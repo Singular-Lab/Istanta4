@@ -271,13 +271,19 @@ const schedaRef = {
     /// riscrivere la descrizione non aggiusta: offrire il pulsante per quelle sarebbe una
     /// promessa che non manteniamo.
     differenzaDaAllineare(differenze, labelName) {
+        return this.differenzeDaAllineare(differenze, labelName).length > 0;
+    },
+
+    /// I20-1143: le differenze stesse, non solo se ce ne sono: da loro si legge anche cosa segnare
+    /// in giallo (gialloDellaDescrizione), cosi' pulsante e giallo nascono dallo stesso verdetto.
+    differenzeDaAllineare(differenze, labelName) {
         const etichetta = String(labelName || "").toLowerCase();
 
         if (etichetta === "") {
-            return false;
+            return [];
         }
 
-        return (differenze || []).some(differenza => {
+        return (differenze || []).filter(differenza => {
             if (differenza == null) {
                 return false;
             }
@@ -298,15 +304,22 @@ const schedaRef = {
     /// descrizione. Cosi' il pulsante si offre esattamente quando il report si lamenterebbe,
     /// e non compare quando non c'e' niente da allineare.
     async descrizioneDisallineata(records, box) {
+        return (await this.differenzeDescrizioneDelBox(records, box)).length > 0;
+    },
+
+    /// I20-1143: le differenze della descrizione che la preanalisi trova nel box, quelle di
+    /// descrizioneDisallineata. Se il giudizio non si puo' chiedere ce n'e' una, generica: il
+    /// pulsante si offre lo stesso e il giallo dice che la descrizione non torna.
+    async differenzeDescrizioneDelBox(records, box) {
         const campo = this.campoDescrizioneCompilatoDelPrimario(records);
 
         if (campo == null || box == null) {
-            return false;
+            return [];
         }
 
         try {
             if (!box.isValid) {
-                return false;
+                return [];
             }
 
             const tracciato = this.tracciatoDelPrimario(records);
@@ -322,7 +335,7 @@ const schedaRef = {
                 NoRenderElementi.elencoPerSegnalazioni(tracciato.noRenderElementi, tracciato.membriGruppoFoto)
             );
 
-            return this.differenzaDaAllineare(
+            return this.differenzeDaAllineare(
                 preAnalisi != null ? preAnalisi.differenze : null, campo.labelName);
         }
         catch (error) {
@@ -330,7 +343,151 @@ const schedaRef = {
             //allineamento che non serviva costa un clic, nasconderlo quando serviva costa una
             //segnalazione che l'operatore non sa come togliersi.
             console.error("Allineamento della descrizione non verificabile:", error);
-            return true;
+            return [{ label: campo.labelName, difference: "contenuto" }];
+        }
+    },
+
+    /// I20-1143: cosa segnare in giallo nella schermata di modifica, dalle stesse differenze che
+    /// accendono "Applica descrizione da server": { stili, righe }. stili sono i nomi (senza
+    /// gruppo) degli stili dei blocchi del box che non tornano, da segnare sulle loro caselle;
+    /// righe dice cio' che su una casella non si puo' segnare: un blocco del server che nel box
+    /// manca, un ordine diverso, uno stile di paragrafo diverso, o una differenza di cui non si sa
+    /// il blocco. Con almeno una differenza c'e' sempre almeno uno dei due: giallo e pulsante
+    /// vanno insieme per costruzione, e una differenza di soli spazi o a capo non c'e' perche'
+    /// la preanalisi non la vede.
+    gialloDellaDescrizione(differenze) {
+        const stili = [];
+        const righe = [];
+        const aggiungi = function (lista, valore) {
+            if (lista.indexOf(valore) < 0) {
+                lista.push(valore);
+            }
+        };
+
+        (differenze || []).forEach(function (differenza) {
+            if (differenza == null) {
+                return;
+            }
+            if (differenza.difference === "paragrafo") {
+                aggiungi(righe, "Stile di paragrafo diverso dal server" +
+                    (differenza.valoreLocale != null && differenza.valoreServer != null
+                        ? ": nel box " + differenza.valoreLocale + ", sul server " + differenza.valoreServer : ""));
+                return;
+            }
+
+            const blocchi = differenza.blocchi;
+            const diversi = blocchi != null && Array.isArray(blocchi.diversi) ? blocchi.diversi : [];
+            const mancanti = blocchi != null && Array.isArray(blocchi.mancanti) ? blocchi.mancanti : [];
+            const ordineDiverso = blocchi != null && blocchi.ordineDiverso === true;
+
+            if (diversi.length === 0 && mancanti.length === 0 && !ordineDiverso) {
+                aggiungi(righe, "La descrizione del box e' diversa da quella del server");
+                return;
+            }
+            diversi.forEach(stile => aggiungi(stili, stile));
+            mancanti.forEach(stile => aggiungi(righe, "Nel box manca " + stile));
+            if (ordineDiverso) {
+                aggiungi(righe, "I blocchi della descrizione sono in un ordine diverso da quello del server");
+            }
+        });
+
+        return { stili: stili, righe: righe };
+    },
+
+    /// I20-1143: un campo descrizione vuoto si riempie col contenuto del server prima di decidere
+    /// se offrire "Applica descrizione da server". Prima si riempiva dopo, e alla prima apertura il
+    /// pulsante si decideva sul campo vuoto - comparendo - mentre le caselle si leggevano dal campo
+    /// pieno, senza giallo.
+    /// Se non riesce non ferma la schermata: il campo lo riempie comunque, piu' avanti, il giro
+    /// delle caselle, come prima.
+    riempiDescrizioneVuota(box, campo) {
+        try {
+            if (box == null || !box.isValid || campo == null || !campo.content) {
+                return;
+            }
+            const elementi = box.allPageItems;
+            for (let i = 0; i < elementi.length; i++) {
+                const elemento = elementi[i];
+                if (Utility.parseLabel(elemento.label) == "descrizione") {
+                    if (elemento.contents == "" && !elemento.overflows) {
+                        TestoTag.applicaTagStringToInndTextFrame(elemento, campo.content, box.geometricBounds);
+                    }
+                    return;
+                }
+            }
+        }
+        catch (e) {
+            console.error("Campo descrizione vuoto non riempito prima del giudizio:", e);
+        }
+    },
+
+    /// I20-1143: le descrizioni fondamentali alterate dall'esportazione per il primario della
+    /// scheda, come { fondamentale, nota } da trattare come quelle in sola lettura dell'agenzia:
+    /// casella in sola lettura, nota sotto le caselle, salvate come non toccate. archivio e' quello
+    /// della scheda (archivioDescrizioneDelPrimario). Con la descrizione nei meta non si giudica:
+    /// il contenuto del server e' il meta, e le caselle sono gia' in sola lettura.
+    ///
+    /// Gira mentre si costruisce la schermata: se non riesce non deve fermarla. Nessuna alterata,
+    /// la scheda come prima di I20-1143, e un avviso per l'operatore.
+    descrizioniAlterateDaEsportazione(records, archivio) {
+        try {
+            if (this.statoMetaDescrizione(records) != null) {
+                return [];
+            }
+            const contenuto = this.descrizioneCompilataDelPrimario(records);
+            const fondamentaleDi = function (stile) {
+                const universale = pluginMiddleware.getNameStileUniversale(stile);
+                return universale != null ? universale.fondamentale : null;
+            };
+
+            //Dal suo oggetto: replaceAllSpecialCharacters usa this, e passata da sola lanciava.
+            return confronti.fondamentaliAlterateDaEsportazione(contenuto, archivio, fondamentaleDi, testo => Utility.replaceAllSpecialCharacters(testo))
+                .map(function (fondamentale) {
+                    return {
+                        fondamentale: fondamentale,
+                        nota: fondamentale.charAt(0).toUpperCase() + fondamentale.substring(1) + " (Alterato da esportazione)"
+                    };
+                });
+        }
+        catch (e) {
+            console.error(e);
+            messaggioUtente("Code SRF-133 Non e' stato possibile capire se l'esportazione ha alterato la descrizione: " + (e && e.message ? e.message : e), "warning");
+            return [];
+        }
+    },
+
+    /// I20-1143: le quattro descrizioni fondamentali in archivio con cui la scheda confronta il
+    /// box e che il salvataggio aggiorna, piu' la DescrizioneIndd: quelle della referenza, o del
+    /// gruppo per un membro di un gruppo. Erano scritte dentro la scheda, ora servono anche prima.
+    archivioDescrizioneDelPrimario(primario, dna) {
+        const tracciato = primario != null ? primario.recordInTracciato : null;
+        if (tracciato == null) {
+            return [null, null, null, null, null];
+        }
+        let fonte = tracciato;
+        if (dna != null && dna.codice != dna.codice_gruppo && tracciato["descrizione_gruppo"] != null) {
+            fonte = tracciato["descrizione_gruppo"];
+        }
+        return [fonte["Descrizioni.Descrizione1"], fonte["Descrizioni.Descrizione2"], fonte["Descrizioni.Descrizione3"],
+            fonte["Descrizioni.Descrizione4"], fonte["Descrizioni.DescrizioneIndd"]];
+    },
+
+    /// I20-1143: il testo con cui il server compone nel box ciascuna descrizione fondamentale, per
+    /// il salvataggio: un campo che ne differisce anche solo per spazi o a capo si salva. Se non
+    /// riesce, null: il salvataggio torna al confronto di prima, e l'operatore e' avvisato.
+    testiCompostiDelPrimario(records) {
+        try {
+            const fondamentaleDi = function (stile) {
+                const universale = pluginMiddleware.getNameStileUniversale(stile);
+                return universale != null ? universale.fondamentale : null;
+            };
+            //Dal suo oggetto: replaceAllSpecialCharacters usa this, e passata da sola lanciava.
+            return confronti.testiDelleFondamentali(this.descrizioneCompilataDelPrimario(records), fondamentaleDi, testo => Utility.replaceAllSpecialCharacters(testo));
+        }
+        catch (e) {
+            console.error(e);
+            messaggioUtente("Code SRF-133 Non e' stato possibile leggere la descrizione composta dal server: " + (e && e.message ? e.message : e), "warning");
+            return null;
         }
     },
 
@@ -1359,7 +1516,20 @@ const schedaRef = {
         //I20-1132: le descrizioni fondamentali che l'agenzia dichiara in sola lettura per questo
         //record, con la nota: la casella nasce readonly e il salvataggio non le manda.
         var descrizioniInSolaLettura = pluginMiddleware.getDescrizioniInSolaLettura != null ? (pluginMiddleware.getDescrizioniInSolaLettura(primario.recordInTracciato) || []) : [];
+        //I20-1143: e quelle che l'esportazione ha alterato rispetto all'archivio, con la nota
+        //"(Alterato da esportazione)": stessa casella in sola lettura, stesso salvataggio da non
+        //toccate, e il pannello del mismatch non le conta. Se l'agenzia la dichiara gia' in sola
+        //lettura vale la sua nota, che dice di piu'.
+        var archivioDescrizione = this.archivioDescrizioneDelPrimario(primario, dna);
+        var descrizioniAlterate = this.descrizioniAlterateDaEsportazione(this.schedeRefDati, archivioDescrizione)
+            .filter(alterata => !descrizioniInSolaLettura.some(d => d != null && d.fondamentale === alterata.fondamentale));
+        descrizioniInSolaLettura = descrizioniInSolaLettura.concat(descrizioniAlterate);
         me.noteSolaLetturaDaMostrare = [];
+        //La nota di una descrizione alterata si mostra anche se nel box non ha nessuna casella:
+        //l'esportazione puo' averla tolta del tutto.
+        descrizioniAlterate.forEach(function (alterata) {
+            me.segnaCasellaInSolaLettura(null, alterata);
+        });
 
         let convalidaFirmaRevisione = !this.richiedeConvalidaFirma(primario, refEditabile);
 
@@ -1393,15 +1563,20 @@ const schedaRef = {
         //rientro nella schermata di edit: la preanalisi delle segnalazioni si fa una volta per
         //scheda da I20-992, questa no, e ripartiva anche solo tornando dalle foto.
         //
-        //Alla prima apertura si continua a chiederlo a descrizioneDisallineata, e non per
-        //pigrizia: poco piu' sotto un campo descrizione vuoto viene riempito col contenuto del
-        //server, quindi la preanalisi fatta prima e quella fatta dopo non rispondono la stessa
-        //cosa. Quella delle segnalazioni gira a schermata costruita, e va lasciata li'.
+        //Alla prima apertura le segnalazioni non ci sono ancora - quella preanalisi gira a
+        //schermata costruita, e va lasciata li' - e il giudizio si chiede alla stessa preanalisi
+        //sul solo campo della descrizione (differenzeDescrizioneDelBox).
         const segnalazioniGiaInMemoria = this.segnalazioniInMemoria();
         const campoDescrizioneDelPrimario = this.campoDescrizioneCompilatoDelPrimario(this.schedeRefDati);
-        const descrizioneDaAllineare = segnalazioniGiaInMemoria != null && campoDescrizioneDelPrimario != null
-            ? this.differenzaDaAllineare(segnalazioniGiaInMemoria, campoDescrizioneDelPrimario.labelName)
-            : await this.descrizioneDisallineata(this.schedeRefDati, box);
+        //I20-1143: il campo vuoto si riempie prima di giudicarlo, non dopo: il pulsante e le
+        //caselle devono guardare lo stesso testo.
+        this.riempiDescrizioneVuota(box, campoDescrizioneDelPrimario);
+        const differenzeDescrizione = segnalazioniGiaInMemoria != null && campoDescrizioneDelPrimario != null
+            ? this.differenzeDaAllineare(segnalazioniGiaInMemoria, campoDescrizioneDelPrimario.labelName)
+            : await this.differenzeDescrizioneDelBox(this.schedeRefDati, box);
+        const descrizioneDaAllineare = differenzeDescrizione.length > 0;
+        //I20-1143: cosa segnare in giallo, dalle stesse differenze: giallo e pulsante insieme.
+        const gialloDescrizione = this.gialloDellaDescrizione(differenzeDescrizione);
 
         if (descrizioneDaAllineare) {
             const bottoneDescrizione = $('<sp-action-button id="applicaDescrizioneDaServer" style="font-size: 12px; margin: 4px 0px 8px 0px;">Applica descrizione da server</sp-action-button>');
@@ -2042,37 +2217,22 @@ const schedaRef = {
                     }
                     var currentCharacterStyle = "";
                     var row = $('<div class="row"></div>');
-                    let stringaPerStile = "";
                     //I20-995: un giro per tratto di stile invece che per carattere. Il ramo che
                     //allungava la textarea un carattere alla volta non serve piu': il testo del
                     //tratto si scrive tutto insieme, in fondo al blocco.
                     for (var $j = 0; $j < trattiDelCampo.length; $j++) {
                         let tratto = trattiDelCampo[$j];
                         var characterName = tratto.nome;
-                        var nomeCompleto = tratto.nomeCompleto;
 
                         //Quello che era il ramo "lo stile e' cambiato" vale adesso per ogni
                         //tratto, perche' due tratti di fila con lo stesso stile non esistono.
                         {
-                            //cerchiamo in contentObjParsedStiles l'oggetto con stile pari a characterName
-
-                            var stileObj = contentObjParsedStiles.find(f => f.stile == nomeCompleto);
-                            var stileInMismatch = stileObj == null;
-
-                            if (currentCharacterStyle != "") {
-                                var previousStileObj = contentObjParsedStiles.find(f => f.stile == currentCharacterStyle);
-                                var previousStileInMismatch = previousStileObj == null || Utility.replaceAllSpecialCharacters(previousStileObj.content) != Utility.replaceAllSpecialCharacters(stringaPerStile);
-                                if (previousStileInMismatch) {
-                                    //dobbiamo recuperare la precedente textarea e cambiare label e bordo a rosso
-                                    var previousTextarea = row.find('textarea').last();
-                                    var previousLabel = row.find('label').last();
-                                    previousLabel.css("color", "gold");
-                                    previousTextarea.css("border", "2px solid gold");
-                                    previousTextarea.addClass("mismatchInImpaginato");
-                                }
-                            }
-
-                            stringaPerStile = "";
+                            //I20-1143: il giallo della casella lo decide la stessa preanalisi che
+                            //accende "Applica descrizione da server" (gialloDellaDescrizione), per il
+                            //nome dello stile senza gruppo come lo confronta lei. Prima lo decideva un
+                            //confronto a parte, che contava anche spazi e a capo e non vedeva i blocchi
+                            //del server assenti dal box: giallo senza pulsante, e pulsante senza giallo.
+                            var stileInMismatch = gialloDescrizione.stili.indexOf(characterName) >= 0;
 
                             if (row.children().length == (grandezzeBox != null && grandezzeBox.bigBoxPerRow != null && grandezzeBox.bigBoxPerRow != "auto" ? grandezzeBox.bigBoxPerRow : 2)) {
                                 $("#editReferenza").append(row);
@@ -2164,28 +2324,12 @@ const schedaRef = {
                             me.segnaCasellaInSolaLettura(textarea, notaSolaLettura);
                             row.append(column);
 
-                            //Il testo del tratto: quello che si vede e quello che serve al
-                            //confronto con il contenuto del server. La normalizzazione passa
-                            //carattere per carattere come faceva il ciclo vecchio, e l'a capo
-                            //diventa "\n" nella textarea e resta "\r" nel confronto.
+                            //Il testo del tratto, quello che si vede nella textarea. La normalizzazione
+                            //passa carattere per carattere come faceva il ciclo vecchio, e l'a capo
+                            //diventa "\n". Il confronto col server non si fa piu' qui (I20-1143).
                             var testiDelTratto = TestoTag.testiDelTratto(tratto.contenuto, normalizzaCarattere);
                             var currentTextarea = row.find('textarea').last();
                             currentTextarea.val(testiDelTratto.perLaTextarea); // Aggiungi il contenuto alla textarea qui
-
-                            stringaPerStile += testiDelTratto.perIlConfronto;
-                        }
-                    }
-
-                    if (currentCharacterStyle != "") {
-                        var previousStileObj = contentObjParsedStiles.find(f => f.stile == currentCharacterStyle);
-                        var previousStileInMismatch = previousStileObj == null || Utility.replaceAllSpecialCharacters(previousStileObj.content) != Utility.replaceAllSpecialCharacters(stringaPerStile);
-                        if (previousStileInMismatch) {
-                            //dobbiamo recuperare la precedente textarea e cambiare label e bordo a rosso
-                            var previousTextarea = row.find('textarea').last();
-                            var previousLabel = row.find('label').last();
-                            previousLabel.css("color", "gold");
-                            previousTextarea.css("border", "2px solid gold");
-                            previousTextarea.addClass("mismatchInImpaginato");
                         }
                     }
 
@@ -2266,6 +2410,10 @@ const schedaRef = {
 
                     $("#pulsantiExtra").empty();
                     $("#pulsantiExtra").append(button);
+
+                    //I20-1143: in giallo, sotto i campi e le note, le differenze col server che non
+                    //stanno su una casella: un blocco che nel box manca, l'ordine, lo stile di paragrafo.
+                    me.mostraGialloDescrizione(gialloDescrizione.righe);
 
                     break;
                 }
@@ -2531,25 +2679,16 @@ const schedaRef = {
             setTimeout(function () {
 
                 //writeDebugMessageForCrash("Inizio try descrizioni regionali e canale");
-                let descr1InArchivio = primario.recordInTracciato["Descrizioni.Descrizione1"];
-                let descr2InArchivio = primario.recordInTracciato["Descrizioni.Descrizione2"];
-                let descr3InArchivio = primario.recordInTracciato["Descrizioni.Descrizione3"];
-                let descr4InArchivio = primario.recordInTracciato["Descrizioni.Descrizione4"];
-                let descrIndd = primario.recordInTracciato["Descrizioni.DescrizioneIndd"];
-                if (dna.codice != dna.codice_gruppo) {
-                    if (primario.recordInTracciato["descrizione_gruppo"] != null) {
-                        descr1InArchivio = primario.recordInTracciato["descrizione_gruppo"]["Descrizioni.Descrizione1"];
-                        descr2InArchivio = primario.recordInTracciato["descrizione_gruppo"]["Descrizioni.Descrizione2"];
-                        descr3InArchivio = primario.recordInTracciato["descrizione_gruppo"]["Descrizioni.Descrizione3"];
-                        descr4InArchivio = primario.recordInTracciato["descrizione_gruppo"]["Descrizioni.Descrizione4"];
-                        descrIndd = primario.recordInTracciato["descrizione_gruppo"]["Descrizioni.DescrizioneIndd"];
-                    }
-                }
+                //Le descrizioni della referenza, o del gruppo per un membro di un gruppo
+                //(archivioDescrizioneDelPrimario, I20-1143): una copia, perche' il controller la cambia.
+                let archivioDelController = archivioDescrizione.slice();
 
                 let compiledFields = primario.recordInTracciato.compiledFields;
 
                 //I20-1132: le fondamentali in sola lettura partono come non toccate, anche se il box differisce.
-                me.editRefFieldController = new InputEditController($("#editReferenza"), convalidaFirmaRevisione, [descr1InArchivio, descr2InArchivio, descr3InArchivio, descr4InArchivio, descrIndd], compiledFields, descrizioniInSolaLettura.map(function (d) { return d.fondamentale; }));
+                //I20-1143: anche quelle alterate dall'esportazione; e coi testi composti dal server un
+                //campo che ne differisce per soli spazi o a capo si salva.
+                me.editRefFieldController = new InputEditController($("#editReferenza"), convalidaFirmaRevisione, archivioDelController, compiledFields, descrizioniInSolaLettura.map(function (d) { return d.fondamentale; }), me.testiCompostiDelPrimario(me.schedeRefDati));
                 //I20-1090: la descrizione nei meta (sola lettura, niente revisione) e i suoi pulsanti.
                 me.applicaStatoMetaDescrizione();
                 //writeDebugMessageForCrash("Fine try descrizioni regionali e canale");
@@ -4509,6 +4648,25 @@ const schedaRef = {
         var contenitore = $('<div id="noteDescrizioniSolaLettura" style="margin: 2px 8px 6px 8px;"></div>');
         note.forEach(function (voce) {
             contenitore.append(schedaRef.elementoNotaSolaLettura(voce));
+        });
+        $("#editReferenza").append(contenitore);
+        return true;
+    },
+
+    /// I20-1143: le righe gialle sotto i campi della descrizione, per le differenze col server che
+    /// non stanno su una casella (gialloDellaDescrizione): un blocco che nel box manca, l'ordine,
+    /// lo stile di paragrafo. Stesso margine della riga delle note. Niente se non ce ne sono.
+    mostraGialloDescrizione(righe) {
+        var elenco = Array.isArray(righe) ? righe.filter(r => typeof r === "string" && r !== "") : [];
+        $("#gialloDescrizione").remove();
+        if (elenco.length === 0) {
+            return false;
+        }
+        var contenitore = $('<div id="gialloDescrizione" style="margin: 2px 8px 6px 8px;"></div>');
+        elenco.forEach(function (riga) {
+            var testo = $('<div class="rigaGialloDescrizione" style="font-size: 11px; color: gold; margin-top: 2px;"></div>');
+            testo.text(riga);
+            contenitore.append(testo);
         });
         $("#editReferenza").append(contenitore);
         return true;

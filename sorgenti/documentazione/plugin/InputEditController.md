@@ -22,11 +22,13 @@ servono davvero**, invece di risalvare ogni campo a ogni conferma.
 | `descrInArchivio` | la descrizione in archivio, per il confronto |
 | `inMismatch` | se quella mostrata e quella in archivio non coincidono |
 | `solaLettura` | I20-993: le varianti che non comandano si guardano e non si toccano |
+| `fondamentaliInSolaLettura` | I20-1132/I20-1143: le fondamentali che partono sempre non toccate e che il pannello del mismatch non conta: quelle dichiarate dall'agenzia e quelle alterate dall'esportazione |
+| `testiComposti` | I20-1143: il testo con cui il server compone ciascuna fondamentale nel box, spazi e a capo compresi |
 
 ## Funzioni
 
-- `constructor(container, convalidaFirma, descrInArchivio, compiledFields)` → prende i campi e
-  memorizza i valori di partenza.
+- `constructor(container, convalidaFirma, descrInArchivio, compiledFields, fondamentaliInSolaLettura, testiComposti)`
+  → prende i campi e memorizza i valori di partenza.
 - `listen()` → si mette in ascolto delle modifiche dell'operatore.
 - `checkStato()` → aggiorna lo stato della scheda dopo una modifica: cosa risulta cambiato, e se la
   descrizione mostrata si discosta da quella in archivio.
@@ -35,6 +37,13 @@ servono davvero**, invece di risalvare ogni campo a ogni conferma.
   chiama prima del confronto del box con la scheda riscaricata, che puo' chiedere qualcosa.
 - `getOperazioniDiSalvataggioDaFare(descrizioneEreditata)` → **il cuore**. Senza questo confronto
   ogni conferma riscriverebbe tutti i campi, anche quelli che l'operatore non ha toccato.
+- `decidiFondamentali(voci, archivio, opzioni)` → cosa mandare per ciascuna descrizione
+  fondamentale. Parte col suo testo un campo diverso dall'archivio nel contenuto e, dal I20-1143,
+  anche uno che differisce solo per spazi o a capo dal testo composto dal server
+  (`opzioni.composto`): uno spazio o un a capo messo nella scheda o a mano nel box arriva al
+  revisore. Il confronto è col composto e non con l'archivio perché gli export aggiungono i loro
+  separatori (Coop uno spazio davanti, Edro21 un a capo in coda); rimandarli non li raddoppia.
+  `testoEsatto` scrive tutti gli a capo come `\n` e lo spazio unificatore come spazio.
 
 ## Cosa è stato rimosso
 

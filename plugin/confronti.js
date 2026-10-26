@@ -577,8 +577,14 @@ const confronti = {
 
                         if (stringaRicomposta != stringaConfronto) {
                             //I20-1071: i due valori, leggibili: il testo del campo e il dato senza i suoi tag.
+                            //I20-1143: e quali blocchi non tornano, perche' la scheda segni in giallo
+                            //proprio quelli, con lo stesso verdetto che accende "Applica descrizione da server".
                             differenze.push({ label: compiledField.labelName, difference: "contenuto",
-                                valoreLocale: confronti.testoLeggibile(campoBox1.contents), valoreServer: confronti.testoLeggibile(compiledField.content) });
+                                valoreLocale: confronti.testoLeggibile(campoBox1.contents), valoreServer: confronti.testoLeggibile(compiledField.content),
+                                blocchi: confronti.blocchiDescrizioneDiversi(trattiDelCampo, compiledField.content, function (tag) {
+                                    let stile = TestoTag.parseStile(tag);
+                                    return stile != null && stile.isValid ? stile.name : tag;
+                                }) });
                         }
                     }
                 }
@@ -1516,6 +1522,123 @@ const confronti = {
             }
         });
         return { fondamentali: fondamentaliDiverse, altri: box.altri !== server.altri };
+    },
+
+    /// I20-1143: i blocchi di un contenuto composto dal server, nell'ordine: uno per tag,
+    /// { stile, testo }, con il testo com'e' dentro il tag. I tratti nascosti (_$Hidden) non ci
+    /// sono, come nel box, e nemmeno il testo fuori dai tag, che non porta a nessuno stile.
+    blocchiDelContenuto(contenuto) {
+        const blocchi = [];
+        const testo = contenuto == null ? "" : String(contenuto);
+        const regola = /<([^<>\/][^<>]*)>([\s\S]*?)<\/\1>/g;
+        let trovato;
+
+        while ((trovato = regola.exec(testo)) !== null) {
+            const stile = trovato[1].trim();
+            if (stile === "" || stile.endsWith("_$Hidden")) {
+                continue;
+            }
+            blocchi.push({ stile: stile, testo: trovato[2] });
+        }
+        return blocchi;
+    },
+
+    /// I20-1143: quali blocchi della descrizione del box non corrispondono a quelli del server,
+    /// con le regole con cui la preanalisi giudica il campo: il blocco del box per il nome dello
+    /// stile senza gruppo, quello del server per il nome dello stile del documento che il tag
+    /// indica (nomeDelloStile, come parseStile; senza, il tag senza gruppo), i testi senza spazi,
+    /// a capo, <br> e "°", con gli apostrofi uguagliati. Un blocco di soli spazi non conta, e i
+    /// blocchi con lo stesso stile valgono insieme. Restituisce { diversi, mancanti, ordineDiverso }:
+    /// diversi gli stili del box che il server non ha o ha con un altro testo, mancanti quelli del
+    /// server che nel box non ci sono, ordineDiverso se coincidono tutti ma in un altro ordine.
+    blocchiDescrizioneDiversi(trattiBox, contenutoServer, nomeDelloStile) {
+        const pulito = function (testo) {
+            return String(testo == null ? "" : testo)
+                .replace(/[’']/g, "'")
+                .replace(/°/g, "")
+                .replace(/<br\s*\/?>|\s+/gi, "");
+        };
+        const senzaGruppo = function (stile) {
+            const punto = stile.lastIndexOf(".");
+            return punto >= 0 ? stile.substring(punto + 1) : stile;
+        };
+        const risolvi = typeof nomeDelloStile === "function" ? nomeDelloStile : senzaGruppo;
+        const raggruppa = function (blocchi) {
+            const testi = {};
+            const ordine = [];
+            blocchi.forEach(function (blocco) {
+                const testo = pulito(blocco.testo);
+                if (testo === "") {
+                    return;
+                }
+                testi[blocco.stile] = (testi[blocco.stile] || "") + testo;
+                if (ordine[ordine.length - 1] !== blocco.stile) {
+                    ordine.push(blocco.stile);
+                }
+            });
+            return { testi: testi, ordine: ordine };
+        };
+
+        const box = raggruppa((trattiBox || []).filter(t => t != null).map(function (t) {
+            return { stile: String(t.nome == null ? "" : t.nome), testo: t.contenuto };
+        }));
+        const server = raggruppa(confronti.blocchiDelContenuto(contenutoServer).map(function (b) {
+            const nome = risolvi(b.stile);
+            return { stile: String(nome == null || nome === "" ? b.stile : nome), testo: b.testo };
+        }));
+
+        const diversi = Object.keys(box.testi).filter(s => server.testi[s] !== box.testi[s]);
+        const mancanti = Object.keys(server.testi).filter(s => box.testi[s] == null);
+        const ordineDiverso = diversi.length === 0 && mancanti.length === 0 && box.ordine.join("|") !== server.ordine.join("|");
+
+        return { diversi: diversi, mancanti: mancanti, ordineDiverso: ordineDiverso };
+    },
+
+    /// I20-1143: il testo con cui il contenuto composto dal server riporta ciascuna descrizione
+    /// fondamentale: { descrizione1: testo, ... }, i blocchi della stessa fondamentale uniti
+    /// nell'ordine. fondamentaleDi(stile) come in dovePortaLaDescrizione; normalizza, se c'e', si
+    /// applica a ogni testo (nel Plugin Utility.replaceAllSpecialCharacters, la stessa dei campi
+    /// della scheda). Una fondamentale che il contenuto non riporta non c'e'.
+    testiDelleFondamentali(contenutoServer, fondamentaleDi, normalizza) {
+        const testi = {};
+
+        confronti.blocchiDelContenuto(contenutoServer).forEach(function (blocco) {
+            const quale = typeof fondamentaleDi === "function" ? fondamentaleDi(blocco.stile) : null;
+            if (quale == null || quale === "") {
+                return;
+            }
+            const testo = typeof normalizza === "function" ? normalizza(blocco.testo) : blocco.testo;
+            testi[quale] = (testi[quale] || "") + (testo == null ? "" : String(testo));
+        });
+        return testi;
+    },
+
+    /// I20-1143: le descrizioni fondamentali che l'esportazione ha alterato: quelle il cui testo
+    /// nel contenuto composto dal server e' diverso da quello in archivio (archivio[0..3], come lo
+    /// usa la scheda) anche togliendo spazi, a capo e <br>. Cosi' i separatori che gli export
+    /// aggiungono ai bordi (Coop uno spazio davanti, Edro21 un a capo in coda) non bastano, mentre
+    /// un testo cambiato, nascosto o tolto si'. Senza contenuto non si giudica: nessuna.
+    fondamentaliAlterateDaEsportazione(contenutoServer, archivio, fondamentaleDi, normalizza) {
+        if (contenutoServer == null || String(contenutoServer) === "") {
+            return [];
+        }
+        const pulito = function (testo) {
+            const normale = typeof normalizza === "function" ? normalizza(testo == null ? "" : String(testo)) : testo;
+            return String(normale == null ? "" : normale)
+                .replace(/<br\s*\/?>|\$br/gi, "")
+                .replace(/[\s\u0000-\u001f\u2028\u2029]/g, "");
+        };
+        const composte = confronti.testiDelleFondamentali(contenutoServer, fondamentaleDi, null);
+        //Nessun blocco che porti a una fondamentale: gli stili dell'agenzia non si riconoscono, e
+        //dire alterate tutte e quattro bloccherebbe la scheda per un difetto di configurazione.
+        if (Object.keys(composte).length === 0) {
+            return [];
+        }
+
+        return ["descrizione1", "descrizione2", "descrizione3", "descrizione4"].filter(function (quale, indice) {
+            const inArchivio = Array.isArray(archivio) ? archivio[indice] : null;
+            return pulito(composte[quale]) !== pulito(inArchivio);
+        });
     },
 
     decodeSpecialCharacters(text) {

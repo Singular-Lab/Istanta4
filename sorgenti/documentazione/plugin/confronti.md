@@ -15,7 +15,7 @@ rimasto il motore, che **non usa niente del report** e lo usano in tanti.
 |---|---|
 | il cambio strutturale (`schedaRef.salvaCambioStrutturaleDo`) | `confrontoBox` |
 | la reimpaginazione di una referenza (`impaginazioneSingoloIndd` in `indexNew.js`) | `confrontoBox`, `confrontoBoxCompiledFieldPreAnalisi` |
-| la scheda (`descrizioneDisallineata`, `differenzeDatiNelBox`) | `confrontoBoxCompiledFieldPreAnalisi` |
+| la scheda (`differenzeDescrizioneDelBox`, `differenzeDatiNelBox`) | `confrontoBoxCompiledFieldPreAnalisi`, i suoi `blocchi` per il giallo della descrizione |
 | il ricalcolo del conteggio della griglia (`griglia.ricalcaConteggio`) | `mappaturaImpaginato` |
 | il ricollegamento delle foto (`ricollegaFotoMassivo`) | `mappaturaImpaginato` |
 | il Report Integrità | `mappaturaImpaginato`, `semplificazioneMappaImpaginato`, `confrontoBoxCompiledFieldPreAnalisi` |
@@ -43,6 +43,20 @@ rimasto il motore, che **non usa niente del report** e lo usano in tanti.
   (`pluginMiddleware.getLoghiConTesto`) si confronta anche sul testo: `differenzaTestoLogo` legge il
   primo riquadro di testo del logo e lo confronta col campo del dato (`<br>` è un a capo, maiuscole e
   spazi in più non contano). Per Edro21 è il logo attributo italiano, testo in `logo_attributo_it`.
+  Dal I20-1143 la differenza "contenuto" di un campo a stili di carattere, come la descrizione,
+  porta anche `blocchi` (`blocchiDescrizioneDiversi`): quali blocchi del box non tornano col server.
+  La scheda li segna in giallo, con lo stesso verdetto che accende "Applica descrizione da server".
+- `blocchiDescrizioneDiversi(trattiBox, contenutoServer, nomeDelloStile)` → (I20-1143) il confronto
+  blocco per blocco della preanalisi: stessi stili senza gruppo, testi senza spazi, a capo, `<br>` e
+  `°`. `{ diversi, mancanti, ordineDiverso }`. `blocchiDelContenuto` scompone il contenuto del
+  server nei suoi blocchi, senza i tratti `_$Hidden`.
+- `testiDelleFondamentali(contenuto, fondamentaleDi, normalizza)` → (I20-1143) il testo con cui il
+  server compone ciascuna descrizione fondamentale, spazi e a capo compresi: il salvataggio della
+  scheda lo usa per accorgersi di uno spazio o un a capo cambiato.
+- `fondamentaliAlterateDaEsportazione(contenuto, archivio, fondamentaleDi, normalizza)` → (I20-1143)
+  le fondamentali che l'export ha alterato rispetto all'archivio: testo cambiato, nascosto o tolto.
+  Spazi, a capo e `<br>` non contano, così i separatori di Coop (spazio davanti) ed Edro21 (a capo
+  in coda) non bastano. Senza blocchi riconosciuti non giudica.
 - `decodeSpecialCharacters(text)` → i caratteri speciali del testo InDesign, per confrontare il
   testo come lo legge l'operatore.
 
