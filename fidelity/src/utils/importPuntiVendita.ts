@@ -90,24 +90,60 @@ export interface CombinazioneDisponibile {
   codice_area?: string;
 }
 
-/** Canali e aree che compaiono nelle combinazioni della GDO, per codice (non per nome), ordinati. */
+/**
+ * Canali e aree che compaiono nelle combinazioni della GDO, per nome, senza doppioni e ordinati.
+ * Senza nome si mostra il codice; due voci con lo stesso nome (in CONAD CNO capita) portano
+ * anche il codice, altrimenti nel menu non si distinguerebbero.
+ */
 export function canaliEAree(combinazioni: CombinazioneDisponibile[]) {
-  const canali = new Map<string, string>();
-  const aree = new Map<string, string>();
+  const canali = new Map<string, { nome?: string; codice: string }>();
+  const aree = new Map<string, { nome?: string; codice: string }>();
   for (const c of combinazioni) {
-    canali.set(c.id_canale, c.codice_canale ?? c.sigla_combinazione);
-    if (c.id_area) aree.set(c.id_area, c.codice_area ?? c.sigla_combinazione);
+    canali.set(c.id_canale, { nome: c.nome_canale, codice: c.codice_canale ?? c.sigla_combinazione });
+    if (c.id_area) aree.set(c.id_area, { nome: c.nome_area, codice: c.codice_area ?? c.sigla_combinazione });
   }
-  const ordina = (voci: Map<string, string>) =>
-    [...voci].map(([id, codice]) => ({ id, codice })).sort((a, b) => a.codice.localeCompare(b.codice));
+  const ordina = (voci: Map<string, { nome?: string; codice: string }>) => {
+    const nomi = [...voci.values()].map(v => v.nome?.trim() || v.codice);
+    const ripetuti = new Set(nomi.filter((n, i) => nomi.indexOf(n) !== i));
+    return [...voci]
+      .map(([id, v]) => {
+        const nome = v.nome?.trim() || v.codice;
+        return { id, nome: ripetuti.has(nome) && nome !== v.codice ? `${nome} (${v.codice})` : nome };
+      })
+      .sort((a, b) => a.nome.localeCompare(b.nome));
+  };
   return { canali: ordina(canali), aree: ordina(aree) };
+}
+
+/**
+ * Coordinate incollate da Google Maps: la coppia "lat, lon" che copia il tasto destro sul punto,
+ * oppure un link che le contiene (".../@43.84,10.50,17z" o "...?q=43.84,10.50").
+ * Null se il testo non ha coordinate, se sono fuori dai limiti o se sono 0,0.
+ */
+export function coordinateDaTesto(testo: string): { lat: number; lon: number } | null {
+  const numero = "(-?\\d{1,3}(?:\\.\\d+)?)";
+  const coppia = new RegExp(`${numero}\\s*,\\s*${numero}`);
+  let t = testo.trim().replace(/\s+/g, " ");
+  try {
+    t = decodeURIComponent(t);
+  } catch {
+    // Un "%" che non e una sequenza URL: si usa il testo cosi com'e
+  }
+  const trovata =
+    t.match(new RegExp(`@${numero},${numero}`)) ?? t.match(new RegExp(`[?&](?:q|query|ll)=${numero},\\s*${numero}`)) ?? t.match(new RegExp(`^${coppia.source}$`));
+  if (!trovata) return null;
+  const lat = Number(trovata[1]);
+  const lon = Number(trovata[2]);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+  if (lat === 0 && lon === 0) return null;
+  return { lat, lon };
 }
 
 /** Combinazione di canale e area scelti, se esiste. */
 export const combinazioneDi = (combinazioni: CombinazioneDisponibile[], idCanale: string, idArea: string) =>
   idCanale && idArea ? combinazioni.find(c => c.id_canale === idCanale && c.id_area === idArea) : undefined;
 
-/** Chiave dell'indirizzo: se cambia dopo la conferma sulla mappa, la conferma non vale piu. */
+/** Chiave dell'indirizzo: se cambia dopo la conferma (mappa o coordinate incollate), la conferma non vale piu. */
 export const chiaveIndirizzo = (dati: Pick<DatiInserimentoManuale, "indirizzo" | "cap" | "citta">) =>
   [dati.indirizzo, dati.cap, dati.citta].map(v => v.trim().toLowerCase()).join("|");
 
