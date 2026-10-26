@@ -39,6 +39,10 @@ rimasto il motore, che **non usa niente del report** e lo usano in tanti.
 - `confrontoBoxCompiledFieldPreAnalisi(...)` → **389 righe.** Un box e i suoi record: cosa non
   corrisponde più. È il confronto fatto sui campi già compilati, senza rileggere il box: la via
   veloce. **`checkMD5` a `false` salta il confronto degli hash delle foto**, che è la parte cara.
+  Dal I20-1140 un logo idms extra auto che il plugin di agenzia dichiara in `loghiConTesto`
+  (`pluginMiddleware.getLoghiConTesto`) si confronta anche sul testo: `differenzaTestoLogo` legge il
+  primo riquadro di testo del logo e lo confronta col campo del dato (`<br>` è un a capo, maiuscole e
+  spazi in più non contano). Per Edro21 è il logo attributo italiano, testo in `logo_attributo_it`.
 - `decodeSpecialCharacters(text)` → i caratteri speciali del testo InDesign, per confrontare il
   testo come lo legge l'operatore.
 

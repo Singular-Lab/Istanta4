@@ -1047,6 +1047,11 @@ namespace IstantaLib
         /// quando una regola vale per il record, con la nota da mostrare. Vuoto: tutte modificabili.
         public List<AgenziaCustomPlugin_DescrizioneInSolaLettura> descrizioniInSolaLettura { get; set; } = new List<AgenziaCustomPlugin_DescrizioneInSolaLettura>();
 
+        /// I20-1140: i loghi idms che portano un testo preso dal dato, con il campo del record da cui
+        /// viene. Il Plugin confronta il testo del logo nel box con quello del dato. Vuoto: i loghi si
+        /// confrontano solo per la presenza.
+        public List<AgenziaCustomPlugin_LogoConTesto> loghiConTesto { get; set; } = new List<AgenziaCustomPlugin_LogoConTesto>();
+
         /// I20-981: i campi che l'agenzia tiene d'occhio nella sezione Confronti del Report
         /// Integrita'. Non cambiano l'aspetto del box, quindi l'analisi di integrita' non li
         /// guarda, ma l'operatore li usa per decidere a che pagina va la referenza: se
@@ -1264,6 +1269,18 @@ namespace IstantaLib
         public string nota { get; set; } = "";
 
         public List<BloccoRegole> setRegole { get; set; } = new List<BloccoRegole>();
+    }
+
+    /// I20-1140: un logo idms con un testo che viene dal dato. In Edro21: il logo attributo italiano
+    /// (sigla logo_attributo_it), che porta sotto la bandiera il testo del campo logo_attributo_it,
+    /// ricavato dalla descrizione ("prodotto<br>italiano").
+    public class AgenziaCustomPlugin_LogoConTesto
+    {
+        /// La sigla del logo fra le foto extra automatiche del record.
+        public string sigla { get; set; } = "";
+
+        /// Il campo del record con il testo del logo; "<br>" e' un a capo.
+        public string keyInRecordInTracciato { get; set; } = "";
     }
     public class AgenziaCustomPlugin_DecodificaNomeFilePerRicercaKit
     {

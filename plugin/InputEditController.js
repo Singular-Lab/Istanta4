@@ -342,6 +342,25 @@ class InputEditController {
 
     }
 
+    /// I20-1140: dopo un salvataggio confermato da Istanta i campi non sono piu' modificati: il valore
+    /// attuale diventa quello di partenza, e il rosso della modifica se ne va. La scheda si ricarica
+    /// solo dopo il confronto del box con la scheda riscaricata: fino ad allora restavano rossi.
+    segnaComeSalvati() {
+        for (let key in this.datasource) {
+            let objFam = this.datasource[key];
+            if (objFam == null || !Array.isArray(objFam.lista)) {
+                continue;
+            }
+            objFam.lista.forEach(campo => {
+                let el = $(campo);
+                el.attr("defaultvalue", el.val());
+                el.css("background-color", "white");
+                el.removeClass("textModified");
+            });
+            objFam.modificato = false;
+        }
+    }
+
     /// I20-1084: il testo come lo confronta il controllo di mismatch, senza spazi e a capo.
     static testoPerConfronto(testo) {
         return TestoTag.trimDescrizione(testo == null ? "" : String(testo));

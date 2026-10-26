@@ -5974,7 +5974,21 @@ async function impaginaBoxNelContesto(meccanica, pagCoinvolta, bounds, itemRef, 
     
                                         elementiDaGruppare.push(rect);
                                         rect.label = "foto_extra$" + nomeDaUsare + "$tipo_" + tipo;
-                                        rect.place(path);
+                                        //I20-1140: un logo senza file non ferma gli altri: via il riquadro vuoto e avanti.
+                                        try {
+                                            rect.place(path);
+                                        }
+                                        catch (errLogo) {
+                                            elementiDaGruppare.pop();
+                                            try {
+                                                rect.remove();
+                                            }
+                                            catch (errRimozione) {
+                                                //il riquadro resta: lo dice l'avviso
+                                            }
+                                            FotoPlacer.avvisaLogoSenzaFile(nome, errLogo);
+                                            continue;
+                                        }
                                         //rect.fit(FitOptions.FRAME_TO_CONTENT);
                                         //Alessio: Ho ripristinato questo al posto di FRAME_TO_CONTENT perchè in Despar faceva un macelllo con i loghi che costringevano il frame ad adattarsi.
                                         //non possiamo permettergli di farlo, se questa cosa era stata fatta per Edro21 va ritestata e capita una misura comune
@@ -5994,6 +6008,8 @@ async function impaginaBoxNelContesto(meccanica, pagCoinvolta, bounds, itemRef, 
                                     }
                                 }
     
+                                //I20-1140: i loghi senza file non hanno un elemento da raggruppare.
+                                elementiDaGruppare = elementiDaGruppare.filter(el => el != null);
                                 if (elementiDaGruppare.length > 0) {
                                     //Rifaccio il gruppo se ci somo foto secondarie da includere
     

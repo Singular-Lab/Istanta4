@@ -34,7 +34,9 @@ const MOTORE = ["confrontoBox", "confrontoBoxCompiledFieldPreAnalisi", "mappatur
     //Le differenze di una foto collegata nel box: collegamento rotto, file assente, non corrispondente.
     "segnalazioniFotoCollegata",
     //I20-1124: la mappa delle versioni precedenti dei box, per il Report Integrita'.
-    "mappaturaVersioniPrecedenti"
+    "mappaturaVersioniPrecedenti",
+    //I20-1140: il testo dei loghi idms dichiarati dal plugin di agenzia, confrontato col dato.
+    "differenzaTestoLogo", "testoDelLogoNelBox", "testoLogoConfrontabile", "testoLogoInRiga"
 ];
 const DA_INDEXNEW = ["avviaReportIntegrita", "applicaConfronto", "preAnalisiBoxMappato",
     "nomiPagineDelDocumento", "boxDellElementoMappa"];
