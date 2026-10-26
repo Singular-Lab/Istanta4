@@ -20,11 +20,11 @@ describe('catalogo delle pagine', () => {
 
   it('confronta segmenti interi: un prefisso di testo non basta', () => {
     expect(paginaPer('/promozioni-in-corso')?.percorso).toBe('/promozioni-in-corso');
-    expect(paginaPer('/gestione-utenti-bis')).toBeUndefined();
+    expect(paginaPer('/gestione-interna/gestione-utenti-bis')).toBeUndefined();
   });
 
   it('una pagina senza sottopagine non copre i percorsi figli', () => {
-    expect(paginaPer('/gestione-utenti/qualcosa')).toBeUndefined();
+    expect(paginaPer('/gestione-interna/gestione-utenti/qualcosa')).toBeUndefined();
   });
 });
 
@@ -50,7 +50,7 @@ describe('puoAprirePagina', () => {
   });
 
   it('le pagine di sistema richiedono il permesso di sistema', () => {
-    expect(puoAprirePagina('/gestione-permessi', con(PERMESSI.UTENTI.VISUALIZZA))).toBe(false);
-    expect(puoAprirePagina('/gestione-permessi', con(PERMESSI.SISTEMA.GESTISCI_ACCESSI))).toBe(true);
+    expect(puoAprirePagina('/gestione-interna/gestione-permessi', con(PERMESSI.UTENTI.VISUALIZZA))).toBe(false);
+    expect(puoAprirePagina('/gestione-interna/gestione-permessi', con(PERMESSI.SISTEMA.GESTISCI_ACCESSI))).toBe(true);
   });
 });

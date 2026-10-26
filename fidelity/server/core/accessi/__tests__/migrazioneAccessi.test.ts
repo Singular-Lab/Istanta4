@@ -54,8 +54,8 @@ describe('migrazione degli accessi al modello per aree', () => {
 
   it('collega i menu dei sotto-ruoli per nome e concede sul sotto-ruolo', async () => {
     db.menu = [
-      { tipo_utente: TIPO_UTENTI.GDO, ruolo_gdo: 'GDO_ADMIN', pathname: '/punti-vendita', disabilitato: false },
-      { tipo_utente: TIPO_UTENTI.GDO, ruolo_gdo: 'GDO_FANTASMA', pathname: '/punti-vendita', disabilitato: false },
+      { tipo_utente: TIPO_UTENTI.GDO, ruolo_gdo: 'GDO_ADMIN', pathname: '/gestione-interna/punti-vendita', disabilitato: false },
+      { tipo_utente: TIPO_UTENTI.GDO, ruolo_gdo: 'GDO_FANTASMA', pathname: '/gestione-interna/punti-vendita', disabilitato: false },
     ];
     const piano = await calcolaPianoMigrazione();
     expect(piano.menuRuoli).toEqual([

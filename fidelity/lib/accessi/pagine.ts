@@ -59,11 +59,11 @@ export const PAGINE: DefinizionePagina[] = [
   { percorso: '/webliant/impostazioni-webpliant', permesso: P.WEBPLIANT.CONFIGURA, sottopagine: true },
 
   // GDO e punti vendita
-  { percorso: '/aree-e-canali', permesso: P.GDO.VISUALIZZA },
-  { percorso: '/punti-vendita', permesso: P.GDO.VISUALIZZA, sottopagine: true },
+  { percorso: '/gestione-interna/aree-e-canali', permesso: P.GDO.VISUALIZZA },
+  { percorso: '/gestione-interna/punti-vendita', permesso: P.GDO.VISUALIZZA, sottopagine: true },
 
   // Utenti
-  { percorso: '/gestione-utenti', permesso: P.UTENTI.VISUALIZZA },
+  { percorso: '/gestione-interna/gestione-utenti', permesso: P.UTENTI.VISUALIZZA },
 
   // Impostazioni
   { percorso: '/impostazioni-tipografia', permesso: P.IMPOSTAZIONI.VISUALIZZA },
@@ -92,9 +92,9 @@ export const PAGINE: DefinizionePagina[] = [
   { percorso: '/competitor-analyzer', permesso: P.STRUMENTI.VISUALIZZA },
 
   // Sistema
-  { percorso: '/gestione-permessi', permesso: P.SISTEMA.GESTISCI_ACCESSI },
-  { percorso: '/gestione-hub', permesso: P.SISTEMA.GESTISCI_HUB },
-  { percorso: '/gestione-metodi-accesso', permesso: P.SISTEMA.GESTISCI_METODI_ACCESSO },
+  { percorso: '/gestione-interna/gestione-permessi', permesso: P.SISTEMA.GESTISCI_ACCESSI },
+  { percorso: '/gestione-interna/gestione-hub', permesso: P.SISTEMA.GESTISCI_HUB },
+  { percorso: '/gestione-interna/gestione-metodi-accesso', permesso: P.SISTEMA.GESTISCI_METODI_ACCESSO },
   { percorso: '/superadmin/dashboard', permesso: P.SISTEMA.DASHBOARD },
 ];
 

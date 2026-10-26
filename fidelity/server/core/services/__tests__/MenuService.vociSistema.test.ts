@@ -20,20 +20,20 @@ const percorsi = (menu: unknown[]) =>
 
 describe('voci di sistema nel menu del Superadmin', () => {
   it('aggiunge Gestione Hub e Metodi di accesso sotto GESTIONE INTERNA', () => {
-    const menu = ['PROMOZIONI', { pathname: '/promozioni/in-corso' }, 'GESTIONE INTERNA', { pathname: '/gestione-permessi' }, 'ALTRO', { pathname: '/x' }];
+    const menu = ['PROMOZIONI', { pathname: '/promozioni/in-corso' }, 'GESTIONE INTERNA', { pathname: '/gestione-interna/gestione-permessi' }, 'ALTRO', { pathname: '/x' }];
 
     expect(percorsi(aggiungiVoci(menu, TIPO_UTENTI.SUPERADMIN))).toEqual([
       'PROMOZIONI', '/promozioni/in-corso',
-      'GESTIONE INTERNA', '/gestione-permessi', '/gestione-hub', '/gestione-metodi-accesso',
+      'GESTIONE INTERNA', '/gestione-interna/gestione-permessi', '/gestione-interna/gestione-hub', '/gestione-interna/gestione-metodi-accesso',
       'ALTRO', '/x',
     ]);
   });
 
   it('crea la sezione se manca e non duplica una voce gia\' presente', () => {
-    const menu = [{ pathname: '/gestione-metodi-accesso' }];
+    const menu = [{ pathname: '/gestione-interna/gestione-metodi-accesso' }];
 
     expect(percorsi(aggiungiVoci(menu, TIPO_UTENTI.SUPERADMIN))).toEqual([
-      '/gestione-metodi-accesso', 'GESTIONE INTERNA', '/gestione-hub',
+      '/gestione-interna/gestione-metodi-accesso', 'GESTIONE INTERNA', '/gestione-interna/gestione-hub',
     ]);
   });
 
