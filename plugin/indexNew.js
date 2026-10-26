@@ -114,6 +114,9 @@ const etichettaSegnalazioni = require('./segnalazioni/etichetta');
 const SchermataSegnalazioni = require('./segnalazioni/schermata');
 //I20-1121: la vista affiancata del pannello, comune a segnalazioni e Report Integrita'.
 const VistaAffiancata = require('./vistaAffiancata');
+//TASK-19c18841: la finestra che compare prima di svuotare delle pagine, quando documento e server
+//non concordano.
+const SvuotamentoPagina = require('./svuotamentoPagina');
 //I20-1123: i campi di testo a riposo, perche' in UXP i campi nativi stanno sopra a tutto.
 const CampiARiposo = require('./campiARiposo');
 //I20-1035: i conti della barra orizzontale della lista dei tracciati, gli stessi del Report Integrita'.
@@ -6689,27 +6692,27 @@ async function rimuoviRefImpaginata(listaCodiciConId = [], mantieniBusyEsterno =
 /// La rimozione scorre l'array all'indietro, perche' togliere un elemento sposta gli indici
 /// di quelli dopo.
 ///
-/// NOTA (I20-1002): il controllo "pagSelected == -1 && page == null" legge `page` prima
-/// della sua dichiarazione. Con var la variabile c'e' gia' ma vale undefined, quindi quella
-/// meta' del controllo e' sempre vera e la condizione si riduce a pagSelected == -1.
-async function svuotaPaginaByPageName(pageName, daMantenere = []) {
+/// TASK-19c18841: restituisce true solo se il server ha confermato e nella pagina non e' rimasto
+/// nessun box con DNA; altrimenti false, dopo aver detto perche'. Prima non restituiva niente, e
+/// chi svuotava scriveva "Svuotamento completato" comunque, coprendo l'errore della pagina. Non
+/// guarda piu' pagSelected (la pagina selezionata in InDesign): la pagina da svuotare e' quella
+/// passata, e fino al primo cambio di pagina pagSelected valeva -1 e bloccava lo svuotamento.
+/// Non c'e' piu' nemmeno l'elenco delle referenze da mantenere: la finestra dello svuotamento
+/// non offre piu' di tenerle (SvuotamentoPagina).
+async function svuotaPaginaByPageName(pageName) {
     //I20-1040: la funzione aspetta la risposta del server, cosi' chi svuota piu' pagine le fa
     //una dopo l'altra e dice "completato" solo alla fine. finito si alza in ogni uscita.
     var finito = false;
+    var svuotata = false;
     try{
 
-        if (pageName == null || pageName == "") {
+        if (pageName == null || pageName === "") {
             messaggioUtente("Code IDX-74 Numero pagina non valido", "error");
-            return;
+            return false;
         }
 
         showLoading("Svuota pagina in corso...");
         await Utility.sleep(100);
-    
-        if(pagSelected == -1 && page == null){
-            messaggioUtente("Code IDX-75 Pagina non selezionata, posizionarsi sulla pagina corretta", "error");
-            return;
-        }
     
         var page = null;
         
@@ -6723,51 +6726,10 @@ async function svuotaPaginaByPageName(pageName, daMantenere = []) {
         
     
         if (page == null) {
-            messaggioUtente("Code IDX-76 Pagina non trovata", "error");
-            return;
+            messaggioUtente("Code IDX-76 Pagina " + pageName + " non trovata", "error");
+            return false;
         }
-        var itemsDaRimuovere = [];
-    
-        // Itera su tutti i gruppi nella pagina
-        for (var i = 0; i < page.groups.length; i++) {
-            var group = page.groups.item(i);
-            var dna = Utility.getDnaOfBox(group);
-            if (dna == null) {
-                continue;
-            }
-            //I20-1040: le referenze non registrate sul server che l'operatore ha scelto di
-            //mantenere nel documento restano dove sono.
-            var codiceBox = { codice: dna.codice_gruppo, idRec: parseInt(dna.idRec) || 0 };
-            if (Array.isArray(daMantenere) && daMantenere.some(m => ReportIntegrita._stessaReferenza(m, codiceBox))) {
-                continue;
-            }
-
-            itemsDaRimuovere.push(group);
-
-
-            // Cerca gli oggetti con label che iniziano con "base" all'interno del gruppo
-            // for (var j = 0; j < group.allPageItems.length; j++) {
-            //     var item = group.allPageItems[j];
-    
-            //     // Controlla se l'oggetto ha la label desiderata
-            //     if (item.label && Utility.parseLabel(item.label).startsWith("base")) {
-            //         var itemToRemove = item.parent;
-            //         var securityCounter = 0;
-            //         while (itemToRemove.parent.constructor.name != "Spread" && securityCounter < 1000) {
-            //             itemToRemove = itemToRemove.parent;
-            //             securityCounter++;
-            //         }
-            //         if(itemToRemove.isValid && securityCounter < 1000)
-            //         {
-            //             itemsDaRimuovere.push(itemToRemove);
-            //         }
-            //         else{
-            //             throw "Errore durante la rimozione della ref";
-            //         }
-            //         break; // Interrompi il ciclo interno una volta trovata la base nel gruppo
-            //     }
-            // }
-        }
+        var itemsDaRimuovere = boxConDnaDellaPagina(page);
     
         indesignEvents.setBusy(true);
         console.log("rimuoviRefImpaginata");
@@ -6800,6 +6762,15 @@ async function svuotaPaginaByPageName(pageName, daMantenere = []) {
                 for (var i = itemsDaRimuovere.length - 1; i >= 0; i--) {
                     itemsDaRimuovere[i].remove();
                 }
+
+                //TASK-19c18841: il server ha cancellato i record della pagina; se nel documento
+                //resta un box con DNA, server e impaginato non sono d'accordo, e va detto.
+                var rimasti = boxConDnaDellaPagina(page).length;
+                if (rimasti > 0) {
+                    messaggioUtente("Code IDX-193 Svuota pagina " + pageName + ": " + rimasti + " box sono rimasti nel documento, ma il server non li registra piu'", "error");
+                    return;
+                }
+                svuotata = true;
             }
             catch (e) {
                 messaggioUtente("Code IDX-80 Errore generico: " + e, "error");
@@ -6844,14 +6815,49 @@ async function svuotaPaginaByPageName(pageName, daMantenere = []) {
             attese++;
             await Utility.sleep(100);
         }
+        return svuotata;
     }
     catch(e){
         console.log(e);
         messaggioUtente("Code IDX-83 Svuota pagina errore generico: " + e, "error");
         hideLoading();
         indesignEvents.setBusy(false);
+        return false;
     }
 
+}
+
+/// TASK-19c18841: i gruppi della pagina con un DNA, cioe' i box del Plugin: quelli che lo
+/// svuotamento toglie, e quelli che dopo non devono esserci piu'.
+function boxConDnaDellaPagina(page) {
+    var trovati = [];
+    for (var i = 0; i < page.groups.length; i++) {
+        var group = page.groups.item(i);
+        if (Utility.getDnaOfBox(group) != null) {
+            trovati.push(group);
+        }
+    }
+    return trovati;
+}
+
+/// TASK-19c18841: svuota le pagine una dopo l'altra e dice com'e' andata davvero: "Svuotamento
+/// completato" solo se tutte sono state svuotate, altrimenti quali no. Prima il messaggio verde
+/// arrivava comunque, e nel riquadro in cima copriva l'errore della pagina. Restituisce le
+/// pagine non svuotate.
+async function svuotaPagineConEsito(pagine) {
+    var nonSvuotate = [];
+    for (const page of pagine) {
+        if (!(await svuotaPaginaByPageName(page))) {
+            nonSvuotate.push(page);
+        }
+    }
+    if (nonSvuotate.length === 0) {
+        messaggioUtente("Svuotamento completato: " + (pagine.length === 1 ? "pagina " : "pagine ") + pagine.join(", "), "success", false, 3);
+    }
+    else {
+        messaggioUtente("Code IDX-194 Svuotamento non completato: " + (nonSvuotate.length === 1 ? "la pagina " + nonSvuotate[0] + " non e' stata svuotata" : "le pagine " + nonSvuotate.join(", ") + " non sono state svuotate") + ", vedere i messaggi precedenti", "error");
+    }
+    return nonSvuotate;
 }
 
 
@@ -9607,100 +9613,6 @@ function attivaDisattivaBollo(bollo, attiva) {
 
 }
 
-//I20-1040: il messaggio di una finestra di svuotamento, a dimensione di testo normale: una
-//frase, l'elenco e la domanda. I valori entrano come testo, non come HTML.
-function messaggioSvuotamento(introduzione, righe, domanda) {
-    var contenitore = $('<div></div>').css({ fontSize: '13px', color: 'black' });
-    contenitore.append($('<div></div>').text(introduzione).css({ fontWeight: 'bold', marginBottom: '6px' }));
-    righe.forEach(riga => contenitore.append($('<div></div>').text("• " + riga).css({ paddingLeft: '8px' })));
-    contenitore.append($('<div></div>').text(domanda).css({ marginTop: '10px' }));
-    return contenitore;
-}
-
-/// I20-1040: le scelte dell'operatore prima di svuotare delle pagine, o null se annulla.
-///
-/// Una referenza che il server ha in una pagina da svuotare e che nel documento sta in un'altra
-/// pagina e' stata spostata a mano: senza intervento lo svuotamento ne cancellerebbe il record.
-/// Per riconoscerla serve la mappa di tutto il documento, letta solo se la pre-analisi ha
-/// referenze presenti solo sul server. Le referenze in pagina ma non registrate sul server, lo
-/// svuotamento le toglieva senza chiedere. Per ognuno dei due casi, se c'e', una finestra.
-///
-/// Un terzo caso: referenze che stanno in una pagina da svuotare ma che il server registra su
-/// un'altra pagina, perche' l'operatore le ha portate li'. Svuotando senza chiedere sparivano dal
-/// documento e dal server.
-///
-/// Restituisce { spostate, aggiornaSpostate, mantenuteRegistrateAltrove, daMantenere }:
-/// daMantenere sono le referenze che restano nel documento, con la loro pagina.
-async function decisioniPrimaDelloSvuotamento(preAnalisi, pagine) {
-    var pagineDaSvuotare = pagine.map(p => p.toString());
-    var ciSonoSoloSulServer = (preAnalisi.resultPaginas || []).some(p =>
-        ReportIntegrita._codiciConId(p.codiciPresentiSoloSulServerConId, p.codiciPresentiSoloSulServer).length > 0);
-
-    var listaDocumento = null;
-    if (ciSonoSoloSulServer) {
-        showLoading("Ricerca delle referenze spostate in altre pagine...");
-        var mappaDocumento = await confronti.mappaturaImpaginato(null, false, true);
-        listaDocumento = mappaDocumento != null ? confronti.semplificazioneMappaImpaginato(mappaDocumento) : null;
-    }
-    var daDecidere = ReportIntegrita.classificaPerSvuotamento(preAnalisi.resultPaginas, listaDocumento, pagineDaSvuotare);
-    var decisioni = { spostate: daDecidere.spostate, aggiornaSpostate: false, mantenuteRegistrateAltrove: [], daMantenere: [] };
-
-    if (daDecidere.spostate.length > 0) {
-        hideLoading();
-        var sceltaSpostate = await Modali.confirmCustom(
-            messaggioSvuotamento(
-                "Le seguenti referenze risultano registrate su una pagina da svuotare, ma nel documento si trovano su un'altra pagina:",
-                daDecidere.spostate.map(r => r.codice + ": registrata a pagina " + r.paginaServer + ", presente a pagina " + r.paginaDocumento),
-                "Si desidera aggiornare la pagina registrata prima dello svuotamento?"),
-            "Aggiorna la pagina e svuota", "aggiorna", "Svuota comunque", "svuota");
-        if (sceltaSpostate == null || !sceltaSpostate.result) {
-            return null;
-        }
-        decisioni.aggiornaSpostate = sceltaSpostate.hiddenVal == "aggiorna";
-    }
-
-    if (daDecidere.registrateAltrove.length > 0) {
-        hideLoading();
-        //La pagina dove il server le registra, se la lista degli impaginati si legge.
-        var impaginati = await Utility.getListaCodiciImpaginati({ nullSeFallisce: true });
-        var paginaRegistrata = (r) => {
-            var trovato = Array.isArray(impaginati) && r.idRec > 0 ? impaginati.find(i => parseInt(i.idRec) === r.idRec) : null;
-            return trovato != null && trovato.nomePagina != null ? "registrata a pagina " + trovato.nomePagina : "registrata su un'altra pagina";
-        };
-        var sceltaRegistrateAltrove = await Modali.confirmCustom(
-            messaggioSvuotamento(
-                "Le seguenti referenze si trovano in una pagina da svuotare, ma risultano registrate su un'altra pagina:",
-                daDecidere.registrateAltrove.map(r => r.codice + ": " + paginaRegistrata(r) + ", presente a pagina " + r.pagina),
-                "Si desidera rimuoverle insieme alla pagina o mantenerle nel documento, registrate sulla pagina in cui si trovano?"),
-            "Rimuovi insieme alla pagina", "rimuovi", "Mantieni nel documento", "mantieni");
-        if (sceltaRegistrateAltrove == null || !sceltaRegistrateAltrove.result) {
-            return null;
-        }
-        if (sceltaRegistrateAltrove.hiddenVal == "mantieni") {
-            decisioni.mantenuteRegistrateAltrove = daDecidere.registrateAltrove;
-            decisioni.daMantenere = decisioni.daMantenere.concat(daDecidere.registrateAltrove);
-        }
-    }
-
-    if (daDecidere.nonRegistrate.length > 0) {
-        hideLoading();
-        var sceltaNonRegistrate = await Modali.confirmCustom(
-            messaggioSvuotamento(
-                "Le seguenti referenze sono presenti nelle pagine da svuotare, ma non risultano impaginate sul server:",
-                daDecidere.nonRegistrate.map(r => r.codice + ": pagina " + r.pagina),
-                "Si desidera rimuoverle insieme alla pagina o mantenerle nel documento?"),
-            "Rimuovi insieme alla pagina", "rimuovi", "Mantieni nel documento", "mantieni");
-        if (sceltaNonRegistrate == null || !sceltaNonRegistrate.result) {
-            return null;
-        }
-        if (sceltaNonRegistrate.hiddenVal == "mantieni") {
-            decisioni.daMantenere = decisioni.daMantenere.concat(daDecidere.nonRegistrate);
-        }
-    }
-
-    return decisioni;
-}
-
 /// I20-1040: le referenze spostate nel formato della pre-analisi, come "impaginate a pagina
 /// differente" della pagina dove stanno: syncImpaginatoConServer porta il loro record a quella
 /// pagina, senza toccare altro.
@@ -9722,189 +9634,37 @@ function preAnalisiPerSpostate(spostate) {
 /// Ogni pagina passa da svuotaPaginaByPageName, quindi ognuna avvisa il server prima di
 /// toccare il documento: se il server rifiuta a meta' elenco, le pagine gia' fatte restano
 /// fatte e le altre no, ma server e impaginato restano d'accordo su entrambe.
+///
+/// TASK-19c18841: l'intervallo si legge una volta sola, con confronti.pagineDellIntervallo, e
+/// pre-analisi, mappa e svuotamento lavorano tutti sulle stesse pagine. Il 26/10/2026 un
+/// intervallo letto come nessuna pagina ha fatto analizzare e sincronizzare tutto il documento
+/// e non svuotare niente, con "Svuotamento completato". Un intervallo non valido ora si ferma
+/// qui, con la finestra ancora aperta per correggerlo. Un errore a meta' strada si dice invece
+/// di perdersi in una promessa rifiutata.
 async function selectionModalSvuota(mode){
     showLoading("Svuotamento in corso, l'operazione potrebbe richiedere un po' di tempo...");
     if(mode == "1"){
         svuotaMenabo();
     }
     else if (mode == "0"){
-        var pagineRange = $("#pagineRangeSvuotatura").val();
-        var pagineRangeSplit = pagineRange.split(",");
-        let pagine = [];
-        for (var i = 0; i < pagineRangeSplit.length; i++) {
-            var range = pagineRangeSplit[i].split("-");
-            if (range.length == 1) {
-                var page = parseInt(range[0]);
-                if (isNaN(page)) {
-                    messaggioUtente("Code IDX-127 Pagina non valida: " + range[0], "Error", false, 5);
-                    hideLoading();
-                    return;
-                }
-                pagine.push(page);
-            }
-            else if (range.length == 2) {
-                var startPage = parseInt(range[0]);
-                var endPage = parseInt(range[1]);
-                if (isNaN(startPage) || isNaN(endPage)) {
-                    messaggioUtente("Code IDX-128 Intervallo di pagine non valido: " + range[0] + "-" + range[1], "Error", false, 5);
-                    hideLoading();
-                    return;
-                }
-                for (var j = startPage; j <= endPage; j++) {
-                    pagine.push(j);
-                }
-            }
+        var letto = confronti.pagineDellIntervallo($("#pagineRangeSvuotatura").val());
+        if (letto.errore != null) {
+            messaggioUtente("Code IDX-127 Pagine da svuotare non valide: " + letto.errore, "Error", false, 5);
+            hideLoading();
+            return;
         }
+        let pagine = letto.pagine;
+        var pagineRange = pagine.join(",");
 
         Modali.chiudiModal();
 
-
-        var preAnalisi = await ReportIntegrita.preAnalisiMismatchNumeriPagina(pagineRange);
-
-        if(preAnalisi == null || preAnalisi.esito == false){
-            if (preAnalisi == null) {
-                messaggioUtente("Code IDX-130 Errore durante l'analisi delle pagine: risposta nulla", "error");
-            } else {
-                //Il server manda gli errori in errors, non in error.
-                messaggioUtente("Code IDX-130 Errore durante l'analisi delle pagine: " + (Array.isArray(preAnalisi.errors) ? preAnalisi.errors.join(", ") : preAnalisi.error), "error");
-            }
-
-            hideLoading()
-
-            //I20-1040: Modali.confirm e' asincrona. Senza await la condizione era una promessa,
-            //sempre vera: la domanda compariva ma lo svuotamento partiva senza aspettare.
-            if (await Modali.confirm("Errore durante l'analisi delle pagine, le pagine non sono state sincronizzate, vuoi comunque procedere con lo svuotamento?")) {
-                showLoading("Svuotamento in corso, l'operazione potrebbe richiedere un po' di tempo...");
-                for (const page of pagine) {
-                    await svuotaPaginaByPageName(page);
-                }
-
-                messaggioUtente("Svuotamento completato", "success", false, 3);
-            }
-            hideLoading();
-            return;
+        try {
+            await svuotaPagineDecise(pagine, pagineRange);
         }
-
-        //la preanalisi ha questa struttura (un esempio):
-        // errors: []
-        // esito: true
-        // resultPaginas: [{
-            // codiciCorrispondentiConId: [{ codice: "5329719,5365965,5365999,5633416,6344292,6927108,6927146", idRec: 123 }]
-            // codiciImpaginatiAPaginaDifferenteConId: [{ codice: "6593680", idRec: 456 }]
-            // codiciNonImpaginatiSulServerConId: [{ codice: "6096504", idRec: 789 }]
-            // codiciPresentiSoloSulServerConId: [{ codice: "2617525", idRec: 321 }]
-            // nomePagina: "1"]}
-
-        //per ogni pagina dobbiamo decidere se fare il sync o meno, tale sync potrebbe anche richiedere una mappa generale dell'impaginato
-        //per decidere ci basiamo sulle seguenti cose
-        //se per tutte le pagine solo la lista codiciCorrispondentiConId ha elementi allora non serve ne sync ne mappa
-        //se anche solo una pagina ha elementi in codiciImpaginatiAPaginaDifferenteConId serve il sync
-        //se anche solo una pagina ha elementi in codiciNonImpaginatiSulServerConId non servono interventi
-        //se anche solo una pagina ha elementi in codiciPresentiSoloSulServerConId serve la mappa e il sync
-        //chiaramente applichiamo la regola che richiede più cose
-
-        function normalizeCodiciConId(list) {
-            if (!Array.isArray(list)) {
-                return [];
-            }
-
-            var result = [];
-            for (var idx = 0; idx < list.length; idx++) {
-                var item = list[idx];
-                if (item == null) {
-                    continue;
-                }
-
-                var codice = "";
-                var idRec = 0;
-
-                if (typeof item === "string" || typeof item === "number") {
-                    codice = item.toString();
-                }
-                else {
-                    codice = item.codice != null ? item.codice.toString() : "";
-                    idRec = item.idRec != null && !isNaN(parseInt(item.idRec)) ? parseInt(item.idRec) : 0;
-                }
-
-                if (codice !== "") {
-                    result.push({ codice: codice, idRec: idRec });
-                }
-            }
-
-            return result;
+        catch (e) {
+            console.error(e);
+            messaggioUtente("Code IDX-195 Svuotamento interrotto da un errore: " + e, "error");
         }
-
-        var serveSync = false;
-        var serveMappa = false;
-        for(var i=0; i<preAnalisi.resultPaginas.length; i++){
-            var pagina = preAnalisi.resultPaginas[i];
-
-            var codiciImpaginatiAPaginaDifferenteConId = normalizeCodiciConId(pagina.codiciImpaginatiAPaginaDifferenteConId);
-            var codiciPresentiSoloSulServerConId = normalizeCodiciConId(pagina.codiciPresentiSoloSulServerConId);
-
-            if(codiciImpaginatiAPaginaDifferenteConId.length > 0){
-                serveSync = true;
-            }
-            if(codiciPresentiSoloSulServerConId.length > 0){
-                serveMappa = true;
-                serveSync = true;
-            }
-        }
-        //I20-1040: prima di toccare il server, le referenze su cui decide l'operatore.
-        var decisioni = await decisioniPrimaDelloSvuotamento(preAnalisi, pagine);
-        if (decisioni == null) {
-            messaggioUtente("Code IDX-171 Svuotamento annullato", "warning", false, 3);
-            hideLoading();
-            return;
-        }
-        showLoading("Svuotamento in corso, l'operazione potrebbe richiedere un po' di tempo...");
-
-        var mappa = null;
-        if(serveMappa){
-            mappa = await confronti.mappaturaImpaginato(pagineRange, false, true);
-        }
-
-        if(serveSync){
-            //I20-1040: le referenze che l'operatore mantiene nella pagina che svuota non passano a
-            //quella pagina adesso: Menabo/SvuotaPagina le cancellerebbe. Passano dopo.
-            var preAnalisiDaSincronizzare = decisioni.mantenuteRegistrateAltrove.length > 0
-                ? { esito: preAnalisi.esito, errors: preAnalisi.errors, resultPaginas: ReportIntegrita.preAnalisiSenza(preAnalisi.resultPaginas, decisioni.mantenuteRegistrateAltrove) }
-                : preAnalisi;
-            await ReportIntegrita.syncImpaginatoConServer(mappa, preAnalisiDaSincronizzare);
-        }
-
-        //I20-1040: le referenze spostate passano sul server alla pagina dove stanno, cosi' lo
-        //svuotamento non ne cancella il record. Se il server non conferma ci si ferma: svuotare
-        //cancellerebbe proprio quello che l'operatore ha chiesto di tenere.
-        if (decisioni.aggiornaSpostate) {
-            var esitoSpostate = await ReportIntegrita.syncImpaginatoConServer(null, { resultPaginas: preAnalisiPerSpostate(decisioni.spostate) });
-            if (esitoSpostate !== "Completed") {
-                messaggioUtente("Code IDX-172 La pagina delle referenze spostate non è stata aggiornata sul server: svuotamento interrotto", "error");
-                hideLoading();
-                return;
-            }
-        }
-
-        //I20-1040: prima le pagine con referenze mantenute ma registrate altrove: subito dopo il
-        //loro svuotamento il record passa a quella pagina. Se la pagina dove erano registrate si
-        //svuota anche lei, cosi' il record ha gia' cambiato pagina e non si cancella.
-        var conMantenute = (page) => decisioni.mantenuteRegistrateAltrove.some(m => m.pagina == page.toString());
-        var ordine = pagine.filter(conMantenute).concat(pagine.filter(page => !conMantenute(page)));
-        for (const page of ordine) {
-            await svuotaPaginaByPageName(page, decisioni.daMantenere.filter(m => m.pagina == page.toString()));
-
-            var daRegistrare = decisioni.mantenuteRegistrateAltrove.filter(m => m.pagina == page.toString());
-            if (daRegistrare.length > 0) {
-                var esitoMantenute = await ReportIntegrita.syncImpaginatoConServer(null, {
-                    resultPaginas: preAnalisiPerSpostate(daRegistrare.map(m => ({ codice: m.codice, idRec: m.idRec, paginaDocumento: m.pagina })))
-                });
-                if (esitoMantenute !== "Completed") {
-                    messaggioUtente("Code IDX-174 Le referenze mantenute a pagina " + page + " non sono state registrate su quella pagina: verificare con il Report Integrità", "error");
-                }
-            }
-        }
-
-        messaggioUtente("Svuotamento completato", "success", false, 3);
     }
     else{
         messaggioUtente("Code IDX-131 Modalità di svuotamento non valida", "error");
@@ -9913,6 +9673,105 @@ async function selectionModalSvuota(mode){
     }
 
     hideLoading();
+}
+
+/// Svuota le pagine di un intervallo gia' letto, dopo aver chiesto all'operatore cosa fare delle
+/// referenze su cui documento e server non concordano (SvuotamentoPagina.decidi).
+async function svuotaPagineDecise(pagine, pagineRange) {
+    var preAnalisi = await ReportIntegrita.preAnalisiMismatchNumeriPagina(pagineRange);
+
+    if(preAnalisi == null || preAnalisi.esito == false){
+        if (preAnalisi == null) {
+            messaggioUtente("Code IDX-130 Errore durante l'analisi delle pagine: risposta nulla", "error");
+        } else {
+            //Il server manda gli errori in errors, non in error.
+            messaggioUtente("Code IDX-130 Errore durante l'analisi delle pagine: " + (Array.isArray(preAnalisi.errors) ? preAnalisi.errors.join(", ") : preAnalisi.error), "error");
+        }
+
+        hideLoading()
+
+        //I20-1040: Modali.confirm e' asincrona. Senza await la condizione era una promessa,
+        //sempre vera: la domanda compariva ma lo svuotamento partiva senza aspettare.
+        if (await Modali.confirm("Errore durante l'analisi delle pagine, le pagine non sono state sincronizzate, vuoi comunque procedere con lo svuotamento?")) {
+            showLoading("Svuotamento in corso, l'operazione potrebbe richiedere un po' di tempo...");
+            await svuotaPagineConEsito(pagine);
+        }
+        return;
+    }
+
+    //la preanalisi ha questa struttura (un esempio):
+    // errors: []
+    // esito: true
+    // resultPaginas: [{
+        // codiciCorrispondentiConId: [{ codice: "5329719,5365965,5365999,5633416,6344292,6927108,6927146", idRec: 123 }]
+        // codiciImpaginatiAPaginaDifferenteConId: [{ codice: "6593680", idRec: 456 }]
+        // codiciNonImpaginatiSulServerConId: [{ codice: "6096504", idRec: 789 }]
+        // codiciPresentiSoloSulServerConId: [{ codice: "2617525", idRec: 321 }]
+        // nomePagina: "1"]}
+
+    //per ogni pagina dobbiamo decidere se fare il sync o meno, tale sync potrebbe anche richiedere una mappa generale dell'impaginato
+    //per decidere ci basiamo sulle seguenti cose
+    //se per tutte le pagine solo la lista codiciCorrispondentiConId ha elementi allora non serve ne sync ne mappa
+    //se anche solo una pagina ha elementi in codiciImpaginatiAPaginaDifferenteConId serve il sync
+    //se anche solo una pagina ha elementi in codiciNonImpaginatiSulServerConId non servono interventi
+    //se anche solo una pagina ha elementi in codiciPresentiSoloSulServerConId serve la mappa e il sync
+    //chiaramente applichiamo la regola che richiede più cose
+
+    var serveSync = false;
+    var serveMappa = false;
+    for(var i=0; i<preAnalisi.resultPaginas.length; i++){
+        var pagina = preAnalisi.resultPaginas[i];
+
+        if(ReportIntegrita._codiciConId(pagina.codiciImpaginatiAPaginaDifferenteConId, null).length > 0){
+            serveSync = true;
+        }
+        if(ReportIntegrita._codiciConId(pagina.codiciPresentiSoloSulServerConId, null).length > 0){
+            serveMappa = true;
+            serveSync = true;
+        }
+    }
+    //TASK-19c18841: prima di toccare il server, una finestra sola con tutte le referenze su cui
+    //documento e server non concordano, e una sola scelta: «Sincronizza e svuota». Sincronizzare
+    //vuol dire allineare il server al documento per quelle referenze: le registrate altrove
+    //passano alla pagina da svuotare (la sync qui sotto) ed escono con lei, le spostate passano
+    //alla pagina dove stanno e restano, le altre escono con la pagina.
+    var decisioni = await SvuotamentoPagina.decidi(preAnalisi, pagine);
+    if (decisioni === false) {
+        return;
+    }
+    if (decisioni == null) {
+        messaggioUtente("Code IDX-171 Svuotamento annullato", "warning", false, 3);
+        return;
+    }
+    showLoading("Svuotamento in corso, l'operazione potrebbe richiedere un po' di tempo...");
+
+    var mappa = null;
+    if(serveMappa){
+        mappa = await confronti.mappaturaImpaginato(pagineRange, false, true);
+    }
+
+    //TASK-19c18841: se il server non conferma non si svuota: le registrate altrove uscirebbero dal
+    //documento lasciando il loro record su un'altra pagina.
+    if(serveSync){
+        var esitoSync = await ReportIntegrita.syncImpaginatoConServer(mappa, preAnalisi);
+        if (esitoSync !== "Completed") {
+            messaggioUtente("Code IDX-196 La sincronizzazione delle pagine con il server non è riuscita: svuotamento interrotto", "error");
+            return;
+        }
+    }
+
+    //I20-1040: le referenze spostate passano sul server alla pagina dove stanno, cosi' lo
+    //svuotamento non ne cancella il record. Se il server non conferma ci si ferma: svuotare
+    //cancellerebbe proprio quello che l'operatore ha chiesto di tenere.
+    if (decisioni.spostate.length > 0) {
+        var esitoSpostate = await ReportIntegrita.syncImpaginatoConServer(null, { resultPaginas: preAnalisiPerSpostate(decisioni.spostate) });
+        if (esitoSpostate !== "Completed") {
+            messaggioUtente("Code IDX-172 La pagina delle referenze spostate non è stata aggiornata sul server: svuotamento interrotto", "error");
+            return;
+        }
+    }
+
+    await svuotaPagineConEsito(pagine);
 }
 
 

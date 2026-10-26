@@ -17,6 +17,8 @@ const { fileDelPlugin, leggiFileDelPlugin } = require("./fileDelPlugin");
 
 const MOTORE = ["confrontoBox", "confrontoBoxCompiledFieldPreAnalisi", "mappaturaImpaginato",
     "semplificazioneMappaImpaginato", "decodeSpecialCharacters",
+    //TASK-19c18841: le pagine di un intervallo, lette allo stesso modo dalla mappa e dallo svuotamento.
+    "pagineDellIntervallo",
     //I20-1068: la decisione sul logo con l'immagine cambiata, membro puro del motore.
     "fotoExtraConImmagineCambiata",
     //I20-1070: il tipo di elemento di una foto extra del dato, per le decisioni della scheda.

@@ -81,9 +81,11 @@ test("le domande non spengono e non riaccendono i campi: rimettono a riposo quel
         assert.match(domanda, /CampiARiposo\.tuttiARiposo\(\);/);
         assert.doesNotMatch(domanda, /HidebleElements|dopoLaDomanda/);
     });
-    //Dopo la risposta non c'e' niente da riaccendere: si risponde e basta.
-    assert.match(personalizzata, /while\(!risposto\)\{\s*await delay\(100\);\s*\}\s*return objRes;/);
-    assert.match(conferma, /while\(result == null\)\{\s*await delay\(100\);\s*\}\s*return result;/);
+    //Dopo la risposta non c'e' niente da riaccendere: si risponde e basta. TASK-19c18841: nell'attesa
+    //ci sono solo il controllo della finestra tolta da altri, che vale come Annulla, e l'altezza
+    //fissa del messaggio se il contenuto supera la massima.
+    assert.match(personalizzata, /while\(!risposto\)\{\s*if \(document\.getElementById\(idMessaggio\) == null\) \{\s*objRes\.result = false;\s*objRes\.hiddenVal = null;\s*break;\s*\}\s*fissaSeServe\(\);\s*await delay\(100\);\s*\}\s*return objRes;/);
+    assert.match(conferma, /while\(result == null\)\{\s*if \(document\.getElementById\(idMessaggio\) == null\) \{\s*return false;\s*\}\s*await delay\(100\);\s*\}\s*return result;/);
 
     //Gli strumenti di .hideble non ci sono piu'.
     ["dopoLaDomanda", "nascondiHidebleElements", "mostraHidebleElements", "isElementVisible"].forEach(nome => {

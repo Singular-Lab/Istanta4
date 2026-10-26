@@ -45,8 +45,11 @@ function altezzaMassima(finestra) {
 }
 
 /// Dove attaccare il riquadro, e quanto spazio concedergli.
-///  - left: sempre presente, ancorato al bordo sinistro dell'elemento e arretrato quanto
-///    serve perche' left piu' la larghezza concessa non superi il bordo del pannello;
+///  - left oppure right: di norma left, il bordo sinistro dell'elemento. Se cosi' il riquadro
+///    potrebbe uscire a destra, right: il bordo destro del riquadro si attacca a quello
+///    dell'elemento e il riquadro cresce verso sinistra, e quanto sia largo non serve saperlo.
+///    TASK-19c18841: prima si arretrava left di tutta la larghezza concessa (260 px), e un
+///    testo corto come "Trova" compariva lontano dalla sua icona;
 ///  - top oppure bottom: si sceglie il lato dove c'e' piu' spazio. Ancorando il bordo
 ///    inferiore del riquadro (bottom) il riquadro cresce verso l'alto, e quanto sia alto non
 ///    serve saperlo;
@@ -64,35 +67,41 @@ function ancoraggioTooltip(elemento, finestra, larghezzaDesiderata) {
     const sinistraElemento = numero(el.left, 0);
     const sopraElemento = numero(el.top, 0);
     const sottoElemento = numero(el.bottom, sopraElemento + numero(el.height, 0));
+    const destraElemento = numero(el.right, sinistraElemento + numero(el.width, 0));
 
-    let left = sinistraElemento;
+    //Il lato orizzontale: { left } o { right }, uno solo, e lo spazio che ne viene.
+    let orizzontale = { left: Math.round(Math.max(BORDO, sinistraElemento)) };
+    let larghezzaConcessa = maxWidth;
 
-    if (left + maxWidth > larghezzaFinestra - BORDO) {
-        left = larghezzaFinestra - BORDO - maxWidth;
-    }
-
-    if (left < BORDO) {
-        left = BORDO;
+    if (sinistraElemento + maxWidth > larghezzaFinestra - BORDO) {
+        const destra = Math.min(destraElemento, larghezzaFinestra - BORDO);
+        const spazioVersoSinistra = destra - BORDO;
+        if (spazioVersoSinistra >= 80) {
+            orizzontale = { right: Math.round(larghezzaFinestra - destra) };
+            larghezzaConcessa = Math.min(maxWidth, spazioVersoSinistra);
+        }
+        else {
+            //Elemento quasi sul bordo sinistro di un pannello stretto: si arretra come prima.
+            orizzontale = { left: Math.round(Math.max(BORDO, larghezzaFinestra - BORDO - maxWidth)) };
+        }
     }
 
     const spazioSotto = (altezzaFinestra - BORDO) - (sottoElemento + DISTANZA);
     const spazioSopra = (sopraElemento - DISTANZA) - BORDO;
 
     if (spazioSotto >= ALTEZZA_MINIMA || spazioSotto >= spazioSopra) {
-        return {
-            left: Math.round(left),
+        return Object.assign({}, orizzontale, {
             top: Math.round(sottoElemento + DISTANZA),
-            maxWidth: Math.round(maxWidth),
+            maxWidth: Math.round(larghezzaConcessa),
             maxHeight: Math.max(ALTEZZA_MINIMA, Math.round(spazioSotto))
-        };
+        });
     }
 
-    return {
-        left: Math.round(left),
+    return Object.assign({}, orizzontale, {
         bottom: Math.round(altezzaFinestra - (sopraElemento - DISTANZA)),
-        maxWidth: Math.round(maxWidth),
+        maxWidth: Math.round(larghezzaConcessa),
         maxHeight: Math.max(ALTEZZA_MINIMA, Math.round(spazioSopra))
-    };
+    });
 }
 
 function numero(valore, predefinito) {

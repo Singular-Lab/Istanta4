@@ -4,6 +4,7 @@
 ///   confrontoBox                         due box a confronto: porta nel box nuovo quello che
 ///                                        l'operatore aveva cambiato a mano in quello vecchio
 ///   confrontoBoxCompiledFieldPreAnalisi  un box e i suoi record: cosa non corrisponde piu'
+///   pagineDellIntervallo                 le pagine di un intervallo come "1,3-5", o perche' non vale
 ///   mappaturaImpaginato                  la mappa di cio' che e' impaginato, pagina per pagina
 ///   semplificazioneMappaImpaginato       la stessa mappa ridotta a quello che chiede il server
 ///   decodeSpecialCharacters              i caratteri speciali del testo InDesign
@@ -898,6 +899,38 @@ const confronti = {
         return mappa;
     },
 
+    /// TASK-19c18841: le pagine di un intervallo come "1,3-5": [1, 3, 4, 5], senza ripetizioni, o
+    /// l'errore che dice quale pezzo non va. Le stesse regole di MenaboController.PagineDellIntervallo:
+    /// un estremo che non e' un numero, piu' di un trattino o un intervallo al contrario non sono
+    /// pagine, e nemmeno un testo vuoto. Restituisce { pagine, errore }, con errore null se va bene.
+    ///
+    /// Prima lo svuotamento e la mappa leggevano l'intervallo ciascuno per conto suo, e tutti e due
+    /// lasciavano passare "13-11" (o "11--13") come nessuna pagina, senza errore. La mappa, senza
+    /// pagine, mappava tutto il documento: il 26/10/2026 la pre-analisi e le sync hanno lavorato su
+    /// tutte le pagine, lo svuotamento su nessuna, e il Plugin ha scritto "Svuotamento completato".
+    pagineDellIntervallo(testo) {
+        const intero = testo == null ? "" : String(testo).trim();
+        if (intero === "") {
+            return { pagine: [], errore: "nessuna pagina indicata" };
+        }
+        const pagine = [];
+        for (const blocco of intero.split(",")) {
+            const estremi = blocco.split("-").map(e => e.trim());
+            const numeri = estremi.every(e => /^\d+$/.test(e));
+            const da = numeri ? parseInt(estremi[0], 10) : NaN;
+            const a = numeri ? parseInt(estremi[estremi.length - 1], 10) : NaN;
+            if (estremi.length > 2 || !numeri || da > a) {
+                return { pagine: [], errore: "'" + blocco.trim() + "' non e' una pagina o un intervallo di pagine valido (come 3 o 3-5)" };
+            }
+            for (let pagina = da; pagina <= a; pagina++) {
+                if (pagine.indexOf(pagina) < 0) {
+                    pagine.push(pagina);
+                }
+            }
+        }
+        return { pagine: pagine, errore: null };
+    },
+
     async mappaturaImpaginato(pag = null, infoDescrizione = false, simplified = false){
         try{
             let mappa = {};
@@ -909,30 +942,13 @@ const confronti = {
 
             let pagine = [];
             if (pag != null) {
-                var pagineRange = pag;
-                var pagineRangeSplit = pagineRange.split(",");
-                for (var i = 0; i < pagineRangeSplit.length; i++) {
-                    var range = pagineRangeSplit[i].split("-");
-                    if (range.length == 1) {
-                        var page = parseInt(range[0]);
-                        if (isNaN(page)) {
-                            messaggioUtente("Code CNF-002: Pagina da mappare non valida nell'unica pagina specificata: " + range[0], "Error", false);
-                            return;
-                        }
-                        pagine.push(page);
-                    }
-                    else if (range.length == 2) {
-                        var startPage = parseInt(range[0]);
-                        var endPage = parseInt(range[1]);
-                        if (isNaN(startPage) || isNaN(endPage)) {
-                            messaggioUtente("Code CNF-003: Pagina da mappare non valida nel range di pagine specificato: " + range[0] + "-" + range[1], "Error", false);
-                            return;
-                        }
-                        for (var j = startPage; j <= endPage; j++) {
-                            pagine.push(j);
-                        }
-                    }
+                //TASK-19c18841: pagine indicate ma non valide non diventano "tutto il documento".
+                const letto = this.pagineDellIntervallo(pag);
+                if (letto.errore != null) {
+                    messaggioUtente("Code CNF-003: Pagine da mappare non valide: " + letto.errore, "Error", false);
+                    return;
                 }
+                pagine = letto.pagine;
             }
 
 

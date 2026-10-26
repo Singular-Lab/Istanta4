@@ -151,7 +151,11 @@ const ReportIntegrita = {
 
     /// Confronta la mappa dell'impaginato coi dati del server e puo'
     /// restituire i record da reimpaginare, pagina per pagina.
-    async syncImpaginatoConServer(mappa = null, preAnalisi, applicaImpaginazioni = false){
+    ///
+    /// TASK-19c18841: origine "report" dice al server che a spostare i box e' il Report
+    /// Integrita': l'autore dei box che cambiano pagina diventa il report, avviato dall'utente
+    /// della sessione, invece dell'utente stesso. Senza origine l'autore e' l'utente.
+    async syncImpaginatoConServer(mappa = null, preAnalisi, applicaImpaginazioni = false, origine = null){
 
         var lista = null;
         if (mappa != null){
@@ -163,6 +167,9 @@ const ReportIntegrita = {
         formData.append("preAnalisi", JSON.stringify(preAnalisi.resultPaginas));
         if (lista != null) {
             formData.append("mappa", JSON.stringify(lista));
+        }
+        if (origine != null) {
+            formData.append("origine", origine);
         }
 
         var stato = null;
@@ -281,30 +288,38 @@ const ReportIntegrita = {
         return stato;
     },
 
-    /// I20-1040: prima di svuotare delle pagine, le referenze su cui l'operatore deve decidere.
+    /// I20-1040: prima di svuotare delle pagine, le referenze su cui documento e server non
+    /// concordano. TASK-19c18841: vanno tutte nella finestra dello svuotamento, comprese quelle
+    /// che il documento non ha piu'.
     ///
     /// resultPaginas e' la pre-analisi (Menabo/PreAnalisiMismatch) delle sole pagine da svuotare;
     /// listaDocumento la mappa di tutto il documento ridotta da semplificazioneMappaImpaginato,
-    /// o null se non serve; pagineDaSvuotare i nomi delle pagine.
+    /// o null quando nessuna referenza e' presente solo sul server; pagineDaSvuotare i nomi
+    /// delle pagine.
     ///
     ///   spostate       il server le ha in una pagina da svuotare, ma nel documento stanno in
     ///                  un'altra pagina, che non si svuota: { codice, idRec, paginaServer,
-    ///                  paginaDocumento }. Senza intervento lo svuotamento ne cancellerebbe il
-    ///                  record, e resterebbero in pagina come non impaginate.
+    ///                  paginaDocumento }. La sync le porta a quella pagina, cosi' lo
+    ///                  svuotamento non ne cancella il record.
+    ///   nonImpaginate  il server le ha in una pagina da svuotare, ma nel documento non ci sono
+    ///                  da nessuna parte: { codice, idRec, paginaServer }. Il loro record si
+    ///                  cancella con lo svuotamento.
     ///   nonRegistrate  stanno in una pagina da svuotare ma il server non le ha impaginate:
     ///                  { codice, idRec, pagina }.
     ///   registrateAltrove  stanno in una pagina da svuotare ma il server le ha impaginate su
     ///                  un'altra pagina, perche' l'operatore le ha portate li': { codice, idRec,
-    ///                  pagina }. Svuotando senza chiedere sparivano dal documento e dal server.
+    ///                  pagina }. La sync le porta a questa pagina, e lo svuotamento le toglie.
     ///
-    /// Le referenze che il server ha ma che nel documento non ci sono piu' da nessuna parte non
-    /// entrano: sono state tolte a mano, e il loro record si cancella con lo svuotamento.
+    /// Una referenza che il server ha in una pagina da svuotare e che nel documento sta in
+    /// un'altra pagina da svuotare non entra fra le prime due: la pre-analisi di quell'altra
+    /// pagina la da' fra le registrate altrove, e cosi' compare una volta sola.
     classificaPerSvuotamento(resultPaginas, listaDocumento, pagineDaSvuotare) {
         const daSvuotare = (Array.isArray(pagineDaSvuotare) ? pagineDaSvuotare : []).map(p => String(p));
         const pagineDocumento = listaDocumento != null && Array.isArray(listaDocumento.listRefPerPagina)
             ? listaDocumento.listRefPerPagina
             : [];
         const spostate = [];
+        const nonImpaginate = [];
         const nonRegistrate = [];
         const registrateAltrove = [];
 
@@ -316,9 +331,11 @@ const ReportIntegrita = {
 
             ReportIntegrita._codiciConId(pagina.codiciPresentiSoloSulServerConId, pagina.codiciPresentiSoloSulServer).forEach(codice => {
                 const dove = pagineDocumento.find(p => p != null
-                    && daSvuotare.indexOf(String(p.nomePagina)) < 0
                     && ReportIntegrita._codiciConId(p.codiciConId, p.codici).some(c => ReportIntegrita._stessaReferenza(c, codice)));
-                if (dove != null) {
+                if (dove == null) {
+                    nonImpaginate.push({ codice: codice.codice, idRec: codice.idRec, paginaServer: nomePagina });
+                }
+                else if (daSvuotare.indexOf(String(dove.nomePagina)) < 0) {
                     spostate.push({ codice: codice.codice, idRec: codice.idRec, paginaServer: nomePagina, paginaDocumento: String(dove.nomePagina) });
                 }
             });
@@ -332,26 +349,7 @@ const ReportIntegrita = {
             });
         });
 
-        return { spostate: spostate, nonRegistrate: nonRegistrate, registrateAltrove: registrateAltrove };
-    },
-
-    /// I20-1040: la pre-analisi senza le referenze indicate fra le "impaginate a pagina
-    /// differente". Sono quelle che l'operatore mantiene nella pagina che svuota: portarle a quella
-    /// pagina prima dello svuotamento vorrebbe dire farle cancellare da Menabo/SvuotaPagina. Si
-    /// portano dopo. Restituisce una copia, la pre-analisi ricevuta non cambia.
-    preAnalisiSenza(resultPaginas, referenze) {
-        const daTogliere = Array.isArray(referenze) ? referenze : [];
-        const resta = (codice) => !daTogliere.some(r => ReportIntegrita._stessaReferenza(r, codice));
-        return (Array.isArray(resultPaginas) ? resultPaginas : []).map(pagina => {
-            if (pagina == null) {
-                return pagina;
-            }
-            const copia = Object.assign({}, pagina);
-            copia.codiciImpaginatiAPaginaDifferenteConId = ReportIntegrita._codiciConId(pagina.codiciImpaginatiAPaginaDifferenteConId, null).filter(resta);
-            copia.codiciImpaginatiAPaginaDifferente = (Array.isArray(pagina.codiciImpaginatiAPaginaDifferente) ? pagina.codiciImpaginatiAPaginaDifferente : [])
-                .filter(c => resta({ codice: String(c), idRec: 0 }) || copia.codiciImpaginatiAPaginaDifferenteConId.some(k => k.codice === String(c)));
-            return copia;
-        });
+        return { spostate: spostate, nonImpaginate: nonImpaginate, nonRegistrate: nonRegistrate, registrateAltrove: registrateAltrove };
     },
 
     /// Una lista di codici della pre-analisi come { codice, idRec }: quella con l'idRec se c'e',
@@ -4366,7 +4364,8 @@ const ReportIntegrita = {
                 return;
             }
 
-            const statoRes = await ReportIntegrita.syncImpaginatoConServer(mappa, preAnalisiMismatchNumeriPagina, true);
+            //TASK-19c18841: i box che la sync sposta di pagina risultano spostati dal report.
+            const statoRes = await ReportIntegrita.syncImpaginatoConServer(mappa, preAnalisiMismatchNumeriPagina, true, "report");
             if (statoRes == null) {
                 messaggioUtente("Code IDX-86 Sync con server fallita", "error", false, 10);
                 return;
