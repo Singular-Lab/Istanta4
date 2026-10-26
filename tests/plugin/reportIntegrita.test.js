@@ -38,7 +38,10 @@ const MOTORE = ["confrontoBox", "confrontoBoxCompiledFieldPreAnalisi", "mappatur
     //I20-1124: la mappa delle versioni precedenti dei box, per il Report Integrita'.
     "mappaturaVersioniPrecedenti",
     //I20-1140: il testo dei loghi idms dichiarati dal plugin di agenzia, confrontato col dato.
-    "differenzaTestoLogo", "testoDelLogoNelBox", "testoLogoConfrontabile", "testoLogoInRiga"
+    "differenzaTestoLogo", "testoDelLogoNelBox", "testoLogoConfrontabile", "testoLogoInRiga",
+    //I20-1143: i blocchi della descrizione per il giallo della scheda, e le fondamentali alterate
+    //dall'esportazione con il testo che il server compone per ciascuna.
+    "blocchiDelContenuto", "blocchiDescrizioneDiversi", "testiDelleFondamentali", "fondamentaliAlterateDaEsportazione"
 ];
 const DA_INDEXNEW = ["avviaReportIntegrita", "applicaConfronto", "preAnalisiBoxMappato",
     "nomiPagineDelDocumento", "boxDellElementoMappa"];

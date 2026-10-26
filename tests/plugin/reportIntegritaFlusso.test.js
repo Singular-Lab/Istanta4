@@ -950,9 +950,12 @@ test('la descrizione applicata si vede anche in edit', () => {
     //
     //I20-995: quando la preanalisi della scheda e' gia' stata fatta il giudizio si legge da
     //quella - stesso elenco di differenze, stesso filtro sul campo - invece di rifarne una a
-    //ogni rientro nella schermata. Alla prima apertura si continua a chiederlo a
-    //descrizioneDisallineata, che gira prima che un campo vuoto venga riempito.
-    assert.match(sorgenteScheda, /segnalazioniGiaInMemoria != null && campoDescrizioneDelPrimario != null\s*\n\s*\? this\.differenzaDaAllineare\(segnalazioniGiaInMemoria, campoDescrizioneDelPrimario\.labelName\)\s*\n\s*: await this\.descrizioneDisallineata\(this\.schedeRefDati, box\)/);
+    //ogni rientro nella schermata. Alla prima apertura lo si chiede alla stessa preanalisi sul
+    //solo campo della descrizione.
+    //I20-1143: si tengono le differenze e non solo il si' o no, perche' da quelle stesse si legge
+    //il giallo delle caselle: pulsante e giallo nascono dallo stesso verdetto.
+    assert.match(sorgenteScheda, /segnalazioniGiaInMemoria != null && campoDescrizioneDelPrimario != null\s*\n\s*\? this\.differenzeDaAllineare\(segnalazioniGiaInMemoria, campoDescrizioneDelPrimario\.labelName\)\s*\n\s*: await this\.differenzeDescrizioneDelBox\(this\.schedeRefDati, box\)/);
+    assert.match(sorgenteScheda, /const descrizioneDaAllineare = differenzeDescrizione\.length > 0;/);
     assert.match(sorgenteScheda, /if \(descrizioneDaAllineare\) \{/);
 
     //I20-993: il contenuto che riporta e' quello composto per la variante che comanda, quindi

@@ -64,6 +64,19 @@ sta lavorando l'operatore» guarda lì. Con lei: `multiSelection`, `schedeRefDat
   un'opzione valida; con una sola opzione si usa quella. Lo stato è in `azioniStrutturaliDisponibili`
   e `azioniDiGruppo`. La regola sulle opzioni è in [cambiStrutturali](cambiStrutturali.md)
   (I20-1049).
+- `differenzeDaAllineare`, `differenzeDescrizioneDelBox`, `gialloDellaDescrizione` → (I20-1143) il
+  giallo delle caselle della descrizione e "Applica descrizione da server" nascono dalle stesse
+  differenze della preanalisi: le caselle dei blocchi diversi si colorano, il resto (un blocco del
+  server che nel box manca, l'ordine, lo stile di paragrafo) va in righe gialle sotto i campi
+  (`mostraGialloDescrizione`). Una differenza di soli spazi o a capo non accende niente. Un campo
+  descrizione vuoto si riempie prima di decidere (`riempiDescrizioneVuota`).
+- `descrizioniAlterateDaEsportazione`, `archivioDescrizioneDelPrimario`, `testiCompostiDelPrimario`
+  → (I20-1143) le fondamentali che l'export ha alterato rispetto all'archivio della scheda vanno in
+  sola lettura come quelle dell'agenzia (I20-1132), con la nota "DescrizioneN (Alterato da
+  esportazione)" anche quando nel box non hanno casella, e partono non toccate. Col meta della
+  descrizione non si giudica. I testi composti vanno al controller, perché il Salva veda anche uno
+  spazio o un a capo cambiato. Girano mentre si costruisce la schermata: se non riescono la scheda
+  si apre come prima, con l'avviso `SRF-133` (un'eccezione lì lasciava la scheda in caricamento).
 
 ---
 

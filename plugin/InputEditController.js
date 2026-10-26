@@ -29,13 +29,18 @@ class InputEditController {
     //(pluginMiddleware.getDescrizioniInSolaLettura): partono come non toccate, anche se il testo
     //del box e' diverso dall'archivio, e i loro tratti ripetuti non fermano il salvataggio.
     fondamentaliInSolaLettura = [];
+    //I20-1143: il testo con cui il server compone ciascuna descrizione fondamentale nel box
+    //({ descrizione1: testo, ... }, confronti.testiDelleFondamentali): un campo che ne differisce
+    //anche solo per spazi o a capo e' una modifica da salvare.
+    testiComposti = null;
 
-    constructor(container, convalidaFirma, descrInArchivio, compiledFields = null, fondamentaliInSolaLettura = []) {
+    constructor(container, convalidaFirma, descrInArchivio, compiledFields = null, fondamentaliInSolaLettura = [], testiComposti = null) {
         this.myContainer = container;//.find('input');
-        this.convalidaFirma = convalidaFirma;   
+        this.convalidaFirma = convalidaFirma;
         this.descrInArchivio = descrInArchivio;
         //I20-1132: prima di leggere i campi, perche' checkStato le usa subito.
         this.fondamentaliInSolaLettura = Array.isArray(fondamentaliInSolaLettura) ? fondamentaliInSolaLettura : [];
+        this.testiComposti = testiComposti != null && typeof testiComposti === "object" ? testiComposti : null;
 
         if(compiledFields!=null){
             let matchFieldData = compiledFields.find(f => Utility.parseLabel(f.labelName) == "descrizione");
@@ -259,20 +264,24 @@ class InputEditController {
         }
         else {
             let report = "";
+            //I20-1132/I20-1143: le fondamentali in sola lettura - per regola dell'agenzia o perche'
+            //l'esportazione le ha alterate - non si segnalano: il box le mostra come le compone il
+            //server, e non e' l'operatore a doverle allineare all'archivio.
+            const siConfronta = n => !this.fondamentaliInSolaLettura.includes("descrizione" + n);
 
-            if (TestoTag.trimDescrizione(this.descrInArchivio[0]) != TestoTag.trimDescrizione(descr1InPage)) {
+            if (siConfronta(1) && TestoTag.trimDescrizione(this.descrInArchivio[0]) != TestoTag.trimDescrizione(descr1InPage)) {
                 //MISMATCH WARNING
                 report +=" Descrizione1 no match";
             }
-            if (TestoTag.trimDescrizione(this.descrInArchivio[1]) != TestoTag.trimDescrizione(descr2InPage)) {
+            if (siConfronta(2) && TestoTag.trimDescrizione(this.descrInArchivio[1]) != TestoTag.trimDescrizione(descr2InPage)) {
                 //MISMATCH WARNING
                 report +=" Descrizione2 no match";
             }
-            if (TestoTag.trimDescrizione(this.descrInArchivio[2]) != TestoTag.trimDescrizione(descr3InPage)) {
+            if (siConfronta(3) && TestoTag.trimDescrizione(this.descrInArchivio[2]) != TestoTag.trimDescrizione(descr3InPage)) {
                 //MISMATCH WARNING
                 report +=" Descrizione3 no match";
             }
-            if (TestoTag.trimDescrizione(this.descrInArchivio[3]) != TestoTag.trimDescrizione(descr4InPage)) {
+            if (siConfronta(4) && TestoTag.trimDescrizione(this.descrInArchivio[3]) != TestoTag.trimDescrizione(descr4InPage)) {
                 //MISMATCH WARNING
                 report +=" Descrizione4 no match";
             }
@@ -366,6 +375,15 @@ class InputEditController {
         return TestoTag.trimDescrizione(testo == null ? "" : String(testo));
     }
 
+    /// I20-1143: il testo come lo confronta il salvataggio con quello composto dal server, spazi e
+    /// a capo compresi. Gli a capo si scrivono tutti "\n" - InDesign li tiene come "\r", la
+    /// textarea come "\n" - e lo spazio unificatore vale uno spazio: a vista sono la stessa cosa.
+    static testoEsatto(testo) {
+        return String(testo == null ? "" : testo)
+            .replace(/\r\n|\r|\u2028|\u2029/g, "\n")
+            .replace(/\u00a0/g, " ");
+    }
+
     /// I20-1084: i campi della descrizione, uno per textarea, come li guarda il salvataggio: lo
     /// stile, la descrizione fondamentale a cui porta (null se nessuna), il testo, se il campo ha
     /// ricevuto una modifica, e se e' un tratto nascosto.
@@ -437,6 +455,13 @@ class InputEditController {
     /// vede, e le varianti in sola lettura, che mostrano i testi di un'altra variante: confrontarli
     /// con questo archivio direbbe "cambiato" per niente.
     ///
+    /// I20-1143: con opzioni.composto ({ descrizioneN: testo composto dal server }) parte col suo
+    /// testo anche un campo uguale all'archivio a meno di spazi e a capo, se quegli spazi e a capo
+    /// non sono quelli del testo composto: li ha cambiati l'operatore, nella scheda o a mano nel
+    /// box. Il confronto e' col composto e non con l'archivio perche' gli export aggiungono i loro
+    /// separatori (Coop uno spazio davanti, Edro21 un a capo in coda), e con l'archivio ogni campo
+    /// sembrerebbe cambiato. Rimandarli non li raddoppia: entrambi li aggiungono solo se mancano.
+    ///
     /// Restituisce { valori: { descrizioneN: testo | "<untouched>" }, cambiati: [descrizioneN],
     /// ripetuti }: una descrizione senza nessun campo non c'e' fra i valori, e il server la
     /// lascia com'e'. Una ripetuta nemmeno: con lei il salvataggio non parte.
@@ -485,11 +510,15 @@ class InputEditController {
             const scelta = conTesto.length > 0 ? conTesto[0] : visibili[0];
             const inArchivio = archivio != null ? archivio[indice] : null;
             const diverso = InputEditController.testoPerConfronto(scelta.valore) !== InputEditController.testoPerConfronto(inArchivio);
+            //I20-1143: stesso testo, ma spazi o a capo diversi da come il server lo compone.
+            const composto = opzioni.composto != null && typeof opzioni.composto === "object" ? opzioni.composto[fondamentale] : undefined;
+            const soloSpazi = !diverso && composto != null &&
+                InputEditController.testoEsatto(scelta.valore) !== InputEditController.testoEsatto(composto);
 
-            if (diverso) {
+            if (diverso || soloSpazi) {
                 cambiati.push(fondamentale);
             }
-            valori[fondamentale] = diverso || forzato ? scelta.valore : SpecificitaNonToccato;
+            valori[fondamentale] = diverso || soloSpazi || forzato ? scelta.valore : SpecificitaNonToccato;
         });
 
         return { valori: valori, cambiati: cambiati, ripetuti: ripetuti };
@@ -509,7 +538,7 @@ class InputEditController {
             return false;
         }
         const voci = this.vociDellaDescrizione().filter(v => !v.nascosto);
-        const decise = InputEditController.decidiFondamentali(voci, this.descrInArchivio, { nonToccare: this.fondamentaliInSolaLettura });
+        const decise = InputEditController.decidiFondamentali(voci, this.descrInArchivio, { nonToccare: this.fondamentaliInSolaLettura, composto: this.testiComposti });
         return decise.cambiati.length > 0 || decise.ripetuti.length > 0;
     }
 
@@ -547,7 +576,7 @@ class InputEditController {
                 if (key=="descrizione")
                 {
                     const decise = InputEditController.decidiFondamentali(this.vociDellaDescrizione(), this.descrInArchivio,
-                        { forzato: descrizioneEreditata, inMismatch: this.inMismatch, solaLettura: this.solaLettura, nonToccare: this.fondamentaliInSolaLettura });
+                        { forzato: descrizioneEreditata, inMismatch: this.inMismatch, solaLettura: this.solaLettura, nonToccare: this.fondamentaliInSolaLettura, composto: this.testiComposti });
                     Object.assign(operazioni.revisione, decise.valori);
                     operazioni.trattiRipetuti = decise.ripetuti;
                 }

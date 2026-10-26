@@ -74,10 +74,11 @@ test("nonToccare malformato o vuoto non cambia niente", () => {
 test("il controller riceve le fondamentali in sola lettura alla nascita e le passa al salvataggio e al confronto con l'archivio", () => {
     const sorgente = leggiFileDelPlugin("InputEditController.js").replace(/\r/g, "");
     assert.match(sorgente, /^\s*fondamentaliInSolaLettura = \[\];/m);
-    assert.match(sorgente, /constructor\(container, convalidaFirma, descrInArchivio, compiledFields = null, fondamentaliInSolaLettura = \[\]\) \{/);
+    //I20-1143: dopo, i testi composti dal server.
+    assert.match(sorgente, /constructor\(container, convalidaFirma, descrInArchivio, compiledFields = null, fondamentaliInSolaLettura = \[\](, testiComposti = null)?\) \{/);
     assert.match(sorgente, /this\.fondamentaliInSolaLettura = Array\.isArray\(fondamentaliInSolaLettura\) \? fondamentaliInSolaLettura : \[\];/);
-    assert.match(sorgente, /decidiFondamentali\(voci, this\.descrInArchivio, \{ nonToccare: this\.fondamentaliInSolaLettura \}\)/);
-    assert.match(sorgente, /\{ forzato: descrizioneEreditata, inMismatch: this\.inMismatch, solaLettura: this\.solaLettura, nonToccare: this\.fondamentaliInSolaLettura \}/);
+    assert.match(sorgente, /decidiFondamentali\(voci, this\.descrInArchivio, \{ nonToccare: this\.fondamentaliInSolaLettura(, composto: this\.testiComposti)? \}\)/);
+    assert.match(sorgente, /\{ forzato: descrizioneEreditata, inMismatch: this\.inMismatch, solaLettura: this\.solaLettura, nonToccare: this\.fondamentaliInSolaLettura(, composto: this\.testiComposti)? \}/);
 });
 
 /* ---- la scheda ---- */
@@ -124,7 +125,7 @@ test("la schermata di modifica chiede le descrizioni in sola lettura una volta e
     assert.ok(!/column\.append\(me\.elementoNotaSolaLettura/.test(sorgente), "la nota non deve stare nella colonna");
     assert.match(sorgente, /\$\("#editReferenza"\)\.append\(row\);\s*\}\s*\/\/[^\n]*\n\s*me\.mostraNoteSolaLettura\(\);\s*var button = \$\('<sp-action-button id="salvaButton"/);
     assert.match(sorgente, /me\.noteSolaLetturaDaMostrare = \[\];/);
-    assert.match(sorgente, /me\.editRefFieldController = new InputEditController\([^\n]*compiledFields, descrizioniInSolaLettura\.map\(function \(d\) \{ return d\.fondamentale; \}\)\);/);
+    assert.match(sorgente, /me\.editRefFieldController = new InputEditController\([^\n]*compiledFields, descrizioniInSolaLettura\.map\(function \(d\) \{ return d\.fondamentale; \}\)(, me\.testiCompostiDelPrimario\(me\.schedeRefDati\))?\);/);
     //La casella nasce readonly quando isEditable e' falso, com'era.
     assert.ok((sorgente.match(/\(isEditable\s*&& refEditabile \? '' : 'readonly'\)/g) || []).length >= 3);
 });
