@@ -184,6 +184,12 @@ segnalazioni resta **blu**. Passandoci sopra: «2 segnalazioni di impaginazione 
   pallini si ricolorano senza rifare il tracciato: dopo un «Risolvi» il colore di prima non è più
   vero.
 - Un box senza DNA leggibile, per esempio finito dentro un altro gruppo, resta blu nel tracciato.
+- **Il filtro «Con segnalazioni»** (I20-1141): la quarta voce della tendina del tracciato, accanto
+  a Vedi tutto, Impaginati e Da impaginare. `Segnalazioni.recordConSegnalazioni(records, riepilogo,
+  idRecDi)` tiene, nell'ordine dato, i record che hanno voci nel riepilogo: gli stessi dei pallini
+  colorati. Con una ricerca si parte dalla lista di «Vedi tutto», quindi i criteri valgono.
+  Risolvendo una segnalazione la riga sparisce al ridisegno successivo del tracciato, non
+  alla chiusura della schermata.
 
 Il dettaglio dal lato del tracciato sta in
 [indexNew, 04](../indexNew/04-tracciato-messaggi-e-il-resto.md).

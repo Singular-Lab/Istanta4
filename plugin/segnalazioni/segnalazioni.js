@@ -313,6 +313,25 @@ const Segnalazioni = {
         return isNaN(numero) ? null : String(numero);
     },
 
+    /// I20-1141: i record del tracciato il cui box ha segnalazioni, per la voce "Con segnalazioni"
+    /// della tendina. riepilogo e' quello di riepilogoTracciato (per idRec, solo i box con voci),
+    /// idRecDi(record) l'idRec del record. L'ordine resta quello ricevuto.
+    recordConSegnalazioni(records, riepilogo, idRecDi) {
+        if (!Array.isArray(records) || riepilogo == null || typeof idRecDi !== "function") {
+            return [];
+        }
+        return records.filter(record => {
+            let chiave = null;
+            try {
+                chiave = Segnalazioni.chiaveRecord(idRecDi(record));
+            }
+            catch (e) {
+                chiave = null;
+            }
+            return chiave != null && riepilogo[chiave] != null;
+        });
+    },
+
     /// I bollini fra gli ovali di un gruppo e, per livelliSotto livelli, dei suoi gruppi.
     _bolliniNelGruppo(gruppo, nomePagina, livelliSotto, risultato) {
         if (gruppo == null) {
