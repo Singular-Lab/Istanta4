@@ -7,6 +7,7 @@ import {
   chiaveIndirizzo,
   classePunteggio,
   combinazioneDi,
+  coordinateDaTesto,
   decodificaPayloadSocket,
   importAttivo,
   inserimentoCompleto,
@@ -136,11 +137,21 @@ const modulo = (campi: Partial<DatiInserimentoManuale> = {}): DatiInserimentoMan
 });
 
 describe("inserimento manuale", () => {
-  it("canali e aree si ricavano dalle combinazioni per codice, non per nome, senza doppioni e ordinati", () => {
+  it("canali e aree si ricavano dalle combinazioni per nome, senza doppioni e ordinati", () => {
     expect(canaliEAree(combinazioni)).toEqual({
-      canali: [{ id: "cy", codice: "cy" }, { id: "td", codice: "tuday" }],
-      aree: [{ id: "li", codice: "LI" }, { id: "to", codice: "TO" }],
+      canali: [{ id: "cy", nome: "City" }, { id: "td", nome: "TuDay" }],
+      aree: [{ id: "li", nome: "Liguria" }, { id: "to", nome: "Toscana" }],
     });
+  });
+
+  it("senza nome si mostra il codice, e due nomi uguali portano anche il codice", () => {
+    const { canali, aree } = canaliEAree([
+      { id: "k1", sigla_combinazione: "tuday_TO", id_canale: "td", id_area: "to", nome_canale: "tuday", codice_canale: "tuday", codice_area: "TO" },
+      { id: "k2", sigla_combinazione: "XX_TO", id_canale: "xx", id_area: "to", nome_canale: "tuday", codice_canale: "XX", codice_area: "TO" },
+    ]);
+
+    expect(canali).toEqual([{ id: "td", nome: "tuday" }, { id: "xx", nome: "tuday (XX)" }]);
+    expect(aree).toEqual([{ id: "to", nome: "TO" }]);
   });
 
   it("canale e area scelti danno la loro combinazione, se esiste", () => {
@@ -174,5 +185,37 @@ describe("inserimento manuale", () => {
     expect(inserimentoCompleto({ ...dati, indirizzo: "Via Grayson 22" }, confermato)).toBe(false);
     expect(inserimentoCompleto({ ...dati, citta: "Curtatone" }, confermato)).toBe(false);
     expect(inserimentoCompleto({ ...dati, telefono: "0376 123456" }, confermato)).toBe(true);
+  });
+});
+
+describe("coordinate incollate da Google Maps", () => {
+  it("legge la coppia copiata dal punto, con o senza spazi, anche negativa", () => {
+    expect(coordinateDaTesto("43.8430, 10.5027")).toEqual({ lat: 43.843, lon: 10.5027 });
+    expect(coordinateDaTesto("  43.8430,10.5027 ")).toEqual({ lat: 43.843, lon: 10.5027 });
+    expect(coordinateDaTesto("-33.8688, -151.2093")).toEqual({ lat: -33.8688, lon: -151.2093 });
+  });
+
+  it("legge le coordinate dal link di Google Maps", () => {
+    expect(coordinateDaTesto("https://www.google.com/maps/place/Lucca/@43.8429,10.5027,17z/data=!3m1")).toEqual({ lat: 43.8429, lon: 10.5027 });
+    expect(coordinateDaTesto("https://maps.google.com/?q=43.8429,10.5027")).toEqual({ lat: 43.8429, lon: 10.5027 });
+    expect(coordinateDaTesto("https://www.google.com/maps/search/?api=1&query=43.8429%2C10.5027")).toEqual({ lat: 43.8429, lon: 10.5027 });
+  });
+
+  it("rifiuta testo senza coordinate, valori fuori dai limiti e 0,0", () => {
+    expect(coordinateDaTesto("")).toBeNull();
+    expect(coordinateDaTesto("Via Fillungo 12, Lucca")).toBeNull();
+    expect(coordinateDaTesto("120.5, 10.5")).toBeNull();
+    expect(coordinateDaTesto("43.5, 190")).toBeNull();
+    expect(coordinateDaTesto("0, 0")).toBeNull();
+    expect(coordinateDaTesto("100%")).toBeNull();
+  });
+
+  it("le coordinate incollate confermano la posizione finche l'indirizzo non cambia", () => {
+    const dati = { ...modulo(), ...coordinateDaTesto("45.1564, 10.7914")! };
+    const confermato = chiaveIndirizzo(dati);
+
+    expect(dati).toMatchObject({ indirizzo: "Via Grayson 20", lat: 45.1564, lon: 10.7914 });
+    expect(inserimentoCompleto(dati, confermato)).toBe(true);
+    expect(inserimentoCompleto({ ...dati, indirizzo: "Via Grayson 22" }, confermato)).toBe(false);
   });
 });

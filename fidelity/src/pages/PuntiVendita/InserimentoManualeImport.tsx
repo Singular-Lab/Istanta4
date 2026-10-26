@@ -16,6 +16,7 @@ import {
   chiaveIndirizzo,
   classePunteggio,
   combinazioneDi,
+  coordinateDaTesto,
   inserimentoCompleto,
   type CombinazioneDisponibile,
   type DatiInserimentoManuale,
@@ -46,6 +47,8 @@ function Inquadra({ punti }: { punti: Array<[number, number]> }) {
 /**
  * Modale della riga su cui l'import e fermo: l'utente cerca l'indirizzo su Nominatim, sceglie
  * sulla mappa OpenStreetMap quello giusto, sceglie canale e area e salva; poi l'import riprende.
+ * Se Nominatim non trova il punto vendita, la posizione si conferma incollando le coordinate
+ * copiate da Google Maps.
  */
 export function InserimentoManualeImport({
   riga,
@@ -68,6 +71,7 @@ export function InserimentoManualeImport({
   const [risultati, setRisultati] = useState<IndirizzoTrovatoDTO[]>([]);
   const [scelto, setScelto] = useState<IndirizzoTrovatoDTO | null>(null);
   const [confermato, setConfermato] = useState<string | null>(null);
+  const [coordinateIncollate, setCoordinateIncollate] = useState("");
   const [ricercaInCorso, setRicercaInCorso] = useState(false);
   const [invioInCorso, setInvioInCorso] = useState<"inserisci" | "scarta" | null>(null);
   const [errore, setErrore] = useState<string | null>(null);
@@ -82,6 +86,7 @@ export function InserimentoManualeImport({
     setRisultati([]);
     setScelto(null);
     setConfermato(null);
+    setCoordinateIncollate("");
     setErrore(null);
   }, [riga, combinazioni]);
 
@@ -123,6 +128,26 @@ export function InserimentoManualeImport({
 
   const scegli = (trovato: IndirizzoTrovatoDTO) => {
     const aggiornati = applicaIndirizzo(dati, trovato);
+    setScelto(trovato);
+    setDati(aggiornati);
+    setConfermato(chiaveIndirizzo(aggiornati));
+  };
+
+  // Posizione da Google Maps: l'indirizzo resta quello scritto, le coordinate sono quelle incollate
+  const usaCoordinate = () => {
+    const coordinate = coordinateDaTesto(coordinateIncollate);
+    if (!coordinate) {
+      setErrore("Coordinate non valide: incolla \"latitudine, longitudine\" o il link copiato da Google Maps");
+      return;
+    }
+    const trovato: IndirizzoTrovatoDTO = {
+      etichetta: `Da Google Maps: ${coordinate.lat}, ${coordinate.lon}`,
+      indirizzo: dati.indirizzo,
+      ...coordinate,
+    };
+    const aggiornati = { ...dati, ...coordinate };
+    setErrore(null);
+    setRisultati([trovato]);
     setScelto(trovato);
     setDati(aggiornati);
     setConfermato(chiaveIndirizzo(aggiornati));
@@ -173,7 +198,7 @@ export function InserimentoManualeImport({
                 <option value="">Scegli il canale</option>
                 {canali.map(c => (
                   <option key={c.id} value={c.id}>
-                    {c.codice}
+                    {c.nome}
                   </option>
                 ))}
               </FormSelect>
@@ -184,7 +209,7 @@ export function InserimentoManualeImport({
                 <option value="">Scegli l'area</option>
                 {aree.map(a => (
                   <option key={a.id} value={a.id}>
-                    {a.codice}
+                    {a.nome}
                   </option>
                 ))}
               </FormSelect>
@@ -216,6 +241,23 @@ export function InserimentoManualeImport({
               ) : (
                 <span className="text-xs text-slate-500">Scegli il risultato giusto per confermare l'indirizzo</span>
               )}
+            </div>
+
+            <div className="col-span-12">
+              <FormLabel htmlFor="inserimento-coordinate">Non trovi la posizione? Incolla le coordinate da Google Maps</FormLabel>
+              <div className="flex gap-2">
+                <FormInput
+                  id="inserimento-coordinate"
+                  placeholder="43.8430, 10.5027 oppure il link di Google Maps"
+                  value={coordinateIncollate}
+                  onChange={e => setCoordinateIncollate(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && coordinateIncollate.trim() && usaCoordinate()}
+                />
+                <Button variant="outline-primary" className="whitespace-nowrap" disabled={!coordinateIncollate.trim()} onClick={usaCoordinate}>
+                  <Lucide icon="MapPin" className="w-4 h-4 mr-2" />
+                  Usa coordinate
+                </Button>
+              </div>
             </div>
 
             {risultati.length > 0 && (
