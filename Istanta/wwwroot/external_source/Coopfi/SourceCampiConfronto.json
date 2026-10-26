@@ -1,0 +1,14 @@
+{
+  "source": [
+    "tema",
+    "tipo_evento",
+    "meccanica",
+    "prezzo_continuo",
+    "prezzo_promo",
+    "prezzo_promo_kgl",
+    "txt_sconto",
+    "N_Punti",
+    "pezzi_soci",
+    "N_Pezzi_soci"
+  ]
+}

@@ -1,0 +1,222 @@
+﻿@page
+@model Istanta.Views.MenaboSettings.IndexModel
+@{
+
+    var listaMastro = (ViewBag.ListaMastro as List<Istanta.Models.DbMastroItem>)!.ToList();
+    var formatiPagine = (ViewBag.FormatiPagina as List<string>)!.ToList();
+}
+@if (ViewBag.error != null)
+{
+    <div id="error_panel" class="alert alert-danger" style="position:fixed; width:100%;">
+        <strong>Attenzione</strong>: @ViewBag.error
+    </div>
+}
+<h3 style="margin-bottom:25px;">Formati pagine</h3>
+<div class="row">
+    <div class="col">
+        <textarea id="FormatiPagina" name="FormatiPagina" style="width:100%">@{
+                var formatiPagina = ViewBag.FormatiPagina as List<string>;
+                for (int i = 0; i < formatiPagina!.Count; i++)
+                {
+                    @formatiPagina[i]
+                    @if (i < formatiPagina.Count - 1)
+                    {
+                        @(",")
+                        ;
+                    }
+                }
+            }</textarea>
+    </div>
+    <div class="col" style="display: flex; align-items: center;">
+        <input type="submit" value="Salva" onclick="msInstance.salvaFormatiPagine()">
+    </div>
+</div>
+
+<h3 style="margin-bottom:25px;">Schemi Menabò</h3>
+<table>
+    <thead>
+        <tr>
+            <td>
+                <table>
+                    <tr>
+                        <td style="width:200px;">Nome dello schema</td>
+                        <td>Aree</td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                    </tr>
+                </table>
+            </td>
+
+        </tr>
+    </thead>
+    @foreach (var menabo in (ViewBag.ListaMenabo as List<Istanta.Models.DbMenaboItem>)!)
+    {
+
+        <tr>
+            <td>
+
+                <form method="POST" action="MenaboSettings/Update/@menabo.Id">
+                    <table>
+                        <tr>
+                            <td>
+                                <input type="hidden" value="mastro.Id">
+                                <input type="text" id="Titolo" name="Titolo" value="@menabo.Titolo">
+
+                            </td>
+                            <td>
+                                <textarea id="Aree" name="Aree">@menabo.ToAreeString()</textarea>
+                            </td>
+                            <td>
+                                <input type="submit" value="Salva">
+                            </td>
+                            <td>
+                                <input type="button" value="Vedi schema" onclick="msInstance.mostraSchema(@menabo.IdMenaboPagine)" />
+                            </td>
+                            <td style="padding-left:30px;">
+                                <a class="btn btn-danger btn-sm" href="MenaboSettings/Delete/@menabo.Id" onclick="return confirm('Sicuro di voler eliminare?')">Elimina</a>
+                            </td>
+                        </tr>
+                    </table>
+                </form>
+            </td>
+        </tr>
+        <tr>
+            <td><hr /></td>
+        </tr>
+
+    }
+    <!--Riga per inserire nuova regola-->
+    <tr>
+        <td>
+            <form method="POST" action="MenaboSettings/Insert">
+                <table>
+                    <tr>
+                        <td>
+                            <input type="text" id="Titolo" name="Titolo" value="">
+                        </td>
+                        <td>
+                            <textarea id="Aree" name="Aree"></textarea>
+                        </td>
+                        <td>
+                            <input type="submit" value="Aggiungi">
+                        </td>
+                    </tr>
+                </table>
+            </form>
+        </td>
+    </tr>
+</table>
+
+
+@foreach (var schema in (ViewBag.ListaSchemi as List<Istanta.Models.DbMenaboPagineItem>)!)
+{
+    <div id="schema_@schema.Id" style="display:none;">
+        <div class="container schema">
+            <h3>
+                @schema.Titolo
+            </h3>
+            <hr>
+
+            <div class="container" id="containerPags">
+
+                @if (schema.Pagine != null)
+                {
+                    foreach (var pag in schema.Pagine.OrderBy(o => o.Numero))
+                    {
+                        <div class="row mb-4" id="pag_@pag.Numero">
+                            <div class="col-4">
+                                Pag.
+                                <input type="text" id="numeroPag" value="@pag.Numero" style="width:50px;" readonly="readonly">
+                            </div>
+                            <div class="col-4">
+                                <select id="mastroPag">
+                                    @foreach (var mastro in listaMastro)
+                                    {
+                                        if (!mastro.Active)
+                                        {
+                                            continue;
+                                        }
+
+                                        @if (mastro.Id == pag.IdMastro)
+                                        {
+                                            <option value="@mastro.Id" selected>@mastro.Nome</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@mastro.Id">@mastro.Nome</option>
+                                        }
+                                    }
+                                </select>
+
+                            </div>
+                            <div class="col">
+                                <input type="button" class="btn-primary" value="Salva" id="btnSalvaPag" onclick="msInstance.salvaPaginaSchema($(this), @schema.Id)">
+                            </div>
+                            <div class="col">
+                                <input type="button" class="btn-danger" value="Elimina" id="btnEliminaPag" onclick="msInstance.eliminaPaginaSchema($(this), @schema.Id)">
+                            </div>
+                        </div>
+
+                    }
+                }
+                    
+            </div>
+
+            <hr>
+
+            <div class="container">
+                <!-- Riga per aggiunta pagina -->
+                @if (schema.Pagine != null)
+                {
+                    <div class="row mb-2" id="newPag">
+                        <div class="col-4">
+                            Pag.
+                            <input type="text" style="width:50px;" id="numeroPag" value="@((schema.Pagine.Count>0?schema.Pagine.OrderByDescending(o=>o.Numero).Select(s=>s.Numero).FirstOrDefault() + 1:1))">
+                        </div>
+                        <div class="col-4">
+                            <select id="mastroPag">
+                                @foreach (var mastro in listaMastro)
+                                {
+                                    <option value="@mastro.Id">@mastro.Nome</option>
+                                }
+                            </select>
+
+                    </div>
+                    <div class="col">
+                        <input type="button" class="btn-primary" id="btnSalvaPag" value="Aggiungi" onclick="msInstance.salvaPaginaSchema($(this), @schema.Id)">
+                    </div>
+                    <div class="col">
+                        <input type="button" style="display:none;" class="btn-danger" value="Elimina" id="btnEliminaPag">
+                    </div>
+                </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+<div class="modal fade show" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" id="modalSchema" aria-modal="true" role="dialog">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable" style="width:700px;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Dettaglio schema</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" onclick="window.location='MenaboSettings'"></button>
+            </div>
+            <div class="modal-body">
+                <div class="container" style="position:fixed; width:auto; z-index:99" id="liveAlertPlaceholder"></div>
+                <div class="container" id="content">
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@inject Microsoft.AspNetCore.Http.IHttpContextAccessor HttpContextAccessor
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]" src="~/js/menaboSettings.js?v=1.0.0.2"></script>
+
+<script nonce ="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]">
+
+    var msInstance = new MenaboSettings();
+
+</script>

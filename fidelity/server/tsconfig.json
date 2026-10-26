@@ -1,0 +1,99 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": [
+      "ES2022"
+    ],
+    "jsx": "react-jsx",
+    "baseUrl": "..",
+    "paths": {
+      "@/*": [
+        "./*"
+      ],
+      "@types/*": [
+        "./types/*"
+      ],
+      "@global_types/*": [
+        "./lib/*"
+      ],
+      "@lib/*": [
+        "./lib/*"
+      ],
+      "@services/*": [
+        "./server/core/services/*"
+      ],
+      "@controllers/*": [
+        "./server/core/controllers/*"
+      ],
+      "@models/*": [
+        "./server/core/models/*"
+      ],
+      "@middleware/*": [
+        "./server/core/middleware/*"
+      ],
+      "@utils/*": [
+        "./server/core/utils/*"
+      ],
+      "@config/*": [
+        "./server/core/config/*"
+      ],
+      "@db/*": [
+        "./server/core/db/*"
+      ],
+      "@interfaces/*": [
+        "./server/core/interfaces/*"
+      ],
+      "@dto/*": [
+        "./server/core/dto/*"
+      ],
+      "@monitoring/*": [
+        "./server/core/monitoring/*"
+      ],
+      "@di/*": [
+        "./server/core/di/*"
+      ],
+      "@di": [
+        "./server/core/di/index.ts"
+      ],
+      "@repositories/*": [
+        "./server/core/repositories/*"
+      ],
+      "@repositories": [
+        "./server/core/repositories/index.ts"
+      ]
+    },
+    "typeRoots": [
+      "../node_modules/@types"
+    ],
+    "types": [
+      "node"
+    ],
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "allowJs": true,
+    "checkJs": false,
+    "skipLibCheck": true,
+    "strict": false,
+    "noEmit": true,
+    "sourceMap": true
+  },
+  "include": [
+    "./**/*.ts",
+    "./**/*.tsx",
+    "./**/*.d.ts",
+    "../lib/**/*.ts",
+    "../lib/**/*.d.ts"
+  ],
+  "exclude": [
+    "../node_modules",
+    "../dist",
+    "../dist_server",
+    "../lib/server_call.ts",
+    "../lib/List.ts",
+    "./**/*.spec.ts",
+    "./**/*.test.ts"
+  ]
+}

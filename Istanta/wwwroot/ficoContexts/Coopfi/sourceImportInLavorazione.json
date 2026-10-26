@@ -1,0 +1,26 @@
+[
+  {
+    "titoloField": "Scegli l'addestramento",
+    "idField": "idAddestramento",
+    "binding": "addestramenti",
+    "visible": true,
+    "tipoField": "cmb",
+    "nullable": false
+  },
+  {
+    "titoloField": "Scegli l'etichetta",
+    "idField": "idLabel",
+    "binding": "labels",
+    "visible": true,
+    "tipoField": "cmb",
+    "nullable": false
+  },
+  {
+    "titoloField": "Scegli l'area",
+    "idField": "guidIdArea",
+    "binding": "aree",
+    "visible": true,
+    "tipoField": "cmb",
+    "nullable": true
+  }
+]

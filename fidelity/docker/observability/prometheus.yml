@@ -1,0 +1,38 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # Auto-discovery via Docker labels.
+  # Il servizio app/server deve avere queste label nel compose:
+  #   prometheus.scrape: "true"
+  #   prometheus.port: "${NODE_PORT:-3010}"
+  #   prometheus.path: "/metrics"
+  - job_name: fidelity-app
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 15s
+    relabel_configs:
+      # Tieni solo i container con prometheus.scrape=true
+      - source_labels: [__meta_docker_container_label_prometheus_scrape]
+        regex: "true"
+        action: keep
+      # Costruisci l'indirizzo da IP del container + porta dalla label
+      - source_labels: [__meta_docker_network_ip, __meta_docker_container_label_prometheus_port]
+        separator: ":"
+        target_label: __address__
+      # Path da label (default /metrics se assente)
+      - source_labels: [__meta_docker_container_label_prometheus_path]
+        target_label: __metrics_path__
+      # Job = COMPOSE_PROJECT_NAME dell'istanza (sovrascrive il job_name statico)
+      - source_labels: [__meta_docker_container_label_com_docker_compose_project]
+        target_label: job
+      # Label utili nei grafici
+      - source_labels: [__meta_docker_container_label_com_docker_compose_service]
+        target_label: service
+      - source_labels: [__meta_docker_container_label_com_docker_compose_project]
+        target_label: project
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["prometheus:9090"]

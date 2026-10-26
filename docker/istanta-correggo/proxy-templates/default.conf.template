@@ -1,0 +1,82 @@
+# Due origini distinte dietro un solo nginx: Istanta sulla 443, Correggo4 sulla
+# 444, entrambe in TLS. Porte separate invece di prefissi di percorso, perché
+# un prefisso richiederebbe a ciascuna applicazione di sapere di vivere sotto
+# un path base, e nessuna delle due è configurata per farlo.
+#
+# Reso da envsubst all'avvio: si sostituiscono solo le variabili che iniziano
+# per APP_ (NGINX_ENVSUBST_FILTER nel compose), così le variabili di nginx come
+# $http_upgrade restano intatte.
+
+# Necessaria per l'upgrade a WebSocket: inoltra "upgrade" solo quando il client
+# lo chiede, e chiude la connessione altrimenti. Sta qui perché i file di
+# conf.d sono inclusi dentro il blocco http, dove `map` è ammessa.
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name _;
+
+    ssl_certificate     /etc/nginx/certs/fullchain.pem;
+    ssl_certificate_key /etc/nginx/certs/privkey.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_session_cache   shared:SSL:10m;
+    ssl_session_timeout 1h;
+
+    # Istanta importa ed esporta file di volantino: il limite predefinito di
+    # nginx (1 MB) fermerebbe i caricamenti molto prima dell'applicazione.
+    client_max_body_size 500m;
+
+    # Il resolver di Docker, usato insieme alle variabili qui sotto: senza,
+    # nginx risolverebbe il nome una volta sola all'avvio e continuerebbe a
+    # puntare al vecchio indirizzo ogni volta che il Runner ricrea il container.
+    resolver 127.0.0.11 valid=10s ipv6=off;
+
+    location / {
+        set $istanta_upstream http://istanta:${APP_ISTANTA_PORT};
+        proxy_pass $istanta_upstream;
+        proxy_http_version 1.1;
+        # Istanta usa i WebSocket (SocketsManager): senza questi due header
+        # la connessione verrebbe declassata a HTTP normale.
+        proxy_set_header Upgrade           $http_upgrade;
+        proxy_set_header Connection        $connection_upgrade;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 3600s;
+    }
+}
+
+server {
+    listen 444 ssl;
+    http2 on;
+    server_name _;
+
+    ssl_certificate     /etc/nginx/certs/fullchain.pem;
+    ssl_certificate_key /etc/nginx/certs/privkey.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_session_cache   shared:SSL:10m;
+    ssl_session_timeout 1h;
+
+    # Correggo4 riceve PDF di volantini.
+    client_max_body_size 500m;
+
+    resolver 127.0.0.11 valid=10s ipv6=off;
+
+    location / {
+        set $correggo_upstream http://correggo4:${APP_CORREGGO_PORT};
+        proxy_pass $correggo_upstream;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade           $http_upgrade;
+        proxy_set_header Connection        $connection_upgrade;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 3600s;
+    }
+}

@@ -1,0 +1,1176 @@
+import {
+  RouteObject,
+  redirect,
+  type LoaderFunctionArgs,
+  type ShouldRevalidateFunctionArgs,
+} from "react-router-dom";
+
+
+import { RouteErrorFallback } from "@/components/AppErrorFallback";
+import ErrorPage from "@/components/ErrorPage";
+import NotFoundPage from "@/components/NotFoundPage";
+import { PERCORSI_SPOSTATI } from "../../lib/accessi/gestioneInterna";
+
+type LoaderFunctionsModule = typeof import("./loaderFunctions");
+
+const createLazyLoader = <K extends keyof LoaderFunctionsModule>(
+  loaderName: K
+): LoaderFunctionsModule[K] =>
+  (async (...args: any[]) => {
+    const module = await import("./loaderFunctions");
+    const loader = module[loaderName] as (...params: any[]) => any;
+    return loader(...args);
+  }) as LoaderFunctionsModule[K];
+
+const dashboard3Loader = createLazyLoader("dashboard3Loader");
+const superadminDashboardLoader = createLazyLoader("superadminDashboardLoader");
+const funzioneCaricamentoAuth = createLazyLoader("funzioneCaricamentoAuth");
+const funzioneCaricamentoAuthAD = createLazyLoader("funzioneCaricamentoAuthAD");
+const funzioneCaricamentoConfigWebpliant = createLazyLoader("funzioneCaricamentoConfigWebpliant");
+const funzioneCaricamentoDettagliFineLavorazione = createLazyLoader("funzioneCaricamentoDettagliFineLavorazione");
+const funzioneCaricamentoDettagliOrdiniDiStampa = createLazyLoader("funzioneCaricamentoDettagliOrdiniDiStampa");
+const funzioneCaricamentoDettagliTemplateWhatsappAdmin = createLazyLoader("funzioneCaricamentoDettagliTemplateWhatsappAdmin");
+const funzioneCaricamentoEditWorkspace = createLazyLoader("funzioneCaricamentoEditWorkspace");
+const funzioneCaricamentoGestioneApi = createLazyLoader("funzioneCaricamentoGestioneApi");
+const funzioneCaricamentoGestioneSetupWhatsappSuperAdmin = createLazyLoader("funzioneCaricamentoGestioneSetupWhatsappSuperAdmin");
+const funzioneCaricamentoGestioneTemplatesWhatsappAdmin = createLazyLoader("funzioneCaricamentoGestioneTemplatesWhatsappAdmin");
+const funzioneCaricamentoGestioneWhatsappSuperAdmin = createLazyLoader("funzioneCaricamentoGestioneWhatsappSuperAdmin");
+const funzioneCaricamentoImpostazioniTipografia = createLazyLoader("funzioneCaricamentoImpostazioniTipografia");
+const funzioneCaricamentoInvioCampagnaWhatsapp = createLazyLoader("funzioneCaricamentoInvioCampagnaWhatsapp");
+const funzioneCaricamentoMaterialiAttivi = createLazyLoader("funzioneCaricamentoMaterialiAttivi");
+const funzioneCaricamentoMaterialiInCorso = createLazyLoader("funzioneCaricamentoMaterialiInCorso");
+const funzioneCaricamentoMaterialiPromo = createLazyLoader("funzioneCaricamentoMaterialiPromo");
+const funzioneCaricamentoModificaRicetta = createLazyLoader("funzioneCaricamentoModificaRicetta");
+const funzioneCaricamentoNuovoODS = createLazyLoader("funzioneCaricamentoNuovoODS");
+const funzioneCaricamentoODSCompletati = createLazyLoader("funzioneCaricamentoODSCompletati");
+const funzioneCaricamentoODSInCorso = createLazyLoader("funzioneCaricamentoODSInCorso");
+const funzioneCaricamentoRicetta = createLazyLoader("funzioneCaricamentoRicetta");
+const funzioneCaricamentoStoricoLavorazioni = createLazyLoader("funzioneCaricamentoStoricoLavorazioni");
+const funzioneCaricamentoStoricoMateriali = createLazyLoader("funzioneCaricamentoStoricoMateriali");
+const funzioneCaricamentoTuttiIFilePerKit = createLazyLoader("funzioneCaricamentoTuttiIFilePerKit");
+const funzioneCaricamentoTuttiIfFilesOrdiniDiStampa = createLazyLoader("funzioneCaricamentoTuttiIfFilesOrdiniDiStampa");
+const funzioneCaricamentoVolantiniPDF = createLazyLoader("funzioneCaricamentoVolantiniPDF");
+const funzioneCaricamentoVolantinoWebPliant = createLazyLoader("funzioneCaricamentoVolantinoWebPliant");
+const funzioneCaricamentoWebpliant = createLazyLoader("funzioneCaricamentoWebpliant");
+const funzioneCaricamentoWebpliantLayout = createLazyLoader("funzioneCaricamentoWebpliantLayout");
+const funzioneCaricamentoWorkspace = createLazyLoader("funzioneCaricamentoWorkspace");
+const funzioneDettagliKit = createLazyLoader("funzioneDettagliKit");
+const funzioneDettagliKitManualiInCorso = createLazyLoader("funzioneDettagliKitManualiInCorso");
+const funzioneDettagliLavorazioniInCorso = createLazyLoader("funzioneDettagliLavorazioniInCorso");
+const funzioneGestionePuntoVendita = createLazyLoader("funzioneGestionePuntoVendita");
+const funzioneLavorazioniInCorso = createLazyLoader("funzioneLavorazioniInCorso");
+const throw404 = () => {
+  throw new Response(null, { status: 404 });
+};
+
+const routes: RouteObject[] = [
+  // Public routes - no auth required (must be BEFORE the "/" layout)
+  {
+    path: "/display/files",
+    lazy: async () => {
+      const { default: DisplayPage } = await import("@/pages/DisplayPage");
+      return { Component: DisplayPage };
+    },
+  },
+  {
+    path: "/auth/:context",
+    lazy: async () => {
+      const { default: Auth } = await import("../pages/Auth");
+      return {
+        Component: Auth,
+        loader: funzioneCaricamentoAuth,
+      };
+    },
+  },
+  {
+    path: "/auth-ad/:context",
+    lazy: async () => {
+      const { default: AuthAD } = await import("../pages/AuthAD");
+      return {
+        Component: AuthAD,
+        loader: funzioneCaricamentoAuthAD,
+      };
+    },
+  },
+  // Menabo full-screen: fuori dal layout Echo.
+  {
+    path: "/promozioni/in-corso/dettagli/:idPromo/menabo",
+    lazy: async () => {
+      const { default: MenaboPromoPage } = await import("@/pages/MenaboPromo");
+      return { Component: MenaboPromoPage };
+    },
+  },
+  {
+    path: "/promozioni/storico/dettagli/:idPromo/menabo",
+    lazy: async () => {
+      const { default: MenaboPromoPage } = await import("@/pages/MenaboPromo");
+      return { Component: MenaboPromoPage };
+    },
+  },
+  // Anteprima tracciato full-screen: fuori dal layout Echo, griglia stile Excel.
+  {
+    path: "/promozioni/in-corso/dettagli/:idPromo/anteprima-tracciato/:idTracciato",
+    lazy: async () => {
+      const { default: DettaglioAnteprimaTracciato } = await import("@/pages/DettaglioAnteprimaTracciato");
+      return { Component: DettaglioAnteprimaTracciato };
+    },
+  },
+  {
+    path: "/promozioni/storico/dettagli/:idPromo/anteprima-tracciato/:idTracciato",
+    lazy: async () => {
+      const { default: DettaglioAnteprimaTracciato } = await import("@/pages/DettaglioAnteprimaTracciato");
+      return { Component: DettaglioAnteprimaTracciato };
+    },
+  },
+
+  // INDEX: redirect con loader (niente <Navigate/>)
+  {
+    index: true,
+    loader: () => redirect("/gdo/dashboard"),
+  },
+
+  // ROOT LAYOUT
+  {
+    path: "/",
+    lazy: async () => {
+      const { default: Layout } = await import("../themes/Echo");
+      return {
+        Component: Layout,
+      };
+    },
+    // Route senza path che avvolge le pagine: l'errore di loader/render compare nell'Outlet di Echo,
+    // con il menu visibile. Gli errori del layout stesso risalgono al fallback impostato in fondo.
+    children: [{
+      errorElement: <ErrorPage />,
+      children: [
+      {
+        path: "barcode-reader",
+        lazy: async () => {
+          const [{ default: BarCodeReaderComponent }, { GestioneReferenzeProvider }] = await Promise.all([
+            import("@/pages/BarCodeReader"),
+            import("@/context/GestioneReferenzeContext"),
+          ]);
+          // Fuori da WebPliant manca il provider che BoxRef usa per mostrare la referenza scansionata
+          return {
+            Component: () => (
+              <GestioneReferenzeProvider>
+                <BarCodeReaderComponent />
+              </GestioneReferenzeProvider>
+            ),
+          };
+        },
+      },
+      // GESTIONE INTERNA: pagine di amministrazione, separate da quelle pensate per il cliente
+      {
+        path: "gestione-interna",
+        children: [
+          {
+            path: "gestione-permessi",
+            lazy: async () => {
+              const { default: GestionePermessi } = await import(
+                "@/pages/GestionePermessi"
+              );
+              return { Component: GestionePermessi };
+            },
+          },
+          {
+            path: "gestione-hub",
+            lazy: async () => {
+              const { default: GestioneHub } = await import(
+                "@/pages/GestioneHub"
+              );
+              return { Component: GestioneHub };
+            },
+          },
+          {
+            path: "gestione-metodi-accesso",
+            lazy: async () => {
+              const { default: GestioneMetodiAccesso } = await import(
+                "@/pages/GestioneMetodiAccesso"
+              );
+              return { Component: GestioneMetodiAccesso };
+            },
+          },
+          {
+            path: "aree-e-canali",
+            lazy: async () => {
+              const { default: AreeCanali } = await import("../pages/AreeCanali");
+              return { Component: AreeCanali };
+            },
+          },
+          {
+            path: "punti-vendita",
+            lazy: async () => {
+              const { default: PuntiVendita } = await import("../pages/PuntiVendita");
+              return { Component: PuntiVendita };
+            },
+          },
+          {
+            path: "punti-vendita/:id",
+            lazy: async () => {
+              const { default: DettaglioPuntoVendita } = await import(
+                "../pages/GestionePuntoVendita"
+              );
+              return {
+                Component: DettaglioPuntoVendita,
+                loader: funzioneGestionePuntoVendita,
+              };
+            },
+          },
+          {
+            path: "gestione-utenti",
+            lazy: async () => {
+              const { default: GestioneUtenti } = await import("@/pages/GestioneUtenti");
+              return { Component: GestioneUtenti };
+            },
+          },
+        ],
+      },
+      // Vecchi indirizzi delle pagine spostate sotto /gestione-interna (segnalibri e link esterni)
+      ...Object.entries(PERCORSI_SPOSTATI).map(([vecchio, nuovo]) => ({
+        path: `${vecchio.slice(1)}/*`,
+        // Dai parametri e non da request.url, che contiene anche il basename dell'installazione
+        loader: ({ request, params }: LoaderFunctionArgs) => {
+          const resto = params["*"] ? `/${params["*"]}` : "";
+          return redirect(`${nuovo}${resto}${new URL(request.url).search}`);
+        },
+      })),
+      {
+        path: "promozioni/nuova",
+        lazy: async () => {
+          const { default: NuovaLavorazione } = await import(
+            "@/pages/NuovaLavorazione"
+          );
+          return { Component: NuovaLavorazione };
+        },
+      },
+      {
+        path: "dashboard",
+        loader: () => redirect("/gdo/dashboard"),
+      },
+      {
+        path: "gdo/dashboard",
+        loader: dashboard3Loader,
+        lazy: async () => {
+          const { default: Dashboard } = await import("../pages/Dashboard3");
+          return { Component: Dashboard };
+        },
+      },
+      {
+        path: "marketing/dashboard",
+        // loader: dashboard3Loader,
+        lazy: async () => {
+          const { default: Dashboard } = await import("../pages/DashboardMarketing");
+          return { Component: Dashboard };
+        },
+      },
+      {
+        path: "category/dashboard",
+        lazy: async () => {
+          const { default: Dashboard } = await import("../pages/DashboardCategory");
+          return { Component: Dashboard };
+        },
+      },
+      {
+        path: "superadmin/dashboard",
+        loader: superadminDashboardLoader,
+        lazy: async () => {
+          const { default: SuperadminDashboard } = await import(
+            "../pages/SuperadminDashboard"
+          );
+          return { Component: SuperadminDashboard };
+        },
+      },
+      {
+        path: "volantini",
+        lazy: async () => {
+          const { default: Volantini } = await import("../pages/Volantini");
+          return {
+            Component: Volantini,
+            loader: funzioneCaricamentoVolantiniPDF,
+          };
+        },
+      },
+      {
+        path: "volantini/tutti_i_volantini",
+        lazy: async () => {
+          const { default: TuttiIVolantini } = await import(
+            "@/pages/TuttiIVolantini"
+          );
+          return {
+            Component: TuttiIVolantini,
+            loader: funzioneCaricamentoTuttiIFilePerKit,
+          };
+        },
+      },
+      {
+        path: "storico-volantini",
+        lazy: async () => {
+          const { default: StoricoVolantini } = await import(
+            "@/pages/StoricoVolantini"
+          );
+          return { Component: StoricoVolantini };
+        },
+      },
+      // {
+      //   path: "documentale",
+      //   lazy: async () => {
+      //     const { default: Documentale } = await import("../pages/Documentale");
+      //     return { Component: Documentale };
+      //   },
+      // },
+      {
+        path: "materiali-attivi",
+        lazy: async () => {
+          const { default: MaterialiDocumentale } = await import("../pages/MaterialiDocumentale");
+          return {
+            Component: MaterialiDocumentale,
+            loader: funzioneCaricamentoMaterialiAttivi,
+          };
+        },
+      },
+      {
+        path: "materiali-in-corso",
+        lazy: async () => {
+          const { default: MaterialiDocumentale } = await import("../pages/MaterialiDocumentale");
+          return {
+            Component: MaterialiDocumentale,
+            loader: funzioneCaricamentoMaterialiInCorso,
+          };
+        },
+      },
+      {
+        path: "storico-materiali",
+        lazy: async () => {
+          const { default: MaterialiDocumentale } = await import("../pages/MaterialiDocumentale");
+          return {
+            Component: MaterialiDocumentale,
+            loader: funzioneCaricamentoStoricoMateriali,
+          };
+        },
+      },
+      {
+        path: "contenuti-digitali",
+        lazy: async () => {
+          const { default: ContenutiDigitali } = await import(
+            "@/pages/ContenutiDigitali"
+          );
+          return { Component: ContenutiDigitali };
+        },
+      },
+      {
+        // La vecchia panoramica lavorava su dati finti: tutto ciò che mostrava è nelle pagine in corso e storico
+        path: "promozioni",
+        loader: () => redirect("/promozioni/in-corso"),
+      },
+      {
+        path: "report/tracciati",
+        lazy: async () => {
+          const { default: ReportTracciati } = await import(
+            "@/pages/ReportTracciati"
+          );
+          return {
+            Component: ReportTracciati,
+          };
+        },
+      },
+      {
+        path: "report/tracciati/risultato",
+        lazy: async () => {
+          const { default: RisultatoConfrontoTracciati } = await import(
+            "@/pages/RisultatoConfrontoTracciati"
+          );
+          return {
+            Component: RisultatoConfrontoTracciati,
+          };
+        },
+      },
+      {
+        path: "nuova-promozione",
+        loader: () => redirect("/promozioni/nuova"),
+      },
+      {
+        path: "promozioni-in-corso",
+        loader: () => redirect("/promozioni/in-corso"),
+      },
+      {
+        path: "storico-promozioni",
+        loader: () => redirect("/promozioni/storico"),
+      },
+      {
+        path: "promozioni/in-corso",
+        lazy: async () => {
+          const { default: LavorazioniInCorso } = await import(
+            "@/pages/LavorazioniInCorso"
+          );
+          return {
+            Component: LavorazioniInCorso,
+            loader: funzioneLavorazioniInCorso,
+          };
+        },
+      },
+      {
+        path: "promozioni/in-corso/dettagli",
+        loader: () => redirect("/promozioni/in-corso"),
+      },
+      {
+        path: "promozioni/in-corso/dettagli/:idPromo",
+        lazy: async () => {
+          const { default: DettagliLavorazioneInCorso } = await import(
+            "@/pages/LavorazioniInCorso/DettagliLavorazioneInCorso"
+          );
+          return {
+            Component: DettagliLavorazioneInCorso,
+            loader: funzioneDettagliLavorazioniInCorso,
+          };
+        },
+      },
+      {
+        path: "promozioni/in-corso/dettagli/:idPromo/report/:guidIdConfronto",
+        lazy: async () => {
+          const { default: RisultatoConfrontoTracciati } = await import(
+            "@/pages/RisultatoConfrontoTracciati"
+          );
+          return {
+            Component: RisultatoConfrontoTracciati,
+          };
+        },
+      },
+      {
+        path: "promozioni/in-corso/dettagli/:idPromo/kits",
+        lazy: async () => {
+          const { default: DettagliLavorazioneInCorsoKitManuale } = await import(
+            "@/pages/LavorazioniInCorso/DettagliKitManualiInCorso"
+          );
+          return {
+            Component: DettagliLavorazioneInCorsoKitManuale,
+            loader: funzioneDettagliKitManualiInCorso,
+          };
+        },
+      },
+      {
+        path: "promozioni/in-corso/dettagli/:idPromo/kits/:idKit",
+        lazy: async () => {
+          const { default: DettaglioKit } = await import(
+            "@/pages/DettaglioKit"
+          );
+          return {
+            Component: DettaglioKit,
+            loader: funzioneDettagliKit,
+          };
+        },
+      },
+      {
+        path: "promozioni/in-corso/dettagli/:idPromo/materiali",
+        lazy: async () => {
+          const { default: MaterialiDocumentalePromo } = await import(
+            "@/pages/MaterialiDocumentalePromo"
+          );
+          return {
+            Component: MaterialiDocumentalePromo,
+            loader: funzioneCaricamentoMaterialiPromo,
+          };
+        },
+      },
+      {
+        // Il kit POP usa la stessa pagina dei kit: DettaglioKit gestisce anche il POP
+        path: "promozioni/in-corso/dettagli/:idPromo/pop/:idKit",
+        lazy: async () => {
+          const { default: DettaglioKit } = await import("@/pages/DettaglioKit");
+          return {
+            Component: DettaglioKit,
+            loader: funzioneDettagliKit,
+          };
+        },
+      },
+      {
+        path: "promozioni/in-corso/dettagli/:idPromo/kits/:idKit/dettagli-pubblicazione",
+        lazy: async () => {
+          const { default: DettaglioPubblicazioneKit } = await import(
+            "@/pages/DettaglioPubblicazioneKit"
+          );
+          return {
+            Component: DettaglioPubblicazioneKit,
+            loader: funzioneDettagliKit,
+          };
+        },
+      },
+      {
+        path: "promozioni/storico",
+        lazy: async () => {
+          const { default: StoricoLavorazioni } = await import(
+            "@/pages/StoricoLavorazioni"
+          );
+          return {
+            Component: StoricoLavorazioni,
+            loader: funzioneCaricamentoStoricoLavorazioni,
+          };
+        },
+      },
+      {
+        path: "promozioni/storico/dettagli",
+        loader: () => redirect("/promozioni/storico"),
+      },
+      {
+        path: "promozioni/storico/dettagli/:idPromo",
+        lazy: async () => {
+          const { default: DettagliLavorazioneInCorso } = await import(
+            "@/pages/LavorazioniInCorso/DettagliLavorazioneInCorso"
+          );
+          return {
+            Component: DettagliLavorazioneInCorso,
+            loader: funzioneDettagliLavorazioniInCorso,
+          };
+        },
+      },
+      {
+        path: "promozioni/storico/dettagli/:idPromo/kits",
+        lazy: async () => {
+          const { default: DettagliLavorazioneInCorsoKitManuale } = await import(
+            "@/pages/LavorazioniInCorso/DettagliKitManualiInCorso"
+          );
+          return {
+            Component: DettagliLavorazioneInCorsoKitManuale,
+            loader: funzioneDettagliKitManualiInCorso,
+          };
+        },
+      },
+      {
+        path: "promozioni/storico/dettagli/:idPromo/kits/:idKit",
+        lazy: async () => {
+          const { default: DettaglioKit } = await import(
+            "@/pages/DettaglioKit"
+          );
+          return {
+            Component: DettaglioKit,
+            loader: funzioneDettagliKit,
+          };
+        },
+      },
+      {
+        path: "promozioni/storico/dettagli/:idPromo/materiali",
+        lazy: async () => {
+          const { default: MaterialiDocumentalePromo } = await import(
+            "@/pages/MaterialiDocumentalePromo"
+          );
+          return {
+            Component: MaterialiDocumentalePromo,
+            loader: funzioneCaricamentoMaterialiPromo,
+          };
+        },
+      },
+      {
+        path: "impostazioni-tipografia",
+        lazy: async () => {
+          const { default: ImpostazioniTipografia } = await import(
+            "@/pages/ImpostazioniTipografia"
+          );
+          return {
+            Component: ImpostazioniTipografia,
+            loader: funzioneCaricamentoImpostazioniTipografia,
+          };
+        },
+      },
+      {
+        path: "impostazioni-di-produzione",
+        lazy: async () => {
+          const { default: ImpostazioniDiProduzione } = await import(
+            "@/pages/ImpostazioniDiProduzione"
+          );
+          return { Component: ImpostazioniDiProduzione };
+        },
+      },
+      {
+        path: "impostazioni-di-produzione/creazione-kit-automatico",
+        lazy: async () => {
+          const { default: PaginaCreazioneKitDesignAutomatici } = await import(
+            "@/pages/PaginaCreazioneKitDesignAutomatici"
+          );
+          return { Component: PaginaCreazioneKitDesignAutomatici };
+        },
+      },
+      {
+        path: "impostazioni-di-produzione/creazione-kit-manuale",
+        lazy: async () => {
+          const { default: PaginaCreazioneKitDesignManuali } = await import(
+            "@/pages/PaginaCreazioneKitDesignManuali"
+          );
+          return { Component: PaginaCreazioneKitDesignManuali };
+        },
+      },
+      {
+        path: "impostazioni-di-produzione/dettagli",
+        lazy: async () => {
+          const { default: DettagliCombinazioneProduzione } = await import(
+            "@/pages/DettagliCombinazioniProduzione"
+          );
+          return { Component: DettagliCombinazioneProduzione };
+        },
+      },
+      {
+        path: "impostazioni-di-produzione/dettagli-combinazione-produzione",
+        lazy: async () => {
+          const { default: PaginaDettaglioCombinazione } = await import(
+            "@/pages/PaginaDettaglioCombinazione"
+          );
+          return { Component: PaginaDettaglioCombinazione };
+        },
+      },
+      {
+        path: "webliant/impostazioni-webpliant",
+        lazy: async () => {
+          const { default: ImpostazioniWebpliant } = await import(
+            "@/pages/ImpostazioniWebpliant"
+          );
+          return {
+            Component: ImpostazioniWebpliant,
+            loader: funzioneCaricamentoWorkspace,
+          };
+        },
+      },
+      {
+        path: "webliant/impostazioni-webpliant/configurazione-webpliant",
+        lazy: async () => {
+          const { default: ConfigurazioneWebpliant } = await import(
+            "@/pages/ConfigurazioneWebpliant"
+          );
+          return {
+            Component: ConfigurazioneWebpliant,
+            loader: funzioneCaricamentoConfigWebpliant,
+          };
+        },
+      },
+      {
+        path: "webliant/webpliant-disponibili",
+        lazy: async () => {
+          const { default: WebPliantDisponibili } = await import(
+            "@/pages/WebPliantDisponibili"
+          );
+          return {
+            Component: WebPliantDisponibili,
+            loader: funzioneCaricamentoWebpliant,
+          };
+        },
+      },
+
+      // GESTIONE RICETTE (pagine indipendenti)
+      {
+        path: "gestione-ricette",
+        lazy: async () => {
+          const { default: GestioneRicette } = await import(
+            "@/pages/GestioneGDOAI/GestioneRicette"
+          );
+          return { Component: GestioneRicette };
+        },
+      },
+      {
+        path: "gestione-ricette/modifica",
+        lazy: async () => {
+          const { default: ModificaRicetta } = await import(
+            "@/pages/GestioneGDOAI/ModificaRicette"
+          );
+          return {
+            Component: ModificaRicetta,
+            loader: funzioneCaricamentoModificaRicetta,
+          };
+        },
+      },
+
+      // GESTIONE APPROFONDIMENTO VINI (pagine indipendenti)
+      {
+        path: "gestione-approfondimento-vini",
+        lazy: async () => {
+          const { default: GestioneApprofondimentoVini } = await import(
+            "@/pages/GestioneGDOAI/GestioneApprofondimentoVini"
+          );
+          return { Component: GestioneApprofondimentoVini };
+        },
+      },
+      {
+        path: "gestione-approfondimento-vini/modifica",
+        lazy: async () => {
+          const { default: ModificaApprofondimentoVini } = await import(
+            "@/pages/GestioneGDOAI/ModificaApprofondimentoVini"
+          );
+          return { Component: ModificaApprofondimentoVini };
+        },
+      },
+
+      // New Unified ODS Routes
+      {
+        path: "nuovo-ods",
+        lazy: async () => {
+          const { default: OrdiniDiStampaUnified } = await import("@/pages/OrdiniDiStampaUnified");
+          return {
+            Component: OrdiniDiStampaUnified,
+            loader: funzioneCaricamentoNuovoODS,
+          };
+        },
+      },
+      {
+        path: "ods-in-corso",
+        lazy: async () => {
+          const { default: OrdiniDiStampaUnified } = await import("@/pages/OrdiniDiStampaUnified");
+          return {
+            Component: OrdiniDiStampaUnified,
+            loader: funzioneCaricamentoODSInCorso,
+          };
+        },
+      },
+      {
+        path: "ods-completati",
+        lazy: async () => {
+          const { default: OrdiniDiStampaUnified } = await import("@/pages/OrdiniDiStampaUnified");
+          return {
+            Component: OrdiniDiStampaUnified,
+            loader: funzioneCaricamentoODSCompletati,
+          };
+        },
+      },
+      {
+        path: "ods-in-corso/revisione",
+        lazy: async () => {
+          const { default: RevisioneOrdiniDiStampaDetail } = await import(
+            "@/pages/RevisioneOrdiniDiStampaDetail"
+          );
+          return {
+            Component: RevisioneOrdiniDiStampaDetail,
+            loader: funzioneCaricamentoDettagliOrdiniDiStampa,
+          };
+        },
+      },
+      {
+        path: "ods-in-corso/kit-dettagli",
+        lazy: async () => {
+          const { default: DettagliKitOrdiniDiStampa } = await import(
+            "@/pages/DettagliKitOrdiniDiStampa"
+          );
+          return {
+            Component: DettagliKitOrdiniDiStampa,
+            loader: funzioneCaricamentoTuttiIfFilesOrdiniDiStampa,
+          };
+        },
+      },
+      {
+        path: "ods-completati/dettagli",
+        lazy: async () => {
+          const { default: RevisioneOrdiniDiStampaDetail } = await import(
+            "@/pages/RevisioneOrdiniDiStampaDetail"
+          );
+          return {
+            Component: RevisioneOrdiniDiStampaDetail,
+            loader: funzioneCaricamentoDettagliFineLavorazione,
+          };
+        },
+      },
+      {
+        path: "ods-completati/kit-dettagli",
+        lazy: async () => {
+          const { default: DettagliKitOrdiniDiStampa } = await import(
+            "@/pages/DettagliKitOrdiniDiStampa"
+          );
+          return {
+            Component: DettagliKitOrdiniDiStampa,
+            loader: funzioneCaricamentoTuttiIfFilesOrdiniDiStampa,
+          };
+        },
+      },
+      // Deprecated ODS Routes (redirect to new routes)
+      {
+        path: "ordini-di-stampa",
+        loader: () => redirect("/ods-in-corso"),
+      },
+      {
+        path: "ordini-di-stampa/revisione",
+        loader: ({ request }) => {
+          const url = new URL(request.url);
+          const id = url.searchParams.get("id");
+          return redirect(`/ods-in-corso/revisione${id ? `?id=${id}` : ''}`);
+        },
+      },
+      {
+        path: "ordini-di-stampa/revisione/dettagli",
+        loader: ({ request }) => {
+          const url = new URL(request.url);
+          const id = url.searchParams.get("id");
+          return redirect(`/ods-in-corso/kit-dettagli${id ? `?id=${id}` : ''}`);
+        },
+      },
+      {
+        path: "ordini-di-stampa/dettagli",
+        loader: ({ request }) => {
+          const url = new URL(request.url);
+          const id = url.searchParams.get("id");
+          return redirect(`/ods-completati/dettagli${id ? `?id=${id}` : ''}`);
+        },
+      },
+      {
+        path: "profilo-utente",
+        lazy: async () => {
+          const { default: Settings } = await import("@/pages/ImpostazioniUtente");
+          return { Component: Settings };
+        },
+      },
+      {
+        path: "gestione-webhook",
+        lazy: async () => {
+          const { default: GestioneWebhook } = await import("@/pages/GestioneWebhook");
+          return { Component: GestioneWebhook };
+        },
+      },
+      // GESTIONE API - Pagine standalone
+      {
+        path: "gestione-api/statistiche",
+        lazy: async () => {
+          const { default: StatistichePage } = await import("@/pages/Api/Statistiche");
+          return { Component: StatistichePage };
+        },
+      },
+      {
+        path: "gestione-api/test",
+        lazy: async () => {
+          const { default: TestApiPage } = await import("@/pages/Api/TestApi");
+          return {
+            Component: TestApiPage,
+            loader: funzioneCaricamentoGestioneApi,
+          };
+        },
+      },
+      {
+        path: "gestione-api/keys",
+        lazy: async () => {
+          const { default: ApiKeysPage } = await import("@/pages/Api/Keys");
+          return {
+            Component: ApiKeysPage,
+            loader: funzioneCaricamentoGestioneApi,
+          };
+        },
+      },
+      {
+        path: "gestione-api/plugin",
+        lazy: async () => {
+          const { default: PluginPage } = await import("@/pages/Api/Plugin");
+          return {
+            Component: PluginPage,
+            loader: funzioneCaricamentoGestioneApi,
+          };
+        },
+      },
+      // DOCUMENTAZIONE - Hub e pagine
+      {
+        path: "documentazione",
+        lazy: async () => {
+          const { default: DocumentazioneHubPage } = await import("@/pages/Documentazione");
+          return { Component: DocumentazioneHubPage };
+        },
+      },
+      {
+        path: "documentazione/panoramica",
+        lazy: async () => {
+          const { default: DocumentazioneOverviewPage } = await import("@/pages/Documentazione/Overview");
+          return { Component: DocumentazioneOverviewPage };
+        },
+      },
+      {
+        path: "documentazione/guida-rapida",
+        lazy: async () => {
+          const { default: DocumentazioneGettingStartedPage } = await import("@/pages/Documentazione/GettingStarted");
+          return {
+            Component: DocumentazioneGettingStartedPage,
+            loader: funzioneCaricamentoGestioneApi,
+          };
+        },
+      },
+      {
+        path: "documentazione/api",
+        lazy: async () => {
+          const { default: DocumentazioneApiPage } = await import("@/pages/Documentazione/Api");
+          return {
+            Component: DocumentazioneApiPage,
+            loader: funzioneCaricamentoGestioneApi,
+          };
+        },
+      },
+      {
+        path: "documentazione/plugin",
+        lazy: async () => {
+          const { default: DocumentazionePluginPage } = await import("@/pages/Documentazione/Plugin");
+          return { Component: DocumentazionePluginPage };
+        },
+      },
+      {
+        path: "documentazione/filter-templates",
+        lazy: async () => {
+          const { default: DocumentazioneFilterTemplatesPage } = await import("@/pages/Documentazione/FilterTemplates");
+          return { Component: DocumentazioneFilterTemplatesPage };
+        },
+      },
+      {
+        path: "documentazione/statistiche",
+        lazy: async () => {
+          const { default: DocumentazioneStatisticsPage } = await import("@/pages/Documentazione/Statistics");
+          return { Component: DocumentazioneStatisticsPage };
+        },
+      },
+      {
+        path: "competitor-analyzer",
+        lazy: async () => {
+          const { default: RedirectPaginaEsterna } = await import("@/pages/RedirectPaginaEsterna");
+          return { Component: RedirectPaginaEsterna };
+        },
+      },
+      {
+        path: "whatsapp/invio-campagna-whatsapp",
+        lazy: async () => {
+          const { default: InvioCampagnaWhatsapp } = await import(
+            "@/pages/InvioCampagnaWhatsapp"
+          );
+          return {
+            Component: InvioCampagnaWhatsapp,
+            loader: funzioneCaricamentoInvioCampagnaWhatsapp,
+            shouldRevalidate: ({
+              currentUrl,
+              nextUrl,
+            }: ShouldRevalidateFunctionArgs) => {
+              const ignoreParams = new Set(["step"]);
+
+              const cleanSearch = (url: URL) => {
+                const sp = new URLSearchParams(url.search);
+                ignoreParams.forEach((p) => sp.delete(p));
+                return sp.toString();
+              };
+
+              return cleanSearch(currentUrl) !== cleanSearch(nextUrl);
+            },
+          };
+        },
+
+      },
+      {
+        path: "whatsapp/campagne-whatsapp",
+        lazy: async () => {
+          const { default: OutboxWhatsapp } = await import(
+            "@/pages/OutboxWhatsapp"
+          );
+          return { Component: OutboxWhatsapp };
+        },
+      },
+      {
+        path: "whatsapp/gestione-whatsapp-superadmin",
+        lazy: async () => {
+          const { default: GestioneWhatsappSuperAdmin } = await import(
+            "@/pages/GestioneWhatsappSuperAdmin"
+          );
+          return {
+            Component: GestioneWhatsappSuperAdmin,
+            loader: funzioneCaricamentoGestioneWhatsappSuperAdmin,
+          };
+        },
+      },
+      {
+        path: "whatsapp/gestione-whatsapp-superadmin/setup",
+        lazy: async () => {
+          const { default: GestioneSetupWhatsappSuperAdmin } = await import(
+            "@/pages/GestioneSetupWhatsappSuperAdmin"
+          );
+          return {
+            Component: GestioneSetupWhatsappSuperAdmin,
+            loader: funzioneCaricamentoGestioneSetupWhatsappSuperAdmin,
+          };
+        },
+      },
+      {
+        path: "whatsapp/gestione-whatsapp-superadmin/templates",
+        lazy: async () => {
+          const { default: GestioneTemplatesWhatsappSuperAdmin } = await import(
+            "@/pages/GestioneTemplatesWhatsappSuperAdmin"
+          );
+          return {
+            Component: GestioneTemplatesWhatsappSuperAdmin,
+            loader: funzioneCaricamentoGestioneTemplatesWhatsappAdmin,
+          };
+        },
+      },
+      {
+        path: "whatsapp/gestione-whatsapp-superadmin/templates/nuova-versione",
+        lazy: async () => {
+          const { default: NuovaVersioneTemplatesWhatsappSuperAdmin } = await import(
+            "@/pages/NuovaVersioneTemplatesWhatsappSuperAdmin"
+          );
+          return {
+            Component: NuovaVersioneTemplatesWhatsappSuperAdmin,
+            loader: funzioneCaricamentoDettagliTemplateWhatsappAdmin,
+          };
+        },
+      },
+      {
+        path: "whatsapp/gestione-whatsapp-superadmin/templates/presets",
+        lazy: async () => {
+          const { default: GestionePresetsWhatsappSuperAdmin } = await import(
+            "@/pages/GestionePresetsWhatsappSuperAdmin"
+          );
+          return {
+            Component: GestionePresetsWhatsappSuperAdmin,
+            loader: funzioneCaricamentoDettagliTemplateWhatsappAdmin,
+          };
+        },
+      },
+      {
+        path: "whatsapp/gestione-whatsapp-superadmin/templates/crea",
+        lazy: async () => {
+          const { default: CreaTemplatesWhatsappSuperAdmin } = await import(
+            "@/pages/CreaTemplatesWhatsappSuperAdmin"
+          );
+          return { Component: CreaTemplatesWhatsappSuperAdmin };
+        },
+      },
+      {
+        path: "gestione-whatsapp-admin",
+        lazy: async () => {
+          const { default: GestioneWhatsappAdmin } = await import(
+            "@/pages/GestioneWhatsappAdminGDO"
+          );
+          return {
+            Component: GestioneWhatsappAdmin,
+            loader: funzioneCaricamentoGestioneTemplatesWhatsappAdmin,
+          };
+        },
+      },
+
+      // Catch-all della branch root
+      {
+        path: "*",
+        loader: throw404,
+        errorElement: <NotFoundPage />,
+      },
+    ],
+    }],
+  },
+
+  // NODO /webpliant con error boundary e catch-all locale
+  {
+    path: "/webpliant",
+    lazy: async () => {
+      const { default: WebpliantLayout } = await import(
+        "@/pages/WebpliantLayout/index"
+      );
+      const { LoadingWebpliant } = await import(
+        "@/pages/WebpliantLayout/LoadingWebpliant"
+      );
+      return {
+        Component: () => <WebpliantLayout />,
+        loader: funzioneCaricamentoWebpliantLayout,
+        HydrateFallback: LoadingWebpliant,
+      };
+    },
+    children: [
+      {
+        path: "volantino",
+        lazy: async () => {
+          const { default: WebPliant } = await import("@/pages/WebPliant");
+          return {
+            Component: WebPliant,
+            loader: funzioneCaricamentoVolantinoWebPliant,
+          };
+        },
+      },
+      {
+        path: "barcode-reader",
+        lazy: async () => {
+          const { default: BarCodeReaderComponent } = await import(
+            "@/pages/BarCodeReader"
+          );
+          return { Component: BarCodeReaderComponent };
+        },
+      },
+      {
+        path: "volantino/ricetta",
+        lazy: async () => {
+          const { default: Ricette } = await import("@/pages/WebPliant/Ricette");
+          return {
+            Component: Ricette,
+            loader: funzioneCaricamentoRicetta,
+          };
+        },
+      },
+      {
+        path: "wishlist",
+        lazy: async () => {
+          const { default: WishlistWebpliant } = await import(
+            "@/pages/WishlistWebpliant"
+          );
+          return { Component: WishlistWebpliant };
+        },
+      },
+      {
+        path: "ricerca",
+        lazy: async () => {
+          const { default: WebpliantRicerca } = await import(
+            "@/pages/WebpliantRicerca"
+          );
+          return { Component: WebpliantRicerca };
+        },
+      },
+      {
+        path: "*",
+        loader: throw404,
+        errorElement: <NotFoundPage />,
+      },
+
+    ],
+  },
+
+  // Altre top-level routes
+  {
+    path: "webliant/impostazioni-webpliant/workspace",
+    lazy: async () => {
+      const { default: CreazioneWebPliant } = await import(
+        "@/pages/CreazioneWebPliant"
+      );
+      return {
+        Component: CreazioneWebPliant,
+        loader: funzioneCaricamentoEditWorkspace,
+      };
+    },
+  },
+  {
+    path: "login",
+    lazy: async () => {
+      const { default: HubLogin } = await import("@/pages/HubLogin");
+      return { Component: HubLogin };
+    },
+  },
+  {
+    path: "hub",
+    lazy: async () => {
+      const { default: ServicesDashboard } = await import("@/pages/ServicesDashboard");
+      return { Component: ServicesDashboard };
+    },
+  },
+  {
+    path: "recupero-password",
+    lazy: async () => {
+      const { default: RecuperoPassword } = await import("@/pages/RecuperoPassword");
+      return { Component: RecuperoPassword };
+    },
+  },
+  {
+    path: "reset-password",
+    lazy: async () => {
+      const { default: ResetPassword } = await import("@/pages/ResetPassword");
+      return { Component: ResetPassword };
+    },
+  },
+  // {
+  //   path: "*",
+  //   loader: throw404,
+  //   errorElement: <NotFoundPage />,
+  // },
+];
+
+// Route di primo livello (pubbliche e layout Echo): fallback che non chiama /menu/me
+routes.forEach((route) => {
+  route.errorElement ??= <RouteErrorFallback />;
+});
+
+export default routes;

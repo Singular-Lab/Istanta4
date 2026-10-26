@@ -1,0 +1,221 @@
+﻿@*
+    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
+*@
+@{
+}
+
+<style>
+    .goupedRef
+    {
+        display: none;
+        background-color:#efd89e;
+    }
+
+    .collapsedRef {
+        display:none;
+    }
+
+    .showedRef {
+        display: block;
+    }
+</style>
+
+<div class="modal fade" tabindex="-1" id="modalDtl">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Dettaglio</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="container" style="position:fixed; width:auto; z-index:99" id="liveAlertPlaceholder"></div>
+                <div class="container" id="content"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container bg-light p-3 rounded-3 shadow-sm mb-4">
+    <div class="row">
+        <div class="col-5 mb-3">
+            <h5>Sincronizza descrizioni da volantino</h5>
+        </div>
+    </div>
+    <div class="row mt-3">
+        <div class="col-5">
+            <label for="FileEsportazione">Allega file di esportazione InDesign</label>
+            <input class="form-control form-control" id="FileEsportazione" name="FileEsportazione" type="file" onchange="revInstance.searchTracciatoByTitle(this.files[0].name)">
+        </div>
+    </div>
+    <div class="row mt-3">
+        <div class="col-5">
+            <label for="promoToSync">Seleziona promo di revisione</label>
+            <select class="form-select form-select-lg" id="promoToSync" name="promoToSync" onchange="revInstance.searchTracciatoByPromo($(this).val())">
+                <option value="0" selected>Seleziona..</option>
+                @foreach (var s in ViewBag.listaPromoAttive)
+                {
+                    <option value="@s.Id">@s.NomePromo</option>
+                }
+            </select>
+        </div>
+    </div>
+    <div class="row mt-3">
+        <div class="col-5">
+            <label for="promoToSync">Seleziona tracciato</label>
+            <select class="form-select form-select-lg" id="tracciatoToSync" name="tracciatoToSync">
+                <option value="0" selected>Seleziona..</option>
+            </select>
+        </div>
+    </div>
+    <div class="row mt-4">
+        <div class="col-auto">
+            <input type="button" class="btn btn-primary" value="Analizza" onclick="revInstance.syncDescrizioniDaIndd(false);">
+        </div>
+    </div>
+</div>
+
+<div class="container">
+    <div class="row" id="headerResult" style="visibility:hidden;">
+        <div class="col p-2">
+            <h5>Risultato della sincronizzazione</h5>
+        </div>
+    </div>
+@*    <table class="table" id="tblResult" style="visibility:hidden;">
+        <thead>
+            <tr>
+                <th scope="col" style="width:5%;"></th><!--Colonna icone-->
+                <th scope="col" style="width:10%;">Cod. articolo</th>
+                <th scope="col" style="width:60%;">Descrizione</th>
+                <th scope="col" style="width:25%;"></th>
+            </tr>
+        </thead>
+        <tbody>
+        </tbody>
+    </table>*@
+    <div class="container" id="tblResult" style="visibility:hidden;">
+
+    </div>
+    <div class="container" id="stepSync" style="display:none;">
+        <div class="row">
+            <div class="col" style="text-align:center;">
+                <button type="button" class="btn btn-danger" onclick="revInstance.syncDescrizioniDaIndd(true);">Procedi con sincronizzazione</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<template id="template">
+    <div class="row recordSync">
+        <div class="col">
+            <div class="container">
+                <div class="row">
+                    <div class="col-2">
+                        <span id="lab_icon"></span>
+                    </div>
+                    <div class="col-3" style="overflow:hidden; text-overflow:ellipsis;">
+                        <span id="lab_cod"></span>
+                    </div>
+                    <div class="col-5">
+                        <span id="lab_descrizione"></span>
+                    </div>        
+                    <div class="col-1">
+                        <span id="lab_stato"></span>
+                    </div>
+                    <div class="col-1">
+                        <span id="stato_revisione" class="badge stato_revisione" style="cursor:pointer;" onclick="revInstance.apriDettaglioRevisione($(this), 'modalDtl')" data-bs-toggle="modal" data-bs-target="#modalDtl">Da revisionare</span>
+                    </div>
+                </div>
+                <div class="row sottogruppo" style="background-color:#ebd9eb;">
+                    <div class="col sottogruppoCell">
+                        Cod. sottogruppo
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+
+<template id="templateDettaglio">
+    <div class="container border-bottom pb-4 mb-5 record_articolo">
+        <!--Riga di riepilogo dell'articolo-->
+        <div class="row">
+            <div class="col">
+                <img id="img_principale" @*src="~/Thumb?codice=&w=40&h=40" *@style="float:left;vertical-align:middle;" />
+                <span class="me-1"><a id="a_scheda_articolo" href="SchedaArticolo?id=" target="_blank"><b>COD REF</b></a></span>
+            </div>
+            <div class="col">
+                <input type="hidden" id="firma_tracciato"></input>
+                <span class="me-1" id="dtl_agenzia_stato"></span>
+            </div>
+            <div class="col">
+                <span id="lab_data_ultima_revisione">Data ultima revisione: Data ultima revisione</span>
+            </div>
+        </div>
+        <!--Riga di descrizioni-->
+        <div class="row mt-3">
+            <div class="col">
+                <div class="container">
+                    <div class="row">
+                        <div class="col">
+                            <label for="Descrizione1" class="form-label">Descrizione1</label>
+                            <textarea class="form-control" style="height:115px;" id="Descrizione1" name="Descrizione1"></textarea>
+                        </div>
+                        <div class="col">
+                            <label for="Descrizione3" class="form-label">Descrizione3</label>
+                            <textarea class="form-control" style="height:115px;" id="Descrizione3" name="Descrizione3"></textarea>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col">
+                            <label for="Descrizione2" class="form-label">Descrizione2</label>
+                            <textarea class="form-control" style="height:115px;" id="Descrizione2" name="Descrizione2"></textarea>
+                        </div>
+                        <div class="col">
+                            <label for="Descrizione4" class="form-label">Descrizione4</label>
+                            <textarea class="form-control" style="height:115px;" id="Descrizione4" name="Descrizione4"></textarea>
+                        </div>
+                    </div>
+                    <div class="row indd" style="display:none;">
+                        <div class="col">
+                            <label for="DescrizioneIndd" class="form-label">Descrizione proveniente da InDesign</label>
+                            <textarea class="form-control" style="height:115px;" id="DescrizioneIndd" name="DescrizioneIndd"></textarea>
+                        </div>
+                    </div>
+                    <div class="row mt-4">
+                        <div class="col">
+                            <div class="input-group float-start w-50">
+                                <span class="input-group-text" style="font-size:small;">Peso totale</span>
+                                <input type="text" class="form-control" id="Peso" name="Peso" />
+                            </div>
+                            <div class="input-group float-start w-50">
+                                <span class="input-group-text" style="font-size:small;">Unità di misura</span>
+                                <input type="text" class="form-control" id="Um" name="Um" />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mt-4">
+                        <div class="text-end px-3">
+                            <input type="button" class="btn btn-primary" value="Salva" onclick="archivioInstance.salvaDaSync($(this), revInstance.onSalvatoInArchivio)" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+
+<template id="template_divisorio">
+    <div style="height:2px; width:100%; background-color:black;"></div>
+</template>
+
+@inject Microsoft.AspNetCore.Http.IHttpContextAccessor HttpContextAccessor
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]">
+    let revInstance;
+    let archivioInstance;
+    function documentReady() {
+        revInstance = new Revisore();
+        archivioInstance = new Archivio();
+
+    }
+</script>

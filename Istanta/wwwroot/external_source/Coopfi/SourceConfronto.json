@@ -1,0 +1,44 @@
+{
+  "campiDiControllo": [
+    {
+      "nome": "tema",
+      "rules": []
+    },
+    {
+      "nome": "tipo_evento",
+      "rules": []
+    },
+    {
+      "nome": "meccanica",
+      "rules": []
+    },
+    {
+      "nome": "prezzo_continuo",
+      "rules": []
+    },
+    {
+      "nome": "prezzo_promo",
+      "rules": []
+    },
+    {
+      "nome": "prezzo_promo_kgl",
+      "rules": []
+    },
+    {
+      "nome": "txt_sconto",
+      "rules": []
+    },
+    {
+      "nome": "N_Punti",
+      "rules": []
+    },
+    {
+      "nome": "pezzi_soci",
+      "rules": []
+    },
+    {
+      "nome": "N_pezzi_soci",
+      "rules": []
+    }
+  ]
+}

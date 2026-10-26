@@ -1,0 +1,484 @@
+#!/usr/bin/env bash
+# Prepara la directory di progetto sul target prima di distribuire.
+#
+# Si esegue con sudo, dalla directory che contiene release.env:
+#
+#   cd /opt/company-ai/projects/<progetto>
+#   sudo ./prepare-target.sh
+#
+# Perché serve: Docker non fallisce mai su un bind mount il cui percorso non
+# esiste. Lo crea vuoto, di proprietà di root, e tira dritto. Il guasto emerge
+# molto dopo e lontano dalla causa — gli script di init di PostgreSQL mai
+# eseguiti, l'applicazione che non riesce a scrivere i propri dati — e nel caso
+# di PostgreSQL non si corregge da solo nemmeno dopo aver sistemato il percorso,
+# perché il volume ormai inizializzato non viene più ripreso in mano.
+#
+# Lo script distingue tre categorie di directory:
+#
+#   contenuto   devono ARRIVARE col bundle, già popolate. Se mancano o sono
+#               vuote è un errore: crearle vuote qui riprodurrebbe esattamente
+#               il difetto che stiamo cercando di evitare.
+#   dati        di runtime: le crea lui, con il proprietario giusto.
+#   facoltativo serve solo al proxy TLS, di cui si può fare a meno per provare.
+set -uo pipefail
+
+# UID/GID dell'utente `app` nelle immagini .NET: è con quello che gira Istanta,
+# ed è chi deve poter scrivere in /data.
+readonly UID_APP=1654
+
+rosso()  { printf '\033[31m%s\033[0m\n' "$*"; }
+giallo() { printf '\033[33m%s\033[0m\n' "$*"; }
+verde()  { printf '\033[32m%s\033[0m\n' "$*"; }
+
+errori=0
+avvisi=0
+
+if [ ! -f release.env ]; then
+    rosso "release.env non trovato: esegui lo script dalla directory del progetto."
+    exit 1
+fi
+
+# Legge una variabile da un file env senza eseguirlo: contiene password, e un
+# `source` eseguirebbe anche quello che ci fosse dentro per errore.
+#   leggi NOME           da release.env
+#   leggi NOME FILE      da un altro file (correggo4.env); se il file non c'e', vuoto
+# Unica funzione che gira in una subshell, e infatti si limita a stampare: ogni
+# verifica avviene nella shell principale, dove i contatori esistono davvero.
+leggi() {
+    local file="${2:-release.env}"
+    [ -f "$file" ] || return 0
+    sed -n "s/^$1=//p" "$file" | tail -n 1 | tr -d '\r' \
+        | sed -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'\$/\1/"
+}
+
+# Directory che arriva col bundle. Si verifica in due passi, perché "esiste e
+# non è vuota" non basta: una schemas/ con dentro due sottocartelle vuote
+# passerebbe il controllo e lascerebbe PostgreSQL senza tabelle, che è
+# esattamente il guasto da cui nasce questo script.
+#
+# verifica_directory lascia il percorso in `percorso_verificato` e restituisce 0
+# solo se c'è davvero, così verifica_file può proseguire da lì.
+percorso_verificato=""
+
+verifica_directory() {
+    local nome="$1" attesi="$2" percorso
+    percorso_verificato=""
+    percorso=$(leggi "$nome")
+
+    if [ -z "$percorso" ]; then
+        rosso "  manca     $nome non è valorizzata in release.env"
+        errori=$((errori + 1))
+        return 1
+    fi
+    case "$percorso" in
+        /*) ;;
+        *)  rosso "  relativo  $nome = $percorso"
+            rosso "            Serve un percorso assoluto: il Runner lancia compose dal"
+            rosso "            proprio container, e un percorso relativo verrebbe risolto"
+            rosso "            in /deployments/..., che sull'host non esiste."
+            errori=$((errori + 1))
+            return 1 ;;
+    esac
+    if [ ! -d "$percorso" ]; then
+        rosso "  assente   $nome = $percorso"
+        rosso "            Va copiata dal bundle: contiene $attesi."
+        errori=$((errori + 1))
+        return 1
+    fi
+    percorso_verificato="$percorso"
+    return 0
+}
+
+# Cerca i file che devono esserci dentro la directory appena verificata.
+verifica_file() {
+    local modello="$1" attesi="$2" trovati
+    [ -n "$percorso_verificato" ] || return
+
+    # Si conta con find e non con un glob della shell: sotto `set -u` un glob
+    # che non trova nulla resterebbe il testo del modello, e il confronto
+    # direbbe che il file c'è.
+    trovati=$(find "$percorso_verificato" -path "$percorso_verificato/$modello" -type f 2>/dev/null | wc -l)
+    if [ "$trovati" -eq 0 ]; then
+        rosso "  incompleta $percorso_verificato non contiene $modello"
+        rosso "            Ci vanno $attesi."
+        errori=$((errori + 1))
+        return
+    fi
+    verde "  ok        $percorso_verificato/$modello ($trovati)"
+}
+
+# Directory di dati: si crea, e se serve si assegna all'utente applicativo.
+verifica_dati() {
+    local nome="$1" proprietario="${2:-}" percorso
+    percorso=$(leggi "$nome")
+
+    if [ -z "$percorso" ]; then
+        rosso "  manca     $nome non è valorizzata in release.env"
+        errori=$((errori + 1))
+        return
+    fi
+    case "$percorso" in
+        /*) ;;
+        *)  rosso "  relativo  $nome = $percorso (serve un percorso assoluto)"
+            errori=$((errori + 1))
+            return ;;
+    esac
+    if [ ! -d "$percorso" ]; then
+        if ! mkdir -p "$percorso"; then
+            rosso "  errore    non riesco a creare $percorso"
+            errori=$((errori + 1))
+            return
+        fi
+        giallo "  creata    $nome = $percorso"
+    fi
+    if [ -n "$proprietario" ]; then
+        if ! chown -R "$proprietario:$proprietario" "$percorso"; then
+            rosso "  errore    non riesco ad assegnare $percorso a $proprietario (serve sudo)"
+            errori=$((errori + 1))
+            return
+        fi
+        verde "  ok        $percorso (proprietario $proprietario)"
+    else
+        verde "  ok        $percorso"
+    fi
+}
+
+# Directory facoltativa: senza, manca il proxy TLS, non il deployment.
+verifica_facoltativa() {
+    local nome="$1" nota="$2" percorso
+    percorso=$(leggi "$nome")
+
+    if [ -z "$percorso" ]; then
+        # Il compose la pretende comunque per costruire il bind mount.
+        rosso "  manca     $nome non è valorizzata (il compose la richiede lo stesso)"
+        errori=$((errori + 1))
+        return
+    fi
+    if [ ! -d "$percorso" ] || [ -z "$(ls -A "$percorso" 2>/dev/null)" ]; then
+        mkdir -p "$percorso" 2>/dev/null
+        giallo "  da fare   $nome = $percorso"
+        giallo "            $nota"
+        avvisi=$((avvisi + 1))
+        return
+    fi
+    verde "  ok        $percorso"
+}
+
+valore_richiesto() {
+    local nome="$1" nota="$2" valore
+    valore=$(leggi "$nome")
+
+    if [ -z "$valore" ]; then
+        rosso "  manca     $nome — $nota"
+        errori=$((errori + 1))
+        return
+    fi
+    verde "  ok        $nome"
+}
+
+echo
+echo "Directory che arrivano col bundle"
+if verifica_directory POSTGRES_INIT_DIR "gli script di inizializzazione di PostgreSQL"; then
+    verifica_file "*.sh" "01-init-databases.sh e 02-utente-admin.sh"
+fi
+if verifica_directory SCHEMAS_DIR "gli schemi SQL delle due applicazioni"; then
+    verifica_file "istanta/*.sql"   "lo schema di Istanta"
+    verifica_file "correggo4/*.sql" "lo schema di Correggo4"
+fi
+if verifica_directory PROXY_TEMPLATE_DIR "la configurazione di nginx"; then
+    verifica_file "*.template" "default.conf.template"
+fi
+
+# Sottodirectory di una directory di dati. Esistono perché il compose le monta
+# come bind mount invece che come volumi nominati: un volume nominato su un
+# percorso che nell'immagine non esiste nascerebbe vuoto e di proprietà di root,
+# e l'applicazione, che gira come 1654, non potrebbe scriverci. Preparandole qui
+# il problema non si presenta, e soprattutto non si ripresenta.
+verifica_sottodirectory() {
+    local nome="$1" sotto="$2" proprietario="$3" base
+    base=$(leggi "$nome")
+    [ -n "$base" ] || return          # l'assenza l'ha già segnalata verifica_dati
+    case "$base" in /*) ;; *) return ;; esac
+
+    if [ ! -d "$base/$sotto" ]; then
+        if ! mkdir -p "$base/$sotto"; then
+            rosso "  errore    non riesco a creare $base/$sotto"
+            errori=$((errori + 1))
+            return
+        fi
+        giallo "  creata    $base/$sotto"
+    fi
+    if ! chown -R "$proprietario:$proprietario" "$base/$sotto"; then
+        rosso "  errore    non riesco ad assegnare $base/$sotto a $proprietario (serve sudo)"
+        errori=$((errori + 1))
+        return
+    fi
+    verde "  ok        $base/$sotto (proprietario $proprietario)"
+}
+
+echo
+echo "Directory di dati"
+verifica_dati ISTANTA_DATA_DIR "$UID_APP"
+# Chiavi di DataProtection: senza queste scrivibili, ogni pagina di Istanta
+# risponde 500, perché il cookie di sessione non può essere cifrato.
+verifica_sottodirectory ISTANTA_DATA_DIR  "dataprotection-keys" "$UID_APP"
+# Campioni di addestramento scritti da BackgroundCodeService.
+verifica_sottodirectory ISTANTA_DATA_DIR  "ai_models"           "$UID_APP"
+# I percorsi di istanta.env sotto /data (jpg_path_foto, path_to_export,
+# path_to_import, sync_options__extractPath). Istanta ci scrive file senza mai
+# creare la directory di base: se manca, caricamenti, esportazioni e sync foto
+# falliscono con DirectoryNotFoundException.
+verifica_sottodirectory ISTANTA_DATA_DIR  "jpg"                 "$UID_APP"
+verifica_sottodirectory ISTANTA_DATA_DIR  "exported_files"      "$UID_APP"
+verifica_sottodirectory ISTANTA_DATA_DIR  "imported_files"      "$UID_APP"
+verifica_sottodirectory ISTANTA_DATA_DIR  "estrazioni"          "$UID_APP"
+verifica_dati CORREGGO_DATA_DIR "$UID_APP"
+verifica_sottodirectory CORREGGO_DATA_DIR "volantini"           "$UID_APP"
+# Ci scrive il Runner installando AgenziaLib.dll, e Istanta la legge in sola
+# lettura: può restare di root, basta che esista.
+verifica_dati ISTANTA_EXTERNAL_LIB_DIR
+
+# Il cliente: il nome e il suo file appsettings, che il compose monta in /app.
+# Program.cs pretende il file quando ISTANTA_CLIENTE e' impostata, e un bind mount
+# su un file che non esiste diventa una directory vuota: Istanta non partirebbe.
+verifica_cliente() {
+    local cliente file immagine cartelle
+
+    cliente=$(leggi ISTANTA_CLIENTE)
+    if [ -z "$cliente" ]; then
+        rosso "  manca     ISTANTA_CLIENTE non è valorizzata in release.env"
+        rosso "            Il nome del cliente in minuscolo, es. famila: sceglie"
+        rosso "            appsettings.<cliente>.json e lo script di agenzia."
+        errori=$((errori + 1))
+    else
+        # Stessa regola di ScriptAgenzia.NomeAccettabile: lettere, cifre, - e _.
+        case "$cliente" in
+            *[!A-Za-z0-9_-]*)
+                rosso "  non valido ISTANTA_CLIENTE = $cliente (solo lettere, cifre, - e _)"
+                errori=$((errori + 1))
+                cliente="" ;;
+            *)  verde "  ok        ISTANTA_CLIENTE = $cliente" ;;
+        esac
+    fi
+
+    file=$(leggi ISTANTA_CLIENT_CONFIG)
+    if [ -z "$file" ]; then
+        rosso "  manca     ISTANTA_CLIENT_CONFIG non è valorizzata in release.env"
+        errori=$((errori + 1))
+    else
+        case "$file" in
+            /*) ;;
+            *)  rosso "  relativo  ISTANTA_CLIENT_CONFIG = $file (serve un percorso assoluto)"
+                errori=$((errori + 1))
+                file="" ;;
+        esac
+    fi
+
+    if [ -n "$file" ]; then
+        if [ -d "$file" ]; then
+            rosso "  directory $file è una directory, non un file."
+            rosso "            Succede quando si distribuisce prima di averlo creato: Docker"
+            rosso "            crea una directory al posto del file mancante. Rimuovila"
+            rosso "            (sudo rmdir \"$file\") e metti il file del cliente."
+            errori=$((errori + 1))
+        elif [ ! -f "$file" ]; then
+            rosso "  assente   $file"
+            rosso "            Crealo con le impostazioni proprie del cliente; anche solo {}"
+            rosso "            va bene, perché la configurazione completa è in istanta.env."
+            errori=$((errori + 1))
+        else
+            # Un JSON rotto ferma l'avvio di Istanta: meglio saperlo qui.
+            if command -v python3 >/dev/null 2>&1; then
+                if python3 -c 'import json, sys; json.load(open(sys.argv[1], encoding="utf-8-sig"))' "$file" 2>/dev/null; then
+                    verde "  ok        $file (JSON valido)"
+                else
+                    rosso "  rotto     $file non è JSON valido: Istanta non partirebbe"
+                    errori=$((errori + 1))
+                fi
+            elif command -v jq >/dev/null 2>&1; then
+                if jq empty "$file" >/dev/null 2>&1; then
+                    verde "  ok        $file (JSON valido)"
+                else
+                    rosso "  rotto     $file non è JSON valido: Istanta non partirebbe"
+                    errori=$((errori + 1))
+                fi
+            else
+                giallo "  da fare   $file: né python3 né jq per verificare che sia JSON valido"
+                avvisi=$((avvisi + 1))
+            fi
+            # Puo' contenere segreti: leggibile da Istanta (gruppo 1654), non da altri.
+            if chown "root:$UID_APP" "$file" && chmod 640 "$file"; then
+                verde "  ok        $file (root:$UID_APP, 640)"
+            else
+                rosso "  errore    non riesco ad assegnare $file a root:$UID_APP (serve sudo)"
+                errori=$((errori + 1))
+            fi
+        fi
+    fi
+
+    # Lo script di agenzia sta nell'immagine, in /app/ScriptAgenzia/<cliente>.
+    # Si controlla solo se l'immagine c'e' gia': alla prima installazione la
+    # scarica il Runner, e il controllo si rifa' alla release successiva.
+    [ -n "$cliente" ] || return
+    immagine=$(leggi ISTANTA_IMAGE)
+    if [ -z "$immagine" ] || ! docker image inspect "$immagine" >/dev/null 2>&1; then
+        giallo "  da fare   script di agenzia per $cliente: immagine di Istanta non ancora sul"
+        giallo "            target, si potra' verificare dopo la prima distribuzione."
+        avvisi=$((avvisi + 1))
+        return
+    fi
+    cartelle=$(docker run --rm --entrypoint ls "$immagine" /app/ScriptAgenzia 2>/dev/null)
+    # La cartella si cerca senza distinguere maiuscole e minuscole, come fa
+    # ScriptAgenzia.TrovaCartella: le storiche si chiamano "Maiora", "craiOvest".
+    if printf '%s\n' "$cartelle" | grep -qixF -- "$cliente"; then
+        verde "  ok        script di agenzia per $cliente presente nell'immagine"
+    else
+        giallo "  manca     nessuna cartella ScriptAgenzia per $cliente nell'immagine:"
+        giallo "            /Agenzia/script.js risponderà 500. Presenti: $(printf '%s' "$cartelle" | tr '\n' ' ')"
+        avvisi=$((avvisi + 1))
+    fi
+}
+
+echo
+echo "Cliente"
+verifica_cliente
+
+echo
+echo "Facoltativo"
+verifica_facoltativa PROXY_CERT_DIR \
+  "Serve solo al proxy HTTPS: dentro ci vanno fullchain.pem e privkey.pem. Finché è vuota, usa le porte in chiaro."
+
+# Pulizia notturna delle estrazioni di sync foto (PuliziaEstrazioniService).
+# Facoltative: senza, Istanta usa i default e lo si dice soltanto. Un valore
+# presente ma non numerico invece è un errore: .NET non riuscirebbe a leggerlo
+# e Istanta non partirebbe. Un valore fuori intervallo sarebbe ignorato in
+# silenzio a favore del default, e anche questo va detto prima.
+#   verifica_intero_facoltativo NOME MIN MAX "default"
+verifica_intero_facoltativo() {
+    local nome="$1" min="$2" max="$3" predefinito="$4" valore
+    valore=$(leggi "$nome" istanta.env)
+
+    if [ -z "$valore" ]; then
+        giallo "  assente   $nome: si usa il default, $predefinito"
+        avvisi=$((avvisi + 1))
+        return
+    fi
+    case "$valore" in
+        *[!0-9]*) ;;
+        *)
+            if [ "$valore" -ge "$min" ] && [ "$valore" -le "$max" ]; then
+                verde "  ok        $nome = $valore"
+                return
+            fi
+            ;;
+    esac
+    rosso "  non valido $nome = $valore (serve un intero fra $min e $max)"
+    errori=$((errori + 1))
+}
+
+echo
+echo "istanta.env (pulizia delle estrazioni di sync foto)"
+if [ ! -f istanta.env ]; then
+    rosso "  assente   istanta.env: copialo da istanta.env.example e compilalo"
+    errori=$((errori + 1))
+else
+    verifica_intero_facoltativo sync_options__mesiConservazioneEstrazioni 1 120 \
+        "i pacchetti vengono eliminati dopo 1 mese"
+    verifica_intero_facoltativo sync_options__oraPuliziaEstrazioni 0 23 \
+        "la pulizia gira alle 3 di notte"
+fi
+
+echo
+echo "Valori che il compose pretende"
+valore_richiesto ISTANTA_DB_PASSWORD  "password del database di Istanta"
+valore_richiesto CORREGGO_DB_PASSWORD "password del database di Correggo4"
+valore_richiesto ADMIN_EMAIL          "primo utente amministratore"
+valore_richiesto ADMIN_USERNAME       "primo utente amministratore"
+valore_richiesto ADMIN_PASSWORD       "primo utente amministratore"
+
+# utenti.password di Istanta è varchar(50): una password più lunga farebbe
+# fallire l'INSERT a metà inizializzazione, lasciando un volume che PostgreSQL
+# non riprenderà mai più in mano.
+pwd_admin=$(leggi ADMIN_PASSWORD)
+if [ -n "$pwd_admin" ] && [ "${#pwd_admin}" -gt 50 ]; then
+    rosso "  lunga     ADMIN_PASSWORD supera i 50 caratteri, limite della colonna utenti.password di Istanta"
+    errori=$((errori + 1))
+fi
+
+# Correggo4 parte anche senza queste chiavi, ma senza non si entra da Fidelity,
+# l'Edit avanzato non trova foto e loghi e le policy dei Category restano spente:
+# un'installazione che "funziona" solo in apparenza.
+echo
+echo "correggo4.env (collegamento con Fidelity, Olimpo e Istanta)"
+if [ ! -f correggo4.env ]; then
+    rosso "  assente   correggo4.env: copialo da correggo4.env.example e compilalo"
+    errori=$((errori + 1))
+else
+    for v in Fico__OlimpoUrl Fico__IstantaUrl; do
+        u=$(leggi "$v" correggo4.env)
+        case "$u" in
+            http://*|https://*) verde "  ok        $v = $u" ;;
+            "") rosso "  manca     $v in correggo4.env"; errori=$((errori + 1)) ;;
+            *)  rosso "  non URL   $v = $u (serve http:// o https://)"; errori=$((errori + 1)) ;;
+        esac
+    done
+    if [ -n "$(leggi Fico__Secret correggo4.env)" ]; then
+        verde "  ok        Fico__Secret"
+    else
+        rosso "  manca     Fico__Secret in correggo4.env — lo stesso FICO_SECRET di Fidelity e Olimpo"
+        errori=$((errori + 1))
+    fi
+    if [ -n "$(leggi Fico__SecretKey correggo4.env)" ]; then
+        giallo "  superata  Fico__SecretKey non è più letta: il segreto è solo Fico__Secret"
+        avvisi=$((avvisi + 1))
+    fi
+    gdo=$(leggi Fico__NomeGdo correggo4.env)
+    if [ -n "$gdo" ]; then
+        verde "  ok        Fico__NomeGdo = $gdo"
+    else
+        giallo "  vuota     Fico__NomeGdo: nessuna policy dei Category (giusto per i clienti diversi da CoopFi)"
+        avvisi=$((avvisi + 1))
+    fi
+fi
+
+echo
+if [ "$errori" -gt 0 ]; then
+    if [ "$errori" -eq 1 ]; then
+        rosso "1 problema da risolvere prima di distribuire."
+    else
+        rosso "$errori problemi da risolvere prima di distribuire."
+    fi
+    echo
+    echo "Gli script di init, gli schemi e i template si copiano dal bundle:"
+    echo "  sudo cp -r /percorso/del/bundle/{postgres-init,schemas,proxy-templates} ."
+    exit 1
+fi
+
+if [ "$avvisi" -eq 1 ]; then
+    giallo "Pronto per distribuire. 1 cosa facoltativa da sistemare quando servirà."
+elif [ "$avvisi" -gt 1 ]; then
+    giallo "Pronto per distribuire. $avvisi cose facoltative da sistemare quando serviranno."
+else
+    verde "Pronto per distribuire."
+fi
+
+# Il controllo più importante viene per ultimo, perché è l'unico che non si
+# risolve preparando qualcosa: se PostgreSQL ha già inizializzato il volume
+# quando mancavano gli schemi, quel volume resta sbagliato per sempre.
+volume="$(leggi COMPOSE_PROJECT_NAME)_postgres_data"
+if docker volume inspect "$volume" >/dev/null 2>&1 || ! docker info >/dev/null 2>&1; then
+    echo
+    giallo "Attenzione al volume $volume."
+    giallo "Se PostgreSQL si è avviato prima che gli schemi fossero al loro posto,"
+    giallo "è rimasto senza tabelle e non si sistemerà da solo: gli script di"
+    giallo "/docker-entrypoint-initdb.d girano soltanto su un volume vuoto."
+    echo
+    echo "Per ripartire da zero (SI PERDONO I DATI):"
+    echo "  docker compose --env-file release.env -f compose.production.yaml down -v"
+    echo
+    echo "Per controllare prima se le tabelle ci sono:"
+    echo "  docker compose --env-file release.env -f compose.production.yaml \\"
+    echo "    exec postgres psql -U \"\$(sed -n 's/^ISTANTA_DB_USER=//p' release.env)\" \\"
+    echo "    -d \"\$(sed -n 's/^ISTANTA_DB_NAME=//p' release.env)\" -c '\\dt'"
+fi
+echo

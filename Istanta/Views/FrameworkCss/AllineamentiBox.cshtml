@@ -1,0 +1,83 @@
+@page
+@model Istanta.Views.FrameWorkCss.AllineamentiBoxModel
+@{
+}
+@if (ViewBag.error != null)
+{
+    <div id="error_panel" class="alert alert-danger" style="position:fixed; width:100%;">
+        <strong>Attenzione</strong>: @ViewBag.error
+    </div>
+}
+
+
+<h3 style="margin-bottom:25px;">Allineamenti</h3>
+
+<div class="btn-group">
+    <a href="#" class="btn btn-primary toggleVisual active" aria-current="page" onclick="menuVisual();">Visual</a>
+    <a href="#" class="btn btn-primary toggleSource" onclick="menuSource();">Source</a>
+</div>
+
+
+<div class="container" id="container">
+    <div id="contentVisual" class="pt-3">
+        <div id="visualBody"></div>
+    </div>
+    <div id="contentSource" class="pt-3" style="display:none;">
+        <div class="container">
+            <div class="row">
+                <div class="col-12 mb-3" style="text-align:right;">
+                    <button class="btn btn-primary" value="Salva" onclick="exSourceEditor.save('Allineamenti');">Salva</button>
+                </div>
+            </div>
+            <div id="editor"></div>
+        </div>
+    </div>
+</div>
+
+
+        
+@inject Microsoft.AspNetCore.Http.IHttpContextAccessor HttpContextAccessor
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]" src="~/js/sourceEditor.js?v=3"></script>
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]" src="~/js/visualSource.js?v=2"></script>
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]" src="https://unpkg.com/monaco-editor@latest/min/vs/loader.js"></script>
+
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]">
+
+    let exSourceEditor = new ExternalSourceEditor();
+
+    function documentReady() {
+
+        new VisualSource("visualBody").mostra("Allineamenti");
+
+        // I bottoni usano onclick inline, che la Content-Security-Policy blocca:
+        // li aggancio qui, come fanno le altre pagine.
+        $(".toggleVisual").on("click", function () { menuVisual(); });
+        $(".toggleSource").on("click", function () { menuSource(); });
+        $("#contentSource button").on("click", function () { exSourceEditor.save('Allineamenti'); });
+    }
+
+
+    function menuVisual() {
+        document.getElementById("contentSource").style.display = "none";
+        document.getElementById("contentVisual").style.display = "block";
+
+        $(".toggleVisual").addClass("active");
+        $(".toggleSource").removeClass("active");
+
+    }
+    function menuSource() {
+        document.getElementById("contentSource").style.display = "block";
+        document.getElementById("contentVisual").style.display = "none";
+
+        $(".toggleSource").addClass("active");
+        $(".toggleVisual").removeClass("active");
+
+        //prima ridimensiono l'editor
+        $("#editor").css("width", $("#container").css("width"));
+        //atezza quanto la pagina
+        $("#editor").css("height", $(window).height() - 100 + "px");
+
+        exSourceEditor.init("SourceAllineamenti");
+
+    }
+</script>

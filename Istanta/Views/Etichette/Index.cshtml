@@ -1,0 +1,319 @@
+﻿@page
+@model Istanta.Views.Etichette.IndexModel
+@{
+}
+@if (ViewBag.error != null)
+{
+    <div id="error_panel" class="alert alert-danger" style="position:fixed; width:100%;">
+        <strong>Attenzione</strong>: @ViewBag.error
+    </div>
+}
+
+@{
+    // Raggruppa gli elementi per livello
+    var groupedItems = ((List<Istanta.Models.EtichettaItem>
+    )ViewBag.lista_etichette).OrderBy(x => x.Raccolta).ThenBy(x => x.Etichetta)
+    .GroupBy(x => x.Raccolta);
+
+}
+<h3 style="margin-bottom:25px;">Lista etichette</h3>
+
+
+<div class="btn-group">
+    <a href="#" id="aMenuVisual" class="btn btn-primary toggleVisual active" aria-current="page">Visual</a>
+    <a href="#" id="aMenuSource" class="btn btn-primary toggleSource">Source</a>
+</div>
+
+
+<div class="container" id="container">
+    <div id="contentVisual" class="pt-3">
+
+        @if (ViewBag.error != null)
+        {
+            <div class="alert alert-warning" role="alert">
+                <strong>Attenzione</strong>: @ViewBag.error
+            </div>
+        }
+
+        @foreach (var group in groupedItems)
+        {
+            <div class="accordion" id="accordionLivello_@group.Key">
+                <div class="accordion-item">
+                    <div class="accordion-header" id="headingLivello@group.Key">
+                        <h2 class="mb-0">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseLivello_@group.Key" aria-expanded="false" aria-controls="collapseLivello_@group.Key">
+                                @(@group.Key != "" ? @group.Key : "Default")
+                            </button>
+                        </h2>
+                    </div>
+                    <div id="collapseLivello_@group.Key" class="accordion-collapse collapse" aria-labelledby="headingLivello_@group.Key" data-parent="#accordionLivello_@group.Key">
+                        <div class="accordion-body">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <td>
+                                            <table>
+                                                <tr>
+                                                    <td style="width:200px;">
+                                                        Etichetta
+                                                    </td>
+                                                    <td style="width:200px;">
+                                                        Visualizzazione in tracciato
+                                                    </td>
+                                                    <td style="width:200px; margin-right:50px;">
+                                                        Associazioni
+                                                    </td>
+                                                    <td style="padding-left:30px;">
+                                                    </td>
+                                                </tr>
+                                            </table>
+                                        </td>
+                                    </tr>
+                                </thead>
+                                @foreach (var item in group)
+                                {
+                                    <tr>
+                                        <td>
+                                            <form method="POST" action="Etichette/Update/@item.Id">
+                                                <table>
+                                                    <tr>
+                                                        <td style="width:150px;">
+                                                            <input type="text" id="etichetta" name="etichetta" value="@item.Etichetta">
+                                                        </td>
+                                                        <td style="width:150px;">
+                                                            <input type="text" id="Visual" name="Visual" value="@item.Visual">
+                                                        </td>
+                                                        <td style="width:150px;">
+                                                            <input type="text" id="Raccolta" name="Raccolta" value="@item.Raccolta">
+                                                        </td>
+                                                        <td>
+                                                            <button style="margin-right:50px;" class="btn-primary associazioni" type="button" id="associazioni" name="associazioni">Vedi regole</button>
+                                                        </td>
+                                                        <td>
+                                                            <input type="submit" value="Salva" class="salvaBtn">
+                                                        </td>
+                                                        <td style="padding-left:30px;">
+                                                            <a class="btn btn-danger btn-sm eliminaBtn" href="Etichette/Delete/@item.Id">Elimina</a>
+                                                        </td>
+                                                        <td style="display:none;">
+                                                            <input type="hidden" id="itemId" name="itemId" value="@item.Id">
+                                                        </td>
+                                                    </tr>
+                                                </table>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td><hr /></td>
+                                    </tr>
+
+                                }
+                                <tr>
+                                    <td>
+                                        <form method="POST" action="Etichette/Add">
+                                            <table>
+                                                <tr>
+                                                    <td style="width:150px;">
+                                                        Etichetta
+                                                    </td>
+                                                    <td style="width:150px;">
+                                                        Visualizzazione in tracciato
+                                                    </td>
+                                                    <td style="width:150px;">
+                                                        Raccolta
+                                                    </td>
+                                                    <td style="padding-left:30px;">
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td style="width:150px;">
+                                                        <input type="text" id="etichetta" name="Etichetta" value="">
+                                                    </td>
+                                                    <td style="width:150px;">
+                                                        <input type="text" id="visual" name="Visual" value="">
+                                                    </td>
+                                                    <td style="width:150px;">
+                                                        <input type="text" id="raccolta" name="Raccolta" value="">
+                                                    </td>
+                                                    <td>
+                                                        <input type="submit" value="Aggiungi">
+                                                    </td>
+                                                </tr>
+                                            </table>
+                                        </form>
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <div class="modal fade" tabindex="-1" id="modalModificaRegole" data-bs-backdrop="static">
+            <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Set regole</h5>
+                        <button type="button" data-bs-dismiss="modal" class="btn-close" aria-label="Close"></button>
+                        <div id="liveAlertPlaceholder"></div>
+                    </div>
+                    <div class="modal-body">
+                        <div id="regoleContainer">
+                        </div>
+                    </div>
+                    <div class="modal-footer d-flex justify-content-between">
+                        <button class="btn btn-primary aggiungiSetRegole" type="button">Aggiungi Set regole</button>
+                        <button class="btn btn-success salvaRegoleBtn" type="button">Salva</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="contentSource" class="pt-3" style="display:none;">
+        <div class="container">
+            <div class="row">
+                <div class="col-12 mb-3" style="text-align:right;">
+                    <button class="btn btn-primary" id="btnSourceSave" value="Salva">Salva</button>
+                </div>
+            </div>
+            <div id="editor" style="width:800px; height:600px; "></div>
+        </div>
+    </div>
+</div>
+
+
+
+<template id="setRegole">
+    <div class="setRegole bg-warning bg-opacity-25 mb-1 position-relative">
+        SET
+        <button type="button" class="btn-close position-absolute top-0 end-0 eliminaSetRegole" aria-label="Close"></button>
+    </div>
+</template>
+
+<template id="addRegola">
+    <div class="addRegola mb-1 d-flex justify-content-center align-items-center">
+        <button type="button" class="btn btn-primary addRegolaBtn">Aggiungi regola</button>
+    </div>
+</template>
+
+<template id="regola">
+    <div class="regola row mb-1">
+        <div class="col d-flex flex-column">
+            <label for="percorso">Percorso</label>
+            <select id="percorso" class="form-select" aria-label="Menu a tendina" onchange="etichetteInstance.appendiCampiOptions($(this).closest('.col').find('#campo'), null, $(this).val())" onchange="etichetteInstance.appendiCampiOptions($(this).closest('.col').find('#campo'), null, $(this).val())">
+                <option value="recordInTracciato">Record in tracciato</option>
+                <option value="recordRevisionato">Record revisionato</option>
+                <option value="recordImpaginato">Record impaginato</option>
+                <option value="promoTracciati">Promo tracciato</option>
+                <option value="promo">Promo</option>
+                <option value="formato">Formato</option>
+                <option value="kit.declinazioni">Kit.declinazioni</option>
+            </select>
+            <label for="campo">Campo</label>
+            <select id="campo" class="form-select" aria-label="Menu a tendina">
+                <option value="0">Seleziona campo</option>
+            </select>
+        </div>
+        <div class="col d-flex flex-column">
+            <label for="operator">Operatore</label>
+            <select id="operator" class="form-select" aria-label="Menu a tendina">
+                <option value="0">Seleziona operatore</option>
+            </select>
+        </div>
+        <div class="col d-flex flex-column ">
+            <label for="value">Valore</label>
+            <input type="text" id="value" name="value" class="form-control">
+        </div>
+        <div class="col-1 d-flex align-items-end">
+            <button type="button" class="btn btn-danger btn-sm eliminaRegola" style="height:100px">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div>
+            <hr class="mt-1">
+        </div>
+    </div>
+</template>
+        
+
+@inject Microsoft.AspNetCore.Http.IHttpContextAccessor HttpContextAccessor
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]" src="~/js/sourceEditor.js"></script>
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]" src="https://unpkg.com/monaco-editor@latest/min/vs/loader.js"></script>
+
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]" type="text/javascript">
+
+    let etichetteInstance;
+
+    function documentReady() {
+    etichetteInstance = new Etichette();
+    etichetteInstance.sourceEtichetteRef = @Html.Raw(Json.Serialize(ViewBag.lista_etichette));
+
+    $("#btnSourceSave").on("click", function() {
+    exSourceEditor.save('Etichette');
+    });
+
+    $("#aMenuVisual").on("click", function() {
+    menuVisual();
+    });
+        
+    $("#aMenuSource").on("click", function() {
+    menuSource();
+    });
+
+    $(".associazioni").on("click", function() {
+    etichetteInstance.openModal($(this).closest('tr').find('#itemId').val());
+    });
+    $(".salvaBtn").on("click", function() {
+    mostraMessaggio('Ricaricare la pagina per vedere le modifiche', 'success' );
+    });
+    $(".eliminaBtn").on("click", function() {
+    return confirm('Sicuro di voler eliminare?')
+    });
+    $(".aggiungiSetRegole").on("click", function() {
+    etichetteInstance.aggiungiNuovoSetRegole($('#modalModificaRegole').find('#regoleContainer'))
+    });
+    $(".salvaRegoleBtn").on("click", function() {
+    etichetteInstance.salvaEModifica()
+    });
+
+    $("#modalModificaRegole").on("click", ".eliminaSetRegole", function () {
+    etichetteInstance.eliminaSetRegole($(this).closest('.setRegole'))
+    });
+    $("#modalModificaRegole").on("click", ".addRegolaBtn", function () {
+    etichetteInstance.aggiungiRegola($(this).closest('.addRegola'))
+    });
+    $("#modalModificaRegole").on("click", ".eliminaRegola", function () {
+    etichetteInstance.eliminaRegola($(this).closest('.regola'))
+    });
+
+
+    }
+
+    let exSourceEditor = new ExternalSourceEditor();
+
+    function menuVisual() {
+    document.getElementById("contentSource").style.display = "none";
+    document.getElementById("contentVisual").style.display = "block";
+
+    $(".toggleVisual").addClass("active");
+    $(".toggleSource").removeClass("active");
+
+    }
+    function menuSource() {
+    document.getElementById("contentSource").style.display = "block";
+    document.getElementById("contentVisual").style.display = "none";
+
+    $(".toggleSource").addClass("active");
+    $(".toggleVisual").removeClass("active");
+
+    //prima ridimensiono l'editor
+    $("#editor").css("width", $("#container").css("width"));
+    //atezza quanto la pagina
+    $("#editor").css("height", $(window).height() - 100 + "px");
+
+    exSourceEditor.init("SourceEtichetteRef");
+
+    }
+
+</script>

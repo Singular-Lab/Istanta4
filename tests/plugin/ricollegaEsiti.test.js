@@ -1,0 +1,323 @@
+/*
+ * I20-986: i difetti del ricollegamento, quello del box e quello massivo delle foto.
+ *
+ * Le regole che decidono cosa dire all'operatore e dove mettere una foto nuova stanno in un
+ * modulo a parte, che non tocca InDesign e gira sotto il test runner di Node. Quello che invece
+ * vive dentro a funzioni enormi si controlla sul sorgente, ma solo per le condizioni che, se
+ * cambiassero, farebbero tornare esattamente il difetto corretto.
+ *
+ * Esecuzione: node --test tests/plugin/*.test.js
+ */
+
+const test = require("node:test");
+const assert = require("node:assert");
+const fs = require("node:fs");
+const path = require("node:path");
+
+const RicollegaEsiti = require("../../plugin/ricollegaEsiti.js");
+
+//I20-1015: la parte foto della scheda e le operazioni foto sono uscite in reperimentoFoto/. Per
+//questi controlli la scheda e' schedaRef.js piu' schedaFoto.js (a runtime un oggetto solo), e
+//indexNew.js e utility.js si leggono insieme a quello che hanno dato a reperimentoFoto.js.
+const INSIEME_A = {
+    "schedaRef.js": ["reperimentoFoto/schedaFoto.js"],
+    "indexNew.js": ["reperimentoFoto/reperimentoFoto.js"],
+    //I20-1012: e utility.js anche con i quattro oggetti che ne sono usciti.
+    "utility.js": ["reperimentoFoto/reperimentoFoto.js", "reperimentoFoto/fotoPlacer.js",
+        "modali/modali.js", "modali/eliminazione.js", "tooltip/tooltip.js", "menu.js", "testoTag.js"]
+};
+function sorgente(percorso) {
+    const altri = (INSIEME_A[percorso.replace(/^plugin\//, "")] || []).map(nome => "plugin/" + nome);
+    return [percorso, ...altri]
+        .map(nome => fs.readFileSync(path.join(__dirname, "..", "..", nome), "utf8")).join("\n");
+}
+
+/* ---- dove mettere una foto che va creata ---- */
+
+// Era il difetto piu' netto: l'elemento veniva letto prima di essere dichiarato, e il ramo senza
+// foto esistente, cioe' proprio quello di chi ne sta creando una, sollevava un errore.
+test("senza una foto gia' nel box le misure si prendono dal gruppo", () => {
+    assert.deepStrictEqual(
+        RicollegaEsiti.boundsNuovaFoto(null, [10, 20, 30, 40]), [15, 25, 35, 45]);
+});
+
+test("con una foto gia' nel box si parte da quella", () => {
+    assert.deepStrictEqual(
+        RicollegaEsiti.boundsNuovaFoto([1, 2, 3, 4], [10, 20, 30, 40]), [6, 7, 8, 9]);
+});
+
+test("senza misure da nessuna parte non si inventa una posizione", () => {
+    assert.strictEqual(RicollegaEsiti.boundsNuovaFoto(null, null), null);
+    assert.strictEqual(RicollegaEsiti.boundsNuovaFoto([1, 2], [3]), null);
+    assert.strictEqual(RicollegaEsiti.boundsNuovaFoto(null, [1, 2, "x", 4]), null);
+});
+
+/* ---- cosa si dice all'operatore ---- */
+
+// Il difetto: il server scriveva l'errore dentro al singolo elemento e chi chiamava guardava solo
+// quello generale, quindi un ricollegamento fallito passava per riuscito.
+test("l'errore del singolo elemento diventa un messaggio", () => {
+    const avviso = RicollegaEsiti.messaggioPerElemento({
+        stato: RicollegaEsiti.STATO.autoImpaginato,
+        error: "Non trovato in tracciato."
+    });
+
+    assert.strictEqual(avviso.tipo, "error");
+    assert.ok(avviso.testo.includes("Non trovato in tracciato."));
+});
+
+test("un ricollegamento riuscito non dice niente", () => {
+    assert.strictEqual(RicollegaEsiti.messaggioPerElemento(
+        { stato: RicollegaEsiti.STATO.autoImpaginato, error: "" }), null);
+});
+
+test("la referenza gia' impaginata si segnala come avviso", () => {
+    const avviso = RicollegaEsiti.messaggioPerElemento({ stato: RicollegaEsiti.STATO.giaImpaginato });
+
+    assert.strictEqual(avviso.tipo, "warning");
+    assert.ok(avviso.testo.includes("già impaginata"));
+});
+
+// Il cambio di forma lasciava il box non impaginato senza dire niente, ed era indistinguibile da
+// un successo: adesso si dice in che forma il codice e' gia' in lavorazione.
+test("il cambio di forma si spiega, con i codici", () => {
+    const avviso = RicollegaEsiti.messaggioPerElemento({
+        stato: RicollegaEsiti.STATO.cambioDiForma,
+        codiciPresenti: ["6119227,6119231"],
+        codiciNonEsistenti: ["6119999"]
+    });
+
+    assert.strictEqual(avviso.tipo, "warning");
+    assert.ok(avviso.testo.includes("6119227,6119231"), "si dice dov'e' finito");
+    assert.ok(avviso.testo.includes("6119999"), "e cosa invece non c'e'");
+    assert.ok(avviso.testo.toLowerCase().includes("non effettuato"), "e che non e' stato ricollegato");
+});
+
+test("il cambio di forma si spiega anche senza liste", () => {
+    const avviso = RicollegaEsiti.messaggioPerElemento({ stato: RicollegaEsiti.STATO.cambioDiForma });
+
+    assert.ok(avviso.testo.length > 0);
+    assert.ok(!avviso.testo.includes("undefined"));
+});
+
+test("la referenza inesistente resta un errore", () => {
+    assert.strictEqual(
+        RicollegaEsiti.messaggioPerElemento({ stato: RicollegaEsiti.STATO.inesistente }).tipo, "error");
+    assert.strictEqual(RicollegaEsiti.messaggioPerElemento(null), null);
+});
+
+/* ---- i messaggi del ricollegamento foto ---- */
+
+// I messaggi leggevano un campo che negli oggetti mappati non esiste: l'operatore si trovava
+// scritto "del codice: undefined", che non gli dice quale foto guardare.
+test("il codice della foto si legge dal campo giusto", () => {
+    const testo = RicollegaEsiti.messaggioDatoManomesso("6119227", { codiceFoto: "6119231", codice: undefined });
+
+    assert.ok(testo.includes("6119231"));
+    assert.ok(!testo.includes("undefined"));
+});
+
+test("senza codice si dice che non e' indicato, non undefined", () => {
+    const testo = RicollegaEsiti.messaggioDatoManomesso("6119227", { nomeFoto: "scatto.psd" });
+
+    assert.ok(!testo.includes("undefined"));
+    assert.ok(testo.includes("non indicato"));
+});
+
+test("la secondaria sparita dal tracciato viene detta", () => {
+    const testo = RicollegaEsiti.messaggioSecondariaSparita("6119227", { codiceFoto: "6119231" });
+
+    assert.ok(testo.includes("6119231") && testo.includes("6119227"));
+});
+
+/* ---- il rapporto di esito ---- */
+
+// I rapporti d'errore si sovrascrivevano fra loro, perche' solo quello riuscito portava l'istante:
+// di due tentativi andati male restava solo l'ultimo, cioe' proprio quando il rapporto serve.
+test("il nome del rapporto porta sempre l'istante", () => {
+    const primo = RicollegaEsiti.nomeFileEsito("volantino.indd", new Date("2026-09-23T10:00:00Z"));
+    const secondo = RicollegaEsiti.nomeFileEsito("volantino.indd", new Date("2026-09-23T10:05:00Z"));
+
+    assert.notStrictEqual(primo, secondo, "due tentativi non devono sovrascriversi");
+    assert.ok(primo.startsWith("EsitoRicollegamentoFoto_volantino_"));
+    assert.ok(primo.endsWith(".json"));
+    assert.ok(!primo.includes(":"), "i due punti non si possono usare nei nomi di file");
+});
+
+/* ---- guardie sui punti che non si possono estrarre ---- */
+
+test("l'elemento da creare si legge prima di usarlo", () => {
+    const js = sorgente("plugin/indexNew.js");
+    const dichiarazione = js.indexOf("let item = elementiDaCreare[i];");
+    const uso = js.indexOf("RicollegaEsiti.boundsNuovaFoto(", dichiarazione - 2000);
+
+    assert.ok(dichiarazione > 0, "la dichiarazione c'e'");
+    assert.ok(dichiarazione < uso, "e viene prima dell'uso, altrimenti torna l'errore di partenza");
+});
+
+test("il rapporto e' visibile anche a chi gestisce gli errori", () => {
+    const js = sorgente("plugin/indexNew.js");
+    //I20-1015: ricollegaFotoMassivo e' un membro di ReperimentoFoto, non piu' una funzione di indexNew.
+    const inizio = js.indexOf("    async ricollegaFotoMassivo(");
+    const funzione = js.slice(inizio, js.indexOf("\n    },", inizio));
+
+    const dichiarazione = funzione.indexOf("let fileEsito = {");
+    const primoTry = funzione.indexOf("try{");
+
+    assert.ok(dichiarazione > 0 && primoTry > 0);
+    assert.ok(dichiarazione < primoTry,
+        "dichiarato dentro al try, il blocco degli errori falliva a sua volta e la rotella restava accesa");
+});
+
+test("il box fuori pagina ha un messaggio suo", () => {
+    const js = sorgente("plugin/schedaRef.js");
+    const inizio = js.indexOf("async ricollegaBoxImpaginato(");
+    //La funzione chiama gestisciRichiestaClonazione prima che sia definita: il confine e' la
+    //definizione, riconoscibile dal rientro, non la prima occorrenza del nome.
+    const funzione = js.slice(inizio, js.indexOf("\n    gestisciRichiestaClonazione(", inizio));
+
+    assert.ok(funzione.includes("Code SRF-18"), "si dice cosa e' successo e cosa fare");
+    assert.ok(!funzione.includes("box.parentPage.name"),
+        "chiedere il nome della pagina senza guardare se c'e' faceva fallire tutto con l'errore generico");
+});
+
+test("l'esito di ogni elemento arriva all'operatore", () => {
+    const js = sorgente("plugin/schedaRef.js");
+
+    assert.ok(js.includes("RicollegaEsiti.messaggioPerElemento(allElementGruppo[iEsito])"),
+        "si guardano tutti gli elementi, non solo il primo");
+});
+
+/* ---- guardie sul server ---- */
+
+test("la pagina forzata viene salvata", () => {
+    const cs = sorgente("Istanta/Controllers/MenaboController.cs");
+    const inizio = cs.indexOf("public async Task<IActionResult> ricollegaBox(");
+    const azione = cs.slice(inizio, cs.indexOf("public class InddObjImpostazionePrimarieSecondarieRequest", inizio));
+
+    //TASK-19c18841: la pagina passa da PortaAPagina, che ne aggiorna anche l'autore.
+    assert.ok(azione.includes("PortaAPagina(plr, request.elementoDaRicollegare.pag, IdUtenteDellaSessione);"));
+    assert.ok(azione.includes("SaveChangesAsync()"),
+        "senza salvataggio la pagina cambiava solo in memoria e la risposta la dava per fatta");
+});
+
+test("la lavorazione si controlla prima di leggerla", () => {
+    const cs = sorgente("Istanta/Controllers/MenaboController.cs");
+    const inizio = cs.indexOf("public async Task<IActionResult> ricollegaBox(");
+    const azione = cs.slice(inizio, inizio + 4000);
+
+    const controllo = azione.indexOf("if (pl == null)");
+    //I20-1069: la lettura del Meta ora controlla anche che ci sia.
+    const lettura = azione.indexOf("JsonConvert.DeserializeObject<FicoRuntimeKit>(pl.Meta)");
+
+    assert.ok(controllo > 0 && lettura > 0);
+    assert.ok(controllo < lettura, "letta prima del controllo, la lavorazione inesistente dava un errore di riferimento nullo");
+    //I20-1069: lavorazione e promo mancanti si dicono con una frase, non piu' con i codici lavorazione_inesistente e promo_inesistente.
+    assert.match(azione, /if \(pl == null\)\s*\{(\s*\/\/[^\n]*)*\s*throw new ErroreIstanta\("lettura della lavorazione", \$"la lavorazione \{request\.idLavorazione\} non esiste\."\);/);
+    assert.match(azione, /if \(promo == null\)\s*\{\s*throw new ErroreIstanta\("lettura della promo", /, "anche la promo puo' mancare e piu' avanti se ne legge l'identificativo");
+});
+
+test("all'operatore arriva il motivo, non lo stack trace", () => {
+    const cs = sorgente("Istanta/Controllers/MenaboController.cs");
+    const inizio = cs.indexOf("public async Task<IActionResult> ricollegaBox(");
+    const azione = cs.slice(inizio, cs.indexOf("public class InddObjImpostazionePrimarieSecondarieRequest", inizio));
+
+    //I20-1069: il motivo breve di DescrizioneErrori (passo e motivo, o tipo e riga), invece di ex.Message;
+    //la traccia anche in dettaglio, che il Plugin scrive in console senza mostrarla.
+    assert.ok(azione.includes("result.error = DescrizioneErrori.Breve(\"ricollegaBox\", ex);"));
+    assert.ok(azione.includes("result.dettaglio = DescrizioneErrori.Dettaglio(ex);"));
+    assert.ok(!azione.includes("result.error = ex.ToString();"));
+    assert.ok(azione.includes("_logger?.LogError(ex"), "il dettaglio non si perde, va nel registro");
+});
+
+
+/* ---- I20-986: cosa rappresenta un rettangolo del box ---- */
+
+// La stessa lettura era scritta due volte nella mappatura dell'impaginato, e le due copie erano
+// divergenti: chi mappava una pagina sola otteneva foto senza codice. La foto passava allora per
+// una secondaria non piu' esistente, e in modalita' avanzata quel caso non la salta: la mette in
+// coda per la rimozione. Cioe' avrebbe cancellato foto buone.
+test('la foto primaria si riconosce e porta il suo codice', () => {
+    assert.deepStrictEqual(RicollegaEsiti.fotoDallaLabel('immagine$6119227', null, null),
+        { statoSelezione: 1, codiceFoto: '6119227' });
+});
+
+test('la foto secondaria si riconosce e porta il suo codice', () => {
+    assert.deepStrictEqual(RicollegaEsiti.fotoDallaLabel('foto_secondaria$6119231', null, null),
+        { statoSelezione: 2, codiceFoto: '6119231' });
+});
+
+test('quello che non e\' una foto non entra nella mappa', () => {
+    assert.strictEqual(RicollegaEsiti.fotoDallaLabel('base$6119227', null, null), null);
+    assert.strictEqual(RicollegaEsiti.fotoDallaLabel('descrizione$1', null, null), null);
+    assert.strictEqual(RicollegaEsiti.fotoDallaLabel('', null, null), null);
+    assert.strictEqual(RicollegaEsiti.fotoDallaLabel(null, null, null), null);
+});
+
+test('una foto senza codice nell\'etichetta non inventa un codice', () => {
+    assert.deepStrictEqual(RicollegaEsiti.fotoDallaLabel('immagine', null, null),
+        { statoSelezione: 1, codiceFoto: '' });
+});
+
+test('i nomi dei campi configurati dal cliente valgono al posto di quelli di sempre', () => {
+    assert.deepStrictEqual(RicollegaEsiti.fotoDallaLabel('scatto$999', 'scatto', 'extra'),
+        { statoSelezione: 1, codiceFoto: '999' });
+    assert.deepStrictEqual(RicollegaEsiti.fotoDallaLabel('extra$998', 'scatto', 'extra'),
+        { statoSelezione: 2, codiceFoto: '998' });
+});
+
+// Il controllo era fatto solo contro il valore nullo: un campo non definito passava per
+// configurato, e si finiva a cercare etichette che cominciano per indefinito.
+test('un campo non definito non diventa il nome da cercare', () => {
+    assert.deepStrictEqual(RicollegaEsiti.fotoDallaLabel('immagine$1', undefined, undefined),
+        { statoSelezione: 1, codiceFoto: '1' });
+    assert.deepStrictEqual(RicollegaEsiti.fotoDallaLabel('immagine$1', '', ''),
+        { statoSelezione: 1, codiceFoto: '1' });
+});
+
+test('i due rami della mappatura usano la stessa regola', () => {
+    const js = sorgente('plugin/confronti.js');
+    const quanti = (js.match(/RicollegaEsiti\.fotoDallaLabel\(/g) || []).length;
+
+    assert.strictEqual(quanti, 2, 'uno per il documento intero e uno per le pagine scelte');
+    assert.ok(!js.includes('statoSelezione: statoSelezione }'),
+        'la vecchia lettura senza codice non deve restare in giro');
+    assert.ok((js.match(/codiceFoto: riconosciuta\.codiceFoto/g) || []).length === 2,
+        'tutte e due registrano il codice della foto');
+});
+
+/* ---- I20-1134: le secondarie del ricollegamento avanzato ---- */
+
+//Il ricollegamento avanzato rimetteva nel box ogni secondaria della lista, anche quelle che il server
+//aveva tolto dalle foto del gruppo: nel BIS di Edro21 tornava la terza foto.
+const record = (codice, stato) => ({ recordInTracciato: { "Referenza.Codice": codice, StatoSelezione: stato } });
+const membro = (codRef, statoSelezione) => ({ codRef: codRef, nomeFoto: codRef + ".psd", statoSelezione: statoSelezione, hash: "h" + codRef });
+
+test("si ricreano solo le secondarie che il server ha messo fra le foto del gruppo", () => {
+    const secondari = [record("101", 2), record("102", 2)];
+    const primario = record("100", 1);
+    primario.recordInTracciato.membriGruppoFoto = [membro("100", 1), membro("101", 2)];
+
+    assert.deepStrictEqual(RicollegaEsiti.secondariDaRicollegare(secondari, primario).map(s => s.recordInTracciato["Referenza.Codice"]), ["101"]);
+});
+
+test("senza la lista delle foto del gruppo valgono tutte le secondarie, come prima", () => {
+    const secondari = [record("101", 2), record("102", 2)];
+    assert.strictEqual(RicollegaEsiti.secondariDaRicollegare(secondari, record("100", 1)).length, 2);
+    assert.strictEqual(RicollegaEsiti.secondariDaRicollegare(secondari, null).length, 2);
+    assert.deepStrictEqual(RicollegaEsiti.secondariDaRicollegare(null, record("100", 1)), []);
+});
+
+test("la lista si legge dal sottogruppo quando la porta lui, come nell'impaginazione", () => {
+    const secondari = [record("101", 2), record("102", 2)];
+    const primario = record("100", 1);
+    primario.recordInTracciato.membriGruppoFoto = [membro("101", 2), membro("102", 2)];
+    primario.sottogruppo = { membriGruppoFoto: [membro("100", 1), membro("102", 2)] };
+
+    assert.deepStrictEqual(RicollegaEsiti.secondariDaRicollegare(secondari, primario).map(s => s.recordInTracciato["Referenza.Codice"]), ["102"]);
+});
+
+test("il ricollegamento avanzato scorre le secondarie filtrate, non quelle della lista", () => {
+    const js = sorgente("plugin/indexNew.js").replace(/\r/g, "");
+    assert.match(js, /if \(advancedMode\) \{\n\s*let secondariDelBox = RicollegaEsiti\.secondariDaRicollegare\(secondari, primario\);\n\s*for \(let j = 0; j < secondariDelBox\.length; j\+\+\) \{\n\s*let corrispondente = secondariDelBox\[j\];/);
+});

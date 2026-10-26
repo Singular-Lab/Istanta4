@@ -1,0 +1,71 @@
+@import url('https://fonts.googleapis.com/css2?family=Urbanist:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Allura&display=swap');
+
+html {
+    body {
+        letter-spacing: theme("letterSpacing.normal") !important;
+        font-size: theme("fontSize.sm") !important;
+        -webkit-font-smoothing: antialiased !important;
+        -moz-osx-font-smoothing: grayscale !important;
+        font-family: theme("fontFamily.urbanist") !important;
+        color: theme("colors.slate.600") !important;
+        line-height: theme("lineHeight.relaxed") !important;
+        font-weight: 400 !important;
+    }
+
+    input[type="search"] {
+        transition: all 0.2s ease;
+    }
+
+    table {
+        th {
+            font-weight: 600;
+            font-size: 0.8125rem;
+            /* Leggermente più piccolo */
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: theme("colors.slate.500");
+        }
+
+        td {
+            font-weight: 400;
+            color: theme("colors.slate.700");
+        }
+    }
+
+    table tbody tr {
+        transition: all 0.15s ease;
+    }
+
+    table tbody tr:hover {
+        background-color: theme("colors.slate.50");
+        box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.05);
+    }
+
+    h1,
+    h2,
+    h3 {
+        font-family: theme("fontFamily.space-grotesk");
+        font-weight: 600;
+        letter-spacing: -0.02em;
+    }
+
+    .citazione,
+    .firma {
+        font-family: theme("fontFamily.allura");
+    }
+
+    h1 {
+        font-size: 1.875rem !important;
+        line-height: 2.25rem !important;
+    }
+
+    h2 {
+        font-size: 1.5rem !important;
+        line-height: 2rem !important;
+    }
+
+    h3 {
+        font-size: 1.25rem !important;
+        line-height: 1.75rem !important;
+    }
+}

@@ -1,0 +1,114 @@
+import { Request, Response } from 'express';
+import 'express-session';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import util from 'util';
+import { v4 as uuidv4 } from 'uuid';
+import { EVENTI_WEBHOOK, HttpStatusCode, STATO_LOG_FILE } from '../../../lib/enums';
+import { FileItemKitLog, OggettoTipiDiExport } from '../../../lib/types';
+import { BaseController } from '../base/BaseController';
+import config from '../config';
+import { IConfigService } from '../interfaces/IConfigService';
+import { IImpostazioniService } from '../interfaces/IImpostazioniService';
+import { authMiddleware, integrationAuthMiddleware } from '../middleware/authMiddleware';
+import { permissionGuard } from '../middleware/permissionGuard';
+import { ServerUtils } from '../utils/ServerUtils';
+
+import { TYPES, container } from '../di';
+import type { IKitRuntimeService } from '../interfaces/IKitRuntimeService';
+import { IWebhookService } from '../interfaces/IWebhookService';
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+export class ImpostazioniController extends BaseController {
+  protected setupRoutes(): void {
+
+    // =========================
+    // GESTIONE PAGINE E UI
+    // =========================
+    this.router.get('/getGestionePagineSingular', authMiddleware, this.getGestionePagineSingular.bind(this));
+    this.router.put('/salvaGestionePagineSingular', authMiddleware, permissionGuard('impostazioni.gestisci_pagine_singular'), this.salvaGestionePagineSingular.bind(this));
+
+    // =========================
+    // PROMOZIONI E TIMELINE
+    // =========================
+    this.router.get('/getAllPromoForTimeline', authMiddleware, this.getAllPromoForTimeline.bind(this));
+
+    // =========================
+    // WEBPLIANT E REFERENZE (dipendono da webhookService/configService)
+    // =========================
+
+    this.router.get("/richiediConfigMapDatafields", integrationAuthMiddleware, this.richiediConfigMapDatafields.bind(this));
+
+    // =========================
+    // IMPOSTAZIONI QUICK SEARCH
+    // =========================
+    this.router.get('/get_quick_search_settings', authMiddleware, this.getQuickSearchSettings.bind(this));
+  }
+
+  constructor(
+    private impostazioniService: IImpostazioniService,
+    private webhookService: IWebhookService,
+    private configService: IConfigService
+  ) {
+    super('/api');
+  }
+
+  public initializeRoutes(): void {
+    this.setupRoutes();
+  }
+
+
+  private async getGestionePagineSingular(req: Request, res: Response): Promise<void> {
+    try {
+      const pathJson = path.join(process.cwd(), "config", "menu.json");
+      const menu = JSON.parse(await util.promisify(fs.readFile)(pathJson, 'utf8'));
+      res.status(HttpStatusCode.OK).json(menu);
+    } catch (error: any) {
+      this.handleError(res, error);
+    }
+  }
+
+  private async salvaGestionePagineSingular(req: Request, res: Response): Promise<void> {
+    try {
+      const pathJson = path.join(process.cwd(), "config", "menu.json");
+      const menu = JSON.parse(await util.promisify(fs.readFile)(pathJson, 'utf8'));
+      await fs.promises.writeFile(pathJson, JSON.stringify(req.body, null, 2));
+      res.status(HttpStatusCode.OK).json({ message: "Pagina singular salvata con successo" });
+    } catch (error: any) {
+      this.handleError(res, error);
+    }
+  }
+
+  private async getAllPromoForTimeline(req: Request, res: Response): Promise<void> {
+    try {
+      const idArea = req.query.idArea as string;
+      const idCanale = req.query.idCanale as string;
+      const promi = await this.impostazioniService.getAllPromoForTimeline(idArea, idCanale);
+      res.status(HttpStatusCode.OK).json(promi);
+    } catch (error: any) {
+      this.handleError(res, error);
+    }
+  }
+
+
+
+  private async richiediConfigMapDatafields(req: Request, res: Response): Promise<void> {
+    try {
+      let configWebpliant = await this.configService.getConfigWebPliantFromVolantino();
+      const webpliantFields = configWebpliant.data_fields_refs.map((data_field) => data_field.expected_input);
+      res.status(HttpStatusCode.OK).json(webpliantFields);
+    } catch (error: any) {
+      this.handleError(res, error);
+    }
+  }
+
+  private async getQuickSearchSettings(req: Request, res: Response): Promise<void> {
+    try {
+      const result = await this.impostazioniService.getQuickSearchSettings(req);
+      res.status(HttpStatusCode.OK).json(result);
+    } catch (error: any) {
+      this.handleError(res, error);
+    }
+  }
+}

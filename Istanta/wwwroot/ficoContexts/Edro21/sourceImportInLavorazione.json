@@ -1,0 +1,16 @@
+[
+  {
+    "titoloField": "Scegli l'addestramento",
+    "idField": "idAddestramento",
+    "visible": true,
+    "tipoField": "cmb",
+    "nullable": false
+  },
+  {
+    "titoloField": "Scegli l'etichetta",
+    "idField": "idLabel",
+    "visible": true,
+    "tipoField": "cmb",
+    "nullable": false
+  }
+]

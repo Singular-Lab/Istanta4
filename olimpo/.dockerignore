@@ -1,0 +1,17 @@
+node_modules
+ui/node_modules
+dist
+private-ui
+coverage
+.env
+.env.*
+*.log
+.git
+.github
+.vscode
+.idea
+.codex
+uploads
+tmp
+.tmp
+*.tsbuildinfo

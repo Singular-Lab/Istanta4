@@ -1,0 +1,534 @@
+[
+  {
+    "AreaInput": "Toscana",
+    "CanaleInput": "Iper",
+    "AreaOutput": "TO",
+    "CanaleOutput": "SC",
+    "GruppoSiti": "9999"
+  },
+  {
+    "AreaInput": "Toscana",
+    "CanaleInput": "SuperStore",
+    "AreaOutput": "TO",
+    "CanaleOutput": "SS",
+    "GruppoSiti": "1328"
+  },
+  {
+    "AreaInput": "Toscana",
+    "CanaleInput": "Conad",
+    "AreaOutput": "TO",
+    "CanaleOutput": "CN",
+    "GruppoSiti": "1334"
+  },
+  {
+    "AreaInput": "Toscana",
+    "CanaleInput": "City",
+    "AreaOutput": "TO",
+    "CanaleOutput": "CY",
+    "GruppoSiti": "723"
+  },
+  {
+    "AreaInput": "Sardegna",
+    "CanaleInput": "Iper",
+    "AreaOutput": "SA",
+    "CanaleOutput": "SC",
+    "GruppoSiti": "8888"
+  },
+  {
+    "AreaInput": "Sardegna",
+    "CanaleInput": "SuperStore",
+    "AreaOutput": "SA",
+    "CanaleOutput": "SS",
+    "GruppoSiti": "1330"
+  },
+  {
+    "AreaInput": "Sardegna",
+    "CanaleInput": "Conad",
+    "AreaOutput": "SA",
+    "CanaleOutput": "CN",
+    "GruppoSiti": "1336"
+  },
+  {
+    "AreaInput": "Sardegna",
+    "CanaleInput": "City",
+    "AreaOutput": "SA",
+    "CanaleOutput": "CY",
+    "GruppoSiti": "1064"
+  },
+  {
+    "AreaInput": "Lazio",
+    "CanaleInput": "Iper",
+    "AreaOutput": "LA",
+    "CanaleOutput": "SC",
+    "GruppoSiti": "7777"
+  },
+  {
+    "AreaInput": "Lazio",
+    "CanaleInput": "SuperStore",
+    "AreaOutput": "LA",
+    "CanaleOutput": "SS",
+    "GruppoSiti": "1329"
+  },
+  {
+    "AreaInput": "Lazio",
+    "CanaleInput": "Conad",
+    "AreaOutput": "LA",
+    "CanaleOutput": "CN",
+    "GruppoSiti": "1335"
+  },
+  {
+    "AreaInput": "Lazio",
+    "CanaleInput": "City",
+    "AreaOutput": "LA",
+    "CanaleOutput": "CY",
+    "GruppoSiti": "1063"
+  },
+  {
+    "AreaInput": "Emilia",
+    "CanaleInput": "Iper",
+    "AreaOutput": "EM",
+    "CanaleOutput": "SC",
+    "GruppoSiti": "5550"
+  },
+  {
+    "AreaInput": "Emilia",
+    "CanaleInput": "SuperStore",
+    "AreaOutput": "EM",
+    "CanaleOutput": "SS",
+    "GruppoSiti": "5540"
+  },
+  {
+    "AreaInput": "Emilia",
+    "CanaleInput": "Conad",
+    "AreaOutput": "EM",
+    "CanaleOutput": "CN",
+    "GruppoSiti": "5530"
+  },
+  {
+    "AreaInput": "Emilia",
+    "CanaleInput": "City",
+    "AreaOutput": "EM",
+    "CanaleOutput": "CY",
+    "GruppoSiti": "5520"
+  },
+  {
+    "AreaInput": "Piemonte",
+    "CanaleInput": "Iper",
+    "AreaOutput": "PI",
+    "CanaleOutput": "SC",
+    "GruppoSiti": "4450"
+  },
+  {
+    "AreaInput": "Piemonte",
+    "CanaleInput": "SuperStore",
+    "AreaOutput": "PI",
+    "CanaleOutput": "SS",
+    "GruppoSiti": "4440"
+  },
+  {
+    "AreaInput": "Piemonte",
+    "CanaleInput": "Conad",
+    "AreaOutput": "PI",
+    "CanaleOutput": "CN",
+    "GruppoSiti": "4430"
+  },
+  {
+    "AreaInput": "Piemonte",
+    "CanaleInput": "City",
+    "AreaOutput": "PI",
+    "CanaleOutput": "CY",
+    "GruppoSiti": "4420"
+  },
+  {
+    "AreaInput": "Liguria",
+    "CanaleInput": "Iper",
+    "AreaOutput": "LI",
+    "CanaleOutput": "SC",
+    "GruppoSiti": "3350"
+  },
+  {
+    "AreaInput": "Liguria",
+    "CanaleInput": "SuperStore",
+    "AreaOutput": "LI",
+    "CanaleOutput": "SS",
+    "GruppoSiti": "3340"
+  },
+  {
+    "AreaInput": "Liguria",
+    "CanaleInput": "Conad",
+    "AreaOutput": "LI",
+    "CanaleOutput": "CN",
+    "GruppoSiti": "3330"
+  },
+  {
+    "AreaInput": "Liguria",
+    "CanaleInput": "City",
+    "AreaOutput": "LI",
+    "CanaleOutput": "CY",
+    "GruppoSiti": "3320"
+  },
+  {
+    "AreaInput": "Toscana",
+    "CanaleInput": "SPAZIO CONAD",
+    "AreaOutput": "TO",
+    "CanaleOutput": "SC",
+    "GruppoSiti": "999"
+  },
+  {
+    "AreaInput": "Lazio",
+    "CanaleInput": "SPAZIO CONAD",
+    "AreaOutput": "LA",
+    "CanaleOutput": "SC",
+    "GruppoSiti": "777"
+  },
+  {
+    "AreaInput": "Sardegna",
+    "CanaleInput": "SPAZIO CONAD",
+    "AreaOutput": "SA",
+    "CanaleOutput": "SC",
+    "GruppoSiti": "888"
+  },
+  {
+    "AreaInput": "Emilia",
+    "CanaleInput": "SPAZIO CONAD",
+    "AreaOutput": "EM",
+    "CanaleOutput": "SC",
+    "GruppoSiti": "5550"
+  },
+  {
+    "AreaInput": "Liguria",
+    "CanaleInput": "SPAZIO CONAD",
+    "AreaOutput": "LI",
+    "CanaleOutput": "SC",
+    "GruppoSiti": "3350"
+  },
+  {
+    "AreaInput": "Piemonte",
+    "CanaleInput": "SPAZIO CONAD",
+    "AreaOutput": "PI",
+    "CanaleOutput": "SC",
+    "GruppoSiti": "4450"
+  },
+  {
+    "AreaInput": "Valle d'Aosta",
+    "CanaleInput": "Conad",
+    "AreaOutput": "PI",
+    "CanaleOutput": "CN",
+    "GruppoSiti": "4430"
+  },
+  {
+    "AreaInput": "Lunigiana",
+    "CanaleInput": "SuperStore",
+    "AreaOutput": "TO",
+    "CanaleOutput": "SS",
+    "GruppoSiti": "1328"
+  },
+  {
+    "AreaInput": "Lunigiana",
+    "CanaleInput": "Conad",
+    "AreaOutput": "TO",
+    "CanaleOutput": "CN",
+    "GruppoSiti": "1334"
+  },
+  {
+    "AreaInput": "Lunigiana",
+    "CanaleInput": "City",
+    "AreaOutput": "TO",
+    "CanaleOutput": "CY",
+    "GruppoSiti": "723"
+  },
+  {
+    "AreaInput": "Pet Nord",
+    "CanaleInput": "Pet Store",
+    "AreaOutput": "N",
+    "CanaleOutput": "PET",
+    "GruppoSiti": "2502"
+  },
+  {
+    "AreaInput": "Pet Ovest",
+    "CanaleInput": "Pet Store",
+    "AreaOutput": "O",
+    "CanaleOutput": "PET",
+    "GruppoSiti": "2503"
+  },
+  {
+    "AreaInput": "OS CONAD LOCALISMO LIGURIA",
+    "CanaleInput": "Conad",
+    "AreaOutput": "LI",
+    "CanaleOutput": "CN",
+    "GruppoSiti": "3330"
+  },
+  {
+    "AreaInput": "OS CONAD LOCALISMO PIEMONTE",
+    "CanaleInput": "Conad",
+    "AreaOutput": "PI",
+    "CanaleOutput": "CN",
+    "GruppoSiti": "4430"
+  },
+  {
+    "AreaInput": "OS CITY LOCALISMO LIGURIA",
+    "CanaleInput": "City",
+    "AreaOutput": "LI",
+    "CanaleOutput": "CY",
+    "GruppoSiti": "3320"
+  },
+  {
+    "AreaInput": "OS CITY LOCALISMO PIEMONTE",
+    "CanaleInput": "City",
+    "AreaOutput": "PI",
+    "CanaleOutput": "CY",
+    "GruppoSiti": "4420"
+  },
+  {
+    "AreaInput": "IN$PIEMONTE",
+    "CanaleInput": "Conad",
+    "AreaOutput": "PI",
+    "CanaleOutput": "CN",
+    "GruppoSiti": "????"
+  },
+  {
+    "AreaInput": "IN$PIEMONTE",
+    "CanaleInput": "SuperStore",
+    "AreaOutput": "PI",
+    "CanaleOutput": "SS",
+    "GruppoSiti": "????"
+  },
+  {
+    "AreaInput": "IN$PIEMONTE",
+    "CanaleInput": "City",
+    "AreaOutput": "PI",
+    "CanaleOutput": "CY",
+    "GruppoSiti": "????"
+  },
+  {
+    "AreaInput": "IN$PIEMONTE",
+    "CanaleInput": "Iper",
+    "AreaOutput": "PI",
+    "CanaleOutput": "SC",
+    "GruppoSiti": "????"
+  },
+  {
+    "AreaInput": "IN$AOSTA",
+    "CanaleInput": "Conad",
+    "AreaOutput": "AO",
+    "CanaleOutput": "CN",
+    "GruppoSiti": "????"
+  },
+  {
+    "AreaInput": "IN$AOSTA",
+    "CanaleInput": "SuperStore",
+    "AreaOutput": "AO",
+    "CanaleOutput": "SS",
+    "GruppoSiti": "????"
+  },
+  {
+    "AreaInput": "IN$AOSTA",
+    "CanaleInput": "City",
+    "AreaOutput": "AO",
+    "CanaleOutput": "CY",
+    "GruppoSiti": "????"
+  },
+  {
+    "AreaInput": "IN$AOSTA",
+    "CanaleInput": "Iper",
+    "AreaOutput": "AO",
+    "CanaleOutput": "SC",
+    "GruppoSiti": "????"
+  },
+  {
+    "AreaInput": "IN$TOSCANA",
+    "CanaleInput": "City",
+    "AreaOutput": "TO",
+    "CanaleOutput": "CY",
+    "GruppoSiti": "????"
+  },
+  {
+    "AreaInput": "IN$TOSCANA",
+    "CanaleInput": "SuperStore",
+    "AreaOutput": "TO",
+    "CanaleOutput": "SS",
+    "GruppoSiti": "????"
+  },
+  {
+    "AreaInput": "IN$TOSCANA",
+    "CanaleInput": "Conad",
+    "AreaOutput": "TO",
+    "CanaleOutput": "CN",
+    "GruppoSiti": "????"
+  },
+  {
+    "AreaInput": "IN$TOSCANA",
+    "CanaleInput": "Iper",
+    "AreaOutput": "TO",
+    "CanaleOutput": "SC",
+    "GruppoSiti": "????"
+  },
+  {
+    "AreaInput": "IN$LIGURIA",
+    "CanaleInput": "City",
+    "AreaOutput": "LI",
+    "CanaleOutput": "CY",
+    "GruppoSiti": "????"
+  },
+  {
+    "AreaInput": "IN$LIGURIA",
+    "CanaleInput": "SuperStore",
+    "AreaOutput": "LI",
+    "CanaleOutput": "SS",
+    "GruppoSiti": "????"
+  },
+  {
+    "AreaInput": "IN$LIGURIA",
+    "CanaleInput": "Conad",
+    "AreaOutput": "LI",
+    "CanaleOutput": "CN",
+    "GruppoSiti": "????"
+  },
+  {
+    "AreaInput": "IN$LIGURIA",
+    "CanaleInput": "Iper",
+    "AreaOutput": "LI",
+    "CanaleOutput": "SC",
+    "GruppoSiti": "????"
+  },
+  {
+    "AreaInput": "IN$LUNIGIANA",
+    "CanaleInput": "City",
+    "AreaOutput": "SP",
+    "CanaleOutput": "CY",
+    "GruppoSiti": "????"
+  },
+  {
+    "AreaInput": "IN$LUNIGIANA",
+    "CanaleInput": "SuperStore",
+    "AreaOutput": "SP",
+    "CanaleOutput": "SS",
+    "GruppoSiti": "????"
+  },
+  {
+    "AreaInput": "IN$LUNIGIANA",
+    "CanaleInput": "Conad",
+    "AreaOutput": "SP",
+    "CanaleOutput": "CN",
+    "GruppoSiti": "????"
+  },
+  {
+    "AreaInput": "IN$LUNIGIANA",
+    "CanaleInput": "Iper",
+    "AreaOutput": "SP",
+    "CanaleOutput": "SC",
+    "GruppoSiti": "????"
+  },
+  {
+    "AreaInput": "IN$SARDEGNA",
+    "CanaleInput": "SuperStore",
+    "AreaOutput": "SA",
+    "CanaleOutput": "SS",
+    "GruppoSiti": "????"
+  },
+  {
+    "AreaInput": "IN$SARDEGNA",
+    "CanaleInput": "Conad",
+    "AreaOutput": "SA",
+    "CanaleOutput": "CN",
+    "GruppoSiti": "????"
+  },
+  {
+    "AreaInput": "IN$SARDEGNA",
+    "CanaleInput": "City",
+    "AreaOutput": "SA",
+    "CanaleOutput": "CY",
+    "GruppoSiti": "????"
+  },
+  {
+    "AreaInput": "IN$SARDEGNA",
+    "CanaleInput": "Iper",
+    "AreaOutput": "SA",
+    "CanaleOutput": "SC",
+    "GruppoSiti": "????"
+  },
+  {
+    "AreaInput": "IN$LAZIO",
+    "CanaleInput": "SuperStore",
+    "AreaOutput": "LA",
+    "CanaleOutput": "SS",
+    "GruppoSiti": "????"
+  },
+  {
+    "AreaInput": "IN$LAZIO",
+    "CanaleInput": "Conad",
+    "AreaOutput": "LA",
+    "CanaleOutput": "CN",
+    "GruppoSiti": "????"
+  },
+  {
+    "AreaInput": "IN$LAZIO",
+    "CanaleInput": "City",
+    "AreaOutput": "LA",
+    "CanaleOutput": "CY",
+    "GruppoSiti": "????"
+  },
+  {
+    "AreaInput": "IN$LAZIO",
+    "CanaleInput": "Iper",
+    "AreaOutput": "LA",
+    "CanaleOutput": "SC",
+    "GruppoSiti": "????"
+  },
+  {
+    "AreaInput": "IN$EMILIA",
+    "CanaleInput": "SuperStore",
+    "AreaOutput": "EM",
+    "CanaleOutput": "SS",
+    "GruppoSiti": "????"
+  },
+  {
+    "AreaInput": "IN$EMILIA",
+    "CanaleInput": "Conad",
+    "AreaOutput": "EM",
+    "CanaleOutput": "CN",
+    "GruppoSiti": "????"
+  },
+  {
+    "AreaInput": "IN$EMILIA",
+    "CanaleInput": "City",
+    "AreaOutput": "EM",
+    "CanaleOutput": "CY",
+    "GruppoSiti": "????"
+  },
+  {
+    "AreaInput": "IN$EMILIA",
+    "CanaleInput": "Iper",
+    "AreaOutput": "EM",
+    "CanaleOutput": "SC",
+    "GruppoSiti": "????"
+  },
+  {
+    "AreaInput": "IN$BOLOGNA",
+    "CanaleInput": "SuperStore",
+    "AreaOutput": "EM",
+    "CanaleOutput": "SS",
+    "GruppoSiti": "????"
+  },
+  {
+    "AreaInput": "IN$BOLOGNA",
+    "CanaleInput": "Conad",
+    "AreaOutput": "EM",
+    "CanaleOutput": "CN",
+    "GruppoSiti": "????"
+  },
+  {
+    "AreaInput": "IN$BOLOGNA",
+    "CanaleInput": "City",
+    "AreaOutput": "EM",
+    "CanaleOutput": "CY",
+    "GruppoSiti": "????"
+  },
+  {
+    "AreaInput": "IN$BOLOGNA",
+    "CanaleInput": "Iper",
+    "AreaOutput": "EM",
+    "CanaleOutput": "SC",
+    "GruppoSiti": "????"
+  }
+]

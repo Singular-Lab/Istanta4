@@ -1,0 +1,525 @@
+/*
+ * I20-981 (Lotto 1): le regole con cui il Report Integrita' decide come partire e quando
+ * smettere di valere.
+ *
+ * Stavano dentro il gestore del bottone "Avvia" in indexNew.js e dentro
+ * richiediAzioneReportIntegritaEsistente in confronti.js, mescolate all'interfaccia (dal I20-1014
+ * quel codice sta in reportIntegrita.js, e questo file, che si chiamava reportIntegritaAvvio.js,
+ * gli sta accanto).
+ * Nessuno dei due file si carica sotto Node (require('indesign')), quindi le soglie non
+ * erano verificabili: qui restano solo le decisioni, senza InDesign e senza DOM.
+ *
+ * Esecuzione dei test: node --test tests/plugin/reportIntegritaAvvio.test.js
+ */
+
+//La lista scaricata da meno di un'ora si puo' riusare senza riscaricarla.
+const MINUTI_LISTA_RECENTE = 60;
+//Oltre le quattro ore un report esistente e' troppo vecchio: si rifa' senza chiedere.
+const ORE_REPORT_DA_CHIEDERE = 4;
+//Oltre le due ore si chiede ancora, ma la data va mostrata in evidenza.
+const ORE_REPORT_VECCHIO = 2;
+
+/// Legge "21/09/2026, 09:20:33" come lo scrive toLocaleString('it-IT'), tollerando la
+/// virgola, lo spazio o qualunque altro separatore fra data e ora.
+/// Restituisce null se il testo non e' una data italiana completa con anno a quattro cifre:
+/// chi chiama tratta il null come "non recente", cioe' riscarica. Meglio un download in piu'
+/// che un confronto fatto su una lista di cui non sappiamo l'eta'.
+function leggiDataItaliana(testo) {
+    if (testo == null) {
+        return null;
+    }
+
+    const numeri = String(testo).match(/\d+/g);
+    if (numeri == null || numeri.length < 3) {
+        return null;
+    }
+
+    if (numeri[2].length !== 4) {
+        return null;
+    }
+
+    const giorno = parseInt(numeri[0], 10);
+    const mese = parseInt(numeri[1], 10);
+    const anno = parseInt(numeri[2], 10);
+    const ore = numeri.length > 3 ? parseInt(numeri[3], 10) : 0;
+    const minuti = numeri.length > 4 ? parseInt(numeri[4], 10) : 0;
+    const secondi = numeri.length > 5 ? parseInt(numeri[5], 10) : 0;
+
+    const data = new Date(anno, mese - 1, giorno, ore, minuti, secondi);
+    if (isNaN(data.getTime())) {
+        return null;
+    }
+
+    //Date fa scorrere il 31/02 al primo marzo: se i pezzi non tornano il testo non era una data.
+    if (data.getDate() !== giorno || data.getMonth() !== mese - 1 || data.getFullYear() !== anno) {
+        return null;
+    }
+
+    return data;
+}
+
+/// Vero se la lista del kit e' stata scaricata da meno di `minuti`, e quindi si puo' proporre
+/// all'operatore di riusarla. Una data nel futuro (orologio spostato) non e' considerata
+/// recente: si riscarica, che e' il lato sicuro.
+function listaERecente(dataScaricamento, adesso = new Date(), minuti = MINUTI_LISTA_RECENTE) {
+    const data = leggiDataItaliana(dataScaricamento);
+    if (data == null) {
+        return false;
+    }
+
+    const differenzaMinuti = (adesso.getTime() - data.getTime()) / (1000 * 60);
+    if (differenzaMinuti < 0) {
+        return false;
+    }
+
+    return differenzaMinuti < minuti;
+}
+
+/// Decide cosa fare quando esiste gia' un report integrita' salvato in locale.
+///  - chiedi: mostrare la scelta fra Riapri, Nuovo report e Annulla;
+///  - vecchio: la data va scritta in evidenza perche' il report ha piu' di due ore;
+///  - data: la data di creazione interpretata, null se illeggibile.
+/// Se la data e' illeggibile o il report ha piu' di quattro ore non si chiede nulla e si fa
+/// un report nuovo: quello vecchio non descrive piu' il documento che l'operatore ha davanti.
+function decidiReportEsistente(createdAt, adesso = new Date()) {
+    if (createdAt == null || createdAt === "") {
+        return { chiedi: false, vecchio: false, data: null };
+    }
+
+    const data = new Date(createdAt);
+    if (isNaN(data.getTime())) {
+        return { chiedi: false, vecchio: false, data: null };
+    }
+
+    const ore = (adesso.getTime() - data.getTime()) / (1000 * 60 * 60);
+    if (ore > ORE_REPORT_DA_CHIEDERE) {
+        return { chiedi: false, vecchio: true, data: data };
+    }
+
+    return { chiedi: true, vecchio: ore > ORE_REPORT_VECCHIO, data: data };
+}
+
+/// Il range di pagine da mappare, nel formato che vuole mappaturaImpaginato ("1,2,3").
+/// Le pagine con nome non numerico (copertine, pagine di servizio) restano fuori, come prima.
+function componiRangePagine(nomiPagine) {
+    const pagine = [];
+
+    (nomiPagine || []).forEach(nome => {
+        const numero = parseInt(nome, 10);
+        if (!isNaN(numero)) {
+            pagine.push(numero);
+        }
+    });
+
+    return pagine.join(",");
+}
+
+/// Vero se il report aperto non parla piu' del documento che si ha davanti, e quindi va
+/// chiuso. Vale anche quando non resta aperto nessun documento: un report senza il suo
+/// impaginato sotto e' un elenco di segnalazioni che non si possono piu' verificare.
+/// Se non sappiamo su quale documento il report e' nato non si chiude niente.
+function deveChiudereReport(documentoDelReport, documentoAttuale) {
+    if (documentoDelReport == null || documentoDelReport === "") {
+        return false;
+    }
+
+    const attuale = documentoAttuale == null ? "" : String(documentoAttuale);
+    return attuale !== String(documentoDelReport);
+}
+
+//I20-981 (Lotto 4a): la scheda referenza si puo' aprire dal report, e quando si chiude quella
+//referenza va ricontrollata da sola, perche' l'operatore puo' aver risolto le sue segnalazioni
+//standoci dentro. Queste sono le regole di dove va a finire il record.
+
+/// La categoria del record dopo il ricontrollo: la stessa classificazione con cui il report
+/// nasce, cosi' un record ricontrollato e uno appena analizzato finiscono nello stesso posto a
+/// parita' di esito.
+function categoriaRecordRicontrollato(preAnalisi, haDuplicato) {
+    if (haDuplicato) {
+        return "recordCambiati";
+    }
+
+    if (preAnalisi == null) {
+        return null;
+    }
+
+    if ((preAnalisi.errors || []).length > 0) {
+        return "recordConErrori";
+    }
+
+    if ((preAnalisi.differenze || []).length > 0) {
+        return "recordCambiati";
+    }
+
+    return "recordGiusti";
+}
+
+/// Il dato riletto ha qualcosa da confrontare? Se non porta ne' campi compilati ne' foto, il
+/// confronto non guarda niente e torna zero differenze: uno zero che non vuol dire "a posto",
+/// vuol dire "non ho guardato".
+function ciSonoDatiDaConfrontare(dati) {
+    if (dati == null) {
+        return false;
+    }
+
+    const quanti = (elenco) => (Array.isArray(elenco) ? elenco.length : 0);
+
+    return (quanti(dati.compiledFields) +
+        quanti(dati.listaFoto) +
+        quanti(dati.fotoExtra) +
+        quanti(dati.fotoExtraAuto)) > 0;
+}
+
+/// Che fare del record alla chiusura della scheda.
+/// La regola che tiene tutto insieme: il report si cambia solo quando il ricontrollo ha
+/// davvero potuto confrontare. In tutti gli altri casi si resta com'era, perche' una
+/// segnalazione tolta per sbaglio e' lavoro che l'operatore non sa piu' di dover fare.
+function esitoChiusuraScheda(situazione) {
+    const dati = situazione || {};
+
+    //Il box non c'e' piu': la referenza esce dal report e ricompare fra le Nuove, che si
+    //calcolano per differenza da chi nel report c'e' gia'.
+    if (!dati.boxPresente) {
+        return { azione: "rimuovi", categoria: null };
+    }
+
+    //Senza preanalisi non sappiamo niente di nuovo: meglio lasciare il report com'era che
+    //dichiarare risolto quello che non abbiamo controllato.
+    if (dati.preAnalisi == null) {
+        return { azione: "invariato", categoria: null };
+    }
+
+    //L'analisi e' finita in errore. Non rilancia: mette il messaggio negli errori e torna le
+    //differenze raccolte fino a li', che possono essere zero. Quello zero non e' una prova che
+    //le segnalazioni siano risolte, e un record classificato per errore finirebbe fra quelli
+    //con errori, che il report non mostra in nessuna scheda: sparirebbe dalla vista.
+    if ((dati.preAnalisi.errors || []).length > 0) {
+        return { azione: "invariato", categoria: null, motivo: "errori" };
+    }
+
+    //Niente da confrontare non vuol dire tutto a posto.
+    if (dati.nienteDaConfrontare === true) {
+        return { azione: "invariato", categoria: null, motivo: "nienteDaConfrontare" };
+    }
+
+    return {
+        azione: "sposta",
+        categoria: categoriaRecordRicontrollato(dati.preAnalisi, dati.haDuplicato === true)
+    };
+}
+
+/// Le differenze di confronto non vengono dal box: il ricontrollo del box non le puo' vedere,
+/// e quindi si riportano come stavano.
+function differenzeDiConfronto(record) {
+    const differenze = (record && record.preAnalisi && record.preAnalisi.differenze) || [];
+    return differenze.filter(d => d != null && d.origine === "confronto");
+}
+
+/// Le differenze del record dopo il ricontrollo, nell'ordine in cui le mette la costruzione
+/// del report: prima l'integrita', poi il confronto, il duplicato in fondo.
+function differenzeDopoRicontrollo(differenzeIntegrita, differenzeConfronto, duplicateInfo) {
+    const risultato = (differenzeIntegrita || []).filter(d => d != null && d.origine !== "confronto");
+
+    (differenzeConfronto || []).forEach(d => risultato.push(d));
+
+    if (duplicateInfo != null) {
+        risultato.push({
+            label: "Duplicato",
+            difference: "box duplicato: istanza " + duplicateInfo.index + " di " + duplicateInfo.total
+        });
+    }
+
+    return risultato;
+}
+
+//I20-981 (Lotto 4a): il dato riletto dal server alla chiusura della scheda prende il posto di
+//quello nella lista del kit. Serve perche' l'operatore, sistemando una segnalazione, allinea
+//il box al server: se la lista restasse indietro, il report continuerebbe a giudicare il box
+//con un dato che non e' piu' quello vero.
+
+/// L'identita' di un record di lista: l'idRec quando c'e' da tutte e due le parti, altrimenti
+/// il codice della referenza.
+function idRecDiLista(record) {
+    const diretto = record != null ? record.idRec : null;
+    const dentro = record != null && record.recordInTracciato != null ? record.recordInTracciato.idRec : null;
+    const valore = diretto != null && diretto !== "" ? diretto : dentro;
+
+    if (valore == null || valore === "") {
+        return null;
+    }
+
+    const numero = Number(valore);
+    return isNaN(numero) ? String(valore) : numero;
+}
+
+function codiceDiLista(record) {
+    const tracciato = record != null ? record.recordInTracciato : null;
+    const codice = tracciato != null ? tracciato["Referenza.Codice"] : null;
+    return codice == null ? "" : String(codice);
+}
+
+function stessoRecordDiLista(uno, altro) {
+    if (uno == null || altro == null) {
+        return false;
+    }
+
+    const idUno = idRecDiLista(uno);
+    const idAltro = idRecDiLista(altro);
+
+    if (idUno != null && idAltro != null) {
+        return idUno === idAltro;
+    }
+
+    const codiceUno = codiceDiLista(uno);
+    return codiceUno !== "" && codiceUno === codiceDiLista(altro);
+}
+
+/// Sostituisce nella lista i record riletti dal server. La scheda non restituisce tutte le
+/// chiavi che la lista ha (label, forzaSoloUscitaSottogruppo sono della lista), quindi si
+/// sovrascrive quello che arriva e si conserva il resto. Un record che nella lista non c'e'
+/// non si aggiunge: la lista dice quali referenze sono nel kit, e non e' questo il posto per
+/// cambiarlo.
+function sostituisciRecordNellaLista(recordsLista, recordsFreschi) {
+    const lista = Array.isArray(recordsLista) ? recordsLista.slice() : [];
+    let sostituiti = 0;
+
+    (recordsFreschi || []).forEach(fresco => {
+        if (fresco == null) {
+            return;
+        }
+
+        const indice = lista.findIndex(item => stessoRecordDiLista(item, fresco));
+        if (indice < 0) {
+            return;
+        }
+
+        lista[indice] = Object.assign({}, lista[indice], fresco);
+        sostituiti++;
+    });
+
+    return { records: lista, sostituiti };
+}
+
+/// I20-991: come si legge il nome di una label quando la sua segnalazione arriva davanti a
+/// chi lavora. La label di InDesign e' un nome tecnico - "campo_offerta" non dice che quello
+/// e' il prezzo di prima - e l'operatore che deve decidere si trova davanti una sigla. Se
+/// l'agenzia ha dichiarato come si chiama quella cosa nel suo linguaggio, si scrive la
+/// traduzione e accanto, fra parentesi, la label originale: la traduzione dice di che si
+/// tratta, la label serve a ritrovare il campo in pagina.
+///
+/// Le traduzioni arrivano da fuori, cosi' la regola resta verificabile senza middleware.
+/// Senza traduzione la label si mostra com'e': e' il caso di tutte le agenzie che non
+/// dichiarano nulla, e delle label che l'agenzia non ha ritenuto oscure.
+///
+/// Non tocca l'identita' della segnalazione: la chiave con cui il report riconosce quali
+/// segnalazioni spariscono dopo un ricontrollo continua a usare la label vera.
+function etichettaSegnalazione(label, traduzioni) {
+    const nome = label == null ? "" : String(label);
+    if (nome === "") {
+        return "";
+    }
+
+    const elenco = Array.isArray(traduzioni) ? traduzioni : [];
+    const voce = elenco.find(t => t != null && String(t.label == null ? "" : t.label) === nome);
+    const traduzione = voce != null && voce.traduzione != null ? String(voce.traduzione).trim() : "";
+
+    //Una traduzione vuota o assente non e' una traduzione: meglio la label che una parentesi
+    //con dentro il nulla.
+    if (traduzione === "") {
+        return nome;
+    }
+
+    return traduzione + " (" + nome + ")";
+}
+
+//I20-1074: le vigilanze di fila con la selezione vuota dopo cui la scheda aperta in vista
+//controllata si chiude come con la X. Una sola potrebbe essere il box che Reimpagina sta rifacendo,
+//che per un momento non e' selezionato.
+const VIGILANZE_DESELEZIONE = 2;
+
+/// I20-1074: il conto delle vigilanze di fila in cui nulla e' selezionato, e se e' ora di chiudere
+/// la scheda in vista controllata come con la X. Mentre la scheda lavora o si riaggancia a un box
+/// rifatto non si conta: il conto riparte da zero.
+function contoDeselezione(contoPrecedente, quantiSelezionati, inPausa) {
+    if (inPausa) {
+        return { conto: 0, chiudi: false };
+    }
+    const conto = quantiSelezionati > 0 ? 0 : (contoPrecedente > 0 ? contoPrecedente : 0) + 1;
+    return { conto: conto, chiudi: conto >= VIGILANZE_DESELEZIONE };
+}
+
+/// I20-1121: con il report affiancato, "Trova" seleziona il box senza vista controllata. Il conto
+/// delle vigilanze di fila in cui l'operatore non e' piu' sul box (selezione altrove o vuota), e se
+/// e' ora di ricontrollare la riga. Come per la scheda dal report bastano due vigilanze: una sola
+/// potrebbe essere il box che Reimpagina sta rifacendo. Mentre si lavora il conto riparte da zero.
+function contoAbbandono(contoPrecedente, sulBox, inPausa) {
+    if (inPausa) {
+        return { conto: 0, ricontrolla: false };
+    }
+    const conto = sulBox ? 0 : (contoPrecedente > 0 ? contoPrecedente : 0) + 1;
+    return { conto: conto, ricontrolla: conto >= VIGILANZE_DESELEZIONE };
+}
+
+/// I20-1121: se l'operatore e' ancora sul box seguito: fra gli oggetti selezionati c'e' il box o
+/// qualcosa che ci sta dentro (una cornice del gruppo, il testo in una sua cornice). Si risale da
+/// ogni oggetto al gruppo che lo contiene: dal testo alla sua cornice (parentTextFrames), dagli
+/// altri al genitore (parent). Senza id del box (il box non c'e' piu') l'operatore non ci puo' essere.
+function selezioneSulBox(selezione, idBox, passiMassimi = 12) {
+    if (idBox == null || selezione == null || !(selezione.length > 0)) {
+        return false;
+    }
+
+    for (let i = 0; i < selezione.length; i++) {
+        let elemento = selezione[i];
+        for (let passo = 0; passo < passiMassimi && elemento != null; passo++) {
+            let id = null;
+            try {
+                id = elemento.id;
+            }
+            catch (err) {
+                id = null;
+            }
+            if (id != null && id == idBox) {
+                return true;
+            }
+
+            let cornici = null;
+            try {
+                cornici = elemento.parentTextFrames;
+            }
+            catch (err) {
+                cornici = null;
+            }
+
+            try {
+                elemento = cornici != null && cornici.length > 0 ? cornici[0] : elemento.parent;
+            }
+            catch (err) {
+                elemento = null;
+            }
+        }
+    }
+
+    return false;
+}
+
+/// I20-1067: il gruppo che il server restituisce dalla sincronizzazione del report e' gia' un box del
+/// documento? La mappa e' quella della costruzione del report: { pagina: [{ codiceGruppo, idRec }] }.
+/// Si guarda il codice gruppo del primario (o del primo record) e, se tutti e due lo hanno, l'idRec.
+/// Un box gia' nel documento il server lo ha appena registrato: rifarlo non serve, e con una
+/// differenza diventava un box nuovo sfalsato su quello vecchio.
+function gruppoGiaNellaMappa(records, mappa) {
+    if (!Array.isArray(records) || records.length === 0 || mappa == null || typeof mappa !== "object") {
+        return false;
+    }
+    const primario = records.find(r => r != null && r.recordInTracciato != null && r.recordInTracciato.StatoSelezione == 1)
+        || records.find(r => r != null && r.recordInTracciato != null);
+    if (primario == null) {
+        return false;
+    }
+    const codice = primario.recordInTracciato["Scatto.CodiceGruppo"] != null ? String(primario.recordInTracciato["Scatto.CodiceGruppo"]) : "";
+    if (codice === "") {
+        return false;
+    }
+    const idRec = parseInt(primario.idRec);
+    return Object.keys(mappa).some(pagina => (Array.isArray(mappa[pagina]) ? mappa[pagina] : []).some(gruppo => {
+        if (gruppo == null || gruppo.codiceGruppo == null || String(gruppo.codiceGruppo) !== codice) {
+            return false;
+        }
+        const idRecMappa = parseInt(gruppo.idRec);
+        return !(idRec > 0 && idRecMappa > 0) || idRec === idRecMappa;
+    }));
+}
+
+//I20-1124: le versioni precedenti dei box - quelle che un'azione sul box o Reimpagina box hanno
+//messo da parte sul livello cloneVecchioImpaginato - nel Report Integrita'. Chi ha ancora il
+//suo box su InPagina, in qualunque pagina, e' un clone da eliminare; chi non ce l'ha e' una
+//versione da riportare in pagina o da eliminare, e sta fra i modificati.
+
+/// La chiave di una presenza: codice gruppo e idRec, vuoto compreso.
+function chiavePresenza(codiceGruppo, idRec) {
+    return String(codiceGruppo == null ? "" : codiceGruppo) + "|" + (idRec == null || idRec === "" ? "" : String(idRec));
+}
+
+/// Divide le versioni precedenti (mappa per pagina, come quella dell'impaginato) fra chi ha un
+/// corrispettivo nella mappa di InPagina e chi no. Ogni voce porta l'elemento, la sua pagina e
+/// gli elementi della stessa pagina, come li vuole il record del report.
+function classificaVersioniPrecedenti(mappaVersioni, mappa) {
+    const inPagina = new Set();
+    Object.keys(mappa || {}).forEach(pagina => {
+        (mappa[pagina] || []).forEach(el => {
+            if (el != null) {
+                inPagina.add(chiavePresenza(el.codiceGruppo, el.idRec));
+            }
+        });
+    });
+
+    const daEliminare = [];
+    const daRiportare = [];
+    Object.keys(mappaVersioni || {}).forEach(pagina => {
+        (mappaVersioni[pagina] || []).forEach(el => {
+            if (el == null) {
+                return;
+            }
+            const voce = { elemento: el, pagina: String(pagina), elementiPagina: mappaVersioni[pagina] };
+            (inPagina.has(chiavePresenza(el.codiceGruppo, el.idRec)) ? daEliminare : daRiportare).push(voce);
+        });
+    });
+
+    return { daEliminare, daRiportare };
+}
+
+/// La segnalazione con cui una versione precedente senza box in pagina sta fra i modificati.
+const DIFFERENZA_VERSIONE_PRECEDENTE = {
+    label: "Versione precedente",
+    difference: "versione precedente senza un box in pagina: da riportare in pagina o da eliminare"
+};
+
+/// Il record del report per una versione precedente: fra i box da eliminare (conCorrispettivo)
+/// o fra i modificati, con la segnalazione che dice cosa farne. versionePrecedente a true e' il
+/// contrassegno "Clone" dei pannelli e del csv.
+function recordVersionePrecedente(voce, conCorrispettivo) {
+    const el = voce.elemento;
+    return {
+        elementoMappa: el,
+        inddId: el.refId != null ? el.refId : null,
+        codiceGruppo: el.codiceGruppo,
+        schedaRef: null,
+        preAnalisi: conCorrispettivo ? null : { differenze: [Object.assign({}, DIFFERENZA_VERSIONE_PRECEDENTE)], errors: [] },
+        numeroPagina: voce.pagina,
+        elementoPaginaMappa: voce.elementiPagina,
+        versionePrecedente: true
+    };
+}
+
+function eRecordVersionePrecedente(record) {
+    return record != null && record.versionePrecedente === true;
+}
+
+module.exports = {
+    gruppoGiaNellaMappa,
+    chiavePresenza,
+    classificaVersioniPrecedenti,
+    DIFFERENZA_VERSIONE_PRECEDENTE,
+    recordVersionePrecedente,
+    eRecordVersionePrecedente,
+    MINUTI_LISTA_RECENTE,
+    VIGILANZE_DESELEZIONE,
+    contoDeselezione,
+    contoAbbandono,
+    selezioneSulBox,
+    ORE_REPORT_DA_CHIEDERE,
+    ORE_REPORT_VECCHIO,
+    leggiDataItaliana,
+    listaERecente,
+    decidiReportEsistente,
+    componiRangePagine,
+    deveChiudereReport,
+    categoriaRecordRicontrollato,
+    esitoChiusuraScheda,
+    ciSonoDatiDaConfrontare,
+    differenzeDiConfronto,
+    differenzeDopoRicontrollo,
+    sostituisciRecordNellaLista,
+    etichettaSegnalazione
+};

@@ -1,0 +1,119 @@
+name: Build AgenziaLib artifact
+run-name: AgenziaLib ${{ inputs.version }} - release ${{ inputs.releaseID }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Versione della DLL senza prefisso v (es. 3.5.13)'
+        required: true
+        type: string
+      releaseID:
+        description: 'Identificativo della release nel sistema chiamante'
+        required: true
+        type: string
+      sourceSHA:
+        description: 'SHA completo del commit da compilare, compatibile con Istanta in esecuzione'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agenzialib-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: publish-agenzialib
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Validate release inputs
+        id: release
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+          RELEASE_ID: ${{ inputs.releaseID }}
+          SOURCE_SHA: ${{ inputs.sourceSHA }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" = refs/heads/main ]] || { echo '::error::Dispatch must use main.'; exit 1; }
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ && ${#VERSION} -le 128 ]] || { echo '::error::Invalid version.'; exit 1; }
+          [[ "$RELEASE_ID" =~ ^[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}$ ]] || { echo '::error::Invalid releaseID.'; exit 1; }
+          [[ "$SOURCE_SHA" =~ ^[a-fA-F0-9]{40}$ ]] || { echo '::error::Invalid sourceSHA.'; exit 1; }
+          echo "sha=${SOURCE_SHA,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout requested source commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.release.outputs.sha }}
+          persist-credentials: false
+
+      - name: Verify source commit
+        env:
+          SOURCE_SHA: ${{ steps.release.outputs.sha }}
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and export only AgenziaLib.dll
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Istanta/Dockerfile
+          target: agenzialib-export
+          platforms: linux/amd64
+          push: false
+          outputs: type=local,dest=${{ runner.temp }}/agenzialib
+          cache-from: type=gha,scope=agenzialib
+          cache-to: type=gha,mode=max,scope=agenzialib
+
+      - name: Upload DLL
+        id: payload
+        uses: actions/upload-artifact@v7
+        with:
+          name: agenzialib-${{ inputs.releaseID }}
+          path: ${{ runner.temp }}/agenzialib/AgenziaLib.dll
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Create DLL release manifest
+        shell: bash
+        env:
+          RELEASE_ID: ${{ inputs.releaseID }}
+          VERSION: ${{ inputs.version }}
+          SOURCE_SHA: ${{ steps.release.outputs.sha }}
+          ARTIFACT_ID: ${{ steps.payload.outputs.artifact-id }}
+        run: |
+          set -euo pipefail
+          checksum=$(sha256sum "$RUNNER_TEMP/agenzialib/AgenziaLib.dll")
+          checksum=${checksum%% *}
+          jq -n \
+            --arg releaseId "$RELEASE_ID" \
+            --arg version "$VERSION" \
+            --arg sourceCommit "$SOURCE_SHA" \
+            --arg artifact "agenzialib-$RELEASE_ID" \
+            --arg artifactId "$ARTIFACT_ID" \
+            --arg sha256 "$checksum" \
+            '{schemaVersion: 1, component: "AgenziaLib", distribution: "dll",
+              releaseId: $releaseId, version: $version, sourceCommit: $sourceCommit,
+              artifact: $artifact, artifactId: $artifactId, file: "AgenziaLib.dll",
+              sha256: $sha256}' > "$RUNNER_TEMP/release-manifest.json"
+
+      - name: Upload release manifest
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-manifest-${{ inputs.releaseID }}
+          path: ${{ runner.temp }}/release-manifest.json
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Write release summary
+        shell: bash
+        run: |
+          printf '### AgenziaLib artifact ready\n\n' >> "$GITHUB_STEP_SUMMARY"
+          printf 'DLL e manifest disponibili negli artifact della run. Installazione sul server ancora da eseguire.\n' >> "$GITHUB_STEP_SUMMARY"

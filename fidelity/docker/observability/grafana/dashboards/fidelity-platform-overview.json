@@ -1,0 +1,710 @@
+{
+  "uid": "fidelity-platform",
+  "title": "Fidelity Promotion — Platform Overview",
+  "tags": ["fidelity", "platform", "prometheus", "loki", "docker"],
+  "timezone": "browser",
+  "editable": true,
+  "graphTooltip": 2,
+  "refresh": "15s",
+  "schemaVersion": 39,
+  "version": 3,
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "job",
+        "label": "Istanza",
+        "type": "query",
+        "datasource": { "uid": "prometheus" },
+        "query": {
+          "query": "label_values(up{job=~\"fidelity-.+\"}, job)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "multi": false,
+        "includeAll": true,
+        "allValue": "fidelity-.+",
+        "current": {},
+        "options": [],
+        "hide": 0
+      }
+    ]
+  },
+  "panels": [
+
+    { "id": 1, "type": "row", "title": "Stato Servizi", "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 }, "collapsed": false },
+
+    {
+      "id": 2, "type": "stat", "title": "API Server",
+      "datasource": { "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 1, "w": 4, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [{ "type": "value", "options": { "0": { "text": "DOWN", "color": "red", "index": 0 }, "1": { "text": "UP", "color": "green", "index": 1 } } }],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none", "justifyMode": "center", "textMode": "auto" },
+      "targets": [{ "expr": "max(up{job=~\"$job\"})", "refId": "A" }]
+    },
+    {
+      "id": 3, "type": "stat", "title": "PostgreSQL",
+      "datasource": { "uid": "prometheus" },
+      "gridPos": { "x": 4, "y": 1, "w": 4, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [{ "type": "value", "options": { "0": { "text": "DOWN", "color": "red", "index": 0 }, "1": { "text": "UP", "color": "green", "index": 1 } } }],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none", "justifyMode": "center", "textMode": "auto" },
+      "targets": [{ "expr": "postgres_health_status{job=~\"$job\"}", "refId": "A" }]
+    },
+    {
+      "id": 4, "type": "stat", "title": "Redis",
+      "datasource": { "uid": "prometheus" },
+      "gridPos": { "x": 8, "y": 1, "w": 4, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [{ "type": "value", "options": { "0": { "text": "DOWN", "color": "red", "index": 0 }, "1": { "text": "UP", "color": "green", "index": 1 } } }],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none", "justifyMode": "center", "textMode": "auto" },
+      "targets": [{ "expr": "redis_health_status{job=~\"$job\"}", "refId": "A" }]
+    },
+    {
+      "id": 5, "type": "stat", "title": "Prometheus",
+      "datasource": { "uid": "prometheus" },
+      "gridPos": { "x": 12, "y": 1, "w": 4, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [{ "type": "value", "options": { "0": { "text": "DOWN", "color": "red", "index": 0 }, "1": { "text": "UP", "color": "green", "index": 1 } } }],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none", "justifyMode": "center", "textMode": "auto" },
+      "targets": [{ "expr": "max(up{job=\"prometheus\"})", "refId": "A" }]
+    },
+    {
+      "id": 6, "type": "stat", "title": "Uptime",
+      "datasource": { "uid": "prometheus" },
+      "gridPos": { "x": 16, "y": 1, "w": 4, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "blue" },
+          "unit": "dtdurations",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none", "justifyMode": "center", "textMode": "auto" },
+      "targets": [{ "expr": "time() - process_start_time_seconds{job=~\"$job\"}", "refId": "A" }]
+    },
+    {
+      "id": 7, "type": "stat", "title": "Heap Usato %",
+      "datasource": { "uid": "prometheus" },
+      "gridPos": { "x": 20, "y": 1, "w": 4, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "percent",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 70 }, { "color": "red", "value": 90 }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area", "justifyMode": "center", "textMode": "auto" },
+      "targets": [{ "expr": "100 * nodejs_heap_size_used_bytes{job=~\"$job\"} / nodejs_heap_size_total_bytes{job=~\"$job\"}", "refId": "A" }]
+    },
+
+    { "id": 10, "type": "row", "title": "Traffico HTTP — KPI", "gridPos": { "x": 0, "y": 5, "w": 24, "h": 1 }, "collapsed": false },
+
+    {
+      "id": 11, "type": "stat", "title": "Richieste/s",
+      "datasource": { "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 6, "w": 4, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "reqps",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area", "justifyMode": "center", "textMode": "auto" },
+      "targets": [{ "expr": "sum(rate(http_requests_total{job=~\"$job\"}[1m]))", "refId": "A" }]
+    },
+    {
+      "id": 12, "type": "stat", "title": "Tasso Errori %",
+      "datasource": { "uid": "prometheus" },
+      "gridPos": { "x": 4, "y": 6, "w": 4, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "percent",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 5 }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area", "justifyMode": "center", "textMode": "auto" },
+      "targets": [{ "expr": "100 * sum(rate(http_errors_total{job=~\"$job\"}[5m])) / clamp_min(sum(rate(http_requests_total{job=~\"$job\"}[5m])), 1)", "refId": "A" }]
+    },
+    {
+      "id": 13, "type": "stat", "title": "Latenza P50",
+      "datasource": { "uid": "prometheus" },
+      "gridPos": { "x": 8, "y": 6, "w": 4, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "s",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.2 }, { "color": "red", "value": 0.5 }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area", "justifyMode": "center", "textMode": "auto" },
+      "targets": [{ "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket{job=~\"$job\"}[5m])) by (le))", "refId": "A" }]
+    },
+    {
+      "id": 14, "type": "stat", "title": "Latenza P95",
+      "datasource": { "uid": "prometheus" },
+      "gridPos": { "x": 12, "y": 6, "w": 4, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "s",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.5 }, { "color": "red", "value": 1 }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area", "justifyMode": "center", "textMode": "auto" },
+      "targets": [{ "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=~\"$job\"}[5m])) by (le))", "refId": "A" }]
+    },
+    {
+      "id": 15, "type": "stat", "title": "Latenza P99",
+      "datasource": { "uid": "prometheus" },
+      "gridPos": { "x": 16, "y": 6, "w": 4, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "s",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 2 }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area", "justifyMode": "center", "textMode": "auto" },
+      "targets": [{ "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{job=~\"$job\"}[5m])) by (le))", "refId": "A" }]
+    },
+    {
+      "id": 16, "type": "stat", "title": "Errori (ultimi 5min)",
+      "datasource": { "uid": "prometheus" },
+      "gridPos": { "x": 20, "y": 6, "w": 4, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "short",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 10 }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area", "justifyMode": "center", "textMode": "auto" },
+      "targets": [{ "expr": "sum(increase(http_errors_total{job=~\"$job\"}[5m]))", "refId": "A" }]
+    },
+
+    { "id": 20, "type": "row", "title": "Traffico HTTP — Trend", "gridPos": { "x": 0, "y": 10, "w": 24, "h": 1 }, "collapsed": false },
+
+    {
+      "id": 21, "type": "timeseries", "title": "Request Rate per Categoria",
+      "datasource": { "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 11, "w": 12, "h": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 8, "gradientMode": "opacity", "showPoints": "never", "spanNulls": false }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "2xx" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }] },
+          { "matcher": { "id": "byName", "options": "4xx" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "yellow" } }] },
+          { "matcher": { "id": "byName", "options": "5xx" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }] }
+        ]
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "showLegend": true, "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max", "mean"] }
+      },
+      "targets": [
+        { "expr": "sum(rate(http_requests_total{job=~\"$job\",status_code=~\"2..\"}[1m]))", "legendFormat": "2xx", "refId": "A" },
+        { "expr": "sum(rate(http_requests_total{job=~\"$job\",status_code=~\"4..\"}[1m]))", "legendFormat": "4xx", "refId": "B" },
+        { "expr": "sum(rate(http_requests_total{job=~\"$job\",status_code=~\"5..\"}[1m]))", "legendFormat": "5xx", "refId": "C" }
+      ]
+    },
+    {
+      "id": 22, "type": "timeseries", "title": "Latenza Percentili (P50 / P95 / P99)",
+      "datasource": { "uid": "prometheus" },
+      "gridPos": { "x": 12, "y": 11, "w": 12, "h": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 8, "gradientMode": "opacity", "showPoints": "never", "spanNulls": false }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "showLegend": true, "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] }
+      },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket{job=~\"$job\"}[5m])) by (le))", "legendFormat": "P50", "refId": "A" },
+        { "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=~\"$job\"}[5m])) by (le))", "legendFormat": "P95", "refId": "B" },
+        { "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{job=~\"$job\"}[5m])) by (le))", "legendFormat": "P99", "refId": "C" }
+      ]
+    },
+    {
+      "id": 23, "type": "timeseries", "title": "Top 10 Route per Traffico",
+      "datasource": { "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 19, "w": 12, "h": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 5, "gradientMode": "none", "showPoints": "never", "spanNulls": false }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "showLegend": true, "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] }
+      },
+      "targets": [
+        { "expr": "topk(10, sum(rate(http_requests_total{job=~\"$job\"}[5m])) by (route))", "legendFormat": "{{route}}", "refId": "A" }
+      ]
+    },
+    {
+      "id": 24, "type": "timeseries", "title": "Distribuzione Status Code",
+      "datasource": { "uid": "prometheus" },
+      "gridPos": { "x": 12, "y": 19, "w": 12, "h": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10, "gradientMode": "opacity", "showPoints": "never", "spanNulls": false }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "showLegend": true, "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] }
+      },
+      "targets": [
+        { "expr": "sum(rate(http_requests_total{job=~\"$job\"}[1m])) by (status_code)", "legendFormat": "{{status_code}}", "refId": "A" }
+      ]
+    },
+
+    { "id": 30, "type": "row", "title": "Node.js Runtime", "gridPos": { "x": 0, "y": 27, "w": 24, "h": 1 }, "collapsed": false },
+
+    {
+      "id": 31, "type": "stat", "title": "Heap %",
+      "datasource": { "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 28, "w": 4, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "percent",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 70 }, { "color": "red", "value": 90 }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area", "justifyMode": "center", "textMode": "auto" },
+      "targets": [{ "expr": "100 * nodejs_heap_size_used_bytes{job=~\"$job\"} / nodejs_heap_size_total_bytes{job=~\"$job\"}", "refId": "A" }]
+    },
+    {
+      "id": 32, "type": "stat", "title": "Heap Usato",
+      "datasource": { "uid": "prometheus" },
+      "gridPos": { "x": 4, "y": 28, "w": 4, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "bytes",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 500000000 }, { "color": "red", "value": 900000000 }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area", "justifyMode": "center", "textMode": "auto" },
+      "targets": [{ "expr": "nodejs_heap_size_used_bytes{job=~\"$job\"}", "refId": "A" }]
+    },
+    {
+      "id": 33, "type": "stat", "title": "RSS Memory",
+      "datasource": { "uid": "prometheus" },
+      "gridPos": { "x": 8, "y": 28, "w": 4, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "bytes",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 700000000 }, { "color": "red", "value": 1200000000 }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area", "justifyMode": "center", "textMode": "auto" },
+      "targets": [{ "expr": "process_resident_memory_bytes{job=~\"$job\"}", "refId": "A" }]
+    },
+    {
+      "id": 34, "type": "stat", "title": "CPU %",
+      "datasource": { "uid": "prometheus" },
+      "gridPos": { "x": 12, "y": 28, "w": 4, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "percent",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 50 }, { "color": "red", "value": 80 }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area", "justifyMode": "center", "textMode": "auto" },
+      "targets": [{ "expr": "rate(process_cpu_seconds_total{job=~\"$job\"}[1m]) * 100", "refId": "A" }]
+    },
+    {
+      "id": 35, "type": "stat", "title": "Event Loop Lag P99",
+      "datasource": { "uid": "prometheus" },
+      "gridPos": { "x": 16, "y": 28, "w": 4, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "ms",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 50 }, { "color": "red", "value": 200 }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area", "justifyMode": "center", "textMode": "auto" },
+      "targets": [{ "expr": "nodejs_eventloop_lag_p99_seconds{job=~\"$job\"} * 1000", "refId": "A" }]
+    },
+    {
+      "id": 36, "type": "stat", "title": "File Descriptor Aperti",
+      "datasource": { "uid": "prometheus" },
+      "gridPos": { "x": 20, "y": 28, "w": 4, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "short",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 500 }, { "color": "red", "value": 900 }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area", "justifyMode": "center", "textMode": "auto" },
+      "targets": [{ "expr": "process_open_fds{job=~\"$job\"}", "refId": "A" }]
+    },
+
+    {
+      "id": 37, "type": "timeseries", "title": "Memoria nel Tempo",
+      "datasource": { "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 32, "w": 12, "h": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 8, "gradientMode": "opacity", "showPoints": "never", "spanNulls": false }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "showLegend": true, "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] }
+      },
+      "targets": [
+        { "expr": "nodejs_heap_size_used_bytes{job=~\"$job\"}", "legendFormat": "Heap Usato", "refId": "A" },
+        { "expr": "nodejs_heap_size_total_bytes{job=~\"$job\"}", "legendFormat": "Heap Totale", "refId": "B" },
+        { "expr": "process_resident_memory_bytes{job=~\"$job\"}", "legendFormat": "RSS", "refId": "C" },
+        { "expr": "nodejs_external_memory_bytes{job=~\"$job\"}", "legendFormat": "Memoria Esterna", "refId": "D" }
+      ]
+    },
+    {
+      "id": 38, "type": "timeseries", "title": "CPU nel Tempo",
+      "datasource": { "uid": "prometheus" },
+      "gridPos": { "x": 12, "y": 32, "w": 12, "h": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10, "gradientMode": "opacity", "showPoints": "never", "spanNulls": false }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "showLegend": true, "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max", "mean"] }
+      },
+      "targets": [
+        { "expr": "rate(process_cpu_user_seconds_total{job=~\"$job\"}[1m]) * 100", "legendFormat": "CPU User", "refId": "A" },
+        { "expr": "rate(process_cpu_system_seconds_total{job=~\"$job\"}[1m]) * 100", "legendFormat": "CPU System", "refId": "B" },
+        { "expr": "rate(process_cpu_seconds_total{job=~\"$job\"}[1m]) * 100", "legendFormat": "CPU Totale", "refId": "C" }
+      ]
+    },
+
+    {
+      "id": 39, "type": "timeseries", "title": "Event Loop Lag (P50 / P90 / P99)",
+      "datasource": { "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 40, "w": 8, "h": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 5, "gradientMode": "none", "showPoints": "never", "spanNulls": false }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "showLegend": true, "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] }
+      },
+      "targets": [
+        { "expr": "nodejs_eventloop_lag_p50_seconds{job=~\"$job\"} * 1000", "legendFormat": "P50", "refId": "A" },
+        { "expr": "nodejs_eventloop_lag_p90_seconds{job=~\"$job\"} * 1000", "legendFormat": "P90", "refId": "B" },
+        { "expr": "nodejs_eventloop_lag_p99_seconds{job=~\"$job\"} * 1000", "legendFormat": "P99", "refId": "C" }
+      ]
+    },
+    {
+      "id": 40, "type": "timeseries", "title": "Garbage Collection (% tempo per tipo)",
+      "datasource": { "uid": "prometheus" },
+      "gridPos": { "x": 8, "y": 40, "w": 8, "h": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 8, "gradientMode": "opacity", "showPoints": "never", "spanNulls": false }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "showLegend": true, "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] }
+      },
+      "targets": [
+        { "expr": "sum(rate(nodejs_gc_duration_seconds_sum{job=~\"$job\"}[1m])) by (kind) * 100", "legendFormat": "GC {{kind}}", "refId": "A" }
+      ]
+    },
+    {
+      "id": 41, "type": "timeseries", "title": "Handle Attivi & File Descriptor",
+      "datasource": { "uid": "prometheus" },
+      "gridPos": { "x": 16, "y": 40, "w": 8, "h": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 5, "gradientMode": "none", "showPoints": "never", "spanNulls": false }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "showLegend": true, "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] }
+      },
+      "targets": [
+        { "expr": "nodejs_active_handles_total{job=~\"$job\"}", "legendFormat": "Handle Attivi", "refId": "A" },
+        { "expr": "nodejs_active_requests_total{job=~\"$job\"}", "legendFormat": "Richieste Attive", "refId": "B" },
+        { "expr": "process_open_fds{job=~\"$job\"}", "legendFormat": "FD Aperti", "refId": "C" }
+      ]
+    },
+
+    { "id": 50, "type": "row", "title": "PostgreSQL", "gridPos": { "x": 0, "y": 48, "w": 24, "h": 1 }, "collapsed": false },
+
+    {
+      "id": 51, "type": "stat", "title": "DB Size",
+      "datasource": { "uid": "postgres" },
+      "gridPos": { "x": 0, "y": 49, "w": 4, "h": 4 },
+      "fieldConfig": { "defaults": { "unit": "bytes", "color": { "mode": "fixed", "fixedColor": "blue" } } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area", "justifyMode": "center", "textMode": "auto" },
+      "targets": [{ "datasource": { "uid": "postgres" }, "format": "time_series", "refId": "A", "rawSql": "SELECT now() AS \"time\", pg_database_size(current_database())::double precision AS value;" }]
+    },
+    {
+      "id": 52, "type": "stat", "title": "Connessioni Attive",
+      "datasource": { "uid": "postgres" },
+      "gridPos": { "x": 4, "y": 49, "w": 4, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 80 }, { "color": "red", "value": 150 }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area", "justifyMode": "center", "textMode": "auto" },
+      "targets": [{ "datasource": { "uid": "postgres" }, "format": "time_series", "refId": "A", "rawSql": "SELECT now() AS \"time\", COUNT(*)::double precision AS value FROM pg_stat_activity WHERE datname = current_database() AND state = 'active';" }]
+    },
+    {
+      "id": 53, "type": "stat", "title": "Utilizzo Connessioni %",
+      "datasource": { "uid": "postgres" },
+      "gridPos": { "x": 8, "y": 49, "w": 4, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 70 }, { "color": "red", "value": 90 }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area", "justifyMode": "center", "textMode": "auto" },
+      "targets": [{ "datasource": { "uid": "postgres" }, "format": "time_series", "refId": "A", "rawSql": "SELECT now() AS \"time\", (100.0 * COUNT(*) / NULLIF((SELECT setting::int FROM pg_settings WHERE name = 'max_connections'), 0))::double precision AS value FROM pg_stat_activity;" }]
+    },
+    {
+      "id": 54, "type": "stat", "title": "Cache Hit Ratio %",
+      "datasource": { "uid": "postgres" },
+      "gridPos": { "x": 12, "y": 49, "w": 4, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "yellow", "value": 90 }, { "color": "green", "value": 98 }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area", "justifyMode": "center", "textMode": "auto" },
+      "targets": [{ "datasource": { "uid": "postgres" }, "format": "time_series", "refId": "A", "rawSql": "SELECT now() AS \"time\", (100.0 * sum(blks_hit) / NULLIF(sum(blks_hit) + sum(blks_read), 0))::double precision AS value FROM pg_stat_database WHERE datname = current_database();" }]
+    },
+    {
+      "id": 55, "type": "stat", "title": "Deadlock (totale)",
+      "datasource": { "uid": "postgres" },
+      "gridPos": { "x": 16, "y": 49, "w": 4, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 10 }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area", "justifyMode": "center", "textMode": "auto" },
+      "targets": [{ "datasource": { "uid": "postgres" }, "format": "time_series", "refId": "A", "rawSql": "SELECT now() AS \"time\", deadlocks::double precision AS value FROM pg_stat_database WHERE datname = current_database();" }]
+    },
+    {
+      "id": 56, "type": "stat", "title": "File Temporanei",
+      "datasource": { "uid": "postgres" },
+      "gridPos": { "x": 20, "y": 49, "w": 4, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 10 }, { "color": "red", "value": 100 }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area", "justifyMode": "center", "textMode": "auto" },
+      "targets": [{ "datasource": { "uid": "postgres" }, "format": "time_series", "refId": "A", "rawSql": "SELECT now() AS \"time\", temp_files::double precision AS value FROM pg_stat_database WHERE datname = current_database();" }]
+    },
+
+    {
+      "id": 57, "type": "timeseries", "title": "Connessioni per Stato",
+      "datasource": { "uid": "postgres" },
+      "gridPos": { "x": 0, "y": 53, "w": 12, "h": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 8, "gradientMode": "opacity", "showPoints": "never", "spanNulls": false }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "showLegend": true, "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] }
+      },
+      "targets": [{ "datasource": { "uid": "postgres" }, "format": "time_series", "refId": "A", "rawSql": "SELECT now() AS \"time\", COALESCE(state, 'unknown') AS metric, COUNT(*)::double precision AS value FROM pg_stat_activity WHERE datname = current_database() GROUP BY metric ORDER BY metric;" }]
+    },
+    {
+      "id": 58, "type": "table", "title": "Query Attive più Lente",
+      "datasource": { "uid": "postgres" },
+      "gridPos": { "x": 12, "y": 53, "w": 12, "h": 8 },
+      "options": { "showHeader": true, "cellHeight": "sm", "footer": { "show": false } },
+      "targets": [{ "datasource": { "uid": "postgres" }, "format": "table", "refId": "A", "rawSql": "SELECT pid, usename AS utente, application_name AS app, state AS stato, wait_event_type AS attesa_tipo, now() - query_start AS durata, left(query, 150) AS query_preview FROM pg_stat_activity WHERE datname = current_database() AND state = 'active' AND query NOT ILIKE '%pg_stat_activity%' ORDER BY durata DESC NULLS LAST LIMIT 15;" }]
+    },
+    {
+      "id": 59, "type": "table", "title": "Statistiche Tabelle (Top per Righe Vive)",
+      "datasource": { "uid": "postgres" },
+      "gridPos": { "x": 0, "y": 61, "w": 24, "h": 8 },
+      "options": { "showHeader": true, "cellHeight": "sm", "footer": { "show": false } },
+      "targets": [{ "datasource": { "uid": "postgres" }, "format": "table", "refId": "A", "rawSql": "SELECT schemaname AS schema, relname AS tabella, n_live_tup AS righe_vive, n_dead_tup AS righe_morte, n_mod_since_analyze AS mod_da_analyze, pg_size_pretty(pg_total_relation_size(schemaname||'.'||relname)) AS dimensione, last_autovacuum::text AS ultimo_vacuum, last_autoanalyze::text AS ultimo_analyze FROM pg_stat_user_tables ORDER BY n_live_tup DESC LIMIT 20;" }]
+    },
+
+    { "id": 60, "type": "row", "title": "Logs (Loki)", "gridPos": { "x": 0, "y": 69, "w": 24, "h": 1 }, "collapsed": false },
+
+    {
+      "id": 61, "type": "stat", "title": "Log Totali (5min)",
+      "datasource": { "uid": "loki" },
+      "gridPos": { "x": 0, "y": 70, "w": 8, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "fixed", "fixedColor": "blue" }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area", "justifyMode": "center", "textMode": "auto" },
+      "targets": [{ "expr": "sum(count_over_time({job=~\"$job\"}[5m]))", "refId": "A" }]
+    },
+    {
+      "id": 62, "type": "stat", "title": "Warning (5min)",
+      "datasource": { "uid": "loki" },
+      "gridPos": { "x": 8, "y": 70, "w": 8, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "orange", "value": 20 }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area", "justifyMode": "center", "textMode": "auto" },
+      "targets": [{ "expr": "sum(count_over_time({job=~\"$job\"} |= \"\\\"level\\\":40\"[5m]))", "refId": "A" }]
+    },
+    {
+      "id": 63, "type": "stat", "title": "Errori (5min)",
+      "datasource": { "uid": "loki" },
+      "gridPos": { "x": 16, "y": 70, "w": 8, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area", "justifyMode": "center", "textMode": "auto" },
+      "targets": [{ "expr": "sum(count_over_time({job=~\"$job\"} |= \"\\\"level\\\":50\"[5m]))", "refId": "A" }]
+    },
+
+    {
+      "id": 64, "type": "timeseries", "title": "Volume Log per Minuto",
+      "datasource": { "uid": "loki" },
+      "gridPos": { "x": 0, "y": 74, "w": 12, "h": 7 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 8, "gradientMode": "opacity", "showPoints": "never", "spanNulls": false }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "showLegend": true, "displayMode": "list", "placement": "bottom" }
+      },
+      "targets": [
+        { "expr": "sum(count_over_time({job=~\"$job\"}[1m]))", "legendFormat": "Totale", "refId": "A" }
+      ]
+    },
+    {
+      "id": 65, "type": "timeseries", "title": "Log per Livello (INFO / WARN / ERROR)",
+      "datasource": { "uid": "loki" },
+      "gridPos": { "x": 12, "y": 74, "w": 12, "h": 7 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 8, "gradientMode": "opacity", "showPoints": "never", "spanNulls": false }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "INFO" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "blue" } }] },
+          { "matcher": { "id": "byName", "options": "WARN" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "yellow" } }] },
+          { "matcher": { "id": "byName", "options": "ERROR" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }] }
+        ]
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "showLegend": true, "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] }
+      },
+      "targets": [
+        { "expr": "sum(count_over_time({job=~\"$job\"} |= \"\\\"level\\\":30\"[1m]))", "legendFormat": "INFO", "refId": "A" },
+        { "expr": "sum(count_over_time({job=~\"$job\"} |= \"\\\"level\\\":40\"[1m]))", "legendFormat": "WARN", "refId": "B" },
+        { "expr": "sum(count_over_time({job=~\"$job\"} |= \"\\\"level\\\":50\"[1m]))", "legendFormat": "ERROR", "refId": "C" }
+      ]
+    },
+
+    {
+      "id": 66, "type": "logs", "title": "Log Live",
+      "datasource": { "uid": "loki" },
+      "gridPos": { "x": 0, "y": 81, "w": 12, "h": 10 },
+      "options": { "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true, "enableLogDetails": true, "prettifyLogMessage": false },
+      "targets": [{ "expr": "{job=~\"$job\"}", "refId": "A" }]
+    },
+    {
+      "id": 67, "type": "logs", "title": "Warning & Errori",
+      "datasource": { "uid": "loki" },
+      "gridPos": { "x": 12, "y": 81, "w": 12, "h": 10 },
+      "options": { "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true, "enableLogDetails": true, "prettifyLogMessage": false },
+      "targets": [{ "expr": "{job=~\"$job\"} |~ \"\\\"level\\\":(40|50)\"", "refId": "A" }]
+    }
+
+  ]
+}

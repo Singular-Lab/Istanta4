@@ -1,0 +1,93 @@
+{
+  "version": "2.5.0",
+  "defaultRules": {
+    "uscita": 50,
+    "entrata": 50,
+    "modifica": {
+      "peso": 50,
+      "campi": {
+        "prezzo_promo": 10,
+        "prezzo_continuo": 5,
+        "prezzo_promo_kgl": 8,
+        "tipo_evento": 1,
+        "txt_sconto": 1,
+        "N_Punti": 1,
+        "N_pezzi_soci": 1,
+        "Descrizioni.Peso": 1,
+        "prestazione": 2,
+        "Format_PdvRif": 2,
+        "format_1": 1,
+        "format_2": 1
+      },
+      "combinazioni": [
+        {
+          "if": [
+            "prezzo_promo",
+            "prezzo_continuo"
+          ],
+          "operator": "all",
+          "valore": 20,
+          "priority": 10
+        },
+        {
+          "if": [
+            "prezzo_promo",
+            "prezzo_promo_kgl"
+          ],
+          "operator": "all",
+          "valore": 0.2,
+          "priority": 9
+        }
+      ]
+    }
+  },
+  "groupRules": {
+    "No Food": {
+      "uscita": 100,
+      "entrata": 30,
+      "modifica": {
+        "peso": 70,
+        "campi": {
+          "prezzo_promo": 15,
+          "prezzo_continuo": 10
+        },
+        "combinazioni": [
+          {
+            "if": [
+              "prezzo_promo",
+              "prezzo_continuo"
+            ],
+            "operator": "all",
+            "valore": 30,
+            "priority": 20
+          }
+        ]
+      }
+    },
+    "Ortofrutta": {
+      "uscita": 100,
+      "entrata": 30,
+      "modifica": {
+        "peso": 70
+      }
+    },
+    "Chimica Igiene Casa": {
+      "uscita": 100,
+      "entrata": 30,
+      "modifica": {
+        "peso": 70,
+        "combinazioni": [
+          {
+            "if": [
+              "prestazione",
+              "Format_PdvRif"
+            ],
+            "operator": "all",
+            "valore": 25,
+            "priority": 15
+          }
+        ]
+      }
+    }
+  }
+}

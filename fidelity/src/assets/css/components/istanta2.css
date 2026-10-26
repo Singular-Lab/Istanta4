@@ -1,0 +1,56 @@
+@layer components {
+
+  .IST_center{
+    text-align: center;
+    display: block;
+    justify-content: center;
+    align-items: center;
+    margin: auto;
+  }
+  
+  .IST_txt_uppercase{
+    text-transform: uppercase;
+  }
+
+  .IST_txt_lowercase{
+    text-transform: lowercase;
+  }
+  .IST_paddingBottom20{
+    padding-bottom: 20px;
+  }
+
+  .IST_img_productGrid{
+    border: 1px solid gray;
+    width: 150px;  
+    height: 150px;
+    object-fit: cover;
+  }
+
+  .IST_documenti_padding{
+    padding-top: 20px;
+    padding-bottom: 20px;
+  }
+
+
+  /* FONTS&COLORS */
+
+  .txt_tile_prezzo{
+    font-size: 2.5em;
+    font-weight: bold;
+  }
+
+  .txt_tile_info_prezzi{
+    font-size: 1.5em;
+    
+  }
+  .txt_tile_euro{
+    font-size: 2em;
+    font-weight: bold;
+  }
+
+  .txt_color_red{
+    color: red;
+  }
+
+
+}

@@ -1,0 +1,207 @@
+﻿@page
+@model Istanta.Views.MenaboSettings.OrdinamentoModel
+@{
+}
+
+<!--<div>
+<div class="dropdown">
+  <button class="btn btn-secondary dropdown-toggle" type="button" id="dropdownMenuButton1" data-bs-toggle="dropdown" aria-expanded="false">
+    Dropdown button
+  </button>
+  <ul class="dropdown-menu" aria-labelledby="dropdownMenuButton1">
+    <li><a class="dropdown-item" href="#">Action</a></li>
+    <li><a class="dropdown-item" href="#">Another action</a></li>
+    <li><a class="dropdown-item" href="#">Something else here</a></li>
+  </ul>
+</div>
+
+    <div class="dropdown mt-2">
+        <button class="btn btn-secondary dropdown-toggle" id="cmbSettoriAree2" type="button" data-bs-toggle="dropdown" aria-expanded="false">Seleziona Area</button><ul class="dropdown-menu" aria-labelledby="cmbSettoriAree2" id="cmb_settori_aree"><li><a class="dropdown-item" onclick="alert(1)">1</a></li><li><a class="dropdown-item" onclick="alert(2)">2</a></li><li><a class="dropdown-item" onclick="alert(3)">3</a></li><li><a class="dropdown-item" onclick="alert(4)">4</a></li><li><a class="dropdown-item" onclick="alert(5)">5</a></li></ul></div>
+</div>-->
+
+<h3 style="margin-bottom:25px;">Schema di ordinamento</h3>
+
+
+<div class="btn-group">
+    <a href="#" id="aMenuVisual" class="btn btn-primary toggleVisual active" aria-current="page">Visual</a>
+    <a href="#" id="aMenuSource" class="btn btn-primary toggleSource">Source</a>
+</div>
+
+
+<div class="container" id="mainContainer">
+    <div id="contentVisual" class="pt-3">
+
+        <button class="btn btn-primary" id="btnBindingAuto">Binding automatico</button>
+        <div id="binder" class="container mt-3 mb-3" style="background-color:bisque; border-radius:50px;">
+            <div class="row p-4">
+                <div class="col-3" style="text-align:center;">
+                    <button id="toggle_area" type="button" class="btn btn-secondary" data-bs-container="body" data-bs-toggle="popover" data-bs-placement="bottom" data-bs-content="Caricamento contenuto...">
+                        AREA
+                    </button>
+                </div>
+                <div class="col-3" style="text-align:center;">
+                    <button id="toggle_settore" type="button" class="btn btn-secondary" data-bs-container="body" data-bs-toggle="popover" data-bs-placement="bottom" data-bs-content="Caricamento contenuto...">
+                        SETTORE
+                    </button>
+                </div>
+                <div class="col-3" style="text-align:center;">
+                    <button id="toggle_reparto" type="button" class="btn btn-secondary" data-bs-container="body" data-bs-toggle="popover" data-bs-placement="bottom" data-bs-content="Caricamento contenuto...">
+                        REPARTO
+                    </button>
+                </div>
+                <div class="col-3" style="text-align:center;">
+                    <button id="toggle_categoria" type="button" class="btn btn-secondary" data-bs-container="body" data-bs-toggle="popover" data-bs-placement="bottom" data-bs-content="Caricamento contenuto...">
+                        CATEGORIA
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="container" id="schema">
+            <div class="container">
+                <div class="row divisorio" style="display:none">
+                    <div class="col-1">
+                        <svg style="cursor:pointer;" id="btnDivisorio" xmlns="http://www.w3.org/2000/svg" width="16" height="12" fill="currentColor" class="bi bi-arrow-bar-right bCambioIndice" viewBox="0 0 16 16">
+                            <path fill-rule="evenodd" d="M6 8a.5.5 0 0 0 .5.5h5.793l-2.147 2.146a.5.5 0 0 0 .708.708l3-3a.5.5 0 0 0 0-.708l-3-3a.5.5 0 0 0-.708.708L12.293 7.5H6.5A.5.5 0 0 0 6 8m-2.5 7a.5.5 0 0 1-.5-.5v-13a.5.5 0 0 1 1 0v13a.5.5 0 0 1-.5.5" />
+                        </svg>
+                    </div>
+                    <div class="col-10" id="">
+                        <hr class="bg-warning" style="height:5px">
+                    </div>
+                    <div class="col-1">
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+    <div id="contentSource" class="pt-3" style="display:none;">
+        <div class="container">
+            <div class="row">
+                <div class="col-12 mb-3" style="text-align:right;">
+                    <button id="btnSourceSave" class="btn btn-primary" value="Salva">Salva</button>
+                </div>
+            </div>
+            <div id="editor"></div>
+        </div>
+    </div>
+</div>
+
+<template id="record">
+    <div class="container">
+        <div class="row record">
+            <div class="col-1">
+                <input type="checkbox" class="border-2 form-check-input checkOrdinamento" id="checkOrdinamento" style="border-color:orange;" />
+            </div>
+            <div class="col-2" id="area">
+            </div>
+            <div class="col-3" id="settore">
+            </div>
+            <div class="col-3" id="reparto">
+            </div>
+            <div class="col-2" id="categoria">
+            </div>
+            <div class="col-1 ordinamentoVal" id="orderInx">
+                @*			<input type="text" class="ordinamentoVal" id="orderInx" style="width:40px; display:none" onkeyup="ordinamentoCore.gestisciCheckbox($(this)), ordinamentoCore.inviaModifica($(this))" /> @*ordinamentoCore.startTimeoutToSaveNewOrder($(this))*@
+            </div>
+        </div>
+        <div class="row divisorio" style="display:none">
+            <div class="col-1">
+                <svg style="cursor:pointer;" xmlns="http://www.w3.org/2000/svg" width="16" height="12" fill="currentColor" class="bi bi-arrow-bar-right bCambioIndice" viewBox="0 0 16 16">
+                    <path fill-rule="evenodd" d="M6 8a.5.5 0 0 0 .5.5h5.793l-2.147 2.146a.5.5 0 0 0 .708.708l3-3a.5.5 0 0 0 0-.708l-3-3a.5.5 0 0 0-.708.708L12.293 7.5H6.5A.5.5 0 0 0 6 8m-2.5 7a.5.5 0 0 1-.5-.5v-13a.5.5 0 0 1 1 0v13a.5.5 0 0 1-.5.5" />
+                </svg>
+            </div>
+            <div class="col-10" id="">
+                <hr class="bg-warning" style="height:5px">
+            </div>
+            <div class="col-1">
+            </div>
+        </div>
+    </div>
+</template>
+
+@inject Microsoft.AspNetCore.Http.IHttpContextAccessor HttpContextAccessor
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]">
+
+        $(".masterBodySpread").css("visibility","hidden");
+
+    let agenzia;
+	let ordinamentoCore;
+    function documentReady() 
+    {
+        
+        agenzia=new Agenzia();
+
+        $("#btnSourceSave").on("click", function() {
+            exSourceEditor.save('MenaboSettings');
+        });
+
+        $("#aMenuVisual").on("click", function() {
+            menuVisual();
+        });
+        
+        $("#aMenuSource").on("click", function() {
+            menuSource();
+        });
+        
+
+
+  //      if (agenzia.bindSchemaOrdinamento!=null)
+  //      {
+  //          agenzia.bindSchemaOrdinamento();
+		//	$("#binder").css("display","none");
+  //      }
+		//else
+		//{
+			ordinamentoCore =new Ordinamento();
+			ordinamentoCore.bind();
+		//}
+
+        $("#btnBindingAuto").on("click", function() {
+              ordinamentoCore.bindingOrdinamentoAutomatico();
+        });
+
+        $("#btnDivisorio").on("click", function () {
+            ordinamentoCore.execCambioIndiceOrdinamento($(this));
+        });
+
+        $(".masterBodySpread").css("visibility","visible");
+    }
+    
+
+
+</script>
+
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]" src="~/js/sourceEditor.js?v=1"></script>
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]" src="https://unpkg.com/monaco-editor@latest/min/vs/loader.js"></script>
+
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]" type="text/javascript">
+
+    let exSourceEditor = new ExternalSourceEditor();
+    
+
+    function menuVisual() {
+        document.getElementById("contentSource").style.display = "none";
+        document.getElementById("contentVisual").style.display = "block";
+
+        $(".toggleVisual").addClass("active");
+        $(".toggleSource").removeClass("active");
+
+    }
+    function menuSource() {
+        document.getElementById("contentSource").style.display = "block";
+        document.getElementById("contentVisual").style.display = "none";
+
+        $(".toggleSource").addClass("active");
+        $(".toggleVisual").removeClass("active");
+
+        //prima ridimensiono l'editor
+        $("#editor").css("width", $("#container").css("width"));
+        //atezza quanto la pagina
+        $("#editor").css("height", $(window).height() - 100 + "px");
+
+        exSourceEditor.init("SourceOrdinamentoLista");
+
+    }
+
+</script>

@@ -1,0 +1,33 @@
+{
+  "name": "plugin",
+  "version": "1.0.0",
+  "description": "",
+  "type": "module",
+  "main": "./dist/index.cjs.js",
+  "module": "./dist/index.esm.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.esm.js",
+      "require": "./dist/index.cjs.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./browser": "./dist/index.iife.js"
+  },
+  "scripts": {
+    "build:dev": "cross-env NODE_ENV=development tsup",
+    "build:prod": "cross-env NODE_ENV=production tsup && node scripts/obfuscate.js",
+    "build": "npm run build:prod"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "SEE LICENSE IN LICENSE.txt",
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "tsup": "^8.0.1",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "javascript-obfuscator": "^5.1.0"
+  }
+}

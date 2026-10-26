@@ -1,0 +1,11 @@
+**/bin
+**/obj
+storage
+appsettings*.json
+*.env
+*.log
+.git
+.github
+.vscode
+.idea
+.codex

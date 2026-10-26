@@ -1,0 +1,23 @@
+﻿@{
+    ViewData["Title"] = "Home Page";
+}
+
+
+
+<div class="text-center">
+    <h1 class="display-4">Welcome</h1>
+    <p>Learn about <a href="https://docs.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>    
+    @DateTime.Now
+    @ViewBag.NomePrima
+    @ViewBag.NomeDopo
+</div>
+
+
+<div class="btn-group-vertical">
+    <input type="radio" class="btn-check" name="vbtn-sel" id="vbtn-0" autocomplete="off">
+    <label class="btn btn-outline-danger" for="vbtn-0">Non esportare</label>
+    <input type="radio" class="btn-check" name="vbtn-sel" id="vbtn-1" autocomplete="off">
+    <label class="btn btn-outline-danger" for="vbtn-1">Esporta</label>
+    <input type="radio" class="btn-check" name="vbtn-sel" id="vbtn-2" autocomplete="off">
+    <label class="btn btn-outline-danger" for="vbtn-2">Solo foto</label>
+</div>

@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "Istanta": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ISTANTA_CLIENTE": "__CLIENTE__"
+      }
+    }
+  }
+}

@@ -1,0 +1,4 @@
+{
+  "lib": "AgenziaLib.Trea.confrontaListe(primario,secondario,controlloVersione,reqParams)",
+  "listatoVolantino": "AgenziaLib.Trea.confrontaListatoVolantino(primario,reqParams)",
+}

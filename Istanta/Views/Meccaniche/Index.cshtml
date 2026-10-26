@@ -1,0 +1,178 @@
+﻿@page
+@model Istanta.Views.Meccaniche.IndexModel
+@{
+}
+@if (ViewBag.error != null)
+{
+    <div id="error_panel" class="alert alert-danger" style="position:fixed; width:100%;">
+        <strong>Attenzione</strong>: @ViewBag.error
+    </div>
+}
+
+<head>
+    <style>
+        #editor {
+            width: 800px;
+            height: 600px;
+            border: 1px solid grey;
+        }
+    </style>
+</head>
+
+
+<h3 style="margin-bottom:25px;">Lista meccaniche</h3>
+<table>
+    <thead>
+        <tr>
+            <td>
+                <table>
+                    <tr>
+                        <td style="width:200px;">
+                            Meccanica Origine
+                        </td>
+                        <td style="width:200px;">
+                            Meccanica Tradotta
+                        </td>
+                        <td style="width:200px;">
+                            Formato
+                        </td>
+                        <td style="width:200px;">
+                            Aree
+                        </td>
+                        <td>
+                        </td>
+                        <td style="padding-left:30px;">
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </thead>
+    @foreach (var item in (ViewBag.lista_meccaniche as List<Istanta.Models.Meccaniche>)!)
+    {
+
+        <tr>
+            <td>
+
+
+                <form method="POST" action="Meccaniche/Update/@item.Id">
+                    <table>
+                        <tr>
+                            <td style="width:200px;">
+                                <input type="text" id="NomeOrigine" name="NomeOrigine" value="@item.NomeOrigine">
+                            </td>
+                            <td style="width:200px;">
+                                <input type="text" id="NomeTraduzione" name="NomeTraduzione" value="@item.NomeTraduzione">
+                            </td>
+                            <td>
+                                <input type="text" id="Formato" name="Formato" value="@item.Formato"/>
+                            </td>
+                            <td>
+                                <textarea  id="Aree" name="Aree">@String.Join(",",item.Aree!)</textarea>
+                            </td>
+                            <td>
+                                <input type="submit" value="Salva">
+                            </td>
+                            <td style="padding-left:30px;">
+                                <a class="btn btn-danger btn-sm" href="Meccaniche/Delete/@item.Id" onclick="return confirm('Sicuro di voler eliminare?')">Elimina</a>
+                            </td>
+                        </tr>
+                    </table>
+                </form>
+            </td>
+        </tr>
+        <tr>
+            <td><hr /></td>
+        </tr>
+
+    }
+    <tr>
+        <td>
+            <form method="POST">
+                <table>
+                    <tr>
+                        <td style="width:200px;">
+                            Origine
+                        </td>
+                        <td style="width:200px;">
+                            Traduzione
+                        </td>
+                        <td>
+                            Formato
+                        </td>
+                        <td>
+                            Aree
+                        </td>
+                        <td>
+                            <input type="submit" value="Salva">
+                        </td>
+                        <td style="padding-left:30px;">
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="width:200px;">
+                            <input type="text" id="NomeOrigine" name="NomeOrigine">
+                        </td>
+                        <td style="width:200px;">
+                            <input type="text" id="NomeTraduzione" name="NomeTraduzione">
+                        </td>
+                        <td>
+                            <input type="text" id="Formato" name="Formato" />
+                        </td>
+                        <td>
+                            <textarea  id="Aree" name="Aree"> </textarea>
+                        </td>
+                        <td>
+                            
+                        </td>
+                        <td style="padding-left:30px;">
+                        </td>
+                    </tr>
+                </table>
+            </form>
+
+            <input type="button" value="ABILITA EDITOR" onclick="exSourceEditor.init('SourceACPV');" />
+        </td>
+    </tr>
+</table>
+
+<div id="editor" style="width:800px; height:600px; display:none;"></div>
+
+@inject Microsoft.AspNetCore.Http.IHttpContextAccessor HttpContextAccessor
+<script nonce ="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]" src="~/js/sourceEditor.js"></script>
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]"  src="https://unpkg.com/monaco-editor@latest/min/vs/loader.js"></script>
+
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]">
+
+    let exSourceEditor = new ExternalSourceEditor();
+
+    
+
+    /*
+    require.config({ paths: { vs: 'https://unpkg.com/monaco-editor@latest/min/vs' } });
+
+    const editorContainer = document.getElementById('editor');
+    let editorInstance;
+
+    function enableMonacoEditor() 
+    {
+        
+        editorContainer.style.display = 'block';
+
+        require(['vs/editor/editor.main'], function () {
+            editorInstance = monaco.editor.create(editorContainer, {
+                value: '[{"nome":"Alessio"},{"cognome":"Mattolini"}]',
+                language: 'json',
+                theme: 'vs-dark'
+            });
+
+            console.log("Editor creato");
+            console.log(editorInstance);
+            console.log(editorInstance.getValue());
+
+        });
+    }
+    */
+    
+</script>
+         

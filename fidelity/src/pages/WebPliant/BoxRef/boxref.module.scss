@@ -1,0 +1,221 @@
+.flipContainer {
+    perspective: 1000px;
+    transform-style: preserve-3d;
+    width: 100%;
+    height: 100%;
+}
+
+.card {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    transform-style: preserve-3d;
+    backface-visibility: visible;
+}
+
+.backContent {
+    transform: rotateY(180deg);
+    backface-visibility: hidden;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #ffffff;
+    border: 2px solid #5E5353;
+    font-family: "Jost";
+}
+
+.extraLoghi {
+    position: absolute;
+    bottom: 0px;
+    left: 0px;
+    display: flex;
+    align-items: flex-start;
+    flex-direction: column-reverse;
+    height: 100%;
+    width: 100%;
+    margin-left: 20px;
+    z-index: 9999999;
+}
+.contentWrapper {
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: -webkit-fill-available;
+    flex-direction: column;
+}
+
+.innerContent {
+    transform: scale(1);
+    transform-origin: center;
+    max-width: 100%;
+    max-height: 100%;
+    overflow: hidden;
+    height: 100%;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    padding: 10px;
+}
+
+.addToCartButton {
+    background-color: #4CAF50;
+    color: white;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 5px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+    margin-top: auto;
+    align-self: center;
+    width: 90%;
+    font-weight: 600;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.addToCartButton:hover {
+    background-color: #45a049;
+}
+
+.addToCartButton:active {
+    background-color: #3e8e41;
+    transform: translateY(1px);
+}
+
+.cartAnimation {
+    position: fixed;
+
+    pointer-events: none;
+    /* This will be positioned dynamically via the animation */
+}
+
+.miniProductCard {
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+}
+
+.miniProductImage {
+    max-width: 90%;
+    max-height: 90%;
+    object-fit: contain;
+}
+/* Responsive styles */
+@media (max-width: 768px) {
+    .backContent {
+        padding: 10px;
+    }
+    
+    .addToCartButton {
+        padding: 8px 12px;
+        font-size: 14px;
+    }
+    
+    .miniProductCard {
+        width: 50px;
+        height: 50px;
+    }
+}
+
+/* Additional styles for flip effect */
+.card:hover {
+    cursor: pointer;
+}
+
+/* Style for the back content scrolling if content overflows */
+.innerContent {
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #888 #f1f1f1;
+}
+
+.innerContent::-webkit-scrollbar {
+    width: 5px;
+}
+
+.innerContent::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+}
+
+.innerContent::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 10px;
+}
+
+.innerContent::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* Additional styles for images in the back content */
+.innerContent img {
+    max-width: 100%;
+    // height: auto;
+    margin: 5px 0;
+}
+
+/* Styles for text in the back content */
+.innerContent p, 
+.innerContent h3, 
+.innerContent h4 {
+    margin-bottom: 10px;
+}
+
+.innerContent h3 {
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.innerContent p {
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+/* Improved heart styles */
+.heart {
+    position: fixed;
+    width: 20px;
+    height: 20px;
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="red"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>');
+    background-size: contain;
+    background-repeat: no-repeat;
+    pointer-events: none;
+    z-index: 9999999;
+    /* Start visible */
+    opacity: 1;
+    transform: scale(0);
+  }
+  
+  /* Enhanced animation */
+  @keyframes floatHeart {
+    0% {
+      opacity: 1;
+      transform: scale(0) translateY(0);
+    }
+    15% {
+      opacity: 1;
+      transform: scale(1.2) translateY(-5px);
+    }
+    30% {
+      opacity: 1;
+      transform: scale(1) translateY(-15px);
+    }
+    70% {
+      opacity: 0.8;
+      transform: scale(0.8) translateY(-30px) rotate(10deg);
+    }
+    100% {
+      opacity: 0;
+      transform: scale(0.5) translateY(-50px) rotate(30deg);
+    }
+  }

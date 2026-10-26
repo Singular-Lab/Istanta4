@@ -1,0 +1,90 @@
+@model Correggo4.Models.Vista.VistaAffiancata
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@Model.Titolo — lettura affiancata</title>
+    @* LA LETTURA AFFIANCATA (j322). Michele, 01/10: «fallo funzionare».
+
+       Com'era nel Correggo vecchio (LetturaAffiancata.aspx), e com'e' rimasto qui: il volantino
+       come si sfoglia, due pagine per riga - la copertina da sola a destra, poi 2|3, 4|5 - con una
+       riga nera fra una coppia e l'altra, e il titolo in grande nel posto vuoto accanto alla
+       copertina. Si guarda e basta: nessuno strumento, nessuna correzione, niente da cliccare.
+
+       Pagina a se', senza il telaio di Correggo (Layout = null): si apre in una finestra nuova e
+       deve essere tutta volantino. Per questo lo stile sta qui dentro e non nel foglio comune.
+
+       Le immagini sono al 50% in larghezza, come il vecchio, ma con box-sizing e flex invece dei
+       float e del calcolo in JavaScript: il vecchio misurava la finestra all'avvio con jQuery e
+       scriveva i pixel a mano, quindi ridimensionando la finestra restava storto. *@
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; background: #2b3338; font: 14px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+        .coppia { display: flex; background: #fff; }
+        .meta { width: 50%; }
+        .meta img { width: 100%; height: auto; display: block; }
+        .riga_nera { height: 3px; background: #000; }
+        /* il posto vuoto accanto alla copertina: nel vecchio ci finiva il titolo del volantino,
+           scritto grande. Era l'unica indicazione in tutta la pagina, e si tiene. */
+        .titolo {
+            width: 50%; display: flex; flex-direction: column; align-items: center;
+            justify-content: center; text-align: center; padding: 30px; gap: 10px;
+        }
+        .titolo b { font-size: 38px; line-height: 1.15; color: #1b2429; word-break: break-word; }
+        .titolo span { font-size: 15px; color: #55646c; }
+        .titolo .promo { font-size: 13px; color: #7a8a92; letter-spacing: .4px; }
+        /* se una pagina manca (volantino con numero dispari di pagine) il posto resta bianco:
+           meglio di una riga storta */
+        .vuota { width: 50%; background: #fff; }
+        .niente { color: #fff; padding: 40px; text-align: center; font-size: 16px; }
+        @@media print {
+            body { background: #fff; }
+            .coppia { break-inside: avoid; page-break-inside: avoid; }
+        }
+    </style>
+</head>
+<body>
+    @if (Model.Coppie.Count == 0)
+    {
+        <div class="niente">Questo volantino non ha pagine da mostrare.</div>
+    }
+    else
+    {
+        foreach (var c in Model.Coppie)
+        {
+            <div class="coppia">
+                @if (c.Sinistra != null)
+                {
+                    <div class="meta">
+                        <img src="@c.Sinistra.Url" alt="pagina @c.Sinistra.Numero" loading="lazy">
+                    </div>
+                }
+                else
+                {
+                    <div class="titolo">
+                        <b>@Model.Titolo</b>
+                        <span>versione n&deg; @Model.Versione</span>
+                        <span class="promo">@Model.Promo</span>
+                    </div>
+                }
+
+                @if (c.Destra != null)
+                {
+                    <div class="meta">
+                        <img src="@c.Destra.Url" alt="pagina @c.Destra.Numero" loading="lazy">
+                    </div>
+                }
+                else
+                {
+                    <div class="vuota"></div>
+                }
+            </div>
+            <div class="riga_nera"></div>
+        }
+    }
+</body>
+</html>

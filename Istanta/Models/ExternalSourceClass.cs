@@ -1,0 +1,4017 @@
+using DocumentFormat.OpenXml.Bibliography;
+using Microsoft.AspNetCore.Mvc.ApiExplorer;
+using Microsoft.VisualBasic;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using IstantaLib;
+using DocumentFormat.OpenXml.Office2010.Excel;
+using DocumentFormat.OpenXml.Wordprocessing;
+using System.Reflection;
+using Istanta.Utility;
+using System.Linq;
+using System.IO;
+
+namespace Istanta.Models
+{
+
+    public class ExternalSourceClass
+    {
+        private readonly string[] COMMANDS = new string[] { "getAree", "getMastro", "getGrammature", "getMeccaniche" };
+        private string pathExternal;
+
+        private Dictionary<string, JObject> Sources = new Dictionary<string, JObject>();
+
+        #region Sorgenti da compilare
+
+        // external_source/vergine/ e il modello: ogni cliente deve avere gli stessi
+        // Source*.json, compilati con i propri dati. Qui teniamo l'elenco di quelli che
+        // al cliente mancano, piu quelli che un getter ha fabbricato vuoti perche non
+        // c'erano. _Layout li mostra in una fascia in cima a ogni pagina.
+        private static readonly object _lucchettoSorgenti = new object();
+        private static readonly Dictionary<string, long> _createVuote = new Dictionary<string, long>();
+        private static List<string> _mancanti = new List<string>();
+        private static DateTime _ultimoControllo = DateTime.MinValue;
+
+        /// <summary>
+        /// Chiamata da un getter che ha dovuto creare il file perche non esisteva.
+        /// Registriamo anche la dimensione, cosi l'avviso sparisce da solo quando
+        /// qualcuno ci mette dentro i dati.
+        /// </summary>
+        public static void SegnalaCreataVuota(string nomeFile, string pathSource)
+        {
+            lock (_lucchettoSorgenti)
+            {
+                try
+                {
+                    var f = new FileInfo(Path.Combine(pathSource, nomeFile));
+                    _createVuote[nomeFile] = f.Exists ? f.Length : 0;
+                }
+                catch { _createVuote[nomeFile] = 0; }
+            }
+        }
+
+        /// <summary>
+        /// I Source*.json che il cliente non ha rispetto a vergine, piu quelli creati
+        /// vuoti e ancora intatti. Ricalcolato al massimo una volta al minuto: cosi la
+        /// fascia sparisce da sola appena i file vengono messi a posto, senza riavviare.
+        /// Non solleva mai eccezioni: se vergine non si trova, l'elenco resta vuoto.
+        /// </summary>
+        public static List<string> SorgentiDaCompilare(string pathSource)
+        {
+            lock (_lucchettoSorgenti)
+            {
+                if ((DateTime.UtcNow - _ultimoControllo).TotalSeconds > 60)
+                {
+                    _ultimoControllo = DateTime.UtcNow;
+                    _mancanti = CalcolaMancanti(pathSource);
+                    foreach (var nome in _createVuote.Keys.ToList())
+                    {
+                        try
+                        {
+                            var f = new FileInfo(Path.Combine(pathSource, nome));
+                            if (!f.Exists || f.Length != _createVuote[nome]) _createVuote.Remove(nome);
+                        }
+                        catch { }
+                    }
+                }
+                return _mancanti.Concat(_createVuote.Keys).Distinct().OrderBy(x => x).ToList();
+            }
+        }
+
+        private static List<string> CalcolaMancanti(string pathSource)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(pathSource) || !Directory.Exists(pathSource))
+                    return new List<string>();
+
+                // vergine e sorella della cartella del cliente
+                string? padre = Directory.GetParent(pathSource.TrimEnd('/', '\\'))?.FullName;
+                if (padre == null) return new List<string>();
+                string modello = Path.Combine(padre, "vergine");
+                if (!Directory.Exists(modello) ||
+                    string.Equals(Path.GetFullPath(modello).TrimEnd('/', '\\'),
+                                  Path.GetFullPath(pathSource).TrimEnd('/', '\\'),
+                                  StringComparison.OrdinalIgnoreCase))
+                    return new List<string>();
+
+                var mancano = new List<string>();
+                foreach (var f in Directory.GetFiles(modello, "Source*.json"))
+                {
+                    string nome = Path.GetFileName(f);
+                    if (!File.Exists(Path.Combine(pathSource, nome))) mancano.Add(nome);
+                }
+                return mancano;
+            }
+            catch
+            {
+                // un avviso mancato non deve mai far cadere una pagina
+                return new List<string>();
+            }
+        }
+
+        #endregion
+
+
+        public ExternalSourceClass(string pathExternalSource)
+        {
+            this.pathExternal = pathExternalSource;
+        }
+        public ExternalSourceClass(string pathExternalSource, string[] sources)
+        {
+            this.pathExternal = pathExternalSource;
+            foreach (string s in sources)
+            {
+                JObject o1 = JObject.Parse(System.IO.File.ReadAllText($"{this.pathExternal}{s}.json"));
+                Sources[s] = o1;
+            }
+        }
+
+        private void RefreshSources()
+        {
+            foreach (string s in this.Sources.Keys)
+            {
+                JObject o1 = JObject.Parse(System.IO.File.ReadAllText($"{this.pathExternal}{s}.json"));
+                Sources[s] = o1;
+            }
+        }
+
+        public object Exec(string command)
+        {
+            if (COMMANDS.Contains(command))
+            {
+                switch (command)
+                {
+                    case "getAree":
+                        return getAree();
+                    case "getMastro":
+                        return getMastro();
+                    case "getMeccaniche":
+                        return getMeccaniche();
+                    default:
+                        return "no command implemented";
+                }
+            }
+            else
+            {
+                return "command not exist";
+            }
+        }
+
+        #region FICO ACPV
+        public DbACPV getACPV()
+        {
+            JObject? o1 = JObject.Parse(System.IO.File.ReadAllText(this.pathExternal + "Source" + DbACPV.dbSourceName));
+            DbACPV? acpvDB = o1.ToObject<DbACPV>();
+            acpvDB!.SetExternalPath(this.pathExternal);
+            return acpvDB;
+        }
+
+        #endregion
+
+        #region FICO Promo process
+        public DbLabels getLabels()
+        {
+            JObject? o1 = JObject.Parse(System.IO.File.ReadAllText(this.pathExternal + "Source" + DbLabels.dbSourceName));
+            DbLabels? lblDB = o1.ToObject<DbLabels>();
+            return lblDB!;
+        }
+
+        public DbFormati getFormati()
+        {
+            if (!File.Exists(this.pathExternal + "Source" + DbFormati.dbSourceName))
+            {
+                DbFormati crea = new DbFormati();
+                crea.SetExternalPath(this.pathExternal);
+                crea.SaveChanges();
+                SegnalaCreataVuota("Source" + DbFormati.dbSourceName, this.pathExternal);
+            }
+
+            JObject? o1 = JObject.Parse(System.IO.File.ReadAllText(this.pathExternal + "Source" + DbFormati.dbSourceName));
+            DbFormati? fmtDB = o1.ToObject<DbFormati>();
+            fmtDB!.SetExternalPath(this.pathExternal);
+
+            return fmtDB!;
+        }
+
+        public DbLoghiBolli getLoghiBolli()
+        {
+            if (!File.Exists(this.pathExternal + "Source" + DbLoghiBolli.dbSourceName))
+            {
+                DbLoghiBolli crea = new DbLoghiBolli();
+                crea.SetExternalPath(this.pathExternal);
+                crea.SaveChanges();
+                SegnalaCreataVuota("Source" + DbLoghiBolli.dbSourceName, this.pathExternal);
+            }
+
+            JObject? o1 = JObject.Parse(System.IO.File.ReadAllText(this.pathExternal + "Source" + DbLoghiBolli.dbSourceName));
+            DbLoghiBolli? dbLB = o1.ToObject<DbLoghiBolli>();
+            dbLB!.SetExternalPath(this.pathExternal);
+            return dbLB!;
+        }
+
+        public DbTipoDiExport getTipiDiExport()
+        {
+            if (!File.Exists(this.pathExternal + "Source" + DbTipoDiExport.dbSourceName))
+            {
+                DbTipoDiExport crea = new DbTipoDiExport();
+                crea.SetExternalPath(this.pathExternal);
+                crea.SaveChanges();
+                SegnalaCreataVuota("Source" + DbTipoDiExport.dbSourceName, this.pathExternal);
+            }
+
+            JObject? o1 = JObject.Parse(System.IO.File.ReadAllText(this.pathExternal + "Source" + DbTipoDiExport.dbSourceName));
+            DbTipoDiExport? fmtDB = o1.ToObject<DbTipoDiExport>();
+            fmtDB!.SetExternalPath(this.pathExternal);
+            return fmtDB;
+        }
+
+        public DbDeclinazioniKit getDeclinazioniKit()
+        {
+            if (!File.Exists(this.pathExternal + "Source" + DbDeclinazioniKit.dbSourceName))
+            {
+                DbDeclinazioniKit crea = new DbDeclinazioniKit();
+                crea.SetExternalPath(this.pathExternal);
+                crea.SaveChanges();
+                SegnalaCreataVuota("Source" + DbDeclinazioniKit.dbSourceName, this.pathExternal);
+            }
+
+            JObject? o1 = JObject.Parse(System.IO.File.ReadAllText(this.pathExternal + "Source" + DbDeclinazioniKit.dbSourceName));
+            DbDeclinazioniKit? fmtDB = o1.ToObject<DbDeclinazioniKit>();
+            fmtDB!.SetExternalPath(this.pathExternal);
+            return fmtDB;
+        }
+
+        public DbNamingConvention getNamingConvention()
+        {
+            if (!File.Exists(this.pathExternal + "Source" + DbNamingConvention.dbSourceName))
+            {
+                DbNamingConvention crea = new DbNamingConvention();
+                crea.SetExternalPath(this.pathExternal);
+                crea.SaveChanges();
+                SegnalaCreataVuota("Source" + DbNamingConvention.dbSourceName, this.pathExternal);
+            }
+
+            JObject? o1 = JObject.Parse(System.IO.File.ReadAllText(this.pathExternal + "Source" + DbNamingConvention.dbSourceName));
+            DbNamingConvention? dbNC = o1.ToObject<DbNamingConvention>();
+            dbNC!.SetExternalPath(this.pathExternal);
+            return dbNC;
+        }
+
+
+        #endregion
+
+        #region Aree
+
+        public DbAree getAree()
+        {
+            JObject? o1 = JObject.Parse(System.IO.File.ReadAllText(this.pathExternal + "SourceAree.json"));
+            DbAree? areeDB = o1.ToObject<DbAree>();
+            return areeDB!;
+        }
+        public Aree getAreaById(int id)
+        {
+            var _source = getAree().source;
+            return _source!.Find(m => m.Id == id)!;
+        }
+        public Aree getAreaByCombinazioneAreaCanale(string area, string canale)
+        {
+            var _source = getAree().source;
+            return _source.Find(m => m.Area == area && m.Canale == canale)!;
+        }
+
+        public void addArea(Aree item)
+        {
+            var db = getAree();
+            var _source = db.source;
+
+            var _last = _source.OrderByDescending(o => o.Id).FirstOrDefault();
+            item.Id = _last != null ? _last.Id + 1 : 1;
+
+            _source.Add(item);
+
+            saveAree(db);
+        }
+
+        public void editArea(Aree item)
+        {
+            var db = getAree();
+            var itemDb = db.source.Find(m => m.Id == item.Id);
+            itemDb!.Canale = item.Canale;
+            itemDb.Area = item.Area;
+            itemDb.GruppoSiti = item.GruppoSiti;
+
+            saveAree(db);
+        }
+
+        public void deleteArea(Aree item)
+        {
+            var db = getAree();
+            db.source.Remove(db.source.Find(m => m.Id == item.Id)!);
+
+            saveAree(db);
+        }
+
+        void saveAree(DbAree db)
+        {
+            string jsonStr = JsonConvert.SerializeObject(db);
+
+            using (StreamWriter sw = new StreamWriter(this.pathExternal + "SourceAree.json", false))
+            {
+                sw.WriteLine(jsonStr);
+            }
+        }
+
+        #endregion
+
+        #region Mastro
+        public JObject getSource(string nomeSource)
+        {
+            return Sources[nomeSource];
+        }
+
+        public DbMastro getMastro()
+        {
+            JObject? o1 = JObject.Parse(System.IO.File.ReadAllText(this.pathExternal + "SourceMastro.json"));
+            DbMastro? mastroDB = o1.ToObject<DbMastro>();
+
+            return mastroDB!;
+        }
+        public DbMastroItem getMastroById(int id)
+        {
+            var _source = getMastro().source;
+            return _source.Find(m => m.Id == id)!;
+        }
+
+        public DbMastroItem getMastroByNameAndFormato(string id, string formato)
+        {
+            var _source = getMastro().source;
+            return _source.Find(m => m.Nome == id && m.Formato == formato)!;
+        }
+
+        public Int64 getLastMastroId()
+        {
+            var _last = getMastro().source.OrderByDescending(m => m.Id).FirstOrDefault();
+            return (_last != null ? _last.Id + 1 : 1);
+        }
+
+        public void addMastro(DbMastroItem item)
+        {
+            var db = getMastro();
+            var _source = db.source;
+
+            var _last = _source.OrderByDescending(o => o.Id).FirstOrDefault();
+            item.Id = _last != null ? _last.Id + 1 : 1;
+
+            _source.Add(item);
+
+            saveMastro(db);
+        }
+
+        public void editMastro(DbMastroItem item)
+        {
+            var db = getMastro();
+            var dbItem = db.source.Find(m => m.Id == item.Id);
+
+
+            dbItem!.Nome = item.Nome;
+            dbItem.Formato = item.Formato;
+            dbItem.MeccanicaDefault = item.MeccanicaDefault;
+            dbItem.Active = item.Active;
+            dbItem.Associazioni = item.Associazioni;
+
+            saveMastro(db);
+        }
+
+        public void deleteMastro(DbMastroItem item)
+        {
+            var db = getMastro();
+            var mastro = db.source.Find(m => m.Id == item.Id);
+            //db.source.Remove(db.source.Find(m => m.Id == item.Id));
+            mastro!.Active = false;
+            saveMastro(db);
+        }
+
+        void saveMastro(DbMastro db)
+        {
+            string jsonStr = JsonConvert.SerializeObject(db);
+
+            using (StreamWriter sw = new StreamWriter(this.pathExternal + "SourceMastro.json", false))
+            {
+                sw.WriteLine(jsonStr);
+            }
+        }
+
+        #endregion
+
+        #region Meccaniche
+
+        public DbMeccaniche getMeccaniche()
+        {
+            JObject? o1 = JObject.Parse(System.IO.File.ReadAllText(this.pathExternal + "SourceMeccaniche.json"));
+            DbMeccaniche? meccanicheDB = o1.ToObject<DbMeccaniche>();
+            return meccanicheDB!;
+        }
+
+        public Meccaniche getMeccanicaById(int id)
+        {
+            var _source = getMeccaniche().source;
+            return _source.Find(m => m.Id == id)!;
+        }
+        public Meccaniche getMeccanicaByName(string id)
+        {
+            var _source = getMeccaniche().source;
+            return _source.Find(m => m.NomeOrigine == id)!;
+        }
+
+        public void addMeccanica(Meccaniche item)
+        {
+            var db = getMeccaniche();
+            var _source = db.source;
+            var _last = _source.OrderByDescending(o => o.Id).FirstOrDefault();
+            item.Id = _last != null ? _last.Id + 1 : 1;
+            _source.Add(item);
+
+            saveMeccaniche(db);
+        }
+
+        public void editMeccanica(Meccaniche item)
+        {
+            var db = getMeccaniche();
+            var itemDb = db.source.Find(m => m.Id == item.Id);
+            itemDb!.NomeOrigine = item.NomeOrigine;
+            itemDb.NomeTraduzione = item.NomeTraduzione;
+            itemDb.Aree = item.Aree;
+            itemDb.Formato = item.Formato;
+
+            saveMeccaniche(db);
+        }
+
+        public void deleteMeccanica(Meccaniche item)
+        {
+            var db = getMeccaniche();
+            db.source.Remove(db.source.Find(m => m.Id == item.Id)!);
+
+            saveMeccaniche(db);
+        }
+
+        void saveMeccaniche(DbMeccaniche db)
+        {
+            string jsonStr = JsonConvert.SerializeObject(db);
+
+            using (StreamWriter sw = new StreamWriter(this.pathExternal + "SourceMeccaniche.json", false))
+            {
+                sw.WriteLine(jsonStr);
+            }
+        }
+
+        public string getFormatoMeccanica(string meccanica)
+        {
+            var db = getMeccaniche();
+            var meccanicaItem = db.source.Where(f => f.NomeTraduzione == meccanica).FirstOrDefault();
+            return (meccanicaItem != null ? meccanicaItem.Formato : "1x1")!;
+        }
+
+        #endregion
+
+        #region Combinazioni PoP
+
+        public DbPopCombinazioni getCombinazioniPoP()
+        {
+            JObject? o1 = JObject.Parse(System.IO.File.ReadAllText(this.pathExternal + "SourceCombinazioniPoP.json"));
+            DbPopCombinazioni? combDB = o1.ToObject<DbPopCombinazioni>();
+            return combDB!;
+        }
+
+        public List<PopMateriale> getMateriali()
+        {
+            return getCombinazioniPoP().Materiali;
+        }
+
+        #endregion
+
+        #region Regole Menabò
+        public DbMenabo getRegoleMenabo()
+        {
+            JObject? o1 = JObject.Parse(System.IO.File.ReadAllText(this.pathExternal + "SourceMenabo.json")); // this.Sources["SourceMenabo"];
+            DbMenabo? menaboDB = o1.ToObject<DbMenabo>();
+            return menaboDB!;
+        }
+
+        public void addRegolaMenabo(DbMenaboItem item)
+        {
+            JObject o1 = this.Sources["SourceMenabo"];
+            DbMenabo? menaboDB = o1.ToObject<DbMenabo>();
+
+            var _last = menaboDB!.source.OrderByDescending(o => o.Id).FirstOrDefault();
+
+            item.Id = _last != null ? _last.Id + 1 : 1;
+
+
+            JObject? o2 = this.Sources["SourceMenaboPagine"];
+            DbMenaboPagine? menaboPagDB = o2.ToObject<DbMenaboPagine>();
+
+            var _lastSchemaPag = menaboPagDB!.source.OrderByDescending(o => o.Id).FirstOrDefault();
+
+            DbMenaboPagineItem schemaPag = new DbMenaboPagineItem();
+            schemaPag.Id = _lastSchemaPag != null ? _lastSchemaPag.Id + 1 : 1;
+            schemaPag.Pagine = new List<DbMenaboPagineItemPagina>();
+            schemaPag.Titolo = item.Titolo;
+
+            menaboPagDB.source.Add(schemaPag);
+
+            saveSchemaMenabo(menaboPagDB);
+
+
+            item.IdMenaboPagine = schemaPag.Id;
+
+            menaboDB.source.Add(item);
+
+
+            saveMenabo(menaboDB);
+
+
+        }
+
+
+        public DbMenaboItem getMenaboById(int id)
+        {
+            DbMenabo menaboDB = getRegoleMenabo();
+            return menaboDB.source.Where(m => m.Id == id).FirstOrDefault()!;
+        }
+        public bool editMenabo(DbMenaboItem item)
+        {
+
+            JObject? o2 = this.Sources["SourceMenabo"];
+            DbMenabo? menaboDb = o2.ToObject<DbMenabo>();
+
+            var dbExist = menaboDb!.source.Where(m => m.Id == item.Id).FirstOrDefault();
+            if (dbExist != null)
+            {
+                dbExist.Aree = item.Aree;
+                dbExist.Titolo = item.Titolo;
+                saveMenabo(menaboDb);
+                return true;
+            }
+
+
+            return false;
+        }
+        public void deleteMenabo(DbMenaboItem item)
+        {
+            var db = getRegoleMenabo();
+            db.source.Remove(db.source.Find(m => m.Id == item.Id)!);
+            saveMenabo(db);
+        }
+
+
+        public DbMenaboPagineItem getSchemaMenabo(Int64 id)
+        {
+            JObject? o1 = JObject.Parse(System.IO.File.ReadAllText(this.pathExternal + "SourceMenabo.json"));  //this.Sources["SourceMenabo"];
+            DbMenabo? menaboDB = o1.ToObject<DbMenabo>();
+
+            JObject? o2 = JObject.Parse(System.IO.File.ReadAllText(this.pathExternal + "SourceMenaboPagine.json")); //this.Sources["SourceMenaboPagine"];
+            DbMenaboPagine? menaboPagineDb = o2.ToObject<DbMenaboPagine>();
+
+            var mItem = menaboDB!.source.Where(m => m.IdMenaboPagine == id).FirstOrDefault();
+            if (mItem != null)
+            {
+                var mpItem = menaboPagineDb!.source.Where(mp => mp.Id == mItem.IdMenaboPagine).FirstOrDefault();
+                if (mpItem != null)
+                {
+                    return mpItem;
+                }
+                else
+                {
+                    throw new Exception("Schema pagine non trovato");
+                }
+            }
+            else
+            {
+                throw new Exception("Menabo non trovato");
+            }
+
+        }
+
+
+        public List<string> getFormatiPagina()
+        {
+            JObject? o1 = this.Sources["SourceMenabo"];
+            DbMenabo? menaboDB = o1.ToObject<DbMenabo>();
+            return menaboDB!.formatiMenaboPagina;
+        }
+
+        public void saveFormatiPagina(List<string> nuoviFormati)
+        {
+            JObject? o1 = this.Sources["SourceMenabo"];
+            DbMenabo? menaboDB = o1.ToObject<DbMenabo>();
+            menaboDB!.formatiMenaboPagina = nuoviFormati;
+            saveMenabo(menaboDB);
+        }
+
+        public List<DbMenaboItem> getMenabos()
+        {
+            DbMenabo menaboDB = getRegoleMenabo();
+            return menaboDB.source;
+        }
+
+
+
+        public bool editSchemaMenabo(DbMenaboPagineItem item)
+        {
+
+            JObject? o2 = this.Sources["SourceMenaboPagine"];
+            DbMenaboPagine? menaboPagineDb = o2.ToObject<DbMenaboPagine>();
+
+            var dbExist = menaboPagineDb!.source.Where(m => m.Id == item.Id).FirstOrDefault();
+            if (dbExist != null)
+            {
+                dbExist.Pagine = item.Pagine;
+                saveSchemaMenabo(menaboPagineDb);
+                return true;
+            }
+
+
+            return false;
+        }
+
+
+
+        public void saveMenabo(DbMenabo db)
+        {
+            string jsonStr = JsonConvert.SerializeObject(db);
+
+            using (StreamWriter sw = new StreamWriter(this.pathExternal + "SourceMenabo.json", false))
+            {
+                sw.WriteLine(jsonStr);
+            }
+
+            this.RefreshSources();
+        }
+
+        public void saveSchemaMenabo(DbMenaboPagine db)
+        {
+            string jsonStr = JsonConvert.SerializeObject(db);
+
+            using (StreamWriter sw = new StreamWriter(this.pathExternal + "SourceMenaboPagine.json", false))
+            {
+                sw.WriteLine(jsonStr);
+            }
+
+            this.RefreshSources();
+        }
+
+        #endregion
+
+        #region Ordinamento universale
+        public JsonDbClassificazioneUniversale getClassificazioneUniversale()
+        {
+            try
+            {
+                JObject? o1 = JObject.Parse(System.IO.File.ReadAllText(this.pathExternal + "SourceOrdinamentoLista.json"));
+                JsonDbClassificazioneUniversale? DB = o1.ToObject<JsonDbClassificazioneUniversale>();
+                return DB!;
+            }
+            catch
+            {
+                var classUniversale = new JsonDbClassificazioneUniversale();
+                classUniversale.universale = false;
+                classUniversale.bindings = new ClassificazioneBinding();
+                classUniversale.bindings.area = new BindingItem();
+                classUniversale.bindings.categoria = new BindingItem();
+                classUniversale.bindings.reparto = new BindingItem();
+                classUniversale.bindings.settore = new BindingItem();
+                return classUniversale;
+            }
+        }
+        public int addRuleToClassificatore(string bindingName, string definizione, string valoriDaCercare)
+        {
+            var db = getClassificazioneUniversale();
+            BindingItemRule ruleItem = new BindingItemRule();
+            ruleItem.definizione = definizione;
+            ruleItem.valoridaRicercare = valoriDaCercare.Split(',').ToList();
+            db.IdProg += 1;
+            ruleItem.id = db.IdProg;
+            if (bindingName == "area")
+            {
+                db.bindings!.area!.rules.Add(ruleItem);
+            }
+            else if (bindingName == "settore")
+            {
+                db.bindings!.settore!.rules.Add(ruleItem);
+            }
+            else if (bindingName == "reparto")
+            {
+                db.bindings!.reparto!.rules.Add(ruleItem);
+            }
+
+
+            saveClassificazioneUniversale(db);
+
+            return db.IdProg;
+        }
+        public void deleteRuleOfClassificatore(string bindingName, int id)
+        {
+            var db = getClassificazioneUniversale();
+            //db.bindings.Remove(db.bindings.Find(m => m.Id == id));
+            if (bindingName == "area")
+            {
+                db.bindings!.area!.rules.Remove(db.bindings.area.rules.Find(m => m.id == id)!);
+            }
+            else if (bindingName == "settore")
+            {
+                db.bindings!.settore!.rules.Remove(db.bindings.settore.rules.Find(m => m.id == id)!);
+
+            }
+            else if (bindingName == "reparto")
+            {
+                db.bindings!.reparto!.rules.Remove(db.bindings.reparto.rules.Find(m => m.id == id)!);
+            }
+
+            saveClassificazioneUniversale(db);
+        }
+        public void editRuleOfClassificatore(string bindingName, int id, string valoriDaCercare)
+        {
+            var db = getClassificazioneUniversale();
+            //db.bindings.Remove(db.bindings.Find(m => m.Id == id));
+            if (bindingName == "area")
+            {
+                var item = db.bindings!.area!.rules.Find(m => m.id == id);
+                item!.valoridaRicercare = valoriDaCercare.Split(',').ToList();
+            }
+            else if (bindingName == "settore")
+            {
+                var item = db.bindings!.settore!.rules.Find(m => m.id == id);
+                item!.valoridaRicercare = valoriDaCercare.Split(',').ToList();
+
+            }
+            else if (bindingName == "reparto")
+            {
+                var item = db.bindings!.reparto!.rules.Find(m => m.id == id);
+                item!.valoridaRicercare = valoriDaCercare.Split(',').ToList();
+            }
+
+            saveClassificazioneUniversale(db);
+        }
+
+        public void editOrdinamento(int areaIndex, int settoreIndex, int repartoIndex, int newGlobalOrderIndex)
+        {
+            var db = getClassificazioneUniversale();
+            var itemDb = db.lista.Where(l => l.areaIndex == areaIndex && l.settoreIndex == settoreIndex && l.repartoIndex == repartoIndex).FirstOrDefault();
+            if (itemDb != null)
+            {
+                itemDb.orderIndex = newGlobalOrderIndex;
+            }
+
+            saveClassificazioneUniversale(db);
+        }
+
+        public void addOrdinamento(string area, string settore, string reparto)
+        {
+            var db = getClassificazioneUniversale();
+            var itemDb = db.lista.Where(l => l.area == area && l.settore == settore && l.reparto == reparto).FirstOrDefault();
+            if (itemDb == null)
+            {
+                itemDb = new ClassificazioneUniversale();
+                itemDb.area = area;
+                itemDb.settore = settore;
+                itemDb.reparto = reparto;
+
+                var validItems = db.lista.Where(f => f.area == area).ToList();
+
+                if (validItems.Count > 0)
+                {
+                    itemDb.areaIndex = validItems[0].areaIndex;
+                    validItems = validItems.Where(f => f.settore == settore).ToList();
+
+                    if (validItems.Count > 0)
+                    {
+                        itemDb.settoreIndex = validItems[0].settoreIndex;
+                        itemDb.repartoIndex = validItems.Max(y => y.repartoIndex) + 1;
+                    }
+                    else
+                    {
+                        itemDb.settoreIndex = validItems.Max(y => y.settoreIndex) + 1;
+                        itemDb.repartoIndex = 1;
+                    }
+                }
+                else
+                {
+                    itemDb.areaIndex = db.lista.Max(y => y.areaIndex) + 1;
+                    itemDb.settoreIndex = 1;
+                    itemDb.repartoIndex = 1;
+                }
+
+                itemDb.orderIndex = db.lista.Max(y => y.orderIndex) + 1;
+
+                db.lista.Add(itemDb);
+            }
+
+            saveClassificazioneUniversale(db);
+        }
+
+        public void saveClassificazioneUniversale(JsonDbClassificazioneUniversale db)
+        {
+            string jsonStr = JsonConvert.SerializeObject(db);
+
+            using (StreamWriter sw = new StreamWriter(this.pathExternal + "SourceOrdinamentoLista.json", false))
+            {
+                sw.WriteLine(jsonStr);
+            }
+        }
+
+        public DbOrdinamentoLista getOrdinamentoListaFreeSource()
+        {
+            DbOrdinamentoLista oDB = new DbOrdinamentoLista();
+            try
+            {
+
+                oDB.freeSource = System.IO.File.ReadAllText(this.pathExternal + "SourceOrdinamentoLista.json");
+
+            }
+            catch
+            {
+                //Non trovata
+                oDB.freeSource = "";
+
+            }
+            oDB.SetExternalPath(this.pathExternal);
+
+            return oDB;
+        }
+
+        #endregion
+
+        #region Etichette
+
+        public DbEtichetta getEtichette()
+        {
+            JObject? o1 = JObject.Parse(System.IO.File.ReadAllText(this.pathExternal + "SourceEtichetteRef.json"));
+            DbEtichetta? etichetteDB = o1.ToObject<DbEtichetta>();
+            for (int i = 0; i < etichetteDB!.source.Count; i++)
+            {
+                var item = etichetteDB.source[i];
+                if (item.Raccolta == null)
+                {
+                    item.Raccolta = "";
+                }
+            }
+
+            etichetteDB.SetExternalPath(this.pathExternal);
+            return etichetteDB;
+        }
+
+        public EtichettaItem getEtichettaById(int id)
+        {
+            var _source = getEtichette().source;
+            return _source.Find(m => m.Id == id)!;
+        }
+        public EtichettaItem geEtichettaByName(string name)
+        {
+            var _source = getEtichette().source;
+            return _source.Find(m => m.Etichetta == name)!;
+        }
+
+        public void addEtichetta(EtichettaItem item)
+        {
+            var db = getEtichette();
+            var _source = db.source;
+            var _last = _source.OrderByDescending(o => o.Id).FirstOrDefault();
+            item.Id = _last != null ? _last.Id + 1 : 1;
+            _source.Add(item);
+
+            saveEtichette(db);
+        }
+
+        public void editEtichetta(EtichettaItem item)
+        {
+            var db = getEtichette();
+            var itemDb = db.source.Find(m => m.Id == item.Id);
+            itemDb!.Etichetta = item.Etichetta;
+            itemDb.Visual = item.Visual;
+            itemDb.Regole = item.Regole;
+            itemDb.Raccolta = item.Raccolta;
+            saveEtichette(db);
+        }
+
+        public void deleteEtichetta(EtichettaItem item)
+        {
+            var db = getEtichette();
+            db.source.Remove(db.source.Find(m => m.Id == item.Id)!);
+
+            saveEtichette(db);
+        }
+
+        void saveEtichette(DbEtichetta db)
+        {
+            string jsonStr = JsonConvert.SerializeObject(db);
+
+            using (StreamWriter sw = new StreamWriter(this.pathExternal + "SourceEtichetteRef.json", false))
+            {
+                sw.WriteLine(jsonStr);
+            }
+        }
+        #endregion
+
+        #region Declinazione meccanica
+        public DbDeclinazioneMeccaniche getDeclinazioneMeccaniche()
+        {
+            JObject? o1 = JObject.Parse(System.IO.File.ReadAllText(this.pathExternal + "SourceDeclinazioneMeccaniche.json"));
+            DbDeclinazioneMeccaniche? meccanicheDB = o1.ToObject<DbDeclinazioneMeccaniche>();
+            meccanicheDB!.source = meccanicheDB.source ?? new List<DeclinazioneMeccanica>();
+            meccanicheDB.combinazioniMeccaniche = meccanicheDB.combinazioniMeccaniche ?? new List<CombinazioniMeccaniche>();
+            meccanicheDB.meccanicheAvanzate = meccanicheDB.meccanicheAvanzate ?? new List<DeclinazioneMeccanicaAvanzata>();
+            meccanicheDB.meccanicheInRimozione = meccanicheDB.meccanicheInRimozione ?? new List<RimozioneDeclinazioneMeccanica>();
+            meccanicheDB.meccanicheInvalidate = meccanicheDB.meccanicheInvalidate ?? new List<String>();
+
+            meccanicheDB.SetExternalPath(this.pathExternal);
+
+            return meccanicheDB;
+        }
+
+        public DeclinazioneMeccanica getDeclinazioneMeccanicaById(int id)
+        {
+            var _source = getDeclinazioneMeccaniche().source;
+            if (_source == null)
+                return new DeclinazioneMeccanica();
+            return _source.Find(m => m.Id == id)!;
+        }
+        public DeclinazioneMeccanica getDeclinazioneMeccanicaByName(string name)
+        {
+            var _source = getDeclinazioneMeccaniche().source;
+            if (_source == null)
+                return new DeclinazioneMeccanica();
+            return _source.Find(m => m.Nome == name)!;
+        }
+        public CombinazioniMeccaniche getCombinazioneMeccanicaById(int id)
+        {
+            var _comb = getDeclinazioneMeccaniche().combinazioniMeccaniche;
+            if (_comb == null)
+                return new CombinazioniMeccaniche();
+            return _comb.Find(m => m.Id == id)!;
+        }
+        public CombinazioniMeccaniche getCombinazioneMeccanicaByName(string name)
+        {
+            var _comb = getDeclinazioneMeccaniche().combinazioniMeccaniche;
+            if (_comb == null)
+                return new CombinazioniMeccaniche();
+            return _comb.Find(m => m.NomeCombinazione == name)!;
+        }
+
+        public void addDeclinazioneMeccanica(DeclinazioneMeccanica item)
+        {
+            var db = getDeclinazioneMeccaniche();
+            var _source = db.source;
+            var _lastAvanzate = db.meccanicheAvanzate != null
+                ? db.meccanicheAvanzate.OrderByDescending(o => o.Id).FirstOrDefault()
+                : null;
+            var _lastRimozioneAvanzate = db.meccanicheInRimozione != null
+                ? db.meccanicheInRimozione.OrderByDescending(o => o.Id).FirstOrDefault()
+                : null;
+            var _last = db.source != null
+                ? db.source.OrderByDescending(o => o.Id).FirstOrDefault()
+                : null;
+            List<int> arrayMaxId = new List<int>();
+            if (_last != null)
+            {
+                arrayMaxId.Add((int)_last.Id);
+            }
+            if (_lastAvanzate != null)
+            {
+                arrayMaxId.Add((int)_lastAvanzate.Id);
+            }
+            if (_lastRimozioneAvanzate != null)
+            {
+                arrayMaxId.Add((int)_lastRimozioneAvanzate.Id);
+            }
+
+            if (arrayMaxId.Count == 0)
+            {
+                arrayMaxId.Add(0);
+            }
+
+            item.Id = arrayMaxId.Max() + 1;
+            _source.Add(item);
+            db.source = _source.OrderBy(o => o.Livello).ToList();
+            saveDeclinazioneMeccanica(db);
+        }
+
+        public void addCombinazioneMeccanica(CombinazioniMeccaniche item)
+        {
+            var db = getDeclinazioneMeccaniche();
+            var _comb = db.combinazioniMeccaniche;
+            var _last = _comb.OrderByDescending(o => o.Id).FirstOrDefault();
+            item.Id = _last != null ? _last.Id + 1 : 1;
+            _comb.Add(item);
+
+            saveDeclinazioneMeccanica(db);
+        }
+
+        public void editDeclinazioneMeccanica(DeclinazioneMeccanica item)
+        {
+            var db = getDeclinazioneMeccaniche();
+            var itemDb = db.source.Find(m => m.Id == item.Id);
+            itemDb!.Nome = item.Nome;
+            itemDb.Livello = item.Livello;
+            itemDb.Formato = item.Formato;
+            itemDb.Regole = item.Regole;
+
+            saveDeclinazioneMeccanica(db);
+        }
+
+        public void editCombinazioneMeccanica(CombinazioniMeccaniche item)
+        {
+            var db = getDeclinazioneMeccaniche();
+            var itemDb = db.combinazioniMeccaniche.Find(m => m.Id == item.Id);
+            itemDb!.NomeCombinazione = item.NomeCombinazione;
+            itemDb.Formato = item.Formato;
+
+            saveDeclinazioneMeccanica(db);
+        }
+
+        public void deleteDeclinazioneMeccanica(DeclinazioneMeccanica item)
+        {
+            var db = getDeclinazioneMeccaniche();
+            db.source.Remove(db.source.Find(m => m.Id == item.Id)!);
+
+            saveDeclinazioneMeccanica(db);
+        }
+
+        public void deleteCombinazioneMeccanica(CombinazioniMeccaniche item)
+        {
+            var db = getDeclinazioneMeccaniche();
+            db.combinazioniMeccaniche.Remove(db.combinazioniMeccaniche.Find(m => m.Id == item.Id)!);
+
+            saveDeclinazioneMeccanica(db);
+        }
+
+        void saveDeclinazioneMeccanica(DbDeclinazioneMeccaniche db)
+        {
+            string jsonStr = JsonConvert.SerializeObject(db);
+
+            using (StreamWriter sw = new StreamWriter(this.pathExternal + "SourceDeclinazioneMeccaniche.json", false))
+            {
+                sw.WriteLine(jsonStr);
+            }
+        }
+
+        public string getFormatoCombinazioneMeccanica(string formatoCombinazione)
+        {
+            var db = getDeclinazioneMeccaniche();
+            if (db.combinazioniMeccaniche == null)
+                return "1x1";
+            var corrispondenza = db.combinazioniMeccaniche.Find(f => f.NomeCombinazione == formatoCombinazione);
+            if (corrispondenza != null)
+            {
+                return corrispondenza.Formato;
+            }
+            else
+            {
+                var livelliMeccanica = formatoCombinazione.Split("_");
+                for (int i = livelliMeccanica.Length - 1; i >= 0; i--)
+                {
+                    var levelName = livelliMeccanica[i];
+                    var livelloTrovato = db.source.Find(f => f.Nome == levelName);
+                    if (livelloTrovato != null && livelloTrovato.Formato != null && livelloTrovato.Formato != "")
+                    {
+                        return livelloTrovato.Formato;
+                    }
+                }
+            }
+            return "1x1";
+        }
+
+
+        public DeclinazioneMeccanicaAvanzata getDeclinazioneMeccanicaAvanzataById(int id)
+        {
+            var _source = getDeclinazioneMeccaniche().meccanicheAvanzate;
+            if (_source == null)
+                return new DeclinazioneMeccanicaAvanzata();
+            return _source.Find(m => m.Id == id)!;
+        }
+        public DeclinazioneMeccanicaAvanzata getDeclinazioneMeccanicaAvanzataByName(string name, float livelloEsterno)
+        {
+            var _source = getDeclinazioneMeccaniche().meccanicheAvanzate;
+            if (_source == null)
+                return new DeclinazioneMeccanicaAvanzata();
+            return _source.Find(m => m.Nome == name && m.LivelloEsternoMeccanicaAvanzata == livelloEsterno)!;
+        }
+        public void addDeclinazioneMeccanicaAvanzata(DeclinazioneMeccanicaAvanzata item)
+        {
+            var db = getDeclinazioneMeccaniche();
+            var _source = db.meccanicheAvanzate;
+            var _lastAvanzate = db.meccanicheAvanzate != null
+                ? db.meccanicheAvanzate.OrderByDescending(o => o.Id).FirstOrDefault()
+                : null;
+            var _lastRimozioneAvanzate = db.meccanicheInRimozione != null
+                ? db.meccanicheInRimozione.OrderByDescending(o => o.Id).FirstOrDefault()
+                : null;
+            var _last = db.source != null
+                ? db.source.OrderByDescending(o => o.Id).FirstOrDefault()
+                : null;
+
+            List<int> arrayMaxId = new List<int>();
+            if (_last != null)
+            {
+                arrayMaxId.Add((int)_last.Id);
+            }
+            if (_lastAvanzate != null)
+            {
+                arrayMaxId.Add((int)_lastAvanzate.Id);
+            }
+            if (_lastRimozioneAvanzate != null)
+            {
+                arrayMaxId.Add((int)_lastRimozioneAvanzate.Id);
+            }
+
+            if (arrayMaxId.Count == 0)
+            {
+                arrayMaxId.Add(0);
+            }
+
+            item.Id = arrayMaxId.Max() + 1;
+            _source.Add(item);
+            db.meccanicheAvanzate = _source.OrderBy(o => o.LivelloMeccanica).ToList();
+            saveDeclinazioneMeccanica(db);
+        }
+        public void editDeclinazioneMeccanicaAvanzata(DeclinazioneMeccanicaAvanzata item)
+        {
+            var db = getDeclinazioneMeccaniche();
+            var itemDb = db.meccanicheAvanzate.Find(m => m.Id == item.Id);
+            itemDb!.Nome = item.Nome;
+            itemDb.LivelloMeccanica = item.LivelloMeccanica;
+            itemDb.LivelloEsternoMeccanicaAvanzata = item.LivelloEsternoMeccanicaAvanzata;
+            itemDb.Formato = item.Formato;
+            itemDb.Regole = item.Regole;
+
+            saveDeclinazioneMeccanica(db);
+        }
+        public void deleteDeclinazioneMeccanicaAvanzata(DeclinazioneMeccanicaAvanzata item)
+        {
+            var db = getDeclinazioneMeccaniche();
+            db.meccanicheAvanzate.Remove(db.meccanicheAvanzate.Find(m => m.Id == item.Id)!);
+
+            saveDeclinazioneMeccanica(db);
+        }
+
+
+
+
+        public RimozioneDeclinazioneMeccanica getRimozioneMeccanicaAvanzataById(int id)
+        {
+            var _source = getDeclinazioneMeccaniche().meccanicheInRimozione;
+            if (_source == null)
+                return new RimozioneDeclinazioneMeccanica();
+            return _source.Find(m => m.Id == id)!;
+        }
+        public RimozioneDeclinazioneMeccanica getRimozioneMeccanicaAvanzataByName(string name, float livelloEsterno)
+        {
+            var _source = getDeclinazioneMeccaniche().meccanicheInRimozione;
+            if (_source == null)
+                return new RimozioneDeclinazioneMeccanica();
+            return _source.Find(m => m.Nome == name && m.LivelloEsternoMeccanicaAvanzata == livelloEsterno)!;
+        }
+        public void addRimozioneMeccanicaAvanzata(RimozioneDeclinazioneMeccanica item)
+        {
+            var db = getDeclinazioneMeccaniche();
+            var _source = db.meccanicheInRimozione;
+            var _lastAvanzate = db.meccanicheAvanzate != null
+                ? db.meccanicheAvanzate.OrderByDescending(o => o.Id).FirstOrDefault()
+                : null;
+            var _lastRimozioneAvanzate = db.meccanicheInRimozione != null
+                ? db.meccanicheInRimozione.OrderByDescending(o => o.Id).FirstOrDefault()
+                : null;
+            var _last = db.source != null
+                ? db.source.OrderByDescending(o => o.Id).FirstOrDefault()
+                : null;
+            List<int> arrayMaxId = new List<int>();
+            if (_last != null)
+            {
+                arrayMaxId.Add((int)_last.Id);
+            }
+            if (_lastAvanzate != null)
+            {
+                arrayMaxId.Add((int)_lastAvanzate.Id);
+            }
+            if (_lastRimozioneAvanzate != null)
+            {
+                arrayMaxId.Add((int)_lastRimozioneAvanzate.Id);
+            }
+
+            if (arrayMaxId.Count == 0)
+            {
+                arrayMaxId.Add(0);
+            }
+
+            item.Id = arrayMaxId.Max() + 1;
+            _source.Add(item);
+            db.meccanicheInRimozione = _source.OrderBy(o => o.LivelloMeccanica).ToList();
+            saveDeclinazioneMeccanica(db);
+        }
+        public void editRimozioneMeccanicaAvanzata(RimozioneDeclinazioneMeccanica item)
+        {
+            var db = getDeclinazioneMeccaniche();
+            var itemDb = db.meccanicheInRimozione.Find(m => m.Id == item.Id);
+            itemDb!.Nome = item.Nome;
+            itemDb.LivelloMeccanica = item.LivelloMeccanica;
+            itemDb.LivelloEsternoMeccanicaAvanzata = item.LivelloEsternoMeccanicaAvanzata;
+            itemDb.Regole = item.Regole;
+            itemDb.timeToApply = item.timeToApply;
+
+            saveDeclinazioneMeccanica(db);
+        }
+        public void deleteRimozioneMeccanicaAvanzata(RimozioneDeclinazioneMeccanica item)
+        {
+            var db = getDeclinazioneMeccaniche();
+            db.meccanicheInRimozione.Remove(db.meccanicheInRimozione.Find(m => m.Id == item.Id)!);
+
+            saveDeclinazioneMeccanica(db);
+        }
+
+        #endregion
+
+        #region Regole Mastro
+        public DbRegoleMastro getDbRegoleMastro()
+        {
+            JObject? o1 = JObject.Parse(System.IO.File.ReadAllText(this.pathExternal + "SourceRegoleMastro.json"));
+            DbRegoleMastro? mastroDB = o1.ToObject<DbRegoleMastro>();
+            return mastroDB!;
+        }
+
+        #endregion
+
+        #region Framework css
+        public DbFrameworkCss getFrameworkCss()
+        {
+            var db = DbFrameworkCss.Load(this.pathExternal);
+            db.SetExternalPath(this.pathExternal); // per sicurezza
+                                                   // Sanitizzazione compatibilità
+            if (db.livelli == null) db.livelli = new List<livelloCssFramework>();
+            foreach (var liv in db.livelli)
+            {
+                liv.definizioni ??= new List<DefinizioniCssFramework>();
+                foreach (var def in liv.definizioni)
+                    def.regole ??= new List<macroRegolaCssFramework>();
+            }
+            return db;
+        }
+        public DbMappaStili getMappaStili()
+        {
+            DbMappaStili msDB = new DbMappaStili();
+            try
+            {
+
+                msDB.freeSource = System.IO.File.ReadAllText(this.pathExternal + "SourceMappaStili.json");
+
+            }
+            catch
+            {
+                //Non trovata
+                msDB.freeSource = "";
+
+            }
+            msDB.SetExternalPath(this.pathExternal);
+
+            return msDB;
+        }
+
+
+
+        public livelloCssFramework getLivelloById(int id)
+        {
+            var _source = getFrameworkCss().livelli;
+            var livello = _source.Find(m => m.id == id);
+            return livello!;
+        }
+
+
+        public livelloCssFramework getLivelloByDefinizioneId(int id)
+        {
+            var _source = getFrameworkCss().livelli;
+            var livello = _source.Find(m => m.definizioni.Find(f2 => f2.id == id) != null);
+            return livello!;
+        }
+
+
+        public BoolResult addLivello(livelloCssFramework item)
+        {
+            BoolResult res = new BoolResult();
+            try
+            {
+                var db = getFrameworkCss();
+                var _source = db.livelli;
+                var _last = _source.OrderByDescending(o => o.ordine).FirstOrDefault();
+                bool ordineRichiesto = false;
+                int newOrder = item.ordine;
+                if (item.ordine != 0)
+                {
+                    ordineRichiesto = true;
+                }
+
+                item.ordine = _last != null ? _last.ordine + 1 : 1;
+
+                item.id = _last != null ? _last.id + 1 : 1;
+                if (item.definizioni == null)
+                {
+                    item.definizioni = new List<DefinizioniCssFramework>();
+                }
+                _source.Add(item);
+                if (ordineRichiesto)
+                {
+                    db = editOrdineLivello(item.id, newOrder, db);
+                }
+
+                saveFrameworkCss(db);
+                res.Esito = true;
+                return res;
+            }
+            catch (Exception ex)
+            {
+                res.error = ex.ToString();
+                res.Esito = false;
+                return res;
+            }
+        }
+
+        public BoolResult editOrdineLivello(int id, int nuovoOrdine)
+        {
+            BoolResult res = new BoolResult();
+            try
+            {
+                var db = getFrameworkCss();
+                var itemDb = db.livelli.Find(m => m.id == id);
+                int vecchioOrdine = itemDb!.ordine;
+
+                // Cambiamo l'ordine dell'elemento selezionato
+                int maxOrdine = db.livelli.Count;
+                if (nuovoOrdine > maxOrdine)
+                {
+                    nuovoOrdine = maxOrdine;
+                }
+
+                int minOrdine = 1;
+                if (nuovoOrdine < minOrdine)
+                {
+                    nuovoOrdine = minOrdine;
+                }
+                itemDb.ordine = nuovoOrdine;
+
+                // Spostiamo gli altri elementi per mantenere la continuità
+                if (nuovoOrdine > vecchioOrdine)
+                {
+                    // Stiamo spostando l'elemento "in avanti", quindi dobbiamo decrementare l'ordine degli altri elementi compresi tra vecchioOrdine e nuovoOrdine
+                    foreach (var item in db.livelli)
+                    {
+                        if (item.id != id && item.ordine > vecchioOrdine && item.ordine <= nuovoOrdine)
+                        {
+                            item.ordine--;
+                        }
+                    }
+                }
+                else if (nuovoOrdine < vecchioOrdine)
+                {
+                    // Stiamo spostando l'elemento "indietro", quindi dobbiamo incrementare l'ordine degli altri elementi compresi tra nuovoOrdine e vecchioOrdine
+                    foreach (var item in db.livelli)
+                    {
+                        if (item.id != id && item.ordine >= nuovoOrdine && item.ordine < vecchioOrdine)
+                        {
+                            item.ordine++;
+                        }
+                    }
+                }
+                saveFrameworkCss(db);
+                res.Esito = true;
+                return res;
+            }
+            catch (Exception ex)
+            {
+                res.error = ex.ToString();
+                res.Esito = false;
+                return res;
+            }
+
+        }
+
+
+        public DbFrameworkCss editOrdineLivello(int id, int nuovoOrdine, DbFrameworkCss db)
+        {
+            var itemDb = db.livelli.Find(m => m.id == id);
+            int vecchioOrdine = itemDb!.ordine;
+
+            // Cambiamo l'ordine dell'elemento selezionato
+            int maxOrdine = db.livelli.Count;
+            if (nuovoOrdine > maxOrdine)
+            {
+                nuovoOrdine = maxOrdine;
+            }
+
+            int minOrdine = 1;
+            if (nuovoOrdine < minOrdine)
+            {
+                nuovoOrdine = minOrdine;
+            }
+
+            itemDb.ordine = nuovoOrdine;
+            // Spostiamo gli altri elementi per mantenere la continuità
+            if (nuovoOrdine > vecchioOrdine)
+            {
+                // Stiamo spostando l'elemento "in avanti", quindi dobbiamo decrementare l'ordine degli altri elementi compresi tra vecchioOrdine e nuovoOrdine
+                foreach (var item in db.livelli)
+                {
+                    if (item.id != id && item.ordine > vecchioOrdine && item.ordine <= nuovoOrdine)
+                    {
+                        item.ordine--;
+                    }
+                }
+            }
+            else if (nuovoOrdine < vecchioOrdine)
+            {
+                // Stiamo spostando l'elemento "indietro", quindi dobbiamo incrementare l'ordine degli altri elementi compresi tra nuovoOrdine e vecchioOrdine
+                foreach (var item in db.livelli)
+                {
+                    if (item.id != id && item.ordine >= nuovoOrdine && item.ordine < vecchioOrdine)
+                    {
+                        item.ordine++;
+                    }
+                }
+            }
+            return db;
+        }
+
+        public BoolResult addDefinizioneCssFramework(DefinizioniCssFramework def, int idLiv)
+        {
+            BoolResult res = new BoolResult();
+            try
+            {
+                var liv = getLivelloById(idLiv);
+                var db = getFrameworkCss();
+                DefinizioniCssFramework? _last = null;
+                //liv.definizioni.Add(def);
+                foreach (var livello in db.livelli)
+                {
+                    if (livello.definizioni.Count == 0)
+                    {
+                        continue;
+                    }
+                    var _lastLivello = livello.definizioni.OrderByDescending(o => o.id).FirstOrDefault();
+
+                    if (_last == null)
+                    {
+                        _last = _lastLivello;
+                    }
+                    if (_lastLivello!.id > _last!.id)
+                    {
+                        _last = _lastLivello;
+                    }
+                }
+
+                DefinizioniCssFramework? _lastOrdine = null;
+
+                foreach (var livello in db.livelli)
+                {
+                    if (livello.definizioni.Count == 0)
+                    {
+                        continue;
+                    }
+                    var _lastLivello = livello.definizioni.OrderByDescending(o => o.ordine).FirstOrDefault();
+
+                    if (_lastOrdine == null)
+                    {
+                        _lastOrdine = _lastLivello;
+                    }
+                    if (_lastLivello!.id > _last!.id)
+                    {
+                        _lastOrdine = _lastLivello;
+                    }
+                }
+
+                bool ordineRichiesto = false;
+                int newOrder = def.ordine;
+                if (def.ordine != 0)
+                {
+                    ordineRichiesto = true;
+                }
+
+                def.ordine = _lastOrdine != null ? _lastOrdine.ordine + 1 : 1;
+
+                def.id = _last != null ? _last.id + 1 : 1;
+                if (def.regole == null)
+                {
+                    def.regole = new List<macroRegolaCssFramework>();
+                }
+                if (def.descrizione == null)
+                {
+                    def.descrizione = "";
+                }
+                liv.definizioni.Add(def);
+
+                if (ordineRichiesto)
+                {
+                    liv = editOrdineDefinizioni(def.id, newOrder, liv);
+                }
+
+                //var dbLiv = db.livelli.Find(f => f.id == liv.id);
+                //dbLiv = liv;
+                //saveFrameworkCss(db);
+
+                int index = db.livelli.FindIndex(f => f.id == liv.id);
+                if (index != -1)
+                {
+                    db.livelli[index] = liv; // Sostituisce l'elemento con quello aggiornato
+                    saveFrameworkCss(db);
+                }
+
+
+                res.Esito = true;
+                return res;
+            }
+            catch (Exception ex)
+            {
+                res.error = ex.ToString();
+                res.Esito = false;
+                return res;
+            }
+        }
+
+        public BoolResult editOrdineDefinizioni(int id, int nuovoOrdine)
+        {
+            BoolResult res = new BoolResult();
+            try
+            {
+                var liv = getLivelloByDefinizioneId(id);
+                var item = liv.definizioni.Find(f => f.id == id);
+                if (item == null)
+                {
+                    res.error = "Id definizione non trovato nel DB";
+                    res.Esito = false;
+                    return res;
+                }
+
+                int vecchioOrdine = item.ordine;
+
+                // Cambiamo l'ordine dell'elemento selezionato
+                int maxOrdine = liv.definizioni.Count;
+                if (nuovoOrdine > maxOrdine)
+                {
+                    nuovoOrdine = maxOrdine;
+                }
+
+                int minOrdine = 1;
+                if (nuovoOrdine < minOrdine)
+                {
+                    nuovoOrdine = minOrdine;
+                }
+
+                item.ordine = nuovoOrdine;
+                // Spostiamo gli altri elementi per mantenere la continuità
+                if (nuovoOrdine > vecchioOrdine)
+                {
+                    // Stiamo spostando l'elemento "in avanti", quindi dobbiamo decrementare l'ordine degli altri elementi compresi tra vecchioOrdine e nuovoOrdine
+                    foreach (var itemLiv in liv.definizioni)
+                    {
+                        if (itemLiv.id != id && itemLiv.ordine > vecchioOrdine && itemLiv.ordine <= nuovoOrdine)
+                        {
+                            itemLiv.ordine--;
+                        }
+                    }
+                }
+                else if (nuovoOrdine < vecchioOrdine)
+                {
+                    // Stiamo spostando l'elemento "indietro", quindi dobbiamo incrementare l'ordine degli altri elementi compresi tra nuovoOrdine e vecchioOrdine
+                    foreach (var itemLiv in liv.definizioni)
+                    {
+                        if (itemLiv.id != id && itemLiv.ordine >= nuovoOrdine && itemLiv.ordine < vecchioOrdine)
+                        {
+                            itemLiv.ordine++;
+                        }
+                    }
+                }
+
+                var db = getFrameworkCss();
+                //var dbLiv = db.livelli.Find(f => f.id == liv.id);
+                //dbLiv = liv;
+                //saveFrameworkCss(db);
+
+                int index = db.livelli.FindIndex(f => f.id == liv.id);
+                if (index != -1)
+                {
+                    db.livelli[index] = liv; // Sostituisce l'elemento con quello aggiornato
+                    saveFrameworkCss(db);
+                }
+                res.Esito = true;
+
+                return res;
+            }
+            catch (Exception ex)
+            {
+                res.error = ex.ToString();
+                res.Esito = false;
+                return res;
+            }
+        }
+
+        public BoolResult editNomeDefinizioni(int id, string nome)
+        {
+            BoolResult res = new BoolResult();
+            try
+            {
+                if (nome == null || nome == "")
+                {
+                    throw new Exception("Nome non specificato");
+                }
+                var liv = getLivelloByDefinizioneId(id);
+                var item = liv.definizioni.Find(f => f.id == id);
+                if (item == null)
+                {
+                    res.error = "Id definizione non trovato nel DB";
+                    res.Esito = false;
+                    return res;
+                }
+
+                item.result = nome;
+
+                var db = getFrameworkCss();
+
+                int index = db.livelli.FindIndex(f => f.id == liv.id);
+                if (index != -1)
+                {
+                    db.livelli[index] = liv; // Sostituisce l'elemento con quello aggiornato
+                    saveFrameworkCss(db);
+                }
+                res.Esito = true;
+
+                return res;
+            }
+            catch (Exception ex)
+            {
+                res.error = ex.ToString();
+                res.Esito = false;
+                return res;
+            }
+        }
+
+        public BoolResult editDescrizioneDefinizioni(int id, string descrizione)
+        {
+            BoolResult res = new BoolResult();
+            try
+            {
+                var liv = getLivelloByDefinizioneId(id);
+                var item = liv.definizioni.Find(f => f.id == id);
+                if (item == null)
+                {
+                    res.error = "Id definizione non trovato nel DB";
+                    res.Esito = false;
+                    return res;
+                }
+
+                item.descrizione = descrizione;
+
+                var db = getFrameworkCss();
+
+                int index = db.livelli.FindIndex(f => f.id == liv.id);
+                if (index != -1)
+                {
+                    db.livelli[index] = liv; // Sostituisce l'elemento con quello aggiornato
+                    saveFrameworkCss(db);
+                }
+                res.Esito = true;
+
+                return res;
+            }
+            catch (Exception ex)
+            {
+                res.error = ex.ToString();
+                res.Esito = false;
+                return res;
+            }
+        }
+
+        public livelloCssFramework editOrdineDefinizioni(int id, int nuovoOrdine, livelloCssFramework liv)
+        {
+            var itemLiv = liv.definizioni.Find(m => m.id == id);
+            int vecchioOrdine = itemLiv!.ordine;
+
+            // Cambiamo l'ordine dell'elemento selezionato
+            int maxOrdine = liv.definizioni.Count;
+            if (nuovoOrdine > maxOrdine)
+            {
+                nuovoOrdine = maxOrdine;
+            }
+
+            int minOrdine = 1;
+            if (nuovoOrdine < minOrdine)
+            {
+                nuovoOrdine = minOrdine;
+            }
+            itemLiv.ordine = nuovoOrdine;
+
+            // Spostiamo gli altri elementi per mantenere la continuità
+            if (nuovoOrdine > vecchioOrdine)
+            {
+                // Stiamo spostando l'elemento "in avanti", quindi dobbiamo decrementare l'ordine degli altri elementi compresi tra vecchioOrdine e nuovoOrdine
+                foreach (var item in liv.definizioni)
+                {
+                    if (item.id != id && item.ordine > vecchioOrdine && item.ordine <= nuovoOrdine)
+                    {
+                        item.ordine--;
+                    }
+                }
+            }
+            else if (nuovoOrdine < vecchioOrdine)
+            {
+                // Stiamo spostando l'elemento "indietro", quindi dobbiamo incrementare l'ordine degli altri elementi compresi tra nuovoOrdine e vecchioOrdine
+                foreach (var item in liv.definizioni)
+                {
+                    if (item.id != id && item.ordine >= nuovoOrdine && item.ordine < vecchioOrdine)
+                    {
+                        item.ordine++;
+                    }
+                }
+            }
+            return liv;
+        }
+
+        public BoolResult editRegoleDefinizione(List<macroRegolaCssFramework> regole, int idDefinizione, string percorso)
+        {
+            BoolResult res = new BoolResult();
+            try
+            {
+                var liv = getLivelloByDefinizioneId(idDefinizione);
+                var item = liv.definizioni.Find(f => f.id == idDefinizione);
+                if (item == null)
+                {
+                    res.error = "Id definizione non trovato nel DB";
+                    res.Esito = false;
+                    return res;
+                }
+
+                var percorsoEl = percorso.Split("$").Where(f => f != "").ToList();
+                macroRegolaCssFramework? setRegola = null;
+
+                foreach (var perc in percorsoEl)
+                {
+                    var id = int.Parse(perc);
+                    setRegola = item.regole.Find(f => f.id == id);
+                }
+
+                if (setRegola != null)
+                {
+                    int deepness = percorsoEl.Count;
+                    setRegola.regoleAnnidate = regole != null ? regole : new List<macroRegolaCssFramework>();
+                    int counter = 1;
+                    foreach (var itemSet in setRegola.regoleAnnidate)
+                    {
+                        itemSet.id = counter;
+                        itemSet.deepness = deepness;
+                        counter++;
+                    }
+                }
+                else
+                {
+                    item.regole = regole != null ? regole : new List<macroRegolaCssFramework>();
+                    int counter = 1;
+                    foreach (var itemSet in item.regole)
+                    {
+                        itemSet.id = counter;
+                        itemSet.deepness = 0;
+                        counter++;
+                    }
+                }
+
+
+                var db = getFrameworkCss();
+
+                int index = db.livelli.FindIndex(f => f.id == liv.id);
+                if (index != -1)
+                {
+                    db.livelli[index] = liv; // Sostituisce l'elemento con quello aggiornato
+                    saveFrameworkCss(db);
+                }
+
+                res.Esito = true;
+                return res;
+            }
+            catch (Exception ex)
+            {
+                res.error = ex.ToString();
+                res.Esito = false;
+                return res;
+            }
+        }
+
+
+        public BoolResult deleteLivello(int id)
+        {
+            BoolResult res = new BoolResult();
+            try
+            {
+                var db = getFrameworkCss();
+                var itemToDelete = db.livelli.Find(m => m.id == id);
+
+                if (itemToDelete == null)
+                {
+                    res.Esito = false;
+                    res.error = "Livello non presente nel DB";
+                    return res; // L'elemento non esiste
+                }
+
+                // Rimuoviamo l'elemento selezionato
+                db.livelli.Remove(itemToDelete);
+
+                // Aggiorniamo gli ordini dei rimanenti elementi
+                foreach (var item in db.livelli)
+                {
+                    if (item.ordine > itemToDelete.ordine)
+                    {
+                        item.ordine--;
+                    }
+                }
+
+                // Salviamo il database aggiornato
+                saveFrameworkCss(db);
+
+                res.Esito = true;
+                return res;
+            }
+            catch (Exception ex)
+            {
+                res.error = ex.ToString();
+                res.Esito = false;
+                return res;
+            }
+        }
+
+        public BoolResult deleteDefinizioneById(int id)
+        {
+            BoolResult res = new BoolResult();
+            try
+            {
+                var db = getFrameworkCss();
+                var liv = db.livelli.Find(f => f.definizioni.Find(f2 => f2.id == id) != null);
+                if (liv != null)
+                {
+                    var itemToDelete = liv.definizioni.Find(f => f.id == id)!;
+
+                    liv.definizioni.Remove(itemToDelete);
+
+                    foreach (var item in liv.definizioni)
+                    {
+                        if (item.ordine > itemToDelete.ordine)
+                        {
+                            item.ordine--;
+                        }
+                    }
+                }
+                else
+                {
+                    res.Esito = false;
+                    res.error = "Definizione non presente nel DB";
+                    return res; // L'elemento non esiste
+                }
+
+
+                saveFrameworkCss(db);
+
+                res.Esito = true;
+                return res;
+            }
+            catch (Exception ex)
+            {
+                res.error = ex.ToString();
+                res.Esito = false;
+                return res;
+            }
+        }
+
+        //void saveFrameworkCss(DbFrameworkCss db)
+        //{
+        //    string jsonStr = JsonConvert.SerializeObject(db);
+
+        //    using (StreamWriter sw = new StreamWriter(this.pathExternal + "SourceFrameworkCss.json", false))
+        //    {
+        //        sw.WriteLine(jsonStr);
+        //    }
+        //}
+
+        void saveFrameworkCss(DbFrameworkCss db)
+        {
+            if (db == null)
+                throw new ArgumentNullException(nameof(db));
+
+            // Assicura che la directory esista
+            //var dir = Path.Combine(this.pathExternal, "Source");
+            //if (!Directory.Exists(dir))
+            //    Directory.CreateDirectory(dir);
+
+            var fullPath = Path.Combine(this.pathExternal, DbFrameworkCss.dbSourceName);
+
+            // Serializza una sola volta, formattazione compatta
+            var jsonStr = JsonConvert.SerializeObject(db, Formatting.None);
+
+            // Scrive in modo atomico e sicuro
+            using (var sw = new StreamWriter(fullPath, false))
+            {
+                sw.WriteLine(jsonStr);
+            }
+        }
+
+
+        #endregion
+
+        #region Confronti
+        public DbConfronto getConfronto()
+        {
+            JObject? o1 = JObject.Parse(System.IO.File.ReadAllText(this.pathExternal + "Source" + DbConfronto.dbSourceName));
+            DbConfronto? confDB = o1.ToObject<DbConfronto>();
+            confDB!.SetExternalPath(this.pathExternal);
+            return confDB;
+        }
+
+        #endregion
+
+        #region PuliziaListe
+        /// <summary>
+        /// I20-1106 (Lotto 2): i tipi di record della pulizia delle liste. Se il file manca lo crea
+        /// vuoto, come getFormati: nei volumi di produzione seminati prima di questa funzione non c'e'.
+        /// Non lo segnala fra le sorgenti da compilare: per i clienti senza regole un file vuoto e'
+        /// la configurazione giusta.
+        /// </summary>
+        public DbPuliziaListe getPuliziaListe()
+        {
+            string percorso = this.pathExternal + "Source" + DbPuliziaListe.dbSourceName;
+            if (!File.Exists(percorso))
+            {
+                DbPuliziaListe crea = new DbPuliziaListe();
+                crea.SetExternalPath(this.pathExternal);
+                crea.SaveChanges();
+            }
+
+            JObject? o1 = JObject.Parse(System.IO.File.ReadAllText(percorso));
+            DbPuliziaListe? db = o1.ToObject<DbPuliziaListe>();
+            db!.SetExternalPath(this.pathExternal);
+            return db;
+        }
+
+        #endregion
+
+        #region customPlugin
+        public DbCustomPlugin getCustomPluginAgenzia()
+        {
+            var db = DbCustomPlugin.Load(this.pathExternal);
+            db.SetExternalPath(this.pathExternal); // per sicurezza
+            return db;
+        }
+
+
+        #endregion
+
+        //public DbAllineamenti getDbAllineamentiSource()
+        //{
+        //    DbAllineamenti msDB = new DbAllineamenti();
+        //    try
+        //    {
+
+        //        msDB.freeSource = System.IO.File.ReadAllText(this.pathExternal + "SourceAllineamenti.json");
+
+        //    }
+        //    catch
+        //    {
+        //        //Non trovata
+        //        msDB.freeSource = "";
+
+        //    }
+        //    msDB.SetExternalPath(this.pathExternal);
+
+        //    return msDB;
+
+
+        //}
+
+        public DbRidimensionamentiAllineamenti getDbAllineamentiSource()
+        {
+            var root = DbFrameworkCss.Load(this.pathExternal);
+            root.SetExternalPath(this.pathExternal);
+            return root.dbRidimensionamentiAllineamenti ?? new DbRidimensionamentiAllineamenti();
+        }
+    }
+
+
+
+    #region FICO Area/Canale/PV
+
+    public class DbACPV
+    {
+        public static readonly string dbSourceName = "ACPV.json";
+
+        private string pathExternalSource  = "";
+        public List<Area> aree { get; set; } = new List<Area>();
+        public List<Canale> canali { get; set; } = new List<Canale>();
+        public List<CombinazioneAreaCanale> combinazioni { get; set; } = new List<CombinazioneAreaCanale>();
+        public List<PV> pv { get; set; } = new List<PV>();
+
+        public void SetExternalPath(string pathExternalSource)
+        {
+            this.pathExternalSource = pathExternalSource + "Source" + DbACPV.dbSourceName;
+        }
+
+        public BoolResult SetJsonSource(string jsonStr)
+        {
+            BoolResult br = new BoolResult();
+            try
+            {
+                var db = JsonConvert.DeserializeObject<DbACPV>(jsonStr);
+                this.aree = db!.aree;
+                this.canali = db.canali;
+                this.combinazioni = db.combinazioni;
+                this.pv = db.pv;
+                this.SaveChanges();
+
+                br.Esito = true;
+            }
+            catch (Exception ex)
+            {
+                br.Esito = false;
+                br.error = ex.ToString();
+                return br;
+            }
+
+            return br;
+        }
+
+        public bool SaveChanges()
+        {
+            string jsonStr = JsonConvert.SerializeObject(this);
+
+            using (StreamWriter sw = new StreamWriter(this.pathExternalSource, false))
+            {
+                sw.WriteLine(jsonStr);
+            }
+
+            return true;
+        }
+
+
+    }
+
+    public class CombinazioneAreaCanale
+    {
+        public string guidID { get; set; } = "";
+        public string guidIDArea { get; set; } = "";
+        public string guidIDCanale { get; set; } = "";
+        public bool enabled { get; set; }
+
+    }
+
+    public class PV
+    {
+        public string guidID { get; set; } = "";
+        public string nome { get; set; } = "";
+        public string indirizzo { get; set; } = "";
+        public string citta { get; set; } = "";
+        public string cap { get; set; } = "";
+        public double lat { get; set; }
+        public double lon { get; set; }
+        public string guidIDCombinazione { get; set; } = "";
+    }
+
+    public class ACPVFicoOperationResult
+    {
+        public bool esito { get; set; }
+        public string error { get; set; } = "";
+    }
+
+
+    #endregion
+
+    #region FICO flusso promo
+    public class DbLabels
+    {
+        public static readonly string dbSourceName = "Labels.json";
+
+        private string pathExternalSource="";
+        public List<Label> source { get; set; }= new List<Label>();
+
+        public void SetExternalPath(string pathExternalSource)
+        {
+            this.pathExternalSource = pathExternalSource + "Source" + DbLabels.dbSourceName;
+        }
+
+        public bool SaveChanges()
+        {
+            string jsonStr = JsonConvert.SerializeObject(this);
+
+            using (StreamWriter sw = new StreamWriter(this.pathExternalSource, false))
+            {
+                sw.WriteLine(jsonStr);
+            }
+
+            return true;
+        }
+
+
+    }
+    public class Label
+    {
+        public Int16 Id { get; set; }
+        public string Codice { get; set; } = "";
+        public string Nome { get; set; } = "";
+    }
+    public class DbFormati
+    {
+        public static readonly string dbSourceName = "Formati.json";
+
+        private string pathExternalSource="";
+        public List<Formato> source { get; set; } = new List<Formato>();
+
+        public void SetExternalPath(string pathExternalSource)
+        {
+            this.pathExternalSource = pathExternalSource + "Source" + DbFormati.dbSourceName;
+        }
+
+        public bool SaveChanges()
+        {
+            string jsonStr = JsonConvert.SerializeObject(this);
+
+            using (StreamWriter sw = new StreamWriter(this.pathExternalSource, false))
+            {
+                sw.WriteLine(jsonStr);
+            }
+
+            return true;
+        }
+        public BoolResult SetJsonSource(string jsonStr)
+        {
+            BoolResult br = new BoolResult();
+            try
+            {
+                if (jsonStr == null || jsonStr.Trim() == "")
+                {
+                    br.Esito = false;
+                    br.error = "Il JSON fornito è vuoto o nullo.";
+                    return br;
+                }
+
+
+                this.freeSource = jsonStr.Replace("\n", "").Replace("\t", "").Replace("\t", "");
+
+                using (StreamWriter sw = new StreamWriter(this.pathExternalSource, false))
+                {
+                    sw.WriteLine(this.freeSource);
+                }
+
+                this.source.ToString();
+                this.source = JsonConvert.DeserializeObject<DbFormati>(this.freeSource)!.source;
+                
+                this.SaveChanges();
+
+                br.Esito = true;
+            }
+            catch (Exception ex)
+            {
+                br.Esito = false;
+                br.error = ex.ToString();
+                return br;
+            }
+
+            return br;
+        }
+
+        public string freeSource { get; set; } = "";
+
+    }
+    public class DbTipoDiExport
+    {
+        public static readonly string dbSourceName = "TipiDiExport.json";
+
+        private string pathExternalSource="";
+        public List<TipoDiExport> source { get; set; } = new List<TipoDiExport>();
+
+        public void SetExternalPath(string pathExternalSource)
+        {
+            this.pathExternalSource = pathExternalSource + "Source" + DbTipoDiExport.dbSourceName;
+        }
+
+        public bool SaveChanges()
+        {
+            string jsonStr = JsonConvert.SerializeObject(this);
+
+            using (StreamWriter sw = new StreamWriter(this.pathExternalSource, false))
+            {
+                sw.WriteLine(jsonStr);
+            }
+
+            return true;
+        }
+
+        public BoolResult SetJsonSource(string jsonStr)
+        {
+            BoolResult br = new BoolResult();
+            try
+            {
+                if (jsonStr == null || jsonStr.Trim() == "")
+                {
+                    br.Esito = false;
+                    br.error = "Il JSON fornito è vuoto o nullo.";
+                    return br;
+                }
+
+
+                this.freeSource = jsonStr.Replace("\n", "").Replace("\t", "").Replace("\t", "");
+
+                using (StreamWriter sw = new StreamWriter(this.pathExternalSource, false))
+                {
+                    sw.WriteLine(this.freeSource);
+                }
+
+                br.Esito = true;
+            }
+            catch (Exception ex)
+            {
+                br.Esito = false;
+                br.error = ex.ToString();
+                return br;
+            }
+
+            return br;
+        }
+
+        public string freeSource { get; set; } = "";
+
+
+    }
+
+    public class DbDeclinazioniKit
+    {
+        public static readonly string dbSourceName = "DeclinazioniKit.json";
+
+        private string pathExternalSource="";
+        public List<FicoDeclinazioneKit> source { get; set; } = new List<FicoDeclinazioneKit>();
+
+        public void SetExternalPath(string pathExternalSource)
+        {
+            this.pathExternalSource = pathExternalSource + "Source" + DbDeclinazioniKit.dbSourceName;
+        }
+
+        public bool SaveChanges()
+        {
+            string jsonStr = JsonConvert.SerializeObject(this);
+
+            using (StreamWriter sw = new StreamWriter(this.pathExternalSource, false))
+            {
+                sw.WriteLine(jsonStr);
+            }
+
+            return true;
+        }
+
+
+    }
+
+    public class DbLoghiBolli
+    {
+        public static readonly string dbSourceName = "LoghiBolli.json";
+        private string pathExternalSource="";
+        public List<LogoBollo> source { get; set; } = new List<LogoBollo>();
+
+        public void SetExternalPath(string pathExternalSource)
+        {
+            this.pathExternalSource = pathExternalSource + "Source" + DbLoghiBolli.dbSourceName;
+        }
+
+        public bool SaveChanges()
+        {
+            string jsonStr = JsonConvert.SerializeObject(this);
+
+            using (StreamWriter sw = new StreamWriter(this.pathExternalSource, false))
+            {
+                sw.WriteLine(jsonStr);
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// I20-1136: l'archivio loghi e bolli dal sorgente, come per Aree/Canali: la pagina Loghi e
+        /// bolli manda il JSON intero scritto nella vista Source. Sostituisce l'elenco di questo
+        /// oggetto, che e' quello in memoria letto anche dalla sincronizzazione dei loghi del Plugin,
+        /// e riscrive il file. Un JSON non valido, o senza l'elenco source, non tocca niente: un
+        /// archivio vuoto per errore toglierebbe tutti i loghi dalla sincronizzazione.
+        /// </summary>
+        public BoolResult SetJsonSource(string jsonStr)
+        {
+            BoolResult br = new BoolResult();
+            DbLoghiBolli? db;
+            try
+            {
+                db = JsonConvert.DeserializeObject<DbLoghiBolli>(jsonStr ?? "");
+            }
+            catch (Exception ex)
+            {
+                br.Esito = false;
+                br.error = "Il sorgente non e' un JSON valido: " + ex.Message;
+                return br;
+            }
+
+            if (db == null || db.source == null || !JObject.Parse(jsonStr!).ContainsKey("source"))
+            {
+                br.Esito = false;
+                br.error = "Il sorgente non contiene l'elenco dei loghi e bolli (source).";
+                return br;
+            }
+
+            List<LogoBollo> precedente = this.source;
+            try
+            {
+                this.source = db.source;
+                this.SaveChanges();
+            }
+            catch (Exception ex)
+            {
+                this.source = precedente;
+                br.Esito = false;
+                br.error = ex.ToString();
+                return br;
+            }
+
+            br.Esito = true;
+            return br;
+        }
+    }
+
+    public class InputFotoSync
+    {
+        public IFormFile? file { get; set; }
+
+    }
+
+    // Istanta4 - caricamento manuale di una foto da Archivio (vedi ArchivioController.caricaFotoManuale)
+    public class InputFotoArchivio
+    {
+        public IFormFile? file { get; set; }
+        public string? codice { get; set; }
+        public string? area { get; set; }
+        public string? canale { get; set; }
+    }
+    public class ScanResult
+    {
+        public string filename { get; set; } = "";
+        public string error { get; set; } = "";
+    }
+
+
+    public class InputLogoBollo
+    {
+        public string Id { get; set; } = "";//Olympus ID
+        public string Sigla { get; set; } = "";
+        public TipoFoto Tipo { get; set; } = TipoFoto.Foto;
+        public IFormFile? file { get; set; }
+
+    }
+
+    public class LogoBolloOperationResult
+    {
+        public LogoBollo? item { get; set; }
+        public bool esito { get; set; }
+        public string error { get; set; } = "";
+        // Facoltativi: valorizzati solo quando il file supera il limite (LimiteLoghiBolli), cosi'
+        // il client riconosce il caso senza leggere il testo del messaggio.
+        public string? codice { get; set; }
+        public long? limiteByte { get; set; }
+    }
+
+
+
+
+    #endregion
+
+    #region FICO NamingConvention
+    public class DbNamingConvention
+    {
+        public static readonly string dbSourceName = "NamingConvention.json";
+
+        private string pathExternalSource="";
+        public List<FicoNamingConventionComponent> components { get; set; }= new List<FicoNamingConventionComponent>();
+        public List<FicoNamingConventionCombinazione> combinazioni { get; set; } = new List<FicoNamingConventionCombinazione>();
+
+        public void SetExternalPath(string pathExternalSource)
+        {
+            this.pathExternalSource = pathExternalSource + "Source" + DbNamingConvention.dbSourceName;
+        }
+
+        public bool SaveChanges()
+        {
+            string jsonStr = JsonConvert.SerializeObject(this);
+
+            using (StreamWriter sw = new StreamWriter(this.pathExternalSource, false))
+            {
+                sw.WriteLine(jsonStr);
+            }
+
+            return true;
+        }
+
+        public BoolResult SetJsonSource(string jsonStr)
+        {
+            BoolResult br = new BoolResult();
+            try
+            {
+                if (jsonStr == null || jsonStr.Trim() == "")
+                {
+                    br.Esito = false;
+                    br.error = "Il JSON fornito è vuoto o nullo.";
+                    return br;
+                }
+
+
+                this.freeSource = jsonStr.Replace("\n", "").Replace("\t", "").Replace("\t", "");
+
+                using (StreamWriter sw = new StreamWriter(this.pathExternalSource, false))
+                {
+                    sw.WriteLine(this.freeSource);
+                }
+
+                br.Esito = true;
+            }
+            catch (Exception ex)
+            {
+                br.Esito = false;
+                br.error = ex.ToString();
+                return br;
+            }
+
+            return br;
+        }
+
+        public string freeSource { get; set; } = "";
+
+    }
+
+    #endregion
+
+    #region Confronti
+
+    public class DbConfronto
+    {
+        public static readonly string dbSourceName = "Confronto.json";
+
+        private string pathExternalSource="";
+        public List<DbConfrontoCampoDiControllo> campiDiControllo { get; set; } = new List<DbConfrontoCampoDiControllo>();
+
+        public void SetExternalPath(string pathExternalSource)
+        {
+            this.pathExternalSource = pathExternalSource + "Source" + DbConfronto.dbSourceName;
+        }
+
+        public BoolResult SetJsonSource(string jsonStr)
+        {
+            BoolResult br = new BoolResult();
+            try
+            {
+                var db = JsonConvert.DeserializeObject<DbConfronto>(jsonStr);
+                this.campiDiControllo = db!.campiDiControllo;
+                this.SaveChanges();
+
+                br.Esito = true;
+            }
+            catch (Exception ex)
+            {
+                br.Esito = false;
+                br.error = ex.ToString();
+                return br;
+            }
+
+            return br;
+        }
+
+        public bool SaveChanges()
+        {
+            string jsonStr = JsonConvert.SerializeObject(this);
+
+            using (StreamWriter sw = new StreamWriter(this.pathExternalSource, false))
+            {
+                sw.WriteLine(jsonStr);
+            }
+
+            return true;
+        }
+
+
+    }
+
+    #endregion
+
+    #region PuliziaListe
+
+    /// <summary>
+    /// I20-1106 (Lotto 2): i tipi di record che la pulizia delle liste considera, per cliente
+    /// (SourcePuliziaListe.json). Un record corrisponde a un tipo se almeno un set di Regole sui
+    /// campi e' soddisfatto (stesso formato e stessi operatori delle etichette) e, se ci sono
+    /// RegoleEtichette, anche almeno un loro set (presenza o assenza di etichette, come nelle
+    /// declinazioni meccaniche). Un tipo senza regole non riconosce nulla. La valutazione e' in
+    /// Models/PuliziaListe.cs.
+    /// </summary>
+    public class DbPuliziaListe
+    {
+        public static readonly string dbSourceName = "PuliziaListe.json";
+
+        private string pathExternalSource = "";
+
+        public List<TipoRecordPulizia> source { get; set; } = new List<TipoRecordPulizia>();
+
+        public void SetExternalPath(string pathExternalSource)
+        {
+            this.pathExternalSource = pathExternalSource + "Source" + DbPuliziaListe.dbSourceName;
+        }
+
+        public BoolResult SetJsonSource(string jsonStr)
+        {
+            BoolResult br = new BoolResult();
+            try
+            {
+                var db = JsonConvert.DeserializeObject<DbPuliziaListe>(jsonStr);
+                this.source = db!.source ?? new List<TipoRecordPulizia>();
+                this.SaveChanges();
+
+                br.Esito = true;
+            }
+            catch (Exception ex)
+            {
+                br.Esito = false;
+                br.error = ex.ToString();
+                return br;
+            }
+
+            return br;
+        }
+
+        public bool SaveChanges()
+        {
+            string jsonStr = JsonConvert.SerializeObject(this);
+
+            using (StreamWriter sw = new StreamWriter(this.pathExternalSource, false))
+            {
+                sw.WriteLine(jsonStr);
+            }
+
+            return true;
+        }
+    }
+
+    public class TipoRecordPulizia
+    {
+        public Int64 Id { get; set; }
+        public string Nome { get; set; } = "";
+        /// <summary>OR fra i set, AND dentro ogni set: come EtichettaItem.Regole.</summary>
+        public List<List<RegolaComparazioneEtichetta>> Regole { get; set; } = new List<List<RegolaComparazioneEtichetta>>();
+        /// <summary>OR fra i set, AND dentro: come DeclinazioneMeccanica.Regole.</summary>
+        public List<List<RegolaComparazionePerEtichetta>> RegoleEtichette { get; set; } = new List<List<RegolaComparazionePerEtichetta>>();
+    }
+
+    #endregion
+
+
+    public partial class Aree
+    {
+        public Int64 Id { get; set; }
+        public string Area { get; set; } = null!;
+        public string Canale { get; set; } = null!;
+        public string? Descrizione { get; set; }
+        public short GruppoSiti { get; set; }
+        public byte? IndiceVisualizzazione { get; set; }
+        public byte? IndiceCombo { get; set; }
+
+    }
+
+
+    public class DbAree
+    {
+        public List<Aree> source=new List<Aree>();
+    }
+
+    public class DbMenabo
+    {
+        public string libAutoSelezione="";
+        public string libOrdinamentoLista="";
+        public string libAutoImpaginazioneMeccanica = "";
+        public List<string> formatiMenaboPagina = new List<string>();
+        public List<DbMenaboItem> source = new List<DbMenaboItem>();
+        public List<listaSetRegole> automatismo = new List<listaSetRegole>();
+    }
+    public class DbMenaboItem
+    {
+        public Int64 Id;
+        public string Titolo="";
+        public List<string> Aree=new List<string>();
+        public Int64 IdMenaboPagine;
+
+        public string ToAreeString()
+        {
+            return String.Join(",", this.Aree);
+        }
+    }
+
+    public class DbMenaboPagine
+    {
+        public List<DbMenaboPagineItem> source=new List<DbMenaboPagineItem>();
+    }
+
+    public class DbMenaboPagineItem
+    {
+        public Int64 Id;
+        public string Titolo="";
+        public List<DbMenaboPagineItemPagina> Pagine =  new List<DbMenaboPagineItemPagina>();
+    }
+    public class DbMenaboPagineItemPagina
+    {
+        public Int16 Numero { get; set; }
+        public Int16 IdMastro { get; set; }
+    }
+
+    public class DbMastro
+    {
+        public List<DbMastroItem> source=new List<DbMastroItem>();
+    }
+    public class DbMastroItem
+    {
+        public Int64 Id;
+        public string Nome="";
+        public string Formato="";
+        public List<string> Associazioni = new List<string>();
+        public string MeccanicaDefault="";
+        public bool Active = true;
+    }
+
+    public class DbCustomPlugin
+    {
+        public static readonly string dbSourceName = "SourceCustomPlugin.json";
+
+        [JsonIgnore] private string _basePath = "";
+        [JsonIgnore] private string _fullPath => Path.Combine(_basePath ?? "", dbSourceName);
+
+        public AgenziaCustomPlugin DB = new AgenziaCustomPlugin();
+
+        public static DbCustomPlugin Load(string basePath)
+        {
+            var db = new DbCustomPlugin();
+            db.SetExternalPath(basePath);
+
+            var fullPath = Path.Combine(basePath ?? "", dbSourceName);
+            if (!File.Exists(fullPath))
+            {
+                // Migrazione opzionale da file legacy (se presenti)
+                //db.TryMigrateLegacy(basePath);
+                db.SaveChanges(); // crea il file unificato
+                return db;
+            }
+
+            var json = File.ReadAllText(fullPath);
+            var loaded = JsonConvert.DeserializeObject<AgenziaCustomPlugin>(json) ?? new AgenziaCustomPlugin();
+            db.DB = loaded;
+            return db;
+        }
+
+        public void SetExternalPath(string pathExternalSource)
+        {
+            this._basePath = pathExternalSource;
+        }
+
+        public void SaveChanges()
+        {
+            if (string.IsNullOrWhiteSpace(_basePath))
+                throw new InvalidOperationException("BasePath non impostato via SetExternalPath.");
+
+            //var dir = Path.Combine(_basePath, "Source");
+            //if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+
+            var jsonStr = JsonConvert.SerializeObject(this.DB);
+            using (var sw = new StreamWriter(_fullPath))
+            {
+                sw.WriteLine(jsonStr);
+            }
+        }
+
+        public BoolResult SetJsonSource(string jsonStr)
+        {
+            BoolResult br = new BoolResult();
+            try
+            {
+                var db = JsonConvert.DeserializeObject<AgenziaCustomPlugin>(jsonStr);
+                this.DB = db;
+                this.SaveChanges();
+
+                br.Esito = true;
+            }
+            catch (Exception ex)
+            {
+                br.Esito = false;
+                br.error = ex.ToString();
+                return br;
+            }
+
+            return br;
+        }
+    }
+
+    public class MastroAssociazioni
+    {
+        public List<string> Associazioni { get; set; }=new List<string>();
+    }
+
+    public class DbUnitaItem
+    {
+        public int id;
+        public string path = "";
+        public int priorita;
+        public bool syncFolder;
+        public bool webFolder;
+        public bool exportFolder;
+        public string credentials = "";
+        public List<DbUnitaRule> rules=new List<DbUnitaRule>();
+    }
+    public class DbUnitaRule
+    {
+        public string splitChar = "";
+        public DbUnitaRuleField? bindField;
+    }
+    public class DbUnitaRuleField
+    {
+        public string name = "";
+        public int index;
+        public string[] regex=new string[] { };
+        public string[] ignoringKeys= new string[] { };
+    }
+    public class DbUnita
+    {
+        public List<DbUnitaItem> source=new List<DbUnitaItem>();
+    }
+    public class DbMeccaniche
+    {
+        public List<Meccaniche> source=new List<Meccaniche>();
+    }
+    public class Meccaniche
+    {
+        public Int64 Id { get; set; }
+        public string NomeOrigine { get; set; } = null!;
+        public string NomeTraduzione { get; set; } = null!;
+        //public string? Mastro { get; set; }
+        public string? Formato { get; set; }
+        public List<string>? Aree { get; set; }
+        public List<regoleMeccanica> Regole { get; set; } = new List<regoleMeccanica>();
+    }
+
+    public class DbConfrontoCampoDiControllo
+    {
+        public string nome = "";
+        public string[] rules = new string[] { };//Per ora mettiamolo come array di stringhe poi vedremo come definirlo
+    }
+
+    public class regoleMeccanica //deprecato
+    {
+        public List<string> Value { get; set; } = new List<string>();
+        public string Campo { get; set; } = "";
+        public string Operatore { get; set; } = "";
+    }
+
+    public class DbDeclinazioneMeccaniche
+    {
+        public List<DeclinazioneMeccanica> source=new List<DeclinazioneMeccanica>();
+        public List<CombinazioniMeccaniche> combinazioniMeccaniche=new List<CombinazioniMeccaniche>();
+        public List<DeclinazioneMeccanicaAvanzata> meccanicheAvanzate=new List<DeclinazioneMeccanicaAvanzata>();
+        public List<RimozioneDeclinazioneMeccanica> meccanicheInRimozione=new List<RimozioneDeclinazioneMeccanica>();
+        public List<string> meccanicheInvalidate = new List<string>();
+        public string meccanicaDefault="";
+
+        public static readonly string dbSourceName = "DeclinazioneMeccaniche.json";
+        private string pathExternalSource="";
+
+        public void SetExternalPath(string pathExternalSource)
+        {
+            this.pathExternalSource = pathExternalSource + "Source" + DbDeclinazioneMeccaniche.dbSourceName;
+        }
+
+        public BoolResult SetJsonSource(string jsonStr)
+        {
+            BoolResult br = new BoolResult();
+            try
+            {
+                var db = JsonConvert.DeserializeObject<DbDeclinazioneMeccaniche>(jsonStr);
+                this.source = db!.source;
+                this.meccanicaDefault = db.meccanicaDefault;
+                this.combinazioniMeccaniche = db.combinazioniMeccaniche;
+                this.meccanicheAvanzate = db.meccanicheAvanzate;
+                this.meccanicheInRimozione = db.meccanicheInRimozione;
+                this.meccanicheInvalidate = db.meccanicheInvalidate;
+                this.SaveChanges();
+
+                br.Esito = true;
+            }
+            catch (Exception ex)
+            {
+                br.Esito = false;
+                br.error = ex.ToString();
+                return br;
+            }
+
+            return br;
+        }
+
+
+        public bool SaveChanges()
+        {
+            string jsonStr = JsonConvert.SerializeObject(this);
+
+            using (StreamWriter sw = new StreamWriter(this.pathExternalSource, false))
+            {
+                sw.WriteLine(jsonStr);
+            }
+
+            return true;
+        }
+
+    }
+
+    public class MeccanicheLivello
+    {
+        // Proprietà per la lista di DeclinazioneMeccanica
+        public List<DeclinazioneMeccanica> Meccaniche { get; set; }
+
+        // Proprietà per il livello
+        public float Livello { get; set; }
+
+        // Costruttore per inizializzare la lista e il livello
+        public MeccanicheLivello(float livello)
+        {
+            Meccaniche = new List<DeclinazioneMeccanica>();
+            Livello = livello;
+        }
+    }
+
+    public class DeclinazioneMeccanica
+    {
+        public Int64 Id { get; set; }
+        public string Nome { get; set; } = "";
+        public float Livello { get; set; }
+        public string Formato { get; set; } = "";
+        public List<List<RegolaComparazionePerEtichetta>>? Regole { get; set; }
+    }
+
+    public class DeclinazioneMeccanicaAvanzata
+    {
+        public Int64 Id { get; set; }
+        public string Nome { get; set; } = "";
+        public float LivelloMeccanica { get; set; }
+        public float LivelloEsternoMeccanicaAvanzata { get; set; }
+        public string Formato { get; set; } = "";
+        public List<RegolaComparazioneMeccanicaAvanzata> Regole { get; set; } = new List<RegolaComparazioneMeccanicaAvanzata>();
+    }
+
+    public class RimozioneDeclinazioneMeccanica
+    {
+        public Int64 Id { get; set; }
+        public string Nome { get; set; } = "";
+        public float LivelloMeccanica { get; set; }
+        public float LivelloEsternoMeccanicaAvanzata { get; set; }
+        public timeToApplyOperation timeToApply { get; set; }
+        public List<RegolaComparazioneMeccanicaAvanzata> Regole { get; set; } = new List<RegolaComparazioneMeccanicaAvanzata>();
+    }
+
+    public class DbRegoleMastro
+    {
+        public List<RegoleMastro> source= new List<RegoleMastro>();
+    }
+
+    public class RegoleMastro
+    {
+        public int Id { get; set; }
+        public string Nome { get; set; } = "";
+        public List<List<RegolaComparazionePerEtichetta>> Regole { get; set; } = new List<List<RegolaComparazionePerEtichetta>>();
+
+        public List<SpecificheMastro> Specifiche { get; set; } = new List<SpecificheMastro>();
+    }
+
+    public class SpecificheMastro
+    {
+        public string etichetta { get; set; } = "";
+        public tipoElemento tipoElemento { get; set; }
+        public string value { get; set; } = "";
+    }
+
+    public enum tipoElemento
+    {
+        FillColor = 0,
+        TextColor = 1,
+        CharacterStyle = 2,
+        ParagraphStyle = 3,
+        BorderColor = 4,
+    }
+    public class CombinazioniMeccaniche
+    {
+        public Int64 Id { get; set; }
+        public string NomeCombinazione { get; set; } = "";
+        public string Formato { get; set; } = "";
+
+    }
+
+    public class RegolaComparazionePerEtichetta
+    {
+        public string nomeEtichetta { get; set; } = "";
+        public bool presente { get; set; }
+    }
+
+    public class RegolaComparazionePerMeccanica
+    {
+        public int idMeccanica { get; set; }
+        public string nomeMeccanica { get; set; } = "";
+        public bool presente { get; set; }
+    }
+
+    public class RegolaComparazioneMeccanicaAvanzata
+    {
+        public bool EsclusivitaMeccanicheCoinvolte { get; set; }
+        public List<RegolaComparazionePerEtichetta> regoleEtichetta { get; set; } = new List<RegolaComparazionePerEtichetta>();
+        public List<RegolaComparazionePerMeccanica> regoleMeccanica { get; set; } = new List<RegolaComparazionePerMeccanica>();
+    }
+
+    public class DbEtichetta
+    {
+        public static readonly string dbSourceName = "EtichetteRef.json";
+
+        private string pathExternalSource="";
+
+        public void SetExternalPath(string pathExternalSource)
+        {
+            this.pathExternalSource = pathExternalSource + "Source" + DbEtichetta.dbSourceName;
+        }
+
+        public BoolResult SetJsonSource(string jsonStr)
+        {
+            BoolResult br = new BoolResult();
+            try
+            {
+                var db = JsonConvert.DeserializeObject<DbEtichetta>(jsonStr);
+                this.source = db!.source;
+                this.SaveChanges();
+
+                br.Esito = true;
+            }
+            catch (Exception ex)
+            {
+                br.Esito = false;
+                br.error = ex.ToString();
+                return br;
+            }
+
+            return br;
+        }
+
+
+        public bool SaveChanges()
+        {
+            string jsonStr = JsonConvert.SerializeObject(this);
+
+            using (StreamWriter sw = new StreamWriter(this.pathExternalSource, false))
+            {
+                sw.WriteLine(jsonStr);
+            }
+
+            return true;
+        }
+
+        public List<EtichettaItem> source=new List<EtichettaItem>();
+    }
+
+    public class EtichettaItem
+    {
+        public Int64 Id { get; set; }
+        public string Etichetta { get; set; } = "";
+        public string? Visual { get; set; }
+        public string? Raccolta { get; set; }
+        public List<List<RegolaComparazioneEtichetta>> Regole { get; set; } = new List<List<RegolaComparazioneEtichetta>>();
+
+    }
+
+    public class SetRegoleEtichette
+    {
+        public List<RegolaComparazioneEtichetta> Regole { get; set; } = new List<RegolaComparazioneEtichetta>();
+    }
+
+    public class RegolaComparazioneEtichetta
+    {
+        public string Value { get; set; } = "";
+        public string campo { get; set; } = "";
+        public string Operatore { get; set; } = "";
+    }
+
+    public class PopMateriale
+    {
+        public int Id { get; set; }
+        public string Nome { get; set; } = "";
+        public string Codice { get; set; } = "";
+        public Byte Associazione { get; set; }
+        public int EreditaDa { get; set; } = 0; //Specifica un ID Materiale dal quale ereditare tutte le combinazioni per evitare di duplicarle per il materiale in esame
+    }
+    public class PopCategoria
+    {
+        public int Id { get; set; }
+        public string Nome { get; set; } = "";
+
+    }
+
+    public class PopFormato
+    {
+        public int Id { get; set; }
+        public string Nome { get; set; } = "";
+    }
+
+    public class DbPopCombinazioni
+    {
+        public List<PopMateriale> Materiali { get; set; } = new List<PopMateriale>();
+        public List<PopFormato> Formati { get; set; } = new List<PopFormato>();
+        public List<PopCategoria> Categorie { get; set; } = new List<PopCategoria>();
+        public List<PopCombinazione> Combinazioni { get; set; } = new List<PopCombinazione>();
+        public Dictionary<string, object> optionsScheme { get; set; }= new Dictionary<string, object>();
+    }
+
+    public class PopCombinazione
+    {
+        public int Id { get; set; }
+        public int IdMateriale { get; set; }
+        public int IdArea { get; set; }
+        public int IdCategoria { get; set; }
+        public int IdFormato { get; set; }
+        public bool Attivo { get; set; }
+        public Dictionary<string, object> Options { get; set; } = new Dictionary<string, object>();
+    }
+
+    //public class DbLoghiBolli
+    //{
+    //    public List<string> source;
+    //}
+
+    public class JsonDbClassificazioneUniversale
+    {
+        public bool universale = false;
+        public string sheet="";
+        public int IdProg { get; set; }
+        public ClassificazioneBinding? bindings;
+        public List<ClassificazioneUniversale> lista { get; set; } = new List<ClassificazioneUniversale>();
+    }
+    public class ClassificazioneUniversale
+    {
+        public string area = "";
+        public int areaIndex { get; set; }
+        public string settore = "";
+        public int settoreIndex { get; set; }
+        public string reparto = "";
+        public int repartoIndex { get; set; }
+        public string categoria = "";
+        public int categoriaIndex { get; set; }
+        public int orderIndex { get; set; }
+    }
+
+
+
+    //Classe che definisce le veicolazioni dei 4 campi.
+    //In ognuno di essi, se esiste va indicato il campo da leggere nel tracciato
+    public class ClassificazioneBinding
+    {
+        public BindingItem? area;
+        public BindingItem? settore;
+        public BindingItem? reparto;
+        public BindingItem? categoria;
+    }
+
+    public class BindingItem
+    {
+        public List<BindingItemRule> rules = new List<BindingItemRule>();
+        public string campoMeta { get; set; } = "";
+    }
+    public class BindingItemRule
+    {
+        public int id;
+        public string definizione="";
+        public List<string> valoridaRicercare=new List<string>();
+    }
+
+    public enum timeToApplyOperation
+    {
+        nonSpecificato,
+        applyBefore,
+        applyAfter,
+    }
+
+    public class DbFrameworkCss
+    {
+        public static readonly string dbSourceName = "SourceFrameworkCss.json";
+
+        [JsonIgnore] private string _basePath="";
+        [JsonIgnore] private string _fullPath => Path.Combine(_basePath ?? "", dbSourceName);
+
+        public string defaultBox { get; set; } = "";
+        public List<livelloCssFramework> livelli { get; set; } = new List<livelloCssFramework>();
+
+        // NUOVO: sezione allineamenti nel file unico
+        public DbRidimensionamentiAllineamenti dbRidimensionamentiAllineamenti { get; set; } = new DbRidimensionamentiAllineamenti();
+
+        public void SetExternalPath(string pathExternalSource)
+        {
+            this._basePath = pathExternalSource + DbFrameworkCss.dbSourceName;
+        }
+
+        public BoolResult SetJsonSource(string jsonStr)
+        {
+            var br = new BoolResult();
+            try
+            {
+                if (string.IsNullOrWhiteSpace(jsonStr))
+                    throw new Exception("JSON nullo o vuoto.");
+
+                // Deserializzo il payload della pagina "Framework" (può NON contenere dbAllineamenti)
+                var incoming = JsonConvert.DeserializeObject<DbFrameworkCss>(jsonStr);
+                if (incoming == null) throw new Exception("JSON non compatibile con DbFrameworkCss.");
+
+                // Merge conservativo: se il payload non ha la sezione allineamenti, preserva quella attuale
+                var keepAllineamenti = this.dbRidimensionamentiAllineamenti;
+                this.defaultBox = incoming.defaultBox;
+                this.livelli = incoming.livelli ?? new List<livelloCssFramework>();
+                this.dbRidimensionamentiAllineamenti = incoming.dbRidimensionamentiAllineamenti ?? keepAllineamenti;
+
+                SaveChanges();
+                br.Esito = true;
+            }
+            catch (Exception ex)
+            {
+                br.Esito = false;
+                br.error = ex.ToString();
+            }
+            return br;
+        }
+
+        // NUOVO: usato dalla pagina "Allineamenti" (editor di sezione)
+
+        public void SaveChanges()
+        {
+            if (string.IsNullOrWhiteSpace(_basePath))
+                throw new InvalidOperationException("BasePath non impostato via SetExternalPath.");
+
+            //var dir = Path.Combine(_basePath, "Source");
+            //if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+
+            var jsonStr = JsonConvert.SerializeObject(this);
+            using (var sw = new StreamWriter(_basePath))
+            {
+                sw.WriteLine(jsonStr);
+            }
+        }
+
+        // Utility di caricamento centralizzata
+        public static DbFrameworkCss Load(string basePath)
+        {
+            var db = new DbFrameworkCss();
+            db.SetExternalPath(basePath);
+
+            var fullPath = Path.Combine(basePath ?? "", dbSourceName);
+            if (!File.Exists(fullPath))
+            {
+                // Migrazione opzionale da file legacy (se presenti)
+                //db.TryMigrateLegacy(basePath);
+                db.SaveChanges(); // crea il file unificato
+                return db;
+            }
+
+            var json = File.ReadAllText(fullPath);
+            var loaded = JsonConvert.DeserializeObject<DbFrameworkCss>(json) ?? new DbFrameworkCss();
+            //loaded.SetExternalPath(basePath);
+            return loaded;
+        }
+
+    }
+
+    // Sezione allineamenti serializzata nel file unico
+    public class DbRidimensionamentiAllineamenti
+    {
+        public List<dbModifiche> modificheCssPerKit { get; set; } = new List<dbModifiche>();
+
+        // Campi opzionali solo per migrazione/diagnostica; puoi rimuoverli quando sei sicuro
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+        public string noteLegacy { get; set; } = "";
+
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+        public string rawLegacy { get; set; } = "";
+    }
+
+    public class livelloCssFramework
+    {
+        public int id { get; set; }
+        public int ordine { get; set; }
+        public List<DefinizioniCssFramework> definizioni { get; set; } = new List<DefinizioniCssFramework>();
+    }
+
+    public class DefinizioniCssFramework
+    {
+        public int id { get; set; }
+        public bool virtualElement { get; set; } = false;
+        public string result { get; set; }="";
+        public string descrizione { get; set; } = "";
+        public int ordine { get; set; }
+        public List<macroRegolaCssFramework> regole { get; set; } = new List<macroRegolaCssFramework>();
+        //public List<SpecificheFrameCss> specifiche { get; set; } = new List<SpecificheFrameCss>();
+    }
+
+    public class regolaCssFramework
+    {
+        public string Value { get; set; } = "";
+        public string campo { get; set; } = "";
+        public string Operatore { get; set; }="";
+    }
+
+    public class macroRegolaCssFramework
+    {
+        public int id { get; set; }
+        public int deepness { get; set; } = 0;
+        public List<regolaCssFramework> regole { get; set; } = new List<regolaCssFramework>();
+        public List<macroRegolaCssFramework> regoleAnnidate { get; set; } = new List<macroRegolaCssFramework>();
+    }
+
+    public class SpecificheFrameCss
+    {
+        public int id { get; set; }
+        public operationFrameEnum tipoOperazione { get; set; }
+        public string nomeCampoIndd { get; set; } = "";
+        public List<SpecificaFrameCss> specifica { get; set; }=new List<SpecificaFrameCss>();
+    }
+
+    public class SpecificaFrameCss
+    {
+        //value è usato da style e potenzialmente da constraint
+        public string value { get; set; } = "";
+
+        //regole
+        List<macroRegolaCssFramework> setRegole { get; set; } = new List<macroRegolaCssFramework>();
+
+        //style
+        public styleEnum style { get; set; }
+
+        //constraint ancora da implementare
+    }
+
+    public class DbMappaStili
+    {
+        public static readonly string dbSourceName = "MappaStili.json";
+
+        private string pathExternalSource="";
+
+        public void SetExternalPath(string pathExternalSource)
+        {
+            this.pathExternalSource = pathExternalSource + "Source" + DbMappaStili.dbSourceName;
+        }
+
+        public BoolResult SetJsonSource(string jsonStr)
+        {
+            BoolResult br = new BoolResult();
+            try
+            {
+                if (jsonStr == null || jsonStr.Trim() == "")
+                {
+                    br.Esito = false;
+                    br.error = "Il JSON fornito è vuoto o nullo.";
+                    return br;
+                }
+
+
+                this.freeSource = jsonStr.Replace("\n", "").Replace("\t", "").Replace("\t", "");
+                this.SaveChanges();
+
+                br.Esito = true;
+            }
+            catch (Exception ex)
+            {
+                br.Esito = false;
+                br.error = ex.ToString();
+                return br;
+            }
+
+            return br;
+        }
+
+
+        public bool SaveChanges()
+        {
+            string jsonStr = this.freeSource;
+
+            using (StreamWriter sw = new StreamWriter(this.pathExternalSource, false))
+            {
+                sw.WriteLine(jsonStr);
+            }
+
+            return true;
+        }
+
+        public string freeSource { get; set; } = "";
+    }
+
+    public class DbOrdinamentoLista
+    {
+        public static readonly string dbSourceName = "OrdinamentoLista.json";
+
+        private string pathExternalSource="";
+
+        public void SetExternalPath(string pathExternalSource)
+        {
+            this.pathExternalSource = pathExternalSource + "Source" + DbOrdinamentoLista.dbSourceName;
+        }
+
+        public BoolResult SetJsonSource(string jsonStr)
+        {
+            BoolResult br = new BoolResult();
+            try
+            {
+                if (jsonStr == null || jsonStr.Trim() == "")
+                {
+                    br.Esito = false;
+                    br.error = "Il JSON fornito è vuoto o nullo.";
+                    return br;
+                }
+
+
+                this.freeSource = jsonStr.Replace("\n", "").Replace("\t", "").Replace("\t", "");
+                this.SaveChanges();
+
+                br.Esito = true;
+            }
+            catch (Exception ex)
+            {
+                br.Esito = false;
+                br.error = ex.ToString();
+                return br;
+            }
+
+            return br;
+        }
+
+
+        public bool SaveChanges()
+        {
+            string jsonStr = this.freeSource;
+
+            using (StreamWriter sw = new StreamWriter(this.pathExternalSource, false))
+            {
+                sw.WriteLine(jsonStr);
+            }
+
+            return true;
+        }
+
+        public string freeSource { get; set; } = "";
+    }
+
+
+    public enum operationFrameEnum
+    {
+        error = 0,
+        style = 1,
+        constraint = 2,
+        delete = 3,
+    }
+
+    public enum styleEnum
+    {
+        FillColor = 0,
+        TextColor = 1,
+        CharacterStyle = 2,
+        ParagraphStyle = 3,
+        BorderColor = 4,
+    }
+
+    public class SourceJsonRequest
+    {
+        public string jsoncode { get; set; } = "";
+        public string origin { get; set; } = "";
+    }
+
+    public class dbModifiche
+    {
+        public List<modificheCssBox> operazioniPerBox = new List<modificheCssBox>();
+
+        public KitCondition kit = new KitCondition();
+
+        /// I20-1026: regole che non appartengono a un box ma a una ref. Una sovrastruttura le cui
+        /// condizioni sono vere si fonde nelle regole del box come il livello piu' alto: una
+        /// regola con un nomeGruppo nuovo si aggiunge, una con lo stesso nomeGruppo sostituisce
+        /// quella del box. Il Plugin le fonde in plugin/cssFramework/sovrastrutture.js.
+        public List<SovrastrutturaObj> sovrastrutture = new List<SovrastrutturaObj>();
+    }
+
+    /// I20-1026: una sovrastruttura. Le operazioni hanno la stessa forma delle regole di un box
+    /// (nomiBox non conta). Senza condizioni vale per tutti i box del kit.
+    public class SovrastrutturaObj
+    {
+        public string nome { get; set; } = "";
+        public List<SetCondizioni> listSetCondizioni { get; set; } = new List<SetCondizioni>();
+        public modificheCssBox operazioni { get; set; } = new modificheCssBox();
+    }
+
+    /// I20-1026: disattiva i loghi automatici della ref (Foto.ExtraAuto) che nomina quando le
+    /// condizioni sono vere, e li riattiva quando non lo sono piu'. Un logo disattivato non sta
+    /// nel box: il Plugin non lo piazza, o lo toglie, e lo rimette quando serve. Un logo escluso
+    /// dall'operatore non si riattiva mai.
+    public class DisattivaObj
+    {
+        public string nomeGruppo { get; set; } = "";
+        public List<string> elementi { get; set; } = new List<string>();
+        public List<SetCondizioni> listSetCondizioni { get; set; } = new List<SetCondizioni>();
+    }
+
+    public class modificheCssBox
+    {
+        public List<string> nomiBox = new List<string>();
+
+        public List<RidimensionamentoObj> ridimensionamenti = new ();
+
+        public List<PostRidimensionamentoObj> postRidimensionamenti = new();
+        public List<Allineamento> allineamenti { get; set; } = new();
+        public List<SegnalazioniConflitti> segnalazioniConflitti { get; set; } = new();
+
+        /// I20-970: elementi creati duplicandone uno gia' presente, uno per ogni bersaglio.
+        public List<DuplicazioneObj> duplicazioni { get; set; } = new();
+
+        /// I20-970: chi sta davanti e chi dietro dentro il box.
+        public List<OrdineZObj> ordiniZ { get; set; } = new();
+
+        /// Come scegliere, fra gli spazi liberi, quello in cui mettere le foto.
+        /// Null: vince lo spazio piu' ampio, il criterio di sempre.
+        public SceltaSpazioFotoObj? sceltaSpazioFoto { get; set; }
+
+        /// Spazio da riservare attorno alle foto, per lato. Null: nessuno.
+        public EstensioniFotoObj? estensioniFoto { get; set; }
+
+        /// I20-1026: loghi automatici da tenere fuori dal box quando le condizioni sono vere.
+        public List<DisattivaObj> disattiva { get; set; } = new();
+    }
+
+    /// Spazio riservato attorno al gruppo foto quando il fixFoto lo colloca, in millimetri
+    /// e per lato. Serve a cio' che sta attaccato alla foto e sporge oltre i suoi bordi,
+    /// come un'ombra: la foto viene un po' piu' piccola e la sporgenza non finisce sugli
+    /// altri elementi.
+    ///
+    /// Ogni lato e' un'espressione con la sintassi dei post ridimensionamenti: un numero
+    /// ("3"), oppure un'etichetta del box con le sue specifiche ("sy_ombra*[H][50%]" per
+    /// meta' dell'altezza dell'ombra). Se l'etichetta non e' nel box, o l'elemento e'
+    /// invisibile, quel lato vale zero. Null o vuoto: zero.
+    public class EstensioniFotoObj
+    {
+        public string? alto { get; set; }
+        public string? sinistra { get; set; }
+        public string? basso { get; set; }
+        public string? destra { get; set; }
+    }
+
+    /// Criterio di scelta dello spazio delle foto dentro al box.
+    ///
+    /// Serve ai box in cui le foto vivono dentro un disegno fisso, come le parentesi del BOX41:
+    /// li' una foto spostata di lato per guadagnare qualche millimetro risulta vistosamente
+    /// scentrata, e conviene accettare qualche millimetro in meno restando al centro.
+    public class SceltaSpazioFotoObj
+    {
+        /// "areaMassima" (predefinito) oppure "centrato".
+        public string modo { get; set; } = "areaMassima";
+
+        /// Quanta area si e' disposti a perdere per stare piu' al centro, come frazione
+        /// dell'area migliore: 0.7 accetta uno spazio che valga almeno il 70% del migliore.
+        /// Sopra quella soglia vince la centratura, sotto torna a vincere l'area.
+        public double tolleranzaArea { get; set; } = 0.7;
+
+        /// Su quale asse si misura la centratura: "x", "y" oppure "xy" (predefinito).
+        public string asseCentratura { get; set; } = "xy";
+    }
+
+    /// Duplica un elemento del box una volta per ogni bersaglio, dando a ogni copia
+    /// un'etichetta univoca: quella della sorgente piu' il suffisso del bersaglio
+    /// (sy_ombra + immagine$3150596 -> sy_ombra$3150596). Serve perche' gli allineamenti
+    /// lavorano per etichetta e due elementi omonimi non sarebbero distinguibili.
+    public class DuplicazioneObj
+    {
+        public string nomeGruppo { get; set; } = "";
+
+        /// Etichetta dell'elemento da duplicare. I20-1022: ammette l'asterisco ("immagine*"),
+        /// per le sorgenti che portano un codice nell'etichetta, come le foto.
+        public string etichettaSorgente { get; set; } = "";
+
+        /// I20-1022: il nome base delle copie, se diverso da quello della sorgente. La copia della
+        /// primaria nei box BIS si chiama foto_secondaria$..., cosi' il fix foto la conta.
+        /// Vuoto: le copie prendono il nome della sorgente, come le ombre.
+        public string etichettaCopia { get; set; } = "";
+
+        /// I20-1022: aggiunge $clone in fondo all'etichetta della copia. Le segnalazioni riconoscono
+        /// il clone da quel segno e lo ignorano.
+        public bool marcaClone { get; set; } = false;
+
+        /// I20-1022: false lascia la copia dov'e' nei passaggi successivi alla creazione, invece di
+        /// riportarla sul bersaglio. Serve alla copia di una foto, che la sistema il fix foto.
+        public bool aggiornaCopie { get; set; } = true;
+
+        /// Etichette dei bersagli, un elemento per copia. Ammette l'asterisco.
+        public List<string> bersagli { get; set; } = new();
+
+        /// Come la copia si adatta al proprio bersaglio. Null: copia identica, centrata sul bersaglio.
+        public AdattamentoAlBersaglio? adattaAlBersaglio { get; set; }
+
+        /// Di norma la sorgente viene rimossa dopo le copie: resterebbe un elemento spaiato.
+        public bool mantieniSorgente { get; set; } = false;
+
+        public List<SetCondizioni> listSetCondizioni { get; set; } = new List<SetCondizioni>();
+    }
+
+    /// Misure e ancoraggio della copia rispetto al bersaglio.
+    public class AdattamentoAlBersaglio
+    {
+        /// "bersaglio" per prendere la larghezza del bersaglio; altrimenti resta quella della sorgente.
+        public string? larghezza { get; set; }
+
+        /// "bersaglio" per prendere l'altezza del bersaglio; altrimenti resta quella della sorgente.
+        public string? altezza { get; set; }
+
+        /// "centro" (default), "sinistra", "destra".
+        public string? ancoraX { get; set; }
+
+        /// "centro" (default), "alto", "basso", "centroSuLatoBasso", "centroSuLatoAlto".
+        /// Con centroSuLatoBasso il centro della copia cade sul lato basso del bersaglio:
+        /// meta' resta visibile sotto, meta' finisce dietro al bersaglio.
+        public string? ancoraY { get; set; }
+
+        /// Scostamenti finali in millimetri.
+        public double offsetX { get; set; } = 0;
+        public double offsetY { get; set; } = 0;
+
+        /// Allargare il riquadro non allarga il grafico che contiene: "riquadro" lo fa
+        /// seguire esattamente, "proporzionale" lo adatta senza deformarlo, null lo lascia com'e'.
+        public string? fitContenuto { get; set; }
+    }
+
+    /// Ordine di sovrapposizione: porta delle etichette dietro o davanti ad altre.
+    public class OrdineZObj
+    {
+        public string nomeGruppo { get; set; } = "";
+
+        /// Etichette da spostare. Ammette l'asterisco.
+        public List<string> etichette { get; set; } = new();
+
+        /// "dietro" (default) oppure "davanti".
+        public string posizione { get; set; } = "dietro";
+
+        /// Etichette di riferimento. Vuoto: in fondo o in cima al box.
+        public List<string> rispettoA { get; set; } = new();
+
+        public List<SetCondizioni> listSetCondizioni { get; set; } = new List<SetCondizioni>();
+    }
+
+
+    /// Un gruppo di allineamento (un “blocco” logico).
+
+    public class RidimensionamentoObj
+    {
+        public string nomeGruppo { get; set; } = "";
+
+        /// Momento in cui la regola viene eseguita. Vuoto: l'ordine di sempre.
+        /// Vedere il commento su fase in Allineamento.
+        public string fase { get; set; } = "";
+        /// Etichette che si muovono come un blocco.
+        public List<string> gruppoEtichette { get; set; } = new();
+
+        /// Etichette per cui dobbiamo agire sull'itemLink.
+        public List<string> itemLinks { get; set; } = new();
+
+        /// Impostazioni di ridimensionamento per asse.
+        public Ridimensionamento? ridimensionamento { get; set; }
+
+        public List<FitClass> finalFit { get; set; } = new List<FitClass>();
+
+        public List<SetCondizioni> listSetCondizioni { get; set; } = new List<SetCondizioni>();
+
+    }
+
+    public class PostRidimensionamentoObj
+    {
+        public string nomeGruppo { get; set; } = "";
+        public int ordine { get; set; } = 999999;
+
+        /// Momento in cui la regola viene eseguita. Vuoto: l'ordine di sempre.
+        public string fase { get; set; } = "";
+
+        /// Etichette che si muovono come un blocco.
+        public List<string> gruppoEtichette { get; set; } = new();
+
+        /// Etichette per cui dobbiamo agire sull'itemLink.
+        public List<string> itemLinks { get; set; } = new();
+
+        /// Impostazioni di ridimensionamento per asse.
+        public List<PostRidimensionamenti>? ridimensionamenti { get; set; } = new List<PostRidimensionamenti>();
+
+        public List<FitClass> finalFit { get; set; } = new List<FitClass>();
+    }
+
+    /// Come reagiscono X e Y al ridimensionamento.
+    public class PostRidimensionamenti
+    {
+
+        /// Se null, trattato come SpostamentoLineare.
+        public string? instructionX { get; set; }
+
+        /// Se null, trattato come SpostamentoLineare.
+        public string? instructionY { get; set; }
+
+        public string? setWidth { get; set; } = null;
+
+        public string? setHeight { get; set; } = null;
+
+        public List<SetCondizioni> listSetCondizioni { get; set; } = new List<SetCondizioni>();
+
+    }
+
+    public class FitClass
+    {
+        public List<string> nomiElementi { get; set; } = new List<string>();
+
+        public List<FitOperation> fit { get; set; } = new();
+
+    }
+
+    public class Allineamento
+    {
+        /// Nome usato per riferirsi al gruppo.
+        public string nomeGruppo { get; set; } = "";
+        public int ordine { get; set; } = 999999;
+
+        /// Momento in cui l'allineamento viene eseguito. Vuoto: prima della sistemazione
+        /// delle foto, come e' sempre stato. "dopoFixFoto" per chi deve inseguire le immagini.
+        public string fase { get; set; } = "";
+
+        /// Etichette che si muovono come un blocco.
+        public List<string> gruppoEtichette { get; set; } = new();
+
+        /// Etichette per cui dobbiamo agire sull'itemLink.
+        public List<string> itemLinks { get; set; } = new();
+
+        /// Righe o Colonne: determina l’allineamento degli elementi sullo stesso livello.
+        public LetturaLivelli letturaLivelli { get; set; } = LetturaLivelli.Righe_Bottom_To_Top;
+
+        /// Ordinamento per livelli, eseguiti in ordine di 'Livello' crescente.
+        public List<OrdinamentoLivello> ordinamentoLivelli { get; set; } = new();
+
+        /// Spazio fisso tra livelli (mm). Se null viene calcolato automaticamente.
+        public double? spacingLivelli { get; set; } = null;
+
+        /// Ancora statica usata soprattutto nel ridimensionamento.
+        public List<StaticAnchor> staticAnchor { get; set; } = new List<StaticAnchor>();
+
+        /// Regole per “seguire” un altro gruppo/etichetta.
+        public List<FollowAnchor> followAnchor { get; set; } = new List<FollowAnchor>();
+
+        public List<FitClass> finalFit { get; set; } = new();
+
+        public List<SetCondizioni> listSetCondizioni { get; set; } = new List<SetCondizioni>();
+
+        public evitaTracciaGruppo evitaTracciaAllineamento { get; set; } = new evitaTracciaGruppo();
+
+        /// <summary>
+        /// I20-1102: se valorizzato, il gruppo mette i suoi elementi nei riquadri del modello invece
+        /// di impilarli a livelli (plugin/cssFramework/slot.js). Senza, il gruppo resta a livelli; non
+        /// si scrive quando manca, cosi' le configurazioni che non lo usano restano come sono.
+        /// </summary>
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+        public SlotAllineamento? slot { get; set; } = null;
+
+        /// <summary>
+        /// I20-1113: se vero, il gruppo non si ricompone per livelli: gli elementi restano dove sono e
+        /// ancore, agganci ed evita traccia li spostano tutti insieme, come un blocco solo
+        /// (CssFramework.gruppoInBlocco nel Plugin). Va dichiarato qui, altrimenti sparirebbe passando
+        /// dalle classi C#; non si scrive quando manca, cosi' le configurazioni esistenti restano come sono.
+        /// </summary>
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+        public bool? bloccoUnico { get; set; } = null;
+
+    }
+
+    /// <summary>
+    /// I20-1102: gli slot di un gruppo di allineamento. Gli elementi presenti del gruppo, nell'ordine
+    /// dei livelli, vanno uno per riquadro nell'ordine delle cornici; se il box non ha nessuna delle
+    /// cornici il gruppo si allinea a livelli.
+    /// </summary>
+    public class SlotAllineamento
+    {
+        /// Le etichette dei riquadri del modello, nell'ordine di riempimento.
+        public List<string> cornici { get; set; } = new();
+
+        /// "posizione": centro su centro. "posizioneEDimensione": centro su centro e la misura del riquadro.
+        public string modalita { get; set; } = "posizione";
+
+        /// Le etichette (anche con *) dei riquadri da togliere dal box, pieni o vuoti. Vuoto: le cornici.
+        public List<string> corniciDaRimuovere { get; set; } = new();
+
+        /// Eccezioni per alcuni elementi: modalita' e allineamento orizzontale propri, sotto condizioni.
+        /// Vale la prima che nomina l'elemento e le cui condizioni sono vere. Non si scrive quando manca,
+        /// cosi' le configurazioni che non la usano restano come sono.
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+        public List<SlotEccezione>? eccezioni { get; set; } = null;
+    }
+
+    /// Un'eccezione del gruppo a slot (plugin/cssFramework/slot.js, eccezioneDi).
+    public class SlotEccezione
+    {
+        /// Le etichette degli elementi (anche con *).
+        public List<string> elementi { get; set; } = new();
+
+        /// "posizione" (la propria misura) o "posizioneEDimensione" (la misura dello slot).
+        public string modalita { get; set; } = "posizione";
+
+        /// Con la sola posizione: "centro", "destra" (bordo destro sullo slot) o "sinistra".
+        public string allineamentoOrizzontale { get; set; } = "centro";
+
+        /// Quando vale l'eccezione: le condizioni del CssFramework. Vuote: sempre.
+        public List<SetCondizioni> listSetCondizioni { get; set; } = new List<SetCondizioni>();
+    }
+
+    public class SegnalazioniConflitti
+    {
+        public string[] segnalazioni { get; set; } = new string[2];
+
+        /// <summary>
+        /// I20-974: su cosa si misura il contatto fra gli elementi. Con false vale il riquadro
+        /// dell'oggetto, con true il testo che contiene davvero: per un campo di testo i due
+        /// valori sono molto diversi ed e' la ragione per cui nascevano segnalazioni che
+        /// l'occhio non vede. Senza questa proprieta' la scelta scritta nella configurazione
+        /// veniva scartata qui, nel passaggio verso il Plugin.
+        /// </summary>
+        public bool useTextBounds { get; set; } = false;
+    }
+    /// Come reagiscono X e Y al ridimensionamento.
+    public class Ridimensionamento
+    {
+        /// Se null, trattato come SpostamentoLineare.
+        public AxisResizeMode? x { get; set; }
+
+        /// Se null, trattato come SpostamentoLineare.
+        public AxisResizeMode? y { get; set; }
+
+        public List<SetCondizioni> listSetCondizioni { get; set; } = new List<SetCondizioni>();
+
+    }
+
+    /// Ordinamento e allineamento di un livello.
+    public class OrdinamentoLivello
+    {
+        /// Indice del livello (1 = base).
+        public int livello { get; set; }
+
+        /// Etichette coinvolte nell’ordinamento.
+        public List<string> elementi { get; set; } = new();
+
+        /// Ancora interna: spinge gli elementi in quella direzione quando qualcuno viene rimosso.
+        public InternalAnchor internalAnchor { get; set; }
+
+        //in caso sia true indica che l'allineamento del livello avviene controllonda i bounds del testo invece che dell'elemento in caso di textframes
+        public bool allineaATextBounds { get; set; } = false;
+
+        /// Spazio fisso tra elementi (mm). Null = auto.
+        public double? spacing { get; set; }
+
+        public List<SetCondizioni> listSetCondizioni { get; set; } = new List<SetCondizioni>();
+
+    }
+
+    /// Ancora statica del box di riferimento.
+    public class StaticAnchor
+    {
+        /// Ancora lungo X (vertical line reference + pos X).
+        public XAnchorStatic? xAnchor { get; set; } = null;
+
+        /// Ancora lungo Y (horizontal line reference + pos Y).
+        public YAnchorStatic? yAnchor { get; set; } = null;
+        public List<SetCondizioni> listSetCondizioni { get; set; } = new List<SetCondizioni>();
+
+    }
+
+    /// 
+    /// Definizione ancora statica su asse X (posizione rispetto a una linea verticale).
+    /// 
+    public class XAnchorStatic
+    {
+        public string distance { get; set; } = "0";
+        public bool applyToSingleLevels { get; set; } = false;
+
+        public HorizontalReferenceLine allineaAlLato { get; set; } = HorizontalReferenceLine.Left;
+        public HorizontalReferenceLine allineaLato { get; set; } = HorizontalReferenceLine.Left;
+    }
+
+    public class YAnchorStatic
+    {
+        public string distance { get; set; } = "0";
+
+        public bool applyToSingleLevels { get; set; } = false;
+
+        public VerticalReferenceLine allineaAlLato { get; set; } = VerticalReferenceLine.Top;
+        public VerticalReferenceLine allineaLato { get; set; } = VerticalReferenceLine.Top;
+    }
+
+    /// Regole di “follow” rispetto a un altro gruppo (o singola etichetta).
+    public class FollowAnchor
+    {
+        /// Id del gruppo o nome etichetta da seguire.
+        public List<string> nomiGruppiSeguiti { get; set; } = new List<string>();
+
+        /// Regole di follow sull’asse X (distanza verticale e pre-allineamento).
+        public FollowOnX? xAnchor { get; set; } = null;
+
+        /// Regole di follow sull’asse Y (distanza orizzontale e pre-allineamento).
+        public FollowOnY? yAnchor { get; set; } = null;
+
+        /// Asse prioritario (default: X se non specificato).
+        public PriorityAxis priority { get; set; } = PriorityAxis.X;
+
+        public List<SetCondizioni> listSetCondizioni { get; set; } = new List<SetCondizioni>();
+
+        public bool useTextBounds { get; set; } = false;
+
+
+    }
+
+    /// 
+    /// Follow sull’asse X (distanza verticale + pre-allineamento verticale).
+    /// 
+    public class FollowOnX
+    {
+        /// I20-1026: si somma a distance una percentuale della dimensione del gruppo seguito
+        /// sull'asse dell'ancora (larghezza per x, altezza per y). Null: niente.
+        public double? distancePercentuale { get; set; }
+
+        /// Distanza verticale in mm tra la X del gruppo corrente e quella del gruppo seguito.
+        public double distance { get; set; } = 0;
+        public bool stopOnCollision { get; set; } = false;
+
+        public bool applyToSingleLevels { get; set; } = false;
+
+        public HorizontalReferenceLine allineaAlLato { get; set; } = HorizontalReferenceLine.Left;
+        public HorizontalReferenceLine allineaLato { get; set; } = HorizontalReferenceLine.Left;
+    }
+
+    /// 
+    /// Follow sull’asse Y (distanza orizzontale + pre-allineamento orizzontale).
+    /// 
+    public class FollowOnY
+    {
+        /// I20-1026: si somma a distance una percentuale della dimensione del gruppo seguito
+        /// sull'asse dell'ancora (larghezza per x, altezza per y). Null: niente.
+        public double? distancePercentuale { get; set; }
+
+        /// Distanza orizzontale in mm tra la Y del gruppo corrente e quella del gruppo seguito.
+        public double distance { get; set; } = 0;
+
+        public bool stopOnCollision { get; set; } = false;
+
+        public bool applyToSingleLevels { get; set; } = false;
+
+
+        public VerticalReferenceLine allineaAlLato { get; set; } = VerticalReferenceLine.Top;
+        public VerticalReferenceLine allineaLato { get; set; } = VerticalReferenceLine.Top;
+
+    }
+
+    public class SetCondizioni
+    {
+        public List<Condizione> setCondizioni { get; set; } = new List<Condizione>();
+    }
+
+    public class evitaTracciaGruppo
+    {
+        public bool evitaTracciaBase { get; set; } = false;
+        public bool useTextBounds { get; set; } = true; //indica che per il confronto dobbiamo controllare i bounds del testo e non quelli dell'elemento
+        public float distance { get; set; } = 0;
+    }
+    public class Condizione
+    {
+        public List<string> elementiDaTrovare { get; set; } = new List<string>();
+        public List<string> elementiDaNonTrovare { get; set; } = new List<string>();
+        public List<TouchCondition> touchCondition { get; set; } = new List<TouchCondition>();
+        public List<BoxCondition> boxCondition { get; set; } = new List<BoxCondition>();
+        public List<KitCondition> kitCondition { get; set; } = new List<KitCondition>();
+
+        /// I20-1026: condizioni sui dati della ref. Basta che una sia vera.
+        public List<RefCondition> refCondition { get; set; } = new List<RefCondition>();
+
+        /// I20-1026: condizioni sulla forma del box. Basta che una sia vera.
+        public List<FormaBoxCondition> formaBoxCondition { get; set; } = new List<FormaBoxCondition>();
+    }
+
+    /// I20-1026: vera se il campo della ref contiene il testo, senza distinguere maiuscole e
+    /// minuscole; per i campi Descrizioni.* di un gruppo vale la descrizione del gruppo.
+    public class RefCondition
+    {
+        public string campo { get; set; } = "";
+        public string contiene { get; set; } = "";
+    }
+
+    /// I20-1026: vera se il box ha una delle forme. Largo: larghezza almeno rapporto volte
+    /// l'altezza. Alto: il contrario. Standard: tutti gli altri casi. Rapporto null: 1.6.
+    public class FormaBoxCondition
+    {
+        public List<string> forme { get; set; } = new List<string>();
+        public double? rapporto { get; set; }
+    }
+
+    public class KitCondition
+    {
+        public List<string> canaliValidi { get; set; } = new List<string>();
+        public List<string> areeValide { get; set; } = new List<string>();
+        public List<int> kitTipoLavorazioniValide { get; set; } = new List<int>();
+        public List<string> kitFormatiValidi { get; set; } = new List<string>();
+    }
+
+    public class BoxCondition
+    {
+        public List<string> boxValidi { get; set; } = new List<string>(); //se la lista contiene elementi, il box deve essere uno di questi per essere valida la condizione
+        public List<string> boxInvalidi { get; set; } = new List<string>(); //se la lista contiene elementi, il box non deve essere uno di questi per essere valida la condizione
+    }
+
+    public class TouchCondition
+    {
+        public List<string> EtichetteToccanti { get; set; } = new List<string>(); //se almeno uno di questi elementi
+        public List<string> EtichetteToccate { get; set; } = new List<string>(); //tocca almeno uno di questi
+        public bool TrueOnContact { get; set; } = true; //la condizione è rispettata se l'elemento tocca, se messa a false la condizione è rispettata se non c'è il contatto
+        public bool useTextBounds { get; set; } = true; //indica che per il confronto dobbiamo controllare i bounds del testo e non quelli dell'elemento
+
+    }
+
+    /// 
+    /// Modalità di ridimensionamento per asse.
+    /// 
+    public enum AxisResizeMode
+    {
+        proporzionale,
+        ingrandimento_lineare,
+        spostamento_lineare,
+        spostamento_lineare_centrato
+    }
+
+    /// 
+    /// Lettura livelli: Righe (allineamento su X) o Colonne (allineamento su Y).
+    /// 
+    public enum LetturaLivelli
+    {
+        Colonne_Left_To_Right,
+        Colonne_Right_To_Left,
+        Righe_Top_To_Bottom,
+        Righe_Bottom_To_Top
+    }
+
+    /// 
+    /// Ancore interne per l’ordinamento di livello.
+    /// 
+    public enum InternalAnchor
+    {
+        Left,
+        Right,
+        Top,
+        Bottom
+    }
+
+    /// 
+    /// Linea verticale di riferimento: Left/Right.
+    /// 
+    public enum VerticalReferenceLine
+    {
+        Top,
+        Bottom,
+        Middle
+    }
+
+    /// 
+    /// Linea orizzontale di riferimento: Top/Bottom.
+    /// 
+    public enum HorizontalReferenceLine
+    {
+        Left,
+        Right,
+        Middle
+
+    }
+
+    /// 
+    /// Asse prioritario nel follow.
+    /// 
+    public enum PriorityAxis
+    {
+        X,
+        Y
+    }
+
+    public enum FitOperation
+    {
+        FRAME_TO_CONTENT,
+        CONTENT_TO_FRAME,
+        PROPORTIONALLY,
+        FILL_PROPORTIONALLY
+
+    }
+
+
+}

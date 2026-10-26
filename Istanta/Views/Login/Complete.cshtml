@@ -1,0 +1,80 @@
+﻿@page
+@model Istanta.Views.OAuthComplete.CompleteModel
+@{
+    Layout = "_LayoutLogin";
+}
+
+
+<div style="display: flex; justify-content:center; align-items: center; width:100%; margin-top:15%;">
+
+    <div style="width: 100%; max-width: 400px; padding: 20px; border: 1px solid #ddd; border-radius: 10px; background-color: #fff; box-shadow: 0 0 10px rgba(0,0,0,0.1);">
+        <h2 class="text-center mb-4">Oauth completato!</h2>
+        <div class="mb-3">
+            <h5>@ViewBag.NomeUtente</h5>
+            <hr />
+            <b>Token di accesso</b>
+            <div style="display:flex; margin-bottom:20px;">
+                <span id="_token" style="font-size:14px;margin-top:6px;">@ViewBag.Token</span>
+                <button type="button" id="btnCopyToken" class="btn btn-primary btn-sm ms-2">Copia</button>
+            </div>
+            
+            <span>Da utilizzare entro: @ViewBag.DataScadenzaToken</span></p>
+        
+            <div style="width:100%;text-align:center;">
+                <p>
+                <span style="font-size:12px;">oppure</span>
+                </p>
+                <p>
+                    <a href="#" id="b_continuaSuBrowser">Continua su browser</a>
+                </p>
+            </div>
+        </div>        
+    </div>    
+</div>
+
+<div class="toast position-fixed" role="alert" aria-live="assertive" aria-atomic="true" id="clipToast" data-bs-delay="2000" style="top:10px;right:10px;background:#a1e3be;">
+    <div class="d-flex">
+        <div class="toast-body">
+            Token copiato!
+        </div>
+    </div>
+</div>
+
+<input type="hidden" id="hiddenRedirectUrl" value="@ViewBag.RedirectDest" />
+
+@inject Microsoft.AspNetCore.Http.IHttpContextAccessor HttpContextAccessor
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]">
+        function documentReady() {
+
+            $("#btnCopyToken").on("click", function () {
+                // Copia il token negli appunti
+            console.log("click to copy token");
+                const token = $("#_token").text();
+                navigator.clipboard.writeText(token).then(function() {
+                var toastLiveExample = document.getElementById('clipToast')
+                   var toast = new bootstrap.Toast(toastLiveExample);
+                   toast.show();
+
+                }, function(err) {
+                    alert("Errore nel copiare il token: ", err);
+                });
+            });
+
+            if ($("#hiddenRedirectUrl").val()!="")
+            {
+                
+                $("#b_continuaSuBrowser").on("click", function () {
+                    showLoading();
+                  apriLinkEsterno($("#hiddenRedirectUrl").val());
+                });
+            }
+            else
+            {
+                $("#b_continuaSuBrowser").attr("href", "~/Tracciati");
+            }
+
+        }
+
+
+
+</script>

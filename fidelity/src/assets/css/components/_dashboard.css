@@ -1,0 +1,17 @@
+/* Dashboard styles */
+@layer components {
+  /* Nascondi gli handle di resize quando non è superadmin */
+  .hide-resize-handles .react-resizable-handle {
+    display: none !important;
+  }
+
+  /* Nascondi anche il cursore di resize */
+  .hide-resize-handles .react-grid-item {
+    cursor: default !important;
+  }
+
+  /* Rimuovi effetti hover sugli elementi della griglia */
+  .hide-resize-handles .react-grid-item:hover {
+    z-index: auto !important;
+  }
+}

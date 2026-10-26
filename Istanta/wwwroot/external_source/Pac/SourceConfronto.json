@@ -1,0 +1,28 @@
+{
+  "campiDiControllo": [
+    {
+      "nome": "tema",
+      "rules": []
+    },
+    {
+      "nome": "meccanica",
+      "rules": []
+    },
+    {
+      "nome": "prezzo_continuo",
+      "rules": []
+    },
+    {
+      "nome": "prezzo_promo",
+      "rules": []
+    },
+    {
+      "nome": "prezzo_promo_kgl",
+      "rules": []
+    },
+    {
+      "nome": "txt_sconto",
+      "rules": []
+    }
+  ]
+}

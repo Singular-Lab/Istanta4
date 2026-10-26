@@ -1,0 +1,19 @@
+COME SI PUBBLICA QUI
+
+  cd /srv/istanta4/pg-spike/Istanta
+  dotnet publish Istanta.csproj -c Release -o ../pubblicato
+  cp -f ../appsettings.pgtest.json ../pubblicato/appsettings.json
+  systemctl restart istanta4-pgtest.service
+
+DUE COSE DA NON DIMENTICARE
+
+1) SEMPRE -c Release. In Debug, Program.cs sceglie il file di configurazione
+   del cliente usato in sviluppo (appsettings.coopfi.json), che contiene
+   percorsi Windows: l'applicazione si pianta all'avvio con
+   FileNotFoundException su C:\Progetti\...\external_source\Coopfi\.
+
+2) Ogni publish RISCRIVE pubblicato/appsettings.json prendendolo dai sorgenti,
+   che hanno percorsi Windows e stringhe di connessione vere. Il file buono
+   per questa copia e' ../appsettings.pgtest.json e va ricopiato dopo ogni
+   publish. Le stringhe di connessione sono vuote di proposito: arrivano
+   dalle variabili d'ambiente in /etc/istanta4-pgtest.env.

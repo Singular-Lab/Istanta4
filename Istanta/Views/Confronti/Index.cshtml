@@ -1,0 +1,204 @@
+﻿@page
+@using Istanta.Models_2
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Mvc
+@model Istanta.Views.Confronti.IndexModel
+@inject IConfiguration Configuration
+@{
+   
+    string? connString =  Configuration["ConnectionStrings:IstandaConnectionDb"];
+
+    Edro21_DbContext2 ctx2 = FabbricaCtx2.CreateDbContext();
+    var lista_promo_attive =  ctx2.Promos.Where(p => p.DataScadenza > DateTime.Now && p.Stato == (Byte)StatoPromo.Aperta).ToList();
+
+
+
+}
+
+@inject Microsoft.AspNetCore.Http.IHttpContextAccessor HttpContextAccessor
+@inject Microsoft.EntityFrameworkCore.IDbContextFactory<Istanta.Models_2.Edro21_DbContext2> FabbricaCtx2
+
+<head>
+    <title>Confronto dati</title>
+    <link nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]" rel="stylesheet" href="https://cdn.datatables.net/2.3.4/css/dataTables.dataTables.css" />
+    <script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]"  src="https://cdn.datatables.net/2.3.4/js/dataTables.js"></script>
+    <style>
+        #tableScreen th,
+        #tableScreen td {
+            white-space: nowrap;
+        }
+
+        .dt-length select
+        {
+            margin-right:10px;
+        }
+</style>
+</head>
+
+    <h2>Confronto dati</h2>
+
+    <div class="container p-4" style="width:auto; z-index:99" id="confrontiContainer">
+        <div class="row p-4">
+            <div class="col-6" id="colMaster">
+                <div class="container">
+                    <div class="row">
+                        <div class="col p-1">
+                            <label for="TendinaPromoMaster">Scegli Promo master</label>
+                            <select id="TendinaPromoMaster" class="form-select" aria-label="Menu a tendina">
+                                <option value="0" selected>Seleziona un'opzione</option>
+                                @foreach (Promo p in lista_promo_attive)
+                                {
+                                    <option value="@p.Id">@p.NomePromo</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row" id="rowVersionMaster" style="display:none;">
+                        <div class="col p-1">
+                            <label for="TendinaVersionePromoMaster">Versione</label>
+                            <select id="TendinaVersionePromoMaster" class="form-select" aria-label="Menu a tendina" disabled>
+                                <option value="1" selected>Versione attuale</option>
+                                <option value="2">Versione -1</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col p-1">
+                            <label for="TendinaFiltroCombMaster">Filtro combinazioni (Opzionale)</label><br />
+                            <select id="TendinaFiltroCombMaster" class="form-select" aria-label="Menu a tendina" style="width:300px;display:inline">
+                                <option value="0" selected>Tutte le combinazioni</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6" id="colSlave" style="border-left:2px solid gray;">
+                <div class="container" id="slaveOpzioneExcel">
+                </div>
+                <div class="container" id="slaveOpzioneEsistente">
+                    <div class="row">
+                        <div class="col p-1">
+                            <label for="TendinaPromoSlave">Scegli Promo di confronto</label>
+                            <select id="TendinaPromoSlave" class="form-select" aria-label="Menu a tendina">
+                                <option value="0" selected>Seleziona un'opzione</option>
+                                @foreach (Promo p in lista_promo_attive)
+                                {
+                                    <option value="@p.Id">@p.NomePromo</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row" id="rowVersionSlave" style="display:none;">
+                        <div class="col p-1">
+                            <label for="TendinaVersionePromoSlave">Versione</label>
+                            <select id="TendinaVersionePromoSlave" class="form-select" aria-label="Menu a tendina" disabled>
+                                <option value="1" selected>Versione attuale</option>
+                                <option value="2">Versione -1</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col p-1">
+                            <label for="TendinaFiltroCombSlave">Filtro combinazioni (Opzionale)</label><br />
+                            <select id="TendinaFiltroCombSlave" class="form-select" aria-label="Menu a tendina" style="width:300px;display:inline">
+                                <option value="0" selected>Tutte le combinazioni</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col p-1">
+                            <!-- file select-->
+                            <label for="TendinaImportazionePromoSlave">Seleziona importazione (Opzionale)</label>
+                            <select id="TendinaImportazionePromoSlave" class="form-select" aria-label="Menu a tendina">
+                                <option value="0">Non specificato</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="row p-4" id="rowAction" style="display:none;">
+            <div class="col text-center p-1">
+                <button class="btn btn-primary" id="btnConfronto">CONFRONTA</button>
+            </div>
+        </div>
+        <div class="row p-4" id="rowErrors" style="display:none;">
+            <div class="col text-center p-1">
+                <p id="pError"></p>
+            </div>
+        </div>
+
+    </div>
+    <div class="container" id="resultContainer" style="display:none;">
+        <div class="row">
+            <div class="col-6">
+                <h3>Risultato del confronto</h3>
+            </div>
+            <div class="col-3 text-end">
+                <button class="btn btn-primary" id="btnCsvDownload">Scarica Report</button>
+            </div>
+            <div class="col-3 text-end">
+                <button class="btn btn-primary" id="btnExcelDownload">Esporta come lista</button>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col" id="containerTableScreen">
+
+            </div>
+        </div>
+    </div>
+    <div class="container" id="customOutOfmainContent" style="display:none;">
+
+    </div>
+   
+
+
+<!--<script src="~/js/confronti.js?v=1.0.0.5"></script>-->
+
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]" type="text/javascript">
+
+    let confInstance;
+    let taskManager;
+    let tableScreen;
+    function documentReady() {
+        confInstance = new Confronti();
+
+        
+        $("#btnCsvDownload").on("click", function(){
+            confInstance.scaricaCsv($(this));
+        });
+                
+        $("#btnExcelDownload").on("click", function(){
+            confInstance.scaricaExcel($(this));
+        });
+
+        $("#btnConfronto").on("click", function(){
+            confInstance.confrontaAction();
+        });
+
+        $("#TendinaPromoMaster").on("change", function(){
+            confInstance.onChangePromoMaster($(this));
+        });
+
+        $("#TendinaFiltroCombMaster").on("change", function(){
+            confInstance.onchangeCombinazione($(this));
+        });
+
+        $("#TendinaPromoSlave").on("change", function(){
+            confInstance.onChangePromoSlave($(this));
+        });
+
+        $("#TendinaFiltroCombSlave").on("change", function(){
+            confInstance.onchangeCombinazione($(this))
+        });
+
+
+        $("#TendinaImportazionePromoSlave").on("change", function(){
+            confInstance.onchangeImportazionePending($(this));
+        });
+
+
+    }
+
+
+</script>

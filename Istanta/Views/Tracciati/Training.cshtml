@@ -1,0 +1,534 @@
+﻿@*
+    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
+*@
+@{
+}
+<h3>Addestramento lista</h3>
+<div class="container" id="liveAlertPlaceholder"></div>
+
+<div class="tab-content">
+
+    <div id="AddestramentoListaScheda" class="container tab-pane schedaAddestramentoLista active">
+        <div class="container bg-light p-3 rounded-3 shadow-sm mb-4">
+            <div class="row">
+                <div class="col-5 mb-3">
+                    <h5>Importa nuovo tracciato di addestramento</h5>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-auto">
+                    <label for="txtTitolo" class="visually-hidden">Titolo</label>
+                    <input type="text" class="form-control" id="txtTitolo" placeholder="Inserisci titolo">
+                </div>
+                <div class="col-5">
+                    <input class="form-control form-control" id="FileTracciato" name="FileTracciato" type="file">
+                </div>
+                <div class="col-auto">
+                    <input type="button" id="btnImporta" class="btn btn-primary" value="Importa">
+                </div>
+            </div>
+        </div>
+
+        <div class="container mb-3">
+            <div class="row">
+                <div class="col-auto">
+                    <select id="cmbAddestramenti" name="cmbAddestramenti" class="tendinaAddestramenti form-select form-select-lg mb-3 mt-4">
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="container mb-3">
+            <div class="row mb-4">
+                <div class="col-auto">
+                    <div id="lista" class="container mb-3">
+                    </div>
+                </div>
+            </div>
+            <div class="row" id="addNewFieldContainer">
+            </div>
+            <div class="row">
+                <div class="col-auto" id="external_options">
+                </div>
+            </div>
+        </div>
+
+    </div>
+    <div id="ImpostaRegoleScheda" class="container tab-pane schedaAddestramentoLista">
+        <div class="container mb-3">
+
+            <div id="HeaderOpzioni" class="row mb-4 bg-primary" style="display:inline-block;">
+                <input type="button" class="btn btn-primary" value="Crea nuova regola" data-bs-toggle="modal" data-bs-target="#aggiungiNuovaRegola" style="display:inline-block;" onclick="">
+            </div>
+            <div id="selezionaAddestramentoRegoleCreate" class="row mb-4">
+                <div class="col-auto">
+                    <label for="cmbAddestramentiRegoleCreate">Addestramento</label>
+                    <select id="cmbAddestramentiRegoleCreate" name="cmbAddestramentiRegoleCreate" class="tendinaAddestramenti form-select form-select-lg mb-3" onchange="trainer.leggiRegole($(this).val())"></select>
+                </div>
+            </div>
+            Regole create:
+            <div id="RegoleCreate" class="row mb-4">
+            </div>
+        </div>
+    </div>
+
+</div>
+
+
+
+
+<template id="template">
+    <div class="row">
+        <div class="col-auto">
+            <span id="nome_colonna_excel"></span>
+        </div>
+    </div>
+    <div class="row schema_campo">
+        <div class="col-auto">
+            <input tpye="text" id="nome_colonna" />
+        </div>
+        <div class="col-auto">
+            <select id="tipo_valore">
+                <option value="0">Tipo di dato</option>
+                <option value="1">Stringa</option>
+                <option value="2">Numerico</option>
+                <option value="3">Decimale</option>
+                <option value="4">Data</option>
+                <option value="5">Boolean</option>
+            </select>
+        </div>
+        <div class="col-auto">
+            <select id="tipo_ordinamento">
+                <option value="0">Tipo di ordinamento</option>
+                <option value="1">Categoria</option>
+                <option value="2">Reparto</option>
+                <option value="3">Settore</option>
+                <option value="4">Segmento</option>
+            </select>
+        </div>
+        <div class="col-auto">
+            <select id="ruolo">
+                <option value="0">Seleziona ruolo</option>
+                @{
+                    int iter = 1;
+                }
+
+                @foreach (string s in Enum.GetNames(typeof(Istanta.Models.AddestramentoRuoli)))
+                {
+                    <option value="@iter">@s</option>
+                    iter++;
+                }
+            </select>
+        </div>
+        <div class="col-auto">
+            <input type="button" class="btn btn-primary" value="Salva">
+            <input type="button" class="btn btn-danger" value="Elimina" style="display:none;">
+        </div>
+    </div>
+</template>
+
+<template id="templateNew">
+    <div class="row">
+        <div class="col-auto">
+            <span id="nome_colonna_excel"></span>
+        </div>
+    </div>
+    <div class="row schema_campo">
+        <div class="col-auto">
+            <input tpye="text" id="nome_colonna" />
+        </div>
+        <div class="col-auto">
+            <div class="row">
+                <div class="col-auto">
+                    <select id="tipo_valore">
+                        <option value="0">Tipo di dato</option>
+                        <option value="1">Stringa</option>
+                        <option value="2">Numerico</option>
+                        <option value="3">Decimale</option>
+                        <option value="4">Data</option>
+                        <option value="5">Boolean</option>
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <select id="tipo_ordinamento">
+                        <option value="0">Tipo Ordinamento</option>
+                        <option value="1">Categoria</option>
+                        <option value="2">Reparto</option>
+                        <option value="3">Settore</option>
+                        <option value="4">Segmento</option>
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <select id="ruolo" onchange="trainer.cambioRuolo($(this))">
+                        <option value="0">Seleziona ruolo</option>
+                        @{
+                            iter = 0;
+                        }
+
+                        @foreach (string s in Enum.GetNames(typeof(Istanta.Models.AddestramentoRuoli)))
+                        {
+                            <option value="@iter">@s</option>
+                            iter++;
+                        }
+                    </select>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="col-auto">
+            <div class="col-auto">
+                <input type="button" class="btn btn-primary" value="Salva" onclick="trainer.aggiungiCampoCustom()">
+            </div>
+        </div>
+    </div>
+    <div class="row mb-3">
+        <div class="col-auto" id="cmb_lib_custom">
+            <select class="form-select-sm" aria-label="Default select example" id="cmbCallToExternal" onchange="trainer.selezionatoLibItem($(this))">
+                <option value="0">Seleziona EntryPoint</option>
+                @{
+                    foreach (Istanta.Models.AddestramentoExternalLibItem lib in ViewBag.listaLibsItem)
+                    {
+                        <option value="@lib">@lib</option>
+                    }
+                }
+            </select>
+            <select class="form-select-sm ms-2" aria-label="Default select example" id="cmbWhenAction" style="display:none;">
+                <option value="1">Durante l'importazione</option>
+                <option value="2">Dopo l'importazione</option>
+                <option value="3">Durante l'esportazione</option>
+                <option value="4">Manualmente</option>
+            </select>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-auto" id="cmb_parameters_custom">
+        </div>
+    </div>
+
+</template>
+
+<template id="template_exOption">
+    <div class="row exOptions mb-4" id="imp">
+        <div>
+            <div class="col-auto p-3" id="importOpt" style="border:1px solid #cfc7c7;">
+                <label for="cmbImportToExternal" class="form-label"><b>Operazione da eseguire per l'importazione</b></label>
+                <select class="form-control" id="cmbImportToExternal" onchange="trainer.selezionatoLibItem($(this))">
+                    <option value="reset">Seleziona EntryPoint</option>
+                    @{
+                        foreach (Istanta.Models.AddestramentoExternalLibItem lib in ViewBag.listaLibsItem)
+                        {
+                            <option value="@lib">@lib</option>
+                        }
+                    }
+                </select>
+            </div>
+        </div>
+    </div>
+    <div class="row exOptions mb-4" id="exp">
+        <div>
+            <div class="col-auto p-3" id="exportOpt" style="border:1px solid #cfc7c7;">
+                <label for="cmbExportToExternal" class="form-label"><b>Operazione da eseguire per l'esportazione</b></label>
+                <select class="form-control" id="cmbExportToExternal" onchange="trainer.selezionatoLibItem($(this))">
+                    <option value="reset">Seleziona EntryPoint</option>
+                    @{
+                        foreach (Istanta.Models.AddestramentoExternalLibItem lib in ViewBag.listaLibsItem)
+                        {
+                            <option value="@lib">@lib</option>
+                        }
+                    }
+                </select>
+            </div>
+        </div>
+    </div>
+    <div class="row exOptions mb-4" id="expPoP">
+        <div>
+            <div class="col-auto p-3" id="exportPoPOpt" style="border:1px solid #cfc7c7;">
+                <label for="cmbExportPoPToExternal" class="form-label"><b>Operazione da eseguire per l'esportazione PoP</b></label>
+                <select class="form-control" id="cmbExportPoPToExternal" onchange="trainer.selezionatoLibItem($(this))">
+                    <option value="reset">Seleziona EntryPoint</option>
+                    @{
+                        foreach (Istanta.Models.AddestramentoExternalLibItem lib in ViewBag.listaLibsItem)
+                        {
+                            <option value="@lib">@lib</option>
+                        }
+                    }
+                </select>
+            </div>
+        </div>
+    </div>
+    <div class="row exOptions mt-4" id="exp">
+        <div class="col-auto">
+            <input class="form-check-input" type="checkbox" id="chEsportaSubito" onchange="trainer.checkOpzioneEsportazioneChanged($(this))">
+            <label class="form-check-label" for="flexCheckDefault">
+                Esporta subito dopo l'importazione
+            </label>
+        </div>
+    </div>
+</template>
+
+<div class="modal fade" tabindex="-1" id="aggiungiNuovaRegola">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Aggiungi regola</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-header">
+                <div class="row">
+                    <div class="container" id="bodyModalAggiungiRegola">
+                        <div class="row">
+                            <div class="col-2">
+                                <label for="ordineRegola">Ordine Regola:</label>
+                                <input type="number" id="ordineRegola" name="ordineRegola" class="form-select form-select-lg mb-3">
+                            </div>
+                            <div class="col-2">
+                                <label for="cmbAddestramentiRegole">Addestramento</label>
+                                <select id="cmbAddestramentiRegole" name="cmbAddestramentiRegole" class="tendinaAddestramenti form-select form-select-lg mb-3" onchange="trainer.appendPrimoSetRegole($(this))"></select>
+                            </div>
+                            <div class="col-2">
+                                <label for="PaginaInCuiInserirePartenza">Da Pagina:</label>
+                                <input type="number" id="PaginaInCuiInserireInizio" name="cmbPaginaInCuiInserireInzio" class="form-select form-select-lg mb-3">
+                            </div>
+                            <div class="col-2">
+                                <label for="PaginaInCuiInserireFine">A Pagina:</label>
+                                <input type="number" id="PaginaInCuiInserireFine" name="cmbPaginaInCuiInserireFine" class="form-select form-select-lg mb-3">
+                            </div>
+                            <div class="col-2">
+                                <label for="IndiceACuiInserire">Da Indice</label>
+                                <input type="number" id="IndiceACuiInserire" name="cmbIndiceACuiInserire" class="form-select form-select-lg mb-3" onchange="">
+                            </div>
+                            <div class="col-2 d-flex align-items-center justify-content-center">
+                                <label>
+                                    <input type="checkbox" id="IndicePreciso" name="indice_preciso" onchange="trainer.changeTextIndice($(this))"> Indice preciso
+                                </label>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-2">
+                                <label for="cmbRegoleSceltaPagina">Restrizioni</label>
+                                <select id="cmbRegoleSceltaPagina" name="cmbRegoleSceltaPagina" class="form-select form-select-lg mb-3" onchange="">
+                                    <option value="0">Nessuna</option>
+                                    <option value="1">Pagina nuova</option>
+                                    <option value="2">Pagina esclusiva</option>
+                                </select>
+                            </div>
+                            <div class="col-2">
+                                <label for="cmbCambioFormato">Cambio formato</label>
+                                <select id="cmbCambioFormato" name="cmbCambioFormato" class="form-select form-select-lg mb-3 cmbCambioFormato" onchange=""></select>
+                            </div>
+                            <div class="col-2">
+                                <label for="cmbMeccanica">Meccanica</label>
+                                <select id="cmbMeccanica" name="cmbMeccanica" class="form-select form-select-lg mb-3 cmbMeccanica" onchange="trainer.onChangeMeccanica($(this))"></select>
+                            </div>
+                            <div class="col-2">
+                                <label for="cmbLabelSpecifica">Label</label>
+                                <input type="text" id="cmbLabelSpecifica" name="cmbLabelSpecifica" class="form-select form-select-lg mb-3">
+                            </div>
+                            <div class="col-auto d-flex align-items-center">
+                                <button id="creaNuovoSetRegole" disabled type="button" class="btn btn-primary mt-2" aria-label="" onclick="trainer.creaNuovoSetRegole($('#RegoleStabiliteModal'))">Crea nuovo set regole</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div class="row" id="RegoleStabiliteModal">
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <div class="container text-end" id="confermaRegola">
+                    <button type="button" class="btn btn-primary mt-2" aria-label="" onclick="trainer.salvaSetRegole(0,$('#cmbAddestramentiRegole').val(),$(this).closest('.modal'))">Crea regola</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="modal fade" tabindex="-1" id="modificaRegola" idRegola="">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Modifica regola</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-header">
+                <div class="row">
+                    <div class="container" id="bodyModalModificaRegola">
+                        <div class="row">
+                            <div class="col-2">
+                                <label for="ordineRegola">Ordine Regola:</label>
+                                <input type="number" id="ordineRegola" name="ordineRegola" class="form-select form-select-lg mb-3">
+                            </div>
+                            <div class="col-2">
+                                <label for="cmbAddestramentiRegole">Addestramento</label>
+                                <input readonly type="text" id="addestramentoModifica" name="addestramentoModifica" class="mb-3">
+                            </div>
+                            <div class="col-2">
+                                <label for="PaginaInCuiInserirePartenza">Da Pagina:</label>
+                                <input type="number" id="PaginaInCuiInserireInizio" name="cmbPaginaInCuiInserireInzio" class="form-select form-select-lg mb-3">
+                            </div>
+                            <div class="col-2">
+                                <label for="PaginaInCuiInserireFine">A Pagina:</label>
+                                <input type="number" id="PaginaInCuiInserireFine" name="cmbPaginaInCuiInserireFine" class="form-select form-select-lg mb-3">
+                            </div>
+                            <div class="col-2">
+                                <label for="IndiceACuiInserire">Indice</label>
+                                <input type="number" id="IndiceACuiInserire" name="cmbIndiceACuiInserire" class="form-select form-select-lg mb-3" onchange="">
+                            </div>
+                            <div class="col-2 d-flex align-items-center justify-content-center">
+                                <label>
+                                    <input type="checkbox" id="IndicePreciso" name="indice_preciso" onchange="trainer.changeTextIndice($(this))"> Indice preciso
+                                </label>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-2">
+                                <label for="cmbRegoleSceltaPagina">Restrizioni</label>
+                                <select id="cmbRegoleSceltaPagina" name="cmbRegoleSceltaPagina" class="form-select form-select-lg mb-3" onchange="">
+                                    <option value="0">Nessuna</option>
+                                    <option value="1">Pagina nuova</option>
+                                    <option value="2">Pagina esclusiva</option>
+                                </select>
+                            </div>
+                            <div class="col-2">
+                                <label for="cmbCambioFormato">Cambio formato</label>
+                                <select id="cmbCambioFormato" name="cmbCambioFormato" class="form-select form-select-lg mb-3 cmbCambioFormato" onchange=""></select>
+                            </div>
+                            <div class="col-2">
+                                <label for="cmbMeccanica">Meccanica</label>
+                                <select id="cmbMeccanica" name="cmbMeccanica" class="form-select form-select-lg mb-3 cmbMeccanica" onchange="trainer.onChangeMeccanica($(this))"></select>
+                            </div>
+                            <div class="col-2">
+                                <label for="cmbLabelSpecifica">Label</label>
+                                <input type="text" id="cmbLabelSpecifica" name="cmbLabelSpecifica" class="form-select form-select-lg mb-3">
+                            </div>
+                            <div class="col-auto d-flex align-items-center">
+                                <button id="creaNuovoSetRegole" type="button" class="btn btn-primary mt-2" aria-label="" onclick="trainer.creaNuovoSetRegole($('#RegoleStabiliteModalModifica'))">Crea nuovo set regole</button>
+                            </div>
+                            <div class="col-auto d-flex align-items-center">
+                                <button id="eliminaRegola" type="button" class="btn btn-danger mt-2" aria-label="" onclick="trainer.rimuoviSetRegole($(this).closest('#modificaRegola').attr('idRegola'), $(this).closest('#modificaRegola').attr('idAddestramento'), $(this).closest('.modal'))">Elimina</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div class="row" id="RegoleStabiliteModalModifica">
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <div class="container text-end" id="confermaRegolaModifica">
+                    <button type="button" class="btn btn-primary mt-2" aria-label="" onclick="trainer.salvaSetRegole($(this).closest('#modificaRegola').attr('idRegola'), $(this).closest('#modificaRegola').attr('idAddestramento'), $(this).closest('.modal'))">Modifica regola</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<template id="setRegoleTemplate">
+    <div id="setRegoleParent">
+        <div class="mt-3 bg-success bg-opacity-10 fs-3">Set</div>
+        <div id="setRegole" class="bg-success bg-opacity-10 setRegole"></div>
+        <button id="aggiungiNuovaRegolaButton" class="btn btn-primary aggiungiNuovaRegolaButton mt-2" onclick="trainer.nuovaRegolaButton($(this))">Aggiungi regola</button>
+        <button id="rimuovi intero set" class="btn btn-warning rimuoviSetRegoleButton mt-2" onclick="trainer.rimuoviSetRegoleButton($(this))">Rimuovi intero set regole</button>
+        <div class="border-top"></div>
+    </div>
+</template>
+<template id="regolaTemplate">
+    <div class="row mt-2 bg-success bg-opacity-25 regola" id="regola">
+        <div class="col-4 d-flex align-items-center">
+            <label for="campoAddestramentoRegola">Campo</label>
+            <select data-live-search="true" class="ms-2 selectpicker" id="campoAddestramentoRegola" name="campoAddestramentoRegola">
+                <option value="0">Seleziona campo</option>
+            </select>
+        </div>
+        <div class="col-3 d-flex align-items-center">
+            <select class="selectpicker" data-live-search="true" id="operatoreDiConfrontoRegola" name="operatoreDiConfrontoRegola">
+                <option value="0">Uguale</option>
+                <option value="1">Diverso</option>
+                <option value="2">Contiene</option>
+                <option value="3">Non contiene</option>
+                <option value="4">Inizia con</option>
+                <option value="5">Finisce con</option>
+                <option value="6">Maggiore di</option>
+                <option value="7">Maggiore o uguale di</option>
+                <option value="8">Minore di</option>
+                <option value="9">Minore o uguale di</option>
+            </select>
+        </div>
+        <div class="col-4 d-flex align-items-center">
+            <input type="text" id="valoreRegola" name="valoreRegola">
+        </div>
+        <div class="col-1 d-flex justify-content-end align-items-center">
+            <button type="button" class="btn-close" aria-label="Close" onclick="trainer.rimuoviRegola($(this))"></button>
+        </div>
+    </div>
+</template>
+<template id="previewRegolaTemplate">
+    <div class="row mt-2 bg-success bg-opacity-25 regola" id="regolaPreview">
+        <div id="ordineRegolaPreview" class="col-1 d-flex align-items-center">
+        </div>
+        <div class="col-3 d-flex align-items-center">
+            <label for="campoAddestramentoRegolaPreview">Campo</label>
+            <input readonly type="text" id="campoAddestramentoRegolaPreview" name="campoAddestramentoRegolaPreview">
+        </div>
+        <div class="col-3 d-flex align-items-center">
+            <select disabled class="selectpicker" data-live-search="true" id="operatoreDiConfrontoRegola" name="operatoreDiConfrontoRegola">
+                <option value="0">Uguale</option>
+                <option value="1">Diverso</option>
+                <option value="2">Contiene</option>
+                <option value="3">Non contiene</option>
+                <option value="4">Inizia con</option>
+                <option value="5">Finisce con</option>
+                <option value="6">Maggiore di</option>
+                <option value="7">Maggiore o uguale di</option>
+                <option value="8">Minore di</option>
+                <option value="9">Minore o uguale di</option>
+            </select>
+        </div>
+        <div class="col-3 d-flex align-items-center">
+            <input readonly type="text" id="valoreRegolaPreview" name="valoreRegolaPreview">
+        </div>
+        <div class="col-1 d-flex justify-content-end align-items-center" id="regoleAggiuntive"></div>
+        <div class="col-1 d-flex justify-content-end align-items-center">
+            <button class="me-1" type="button" @*class="btn btn-primary"*@ aria-label="" onclick="trainer.apriModalModifica($(this).closest('#regolaPreview').attr('idRegola'), $(this).closest('#regolaPreview').attr('idAddestramento'))"><i class="fas fa-edit"></i></button>
+            <button type="button" @*class="btn btn-primary"*@ aria-label="" onclick="trainer.rimuoviSetRegole($(this).closest('#regolaPreview').attr('idRegola'), $(this).closest('#regolaPreview').attr('idAddestramento'), null)"><i class="fas fa-trash-alt" style="color: red;"></i></button>
+        </div>
+    </div>
+</template>
+<template id="aggiungiSetRegoleTemplate">
+    <div>
+        <button id="aggiungiNuovoSetRegoleButton" class="btn btn-primary" onclick="trainer.mostraDivOr()">Aggiungi nuovo set regole</button>
+        <div id="orDiv" style="display: none;">OR</div>
+    </div>
+</template>
+<template id="aggiungiNuovaRegolaTemplate">
+    <div>
+        <button id="aggiungiNuovaRegolaButton" class="btn btn-primary" onclick="trainer.nuovaRegolaButton($(this))">Aggiungi regola</button>
+        <div id="orDiv" style="display: none;">OR</div>
+    </div>
+</template>
+
+@inject Microsoft.AspNetCore.Http.IHttpContextAccessor HttpContextAccessor
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]" type="text/javascript">
+
+
+    let trainer;
+    function documentReady() {
+
+        trainer = new Addestramento();
+        //trainer.getFormati("Aumenta fino a: ");
+        //trainer.getMeccaniche();
+        $("#cmbAddestramenti").on("change", function () {
+            trainer.selezionaAddestramento();
+        });
+
+        $("#btnImporta").on("click", function(){
+            trainer.importa();
+        });
+
+
+    }
+
+</script>

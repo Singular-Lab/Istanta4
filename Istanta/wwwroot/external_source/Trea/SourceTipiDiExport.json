@@ -1,0 +1,20 @@
+{
+  "source": [
+    {
+      "guidID": "a48fb2d7-c7ab-465d-9fce-252d814938d0",
+      "titolo": "Volantino",
+      "codice": "VOL",
+      "guidIdNamingConvention": "d2a806e2-f6f4-4323-a4b4-af5079c6c30e",
+      "filtro": [],
+      "modalita": 1
+    },
+    {
+      "guidID": "02614669-2274-4994-9498-7cb6e03ed39c",
+      "titolo": "POP",
+      "codice": "POP",
+      "guidIdNamingConvention": "82d30f61-4100-4c6a-9b37-eac2fb8ecf33",
+      "filtro": [],
+      "modalita": 2
+    }
+  ]
+}
