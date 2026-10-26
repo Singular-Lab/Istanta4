@@ -585,7 +585,8 @@ const SistemazioneFoto = {
         if (senzaTracciato.length > 0 && !projection) {
             var testoSenzaTracciato = "Code CSF-26: Foto senza tracciato di ritaglio, disposte secondo l'immagine intera: " + senzaTracciato.join(", ");
             console.warn(testoSenzaTracciato);
-            addSegnalazione(testoSenzaTracciato, "warning", 2, false);
+            //segnalazione volutamente disattivata, lasciamo solo il warning in console
+            //addSegnalazione(testoSenzaTracciato, "warning", 2, false);
         }
 
         //cerchiamo in calcoloDistanziamentoFoto l'oggetto che ha foto uguale alla lunghezza della lista delle foto
