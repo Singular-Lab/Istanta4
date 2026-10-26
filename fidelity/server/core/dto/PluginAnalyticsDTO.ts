@@ -11,7 +11,7 @@ const PluginAnalyticsEventSchema = z.object({
   pageOrigin: z.string().max(255),
   pagePath: z.string().max(500).optional().default(''),
   sessionId: z.string().max(36),
-  data: z.record(z.unknown()).optional().nullable(),
+  data: z.record(z.string(), z.unknown()).optional().nullable(),
 });
 
 export const BeaconPayloadSchema = z.object({

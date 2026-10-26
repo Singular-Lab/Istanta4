@@ -31,7 +31,7 @@
     "ioredis": "^5.4.2",
     "jose": "^6.2.2",
     "lodash": "^4.17.21",
-    "multer": "^2.0.2",
+    "multer": "^2.5.0",
     "node-cron": "^4.2.1",
     "node-fetch": "^3.3.2",
     "nodemailer": "^10.0.16",
@@ -51,7 +51,7 @@
     "uuid": "^14.0.0",
     "ws": "^8.18.0",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
-    "zod": "^3.25.7"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.7",

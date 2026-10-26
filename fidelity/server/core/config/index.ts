@@ -9,8 +9,8 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 const envSchema = z.object({
     // Configurazione dell'ambiente
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-    NODE_PORT: z.string().regex(/^\d+$/).transform(Number).default('3001'),
-    PORTA_VITE: z.string().regex(/^\d+$/).transform(Number).default('3000'),
+    NODE_PORT: z.string().regex(/^\d+$/).transform(Number).default(3001),
+    PORTA_VITE: z.string().regex(/^\d+$/).transform(Number).default(3000),
     CLIENT_URL: z.string().url(),
 
     // Configurazione OpenAI
@@ -33,7 +33,7 @@ const envSchema = z.object({
     AD_TENANT_ID: z.string().optional(),
     SALT_ROUNDS: z.string().regex(/^\d+$/).transform(Number),
     INTERNAL_REQUEST_SECRET: z.string().optional(),
-    INTERNAL_REQUEST_WINDOW_MS: z.string().regex(/^\d+$/).transform(Number).default('60000'),
+    INTERNAL_REQUEST_WINDOW_MS: z.string().regex(/^\d+$/).transform(Number).default(60000),
     // Firma i link dell'accesso di servizio OIDC (fake-callback): senza, l'accesso non esiste
     OIDC_FAKE_CALLBACK_SECRET: z.string().min(32).optional(),
 
@@ -51,7 +51,7 @@ const envSchema = z.object({
     OLYMPUS_IP_ADDRESS_CORS: z.string().url(),
     VITE_OLYMPUS_IP_ADDRESS_CORS: z.string().url(),
     SESSION_SECRET: z.string().min(1),
-    WS_PORT: z.string().regex(/^\d+$/).transform(Number).default('3400'),
+    WS_PORT: z.string().regex(/^\d+$/).transform(Number).default(3400),
 
     //SMTP EMAIL CONFIG
     SMTP_HOST: z.string(),
@@ -61,7 +61,7 @@ const envSchema = z.object({
     SMTP_FROM: z.string().email().optional(),
 
     // Plugin Analytics
-    PLUGIN_ANALYTICS_RETENTION_DAYS: z.string().regex(/^\d+$/).transform(Number).default('90'),
+    PLUGIN_ANALYTICS_RETENTION_DAYS: z.string().regex(/^\d+$/).transform(Number).default(90),
 
     //Configurazione url DB1
     DBUNO_URL: z.string().url().optional(),
@@ -92,7 +92,7 @@ function validateConfig() {
     } catch (error) {
         if (error instanceof z.ZodError) {
             console.error('Errore di validazione della configurazione:');
-            error.errors.forEach(err => {
+            error.issues.forEach(err => {
                 console.error(`- ${err.path.join('.')}: ${err.message}`);
             });
             process.exit(1);

@@ -29,11 +29,13 @@ const filterTemplateSchema = z.object({
   scroll_speed: z.coerce.number().min(1000, "Minimo 1000ms").max(30000, "Massimo 30000ms").default(5000),
   show_indicators: z.boolean().default(true),
   show_nav_buttons: z.boolean().default(true),
-  meta_options: z.record(z.unknown()).default({}),
+  meta_options: z.record(z.string(), z.unknown()).default({}),
   is_active: z.boolean().default(true)
 });
 
-type FilterTemplateFormData = z.infer<typeof filterTemplateSchema>;
+// I campi con default sono facoltativi in ingresso al form e sempre presenti dopo la validazione
+type FilterTemplateFormInput = z.input<typeof filterTemplateSchema>;
+type FilterTemplateFormData = z.output<typeof filterTemplateSchema>;
 
 interface FilterTemplateFormProps {
   mode: 'create' | 'edit';
@@ -77,7 +79,7 @@ function FilterTemplateForm({
     watch,
     setValue,
     formState: { errors }
-  } = useForm<FilterTemplateFormData>({
+  } = useForm<FilterTemplateFormInput, unknown, FilterTemplateFormData>({
     resolver: zodResolver(filterTemplateSchema),
     defaultValues: template ? {
       nome: template.nome || '',
@@ -112,8 +114,8 @@ function FilterTemplateForm({
 
   const endpointType = watch('endpoint_type');
   const renderType = watch('render_type');
-  const selectedTemplateIds = watch('template_ids');
-  const selectedExportCodes = watch('export_codes');
+  const selectedTemplateIds = watch('template_ids') ?? [];
+  const selectedExportCodes = watch('export_codes') ?? [];
 
   // Genera slug automatico dal nome
   const generateSlug = (nome: string) => {
