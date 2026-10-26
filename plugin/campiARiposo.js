@@ -257,7 +257,9 @@ const CampiARiposo = {
         }
         dentro.padding = CampiARiposo.RIEMPIMENTO;
         dentro.lineHeight = CampiARiposo.interlinea(campo);
-        dentro.fontSize = CampiARiposo.CORPO;
+        //TASK-19c18841: il corpo dello stile del campo, se ne ha uno: il campo nativo lo rispetta
+        //(i campi delle pagine di Svuota e Bolli, a 14 px), e a riposo il testo resta grande uguale.
+        dentro.fontSize = CampiARiposo.corpo(campo);
         dentro.fontFamily = CampiARiposo.CARATTERE;
         //Sempre a sinistra: il campo nativo ignora text-align (la casella Ordine e' "center" nello
         //stile, e il numero nativo sta a sinistra).
@@ -410,6 +412,12 @@ const CampiARiposo = {
     unaRiga(campo) {
         const tag = String(campo.tagName).toLowerCase();
         return tag !== "textarea" && CampiARiposo._etichetta(campo) == null;
+    },
+
+    /// TASK-19c18841: il corpo del testo del riquadro: quello dello stile del campo, o quello nativo.
+    corpo(campo) {
+        const scritto = campo != null && campo.style != null ? campo.style.fontSize : "";
+        return scritto ? scritto : CampiARiposo.CORPO;
     },
 
     /// L'interlinea del riquadro. Il campo di una riga mette il testo a meta' altezza: la riga e' alta

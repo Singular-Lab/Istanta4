@@ -981,8 +981,11 @@
         <sp-menu-item value="1">Svuota tutto</sp-menu-item>
       </sp-menu>
     </sp-picker>
-    <sp-textfield placeholder="Es: 2-5,7,9,14-18" id="pagineRangeSvuotatura"
-    style="color: white; display: none;"></sp-textfield>
+    <!-- TASK-19c18841: un input come quelli della schermata filtri, con misure e corpo dello
+         sp-textfield di prima (192x32, 14 px). Lo sp-textfield, mentre ci si scriveva, ignorava
+         il colore dello stile e il testo si leggeva grigio scuro su nero. -->
+    <input type="text" placeholder="Es: 2-5,7,9,14-18" id="pagineRangeSvuotatura"
+    style="color: lightblue; width: 192px; height: 32px; font-size: 14px; display: none;">
   </div>
   <div>
     <button onclick="Modali.chiudiModal();">Annulla</button>
@@ -1000,8 +1003,9 @@
         <sp-menu-item value="1">Tutte le pagine</sp-menu-item>
       </sp-menu>
     </sp-picker>
-    <sp-textfield placeholder="Es: 2-5,7,9,14-18" id="pagineRangeAttivaDisattivaBolli"
-    style="color: white;"></sp-textfield>
+    <!-- TASK-19c18841: come il campo dello svuotamento, un input leggibile anche mentre ci si scrive. -->
+    <input type="text" placeholder="Es: 2-5,7,9,14-18" id="pagineRangeAttivaDisattivaBolli"
+    style="color: lightblue; width: 192px; height: 32px; font-size: 14px;">
   </div>
   <div>
     <button onclick="Modali.chiudiModal();">Annulla</button>

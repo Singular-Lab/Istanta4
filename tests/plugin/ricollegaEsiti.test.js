@@ -195,7 +195,8 @@ test("la pagina forzata viene salvata", () => {
     const inizio = cs.indexOf("public async Task<IActionResult> ricollegaBox(");
     const azione = cs.slice(inizio, cs.indexOf("public class InddObjImpostazionePrimarieSecondarieRequest", inizio));
 
-    assert.ok(azione.includes("plr.Pagina = request.elementoDaRicollegare.pag;"));
+    //TASK-19c18841: la pagina passa da PortaAPagina, che ne aggiorna anche l'autore.
+    assert.ok(azione.includes("PortaAPagina(plr, request.elementoDaRicollegare.pag, IdUtenteDellaSessione);"));
     assert.ok(azione.includes("SaveChangesAsync()"),
         "senza salvataggio la pagina cambiava solo in memoria e la risposta la dava per fatta");
 });

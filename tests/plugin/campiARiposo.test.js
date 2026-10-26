@@ -151,6 +151,15 @@ function riquadroDi(el) {
 
 /* ---- le regole ---- */
 
+test("a riposo il testo ha il corpo dello stile del campo, se c'e', altrimenti quello nativo", () => {
+    //TASK-19c18841: i campi delle pagine di Svuota e Bolli sono a 14 px anche mentre ci si scrive.
+    assert.strictEqual(CampiARiposo.corpo({ style: { fontSize: "14px" } }), "14px");
+    assert.strictEqual(CampiARiposo.corpo({ style: { fontSize: "" } }), CampiARiposo.CORPO);
+    assert.strictEqual(CampiARiposo.corpo({ style: {} }), CampiARiposo.CORPO);
+    assert.strictEqual(CampiARiposo.corpo(null), CampiARiposo.CORPO);
+    assert.match(leggiFileDelPlugin("campiARiposo.js"), /dentro\.fontSize = CampiARiposo\.corpo\(campo\);/);
+});
+
 test("sono campi di testo le caselle, gli input di testo e i sp-textfield, non password, spunte e pulsanti", () => {
     nuovoDocumento();
     const conTipo = (tag, tipo) => { const e = new Elemento(tag); if (tipo != null) { e.setAttribute("type", tipo); } return e; };

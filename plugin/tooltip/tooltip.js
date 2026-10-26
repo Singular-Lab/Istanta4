@@ -158,7 +158,16 @@ const Tooltip = {
             riquadro.textContent = testo;
             riquadro.style.maxWidth = ancoraggio.maxWidth + "px";
             riquadro.style.maxHeight = ancoraggio.maxHeight + "px";
-            riquadro.style.left = ancoraggio.left + "px";
+            //TASK-19c18841: come top e bottom, uno dei due e l'altro ad auto. Vicino al bordo
+            //destro il riquadro si attacca col suo lato destro a quello dell'elemento.
+            if (ancoraggio.right != null) {
+                riquadro.style.right = ancoraggio.right + "px";
+                riquadro.style.left = "auto";
+            }
+            else {
+                riquadro.style.left = ancoraggio.left + "px";
+                riquadro.style.right = "auto";
+            }
 
             //Uno dei due, mai tutti e due: l'altro va rimesso ad auto, altrimenti resta quello
             //del suggerimento precedente e il riquadro si stira.

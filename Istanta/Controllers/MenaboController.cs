@@ -6747,6 +6747,11 @@ double.TryParse(percorso.ToString(), out double valore16))
             public string codiceGruppo = "";
             public long idRec = 0;
             public string nomePagina = "";
+            //TASK-19c18841: chi ha impaginato il box o lo ha spostato per ultimo. Con autoreReport lo
+            //ha spostato il Report Integrita', e nomeAutore e' l'utente che lo ha avviato.
+            public short idAutore = 0;
+            public string nomeAutore = "";
+            public bool autoreReport = false;
         }
 
         [HttpGet]
@@ -6754,17 +6759,72 @@ double.TryParse(percorso.ToString(), out double valore16))
         public List<elementoImpaginato> getListaImpaginati(int idLavorazione)
         {
             var recordImpaginati = this.ctx2.PromoLavorazioniRecords.Where(f => f.IdLavorazione == idLavorazione).ToList();
-            List<elementoImpaginato> result = new List<elementoImpaginato>();
 
-            foreach (var record in recordImpaginati)
+            //TASK-19c18841: i nomi degli autori stanno nell'altro contesto, in una query sola. Senza
+            //nomi la lista vale lo stesso: il nome serve all'operatore, non a chi conta i box.
+            var nomiUtenti = new Dictionary<int, string>();
+            try
             {
-                elementoImpaginato elImp = new elementoImpaginato();
-                elImp.codiceGruppo = record.CodiceGruppo;
-                elImp.idRec = record.IdRecordTracciato;
-                elImp.nomePagina = record.Pagina.ToString();
-                result.Add(elImp);
+                var idUtenti = recordImpaginati.Select(r => (short)Math.Abs((int)r.IdAutore)).Distinct().ToList();
+                nomiUtenti = this.ctx.Utentis
+                    .Where(u => idUtenti.Contains(u.Id))
+                    .ToDictionary(u => (int)u.Id, u => u.NomeUtente);
             }
-            return result;
+            catch (Exception exSilenzioso)
+            {
+                Console.WriteLine($"[catch muto] MenaboController.getListaImpaginati, nomi degli autori: {exSilenzioso.Message}");
+            }
+
+            return ElementiImpaginati(recordImpaginati, nomiUtenti);
+        }
+
+        /// TASK-19c18841: le righe impaginate come le legge il Plugin, con il nome dell'autore.
+        /// nomiUtenti va dall'id dell'utente al suo nome utente. Un IdAutore negativo e' il Report
+        /// Integrita', avviato dall'utente con l'id opposto (AutoreDelReport); un utente che non
+        /// c'e' lascia il nome vuoto.
+        public static List<elementoImpaginato> ElementiImpaginati(IEnumerable<PromoLavorazioniRecord> righe, IReadOnlyDictionary<int, string> nomiUtenti)
+        {
+            return righe.Select(record => new elementoImpaginato
+            {
+                codiceGruppo = record.CodiceGruppo!,
+                idRec = record.IdRecordTracciato,
+                nomePagina = record.Pagina.ToString(),
+                idAutore = record.IdAutore,
+                nomeAutore = nomiUtenti.TryGetValue(Math.Abs((int)record.IdAutore), out var nome) ? nome : "",
+                autoreReport = record.IdAutore < 0
+            }).ToList();
+        }
+
+        /// TASK-19c18841: l'autore dei box che la sincronizzazione del Report Integrita' sposta di
+        /// pagina. Non c'e' una colonna per dirlo: e' l'id dell'utente che ha avviato il report, col
+        /// segno meno. Il segno dice "spostato dal report", il valore chi lo ha avviato.
+        public static short AutoreDelReport(short idUtente)
+        {
+            return (short)-Math.Abs((int)idUtente);
+        }
+
+        /// TASK-19c18841: porta un box impaginato a un'altra pagina. Chi cambia la pagina di un box
+        /// ne diventa l'autore, sempre; se la pagina e' gia' quella non cambia niente, autore
+        /// compreso. autore si chiede solo se serve: leggerlo puo' voler dire leggere la sessione.
+        /// Restituisce true se la pagina e' cambiata.
+        public static bool PortaAPagina(PromoLavorazioniRecord record, byte pagina, Func<short> autore)
+        {
+            if (record.Pagina == pagina)
+            {
+                return false;
+            }
+            record.Pagina = pagina;
+            record.IdAutore = autore();
+            return true;
+        }
+
+        /// TASK-19c18841: l'id dell'utente della sessione, o l'errore di sessione scaduta.
+        private short IdUtenteDellaSessione()
+        {
+            var session = SessionIstantaObject.GetSession(HttpContext);
+            if (!Int16.TryParse(session, out Int16 id_utente))
+                throw ErroreIstanta.SessioneScaduta();
+            return id_utente;
         }
 
 
@@ -10184,7 +10244,8 @@ double.TryParse(percorso.ToString(), out double valore16))
                 }
                 else if(giaImpaginato != null && richiesta.byPassBloccoGiaImpaginato)
                 {
-                    giaImpaginato.Pagina = richiesta.pagina;
+                    //TASK-19c18841: chi cambia la pagina del box ne diventa l'autore.
+                    PortaAPagina(giaImpaginato, richiesta.pagina, () => id_utente);
                     IActionResult res = await getSchedaRef(richiesta.codiceGruppo!, richiesta.idLavorazione, richiesta.idRec);
                     ArticoloInRevisioneKitResult gruppoResult = new ArticoloInRevisioneKitResult();
                     if (res is OkObjectResult && (res as OkObjectResult)!.Value is ArticoloInRevisioneKitResult)
@@ -10587,9 +10648,22 @@ double.TryParse(percorso.ToString(), out double valore16))
 
         [HttpPut]
         [Route("Menabo/syncImpaginatoConServer/{id_lavorazione}/{impaginaETogliDaImpaginato}")]
-        public async Task<IActionResult> syncImpaginatoConServer([FromForm] string preAnalisi, [FromForm] string mappa, int id_lavorazione, bool impaginaETogliDaImpaginato)
+        public async Task<IActionResult> syncImpaginatoConServer([FromForm] string preAnalisi, [FromForm] string mappa, int id_lavorazione, bool impaginaETogliDaImpaginato, [FromForm] string? origine = null)
         {
             ListArticoloInRevisioneKitResult res = new ListArticoloInRevisioneKitResult();
+            //TASK-19c18841: chi sposta un box di pagina ne diventa l'autore. Con origine "report" a
+            //spostarlo e' il Report Integrita', avviato dall'utente della sessione (AutoreDelReport).
+            //La sessione si legge solo se un box cambia davvero pagina.
+            short? autoreSpostamenti = null;
+            short AutoreSpostamenti()
+            {
+                if (autoreSpostamenti == null)
+                {
+                    short idUtente = IdUtenteDellaSessione();
+                    autoreSpostamenti = origine == "report" ? AutoreDelReport(idUtente) : idUtente;
+                }
+                return autoreSpostamenti.Value;
+            }
             listaRefPerPagina? listaRefMappa = null;
             if (mappa != null)
             {
@@ -10729,7 +10803,7 @@ double.TryParse(percorso.ToString(), out double valore16))
 
                             if (paginaMappa != null)
                             {
-                                record.Pagina = Byte.Parse(paginaMappa.nomePagina!);
+                                PortaAPagina(record, Byte.Parse(paginaMappa.nomePagina!), AutoreSpostamenti);
                             }
                             else
                             {
@@ -10821,7 +10895,7 @@ double.TryParse(percorso.ToString(), out double valore16))
                             );
                         }
 
-                        recordDaCambiarePagina.Pagina = byte.Parse(pag.nomePagina!);
+                        PortaAPagina(recordDaCambiarePagina, byte.Parse(pag.nomePagina!), AutoreSpostamenti);
                     }
 
 
@@ -11116,7 +11190,8 @@ double.TryParse(percorso.ToString(), out double valore16))
 
                         if (!fuoriRange)
                         {
-                            plr.Pagina = request.elementoDaRicollegare.pag;
+                            //TASK-19c18841: chi cambia la pagina del box ne diventa l'autore.
+                            PortaAPagina(plr, request.elementoDaRicollegare.pag, IdUtenteDellaSessione);
 
                             //I20-986: qui mancava il salvataggio. La pagina veniva cambiata solo in
                             //memoria e persa a fine richiesta, mentre la risposta riportava comunque

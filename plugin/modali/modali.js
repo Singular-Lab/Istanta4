@@ -20,6 +20,29 @@ const Modali = {
     /// domanda "Solo volantino / Tutto" nasceva dietro la finestra delle differenze.
     LIVELLO_CONFERMA: 2147483000,
 
+    /// TASK-19c18841: il piede dei pulsanti di confirmCustom, alto quanto misurato (26/10/2026: 50 px,
+    /// margine di sopra compreso). Fisso, perche' lo spazio del messaggio si calcola senza misurarlo.
+    ALTEZZA_PIEDE_CONFERMA: 50,
+
+    /// TASK-19c18841: un id nuovo per il messaggio di una conferma, cosi' lo si ritrova nella pagina.
+    _contatoreMessaggi: 0,
+    nuovoIdMessaggio() {
+        Modali._contatoreMessaggi++;
+        return "messaggioConferma" + Modali._contatoreMessaggi;
+    },
+
+    /// TASK-19c18841: l'altezza massima del messaggio di confirmCustom in un pannello alto
+    /// altezzaPannello: quella del riquadro (l'88% del pannello meno i 10 px di margine sopra e
+    /// sotto), meno i suoi 14 px di margine sopra e sotto, il piede e 4 px per gli arrotondamenti.
+    /// Pannello di 628 px: 453.
+    altezzaMassimaMessaggio(altezzaPannello) {
+        var altezza = Number(altezzaPannello);
+        if (!(altezza > 0)) {
+            altezza = 600;
+        }
+        return Math.max(60, Math.floor((altezza - 20) * 0.88) - 28 - Modali.ALTEZZA_PIEDE_CONFERMA - 4);
+    },
+
     /// Chiede una conferma: Conferma da' true, Annulla false, e un errore vale come Annulla.
     /// message puo' essere un testo (va in un titolo) o un elemento. Attende con delay, la globale
     /// di indexNew.
@@ -36,7 +59,9 @@ const Modali = {
             //all'80% senza scorrimento, un testo lungo usciva dal riquadro bianco.
             var dialog = $('<div style="width: 92%; max-width: 460px; min-width: 200px; max-height: 88%; background-color: white; display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; padding: 14px; box-sizing: border-box; border-radius: 6px;"></div>');
             
-            let messaggio = $('<div style="display: block; flex: 1 1 auto; min-height: 0; overflow: auto;"></div>');
+            //TASK-19c18841: un id unico, per ritrovare il messaggio nella pagina (Modali.nuovoIdMessaggio).
+            var idMessaggio = Modali.nuovoIdMessaggio();
+            let messaggio = $('<div id="' + idMessaggio + '" style="display: block; flex: 1 1 auto; min-height: 0; overflow: auto;"></div>');
     
             if (typeof message === "string") {
                 messaggio.html(`<h3>${message}</h3>`);
@@ -74,7 +99,12 @@ const Modali = {
             modal.append(dialog);
             $("body").append(modal);
         
+            //TASK-19c18841: tolta da qualcun altro (Modali.closeAllModal), vale come Annulla, come
+            //in confirmCustom: altrimenti l'attesa non finirebbe mai. Si guarda nella pagina, per id.
             while(result == null){
+                if (document.getElementById(idMessaggio) == null) {
+                    return false;
+                }
                 await delay(100);
             }
             return result;
@@ -237,7 +267,9 @@ const Modali = {
         CampiARiposo.tuttiARiposo();
         var modal = $('<div id="confirmModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: ' + Modali.LIVELLO_CONFERMA + '; display: flex; justify-content: center; align-items: center; padding: 10px;"></div>');
         var dialog = $('<div style="width: 92%; max-width: 460px; min-width: 200px; max-height: 88%; background-color: white; display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; padding: 14px; box-sizing: border-box; border-radius: 6px;"></div>');
-        var messaggio = $('<div style="display: block; flex: 1 1 auto; min-height: 0; overflow: auto;"></div>');
+        //TASK-19c18841: un id unico, per ritrovare il messaggio nella pagina (Modali.nuovoIdMessaggio).
+        var idMessaggio = Modali.nuovoIdMessaggio();
+        var messaggio = $('<div id="' + idMessaggio + '" style="display: block; flex: 1 1 auto; min-height: 0; overflow: auto;"></div>');
         //I20-1040: come confirm, il messaggio puo' essere un elemento, inserito com'e'; un testo
         //resta in un titolo come prima.
         if (message instanceof jQuery || message instanceof Element) {
@@ -245,7 +277,9 @@ const Modali = {
         } else {
             messaggio.html('<h3 style="margin-top:0;">' + message + '</h3>');
         }
-        var pulsanti = $('<div style="display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; width: 100%; flex: 0 0 auto; padding-top: 12px;"></div>');
+        //TASK-19c18841: il piede dei pulsanti ha un'altezza fissa, cosi' lo spazio del messaggio si
+        //calcola senza misurarlo.
+        var pulsanti = $('<div style="display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; width: 100%; flex: 0 0 auto; padding-top: 12px; height: ' + Modali.ALTEZZA_PIEDE_CONFERMA + 'px; box-sizing: border-box;"></div>');
         var conferma1 = $('<button style="min-width: 88px; height: 26px; padding: 0 10px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">'+bottoneConfirm1Text +'</button>');
         if(bottoneConfirm2Text != null){
             var conferma2 = $('<button style="min-width: 88px; height: 26px; padding: 0 10px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">'+bottoneConfirm2Text +'</button>');
@@ -299,20 +333,57 @@ const Modali = {
 
         //I20-1040: in UXP un contenitore scorre solo se ha un'altezza in pixel. Col solo
         //max-height del riquadro un messaggio lungo veniva tagliato, senza modo di leggerlo.
-        //Se non ci sta, il messaggio prende lo spazio che resta sopra i pulsanti e scorre.
-        //Le misure si leggono dopo un attimo: subito dopo l'inserimento possono essere vecchie.
-        await delay(50);
+        //TASK-19c18841: il piede dei pulsanti sta fermo in fondo e il messaggio scorre sopra di lui.
+        //Il messaggio prende subito un'altezza massima in pixel, dal pannello meno margini e piede:
+        //niente misure del contenuto appena inserito, che in UXP possono essere vecchie. E si scrive
+        //sullo stile, non con .css di jQuery: per l'altezza jQuery passa da un suo calcolo che in UXP
+        //non arriva allo stile. Misurato il 26/10/2026: lo stile restava vuoto, il messaggio (485 px)
+        //non si restringeva dentro il riquadro (535) e spingeva i pulsanti 15 px fuori; scritta sullo
+        //stile, l'altezza massima teneva il messaggio e lo faceva scorrere.
+        //Lo stile e' quello dell'elemento nella pagina, preso per id: messaggio[0] puo' non esserlo.
+        //Un elemento jQuery creato da un testo con attributi nasce da un frammento HTML, e in UXP il
+        //primo del gruppo non e' sempre il div che finisce nella pagina (misurato il 26/10/2026: le
+        //scritture su messaggio[0] non arrivavano, quelle sull'elemento preso dalla pagina si').
+        //Se l'altezza massima non bastasse a fermarlo, appena il contenuto la supera il messaggio
+        //prende un'altezza fissa uguale: quella in pixel UXP la rispetta di sicuro.
+        var massimo = Modali.altezzaMassimaMessaggio(600);
+        var altezzaFissata = false;
         try {
-            var spazio = Math.floor((modal[0].clientHeight - 20) * 0.88) - pulsanti[0].offsetHeight - 28;
-            if (spazio > 60 && messaggio[0].scrollHeight > spazio) {
-                messaggio.css({ height: spazio + "px", flex: "0 0 auto", overflowY: "auto" });
+            var wrapper = document.getElementById("wrapper");
+            var altezzaPannello = wrapper != null && wrapper.clientHeight > 0 ? wrapper.clientHeight
+                : (document.body != null ? document.body.clientHeight : 0);
+            massimo = Modali.altezzaMassimaMessaggio(altezzaPannello);
+            var elMessaggio = document.getElementById(idMessaggio);
+            if (elMessaggio != null) {
+                elMessaggio.style.flex = "0 0 auto";
+                elMessaggio.style.overflowY = "auto";
+                elMessaggio.style.maxHeight = massimo + "px";
             }
         }
         catch (e) {
             console.warn("confirmCustom: altezza del messaggio non calcolata", e);
         }
+        var fissaSeServe = function () {
+            if (altezzaFissata) {
+                return;
+            }
+            var el = document.getElementById(idMessaggio);
+            if (el != null && el.scrollHeight > massimo) {
+                el.style.height = massimo + "px";
+                altezzaFissata = true;
+            }
+        };
     
+        //TASK-19c18841: se la finestra la toglie qualcun altro - Modali.closeAllModal, che parte
+        //quando in InDesign si seleziona un box - la risposta non arriverebbe piu' e chi aspetta
+        //resterebbe fermo per sempre, in silenzio. Vale come Annulla. Si guarda nella pagina, per id.
         while(!risposto){
+            if (document.getElementById(idMessaggio) == null) {
+                objRes.result = false;
+                objRes.hiddenVal = null;
+                break;
+            }
+            fissaSeServe();
             await delay(100);
         }
     
