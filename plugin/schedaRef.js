@@ -6038,13 +6038,20 @@ const schedaRef = {
 
         const me = this;
         const box = this.refSelected != null ? this.refSelected.item : null;
-        corpo.append(SchermataSegnalazioni.elencoVociDelBox(box, voci, function () {
-            me.leggiVociBollino(box);
+        //I20-1138: "Risolvi" passa il box com'e' dopo: se il bollino l'ha rigruppato, quello di prima
+        //non c'e' piu', e le voci si rileggono dal nuovo.
+        corpo.append(SchermataSegnalazioni.elencoVociDelBox(box, voci, function (dopo) {
+            const attuale = dopo != null && dopo.isValid ? dopo : box;
+            //Anche col box non selezionato (scheda aperta dal report) la scheda segue il gruppo nuovo.
+            if (attuale !== box && me.refSelected != null && me.refSelected.item === box) {
+                me.refSelected.item = attuale;
+            }
+            me.leggiVociBollino(attuale);
             me.riempiElencoSegnalazioni(elenco, intestazione, me.segnalazioniInMemoria() || [], me.vociBollinoInMemoria(), me.dopoAzioneFinestra);
             me.riempiSezioneBollino(sezione, elenco, intestazione);
             me.aggiornaPulsanteSegnalazioni();
             try {
-                SchermataSegnalazioni.controllaPagine([box.parentPage.name]);
+                SchermataSegnalazioni.controllaPagine([attuale.parentPage.name]);
             }
             catch (e) {
                 //l'icona si riallinea al prossimo controllo

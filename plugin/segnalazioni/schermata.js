@@ -1139,10 +1139,50 @@ const SchermataSegnalazioni = {
         }
         riga.append(testo);
         riga.append($('<button type="button"></button>').text("Risolvi").css({ flexShrink: '0' }).on('click', () => {
-            Segnalazioni.risolviVoce(box, indice);
-            alCambio();
+            //I20-1138: la selezione si guarda prima, perche' risolvere puo' rifare il gruppo del box.
+            const eraSelezionato = SchermataSegnalazioni.eSelezionato(box);
+            const dopo = Segnalazioni.risolviVoce(box, indice);
+            SchermataSegnalazioni.seguiBoxRigruppato(box, dopo, eraSelezionato);
+            alCambio(dopo);
         }));
         return riga;
+    },
+
+    /// I20-1138: se il box e' la selezione corrente di InDesign (da solo).
+    eSelezionato(box) {
+        try {
+            const selezione = typeof app !== "undefined" && app != null ? app.selection : null;
+            return box != null && selezione != null && selezione.length === 1 && selezione[0] != null && selezione[0].id === box.id;
+        }
+        catch (e) {
+            return false;
+        }
+    },
+
+    /// I20-1138: "Risolvi" con altre segnalazioni nel box ridisegna il bollino, e il disegno rifa' il
+    /// gruppo del box (Utility.addBollinoCustom): il gruppo nuovo ha un altro id. Se il box era
+    /// selezionato, il ciclo degli eventi lo prendeva per una ref appena scelta e chiudeva tutte le
+    /// finestre (EVENT_NEW_REF_SELECTED, Modali.closeAllModal), compresa questa. Qui il box nuovo si
+    /// seleziona e il ciclo lo accetta come gia' visto, con la scheda ref che lo segue come in I20-1132
+    /// (seguiBoxRicostruito). Un box non rifatto, non selezionato o non valido non tocca niente.
+    seguiBoxRigruppato(prima, dopo, eraSelezionato) {
+        try {
+            if (!eraSelezionato || dopo == null || dopo === prima || !dopo.isValid) {
+                return false;
+            }
+            if (typeof schedaRef !== "undefined" && schedaRef != null && typeof schedaRef.seguiBoxRicostruito === "function") {
+                return schedaRef.seguiBoxRicostruito(dopo);
+            }
+            Utility.selezionaBox(dopo);
+            if (typeof indesignEvents !== "undefined" && indesignEvents != null && typeof indesignEvents.accettaSelezione === "function") {
+                indesignEvents.accettaSelezione([dopo.id]);
+            }
+            return true;
+        }
+        catch (e) {
+            console.error("Code SGN-07 Box rifatto dopo Risolvi non seguito:", e);
+            return false;
+        }
     },
 
     /// I20-1056, lotto 4: le segnalazioni di un box per la scheda ref: "Risolvi tutte" e le righe,

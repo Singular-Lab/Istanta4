@@ -223,7 +223,8 @@ test("la schermata legge il documento e offre vai al box, risolvi e risolvi tutt
     assert.match(schermata, /\.text\("Vai al box"\)/);
     //I20-1044: fra il testo e il clic c'e' lo stile che tiene il pulsante intero.
     //I20-1056, lotto 4: la riga e' condivisa con la scheda ref; nella schermata alCambio rifa' l'elenco.
-    assert.match(schermata, /\.text\("Risolvi"\)(?:\.css\([^)]*\))?\.on\('click', \(\) => \{\s*Segnalazioni\.risolviVoce\(box, indice\);\s*alCambio\(\);/);
+    //I20-1138: prima di ridisegnare il box rifatto si segue, e alCambio riceve quello aggiornato.
+    assert.match(schermata, /\.text\("Risolvi"\)(?:\.css\([^)]*\))?\.on\('click', \(\) => \{[\s\S]{0,200}?const dopo = Segnalazioni\.risolviVoce\(box, indice\);[\s\S]{0,120}?alCambio\(dopo\);/);
     assert.match(schermata, /const ridisegna = \(\) => SchermataSegnalazioni\.riempi\(elenco\);/);
     //I20-1056, lotto 2: il conteggio va accanto al titolo.
     //I20-1116: il titolo e' una costante, la stessa del popup e della colonna della vista affiancata.
@@ -1355,4 +1356,81 @@ test("I20-1126: disattivate, l'impaginazione non scrive bollini e il Report Inte
     //E la schermata offre sempre, in cima, di disattivarle o riattivarle.
     const schermata = leggiFileDelPlugin("segnalazioni/schermata.js").replace(/\r/g, "");
     assert.match(schermata, /elenco\.empty\(\);\s*\/\/I20-1126[^\n]*\n\s*elenco\.append\(SchermataSegnalazioni\._barraDisattivazione\(elenco\)\);/);
+});
+
+/* ---- I20-1138: "Risolvi" non chiude la schermata ---- */
+
+//"Risolvi" con altre segnalazioni nel box ridisegna il bollino, e il disegno rifa' il gruppo del box:
+//il gruppo nuovo ha un altro id. Col box selezionato il ciclo degli eventi lo prendeva per una ref
+//appena scelta e chiudeva tutte le finestre, compresa la schermata delle segnalazioni.
+
+function conGlobali(globali, fn) {
+    const prima = {};
+    Object.keys(globali).forEach(k => { prima[k] = global[k]; global[k] = globali[k]; });
+    try {
+        return fn();
+    }
+    finally {
+        Object.keys(globali).forEach(k => { if (prima[k] === undefined) { delete global[k]; } else { global[k] = prima[k]; } });
+    }
+}
+
+const boxFinto = (id, valido = true) => ({ id: id, isValid: valido });
+
+test("il box selezionato e' quello solo nella selezione di InDesign", () => {
+    const box = boxFinto(10);
+    conGlobali({ app: { selection: [boxFinto(10)] } }, () => assert.strictEqual(SchermataSegnalazioni.eSelezionato(box), true));
+    conGlobali({ app: { selection: [boxFinto(11)] } }, () => assert.strictEqual(SchermataSegnalazioni.eSelezionato(box), false));
+    conGlobali({ app: { selection: [boxFinto(10), boxFinto(11)] } }, () => assert.strictEqual(SchermataSegnalazioni.eSelezionato(box), false));
+    conGlobali({ app: { selection: [] } }, () => assert.strictEqual(SchermataSegnalazioni.eSelezionato(box), false));
+    conGlobali({ app: { selection: [boxFinto(10)] } }, () => assert.strictEqual(SchermataSegnalazioni.eSelezionato(null), false));
+});
+
+test("il box rigruppato e selezionato si fa seguire dalla scheda, che lo seleziona e lo fa accettare", () => {
+    const seguiti = [];
+    const prima = boxFinto(10);
+    const dopo = boxFinto(20);
+    conGlobali({ schedaRef: { seguiBoxRicostruito(box) { seguiti.push(box); return true; } } }, () => {
+        assert.strictEqual(SchermataSegnalazioni.seguiBoxRigruppato(prima, dopo, true), true);
+    });
+    assert.deepStrictEqual(seguiti, [dopo]);
+});
+
+test("senza la scheda il box nuovo si seleziona e il ciclo degli eventi lo accetta come gia' visto", () => {
+    const selezionati = [];
+    const accettati = [];
+    const dopo = boxFinto(20);
+    conGlobali({
+        schedaRef: undefined,
+        Utility: { selezionaBox(box) { selezionati.push(box); return true; } },
+        indesignEvents: { accettaSelezione(ids) { accettati.push(ids); return true; } }
+    }, () => {
+        assert.strictEqual(SchermataSegnalazioni.seguiBoxRigruppato(boxFinto(10), dopo, true), true);
+    });
+    assert.deepStrictEqual(selezionati, [dopo]);
+    assert.deepStrictEqual(accettati, [[20]]);
+});
+
+test("un box non selezionato, non rifatto o non valido non tocca la selezione", () => {
+    const seguiti = [];
+    const prima = boxFinto(10);
+    conGlobali({ schedaRef: { seguiBoxRicostruito(box) { seguiti.push(box); return true; } } }, () => {
+        assert.strictEqual(SchermataSegnalazioni.seguiBoxRigruppato(prima, boxFinto(20), false), false);
+        //"Risolvi" sull'ultima segnalazione toglie il bollino: il box resta lo stesso.
+        assert.strictEqual(SchermataSegnalazioni.seguiBoxRigruppato(prima, prima, true), false);
+        assert.strictEqual(SchermataSegnalazioni.seguiBoxRigruppato(prima, boxFinto(20, false), true), false);
+        assert.strictEqual(SchermataSegnalazioni.seguiBoxRigruppato(prima, null, true), false);
+    });
+    assert.deepStrictEqual(seguiti, []);
+});
+
+test("\"Risolvi\" guarda la selezione prima di risolvere, segue il box e passa il box nuovo a chi ridisegna", () => {
+    const schermata = leggiFileDelPlugin("segnalazioni/schermata.js").replace(/\r/g, "");
+    assert.match(schermata, /text\("Risolvi"\)[\s\S]{0,200}?const eraSelezionato = SchermataSegnalazioni\.eSelezionato\(box\);\s*const dopo = Segnalazioni\.risolviVoce\(box, indice\);\s*SchermataSegnalazioni\.seguiBoxRigruppato\(box, dopo, eraSelezionato\);\s*alCambio\(dopo\);/);
+});
+
+test("la scheda ref rilegge le segnalazioni dal box che \"Risolvi\" le passa, e lo segue", () => {
+    const scheda = leggiFileDelPlugin("schedaRef.js").replace(/\r/g, "");
+    assert.match(scheda, /SchermataSegnalazioni\.elencoVociDelBox\(box, voci, function \(dopo\) \{\s*const attuale = dopo != null && dopo\.isValid \? dopo : box;[\s\S]{0,300}?me\.refSelected\.item = attuale;[\s\S]{0,40}?me\.leggiVociBollino\(attuale\);/);
+    assert.match(scheda, /SchermataSegnalazioni\.controllaPagine\(\[attuale\.parentPage\.name\]\);/);
 });
