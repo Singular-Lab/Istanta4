@@ -1313,6 +1313,10 @@ const filtri = {
                                     //$('<option></option>').text('Da impaginare').val('da_impaginare')
                                     $('<sp-menu-item></sp-menu-item>').text('Da impaginare').val('da_impaginare')
                                 )
+                                .append(
+                                    //I20-1141: le referenze il cui box ha segnalazioni di impaginazione.
+                                    $('<sp-menu-item></sp-menu-item>').text('Con segnalazioni').val('con_segnalazioni')
+                                )
                                 .on('change', function () {
                                     //togliamo selected ad ogni opzione
                                     //$(this).find('option').prop('selected', false);

@@ -442,3 +442,59 @@ test("addBollinoCustom mette l'etichetta sull'ovale, e senza etichetta resta com
     assert.match(utility, /addBollinoCustom\(box, text, colorString, colorGradient, positionEnum = 1, customBoundsRelativeToBox = null, overflowControls = true, etichettaBollino = null\)\{/);
     assert.match(utility, /if \(etichettaBollino != null\) \{\s*bollino\.label = etichettaBollino;/);
 });
+
+/* ---- I20-1141: il tracciato con le sole referenze con segnalazioni ---- */
+
+//Il riepilogo come lo da' riepilogoTracciato: per idRec, solo i box con voci.
+const RIEPILOGO_TRACCIATO = {
+    "4410": { gravita: "errore", segnalazioni: 2, errori: 1 },
+    "4412": { gravita: "warning", segnalazioni: 1, errori: 0 }
+};
+//Le righe del tracciato portano l'idRec in recordInTracciato, come le legge il badge.
+const idRecDellaRiga = (riga) => riga.recordInTracciato.idRec;
+
+function riga(idRec, codice) {
+    return { recordInTracciato: { idRec, "Referenza.Codice": codice } };
+}
+
+test("Con segnalazioni: restano solo le righe il cui box ha voci, nell'ordine del tracciato", () => {
+    const righe = [riga(4412, "B"), riga(4409, "A"), riga(4410, "C"), riga(4411, "D")];
+
+    const tenute = Segnalazioni.recordConSegnalazioni(righe, RIEPILOGO_TRACCIATO, idRecDellaRiga);
+
+    assert.deepStrictEqual(tenute.map(r => r.recordInTracciato["Referenza.Codice"]), ["B", "C"]);
+});
+
+test("Con segnalazioni: l'idRec come testo o come numero vale uguale, come per il badge", () => {
+    const righe = [riga("4410", "testo"), riga(4410, "numero"), riga("4410.0", "decimale")];
+
+    assert.strictEqual(Segnalazioni.recordConSegnalazioni(righe, RIEPILOGO_TRACCIATO, idRecDellaRiga).length, 3);
+});
+
+test("Con segnalazioni: documento senza segnalazioni, righe senza idRec o dati mancanti danno una lista vuota", () => {
+    const righe = [riga(4410, "C"), riga(null, "senza"), { recordInTracciato: {} }];
+
+    assert.deepStrictEqual(Segnalazioni.recordConSegnalazioni(righe, {}, idRecDellaRiga), []);
+    assert.deepStrictEqual(Segnalazioni.recordConSegnalazioni([riga(null, "senza"), { recordInTracciato: {} }], RIEPILOGO_TRACCIATO, idRecDellaRiga), []);
+    assert.deepStrictEqual(Segnalazioni.recordConSegnalazioni(righe, null, idRecDellaRiga), []);
+    assert.deepStrictEqual(Segnalazioni.recordConSegnalazioni(null, RIEPILOGO_TRACCIATO, idRecDellaRiga), []);
+    assert.deepStrictEqual(Segnalazioni.recordConSegnalazioni(righe, RIEPILOGO_TRACCIATO, null), []);
+    //Una riga che non si legge non ferma le altre.
+    const rotta = { get recordInTracciato() { throw new Error("riga rotta"); } };
+    assert.deepStrictEqual(Segnalazioni.recordConSegnalazioni([rotta, riga(4410, "C")], RIEPILOGO_TRACCIATO, idRecDellaRiga).length, 1);
+});
+
+test("la tendina del tracciato ha Con segnalazioni, e il tracciato la usa con e senza ricerca", () => {
+    const filtri = leggiFileDelPlugin("filtri.js").replace(/\r/g, "");
+    assert.match(filtri, /\$\('<sp-menu-item><\/sp-menu-item>'\)\.text\('Da impaginare'\)\.val\('da_impaginare'\)\s*\)\s*\.append\(\s*(\/\/[^\n]*\n\s*)*\$\('<sp-menu-item><\/sp-menu-item>'\)\.text\('Con segnalazioni'\)\.val\('con_segnalazioni'\)/);
+
+    const indexNew = leggiFileDelPlugin("indexNew.js").replace(/\r/g, "");
+    const inizio = indexNew.indexOf("async function aggiornaTracciatoPostRicerca(resRicerca) {");
+    const corpo = indexNew.substring(inizio, indexNew.indexOf("\n}\n", inizio));
+    //Senza ricerca: tutti i record del kit, poi solo quelli con segnalazioni.
+    assert.match(corpo, /\} else if \(val === "con_segnalazioni"\) \{\s*(\/\/[^\n]*\n\s*)*recordsDaMostrare = Segnalazioni\.recordConSegnalazioni\(contenutoKitInLavorazione\.records \|\| \[\], riepilogoSegnalazioniTracciato\(\), idRecDelRecordDelTracciato\);/);
+    //Con la ricerca: la lista di "Vedi tutto", con i suoi criteri, poi solo quelli con segnalazioni.
+    assert.match(corpo, /if \(val === "all" \|\| val === "con_segnalazioni"\) \{[\s\S]*?if \(val === "con_segnalazioni"\) \{\s*tutti = Segnalazioni\.recordConSegnalazioni\(tutti, riepilogoSegnalazioniTracciato\(\), idRecDelRecordDelTracciato\);\s*\}/);
+    //L'idRec e' quello del recordInTracciato, come per il badge di pagina.
+    assert.match(indexNew, /function idRecDelRecordDelTracciato\(record\) \{\s*return getIdRecFromItemRef\(record != null \? record\.recordInTracciato : null\);\s*\}/);
+});

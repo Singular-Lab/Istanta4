@@ -7299,8 +7299,14 @@ function creaRigaSync(contenutoKitInLavorazione) {
     };
 }
 
-/// Ridisegna il corpo del tracciato con i record da mostrare: tutti, i soli impaginati, o i
-/// soli da impaginare, secondo il filtro di visualizzazione.
+/// I20-1141: l'idRec di un record del tracciato, come lo legge la riga per il badge di pagina.
+function idRecDelRecordDelTracciato(record) {
+    return getIdRecFromItemRef(record != null ? record.recordInTracciato : null);
+}
+
+/// Ridisegna il corpo del tracciato con i record da mostrare: tutti, i soli impaginati, i soli
+/// da impaginare o, dal I20-1141, quelli il cui box ha segnalazioni, secondo il filtro di
+/// visualizzazione.
 ///
 /// Due sorgenti diverse a seconda di come ci si arriva. Senza ricerca si parte dal
 /// contenuto del kit e si divide confrontando con la lista dei codici gia' impaginati nel
@@ -7328,6 +7334,10 @@ async function aggiornaTracciatoPostRicerca(resRicerca) {
 
             if (val === "all") {
                 recordsDaMostrare = contenutoKitInLavorazione.records || [];
+            } else if (val === "con_segnalazioni") {
+                //I20-1141: tutti i record, poi solo quelli il cui box ha segnalazioni.
+                //La lettura e' quella che riusano i badge qui sotto (Segnalazioni.riepilogoTracciato).
+                recordsDaMostrare = Segnalazioni.recordConSegnalazioni(contenutoKitInLavorazione.records || [], riepilogoSegnalazioniTracciato(), idRecDelRecordDelTracciato);
             } else if (val === "impaginati") {
                 recordsDaMostrare = (contenutoKitInLavorazione.records || []).filter(r =>
                     listImpaginati.includes(r.recordInTracciato.idRec)
@@ -7340,11 +7350,15 @@ async function aggiornaTracciatoPostRicerca(resRicerca) {
         } else {
             let tutti = [];
 
-            if (val === "all") {
+            if (val === "all" || val === "con_segnalazioni") {
                 if (!resRicerca.criteriValidati) {
                     tutti = resRicerca.listaCompleta || [];
                 } else {
                     tutti = [].concat(resRicerca.impaginati || [], resRicerca.nonImpaginati || []);
+                }
+                //I20-1141: con i criteri della ricerca, solo i record il cui box ha segnalazioni.
+                if (val === "con_segnalazioni") {
+                    tutti = Segnalazioni.recordConSegnalazioni(tutti, riepilogoSegnalazioniTracciato(), idRecDelRecordDelTracciato);
                 }
             } else if (val === "impaginati") {
                 tutti = !resRicerca.criteriValidati
