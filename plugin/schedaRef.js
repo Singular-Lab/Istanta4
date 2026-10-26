@@ -2390,8 +2390,11 @@ const schedaRef = {
                                     if (currVal == null) {
                                         currVal = "";
                                     }
-                                    contInstr.append("<input style=\"width:100px;vertical-align:middle;background-color:#79d4e8;color:black;\" class=\"fieldCambioStrutturale\" type=\"text\" id=\"" + istruzione.field + "\" value=\"" + currVal + "\"></input>");
-                                    panelAzioneEl.append('<div class="row" style="display:block;"><div class="col" style="display:block;"><div style="color: white;width:100%">'+istruzione.field +'</div><div  style="width:100%"><input type="text" class="fieldCambioStrutturale singular-inputTextfield" id="'+istruzione.field +'" style="width: 90%; color: black; background-color:white;" value="'+currVal+'"></input></div></div></div>');
+                                    //I20-1137: i campi dei cambi strutturali restano nativi (data-sempre-nativo): a riposo, al passaggio
+                                    //del mouse il campo vero rientrava nella riga e UXP non la ridisponeva bene, e il campo si spostava
+                                    //sopra l'etichetta. Vale per le quattro caselle qui sotto.
+                                    contInstr.append("<input style=\"width:100px;vertical-align:middle;background-color:#79d4e8;color:black;\" class=\"fieldCambioStrutturale\" data-sempre-nativo type=\"text\" id=\"" + istruzione.field + "\" value=\"" + currVal + "\"></input>");
+                                    panelAzioneEl.append('<div class="row" style="display:block;"><div class="col" style="display:block;"><div style="color: white;width:100%">'+istruzione.field +'</div><div  style="width:100%"><input type="text" class="fieldCambioStrutturale singular-inputTextfield" data-sempre-nativo id="'+istruzione.field +'" style="width: 90%; color: black; background-color:white;" value="'+currVal+'"></input></div></div></div>');
                                 }
                                 else {
                                     if (typeof istruzione.valore === "object") {
@@ -2417,8 +2420,8 @@ const schedaRef = {
                                     }
                                     else {
                                         //Valore assegnato forzato
-                                        contInstr.append("<input style=\"width:100px;vertical-align:middle;\" class=\"fieldCambioStrutturale\" type=\"text\" readonly disabled id=\"" + istruzione.field + "\" value=\"" + istruzione.valore + "\"></input>");
-                                        panelAzioneEl.append('<div class="row" style="display:block;"><div class="col" style="display:block;"><div style="color: white;width:100%;">'+istruzione.field +'</div><div style="width:100%"><input type="text" class="fieldCambioStrutturale singular-inputTextfield" id="'+istruzione.field +'" readonly style="width: 90%; color: black; background:#dcdc82;" value="'+istruzione.valore+'"></input></div></div></div>');
+                                        contInstr.append("<input style=\"width:100px;vertical-align:middle;\" class=\"fieldCambioStrutturale\" data-sempre-nativo type=\"text\" readonly disabled id=\"" + istruzione.field + "\" value=\"" + istruzione.valore + "\"></input>");
+                                        panelAzioneEl.append('<div class="row" style="display:block;"><div class="col" style="display:block;"><div style="color: white;width:100%;">'+istruzione.field +'</div><div style="width:100%"><input type="text" class="fieldCambioStrutturale singular-inputTextfield" data-sempre-nativo id="'+istruzione.field +'" readonly style="width: 90%; color: black; background:#dcdc82;" value="'+istruzione.valore+'"></input></div></div></div>');
 
                                     }
                                 }
