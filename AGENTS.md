@@ -24,7 +24,20 @@ Prima di esaminare o modificare qualsiasi file:
    - `projectId`: `istanta4`;
    - `prompt`: la richiesta completa originale dell'utente;
    - `sourceBranch`: **solo** nel caso descritto al punto 6, altrimenti lascialo vuoto.
-2. Conserva il `taskId` restituito e consulta tutte le specifiche fornite.
+2. Conserva il `taskId` restituito. La risposta contiene solo l'indice delle specifiche
+   del progetto, senza il loro testo: individua tu quelle pertinenti alla richiesta.
+   - Sintetizza la richiesta in una o più descrizioni in linguaggio naturale, una per
+     ogni capacità o passaggio del flusso coinvolto, e cerca ciascuna con
+     `company_search_specifications`: la ricerca è per significato, non serve indovinare
+     le parole esatte.
+   - Leggi per intero con `company_get_specification` ogni specifica che risulta
+     pertinente, prima di basarti su un risultato della ricerca.
+   - Se il flusso attraversa altri servizi, ripeti la ricerca per ogni passaggio della
+     catena (§4.5); se i risultati sono scarsi o ambigui, riformula, oppure orientati con
+     l'indice o con `company_list_specifications`.
+   - Non scaricare le specifiche estranee al task: occupano contesto che serve al lavoro.
+   - Nel pre-flight (§7) riporta le ricerche fatte e le specifiche lette, così chi approva
+     può accorgersi se ne manca qualcuna.
 3. Non inventare o generare autonomamente un `taskId`.
 4. Riutilizza lo stesso `taskId` per tutte le operazioni relative alla medesima richiesta.
 5. Se un task `Blocked` può riprendere, usa `company_update_task_status` con stato `Resume` prima di continuare.
@@ -102,7 +115,7 @@ Non creare test per modifiche esclusivamente documentali o refactoring senza cam
 
 Prima di modificare file produci un **RAPPORTO PRE-FLIGHT** contenente:
 
-- ID del task e specifiche consultate;
+- ID del task e specifiche consultate, con le ricerche fatte per trovarle (§2);
 - componenti, file e test pertinenti;
 - criteri di accettazione e matrice d'impatto del task;
 - test da creare, aggiornare ed eseguire;
@@ -225,7 +238,7 @@ Le specifiche seguono lo standard OpenSpec, sempre: vale quando proponi un testo
 
 ### Divari di specifica durante un task
 
-Un task, che corregga un bug, aggiunga una funzionalità o ne migliori una, può far emergere un comportamento che le specifiche ricevute da `company_prepare_task` non descrivono, o descrivono in modo diverso. In quel caso:
+Un task, che corregga un bug, aggiunga una funzionalità o ne migliori una, può far emergere un comportamento che le specifiche consultate per il task non descrivono, o descrivono in modo diverso. In quel caso:
 
 1. Verifica il divario sulle specifiche ufficiali: rileggi quella pertinente e, se serve, cercala con `company_search_specifications`.
 2. Proponi il requisito con `company_propose_spec_change`, indicando il `taskId`, la specifica (`specPath`, come la restituisce il Control Plane), se il requisito è nuovo (`added`) o cambia uno esistente (`modified`), il requisito nel formato dei punti precedenti, il motivo (`bug`, `feature` o `improvement`) e una spiegazione con le prove: issue, codice, test. Per una capacità che non ha ancora una specifica indica anche `capabilityPurpose`.
