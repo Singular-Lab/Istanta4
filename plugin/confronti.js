@@ -770,6 +770,10 @@ const confronti = {
                 var disattivatiDallaForma = itemRef != null && typeof CssFramework !== "undefined"
                     ? CssFramework.disattivatiDallaForma(box1, itemRef, box1.geometricBounds).disattivati
                     : new Set();
+                //I20-1140: i loghi con testo dichiarati dal plugin di agenzia.
+                var loghiConTesto = typeof pluginMiddleware !== "undefined" && pluginMiddleware != null && typeof pluginMiddleware.getLoghiConTesto === "function"
+                    ? pluginMiddleware.getLoghiConTesto()
+                    : [];
                 fotoExtraAuto.forEach(foto => {
                     if (disattivatiDallaForma.has(foto.sigla)) {
                         listFotoExtraBox1 = listFotoExtraBox1.filter(f => f != foto.nome && f != foto.sigla);
@@ -787,6 +791,14 @@ const confronti = {
                         else {
                             if (foto.escluso) {
                                 differenze.push({ label: foto.sigla, difference: "foto extraAuto esclusa ma presente nel box: " + foto.sigla });
+                            }
+                            else {
+                                //I20-1140: un logo che il plugin di agenzia dichiara con testo deve portare
+                                //il testo del dato (il logo attributo italiano di Edro21 segue la descrizione).
+                                let testoDiverso = confronti.differenzaTestoLogo(foto, campoBox1, itemRef, loghiConTesto);
+                                if (testoDiverso != null) {
+                                    differenze.push(testoDiverso);
+                                }
                             }
                             //togliamo la foto dalla lista
                             listFotoExtraBox1 = listFotoExtraBox1.filter(f => f != foto.sigla);
@@ -1220,6 +1232,77 @@ const confronti = {
                 nomeServer: foto.nome
             }
         };
+    },
+
+    /// I20-1140: la differenza sul testo di un logo idms, o null. Il plugin di agenzia dichiara in
+    /// loghiConTesto ([{ sigla, keyInRecordInTracciato }]) i loghi che portano un testo del dato: per
+    /// Edro21 il logo attributo italiano, con "prodotto<br>italiano" in logo_attributo_it. Il testo del
+    /// logo nel box e' quello del suo primo riquadro di testo. Un logo non dichiarato, un dato senza
+    /// quel campo o un logo senza riquadro di testo non si confrontano. Non guarda InDesign oltre
+    /// all'elemento ricevuto: si prova sotto Node.
+    differenzaTestoLogo(foto, elementoNelBox, itemRef, loghiConTesto) {
+        var sigla = foto != null && foto.sigla != null ? String(foto.sigla) : "";
+        if (sigla === "" || itemRef == null || !Array.isArray(loghiConTesto)) {
+            return null;
+        }
+        var voce = loghiConTesto.find(v => v != null && v.sigla === sigla);
+        if (voce == null || itemRef[voce.keyInRecordInTracciato] == null) {
+            return null;
+        }
+        var nelBox = confronti.testoDelLogoNelBox(elementoNelBox);
+        if (nelBox == null) {
+            return null;
+        }
+        var atteso = String(itemRef[voce.keyInRecordInTracciato]);
+        if (confronti.testoLogoConfrontabile(nelBox) === confronti.testoLogoConfrontabile(atteso)) {
+            return null;
+        }
+        return {
+            label: sigla,
+            difference: "testo del logo " + sigla + " diverso dal dato: nel box \"" + confronti.testoLogoInRiga(nelBox)
+                + "\", nel dato \"" + confronti.testoLogoInRiga(atteso) + "\""
+        };
+    },
+
+    /// I20-1140: il testo del primo riquadro di testo di un logo idms (o del riquadro stesso), null
+    /// se non ne ha o non si legge.
+    testoDelLogoNelBox(elemento) {
+        try {
+            if (elemento == null) {
+                return null;
+            }
+            if (elemento.textFrames != null && elemento.textFrames.length > 0) {
+                var riquadro = elemento.textFrames.item(0);
+                return riquadro != null && riquadro.contents != null ? String(riquadro.contents) : null;
+            }
+            return typeof elemento.contents === "string" ? elemento.contents : null;
+        }
+        catch (e) {
+            return null;
+        }
+    },
+
+    /// I20-1140: un testo di logo come si confronta: "<br>" e i ritorni a capo di InDesign valgono
+    /// come a capo, le righe vuote e gli spazi in piu' non contano, e nemmeno le maiuscole (il logo
+    /// le mette con lo stile).
+    testoLogoConfrontabile(testo) {
+        return String(testo == null ? "" : testo)
+            .replace(/<br\s*\/?>/gi, "\n")
+            .split(/\r\n|\r|\n/)
+            .map(riga => riga.replace(/\s+/g, " ").trim())
+            .filter(riga => riga !== "")
+            .join("\n")
+            .toLowerCase();
+    },
+
+    /// I20-1140: un testo di logo su una riga, per la segnalazione: gli a capo diventano " / ".
+    testoLogoInRiga(testo) {
+        return String(testo == null ? "" : testo)
+            .replace(/<br\s*\/?>/gi, "\n")
+            .split(/\r\n|\r|\n/)
+            .map(riga => riga.trim())
+            .filter(riga => riga !== "")
+            .join(" / ");
     },
 
     /// I20-1070: il tipo di elemento del box di una foto extra del dato: tipo 3 (TipoFoto.Logo)

@@ -38,7 +38,7 @@ Le quaranta funzioni rispondono tutte a domande sul cliente corrente:
 | campi ed etichette | `getCampo`, `getEtichette`, `replacePlaceholders`, `getInfoExtra` |
 | cosa si può modificare | `isSchemaEditable`, `getEditabilitaSchedaRef`, `getAvvisoCambioPrimario` |
 | testo in overflow | `getOverflowsInstruction`, `getOverflowDirection`, `getDefaultOverflowDirection` |
-| logo e bolli | `getFitTypeLogo`, `setBolloNOFOTO`, `setBolloFOTONOFOUND` |
+| logo e bolli | `getFitTypeLogo`, `setBolloNOFOTO`, `setBolloFOTONOFOUND`, `getLoghiConTesto` (I20-1140: i loghi idms con un testo del dato, da `loghiConTesto`) |
 | meccanica e lavorazione | `getDeclinazioneMeccanica`, `getSuffissoLavorazione`, `requiresIngombro` |
 | librerie InDesign | `getLibreria` |
 | tracciato e ordinamento | `getColonneTracciatoIntestazione`, `applicaSchemaDiOrdinamentoConPesi`, `getRegoleApplicazioneDNA` |

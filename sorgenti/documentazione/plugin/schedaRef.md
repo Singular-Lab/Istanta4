@@ -44,7 +44,13 @@ sta lavorando l'operatore» guarda lì. Con lei: `multiSelection`, `schedeRefDat
 
 - `salvaModifiche(...)` → manda al server quello che l'operatore ha cambiato. **Cosa sia cambiato
   davvero lo dice [InputEditController](InputEditController.md)**, che tiene da parte i valori di
-  partenza: senza quel confronto si riscriverebbe tutto a ogni conferma.
+  partenza: senza quel confronto si riscriverebbe tutto a ogni conferma. Dopo un salvataggio
+  registrato da Istanta, senza cambio strutturale, `allineaBoxDopoSalvataggioScheda` riscarica la
+  scheda e la confronta col box come dopo le primarie e secondarie (`allineaBoxDopoSalvataggioPS`):
+  tipo di box cambiato, si reimpagina; dati non più allineati, per esempio un logo che la descrizione
+  nuova fa entrare o uscire, si chiede "Aggiorno il box?" (I20-1140). Se il box viene rifatto
+  (`applicaReimpaginazione` lo ricorda in `boxReimpaginato`) la scheda lo segue con
+  `seguiBoxRicostruito` e si ricarica su quello.
 - `ricollegaBoxImpaginato(box, externalCall, codiceGruppo)` → riaggancia un box alla sua referenza.
   Gli esiti che il server manda indietro si leggono con [ricollegaEsiti](ricollegaEsiti.md), che è
   verificabile.

@@ -122,7 +122,14 @@ const FotoPlacer =
                 }
 
                 if (cacheLoghi[sigla] == null || !cacheLoghi[sigla].isValid) {
-                    let objDms = doc.pages.item(0).place(path, [0, 0], doc.layers.itemByName("InPagina"));
+                    let objDms;
+                    try {
+                        objDms = doc.pages.item(0).place(path, [0, 0], doc.layers.itemByName("InPagina"));
+                    }
+                    catch (err) {
+                        FotoPlacer.avvisaLogoSenzaFile(imgName, err);
+                        return null;
+                    }
                     objDms.label = "simbolo$" + sigla + "$tipo_" + tipo;
                     cacheLoghi[sigla] = objDms[0];
                 }
@@ -139,7 +146,20 @@ const FotoPlacer =
 
         var rect = box.parentPage.rectangles.add(doc.layers.itemByName("InPagina"), LocationOptions.UNKNOWN, box, { geometricBounds: box.geometricBounds });
         rect.label = "foto_extra$" + sigla + "$tipo_" + tipo;
-        rect.place(path);
+        //I20-1140: un logo senza file non deve fermare gli altri: via il riquadro vuoto, avviso, null.
+        try {
+            rect.place(path);
+        }
+        catch (err) {
+            try {
+                rect.remove();
+            }
+            catch (errRimozione) {
+                //il riquadro resta: lo dice l'avviso
+            }
+            FotoPlacer.avvisaLogoSenzaFile(imgName, err);
+            return null;
+        }
         //Alessio: CONTENT_TO_FRAME al posto di FRAME_TO_CONTENT perche' in Despar faceva un macello con i
         //loghi che costringevano il frame ad adattarsi. Il cliente lo cambia con getFitTypeLogo.
         let fitType = FitOptions.CONTENT_TO_FRAME;
@@ -152,6 +172,15 @@ const FotoPlacer =
         }
         extra.referenceTo = rect;
         return rect;
+    },
+
+    /// I20-1140: un logo il cui file non si apre (non c'e' nella cartella dei loghi, o non si legge).
+    /// Il box si impagina senza: lo si dice all'operatore, con il nome del file da scaricare.
+    avvisaLogoSenzaFile(nomeFile, err) {
+        console.warn("Code FPL-01 Logo " + nomeFile + " non piazzato:", err);
+        if (typeof messaggioUtente === "function") {
+            messaggioUtente("Code FPL-01 Logo " + nomeFile + " non trovato nella cartella dei loghi: il box e' stato impaginato senza. Scarica i loghi della lavorazione.", "warning", false, 8);
+        }
     },
 
     applicaNoRender:function(fotoRectangle, noRender)

@@ -2721,6 +2721,8 @@ const schedaRef = {
     },
 
     async applicaReimpaginazione(){
+        //I20-1140: il box rifatto, per chi deve seguirlo dopo (il Salva della scheda).
+        this.boxReimpaginato = null;
         var schedaRef = this.schedeRefDati;
         if (schedaRef == null || schedaRef.length == 0) {
             messaggioUtente("Code SRF-1 Scheda ref non trovata", "error");
@@ -2758,6 +2760,7 @@ const schedaRef = {
         var esito = await impaginazioneSingoloIndd(schedaRef, pagina, false, null, false, bounds, false, false);
         //Il box nuovo resta selezionato: e' quello su cui l'operatore sta lavorando.
         Utility.selezionaBox(esito != null ? (esito.boxFinale || esito.boxAggiunto) : null);
+        this.boxReimpaginato = esito != null ? (esito.boxFinale || esito.boxAggiunto || null) : null;
         return esito;
     },
 
@@ -4120,6 +4123,13 @@ const schedaRef = {
                 return;
             }   
 
+            //I20-1140: il codice del box va letto adesso, sul dato ancora vecchio: dopo il salvataggio
+            //la scheda si riscarica, e un codice diverso vuol dire box da rifare.
+            const codiceBoxPrecedente = this.codiceBoxDellaScheda(this.schedeRefDati);
+            //I20-1140: vero quando Istanta ha registrato il salvataggio: solo allora il dato puo' essere
+            //cambiato (una descrizione nuova porta o toglie i loghi che ne dipendono).
+            let salvatoSuIstanta = false;
+
             //descrizioneEreditata è un bool che è vero se la ref è un gruppo (codice != codice_gruppo) e descrizione_gruppo non esiste come chiave
             let descrizioneEreditata = (primario.recordInTracciato["Referenza.Codice"] != primario.recordInTracciato["Scatto.CodiceGruppo"]) && !(primario.recordInTracciato.hasOwnProperty("descrizione_gruppo"));
 
@@ -4220,6 +4230,20 @@ const schedaRef = {
                         //il testo è in formato <stile>testo</stile><stile>testo2</stile>
                         TestoTag.applicaTagStringToInndTextFrame(field, descr, box.geometricBounds);
                     }
+                    //I20-1140: come dopo il salvataggio di primarie e secondarie, la scheda riscaricata si
+                    //confronta col box: tipo di box cambiato, si reimpagina; dati non piu' allineati (per
+                    //esempio un logo che la descrizione fa entrare o uscire), si chiede. Se il box e' stato
+                    //rifatto la scheda segue quello nuovo, come dopo le primarie e secondarie (I20-1132), e
+                    //si ricarica su quello; altrimenti si ricarica come prima.
+                    if (salvatoSuIstanta) {
+                        me.allineaBoxDopoSalvataggioScheda(box, codiceBoxPrecedente, dna.codice_gruppo, req.idRec).then(rifatto => {
+                            if (rifatto && me.boxReimpaginato != null && me.boxReimpaginato.isValid && typeof me.seguiBoxRicostruito === "function") {
+                                me.seguiBoxRicostruito(me.boxReimpaginato);
+                            }
+                            me.initSchedaRef(me.refSelected);
+                        });
+                        return;
+                    }
                     //Ricarico la scheda ref
                     //Probabilmente è necessario verificare lo stato della selezione (Questo se nella sciagurata ipotesi, tra il click di Salva modifiche e la fine dell'operazione l'utente cambia follemente la selezione)
                     me.initSchedaRef(me.refSelected);
@@ -4245,6 +4269,12 @@ const schedaRef = {
     
                         //controlliamo se ci sono stati errori
                         if (objResult.esito) {
+                            salvatoSuIstanta = true;
+                            //I20-1140: salvato: le caselle non sono piu' modificate e non restano rosse mentre
+                            //il box si confronta con la scheda riscaricata.
+                            if (this.editRefFieldController != null && typeof this.editRefFieldController.segnaComeSalvati === "function") {
+                                this.editRefFieldController.segnaComeSalvati();
+                            }
                             messaggioUtente("SalvaModifiche: Richiesta completata con successo", "success", false, 5);
                             //I20-1090: a revisione salvata, il meta della descrizione.
                             if (metaDescrizioneDopo != null) {
@@ -6305,6 +6335,36 @@ const schedaRef = {
         }
 
         return esiti.nessuno;
+    },
+
+    /*
+     * I20-1140: dopo il Salva modifiche della scheda, lo stesso controllo del salvataggio di primarie e
+     * secondarie: si riscarica la scheda e si allinea il box (allineaBoxDopoSalvataggioPS). Vero se il
+     * box e' stato rifatto, e chi chiama si ferma. Se la scheda non si riscarica, o qualcosa va storto,
+     * falso: si prosegue come prima del controllo, senza toccare il box.
+     */
+    async allineaBoxDopoSalvataggioScheda(box, codiceBoxPrecedente, codiceGruppo, idRec) {
+        let me = this;
+        try {
+            showLoading("Aggiornamento della scheda in corso...");
+            var schedaRicaricata = false;
+            try {
+                schedaRicaricata = await me.ricaricaDatiScheda(codiceGruppo, idRec);
+            }
+            finally {
+                hideLoading();
+            }
+            if (!schedaRicaricata) {
+                return false;
+            }
+
+            var esito = await me.allineaBoxDopoSalvataggioPS(box, codiceBoxPrecedente);
+            return esito !== me.ESITI_ALLINEAMENTO_BOX.nessuno;
+        }
+        catch (e) {
+            console.error("Code SRF-132 Box non confrontato con la scheda dopo il salvataggio: " + e);
+            return false;
+        }
     },
 
     cartellaDiPercorso(percorso) {

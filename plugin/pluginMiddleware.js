@@ -541,6 +541,29 @@ const pluginMiddleware = {
         return valide;
     },
 
+    /// I20-1140: i loghi idms che portano un testo preso dal dato: [{ sigla, keyInRecordInTracciato }].
+    /// Il plugin di agenzia li dichiara in loghiConTesto; il confronto del box controlla che il testo
+    /// del logo sia quello del campo. Per Edro21 e' il logo attributo italiano. Vuoto: nessun logo con
+    /// testo, i loghi si confrontano solo per la presenza.
+    getLoghiConTesto() {
+        let me = this;
+
+        if (me.callCustom) {
+            if (typeof customAgenzia !== "undefined" && typeof customAgenzia.getLoghiConTesto === "function") {
+                return customAgenzia.getLoghiConTesto() || [];
+            }
+            return [];
+        }
+
+        const voci = me.customPluginDB?.loghiConTesto;
+        if (!Array.isArray(voci)) {
+            return [];
+        }
+        return voci.filter(v => v != null
+            && typeof v.sigla === "string" && v.sigla !== ""
+            && typeof v.keyInRecordInTracciato === "string" && v.keyInRecordInTracciato !== "");
+    },
+
     getSuffissoLavorazione(listaRefImpaginate) {
         let me = this;
 

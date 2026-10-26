@@ -30,6 +30,9 @@ servono davvero**, invece di risalvare ogni campo a ogni conferma.
 - `listen()` → si mette in ascolto delle modifiche dell'operatore.
 - `checkStato()` → aggiorna lo stato della scheda dopo una modifica: cosa risulta cambiato, e se la
   descrizione mostrata si discosta da quella in archivio.
+- `segnaComeSalvati()` → dopo un salvataggio confermato da Istanta (I20-1140): il valore attuale di
+  ogni campo diventa quello di partenza, e i campi tornano bianchi e non modificati. Il Salva lo
+  chiama prima del confronto del box con la scheda riscaricata, che puo' chiedere qualcosa.
 - `getOperazioniDiSalvataggioDaFare(descrizioneEreditata)` → **il cuore**. Senza questo confronto
   ogni conferma riscriverebbe tutti i campi, anche quelli che l'operatore non ha toccato.
 
