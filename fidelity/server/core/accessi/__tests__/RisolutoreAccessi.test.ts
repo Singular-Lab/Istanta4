@@ -71,7 +71,7 @@ describe('RisolutoreAccessi', () => {
     const risolutore = new RisolutoreAccessi(fonte as any, async () => 1);
     const superadmin = contesto({ tipo: TIPO_UTENTI.SUPERADMIN, superadmin: true });
     expect(await risolutore.puo(superadmin, PERMESSI.SISTEMA.LOG)).toBe(true);
-    expect(await risolutore.puoAprire(superadmin, '/gestione-hub')).toBe(true);
+    expect(await risolutore.puoAprire(superadmin, '/gestione-interna/gestione-hub')).toBe(true);
     expect(fonte.findPermessiPerRuolo).not.toHaveBeenCalled();
   });
 

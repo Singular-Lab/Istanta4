@@ -11,6 +11,7 @@ import { paginaPer } from '../../../lib/accessi/pagine';
 import { sequelize } from '../db/SequelizeConnector';
 import { log } from '../logger';
 import { PermessiRepository } from '../repositories/PermessiRepository';
+import { migraPercorsiSpostati } from '../inizializzazione/migrazionePercorsi';
 import { PERMESSI_PREDEFINITI } from './predefiniti';
 import {
   creaTabellaStatoAccessi,
@@ -232,6 +233,8 @@ export const preparaAccessiAllAvvio = async (repository = new PermessiRepository
   await creaTabellaStatoAccessi();
   // Anche con DB_SYNC_ON_START=false la colonna serve alla migrazione e al menu.
   await sequelize.query(`ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS id_ruolo_utente_gdo UUID`);
+  // Prima del piano di migrazione, che legge i percorsi del menu nel catalogo delle pagine.
+  await migraPercorsiSpostati();
   // Vincoli univoci storici delle tabelle dei permessi (idempotente).
   await repository.migrateLegacyConstraint();
   await repository.migrateLegacyGdoConstraint();

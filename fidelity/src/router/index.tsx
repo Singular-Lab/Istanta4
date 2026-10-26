@@ -1,6 +1,7 @@
 import {
   RouteObject,
   redirect,
+  type LoaderFunctionArgs,
   type ShouldRevalidateFunctionArgs,
 } from "react-router-dom";
 
@@ -8,6 +9,7 @@ import {
 import { RouteErrorFallback } from "@/components/AppErrorFallback";
 import ErrorPage from "@/components/ErrorPage";
 import NotFoundPage from "@/components/NotFoundPage";
+import { PERCORSI_SPOSTATI } from "../../lib/accessi/gestioneInterna";
 
 type LoaderFunctionsModule = typeof import("./loaderFunctions");
 
@@ -158,33 +160,81 @@ const routes: RouteObject[] = [
           };
         },
       },
+      // GESTIONE INTERNA: pagine di amministrazione, separate da quelle pensate per il cliente
       {
-        path: "gestione-permessi",
-        lazy: async () => {
-          const { default: GestionePermessi } = await import(
-            "@/pages/GestionePermessi"
-          );
-          return { Component: GestionePermessi };
-        },
+        path: "gestione-interna",
+        children: [
+          {
+            path: "gestione-permessi",
+            lazy: async () => {
+              const { default: GestionePermessi } = await import(
+                "@/pages/GestionePermessi"
+              );
+              return { Component: GestionePermessi };
+            },
+          },
+          {
+            path: "gestione-hub",
+            lazy: async () => {
+              const { default: GestioneHub } = await import(
+                "@/pages/GestioneHub"
+              );
+              return { Component: GestioneHub };
+            },
+          },
+          {
+            path: "gestione-metodi-accesso",
+            lazy: async () => {
+              const { default: GestioneMetodiAccesso } = await import(
+                "@/pages/GestioneMetodiAccesso"
+              );
+              return { Component: GestioneMetodiAccesso };
+            },
+          },
+          {
+            path: "aree-e-canali",
+            lazy: async () => {
+              const { default: AreeCanali } = await import("../pages/AreeCanali");
+              return { Component: AreeCanali };
+            },
+          },
+          {
+            path: "punti-vendita",
+            lazy: async () => {
+              const { default: PuntiVendita } = await import("../pages/PuntiVendita");
+              return { Component: PuntiVendita };
+            },
+          },
+          {
+            path: "punti-vendita/:id",
+            lazy: async () => {
+              const { default: DettaglioPuntoVendita } = await import(
+                "../pages/GestionePuntoVendita"
+              );
+              return {
+                Component: DettaglioPuntoVendita,
+                loader: funzioneGestionePuntoVendita,
+              };
+            },
+          },
+          {
+            path: "gestione-utenti",
+            lazy: async () => {
+              const { default: GestioneUtenti } = await import("@/pages/GestioneUtenti");
+              return { Component: GestioneUtenti };
+            },
+          },
+        ],
       },
-      {
-        path: "gestione-hub",
-        lazy: async () => {
-          const { default: GestioneHub } = await import(
-            "@/pages/GestioneHub"
-          );
-          return { Component: GestioneHub };
+      // Vecchi indirizzi delle pagine spostate sotto /gestione-interna (segnalibri e link esterni)
+      ...Object.entries(PERCORSI_SPOSTATI).map(([vecchio, nuovo]) => ({
+        path: `${vecchio.slice(1)}/*`,
+        // Dai parametri e non da request.url, che contiene anche il basename dell'installazione
+        loader: ({ request, params }: LoaderFunctionArgs) => {
+          const resto = params["*"] ? `/${params["*"]}` : "";
+          return redirect(`${nuovo}${resto}${new URL(request.url).search}`);
         },
-      },
-      {
-        path: "gestione-metodi-accesso",
-        lazy: async () => {
-          const { default: GestioneMetodiAccesso } = await import(
-            "@/pages/GestioneMetodiAccesso"
-          );
-          return { Component: GestioneMetodiAccesso };
-        },
-      },
+      })),
       {
         path: "promozioni/nuova",
         lazy: async () => {
@@ -306,32 +356,6 @@ const routes: RouteObject[] = [
             "@/pages/ContenutiDigitali"
           );
           return { Component: ContenutiDigitali };
-        },
-      },
-      {
-        path: "aree-e-canali",
-        lazy: async () => {
-          const { default: AreeCanali } = await import("../pages/AreeCanali");
-          return { Component: AreeCanali };
-        },
-      },
-      {
-        path: "punti-vendita",
-        lazy: async () => {
-          const { default: PuntiVendita } = await import("../pages/PuntiVendita");
-          return { Component: PuntiVendita };
-        },
-      },
-      {
-        path: "punti-vendita/:id",
-        lazy: async () => {
-          const { default: DettaglioPuntoVendita } = await import(
-            "../pages/GestionePuntoVendita"
-          );
-          return {
-            Component: DettaglioPuntoVendita,
-            loader: funzioneGestionePuntoVendita,
-          };
         },
       },
       {
@@ -626,13 +650,6 @@ const routes: RouteObject[] = [
             Component: WebPliantDisponibili,
             loader: funzioneCaricamentoWebpliant,
           };
-        },
-      },
-      {
-        path: "gestione-utenti",
-        lazy: async () => {
-          const { default: GestioneUtenti } = await import("@/pages/GestioneUtenti");
-          return { Component: GestioneUtenti };
         },
       },
 

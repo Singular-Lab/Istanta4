@@ -148,8 +148,8 @@ export class MenuService implements IMenuService {
    * il seed MENU_SUPERADMIN non cambia e un menu gia' personalizzato le riceve comunque.
    */
   private static readonly VOCI_SISTEMA: MenuItemType[] = [
-    { icon: 'LayoutDashboard', pathname: '/gestione-hub', title: 'Gestione Hub', subMenu: [] },
-    { icon: 'KeyRound', pathname: '/gestione-metodi-accesso', title: 'Metodi di accesso', subMenu: [] },
+    { icon: 'LayoutDashboard', pathname: '/gestione-interna/gestione-hub', title: 'Gestione Hub', subMenu: [] },
+    { icon: 'KeyRound', pathname: '/gestione-interna/gestione-metodi-accesso', title: 'Metodi di accesso', subMenu: [] },
   ];
 
   private ensureHubManagementEntry(menu: MenuElement[], tipoUtente: string): MenuElement[] {

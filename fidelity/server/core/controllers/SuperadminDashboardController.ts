@@ -252,8 +252,8 @@ export class SuperadminDashboardController extends BaseController {
                 metricValue: audit.suspiciousActivities,
                 threshold: 1,
                 actions: [
-                    { label: 'Verifica permessi', href: '/gestione-permessi', variant: 'danger' },
-                    { label: 'Controlla utenti', href: '/gestione-utenti', variant: 'secondary' },
+                    { label: 'Verifica permessi', href: '/gestione-interna/gestione-permessi', variant: 'danger' },
+                    { label: 'Controlla utenti', href: '/gestione-interna/gestione-utenti', variant: 'secondary' },
                 ],
             });
         }
@@ -268,8 +268,8 @@ export class SuperadminDashboardController extends BaseController {
                 metricValue: audit.failedLogins,
                 threshold: 20,
                 actions: [
-                    { label: 'Apri gestione utenti', href: '/gestione-utenti', variant: 'primary' },
-                    { label: 'Verifica permessi', href: '/gestione-permessi', variant: 'secondary' },
+                    { label: 'Apri gestione utenti', href: '/gestione-interna/gestione-utenti', variant: 'primary' },
+                    { label: 'Verifica permessi', href: '/gestione-interna/gestione-permessi', variant: 'secondary' },
                 ],
             });
         } else if (audit.failedLogins >= 8) {
@@ -282,7 +282,7 @@ export class SuperadminDashboardController extends BaseController {
                 metricValue: audit.failedLogins,
                 threshold: 8,
                 actions: [
-                    { label: 'Apri gestione utenti', href: '/gestione-utenti', variant: 'primary' },
+                    { label: 'Apri gestione utenti', href: '/gestione-interna/gestione-utenti', variant: 'primary' },
                     { label: 'Verifica sessioni attive', href: '/superadmin/dashboard', variant: 'secondary' },
                 ],
             });
@@ -331,7 +331,7 @@ export class SuperadminDashboardController extends BaseController {
                 threshold: activeSessions * 3,
                 actions: [
                     { label: 'Apri stato sistema', href: '/superadmin/dashboard', variant: 'primary' },
-                    { label: 'Verifica utenti online', href: '/gestione-utenti', variant: 'secondary' },
+                    { label: 'Verifica utenti online', href: '/gestione-interna/gestione-utenti', variant: 'secondary' },
                 ],
             });
         }

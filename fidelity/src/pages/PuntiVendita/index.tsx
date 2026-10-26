@@ -1112,7 +1112,7 @@ function Main() {
                     <MapPuntiVendita
                       puntiVendita={filtrati}
                       coloreCanale={coloreCanale}
-                      onDettagli={pv => navigate(`/punti-vendita/${pv.id}`)}
+                      onDettagli={pv => navigate(`/gestione-interna/punti-vendita/${pv.id}`)}
                     />
                   )}
 
@@ -1331,7 +1331,7 @@ function Main() {
                                         variant="outline-secondary"
                                         size="sm"
                                         onClick={() =>
-                                          navigate(`/punti-vendita/${pv.id}`)
+                                          navigate(`/gestione-interna/punti-vendita/${pv.id}`)
                                         }
                                       >
                                         Dettagli

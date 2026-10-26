@@ -661,7 +661,7 @@ const AuditLogTable: FC<AuditLogTableProps> = ({
                   <td className="px-4 py-3">
                     {row.user_id ? (
                       <Link
-                        to={`/gestione-utenti?userId=${encodeURIComponent(row.user_id)}`}
+                        to={`/gestione-interna/gestione-utenti?userId=${encodeURIComponent(row.user_id)}`}
                         onClick={(e) => e.stopPropagation()}
                         className="inline-flex flex-col gap-0.5 rounded-md px-2 py-1 -mx-2 -my-1 transition-colors hover:bg-theme-1/5"
                         title={`Apri scheda utente (${row.user_id})`}
