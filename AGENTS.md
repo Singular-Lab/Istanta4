@@ -35,6 +35,8 @@ Prima di esaminare o modificare qualsiasi file:
    - Se il flusso attraversa altri servizi, ripeti la ricerca per ogni passaggio della
      catena (§4.5); se i risultati sono scarsi o ambigui, riformula, oppure orientati con
      l'indice o con `company_list_specifications`.
+   - Passa sempre il `taskId` a `company_search_specifications` e a
+     `company_get_specification`: il Control Plane registra ricerche e letture sul task.
    - Non scaricare le specifiche estranee al task: occupano contesto che serve al lavoro.
    - Nel pre-flight (§7) riporta le ricerche fatte e le specifiche lette, così chi approva
      può accorgersi se ne manca qualcuna.
