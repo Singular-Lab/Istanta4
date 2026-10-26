@@ -546,3 +546,48 @@ test("la documentazione del Plugin ha la sua pagina", () => {
     const pagina = path.join(__dirname, "..", "..", "sorgenti", "documentazione", "plugin", "campiARiposo.md");
     assert.ok(fs.existsSync(pagina));
 });
+
+/* ---- I20-1137: i campi dei cambi strutturali restano nativi ---- */
+
+//Nella finestra "Cambia prezzo promo" il campo a riposo, al passaggio del mouse, rientrava nella riga
+//e UXP non la ridisponeva: il campo si spostava sopra la sua etichetta. Misurato in console con
+//l'operatore il 26/10/2026: UXP non ricalcola la riga quando un elemento gia' disposto esce o rientra
+//nel flusso, e non applica margini negativi. Quei campi restano nativi e fermi.
+
+test("ogni casella dei cambi strutturali della scheda ref resta nativa", () => {
+    const scheda = leggiFileDelPlugin("schedaRef.js").replace(/\r/g, "");
+    const caselle = scheda.match(/<input[^>]*fieldCambioStrutturale[^>]*>/g) || [];
+
+    assert.strictEqual(caselle.length, 4, "riga dell'azione e finestra, per il valore libero e per quello forzato");
+    caselle.forEach(casella => assert.ok(casella.includes("data-sempre-nativo"), casella.substring(0, 120)));
+});
+
+test("una casella dei cambi strutturali sotto la sua etichetta resta nativa e ferma dopo il giro", () => {
+    nuovoDocumento();
+    const etichetta = new Elemento("div");
+    etichetta.textContent = "prezzo_promo_kgl";
+    const casella = campo("input", {
+        larghezza: 387, altezza: 31, valore: "32.79",
+        attributi: { type: "text", "class": "fieldCambioStrutturale singular-inputTextfield", "data-sempre-nativo": "" },
+        stile: { width: "90%", color: "black", backgroundColor: "white" }
+    });
+    const contenitore = casella.parentNode;
+    documento.body.insertBefore(etichetta, contenitore);
+    //Accanto, una casella qualunque va a riposo come sempre.
+    const altra = campo("input", { attributi: { type: "text" }, valore: "altro" });
+
+    CampiARiposo.giro();
+    CampiARiposo.giro();
+
+    assert.strictEqual(casella.__riposo, undefined);
+    assert.strictEqual(casella.hasAttribute("data-a-riposo"), false);
+    assert.strictEqual(casella.style.position, undefined);
+    assert.strictEqual(casella.style.visibility, undefined);
+    assert.deepStrictEqual(contenitore.childNodes, [casella]);
+    assert.strictEqual(document.querySelectorAll(".campoARiposo").length, 1);
+    assert.ok(riquadroDi(altra) != null);
+
+    //Il mouse che ci passa sopra non cambia niente: non c'e' riquadro da scambiare.
+    assert.strictEqual(CampiARiposo.mostra(casella), false);
+    assert.strictEqual(casella.style.position, undefined);
+});

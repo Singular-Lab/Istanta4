@@ -156,15 +156,26 @@ test("getRealBoundsOfFoto su una foto senza tracciato da' l'immagine nel riquadr
 
 /* ---- il fix foto, fino in fondo ---- */
 
-test("tre foto, due senza tracciato: vengono disposte e il box sa quali non hanno tracciato", () => {
+//I20-1137: dal 26/10/2026 (ee718fe) la CSF-26 non e' piu' una segnalazione del box, per scelta: resta
+//solo l'avviso nella console del Plugin, con le foto senza tracciato.
+test("tre foto, due senza tracciato: vengono disposte e la console dice quali non hanno tracciato", () => {
     //Le tre foto posate una sull'altra, sfalsate di 5, come le lascia l'impaginazione.
     const primaria = foto("immagine$7793827", [10, 10, 40, 40], [12, 10, 38, 40], false);
     const seconda = foto("foto_secondaria$7793838", [15, 15, 45, 45], [17, 15, 43, 45], true);
     const terza = foto("foto_secondaria$7793828", [20, 20, 50, 50], [22, 20, 48, 50], false);
     const scatola = box([elemento("base", [0, 0, 80, 100]), primaria, seconda, terza], [primaria, seconda, terza]);
 
-    const spazio = SistemazioneFoto.getSpazioImpaginazione(scatola);
-    const area = SistemazioneFoto.fixFoto(scatola, spazio.candidate, spazio.obstacles);
+    const avvisi = [];
+    const warnOriginale = console.warn;
+    console.warn = (...parti) => avvisi.push(parti.map(String).join(" "));
+    let area;
+    try {
+        const spazio = SistemazioneFoto.getSpazioImpaginazione(scatola);
+        area = SistemazioneFoto.fixFoto(scatola, spazio.candidate, spazio.obstacles);
+    }
+    finally {
+        console.warn = warnOriginale;
+    }
 
     assert.ok(area > 0, "il fix foto ha disposto il gruppo");
     for (const f of [primaria, seconda, terza]) {
@@ -175,11 +186,14 @@ test("tre foto, due senza tracciato: vengono disposte e il box sa quali non hann
     const angoli = new Set([primaria, seconda, terza].map(f => f.geometricBounds.slice(0, 2).map(n => n.toFixed(2)).join(";")));
     assert.strictEqual(angoli.size, 3);
 
-    const csf26 = segnalazioni.filter(s => s.testo.startsWith("Code CSF-26"));
+    //Nessuna segnalazione nel box per le foto senza tracciato.
+    assert.deepStrictEqual(segnalazioni.filter(s => s.testo.includes("CSF-26")), []);
+    //L'avviso in console, una volta, con le due foto senza tracciato e non quella che ce l'ha.
+    const csf26 = avvisi.filter(a => a.startsWith("Code CSF-26"));
     assert.strictEqual(csf26.length, 1);
-    assert.match(csf26[0].testo, /immagine\$7793827/);
-    assert.match(csf26[0].testo, /foto_secondaria\$7793828/);
-    assert.doesNotMatch(csf26[0].testo, /7793838/);
+    assert.match(csf26[0], /immagine\$7793827/);
+    assert.match(csf26[0], /foto_secondaria\$7793828/);
+    assert.doesNotMatch(csf26[0], /7793838/);
     assert.deepStrictEqual(messaggi.filter(m => m.testo.includes("CSF-27")), []);
 });
 
