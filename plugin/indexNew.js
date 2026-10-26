@@ -7876,6 +7876,30 @@ function aggiornaBadgeSegnalazioniTracciato() {
     $("#ElementiTracciato .badge-pagina-tracciato").each(function () {
         coloraBadgeTracciato($(this), riepilogo[$(this).attr("idRec")]);
     });
+    //I20-1142: con "Con segnalazioni" le referenze risolte escono dal tracciato.
+    togliRigheSenzaSegnalazioni(riepilogo);
+}
+
+/// I20-1142: con il tracciato su "Con segnalazioni" (I20-1141), le righe il cui box non ha piu'
+/// segnalazioni nel riepilogo appena riletto escono dal tracciato, senza ridisegnare il resto: la
+/// lista resta dov'era. La nuova prima riga riprende il margine in alto di creaElementoTracciato.
+/// Con gli altri filtri non toglie niente. Restituisce quante righe ha tolto.
+function togliRigheSenzaSegnalazioni(riepilogo) {
+    if ($("#areaFiltriEffettiva").find(".filtro-visualizzazione").val() !== "con_segnalazioni") {
+        return 0;
+    }
+    let tolte = 0;
+    $("#ElementiTracciato .elemento-tracciato").each(function () {
+        const idRec = $(this).find(".badge-pagina-tracciato").attr("idRec");
+        if (idRec == null || riepilogo == null || riepilogo[idRec] == null) {
+            $(this).remove();
+            tolte++;
+        }
+    });
+    if (tolte > 0) {
+        $("#ElementiTracciato .elemento-tracciato").first().css("margin-top", "30px");
+    }
+    return tolte;
 }
 
 /// Costruisce la riga di una referenza nel tracciato: una cella per colonna, coi valori
