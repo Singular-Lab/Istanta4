@@ -389,7 +389,8 @@ test('nella finestra le segnalazioni stanno nella loro sezione e si risolvono co
     assert.match(scheda, /<div id="segnalazioniBollinoScheda"/);
     assert.strictEqual((scheda.match(/riempiSezioneBollino\(sezioneBollino, elenco, intestazione\);/g) || []).length, 2);
     //La stessa resa della schermata, e dopo ogni risoluzione segnalino e icona del menabo'.
-    assert.match(scheda, /SchermataSegnalazioni\.elencoVociDelBox\(box, voci, function \(\) \{\s*me\.leggiVociBollino\(box\);[\s\S]{0,400}?me\.aggiornaPulsanteSegnalazioni\(\);[\s\S]{0,200}?SchermataSegnalazioni\.controllaPagine\(\[box\.parentPage\.name\]\);/);
+    //I20-1138: dal box che "Risolvi" passa, aggiornato se il bollino l'ha rigruppato.
+    assert.match(scheda, /SchermataSegnalazioni\.elencoVociDelBox\(box, voci, function \(dopo\) \{[\s\S]{0,400}?me\.leggiVociBollino\(attuale\);[\s\S]{0,400}?me\.aggiornaPulsanteSegnalazioni\(\);[\s\S]{0,200}?SchermataSegnalazioni\.controllaPagine\(\[attuale\.parentPage\.name\]\);/);
     //All'apertura della scheda si legge il bollino e se ne tiene conto per aprirsi da sola.
     assert.match(scheda, /me\.leggiVociBollino\(box\);\s*me\.aggiornaPulsanteSegnalazioni\(\);[\s\S]{0,300}?me\.deveAprirsiDaSola\(segnalazioniDellaScheda, codice, me\.vociBollinoInMemoria\(\)\)/);
 
