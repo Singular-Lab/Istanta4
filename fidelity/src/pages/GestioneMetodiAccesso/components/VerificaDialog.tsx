@@ -1,7 +1,11 @@
+import Alert from "@/components/Base/Alert";
 import Button from "@/components/Base/Button";
 import { Dialog } from "@/components/Base/Headless";
 import Lucide from "@/components/Base/Lucide";
 import Spinner from "@/components/Base/Spinner";
+import StatCard, { StatCardGrid } from "@/components/Base/StatCard";
+import StatusBadge from "@/components/Base/StatusBadge";
+import type { TonoStato } from "@/constants/stati";
 import type { AuthProviderAdminDTO, EsitoVerificaProvider } from "../../../../lib/types";
 import { riepilogoVerifica } from "../utils";
 
@@ -12,10 +16,10 @@ interface VerificaDialogProps {
   onClose: () => void;
 }
 
-const STILE_ESITO: Record<EsitoVerificaProvider["esito"], { icona: string; pillola: string; testo: string; iconaClasse: string }> = {
-  ok: { icona: "CircleCheck", pillola: "bg-emerald-50 border-emerald-200 text-emerald-700", testo: "OK", iconaClasse: "text-emerald-600" },
-  avviso: { icona: "TriangleAlert", pillola: "bg-amber-50 border-amber-200 text-amber-700", testo: "Avviso", iconaClasse: "text-amber-600" },
-  errore: { icona: "CircleX", pillola: "bg-danger/5 border-danger/20 text-danger", testo: "Errore", iconaClasse: "text-danger" },
+const STILE_ESITO: Record<EsitoVerificaProvider["esito"], { icona: string; tono: TonoStato; testo: string; iconaClasse: string }> = {
+  ok: { icona: "CircleCheck", tono: "success", testo: "OK", iconaClasse: "text-success" },
+  avviso: { icona: "TriangleAlert", tono: "warning", testo: "Avviso", iconaClasse: "text-warning" },
+  errore: { icona: "CircleX", tono: "danger", testo: "Errore", iconaClasse: "text-danger" },
 };
 
 const VerificaDialog = ({ provider, esiti, onRipeti, onClose }: VerificaDialogProps) => {
@@ -24,19 +28,13 @@ const VerificaDialog = ({ provider, esiti, onRipeti, onClose }: VerificaDialogPr
   return (
     <Dialog open={provider !== null} onClose={onClose} size="lg">
       <Dialog.Panel>
-        <Dialog.Title className="gap-3 bg-white">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-md bg-primary/10 text-primary flex items-center justify-center">
-              <Lucide icon="Stethoscope" className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="text-base font-semibold text-slate-800">Prova di {provider?.nome}</div>
-              <div className="text-sm font-normal text-slate-500">Configurazione e raggiungibilità, senza modificare nulla</div>
-            </div>
-          </div>
+        <Dialog.Title>
+          <Lucide icon="Stethoscope" aria-hidden="true" className="h-5 w-5 text-primary" />
+          Prova di {provider?.nome}
         </Dialog.Title>
 
-        <Dialog.Description className="space-y-4 bg-slate-50/50">
+        <Dialog.Description className="space-y-4">
+          <p className="text-sm text-slate-500">Configurazione e raggiungibilità, senza modificare nulla.</p>
           {!esiti || !riepilogo ? (
             <div role="status" className="p-10 flex items-center justify-center gap-3 text-slate-500">
               <Spinner decorativo />
@@ -44,35 +42,22 @@ const VerificaDialog = ({ provider, esiti, onRipeti, onClose }: VerificaDialogPr
             </div>
           ) : (
             <>
-              <div className="flex items-center justify-center gap-4 rounded-md border border-slate-200/80 bg-white p-4 text-sm shadow-sm">
-                <div className="text-center">
-                  <div className="text-xl font-bold text-emerald-600 leading-none">{riepilogo.ok}</div>
-                  <div className="text-xs text-slate-500 mt-0.5">ok</div>
-                </div>
-                <div className="w-px h-8 bg-slate-200" />
-                <div className="text-center">
-                  <div className="text-xl font-bold text-amber-600 leading-none">{riepilogo.avviso}</div>
-                  <div className="text-xs text-slate-500 mt-0.5">avvisi</div>
-                </div>
-                <div className="w-px h-8 bg-slate-200" />
-                <div className="text-center">
-                  <div className="text-xl font-bold text-danger leading-none">{riepilogo.errore}</div>
-                  <div className="text-xs text-slate-500 mt-0.5">errori</div>
-                </div>
-              </div>
+              <StatCardGrid className="grid-cols-3 lg:grid-cols-3">
+                <StatCard densita="compatta" etichetta="OK" valore={riepilogo.ok} tono="success" evidenzia={riepilogo.ok > 0} />
+                <StatCard densita="compatta" etichetta="Avvisi" valore={riepilogo.avviso} tono="warning" evidenzia={riepilogo.avviso > 0} />
+                <StatCard densita="compatta" etichetta="Errori" valore={riepilogo.errore} tono="danger" evidenzia={riepilogo.errore > 0} />
+              </StatCardGrid>
 
               <div className="space-y-2">
                 {esiti.map((esito, indice) => {
                   const stile = STILE_ESITO[esito.esito];
                   return (
-                    <div key={`${esito.controllo}-${indice}`} className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
-                      <Lucide icon={stile.icona} className={`mt-0.5 w-4 h-4 shrink-0 ${stile.iconaClasse}`} />
+                    <div key={`${esito.controllo}-${indice}`} className="flex items-start gap-3 rounded-card border border-slate-200 bg-white px-4 py-3">
+                      <Lucide icon={stile.icona} aria-hidden="true" className={`mt-0.5 h-4 w-4 shrink-0 ${stile.iconaClasse}`} />
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div className="text-sm font-medium text-slate-700">{esito.controllo}</div>
-                          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${stile.pillola}`}>
-                            {stile.testo}
-                          </span>
+                          <StatusBadge tono={stile.tono} etichetta={stile.testo} />
                         </div>
                         <div className="mt-0.5 text-xs text-slate-500 break-all">{esito.dettaglio}</div>
                       </div>
@@ -81,19 +66,19 @@ const VerificaDialog = ({ provider, esiti, onRipeti, onClose }: VerificaDialogPr
                 })}
               </div>
 
-              <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-700">
+              <Alert variant="soft-info" icona="Info" className="text-xs">
                 La prova non sostituisce un accesso vero: dopo aver attivato il metodo, entra una volta per confermare.
-              </div>
+              </Alert>
             </>
           )}
         </Dialog.Description>
 
-        <Dialog.Footer className="flex flex-col-reverse gap-3 bg-white sm:flex-row sm:justify-end">
-          <Button variant="outline-secondary" type="button" onClick={onClose} className="w-full sm:w-auto">
+        <Dialog.Footer>
+          <Button variant="outline-secondary" type="button" onClick={onClose}>
             Chiudi
           </Button>
-          <Button variant="primary" type="button" onClick={onRipeti} loading={!esiti} className="w-full sm:w-auto">
-            <Lucide icon="RefreshCw" className="w-4 h-4 mr-2" />
+          <Button variant="primary" type="button" onClick={onRipeti} loading={!esiti}>
+            {esiti && <Lucide icon="RefreshCw" aria-hidden="true" className="mr-2 h-4 w-4" />}
             Ripeti prova
           </Button>
         </Dialog.Footer>

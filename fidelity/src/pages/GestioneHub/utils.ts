@@ -45,10 +45,10 @@ const NEWS_ROLE_TARGETS: Array<{ value: string; label: string }> = [
 
 export const SERVICE_COLOR_MAP: Record<string, { iconBg: string; iconText: string; accentBorder: string }> = {
   primary: { iconBg: "bg-primary/10", iconText: "text-primary", accentBorder: "border-l-primary" },
-  info: { iconBg: "bg-sky-50", iconText: "text-sky-600", accentBorder: "border-l-sky-400" },
-  success: { iconBg: "bg-emerald-50", iconText: "text-emerald-600", accentBorder: "border-l-emerald-400" },
-  warning: { iconBg: "bg-amber-50", iconText: "text-amber-600", accentBorder: "border-l-amber-400" },
-  danger: { iconBg: "bg-red-50", iconText: "text-red-600", accentBorder: "border-l-red-400" },
+  info: { iconBg: "bg-info/10", iconText: "text-info", accentBorder: "border-l-info" },
+  success: { iconBg: "bg-success/10", iconText: "text-success", accentBorder: "border-l-success" },
+  warning: { iconBg: "bg-warning/10", iconText: "text-warning", accentBorder: "border-l-warning" },
+  danger: { iconBg: "bg-danger/10", iconText: "text-danger", accentBorder: "border-l-danger" },
 };
 
 export function getServiceColorClasses(colore?: string | null) {
@@ -223,30 +223,14 @@ export function deriveNewsStatus(news: Pick<HubNewsAdminDTO, "attivo" | "data_pu
 export function getNewsStatusMeta(status: NewsStatus): NewsStatusMeta {
   switch (status) {
     case "draft":
-      return {
-        label: "Bozza / Disattiva",
-        className: "bg-slate-100 text-slate-600 border-slate-200",
-        icon: "FileText",
-      };
+      return { label: "Bozza / Disattiva", tono: "neutral", icon: "FileText" };
     case "scheduled":
-      return {
-        label: "Programmata",
-        className: "bg-sky-50 text-sky-700 border-sky-200",
-        icon: "CalendarClock",
-      };
+      return { label: "Programmata", tono: "info", icon: "CalendarClock" };
     case "expired":
-      return {
-        label: "Scaduta",
-        className: "bg-amber-50 text-amber-700 border-amber-200",
-        icon: "Clock3",
-      };
+      return { label: "Scaduta", tono: "warning", icon: "Clock3" };
     case "online":
     default:
-      return {
-        label: "Online",
-        className: "bg-emerald-50 text-emerald-700 border-emerald-200",
-        icon: "BadgeCheck",
-      };
+      return { label: "Online", tono: "success", icon: "BadgeCheck" };
   }
 }
 

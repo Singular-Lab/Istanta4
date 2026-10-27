@@ -18,7 +18,7 @@ const ActionButtons: React.FC<{
         e.stopPropagation();
         onRemove();
       }}
-      className="rounded-md"
+      className="rounded-control"
       variant="danger"
       size="sm"
       aria-label="Rimuovi elemento"
@@ -33,7 +33,7 @@ const ActionButtons: React.FC<{
           e.stopPropagation();
           onPolicy();
         }}
-        className="rounded-md"
+        className="rounded-control"
         variant={policyAttiva ? "soft-primary" : "secondary"}
         size="sm"
         aria-label="Policy di visualizzazione"
@@ -52,7 +52,7 @@ const ActionButtons: React.FC<{
           e.stopPropagation();
           onLock();
         }}
-        className="rounded-md"
+        className="rounded-control"
         variant={locked ? "dark" : "soft-dark"}
         size="sm"
         aria-label={locked ? "Sblocca elemento" : "Blocca elemento"}

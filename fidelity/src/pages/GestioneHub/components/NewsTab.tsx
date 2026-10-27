@@ -1,12 +1,17 @@
+import BarraFiltri from "@/components/Base/BarraFiltri";
 import Button from "@/components/Base/Button";
-import EmptyState from "@/components/EmptyState";
-import LoadingIcon from "@/components/Base/LoadingIcon";
 import Lucide from "@/components/Base/Lucide";
+import PageError from "@/components/Base/PageError";
+import Segmenti from "@/components/Base/Segmenti";
+import Sezione from "@/components/Base/Sezione";
+import Spinner from "@/components/Base/Spinner";
+import StatusBadge from "@/components/Base/StatusBadge";
+import EmptyState from "@/components/EmptyState";
 import { useNotification } from "@/context/NotificationContext";
 import { HUB_QUERY_KEYS, useFetchAllRuoliGDO, useFetchHubNewsAdmin } from "@/query/query";
+import { formatDataOra, valoreOAssente } from "@/utils/format";
 import { sanitizeHtml } from "@/utils/sanitizeHtml";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import clsx from "clsx";
 import { useMemo, useState } from "react";
 import { ServerCall } from "../../../../lib/server_call";
 import type { HubNewsAdminDTO } from "../../../../lib/types";
@@ -32,23 +37,12 @@ const buildNotificationContent = (icon: string, title: string, message: string, 
   </div>
 );
 
-const formatDate = (value?: string) => {
-  if (!value) return "Non impostata";
-  return new Date(value).toLocaleString("it-IT", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-};
-
 const STATUS_SORT_ORDER = { online: 0, scheduled: 1, draft: 2, expired: 3 } as const;
 
 const NewsTab = () => {
   const queryClient = useQueryClient();
   const { showNotification } = useNotification();
-  const { data: newsArchive = [], isLoading } = useFetchHubNewsAdmin();
+  const { data: newsArchive = [], isLoading, isError, error, refetch } = useFetchHubNewsAdmin();
   const { data: gdoRoles = [] } = useFetchAllRuoliGDO();
 
   const [dialogState, setDialogState] = useState<NewsDialogState | null>(null);
@@ -208,227 +202,179 @@ const NewsTab = () => {
     });
   };
 
+  const openCreateDialog = () => setDialogState({ mode: "create" });
+
+  const renderContent = () => {
+    if (isError) {
+      return (
+        <PageError
+          compatta
+          titolo="Impossibile caricare le news"
+          motivo={error instanceof Error ? error.message : "Il servizio non ha restituito l'archivio delle news."}
+          onRiprova={() => void refetch()}
+        />
+      );
+    }
+
+    if (isLoading) {
+      return (
+        <div className="flex items-center justify-center gap-3 py-8 text-slate-500">
+          <Spinner size="sm" etichetta="Caricamento archivio news…" />
+          <span aria-hidden="true">Caricamento archivio news…</span>
+        </div>
+      );
+    }
+
+    if (sortedNews.length === 0) {
+      return (
+        <EmptyState
+          compatta
+          icon="Newspaper"
+          title="Nessuna news presente"
+          description="Crea la prima news Hub per iniziare a popolare l'archivio."
+          buttonText="Crea news"
+          buttonIcon="Plus"
+          onButtonClick={openCreateDialog}
+        />
+      );
+    }
+
+    if (filteredNews.length === 0) {
+      return (
+        <EmptyState
+          compatta
+          icon="SearchX"
+          title="Nessuna news corrisponde al filtro"
+          description="Prova a selezionare uno stato diverso o torna a 'Tutti'."
+          buttonText="Azzera filtro"
+          buttonIcon="RotateCcw"
+          onButtonClick={() => setNewsStatusFilter("all")}
+        />
+      );
+    }
+
+    return (
+      <div className="grid gap-4 xl:grid-cols-2">
+        {filteredNews.map((news) => {
+          const status = deriveNewsStatus(news);
+          const statusMeta = getNewsStatusMeta(status);
+          const sanitizedContent = sanitizeHtml(news.contenuto);
+
+          return (
+            <article key={news.id} className="overflow-hidden rounded-card border border-slate-200 bg-white">
+              <div className="flex items-start justify-between gap-3 p-4">
+                <div className="flex min-w-0 items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-control border border-slate-200 bg-slate-50">
+                    {isDataUriIcon(news.icona) ? (
+                      <img src={news.icona} alt="" className="h-full w-full object-contain" />
+                    ) : (
+                      <Lucide icon={news.icona || "Info"} aria-hidden="true" className="h-5 w-5 text-slate-600" />
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="title-card truncate">{news.titolo}</h3>
+                      <StatusBadge tono={statusMeta.tono} etichetta={statusMeta.label} icon={statusMeta.icon} />
+                      {news.in_evidenza && <StatusBadge tono="brand" etichetta="In evidenza" icon="Star" />}
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                      <span className="capitalize">{news.tipo}</span>
+                      {news.autore_nome && (
+                        <>
+                          <span aria-hidden="true">·</span>
+                          <span>{news.autore_nome}</span>
+                        </>
+                      )}
+                      <span aria-hidden="true">·</span>
+                      <span className="tabular-nums">{formatDataOra(news.data_pubblicazione)}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <Button
+                    variant="outline-secondary"
+                    size="sm"
+                    onClick={() => setDialogState({ mode: "edit", news })}
+                    aria-label={`Modifica news ${news.titolo}`}
+                  >
+                    <Lucide aria-hidden="true" icon="PencilLine" className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="outline-danger"
+                    size="sm"
+                    onClick={() => requestDeletion(news)}
+                    aria-label={`Elimina news ${news.titolo}`}
+                  >
+                    <Lucide aria-hidden="true" icon="Trash2" className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+
+              {/* Anteprima del contenuto */}
+              <div
+                className="max-h-20 overflow-hidden px-4 pb-4 text-sm leading-relaxed text-slate-500 [&_a]:text-primary [&_a]:underline [&_ol]:list-decimal [&_ol]:pl-4 [&_p]:mb-1 [&_ul]:list-disc [&_ul]:pl-4"
+                dangerouslySetInnerHTML={{ __html: sanitizedContent }}
+              />
+
+              <dl className="grid grid-cols-1 gap-x-4 gap-y-2 border-t border-slate-100 bg-slate-50 px-4 py-3 text-xs text-slate-500 sm:grid-cols-3">
+                <div className="min-w-0">
+                  <dt className="mb-0.5 font-medium text-slate-600">Scadenza</dt>
+                  <dd className="tabular-nums">{formatDataOra(news.data_scadenza)}</dd>
+                </div>
+                <div className="min-w-0">
+                  <dt className="mb-0.5 font-medium text-slate-600">Destinatari</dt>
+                  <dd className="truncate">
+                    {news.ruoli_destinatari.length > 0
+                      ? news.ruoli_destinatari
+                          .map((role) => (role.startsWith("GDO_") ? formatRoleLabel(role) : role))
+                          .join(", ")
+                      : "Tutti"}
+                  </dd>
+                </div>
+                <div className="min-w-0">
+                  <dt className="mb-0.5 font-medium text-slate-600">URL</dt>
+                  <dd className="truncate">{valoreOAssente(news.url)}</dd>
+                </div>
+              </dl>
+            </article>
+          );
+        })}
+      </div>
+    );
+  };
+
   return (
     <>
-      <div className="flex flex-col gap-4">
-        {/* Header */}
-        <div className="box box--stacked p-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <div className="text-lg font-semibold text-slate-800">News Hub</div>
-              <div className="text-sm text-slate-500 mt-0.5">
-                Gestisci l'archivio completo delle news, gli stati di pubblicazione e i destinatari.
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              {newsArchive.length > 0 && (
-                <div className="hidden lg:flex items-center gap-3 mr-2">
-                  {statusCounts.online > 0 && (
-                    <div className="text-center">
-                      <div className="text-xl font-bold text-emerald-600 leading-none">{statusCounts.online}</div>
-                      <div className="text-xs text-slate-500 mt-0.5">online</div>
-                    </div>
-                  )}
-                  {statusCounts.scheduled > 0 && (
-                    <>
-                      <div className="w-px h-8 bg-slate-200" />
-                      <div className="text-center">
-                        <div className="text-xl font-bold text-sky-600 leading-none">{statusCounts.scheduled}</div>
-                        <div className="text-xs text-slate-500 mt-0.5">progr.</div>
-                      </div>
-                    </>
-                  )}
-                  {statusCounts.draft > 0 && (
-                    <>
-                      <div className="w-px h-8 bg-slate-200" />
-                      <div className="text-center">
-                        <div className="text-xl font-bold text-slate-500 leading-none">{statusCounts.draft}</div>
-                        <div className="text-xs text-slate-500 mt-0.5">bozze</div>
-                      </div>
-                    </>
-                  )}
-                  {statusCounts.expired > 0 && (
-                    <>
-                      <div className="w-px h-8 bg-slate-200" />
-                      <div className="text-center">
-                        <div className="text-xl font-bold text-amber-600 leading-none">{statusCounts.expired}</div>
-                        <div className="text-xs text-slate-500 mt-0.5">scadute</div>
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
-              <Button variant="primary" onClick={() => setDialogState({ mode: "create" })}>
-                <Lucide icon="Plus" className="w-4 h-4 mr-2" />
-                Nuova news
-              </Button>
-            </div>
-          </div>
-        </div>
-
+      <Sezione
+        senzaPadding
+        titolo="News Hub"
+        descrizione="Gestisci l'archivio completo delle news, gli stati di pubblicazione e i destinatari."
+        azioni={
+          <Button variant="primary" size="sm" onClick={openCreateDialog}>
+            <Lucide icon="Plus" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+            Nuova news
+          </Button>
+        }
+      >
         {newsArchive.length > 0 && (
-          <div className="box box--stacked px-5 py-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide mr-1">Stato:</span>
-              {([
-                { value: "all", label: "Tutti", count: newsArchive.length },
-                { value: "online", label: "Online", count: statusCounts.online },
-                { value: "scheduled", label: "Programmata", count: statusCounts.scheduled },
-                { value: "draft", label: "Bozza", count: statusCounts.draft },
-                { value: "expired", label: "Scaduta", count: statusCounts.expired },
-              ] as const).map((pill) => (
-                <button
-                  key={pill.value}
-                  type="button"
-                  onClick={() => setNewsStatusFilter(pill.value)}
-                  className={clsx(
-                    "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition",
-                    newsStatusFilter === pill.value
-                      ? "bg-primary border-primary text-white"
-                      : "bg-white border-slate-200 text-slate-600 hover:border-primary/40 hover:text-primary"
-                  )}
-                >
-                  {pill.label}
-                  {pill.count > 0 && (
-                    <span
-                      className={clsx(
-                        "inline-flex items-center justify-center rounded-full w-4 h-4 text-3xs font-semibold",
-                        newsStatusFilter === pill.value
-                          ? "bg-white/20 text-white"
-                          : "bg-slate-100 text-slate-500"
-                      )}
-                    >
-                      {pill.count}
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {isLoading ? (
-          <div className="box box--stacked p-10 flex items-center justify-center gap-3 text-slate-500">
-            <LoadingIcon icon="oval" className="w-5 h-5" />
-            Caricamento archivio news...
-          </div>
-        ) : sortedNews.length === 0 ? (
-          <div className="box box--stacked p-6">
-            <EmptyState
-              icon="Newspaper"
-              title="Nessuna news presente"
-              description="Crea la prima news Hub per iniziare a popolare l'archivio."
-              buttonText="Crea news"
-              onButtonClick={() => setDialogState({ mode: "create" })}
+          <BarraFiltri>
+            <Segmenti<NewsStatusFilter>
+              etichetta="Stato delle news"
+              valore={newsStatusFilter}
+              onChange={setNewsStatusFilter}
+              opzioni={[
+                { valore: "all", etichetta: "Tutte", conteggio: newsArchive.length },
+                { valore: "online", etichetta: "Online", conteggio: statusCounts.online },
+                { valore: "scheduled", etichetta: "Programmate", conteggio: statusCounts.scheduled },
+                { valore: "draft", etichetta: "Bozze", conteggio: statusCounts.draft },
+                { valore: "expired", etichetta: "Scadute", conteggio: statusCounts.expired },
+              ]}
             />
-          </div>
-        ) : filteredNews.length === 0 ? (
-          <div className="box box--stacked p-6">
-            <EmptyState
-              icon="SearchX"
-              title="Nessuna news corrisponde al filtro"
-              description="Prova a selezionare uno stato diverso o torna a 'Tutti'."
-              buttonText="Azzera filtro"
-              onButtonClick={() => setNewsStatusFilter("all")}
-            />
-          </div>
-        ) : (
-          <div className="grid gap-4 xl:grid-cols-2">
-            {filteredNews.map((news) => {
-              const status = deriveNewsStatus(news);
-              const statusMeta = getNewsStatusMeta(status);
-              const sanitizedContent = sanitizeHtml(news.contenuto);
-
-              return (
-                <div key={news.id} className="box box--stacked overflow-hidden">
-                  {/* Card header */}
-                  <div className="p-5">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-start gap-3 min-w-0">
-                        <div className="w-11 h-11 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
-                          {isDataUriIcon(news.icona) ? (
-                            <img src={news.icona} alt="" className="w-full h-full object-contain" />
-                          ) : (
-                            <Lucide icon={news.icona || "Info"} className="w-5 h-5 text-slate-600" />
-                          )}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="text-sm font-semibold text-slate-800 truncate">{news.titolo}</h3>
-                            <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${statusMeta.className}`}>
-                              <Lucide icon={statusMeta.icon} className="w-3 h-3" />
-                              {statusMeta.label}
-                            </span>
-                            {news.in_evidenza && (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-xs font-medium text-amber-700">
-                                <Lucide icon="Star" className="w-3 h-3" />
-                                In evidenza
-                              </span>
-                            )}
-                          </div>
-                          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
-                            <span className="capitalize">{news.tipo}</span>
-                            {news.autore_nome && (
-                              <>
-                                <span>·</span>
-                                <span>{news.autore_nome}</span>
-                              </>
-                            )}
-                            <span>·</span>
-                            <span>{formatDate(news.data_pubblicazione)}</span>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex gap-1.5 shrink-0">
-                        <Button variant="outline-secondary" size="sm" onClick={() => setDialogState({ mode: "edit", news })} aria-label="Modifica news">
-                          <Lucide aria-hidden="true" icon="PencilLine" className="w-3.5 h-3.5" />
-                        </Button>
-                        <Button variant="soft-danger" size="sm" onClick={() => requestDeletion(news)} aria-label="Elimina news">
-                          <Lucide aria-hidden="true" icon="Trash2" className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Content preview */}
-                  <div
-                    className="px-5 pb-4 max-h-[5rem] overflow-hidden text-sm leading-relaxed text-slate-500 [&_a]:text-primary [&_a]:underline [&_p]:mb-1 [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4"
-                    dangerouslySetInnerHTML={{ __html: sanitizedContent }}
-                  />
-
-                  {/* Footer meta */}
-                  <div className="border-t border-slate-100 bg-slate-50/60 px-5 py-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs text-slate-500 sm:grid-cols-4">
-                    <div>
-                      <div className="font-medium text-slate-600 mb-0.5">Scadenza</div>
-                      <div>{news.data_scadenza ? formatDate(news.data_scadenza) : "—"}</div>
-                    </div>
-                    <div>
-                      <div className="font-medium text-slate-600 mb-0.5">Destinatari</div>
-                      <div className="truncate">
-                        {news.ruoli_destinatari.length > 0
-                          ? news.ruoli_destinatari
-                              .map((role) => (role.startsWith("GDO_") ? formatRoleLabel(role) : role))
-                              .join(", ")
-                          : "Tutti"}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="font-medium text-slate-600 mb-0.5">URL</div>
-                      <div className="truncate">{news.url || "—"}</div>
-                    </div>
-                    <div className="flex items-end justify-end gap-2 sm:col-auto">
-                      <Button variant="outline-secondary" size="sm" onClick={() => setDialogState({ mode: "edit", news })}>
-                        <Lucide icon="PencilLine" className="w-3.5 h-3.5 mr-1" />
-                        Modifica
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          </BarraFiltri>
         )}
-      </div>
+        {/* Senza barra dei filtri il padding dell'intestazione basta: niente spazio doppio */}
+        <div className={newsArchive.length > 0 ? "p-5" : "px-5 pb-5"}>{renderContent()}</div>
+      </Sezione>
 
       <NewsFormDialog
         open={Boolean(dialogState)}

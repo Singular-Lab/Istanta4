@@ -1,9 +1,10 @@
 import Button from '@/components/Base/Button';
-import { FormInput } from '@/components/Base/Form';
+import { FormInput, FormLabel } from '@/components/Base/Form';
 import FilterBaseForm from '@/components/Base/FormFiltriDesign';
 import ProprietaForm from '@/components/Base/FormFiltriDesign/ProprietaForm';
 import { Disclosure } from '@/components/Base/Headless';
 import Lucide from '@/components/Base/Lucide';
+import EmptyState from '@/components/EmptyState';
 import { Control, FieldErrors, FieldValues, UseFormRegister } from 'react-hook-form';
 
 interface DeclinazioniSectionProps<T extends FieldValues> {
@@ -35,7 +36,7 @@ const DeclinazioniSection = <T extends FieldValues>({
         <div className="space-y-4">
             {/* Header */}
             <div className="flex justify-between items-center">
-                <div className="text-sm text-slate-600">
+                <div className="text-sm text-slate-500">
                     {fields.length === 0
                         ? 'Nessuna declinazione presente'
                         : `${fields.length} ${fields.length === 1 ? 'declinazione' : 'declinazioni'}`}
@@ -43,7 +44,7 @@ const DeclinazioniSection = <T extends FieldValues>({
                 <Button
                     type="button"
                     size="sm"
-                    variant="soft-primary"
+                    variant="outline-secondary"
                     onClick={() =>
                         append({
                             titolo: '',
@@ -52,32 +53,33 @@ const DeclinazioniSection = <T extends FieldValues>({
                         })
                     }
                 >
-                    <Lucide icon="Plus" className="w-5 h-5 mr-1" />
-                    Aggiungi Declinazione
+                    <Lucide icon="Plus" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                    Aggiungi declinazione
                 </Button>
             </div>
 
             {/* Empty State */}
             {fields.length === 0 && (
-                <div className="text-center text-slate-500 py-10 border-2 border-dashed rounded-md">
-                    Nessuna declinazione presente.
-                    <br />
-                    Clicca sul pulsante "Aggiungi Declinazione" per iniziare.
-                    <Lucide icon="FileX" className="w-10 h-10 mx-auto mt-4 text-slate-400" />
-                </div>
+                <EmptyState
+                    compatta
+                    icon="FileX"
+                    title="Nessuna declinazione presente"
+                    description='Usa "Aggiungi declinazione" per iniziare.'
+                    className="border border-dashed border-slate-200"
+                />
             )}
 
             {/* Declinazioni List */}
             {fields.map((field, index) => (
-                <div key={field.id} className="border rounded-lg">
-                    {/* Header della singola declinazione */}
-                    <div className="flex items-center justify-between p-4 bg-slate-50 border-b">
+                <div key={field.id} className="overflow-hidden rounded-card border border-slate-200 bg-white">
+                    {/* Intestazione della singola declinazione */}
+                    <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3">
                         <div className="flex items-center gap-3">
-                            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-500/10">
-                                <Lucide icon="FileText" className="w-4 h-4 text-indigo-600" />
+                            <div aria-hidden="true" className="flex h-8 w-8 items-center justify-center rounded-control bg-slate-100 text-slate-600">
+                                <Lucide icon="FileText" className="h-4 w-4" />
                             </div>
                             <div className="flex-1">
-                                <div className="font-medium text-slate-800">Declinazione {index + 1}</div>
+                                <h3 className="title-card">Declinazione {index + 1}</h3>
                                 <div className="text-xs text-slate-500 mt-0.5">
                                     {field.titolo || 'Senza titolo'}
                                 </div>
@@ -98,9 +100,9 @@ const DeclinazioniSection = <T extends FieldValues>({
                     <div className="p-5 space-y-5">
                         {/* Titolo Declinazione */}
                         <div>
-                            <label htmlFor={`titolo-declinazione-${index}`} className="block text-sm font-medium text-slate-700 mb-2">
-                                Titolo Declinazione
-                            </label>
+                            <FormLabel htmlFor={`titolo-declinazione-${index}`}>
+                                Titolo della declinazione
+                            </FormLabel>
                             <FormInput
                                 id={`titolo-declinazione-${index}`}
                                 {...register(`declinazioni.${index}.titolo`, {
@@ -109,9 +111,9 @@ const DeclinazioniSection = <T extends FieldValues>({
                                 placeholder="Es. 'Banner per Social Media'"
                             />
                             {(errors as any).declinazioni?.[index]?.titolo?.message && (
-                                <span className="text-danger text-sm mt-1 block">
+                                <p className="mt-1.5 text-xs text-danger">
                                     {(errors as any).declinazioni[index]?.titolo?.message}
-                                </span>
+                                </p>
                             )}
                         </div>
 
@@ -120,11 +122,11 @@ const DeclinazioniSection = <T extends FieldValues>({
                             <Disclosure defaultOpen={false}>
                                 <Disclosure.Button>
                                     <div className="flex items-center gap-2">
-                                        <Lucide icon="Settings" className="w-4 h-4" />
+                                        <Lucide icon="Settings" aria-hidden="true" className="w-4 h-4" />
                                         <span className="font-medium">Proprietà</span>
                                     </div>
                                 </Disclosure.Button>
-                                <Disclosure.Panel className="p-4 bg-slate-50/50">
+                                <Disclosure.Panel className="p-4 bg-slate-50">
                                     <ProprietaForm
                                         data={dataDeclinazioni?.data}
                                         control={control}
@@ -138,11 +140,11 @@ const DeclinazioniSection = <T extends FieldValues>({
                             <Disclosure defaultOpen={false}>
                                 <Disclosure.Button>
                                     <div className="flex items-center gap-2">
-                                        <Lucide icon="Filter" className="w-4 h-4" />
+                                        <Lucide icon="Filter" aria-hidden="true" className="w-4 h-4" />
                                         <span className="font-medium">Filtri</span>
                                     </div>
                                 </Disclosure.Button>
-                                <Disclosure.Panel className="p-4 bg-slate-50/50">
+                                <Disclosure.Panel className="p-4 bg-slate-50">
                                     <FilterBaseForm
                                         control={control}
                                         register={register}

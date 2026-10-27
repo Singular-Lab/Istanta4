@@ -1,6 +1,6 @@
 import Button from "@/components/Base/Button";
 import Lucide from "@/components/Base/Lucide";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/utils/twMerge";
 
 interface PageErrorProps {
   /** Perché i dati non sono arrivati, come restituito dal servizio. */
@@ -26,7 +26,7 @@ function PageError({ motivo, titolo = "Impossibile caricare la pagina", onRiprov
       >
         <Lucide icon="TriangleAlert" aria-hidden="true" className="h-5 w-5 flex-none text-danger" />
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-slate-800">{titolo}</p>
+          <p className="title-card">{titolo}</p>
           <p className="text-sm text-slate-500">{motivo}</p>
         </div>
         {onRiprova && (
@@ -45,11 +45,11 @@ function PageError({ motivo, titolo = "Impossibile caricare la pagina", onRiprov
       className={twMerge("box box--stacked flex min-h-[calc(100vh-12rem)] items-center justify-center px-6", className)}
     >
       <div className="w-full max-w-lg space-y-6 text-center">
-        <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl bg-danger/10 text-danger">
+        <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-card bg-danger/10 text-danger">
           <Lucide icon="TriangleAlert" aria-hidden="true" className="h-10 w-10" />
         </div>
         <div className="space-y-2">
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{titolo}</h1>
+          <h1 className="title-page text-slate-800">{titolo}</h1>
           <p className="leading-relaxed text-slate-500">{motivo}</p>
         </div>
         {onRiprova && (

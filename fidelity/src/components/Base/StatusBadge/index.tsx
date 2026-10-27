@@ -1,6 +1,6 @@
 import Lucide from "@/components/Base/Lucide";
 import { descriviStato, DominioStato, TonoStato } from "@/constants/stati";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/utils/twMerge";
 
 const CLASSI_TONO: Record<TonoStato, { pastiglia: string; pallino: string }> = {
   neutral: { pastiglia: "bg-slate-100 text-slate-700", pallino: "bg-slate-400" },

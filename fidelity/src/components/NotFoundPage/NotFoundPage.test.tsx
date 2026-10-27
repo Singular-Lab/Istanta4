@@ -15,11 +15,15 @@ import NotFoundPage from ".";
 describe("NotFoundPage", () => {
   it("ha il titolo di pagina e le azioni sono un pulsante e un link alla pagina iniziale", () => {
     const indietro = vi.spyOn(window.history, "back").mockImplementation(() => {});
-    render(
+    const { container } = render(
       <MemoryRouter>
         <NotFoundPage />
       </MemoryRouter>
     );
+
+    // Stesso guscio di PageError e AccessoNegato: box senza sfondo sfumato proprio
+    expect(container.firstElementChild).toHaveClass("box", "box--stacked");
+    expect(container.firstElementChild).not.toHaveClass("bg-gradient-to-b");
 
     expect(screen.getByRole("heading", { level: 1, name: "Pagina non trovata" })).toHaveClass("title-page");
 

@@ -1,3 +1,4 @@
+import Sezione from "@/components/Base/Sezione";
 import Skeleton from "@/components/Base/Skeleton";
 import { FC, useMemo } from "react";
 import { TIPO_KIT_DESIGN } from "../../../../lib/enums";
@@ -52,13 +53,13 @@ const FileSection: FC<FileSectionProps> = ({
   // Loading state
   if (isLoadingFiles) {
     return (
-      <div className="box box--stacked p-6">
+      <Sezione aria-busy="true">
         <div className="space-y-4">
-          <Skeleton height="40px" className="rounded-lg" />
-          <Skeleton height="100px" className="rounded-lg" />
-          <Skeleton height="100px" className="rounded-lg" />
+          <Skeleton height="40px" className="rounded-control" />
+          <Skeleton height="100px" className="rounded-card" />
+          <Skeleton height="100px" className="rounded-card" />
         </div>
-      </div>
+      </Sezione>
     );
   }
 
@@ -71,13 +72,13 @@ const FileSection: FC<FileSectionProps> = ({
           tipiDiExportInKit={tipiDiExportInKit}
           showAllFiles={showAllFiles}
           onToggleShowAll={onToggleShowAll}
-          title="File Pubblicati"
+          title="File pubblicati"
         />
       );
 
     case "upload":
       return (
-        <div className="space-y-6">
+        <div className="flex flex-col gap-6">
           {/* FileUploader per file non ancora caricati */}
           <FileUploader
             filesData={filesToUpload}
@@ -99,7 +100,7 @@ const FileSection: FC<FileSectionProps> = ({
               onDownload={onDownloadFile}
               onDelete={onFileDelete}
               showDeleteButton={true}
-              title="File Già Caricati"
+              title="File già caricati"
               subtitle={`${uploadedFiles.length} file caricati con successo`}
             />
           )}

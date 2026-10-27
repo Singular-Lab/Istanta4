@@ -2,17 +2,17 @@ import React, { useRef, useState } from 'react';
 import { Link, useLoaderData, useRevalidator } from "react-router-dom";
 
 // Base Components
-import Badge from "@/components/Base/Badge";
+import Alert from "@/components/Base/Alert";
 import Button from "@/components/Base/Button";
 import { Popover } from "@/components/Base/Headless";
 import Lucide from "@/components/Base/Lucide";
-
-// Assets
+import Pagina from "@/components/Base/Pagina";
+import Sezione from "@/components/Base/Sezione";
+import EmptyState from "@/components/EmptyState";
 
 // Utilities and Types
-import PageHeader from '@/components/Base/PageHeader';
 import withSessionCheck from "@/components/SessionChecker";
-import dayjs from 'dayjs';
+import { formatData } from "@/utils/format";
 import { TIPO_PAGINA } from '../../../lib/enums';
 import QRCodeViewer from '../../components/Base/QRCodeViewer';
 
@@ -66,17 +66,17 @@ const ChannelCard: React.FC<{
   const renderCardImage = () => {
     if (!item.disattivo_mancanza_workspace && !item.disattivo_mancanza_referenze) {
       return (
-        <div className="relative w-full h-32 bg-slate-100 rounded-md">
+        <div className="relative w-full h-32 bg-slate-100 rounded-control">
           <div className="absolute inset-0 flex items-center justify-center">
-            <Lucide icon="Globe" className="w-12 h-12 text-slate-400" />
+            <Lucide icon="Globe" aria-hidden="true" className="w-12 h-12 text-slate-400" />
           </div>
         </div>
       );
     }
 
     return (
-      <div className="flex items-center justify-center w-full h-full bg-gray-500">
-        <Lucide icon="TriangleAlert" className="w-10 h-10 text-yellow-500" />
+      <div className="flex items-center justify-center w-full h-full bg-slate-500">
+        <Lucide icon="TriangleAlert" aria-hidden="true" className="w-10 h-10 text-warning" />
       </div>
     );
   };
@@ -84,101 +84,85 @@ const ChannelCard: React.FC<{
   const renderWorkspaceContent = () => {
     if (item.workspaceApplicabili?.length && !item.disattivo_mancanza_referenze) {
       return (
-        <div className="mt-4 flex flex-col space-y-3">
+        <div className="mt-4 flex flex-wrap justify-center gap-2">
           {/* Pulsante per generare QR Code */}
-          <div className="flex justify-center gap-2">
-            <Button
-              variant="outline-primary"
-              size="sm"
-              onClick={() => {
-                if (item.workspaceApplicabili && item.workspaceApplicabili.length > 0) {
-                  onOpenQRCode(item.workspaceApplicabili, item);
-                }
-              }}
-              className="flex items-center px-3 py-2"
-            >
-              <Lucide icon="QrCode" className="w-4 h-4 mr-2" />
-              Genera QR Code
-            </Button>
+          <Button
+            type="button"
+            variant="outline-secondary"
+            size="sm"
+            onClick={() => {
+              if (item.workspaceApplicabili && item.workspaceApplicabili.length > 0) {
+                onOpenQRCode(item.workspaceApplicabili, item);
+              }
+            }}
+          >
+            <Lucide icon="QrCode" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+            Genera QR Code
+          </Button>
 
-            {/* Selettore workspace esistente */}
-            <Popover className="z-40">
-              <Popover.Button as={Button} variant="outline-secondary" className="flex items-center justify-between px-4 py-2 rounded-md border border-slate-300 bg-white hover:bg-slate-50 transition-colors">
-                <span className="flex items-center">
-                  Scegli workspace
-                  <Lucide icon="ChevronDown" className="ml-2 w-4 h-4" />
-                </span>
-              </Popover.Button>
-              <Popover.Panel>
-                <div className="w-80">
-                  {item.workspaceApplicabili.map((workspace, index) => (
-                    <Link
-                      key={index}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      to={generaLinkDinamico(workspace, item)}
-                      className="flex items-center px-4 py-2 hover:bg-slate-100 cursor-pointer transition-colors rounded truncate text-gray-700"
-                    >
-                      <Lucide icon="Layers" className="w-4 h-4 mr-2 text-primary" />
-                      <span className="truncate">{workspace.nomeWorkspace}</span>
-                    </Link>
-                  ))}
-                </div>
-              </Popover.Panel>
-            </Popover>
-          </div>
+          {/* Selettore workspace esistente */}
+          <Popover className="z-40">
+            <Popover.Button as={Button} variant="outline-secondary" size="sm">
+              Scegli workspace
+              <Lucide icon="ChevronDown" aria-hidden="true" className="ml-1.5 h-3.5 w-3.5" />
+            </Popover.Button>
+            <Popover.Panel>
+              <div className="w-80">
+                {item.workspaceApplicabili.map((workspace, index) => (
+                  <Link
+                    key={index}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    to={generaLinkDinamico(workspace, item)}
+                    className="flex items-center px-4 py-2 hover:bg-slate-100 cursor-pointer transition-colors rounded-control truncate text-sm text-slate-700"
+                  >
+                    <Lucide icon="Layers" aria-hidden="true" className="w-4 h-4 mr-2 text-primary" />
+                    <span className="truncate">{workspace.nomeWorkspace}</span>
+                  </Link>
+                ))}
+              </div>
+            </Popover.Panel>
+          </Popover>
         </div>
       );
     }
 
     return (
-      <div className="mt-4 text-center">
-        <Badge opacity="70" border variant="warning">
-          {item.messaggio}
-        </Badge>
-        <div className="my-4 text-center border-t border-dashed w-full flex flex-row justify-center">
-          {item.disattivo_mancanza_workspace && (
+      <div className="mt-4 space-y-3">
+        {item.messaggio && (
+          <Alert variant="soft-warning" icona="TriangleAlert" className="text-sm">
+            {item.messaggio}
+          </Alert>
+        )}
+        {item.disattivo_mancanza_workspace && (
+          <div className="border-t border-dashed border-slate-200 pt-3">
             <Link
-              className="flex text-sm items-center mr-auto text-primary"
+              className="inline-flex text-sm items-center text-primary hover:underline"
               to="/webliant/impostazioni-webpliant"
             >
-              <Lucide icon="Download" className="w-4 h-4 stroke-[1.3] mr-1.5" />
+              <Lucide icon="Download" aria-hidden="true" className="w-4 h-4 mr-1.5" />
               <span>Crea workspace</span>
             </Link>
-          )}
-          {/* {item.disattivo_mancanza_referenze && (
-                        <a
-                            className="flex items-center"
-                            href="#"
-                            onClick={(e) => {
-                                console.log("Richiedi pubblicazione");
-                                e.preventDefault();
-                                mutationDati.mutate(item.idKit);
-                            }}
-                        >
-                            <Lucide icon="SquareKanban" className="w-4 h-4 stroke-[1.3] mr-1.5" />
-                            <span>Richiedi pubblicazione</span>
-                        </a>
-                    )} */}
-        </div>
+          </div>
+        )}
       </div>
     );
   };
 
   return (
-    <div className="col-span-12 my-4 sm:col-span-4 md:col-span-6 xl:col-span-4 p-5 box">
-      <div className="overflow-hidden rounded-lg h-52 image-fit before:block before:absolute before:w-full before:h-full before:top-0 before:left-0 before:z-10 before:bg-gradient-to-t before:from-slate-900/90 before:to-black/20">
+    <div className="col-span-12 md:col-span-6 xl:col-span-4 rounded-card border border-slate-200 bg-white p-4">
+      <div className="overflow-hidden rounded-card h-52 image-fit before:block before:absolute before:w-full before:h-full before:top-0 before:left-0 before:z-10 before:bg-gradient-to-t before:from-slate-900/90 before:to-black/20">
         {renderCardImage()}
         <div className="absolute bottom-0 z-10 w-full px-5 pb-6 text-white">
-          <span className="block text-lg font-medium truncate">
+          <h3 className="title-card truncate text-base text-white">
             {item.nomeCanale} - {item.nomeArea}
-          </span>
+          </h3>
           {item.data_inizio_promo_corrente && item.data_fine_promo_corrente ? (
             <span className="mt-3 text-xs text-white/80">
               Promo corrente: dal&nbsp;
-              {dayjs(item.data_inizio_promo_corrente).format('DD/MM/YYYY')}
+              {formatData(item.data_inizio_promo_corrente)}
               &nbsp;al&nbsp;
-              {dayjs(item.data_fine_promo_corrente).format('DD/MM/YYYY')}
+              {formatData(item.data_fine_promo_corrente)}
             </span>
           ) : (
             <span className="mt-3 text-xs text-white/80 italic">
@@ -188,18 +172,18 @@ const ChannelCard: React.FC<{
         </div>
       </div>
 
-      <div className="mt-4">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-medium text-gray-700">Area:</span>
-          <span className="text-sm text-gray-900">{item.nomeArea}</span>
+      <dl className="mt-4 space-y-2 text-sm">
+        <div className="flex items-center justify-between">
+          <dt className="font-medium text-slate-500">Area</dt>
+          <dd className="text-slate-800">{item.nomeArea}</dd>
         </div>
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-medium text-gray-700">Canale:</span>
-          <span className="text-sm text-gray-900">{item.nomeCanale}</span>
+        <div className="flex items-center justify-between">
+          <dt className="font-medium text-slate-500">Canale</dt>
+          <dd className="text-slate-800">{item.nomeCanale}</dd>
         </div>
+      </dl>
 
-        {renderWorkspaceContent()}
-      </div>
+      {renderWorkspaceContent()}
     </div>
   );
 };
@@ -236,45 +220,29 @@ function Main() {
   };
 
 
-  const renderNoDataMessage = () => (
-    <div className="col-span-12 p-5">
-      <div className="flex flex-col line-h items-center justify-center h-32">
-        <Lucide icon="FileX2" className="w-10 h-10 mb-2 text-gray-500" />
-        <span className="text-gray-500">Nessuna Webpliant disponibile</span>
-        <span className="text-gray-400 text-xs">
-          Nessuna pubblicazione di WebPliant disponibile.
-        </span>
-      </div>
-    </div>
-  );
-
   return (
-    <div className="grid grid-cols-12 gap-y-10 gap-x-6 p-6">
-      <div className="col-span-12">
-        <PageHeader
-          title="Webpliant disponibili"
-          description="Gestione Webpliant disponibili"
-        />
-        <div className="mt-3.5">
-          <div className="flex flex-col box box--stacked">
-
-            <div className="overflow-visible">
-              <div className="grid grid-cols-12 gap-x-4 px-5">
-                {!allData?.length ? renderNoDataMessage() : (
-                  allData.map((item, index) => (
-                    <ChannelCard
-                      key={index}
-                      item={item}
-                      generaLinkDinamico={generaLinkDinamico}
-                      onOpenQRCode={openQRCode}
-                    />
-                  ))
-                )}
-              </div>
-            </div>
+    <Pagina titolo="Webpliant disponibili" descrizione="Gestione Webpliant disponibili">
+      <Sezione>
+        {!allData?.length ? (
+          <EmptyState
+            compatta
+            icon="FileX"
+            title="Nessuna Webpliant disponibile"
+            description="Nessuna pubblicazione di WebPliant disponibile."
+          />
+        ) : (
+          <div className="grid grid-cols-12 gap-4">
+            {allData.map((item, index) => (
+              <ChannelCard
+                key={index}
+                item={item}
+                generaLinkDinamico={generaLinkDinamico}
+                onOpenQRCode={openQRCode}
+              />
+            ))}
           </div>
-        </div>
-      </div>
+        )}
+      </Sezione>
 
       {/* QR Code Viewer Modal */}
       <QRCodeViewer
@@ -284,7 +252,7 @@ function Main() {
         channelItem={qrCodeDataRef.current.channelItem}
         generaLinkDinamico={generaLinkDinamico}
       />
-    </div>
+    </Pagina>
   );
 }
 

@@ -1,10 +1,8 @@
-import IstantaLogo from "@/assets/images/logo_ext.png";
 import userIcon from "@/assets/images/users/user_icon_profile.png";
 import Alert from "@/components/Base/Alert";
 import Button from "@/components/Base/Button";
 import { FormField, FormInput } from "@/components/Base/Form";
 import Dialog from "@/components/Base/Headless/Dialog";
-import Lucide from "@/components/Base/Lucide";
 import Spinner from "@/components/Base/Spinner";
 import { yupResolver } from "@hookform/resolvers/yup";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -18,7 +16,7 @@ import { ServerCall } from "../../../lib/server_call";
 import type { AuthProviderDTO, UtenteAttributes } from "../../../lib/types";
 import type { UtenteResponseDTO } from "../../../server/core/dto";
 import CampoPassword from "./components/CampoPassword";
-import HubBackground from "./components/HubBackground";
+import CardAccesso from "./components/CardAccesso";
 import ProviderCard from "./components/ProviderCard";
 import SessionExpiredBanner from "./components/SessionExpiredBanner";
 
@@ -241,136 +239,111 @@ const HubLogin: React.FC = () => {
 
   return (
     <>
-      <HubBackground />
+      <CardAccesso titolo="Accedi alla piattaforma" descrizione="Suite Istanta">
+        {/* Banners */}
+        <SessionExpiredBanner
+          reason={reason}
+          onDismiss={() => {
+            const url = new URL(window.location.href);
+            url.searchParams.delete("reason");
+            window.history.replaceState({}, document.title, url.toString());
+            startTransition(() => {
+              setReason(null);
+            });
+          }}
+        />
 
-      <div className="relative min-h-screen flex items-center justify-center px-4 py-10 sm:px-6">
-        <div className="w-full max-w-[460px]">
-          {/* Card glassmorphism: sullo sfondo a gradiente l'ombra standard della card non la stacca */}
-          <div className="backdrop-blur-xl bg-white/75 border border-white/30 rounded-card shadow-2xl p-8 sm:p-10">
-            {/* Logo */}
-            <div className="flex justify-center mb-6">
-              <img src={IstantaLogo} alt="Istanta 2 GDO Suite" className="h-12 sm:h-14" />
-            </div>
+        {generalError && (
+          <Alert
+            variant="soft-danger"
+            icona="CircleAlert"
+            titolo="Errore"
+            onChiudi={() => startTransition(() => setGeneralError(null))}
+            className="mb-5 text-sm"
+          >
+            {generalError}
+          </Alert>
+        )}
 
-            <h1 className="title-page text-center text-slate-800 mb-1">
-              Accedi alla piattaforma
-            </h1>
-            <p className="text-center text-sm text-slate-500 mb-6">
-              Suite Istanta
-            </p>
-
-            {/* Banners */}
-            <SessionExpiredBanner
-              reason={reason}
-              onDismiss={() => {
-                const url = new URL(window.location.href);
-                url.searchParams.delete("reason");
-                window.history.replaceState({}, document.title, url.toString());
-                startTransition(() => {
-                  setReason(null);
-                });
-              }}
-            />
-
-            {generalError && (
-              <Alert variant="soft-danger" className="flex items-center gap-2 px-4 py-3 mb-5">
-                <Lucide icon="CircleAlert" aria-hidden="true" className="w-5 h-5 shrink-0" />
-                <span className="text-sm">
-                  <span className="font-medium mr-1">Errore:</span>
-                  {generalError}
-                </span>
-                <button type="button" onClick={() => startTransition(() => setGeneralError(null))} className="ml-auto shrink-0" aria-label="Chiudi">
-                  <Lucide icon="X" aria-hidden="true" className="w-4 h-4" />
-                </button>
-              </Alert>
-            )}
-
-            {/* Provider list */}
-            {reason !== "istanta_required" && (
-              <div className="space-y-3">
-                {loadingProviders ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Spinner size="md" etichetta="Caricamento metodi di accesso" />
-                  </div>
-                ) : (
-                  providers.map((provider, index) => (
-                    <div key={provider.id}>
-                      <ProviderCard
-                        provider={provider}
-                        isExpanded={expandedProvider === provider.codice}
-                        isLoading={oidcLoading === provider.codice}
-                        onClick={() => handleProviderClick(provider)}
-                        index={index}
-                      />
-
-                      {/* Form email/password inline */}
-                      {provider.tipo === 'internal' && expandedProvider === provider.codice && (
-                        <div className="mt-3 animate-fade-in-up">
-                          <form
-                            onSubmit={handleSubmit(
-                              async (data) => await multipleUsersMutation.mutateAsync(data),
-                              onFormError
-                            )}
-                            className="space-y-4"
-                          >
-                            <FormField etichetta="Email" errore={errors.email?.message}>
-                              <FormInput
-                                id="email"
-                                {...register("email")}
-                                type="email"
-                                className={clsx(
-                                  "block px-4 py-3 rounded-control border-slate-300/80 w-full",
-                                  errors.email && "border-danger"
-                                )}
-                                placeholder="inserisci la tua email"
-                                autoComplete="email"
-                              />
-                            </FormField>
-
-                            <FormField etichetta="Password" errore={errors.password?.message}>
-                              <CampoPassword
-                                id="password"
-                                {...register("password")}
-                                className={clsx(
-                                  "block px-4 py-3 rounded-control border-slate-300/80 w-full",
-                                  errors.password && "border-danger"
-                                )}
-                                placeholder="inserisci la tua password"
-                                autoComplete="current-password"
-                              />
-                            </FormField>
-
-                            <div className="flex items-center text-xs text-slate-500">
-                              <a href="/recupero-password" className="text-theme-1 hover:underline ml-auto">
-                                Password Dimenticata?
-                              </a>
-                            </div>
-
-                            <Button
-                              variant="primary"
-                              rounded
-                              type="submit"
-                              loading={isLoading}
-                              className="bg-gradient-to-r from-theme-1/90 to-theme-2/90 w-full py-3"
-                            >
-                              Entra
-                            </Button>
-                          </form>
-                        </div>
-                      )}
-                    </div>
-                  ))
-                )}
+        {/* Provider list */}
+        {reason !== "istanta_required" && (
+          <div className="space-y-3">
+            {loadingProviders ? (
+              <div className="flex items-center justify-center py-8">
+                <Spinner size="md" etichetta="Caricamento metodi di accesso" />
               </div>
-            )}
+            ) : (
+              providers.map((provider, index) => (
+                <div key={provider.id}>
+                  <ProviderCard
+                    provider={provider}
+                    isExpanded={expandedProvider === provider.codice}
+                    isLoading={oidcLoading === provider.codice}
+                    onClick={() => handleProviderClick(provider)}
+                    index={index}
+                  />
 
-            {/* Footer */}
-            <div className="text-center mt-8 text-xs text-slate-400">
-              Powered by Singular Lab
-            </div>
+                  {/* Form email/password inline */}
+                  {provider.tipo === 'internal' && expandedProvider === provider.codice && (
+                    <div className="mt-3 animate-fade-in-up">
+                      <form
+                        onSubmit={handleSubmit(
+                          async (data) => await multipleUsersMutation.mutateAsync(data),
+                          onFormError
+                        )}
+                        className="space-y-4"
+                      >
+                        <FormField etichetta="Email" errore={errors.email?.message}>
+                          <FormInput
+                            id="email"
+                            {...register("email")}
+                            type="email"
+                            className={clsx(
+                              "block px-4 py-3 rounded-control border-slate-300/80 w-full",
+                              errors.email && "border-danger"
+                            )}
+                            placeholder="inserisci la tua email"
+                            autoComplete="email"
+                          />
+                        </FormField>
+
+                        <FormField etichetta="Password" errore={errors.password?.message}>
+                          <CampoPassword
+                            id="password"
+                            {...register("password")}
+                            className={clsx(
+                              "block px-4 py-3 rounded-control border-slate-300/80 w-full",
+                              errors.password && "border-danger"
+                            )}
+                            placeholder="inserisci la tua password"
+                            autoComplete="current-password"
+                          />
+                        </FormField>
+
+                        <div className="flex items-center text-xs text-slate-500">
+                          <a href="/recupero-password" className="text-theme-1 hover:underline ml-auto">
+                            Password Dimenticata?
+                          </a>
+                        </div>
+
+                        <Button
+                          variant="primary"
+                          rounded
+                          type="submit"
+                          loading={isLoading}
+                          className="bg-gradient-to-r from-theme-1/90 to-theme-2/90 w-full py-3"
+                        >
+                          Entra
+                        </Button>
+                      </form>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
           </div>
-        </div>
-      </div>
+        )}
+      </CardAccesso>
 
       {/* Multi-account selection modal */}
       <Dialog
@@ -380,9 +353,7 @@ const HubLogin: React.FC = () => {
         centered
       >
         <Dialog.Panel>
-          <Dialog.Title>
-            <h2 className="title-section">Seleziona Account</h2>
-          </Dialog.Title>
+          <Dialog.Title>Seleziona account</Dialog.Title>
           <Dialog.Description>
             <p className="mb-4 text-sm text-slate-600">
               Hai accesso a più tipi di account. Seleziona quello con cui desideri accedere:
@@ -396,7 +367,7 @@ const HubLogin: React.FC = () => {
                   onClick={() => handleUserSelection(user)}
                 >
                   <span className="flex items-center gap-3">
-                    <span className="overflow-hidden rounded-full w-11 h-11 border-[3px] border-slate-200/70 shrink-0">
+                    <span className="overflow-hidden rounded-full w-11 h-11 border-2 border-slate-200/70 shrink-0">
                       <img
                         alt=""
                         src={user?.meta?.photo ? `data:image/png;base64,${user.meta.photo}` : userIcon}
@@ -414,9 +385,9 @@ const HubLogin: React.FC = () => {
           </Dialog.Description>
           <Dialog.Footer>
             <Button
+              type="button"
               variant="outline-secondary"
               onClick={() => startTransition(() => setShowUserSelection(false))}
-              className="w-24"
             >
               Annulla
             </Button>

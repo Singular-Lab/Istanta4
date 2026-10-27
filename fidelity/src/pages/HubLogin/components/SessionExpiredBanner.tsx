@@ -1,6 +1,5 @@
 import Alert from "@/components/Base/Alert";
 import Button from "@/components/Base/Button";
-import Lucide from "@/components/Base/Lucide";
 
 interface SessionExpiredBannerProps {
   reason: string | null;
@@ -20,55 +19,55 @@ const AVVISI: Record<string, Avviso> = {
   session_expired: {
     variante: "soft-warning",
     icona: "CircleAlert",
-    titolo: "Attenzione:",
+    titolo: "Attenzione",
     messaggio: "La tua sessione è scaduta. Effettua nuovamente il login.",
   },
   oidc_error: {
     variante: "soft-danger",
     icona: "ShieldAlert",
-    titolo: "Autenticazione fallita:",
+    titolo: "Autenticazione fallita",
     messaggio: "Errore durante l'autenticazione esterna",
     messaggioDaUrl: true,
   },
   oidc_user_not_found: {
     variante: "soft-warning",
     icona: "UserX",
-    titolo: "Account non trovato:",
+    titolo: "Account non trovato",
     messaggio: "Nessun account associato a questa email",
     messaggioDaUrl: true,
   },
   oidc_access_denied: {
     variante: "soft-danger",
     icona: "ShieldOff",
-    titolo: "Accesso negato:",
+    titolo: "Accesso negato",
     messaggio: "Non hai i permessi per accedere",
     messaggioDaUrl: true,
   },
   oidc_service_unavailable: {
     variante: "soft-warning",
     icona: "CloudOff",
-    titolo: "Servizio non disponibile:",
+    titolo: "Servizio non disponibile",
     messaggio: "Servizio di autenticazione temporaneamente non disponibile",
     messaggioDaUrl: true,
   },
   oidc_rate_limited: {
     variante: "soft-warning",
     icona: "Timer",
-    titolo: "Limite richieste raggiunto:",
+    titolo: "Limite richieste raggiunto",
     messaggio: "Troppi tentativi di accesso. Riprova tra qualche minuto",
     messaggioDaUrl: true,
   },
   oidc_external_error: {
     variante: "soft-danger",
     icona: "ServerCrash",
-    titolo: "Errore servizio esterno:",
+    titolo: "Errore servizio esterno",
     messaggio: "Errore nel servizio di autenticazione esterno",
     messaggioDaUrl: true,
   },
   logout_success: {
     variante: "soft-success",
     icona: "CircleCheck",
-    titolo: "Logout effettuato:",
+    titolo: "Logout effettuato",
     messaggio: "Hai effettuato il logout con successo.",
   },
 };
@@ -80,19 +79,15 @@ const SessionExpiredBanner: React.FC<SessionExpiredBannerProps> = ({ reason: rea
 
   if (reason === "istanta_required") {
     return (
-      <Alert variant="soft-primary" className="flex flex-col items-center px-4 py-4 mb-5">
-        <div className="flex items-center mb-2">
-          <Lucide icon="CircleAlert" aria-hidden="true" className="w-5 h-5 mr-2" />
-          <span className="font-semibold text-sm">Accesso tramite Istanta richiesto</span>
-        </div>
-        <div className="text-center mb-2 text-xs sm:text-sm">
+      <Alert variant="soft-primary" icona="CircleAlert" titolo="Accesso tramite Istanta richiesto" className="mb-5 text-sm">
+        <p>
           La tua sessione è scaduta. Per accedere, effettua il login dalla piattaforma <strong>Istanta</strong>.
-        </div>
+        </p>
         <Button
+          type="button"
           variant="primary"
-          rounded
           size="sm"
-          className="mt-1 px-4 py-2 text-xs font-medium"
+          className="mt-3"
           onClick={() => {
             const istantaUrl = import.meta.env.VITE_ISTANTA_IP_ADDRESS;
             if (istantaUrl) window.open(istantaUrl, "_blank");
@@ -112,15 +107,14 @@ const SessionExpiredBanner: React.FC<SessionExpiredBannerProps> = ({ reason: rea
     : avviso.messaggio;
 
   return (
-    <Alert variant={avviso.variante} className="flex items-center gap-2 px-4 py-3 mb-5">
-      <Lucide icon={avviso.icona} aria-hidden="true" className="w-5 h-5 shrink-0" />
-      <span className="text-sm">
-        <span className="font-medium mr-1">{avviso.titolo}</span>
-        {messaggio}
-      </span>
-      <button type="button" onClick={onDismiss} className="ml-auto shrink-0" aria-label="Chiudi">
-        <Lucide icon="X" aria-hidden="true" className="w-4 h-4" />
-      </button>
+    <Alert
+      variant={avviso.variante}
+      icona={avviso.icona}
+      titolo={avviso.titolo}
+      onChiudi={onDismiss}
+      className="mb-5 text-sm"
+    >
+      {messaggio}
     </Alert>
   );
 };

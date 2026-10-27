@@ -1,10 +1,14 @@
-import Badge from '@/components/Base/Badge';
 import Button from '@/components/Base/Button';
 import { FormInput, FormLabel } from '@/components/Base/Form';
 import FilterBaseForm from '@/components/Base/FormFiltriDesign';
 import ProprietaForm from '@/components/Base/FormFiltriDesign/ProprietaForm';
 import { Disclosure, Tab } from '@/components/Base/Headless';
 import Lucide from '@/components/Base/Lucide';
+import PageError from '@/components/Base/PageError';
+import Pagina from '@/components/Base/Pagina';
+import Sezione from '@/components/Base/Sezione';
+import Spinner from '@/components/Base/Spinner';
+import EmptyState from '@/components/EmptyState';
 import FileManagement from '@/components/FilesKit';
 import withSessionCheck from '@/components/SessionChecker';
 import { useNotification } from '@/context/NotificationContext';
@@ -15,7 +19,9 @@ import { useFieldArray, useForm } from 'react-hook-form';
 import { useLocation } from 'react-router-dom';
 import { ServerCall } from '../../../lib/server_call';
 import { DESIGN_KIT, FileItemKit } from '../../../lib/types';
-// ... eventuali altri import necessari
+
+// Schede con l'aspetto standard di boxed-tabs: solo larghezza e spaziatura
+const CLASSE_SCHEDA = 'w-full whitespace-nowrap py-2 text-sm xl:w-40';
 
 function Main() {
   // Esempio di hook e query (in base al tuo codice originale)
@@ -138,174 +144,204 @@ function Main() {
   };
 
 
+  const nuovaDeclinazione = () =>
+    append({
+      titolo: '',
+      proprieta: [{ idChiave: 0, valore: '' }],
+      filtri: [
+        {
+          titoloFiltro: '',
+          condizioni: [{ nome_field: '', operatore: '=', valore: '' }],
+        },
+      ],
+    });
+
   return (
-    <div className="container mx-auto px-4 py-6">
-      {/* Tab principale per dividere le due schede */}
-      <Tab.Group>
-        <div className="flex sm:flex-row xs:flex-col xs:items-end 2xl:items-center  gap-y-3">
-          <Tab.List
-            variant="boxed-tabs"
-            className="flex-col sm:flex-row sm:w-auto mr-auto bg-white box rounded-[0.6rem] border-slate-200">
-            <Tab className="bg-slate-50 first:rounded-l-[0.6rem] last:rounded-r-[0.6rem] [&[aria-selected='true']_button]:text-current">
-              <Tab.Button className="w-full xl:w-40 py-2.5 text-slate-500 whitespace-nowrap rounded-[0.6rem] flex items-center justify-center text-[0.94rem]" as="button">
+    <Pagina
+      titolo={dataCombinazione.data?.titolo || 'Dettaglio combinazione'}
+      descrizione="Declinazioni e file della combinazione"
+      indietro={{ to: '/impostazioni-di-produzione', etichetta: 'Torna alle impostazioni di produzione' }}
+    >
+      {dataCombinazione.isError ? (
+        <PageError
+          compatta
+          titolo="Impossibile caricare la combinazione"
+          motivo={(dataCombinazione.error as Error)?.message || 'Il servizio non ha restituito la combinazione.'}
+          onRiprova={() => dataCombinazione.refetch()}
+        />
+      ) : dataCombinazione.isLoading ? (
+        <div role="status" className="box box--stacked flex flex-col items-center gap-3 p-8 text-slate-500">
+          <Spinner decorativo />
+          <span className="text-sm">Caricamento combinazione…</span>
+        </div>
+      ) : (
+        /* Tab principale per dividere le due schede */
+        <Tab.Group>
+          <Tab.List variant="boxed-tabs" className="sm:w-auto sm:self-start">
+            <Tab>
+              <Tab.Button className={CLASSE_SCHEDA} as="button">
                 Declinazioni
               </Tab.Button>
             </Tab>
-            <Tab className="bg-slate-50 first:rounded-l-[0.6rem] last:rounded-r-[0.6rem] [&[aria-selected='true']_button]:text-current">
-              <Tab.Button className="w-full xl:w-40 py-2.5 text-slate-500 whitespace-nowrap rounded-[0.6rem] flex items-center justify-center text-[0.94rem]" as="button">
-                File Aggiunti
+            <Tab>
+              <Tab.Button className={CLASSE_SCHEDA} as="button">
+                File aggiunti
               </Tab.Button>
             </Tab>
           </Tab.List>
-        </div>
-        <Tab.Panels>
-          {/* Scheda 1: Declinazioni */}
-          <Tab.Panel className="mt-4">
-            <form onSubmit={handleSubmit(onSubmit)} className="box p-6 shadow-md rounded-lg">
-              {/* Tab interno per ciascuna declinazione */}
-              <Tab.Group vertical>
-                <Tab.List variant="pills" className="flex space-x-3">
-                  {fields.map((field, index) => (
-                    <Tab key={field.id}>
-                      <Tab.Button className="flex items-center space-x-2">
-                        <Lucide icon="FileText" className="w-5 h-5" />
-                        <span>{field.titolo || `Declinazione ${index + 1}`}</span>
-                      </Tab.Button>
-                    </Tab>
-                  ))}
+          <Tab.Panels className="mt-6">
+            {/* Scheda 1: Declinazioni */}
+            <Tab.Panel>
+              <form onSubmit={handleSubmit(onSubmit)}>
+                <Sezione
+                  senzaPadding
+                  icona="GitBranch"
+                  titolo="Declinazioni"
+                  descrizione="Titolo, proprietà e filtri di ogni declinazione"
+                  azioni={
+                    <Button type="button" size="sm" variant="outline-secondary" onClick={nuovaDeclinazione}>
+                      <Lucide icon="Plus" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                      Aggiungi declinazione
+                    </Button>
+                  }
+                >
+                  <div className="px-5 pb-5">
+                    {/* Tab interno per ciascuna declinazione */}
+                    <Tab.Group vertical>
+                      <Tab.List variant="pills" className="gap-2">
+                        {fields.map((field, index) => (
+                          <Tab key={field.id}>
+                            <Tab.Button className="flex items-center gap-2">
+                              <Lucide icon="FileText" aria-hidden="true" className="h-4 w-4" />
+                              <span>{field.titolo || `Declinazione ${index + 1}`}</span>
+                            </Tab.Button>
+                          </Tab>
+                        ))}
+                      </Tab.List>
+                      <Tab.Panels className="mt-4 rounded-card border border-slate-200">
+                        {fields.map((field, index) => (
+                          <Tab.Panel key={field.id}>
+                            <div className="p-5">
+                              <div className="mb-6 grid grid-cols-12 items-end gap-4">
+                                <div className="col-span-12 md:col-span-6">
+                                  <FormLabel htmlFor={`declinazioni.${index}.titolo`}>
+                                    Titolo della declinazione
+                                  </FormLabel>
+                                  <FormInput
+                                    id={`declinazioni.${index}.titolo`}
+                                    {...register(`declinazioni.${index}.titolo`)}
+                                    placeholder="Titolo della declinazione"
+                                  />
+                                </div>
+                                <div className="col-span-12 md:col-span-6">
+                                  <Button
+                                    type="button"
+                                    variant="outline-danger"
+                                    onClick={() => handleRemoveDeclinazione(index)}
+                                  >
+                                    <Lucide icon="Trash2" aria-hidden="true" className="mr-2 h-4 w-4" />
+                                    Rimuovi declinazione
+                                  </Button>
+                                </div>
+                              </div>
+                              {/* Sezioni collassabili per proprietà e filtri */}
+                              <Disclosure.Group variant="boxed" className="space-y-4">
+                                <Disclosure defaultOpen={false}>
+                                  <Disclosure.Button>
+                                    <span className="font-medium">Proprietà</span>
+                                  </Disclosure.Button>
+                                  <Disclosure.Panel className="p-4">
+                                    <ProprietaForm
+                                      data={dataDeclinazioni.data}
+                                      control={control}
+                                      register={register}
+                                      errors={errors}
+                                      declinazioneIndex={index}
+                                    />
+                                  </Disclosure.Panel>
+                                </Disclosure>
+                                <Disclosure defaultOpen={false}>
+                                  <Disclosure.Button>
+                                    <span className="font-medium">Filtri</span>
+                                  </Disclosure.Button>
+                                  <Disclosure.Panel className="p-4">
+                                    <FilterBaseForm
+                                      control={control}
+                                      register={register}
+                                      errors={errors}
+                                      dataFiltri={field.filtri}
+                                      dataAddestramenti={[] /* Inserisci i dati addestramenti se presenti */}
+                                      declinazioneIndex={index}
+                                      namePrefix={`declinazioni.${index}.filtri`}
+                                    />
+                                  </Disclosure.Panel>
+                                </Disclosure>
+                              </Disclosure.Group>
+                            </div>
+                          </Tab.Panel>
+                        ))}
+                      </Tab.Panels>
+                    </Tab.Group>
+                  </div>
+                  <div className="flex justify-end border-t border-slate-200 px-5 py-4">
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      loading={mutationCreazioneDeclinazioni.isPending}
+                      disabled={mutationCreazioneDeclinazioni.isPending}
+                    >
+                      {!mutationCreazioneDeclinazioni.isPending && <Lucide icon="Save" aria-hidden="true" className="mr-2 h-4 w-4" />}
+                      Salva declinazioni
+                    </Button>
+                  </div>
+                </Sezione>
+              </form>
+            </Tab.Panel>
+            {/* Scheda 2: File aggiunti */}
+            <Tab.Panel>
+              <Sezione senzaPadding icona="Files" titolo="File aggiunti" descrizione="I file della combinazione">
+                <div className="px-5 pb-5">
+                  {files.length === 0 ? (
+                    <EmptyState
+                      compatta
+                      icon="FileX"
+                      title="Nessun file aggiunto"
+                      description=""
+                      className="border border-dashed border-slate-200"
+                    />
+                  ) : (
+                    <FileManagement
+                      files={files}
+                      setFiles={setFiles}
+                      setNameToPreview={setNameToPreview}
+                    />
+                  )}
+                </div>
+                <div className="flex justify-end border-t border-slate-200 px-5 py-4">
                   <Button
                     type="button"
-                    size="sm"
-                    variant="soft-primary"
-                    onClick={() =>
-                      append({
-                        titolo: '',
-                        proprieta: [{ idChiave: 0, valore: '' }],
-                        filtri: [
-                          {
-                            titoloFiltro: '',
-                            condizioni: [{ nome_field: '', operatore: '=', valore: '' }],
-                          },
-                        ],
-                      })
-                    }
-                    className="ml-auto"
+                    variant="primary"
+                    loading={updateKit.isPending}
+                    onClick={() => {
+                      if (dataCombinazione?.data) {
+                        updateKit.mutate({
+                          ...dataCombinazione.data,
+                          guidId: dataCombinazione.data.guidId ?? '',
+                          files,
+                        });
+                      }
+                    }}
                   >
-                    <Lucide icon="Plus" className="w-5 h-5" />
-                    <span>Aggiungi Declinazione</span>
+                    {!updateKit.isPending && <Lucide icon="Save" aria-hidden="true" className="mr-2 h-4 w-4" />}
+                    Salva file
                   </Button>
-                </Tab.List>
-                <Tab.Panels className="border rounded-md mt-4">
-                  {fields.map((field, index) => (
-                    <Tab.Panel key={field.id}>
-                      <div className="p-5">
-                        <div className="grid grid-cols-12 gap-4 items-end mb-6">
-                          <div className="col-span-7 md:col-span-6">
-                            <FormLabel htmlFor={`declinazioni.${index}.titolo`}>
-                              Titolo Declinazione
-                            </FormLabel>
-                            <FormInput
-                              id={`declinazioni.${index}.titolo`}
-                              {...register(`declinazioni.${index}.titolo`)}
-                              placeholder="Titolo Declinazione"
-                            />
-                          </div>
-                          <div className="col-span-2 md:col-span-3">
-                            <Button
-                              type="button"
-                              variant="soft-danger"
-                              onClick={() => handleRemoveDeclinazione(index)}
-                            >
-                              <Lucide icon="Trash2" className="w-5 h-5 mr-1" />
-                              Rimuovi Declinazione
-                            </Button>
-                          </div>
-                        </div>
-                        {/* Sezioni Collassabili per Proprietà e Filtri */}
-                        <Disclosure.Group variant="boxed" className="space-y-4">
-                          <Disclosure defaultOpen={false}>
-                            <Disclosure.Button>
-                              <span className="font-medium">Proprietà</span>
-                            </Disclosure.Button>
-                            <Disclosure.Panel className="p-4">
-                              <ProprietaForm
-                                data={dataDeclinazioni.data}
-                                control={control}
-                                register={register}
-                                errors={errors}
-                                declinazioneIndex={index}
-                              />
-                            </Disclosure.Panel>
-                          </Disclosure>
-                          <Disclosure defaultOpen={false}>
-                            <Disclosure.Button>
-                              <span className="font-medium">Filtri</span>
-                            </Disclosure.Button>
-                            <Disclosure.Panel className="p-4">
-                              <FilterBaseForm
-                                control={control}
-                                register={register}
-                                errors={errors}
-                                dataFiltri={field.filtri}
-                                dataAddestramenti={[] /* Inserisci i dati addestramenti se presenti */}
-                                declinazioneIndex={index}
-                                namePrefix={`declinazioni.${index}.filtri`}
-                              />
-                            </Disclosure.Panel>
-                          </Disclosure>
-                        </Disclosure.Group>
-                      </div>
-                    </Tab.Panel>
-                  ))}
-                </Tab.Panels>
-              </Tab.Group>
-              <div className="flex justify-end mt-6">
-                <Button type="submit" variant="soft-success" loading={mutationCreazioneDeclinazioni.isPending} disabled={mutationCreazioneDeclinazioni.isPending}>
-                  <Lucide icon="Save" className="w-5 h-5 mr-1" />
-                  Salva Declinazioni
-                </Button>
-              </div>
-            </form>
-          </Tab.Panel>
-          {/* Scheda 2: File Aggiunti */}
-          <Tab.Panel className="mt-4">
-            <div className="p-5 bg-white box rounded-lg shadow-md">
-              <ul className="space-y-4">
-                {files.length === 0 ? (
-                  <Badge variant="info" className="p-2 text-blue-500 bg-blue-100 rounded-md">
-                    Nessun file aggiunto
-                  </Badge>
-                ) : (
-                  <FileManagement
-                    files={files}
-                    setFiles={setFiles}
-                    setNameToPreview={setNameToPreview}
-                  />
-                )}
-              </ul>
-              <div className="flex justify-end mt-6">
-                <Button
-                  type="button"
-                  variant="soft-success"
-                  onClick={() => {
-                    if (dataCombinazione?.data) {
-                      updateKit.mutate({
-                        ...dataCombinazione.data,
-                        guidId: dataCombinazione.data.guidId ?? '',
-                        files,
-                      });
-                    }
-                  }}
-                >
-                  <Lucide icon="Save" className="w-5 h-5 mr-1" />
-                  Salva File
-                </Button>
-              </div>
-            </div>
-          </Tab.Panel>
-        </Tab.Panels>
-      </Tab.Group>
-    </div>
+                </div>
+              </Sezione>
+            </Tab.Panel>
+          </Tab.Panels>
+        </Tab.Group>
+      )}
+    </Pagina>
   );
 }
 

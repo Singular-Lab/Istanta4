@@ -3,7 +3,6 @@
 import dayjs from 'dayjs';
 import { Events, GRAVITA_PROBLEMA } from '@/stores/errorSlice';
 import { FilterCondition, FilterConditionContesto, FilterConstruzioneCarosello, PageLayoutItem, ReferenzeIstanta } from '../../../lib/types';
-import { Colorize } from '../../../lib/Colorize';
 import { FieldType } from '../../../lib/enums';
 type Operator = 'equals' | 'not_equals' | 'greater_than' | 'less_than' | 'contains' | 'not_contains';
 
@@ -847,7 +846,6 @@ function evaluateDateCondition(
   // Handle complex date comparison object
   if (typeof conditionValue === 'object' && conditionValue !== null && conditionValue.date) {
     const compareDate = dayjs(conditionValue.date);
-    console.log(Colorize.bgBlue(from))
     switch (operator) {
       case 'equals':
         return fieldDate.isSame(compareDate, 'day');

@@ -2,11 +2,14 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ServerCall } from "../../../lib/server_call";
+import Alert from "../../components/Base/Alert";
 import Badge from "../../components/Base/Badge";
 import Button from "../../components/Base/Button";
 import { FormField, FormInput, FormSelect, FormTextarea } from "../../components/Base/Form";
+import Lucide from "../../components/Base/Lucide";
 import PageError from "../../components/Base/PageError";
-import PageHeader from "../../components/Base/PageHeader";
+import Pagina from "../../components/Base/Pagina";
+import Sezione from "../../components/Base/Sezione";
 import withSessionCheck from "../../components/SessionChecker";
 import { descriviStato } from "../../constants/stati";
 import { useNotification } from "../../context/NotificationContext";
@@ -148,16 +151,6 @@ const Counter: React.FC<{ value: string; max: number }> = ({ value, max }) => (
     <Badge variant="secondary" size="sm">
         {value.length}/{max}
     </Badge>
-);
-
-const Card: React.FC<{ title: string; right?: React.ReactNode; children: React.ReactNode }> = ({ title, right, children }) => (
-    <section className="box box--stacked rounded-card p-5 mb-5">
-        <div className="flex items-center justify-between mb-3">
-            <h2 className="title-card">{title}</h2>
-            {right}
-        </div>
-        {children}
-    </section>
 );
 
 /** ------------------ Pagina principale ------------------ */
@@ -337,32 +330,30 @@ const CreaTemplatesWhatsappSuperAdmin: React.FC = () => {
 
     if (!idGdo) {
         return (
-            <div>
-                <PageHeader title="Crea Template WhatsApp" indietro={{ to: "/whatsapp/gestione-whatsapp-superadmin", etichetta: "Torna alle GDO" }} />
+            <Pagina titolo="Crea Template WhatsApp" indietro={{ to: "/whatsapp/gestione-whatsapp-superadmin", etichetta: "Torna alle GDO" }}>
                 <PageError
                     titolo="GDO non indicata"
                     motivo="Apri la creazione del template dalla pagina dei template della GDO."
                 />
-            </div>
+            </Pagina>
         );
     }
 
     return (
-        <div>
-            <PageHeader
-                title="Crea Template WhatsApp"
-                description="Configura un template conforme alle linee guida Meta e pronto per l’approvazione."
-                indietro={{ to: `${PERCORSO_TEMPLATES}?id=${idGdo}`, etichetta: "Torna ai template" }}
-            />
-
+        <Pagina
+            titolo="Crea Template WhatsApp"
+            descrizione="Configura un template conforme alle linee guida Meta e pronto per l’approvazione."
+            indietro={{ to: `${PERCORSO_TEMPLATES}?id=${idGdo}`, etichetta: "Torna ai template" }}
+        >
             <form
+                className="flex flex-col gap-6"
                 noValidate
                 onSubmit={(e) => {
                     e.preventDefault();
                     salva(false);
                 }}
             >
-                <Card title="Informazioni generali">
+                <Sezione titolo="Informazioni generali">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <FormField etichetta="Nome template" obbligatorio aiuto="Minuscole/underscore, niente spazi." errore={errors.name}>
                             <FormInput placeholder="es. promo_fidelity_settembre" value={form.name} onChange={(e) => update("name", e.target.value.trim())} />
@@ -388,9 +379,9 @@ const CreaTemplatesWhatsappSuperAdmin: React.FC = () => {
                             </FormSelect>
                         </FormField>
                     </div>
-                </Card>
+                </Sezione>
 
-                <Card title="Header">
+                <Sezione titolo="Header">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <FormField etichetta="Formato">
                             <FormSelect value={form.headerFormat} onChange={(e) => update("headerFormat", e.target.value as HeaderFormat)}>
@@ -426,9 +417,9 @@ const CreaTemplatesWhatsappSuperAdmin: React.FC = () => {
                             </FormField>
                         )}
                     </div>
-                </Card>
+                </Sezione>
 
-                <Card title="Body" right={<Counter value={form.bodyText} max={MAX_BODY} />}>
+                <Sezione titolo="Body" azioni={<Counter value={form.bodyText} max={MAX_BODY} />}>
                     <FormField
                         etichetta="Corpo del messaggio"
                         obbligatorio
@@ -458,15 +449,15 @@ const CreaTemplatesWhatsappSuperAdmin: React.FC = () => {
                             {errors.bodyExamples && <p className="mt-1.5 text-xs text-danger">{errors.bodyExamples}</p>}
                         </div>
                     )}
-                </Card>
+                </Sezione>
 
-                <Card title="Footer" right={<Counter value={form.footerText} max={MAX_FOOTER_TEXT} />}>
+                <Sezione titolo="Footer" azioni={<Counter value={form.footerText} max={MAX_FOOTER_TEXT} />}>
                     <FormField etichetta="Testo footer" errore={errors.footerText}>
                         <FormInput placeholder="Es. Servizio clienti 9-18" value={form.footerText} onChange={(e) => update("footerText", e.target.value)} />
                     </FormField>
-                </Card>
+                </Sezione>
 
-                <Card title="Bottoni">
+                <Sezione titolo="Bottoni">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <FormField etichetta="Tipo bottoni" aiuto={<>Quick Reply <b>oppure</b> CTA (non insieme).</>}>
                             <FormSelect value={form.buttonKind} onChange={(e) => update("buttonKind", e.target.value as ButtonKind)}>
@@ -480,8 +471,9 @@ const CreaTemplatesWhatsappSuperAdmin: React.FC = () => {
                             <div className="md:col-span-2">
                                 <div className="flex items-center justify-between mb-2">
                                     <span className="text-sm text-slate-600">Quick Reply</span>
-                                    <Button variant="primary" type="button" onClick={() => update("quickReplies", [...form.quickReplies, { type: "QUICK_REPLY", text: "" }])} disabled={form.quickReplies.length >= 3}>
-                                        + Aggiungi
+                                    <Button size="sm" variant="outline-secondary" type="button" onClick={() => update("quickReplies", [...form.quickReplies, { type: "QUICK_REPLY", text: "" }])} disabled={form.quickReplies.length >= 3}>
+                                        <Lucide icon="Plus" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                                        Aggiungi
                                     </Button>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -506,11 +498,13 @@ const CreaTemplatesWhatsappSuperAdmin: React.FC = () => {
                         {form.buttonKind === "CTA" && (
                             <div className="md:col-span-2 space-y-3">
                                 <div className="flex items-center gap-2">
-                                    <Button variant="primary" type="button" onClick={() => update("ctas", form.ctas.length >= 2 ? form.ctas : [...form.ctas, { type: "URL", text: "", url: "" }])} disabled={form.ctas.length >= 2}>
-                                        + CTA URL
+                                    <Button size="sm" variant="outline-secondary" type="button" onClick={() => update("ctas", form.ctas.length >= 2 ? form.ctas : [...form.ctas, { type: "URL", text: "", url: "" }])} disabled={form.ctas.length >= 2}>
+                                        <Lucide icon="Plus" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                                        CTA URL
                                     </Button>
-                                    <Button variant="secondary" type="button" onClick={() => update("ctas", form.ctas.length >= 2 ? form.ctas : [...form.ctas, { type: "PHONE_NUMBER", text: "", phone_number: "" }])} disabled={form.ctas.length >= 2}>
-                                        + CTA Telefono
+                                    <Button size="sm" variant="outline-secondary" type="button" onClick={() => update("ctas", form.ctas.length >= 2 ? form.ctas : [...form.ctas, { type: "PHONE_NUMBER", text: "", phone_number: "" }])} disabled={form.ctas.length >= 2}>
+                                        <Lucide icon="Plus" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                                        CTA telefono
                                     </Button>
                                 </div>
 
@@ -575,9 +569,9 @@ const CreaTemplatesWhatsappSuperAdmin: React.FC = () => {
                             </div>
                         )}
                     </div>
-                </Card>
+                </Sezione>
 
-                <Card title="Anteprima (isolata, stile WhatsApp)">
+                <Sezione titolo="Anteprima (isolata, stile WhatsApp)">
                     <WhatsAppMessageShadowPreview
                         data={{
                             headerFormat: form.headerFormat,
@@ -594,16 +588,16 @@ const CreaTemplatesWhatsappSuperAdmin: React.FC = () => {
                         }}
                         hostStyle={{ display: "block" }}
                     />
-                </Card>
+                </Sezione>
 
                 {erroreServer && (
-                    <p role="alert" className="mb-4 rounded-control border border-danger/20 bg-danger/5 px-4 py-3 text-sm text-danger">
+                    <Alert variant="soft-danger" icona="CircleAlert">
                         {erroreServer}
-                    </p>
+                    </Alert>
                 )}
 
                 <div className="flex flex-wrap items-center justify-end gap-3">
-                    <Button type="submit" variant="outline-primary" loading={azione === "bozza"} disabled={azione !== null}>
+                    <Button type="submit" variant="outline-secondary" loading={azione === "bozza"} disabled={azione !== null}>
                         Salva bozza
                     </Button>
                     <Button type="button" variant="primary" loading={azione === "invio"} disabled={azione !== null} onClick={() => salva(true)}>
@@ -611,7 +605,7 @@ const CreaTemplatesWhatsappSuperAdmin: React.FC = () => {
                     </Button>
                 </div>
             </form>
-        </div>
+        </Pagina>
     );
 };
 

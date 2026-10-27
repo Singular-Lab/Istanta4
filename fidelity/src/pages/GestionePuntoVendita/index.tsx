@@ -1,14 +1,23 @@
 import userIcon from "@/assets/images/users/user_icon_profile.png";
+import Alert from "@/components/Base/Alert";
+import Badge from "@/components/Base/Badge";
+import BarraFiltri from "@/components/Base/BarraFiltri";
 import Button from "@/components/Base/Button";
+import CampoRicerca from "@/components/Base/CampoRicerca";
 import withSessionCheck from "@/components/SessionChecker";
 import { FormCheck, FormInput, FormLabel, FormSelect } from "@/components/Base/Form";
 import Lucide from "@/components/Base/Lucide";
 import PageError from "@/components/Base/PageError";
-import PageHeader from "@/components/Base/PageHeader";
+import Pagina from "@/components/Base/Pagina";
+import Segmenti, { type OpzioneSegmento } from "@/components/Base/Segmenti";
+import Sezione from "@/components/Base/Sezione";
 import Spinner from "@/components/Base/Spinner";
+import StatCard, { StatCardGrid } from "@/components/Base/StatCard";
 import StatusBadge from "@/components/Base/StatusBadge";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import EmptyState from "@/components/EmptyState";
 import type { TonoStato } from "@/constants/stati";
+import { formatData } from "@/utils/format";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
 import type { Map as LeafletMap } from "leaflet";
@@ -75,19 +84,12 @@ const STATO_DISPOSITIVO: Record<"online" | "offline" | "warning", { tono: TonoSt
   offline: { tono: "neutral", etichetta: "Offline" },
 };
 
-const formattaData = (data: Date | string) =>
-  new Date(data).toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Europe/Rome" });
-
 /** Volantini delle promo valide, dai kit pubblicati con la stessa area e lo stesso canale del punto vendita. */
 const VolantiniAttivi: React.FC<{ idPv: string; canaleArea: string }> = ({ idPv, canaleArea }) => {
   const { data: volantini = [], isLoading, isError, error, refetch } = useFetchVolantiniAttiviPuntoVendita(idPv);
 
   return (
-    <div className="flex flex-col p-5 box box--stacked">
-      <div className="flex items-center gap-3 pb-5 mb-5 border-b border-dashed border-slate-300/70">
-        <h2 className="title-card">Volantini attivi</h2>
-        <span className="ml-auto text-xs text-slate-500">{canaleArea}</span>
-      </div>
+    <Sezione titolo="Volantini attivi" descrizione={canaleArea}>
       {isLoading ? (
         <div role="status" className="flex items-center gap-2 text-sm text-slate-500">
           <Spinner size="sm" decorativo /> Caricamento volantini...
@@ -100,28 +102,30 @@ const VolantiniAttivi: React.FC<{ idPv: string; canaleArea: string }> = ({ idPv,
           onRiprova={() => refetch()}
         />
       ) : volantini.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 py-6 text-center text-slate-500">
-          <Lucide icon="FileSearch" className="w-8 h-8 text-slate-400" />
-          <span className="text-sm">Nessun volantino attivo per questo canale e quest'area</span>
-        </div>
+        <EmptyState
+          compatta
+          icon="FileSearch"
+          title="Nessun volantino attivo"
+          description="Nessun volantino attivo per questo canale e quest'area."
+        />
       ) : (
         <div className="flex flex-col gap-6">
           {volantini.map(v => (
             <div key={v.id_kit}>
               <div className="flex flex-wrap items-baseline gap-x-2 mb-3">
-                <span className="font-medium">{v.promo.nome}</span>
-                <span className="text-xs text-slate-500">
-                  dal {formattaData(v.promo.validita_dal)} al {formattaData(v.promo.validita_al)}
+                <h3 className="title-card">{v.promo.nome}</h3>
+                <span className="text-xs tabular-nums text-slate-500">
+                  dal {formatData(v.promo.validita_dal)} al {formatData(v.promo.validita_al)}
                 </span>
               </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-3">
                 {v.files.map(f => (
-                  <div key={f.id} className="overflow-hidden rounded-lg border border-slate-200/70 dark:border-darkmode-400">
+                  <div key={f.id} className="overflow-hidden rounded-card border border-slate-200 dark:border-darkmode-400">
                     <img src={f.url} alt={f.nome} loading="lazy" className="h-40 w-full object-cover object-top bg-slate-50" />
                     <div className="flex items-center gap-2 p-3">
                       <span className="truncate text-sm" title={f.nome}>{f.nome}</span>
                       <a href={f.url_download} download={f.nome_download} className="ml-auto flex flex-none items-center text-sm text-primary">
-                        <Lucide icon="Download" className="w-4 h-4 mr-1 stroke-[1.3]" /> PDF
+                        <Lucide icon="Download" aria-hidden="true" className="mr-1 h-4 w-4 stroke-[1.3]" /> PDF
                       </a>
                     </div>
                   </div>
@@ -131,7 +135,7 @@ const VolantiniAttivi: React.FC<{ idPv: string; canaleArea: string }> = ({ idPv,
           ))}
         </div>
       )}
-    </div>
+    </Sezione>
   );
 };
 
@@ -194,7 +198,13 @@ const GestionePuntoVendita: React.FC = () => {
   type DeviceStatus = "online" | "offline" | "warning";
 
   const queryClient = useQueryClient();
-  const { data: dispositivi = [], isLoading: isLoadingDevices } = useFetchDispositiviPuntoVendita(puntoVendita.id);
+  const {
+    data: dispositivi = [],
+    isLoading: isLoadingDevices,
+    isError: isErrorDevices,
+    error: erroreDevices,
+    refetch: refetchDevices,
+  } = useFetchDispositiviPuntoVendita(puntoVendita.id);
 
   // Real-time device status via WebSocket
   const { deviceStatuses, getDeviceStatus } = usePVDeviceStatus(puntoVendita.id);
@@ -369,7 +379,13 @@ const GestionePuntoVendita: React.FC = () => {
   // ============================================================
   // DISPLAY CONTEXTS
   // ============================================================
-  const { data: displayContexts = [], isLoading: isLoadingContexts } = useFetchDisplayContextsByPuntoVendita(puntoVendita.id);
+  const {
+    data: displayContexts = [],
+    isLoading: isLoadingContexts,
+    isError: isErrorContexts,
+    error: erroreContexts,
+    refetch: refetchContexts,
+  } = useFetchDisplayContextsByPuntoVendita(puntoVendita.id);
   const { data: metadataFields = [] } = useFetchFilesMetadataFields();
 
   // Opzioni campi per i filtri del display context
@@ -545,16 +561,27 @@ const GestionePuntoVendita: React.FC = () => {
     setSelectedContextId(device.id_display_context || "");
   };
 
+  const conteggiStato = {
+    online: dispositivi.filter((d) => getDeviceStatusValue(d) === "online").length,
+    warning: dispositivi.filter((d) => getDeviceStatusValue(d) === "warning").length,
+    offline: dispositivi.filter((d) => getDeviceStatusValue(d) === "offline").length,
+  };
+  const opzioniStato: OpzioneSegmento<DeviceStatus | "all">[] = [
+    { valore: "all", etichetta: "Tutti", conteggio: dispositivi.length },
+    { valore: "online", etichetta: "Online", conteggio: conteggiStato.online },
+    { valore: "warning", etichetta: "Warning", conteggio: conteggiStato.warning },
+    { valore: "offline", etichetta: "Offline", conteggio: conteggiStato.offline },
+  ];
+
   return (
-    <div className="grid grid-cols-12 gap-y-10 gap-x-6">
-      <div className="col-span-12">
-        <PageHeader
-          title={displayName}
-          indietro={{ to: "/gestione-interna/punti-vendita", etichetta: "Torna ai punti vendita" }}
-        />
-        {/* HEADER + AVATAR PUNTO VENDITA */}
-        <div className="p-1.5 box flex flex-col box--stacked">
-          <div className="h-48 relative w-full rounded-card bg-gradient-to-b from-theme-1/95 to-theme-2/95">
+    <>
+      <Pagina
+        titolo={displayName}
+        indietro={{ to: "/gestione-interna/punti-vendita", etichetta: "Torna ai punti vendita" }}
+      >
+        {/* HEADER + AVATAR PUNTO VENDITA: fascia del profilo, il nome è già nell'intestazione */}
+        <div className="box box--stacked flex flex-col p-1.5">
+          <div className="relative h-48 w-full rounded-card bg-gradient-to-b from-theme-1/95 to-theme-2/95">
             <div
               className={clsx([
                 "w-full h-full relative overflow-hidden",
@@ -562,36 +589,25 @@ const GestionePuntoVendita: React.FC = () => {
                 "after:content-[''] after:absolute after:inset-0 after:bg-texture-white after:-mt-[50rem]",
               ])}
             ></div>
-            <div className="absolute inset-x-0 top-0 w-32 h-32 mx-auto mt-24">
-              <div className="w-full h-full overflow-hidden border-[6px] box border-white rounded-full image-fit">
+            <div className="absolute inset-x-0 top-0 mx-auto mt-24 h-32 w-32">
+              <div className="box image-fit h-full w-full overflow-hidden rounded-full border-[6px] border-white">
                 <img alt={displayName} src={userIcon} />
               </div>
             </div>
           </div>
 
           {/* INFO PRINCIPALI PUNTO VENDITA */}
-          <div className="rounded-card bg-slate-50 pt-12 pb-6">
-            <div className="flex items-center justify-center text-xl font-medium">
-              {displayName}
-              <Lucide
-                icon="BadgeCheck"
-                className="w-5 h-5 ml-2 text-blue-500 fill-blue-500/30"
-              />
-            </div>
-
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-y-2 gap-x-5 mt-2.5">
+          <div className="rounded-card bg-slate-50 pb-6 pt-12">
+            <div className="mt-2.5 flex flex-col items-center justify-center gap-x-5 gap-y-2 sm:flex-row">
               {/* Ragione sociale / GDO / tipo */}
               <div className="flex items-center text-slate-500">
-                <Lucide icon="Briefcase" className="w-3.5 h-3.5 mr-1.5 stroke-[1.3]" />
+                <Lucide icon="Briefcase" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5 stroke-[1.3]" />
                 <span className="text-sm">{ragionesociale || "Punto vendita"}</span>
               </div>
 
               {/* Regione / Località */}
               <div className="flex items-center text-slate-500">
-                <Lucide
-                  icon="MountainSnow"
-                  className="w-3.5 h-3.5 mr-1.5 stroke-[1.3]"
-                />
+                <Lucide icon="MountainSnow" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5 stroke-[1.3]" />
                 <span className="text-sm">
                   {displayLocationShort || "Località non impostata"}
                 </span>
@@ -599,14 +615,14 @@ const GestionePuntoVendita: React.FC = () => {
 
               {/* Canale e area */}
               <div className="flex items-center text-slate-500">
-                <Lucide icon="Signal" className="w-3.5 h-3.5 mr-1.5 stroke-[1.3]" />
+                <Lucide icon="Signal" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5 stroke-[1.3]" />
                 <span className="text-sm">{displayCanaleArea}</span>
               </div>
 
               {/* Codici del sistema della GDO (es. id ANACAN) */}
               {codici.map(c => (
                 <div key={c.etichetta} className="flex items-center text-slate-500">
-                  <Lucide icon="Hash" className="w-3.5 h-3.5 mr-1.5 stroke-[1.3]" />
+                  <Lucide icon="Hash" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5 stroke-[1.3]" />
                   <span className="text-sm">
                     {c.etichetta}: {c.valore}
                   </span>
@@ -616,730 +632,575 @@ const GestionePuntoVendita: React.FC = () => {
           </div>
         </div>
 
-        {/* TABS */}
-        {/* HEADER ACTIONS (ex area tab) */}
-        <div className="mt-10 flex flex-col 2xl:items-center 2xl:flex-row gap-y-3">
-          <div className="mr-auto" />
-        </div>
-
-        {/* PAGINA UNICA (ex Tab Profile) */}
-        <div className="mt-3.5 grid grid-cols-12 gap-y-7 gap-x-6">
+        {/* PAGINA UNICA: contenuto a sinistra, dati del punto vendita a destra */}
+        <div className="grid grid-cols-12 gap-6">
           {/* COLONNA SINISTRA */}
-          <div className="col-span-12 xl:col-span-8">
-            <div className="flex flex-col gap-y-7">
-              <VolantiniAttivi idPv={puntoVendita.id} canaleArea={displayCanaleArea} />
+          <div className="col-span-12 flex flex-col gap-6 xl:col-span-8">
+            <VolantiniAttivi idPv={puntoVendita.id} canaleArea={displayCanaleArea} />
 
-              {/* Activity Feed */}
-              <div className="flex flex-col h-full p-5 box box--stacked">
-                <div className="pb-5 mb-5 border-b border-dashed border-slate-300/70">
-                  <h2 className="title-card">Gestione dispositivi</h2>
+            {/* DISPOSITIVI */}
+            <Sezione
+              titolo="Gestione dispositivi"
+              azioni={
+                <Button size="sm" variant="primary" onClick={() => setIsCreateDeviceOpen(true)}>
+                  <Lucide icon="Plus" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                  Nuovo dispositivo
+                </Button>
+              }
+            >
+              <BarraFiltri variante="interna">
+                <CampoRicerca
+                  etichetta="Cerca dispositivi"
+                  placeholder="Cerca device (nome, posizione, pagina...)"
+                  value={deviceQuery}
+                  onChange={setDeviceQuery}
+                />
+                <Segmenti etichetta="Stato" opzioni={opzioniStato} valore={statusFilter} onChange={setStatusFilter} />
+              </BarraFiltri>
+
+              {/* RIEPILOGO */}
+              <StatCardGrid className="mb-5 lg:grid-cols-3">
+                <StatCard
+                  densita="compatta"
+                  etichetta="Online"
+                  valore={conteggiStato.online}
+                  icona="CircleCheck"
+                  tono="success"
+                  sottotitolo="Device attivi e con heartbeat recente"
+                />
+                <StatCard
+                  densita="compatta"
+                  etichetta="Warning"
+                  valore={conteggiStato.warning}
+                  icona="TriangleAlert"
+                  tono="warning"
+                  sottotitolo="Ritardi heartbeat o errori runtime"
+                />
+                <StatCard
+                  densita="compatta"
+                  etichetta="Offline"
+                  valore={conteggiStato.offline}
+                  icona="CircleX"
+                  tono="neutral"
+                  sottotitolo="Nessun segnale oltre la soglia"
+                />
+              </StatCardGrid>
+
+              {isLoadingDevices ? (
+                <div className="flex justify-center p-8">
+                  <Spinner etichetta="Caricamento dispositivi…" />
                 </div>
-
-                {/* ============================================================
-                    MOCKUP UI DISPOSITIVI (SOLO STILE + COMPONENTI VISIVI)
-                    ============================================================ */}
-                <div className="flex flex-col gap-5">
-                  {/* TOOLBAR */}
-                  <div className="flex flex-col 2xl:flex-row 2xl:items-center gap-3">
-                    <div className="flex-1">
-                      <div className="relative">
-                        <Lucide
-                          icon="Search"
-                          className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 stroke-[1.4] text-slate-500"
-                        />
-                        <FormInput
-                          value={deviceQuery}
-                          onChange={(e) => setDeviceQuery(e.target.value)}
-                          placeholder="Cerca device (nome, posizione, pagina...)"
-                          className="pl-10 py-3 rounded-[0.7rem] bg-white"
-                          type="text"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      {/* FILTER */}
-                      <Menu>
-                        <Menu.Button
-                          as={Button}
-                          variant="secondary"
-                          className="rounded-[0.7rem] bg-white py-3"
-                        >
-                          <Lucide icon="Filter" className="stroke-[1.3] w-4 h-4 mr-2" />
-                          Stato
-                          <Lucide
-                            icon="ChevronDown"
-                            className="stroke-[1.3] w-4 h-4 ml-2"
-                          />
-                        </Menu.Button>
-                        <Menu.Items className="w-52">
-                          <Menu.Item onClick={() => setStatusFilter("all")}>
-                            <Lucide icon="CircleDashed" className="w-4 h-4 mr-2" />
-                            Tutti
-                          </Menu.Item>
-                          <Menu.Item onClick={() => setStatusFilter("online")}>
-                            <Lucide icon="CircleCheck" className="w-4 h-4 mr-2" />
-                            Online
-                          </Menu.Item>
-                          <Menu.Item onClick={() => setStatusFilter("warning")}>
-                            <Lucide icon="TriangleAlert" className="w-4 h-4 mr-2" />
-                            Warning
-                          </Menu.Item>
-                          <Menu.Item onClick={() => setStatusFilter("offline")}>
-                            <Lucide icon="CircleX" className="w-4 h-4 mr-2" />
-                            Offline
-                          </Menu.Item>
-                        </Menu.Items>
-                      </Menu>
-
-                      {/* PRIMARY ACTION */}
-                      <Button
-                        variant="primary"
-                        className="rounded-[0.7rem] py-3"
-                        onClick={() => setIsCreateDeviceOpen(true)}
-                      >
-                        <Lucide icon="Plus" className="stroke-[1.3] w-4 h-4 mr-2" />
-                        Nuovo dispositivo
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* SUMMARY CARDS */}
-                  <div className="grid grid-cols-12 gap-4">
-                    <div className="col-span-12 md:col-span-4">
-                      <div className="p-4 rounded-[0.9rem] bg-gradient-to-b from-slate-50 to-white border border-slate-200/70">
-                        <div className="flex items-center justify-between">
-                          <div className="text-sm text-slate-500">Online</div>
-                          <Lucide icon="CircleCheck" className="w-4 h-4 text-success" />
-                        </div>
-                        <div className="mt-2 text-2xl font-semibold text-slate-900">
-                          {dispositivi.filter((d) => getDeviceStatusValue(d) === "online").length}
-                        </div>
-                        <div className="mt-1 text-xs text-slate-500">
-                          Device attivi e con heartbeat recente
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="col-span-12 md:col-span-4">
-                      <div className="p-4 rounded-[0.9rem] bg-gradient-to-b from-slate-50 to-white border border-slate-200/70">
-                        <div className="flex items-center justify-between">
-                          <div className="text-sm text-slate-500">Warning</div>
-                          <Lucide icon="TriangleAlert" className="w-4 h-4 text-warning" />
-                        </div>
-                        <div className="mt-2 text-2xl font-semibold text-slate-900">
-                          {dispositivi.filter((d) => getDeviceStatusValue(d) === "warning").length}
-                        </div>
-                        <div className="mt-1 text-xs text-slate-500">
-                          Ritardi heartbeat o errori runtime
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="col-span-12 md:col-span-4">
-                      <div className="p-4 rounded-[0.9rem] bg-gradient-to-b from-slate-50 to-white border border-slate-200/70">
-                        <div className="flex items-center justify-between">
-                          <div className="text-sm text-slate-500">Offline</div>
-                          <Lucide icon="CircleX" className="w-4 h-4 text-danger" />
-                        </div>
-                        <div className="mt-2 text-2xl font-semibold text-slate-900">
-                          {dispositivi.filter((d) => getDeviceStatusValue(d) === "offline").length}
-                        </div>
-                        <div className="mt-1 text-xs text-slate-500">
-                          Nessun segnale oltre la soglia
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* LOADING STATE */}
-                  {isLoadingDevices ? (
-                    <div className="flex justify-center p-8">
-                      <Spinner etichetta="Caricamento dispositivi…" />
-                    </div>
-                  ) : (
-                    /* DEVICE GRID */
-                    <div className="grid grid-cols-12 gap-4">
-                      {filteredDevices.map((d) => {
-                        const status = getDeviceStatusValue(d);
-                        const lastSeenLabel = getLastSeenLabel(d);
-                        const realtimeStatus = getDeviceStatus(d.id);
-                        const isRealtimeConnected = realtimeStatus?.isConnected ?? false;
-                        return (
-                          <div key={d.id} className="col-span-12 md:col-span-6">
-                            <div
-                              className={clsx([
-                                "p-4 rounded-[0.9rem] bg-white border border-slate-200/70",
-                                "shadow-sm hover:shadow-md transition-shadow",
-                                statusCardRing(status),
-                              ])}
-                            >
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="flex items-start gap-3 min-w-0">
-                                  <div
-                                    className={clsx([
-                                      "h-10 w-10 rounded-[0.9rem] flex items-center justify-center",
-                                      "bg-slate-50 border border-slate-200/70",
-                                    ])}
-                                  >
-                                    <Lucide
-                                      icon="Monitor"
-                                      className="w-5 h-5 stroke-[1.4] text-slate-700"
-                                    />
-                                  </div>
-
-                                  <div className="min-w-0">
-                                    <div className="flex items-center gap-2">
-                                      <div className="font-medium text-slate-900 truncate">
-                                        {d.nome}
-                                      </div>
-                                      {statusBadge(status, isRealtimeConnected)}
-                                    </div>
-
-                                    <div className="mt-1 text-xs text-slate-500 truncate">
-                                      {d.descrizione || "Nessuna descrizione"} •{" "}
-                                      <span className="text-slate-600">{lastSeenLabel}</span>
-                                    </div>
-                                  </div>
-                                </div>
-
-                                {/* ACTIONS */}
-                                <Menu>
-                                  <Menu.Button
-                                    as={Button}
-                                    variant="secondary"
-                                    className="rounded-[0.7rem] bg-white py-2 px-2"
-                                    aria-label={`Azioni dispositivo ${d.nome}`}
-                                  >
-                                    <Lucide icon="EllipsisVertical" aria-hidden="true" className="w-4 h-4" />
-                                  </Menu.Button>
-                                  <Menu.Items className="w-56">
-                                    {d.display_url ? (
-                                      <Menu.Item onClick={() => window.open(d.display_url, '_blank')}>
-                                        <Lucide icon="Eye" className="w-4 h-4 mr-2" /> Apri preview
-                                      </Menu.Item>
-                                    ) : null}
-                                    <Menu.Item onClick={() => openAssignDialog(d)}>
-                                      <Lucide icon="LayoutDashboard" className="w-4 h-4 mr-2" /> Assegna contesto
-                                    </Menu.Item>
-                                    <Menu.Item onClick={() => handleCopyDisplayUrl(d)}>
-                                      <Lucide icon="Link" className="w-4 h-4 mr-2" /> Copia URL display
-                                    </Menu.Item>
-                                    <Menu.Item onClick={() => handleRegenerateToken(d)}>
-                                      <Lucide icon="RotateCw" className="w-4 h-4 mr-2" /> Rigenera token
-                                    </Menu.Item>
-                                    <Menu.Item onClick={() => handleToggleActive(d)}>
-                                      <Lucide icon={d.is_active ? "Ban" : "CircleCheck"} className="w-4 h-4 mr-2" />
-                                      {d.is_active ? "Disattiva" : "Attiva"}
-                                    </Menu.Item>
-                                    <Menu.Item className="text-danger" onClick={() => handleDeleteDevice(d)}>
-                                      <Lucide icon="Trash2" className="w-4 h-4 mr-2" /> Elimina
-                                    </Menu.Item>
-                                  </Menu.Items>
-                                </Menu>
-                              </div>
-
-                              {/* CONTENT STATUS */}
-                              <div className="mt-4 grid grid-cols-12 gap-3">
-                                <div className="col-span-12 sm:col-span-12">
-                                  <div className="col-span-12 sm:col-span-12">
-                                    <div className="p-3 w-full rounded-[0.8rem] bg-slate-50 border border-slate-200/70 h-full flex flex-col gap-3">
-
-                                      {/* =========================
-        CARD PREVIEW IMMAGINE (IN CIMA)
-       ========================= */}
-                                      <div className="p-3 rounded-[0.8rem] bg-white border border-slate-200/70">
-                                        <div className="flex items-center justify-between text-xs text-slate-500 mb-2">
-                                          <span className="font-medium text-slate-700">
-                                            {isRealtimeConnected ? "Monitoraggio live" : "Anteprima contenuto"}
-                                          </span>
-                                          {isRealtimeConnected &&
-                                            realtimeStatus?.currentSlideIndex != null &&
-                                            realtimeStatus?.totalSlides != null && (
-                                              <span className="text-slate-700 font-medium">
-                                                {realtimeStatus.currentSlideIndex + 1} / {realtimeStatus.totalSlides}
-                                              </span>
-                                            )}
-                                        </div>
-
-                                        {isRealtimeConnected && realtimeStatus?.slideUrl ? (
-                                          <div className="relative w-full aspect-video rounded-md overflow-hidden border border-slate-200 bg-white">
-                                            <img
-                                              key={realtimeStatus.slideUrl}
-                                              src={realtimeStatus.slideUrl}
-                                              alt={realtimeStatus.slideName || "Slide corrente"}
-                                              className="absolute inset-0 w-full h-full object-contain"
-                                              loading="lazy"
-                                              onError={(e) => {
-                                                (e.currentTarget as HTMLImageElement).style.display = "none";
-                                              }}
-                                            />
-
-                                            {/* fallback */}
-                                            <div className="absolute inset-0 flex items-center justify-center text-xs text-slate-400 pointer-events-none">
-                                              Anteprima non disponibile
-                                            </div>
-                                          </div>
-                                        ) : (
-                                          <div className="flex items-center justify-center h-[120px] rounded-md border border-dashed border-slate-200 bg-slate-50 text-xs text-slate-500">
-                                            Nessun dato live disponibile
-                                          </div>
-                                        )}
-
-                                        {realtimeStatus?.slideName && (
-                                          <div
-                                            className="mt-1 text-xs text-slate-500 truncate"
-                                            title={realtimeStatus.slideName}
-                                          >
-                                            {realtimeStatus.slideName}
-                                          </div>
-                                        )}
-                                      </div>
-
-                                      {/* =========================
-        CARD IMPOSTAZIONI / STATO PLAYBACK
-       ========================= */}
-                                      <div className="p-3 rounded-[0.8rem] bg-white border border-slate-200/70">
-                                        <div className="flex items-center justify-between text-xs text-slate-500">
-                                          <span className="font-medium text-slate-700">
-                                            {isRealtimeConnected ? "Playback attivo" : "Impostazioni playback"}
-                                          </span>
-                                          <span className="text-slate-600">
-                                            {d.displayContext?.auto_scroll ? "Auto-scroll" : "Manuale"}
-                                            {d.displayContext?.scroll_speed
-                                              ? ` • ${(d.displayContext.scroll_speed / 1000).toFixed(0)}s`
-                                              : ""}
-                                          </span>
-                                        </div>
-
-                                        <div className="mt-2 text-sm font-medium text-slate-900">
-                                          {d.displayContext?.scroll_speed
-                                            ? `${(d.displayContext.scroll_speed / 1000).toFixed(0)}s per slide`
-                                            : "—"}
-                                        </div>
-                                      </div>
-
-                                      {/* =========================
-        CARD STATO CONNESSIONE / PING
-       ========================= */}
-                                      <div className="p-3 rounded-[0.8rem] bg-white border border-slate-200/70">
-                                        <div className="flex items-center justify-between text-xs text-slate-500">
-                                          {isRealtimeConnected ? (
-                                            <span className="flex items-center gap-1">
-                                              <span className="relative flex h-2 w-2">
-                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>
-                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-success"></span>
-                                              </span>
-                                              Ping
-                                            </span>
-                                          ) : (
-                                            <span>Heartbeat</span>
-                                          )}
-
-                                          <span className="text-slate-700 font-medium">
-                                            {isRealtimeConnected
-                                              ? realtimeStatus?.latencyMs != null
-                                                ? `${realtimeStatus.latencyMs}ms`
-                                                : "—"
-                                              : lastSeenLabel}
-                                          </span>
-                                        </div>
-
-                                        <div className="mt-1 h-1.5 w-full rounded-full bg-slate-200 overflow-hidden">
-                                          <div
-                                            className={clsx([
-                                              "h-full rounded-full transition-all duration-300",
-                                              isRealtimeConnected
-                                                ? "bg-success"
-                                                : status === "online"
-                                                  ? "bg-success"
-                                                  : status === "warning"
-                                                    ? "bg-warning"
-                                                    : "bg-danger",
-                                            ])}
-                                            style={{
-                                              width: isRealtimeConnected
-                                                ? "100%"
-                                                : status === "online"
-                                                  ? "82%"
-                                                  : status === "warning"
-                                                    ? "48%"
-                                                    : "12%",
-                                            }}
-                                          />
-                                        </div>
-
-                                        {!isRealtimeConnected && (
-                                          <div className="mt-1 text-2xs text-right text-slate-400">
-                                            Ultimo segnale: {lastSeenLabel}
-                                          </div>
-                                        )}
-                                      </div>
-
-                                    </div>
-                                  </div>
-                                  <div className="p-3 rounded-[0.8rem] bg-slate-50 border border-slate-200/70 mt-2">
-                                    <div className="text-xs text-slate-500">Display Context</div>
-                                    <div className="mt-1 text-sm font-medium text-slate-900 truncate">
-                                      {d.displayContext?.nome || "Nessun context assegnato"}
-                                    </div>
-                                    <div className="mt-1 text-xs text-slate-500">
-                                      Endpoint:{" "}
-                                      <span className="text-slate-700 font-medium">
-                                        {d.displayContext?.endpoint_type || "—"}
-                                      </span>
-                                    </div>
-                                  </div>
-                                </div>
-
-
-
-                              </div>
-
-                              {/* ALERT: dispositivo disattivato */}
-                              {!d.is_active ? (
-                                <div className="mt-3 p-3 rounded-[0.8rem] bg-danger/5 border border-danger/20">
-                                  <div className="flex items-start gap-2">
-                                    <Lucide
-                                      icon="CircleX"
-                                      className="w-4 h-4 mt-0.5 text-danger stroke-[1.4]"
-                                    />
-                                    <div className="text-xs text-slate-700">
-                                      <span className="font-medium">Dispositivo disattivato</span>
-                                    </div>
-                                  </div>
-                                </div>
-                              ) : !d.displayContext ? (
-                                <div className="mt-3 p-3 rounded-[0.8rem] bg-warning/5 border border-warning/20">
-                                  <div className="flex items-start gap-2">
-                                    <Lucide
-                                      icon="TriangleAlert"
-                                      className="w-4 h-4 mt-0.5 text-warning stroke-[1.4]"
-                                    />
-                                    <div className="text-xs text-slate-700">
-                                      <span className="font-medium">Nessun display context assegnato</span>
-                                    </div>
-                                  </div>
-                                </div>
-                              ) : null}
-
-                              {/* FOOTER CTA */}
-                              <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-2">
-                                <Button
-                                  variant="secondary"
-                                  className="rounded-[0.7rem] bg-white"
-                                  onClick={() => handleCopyDisplayUrl(d)}
-                                >
-                                  <Lucide icon="Link" className="w-4 h-4 mr-2 stroke-[1.3]" />
-                                  Copia link display
-                                </Button>
-
-                                <div className="sm:ml-auto text-xs text-slate-400">
-                                  ID: <span className="text-slate-500">{d.id.slice(0, 8)}...</span>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* EMPTY STATE */}
-                  {!isLoadingDevices && filteredDevices.length === 0 ? (
-                    <div className="p-8 rounded-[0.9rem] border border-dashed border-slate-300/70 bg-slate-50 text-center">
-                      <div className="mx-auto w-12 h-12 rounded-full bg-white border border-slate-200/70 flex items-center justify-center">
-                        <Lucide icon="MonitorX" className="w-6 h-6 text-slate-500" />
-                      </div>
-                      <div className="mt-3 text-sm font-medium text-slate-900">
-                        {dispositivi.length === 0
-                          ? "Nessun dispositivo registrato"
-                          : "Nessun dispositivo trovato"}
-                      </div>
-                      <div className="mt-1 text-xs text-slate-500">
-                        {dispositivi.length === 0
-                          ? "Aggiungi un nuovo dispositivo per iniziare."
-                          : "Modifica i filtri o prova una ricerca diversa."}
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-                {/* ============================================================
-                    FINE MOCKUP UI DISPOSITIVI
-                    ============================================================ */}
-              </div>
-
-              {/* ============================================================
-                  SEZIONE DISPLAY CONTEXTS
-                  ============================================================ */}
-              <div className="flex flex-col h-full p-5 box box--stacked">
-                <div className="pb-5 mb-5 border-b border-dashed border-slate-300/70 flex items-center justify-between">
-                  <h2 className="title-card">Display Contexts</h2>
-                  <Button
-                    variant="primary"
-                    className="rounded-[0.7rem]"
-                    onClick={() => { resetContextForm(); setIsCreateContextOpen(true); }}
-                  >
-                    <Lucide icon="Plus" className="stroke-[1.3] w-4 h-4 mr-2" />
-                    Nuovo contesto
-                  </Button>
-                </div>
-
-                {isLoadingContexts ? (
-                  <div className="flex justify-center p-8">
-                    <Spinner etichetta="Caricamento contesti…" />
-                  </div>
-                ) : displayContexts.length === 0 ? (
-                  <div className="p-8 rounded-[0.9rem] border border-dashed border-slate-300/70 bg-slate-50 text-center">
-                    <div className="mx-auto w-12 h-12 rounded-full bg-white border border-slate-200/70 flex items-center justify-center">
-                      <Lucide icon="LayoutDashboard" className="w-6 h-6 text-slate-500" />
-                    </div>
-                    <div className="mt-3 text-sm font-medium text-slate-900">
-                      Nessun display context
-                    </div>
-                    <div className="mt-1 text-xs text-slate-500">
-                      Crea un contesto per configurare cosa mostrare sui display.
-                    </div>
-                  </div>
+              ) : isErrorDevices ? (
+                <PageError
+                  compatta
+                  titolo="Dispositivi non caricati"
+                  motivo={(erroreDevices as Error)?.message || "Errore durante il recupero dei dispositivi"}
+                  onRiprova={() => refetchDevices()}
+                />
+              ) : filteredDevices.length === 0 ? (
+                dispositivi.length === 0 ? (
+                  <EmptyState
+                    compatta
+                    icon="MonitorX"
+                    title="Nessun dispositivo registrato"
+                    description="Aggiungi un nuovo dispositivo per iniziare."
+                  />
                 ) : (
-                  <div className="grid grid-cols-12 gap-4">
-                    {displayContexts.map((ctx) => (
-                      <div key={ctx.id} className="col-span-12 md:col-span-6">
-                        <div className="p-4 rounded-[0.9rem] bg-white border border-slate-200/70 shadow-sm hover:shadow-md transition-shadow ring-1 ring-slate-200/50">
+                  <EmptyState
+                    compatta
+                    icon="SearchX"
+                    title="Nessun dispositivo trovato"
+                    description="Modifica i filtri o prova una ricerca diversa."
+                    buttonText="Azzera filtri"
+                    buttonIcon="X"
+                    onButtonClick={() => {
+                      setDeviceQuery("");
+                      setStatusFilter("all");
+                    }}
+                  />
+                )
+              ) : (
+                /* DEVICE GRID */
+                <div className="grid grid-cols-12 gap-4">
+                  {filteredDevices.map((d) => {
+                    const status = getDeviceStatusValue(d);
+                    const lastSeenLabel = getLastSeenLabel(d);
+                    const realtimeStatus = getDeviceStatus(d.id);
+                    const isRealtimeConnected = realtimeStatus?.isConnected ?? false;
+                    return (
+                      <div key={d.id} className="col-span-12 md:col-span-6">
+                        <div
+                          className={clsx([
+                            "rounded-card border border-slate-200 bg-white p-4",
+                            statusCardRing(status),
+                          ])}
+                        >
                           <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2">
-                                <div className="font-medium text-slate-900 truncate">{ctx.nome}</div>
-                                <StatusBadge
-                                  tono={ctx.is_active ? "success" : "neutral"}
-                                  etichetta={ctx.is_active ? "Attivo" : "Inattivo"}
-                                />
+                            <div className="flex min-w-0 items-start gap-3">
+                              <div aria-hidden="true" className="flex h-10 w-10 flex-none items-center justify-center rounded-control border border-slate-200 bg-slate-50">
+                                <Lucide icon="Monitor" className="h-5 w-5 stroke-[1.4] text-slate-700" />
                               </div>
-                              {ctx.descrizione && (
-                                <div className="mt-1 text-xs text-slate-500 truncate">{ctx.descrizione}</div>
-                              )}
+
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <h3 className="title-card truncate">{d.nome}</h3>
+                                  {statusBadge(status, isRealtimeConnected)}
+                                </div>
+
+                                <div className="mt-1 truncate text-xs text-slate-500">
+                                  {d.descrizione || "Nessuna descrizione"} •{" "}
+                                  <span className="text-slate-600">{lastSeenLabel}</span>
+                                </div>
+                              </div>
                             </div>
-                            <Menu>
+
+                            {/* ACTIONS */}
+                            <Menu className="inline-block text-left">
                               <Menu.Button
                                 as={Button}
-                                variant="secondary"
-                                className="rounded-[0.7rem] bg-white py-2 px-2"
-                                aria-label={`Azioni contesto ${ctx.nome}`}
+                                size="sm"
+                                variant="outline-secondary"
+                                aria-label={`Azioni dispositivo ${d.nome}`}
                               >
-                                <Lucide icon="EllipsisVertical" aria-hidden="true" className="w-4 h-4" />
+                                <Lucide icon="EllipsisVertical" aria-hidden="true" className="h-4 w-4" />
                               </Menu.Button>
-                              <Menu.Items className="w-48">
-                                <Menu.Item onClick={() => openEditContext(ctx)}>
-                                  <Lucide icon="Pencil" className="w-4 h-4 mr-2" /> Modifica
+                              <Menu.Items className="w-56">
+                                {d.display_url ? (
+                                  <Menu.Item onClick={() => window.open(d.display_url, '_blank')}>
+                                    <Lucide icon="Eye" aria-hidden="true" className="mr-2 h-4 w-4" /> Apri preview
+                                  </Menu.Item>
+                                ) : null}
+                                <Menu.Item onClick={() => openAssignDialog(d)}>
+                                  <Lucide icon="LayoutDashboard" aria-hidden="true" className="mr-2 h-4 w-4" /> Assegna contesto
                                 </Menu.Item>
-                                <Menu.Item
-                                  className="text-danger"
-                                  onClick={() => setConferma({
-                                    title: "Eliminare il contesto?",
-                                    description: `Il contesto "${ctx.nome}" verrà eliminato e i dispositivi che lo usano resteranno senza contesto assegnato.`,
-                                    confirmLabel: "Elimina contesto",
-                                    azione: () => deleteContextMutation.mutateAsync(ctx.id),
-                                  })}
-                                >
-                                  <Lucide icon="Trash2" className="w-4 h-4 mr-2" /> Elimina
+                                <Menu.Item onClick={() => handleCopyDisplayUrl(d)}>
+                                  <Lucide icon="Link" aria-hidden="true" className="mr-2 h-4 w-4" /> Copia URL display
+                                </Menu.Item>
+                                <Menu.Item onClick={() => handleRegenerateToken(d)}>
+                                  <Lucide icon="RotateCw" aria-hidden="true" className="mr-2 h-4 w-4" /> Rigenera token
+                                </Menu.Item>
+                                <Menu.Item onClick={() => handleToggleActive(d)}>
+                                  <Lucide icon={d.is_active ? "Ban" : "CircleCheck"} aria-hidden="true" className="mr-2 h-4 w-4" />
+                                  {d.is_active ? "Disattiva" : "Attiva"}
+                                </Menu.Item>
+                                <Menu.Item className="text-danger" onClick={() => handleDeleteDevice(d)}>
+                                  <Lucide icon="Trash2" aria-hidden="true" className="mr-2 h-4 w-4" /> Elimina
                                 </Menu.Item>
                               </Menu.Items>
                             </Menu>
                           </div>
 
-                          <div className="mt-3 grid grid-cols-3 gap-2">
-                            <div className="p-2 rounded-lg bg-slate-50 border border-slate-200/70">
-                              <div className="text-xs text-slate-500">Endpoint</div>
-                              <div className="mt-0.5 text-sm font-medium text-slate-900">{ctx.endpoint_type}</div>
+                          {/* CONTENT STATUS */}
+                          <div className="mt-4 flex flex-col gap-2">
+                            <div className="flex h-full w-full flex-col gap-3 rounded-card border border-slate-200 bg-slate-50 p-3">
+                              {/* Anteprima del contenuto (in cima) */}
+                              <div className="rounded-card border border-slate-200 bg-white p-3">
+                                <div className="mb-2 flex items-center justify-between text-xs text-slate-500">
+                                  <span className="font-medium text-slate-700">
+                                    {isRealtimeConnected ? "Monitoraggio live" : "Anteprima contenuto"}
+                                  </span>
+                                  {isRealtimeConnected &&
+                                    realtimeStatus?.currentSlideIndex != null &&
+                                    realtimeStatus?.totalSlides != null && (
+                                      <span className="font-medium tabular-nums text-slate-700">
+                                        {realtimeStatus.currentSlideIndex + 1} / {realtimeStatus.totalSlides}
+                                      </span>
+                                    )}
+                                </div>
+
+                                {isRealtimeConnected && realtimeStatus?.slideUrl ? (
+                                  <div className="relative aspect-video w-full overflow-hidden rounded-control border border-slate-200 bg-white">
+                                    <img
+                                      key={realtimeStatus.slideUrl}
+                                      src={realtimeStatus.slideUrl}
+                                      alt={realtimeStatus.slideName || "Slide corrente"}
+                                      className="absolute inset-0 h-full w-full object-contain"
+                                      loading="lazy"
+                                      onError={(e) => {
+                                        (e.currentTarget as HTMLImageElement).style.display = "none";
+                                      }}
+                                    />
+
+                                    {/* fallback */}
+                                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-xs text-slate-400">
+                                      Anteprima non disponibile
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="flex h-28 items-center justify-center rounded-control border border-dashed border-slate-200 bg-slate-50 text-xs text-slate-500">
+                                    Nessun dato live disponibile
+                                  </div>
+                                )}
+
+                                {realtimeStatus?.slideName && (
+                                  <div
+                                    className="mt-1 truncate text-xs text-slate-500"
+                                    title={realtimeStatus.slideName}
+                                  >
+                                    {realtimeStatus.slideName}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Impostazioni / stato del playback */}
+                              <div className="rounded-card border border-slate-200 bg-white p-3">
+                                <div className="flex items-center justify-between text-xs text-slate-500">
+                                  <span className="font-medium text-slate-700">
+                                    {isRealtimeConnected ? "Playback attivo" : "Impostazioni playback"}
+                                  </span>
+                                  <span className="text-slate-600">
+                                    {d.displayContext?.auto_scroll ? "Auto-scroll" : "Manuale"}
+                                    {d.displayContext?.scroll_speed
+                                      ? ` • ${(d.displayContext.scroll_speed / 1000).toFixed(0)}s`
+                                      : ""}
+                                  </span>
+                                </div>
+
+                                <div className="mt-2 text-sm font-medium text-slate-800">
+                                  {d.displayContext?.scroll_speed
+                                    ? `${(d.displayContext.scroll_speed / 1000).toFixed(0)}s per slide`
+                                    : "—"}
+                                </div>
+                              </div>
+
+                              {/* Stato della connessione / ping */}
+                              <div className="rounded-card border border-slate-200 bg-white p-3">
+                                <div className="flex items-center justify-between text-xs text-slate-500">
+                                  {isRealtimeConnected ? (
+                                    <span className="flex items-center gap-1">
+                                      <span className="relative flex h-2 w-2">
+                                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75"></span>
+                                        <span className="relative inline-flex h-2 w-2 rounded-full bg-success"></span>
+                                      </span>
+                                      Ping
+                                    </span>
+                                  ) : (
+                                    <span>Heartbeat</span>
+                                  )}
+
+                                  <span className="font-medium tabular-nums text-slate-700">
+                                    {isRealtimeConnected
+                                      ? realtimeStatus?.latencyMs != null
+                                        ? `${realtimeStatus.latencyMs}ms`
+                                        : "—"
+                                      : lastSeenLabel}
+                                  </span>
+                                </div>
+
+                                <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
+                                  <div
+                                    className={clsx([
+                                      "h-full rounded-full transition-all duration-300",
+                                      isRealtimeConnected
+                                        ? "bg-success"
+                                        : status === "online"
+                                          ? "bg-success"
+                                          : status === "warning"
+                                            ? "bg-warning"
+                                            : "bg-danger",
+                                    ])}
+                                    style={{
+                                      width: isRealtimeConnected
+                                        ? "100%"
+                                        : status === "online"
+                                          ? "82%"
+                                          : status === "warning"
+                                            ? "48%"
+                                            : "12%",
+                                    }}
+                                  />
+                                </div>
+
+                                {!isRealtimeConnected && (
+                                  <div className="mt-1 text-right text-2xs text-slate-400">
+                                    Ultimo segnale: {lastSeenLabel}
+                                  </div>
+                                )}
+                              </div>
                             </div>
-                            <div className="p-2 rounded-lg bg-slate-50 border border-slate-200/70">
-                              <div className="text-xs text-slate-500">Render</div>
-                              <div className="mt-0.5 text-sm font-medium text-slate-900">{ctx.render_type || "carousel"}</div>
-                            </div>
-                            <div className="p-2 rounded-lg bg-slate-50 border border-slate-200/70">
-                              <div className="text-xs text-slate-500">Filtri</div>
-                              <div className="mt-0.5 text-sm font-medium text-slate-900">
-                                {ctx.filters?.flat().length || 0}
+                            <div className="rounded-card border border-slate-200 bg-slate-50 p-3">
+                              <div className="text-xs text-slate-500">Display Context</div>
+                              <div className="mt-1 truncate text-sm font-medium text-slate-800">
+                                {d.displayContext?.nome || "Nessun context assegnato"}
+                              </div>
+                              <div className="mt-1 text-xs text-slate-500">
+                                Endpoint:{" "}
+                                <span className="font-medium text-slate-700">
+                                  {d.displayContext?.endpoint_type || "—"}
+                                </span>
                               </div>
                             </div>
                           </div>
 
-                          <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
-                            <Lucide icon="Monitor" className="w-3.5 h-3.5" />
-                            <span>{ctx.dispositivi_count ?? 0} dispositivi collegati</span>
-                            {ctx.auto_scroll && (
-                              <>
-                                <span className="text-slate-300">|</span>
-                                <span>{(ctx.scroll_speed / 1000).toFixed(0)}s / slide</span>
-                              </>
-                            )}
+                          {/* AVVISO: dispositivo disattivato o senza contesto */}
+                          {!d.is_active ? (
+                            <Alert variant="soft-danger" icona="CircleX" className="mt-3 px-3 py-2 text-xs">
+                              <span className="font-medium">Dispositivo disattivato</span>
+                            </Alert>
+                          ) : !d.displayContext ? (
+                            <Alert variant="soft-warning" icona="TriangleAlert" className="mt-3 px-3 py-2 text-xs">
+                              <span className="font-medium">Nessun display context assegnato</span>
+                            </Alert>
+                          ) : null}
+
+                          {/* FOOTER CTA */}
+                          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+                            <Button
+                              size="sm"
+                              variant="outline-secondary"
+                              onClick={() => handleCopyDisplayUrl(d)}
+                            >
+                              <Lucide icon="Link" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                              Copia link display
+                            </Button>
+
+                            <div className="text-xs text-slate-400 sm:ml-auto">
+                              ID: <span className="text-slate-500">{d.id.slice(0, 8)}...</span>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+                    );
+                  })}
+                </div>
+              )}
+            </Sezione>
+
+            {/* DISPLAY CONTEXTS */}
+            <Sezione
+              titolo="Display Contexts"
+              azioni={
+                <Button
+                  size="sm"
+                  variant="primary"
+                  onClick={() => { resetContextForm(); setIsCreateContextOpen(true); }}
+                >
+                  <Lucide icon="Plus" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                  Nuovo contesto
+                </Button>
+              }
+            >
+              {isLoadingContexts ? (
+                <div className="flex justify-center p-8">
+                  <Spinner etichetta="Caricamento contesti…" />
+                </div>
+              ) : isErrorContexts ? (
+                <PageError
+                  compatta
+                  titolo="Contesti non caricati"
+                  motivo={(erroreContexts as Error)?.message || "Errore durante il recupero dei contesti"}
+                  onRiprova={() => refetchContexts()}
+                />
+              ) : displayContexts.length === 0 ? (
+                <EmptyState
+                  compatta
+                  icon="LayoutDashboard"
+                  title="Nessun display context"
+                  description="Crea un contesto per configurare cosa mostrare sui display."
+                />
+              ) : (
+                <div className="grid grid-cols-12 gap-4">
+                  {displayContexts.map((ctx) => (
+                    <div key={ctx.id} className="col-span-12 md:col-span-6">
+                      <div className="rounded-card border border-slate-200 bg-white p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <h3 className="title-card truncate">{ctx.nome}</h3>
+                              <StatusBadge
+                                tono={ctx.is_active ? "success" : "neutral"}
+                                etichetta={ctx.is_active ? "Attivo" : "Inattivo"}
+                              />
+                            </div>
+                            {ctx.descrizione && (
+                              <div className="mt-1 truncate text-xs text-slate-500">{ctx.descrizione}</div>
+                            )}
+                          </div>
+                          <Menu className="inline-block text-left">
+                            <Menu.Button
+                              as={Button}
+                              size="sm"
+                              variant="outline-secondary"
+                              aria-label={`Azioni contesto ${ctx.nome}`}
+                            >
+                              <Lucide icon="EllipsisVertical" aria-hidden="true" className="h-4 w-4" />
+                            </Menu.Button>
+                            <Menu.Items className="w-48">
+                              <Menu.Item onClick={() => openEditContext(ctx)}>
+                                <Lucide icon="Pencil" aria-hidden="true" className="mr-2 h-4 w-4" /> Modifica
+                              </Menu.Item>
+                              <Menu.Item
+                                className="text-danger"
+                                onClick={() => setConferma({
+                                  title: "Eliminare il contesto?",
+                                  description: `Il contesto "${ctx.nome}" verrà eliminato e i dispositivi che lo usano resteranno senza contesto assegnato.`,
+                                  confirmLabel: "Elimina contesto",
+                                  azione: () => deleteContextMutation.mutateAsync(ctx.id),
+                                })}
+                              >
+                                <Lucide icon="Trash2" aria-hidden="true" className="mr-2 h-4 w-4" /> Elimina
+                              </Menu.Item>
+                            </Menu.Items>
+                          </Menu>
+                        </div>
+
+                        <div className="mt-3 grid grid-cols-3 gap-2">
+                          <div className="rounded-control border border-slate-200 bg-slate-50 p-2">
+                            <div className="text-xs text-slate-500">Endpoint</div>
+                            <div className="mt-0.5 text-sm font-medium text-slate-800">{ctx.endpoint_type}</div>
+                          </div>
+                          <div className="rounded-control border border-slate-200 bg-slate-50 p-2">
+                            <div className="text-xs text-slate-500">Render</div>
+                            <div className="mt-0.5 text-sm font-medium text-slate-800">{ctx.render_type || "carousel"}</div>
+                          </div>
+                          <div className="rounded-control border border-slate-200 bg-slate-50 p-2">
+                            <div className="text-xs text-slate-500">Filtri</div>
+                            <div className="mt-0.5 text-sm font-medium tabular-nums text-slate-800">
+                              {ctx.filters?.flat().length || 0}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
+                          <Lucide icon="Monitor" aria-hidden="true" className="h-3.5 w-3.5" />
+                          <span>{ctx.dispositivi_count ?? 0} dispositivi collegati</span>
+                          {ctx.auto_scroll && (
+                            <>
+                              <span className="text-slate-300">|</span>
+                              <span>{(ctx.scroll_speed / 1000).toFixed(0)}s / slide</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Sezione>
           </div>
 
-          {/* SIDEBAR DESTRA (IDENTICA) */}
-          <div className="relative col-span-12 row-start-1 xl:col-start-9 xl:col-span-4">
-            <div className="relative col-span-12 row-start-1 xl:col-start-9 xl:col-span-4">
-              <div className="sticky top-[6.2rem] flex flex-col gap-y-7">
-                <div className="flex flex-col p-5 box box--stacked">
-                  <h2 className="title-card pb-5 mb-5 border-b border-dashed border-slate-300/70">
-                    Dati punto vendita
-                  </h2>
-
-                  <div className="flex flex-col gap-8">
-                    {/* MAPPA */}
-                    {posizione ? (
-                      <div className="relative w-full h-[220px] rounded-md overflow-hidden">
-                        <MapContainer
-                          center={posizione}
-                          zoom={mapZoom}
-                          preferCanvas
-                          scrollWheelZoom={false}
-                          doubleClickZoom={false}
-                          dragging={false}
-                          touchZoom={false}
-                          keyboard={false}
-                          zoomControl={false}
-                          className="absolute inset-0"
-                        >
-                          <Marker position={posizione} icon={storeMarker} />
-                          <TileLayer
-                            url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-                            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                            maxZoom={19}
-                          />
-                        </MapContainer>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center gap-2 h-[120px] rounded-md border border-dashed border-slate-300/70 text-center">
-                        <Lucide icon="MapPin" className="w-6 h-6 text-slate-400" />
-                        <span className="text-xs text-slate-500">Coordinate non disponibili</span>
-                      </div>
-                    )}
-
-                    {/* DATI GENERALI */}
-                    <div className="flex flex-col gap-3.5">
-                      <div className="flex items-center">
-                        <Lucide
-                          icon="Briefcase"
-                          className="w-4 h-4 mr-2 stroke-[1.3] text-slate-500"
+          {/* SIDEBAR DESTRA: su mobile viene prima del contenuto */}
+          <div className="col-span-12 row-start-1 xl:col-span-4 xl:col-start-9">
+            <div className="sticky top-24 flex flex-col gap-6">
+              <Sezione titolo="Dati punto vendita">
+                <div className="flex flex-col gap-8">
+                  {/* MAPPA */}
+                  {posizione ? (
+                    <div className="relative h-56 w-full overflow-hidden rounded-control">
+                      <MapContainer
+                        center={posizione}
+                        zoom={mapZoom}
+                        preferCanvas
+                        scrollWheelZoom={false}
+                        doubleClickZoom={false}
+                        dragging={false}
+                        touchZoom={false}
+                        keyboard={false}
+                        zoomControl={false}
+                        className="absolute inset-0"
+                      >
+                        <Marker position={posizione} icon={storeMarker} />
+                        <TileLayer
+                          url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+                          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                          maxZoom={19}
                         />
-                        <span className="text-sm">
-                          Ragione Sociale:
-                          <span className="ml-1 font-medium">
-                            {ragionesociale || "Non specificata"}
-                          </span>
-                        </span>
-                      </div>
+                      </MapContainer>
+                    </div>
+                  ) : (
+                    <EmptyState compatta icon="MapPin" title="Coordinate non disponibili" description="" />
+                  )}
 
-                      <div className="flex items-center">
-                        <Lucide
-                          icon="MapPin"
-                          className="w-4 h-4 mr-2 stroke-[1.3] text-slate-500"
-                        />
-                        <span className="text-sm">
-                          Indirizzo:
-                          <span className="ml-1 font-medium">
-                            {displayIndirizzoCompleto || "Indirizzo non disponibile"}
-                          </span>
+                  {/* DATI GENERALI */}
+                  <div className="flex flex-col gap-3.5">
+                    <div className="flex items-center">
+                      <Lucide icon="Briefcase" aria-hidden="true" className="mr-2 h-4 w-4 stroke-[1.3] text-slate-500" />
+                      <span className="text-sm">
+                        Ragione Sociale:
+                        <span className="ml-1 font-medium">
+                          {ragionesociale || "Non specificata"}
                         </span>
-                      </div>
-
-                      <div className="flex items-center">
-                        <Lucide
-                          icon="Signal"
-                          className="w-4 h-4 mr-2 stroke-[1.3] text-slate-500"
-                        />
-                        <span className="text-sm">
-                          Canale / Area:
-                          <span className="ml-1 font-medium">{displayCanaleArea}</span>
-                        </span>
-                      </div>
+                      </span>
                     </div>
 
-                    {/* DATI DEL SISTEMA DELLA GDO */}
-                    {codici.length > 0 && (
-                      <div>
-                        <div className="text-xs uppercase text-slate-500">Dati GDO</div>
-                        <div className="mt-3 flex flex-col gap-2">
-                          {codici.map(c => (
-                            <div key={c.etichetta} className="flex items-center">
-                              <Lucide
-                                icon="Hash"
-                                className="w-4 h-4 mr-2 stroke-[1.3] text-slate-500"
-                              />
-                              <span className="text-sm">
-                                {c.etichetta}:
-                                <span className="ml-1 font-medium">{c.valore}</span>
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                    <div className="flex items-center">
+                      <Lucide icon="MapPin" aria-hidden="true" className="mr-2 h-4 w-4 stroke-[1.3] text-slate-500" />
+                      <span className="text-sm">
+                        Indirizzo:
+                        <span className="ml-1 font-medium">
+                          {displayIndirizzoCompleto || "Indirizzo non disponibile"}
+                        </span>
+                      </span>
+                    </div>
 
-                    {/* RECAPITI */}
+                    <div className="flex items-center">
+                      <Lucide icon="Signal" aria-hidden="true" className="mr-2 h-4 w-4 stroke-[1.3] text-slate-500" />
+                      <span className="text-sm">
+                        Canale / Area:
+                        <span className="ml-1 font-medium">{displayCanaleArea}</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* DATI DEL SISTEMA DELLA GDO */}
+                  {codici.length > 0 && (
                     <div>
-                      <div className="text-xs uppercase text-slate-500">Recapiti</div>
-
-                      <div className="mt-3">
-                        <div className="flex items-center">
-                          <Lucide
-                            icon="Phone"
-                            className="w-4 h-4 mr-2 stroke-[1.3] text-slate-500"
-                          />
-                          <span className="text-sm">
-                            Recapito Telefonico:
-                            {telefono ? (
-                              <a
-                                href={`tel:${telefono}`}
-                                className="ml-1 text-primary underline decoration-dotted decoration-primary/30 underline-offset-[3px]"
-                              >
-                                {telefono}
-                              </a>
-                            ) : (
-                              <span className="ml-1 text-slate-500">Non disponibile</span>
-                            )}
-                          </span>
-                        </div>
+                      <h3 className="title-eyebrow">Dati GDO</h3>
+                      <div className="mt-3 flex flex-col gap-2">
+                        {codici.map(c => (
+                          <div key={c.etichetta} className="flex items-center">
+                            <Lucide icon="Hash" aria-hidden="true" className="mr-2 h-4 w-4 stroke-[1.3] text-slate-500" />
+                            <span className="text-sm">
+                              {c.etichetta}:
+                              <span className="ml-1 font-medium">{c.valore}</span>
+                            </span>
+                          </div>
+                        ))}
                       </div>
                     </div>
+                  )}
 
-                    {/* STATISTICHE */}
-                    <div>
+                  {/* RECAPITI */}
+                  <div>
+                    <h3 className="title-eyebrow">Recapiti</h3>
+
+                    <div className="mt-3">
                       <div className="flex items-center">
-                        <Lucide
-                          icon="Users"
-                          className="w-4 h-4 mr-2 stroke-[1.3] text-slate-500"
-                        />
-                        <span className="text-sm mr-1">Dipendenti collegati:</span>
-                        <span className="text-xs font-medium rounded-md px-1.5 py-px bg-success/10 border border-success/10 text-success">
-                          {numero_utenti_collegati} dipendenti
+                        <Lucide icon="Phone" aria-hidden="true" className="mr-2 h-4 w-4 stroke-[1.3] text-slate-500" />
+                        <span className="text-sm">
+                          Recapito Telefonico:
+                          {telefono ? (
+                            <a
+                              href={`tel:${telefono}`}
+                              className="ml-1 text-primary underline decoration-primary/30 decoration-dotted underline-offset-2"
+                            >
+                              {telefono}
+                            </a>
+                          ) : (
+                            <span className="ml-1 text-slate-500">Non disponibile</span>
+                          )}
                         </span>
                       </div>
-
                     </div>
+                  </div>
+
+                  {/* STATISTICHE */}
+                  <div className="flex items-center">
+                    <Lucide icon="Users" aria-hidden="true" className="mr-2 h-4 w-4 stroke-[1.3] text-slate-500" />
+                    <span className="mr-1 text-sm">Dipendenti collegati:</span>
+                    <StatusBadge tono="success" etichetta={`${numero_utenti_collegati} dipendenti`} />
                   </div>
                 </div>
-              </div>
+              </Sezione>
             </div>
           </div>
-
         </div>
-      </div>
+      </Pagina>
 
       {/* DIALOG: Creazione dispositivo */}
       <Dialog open={isCreateDeviceOpen} onClose={closeCreateDialog}>
         <Dialog.Panel>
-          <Dialog.Title>
-            <h2 className="title-card mr-auto">Nuovo dispositivo</h2>
-          </Dialog.Title>
+          <Dialog.Title>Nuovo dispositivo</Dialog.Title>
           <Dialog.Description className="grid grid-cols-12 gap-4 gap-y-3">
             <div className="col-span-12">
               <FormLabel htmlFor="device-name">Nome dispositivo *</FormLabel>
@@ -1365,16 +1226,14 @@ const GestionePuntoVendita: React.FC = () => {
           <Dialog.Footer>
             <Button
               type="button"
-              variant="outline-danger"
+              variant="outline-secondary"
               onClick={closeCreateDialog}
-              className="w-20 mr-1"
             >
               Annulla
             </Button>
             <Button
               variant="primary"
               type="button"
-              className="min-w-20"
               disabled={!newDeviceName.trim()}
               loading={createDeviceMutation.isPending}
               onClick={() => createDeviceMutation.mutate()}
@@ -1388,53 +1247,44 @@ const GestionePuntoVendita: React.FC = () => {
       {/* DIALOG: Successo creazione - mostra token */}
       <Dialog open={!!createdDevice} onClose={closeSuccessDialog}>
         <Dialog.Panel>
-          <Dialog.Title>
-            <h2 className="title-card mr-auto">Dispositivo creato</h2>
-          </Dialog.Title>
+          <Dialog.Title>Dispositivo creato</Dialog.Title>
           <Dialog.Description className="flex flex-col gap-4">
-            <div className="p-4 rounded-[0.8rem] bg-success/5 border border-success/20">
-              <div className="flex items-center gap-2 text-success">
-                <Lucide icon="CircleCheck" className="w-5 h-5" />
-                <span className="font-medium">
-                  &quot;{createdDevice?.nome}&quot; creato con successo
-                </span>
-              </div>
-            </div>
+            <Alert variant="soft-success" icona="CircleCheck">
+              <span className="font-medium">
+                &quot;{createdDevice?.nome}&quot; creato con successo
+              </span>
+            </Alert>
 
-            <div className="p-4 rounded-[0.8rem] bg-slate-50 border border-slate-200/70">
+            <div className="rounded-card border border-slate-200 bg-slate-50 p-4">
               <div className="text-xs text-slate-500 mb-1">Token display</div>
               <div className="text-sm font-mono text-slate-900 break-all">
                 {createdDevice?.token_display}
               </div>
             </div>
 
-            <div className="p-4 rounded-[0.8rem] bg-slate-50 border border-slate-200/70">
+            <div className="rounded-card border border-slate-200 bg-slate-50 p-4">
               <div className="text-xs text-slate-500 mb-1">URL display</div>
               <div className="text-sm font-mono text-slate-900 break-all">
                 {createdDevice?.display_url}
               </div>
               <Button
-                variant="secondary"
-                className="mt-2 rounded-[0.7rem]"
+                size="sm"
+                variant="outline-secondary"
+                className="mt-2"
                 onClick={() => {
                   if (createdDevice?.display_url) {
                     navigator.clipboard.writeText(createdDevice.display_url);
                   }
                 }}
               >
-                <Lucide icon="Copy" className="w-4 h-4 mr-2" />
+                <Lucide icon="Copy" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
                 Copia URL
               </Button>
             </div>
 
-            <div className="p-3 rounded-[0.8rem] bg-warning/5 border border-warning/20">
-              <div className="flex items-start gap-2">
-                <Lucide icon="TriangleAlert" className="w-4 h-4 mt-0.5 text-warning" />
-                <div className="text-xs text-slate-700">
-                  Salva il token e l&apos;URL: il token non sarà più visibile dopo la chiusura.
-                </div>
-              </div>
-            </div>
+            <Alert variant="soft-warning" icona="TriangleAlert" className="px-3 py-2 text-xs">
+              Salva il token e l&apos;URL: il token non sarà più visibile dopo la chiusura.
+            </Alert>
           </Dialog.Description>
           <Dialog.Footer>
             <Button
@@ -1451,11 +1301,7 @@ const GestionePuntoVendita: React.FC = () => {
       {/* DIALOG: Creazione / Modifica Display Context */}
       <Dialog open={isCreateContextOpen} onClose={closeContextDialog} size="xl">
         <Dialog.Panel>
-          <Dialog.Title>
-            <h2 className="title-card mr-auto">
-              {editingContext ? "Modifica contesto" : "Nuovo display context"}
-            </h2>
-          </Dialog.Title>
+          <Dialog.Title>{editingContext ? "Modifica contesto" : "Nuovo display context"}</Dialog.Title>
           <Dialog.Description className="flex flex-col gap-5 max-h-[70vh] overflow-y-auto">
             {/* INFO BASE */}
             <div className="grid grid-cols-12 gap-4">
@@ -1493,7 +1339,7 @@ const GestionePuntoVendita: React.FC = () => {
 
             {/* OPZIONI DISPLAY */}
             <div>
-              <div className="text-sm font-medium text-slate-700 mb-3">Opzioni display</div>
+              <h3 className="title-card mb-3">Opzioni display</h3>
               <div className="grid grid-cols-12 gap-4">
                 <div className="col-span-6 sm:col-span-3">
                   <FormLabel htmlFor="ctx-render">Render</FormLabel>
@@ -1553,25 +1399,25 @@ const GestionePuntoVendita: React.FC = () => {
             {/* FILTRI */}
             <div>
               <div className="flex items-center justify-between mb-3">
-                <div className="text-sm font-medium text-slate-700">Filtri contenuto</div>
+                <h3 className="title-card">Filtri contenuto</h3>
                 <Button
-                  variant="secondary"
-                  className="rounded-[0.7rem] text-xs py-1.5"
+                  size="sm"
+                  variant="outline-secondary"
                   onClick={addFilterGroup}
                 >
-                  <Lucide icon="Plus" className="w-3.5 h-3.5 mr-1" />
+                  <Lucide icon="Plus" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
                   Gruppo OR
                 </Button>
               </div>
 
               <div className="flex flex-col gap-4">
                 {ctxFilterGroups.map((group, gi) => (
-                  <div key={gi} className="p-3 rounded-lg border border-slate-200/70 bg-slate-50">
+                  <div key={gi} className="rounded-card border border-slate-200 bg-slate-50 p-3">
                     {gi > 0 && (
                       <div className="flex items-center justify-center mb-2">
-                        <span className="px-2 py-0.5 text-xs font-medium rounded bg-amber-100 text-amber-700 border border-amber-200">
+                        <Badge variant="warning" size="sm" border>
                           OR
-                        </span>
+                        </Badge>
                       </div>
                     )}
                     <div className="flex items-center justify-between mb-2">
@@ -1580,21 +1426,21 @@ const GestionePuntoVendita: React.FC = () => {
                       </span>
                       <div className="flex items-center gap-1">
                         <Button
-                          variant="secondary"
-                          className="rounded text-xs py-1 px-2"
+                          size="sm"
+                          variant="outline-secondary"
                           onClick={() => addFilterToGroup(gi)}
                         >
-                          <Lucide icon="Plus" className="w-3 h-3 mr-1" />
+                          <Lucide icon="Plus" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
                           Condizione
                         </Button>
                         {ctxFilterGroups.length > 1 && (
                           <Button
-                            variant="secondary"
-                            className="rounded text-xs py-1 px-2 text-danger"
+                            size="sm"
+                            variant="outline-danger"
                             onClick={() => removeFilterGroup(gi)}
                             aria-label={`Rimuovi gruppo ${gi + 1}`}
                           >
-                            <Lucide icon="Trash2" aria-hidden="true" className="w-3 h-3" />
+                            <Lucide icon="Trash2" aria-hidden="true" className="h-3.5 w-3.5" />
                           </Button>
                         )}
                       </div>
@@ -1605,7 +1451,7 @@ const GestionePuntoVendita: React.FC = () => {
                         <div key={fi} className="grid grid-cols-12 gap-2 items-center">
                           {fi > 0 && (
                             <div className="col-span-12 flex justify-center">
-                              <span className="text-xs text-blue-600 font-medium">AND</span>
+                              <span className="text-xs font-medium text-info">AND</span>
                             </div>
                           )}
                           <div className="col-span-4">
@@ -1657,9 +1503,8 @@ const GestionePuntoVendita: React.FC = () => {
           <Dialog.Footer>
             <Button
               type="button"
-              variant="outline-danger"
+              variant="outline-secondary"
               onClick={closeContextDialog}
-              className="w-20 mr-1"
             >
               Annulla
             </Button>
@@ -1679,9 +1524,7 @@ const GestionePuntoVendita: React.FC = () => {
       {/* DIALOG: Assegna Display Context a Dispositivo */}
       <Dialog open={!!assignDeviceId} onClose={() => { setAssignDeviceId(null); setSelectedContextId(""); }}>
         <Dialog.Panel>
-          <Dialog.Title>
-            <h2 className="title-card mr-auto">Assegna display context</h2>
-          </Dialog.Title>
+          <Dialog.Title>Assegna display context</Dialog.Title>
           <Dialog.Description className="flex flex-col gap-4">
             <div>
               <FormLabel htmlFor="assign-ctx">Seleziona contesto</FormLabel>
@@ -1703,7 +1546,7 @@ const GestionePuntoVendita: React.FC = () => {
               const sel = displayContexts.find((c) => c.id === selectedContextId);
               if (!sel) return null;
               return (
-                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200/70">
+                <div className="rounded-card border border-slate-200 bg-slate-50 p-3">
                   <div className="text-xs text-slate-500 mb-1">Preview contesto</div>
                   <div className="text-sm font-medium text-slate-900">{sel.nome}</div>
                   <div className="mt-1 text-xs text-slate-500">
@@ -1718,9 +1561,8 @@ const GestionePuntoVendita: React.FC = () => {
           <Dialog.Footer>
             <Button
               type="button"
-              variant="outline-danger"
+              variant="outline-secondary"
               onClick={() => { setAssignDeviceId(null); setSelectedContextId(""); }}
-              className="w-20 mr-1"
             >
               Annulla
             </Button>
@@ -1745,7 +1587,7 @@ const GestionePuntoVendita: React.FC = () => {
         onClose={() => !confermaLoading && setConferma(null)}
         onConfirm={eseguiConferma}
       />
-    </div>
+    </>
   );
 };
 

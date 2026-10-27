@@ -1,6 +1,12 @@
 import Button from "@/components/Base/Button";
 import Dialog from "@/components/Base/Headless/Dialog";
 import Lucide from "@/components/Base/Lucide";
+import PageError from "@/components/Base/PageError";
+import Spinner from "@/components/Base/Spinner";
+import StatusBadge from "@/components/Base/StatusBadge";
+import type { TonoStato } from "@/constants/stati";
+import EmptyState from "@/components/EmptyState";
+import { formatDataOra } from "@/utils/format";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { ServerCall } from "../../../../../lib/server_call";
@@ -29,10 +35,10 @@ interface TemplateResponse {
     data: FilterTemplateDTO;
 }
 
-const badgeStyles: Record<string, string> = {
-    current: "bg-emerald-100 text-emerald-700",
-    deleted: "bg-rose-100 text-rose-700",
-    inactive: "bg-amber-100 text-amber-700"
+const TONO_BADGE: Record<string, TonoStato> = {
+    current: "success",
+    deleted: "danger",
+    inactive: "warning"
 };
 
 export default function FilterTemplateVersionHistory({
@@ -51,7 +57,7 @@ export default function FilterTemplateVersionHistory({
     const authHeaders = useMemo(() => (apiKey ? { 'x-api-key': apiKey } : undefined), [apiKey]);
     const queryKey = useMemo(() => ["filter-template-history", slug, apiKey], [slug, apiKey]);
 
-    const { data, isLoading, refetch } = useQuery({
+    const { data, isLoading, isError, isFetching, refetch } = useQuery({
         queryKey,
         enabled: isOpen && Boolean(slug),
         queryFn: async (): Promise<FilterTemplateVersionHistoryDTO> => {
@@ -109,82 +115,84 @@ export default function FilterTemplateVersionHistory({
 
     return (
         <Dialog open={isOpen} onClose={onClose} size="xl" centered>
-            <Dialog.Panel className="bg-white shadow-2xl">
+            <Dialog.Panel>
                 <Dialog.Title>
-                    <div className="flex w-full items-center justify-between">
-                        <div>
-                            <p className="text-xs uppercase tracking-wide text-slate-400">Cronologia versioni</p>
-                            <h3 className="text-lg font-semibold text-slate-900">{slug}</h3>
-                        </div>
-                        <Button variant="outline-secondary" onClick={onClose} type="button">
-                            <Lucide icon="X" className="mr-2 h-4 w-4" /> Chiudi
-                        </Button>
-                    </div>
+                    Cronologia versioni
+                    <span className="truncate font-mono text-sm font-normal text-slate-500">{slug}</span>
                 </Dialog.Title>
 
-                <div className="grid gap-6 p-6 lg:grid-cols-2">
+                <div className="grid gap-6 p-5 lg:grid-cols-2">
                     <div className="space-y-4">
                         <div className="flex items-center justify-between">
-                            <h4 className="text-sm font-semibold text-slate-600">Versioni disponibili</h4>
+                            <h3 className="title-card">Versioni disponibili</h3>
                             <Button
-                                variant="outline-primary"
+                                variant="outline-secondary"
                                 size="sm"
                                 type="button"
                                 onClick={() => refetch()}
                                 disabled={isLoading}
+                                loading={isFetching && !isLoading}
                             >
-                                <Lucide icon="RefreshCcw" className="mr-2 h-4 w-4" /> Aggiorna
+                                {!(isFetching && !isLoading) && <Lucide icon="RefreshCcw" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />}
+                                Aggiorna
                             </Button>
                         </div>
 
                         <div className="max-h-[24rem] space-y-3 overflow-y-auto pr-1">
                             {isLoading && (
-                                <div className="rounded-lg border border-dashed border-slate-200 p-4 text-sm text-slate-500">
-                                    Caricamento cronologia...
+                                <div className="flex justify-center py-8">
+                                    <Spinner etichetta="Caricamento cronologia…" />
                                 </div>
                             )}
 
-                            {!isLoading && versions.length === 0 && (
-                                <div className="rounded-lg border border-dashed border-slate-200 p-4 text-sm text-slate-500">
-                                    Nessuna versione disponibile per questo template.
-                                </div>
+                            {!isLoading && isError && (
+                                <PageError
+                                    compatta
+                                    titolo="Cronologia non caricata"
+                                    motivo="Il servizio non ha restituito le versioni del template."
+                                    onRiprova={() => refetch()}
+                                />
+                            )}
+
+                            {!isLoading && !isError && versions.length === 0 && (
+                                <EmptyState
+                                    compatta
+                                    icon="FileClock"
+                                    title="Nessuna versione disponibile"
+                                    description="Questo template non ha ancora versioni salvate."
+                                />
                             )}
 
                             {versions.map((version: FilterTemplateVersionDTO) => {
                                 const badges: Array<{ label: string; key: string }> = [];
                                 if (version.is_latest && !version.deleted_at) {
-                                    badges.push({ label: "ATTUALE", key: "current" });
+                                    badges.push({ label: "Attuale", key: "current" });
                                 }
                                 if (version.deleted_at) {
-                                    badges.push({ label: "ELIMINATO", key: "deleted" });
+                                    badges.push({ label: "Eliminato", key: "deleted" });
                                 }
                                 if (!version.is_active) {
-                                    badges.push({ label: "INATTIVO", key: "inactive" });
+                                    badges.push({ label: "Inattivo", key: "inactive" });
                                 }
 
-                                const createdAt = new Date(version.createdat).toLocaleString('it-IT');
+                                const createdAt = formatDataOra(version.createdat);
                                 const disableRestore = version.is_latest && !version.deleted_at;
                                 const isSelected = selectedVersion === version.version;
 
                                 return (
                                     <div
                                         key={version.id_filter_template}
-                                        className={`rounded-xl border px-4 py-3 transition hover:border-primary/40 ${isSelected ? 'border-primary bg-primary/5' : 'border-slate-200'
+                                        className={`rounded-card border px-4 py-3 transition hover:border-primary/40 ${isSelected ? 'border-primary bg-primary/5' : 'border-slate-200'
                                             }`}
                                     >
                                         <div className="flex flex-wrap items-center justify-between gap-3">
                                             <div>
-                                                <p className="text-sm font-semibold text-slate-800">Versione v{version.version}</p>
-                                                <p className="text-xs text-slate-500">Creata il {createdAt}</p>
+                                                <h4 className="text-sm font-semibold text-slate-800">Versione v{version.version}</h4>
+                                                <p className="text-xs tabular-nums text-slate-500">Creata il {createdAt}</p>
                                             </div>
                                             <div className="flex flex-wrap gap-2">
                                                 {badges.map((badge) => (
-                                                    <span
-                                                        key={badge.key}
-                                                        className={`rounded-full px-2 py-0.5 text-2xs font-semibold ${badgeStyles[badge.key]}`}
-                                                    >
-                                                        {badge.label}
-                                                    </span>
+                                                    <StatusBadge key={badge.key} tono={TONO_BADGE[badge.key]} etichetta={badge.label} />
                                                 ))}
                                             </div>
                                         </div>
@@ -196,16 +204,16 @@ export default function FilterTemplateVersionHistory({
                                                 variant={isSelected ? "primary" : "outline-secondary"}
                                                 onClick={() => handleViewVersion(version.version)}
                                             >
-                                                <Lucide icon="Eye" className="mr-2 h-4 w-4" /> Visualizza
+                                                <Lucide icon="Eye" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" /> Visualizza
                                             </Button>
                                             <Button
                                                 type="button"
                                                 size="sm"
-                                                variant="outline-primary"
+                                                variant="outline-secondary"
                                                 disabled={disableRestore || isRestoring}
                                                 onClick={() => handleRestore(version.version)}
                                             >
-                                                <Lucide icon="RotateCcw" className="mr-2 h-4 w-4" /> Ripristina
+                                                <Lucide icon="RotateCcw" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" /> Ripristina
                                             </Button>
                                         </div>
                                     </div>
@@ -214,29 +222,27 @@ export default function FilterTemplateVersionHistory({
                         </div>
                     </div>
 
-                    <div className="rounded-2xl border border-slate-200 p-4">
-                        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                            <div>
-                                <p className="text-xs uppercase tracking-wide text-slate-400">Anteprima versione</p>
-                                {selectedVersion ? (
-                                    <h4 className="text-sm font-semibold text-slate-700">v{selectedVersion}</h4>
-                                ) : (
-                                    <h4 className="text-sm font-semibold text-slate-500">Seleziona una versione</h4>
-                                )}
-                            </div>
+                    <div className="rounded-card border border-slate-200 p-4">
+                        <div className="border-b border-slate-100 pb-3">
+                            <p className="title-eyebrow">Anteprima versione</p>
+                            <h3 className="title-card">
+                                {selectedVersion ? `v${selectedVersion}` : "Seleziona una versione"}
+                            </h3>
                         </div>
 
-                        <div className="mt-4 h-[22rem] rounded-xl bg-slate-50 p-4">
+                        <div className="mt-4 h-[22rem] rounded-card bg-slate-50 p-4">
                             {isPreviewLoading && (
-                                <p className="text-sm text-slate-500">Caricamento versione selezionata...</p>
+                                <div className="flex h-full items-center justify-center">
+                                    <Spinner etichetta="Caricamento versione selezionata…" />
+                                </div>
                             )}
 
                             {!isPreviewLoading && previewError && (
-                                <p className="text-sm text-rose-600">{previewError}</p>
+                                <PageError compatta titolo="Versione non caricata" motivo={previewError} />
                             )}
 
                             {!isPreviewLoading && !previewError && previewData && (
-                                <pre className="h-full overflow-y-auto rounded-lg bg-white p-3 text-xs text-slate-700">
+                                <pre className="h-full overflow-y-auto rounded-control bg-white p-3 text-xs text-slate-700">
                                     {JSON.stringify(previewData, null, 2)}
                                 </pre>
                             )}
@@ -249,6 +255,12 @@ export default function FilterTemplateVersionHistory({
                         </div>
                     </div>
                 </div>
+
+                <Dialog.Footer>
+                    <Button variant="outline-secondary" onClick={onClose} type="button">
+                        Chiudi
+                    </Button>
+                </Dialog.Footer>
             </Dialog.Panel>
         </Dialog>
     );

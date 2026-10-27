@@ -1,5 +1,5 @@
 import { Children, cloneElement, forwardRef, isValidElement } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/utils/twMerge";
 import Spinner from "../Spinner";
 
 type Variant =
@@ -89,7 +89,7 @@ const Button: ButtonComponent = forwardRef(
 
     // General Styles
     const generalStyles = [
-      "transition duration-200 border shadow-sm inline-flex items-center justify-center py-2 px-3 rounded-md font-medium cursor-pointer", // Default
+      "transition duration-200 border shadow-sm inline-flex items-center justify-center py-2 px-3 rounded-control font-medium cursor-pointer", // Default
       "focus:ring-2 focus:ring-offset-1 focus:ring-opacity-40",
       "focus:ring-offset-white dark:focus:ring-offset-darkmode-900",
       "focus-visible:outline-none", // On focus visible
@@ -145,7 +145,7 @@ const Button: ButtonComponent = forwardRef(
     const link = [
       "bg-transparent border-transparent text-primary", // Default
       "dark:border-darkmode-400", // Dark mode
-      "[&:hover:not(:disabled)]:bg-gray-100", // On hover and not disabled
+      "[&:hover:not(:disabled)]:bg-slate-100", // On hover and not disabled
       "[&:hover:not(:disabled)]:dark:bg-darkmode-100", // On hover and not disabled in dark mode
     ];
 
@@ -243,13 +243,13 @@ const Button: ButtonComponent = forwardRef(
     ];
 
     const transparent = [
-      "bg-transparent border-transparent text-gray-500 dark:text-gray-400", // Default
+      "bg-transparent border-transparent text-slate-500 dark:text-slate-400", // Default
       "dark:border-darkmode-400", // Dark mode
-      "[&:hover:not(:disabled)]:bg-gray-100", // On hover and not disabled
+      "[&:hover:not(:disabled)]:bg-slate-100", // On hover and not disabled
       "[&:hover:not(:disabled)]:dark:bg-darkmode-100", // On hover and not disabled in dark mode
     ];
     const invisible = [
-      "bg-transparent border-transparent text-gray-500 dark:text-gray-400", // Default
+      "bg-transparent border-transparent text-slate-500 dark:text-slate-400", // Default
       "no-focus-ring",
       "cursor-default",
       "dark:border-darkmode-400", // Dark mode

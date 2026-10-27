@@ -79,7 +79,7 @@ export default function PanelFunzionalita() {
         <div key={voce.chiave} className="flex items-center justify-between gap-4">
           <div>
             <div className="font-medium text-slate-700">{voce.titolo}</div>
-            <p className="text-xs text-slate-400 mt-0.5">{voce.descrizione}</p>
+            <p className="mt-0.5 text-xs text-slate-500">{voce.descrizione}</p>
           </div>
           <FormSwitch>
             <FormSwitch.Input
@@ -94,9 +94,9 @@ export default function PanelFunzionalita() {
       ))}
 
       {puoModificare && (
-        <div className="flex justify-end pt-2 border-t border-slate-200/80">
-          <Button type="button" variant="primary" size="sm" onClick={handleSave} disabled={!isDirty} loading={isSaving}>
-            {!isSaving && <Lucide icon="Save" aria-hidden="true" className="w-4 h-4 mr-1" />}
+        <div className="flex justify-end border-t border-dashed border-slate-200 pt-5">
+          <Button type="button" variant="primary" onClick={handleSave} disabled={!isDirty} loading={isSaving}>
+            {!isSaving && <Lucide icon="Save" aria-hidden="true" className="mr-2 h-4 w-4" />}
             Salva
           </Button>
         </div>

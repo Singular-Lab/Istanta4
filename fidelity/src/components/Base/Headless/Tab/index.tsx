@@ -1,4 +1,4 @@
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/utils/twMerge";
 import { Tab as HeadlessTab, TabGroup, TabList, TabPanel, TabPanels, Transition } from "@headlessui/react";
 import { Fragment, createContext, useContext } from "react";
 
@@ -103,7 +103,7 @@ function TabButton<C extends React.ElementType = "a">({
 
         // Boxed tabs
         list.variant == "boxed-tabs" &&
-          "rounded-md py-1.5 dark:border-transparent",
+          "rounded-control py-1.5 dark:border-transparent",
         list.variant == "boxed-tabs" &&
           tab.selected &&
           "text-slate-700 border shadow-sm font-medium border-slate-200 bg-white dark:text-slate-300 dark:bg-darkmode-400 dark:border-darkmode-400",
@@ -156,7 +156,7 @@ Tab.List = ({
           variant == "tabs" &&
             "border-b border-slate-200 dark:border-darkmode-400",
           variant == "boxed-tabs" &&
-            "p-0.5 border bg-slate-50/70 border-slate-200/70 rounded-lg dark:border-darkmode-400",
+            "p-0.5 border bg-slate-50/70 border-slate-200/70 rounded-card dark:border-darkmode-400",
           // Aggiunta delle classi responsive
           "w-full flex overflow-x-auto whitespace-nowrap scrollbar-hide",
           // Stack verticalmente sui piccoli schermi

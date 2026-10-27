@@ -1,5 +1,5 @@
 import React, { createContext, useContext } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/utils/twMerge";
 import { ButtonProps } from "../../Button";
 
 type InputGroupProps = React.PropsWithChildren &

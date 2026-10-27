@@ -1,6 +1,7 @@
 import { Transition } from "@headlessui/react";
 import { Fragment, forwardRef, useState } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/utils/twMerge";
+import Lucide from "../Lucide";
 
 type Variant =
   | "primary"
@@ -31,7 +32,7 @@ type Variant =
 type AlertProps<C extends React.ElementType> = PolymorphicComponentPropWithRef<
   C,
   {
-    children:
+    children?:
     | React.ReactNode
     | ((props: { dismiss: () => void }) => React.ReactElement);
     dismissible?: boolean;
@@ -40,6 +41,12 @@ type AlertProps<C extends React.ElementType> = PolymorphicComponentPropWithRef<
     onShown?: () => void;
     onHide?: () => void;
     onHidden?: () => void;
+    /** Nome dell'icona Lucide a sinistra del testo. */
+    icona?: string;
+    /** Riga in evidenza sopra il testo. */
+    titolo?: React.ReactNode;
+    /** Mostra il pulsante "Chiudi": chi usa l'avviso decide se nasconderlo. */
+    onChiudi?: () => void;
   }
 >;
 
@@ -62,6 +69,9 @@ const Alert = forwardRef(
       dismissible,
       variant,
       children,
+      icona,
+      titolo,
+      onChiudi,
       ...props
     }: Omit<AlertProps<C>, "ref">,
     ref?: PolymorphicRef<C>
@@ -172,6 +182,17 @@ const Alert = forwardRef(
       "dark:border-info dark:border-opacity-20", // Dark mode
     ];
 
+    const contenuto =
+      typeof children === "function"
+        ? children({
+          dismiss: () => {
+            setShow(false);
+          },
+        })
+        : children;
+    // Con icona, titolo o "Chiudi" il contenuto si dispone in riga
+    const strutturato = Boolean(icona || titolo || onChiudi);
+
     return (
       <Transition
         as={Fragment}
@@ -188,7 +209,7 @@ const Alert = forwardRef(
           ref={ref}
           role="alert"
           className={twMerge([
-            "relative border rounded-md px-5 py-3.5",
+            "relative border rounded-control px-5 py-3.5",
             variant == "primary" && primary,
             variant == "secondary" && secondary,
             variant == "success" && success,
@@ -213,17 +234,35 @@ const Alert = forwardRef(
             variant == "soft-danger" && softDanger,
             variant == "soft-dark" && softDark,
             variant == "soft-info" && softInfo,
+            strutturato && "flex items-start gap-3",
             dismissible && "pl-5 pr-16",
             props.className,
           ])}
         >
-          {typeof children === "function"
-            ? children({
-              dismiss: () => {
-                setShow(false);
-              },
-            })
-            : children}
+          {strutturato ? (
+            <>
+              {icona && <Lucide icon={icona} aria-hidden="true" className="mt-0.5 h-5 w-5 flex-none" />}
+              <div className="min-w-0 flex-1">
+                {titolo && <p className="font-medium">{titolo}</p>}
+                {contenuto !== undefined && contenuto !== null && (
+                  <div className={titolo ? "mt-0.5" : undefined}>{contenuto}</div>
+                )}
+              </div>
+              {onChiudi && (
+                <button
+                  type="button"
+                  aria-label="Chiudi"
+                  title="Chiudi"
+                  onClick={onChiudi}
+                  className="-my-1 -mr-2 flex-none rounded-control p-1 opacity-70 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current"
+                >
+                  <Lucide icon="X" aria-hidden="true" className="h-4 w-4" />
+                </button>
+              )}
+            </>
+          ) : (
+            contenuto
+          )}
         </Component>
       </Transition>
     );
@@ -241,7 +280,7 @@ const DismissButton = <C extends React.ElementType = "button">({
     <Component
       {...props}
       type="button"
-      aria-label="Close"
+      aria-label="Chiudi"
       className={twMerge([
         "text-slate-800 py-2 px-3 absolute right-0 my-auto mr-2",
         props.className,

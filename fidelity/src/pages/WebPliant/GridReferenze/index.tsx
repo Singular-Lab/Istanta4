@@ -61,7 +61,7 @@ const GridReferenze: React.FC<GridReferenzeProps> = memo(function GridReferenze(
 
                 return (
                     <BoxRef
-                        className="border border-gray-200 rounded-md p-4"
+                        className={clsx(styleWp["wp-border"], "p-4")}
                         key={refCode || idx}
                         referenza={ref}
                         config={config}

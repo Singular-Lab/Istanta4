@@ -1,5 +1,5 @@
 import { icons } from "lucide-react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/utils/twMerge";
 import { risolviIconaLucide } from "./risolviIconaLucide";
 
 interface LucideProps extends React.ComponentPropsWithoutRef<"svg"> {

@@ -1,7 +1,10 @@
 import Button from '@/components/Base/Button';
 import { guidIdDaUrlOlimpo } from '@/utils/olimpo';
 import Dropzone, { DropzoneElement } from '@/components/Base/Dropzone';
-import { FormCheck, FormInline, FormSelect } from '@/components/Base/Form';
+import { FormCheck, FormField, FormInline, FormInput, FormSelect, FormTextarea } from '@/components/Base/Form';
+import Alert from '@/components/Base/Alert';
+import Badge from '@/components/Base/Badge';
+import EmptyState from '@/components/EmptyState';
 import { Slideover, Tab } from '@/components/Base/Headless';
 import Lucide from '@/components/Base/Lucide';
 import { useGestioneReferenze } from '@/context/GestioneReferenzeContext';
@@ -11,7 +14,6 @@ import axios from 'axios';
 import type { DropzoneFile } from 'dropzone';
 import parse from 'html-react-parser';
 import React, { forwardRef, Fragment, useEffect, useState } from 'react';
-import { Colorize } from '../../../../lib/Colorize';
 import { ServerCall } from '../../../../lib/server_call';
 import { ReferenzeIstanta } from '../../../../lib/types';
 import { urlFoto } from '@/utils/helper';
@@ -100,14 +102,14 @@ const ImageDisplay: React.FC<ImageDisplayProps> = ({ url, altText, onUploadNuova
 
   return (
     <div className="relative group w-full">
-      <div className="overflow-hidden rounded-lg border border-gray-200">
+      <div className="overflow-hidden rounded-card border border-slate-200">
         {isImageValid ? (
-          <div className="flex flex-col items-center justify-center bg-gray-50 p-2">
+          <div className="flex flex-col items-center justify-center bg-slate-50 p-2">
             <div className="relative w-full aspect-w-1 aspect-h-1 flex items-center justify-center">
               <img
                 src={uploadSuccess ? `${url}?t=${Date.now()}` : url}
                 alt={altText}
-                className="object-contain max-h-56 mx-auto rounded-md"
+                className="object-contain max-h-56 mx-auto rounded-control"
                 onError={handleImageError}
               />
 
@@ -116,7 +118,7 @@ const ImageDisplay: React.FC<ImageDisplayProps> = ({ url, altText, onUploadNuova
                 <Button
                   variant="primary"
                   size="sm"
-                  className="bg-white text-blue-600 hover:bg-blue-50"
+                  className="border-white bg-white text-primary hover:bg-primary/5"
                   onClick={() => {
                     const dropzoneEl = document.getElementById(`dropzone-${url.replace(/[^a-zA-Z0-9]/g, '')}`);
                     if (dropzoneEl) {
@@ -134,10 +136,9 @@ const ImageDisplay: React.FC<ImageDisplayProps> = ({ url, altText, onUploadNuova
             <div className={`mt-3 w-full ${addedFile ? 'block' : 'hidden'}`}>
               <Dropzone
                 id={`dropzone-${url.replace(/[^a-zA-Z0-9]/g, '')}`}
-                className="border-2 border-dashed border-gray-300 rounded-md p-3 text-center"
+                className="border-2 border-dashed border-slate-300 rounded-control p-3 text-center"
                 options={{
                   addedfile: (file) => {
-                    console.log("File added", file);
                     setAddedFile(file);
                     setUploadError(null);
                   },
@@ -153,7 +154,7 @@ const ImageDisplay: React.FC<ImageDisplayProps> = ({ url, altText, onUploadNuova
                 getRef={(el: DropzoneElement) => { }}
               >
                 {!addedFile ? (
-                  <p className="text-gray-600 text-sm">
+                  <p className="text-slate-600 text-sm">
                     Trascina qui o clicca per caricare una nuova immagine
                   </p>
                 ) : null}
@@ -163,13 +164,13 @@ const ImageDisplay: React.FC<ImageDisplayProps> = ({ url, altText, onUploadNuova
             {/* Preview and buttons for selected file */}
             {addedFile && (
               <div className="w-full mt-3">
-                <div className="bg-gray-100 rounded-md p-3">
+                <div className="bg-slate-100 rounded-control p-3">
                   <div className="flex items-center mb-2">
-                    <Lucide icon="FileImage" className="w-5 h-5 text-blue-500 mr-2" />
-                    <div className="text-sm text-gray-700 truncate flex-1">
+                    <Lucide icon="FileImage" className="w-5 h-5 text-primary mr-2" />
+                    <div className="text-sm text-slate-700 truncate flex-1">
                       {addedFile.name}
                     </div>
-                    <span className="text-xs text-gray-500">
+                    <span className="text-xs text-slate-500">
                       {(addedFile.size / 1024).toFixed(1)} KB
                     </span>
                   </div>
@@ -178,20 +179,20 @@ const ImageDisplay: React.FC<ImageDisplayProps> = ({ url, altText, onUploadNuova
                     <img
                       src={URL.createObjectURL(addedFile)}
                       alt="Preview"
-                      className="w-full h-auto max-h-36 object-contain rounded-md"
+                      className="w-full h-auto max-h-36 object-contain rounded-control"
                     />
                   </div>
 
                   {/* Upload progress */}
                   {isUploading && (
                     <div className="mt-3">
-                      <div className="w-full bg-gray-200 rounded-full h-2.5">
+                      <div className="w-full bg-slate-200 rounded-full h-2.5">
                         <div
-                          className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+                          className="bg-primary h-2.5 rounded-full transition-all duration-300"
                           style={{ width: `${uploadProgress}%` }}
                         ></div>
                       </div>
-                      <p className="text-xs text-gray-500 mt-1 text-center">
+                      <p className="text-xs text-slate-500 mt-1 text-center">
                         {uploadProgress < 100
                           ? `Caricamento... ${Math.round(uploadProgress)}%`
                           : 'Caricamento completato!'}
@@ -201,18 +202,12 @@ const ImageDisplay: React.FC<ImageDisplayProps> = ({ url, altText, onUploadNuova
 
                   {/* Error message */}
                   {uploadError && (
-                    <div className="mt-2 p-2 bg-red-50 text-red-600 text-sm rounded">
-                      <Lucide icon="TriangleAlert" className="w-4 h-4 inline mr-1" />
-                      {uploadError}
-                    </div>
+                    <Alert variant="soft-danger" icona="TriangleAlert" className="mt-2 px-3 py-2 text-sm">{uploadError}</Alert>
                   )}
 
                   {/* Upload success message */}
                   {uploadSuccess && (
-                    <div className="mt-2 p-2 bg-green-50 text-green-600 text-sm rounded flex items-center">
-                      <Lucide icon="CircleCheck" className="w-4 h-4 mr-1" />
-                      <span>Immagine caricata con successo!</span>
-                    </div>
+                    <Alert variant="soft-success" icona="CircleCheck" className="mt-2 px-3 py-2 text-sm">Immagine caricata con successo!</Alert>
                   )}
 
                   {/* Action buttons */}
@@ -241,18 +236,17 @@ const ImageDisplay: React.FC<ImageDisplayProps> = ({ url, altText, onUploadNuova
             )}
           </div>
         ) : (
-          <div className="w-full h-full flex items-center justify-center bg-gray-100 p-4">
+          <div className="w-full h-full flex items-center justify-center bg-slate-100 p-4">
             <div className="text-center w-full">
-              <div className="text-gray-500 mb-3">
+              <div className="text-slate-500 mb-3">
                 <Lucide icon="ImageOff" className="w-8 h-8 mx-auto" />
                 <p className="font-medium mt-2">Immagine non valida</p>
               </div>
 
               <Dropzone
-                className="border-2 border-dashed border-gray-300 rounded-md p-4 text-center"
+                className="border-2 border-dashed border-slate-300 rounded-control p-4 text-center"
                 options={{
                   addedfile: (file) => {
-                    console.log("File added", file);
                     setAddedFile(file);
                     setUploadError(null);
                   },
@@ -269,25 +263,25 @@ const ImageDisplay: React.FC<ImageDisplayProps> = ({ url, altText, onUploadNuova
               >
                 {!addedFile ? (
                   <div className={`text-sm ${isUploading ? 'opacity-50' : ''}`}>
-                    <p className="text-sm text-gray-600 font-medium">
+                    <p className="text-sm text-slate-600 font-medium">
                       {isUploading ? 'Caricamento in corso...' : 'Trascina qui o clicca per caricare'}
                     </p>
-                    <p className="mt-1 text-xs text-gray-500">
+                    <p className="mt-1 text-xs text-slate-500">
                       Formati supportati: JPG, PNG, GIF
                     </p>
-                    <p className="mt-1 text-xs text-gray-500">
+                    <p className="mt-1 text-xs text-slate-500">
                       Dimensioni massime: 2MB
                     </p>
                   </div>
                 ) : (
                   <div className="mt-2">
-                    <div className="bg-gray-50 rounded-md p-3">
+                    <div className="bg-slate-50 rounded-control p-3">
                       <div className="flex items-center mb-2">
-                        <Lucide icon="FileImage" className="w-5 h-5 text-blue-500 mr-2" />
-                        <div className="text-sm text-gray-700 truncate flex-1">
+                        <Lucide icon="FileImage" className="w-5 h-5 text-primary mr-2" />
+                        <div className="text-sm text-slate-700 truncate flex-1">
                           {addedFile.name}
                         </div>
-                        <span className="text-xs text-gray-500">
+                        <span className="text-xs text-slate-500">
                           {(addedFile.size / 1024).toFixed(1)} KB
                         </span>
                       </div>
@@ -296,20 +290,20 @@ const ImageDisplay: React.FC<ImageDisplayProps> = ({ url, altText, onUploadNuova
                         <img
                           src={URL.createObjectURL(addedFile)}
                           alt="Preview"
-                          className="w-full h-auto max-h-36 object-contain rounded-md"
+                          className="w-full h-auto max-h-36 object-contain rounded-control"
                         />
                       </div>
 
                       {/* Upload progress */}
                       {isUploading && (
                         <div className="mt-3">
-                          <div className="w-full bg-gray-200 rounded-full h-2.5">
+                          <div className="w-full bg-slate-200 rounded-full h-2.5">
                             <div
-                              className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+                              className="bg-primary h-2.5 rounded-full transition-all duration-300"
                               style={{ width: `${uploadProgress}%` }}
                             ></div>
                           </div>
-                          <p className="text-xs text-gray-500 mt-1 text-center">
+                          <p className="text-xs text-slate-500 mt-1 text-center">
                             {uploadProgress < 100
                               ? `Caricamento... ${Math.round(uploadProgress)}%`
                               : 'Caricamento completato!'}
@@ -319,18 +313,12 @@ const ImageDisplay: React.FC<ImageDisplayProps> = ({ url, altText, onUploadNuova
 
                       {/* Error message */}
                       {uploadError && (
-                        <div className="mt-2 p-2 bg-red-50 text-red-600 text-sm rounded">
-                          <Lucide icon="TriangleAlert" className="w-4 h-4 inline mr-1" />
-                          {uploadError}
-                        </div>
+                        <Alert variant="soft-danger" icona="TriangleAlert" className="mt-2 px-3 py-2 text-sm">{uploadError}</Alert>
                       )}
 
                       {/* Success message */}
                       {uploadSuccess && (
-                        <div className="mt-2 p-2 bg-green-50 text-green-600 text-sm rounded flex items-center">
-                          <Lucide icon="CircleCheck" className="w-4 h-4 mr-1" />
-                          <span>Immagine caricata con successo!</span>
-                        </div>
+                        <Alert variant="soft-success" icona="CircleCheck" className="mt-2 px-3 py-2 text-sm">Immagine caricata con successo!</Alert>
                       )}
 
                       {/* Action buttons */}
@@ -397,10 +385,9 @@ export const ImageUploader: React.FC<{
   return (
     <div className="mt-4">
       <Dropzone
-        className="border-2 border-dashed border-gray-300 rounded-md p-4 text-center"
+        className="border-2 border-dashed border-slate-300 rounded-control p-4 text-center"
         options={{
           addedfile: (file) => {
-            console.log("File added", file);
             onFileSelected(file);
           },
           maxFiles: 1,
@@ -416,13 +403,13 @@ export const ImageUploader: React.FC<{
       >
         {!file ? (
           <div className={`text-sm ${isUploading ? 'opacity-50' : ''}`}>
-            <p className="text-sm text-gray-600 font-medium">
+            <p className="text-sm text-slate-600 font-medium">
               {isUploading ? 'Caricamento in corso...' : 'Trascina qui o clicca per caricare'}
             </p>
-            <p className="mt-1 text-xs text-gray-500">
+            <p className="mt-1 text-xs text-slate-500">
               Formati supportati: JPG, PNG, GIF
             </p>
-            <p className="mt-1 text-xs text-gray-500">
+            <p className="mt-1 text-xs text-slate-500">
               Dimensioni massime: 2MB
             </p>
           </div>
@@ -430,13 +417,13 @@ export const ImageUploader: React.FC<{
       </Dropzone>
 
       {file && (
-        <div className="mt-3 bg-gray-50 rounded-md p-3">
+        <div className="mt-3 bg-slate-50 rounded-control p-3">
           <div className="flex items-center mb-2">
-            <Lucide icon="FileImage" className="w-5 h-5 text-blue-500 mr-2" />
-            <div className="text-sm text-gray-700 truncate flex-1">
+            <Lucide icon="FileImage" className="w-5 h-5 text-primary mr-2" />
+            <div className="text-sm text-slate-700 truncate flex-1">
               {file.name}
             </div>
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-slate-500">
               {(file.size / 1024).toFixed(1)} KB
             </span>
           </div>
@@ -445,20 +432,20 @@ export const ImageUploader: React.FC<{
             <img
               src={URL.createObjectURL(file)}
               alt="Preview"
-              className="w-full h-auto max-h-36 object-contain rounded-md"
+              className="w-full h-auto max-h-36 object-contain rounded-control"
             />
           </div>
 
           {/* Upload progress */}
           {isUploading && (
             <div className="mt-3">
-              <div className="w-full bg-gray-200 rounded-full h-2.5">
+              <div className="w-full bg-slate-200 rounded-full h-2.5">
                 <div
-                  className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+                  className="bg-primary h-2.5 rounded-full transition-all duration-300"
                   style={{ width: `${uploadProgress}%` }}
                 ></div>
               </div>
-              <p className="text-xs text-gray-500 mt-1 text-center">
+              <p className="text-xs text-slate-500 mt-1 text-center">
                 {uploadProgress < 100
                   ? `Caricamento... ${Math.round(uploadProgress)}%`
                   : 'Caricamento completato!'}
@@ -525,19 +512,21 @@ const EditDataFields: React.FC<EditDataFieldsProps> = ({
       <div>
         {Object.entries(fields).map(([key, value]) => (
           <div key={key} className="mb-2">
-            <label className="block text-sm font-medium text-gray-700">{key}</label>
+            <label htmlFor={`campo-dati-${key}`} className="block text-sm font-medium text-slate-700">{key}</label>
             {typeof value === 'object' && value !== null ? (
-              <textarea
+              <FormTextarea
+                id={`campo-dati-${key}`}
                 value={JSON.stringify(value, null, 2)}
                 onChange={(e) => handleChange(key, JSON.parse(e.target.value))}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm"
+                className="mt-1"
               />
             ) : (
-              <input
+              <FormInput
+                id={`campo-dati-${key}`}
                 type="text"
                 value={value}
                 onChange={(e) => handleChange(key, e.target.value)}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm"
+                className="mt-1"
               />
             )}
           </div>
@@ -566,7 +555,6 @@ const GestioneReferenze = forwardRef<GestioneReferenzeHandle, {}>((props, ref) =
   const canali = useFetchCanali();
 
   useEffect(() => {
-    console.log('Referenza changed:', referenza);
     if (referenza) {
       setIsVisible(true);
     }
@@ -589,7 +577,6 @@ const GestioneReferenze = forwardRef<GestioneReferenzeHandle, {}>((props, ref) =
       return response;
     },
     onSuccess: (data) => {
-      console.log('Forzatura foto singola aggiornata:', data);
     },
     onError: (error) => {
       console.error('Errore durante l\'aggiornamento della forzatura foto singola:', error);
@@ -621,7 +608,6 @@ const GestioneReferenze = forwardRef<GestioneReferenzeHandle, {}>((props, ref) =
       const reader = new FileReader();
       reader.readAsDataURL(file);
       const guidId = guidIdDaUrlOlimpo(url);
-      console.log(guidId);
       const formData = new FormData();
       formData.append('file', file);
       formData.append('guidId', guidId ?? "");
@@ -633,7 +619,6 @@ const GestioneReferenze = forwardRef<GestioneReferenzeHandle, {}>((props, ref) =
         },
       });
       if (uploadedFile.status === 200) {
-        console.log('File uploaded successfully:', uploadedFile.data);
       }
     }
   };
@@ -650,7 +635,6 @@ const GestioneReferenze = forwardRef<GestioneReferenzeHandle, {}>((props, ref) =
       formData.append('guidId', ref.id);
       formData.append("idArea", selectAreaPerFotoGruppo);
       formData.append("idCanale", selectCanalePerFotoGruppo);
-      console.log(Object.fromEntries(formData));
       const urlAPI = ServerCall.getUrl();
       const uploadedFile = await axios.post(`${urlAPI}/updateImmagineGruppoReferenza`, formData, {
         headers: {
@@ -658,7 +642,6 @@ const GestioneReferenze = forwardRef<GestioneReferenzeHandle, {}>((props, ref) =
         },
       });
       if (uploadedFile.status === 200) {
-        console.log('File uploaded successfully:', uploadedFile.data);
       }
     }
   }
@@ -666,48 +649,45 @@ const GestioneReferenze = forwardRef<GestioneReferenzeHandle, {}>((props, ref) =
   // Tab panel rendering helpers
   const renderGeneralTab = () => (
     <div>
-      <h3 className="text-lg font-medium text-gray-900">General Information</h3>
+      <h3 className="title-card">Informazioni generali</h3>
       <div className="mt-2 grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2">
         <div className="sm:col-span-1">
-          <dt className="text-sm font-medium text-gray-500">ID</dt>
-          <dd className="mt-1 text-sm text-gray-900">{referenza?.id}</dd>
+          <dt className="text-sm font-medium text-slate-500">ID</dt>
+          <dd className="mt-1 text-sm text-slate-900">{referenza?.id}</dd>
         </div>
         <div className="sm:col-span-1">
-          <dt className="text-sm font-medium text-gray-500">Visible</dt>
-          <dd className="mt-1 text-sm text-gray-900">
+          <dt className="text-sm font-medium text-slate-500">Visibile</dt>
+          <dd className="mt-1 text-sm text-slate-900">
             {referenza?.visibile !== undefined ? referenza?.visibile.toString() : 'N/A'}
           </dd>
         </div>
         <div className="sm:col-span-1">
-          <dt className="text-sm font-medium text-gray-500">Runtime Kit ID</dt>
-          <dd className="mt-1 text-sm text-gray-900">{kit?.titolo}</dd>
+          <dt className="text-sm font-medium text-slate-500">Kit runtime</dt>
+          <dd className="mt-1 text-sm text-slate-900">{kit?.titolo}</dd>
         </div>
         <div className="sm:col-span-1">
-          <dt className="text-sm font-medium text-gray-500">Meccanica</dt>
-          <dd className="mt-1 text-sm text-gray-900">{referenza?.meccanica}</dd>
+          <dt className="text-sm font-medium text-slate-500">Meccanica</dt>
+          <dd className="mt-1 text-sm text-slate-900">{referenza?.meccanica}</dd>
         </div>
         <div className="sm:col-span-1">
-          <dt className="text-sm font-medium text-gray-500">Codice Box</dt>
-          <dd className="mt-1 text-sm text-gray-900">{referenza?.codiceBox}</dd>
+          <dt className="text-sm font-medium text-slate-500">Codice Box</dt>
+          <dd className="mt-1 text-sm text-slate-900">{referenza?.codiceBox}</dd>
         </div>
       </div>
 
       <div className="mt-6">
-        <h3 className="text-lg font-medium text-gray-900">Deleted Fields</h3>
+        <h3 className="title-card">Campi eliminati</h3>
         <div className="mt-2">
           {(referenza?.deletedFields ?? []).length > 0 ? (
             <div className="flex flex-wrap gap-2">
               {referenza?.deletedFields.map((field, index) => (
-                <span
-                  key={index}
-                  className="inline-flex items-center px-2.5 py-0.5 rounded-md text-sm font-medium bg-gray-100 text-gray-800"
-                >
+                <Badge key={index} variant="secondary">
                   {field}
-                </span>
+                </Badge>
               ))}
             </div>
           ) : (
-            <p className="text-sm text-gray-500">No deleted fields</p>
+            <p className="text-sm text-slate-500">Nessun campo eliminato</p>
           )}
         </div>
       </div>
@@ -716,26 +696,26 @@ const GestioneReferenze = forwardRef<GestioneReferenzeHandle, {}>((props, ref) =
 
   const renderFieldsTab = () => (
     <div>
-      <h3 className="text-lg font-medium text-gray-900">Compiled Fields</h3>
+      <h3 className="title-card">Campi compilati</h3>
       <div className="mt-2">
         {(referenza?.compiledFields ?? []).length > 0 ? (
-          <div className="bg-white shadow overflow-hidden sm:rounded-md">
-            <ul className="divide-y divide-gray-200">
+          <div className="overflow-hidden rounded-card border border-slate-200 bg-white">
+            <ul className="divide-y divide-slate-200">
               {referenza?.compiledFields.map((field, index) => (
                 <li key={index} className="px-4 py-4 sm:px-6">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium text-blue-600 truncate">
+                    <p className="text-sm font-medium text-primary truncate">
                       {field.label_name}
                     </p>
                     <div className="ml-2 flex-shrink-0 flex">
-                      <p className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
-                        {field.paragraph_name || 'No paragraph'}
-                      </p>
+                      <Badge variant="info" size="sm">
+                        {field.paragraph_name || 'Nessun paragrafo'}
+                      </Badge>
                     </div>
                   </div>
                   <div className="mt-2 sm:flex sm:justify-between">
                     <div
-                      className="mt-2 flex items-center text-sm text-gray-500 sm:mt-0"
+                      className="mt-2 flex items-center text-sm text-slate-500 sm:mt-0"
                     >
                       {(() => {
                         if (typeof field.content === 'string') {
@@ -752,12 +732,12 @@ const GestioneReferenze = forwardRef<GestioneReferenzeHandle, {}>((props, ref) =
             </ul>
           </div>
         ) : (
-          <p className="text-sm text-gray-500">No compiled fields</p>
+          <p className="text-sm text-slate-500">Nessun campo compilato</p>
         )}
       </div>
 
       <div className="mt-8">
-        <h3 className="text-lg font-medium text-gray-900">Data Fields</h3>
+        <h3 className="title-card">Campi dati</h3>
         <div className="mt-2">
           {isEditingDataFields ? (
             <EditDataFields
@@ -769,15 +749,15 @@ const GestioneReferenze = forwardRef<GestioneReferenzeHandle, {}>((props, ref) =
           ) : (
             <>
               {Object.keys(referenza?.dataFields || {}).length > 0 ? (
-                <div className="bg-white shadow overflow-hidden sm:rounded-md">
-                  <ul className="divide-y divide-gray-200">
+                <div className="overflow-hidden rounded-card border border-slate-200 bg-white">
+                  <ul className="divide-y divide-slate-200">
                     {Object.entries(referenza?.dataFields || {}).map(([key, value], index) => (
                       <li key={index} className="px-4 py-4 sm:px-6">
                         <div className="flex items-center justify-between">
-                          <p className="text-sm font-medium text-indigo-600 truncate">{key}</p>
+                          <p className="text-sm font-medium text-primary truncate">{key}</p>
                         </div>
                         <div className="mt-2 sm:flex sm:justify-between">
-                          <div className="mt-2 flex items-center text-sm text-gray-500 sm:mt-0">
+                          <div className="mt-2 flex items-center text-sm text-slate-500 sm:mt-0">
                             <p>{(() => {
                               if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
                                 return value.toString();
@@ -816,15 +796,13 @@ const GestioneReferenze = forwardRef<GestioneReferenzeHandle, {}>((props, ref) =
                   </ul>
                 </div>
               ) : (
-                <p className="text-sm text-gray-500">No data fields available</p>
+                <p className="text-sm text-slate-500">Nessun campo dati disponibile</p>
               )}
               <div className="mt-4">
-                <button
-                  onClick={() => setIsEditingDataFields(true)}
-                  className="px-4 py-2 bg-green-600 text-white rounded-md"
-                >
-                  Modifica Data Fields
-                </button>
+                <Button type="button" variant="outline-secondary" size="sm" onClick={() => setIsEditingDataFields(true)}>
+                  <Lucide icon="Pencil" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                  Modifica campi dati
+                </Button>
               </div>
             </>
           )}
@@ -877,7 +855,7 @@ const GestioneReferenze = forwardRef<GestioneReferenzeHandle, {}>((props, ref) =
       <div>
         {/* Foto Referenza Section */}
         <div className="mb-8">
-          <h3 className="text-lg font-medium text-gray-900">Foto Referenza</h3>
+          <h3 className="title-card">Foto referenza</h3>
           <div className="mt-4">
             {(referenza?.foto ?? []).length > 0 ? (
               <>
@@ -889,11 +867,9 @@ const GestioneReferenze = forwardRef<GestioneReferenzeHandle, {}>((props, ref) =
                       altText={`Referenza-${referenza?.dataFields?.codice_referenza || index}`}
                       referenza={referenza}
                       onUploadNuovaFoto={(file, ref, url) => {
-                        console.log('Image uploaded');
                         handleImmagineReferenzaMancante(file, ref, url);
                       }}
                       onUploadSostituzioneFoto={(file, ref, url) => {
-                        console.log('Image replaced');
                         handleImmagineReferenzaMancante(file, ref, url);
                       }}
                     />
@@ -922,51 +898,40 @@ const GestioneReferenze = forwardRef<GestioneReferenzeHandle, {}>((props, ref) =
                 </FormCheck>
               </>
             ) : (
-              <div className="text-center py-8 bg-gray-50 rounded-lg">
-                <div className="mx-auto h-12 w-12 text-gray-400">
-                  <Lucide icon="ImageOff" className="h-12 w-12" />
-                </div>
-                <h3 className="mt-2 text-sm font-medium text-gray-900">Nessuna immagine</h3>
-                <p className="mt-1 text-sm text-gray-500">Aggiungi immagini alla referenza.</p>
-                <div className="mt-6">
-                  <Button
-                    variant="outline-primary"
-                    className="inline-flex items-center"
-                  >
-                    <Lucide icon="Plus" className="w-4 h-4 mr-1" />
-                    Aggiungi Immagine
-                  </Button>
-                </div>
-              </div>
+              <EmptyState
+                compatta
+                icon="ImageOff"
+                title="Nessuna immagine"
+                description="Aggiungi immagini alla referenza."
+                className="border border-slate-200"
+              />
             )}
           </div>
         </div>
 
         {/* Loghi e bolli Section */}
         <div className="mb-8">
-          <h3 className="text-lg font-medium text-gray-900">Loghi e bolli</h3>
+          <h3 className="title-card">Loghi e bolli</h3>
           <div className="mt-4">
             {(referenza?.fotoExtra ?? []).length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {referenza?.fotoExtra.map((logo, index) => (
-                  <div key={`logo-${index}`} className="bg-white rounded-lg shadow-sm p-4 flex flex-col items-center">
+                  <div key={`logo-${index}`} className="rounded-card border border-slate-200 bg-white p-4 flex flex-col items-center">
                     <div className="text-center mb-2">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                      <Badge variant="success" size="sm">
                         {logo.tipo}
-                      </span>
-                      <h4 className="mt-1 text-sm font-medium text-gray-900">{logo.sigla}</h4>
+                      </Badge>
+                      <h4 className="title-card mt-1">{logo.sigla}</h4>
                     </div>
-                    <div className="w-full relative overflow-hidden rounded-md">
+                    <div className="w-full relative overflow-hidden rounded-control">
                       <ImageDisplay
                         referenza={referenza}
                         url={logo.guidId}
                         altText={`Logo-${logo.sigla}`}
                         onUploadNuovaFoto={(file, ref, url) => {
-                          console.log('Logo uploaded');
                           handleImmagineReferenzaMancante(file, ref, url);
                         }}
                         onUploadSostituzioneFoto={(file, ref, url) => {
-                          console.log('Logo replaced');
                           handleImmagineReferenzaMancante(file, ref, url);
                         }}
                       />
@@ -975,35 +940,39 @@ const GestioneReferenze = forwardRef<GestioneReferenzeHandle, {}>((props, ref) =
                 ))}
               </div>
             ) : (
-              <div className="text-center py-6 bg-gray-50 rounded-lg">
-                <p className="text-sm text-gray-500">Nessun logo e/o bollo</p>
-              </div>
+              <EmptyState
+                compatta
+                icon="Stamp"
+                title="Nessun logo e/o bollo"
+                description=""
+                className="border border-slate-200"
+              />
             )}
 
             {/* Form to add a new logo */}
-            <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-              <h4 className="text-md font-medium text-gray-800">Aggiungi nuovo logo/bollo</h4>
+            <div className="mt-6 rounded-card border border-slate-200 bg-slate-50 p-4">
+              <h4 className="title-card">Aggiungi nuovo logo/bollo</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Tipo</label>
-                  <select
-                    value={selectedLogoTipo}
-                    onChange={(e) => setSelectedLogoTipo(e.target.value)}
-                    className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
-                  >
-                    <option value="bollo">Bollo</option>
-                    <option value="logo">Logo</option>
-                  </select>
+                  <FormField etichetta="Tipo">
+                    <FormSelect
+                      value={selectedLogoTipo}
+                      onChange={(e) => setSelectedLogoTipo(e.target.value)}
+                    >
+                      <option value="bollo">Bollo</option>
+                      <option value="logo">Logo</option>
+                    </FormSelect>
+                  </FormField>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Sigla</label>
-                  <input
-                    type="text"
-                    value={selectedLogoSigla}
-                    onChange={(e) => setSelectedLogoSigla(e.target.value)}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                    placeholder="Inserisci sigla"
-                  />
+                  <FormField etichetta="Sigla">
+                    <FormInput
+                      type="text"
+                      value={selectedLogoSigla}
+                      onChange={(e) => setSelectedLogoSigla(e.target.value)}
+                      placeholder="Inserisci sigla"
+                    />
+                  </FormField>
                 </div>
               </div>
 
@@ -1020,20 +989,18 @@ const GestioneReferenze = forwardRef<GestioneReferenzeHandle, {}>((props, ref) =
 
         {/* Foto Gruppo Section */}
         <div className="mb-8">
-          <h3 className="text-lg font-medium text-gray-900">Foto Gruppo</h3>
+          <h3 className="title-card">Foto gruppo</h3>
           <div className="mt-4">
             {referenza?.fotoGruppo ? (
-              <div className="bg-white rounded-lg shadow-sm p-4">
+              <div className="rounded-card border border-slate-200 bg-white p-4">
                 <ImageDisplay
                   url={referenza.fotoGruppo}
                   altText="Foto Gruppo"
                   referenza={referenza}
                   onUploadNuovaFoto={(file, ref) => {
-                    console.log('Foto Gruppo uploaded');
                     handleImmagineGruppoReferenza(file, ref);
                   }}
                   onUploadSostituzioneFoto={(file, ref) => {
-                    console.log('Foto Gruppo replaced');
                     handleImmagineGruppoReferenza(file, ref);
                   }}
                 />
@@ -1066,12 +1033,13 @@ const GestioneReferenze = forwardRef<GestioneReferenzeHandle, {}>((props, ref) =
                 </FormInline>
               </div>
             ) : (
-              <div className="text-center py-8 bg-gray-50 rounded-lg">
-                <div className="mx-auto h-12 w-12 text-gray-400">
-                  <Lucide icon="ImageOff" className="h-12 w-12" />
-                </div>
-                <h3 className="mt-2 text-sm font-medium text-gray-900">Nessuna foto gruppo</h3>
-                <p className="mt-1 text-sm text-gray-500">Aggiungi una foto gruppo alla referenza.</p>
+              <div className="rounded-card border border-slate-200 bg-white p-4 text-center">
+                <EmptyState
+                  compatta
+                  icon="ImageOff"
+                  title="Nessuna foto gruppo"
+                  description="Aggiungi una foto gruppo alla referenza."
+                />
 
                 <ImageUploader
                   onFileSelected={(file) => setFileGruppo(file)}
@@ -1116,11 +1084,11 @@ const GestioneReferenze = forwardRef<GestioneReferenzeHandle, {}>((props, ref) =
   };
   const renderContextTab = () => (
     <div>
-      <h3 className="text-lg font-medium text-gray-900">Informazioni di contesto</h3>
+      <h3 className="title-card">Informazioni di contesto</h3>
       <div className="mt-2 grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
         <div className="sm:col-span-2">
-          <dt className="text-sm font-medium text-gray-500">Context Tracciato</dt>
-          <dd className="mt-1 text-sm text-gray-900 bg-gray-50 p-4 rounded-md overflow-auto">
+          <dt className="text-sm font-medium text-slate-500">Contesto tracciato</dt>
+          <dd className="mt-1 text-sm text-slate-900 bg-slate-50 p-4 rounded-control overflow-auto">
             <pre>
               {Array.isArray(referenza?.dataFields.context_promo)
                 ? referenza?.dataFields.context_promo.map((item, index) => (
@@ -1141,8 +1109,8 @@ const GestioneReferenze = forwardRef<GestioneReferenzeHandle, {}>((props, ref) =
           </dd>
         </div>
         <div className="sm:col-span-2">
-          <dt className="text-sm font-medium text-gray-500">Context Promo</dt>
-          <dd className="mt-1 text-sm text-gray-900 bg-gray-50 p-4 rounded-md overflow-auto">
+          <dt className="text-sm font-medium text-slate-500">Contesto promo</dt>
+          <dd className="mt-1 text-sm text-slate-900 bg-slate-50 p-4 rounded-control overflow-auto">
             <pre>{Array.isArray(referenza?.dataFields.context_promo)
               ? referenza?.dataFields.context_promo.map((item, index) => (
                 <div key={index}>
@@ -1173,7 +1141,6 @@ const GestioneReferenze = forwardRef<GestioneReferenzeHandle, {}>((props, ref) =
 
 
   useEffect(() => {
-    console.log('isVisible changed:', isVisible);
     if (isVisible) {
       setSelectAreaPerFotoGruppo("");
       setSelectCanalePerFotoGruppo("");
@@ -1181,21 +1148,16 @@ const GestioneReferenze = forwardRef<GestioneReferenzeHandle, {}>((props, ref) =
   }, [isVisible]);
 
 
-  useEffect(() => {
-    console.log(Colorize.bgMagenta("CAMBIO SELECT PER FOTO GRUPPO"));
-    console.log(selectAreaPerFotoGruppo, selectCanalePerFotoGruppo);
-  }, [selectAreaPerFotoGruppo, selectCanalePerFotoGruppo])
-
   return (
     isVisible && (
-      <Slideover size='xl' open={isVisible} onClose={() => { console.log("CIAO"); setIsVisible(false); setReferenza(undefined) }} className="">
-        <Slideover.Panel className={'w-full max-w-3xl z-50'}>
+      <Slideover size='xl' open={isVisible} onClose={() => { setIsVisible(false); setReferenza(undefined) }} className="">
+        <Slideover.Panel>
           <Slideover.Title>
-            <h2 className="text-xl font-semibold text-gray-800">Dettaglio referenza</h2>
+            <h2 className="title-section">Dettaglio referenza</h2>
           </Slideover.Title>
           <Slideover.Description>
             <Tab.Group className={"flex flex-col gap-y-7 justify-start"}>
-              <Tab.List className="flex flex-wrap items-start -mb-px p-0 text-center" variant="link-tabs">
+              <Tab.List className="flex flex-wrap" variant="boxed-tabs">
                 <Tab>
                   <Tab.Button onClick={() => setActiveTab('general')}>
                     Generale
@@ -1222,7 +1184,7 @@ const GestioneReferenze = forwardRef<GestioneReferenzeHandle, {}>((props, ref) =
                   </Tab.Button>
                 </Tab>
               </Tab.List>
-              <Tab.Panels className="p-6">
+              <Tab.Panels>
                 <Tab.Panel className="leading-relaxed">
                   {renderGeneralTab()}
                 </Tab.Panel>

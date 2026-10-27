@@ -1,8 +1,16 @@
+import Alert from "@/components/Base/Alert";
+import Badge from "@/components/Base/Badge";
 import Button from "@/components/Base/Button";
 import Dropzone, { DropzoneElement } from "@/components/Base/Dropzone";
 import Lucide from "@/components/Base/Lucide";
+import PaginazioneTabella from "@/components/Base/PaginazioneTabella";
+import Sezione from "@/components/Base/Sezione";
 import Skeleton from "@/components/Base/Skeleton";
+import StatCard, { StatCardGrid } from "@/components/Base/StatCard";
+import StatusBadge from "@/components/Base/StatusBadge";
 import Table from "@/components/Base/Table";
+import EmptyState from "@/components/EmptyState";
+import { formatDataOra } from "@/utils/format";
 import { PreviewImmaginePdf } from "@/components/PreviewImmaginePdf";
 import { useNotification } from "@/context/NotificationContext";
 import { useMutation } from "@tanstack/react-query";
@@ -12,7 +20,6 @@ import React, { FC, useCallback, useEffect, useMemo, useRef, useState } from "re
 import { flushSync } from "react-dom";
 import { ServerCall } from "../../../../lib/server_call";
 import { FileItemKit, OggettoTipiDiExport } from "../../../../lib/types";
-import { StatCard } from "../components";
 import { StagedFile } from "../types";
 
 interface FileErrorsTableProps {
@@ -83,26 +90,22 @@ const FileRow: FC<FileRowProps> = ({
         "bg-danger/5": isRejected && !isStaged && !isAccepted,
       })}>
         <Table.Td>
-          <div className="flex items-center">
-            <div className={clsx(
-              "flex h-10 w-10 items-center justify-center rounded-xl shrink-0 mr-3",
+          <div className="flex items-center gap-3">
+            <div aria-hidden="true" className={clsx(
+              "flex h-9 w-9 shrink-0 items-center justify-center rounded-control",
               isStaged ? "bg-warning/10" : isAccepted ? "bg-success/10" : isRejected ? "bg-danger/10" : "bg-slate-100"
             )}>
               <Lucide
                 icon={isStaged ? "Clock" : isAccepted ? "CircleCheck" : isRejected ? "CircleX" : "FileText"}
-                className={clsx("w-5 h-5",
+                className={clsx("h-4 w-4",
                   isStaged ? "text-warning" : isAccepted ? "text-success" : isRejected ? "text-danger" : "text-slate-400"
                 )}
               />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="font-medium text-slate-800 flex items-center gap-2">
+              <div className="flex items-center gap-2 font-medium text-slate-800">
                 <span className="truncate">{file.nome}</span>
-                {isStaged && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-3xs font-medium bg-warning/10 text-warning border border-warning/20 shrink-0">
-                    In Staging
-                  </span>
-                )}
+                {isStaged && <StatusBadge tono="warning" etichetta="In staging" className="shrink-0" />}
               </div>
               {exportType && file.pages && (
                 <div className="text-xs text-slate-500 mt-0.5">
@@ -113,17 +116,13 @@ const FileRow: FC<FileRowProps> = ({
           </div>
         </Table.Td>
         <Table.Td>
-          {exportType ? (
-            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-theme-1/5 text-theme-1 border border-theme-1/20">
-              {exportType.codice}
-            </span>
-          ) : "-"}
+          {exportType ? <Badge variant="primary" size="sm">{exportType.codice}</Badge> : "-"}
         </Table.Td>
-        <Table.Td className="text-center">
-          <div className="flex justify-center gap-2">
+        <Table.Td>
+          <div className="flex justify-end gap-2">
             {file.url && (
-              <Button variant="outline-secondary" size="sm" onClick={() => handleFilePreview(file)} aria-label="Anteprima" title="Anteprima">
-                <Lucide icon="Eye" aria-hidden="true" className="w-4 h-4" />
+              <Button variant="outline-secondary" size="sm" onClick={() => handleFilePreview(file)} aria-label={`Anteprima di ${file.nome}`} title="Anteprima">
+                <Lucide icon="Eye" aria-hidden="true" className="h-3.5 w-3.5" />
               </Button>
             )}
             {isStaged && onRemoveStagedFile && stagedFile && (
@@ -134,7 +133,7 @@ const FileRow: FC<FileRowProps> = ({
                 title="Rimuovi dallo staging"
                 aria-label="Rimuovi dallo staging"
               >
-                <Lucide icon="X" aria-hidden="true" className="w-4 h-4" />
+                <Lucide icon="X" aria-hidden="true" className="h-3.5 w-3.5" />
               </Button>
             )}
           </div>
@@ -145,35 +144,31 @@ const FileRow: FC<FileRowProps> = ({
       {isStaged && stagedFile && (
         <Table.Tr>
           <Table.Td colSpan={3} className="p-0">
-            <div className="p-4 border-t border-info/20 bg-info/5 space-y-3">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-info/10">
-                  <Lucide icon="FileUp" className="w-4 h-4 text-info" />
-                </div>
-                <div className="font-semibold text-sm text-info">
-                  File in Staging — Pronto per il caricamento
-                </div>
-              </div>
+            <div className="space-y-3 border-t border-info/20 bg-info/5 p-4">
+              <p className="flex items-center gap-2 text-sm font-semibold text-info">
+                <Lucide icon="FileUp" aria-hidden="true" className="h-4 w-4" />
+                File in staging — pronto per il caricamento
+              </p>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-white p-4 rounded-xl border border-info/20">
-                  <div className="text-3xs uppercase font-semibold text-info mb-1.5">Nuovo file</div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="rounded-control border border-info/20 bg-white p-4">
+                  <div className="title-eyebrow mb-1.5">Nuovo file</div>
                   <div className="text-sm font-semibold text-slate-800">{stagedFile.newFile.name}</div>
                   <div className="text-xs text-slate-500 mt-1">
                     {formatFileSize(stagedFile.newFile.size)} • {stagedFile.newFile.name.split(".").pop()?.toUpperCase()}
                   </div>
-                  <div className="text-3xs text-slate-400 mt-1.5">
-                    Caricato: {new Date(stagedFile.newFile.lastModified).toLocaleString("it-IT")}
+                  <div className="mt-1.5 text-2xs text-slate-500">
+                    Caricato: {formatDataOra(stagedFile.newFile.lastModified)}
                   </div>
                 </div>
 
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                  <div className="text-3xs uppercase font-semibold text-slate-500 mb-1.5">Sostituisce</div>
+                <div className="rounded-control border border-slate-200 bg-slate-50 p-4">
+                  <div className="title-eyebrow mb-1.5">Sostituisce</div>
                   <div className="text-sm text-slate-700">{stagedFile.originalFile.nome}</div>
                   <div className="text-xs text-slate-500 mt-1">
                     File originale rifiutato
                   </div>
-                  <div className="text-3xs text-slate-400 mt-1.5 font-mono">
+                  <div className="mt-1.5 font-mono text-2xs text-slate-500">
                     ID: {stagedFile.originalFile.id.slice(0, 8)}...
                   </div>
                 </div>
@@ -187,12 +182,9 @@ const FileRow: FC<FileRowProps> = ({
 
                 if (!isCompatible) {
                   return (
-                    <div className="flex items-center gap-2 p-3 bg-warning/5 border border-warning/20 rounded-xl text-warning">
-                      <Lucide icon="CircleAlert" className="w-4 h-4 shrink-0" />
-                      <span className="text-sm font-medium">
-                        Attenzione: Formato file diverso ({origExt} → {newExt})
-                      </span>
-                    </div>
+                    <Alert variant="soft-warning" icona="CircleAlert" className="text-sm">
+                      Attenzione: formato file diverso ({origExt} → {newExt})
+                    </Alert>
                   );
                 }
                 return null;
@@ -206,11 +198,11 @@ const FileRow: FC<FileRowProps> = ({
       {isRejected && !isStaged && (
         <Table.Tr>
           <Table.Td colSpan={3} className="p-0">
-            <div className="p-4 bg-danger/5 border-t border-danger/20">
-              <div className="flex items-center gap-2 mb-2">
-                <Lucide icon="MessageSquare" className="w-4 h-4 text-danger" />
-                <h4 className="font-semibold text-sm text-danger">Motivo del rifiuto</h4>
-              </div>
+            <div className="border-t border-danger/20 bg-danger/5 p-4">
+              <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-danger">
+                <Lucide icon="MessageSquare" aria-hidden="true" className="h-4 w-4" />
+                Motivo del rifiuto
+              </p>
               {file.log && file.log.logs && file.log.logs.length > 0 ? (
                 <div className="space-y-2 max-h-32 overflow-y-auto">
                   {file.log.logs.map((logEntry, i: number) => {
@@ -228,8 +220,8 @@ const FileRow: FC<FileRowProps> = ({
                     return (
                       <div key={i} className="flex items-start justify-between gap-3 py-1.5">
                         <div className="flex items-center gap-2">
-                          <div className={clsx("flex h-6 w-6 items-center justify-center rounded-md shrink-0", style.bg)}>
-                            <Lucide icon={style.icon as any} className={clsx("w-3 h-3", style.color)} />
+                          <div aria-hidden="true" className={clsx("flex h-6 w-6 shrink-0 items-center justify-center rounded-control", style.bg)}>
+                            <Lucide icon={style.icon as any} className={clsx("h-3 w-3", style.color)} />
                           </div>
                           <span className={clsx("text-sm font-medium", style.color)}>
                             {logEntry.azione}
@@ -238,11 +230,8 @@ const FileRow: FC<FileRowProps> = ({
                             <span className="text-sm text-slate-600 ml-1">— "{logEntry.messaggio}"</span>
                           )}
                         </div>
-                        <div className="text-3xs text-slate-400 shrink-0">
-                          {logEntry.data_notifica instanceof Date
-                            ? logEntry.data_notifica.toLocaleString("it-IT")
-                            : new Date(logEntry.data_notifica).toLocaleString("it-IT")
-                          }
+                        <div className="shrink-0 text-2xs tabular-nums text-slate-500">
+                          {formatDataOra(logEntry.data_notifica)}
                         </div>
                       </div>
                     );
@@ -420,8 +409,6 @@ const FileErrorsTable: FC<FileErrorsTableProps> = ({
   });
 
   // Computed values
-  const totalAcceptedPages = Math.ceil(acceptedFiles.length / ITEMS_PER_PAGE);
-  const totalRejectedPages = Math.ceil(rejectedFiles.length / ITEMS_PER_PAGE);
   const paginatedAccepted = acceptedFiles.slice(acceptedPage * ITEMS_PER_PAGE, (acceptedPage + 1) * ITEMS_PER_PAGE);
   const paginatedRejected = rejectedFiles.slice(rejectedPage * ITEMS_PER_PAGE, (rejectedPage + 1) * ITEMS_PER_PAGE);
 
@@ -477,48 +464,23 @@ const FileErrorsTable: FC<FileErrorsTableProps> = ({
     }
   }), [processZipFileMutation, showInfoNotification]);
 
-  // Pagination renderer
-  const renderPagination = (currentPage: number, totalPages: number, onChange: (page: number) => void, totalItems: number) => {
-    if (totalPages <= 1) return null;
-    return (
-      <div className="flex items-center justify-between mt-5">
-        <div className="text-sm text-slate-500">
-          Mostro {currentPage * ITEMS_PER_PAGE + 1}-{Math.min((currentPage + 1) * ITEMS_PER_PAGE, totalItems)} di {totalItems}
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline-secondary"
-            size="sm"
-            onClick={() => onChange(Math.max(0, currentPage - 1))}
-            disabled={currentPage === 0}
-            aria-label="Pagina precedente"
-          >
-            <Lucide icon="ChevronLeft" aria-hidden="true" className="w-4 h-4" />
-          </Button>
-          <span className="px-3 py-1.5 text-sm bg-slate-100 rounded-lg font-medium text-slate-600">
-            {currentPage + 1} / {totalPages}
-          </span>
-          <Button
-            variant="outline-secondary"
-            size="sm"
-            onClick={() => onChange(Math.min(totalPages - 1, currentPage + 1))}
-            disabled={currentPage >= totalPages - 1}
-            aria-label="Pagina successiva"
-          >
-            <Lucide icon="ChevronRight" aria-hidden="true" className="w-4 h-4" />
-          </Button>
-        </div>
-      </div>
-    );
-  };
+  // Paginazione comune, sotto la tabella a filo
+  const renderPagination = (currentPage: number, onChange: (page: number) => void, totalItems: number) => (
+    <PaginazioneTabella
+      totale={totalItems}
+      pagina={currentPage + 1}
+      dimensionePagina={ITEMS_PER_PAGE}
+      onCambiaPagina={(pagina) => onChange(pagina - 1)}
+    />
+  );
 
   // Skeleton rows
   const renderSkeletonRows = () => (
     Array.from({ length: ITEMS_PER_PAGE }).map((_, i) => (
       <Table.Tr key={i}>
         <Table.Td>
-          <div className="flex items-center">
-            <Skeleton width="40px" height="40px" borderRadius="12px" className="mr-3" />
+          <div className="flex items-center gap-3">
+            <Skeleton className="h-9 w-9 rounded-control" />
             <div>
               <Skeleton width="100px" height="16px" className="mb-1" />
               <Skeleton width="60px" height="12px" />
@@ -526,61 +488,56 @@ const FileErrorsTable: FC<FileErrorsTableProps> = ({
           </div>
         </Table.Td>
         <Table.Td>
-          <Skeleton width="60px" height="24px" borderRadius="9999px" />
+          <Skeleton className="h-6 w-16 rounded-full" />
         </Table.Td>
-        <Table.Td className="text-center">
-          <Skeleton width="80px" height="32px" borderRadius="8px" />
+        <Table.Td>
+          <Skeleton className="ml-auto h-8 w-20 rounded-control" />
         </Table.Td>
       </Table.Tr>
     ))
   );
 
+  const intestazioneTabella = (
+    <Table.Thead>
+      <Table.Tr>
+        <Table.Th>File</Table.Th>
+        <Table.Th>Tipo export</Table.Th>
+        <Table.Th className="text-right">
+          <span className="sr-only">Azioni</span>
+        </Table.Th>
+      </Table.Tr>
+    </Table.Thead>
+  );
+
   // Empty state
   if (filesData.length === 0 && !isLoadingFiles) {
     return (
-      <div className="text-center py-16 rounded-xl bg-slate-50 border border-dashed border-slate-200">
-        <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-slate-100 mx-auto mb-4">
-          <Lucide icon="FileX" className="w-10 h-10 text-slate-400" />
-        </div>
-        <h3 className="text-base font-semibold text-slate-700">Nessun file presente</h3>
-        <p className="text-sm text-slate-500 mt-1">Non sono presenti file nella lavorazione.</p>
-      </div>
+      <Sezione>
+        <EmptyState compatta icon="FileX" title="Nessun file presente" description="Non sono presenti file nella lavorazione." />
+      </Sezione>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard icon="Files" iconBg="bg-info/10" iconColor="text-info" value={filesData.length} label="File totali" />
-        <StatCard icon="CircleCheck" iconBg="bg-success/10" iconColor="text-success" value={acceptedFiles.length} label="Accettati" />
-        <StatCard icon="CircleX" iconBg="bg-danger/10" iconColor="text-danger" value={rejectedFiles.length} label="Rifiutati" />
-        <StatCard icon="Clock" iconBg="bg-warning/10" iconColor="text-warning" value={stagedFiles.length} label="In staging" />
-      </div>
+    <div className="flex flex-col gap-6">
+      <StatCardGrid>
+        <StatCard densita="compatta" icona="Files" tono="info" etichetta="File totali" valore={filesData.length} />
+        <StatCard densita="compatta" icona="CircleCheck" tono="success" etichetta="Accettati" valore={acceptedFiles.length} />
+        <StatCard densita="compatta" icona="CircleX" tono="danger" etichetta="Rifiutati" valore={rejectedFiles.length} />
+        <StatCard densita="compatta" icona="Clock" tono="warning" etichetta="In staging" valore={stagedFiles.length} />
+      </StatCardGrid>
 
       {/* Accepted Files Section */}
       {(isLoadingFiles || acceptedFiles.length > 0) && (
-        <div className="box box--stacked p-6">
-          <div className="flex items-center gap-3 mb-5">
-            <div className="p-2.5 bg-gradient-to-br from-success/10 to-success/5 rounded-xl">
-              <Lucide icon="CircleCheck" className="w-5 h-5 text-success" />
-            </div>
-            <div>
-              <h3 className="text-base font-semibold text-slate-800">File Accettati</h3>
-              <p className="text-xs text-slate-500">
-                {isLoadingFiles ? "Caricamento..." : `${acceptedFiles.length} file approvati`}
-              </p>
-            </div>
-          </div>
-          <div className="overflow-x-auto rounded-xl border border-slate-200">
-            <Table bordered striped>
-              <Table.Thead>
-                <Table.Tr className="bg-slate-50">
-                  <Table.Th className="whitespace-nowrap text-xs font-semibold text-slate-600">File</Table.Th>
-                  <Table.Th className="whitespace-nowrap text-xs font-semibold text-slate-600">Tipo Export</Table.Th>
-                  <Table.Th className="text-center whitespace-nowrap text-xs font-semibold text-slate-600">Azioni</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
+        <Sezione
+          senzaPadding
+          icona="CircleCheck"
+          titolo="File accettati"
+          descrizione={isLoadingFiles ? "Caricamento…" : `${acceptedFiles.length} file approvati`}
+        >
+          <div className="overflow-x-auto">
+            <Table>
+              {intestazioneTabella}
               <Table.Tbody>
                 {isLoadingFiles ? renderSkeletonRows() : (
                   paginatedAccepted.map(file => (
@@ -600,56 +557,43 @@ const FileErrorsTable: FC<FileErrorsTableProps> = ({
               </Table.Tbody>
             </Table>
           </div>
-          {!isLoadingFiles && renderPagination(acceptedPage, totalAcceptedPages, setAcceptedPage, acceptedFiles.length)}
-        </div>
+          {!isLoadingFiles && renderPagination(acceptedPage, setAcceptedPage, acceptedFiles.length)}
+        </Sezione>
       )}
 
       {/* Rejected Files Section */}
       {(isLoadingFiles || rejectedFiles.length > 0) && (
-        <div className="box box--stacked p-6">
-          <div className="flex items-center justify-between mb-5">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-gradient-to-br from-danger/10 to-danger/5 rounded-xl">
-                <Lucide icon="CircleX" className="w-5 h-5 text-danger" />
-              </div>
-              <div>
-                <h3 className="text-base font-semibold text-slate-800">File Rifiutati</h3>
-                <div className="flex items-center gap-3 text-xs text-slate-500">
-                  <span>
-                    {isLoadingFiles ? "Caricamento..." : `${rejectedFiles.length} file da correggere`}
-                  </span>
-                  {!isLoadingFiles && rejectedFiles.length > 0 && (
-                    <>
-                      <span className="text-slate-300">•</span>
-                      <span className="flex items-center gap-1 text-warning font-medium">
-                        <Lucide icon="CircleAlert" className="w-3 h-3" />
-                        Richiede correzione
-                      </span>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
+        <Sezione
+          senzaPadding
+          icona="CircleX"
+          titolo="File rifiutati"
+          descrizione={
+            isLoadingFiles ? (
+              "Caricamento…"
+            ) : (
+              <span className="flex flex-wrap items-center gap-2">
+                {rejectedFiles.length} file da correggere
+                {rejectedFiles.length > 0 && <StatusBadge tono="warning" etichetta="Richiede correzione" />}
+              </span>
+            )
+          }
+        >
           {/* Dropzone */}
           {!isLoadingFiles && setStagedFiles && !isLavorazioneAutomatica && (
-            <div className="mb-5">
+            <div className="px-5 pb-5">
               <Dropzone
                 options={dropzoneOptions}
                 getRef={(el) => {
                   dropzoneRef.current = el;
                 }}
-                className="dropzone border-2 border-dashed border-slate-300 rounded-2xl hover:border-theme-1 transition-colors"
+                className="dropzone rounded-card border-2 border-dashed border-slate-300 transition-colors hover:border-theme-1"
               >
                 <div className="flex flex-col items-center py-4">
-                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-theme-1/10 mb-4">
-                    <Lucide icon="Archive" className="w-8 h-8 text-theme-1" />
+                  <div aria-hidden="true" className="mb-4 flex h-14 w-14 items-center justify-center rounded-card bg-theme-1/10">
+                    <Lucide icon="Archive" className="h-7 w-7 text-theme-1" />
                   </div>
-                  <div className="text-base font-semibold text-slate-800">
-                    Trascina qui il file ZIP o clicca per caricare
-                  </div>
-                  <div className="text-sm text-slate-500 mt-1">
+                  <div className="title-card">Trascina qui il file ZIP o clicca per caricare</div>
+                  <div className="mt-1 text-sm text-slate-500">
                     Un singolo file ZIP contenente i file corretti ({rejectedFiles.length} file attesi)
                   </div>
                 </div>
@@ -658,31 +602,17 @@ const FileErrorsTable: FC<FileErrorsTableProps> = ({
           )}
 
           {!isLoadingFiles && isLavorazioneAutomatica && (
-            <div className="mb-5">
-              <div className="flex items-start gap-3 rounded-xl border border-info/20 bg-info/5 p-4">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-info/10 shrink-0">
-                  <Lucide icon="Info" className="w-4 h-4 text-info" />
-                </div>
-                <div>
-                  <h4 className="text-sm font-semibold text-info">Aggiornamento automatico</h4>
-                  <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                    Per i file automatici non è necessario caricare correzioni manuali: la problematica si risolverà
-                    quando il sistema riceverà una nuova pubblicazione.
-                  </p>
-                </div>
-              </div>
+            <div className="px-5 pb-5">
+              <Alert variant="soft-info" icona="Info" titolo="Aggiornamento automatico" className="text-sm">
+                Per i file automatici non è necessario caricare correzioni manuali: la problematica si risolverà
+                quando il sistema riceverà una nuova pubblicazione.
+              </Alert>
             </div>
           )}
 
-          <div className="overflow-x-auto rounded-xl border border-slate-200">
-            <Table bordered striped>
-              <Table.Thead>
-                <Table.Tr className="bg-slate-50">
-                  <Table.Th className="whitespace-nowrap text-xs font-semibold text-slate-600">File</Table.Th>
-                  <Table.Th className="whitespace-nowrap text-xs font-semibold text-slate-600">Tipo Export</Table.Th>
-                  <Table.Th className="text-center whitespace-nowrap text-xs font-semibold text-slate-600">Azioni</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
+          <div className="overflow-x-auto">
+            <Table>
+              {intestazioneTabella}
               <Table.Tbody>
                 {isLoadingFiles ? renderSkeletonRows() : (
                   paginatedRejected.map(file => (
@@ -702,8 +632,8 @@ const FileErrorsTable: FC<FileErrorsTableProps> = ({
               </Table.Tbody>
             </Table>
           </div>
-          {!isLoadingFiles && renderPagination(rejectedPage, totalRejectedPages, setRejectedPage, rejectedFiles.length)}
-        </div>
+          {!isLoadingFiles && renderPagination(rejectedPage, setRejectedPage, rejectedFiles.length)}
+        </Sezione>
       )}
 
       {/* PDF Preview */}

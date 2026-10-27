@@ -1,6 +1,8 @@
 import Button from "@/components/Base/Button";
 import { FormCheck, FormInput, FormLabel, FormSelect, FormTextarea } from "@/components/Base/Form";
 import Lucide from "@/components/Base/Lucide";
+import Alert from "@/components/Base/Alert";
+import Badge from "@/components/Base/Badge";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
@@ -241,12 +243,11 @@ function FilterTemplateForm({
     <>
       {mode === 'edit' && !template?.id_filter_template ? (
         <div className="space-y-4">
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-            <p>Nessun template è attualmente selezionato per la modifica.</p>
-            <p className="mt-1 text-xs text-amber-700">
+          <Alert variant="soft-warning" icona="TriangleAlert" titolo="Nessun template è attualmente selezionato per la modifica.">
+            <p className="text-sm">
               Seleziona un template dall&apos;elenco a sinistra per continuare o annulla l&apos;operazione.
             </p>
-          </div>
+          </Alert>
           <div className="flex justify-end">
             <Button type="button" variant="outline-secondary" onClick={onCancel}>
               Chiudi
@@ -263,8 +264,8 @@ function FilterTemplateForm({
                   {mode === 'create' ? 'Crea Nuovo Template Filtro' : `Modifica: ${template?.nome}`}
                 </h3> */}
                 {mode === 'edit' && currentVersion && (
-                  <p className="mt-1 text-xs uppercase tracking-wide text-slate-500">
-                    Versione attuale <span className="rounded-full bg-primary/10 px-2 py-0.5 text-primary">v{currentVersion}</span>
+                  <p className="title-eyebrow mt-1 flex items-center gap-2">
+                    Versione attuale <Badge variant="primary" size="sm">v{currentVersion}</Badge>
                   </p>
                 )}
               </div>
@@ -275,7 +276,7 @@ function FilterTemplateForm({
                     type="button"
                     onClick={() => setIsHistoryOpen(true)}
                   >
-                    <Lucide icon="Clock" className="mr-2 h-4 w-4" /> Versioni
+                    <Lucide icon="Clock" aria-hidden="true" className="mr-2 h-4 w-4" /> Versioni
                   </Button>
                 )}
                 {mode === 'edit' && (
@@ -289,7 +290,6 @@ function FilterTemplateForm({
                           type="checkbox"
                           checked={field.value}
                           onChange={field.onChange}
-                          className="rounded border-slate-300"
                         />
                         <FormCheck.Label htmlFor="is_active">
                           Attivo
@@ -303,7 +303,7 @@ function FilterTemplateForm({
 
             {/* Informazioni Base */}
             <div className="space-y-4">
-              <h4 className="font-medium text-slate-700">Informazioni Base</h4>
+              <h3 className="title-card">Informazioni Base</h3>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -352,7 +352,7 @@ function FilterTemplateForm({
 
             {/* Sorgente Dati */}
             <div className="space-y-4 border-t pt-4">
-              <h4 className="font-medium text-slate-700">Sorgente Dati</h4>
+              <h3 className="title-card">Sorgente Dati</h3>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -405,7 +405,7 @@ function FilterTemplateForm({
                           <p className="text-slate-500 text-sm">Nessun template disponibile</p>
                         ) : (
                           templates.map((tmpl) => (
-                            <FormCheck key={tmpl.guidId} className="p-3 border rounded-lg hover:bg-slate-50 cursor-pointer">
+                            <FormCheck key={tmpl.guidId} className="cursor-pointer rounded-control border border-slate-200 p-3 hover:bg-slate-50">
                               <FormCheck.Input
                                 id={`tmpl-${tmpl.guidId}`}
                                 type="checkbox"
@@ -416,7 +416,7 @@ function FilterTemplateForm({
                                     : (field.value || []).filter((id: string) => id !== tmpl.guidId);
                                   field.onChange(newValue);
                                 }}
-                                className="mr-3 !rounded-md"
+                                className="mr-3"
                               />
                               <FormCheck.Label htmlFor={`tmpl-${tmpl.guidId}`}>
                                 <div className="font-medium text-sm">{tmpl.titolo}</div>
@@ -455,7 +455,7 @@ function FilterTemplateForm({
                           <p className="text-slate-500 text-sm">Nessun tipo export disponibile</p>
                         ) : (
                           tipiExport.map((tipo) => (
-                            <FormCheck key={tipo.codice} className="p-3 border rounded-lg hover:bg-slate-50 cursor-pointer">
+                            <FormCheck key={tipo.codice} className="cursor-pointer rounded-control border border-slate-200 p-3 hover:bg-slate-50">
                               <FormCheck.Input
                                 id={`export-${tipo.codice}`}
                                 type="checkbox"
@@ -466,7 +466,7 @@ function FilterTemplateForm({
                                     : (field.value || []).filter((code: string) => code !== tipo.codice);
                                   field.onChange(newValue);
                                 }}
-                                className="mr-3 !rounded-md"
+                                className="mr-3"
                               />
                               <FormCheck.Label htmlFor={`export-${tipo.codice}`}>
                                 <div className="font-medium text-sm">{tipo.nome}</div>
@@ -490,7 +490,7 @@ function FilterTemplateForm({
             {/* Opzioni Carousel */}
             {renderType === 'carousel' && (
               <div className="space-y-4 border-t pt-4">
-                <h4 className="font-medium text-slate-700">Parametri Carousel</h4>
+                <h3 className="title-card">Parametri Carousel</h3>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -594,7 +594,7 @@ function FilterTemplateForm({
 
               <div className="space-y-4 mt-3">
                 {filterGroups.map((group, groupIndex) => (
-                  <div key={groupIndex} className="border border-slate-200 rounded-lg p-4">
+                  <div key={groupIndex} className="rounded-card border border-slate-200 p-4">
                     <div className="flex items-center justify-between mb-3">
                       <span className="text-sm font-medium text-slate-600">
                         Gruppo {groupIndex + 1} {groupIndex > 0 && <span className="text-xs text-slate-400">(OR)</span>}
@@ -673,7 +673,7 @@ function FilterTemplateForm({
                           </div>
                           {filterIndex < group.length - 1 && (
                             <div className="col-span-12 text-center">
-                              <span className="text-xs text-slate-400 bg-slate-100 px-2 py-1 rounded">AND</span>
+                              <Badge variant="secondary" size="sm">AND</Badge>
                             </div>
                           )}
                         </div>
@@ -700,7 +700,7 @@ function FilterTemplateForm({
             {/* Meta Options */}
             <div className="space-y-4 border-t pt-4">
               <div>
-                <h4 className="font-medium text-slate-700">Meta-opzioni (JSON)</h4>
+                <h3 className="title-card">Meta-opzioni (JSON)</h3>
                 <p className="text-xs text-slate-500">
                   Payload JSON per sovrascrivere o estendere i parametri di configurazione del template a runtime
                 </p>
@@ -719,13 +719,15 @@ function FilterTemplateForm({
             </div>
 
             {mode === 'edit' && currentVersion && (
-              <div className="rounded-lg border border-dashed border-primary/40 bg-primary/5 p-4 text-sm text-primary">
-                Il prossimo commit genererà automaticamente la versione <span className="font-semibold">v{currentVersion + 1}</span>; le versioni precedenti restano accessibili nello storico.
-              </div>
+              <Alert variant="soft-primary" icona="Info">
+                <p className="text-sm">
+                  Il prossimo commit genererà automaticamente la versione <span className="font-semibold">v{currentVersion + 1}</span>; le versioni precedenti restano accessibili nello storico.
+                </p>
+              </Alert>
             )}
 
             {/* Azioni */}
-            <div className="flex items-center justify-between pt-4 border-t">
+            <div className="flex flex-col-reverse gap-2 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 {mode === 'edit' && (
                   <Button
@@ -733,38 +735,21 @@ function FilterTemplateForm({
                     variant="outline-danger"
                     onClick={() => setConfermaElimina(true)}
                     disabled={isDeleting}
+                    loading={isDeleting}
                   >
-                    {isDeleting ? (
-                      <>
-                        <Lucide icon="Loader" className="w-4 h-4 mr-2 animate-spin" />
-                        Eliminazione...
-                      </>
-                    ) : (
-                      <>
-                        <Lucide icon="Trash2" className="w-4 h-4 mr-2" />
-                        Elimina
-                      </>
-                    )}
+                    {!isDeleting && <Lucide icon="Trash2" aria-hidden="true" className="mr-2 h-4 w-4" />}
+                    {isDeleting ? "Eliminazione..." : "Elimina"}
                   </Button>
                 )}
               </div>
 
-              <div className="flex gap-2">
+              <div className="flex flex-col-reverse gap-2 sm:flex-row">
                 <Button type="button" variant="outline-secondary" onClick={onCancel}>
                   Annulla
                 </Button>
-                <Button type="submit" variant="primary" disabled={isLoading || !!metaOptionsError}>
-                  {isLoading ? (
-                    <>
-                      <Lucide icon="Loader" className="w-4 h-4 mr-2 animate-spin" />
-                      Salvataggio...
-                    </>
-                  ) : (
-                    <>
-                      <Lucide icon="Save" className="w-4 h-4 mr-2" />
-                      {mode === 'create' ? 'Crea Template' : 'Salva Modifiche'}
-                    </>
-                  )}
+                <Button type="submit" variant="primary" disabled={isLoading || !!metaOptionsError} loading={isLoading}>
+                  {!isLoading && <Lucide icon="Save" aria-hidden="true" className="mr-2 h-4 w-4" />}
+                  {isLoading ? "Salvataggio..." : mode === 'create' ? 'Crea Template' : 'Salva Modifiche'}
                 </Button>
               </div>
             </div>

@@ -1,6 +1,4 @@
-import Button from '@/components/Base/Button';
-import { Dialog } from '@/components/Base/Headless';
-import Lucide from '@/components/Base/Lucide';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import { useNotification } from '@/context/NotificationContext';
 import { useFetchAllCombinazioniDesign, useFetchTemplateCombinazioni } from '@/query/query';
 import { useMutation } from '@tanstack/react-query';
@@ -94,16 +92,10 @@ const PanelCombinazioni = forwardRef<unknown, PanelCombinazioniProps>((_props, r
           prev.map((c) => (c.guidId === variables.guidId ? { ...c, stato: variables.stato } : c))
         );
         showNotification(
-          <div className="flex flex-row items-center">
-            <Lucide icon="CircleCheck" className="text-success w-8 h-8" />
-            <div className="ml-4">
-              <div className="font-bold">
-                {variables.stato === STATO_COMBINAZIONI.DISATTIVO
-                  ? 'Disattivazione avvenuta con successo'
-                  : 'Attivazione avvenuta con successo'}
-              </div>
-            </div>
-          </div>
+          variables.stato === STATO_COMBINAZIONI.DISATTIVO
+            ? 'Disattivazione avvenuta con successo'
+            : 'Attivazione avvenuta con successo',
+          { variant: 'success' }
         );
       },
     });
@@ -121,25 +113,10 @@ const PanelCombinazioni = forwardRef<unknown, PanelCombinazioniProps>((_props, r
       dispatch({ type: 'CLEAR_SELECTION' });
       dataTemplateCombinazioni.refetch();
       dataCombinazioni.refetch();
-      showNotification(
-        <div className="flex flex-row items-center">
-          <Lucide icon="CircleCheck" className="text-success w-8 h-8" />
-          <div className="ml-4">
-            <div className="font-bold">Eliminazione avvenuta con successo</div>
-          </div>
-        </div>
-      );
+      showNotification('Eliminazione avvenuta con successo', { variant: 'success' });
     },
     onError: (error: Error) => {
-      showNotification(
-        <div className="flex flex-row items-center">
-          <Lucide icon="CircleX" className="text-error w-14 h-14" />
-          <div className="ml-4">
-            <div className="font-bold">Errore durante l'eliminazione</div>
-            <div className="mt-1 text-slate-500">{error.message}</div>
-          </div>
-        </div>
-      );
+      showNotification(`Errore durante l'eliminazione: ${error.message}`, { variant: 'error' });
     },
   });
 
@@ -148,60 +125,36 @@ const PanelCombinazioni = forwardRef<unknown, PanelCombinazioniProps>((_props, r
       ServerCall.put('/cambioStatoCombinazione', { guidId, stato }),
     mutationKey: ['cambioStatoCombinazione'],
     onError: (error: Error) => {
-      showNotification(
-        <div className="flex flex-row items-center">
-          <Lucide icon="CircleX" className="text-error w-14 h-14" />
-          <div className="ml-4">
-            <div className="font-bold">Errore durante il cambio di stato</div>
-            <div className="mt-1 text-slate-500">{error.message}</div>
-          </div>
-        </div>
-      );
+      showNotification(`Errore durante il cambio di stato: ${error.message}`, { variant: 'error' });
     },
   });
 
   return (
     <>
-      {/* Delete confirmation dialog */}
-      <Dialog open={showDialogEliminazione} onClose={() => setShowDialogEliminazione(false)}>
-        <Dialog.Panel>
-          <Dialog.Title className="font-bold">Elimina template</Dialog.Title>
-          <Dialog.Description>
-            Sei sicuro di voler eliminare il template selezionato?
-            <br />
-            <span className="text-danger">Questa operazione non può essere annullata.</span>
-          </Dialog.Description>
-          <Dialog.Footer>
-            <Button
-              className="mx-1"
-              variant="secondary"
-              onClick={() => setShowDialogEliminazione(false)}
-              disabled={mutationEliminazioneKit.isPending}
-            >
-              Annulla
-            </Button>
-            <Button
-              className="mx-1"
-              variant="danger"
-              loading={mutationEliminazioneKit.isPending}
-              onClick={() => {
-                if (state.selectedTemplate?.guidId) {
-                  mutationEliminazioneKit.mutate(state.selectedTemplate.guidId);
-                }
-              }}
-            >
-              {!mutationEliminazioneKit.isPending && <Lucide icon="Trash2" aria-hidden="true" className="w-4 h-4 mr-2" />}
-              Elimina
-            </Button>
-          </Dialog.Footer>
-        </Dialog.Panel>
-      </Dialog>
+      {/* Conferma di eliminazione */}
+      <ConfirmDialog
+        open={showDialogEliminazione}
+        title="Eliminare il template?"
+        description={<>Il template <strong>{state.selectedTemplate?.titolo}</strong> verrà eliminato. Questa operazione non può essere annullata.</>}
+        confirmLabel="Elimina"
+        loading={mutationEliminazioneKit.isPending}
+        onClose={() => setShowDialogEliminazione(false)}
+        onConfirm={() => {
+          if (state.selectedTemplate?.guidId) {
+            mutationEliminazioneKit.mutate(state.selectedTemplate.guidId);
+          }
+        }}
+      />
 
-      <div className="flex flex-col gap-5 mt-3.5">
+      <div className="flex flex-col gap-5">
         {/* Template card grid */}
         <TemplateCardGrid
           templates={filteredTemplates}
           isLoading={dataTemplateCombinazioni.isLoading}
+          errore={dataTemplateCombinazioni.isError ? {
+            motivo: (dataTemplateCombinazioni.error as Error)?.message || 'Non è stato possibile caricare i template.',
+            onRiprova: () => dataTemplateCombinazioni.refetch(),
+          } : null}
           selectedTemplateId={state.selectedTemplate?.guidId ?? null}
           searchQuery={searchTemplateQuery}
           onSearchChange={setSearchTemplateQuery}
@@ -218,6 +171,10 @@ const PanelCombinazioni = forwardRef<unknown, PanelCombinazioniProps>((_props, r
               selectedTemplate={state.selectedTemplate}
               combinations={filteredCombinations}
               isLoading={dataCombinazioni.isLoading}
+              errore={dataCombinazioni.isError ? {
+                motivo: (dataCombinazioni.error as Error)?.message || 'Non è stato possibile caricare le combinazioni.',
+                onRiprova: () => dataCombinazioni.refetch(),
+              } : null}
               searchQuery={searchCombinationQuery}
               onSearchChange={setSearchCombinationQuery}
               onStateChange={handleStateChange}

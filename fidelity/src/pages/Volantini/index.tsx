@@ -1,19 +1,16 @@
-import Lucide from "@/components/Base/Lucide";
-import { Menu, Popover } from "@/components/Base/Headless";
-import TinySlider, { TinySliderElement } from "@/components/Base/TinySlider";
-import Pagination from "@/components/Base/Pagination";
-import { FormInput, FormSelect } from "@/components/Base/Form";
-import Tippy from "@/components/Base/Tippy";
+import BarraFiltri from "@/components/Base/BarraFiltri";
 import Button from "@/components/Base/Button";
-import { useState, useRef, useCallback } from "react";
-import _ from "lodash";
-import Litepicker from "@/components/Base/Litepicker";
+import CampoRicerca from "@/components/Base/CampoRicerca";
+import { FormSelect } from "@/components/Base/Form";
+import Lucide from "@/components/Base/Lucide";
+import Pagina from "@/components/Base/Pagina";
+import PaginazioneTabella from "@/components/Base/PaginazioneTabella";
+import Sezione from "@/components/Base/Sezione";
+import EmptyState from "@/components/EmptyState";
+import withSessionCheck from "@/components/SessionChecker";
+import { useMemo, useState } from "react";
 import { Link, useLoaderData, useRevalidator } from "react-router-dom";
 
-import { ServerCall } from "../../../lib/server_call";
-import withSessionCheck from "@/components/SessionChecker";
-import EmptyState from "@/components/EmptyState";
-import PageHeader from "@/components/Base/PageHeader";
 interface File {
   nome_file: string;
   id_olimpo_cloud: string;
@@ -32,261 +29,169 @@ interface FileGroup {
   files_field: File[];
 }
 
-const Volantini: React.FC = () => {
-  const maxCap = useRef(4);
-  const { files } = useLoaderData() as { files: any[] };
-  const [daterange, setDaterange] = useState("");
-  const [searchTerm, setSearchTerm] = useState("");
-  const r = useRevalidator();
-  const renderFiles = useCallback(() => {
-    if (!files || files.length === 0) {
-      return (
-        <EmptyState
-          icon="FileSearch"
-          title="Nessun volantino disponibile"
-          description="Al momento non ci sono volantini attivi. I nuovi volantini appariranno qui non appena saranno disponibili."
-          buttonText="Aggiorna"
-          onButtonClick={()=>{r.revalidate()}}
-        />
-      );
-    }
-    return files.map((fileGroup: FileGroup, index: number) => (
-      <div key={index} className="flex flex-col md:flex-row border-dashed border-y">
-        <div className="flex flex-col p-5 md:w-1/6 border-dashed border-r text-center md:text-left">
-          <div className="text-slate-500 mb-5">
-            <div>Area: <span><b>{fileGroup.nomeArea}</b></span></div>
-            <div>Canale: <span><b>{fileGroup.nomeCanale}</b></span></div>
-            <div>Tipo: <span><b>Volantino</b></span></div>
-          </div>
-        </div>
+// Volantini mostrati per ogni kit prima del collegamento "Vedi tutti"
+const MAX_FILE_PER_KIT = 4;
+const KIT_PER_PAGINA = 10;
 
-        <div className="flex flex-wrap md:w-5/6 p-5">
-          {fileGroup.files_field.slice(0, maxCap.current).map((file: File, index_files_field: number) => (
-            <div key={index_files_field} className="w-full sm:w-1/2 xl:w-1/4 p-5 border-dashed border-slate-300/80">
-              <div className="overflow-hidden rounded-lg h-36 image-fit before:block before:absolute before:w-full before:h-full before:top-0 before:left-0 before:z-10 before:bg-gradient-to-t before:from-slate-900/90 before:to-black/20">
-                <img alt={file.nome_file} className="rounded-md" src={file.url} />
-                <span className="absolute top-0 z-10 px-2.5 py-1 m-5 text-xs text-white rounded-lg bg-success/80 font-medium border-white/20 border">Nuovo</span>
-                <div className="absolute bottom-0 z-10 w-full px-5 pb-6 text-white">
-                  <p className="block text-lg font-medium ">{file.nome_file.split(".")[0]}</p>
-                  <span className="mt-3 text-xs text-white/80">dal 10 al 21 agosto</span>
-                </div>
-              </div>
-              <div className="pt-5">
-                <div className="flex items-center">
-                  <a
-                    className="flex items-center mr-auto text-primary"
-                    href={file.url_download}
-                    download
-                  >
-                    <Lucide
-                      icon="Download"
-                      className="w-4 h-4 stroke-[1.3] mr-1.5"
-                    />{" "}
-                    Scarica PDF
-                  </a>
-                  <a className="flex items-center mr-3" href="#">
-                    <Lucide
-                      icon="SquareKanban"
-                      className="w-4 h-4 stroke-[1.3] mr-1.5"
-                    />{" "}
-                    Apri referenze
-                  </a>
-                </div>
-              </div>
-            </div>
-          ))}
-          {fileGroup.files_field.length > maxCap.current && (
-            <div className="w-full text-center mt-5">
-              <Link to={`tutti_i_volantini?kit=${  fileGroup.idKit}`} className="text-primary font-medium">
-                Vedi tutti ({fileGroup.files_field.length})
-              </Link>
-            </div>
-          )}
-        </div>
-      </div>
-    ));
-  }, [files]);
+const valoriUnici = (valori: string[]) => [...new Set(valori.filter(Boolean))].sort((a, b) => a.localeCompare(b));
+
+const Volantini: React.FC = () => {
+  const { files } = useLoaderData() as { files: FileGroup[] | null };
+  const revalidator = useRevalidator();
+  const [ricerca, setRicerca] = useState("");
+  const [area, setArea] = useState("");
+  const [canale, setCanale] = useState("");
+  const [pagina, setPagina] = useState(1);
+
+  const gruppi = useMemo(() => files ?? [], [files]);
+  const aree = useMemo(() => valoriUnici(gruppi.map((g) => g.nomeArea)), [gruppi]);
+  const canali = useMemo(() => valoriUnici(gruppi.map((g) => g.nomeCanale)), [gruppi]);
+
+  // Ricerca su area, canale e nome dei file; filtri per area e canale presi dai dati
+  const filtrati = useMemo(() => {
+    const testo = ricerca.trim().toLowerCase();
+    return gruppi.filter((gruppo) => {
+      if (area && gruppo.nomeArea !== area) return false;
+      if (canale && gruppo.nomeCanale !== canale) return false;
+      if (!testo) return true;
+      return (
+        gruppo.nomeArea?.toLowerCase().includes(testo) ||
+        gruppo.nomeCanale?.toLowerCase().includes(testo) ||
+        gruppo.files_field.some((file) => file.nome_file.toLowerCase().includes(testo))
+      );
+    });
+  }, [gruppi, ricerca, area, canale]);
+
+  const visibili = filtrati.slice((pagina - 1) * KIT_PER_PAGINA, pagina * KIT_PER_PAGINA);
+
+  const cambiaFiltro = (applica: () => void) => {
+    applica();
+    setPagina(1);
+  };
+
+  const azzeraFiltri = () =>
+    cambiaFiltro(() => {
+      setRicerca("");
+      setArea("");
+      setCanale("");
+    });
 
   return (
-    <div className="grid grid-cols-12 gap-y-10 gap-x-6">
-      <div className="col-span-12">
-        <div className="flex flex-col md:h-10 gap-y-3 md:items-center md:flex-row">
-          <PageHeader
-            title="Promozioni in corso"
-            description="Qui troverai tutti i volantini pdf disponibili"
+    <Pagina titolo="Volantini" descrizione="Volantini PDF disponibili per area e canale">
+      <Sezione senzaPadding aria-label="Elenco dei volantini">
+        <BarraFiltri>
+          <CampoRicerca
+            etichetta="Cerca volantini"
+            placeholder="Area, canale o nome del file"
+            value={ricerca}
+            onChange={(valore) => cambiaFiltro(() => setRicerca(valore))}
           />
-          <div className="flex flex-col sm:flex-row gap-x-3 gap-y-2 md:ml-auto">
-          </div>
-        </div>
-        <div className="mt-3.5">
-          <div className="flex flex-col box box--stacked">
-            <div className="flex flex-col p-5 sm:items-center sm:flex-row gap-y-2">
-              <div>
-                <div className="relative">
-                  <Lucide
-                    icon="Search"
-                    className="absolute inset-y-0 left-0 z-10 w-4 h-4 my-auto ml-3 stroke-[1.3] text-slate-500"
-                  />
-                  <FormInput
-                    type="text"
-                    placeholder="Cerca promozione..."
-                    className="pl-9 sm:w-64 rounded-control"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                </div>
-              </div>
+          <FormSelect
+            formSelectSize="sm"
+            aria-label="Area"
+            className="sm:w-44"
+            value={area}
+            onChange={(e) => cambiaFiltro(() => setArea(e.target.value))}
+          >
+            <option value="">Tutte le aree</option>
+            {aree.map((nome) => (
+              <option key={nome} value={nome}>
+                {nome}
+              </option>
+            ))}
+          </FormSelect>
+          <FormSelect
+            formSelectSize="sm"
+            aria-label="Canale"
+            className="sm:w-44"
+            value={canale}
+            onChange={(e) => cambiaFiltro(() => setCanale(e.target.value))}
+          >
+            <option value="">Tutti i canali</option>
+            {canali.map((nome) => (
+              <option key={nome} value={nome}>
+                {nome}
+              </option>
+            ))}
+          </FormSelect>
+        </BarraFiltri>
 
-              <div className="flex flex-col sm:flex-row gap-x-3 gap-y-2 sm:ml-auto">
-                <Popover className="inline-block">
-                  {({ close }) => (
-                    <>
-                      <Popover.Button
-                        as={Button}
+        {gruppi.length === 0 ? (
+          <EmptyState
+            compatta
+            icon="FileSearch"
+            title="Nessun volantino disponibile"
+            description="Al momento non ci sono volantini attivi. I nuovi volantini appariranno qui non appena saranno disponibili."
+            buttonText="Aggiorna"
+            onButtonClick={() => revalidator.revalidate()}
+          />
+        ) : filtrati.length === 0 ? (
+          <EmptyState
+            compatta
+            icon="SearchX"
+            title="Nessun risultato"
+            description="Nessun volantino corrisponde alla ricerca o ai filtri scelti."
+            buttonText="Azzera filtri"
+            buttonIcon="RotateCcw"
+            onButtonClick={azzeraFiltri}
+          />
+        ) : (
+          <ul className="flex flex-col gap-4 p-5">
+            {visibili.map((gruppo) => (
+              <li key={gruppo.idKit} className="rounded-card border border-slate-200 bg-white p-4">
+                <h3 className="title-card">
+                  {gruppo.nomeArea} · {gruppo.nomeCanale}
+                </h3>
+                <p className="text-xs text-slate-500">Volantino · {gruppo.files_field.length} file</p>
+
+                <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                  {gruppo.files_field.slice(0, MAX_FILE_PER_KIT).map((file) => (
+                    <div key={file.id_olimpo_cloud || file.nome_file} className="flex flex-col gap-3">
+                      <div className="h-36 overflow-hidden rounded-control border border-slate-200 bg-slate-100">
+                        <img alt="" className="h-full w-full object-cover" src={file.url} loading="lazy" />
+                      </div>
+                      <p className="truncate text-sm font-medium text-slate-800" title={file.nome_file}>
+                        {file.nome_file.split(".")[0]}
+                      </p>
+                      <Button
+                        as="a"
+                        href={file.url_download}
+                        download
+                        size="sm"
                         variant="outline-secondary"
-                        className="w-full sm:w-auto"
+                        className="self-start"
+                        aria-label={`Scarica il PDF ${file.nome_file}`}
                       >
-                        <Lucide
-                          icon="ArrowDownWideNarrow"
-                          className="stroke-[1.3] w-4 h-4 mr-2"
-                        />
-                        Filtra
-                        <div className="flex items-center justify-center h-5 px-1.5 ml-2 text-xs font-medium border rounded-full bg-slate-100">
-                          X
-                        </div>
-                      </Popover.Button>
+                        <Lucide icon="Download" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                        Scarica PDF
+                      </Button>
+                    </div>
+                  ))}
+                </div>
 
-                      <Popover.Panel placement="bottom-end">
-                        <div className="p-2">
-                          <div>
-                            <div className="text-left text-slate-500">
-                              Stato
-                            </div>
-                            <FormSelect className="flex-1 mt-2">
-                              <option value="">Tutte</option>
-                              <option value="">Attive</option>
-                              <option value="">Nuove</option>
-                              <option value="">In arrivo</option>
-                              <option value="">In scadenza</option>
-                            </FormSelect>
-                          </div>
-                          <div className="mt-3">
-                            <div className="text-left text-slate-500">
-                              insegna
-                            </div>
-                            <FormSelect className="flex-1 mt-2">
-                              <option value="">Tutte</option>
-                              <option value="">DOC</option>
-                            </FormSelect>
-                          </div>
+                {gruppo.files_field.length > MAX_FILE_PER_KIT && (
+                  <Link
+                    to={`tutti_i_volantini?kit=${gruppo.idKit}`}
+                    className="mt-4 inline-flex items-center text-sm font-medium text-primary hover:underline"
+                  >
+                    Vedi tutti ({gruppo.files_field.length})
+                    <Lucide icon="ArrowRight" aria-hidden="true" className="ml-1 h-3.5 w-3.5" />
+                  </Link>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
 
-                          <div className="mt-3">
-                            <div className="text-left text-slate-500">
-                              Area
-                            </div>
-                            <FormSelect className="flex-1 mt-2">
-                              <option value="">Tutte</option>
-                              <option value="">Roma</option>
-                            </FormSelect>
-                          </div>
-
-                          <div className="mt-3">
-                            <div className="text-left text-slate-500">
-                              Canale
-                            </div>
-                            <FormSelect className="flex-1 mt-2">
-                              <option value="">Tutti</option>
-                              <option value="">Market</option>
-                              <option value="">Oro</option>
-                              <option value="">Prossimità</option>
-                            </FormSelect>
-                          </div>
-
-                          <div className="mt-3">
-                            <div className="text-left text-slate-500">
-                              Periodo
-                            </div>
-                            <div className="flex-1 mt-2">
-                              <Litepicker value={daterange} onChange={(e) => {
-                                setDaterange(e.target.value);
-                              }}
-                                options={{
-                                  lang: "it",
-                                  autoApply: false,
-                                  singleMode: false,
-                                  numberOfColumns: 2,
-                                  numberOfMonths: 2,
-                                  showWeekNumbers: true,
-                                  dropdowns: {
-                                    minYear: 1990,
-                                    maxYear: null,
-                                    months: true,
-                                    years: true,
-                                  },
-                                }}
-                                className="block w-56 mx-auto"
-                              />
-                            </div>
-                          </div>
-
-                          <div className="flex items-center mt-4">
-                            <Button
-                              variant="secondary"
-                              onClick={() => {
-                                close();
-                              }}
-                              className="w-32 ml-auto"
-                            >
-                              Chiudi
-                            </Button>
-                            <Button variant="primary" className="w-32 ml-2">
-                              Filtra
-                            </Button>
-                          </div>
-                        </div>
-                      </Popover.Panel>
-                    </>
-                  )}
-                </Popover>
-              </div>
-            </div>
-            <div className="overflow-hidden">
-              {renderFiles()}
-            </div>
-            {files && files.length > 0 && (
-              <div className="flex flex-col-reverse flex-wrap items-center p-5 flex-reverse gap-y-2 sm:flex-row">
-                <Pagination className="flex-1 w-full mr-auto sm:w-auto">
-                  <Pagination.Link aria-label="Prima pagina">
-                    <Lucide icon="ChevronsLeft" aria-hidden="true" className="w-4 h-4" />
-                  </Pagination.Link>
-                  <Pagination.Link aria-label="Pagina precedente">
-                    <Lucide icon="ChevronLeft" aria-hidden="true" className="w-4 h-4" />
-                  </Pagination.Link>
-                  <Pagination.Link>...</Pagination.Link>
-                  <Pagination.Link>1</Pagination.Link>
-                  <Pagination.Link active>2</Pagination.Link>
-                  <Pagination.Link>3</Pagination.Link>
-                  <Pagination.Link>...</Pagination.Link>
-                  <Pagination.Link aria-label="Pagina successiva">
-                    <Lucide icon="ChevronRight" aria-hidden="true" className="w-4 h-4" />
-                  </Pagination.Link>
-                  <Pagination.Link aria-label="Ultima pagina">
-                    <Lucide icon="ChevronsRight" aria-hidden="true" className="w-4 h-4" />
-                  </Pagination.Link>
-                </Pagination>
-                <FormSelect className="sm:w-20 rounded-control">
-                  <option>10</option>
-                  <option>25</option>
-                  <option>35</option>
-                  <option>50</option>
-                </FormSelect>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
+        <PaginazioneTabella
+          totale={filtrati.length}
+          pagina={pagina}
+          dimensionePagina={KIT_PER_PAGINA}
+          onCambiaPagina={setPagina}
+        />
+      </Sezione>
+    </Pagina>
   );
-}
+};
 
 export default withSessionCheck(Volantini);

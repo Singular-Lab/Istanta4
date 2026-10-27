@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import Lucide from "../Base/Lucide";
+import Spinner from "../Base/Spinner";
 
 interface PreviewImmaginePdfProps {
     imageUrl: string;
@@ -163,10 +164,7 @@ export const PreviewImmaginePdf: React.FC<PreviewImmaginePdfProps> = ({
                     <div className="relative flex gap-1">
                         {isPreloading && (
                             <div className="absolute inset-0 z-20 flex items-center justify-center">
-                                <Lucide
-                                    icon="Loader"
-                                    className="w-14 h-14 text-white animate-spin"
-                                />
+                                <Spinner size="lg" etichetta="Caricamento anteprima" className="text-white" />
                             </div>
                         )}
 

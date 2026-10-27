@@ -177,13 +177,10 @@ const DeveloperConsole = forwardRef<
               {err.logo && (
                 <Dropzone options={{
                   dragend: (event) => {
-                    console.log("Drag end", event);
                   },
                   dragenter: (event) => {
-                    console.log("Drag enter", event);
                   },
                   addedfile: (file) => {
-                    console.log("File added", file);
                     if (err.logo) {
                       handleUploadLoghi(file, err.logo);
                     }
@@ -198,7 +195,7 @@ const DeveloperConsole = forwardRef<
                   <div className="text-lg font-medium">
                     Fai clic o trascina i tracciati qui per caricarli
                   </div>
-                  <div className="text-sm text-gray-400">Accetta solo file .png, .jpg, .jpeg, .webp</div>
+                  <div className="text-sm text-slate-400">Accetta solo file .png, .jpg, .jpeg, .webp</div>
                 </Dropzone>
               )}
               {common}
@@ -264,9 +261,9 @@ const DeveloperConsole = forwardRef<
           transition={{ duration: 0.3 }}
         >
           <div className={styles.header}>
-            <h1 className={styles.title}>
+            <h2 className={`title-section ${styles.title}`}>
               Problemi rilevati <span className={styles.errorCount}>{errorCounts.all}</span>
-            </h1>
+            </h2>
             <button onClick={toggleErrorConsole} className={styles.closeButton} aria-label="Chiudi console errori">
               <Lucide aria-hidden="true" icon="X" />
             </button>
@@ -296,8 +293,8 @@ const DeveloperConsole = forwardRef<
                 </AnimatePresence>
 
                 <div className={styles.sectionFooter}>
-                  <Button variant="outline-dark" onClick={toggleErrorConsole}>
-                    Chiudi Console
+                  <Button type="button" variant="outline-secondary" onClick={toggleErrorConsole}>
+                    Chiudi console
                   </Button>
                 </div>
               </div>
@@ -305,7 +302,7 @@ const DeveloperConsole = forwardRef<
           ) : (
             <div className={styles.emptyState}>
               <Lucide icon="CircleCheck" width={48} height={48} />
-              <h3 className={styles.emptyStateMessage}>Nessun problema rilevato</h3>
+              <h3 className={`title-card ${styles.emptyStateMessage}`}>Nessun problema rilevato</h3>
               <p className={styles.emptyStateSubMessage}>Tutto sembra funzionare correttamente</p>
             </div>
           )}
@@ -314,7 +311,7 @@ const DeveloperConsole = forwardRef<
 
       {visibleTimeline && (
         <motion.div
-          className="fixed bottom-0 left-0 right-0 bg-white z-[9999999] rounded-t-md shadow-lg"
+          className="fixed bottom-0 left-0 right-0 bg-white z-[1100] rounded-t-card shadow-lg"
           initial={{ opacity: 0, y: '100%' }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: '100%' }}

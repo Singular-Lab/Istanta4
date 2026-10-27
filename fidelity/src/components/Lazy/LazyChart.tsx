@@ -6,7 +6,7 @@ const Chart = lazy(() => import('@/components/Base/Chart'));
 
 // Skeleton per il loading
 const ChartSkeleton = () => (
-  <div className="animate-pulse bg-slate-200 rounded-lg h-64 flex items-center justify-center">
+  <div className="animate-pulse bg-slate-200 rounded-card h-64 flex items-center justify-center">
     <div className="text-slate-500">Caricamento grafico...</div>
   </div>
 );

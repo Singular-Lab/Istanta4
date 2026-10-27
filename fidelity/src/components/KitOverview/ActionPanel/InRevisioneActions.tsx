@@ -1,6 +1,5 @@
 import Button from "@/components/Base/Button";
 import Lucide from "@/components/Base/Lucide";
-import LoadingIcon from "@/components/Base/LoadingIcon";
 import { PermissionGate } from "@/components/PermissionGate";
 import { PERMISSIONS } from "@/constants/permissions";
 import { FC } from "react";
@@ -39,37 +38,28 @@ const InRevisioneActions: FC<InRevisioneActionsProps> = ({
         {hasAccepted && (
           <PermissionGate permission={PERMISSIONS.KIT_RUNTIME.PUBBLICA} mode="disable">
             <Button
-              variant="success"
+              variant="primary"
               size="sm"
               className="flex-1"
               onClick={onPublish}
-              disabled={isProcessing}
+              loading={isProcessing}
             >
-              {isProcessing ? (
-                <>
-                  <LoadingIcon icon="oval" className="w-4 h-4 mr-2" />
-                  Pubblicazione...
-                </>
-              ) : (
-                <>
-                  <Lucide icon="FileCheck" className="w-4 h-4 mr-2" />
-                  Pubblica Kit
-                </>
-              )}
+              {!isProcessing && <Lucide icon="FileCheck" aria-hidden="true" className="mr-2 h-4 w-4" />}
+              {isProcessing ? "Pubblicazione…" : "Pubblica kit"}
             </Button>
           </PermissionGate>
         )}
         {hasRejected && (
           <PermissionGate permission={PERMISSIONS.KIT_RUNTIME.RIPORTA_IN_LAVORAZIONE} mode="disable">
             <Button
-              variant="warning"
+              variant="outline-secondary"
               size="sm"
               className="flex-1"
               onClick={onRejectAndRework}
               disabled={isProcessing}
             >
-              <Lucide icon="ArrowLeft" className="w-4 h-4 mr-2" />
-              Riporta in Lavorazione
+              <Lucide icon="ArrowLeft" aria-hidden="true" className="mr-2 h-4 w-4" />
+              Riporta in lavorazione
             </Button>
           </PermissionGate>
         )}
@@ -77,30 +67,30 @@ const InRevisioneActions: FC<InRevisioneActionsProps> = ({
       <div className="flex gap-2">
         <PermissionGate permission={PERMISSIONS.KIT_RUNTIME.ELIMINA}>
           <Button
-            variant="outline-secondary"
-            size="xs"
+            variant="outline-danger"
+            size="sm"
             className="flex-1"
             onClick={onDelete}
             disabled={isProcessing}
           >
-            <Lucide icon="Trash2" className="w-3 h-3 mr-1" />
+            <Lucide icon="Trash2" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
             Elimina
           </Button>
         </PermissionGate>
         <PermissionGate permission={PERMISSIONS.KIT_RUNTIME.ELIMINA} mode="disable">
           <Button
-            variant="outline-warning"
-            size="xs"
+            variant="outline-danger"
+            size="sm"
             className="flex-1"
             onClick={onRework}
             disabled={isProcessing}
           >
-            <Lucide icon="RotateCcw" className="w-3 h-3 mr-1" />
+            <Lucide icon="RotateCcw" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
             Rilavora
           </Button>
         </PermissionGate>
       </div>
-      <div className="text-xs text-center text-slate-500 bg-slate-50 py-2 rounded">
+      <div className="rounded-control bg-slate-50 py-2 text-center text-xs text-slate-500">
         <span className="font-medium text-success">{acceptedCount}</span> approvati •
         <span className="font-medium text-danger ml-1">{rejectedCount}</span> rifiutati
       </div>

@@ -1,9 +1,9 @@
 import Lucide from '@/components/Base/Lucide';
-import clsx from 'clsx';
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { twMerge } from "@/utils/twMerge";
 
-type Indietro = { etichetta?: string } & ({ to: string; onClick?: never } | { onClick: () => void; to?: never });
+export type Indietro = { etichetta?: string } & ({ to: string; onClick?: never } | { onClick: () => void; to?: never });
 
 interface PageHeaderProps {
   title: string;
@@ -31,7 +31,7 @@ const PageHeader: React.FC<PageHeaderProps> = ({
   const icona = <Lucide icon="ArrowLeft" aria-hidden="true" className="h-4 w-4" />;
 
   return (
-    <div className={clsx('mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between', className)}>
+    <div className={twMerge('mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between', className)}>
       <div className="flex min-w-0 items-start gap-3">
         {indietro?.to !== undefined && (
           <Link to={indietro.to} aria-label={etichettaIndietro} title={etichettaIndietro} className={classiIndietro}>
@@ -45,7 +45,7 @@ const PageHeader: React.FC<PageHeaderProps> = ({
         )}
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <h1 className="text-3xl font-bold group-[.mode--light]:text-white group-[.mode--dark]:text-slate-800">
+            <h1 className="title-page text-slate-800 group-[.mode--light]:text-white group-[.mode--dark]:text-slate-800">
               {title}
             </h1>
             {badges && <div className="flex flex-wrap items-center gap-2">{badges}</div>}

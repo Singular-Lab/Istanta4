@@ -1,5 +1,5 @@
 import FormCheck, { FormCheckProps, LabelProps } from "../FormCheck";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/utils/twMerge";
 
 function FormSwitch(props: FormCheckProps) {
   return <FormCheck {...props}>{props.children}</FormCheck>;

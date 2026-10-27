@@ -1,16 +1,15 @@
 import Button from "@/components/Base/Button";
-import { FormInput, FormLabel } from "@/components/Base/Form";
+import { FormField, FormInput } from "@/components/Base/Form";
 import Litepicker from "@/components/Base/Litepicker";
 import Lucide from "@/components/Base/Lucide";
-import PageHeader from "@/components/Base/PageHeader";
-import Skeleton from "@/components/Base/Skeleton";
+import Pagina from "@/components/Base/Pagina";
+import Sezione from "@/components/Base/Sezione";
 import withSessionCheck from "@/components/SessionChecker";
 import ContestoLavorazioneFields from "@/components/ContestoLavorazioneFields";
 import VisibilitaPromoFields from "@/components/VisibilitaPromoFields";
 import { useNotification } from "@/context/NotificationContext";
 import { yupResolver } from "@hookform/resolvers/yup";
 import { useMutation } from "@tanstack/react-query";
-import Tippy from '@tippyjs/react';
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
 import { useEffect, useState } from "react";
@@ -22,6 +21,7 @@ import { ServerCall } from "../../../lib/server_call";
 import type { VisibilitaPromo } from "../../../lib/types";
 import { PromoResponseDTO } from "../../../server/core/dto";
 import { useContestoPerNuovaLavorazione } from "../../query/query";
+import SpecificheLavorazione from "../shared/SpecificheLavorazione";
 
 dayjs.extend(customParseFormat);
 
@@ -239,238 +239,150 @@ function Main() {
   };
 
 
+  const occupato = isLoadingContestoPerNuovaLavorazione || inCreazione;
+
   return (
     <form onSubmit={handleSubmit(onSubmit)}>
-      <div className="grid grid-cols-12 gap-y-10 gap-x-6">
-        <div className="col-span-12">
-          <PageHeader
-            title="Nuova promozione"
-            description="Crea una nuova lavorazione per inserire i tracciati"
-          />
-          <div className="mt-3.5">
-            <div className="flex flex-col box box--stacked p-5">
-              <div className="overflow-hidden">
-                <div className="grid p-1 grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="flex flex-col gap-y-2">
-                    <FormLabel htmlFor="nome_promo" className="flex items-center gap-2">
-                      <Lucide icon="Tag" className="w-4 h-4 text-primary" />
-                      Titolo Promo
-                    </FormLabel>
-                    <div className="relative">
-                      <FormInput
-                        disabled={isLoadingContestoPerNuovaLavorazione}
-                        autoComplete="off"
-                        id="nome_promo"
-                        {...register("nome_promo")}
-                        onChange={(e) => {
-                          setTitoloPromo(e.target.value);
-                          handleInputChange("nome_promo", e.target.value);
-                        }}
-                      />
-                    </div>
-                    {errors.nome_promo && (
-                      <span className="text-danger">
-                        {errors.nome_promo.message}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex flex-col gap-y-2">
-                    <FormLabel htmlFor="data_scandenza_promo" className="flex items-center gap-2">
-                      <Lucide icon="Calendar" className="w-4 h-4 text-primary" />
-                      Data di scadenza
-                    </FormLabel>
-                    <div className="relative">
-                      <Litepicker
-                        value={dataScadenzaPromo}
-                        disabled={isLoadingContestoPerNuovaLavorazione}
-                        id="data_scandenza_promo"
-                        options={{
-                          format: "DD/MM/YYYY",
-                          lang: "it-IT",
-                          singleMode: true,
-                          dropdowns: {
-                            minYear: new Date().getFullYear() - 5,
-                            maxYear: new Date().getFullYear() + 5,
-                            months: true,
-                            years: true,
-                          },
-                        }}
-                        onChange={(e) => {
-                          setDataScadenzaPromo(e.target.value);
-                          setValue("data_scandenza_promo", e.target.value);
-                          handleInputChange(
-                            "data_scandenza_promo",
-                            e.target.value
-                          );
-                        }}
-                      />
-
-                    </div>
-                    {errors.data_scandenza_promo && (
-                      <span className="text-danger">
-                        {errors.data_scandenza_promo.message}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex flex-col gap-y-2">
-                    <FormLabel htmlFor="range_di_date" className="flex items-center gap-2">
-                      <Lucide icon="CalendarDays" className="w-4 h-4 text-primary" />
-                      Data di inizio e data di fine
-                    </FormLabel>
-                    <div className="relative">
-                      <Litepicker
-                        disabled={isLoadingContestoPerNuovaLavorazione}
-                        id="range_di_date"
-                        value={rangeDiDate}
-                        options={{
-                          buttonText: {
-                            apply: "Applica",
-                            cancel: "Annulla",
-                            reset: "Reset",
-                            previousMonth: "Previous",
-                            nextMonth: "Next",
-                          },
-                          mobileFriendly: true,
-                          autoApply: false,
-                          singleMode: false,
-                          numberOfColumns: 2,
-                          numberOfMonths: 2,
-                          showWeekNumbers: true,
-                          format: "DD/MM/YYYY",
-                          lang: "it-IT",
-                          dropdowns: {
-                            minYear: new Date().getFullYear() - 5,
-                            maxYear: new Date().getFullYear() + 5,
-                            months: true,
-                            years: true,
-                          },
-                        }}
-                        onChange={(e) => {
-                          setRangeDiDate(e.target.value);
-                          setValue("range_di_date", e.target.value);
-                          const [dataInizio, dataFine] =
-                            e.target.value.split(" - ");
-                          handleInputChange("data_inizio_promo", dataInizio);
-                          handleInputChange("data_fine_promo", dataFine);
-                        }}
-                      />
-                    </div>
-                    {errors.range_di_date && (
-                      <span className="text-danger">
-                        {errors.range_di_date.message}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex flex-col gap-y-2">
-                    <div className="flex align-middle items-start justify-between">
-                      <FormLabel htmlFor="offset_visibilita" className="flex items-center gap-2">
-                        <Lucide icon="Eye" className="w-4 h-4 text-primary" />
-                        Offset visibilità
-                      </FormLabel>
-                      <Tippy
-                        className="text-center"
-                        content={<p>Questi sono i giorni in cui i contenuti del WebPliant appaiono</p>}
-                        theme="light"
-                      >
-                        <Lucide icon="Info" className="w-3 h-3" />
-                      </Tippy>
-                    </div>
-                    <div className="relative">
-                      <FormInput
-                        autoComplete="off"
-                        disabled={isLoadingContestoPerNuovaLavorazione}
-                        type="number"
-                        min={1}
-                        id="offset_visibilita"
-                        {...register("offset_visibilita")}
-                        onChange={(e) => {
-                          setTitoloPromo(e.target.value);
-                          handleInputChange("offset_visibilita", e.target.value);
-                        }}
-                      />
-                    </div>
-                    {errors.offset_visibilita && (
-                      <span className="text-danger">
-                        {errors.offset_visibilita.message}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                {isLoadingContestoPerNuovaLavorazione ? (
-                  <div className="border rounded-[0.6rem] dark:border-darkmode-400 relative mt-10 mb-4 border-slate-200/80">
-                    <div className="absolute left-0 px-3 ml-4 -mt-2 text-xs uppercase bg-white text-slate-500">
-                      <div className="-mt-px">Specifiche di lavorazione</div>
-                    </div>
-                    <div className="px-5 py-2 mt-4 flex flex-col gap-3.5">
-                      <Skeleton height="40px" className="rounded-md" />
-                      <Skeleton height="40px" className="rounded-md" />
-                      <Skeleton height="40px" className="rounded-md" />
-                    </div>
-                  </div>
-                ) : (
-                  fields.length > 0 && (
-                    <div className="border rounded-[0.6rem] dark:border-darkmode-400 relative mt-10 mb-4 border-slate-200/80">
-                      <div className="absolute left-0 px-3 ml-4 -mt-2 text-xs uppercase bg-white text-slate-500">
-                        <div className="-mt-px">Specifiche di lavorazione</div>
-                      </div>
-                      <div className="px-5 py-2 mt-4">
-                        <ContestoLavorazioneFields
-                          context={fields as any}
-                          fieldValues={fieldValues}
-                          customLabelValue={customLabelValue}
-                          errors={(() => {
-                            const map: { [k: string]: string } = {};
-                            if (errors.context_lavorazione) {
-                              fields.forEach((field: any, index: number) => {
-                                const msg = (errors.context_lavorazione as any)?.[index]?.user_value?.message;
-                                if (msg) map[field.nome_field] = msg;
-                              });
-                            }
-                            return map;
-                          })()}
-                          maxCharCustomLabel={MAX_CHAR_CUSTOM_LABEL}
-                          onChange={handleInputChange}
-                          onCustomLabelChange={setCustomLabelValue}
-                        />
-                      </div>
-                    </div>
-                  )
-                )}
-                <VisibilitaPromoFields value={visibilita} onChange={setVisibilita} className="mt-10 mb-4" />
-              </div>
-              <div className="flex flex-col-reverse sm:flex-row flex-wrap items-center justify-end gap-3 mt-8 pt-6 border-t border-slate-200/80 dark:border-darkmode-400">
-                <Button
-                  disabled={isLoadingContestoPerNuovaLavorazione || inCreazione}
-                  variant={
-                    isLoadingContestoPerNuovaLavorazione || inCreazione
-                      ? "pending"
-                      : "primary"
-                  }
-                  type="submit"
-                  aria-busy={isLoadingContestoPerNuovaLavorazione || inCreazione}
-                >
-                  {isLoadingContestoPerNuovaLavorazione ? (
-                    <>
-                      <Lucide icon="Loader" className="w-4 h-4 mr-2 animate-spin" />
-                      <span>Caricamento dati...</span>
-                    </>
-                  ) : inCreazione ? (
-                    <>
-                      <Lucide icon="Loader" className="w-4 h-4 mr-2 animate-spin" />
-                      <span>Creazione in corso...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Lucide icon="Plus" className="w-4 h-4 mr-2" />
-                      <span>Crea Promozione</span>
-                    </>
-                  )}
-                </Button>
-              </div>
-            </div>
+      <Pagina titolo="Nuova promozione" descrizione="Crea una nuova lavorazione per inserire i tracciati">
+        <Sezione titolo="Dati della promozione" descrizione="Titolo, scadenza e periodo di validità">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <FormField etichetta="Titolo promo" errore={errors.nome_promo?.message}>
+              <FormInput
+                disabled={isLoadingContestoPerNuovaLavorazione}
+                autoComplete="off"
+                id="nome_promo"
+                {...register("nome_promo")}
+                onChange={(e) => {
+                  setTitoloPromo(e.target.value);
+                  handleInputChange("nome_promo", e.target.value);
+                }}
+              />
+            </FormField>
+            <FormField etichetta="Data di scadenza" errore={errors.data_scandenza_promo?.message}>
+              <Litepicker
+                value={dataScadenzaPromo}
+                disabled={isLoadingContestoPerNuovaLavorazione}
+                id="data_scandenza_promo"
+                options={{
+                  format: "DD/MM/YYYY",
+                  lang: "it-IT",
+                  singleMode: true,
+                  dropdowns: {
+                    minYear: new Date().getFullYear() - 5,
+                    maxYear: new Date().getFullYear() + 5,
+                    months: true,
+                    years: true,
+                  },
+                }}
+                onChange={(e) => {
+                  setDataScadenzaPromo(e.target.value);
+                  setValue("data_scandenza_promo", e.target.value);
+                  handleInputChange("data_scandenza_promo", e.target.value);
+                }}
+              />
+            </FormField>
+            <FormField etichetta="Data di inizio e data di fine" errore={errors.range_di_date?.message}>
+              <Litepicker
+                disabled={isLoadingContestoPerNuovaLavorazione}
+                id="range_di_date"
+                value={rangeDiDate}
+                options={{
+                  buttonText: {
+                    apply: "Applica",
+                    cancel: "Annulla",
+                    reset: "Reset",
+                    previousMonth: "Previous",
+                    nextMonth: "Next",
+                  },
+                  mobileFriendly: true,
+                  autoApply: false,
+                  singleMode: false,
+                  numberOfColumns: 2,
+                  numberOfMonths: 2,
+                  showWeekNumbers: true,
+                  format: "DD/MM/YYYY",
+                  lang: "it-IT",
+                  dropdowns: {
+                    minYear: new Date().getFullYear() - 5,
+                    maxYear: new Date().getFullYear() + 5,
+                    months: true,
+                    years: true,
+                  },
+                }}
+                onChange={(e) => {
+                  setRangeDiDate(e.target.value);
+                  setValue("range_di_date", e.target.value);
+                  const [dataInizio, dataFine] = e.target.value.split(" - ");
+                  handleInputChange("data_inizio_promo", dataInizio);
+                  handleInputChange("data_fine_promo", dataFine);
+                }}
+              />
+            </FormField>
+            <FormField
+              etichetta="Offset visibilità"
+              aiuto="Giorni in cui i contenuti del WebPliant appaiono"
+              errore={errors.offset_visibilita?.message}
+            >
+              <FormInput
+                autoComplete="off"
+                disabled={isLoadingContestoPerNuovaLavorazione}
+                type="number"
+                min={1}
+                id="offset_visibilita"
+                {...register("offset_visibilita")}
+                onChange={(e) => {
+                  setTitoloPromo(e.target.value);
+                  handleInputChange("offset_visibilita", e.target.value);
+                }}
+              />
+            </FormField>
           </div>
-        </div>
-      </div>
+
+          {(isLoadingContestoPerNuovaLavorazione || fields.length > 0) && (
+            <SpecificheLavorazione caricamento={isLoadingContestoPerNuovaLavorazione} className="mt-8">
+              <ContestoLavorazioneFields
+                context={fields as any}
+                fieldValues={fieldValues}
+                customLabelValue={customLabelValue}
+                errors={(() => {
+                  const map: { [k: string]: string } = {};
+                  if (errors.context_lavorazione) {
+                    fields.forEach((field: any, index: number) => {
+                      const msg = (errors.context_lavorazione as any)?.[index]?.user_value?.message;
+                      if (msg) map[field.nome_field] = msg;
+                    });
+                  }
+                  return map;
+                })()}
+                maxCharCustomLabel={MAX_CHAR_CUSTOM_LABEL}
+                onChange={handleInputChange}
+                onCustomLabelChange={setCustomLabelValue}
+              />
+            </SpecificheLavorazione>
+          )}
+          <VisibilitaPromoFields value={visibilita} onChange={setVisibilita} className="mt-8" />
+
+          <div className="mt-8 flex justify-end border-t border-slate-200 pt-5 dark:border-darkmode-400">
+            <Button
+              variant="primary"
+              type="submit"
+              disabled={occupato}
+              loading={occupato}
+            >
+              {isLoadingContestoPerNuovaLavorazione ? (
+                "Caricamento dati…"
+              ) : inCreazione ? (
+                "Creazione in corso…"
+              ) : (
+                <>
+                  <Lucide icon="Plus" aria-hidden="true" className="mr-2 h-4 w-4" />
+                  Crea promozione
+                </>
+              )}
+            </Button>
+          </div>
+        </Sezione>
+      </Pagina>
     </form>
   );
 }

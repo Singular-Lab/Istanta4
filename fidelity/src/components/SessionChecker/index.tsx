@@ -461,29 +461,28 @@ const SessionCheckWrapper: React.FC<SessionCheckWrapperProps> = ({ WrappedCompon
           staticBackdrop={true}
         >
           <Dialog.Panel>
-            <div className="p-5 text-center">
-              <Lucide icon="TriangleAlert" className="w-16 h-16 mx-auto mt-3 text-warning" />
-              <div className="mt-5 text-3xl">Oops...</div>
+            <Dialog.Title>
+              <Lucide icon="TriangleAlert" aria-hidden="true" className="h-5 w-5 text-warning" />
+              Sessione scaduta
+            </Dialog.Title>
+            <Dialog.Description className="text-slate-500">
               {isIstantaRequired ? (
-                <div className="mt-2 text-slate-500">
+                <>
                   La tua sessione è scaduta. Per accedere nuovamente è necessario effettuare il login tramite <strong>Istanta</strong>.
-                </div>
+                </>
               ) : (
-                <div className="mt-2 text-slate-500">
-                  La tua sessione è scaduta. Per favore effettua nuovamente il login.
-                </div>
+                <>La tua sessione è scaduta. Per favore effettua nuovamente il login.</>
               )}
-            </div>
-            <div className="px-5 pb-8 text-center">
+            </Dialog.Description>
+            <Dialog.Footer>
               <Button
                 type="button"
                 variant="primary"
                 onClick={handleLoginRedirect}
-                className="w-32"
               >
                 {isIstantaRequired ? 'Vai al login' : 'Torna al login'}
               </Button>
-            </div>
+            </Dialog.Footer>
           </Dialog.Panel>
         </Dialog>
       </>

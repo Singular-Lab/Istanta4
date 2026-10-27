@@ -1,4 +1,6 @@
 import Button from "@/components/Base/Button";
+import Lucide from "@/components/Base/Lucide";
+import SchermataStato from "@/components/SchermataStato";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useDispatch, useSelector } from "react-redux";
@@ -18,65 +20,39 @@ export default function NotFoundPage() {
     }, [dispatch, startPage]);
 
     return (
-        <div className="box box--stacked min-h-[calc(100vh-12rem)] bg-gradient-to-b from-slate-50 to-white flex items-center justify-center px-6">
-            <div className="w-full max-w-lg text-center space-y-8">
-
-                {/* Badge 404 */}
-                <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-card
-                        bg-primary/10 text-primary text-4xl font-bold shadow-inner">
-                    404
-                </div>
-
-                {/* Testo */}
-                <div className="space-y-3">
-                    <h1 className="title-page text-slate-900">
-                        {t("errors.not_found_title", {
-                            defaultValue: "Pagina non trovata",
-                        })}
-                    </h1>
-
-                    <p className="text-slate-500 leading-relaxed">
-                        {t("errors.not_found", {
-                            defaultValue:
-                                "La risorsa richiesta non è disponibile. Potrebbe essere stata rimossa, rinominata oppure non hai i permessi necessari per visualizzarla.",
-                        })}
-                    </p>
-                </div>
-
-                {/* Divider soft */}
-                <div className="h-px w-full bg-gradient-to-r from-transparent via-slate-200 to-transparent" />
-
-                {/* Azioni */}
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+        <SchermataStato
+            simbolo={<span aria-hidden="true" className="text-4xl font-bold">404</span>}
+            titolo={t("errors.not_found_title", { defaultValue: "Pagina non trovata" })}
+            descrizione={t("errors.not_found", {
+                defaultValue:
+                    "La risorsa richiesta non è disponibile. Potrebbe essere stata rimossa, rinominata oppure non hai i permessi necessari per visualizzarla.",
+            })}
+            azioni={
+                <>
                     <Button
                         type="button"
                         variant="outline-secondary"
                         rounded
                         onClick={() => window.history.back()}
-                        className="w-full sm:w-auto px-5 py-2.5"
+                        className="w-full px-5 py-2.5 sm:w-auto"
                     >
                         {t("actions.go_back", { defaultValue: "Torna indietro" })}
                     </Button>
-
                     <Button
                         as={Link}
                         to={startPage || "/"}
                         variant="primary"
                         rounded
-                        className="w-full sm:w-auto px-5 py-2.5"
+                        className="w-full px-5 py-2.5 sm:w-auto"
                     >
+                        <Lucide icon="House" aria-hidden="true" className="mr-2 h-4 w-4" />
                         {t("actions.go_first_page")}
                     </Button>
-                </div>
-
-                {/* Hint contestuale */}
-                <p className="text-xs text-slate-400">
-                    {t("errors.not_found_hint", {
-                        defaultValue:
-                            "Se pensi si tratti di un errore, contatta l’amministratore o verifica l’URL.",
-                    })}
-                </p>
-            </div>
-        </div>
+                </>
+            }
+            nota={t("errors.not_found_hint", {
+                defaultValue: "Se pensi si tratti di un errore, contatta l’amministratore o verifica l’URL.",
+            })}
+        />
     );
 }

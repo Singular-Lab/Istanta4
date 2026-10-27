@@ -35,6 +35,7 @@ function getGreeting(t: TFunction<"translation", undefined>): string {
   return t("Buonasera");
 }
 
+// Data estesa con il giorno della settimana: utils/format non ha un equivalente
 function getFormattedDate(): string {
   return new Date().toLocaleDateString('it-IT', {
     weekday: 'long',
@@ -75,27 +76,27 @@ const UserWelcome: React.FC<UserWelcomeProps> = ({ email, tipoUtente, servicesCo
   const formattedDate = getFormattedDate();
 
   return (
-    <div className="relative overflow-hidden bg-gradient-to-br from-theme-1 via-theme-1 to-theme-2 text-white rounded-xl p-6 sm:p-8 shadow-xl animate-fade-in-up">
-      <div className="absolute top-0 right-0 w-64 h-64 rounded-full bg-white/5 -translate-y-1/2 translate-x-1/4" />
-      <div className="absolute bottom-0 left-0 w-40 h-40 rounded-full bg-white/5 translate-y-1/2 -translate-x-1/4" />
+    <div className="relative overflow-hidden bg-gradient-to-br from-theme-1 via-theme-1 to-theme-2 text-white rounded-card p-6 sm:p-8 shadow-card animate-fade-in-up">
+      <div aria-hidden="true" className="absolute top-0 right-0 w-64 h-64 rounded-full bg-white/5 -translate-y-1/2 translate-x-1/4" />
+      <div aria-hidden="true" className="absolute bottom-0 left-0 w-40 h-40 rounded-full bg-white/5 translate-y-1/2 -translate-x-1/4" />
 
       <div className="relative z-10">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-xl bg-white/15 backdrop-blur-sm flex items-center justify-center shrink-0 shadow-inner overflow-hidden">
+            <div className="w-14 h-14 rounded-card bg-white/15 backdrop-blur-sm flex items-center justify-center shrink-0 shadow-inner overflow-hidden">
               {photo ? (
                 <img
                   src={`data:image/jpeg;base64,${photo}`}
                   alt="User"
-                  className="w-full h-full object-cover rounded-xl"
+                  className="w-full h-full object-cover rounded-card"
                   draggable={false}
                 />
               ) : (
-                <Lucide icon="User" className="w-7 h-7" />
+                <Lucide icon="User" aria-hidden="true" className="w-7 h-7" />
               )}
             </div>
             <div>
-              <h2 className="font-urbanist text-xl sm:text-3xl font-bold">
+              <h2 className="title-page text-white">
                 {greeting}
               </h2>
               <div className="flex flex-wrap items-center gap-2 mt-1">
@@ -119,7 +120,7 @@ const UserWelcome: React.FC<UserWelcomeProps> = ({ email, tipoUtente, servicesCo
             className="border-white/30 text-white hover:bg-white/10 shrink-0 self-start sm:self-center"
             onClick={handleLogout}
           >
-            <Lucide icon="LogOut" className="w-4 h-4 mr-2" />
+            <Lucide icon="LogOut" aria-hidden="true" className="w-4 h-4 mr-2" />
             Esci
           </Button>
         </div>
@@ -127,12 +128,12 @@ const UserWelcome: React.FC<UserWelcomeProps> = ({ email, tipoUtente, servicesCo
         {/* Info bar */}
         <div className="mt-5 pt-4 border-t border-white/10 flex flex-wrap items-center gap-4 sm:gap-6 text-sm text-white/70">
           <div className="flex items-center gap-1.5">
-            <Lucide icon="Calendar" className="w-3.5 h-3.5" />
+            <Lucide icon="Calendar" aria-hidden="true" className="w-3.5 h-3.5" />
             <span className="capitalize">{formattedDate}</span>
           </div>
           {servicesCount !== undefined && (
             <div className="flex items-center gap-1.5">
-              <Lucide icon="LayoutGrid" className="w-3.5 h-3.5" />
+              <Lucide icon="LayoutGrid" aria-hidden="true" className="w-3.5 h-3.5" />
               <span>{servicesCount} {servicesCount === 1 ? 'servizio disponibile' : 'servizi disponibili'}</span>
             </div>
           )}

@@ -1,22 +1,33 @@
+import BarraFiltri from "@/components/Base/BarraFiltri";
 import Button from "@/components/Base/Button";
+import CampoRicerca from "@/components/Base/CampoRicerca";
 import Lucide from "@/components/Base/Lucide";
+import PaginazioneTabella from "@/components/Base/PaginazioneTabella";
+import Segmenti, { type OpzioneSegmento } from "@/components/Base/Segmenti";
+import Sezione from "@/components/Base/Sezione";
+import StatCard, { StatCardGrid } from "@/components/Base/StatCard";
 import StatusBadge from "@/components/Base/StatusBadge";
 import Table from "@/components/Base/Table";
 import EmptyState from "@/components/EmptyState";
 import { descriviStato } from "@/constants/stati";
 import { formatData } from "@/utils/format";
 import dayjs from "dayjs";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { OrdiniDiStampaResponseDTO } from "../../../../server/core/dto";
 
 interface ODSInCorsoSectionProps {
   ordini: (OrdiniDiStampaResponseDTO & { nomePromo: string })[];
   searchQuery: string;
+  onSearchQueryChange: (query: string) => void;
   onRevisioneClick: (ordineId: string) => void;
 }
 
 type SortField = 'data' | 'promozione' | 'anzianita' | 'stato';
 type SortDirection = 'asc' | 'desc';
+
+const COLONNE = 5;
+// Oltre questa attesa l'ordine è in ritardo (KPI e badge di riga)
+const GIORNI_RITARDO = 30;
 
 const etichettaStato = (stato: string) => descriviStato("ordineStampa", stato).etichetta;
 
@@ -33,34 +44,30 @@ interface SortableHeaderProps {
 }
 
 // Fuori dal componente: ridefinito a ogni render, il pulsante perderebbe il focus dopo l'ordinamento
-const SortableHeader = ({ field, sortField, sortDirection, onSort, children }: SortableHeaderProps) => (
-  <button
-    type="button"
-    onClick={() => onSort(field)}
-    className="flex items-center gap-2 font-medium cursor-pointer hover:text-slate-900 select-none group rounded-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40"
-  >
-    {children}
-    <span aria-hidden="true" className="flex flex-col">
-      <Lucide
-        icon="ChevronUp"
-        className={`w-3 h-3 -mb-1 transition-colors ${
-          sortField === field && sortDirection === 'asc' ? 'text-slate-800' : 'text-slate-400 group-hover:text-slate-600'
-        }`}
-      />
-      <Lucide
-        icon="ChevronDown"
-        className={`w-3 h-3 -mt-1 transition-colors ${
-          sortField === field && sortDirection === 'desc' ? 'text-slate-800' : 'text-slate-400 group-hover:text-slate-600'
-        }`}
-      />
-    </span>
-  </button>
-);
+const SortableHeader = ({ field, sortField, sortDirection, onSort, children }: SortableHeaderProps) => {
+  const attiva = sortField === field;
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(field)}
+      className={`inline-flex select-none items-center gap-1 uppercase hover:text-slate-800 rounded-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40 ${
+        attiva ? 'text-slate-700' : ''
+      }`}
+    >
+      {children}
+      {attiva && (
+        <Lucide icon={sortDirection === 'asc' ? 'ArrowUp' : 'ArrowDown'} aria-hidden="true" className="h-3 w-3" />
+      )}
+    </button>
+  );
+};
 
-const ODSInCorsoSection: React.FC<ODSInCorsoSectionProps> = ({ ordini, searchQuery, onRevisioneClick }) => {
+const ODSInCorsoSection: React.FC<ODSInCorsoSectionProps> = ({ ordini, searchQuery, onSearchQueryChange, onRevisioneClick }) => {
   const [sortField, setSortField] = useState<SortField>('anzianita');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [statoFilter, setStatoFilter] = useState<string>('all');
+  const [pagina, setPagina] = useState(1);
+  const [righePerPagina, setRighePerPagina] = useState(25);
 
   // Calculate days in waiting for each order
   const ordiniWithMetrics = useMemo(() => {
@@ -75,7 +82,7 @@ const ODSInCorsoSection: React.FC<ODSInCorsoSectionProps> = ({ ordini, searchQue
   // Calculate KPIs
   const kpis = useMemo(() => {
     const total = ordiniWithMetrics.length;
-    const overdue = ordiniWithMetrics.filter(o => o.daysInWaiting > 30).length;
+    const overdue = ordiniWithMetrics.filter(o => o.daysInWaiting > GIORNI_RITARDO).length;
     const avgWaitingTime = total > 0
       ? Math.round(ordiniWithMetrics.reduce((sum, o) => sum + o.daysInWaiting, 0) / total)
       : 0;
@@ -91,6 +98,18 @@ const ODSInCorsoSection: React.FC<ODSInCorsoSectionProps> = ({ ordini, searchQue
     const states = new Set(ordiniWithMetrics.map(o => o.stato));
     return Array.from(states);
   }, [ordiniWithMetrics]);
+
+  const opzioniStato = useMemo<OpzioneSegmento<string>[]>(
+    () => [
+      { valore: 'all', etichetta: 'Tutti', conteggio: kpis.total },
+      ...availableStates.map(stato => ({
+        valore: stato,
+        etichetta: etichettaStato(stato),
+        conteggio: ordiniWithMetrics.filter(o => o.stato === stato).length,
+      })),
+    ],
+    [availableStates, ordiniWithMetrics, kpis.total]
+  );
 
   const filteredOrdini = useMemo(() => {
     let result = ordiniWithMetrics;
@@ -133,6 +152,11 @@ const ODSInCorsoSection: React.FC<ODSInCorsoSectionProps> = ({ ordini, searchQue
     return result;
   }, [ordiniWithMetrics, searchQuery, statoFilter, sortField, sortDirection]);
 
+  // Una nuova ricerca o un altro filtro ripartono dalla prima pagina
+  useEffect(() => setPagina(1), [searchQuery, statoFilter]);
+
+  const ordiniInPagina = filteredOrdini.slice((pagina - 1) * righePerPagina, pagina * righePerPagina);
+
   const handleSort = (field: SortField) => {
     if (sortField === field) {
       setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
@@ -142,205 +166,97 @@ const ODSInCorsoSection: React.FC<ODSInCorsoSectionProps> = ({ ordini, searchQue
     }
   };
 
-  const getUrgencyBadge = (daysInWaiting: number) => {
-    if (daysInWaiting > 180) {
-      return { text: `Da ${Math.floor(daysInWaiting / 30)} mesi`, icon: 'TriangleAlert' };
-    } else if (daysInWaiting > 30) {
-      return { text: `Da ${daysInWaiting} giorni`, icon: 'Clock' };
-    }
-    return null;
-  };
+  const intestazione = (field: SortField, etichetta: string) => (
+    <Table.Th aria-sort={ariaSort(field, sortField, sortDirection)}>
+      <SortableHeader field={field} sortField={sortField} sortDirection={sortDirection} onSort={handleSort}>
+        {etichetta}
+      </SortableHeader>
+    </Table.Th>
+  );
+
+  const filtriAttivi = Boolean(searchQuery) || statoFilter !== 'all';
 
   return (
-    <div>
-      <div className="flex flex-col box box--stacked shadow-sm">
-        {/* KPI Dashboard Header */}
-        <div className="p-6 border-b border-slate-200/60 bg-slate-50/30">
-          <div className="flex items-start justify-between mb-4">
-            <div>
-              <h3 className="title-section mb-1">Ordini in corso</h3>
-              <p className="text-sm text-slate-600">Monitoraggio ordini di stampa in lavorazione</p>
-            </div>
-          </div>
+    <>
+      <StatCardGrid>
+        <StatCard densita="compatta" etichetta="Ordini in corso" valore={kpis.total} icona="Layers" tono="brand" />
+        <StatCard
+          densita="compatta"
+          etichetta="In ritardo"
+          valore={kpis.overdue}
+          icona="TriangleAlert"
+          tono="danger"
+          evidenzia={kpis.overdue > 0}
+        />
+        <StatCard densita="compatta" etichetta="Attesa media" valore={`${kpis.avgWaitingTime} gg`} icona="Clock" tono="neutral" />
+        <StatCard densita="compatta" etichetta="Attesa massima" valore={`${kpis.longestWaiting} gg`} icona="Timer" tono="warning" />
+      </StatCardGrid>
 
-          {/* KPI Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Total Orders */}
-            <div className="flex items-center gap-3 p-4 bg-white rounded-lg border border-slate-200">
-              <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-slate-100">
-                <Lucide icon="Layers" className="w-5 h-5 text-slate-600" />
-              </div>
-              <div>
-                <p className="text-xs text-slate-600 uppercase">Totale</p>
-                <p className="text-2xl font-bold text-slate-900">{kpis.total}</p>
-              </div>
-            </div>
+      <Sezione senzaPadding titolo="Ordini in corso" descrizione="Ordini di stampa in lavorazione, dal più vecchio">
+        <BarraFiltri
+          destra={
+            availableStates.length > 1 && (
+              <Segmenti etichetta="Stato" valore={statoFilter} onChange={setStatoFilter} opzioni={opzioniStato} />
+            )
+          }
+        >
+          <CampoRicerca
+            etichetta="Cerca ordini"
+            placeholder="Nome della promozione"
+            value={searchQuery}
+            onChange={onSearchQueryChange}
+          />
+        </BarraFiltri>
 
-            {/* Overdue Orders */}
-            <div className="flex items-center gap-3 p-4 bg-white rounded-lg border border-slate-200">
-              <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-slate-100">
-                <Lucide icon="TriangleAlert" className="w-5 h-5 text-red-600" />
-              </div>
-              <div>
-                <p className="text-xs text-slate-600 uppercase">In Ritardo</p>
-                <p className="text-2xl font-bold text-slate-900">{kpis.overdue}</p>
-              </div>
-            </div>
-
-            {/* Average Waiting Time */}
-            <div className="flex items-center gap-3 p-4 bg-white rounded-lg border border-slate-200">
-              <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-slate-100">
-                <Lucide icon="Clock" className="w-5 h-5 text-slate-600" />
-              </div>
-              <div>
-                <p className="text-xs text-slate-600 uppercase">Media Attesa</p>
-                <p className="text-2xl font-bold text-slate-900">{kpis.avgWaitingTime}<span className="text-sm text-slate-600 ml-1">gg</span></p>
-              </div>
-            </div>
-
-            {/* Longest Waiting */}
-            <div className="flex items-center gap-3 p-4 bg-white rounded-lg border border-slate-200">
-              <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-slate-100">
-                <Lucide icon="Timer" className="w-5 h-5 text-amber-600" />
-              </div>
-              <div>
-                <p className="text-xs text-slate-600 uppercase">Max Attesa</p>
-                <p className="text-2xl font-bold text-slate-900">{kpis.longestWaiting}<span className="text-sm text-slate-600 ml-1">gg</span></p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* State Filters */}
-        {availableStates.length > 1 && (
-          <div className="px-6 py-4 border-b border-slate-200/60 bg-slate-50/30">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm font-medium text-slate-700 mr-2">Filtra per stato:</span>
-              <button
-                type="button"
-                aria-pressed={statoFilter === 'all'}
-                onClick={() => setStatoFilter('all')}
-                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
-                  statoFilter === 'all'
-                    ? 'bg-slate-800 text-white'
-                    : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50'
-                }`}
-              >
-                Tutti ({kpis.total})
-              </button>
-              {availableStates.map(stato => {
-                const count = ordiniWithMetrics.filter(o => o.stato === stato).length;
-                return (
-                  <button
-                    key={stato}
-                    type="button"
-                    aria-pressed={statoFilter === stato}
-                    onClick={() => setStatoFilter(stato)}
-                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
-                      statoFilter === stato
-                        ? 'bg-slate-800 text-white'
-                        : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50'
-                    }`}
-                  >
-                    {etichettaStato(stato)} ({count})
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        <div className="overflow-auto xl:overflow-visible">
+        <div className="overflow-x-auto">
           <Table>
             <Table.Thead>
               <Table.Tr>
-                <Table.Th aria-sort={ariaSort('promozione', sortField, sortDirection)} className="py-4 font-medium border-t border-b bg-slate-50/80 border-slate-200/60 text-slate-700">
-                  <SortableHeader field="promozione" sortField={sortField} sortDirection={sortDirection} onSort={handleSort}>
-                    <Lucide icon="Tag" aria-hidden="true" className="w-4 h-4" />
-                    Promozione
-                  </SortableHeader>
-                </Table.Th>
-                <Table.Th aria-sort={ariaSort('stato', sortField, sortDirection)} className="py-4 font-medium border-t border-b bg-slate-50/80 border-slate-200/60 text-slate-700">
-                  <SortableHeader field="stato" sortField={sortField} sortDirection={sortDirection} onSort={handleSort}>
-                    <Lucide icon="Activity" aria-hidden="true" className="w-4 h-4" />
-                    Stato
-                  </SortableHeader>
-                </Table.Th>
-                <Table.Th aria-sort={ariaSort('data', sortField, sortDirection)} className="py-4 font-medium border-t border-b bg-slate-50/80 border-slate-200/60 text-slate-700">
-                  <SortableHeader field="data" sortField={sortField} sortDirection={sortDirection} onSort={handleSort}>
-                    <Lucide icon="Calendar" aria-hidden="true" className="w-4 h-4" />
-                    Data Conferma
-                  </SortableHeader>
-                </Table.Th>
-                <Table.Th aria-sort={ariaSort('anzianita', sortField, sortDirection)} className="py-4 font-medium border-t border-b bg-slate-50/80 border-slate-200/60 text-slate-700">
-                  <SortableHeader field="anzianita" sortField={sortField} sortDirection={sortDirection} onSort={handleSort}>
-                    <Lucide icon="Timer" aria-hidden="true" className="w-4 h-4" />
-                    Giorni Attesa
-                  </SortableHeader>
-                </Table.Th>
-                <Table.Th className="py-4 font-medium text-center border-t border-b bg-slate-50/80 border-slate-200/60 text-slate-700">
-                  Azioni
+                {intestazione('promozione', 'Promozione')}
+                {intestazione('stato', 'Stato')}
+                {intestazione('data', 'Data conferma')}
+                {intestazione('anzianita', 'Giorni di attesa')}
+                <Table.Th className="text-right">
+                  <span className="sr-only">Azioni</span>
                 </Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {filteredOrdini && filteredOrdini.length > 0 ? (
-                filteredOrdini.map((ordine, index) => {
-                  const urgencyBadge = getUrgencyBadge(ordine.daysInWaiting);
-
-                  return (
-                    <Table.Tr
-                      key={ordine.id}
-                      className={`[&_td]:last:border-b-0 hover:bg-slate-50 transition-colors ${
-                        index % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'
-                      }`}
-                    >
-                      <Table.Td className="py-3.5 border-dashed dark:bg-darkmode-600">
-                        <div className="font-medium text-slate-800">{ordine.nomePromo}</div>
-                      </Table.Td>
-                      <Table.Td className="py-3.5 border-dashed dark:bg-darkmode-600">
-                        <StatusBadge dominio="ordineStampa" stato={ordine.stato} />
-                      </Table.Td>
-                      <Table.Td className="py-3.5 border-dashed dark:bg-darkmode-600">
-                        {ordine.data_di_conferma ? (
-                          <div className="text-sm text-slate-700">
-                            {formatData(ordine.data_di_conferma)}
-                          </div>
-                        ) : (
-                          <span className="text-sm text-slate-500 italic">In attesa</span>
-                        )}
-                      </Table.Td>
-                      <Table.Td className="py-3.5 border-dashed dark:bg-darkmode-600">
-                        <div className="flex items-center gap-2">
-                          <span className="text-base font-semibold text-slate-900">{ordine.daysInWaiting}</span>
-                          <span className="text-sm text-slate-600">giorni</span>
-                          {urgencyBadge && (
-                            <div className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-danger bg-danger/10 rounded border border-danger/20">
-                              <Lucide icon={urgencyBadge.icon as any} aria-hidden="true" className="w-3 h-3" />
-                              {urgencyBadge.text}
-                            </div>
-                          )}
-                        </div>
-                      </Table.Td>
-                      <Table.Td className="py-3.5 border-dashed relative text-center dark:bg-darkmode-600">
-                        <Button
-                          variant="outline-secondary"
-                          size="sm"
-                          onClick={() => onRevisioneClick(ordine.id)}
-                        >
-                          <Lucide icon="Eye" aria-hidden="true" className="w-4 h-4 mr-2" />
-                          Revisiona
-                        </Button>
-                      </Table.Td>
-                    </Table.Tr>
-                  );
-                })
+              {ordiniInPagina.length > 0 ? (
+                ordiniInPagina.map((ordine) => (
+                  <Table.Tr key={ordine.id}>
+                    <Table.Td className="font-medium text-slate-800">{ordine.nomePromo}</Table.Td>
+                    <Table.Td>
+                      <StatusBadge dominio="ordineStampa" stato={ordine.stato} />
+                    </Table.Td>
+                    <Table.Td className="whitespace-nowrap tabular-nums text-slate-600">
+                      {ordine.data_di_conferma ? (
+                        formatData(ordine.data_di_conferma)
+                      ) : (
+                        <span className="text-slate-400">In attesa</span>
+                      )}
+                    </Table.Td>
+                    <Table.Td>
+                      <div className="flex items-center gap-2 whitespace-nowrap">
+                        <span className="font-semibold tabular-nums text-slate-800">{ordine.daysInWaiting} gg</span>
+                        {ordine.daysInWaiting > GIORNI_RITARDO && <StatusBadge tono="danger" etichetta="In ritardo" />}
+                      </div>
+                    </Table.Td>
+                    <Table.Td className="text-right">
+                      <Button type="button" variant="outline-secondary" size="sm" onClick={() => onRevisioneClick(ordine.id)}>
+                        Revisiona
+                        <Lucide icon="ArrowRight" aria-hidden="true" className="ml-1.5 h-3.5 w-3.5" />
+                      </Button>
+                    </Table.Td>
+                  </Table.Tr>
+                ))
               ) : (
                 <Table.Tr>
-                  <Table.Td colSpan={5} className="py-16 text-center bg-slate-50/30">
+                  <Table.Td colSpan={COLONNE} className="p-0">
                     <EmptyState
-                      icon={searchQuery || statoFilter !== 'all' ? "Search" : "Truck"}
-                      title={searchQuery || statoFilter !== 'all' ? "Nessun risultato trovato" : "Nessun ordine in corso"}
+                      compatta
+                      icon={filtriAttivi ? "Search" : "Truck"}
+                      title={filtriAttivi ? "Nessun risultato trovato" : "Nessun ordine in corso"}
                       description={
                         searchQuery
                           ? `Nessun ordine trovato per "${searchQuery}"`
@@ -355,8 +271,16 @@ const ODSInCorsoSection: React.FC<ODSInCorsoSectionProps> = ({ ordini, searchQue
             </Table.Tbody>
           </Table>
         </div>
-      </div>
-    </div>
+
+        <PaginazioneTabella
+          totale={filteredOrdini.length}
+          pagina={pagina}
+          dimensionePagina={righePerPagina}
+          onCambiaPagina={setPagina}
+          onCambiaDimensione={setRighePerPagina}
+        />
+      </Sezione>
+    </>
   );
 };
 

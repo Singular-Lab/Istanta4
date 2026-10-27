@@ -5,7 +5,7 @@ import { DndProvider, DragSourceMonitor, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import Button from '../Base/Button';
 import { FormInput, InputGroup } from '../Base/Form';
-import LoadingIcon from '../Base/LoadingIcon';
+import Spinner from '../Base/Spinner';
 import Lucide from '../Base/Lucide';
 
 interface Option {
@@ -124,15 +124,15 @@ const NamingConvention = forwardRef<NamingConventionRef | undefined, NamingConve
       <div
         ref={ref}
         className={clsx(
-          'flex items-center px-2 py-1 bg-blue-50 border border-blue-200 rounded cursor-move text-sm',
+          'flex items-center px-2 py-1 bg-primary/5 border border-primary/20 rounded-control cursor-move text-sm',
           { 'opacity-50': isDragging }
         )}
       >
-        <Lucide icon="Move" className="w-3 h-3 mr-1 text-blue-500" />
-        <span className="flex-1 text-gray-800">{option.nome}</span>
+        <Lucide icon="Move" aria-hidden="true" className="w-3 h-3 mr-1 text-primary" />
+        <span className="flex-1 text-slate-800">{option.nome}</span>
         <Button
           size="sm"
-          variant="danger"
+          variant="outline-danger"
           onClick={(e: React.MouseEvent) => {
             e.preventDefault();
             handleRemoveOption(index);
@@ -150,18 +150,18 @@ const NamingConvention = forwardRef<NamingConventionRef | undefined, NamingConve
     <div className="space-y-2">
       {/* Anteprima Nome File */}
       <div className="px-4 py-3">
-        <h2 className="text-lg font-semibold text-gray-800">Anteprima Nome File</h2>
+        <h2 className="title-card">Anteprima nome file</h2>
         <div className="mt-2">
-          <div className="bg-gray-50 border border-gray-200 rounded px-2 py-1 text-sm text-gray-700">
+          <div className="bg-slate-50 border border-slate-200 rounded-control px-2 py-1 text-sm text-slate-700">
             {selectedOptions.length > 0 ? (
               selectedOptions.map((option, index) => (
                 <span key={index}>
                   {option.nome}
-                  {index < selectedOptions.length - 1 && <span className="text-red-500">{separator}</span>}
+                  {index < selectedOptions.length - 1 && <span className="text-danger">{separator}</span>}
                 </span>
               ))
             ) : (
-              <span className="text-gray-400">Nessuna opzione selezionata</span>
+              <span className="text-slate-400">Nessuna opzione selezionata</span>
             )}
           </div>
         </div>
@@ -171,22 +171,22 @@ const NamingConvention = forwardRef<NamingConventionRef | undefined, NamingConve
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Opzioni Disponibili */}
         <div className="px-4 py-3">
-          <h2 className="text-lg font-semibold text-gray-800">Campi Disponibili</h2>
-          <p className="text-gray-600 text-sm mt-1">Seleziona i campi da includere nel nome del file.</p>
+          <h2 className="title-card">Campi disponibili</h2>
+          <p className="text-slate-600 text-sm mt-1">Seleziona i campi da includere nel nome del file.</p>
           <div className="mt-2 space-y-1">
             {availableOptions == undefined && (
-              <LoadingIcon icon="circles" className="w-6 h-6 text-gray-500 mx-auto" />
+              <div className="flex justify-center py-2"><Spinner etichetta="Caricamento campi disponibili" /></div>
             )}
             {availableOptions.length > 0 ? (
               availableOptions.map((option, index) => (
                 <div
                   key={index}
-                  className="flex items-center px-2 py-1 bg-gray-50 border border-gray-200 rounded text-sm"
+                  className="flex items-center px-2 py-1 bg-slate-50 border border-slate-200 rounded-control text-sm"
                 >
-                  <Lucide icon="CirclePlus" className="w-4 h-4 text-green-500 mr-1" />
-                  <span className="flex-1 text-gray-800">{option.nomeVisual}</span>
+                  <Lucide icon="CirclePlus" aria-hidden="true" className="w-4 h-4 text-success mr-1" />
+                  <span className="flex-1 text-slate-800">{option.nomeVisual}</span>
                   {/* <Tippy content={option.descrizione}>
-                    <Lucide icon="Info" className="w-3 h-3 text-gray-500 mr-1" />
+                    <Lucide icon="Info" className="w-3 h-3 text-slate-500 mr-1" />
                   </Tippy> */}
                   <Button
                     size="sm"
@@ -202,13 +202,13 @@ const NamingConvention = forwardRef<NamingConventionRef | undefined, NamingConve
                 </div>
               ))
             ) : (
-              <p className="text-gray-500 text-sm">Tutte le opzioni sono state selezionate.</p>
+              <p className="text-slate-500 text-sm">Tutte le opzioni sono state selezionate.</p>
             )}
           </div>
 
           {/* Aggiungi Parola Personalizzata */}
           <div className="mt-2">
-            <label className="block text-gray-700 text-sm font-medium mb-1">Aggiungi parola personalizzata</label>
+            <label className="block text-slate-700 text-sm font-medium mb-1">Aggiungi parola personalizzata</label>
             <InputGroup>
               <FormInput
                 type="text"
@@ -227,15 +227,15 @@ const NamingConvention = forwardRef<NamingConventionRef | undefined, NamingConve
         {/* Opzioni Selezionate */}
         <DndProvider backend={HTML5Backend}>
           <div className="px-4 py-3">
-            <h2 className="text-lg font-semibold text-gray-800">Campi Selezionati</h2>
-            <p className="text-gray-600 text-sm mt-1">Trascina per riordinare i campi.</p>
+            <h2 className="title-card">Campi selezionati</h2>
+            <p className="text-slate-600 text-sm mt-1">Trascina per riordinare i campi.</p>
             <div className="mt-2 space-y-1">
               {selectedOptions.length > 0 ? (
                 selectedOptions.map((option, index) => (
                   <SelectedOption key={index} option={option} index={index} />
                 ))
               ) : (
-                <p className="text-gray-500 text-sm">Nessun campo selezionato.</p>
+                <p className="text-slate-500 text-sm">Nessun campo selezionato.</p>
               )}
             </div>
           </div>

@@ -1,10 +1,14 @@
 import Badge from '@/components/Base/Badge';
 import Button from '@/components/Base/Button';
 import FileIcon from '@/components/Base/FileIcon';
-import { FormInput, FormLabel, FormSelect } from '@/components/Base/Form';
+import BarraFiltri from '@/components/Base/BarraFiltri';
+import CampoRicerca from '@/components/Base/CampoRicerca';
+import { FormField, FormInput, FormSelect } from '@/components/Base/Form';
 import { Dialog, Menu } from '@/components/Base/Headless';
 import Lucide from '@/components/Base/Lucide';
-import PageHeader from '@/components/Base/PageHeader';
+import Pagina from '@/components/Base/Pagina';
+import Sezione from '@/components/Base/Sezione';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import EmptyState from '@/components/EmptyState';
 import { useNotification } from '@/context/NotificationContext';
 import { yupResolver } from '@hookform/resolvers/yup';
@@ -92,30 +96,13 @@ function Main() {
       queryClient.invalidateQueries({ queryKey: ['workspace'] });
     },
     onSuccess: () => {
-      showNotification(
-        <div className="flex flex-row items-center">
-          <Lucide icon="CircleCheck" className="text-success w-8 h-8" />
-          <div className="ml-4 mr-4">
-            <div className="font-bold">Workspace creato con successo</div>
-          </div>
-        </div>
-      );
+      showNotification("Workspace creato con successo", { variant: "success" });
       setShowDialog(false);
       setWorkspaceDaClonare("");
       reset();
     },
     onError: (error) => {
-      showNotification(
-        <div className="flex flex-row items-center">
-          <Lucide icon="CircleAlert" className="text-danger w-8 h-8" />
-          <div className="ml-4 mr-4">
-            <div className="font-bold">Errore durante la creazione del workspace</div>
-            <div className="mt-1 text-slate-500">
-              {error.message}
-            </div>
-          </div>
-        </div>
-      );
+      showNotification(`Errore durante la creazione del workspace: ${error.message}`, { variant: "error" });
       setShowDialog(false);
       reset();
     }
@@ -137,161 +124,133 @@ function Main() {
 
     },
     onSuccess: () => {
-      showNotification(
-        <div className="flex flex-row items-center">
-          <Lucide icon="CircleCheck" className="text-success w-8 h-8" />
-          <div className="ml-4 mr-4">
-            <div className="font-bold">Workspace eliminato con successo</div>
-          </div>
-        </div>
-      );
+      showNotification("Workspace eliminato con successo", { variant: "success" });
       setShowDialogEliminaWorkspace(false);
       setWorkspaceDaClonare("");
     },
     onError: (error) => {
-      showNotification(
-        <div className="flex flex-row items-center">
-          <Lucide icon="CircleAlert" className="text-danger w-8 h-8" />
-          <div className="ml-4 mr-4">
-            <div className="font-bold">Errore durante l'eliminazione del workspace</div>
-            <div className="mt-1 text-slate-500">
-              {error.message}
-            </div>
-          </div>
-        </div>
-      );
+      showNotification(`Errore durante l'eliminazione del workspace: ${error.message}`, { variant: "error" });
       setShowDialogEliminaWorkspace(false);
     }
 
   });
+
+  const workspaceDaEliminare = workspaces?.find((workspace) => workspace.idWorkspace === workspaceDaClonare);
+  const filtroAttivo = ricercaWorkspace.trim() !== "";
 
   return (
     <>
       <Dialog size="lg" centered={true} open={showDialogCreaWorkspace} onClose={() => setShowDialog(false)}>
         <Dialog.Panel>
           <Dialog.Title>Crea un nuovo workspace</Dialog.Title>
-          <Dialog.Description>
-            <form onSubmit={handleSubmit((data) => {
-              mutationCreazioneWorkspace.mutate({
-                nomeWorkspace: data.nomeWorkspace,
-                idArea: data.idArea || "",
-                idCanale: data.idCanale || "",
-                idPuntoVendita: data.idPuntoVendita || "",
-                webpliant: [{
-                  id: uuidv4(),
-                  tipo: TIPO_PAGINA.HOMEPAGE,
-                  nome: "Homepage",
-                  struttura: []
-                }],
-                sitemap: []
+          <form onSubmit={handleSubmit((data) => {
+            mutationCreazioneWorkspace.mutate({
+              nomeWorkspace: data.nomeWorkspace,
+              idArea: data.idArea || "",
+              idCanale: data.idCanale || "",
+              idPuntoVendita: data.idPuntoVendita || "",
+              webpliant: [{
+                id: uuidv4(),
+                tipo: TIPO_PAGINA.HOMEPAGE,
+                nome: "Homepage",
+                struttura: []
+              }],
+              sitemap: []
 
-              });
-            })}>
-              <div>
-                <FormLabel htmlFor='workspace-name'>Nome del workspace</FormLabel>
+            });
+          })}>
+            <Dialog.Description className="flex flex-col gap-4">
+              <FormField etichetta="Nome del workspace" obbligatorio errore={errors.nomeWorkspace?.message}>
                 <FormInput
                   id='workspace-name'
                   type="text"
-                  className="w-full mt-2"
                   {...register('nomeWorkspace')}
                 />
-                {errors.nomeWorkspace && <p className="text-red-500">{errors.nomeWorkspace.message}</p>}
-              </div>
-              <div className='grid grid-cols-12 gap-x-4'>
-                <div className="mt-4 col-span-6">
-                  <FormLabel htmlFor='workspace-area'>Area del workspace</FormLabel>
-                  <FormSelect id='workspace-area' className="w-full mt-2" {...register('idArea')}>
-                    <option value={""}>Scegli una area</option>
+              </FormField>
+              <div className='grid grid-cols-1 gap-4 sm:grid-cols-2'>
+                <FormField etichetta="Area del workspace" errore={errors.idArea?.message}>
+                  <FormSelect id='workspace-area' {...register('idArea')}>
+                    <option value={""}>Scegli un'area</option>
                     {aree?.map((area) => (
                       <option key={area.id} value={area.id}>{area.nome}</option>
                     ))}
                   </FormSelect>
-                  {errors.idArea && <p className="text-red-500">{errors.idArea.message}</p>}
-                </div>
-                <div className="mt-4 col-span-6">
-                  <FormLabel htmlFor='workspace-canale'>Canali del workspace</FormLabel>
-                  <FormSelect id='workspace-canale' className="w-full mt-2" {...register('idCanale')}>
-                    <option value={""}>Scegli una canale</option>
+                </FormField>
+                <FormField etichetta="Canale del workspace" errore={errors.idCanale?.message}>
+                  <FormSelect id='workspace-canale' {...register('idCanale')}>
+                    <option value={""}>Scegli un canale</option>
                     {canali?.map((canale) => (
                       <option key={canale.id} value={canale.id}>{canale.nome}</option>
                     ))}
                   </FormSelect>
-                  {errors.idCanale && <p className="text-red-500">{errors.idCanale.message}</p>}
-                </div>
+                </FormField>
               </div>
-              <div className="mt-4">
-                <FormLabel htmlFor='workspace-punto-vendita'>Punto Vendita (opzionale)</FormLabel>
-                <FormSelect id='workspace-punto-vendita' className="w-full mt-2" {...register('idPuntoVendita')}>
+              <FormField etichetta="Punto vendita (opzionale)" errore={errors.idPuntoVendita?.message}>
+                <FormSelect id='workspace-punto-vendita' {...register('idPuntoVendita')}>
                   <option value={""}>Scegli un punto vendita</option>
                   {puntiVendita?.map((pv) => (
                     <option key={pv.id} value={pv.id}>{pv.nome} - {pv.citta}</option>
                   ))}
                 </FormSelect>
-                {errors.idPuntoVendita && <p className="text-red-500">{errors.idPuntoVendita.message}</p>}
-              </div>
-              <Dialog.Footer>
-                <Button className='mx-1' onClick={() => setShowDialog(false)} variant="secondary">
-                  Annulla
-                </Button>
-                <Button className='mx-1' type="submit" variant="success" loading={mutationCreazioneWorkspace.isPending} disabled={mutationCreazioneWorkspace.isPending}>
-                  Crea
-                </Button>
-              </Dialog.Footer>
-            </form>
-          </Dialog.Description>
-        </Dialog.Panel >
+              </FormField>
+            </Dialog.Description>
+            <Dialog.Footer>
+              <Button type="button" onClick={() => setShowDialog(false)} variant="outline-secondary">
+                Annulla
+              </Button>
+              <Button type="submit" variant="primary" loading={mutationCreazioneWorkspace.isPending} disabled={mutationCreazioneWorkspace.isPending}>
+                Crea
+              </Button>
+            </Dialog.Footer>
+          </form>
+        </Dialog.Panel>
       </Dialog>
       <Dialog size='lg' centered={true} open={showDialogClonaWorkspace} onClose={() => setShowDialogClonaWorkspace(false)}>
         <Dialog.Panel>
           <Dialog.Title>Clona un workspace</Dialog.Title>
-          <Dialog.Description>
-            <div>
-              <FormLabel htmlFor='clona-workspace-name'>Nome del workspace</FormLabel>
+          <Dialog.Description className="flex flex-col gap-4">
+            <FormField etichetta="Nome del workspace">
               <FormInput
                 id='clona-workspace-name'
                 type="text"
-                className="w-full mt-2"
                 onChange={(e) => {
                   setNomeWorkspace(e.target.value);
                 }}
                 value={nomeWorkspace}
               />
-            </div>
-            <div className='grid grid-cols-12 gap-x-4'>
-              <div className="mt-4 col-span-6">
-                <FormLabel htmlFor='clona-workspace-area'>Area del workspace</FormLabel>
-                <FormSelect value={idAreaSelezionata} onChange={(e) => { setIdAreaSelezionata(e.target.value) }} id='clona-workspace-area' className="w-full mt-2">
-                  <option value={""}>Scegli una area</option>
+            </FormField>
+            <div className='grid grid-cols-1 gap-4 sm:grid-cols-2'>
+              <FormField etichetta="Area del workspace">
+                <FormSelect value={idAreaSelezionata} onChange={(e) => { setIdAreaSelezionata(e.target.value) }} id='clona-workspace-area'>
+                  <option value={""}>Scegli un'area</option>
                   {aree?.map((area) => (
                     <option key={area.id} value={area.id}>{area.nome}</option>
                   ))}
                 </FormSelect>
-              </div>
-              <div className="mt-4 col-span-6">
-                <FormLabel htmlFor='clona-workspace-canale'>Canali del workspace</FormLabel>
-                <FormSelect value={idCanaleSelezionato} onChange={(e) => { setIdCanaleSelezionato(e.target.value) }} id='clona-workspace-canale' className="w-full mt-2">
-                  <option value={""}>Scegli una canale</option>
+              </FormField>
+              <FormField etichetta="Canale del workspace">
+                <FormSelect value={idCanaleSelezionato} onChange={(e) => { setIdCanaleSelezionato(e.target.value) }} id='clona-workspace-canale'>
+                  <option value={""}>Scegli un canale</option>
                   {canali?.map((canale) => (
                     <option key={canale.id} value={canale.id}>{canale.nome}</option>
                   ))}
                 </FormSelect>
-              </div>
+              </FormField>
             </div>
-            <div className="mt-4">
-              <FormLabel htmlFor='workspace-punto-vendita-clona'>Punto Vendita (opzionale)</FormLabel>
-              <FormSelect value={idPuntoVenditaSelezionato} onChange={(e) => { setIdPuntoVenditaSelezionato(e.target.value) }} id='workspace-punto-vendita-clona' className="w-full mt-2">
+            <FormField etichetta="Punto vendita (opzionale)">
+              <FormSelect value={idPuntoVenditaSelezionato} onChange={(e) => { setIdPuntoVenditaSelezionato(e.target.value) }} id='workspace-punto-vendita-clona'>
                 <option value={""}>Scegli un punto vendita</option>
                 {puntiVendita?.map((pv) => (
                   <option key={pv.id} value={pv.id}>{pv.nome} - {pv.citta}</option>
                 ))}
               </FormSelect>
-            </div>
+            </FormField>
           </Dialog.Description>
           <Dialog.Footer>
-            <Button className='mx-1' onClick={() => setShowDialogClonaWorkspace(false)} variant="secondary">
+            <Button onClick={() => setShowDialogClonaWorkspace(false)} variant="outline-secondary">
               Annulla
             </Button>
-            <Button className='mx-1' variant="success" loading={mutationCreazioneWorkspace.isPending} disabled={mutationCreazioneWorkspace.isPending} onClick={() => {
+            <Button variant="primary" loading={mutationCreazioneWorkspace.isPending} disabled={mutationCreazioneWorkspace.isPending} onClick={() => {
               mutationCreazioneWorkspace.mutate({
                 nomeWorkspace,
                 idArea: idAreaSelezionata,
@@ -309,173 +268,158 @@ function Main() {
           </Dialog.Footer>
         </Dialog.Panel>
       </Dialog>
-      <Dialog size='lg' centered={true} open={showDialogEliminaWorkspace} onClose={() => setShowDialogEliminaWorkspace(false)}>
-        <Dialog.Panel>
-          <Dialog.Title>Elimina un workspace</Dialog.Title>
-          <Dialog.Description>
-            {(workspaces?.find((workspace) => workspace.idWorkspace === workspaceDaClonare)?.webpliant ?? []).length > 0 ? <>
-              <div className="flex items-center p-4 my-4 text-sm text-red-700 bg-red-100 rounded-lg" role="alert">
-                <Lucide icon="OctagonAlert" className="w-4 h-4 mr-2" />
-                <span>
-                  Sei sicuro di voler eliminare il workspace? Questa azione non può essere annullata. Se elimini questo workspace perderai il Webpliant
-                  per <strong>{aree.find((area) => workspaces.find((w) => w.idWorkspace === workspaceDaClonare)?.idArea === area.id)?.nome}</strong>
-                  e il canale <strong>{canali.find((canale) => workspaces.find((w) => w.idWorkspace === workspaceDaClonare)?.idCanale === canale.id)?.nome}</strong>
-                </span>
-              </div>
-            </> : <>
-              <div className="flex items-center p-4 my-4 text-sm text-red-700 bg-red-100 rounded-lg" role="alert">
-                <Lucide icon="OctagonAlert" className="w-4 h-4 mr-2" />
-                <span>Sei sicuro di voler eliminare il workspace? Questa azione non può essere annullata.</span>
-              </div>
-            </>}
-          </Dialog.Description>
-          <Dialog.Footer>
-            <Button className='mx-1' onClick={() => setShowDialogEliminaWorkspace(false)} variant="secondary">
-              Annulla
+      {/* Il dialogo resta aperto, con il pulsante in caricamento, fino alla risposta del server */}
+      <ConfirmDialog
+        open={showDialogEliminaWorkspace}
+        title="Eliminare il workspace?"
+        description={
+          (workspaceDaEliminare?.webpliant ?? []).length > 0 ? (
+            <>
+              Questa azione non può essere annullata. Eliminando il workspace perderai il Webpliant
+              per l'area <strong>{aree.find((area) => workspaceDaEliminare?.idArea === area.id)?.nome}</strong>
+              {" "}e il canale <strong>{canali.find((canale) => workspaceDaEliminare?.idCanale === canale.id)?.nome}</strong>.
+            </>
+          ) : (
+            "Questa azione non può essere annullata."
+          )
+        }
+        confirmLabel="Elimina"
+        loading={mutationEliminaWorkspace.isPending}
+        onClose={() => setShowDialogEliminaWorkspace(false)}
+        onConfirm={() => {
+          mutationEliminaWorkspace.mutate({
+            idWorkspace: workspaceDaClonare
+          });
+        }}
+      />
+      <Pagina
+        titolo="Impostazioni Webpliant"
+        descrizione="Costruisci le impostazioni per il tuo webpliant"
+        azioni={
+          <>
+            <Button
+              variant="outline-secondary"
+              onClick={() => {
+                navigate('/webliant/impostazioni-webpliant/configurazione-webpliant');
+              }}
+            >
+              <Lucide icon="Cog" aria-hidden="true" className="mr-2 h-4 w-4" />
+              Impostazioni
             </Button>
-            <Button className='mx-1' variant="danger" onClick={() => {
-              mutationEliminaWorkspace.mutate({
-                idWorkspace: workspaceDaClonare
-              });
-              setShowDialogEliminaWorkspace(false);
-            }}>
-              Elimina
+            <Button variant="primary" onClick={() => setShowDialog(true)}>
+              <Lucide icon="Plus" aria-hidden="true" className="mr-2 h-4 w-4" />
+              Crea workspace
             </Button>
-          </Dialog.Footer>
-        </Dialog.Panel>
-      </Dialog>
-      <div className="grid grid-cols-12 gap-y-10 gap-x-6 p-6">
-        <div className="col-span-12">
-          <div className="flex flex-col mt-4 md:mt-0 md:h-10 gap-y-3 md:items-center md:flex-row">
-            <PageHeader
-              title="Impostazioni Webpliant"
-              description="Costruisci le impostazioni per il tuo webpliant"
+          </>
+        }
+      >
+        <Sezione senzaPadding titolo="Workspace" descrizione="Ogni workspace raccoglie le pagine Webpliant di un'area e un canale">
+          <BarraFiltri>
+            <CampoRicerca
+              etichetta="Cerca workspace"
+              placeholder="Ricerca workspace"
+              value={ricercaWorkspace}
+              onChange={setRicercaWorkspace}
             />
-            <div className="flex flex-col sm:flex-row gap-x-3 gap-y-2 md:ml-auto">
-              <Button
-                variant="primary"
-                className="group-[.mode--light]:!bg-white/[0.12] group-[.mode--light]:!text-slate-200 group-[.mode--light]:!border-transparent"
-                onClick={() => setShowDialog(true)}
-              >
-                <Lucide icon="MailPlus" className="stroke-[1.3] w-4 h-4 mr-2" />{" "}
-                Crea Workspace
-              </Button>
-              <Button
-                onClick={() => {
-                  navigate('/webliant/impostazioni-webpliant/configurazione-webpliant');
-                }}
-                variant="primary"
-                className="group-[.mode--light]:!bg-white/[0.12] group-[.mode--light]:!text-slate-200 group-[.mode--light]:!border-transparent"
-              >
-                <Lucide icon="Cog" className="stroke-[1.3] w-4 h-4 mr-2" /> Impostazioni
-              </Button>
-            </div>
-          </div>
-          <div className=' box box--stacked mt-6'>
-            <div className="flex flex-col p-5 mb-1 sm:items-center sm:flex-row gap-y-2">
-              <div>
-                <div className="relative">
-                  <Lucide
-                    icon="Search"
-                    className="absolute inset-y-0 left-0 z-10 w-4 h-4 my-auto ml-3 stroke-[1.3] text-slate-500"
+          </BarraFiltri>
+          {workspacesVisibili && workspacesVisibili.length > 0 ? (
+            <div className="grid grid-cols-1 gap-5 p-5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+              {/* Workspace Card */}
+              {workspacesVisibili.map((value, index) => (
+                <Link preventScrollReset target="_blank" rel="noopener noreferrer" to={`/webliant/impostazioni-webpliant/workspace?id=${value.idWorkspace}`} key={index} className="relative cursor-pointer rounded-card border border-slate-200 bg-white px-3 pb-5 pt-8 transition hover:bg-slate-50">
+                  <FileIcon
+                    className="w-2/4 mx-auto"
+                    variant="directory"
                   />
-                  <FormInput
-                    type="text"
-                    placeholder="Ricerca Workspace"
-                    className="pl-9 sm:w-64 rounded-control"
-                    value={ricercaWorkspace}
-                    onChange={(e) => setRicercaWorkspace(e.target.value)}
-                  />
-                </div>
-              </div>
-            </div>
-            {workspacesVisibili && workspacesVisibili.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 p-6">
-                {/* Workspace Card */}
-                {workspacesVisibili.map((value, index) => (
-                  <Link preventScrollReset target="_blank" rel="noopener noreferrer" to={`/webliant/impostazioni-webpliant/workspace?id=${value.idWorkspace}`} key={index} className="relative px-3 pt-8 pb-5 rounded-card border border-slate-200/80 hover:bg-slate-50 cursor-pointer transition shadow-sm">
-                    <FileIcon
-                      className="w-2/4 mx-auto"
-                      variant="directory"
-                    />
-                    <div
-                      className="block mt-4 font-medium text-center capitalize truncate"
+                  <div
+                    className="block mt-4 font-medium text-center capitalize truncate"
+                  >
+                    {value.nomeWorkspace}
+                  </div>
+                  <div className='mt-1 flex flex-row flex-wrap justify-center gap-x-2 gap-y-1 text-center'>
+                    {
+                      value.isGlobal ? <Badge variant="success" size='sm' border>
+                        Globale
+                      </Badge> :
+                        <>
+                          <Badge variant="info" size='sm' border>
+                            {value.nomeArea}
+                          </Badge>
+                          <Badge variant="info" size='sm' border>
+                            {value.nomeCanale}
+                          </Badge>
+                          {value.nomePuntoVendita && (
+                            <Badge variant="warning" size='sm' border>
+                              {value.nomePuntoVendita}
+                            </Badge>
+                          )}
+                        </>
+                    }
+                  </div>
+                  <Menu className="absolute top-0 right-0 mt-3 mr-2">
+                    {/* Resta un div: la card è un link e non può contenere un button */}
+                    <Menu.Button
+                      as="div"
+                      role="button"
+                      tabIndex={0}
+                      className="block w-5 h-5"
+                      aria-label={`Azioni workspace ${value.nomeWorkspace}`}
+                      onClick={(e: React.MouseEvent) => {
+                        e.stopPropagation();
+                      }}
                     >
-                      {value.nomeWorkspace}
-                    </div>
-                    <div className='text-center gap-x-2 flex flex-row justify-center mt-1 flex-wrap'>
-                      {
-                        value.isGlobal ? <Badge variant="success" size='sm' border>
-                          Globale
-                        </Badge> :
-                          <>
-                            <Badge variant="info" size='sm' border>
-                              {value.nomeArea}
-                            </Badge>
-                            <Badge variant="info" size='sm' border>
-                              {value.nomeCanale}
-                            </Badge>
-                            {value.nomePuntoVendita && (
-                              <Badge variant="warning" size='sm' border>
-                                {value.nomePuntoVendita}
-                              </Badge>
-                            )}
-                          </>
-                      }
-                    </div>
-                    <Menu className="absolute top-0 right-0 mt-3 mr-2">
-                      {/* Resta un div: la card è un link e non può contenere un button */}
-                      <Menu.Button
-                        as="div"
-                        role="button"
-                        tabIndex={0}
-                        className="block w-5 h-5"
-                        aria-label={`Azioni workspace ${value.nomeWorkspace}`}
-                        onClick={(e: React.MouseEvent) => {
-                          e.stopPropagation();
-                        }}
-                      >
-                        <Lucide
-                          icon="EllipsisVertical"
-                          aria-hidden="true"
-                          className="w-5 h-5 stroke-[1] stroke-slate-400/70 fill-slate-400/70"
-                        />
-                      </Menu.Button>
-                      <Menu.Items className="w-52">
-                        <Menu.Item onClick={(e: React.MouseEvent) => {
-                          e.preventDefault();
-                          setShowDialogEliminaWorkspace(true);
-                          setWorkspaceDaClonare(value.idWorkspace);
-                        }} className={"text-danger"}>
-                          <Lucide icon="Trash" className="w-4 h-4 mr-2" />{" "}
-                          Elimina Workspace
-                        </Menu.Item>
-                        <Menu.Item onClick={(e: React.MouseEvent) => {
-                          e.preventDefault();
-                          setShowDialogClonaWorkspace(true);
-                          setNomeWorkspace(`${value.nomeWorkspace}_COPIA`);
-                          setWorkspaceDaClonare(value.idWorkspace);
-                        }}>
-                          <Lucide icon="Copy" className="w-4 h-4 mr-2" />{" "}
-                          Clona
-                        </Menu.Item>
-                      </Menu.Items>
-                    </Menu>
-                  </Link>
-                ))}
-              </div>
-            ) : (
-              <EmptyState
-                icon="Workflow"
-                iconColor='text-primary w-12 h-12'
-                title="Nessun workspace"
-                description="Non ci sono workspace disponibili"
-              />
-            )}
-          </div>
-        </div>
-      </div>
-
+                      <Lucide
+                        icon="EllipsisVertical"
+                        aria-hidden="true"
+                        className="h-5 w-5 text-slate-400"
+                      />
+                    </Menu.Button>
+                    <Menu.Items className="w-52">
+                      <Menu.Item onClick={(e: React.MouseEvent) => {
+                        e.preventDefault();
+                        setShowDialogClonaWorkspace(true);
+                        setNomeWorkspace(`${value.nomeWorkspace}_COPIA`);
+                        setWorkspaceDaClonare(value.idWorkspace);
+                      }}>
+                        <Lucide icon="Copy" aria-hidden="true" className="w-4 h-4 mr-2" />
+                        Clona
+                      </Menu.Item>
+                      <Menu.Item onClick={(e: React.MouseEvent) => {
+                        e.preventDefault();
+                        setShowDialogEliminaWorkspace(true);
+                        setWorkspaceDaClonare(value.idWorkspace);
+                      }} className={"text-danger"}>
+                        <Lucide icon="Trash2" aria-hidden="true" className="w-4 h-4 mr-2" />
+                        Elimina workspace
+                      </Menu.Item>
+                    </Menu.Items>
+                  </Menu>
+                </Link>
+              ))}
+            </div>
+          ) : filtroAttivo && (workspaces?.length ?? 0) > 0 ? (
+            <EmptyState
+              compatta
+              icon="SearchX"
+              title="Nessun risultato"
+              description="Nessun workspace corrisponde alla ricerca."
+              buttonText="Azzera ricerca"
+              buttonIcon="X"
+              onButtonClick={() => setRicercaWorkspace("")}
+            />
+          ) : (
+            <EmptyState
+              compatta
+              icon="Workflow"
+              title="Nessun workspace"
+              description="Non ci sono workspace disponibili"
+              buttonText="Crea workspace"
+              buttonIcon="Plus"
+              onButtonClick={() => setShowDialog(true)}
+            />
+          )}
+        </Sezione>
+      </Pagina>
     </>
   );
 }

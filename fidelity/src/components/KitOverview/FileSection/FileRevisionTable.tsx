@@ -1,15 +1,22 @@
+import Alert from "@/components/Base/Alert";
+import Badge from "@/components/Base/Badge";
+import BarraFiltri from "@/components/Base/BarraFiltri";
 import Button from "@/components/Base/Button";
-import { FormInput, FormSelect, FormTextarea } from "@/components/Base/Form";
+import CampoRicerca from "@/components/Base/CampoRicerca";
+import { FormSelect, FormTextarea } from "@/components/Base/Form";
 import FormLabel from "@/components/Base/Form/FormLabel";
-import LoadingIcon from "@/components/Base/LoadingIcon";
 import Lucide from "@/components/Base/Lucide";
+import PaginazioneTabella from "@/components/Base/PaginazioneTabella";
+import Sezione from "@/components/Base/Sezione";
 import Skeleton from "@/components/Base/Skeleton";
+import StatCard, { StatCardGrid } from "@/components/Base/StatCard";
+import StatusBadge from "@/components/Base/StatusBadge";
 import Table from "@/components/Base/Table";
+import EmptyState from "@/components/EmptyState";
 import { PreviewImmaginePdf } from "@/components/PreviewImmaginePdf";
 import clsx from "clsx";
 import React, { FC, useMemo, useState } from "react";
 import { FileItemKit, OggettoTipiDiExport } from "../../../../lib/types";
-import { StatCard } from "../components";
 import { EXPORT_DI_SISTEMA } from "../../../../lib/enums";
 
 interface FileRevisionTableProps {
@@ -106,7 +113,6 @@ const FileRevisionTable: FC<FileRevisionTableProps> = ({
     return filtered;
   }, [filesData, selectedExportType, searchQuery, tipiDiExportInKit]);
 
-  const totalPages = Math.ceil(filteredFiles.length / ITEMS_PER_PAGE);
   const paginatedFiles = filteredFiles.slice(
     currentPage * ITEMS_PER_PAGE,
     (currentPage + 1) * ITEMS_PER_PAGE
@@ -179,178 +185,112 @@ const FileRevisionTable: FC<FileRevisionTableProps> = ({
   // Loading skeleton
   if (isLoadingFiles) {
     return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="flex flex-col gap-6" aria-busy="true">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {[1, 2, 3, 4].map(i => (
-            <Skeleton key={i} height="80px" className="rounded-xl" />
+            <Skeleton key={i} height="72px" className="rounded-control" />
           ))}
         </div>
-        <Skeleton height="400px" className="rounded-xl" />
+        <Skeleton height="400px" className="rounded-card" />
       </div>
     );
   }
 
+  const paginaGiaDecisa = paginatedFiles.every(f => isAccepted(f) || isRejected(f));
+
   return (
-    <div className="space-y-6">
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard
-          icon="Files"
-          iconBg="bg-info/10"
-          iconColor="text-info"
-          value={stats.total}
-          label="File totali"
-        />
-        <StatCard
-          icon="CircleCheck"
-          iconBg="bg-success/10"
-          iconColor="text-success"
-          value={stats.acceptedCount}
-          label="Approvati"
-        />
-        <StatCard
-          icon="CircleX"
-          iconBg="bg-danger/10"
-          iconColor="text-danger"
-          value={stats.rejectedCount}
-          label="Rifiutati"
-        />
-        <StatCard
-          icon="Clock"
-          iconBg="bg-warning/10"
-          iconColor="text-warning"
-          value={stats.pendingCount}
-          label="In attesa"
-        />
-      </div>
+    <div className="flex flex-col gap-6">
+      <StatCardGrid>
+        <StatCard densita="compatta" icona="Files" tono="info" etichetta="File totali" valore={stats.total} />
+        <StatCard densita="compatta" icona="CircleCheck" tono="success" etichetta="Approvati" valore={stats.acceptedCount} />
+        <StatCard densita="compatta" icona="CircleX" tono="danger" etichetta="Rifiutati" valore={stats.rejectedCount} />
+        <StatCard densita="compatta" icona="Clock" tono="warning" etichetta="In attesa" valore={stats.pendingCount} />
+      </StatCardGrid>
 
-      {/* Main Table Box */}
-      <div className="box box--stacked p-6">
-        {/* Header */}
-        <div className="flex items-center gap-3 mb-5">
-          <div className="p-2.5 bg-gradient-to-br from-warning/10 to-warning/5 rounded-xl">
-            <Lucide icon="ClipboardCheck" className="w-5 h-5 text-warning" />
-          </div>
-          <div>
-            <h3 className="text-base font-semibold text-slate-800">Revisione File</h3>
-            <p className="text-xs text-slate-500">
-              {stats.total} file da revisionare — {stats.pendingCount} in attesa di decisione
-            </p>
-          </div>
-        </div>
-
-        {/* Actions bar */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 w-full">
-          <div className="flex flex-col sm:flex-row gap-3 w-full">
-            <Button
-              variant="primary"
-              onClick={handleAcceptAll}
-              disabled={stats.pendingCount === 0}
-            >
-              <Lucide
-                icon={stats.pendingCount === 0 ? "CircleX" : "CircleCheck"}
-                className="w-4 h-4 mr-2"
-              />
-              Accetta Tutti i Restanti ({stats.pendingCount})
-            </Button>
-            <Button
-              variant="outline-primary"
-              onClick={handleAcceptPage}
-              disabled={paginatedFiles.every(f => isAccepted(f) || isRejected(f))}
-            >
-              <Lucide
-                icon={paginatedFiles.every(f => isAccepted(f) || isRejected(f)) ? "X" : "Check"}
-                className="w-4 h-4 mr-2"
-              />
-              Accetta Pagina Corrente
-            </Button>
-            <Button
-              variant="outline-warning"
-              onClick={handleUndoAll}
-              disabled={!hasLocalChanges}
-            >
-              <Lucide
-                icon={!hasLocalChanges ? "Minus" : "Undo2"}
-                className="w-4 h-4 mr-2"
-              />
-              Annulla Modifiche
-            </Button>
-          </div>
-
-          {onDownloadZip && (
+      <Sezione
+        senzaPadding
+        icona="ClipboardCheck"
+        titolo="Revisione file"
+        descrizione={`${stats.total} file da revisionare — ${stats.pendingCount} in attesa di decisione`}
+        azioni={
+          onDownloadZip && (
             <Button
               variant="outline-secondary"
+              size="sm"
               onClick={onDownloadZip}
-              disabled={filteredFiles.length === 0 || isDownloading}
+              disabled={filteredFiles.length === 0}
+              loading={isDownloading}
             >
-              {isDownloading ? (
-                <>
-                  <LoadingIcon icon="oval" className="w-4 h-4 mr-2" />
-                  Preparazione ZIP...
-                </>
-              ) : (
-                <>
-                  <Lucide icon="Archive" className="w-4 h-4 mr-2" />
-                  Scarica ZIP ({filteredFiles.length})
-                </>
-              )}
+              {!isDownloading && <Lucide icon="Archive" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />}
+              {isDownloading ? "Preparazione ZIP…" : `Scarica ZIP (${filteredFiles.length})`}
             </Button>
-          )}
-        </div>
+          )
+        }
+      >
+        <BarraFiltri
+          destra={
+            <>
+              <Button variant="outline-secondary" size="sm" onClick={handleUndoAll} disabled={!hasLocalChanges}>
+                <Lucide icon="Undo2" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                Annulla modifiche
+              </Button>
+              <Button variant="outline-secondary" size="sm" onClick={handleAcceptPage} disabled={paginaGiaDecisa}>
+                <Lucide icon="Check" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                Accetta pagina corrente
+              </Button>
+              <Button variant="primary" size="sm" onClick={handleAcceptAll} disabled={stats.pendingCount === 0}>
+                <Lucide icon="CircleCheck" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                Accetta tutti i restanti ({stats.pendingCount})
+              </Button>
+            </>
+          }
+        >
+          <CampoRicerca
+            etichetta="Cerca file"
+            placeholder="Cerca file per nome…"
+            value={searchQuery}
+            onChange={(valore) => {
+              setSearchQuery(valore);
+              setCurrentPage(0);
+            }}
+          />
+          <FormSelect
+            formSelectSize="sm"
+            aria-label="Tipo di export"
+            className="sm:w-48"
+            value={selectedExportType}
+            onChange={(e) => {
+              setSelectedExportType(e.target.value);
+              setCurrentPage(0);
+            }}
+          >
+            <option value="all">Tutti i tipi</option>
+            {availableExportTypes.map((tipo) => (
+              <option key={tipo.tipoDiExportGuidID} value={tipo.codice}>
+                {tipo.codice}
+              </option>
+            ))}
+          </FormSelect>
+        </BarraFiltri>
 
-        {/* Filters */}
-        <div className="flex flex-col sm:flex-row gap-3 mb-5">
-          <div className="flex-1">
-            <FormInput
-              type="text"
-              placeholder="Cerca file per nome..."
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setCurrentPage(0);
-              }}
-              className="w-full"
-            />
-          </div>
-          <div className="w-full sm:w-48">
-            <FormSelect
-              value={selectedExportType}
-              onChange={(e) => {
-                setSelectedExportType(e.target.value);
-                setCurrentPage(0);
-              }}
-              className="w-full"
-            >
-              <option value="all">Tutti i tipi</option>
-              {availableExportTypes.map((tipo) => (
-                <option key={tipo.tipoDiExportGuidID} value={tipo.codice}>
-                  {tipo.codice}
-                </option>
-              ))}
-            </FormSelect>
-          </div>
-        </div>
-
-        {/* Table */}
         {paginatedFiles.length === 0 ? (
-          <div className="text-center py-16 rounded-xl bg-slate-50 border border-dashed border-slate-200">
-            <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-slate-100 mx-auto mb-4">
-              <Lucide icon="Inbox" className="w-10 h-10 text-slate-400" />
-            </div>
-            <h3 className="text-base font-semibold text-slate-700">Nessun file da revisionare</h3>
-            <p className="text-sm text-slate-500 mt-1">
-              Tutti i documenti sono stati processati o prova a modificare i filtri di ricerca.
-            </p>
-          </div>
+          <EmptyState
+            compatta
+            icon="Inbox"
+            title="Nessun file da revisionare"
+            description="Tutti i documenti sono stati processati o prova a modificare i filtri di ricerca."
+          />
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-slate-200">
-            <Table bordered striped>
+          <div className="overflow-x-auto">
+            <Table>
               <Table.Thead>
-                <Table.Tr className="bg-slate-50">
-                  <Table.Th className="whitespace-nowrap text-xs font-semibold text-slate-600">File</Table.Th>
-                  <Table.Th className="whitespace-nowrap text-xs font-semibold text-slate-600">Tipo Export</Table.Th>
-                  <Table.Th className="whitespace-nowrap text-xs font-semibold text-slate-600">Stato</Table.Th>
-                  <Table.Th className="text-center whitespace-nowrap text-xs font-semibold text-slate-600">Azioni</Table.Th>
+                <Table.Tr>
+                  <Table.Th>File</Table.Th>
+                  <Table.Th>Tipo export</Table.Th>
+                  <Table.Th>Stato</Table.Th>
+                  <Table.Th className="text-right">
+                    <span className="sr-only">Azioni</span>
+                  </Table.Th>
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
@@ -359,7 +299,6 @@ const FileRevisionTable: FC<FileRevisionTableProps> = ({
                   const isRej = isRejected(file);
                   const showRejection = showRejectionInput[file.id];
                   const exportType = tipiDiExportInKit.find(t => t.tipoDiExportGuidID === file.tipo_export);
-                  const rejectedFile = rejectedFiles.find(r => r.id === file.id);
 
                   return (
                     <React.Fragment key={file.id}>
@@ -368,21 +307,24 @@ const FileRevisionTable: FC<FileRevisionTableProps> = ({
                         "bg-danger/5": isRej,
                       })}>
                         <Table.Td className="max-w-xs">
-                          <div className="flex items-center">
-                            <div className={clsx(
-                              "flex h-10 w-10 items-center justify-center rounded-xl shrink-0 mr-3",
-                              isAcc ? "bg-success/10" : isRej ? "bg-danger/10" : "bg-slate-100"
-                            )}>
-                              <Lucide icon="FileText" className={clsx("w-5 h-5",
+                          <div className="flex items-center gap-3">
+                            <div
+                              aria-hidden="true"
+                              className={clsx(
+                                "flex h-9 w-9 shrink-0 items-center justify-center rounded-control",
+                                isAcc ? "bg-success/10" : isRej ? "bg-danger/10" : "bg-slate-100"
+                              )}
+                            >
+                              <Lucide icon="FileText" className={clsx("h-4 w-4",
                                 isAcc ? "text-success" : isRej ? "text-danger" : "text-slate-400"
                               )} />
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="font-medium text-slate-800 truncate" title={file.nome}>
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate font-medium text-slate-800" title={file.nome}>
                                 {file.nome}
                               </div>
                               {file.pages && (
-                                <div className="text-xs text-slate-500 mt-0.5">
+                                <div className="mt-0.5 text-xs text-slate-500">
                                   {file.pages} {file.pages > 1 ? "pagine" : "pagina"}
                                 </div>
                               )}
@@ -390,67 +332,44 @@ const FileRevisionTable: FC<FileRevisionTableProps> = ({
                           </div>
                         </Table.Td>
                         <Table.Td>
-                          {exportType ? (
-                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-theme-1/5 text-theme-1 border border-theme-1/20">
-                              {exportType.codice}
-                            </span>
-                          ) : "-"}
+                          {exportType ? <Badge variant="primary" size="sm">{exportType.codice}</Badge> : "-"}
                         </Table.Td>
                         <Table.Td>
-                          {isAcc && (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-success/10 text-success border border-success/20">
-                              <Lucide icon="Check" className="w-3 h-3" /> Accettato
-                            </span>
-                          )}
-                          {isRej && (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-danger/10 text-danger border border-danger/20">
-                              <Lucide icon="X" className="w-3 h-3" /> Rifiutato
-                            </span>
-                          )}
-                          {!isAcc && !isRej && (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-warning/10 text-warning border border-warning/20">
-                              <Lucide icon="Clock" className="w-3 h-3" /> In attesa
-                            </span>
-                          )}
+                          {isAcc && <StatusBadge tono="success" icon="Check" etichetta="Accettato" />}
+                          {isRej && <StatusBadge tono="danger" icon="X" etichetta="Rifiutato" />}
+                          {!isAcc && !isRej && <StatusBadge tono="warning" icon="Clock" etichetta="In attesa" />}
                         </Table.Td>
                         <Table.Td>
-                          <div className="flex items-center justify-center gap-2 flex-wrap">
+                          <div className="flex flex-wrap items-center justify-end gap-2">
                             {file.url && (
                               <Button
                                 variant="outline-secondary"
                                 size="sm"
                                 onClick={() => handlePreview(file)}
-                                aria-label="Anteprima"
+                                aria-label={`Anteprima di ${file.nome}`}
                                 title="Anteprima"
                               >
-                                <Lucide icon="Eye" aria-hidden="true" className="w-4 h-4" />
+                                <Lucide icon="Eye" aria-hidden="true" className="h-3.5 w-3.5" />
                               </Button>
                             )}
                             {!isAcc && !isRej && (
                               <>
-                                <Button
-                                  variant="outline-success"
-                                  size="sm"
-                                  onClick={() => handleAccept(file)}
-                                >
+                                <Button variant="outline-success" size="sm" onClick={() => handleAccept(file)}>
                                   Accetta
                                 </Button>
                                 <Button
                                   variant="outline-danger"
                                   size="sm"
                                   onClick={() => toggleRejectionInput(file.id)}
+                                  aria-expanded={Boolean(showRejection)}
                                 >
                                   Rifiuta
                                 </Button>
                               </>
                             )}
                             {(isAcc || isRej) && (
-                              <Button
-                                variant="outline-secondary"
-                                size="sm"
-                                onClick={() => handleUndo(file)}
-                              >
-                                <Lucide icon="RotateCcw" className="w-4 h-4 mr-1" /> Annulla
+                              <Button variant="outline-secondary" size="sm" onClick={() => handleUndo(file)}>
+                                <Lucide icon="RotateCcw" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" /> Annulla
                               </Button>
                             )}
                           </div>
@@ -460,36 +379,31 @@ const FileRevisionTable: FC<FileRevisionTableProps> = ({
                       {/* Rejection reason input */}
                       {showRejection && !isAcc && !isRej && (
                         <Table.Tr>
-                          <Table.Td colSpan={4} className="p-0">
-                            <div className="p-5 bg-slate-50 border-t border-slate-200">
-                              <FormLabel htmlFor={`rejection-reason-${file.id}`} className="font-semibold text-slate-800">
-                                Motivo del rifiuto
-                              </FormLabel>
-                              <FormTextarea
-                                id={`rejection-reason-${file.id}`}
-                                rows={3}
-                                value={localRejectionReasons[file.id] || ""}
-                                onChange={(e) => handleRejectionReasonChange(file.id, e.target.value)}
-                                placeholder="Es. L'immagine non è in alta risoluzione..."
-                                className="w-full mt-2"
-                              />
-                              <div className="flex justify-end mt-3 gap-2">
-                                <Button
-                                  type="button"
-                                  variant="outline-secondary"
-                                  onClick={() => toggleRejectionInput(file.id)}
-                                >
-                                  Annulla
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="danger"
-                                  onClick={() => handleReject(file, localRejectionReasons[file.id] || "")}
-                                  disabled={!localRejectionReasons[file.id]}
-                                >
-                                  Conferma Rifiuto
-                                </Button>
-                              </div>
+                          <Table.Td colSpan={4} className="bg-slate-50 p-5">
+                            <FormLabel htmlFor={`rejection-reason-${file.id}`} className="font-medium text-slate-800">
+                              Motivo del rifiuto
+                            </FormLabel>
+                            <FormTextarea
+                              id={`rejection-reason-${file.id}`}
+                              rows={3}
+                              value={localRejectionReasons[file.id] || ""}
+                              onChange={(e) => handleRejectionReasonChange(file.id, e.target.value)}
+                              placeholder="Es. L'immagine non è in alta risoluzione…"
+                              className="mt-2 w-full"
+                            />
+                            <div className="mt-3 flex justify-end gap-2">
+                              <Button type="button" variant="outline-secondary" size="sm" onClick={() => toggleRejectionInput(file.id)}>
+                                Annulla
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="danger"
+                                size="sm"
+                                onClick={() => handleReject(file, localRejectionReasons[file.id] || "")}
+                                disabled={!localRejectionReasons[file.id]}
+                              >
+                                Conferma rifiuto
+                              </Button>
                             </div>
                           </Table.Td>
                         </Table.Tr>
@@ -498,14 +412,10 @@ const FileRevisionTable: FC<FileRevisionTableProps> = ({
                       {/* Rejection reason display */}
                       {isRej && getRejectionReason(file) && (
                         <Table.Tr>
-                          <Table.Td colSpan={4} className="p-0">
-                            <div className="p-4 bg-danger/5 border-t border-danger/20">
-                              <div className="flex items-center gap-2 mb-1">
-                                <Lucide icon="MessageSquare" className="w-4 h-4 text-danger" />
-                                <h4 className="font-semibold text-sm text-danger">Motivo del rifiuto</h4>
-                              </div>
-                              <p className="text-sm text-slate-700">{getRejectionReason(file)}</p>
-                            </div>
+                          <Table.Td colSpan={4} className="px-5 py-3">
+                            <Alert variant="soft-danger" icona="MessageSquare" titolo="Motivo del rifiuto" className="text-sm">
+                              {getRejectionReason(file)}
+                            </Alert>
                           </Table.Td>
                         </Table.Tr>
                       )}
@@ -517,38 +427,13 @@ const FileRevisionTable: FC<FileRevisionTableProps> = ({
           </div>
         )}
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between mt-5">
-            <div className="text-sm text-slate-500">
-              Mostro {currentPage * ITEMS_PER_PAGE + 1}-{Math.min((currentPage + 1) * ITEMS_PER_PAGE, filteredFiles.length)} di {filteredFiles.length}
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant="outline-secondary"
-                size="sm"
-                onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
-                disabled={currentPage === 0}
-                aria-label="Pagina precedente"
-              >
-                <Lucide icon="ChevronLeft" aria-hidden="true" className="w-4 h-4" />
-              </Button>
-              <span className="px-3 py-1.5 text-sm bg-slate-100 rounded-lg font-medium text-slate-600">
-                {currentPage + 1} / {totalPages}
-              </span>
-              <Button
-                variant="outline-secondary"
-                size="sm"
-                onClick={() => setCurrentPage(Math.min(totalPages - 1, currentPage + 1))}
-                disabled={currentPage === totalPages - 1}
-                aria-label="Pagina successiva"
-              >
-                <Lucide icon="ChevronRight" aria-hidden="true" className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
-        )}
-      </div>
+        <PaginazioneTabella
+          totale={filteredFiles.length}
+          pagina={currentPage + 1}
+          dimensionePagina={ITEMS_PER_PAGE}
+          onCambiaPagina={(pagina) => setCurrentPage(pagina - 1)}
+        />
+      </Sezione>
 
       {/* Preview Modal */}
       {previewFile && (

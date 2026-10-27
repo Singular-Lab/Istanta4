@@ -1,11 +1,20 @@
+import Alert from '@/components/Base/Alert';
 import Button from '@/components/Base/Button';
-import { FormInline, FormInput, FormLabel, FormSelect } from '@/components/Base/Form';
+import { FormField, FormInput, FormLabel, FormSelect } from '@/components/Base/Form';
 import Lucide from '@/components/Base/Lucide';
 import TomSelect from '@/components/Base/TomSelect';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import EmptyState from '@/components/EmptyState';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useId, useState } from 'react';
 import { TIPO_COMANDO_CONTRATTO_TIPOGRAFIA } from '../../../../lib/enums';
 import { FileTreeNode, RootFileTree } from '../../../../lib/types';
+
+// Testo della conferma: dice se con il nodo spariscono anche i suoi figli
+const descriviEliminazione = (figli: number) => {
+    if (figli === 0) return "Il nodo verrà rimosso dalla struttura, con le sue condizioni e azioni.";
+    if (figli === 1) return "Il nodo verrà rimosso dalla struttura insieme al suo nodo figlio, con condizioni e azioni.";
+    return `Il nodo verrà rimosso dalla struttura insieme ai suoi ${figli} nodi figli, con condizioni e azioni.`;
+};
 
 interface TreeNodeProps {
     node: FileTreeNode;
@@ -18,6 +27,9 @@ interface TreeNodeProps {
 const TreeNode: React.FC<TreeNodeProps> = ({ node, onChange, onDelete, canali, aree }) => {
     const [localNode, setLocalNode] = useState<FileTreeNode>(node);
     const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
+    const [confermaElimina, setConfermaElimina] = useState(false);
+    // Id univoci per nodo: le etichette dei comandi puntano al campo del proprio nodo
+    const idNodo = useId();
 
     // Update local node when props change
     useEffect(() => {
@@ -144,95 +156,120 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onChange, onDelete, canali, a
         updateNode({ filetree: children });
     };
 
+    const etichettaNodo = `Nodo ${localNode.priority || 0}`;
+    const classiGruppo = "rounded-card border border-slate-200 bg-white p-4";
+
     return (
-        <div className="ml-4 border-l pl-4 py-4 my-2 border-slate-200 dark:border-slate-600">
-            {/* Header con toggle collapse e pulsante di eliminazione */}
-            <div className="flex items-center justify-between bg-slate-50 dark:bg-darkmode-400/20 p-2 rounded-md">
-                <div className="flex items-center space-x-3">
+        <div className="my-2 ml-4 border-l border-slate-200 py-2 pl-4">
+            {/* Intestazione con apertura/chiusura ed eliminazione del nodo */}
+            <div className="flex items-center justify-between gap-3 rounded-control bg-slate-50 px-3 py-2">
+                <div className="flex items-center gap-3">
                     <button
+                        type="button"
                         onClick={() => setIsCollapsed(!isCollapsed)}
-                        className="focus:outline-none text-slate-600 dark:text-slate-300"
+                        className="rounded-control text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40"
                         aria-expanded={!isCollapsed}
                         aria-label={`${isCollapsed ? "Espandi" : "Comprimi"} nodo ${localNode.priority || 0}`}
                     >
-                        {isCollapsed ? <Lucide icon="ChevronRight" aria-hidden="true" className="w-5 h-5" /> : <Lucide icon="ChevronDown" aria-hidden="true" className="w-5 h-5" />}
+                        <Lucide icon={isCollapsed ? "ChevronRight" : "ChevronDown"} aria-hidden="true" className="h-4 w-4" />
                     </button>
-                    <Lucide icon="Folder" className="text-amber-500 dark:text-amber-400 w-5 h-5" />
-                    <strong className="text-slate-700 dark:text-slate-300">Nodo {localNode.priority || 0}</strong>
+                    <Lucide icon="Folder" aria-hidden="true" className="h-5 w-5 text-warning" />
+                    <h3 className="title-card">{etichettaNodo}</h3>
                 </div>
                 {onDelete && (
-                    <button
-                        onClick={onDelete}
-                        className="text-danger hover:bg-danger/10 p-1 rounded-full transition-colors"
+                    <Button
+                        type="button"
+                        variant="outline-danger"
+                        size="sm"
+                        onClick={() => setConfermaElimina(true)}
                         aria-label={`Elimina nodo ${localNode.priority || 0}`}
+                        title="Elimina nodo"
                     >
-                        <Lucide icon="Trash2" aria-hidden="true" className="w-4 h-4" />
-                    </button>
+                        <Lucide icon="Trash2" aria-hidden="true" className="h-3.5 w-3.5" />
+                    </Button>
                 )}
             </div>
+
+            {onDelete && (
+                <ConfirmDialog
+                    open={confermaElimina}
+                    title={`Eliminare il ${etichettaNodo.toLowerCase()}?`}
+                    description={descriviEliminazione(localNode.filetree?.length ?? 0)}
+                    confirmLabel="Elimina"
+                    onClose={() => setConfermaElimina(false)}
+                    onConfirm={() => {
+                        setConfermaElimina(false);
+                        onDelete();
+                    }}
+                />
+            )}
 
             {/* Se il nodo non è collassato, mostra i dettagli */}
             {!isCollapsed && (
                 <div className="mt-3 space-y-4 pl-2">
-                    <div className="bg-white dark:bg-darkmode-600 p-3 rounded-md shadow-sm">
-                        <FormInline className="flex items-center mb-2">
-                            <FormLabel htmlFor={`priority-${localNode.priority}`} className="w-28 text-slate-700 dark:text-slate-300">Priorità:</FormLabel>
+                    <div className={classiGruppo}>
+                        <FormField etichetta="Priorità" className="max-w-40">
                             <FormInput
-                                id={`priority-${localNode.priority}`}
                                 type="number"
                                 value={localNode.priority || ''}
                                 onChange={handlePriorityChange}
-                                className="w-24 rounded-md"
                             />
-                        </FormInline>
+                        </FormField>
                     </div>
 
-                    <div className="bg-white dark:bg-darkmode-600 p-3 rounded-md shadow-sm">
-                        <div className="flex items-center justify-between mb-3">
-                            <strong className="text-slate-700 dark:text-slate-300">Condizioni</strong>
+                    <div className={classiGruppo}>
+                        <div className="mb-3 flex items-center justify-between gap-3">
+                            <h4 className="title-eyebrow">Condizioni</h4>
                             <Button
+                                type="button"
                                 onClick={addCondition}
-                                variant="soft-success"
+                                variant="outline-secondary"
                                 size="sm"
                                 className="whitespace-nowrap"
                             >
-                                <Lucide icon="Plus" className="w-4 h-4 mr-1" />
-                                Aggiungi Condizione
+                                <Lucide icon="Plus" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                                Aggiungi condizione
                             </Button>
                         </div>
 
                         {(!localNode.conditions || localNode.conditions.length === 0) && (
-                            <div className="text-slate-500 text-sm italic p-2 bg-slate-50 dark:bg-darkmode-400/20 rounded-md">
-                                Nessuna condizione configurata. Aggiungi una condizione per definire quando questo nodo sarà attivo.
-                            </div>
+                            <EmptyState
+                                compatta
+                                icon="ListFilter"
+                                title="Nessuna condizione"
+                                description="Aggiungi una condizione per definire quando questo nodo sarà attivo."
+                            />
                         )}
 
                         {localNode.conditions && localNode.conditions.length > 0 && (
                             <div className="space-y-2">
                                 {localNode.conditions.map((cond, idx) => (
-                                    <div key={idx} className="flex items-center space-x-2 p-2 bg-slate-50 dark:bg-darkmode-400/20 rounded-md">
+                                    <div key={idx} className="flex items-center gap-2 rounded-control bg-slate-50 p-2">
                                         <FormSelect
+                                            aria-label={`Campo della condizione ${idx + 1}`}
                                             value={cond.field}
                                             onChange={(e) => handleConditionChange(idx, 'field', e.target.value)}
-                                            className="w-1/3 rounded-md"
+                                            className="w-1/3"
                                         >
                                             <option value="">Seleziona campo</option>
                                             <option value="area">Area</option>
                                             <option value="canale">Canale</option>
                                         </FormSelect>
                                         <FormSelect
+                                            aria-label={`Operatore della condizione ${idx + 1}`}
                                             value={cond.operator}
                                             onChange={(e) => handleConditionChange(idx, 'operator', e.target.value)}
-                                            className="w-1/4 rounded-md"
+                                            className="w-1/4"
                                         >
                                             <option value="">Operatore</option>
                                             <option value="==">Uguale a (==)</option>
                                             <option value="!=">Diverso da (!=)</option>
                                         </FormSelect>
                                         <FormSelect
+                                            aria-label={`Valore della condizione ${idx + 1}`}
                                             value={cond.value}
                                             onChange={(e) => handleConditionChange(idx, 'value', e.target.value)}
-                                            className="w-1/3 rounded-md"
+                                            className="w-1/3"
                                         >
                                             {(() => {
                                                 if (cond.field === "area") {
@@ -263,13 +300,13 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onChange, onDelete, canali, a
                                             })()}
                                         </FormSelect>
                                         <Button
+                                            type="button"
                                             onClick={() => removeCondition(idx)}
-                                            variant="soft-danger"
+                                            variant="outline-danger"
                                             size="sm"
-                                            className="rounded-full"
-                                            aria-label="Rimuovi condizione"
+                                            aria-label={`Rimuovi condizione ${idx + 1}`}
                                         >
-                                            <Lucide icon="X" aria-hidden="true" className="w-4 h-4" />
+                                            <Lucide icon="X" aria-hidden="true" className="h-3.5 w-3.5" />
                                         </Button>
                                     </div>
                                 ))}
@@ -277,16 +314,14 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onChange, onDelete, canali, a
                         )}
                     </div>
 
-                    <div className="bg-white dark:bg-darkmode-600 p-3 rounded-md shadow-sm">
-                        <div className="mb-3">
-                            <strong className="text-slate-700 dark:text-slate-300 text-sm uppercase tracking-wide">Azioni se la condizione è rispettata</strong>
-                        </div>
+                    <div className={classiGruppo}>
+                        <h4 className="title-eyebrow mb-3">Azioni se la condizione è rispettata</h4>
                         <div className="space-y-3">
                             <div>
-                                <FormLabel htmlFor="respect-commands" className="mb-1 text-slate-600 dark:text-slate-300">Comandi:</FormLabel>
+                                <FormLabel htmlFor={`${idNodo}-respect-commands`}>Comandi</FormLabel>
                                 <TomSelect
                                     multiple
-                                    id="respect-commands"
+                                    id={`${idNodo}-respect-commands`}
                                     value={localNode.on_respect_condition?.commands || []}
                                     onChange={(e) => handleOnRespectChange('commands', e.target.value)}
                                     options={{
@@ -301,67 +336,53 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onChange, onDelete, canali, a
                                     ))}
                                 </TomSelect>
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                <div>
-                                    <FormLabel htmlFor="respect-dirname" className="mb-1 text-slate-600 dark:text-slate-300">Nome directory:</FormLabel>
+                            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                                <FormField etichetta="Nome directory">
                                     <FormInput
-                                        id="respect-dirname"
                                         placeholder="Nome della directory"
                                         value={localNode.on_respect_condition?.dirname || ''}
                                         onChange={(e) => handleOnRespectChange('dirname', e.target.value)}
-                                        className="w-full rounded-md"
                                     />
-                                </div>
-                                <div>
-                                    <FormLabel htmlFor="respect-permissions" className="mb-1 text-slate-600 dark:text-slate-300">Permessi:</FormLabel>
+                                </FormField>
+                                <FormField etichetta="Permessi">
                                     <FormInput
-                                        id="respect-permissions"
                                         placeholder="Permessi (es. 755)"
                                         value={localNode.on_respect_condition?.permissions || ''}
                                         onChange={(e) => handleOnRespectChange('permissions', e.target.value)}
-                                        className="w-full rounded-md"
                                     />
-                                </div>
+                                </FormField>
                             </div>
 
-                            <div className="bg-slate-50 dark:bg-darkmode-400/20 p-3 rounded-md">
-                                <strong className="text-slate-700 dark:text-slate-300 text-sm">Metadati</strong>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
-                                    <div>
-                                        <FormLabel htmlFor="meta-description" className="mb-1 text-slate-600 dark:text-slate-300 text-xs">Descrizione:</FormLabel>
+                            <div className="rounded-control bg-slate-50 p-3">
+                                <h4 className="title-eyebrow">Metadati</h4>
+                                <div className="mt-2 grid grid-cols-1 gap-3 md:grid-cols-2">
+                                    <FormField etichetta="Descrizione">
                                         <FormInput
-                                            id="meta-description"
                                             placeholder="Descrizione"
                                             value={localNode.on_respect_condition?.meta?.description || ''}
                                             onChange={(e) => handleMetaChange('description', e.target.value)}
-                                            className="w-full rounded-md"
                                         />
-                                    </div>
-                                    <div>
-                                        <FormLabel htmlFor="meta-version" className="mb-1 text-slate-600 dark:text-slate-300 text-xs">Versione:</FormLabel>
+                                    </FormField>
+                                    <FormField etichetta="Versione">
                                         <FormInput
-                                            id="meta-version"
                                             placeholder="Versione"
                                             value={localNode.on_respect_condition?.meta?.version || ''}
                                             onChange={(e) => handleMetaChange('version', e.target.value)}
-                                            className="w-full rounded-md"
                                         />
-                                    </div>
+                                    </FormField>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <div className="bg-white dark:bg-darkmode-600 p-3 rounded-md shadow-sm">
-                        <div className="mb-3">
-                            <strong className="text-slate-700 dark:text-slate-300 text-sm uppercase tracking-wide">Azioni in caso di errore</strong>
-                        </div>
+                    <div className={classiGruppo}>
+                        <h4 className="title-eyebrow mb-3">Azioni in caso di errore</h4>
                         <div className="space-y-3">
                             <div>
-                                <FormLabel htmlFor="error-commands" className="mb-1 text-slate-600 dark:text-slate-300">Comandi:</FormLabel>
+                                <FormLabel htmlFor={`${idNodo}-error-commands`}>Comandi</FormLabel>
                                 <TomSelect
                                     multiple
-                                    id="error-commands"
+                                    id={`${idNodo}-error-commands`}
                                     value={localNode.on_error?.commands || []}
                                     onChange={(e) => handleOnErrorChange('commands', e.target.value)}
                                     options={{
@@ -376,81 +397,74 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onChange, onDelete, canali, a
                                     ))}
                                 </TomSelect>
                             </div>
-                            <div>
-                                <FormLabel htmlFor="error-log" className="mb-1 text-slate-600 dark:text-slate-300">Log di errore:</FormLabel>
+                            <FormField etichetta="Log di errore">
                                 <FormInput
-                                    id="error-log"
                                     placeholder="Messaggio di log per l'errore"
                                     value={localNode.on_error?.log || ''}
                                     onChange={(e) => handleOnErrorChange('log', e.target.value)}
-                                    className="w-full rounded-md"
                                 />
-                            </div>
+                            </FormField>
+                        </div>
+                    </div>
+
+                    <div className={classiGruppo}>
+                        <h4 className="title-eyebrow mb-3">Fallback</h4>
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                            <FormField etichetta="Azione">
+                                <FormInput
+                                    placeholder="Azione di fallback"
+                                    value={localNode.fallback?.action || ''}
+                                    onChange={(e) => handleFallbackChange('action', e.target.value)}
+                                />
+                            </FormField>
+                            <FormField etichetta="Nome directory">
+                                <FormInput
+                                    placeholder="Nome directory di fallback"
+                                    value={localNode.fallback?.dirname || ''}
+                                    onChange={(e) => handleFallbackChange('dirname', e.target.value)}
+                                />
+                            </FormField>
+                        </div>
+                    </div>
+
+                    <div className={classiGruppo}>
+                        <div className="mb-3 flex items-center justify-between gap-3">
+                            <h4 className="title-eyebrow">Nodi figli</h4>
+                            <Button
+                                type="button"
+                                onClick={addChild}
+                                variant="outline-secondary"
+                                size="sm"
+                                className="whitespace-nowrap"
+                            >
+                                <Lucide icon="FolderPlus" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                                Aggiungi nodo figlio
+                            </Button>
                         </div>
 
-                        <div className="bg-white dark:bg-darkmode-600 p-3 rounded-md shadow-sm">
-                            <div className="mb-3">
-                                <strong className="text-slate-700 dark:text-slate-300 text-sm uppercase tracking-wide">Fallback</strong>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                <div>
-                                    <FormLabel htmlFor="fallback-action" className="mb-1 text-slate-600 dark:text-slate-300">Azione:</FormLabel>
-                                    <FormInput
-                                        id="fallback-action"
-                                        placeholder="Azione di fallback"
-                                        value={localNode.fallback?.action || ''}
-                                        onChange={(e) => handleFallbackChange('action', e.target.value)}
-                                        className="w-full rounded-md"
+                        {(!localNode.filetree || localNode.filetree.length === 0) && (
+                            <EmptyState
+                                compatta
+                                icon="FolderTree"
+                                title="Nessun nodo figlio"
+                                description="Aggiungi un nodo figlio per creare una gerarchia."
+                            />
+                        )}
+
+                        {localNode.filetree && localNode.filetree.length > 0 && (
+                            <div className="space-y-2">
+                                {localNode.filetree.map((child, idx) => (
+                                    <TreeNode
+                                        key={`${localNode.priority}-${idx}`}
+                                        node={child}
+                                        canali={canali}
+                                        aree={aree}
+                                        onChange={(updatedChild) => handleChildChange(idx, updatedChild)}
+                                        onDelete={() => removeChild(idx)}
                                     />
-                                </div>
-                                <div>
-                                    <FormLabel htmlFor="fallback-dirname" className="mb-1 text-slate-600 dark:text-slate-300">Nome directory:</FormLabel>
-                                    <FormInput
-                                        id="fallback-dirname"
-                                        placeholder="Nome directory di fallback"
-                                        value={localNode.fallback?.dirname || ''}
-                                        onChange={(e) => handleFallbackChange('dirname', e.target.value)}
-                                        className="w-full rounded-md"
-                                    />
-                                </div>
+                                ))}
                             </div>
-                        </div>
-
-                        <div className="bg-white dark:bg-darkmode-600 p-3 rounded-md shadow-sm">
-                            <div className="flex items-center justify-between mb-3">
-                                <strong className="text-slate-700 dark:text-slate-300 text-sm uppercase tracking-wide">Nodi figli</strong>
-                                <Button
-                                    onClick={addChild}
-                                    variant="soft-primary"
-                                    size="sm"
-                                    className="whitespace-nowrap"
-                                >
-                                    <Lucide icon="FolderPlus" className="w-4 h-4 mr-1" />
-                                    Aggiungi nodo figlio
-                                </Button>
-                            </div>
-
-                            {(!localNode.filetree || localNode.filetree.length === 0) && (
-                                <div className="text-slate-500 text-sm italic p-2 bg-slate-50 dark:bg-darkmode-400/20 rounded-md">
-                                    Nessun nodo figlio. Aggiungi un nodo figlio per creare una gerarchia.
-                                </div>
-                            )}
-
-                            {localNode.filetree && localNode.filetree.length > 0 && (
-                                <div className="space-y-2">
-                                    {localNode.filetree.map((child, idx) => (
-                                        <TreeNode
-                                            key={`${localNode.priority}-${idx}`}
-                                            node={child}
-                                            canali={canali}
-                                            aree={aree}
-                                            onChange={(updatedChild) => handleChildChange(idx, updatedChild)}
-                                            onDelete={() => removeChild(idx)}
-                                        />
-                                    ))}
-                                </div>
-                            )}
-                        </div>
+                        )}
                     </div>
                 </div>
             )}
@@ -471,7 +485,6 @@ const FileTree: React.FC<FileTreeProps> = ({ contratto, onChange, canali, aree, 
 
     // Aggiorno localData quando cambia contratto dall'esterno
     useEffect(() => {
-        console.log("contratto FileTree", contratto);
         setLocalData(contratto);
     }, [contratto]);
 
@@ -564,19 +577,18 @@ const FileTree: React.FC<FileTreeProps> = ({ contratto, onChange, canali, aree, 
 
     if (!localData) {
         return (
-            <div className="flex flex-col box box--stacked p-5 rounded-xl">
-                <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-5 rounded-md">
-                    <div className="flex items-center">
-                        <Lucide icon="Info" className="w-6 h-6 mr-2" />
-                        <span>Non è stato trovato un contratto tipografico valido per questa configurazione.</span>
-                    </div>
-                </div>
+            <div className="flex flex-col gap-4">
+                <Alert variant="soft-warning" icona="Info">
+                    Non è stato trovato un contratto tipografico valido per questa configurazione.
+                </Alert>
 
                 <EmptyState
+                    compatta
                     icon="FolderPlus"
                     title="Nessun contratto configurato"
                     description="Crea un nuovo contratto per definire la struttura delle cartelle per i file tipografici."
                     buttonText="Crea nuovo contratto"
+                    buttonIcon="FolderPlus"
                     onButtonClick={() => {
                         const defaultEmptyContratto: RootFileTree = {
                             root: "root",
@@ -586,50 +598,44 @@ const FileTree: React.FC<FileTreeProps> = ({ contratto, onChange, canali, aree, 
                         setLocalData(defaultEmptyContratto);
                         onCreateNew(defaultEmptyContratto);
                     }}
-                    iconColor="text-primary"
                 />
             </div>
         );
     }
 
     return (
-        <div className="flex flex-col box box--stacked p-5 rounded-xl">
-            <div className="flex justify-between items-center mb-4">
-                <div className='flex-1'>
+        <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <FormField etichetta="Cartella radice" className="flex-1">
                     <FormInput
                         type="text"
-                        className="w-full text-xl font-bold dark:bg-darkmode-600 dark:border-darkmode-400 dark:text-slate-300"
-                        placeholder="Nome del contratto (es. root)"
+                        placeholder="Nome della cartella radice (es. root)"
                         value={localData?.root || ''}
                         onChange={handleRootNameChange}
                     />
-                    <p className="text-sm text-slate-500 mt-1">Configura la struttura delle cartelle per i file tipografici</p>
-                </div>
+                </FormField>
                 <Button
-                    variant="soft-primary"
+                    type="button"
+                    variant="outline-secondary"
                     onClick={addRootNode}
-                    className='ml-4'
                 >
-                    <Lucide icon="FolderPlus" className="w-4 h-4 mr-2" />
+                    <Lucide icon="FolderPlus" aria-hidden="true" className="mr-2 h-4 w-4" />
                     Aggiungi nodo radice
                 </Button>
             </div>
 
             {localData?.root_file_tree.length === 0 ? (
-                <div className="bg-slate-50 dark:bg-darkmode-400/20 p-4 rounded-lg text-center">
-                    <Lucide icon="FolderCog" className="w-12 h-12 mx-auto text-slate-400 mb-3" />
-                    <p className="text-slate-600 dark:text-slate-400 mb-3">Nessun nodo configurato</p>
-                    <Button
-                        variant="outline-primary"
-                        size="sm"
-                        onClick={addRootNode}
-                    >
-                        <Lucide icon="FolderPlus" className="w-4 h-4 mr-2" />
-                        Inizia aggiungendo un nodo
-                    </Button>
-                </div>
+                <EmptyState
+                    compatta
+                    icon="FolderCog"
+                    title="Nessun nodo configurato"
+                    description="Inizia aggiungendo un nodo radice alla struttura delle cartelle."
+                    buttonText="Aggiungi un nodo"
+                    buttonIcon="FolderPlus"
+                    onButtonClick={addRootNode}
+                />
             ) : (
-                <div className="bg-slate-50 dark:bg-darkmode-400/20 p-4 rounded-lg">
+                <div className="rounded-card bg-slate-50 p-4">
                     {localData?.root_file_tree.map((node, idx) => (
                         <TreeNode
                             key={`root-${idx}`}

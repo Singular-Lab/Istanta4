@@ -1,17 +1,37 @@
 import React, { useState } from "react";
-import { Await, useLoaderData, useNavigate } from "react-router-dom";
-import { Fragment } from "react/jsx-runtime";
+import { Await, Link, useAsyncError, useLoaderData, useNavigate } from "react-router-dom";
 import { STATO_GDO_WHATSAPP_NUMBER } from "../../../lib/enums";
-import Button from "../../components/Base/Button";
-import { FormInput, FormSelect } from "../../components/Base/Form";
-import Lucide from "../../components/Base/Lucide";
-import PageHeader from "../../components/Base/PageHeader";
-import Spinner from "../../components/Base/Spinner";
-import StatusBadge from "../../components/Base/StatusBadge";
-import Table from "../../components/Base/Table";
-import withSessionCheck from "../../components/SessionChecker";
-import { descriviStato } from "../../constants/stati";
+import BarraFiltri from "@/components/Base/BarraFiltri";
+import Button from "@/components/Base/Button";
+import CampoRicerca from "@/components/Base/CampoRicerca";
+import { FormSelect } from "@/components/Base/Form";
+import Lucide from "@/components/Base/Lucide";
+import PageError from "@/components/Base/PageError";
+import Pagina from "@/components/Base/Pagina";
+import Sezione from "@/components/Base/Sezione";
+import Spinner from "@/components/Base/Spinner";
+import StatusBadge from "@/components/Base/StatusBadge";
+import Table from "@/components/Base/Table";
+import EmptyState from "@/components/EmptyState";
+import withSessionCheck from "@/components/SessionChecker";
+import { descriviStato } from "@/constants/stati";
+import { formatData, VALORE_ASSENTE } from "@/utils/format";
 
+const COLONNE = 5;
+
+/** Errore del caricamento differito delle GDO, mostrato al posto della tabella. */
+function ErroreGdo() {
+  const errore = useAsyncError() as { message?: string } | undefined;
+  return (
+    <div className="p-5">
+      <PageError
+        compatta
+        titolo="Impossibile caricare le GDO"
+        motivo={errore?.message || "Non è stato possibile recuperare l'elenco delle GDO."}
+      />
+    </div>
+  );
+}
 
 const GestioneWhatsappSuperAdmin: React.FC = () => {
   const {
@@ -37,207 +57,202 @@ const GestioneWhatsappSuperAdmin: React.FC = () => {
       return matchesSearch && matchesStato;
     });
   };
+
+  const filtriAttivi = searchTerm !== "" || filterStato !== "all";
+
   return (
-    <Fragment>
-      <PageHeader
-        title="Gestione WhatsApp"
-        description="Gestisci le configurazioni WhatsApp Business per i GDO"
-      />
-      <div className="col-span-12">
-        <div className="box box--stacked">
-          {/* Header con ricerca e filtri */}
-          <div className="p-5 border-b border-slate-200/60">
-            <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
-              <div className="flex-1 w-full lg:w-auto">
-                <div className="relative">
-                  <Lucide icon="Search" aria-hidden="true" className="absolute left-3 top-1/2 z-20 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                  <FormInput
-                    type="search"
-                    aria-label="Cerca GDO"
-                    placeholder="Cerca per nome GDO, ragione sociale, email o numero..."
-                    className="pl-10"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                </div>
-              </div>
-              <div className="flex gap-2 items-center">
-                <FormSelect
-                  aria-label="Filtra per stato"
-                  className="w-auto"
-                  value={filterStato}
-                  onChange={(e) => setFilterStato(e.target.value)}
-                >
-                  <option value="all">Tutti gli stati</option>
-                  {Object.values(STATO_GDO_WHATSAPP_NUMBER).map((stato) => (
-                    <option key={stato} value={stato}>{descriviStato("waNumero", stato).etichetta}</option>
-                  ))}
-                </FormSelect>
-              </div>
-            </div>
+    <Pagina
+      titolo="Gestione WhatsApp"
+      descrizione="Gestisci le configurazioni WhatsApp Business per i GDO"
+    >
+      <Sezione senzaPadding titolo="GDO" descrizione="Numeri WhatsApp Business configurati per ogni GDO">
+        <BarraFiltri>
+          <CampoRicerca
+            etichetta="Cerca GDO"
+            placeholder="Nome GDO, ragione sociale, email o numero"
+            value={searchTerm}
+            onChange={setSearchTerm}
+          />
+          <FormSelect
+            formSelectSize="sm"
+            aria-label="Filtra per stato"
+            className="sm:w-56"
+            value={filterStato}
+            onChange={(e) => setFilterStato(e.target.value)}
+          >
+            <option value="all">Tutti gli stati</option>
+            {Object.values(STATO_GDO_WHATSAPP_NUMBER).map((stato) => (
+              <option key={stato} value={stato}>{descriviStato("waNumero", stato).etichetta}</option>
+            ))}
+          </FormSelect>
+        </BarraFiltri>
+
+        <React.Suspense fallback={
+          <div className="flex items-center justify-center p-12">
+            <Spinner size="lg" etichetta="Caricamento dati…" />
           </div>
+        }>
+          <Await resolve={gdos_lista} errorElement={<ErroreGdo />}>
+            {(gdos_lista) => {
+              const filteredGdos = filterGdos(gdos_lista);
 
-          {/* Tabella */}
-          <div className="overflow-x-auto">
-            <React.Suspense fallback={
-              <div className="flex items-center justify-center p-12">
-                <div className="flex flex-col items-center gap-3">
-                  <Spinner size="lg" decorativo />
-                  <p role="status" className="text-slate-500">Caricamento dati...</p>
-                </div>
-              </div>
-            }>
-              <Await resolve={gdos_lista}>
-                {(gdos_lista) => {
-                  const filteredGdos = filterGdos(gdos_lista);
-
-                  if (filteredGdos.length === 0) {
-                    return (
-                      <div className="flex flex-col items-center justify-center p-12 text-slate-500">
-                        <Lucide icon="Search" className="w-12 h-12 mb-3 text-slate-400" />
-                        <p className="text-lg font-medium">Nessun risultato trovato</p>
-                        <p className="text-sm">Prova a modificare i criteri di ricerca</p>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <>
-                      {/* Contatore risultati */}
-                      <div className="px-5 py-3 bg-slate-50 border-b border-slate-200/60">
-                        <p className="text-sm text-slate-600">
-                          Trovati <span className="font-semibold text-slate-800">{filteredGdos.length}</span> GDO
-                        </p>
-                      </div>
-
-                      <Table className="w-full" bordered striped>
-                        <Table.Thead className="bg-slate-50">
+              return (
+                <>
+                  <div className="overflow-x-auto">
+                    <Table className="w-full">
+                      <Table.Thead>
+                        <Table.Tr>
+                          <Table.Th>GDO</Table.Th>
+                          <Table.Th>Contatti</Table.Th>
+                          <Table.Th>WhatsApp</Table.Th>
+                          <Table.Th>Stato</Table.Th>
+                          <Table.Th className="text-right"><span className="sr-only">Azioni</span></Table.Th>
+                        </Table.Tr>
+                      </Table.Thead>
+                      <Table.Tbody>
+                        {filteredGdos.length === 0 && (
                           <Table.Tr>
-                            <Table.Th className="font-semibold">GDO</Table.Th>
-                            <Table.Th className="font-semibold">Contatti</Table.Th>
-                            <Table.Th className="font-semibold">WhatsApp</Table.Th>
-                            <Table.Th className="font-semibold">Stato</Table.Th>
-                            <Table.Th className="font-semibold text-center">Azioni</Table.Th>
+                            <Table.Td colSpan={COLONNE} className="p-0">
+                              {filtriAttivi && gdos_lista.length > 0 ? (
+                                <EmptyState
+                                  compatta
+                                  icon="SearchX"
+                                  title="Nessun risultato"
+                                  description="Nessuna GDO corrisponde alla ricerca o al filtro scelto."
+                                  buttonText="Azzera filtri"
+                                  buttonIcon="X"
+                                  onButtonClick={() => {
+                                    setSearchTerm("");
+                                    setFilterStato("all");
+                                  }}
+                                />
+                              ) : (
+                                <EmptyState
+                                  compatta
+                                  icon="Store"
+                                  title="Nessuna GDO"
+                                  description="Non ci sono ancora GDO da configurare."
+                                />
+                              )}
+                            </Table.Td>
                           </Table.Tr>
-                        </Table.Thead>
-                        <Table.Tbody>
-                          {filteredGdos.map((gdo) => (
-                            <Table.Tr
-                              key={gdo.id ?? ''}
-                              className="hover:bg-slate-50 transition-colors [&_td]:last:border-b-0"
-                            >
-                              {/* Colonna GDO */}
-                              <Table.Td className="py-4">
-                                <div className="flex flex-col gap-1">
-                                  <a
-                                    href={`/gdo/${gdo?.id}`}
-                                    className="text-primary font-medium hover:text-primary-dark transition-colors flex items-center gap-1 group"
-                                  >
-                                    {gdo?.nome ?? ''}
-                                    <Lucide icon="ExternalLink" className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                  </a>
-                                  <div className="flex items-center gap-2 text-xs text-slate-500">
-                                    {gdo?.id_parent && (
-                                      <span className="flex items-center gap-1">
-                                        <Lucide icon="Link2" className="w-3 h-3" />
-                                        Parent: {gdo.id_parent}
-                                      </span>
-                                    )}
-                                    {gdo?.createdat && (
-                                      <span className="flex items-center gap-1">
-                                        <Lucide icon="Calendar" className="w-3 h-3" />
-                                        {new Date(gdo.createdat).toLocaleDateString()}
-                                      </span>
-                                    )}
+                        )}
+                        {filteredGdos.map((gdo) => (
+                          <Table.Tr key={gdo.id ?? ''}>
+                            {/* Colonna GDO */}
+                            <Table.Td>
+                              <div className="flex flex-col gap-1">
+                                <Link
+                                  to={`/gdo/${gdo?.id}`}
+                                  className="group flex items-center gap-1 font-medium text-primary transition-colors hover:underline"
+                                >
+                                  {gdo?.nome ?? ''}
+                                  <Lucide icon="ExternalLink" aria-hidden="true" className="h-3.5 w-3.5 opacity-0 transition-opacity group-hover:opacity-100" />
+                                </Link>
+                                <div className="flex items-center gap-2 text-xs text-slate-500">
+                                  {gdo?.id_parent && (
+                                    <span className="flex items-center gap-1">
+                                      <Lucide icon="Link2" aria-hidden="true" className="h-3 w-3" />
+                                      Parent: {gdo.id_parent}
+                                    </span>
+                                  )}
+                                  {gdo?.createdat && (
+                                    <span className="flex items-center gap-1">
+                                      <Lucide icon="Calendar" aria-hidden="true" className="h-3 w-3" />
+                                      {formatData(gdo.createdat)}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </Table.Td>
+
+                            {/* Colonna Contatti */}
+                            <Table.Td>
+                              <div className="flex flex-col gap-1.5">
+                                {gdo?.ragione_sociale && (
+                                  <div className="flex items-start gap-1.5">
+                                    <Lucide icon="Building2" aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-slate-400" />
+                                    <span className="text-sm">{gdo.ragione_sociale}</span>
                                   </div>
-                                </div>
-                              </Table.Td>
+                                )}
+                                {gdo?.email && (
+                                  <div className="flex items-center gap-1.5">
+                                    <Lucide icon="Mail" aria-hidden="true" className="h-3.5 w-3.5 flex-shrink-0 text-slate-400" />
+                                    <span className="text-sm text-slate-600">{gdo.email}</span>
+                                  </div>
+                                )}
+                                {!gdo?.ragione_sociale && !gdo?.email && (
+                                  <span className="text-sm text-slate-400">{VALORE_ASSENTE}</span>
+                                )}
+                              </div>
+                            </Table.Td>
 
-                              {/* Colonna Contatti */}
-                              <Table.Td className="py-4">
-                                <div className="flex flex-col gap-1.5">
-                                  {gdo?.ragione_sociale && (
-                                    <div className="flex items-start gap-1.5">
-                                      <Lucide icon="Building2" className="w-3.5 h-3.5 text-slate-400 mt-0.5 flex-shrink-0" />
-                                      <span className="text-sm">{gdo.ragione_sociale}</span>
-                                    </div>
-                                  )}
-                                  {gdo?.email && (
+                            {/* Colonna WhatsApp */}
+                            <Table.Td>
+                              <div className="flex flex-col gap-1.5">
+                                {gdo?.wa_number ? (
+                                  <>
                                     <div className="flex items-center gap-1.5">
-                                      <Lucide icon="Mail" className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-                                      <span className="text-sm text-slate-600">{gdo.email}</span>
+                                      <Lucide icon="Phone" aria-hidden="true" className="h-3.5 w-3.5 flex-shrink-0 text-success" />
+                                      <span className="text-sm font-medium tabular-nums">{gdo.wa_number}</span>
                                     </div>
-                                  )}
-                                  {!gdo?.ragione_sociale && !gdo?.email && (
-                                    <span className="text-sm text-slate-400">-</span>
-                                  )}
-                                </div>
-                              </Table.Td>
+                                    {gdo?.wa_phone_id && (
+                                      <span className="text-xs text-slate-500">ID: {gdo.wa_phone_id}</span>
+                                    )}
+                                  </>
+                                ) : (
+                                  <span className="text-sm text-slate-400">Non configurato</span>
+                                )}
+                              </div>
+                            </Table.Td>
 
-                              {/* Colonna WhatsApp */}
-                              <Table.Td className="py-4">
-                                <div className="flex flex-col gap-1.5">
-                                  {gdo?.wa_number ? (
-                                    <>
-                                      <div className="flex items-center gap-1.5">
-                                        <Lucide icon="Phone" className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />
-                                        <span className="text-sm font-medium">{gdo.wa_number}</span>
-                                      </div>
-                                      {gdo?.wa_phone_id && (
-                                        <span className="text-xs text-slate-500">ID: {gdo.wa_phone_id}</span>
-                                      )}
-                                    </>
-                                  ) : (
-                                    <span className="text-sm text-slate-400">Non configurato</span>
-                                  )}
-                                </div>
-                              </Table.Td>
+                            {/* Colonna Stato */}
+                            <Table.Td>
+                              {gdo?.stato
+                                ? <StatusBadge dominio="waNumero" stato={gdo.stato} />
+                                : <StatusBadge tono="neutral" etichetta="Non configurato" />}
+                            </Table.Td>
 
-                              {/* Colonna Stato */}
-                              <Table.Td className="py-4">
-                                <div className="flex items-center">
-                                  {gdo?.stato
-                                    ? <StatusBadge dominio="waNumero" stato={gdo.stato} />
-                                    : <StatusBadge tono="neutral" etichetta="Non configurato" />}
-                                </div>
-                              </Table.Td>
-
-                              {/* Colonna Azioni */}
-                              <Table.Td className="py-4">
-                                <div className="flex gap-2 justify-center">
-                                  <Button
-                                    onClick={() => navigate("setup?id=" + gdo.id)}
-                                    size="sm"
-                                    variant="outline-primary"
-                                    className="flex items-center gap-1.5"
-                                  >
-                                    <Lucide icon="Settings" className="w-3.5 h-3.5" />
-                                    Setup
-                                  </Button>
-                                  <Button
-                                    onClick={() => navigate("templates?id=" + gdo.id)}
-                                    size="sm"
-                                    variant="outline-secondary"
-                                    className="flex items-center gap-1.5"
-                                  >
-                                    <Lucide icon="FileText" className="w-3.5 h-3.5" />
-                                    Templates
-                                  </Button>
-                                </div>
-                              </Table.Td>
-                            </Table.Tr>
-                          ))}
-                        </Table.Tbody>
-                      </Table>
-                    </>
-                  );
-                }}
-              </Await>
-            </React.Suspense>
-          </div>
-        </div>
-      </div>
-    </Fragment>
+                            {/* Colonna Azioni: due azioni, pulsanti solo icona */}
+                            <Table.Td className="text-right">
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  onClick={() => navigate("setup?id=" + gdo.id)}
+                                  size="sm"
+                                  variant="outline-secondary"
+                                  aria-label={`Setup WhatsApp di ${gdo?.nome ?? "GDO"}`}
+                                  title="Setup"
+                                >
+                                  <Lucide icon="Settings" aria-hidden="true" className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  onClick={() => navigate("templates?id=" + gdo.id)}
+                                  size="sm"
+                                  variant="outline-secondary"
+                                  aria-label={`Template WhatsApp di ${gdo?.nome ?? "GDO"}`}
+                                  title="Templates"
+                                >
+                                  <Lucide icon="FileText" aria-hidden="true" className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </Table.Td>
+                          </Table.Tr>
+                        ))}
+                      </Table.Tbody>
+                    </Table>
+                  </div>
+                  {filteredGdos.length > 0 && (
+                    <p className="px-5 py-3 text-sm text-slate-500" aria-live="polite">
+                      Trovate <span className="font-medium text-slate-700 tabular-nums">{filteredGdos.length}</span> GDO
+                    </p>
+                  )}
+                </>
+              );
+            }}
+          </Await>
+        </React.Suspense>
+      </Sezione>
+    </Pagina>
   );
 };
 

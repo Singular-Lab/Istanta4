@@ -1,13 +1,18 @@
+import Alert from "@/components/Base/Alert";
+import BarraFiltri from "@/components/Base/BarraFiltri";
 import Button from "@/components/Base/Button";
+import CampoRicerca from "@/components/Base/CampoRicerca";
 import { FormInput, FormLabel, FormSelect } from "@/components/Base/Form";
-import { Dialog } from "@/components/Base/Headless";
+import { Dialog, Menu } from "@/components/Base/Headless";
 import Lucide from "@/components/Base/Lucide";
 import PageError from "@/components/Base/PageError";
-import PageHeader from "@/components/Base/PageHeader";
-import Pagination from "@/components/Base/Pagination";
+import Pagina from "@/components/Base/Pagina";
+import PaginazioneTabella from "@/components/Base/PaginazioneTabella";
+import Sezione from "@/components/Base/Sezione";
 import Spinner from "@/components/Base/Spinner";
 import StatusBadge from "@/components/Base/StatusBadge";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import EmptyState from "@/components/EmptyState";
 import { PermissionGate } from "@/components/PermissionGate";
 import Table from "@/components/Base/Table";
 import withSessionCheck from "@/components/SessionChecker";
@@ -116,7 +121,7 @@ function MapPuntiVendita({ puntiVendita, coloreCanale, onDettagli }: MapPuntiVen
       zoom={6}
       preferCanvas
       scrollWheelZoom={false}
-      className="absolute inset-0 rounded-md"
+      className="absolute inset-0"
     >
       <TileLayer
         url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -171,7 +176,7 @@ function FiltroChip({ etichetta, tutti, voci, attivo, onScegli, colore }: Filtro
           : "border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-darkmode-400 dark:text-slate-300 dark:hover:bg-darkmode-400"
       )}
     >
-      {id && colore && <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: colore(id) }} />}
+      {id && colore && <span aria-hidden="true" className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: colore(id) }} />}
       {testo}
       <span className="text-slate-400">{totale}</span>
     </button>
@@ -179,7 +184,7 @@ function FiltroChip({ etichetta, tutti, voci, attivo, onScegli, colore }: Filtro
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span className="w-16 text-xs uppercase text-slate-500">{etichetta}</span>
+      <span className="title-eyebrow w-16">{etichetta}</span>
       {chip("", tutti, voci.reduce((somma, v) => somma + v.totale, 0))}
       {voci.map(v => chip(v.id, v.nome, v.totale))}
     </div>
@@ -285,39 +290,9 @@ function Main() {
   }, [page, totalPages]);
 
   const showingFrom = totalItems === 0 ? 0 : (page - 1) * pageSize + 1;
-  const showingTo = totalItems === 0 ? 0 : showingFrom + puntiVendita.length - 1;
   const baseIndex = showingFrom === 0 ? 0 : showingFrom - 1;
-  const paginationRange = useMemo<(number | string)[]>(() => {
-    if (totalPages <= 1) {
-      return [];
-    }
-    const range: (number | string)[] = [];
-    const delta = 1;
-    const left = Math.max(2, page - delta);
-    const right = Math.min(totalPages - 1, page + delta);
-
-    range.push(1);
-    if (left > 2) {
-      range.push("left-ellipsis");
-    }
-
-    for (let i = left; i <= right; i += 1) {
-      range.push(i);
-    }
-
-    if (right < totalPages - 1) {
-      range.push("right-ellipsis");
-    }
-
-    if (totalPages > 1) {
-      range.push(totalPages);
-    }
-
-    return range.filter((value, index, self) => self.indexOf(value) === index);
-  }, [page, totalPages]);
-
-  const canGoPrev = page > 1;
-  const canGoNext = totalPages > 0 && page < totalPages;
+  // Colonne della tabella: #, nome, indirizzo, canale, area, (codice GDO), azioni
+  const numeroColonne = mostraCodiciGdo ? 7 : 6;
 
   const invalidatePuntiVendita = () => {
     queryClient.invalidateQueries({ queryKey: ["dataPuntiVendita"] });
@@ -595,11 +570,7 @@ function Main() {
         onClose={() => setIsPuntoVenditaDialogOpen(false)}
       >
         <Dialog.Panel>
-          <Dialog.Title>
-            <h2 className="title-card mr-auto">
-              {isEditMode ? "Modifica Punto Vendita" : "Crea Punto Vendita"}
-            </h2>
-          </Dialog.Title>
+          <Dialog.Title>{isEditMode ? "Modifica Punto Vendita" : "Crea Punto Vendita"}</Dialog.Title>
           <Dialog.Description>
             <form
               ref={formRef}
@@ -763,9 +734,8 @@ function Main() {
           <Dialog.Footer>
             <Button
               type="button"
-              variant="outline-danger"
+              variant="outline-secondary"
               onClick={() => setIsPuntoVenditaDialogOpen(false)}
-              className="w-20 mr-1"
               disabled={mutationCreate.isPending || mutationUpdate.isPending}
             >
               Annulla
@@ -774,7 +744,6 @@ function Main() {
               variant="primary"
               onClick={handleSubmit(onSubmit)}
               form="punto-vendita-form"
-              className="w-20"
               loading={mutationCreate.isPending || mutationUpdate.isPending}
             >
               {isEditMode ? "Modifica" : "Crea"}
@@ -804,11 +773,7 @@ function Main() {
         onClose={chiudiImport}
       >
         <Dialog.Panel>
-          <Dialog.Title>
-            <h2 className="title-card mr-auto">
-              Importa Punti Vendita da Excel
-            </h2>
-          </Dialog.Title>
+          <Dialog.Title>Importa Punti Vendita da Excel</Dialog.Title>
           <Dialog.Description>
             <div className="grid grid-cols-12 gap-4 gap-y-3">
               <div className="col-span-12">
@@ -827,15 +792,11 @@ function Main() {
                   loading={mutationAnteprimaImport.isPending}
                 >
                   {!mutationAnteprimaImport.isPending && (
-                    <Lucide
-                      icon="Upload"
-                      aria-hidden="true"
-                      className="stroke-[1.3] w-4 h-4 mr-2"
-                    />
+                    <Lucide icon="Upload" aria-hidden="true" className="mr-2 h-4 w-4" />
                   )}
                   {fileImport ? fileImport.name : "Seleziona file Excel"}
                 </Button>
-                <div className="mt-2 text-xs text-gray-500">
+                <div className="mt-2 text-xs text-slate-500">
                   Il file viene letto con il tracciato previsto per la tua GDO.
                 </div>
               </div>
@@ -887,16 +848,13 @@ function Main() {
                     )}
                   </div>
                   {statoImport.erroriNominatim > 0 && (
-                    <div className="mt-3 rounded border border-danger/30 bg-danger/5 p-2 text-xs text-danger flex items-start">
-                      <Lucide icon="CircleAlert" className="w-4 h-4 mr-1 shrink-0" />
-                      <span>
-                        Nominatim in errore ({statoImport.erroriNominatim} righe senza coordinate): {statoImport.ultimoErroreNominatim}
-                      </span>
-                    </div>
+                    <Alert variant="soft-danger" icona="CircleAlert" className="mt-3 px-3 py-2 text-xs">
+                      Nominatim in errore ({statoImport.erroriNominatim} righe senza coordinate): {statoImport.ultimoErroreNominatim}
+                    </Alert>
                   )}
                   {statoImport.soloFp > 0 && (
                     <div className="mt-3 text-xs text-warning flex items-center">
-                      <Lucide icon="TriangleAlert" className="w-4 h-4 mr-1" />
+                      <Lucide icon="TriangleAlert" aria-hidden="true" className="mr-1 h-4 w-4" />
                       {statoImport.soloFp} punti vendita salvati solo in FP: Istanta non era raggiungibile, i due sistemi non sono allineati
                     </div>
                   )}
@@ -911,7 +869,7 @@ function Main() {
                     </div>
                   )}
                   {!importJob.inCorso && statoImport.errori.length > 0 && (
-                    <ul className="mt-3 max-h-64 overflow-y-auto border rounded p-3 text-xs text-danger">
+                    <ul className="mt-3 max-h-64 overflow-y-auto rounded-control border border-slate-200 p-3 text-xs text-danger">
                       {statoImport.errori.map((e, i) => (
                         <li key={`${e.row}-${i}`}>
                           Riga {e.row}: {e.error}
@@ -927,7 +885,7 @@ function Main() {
                   <h3 className="title-card mb-2">
                     Anteprima ({anteprimaImport.length} righe)
                   </h3>
-                  <div className="max-h-64 overflow-y-auto border rounded">
+                  <div className="max-h-64 overflow-y-auto rounded-card border border-slate-200">
                     <Table>
                       <Table.Thead>
                         <Table.Tr>
@@ -1006,7 +964,7 @@ function Main() {
           <Dialog.Footer>
             {importJob.inCorso ? (
               <>
-                <Button variant="outline-secondary" className="mr-1" onClick={chiudiImport}>
+                <Button variant="outline-secondary" onClick={chiudiImport}>
                   Nascondi
                 </Button>
                 <Button
@@ -1020,8 +978,7 @@ function Main() {
             ) : (
               <>
                 <Button
-                  variant="outline-danger"
-                  className="w-20 mr-1"
+                  variant="outline-secondary"
                   onClick={chiudiImport}
                 >
                   {statoImport ? "Chiudi" : "Annulla"}
@@ -1029,7 +986,6 @@ function Main() {
                 {!statoImport && (
                   <Button
                     variant="primary"
-                    className="w-auto"
                     onClick={avviaImport}
                     disabled={!fileImport || righeDaElaborare === 0}
                     loading={importJob.avvioInCorso}
@@ -1043,351 +999,235 @@ function Main() {
         </Dialog.Panel>
       </Dialog>
 
-      {/* Tabella punti vendita */}
-      <div className="grid grid-cols-12 gap-y-10 gap-x-6">
-        <div className="col-span-12">
-          <PageHeader
-            title="Punti Vendita"
-            description="Gestione punti vendita"
-          />
-          <div className="mt-3.5">
-            <div className="flex flex-col box box--stacked">
-              <div className="relative h-[440px] w-full p-4">
-                <div className="relative h-full w-full overflow-hidden rounded-2xl border border-slate-200/80 bg-white dark:border-darkmode-500 dark:bg-darkmode-600">
-                  {isLoading && (
-                    <div role="status" className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 px-6 text-center bg-white/80 dark:bg-darkmode-600/80 backdrop-blur-sm">
-                      <Spinner size="lg" decorativo />
-                      <div className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                        Caricamento punti vendita
-                      </div>
-                      <div className="text-xs text-slate-500 dark:text-slate-400">
-                        Recupero i dati dal server...
-                      </div>
-                    </div>
-                  )}
+      <Pagina
+        titolo="Punti Vendita"
+        descrizione="Gestione punti vendita"
+        azioni={
+          <>
+            <PermissionGate permission={PERMISSIONS.GDO.GESTISCI_PUNTI_VENDITA} mode="disable">
+              <Button variant="outline-secondary" onClick={() => setIsExcelImportDialogOpen(true)}>
+                <Lucide icon="FileSpreadsheet" aria-hidden="true" className="mr-2 h-4 w-4" />
+                {importJob.inCorso ? `Import in corso (${percentualeImport(importJob.stato!)}%)` : "Importa Excel"}
+              </Button>
+            </PermissionGate>
+            <PermissionGate permission={PERMISSIONS.GDO.GESTISCI_PUNTI_VENDITA} mode="disable">
+              <Button variant="primary" onClick={openNewPuntoVenditaDialog}>
+                <Lucide icon="Plus" aria-hidden="true" className="mr-2 h-4 w-4" />
+                Nuovo punto vendita
+              </Button>
+            </PermissionGate>
+          </>
+        }
+      >
+        <Sezione titolo="Mappa" descrizione="Punti vendita geolocalizzati, colorati per canale">
+          <div className="relative h-[440px] w-full overflow-hidden rounded-card border border-slate-200 bg-white dark:border-darkmode-500 dark:bg-darkmode-600">
+            {isLoading && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/80 px-6 backdrop-blur-sm dark:bg-darkmode-600/80">
+                <Spinner size="lg" etichetta="Caricamento punti vendita" />
+              </div>
+            )}
 
-                  {puntiVenditaQuery.isError && (
-                    <div className="absolute inset-0 z-10 flex items-center justify-center px-6">
+            {puntiVenditaQuery.isError && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center px-6">
+                <PageError
+                  compatta
+                  titolo="Punti vendita non caricati"
+                  motivo={(puntiVenditaQuery.error as Error)?.message || "Errore durante il recupero dei punti vendita"}
+                  onRiprova={() => puntiVenditaQuery.refetch()}
+                  className="w-full max-w-lg bg-white"
+                />
+              </div>
+            )}
+
+            {!isLoading && hasMappablePoints && (
+              <MapPuntiVendita
+                puntiVendita={filtrati}
+                coloreCanale={coloreCanale}
+                onDettagli={pv => navigate(`/gestione-interna/punti-vendita/${pv.id}`)}
+              />
+            )}
+
+            {!isLoading && !puntiVenditaQuery.isError && !hasMappablePoints && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center px-6">
+                <EmptyState
+                  compatta
+                  icon="MapPin"
+                  title="Nessun punto vendita geolocalizzato"
+                  description="Inserisci latitudine e longitudine per visualizzarli sulla mappa."
+                />
+              </div>
+            )}
+          </div>
+          {tuttiPuntiVendita.length > 0 && (
+            <div className="mt-4 flex flex-col gap-3">
+              <FiltroChip
+                etichetta="Canale"
+                tutti="Tutti"
+                voci={perCanale}
+                attivo={filtroCanale}
+                onScegli={setFiltroCanale}
+                colore={id => coloriCanale.get(id) ?? COLORE_SENZA_CANALE}
+              />
+              <FiltroChip
+                etichetta="Area"
+                tutti="Tutte"
+                voci={perArea}
+                attivo={filtroArea}
+                onScegli={setFiltroArea}
+              />
+              {senzaCoordinate > 0 && (
+                <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                  <Lucide icon="MapPinOff" aria-hidden="true" className="h-3.5 w-3.5" />
+                  {senzaCoordinate === 1
+                    ? "1 punto vendita filtrato non ha coordinate e non compare sulla mappa."
+                    : `${senzaCoordinate} punti vendita filtrati non hanno coordinate e non compaiono sulla mappa.`}
+                </div>
+              )}
+            </div>
+          )}
+        </Sezione>
+
+        <Sezione senzaPadding titolo="Punti Vendita" descrizione="Elenco dei punti vendita della GDO, con i filtri della mappa">
+          <BarraFiltri destra={isTableFetching && !isLoading ? <Spinner size="sm" etichetta="Ricerca in corso…" /> : undefined}>
+            <CampoRicerca
+              etichetta="Cerca punto vendita"
+              placeholder="Cerca punto vendita"
+              value={searchTerm}
+              onChange={setSearchTerm}
+              className="sm:w-80"
+            />
+          </BarraFiltri>
+          <div className="overflow-x-auto">
+            <Table>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th className="w-12">#</Table.Th>
+                  <Table.Th>Nome</Table.Th>
+                  <Table.Th>Indirizzo</Table.Th>
+                  <Table.Th>Canale</Table.Th>
+                  <Table.Th>Area</Table.Th>
+                  {mostraCodiciGdo && <Table.Th>Codice GDO</Table.Th>}
+                  <Table.Th className="text-right"><span className="sr-only">Azioni</span></Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {isLoading ? (
+                  <Table.Tr>
+                    <Table.Td colSpan={numeroColonne}>
+                      <div className="flex justify-center py-10">
+                        <Spinner size="lg" etichetta="Caricamento punti vendita..." />
+                      </div>
+                    </Table.Td>
+                  </Table.Tr>
+                ) : puntiVenditaQuery.isError ? (
+                  <Table.Tr>
+                    <Table.Td colSpan={numeroColonne}>
                       <PageError
                         compatta
                         titolo="Punti vendita non caricati"
                         motivo={(puntiVenditaQuery.error as Error)?.message || "Errore durante il recupero dei punti vendita"}
                         onRiprova={() => puntiVenditaQuery.refetch()}
-                        className="w-full max-w-lg bg-white"
                       />
-                    </div>
-                  )}
-
-                  {!isLoading && hasMappablePoints && (
-                    <MapPuntiVendita
-                      puntiVendita={filtrati}
-                      coloreCanale={coloreCanale}
-                      onDettagli={pv => navigate(`/gestione-interna/punti-vendita/${pv.id}`)}
-                    />
-                  )}
-
-                  {!isLoading && !puntiVenditaQuery.isError && !hasMappablePoints && (
-                    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 px-6 text-center">
-                      <Lucide icon="MapPin" className="w-8 h-8 text-slate-400" />
-                      <p className="text-sm font-medium text-slate-600 dark:text-slate-200">
-                        Nessun punto vendita geolocalizzato
-                      </p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
-                        Inserisci latitudine e longitudine per visualizzarli sulla mappa.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-              {tuttiPuntiVendita.length > 0 && (
-                <div className="flex flex-col gap-3 px-5 pb-5">
-                  <FiltroChip
-                    etichetta="Canale"
-                    tutti="Tutti"
-                    voci={perCanale}
-                    attivo={filtroCanale}
-                    onScegli={setFiltroCanale}
-                    colore={id => coloriCanale.get(id) ?? COLORE_SENZA_CANALE}
-                  />
-                  <FiltroChip
-                    etichetta="Area"
-                    tutti="Tutte"
-                    voci={perArea}
-                    attivo={filtroArea}
-                    onScegli={setFiltroArea}
-                  />
-                  {senzaCoordinate > 0 && (
-                    <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                      <Lucide icon="MapPinOff" className="w-3.5 h-3.5" />
-                      {senzaCoordinate === 1
-                        ? "1 punto vendita filtrato non ha coordinate e non compare sulla mappa."
-                        : `${senzaCoordinate} punti vendita filtrati non hanno coordinate e non compaiono sulla mappa.`}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-          <div className="mt-3.5">
-            <div className="flex flex-col box box--stacked">
-              <div className="flex flex-col p-5 sm:items-center sm:flex-row gap-y-2">
-                <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center">
-                  <div className="relative w-full sm:w-80">
-                    <Lucide
-                      icon="Search"
-                      className="absolute inset-y-0 left-0 z-10 w-4 h-4 my-auto ml-3 stroke-[1.3] text-slate-500"
-                    />
-                    <FormInput
-                      type="text"
-                      value={searchTerm}
-                      onChange={e => setSearchTerm(e.target.value)}
-                      placeholder="Cerca punto vendita"
-                      className="pl-9 pr-9 rounded-control"
-                    />
-                    {isTableFetching ? (
-                      <span className="absolute inset-y-0 right-0 mr-3 flex items-center">
-                        <Spinner size="sm" etichetta="Ricerca in corso…" />
-                      </span>
-                    ) : (
-                      searchTerm && (
-                        <button
-                          type="button"
-                          onClick={() => setSearchTerm("")}
-                          className="absolute inset-y-0 right-0 my-auto mr-3 text-slate-400 hover:text-slate-600"
-                          aria-label="Pulisci ricerca"
-                        >
-                          <Lucide icon="X" aria-hidden="true" className="w-4 h-4" />
-                        </button>
-                      )
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-slate-600">
-                    <span className="text-slate-500">Mostra</span>
-                    <FormSelect
-                      value={pageSize.toString()}
-                      onChange={e => setPageSize(Number(e.target.value))}
-                      className="sm:w-36 rounded-control"
-                    >
-                      {pageSizeOptions.map(size => (
-                        <option key={size} value={size}>
-                          {size} / pagina
-                        </option>
-                      ))}
-                    </FormSelect>
-                  </div>
-                </div>
-                <div className="flex flex-col sm:flex-row gap-x-3 gap-y-2 sm:ml-auto">
-                  <PermissionGate permission={PERMISSIONS.GDO.GESTISCI_PUNTI_VENDITA} mode="disable">
-                    <Button
-                      variant="outline-secondary"
-                      className="w-full sm:w-auto"
-                      onClick={() => setIsExcelImportDialogOpen(true)}
-                    >
-                      <Lucide
-                        icon="FileSpreadsheet"
-                        className="stroke-[1.3] w-4 h-4 mr-2"
-                      />{" "}
-                      {importJob.inCorso ? `Import in corso (${percentualeImport(importJob.stato!)}%)` : "Importa Excel"}
-                    </Button>
-                  </PermissionGate>
-                  <PermissionGate permission={PERMISSIONS.GDO.GESTISCI_PUNTI_VENDITA} mode="disable">
-                    <Button
-                      variant="outline-secondary"
-                      className="w-full sm:w-auto"
-                      onClick={openNewPuntoVenditaDialog}
-                    >
-                      <Lucide icon="Plus" className="stroke-[1.3] w-4 h-4 mr-2" />{" "}
-                      Crea
-                    </Button>
-                  </PermissionGate>
-                </div>
-              </div>
-              <div className="overflow-hidden">
-                <div className="grid grid-cols-12 gap-6 px-5 -mx-5 border-dashed border-y">
-                  <div className="overflow-x-auto col-span-12 px-5">
-                    <div className="px-5 border rounded-card dark:border-darkmode-400 relative mt-7 mb-4 border-slate-200/80">
-                      <div className="absolute left-0 px-3 ml-4 -mt-2 text-xs uppercase bg-white text-slate-500">
-                        <div className="-mt-px">Punti Vendita</div>
-                      </div>
-                      <div className="py-2 mt-4 flex flex-col gap-3.5 overflow-x-auto">
-                        <Table>
-                          <Table.Thead>
-                            <Table.Tr>
-                              <Table.Th>#</Table.Th>
-                              <Table.Th>Nome</Table.Th>
-                              <Table.Th>Indirizzo</Table.Th>
-                              <Table.Th>Canale</Table.Th>
-                              <Table.Th>Area</Table.Th>
-                              {mostraCodiciGdo && <Table.Th>Codice GDO</Table.Th>}
-                              <Table.Th className="text-center">Azioni</Table.Th>
-                            </Table.Tr>
-                          </Table.Thead>
-                          <Table.Tbody>
-                            {isLoading ? (
-                              <Table.Tr>
-                                <Table.Td colSpan={12}>
-                                  <div role="status" className="flex flex-col items-center justify-center py-10 text-center">
-                                    <Spinner size="lg" decorativo />
-                                    <div className="mt-3 text-sm font-medium text-slate-600 dark:text-slate-200">
-                                      Caricamento punti vendita...
-                                    </div>
-                                    <div className="text-xs text-slate-500 dark:text-slate-400">
-                                      Attendere qualche istante
-                                    </div>
-                                  </div>
-                                </Table.Td>
-                              </Table.Tr>
-                            ) : puntiVenditaQuery.isError ? (
-                              <Table.Tr>
-                                <Table.Td colSpan={12}>
-                                  <PageError
-                                    compatta
-                                    titolo="Punti vendita non caricati"
-                                    motivo={(puntiVenditaQuery.error as Error)?.message || "Errore durante il recupero dei punti vendita"}
-                                    onRiprova={() => puntiVenditaQuery.refetch()}
-                                  />
-                                </Table.Td>
-                              </Table.Tr>
-                            ) : puntiVendita.length === 0 ? (
-                              <Table.Tr>
-                                <Table.Td colSpan={12} className="text-center text-slate-500 dark:text-slate-400">
-                                  {debouncedSearch.trim() || filtroCanale || filtroArea
-                                    ? "Nessun punto vendita corrisponde alla ricerca o ai filtri"
-                                    : "Nessun punto vendita disponibile"}
-                                </Table.Td>
-                              </Table.Tr>
-                            ) : (
-                              puntiVendita.map((pv, idx) => (
-                                <Table.Tr key={pv.id}>
-                                  <Table.Td>{baseIndex + idx + 1}</Table.Td>
-                                  <Table.Td>
-                                    <div className="font-medium">{pv.nome}</div>
-                                    {pv.ragionesociale && (
-                                      <div className="text-xs text-slate-500">{pv.ragionesociale}</div>
-                                    )}
-                                  </Table.Td>
-                                  <Table.Td>{indirizzoCompleto(pv)}</Table.Td>
-                                  <Table.Td>
-                                    <span className="inline-flex items-center gap-1.5">
-                                      <span className="h-2.5 w-2.5 flex-none rounded-full" style={{ backgroundColor: coloreCanale(pv) }} />
-                                      {pv.nome_canale || "-"}
-                                    </span>
-                                  </Table.Td>
-                                  <Table.Td>{pv.nome_area || "-"}</Table.Td>
-                                  {mostraCodiciGdo && (
-                                    <Table.Td>
-                                      {codiciGdo(pv.meta).map(c => (
-                                        <div key={c.etichetta} className="text-xs">
-                                          <span className="text-slate-500">{c.etichetta}:</span> {c.valore}
-                                        </div>
-                                      ))}
-                                    </Table.Td>
-                                  )}
-                                  <Table.Td className="flex justify-center">
-                                    <div className="flex gap-2">
-                                      <Button
-                                        variant="outline-primary"
-                                        size="sm"
-                                        onClick={() => handleModify(pv)}
-                                      >
-                                        Modifica
-                                      </Button>
-                                      <PermissionGate permission={PERMISSIONS.GDO.GESTISCI_PUNTI_VENDITA}>
-                                        <Button
-                                          variant="outline-danger"
-                                          size="sm"
-                                          onClick={() => setPvDaEliminare(pv)}
-                                        >
-                                          Elimina
-                                        </Button>
-                                      </PermissionGate>
-                                      <Button
-                                        variant="outline-secondary"
-                                        size="sm"
-                                        onClick={() =>
-                                          navigate(`/gestione-interna/punti-vendita/${pv.id}`)
-                                        }
-                                      >
-                                        Dettagli
-                                      </Button>
-                                    </div>
-                                  </Table.Td>
-                                </Table.Tr>
-                              ))
-                            )}
-                          </Table.Tbody>
-                        </Table>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
-                <div className="text-sm text-slate-500">
-                  {isLoading ? (
-                    "Caricamento dei punti vendita..."
-                  ) : totalItems > 0 ? (
-                    <>
-                      Mostrati
-                      <span className="mx-1 font-semibold text-slate-700 dark:text-slate-200">
-                        {showingFrom}
-                      </span>
-                      -
-                      <span className="mx-1 font-semibold text-slate-700 dark:text-slate-200">
-                        {showingTo}
-                      </span>
-                      di
-                      <span className="ml-1 font-semibold text-slate-700 dark:text-slate-200">
-                        {totalItems}
-                      </span>
-                      &nbsp;
-                      punti vendita
-                    </>
-                  ) : (
-                    "Nessun punto vendita da mostrare"
-                  )}
-                </div>
-                {totalPages > 1 && (
-                  <Pagination className="flex w-full justify-end sm:w-auto">
-                    <Pagination.Link
-                      onClick={() => canGoPrev && setPage(prev => Math.max(1, prev - 1))}
-                      className={!canGoPrev ? "opacity-40 pointer-events-none" : ""}
-                      aria-label="Pagina precedente"
-                    >
-                      <Lucide icon="ChevronLeft" aria-hidden="true" className="w-4 h-4" />
-                    </Pagination.Link>
-                    {paginationRange.map(item =>
-                      typeof item === "number" ? (
-                        <Pagination.Link
-                          key={`page-${item}`}
-                          active={item === page}
-                          onClick={() => setPage(item)}
-                        >
-                          {item}
-                        </Pagination.Link>
+                    </Table.Td>
+                  </Table.Tr>
+                ) : puntiVendita.length === 0 ? (
+                  <Table.Tr>
+                    <Table.Td colSpan={numeroColonne} className="p-0">
+                      {debouncedSearch.trim() || filtroCanale || filtroArea ? (
+                        <EmptyState
+                          compatta
+                          icon="SearchX"
+                          title="Nessun risultato"
+                          description="Nessun punto vendita corrisponde alla ricerca o ai filtri."
+                          buttonText="Azzera filtri"
+                          buttonIcon="X"
+                          onButtonClick={() => {
+                            setSearchTerm("");
+                            setFiltroCanale("");
+                            setFiltroArea("");
+                          }}
+                        />
                       ) : (
-                        <Pagination.Link
-                          key={item}
-                          className="pointer-events-none select-none text-slate-400"
-                        >
-                          ...
-                        </Pagination.Link>
-                      )
-                    )}
-                    <Pagination.Link
-                      onClick={() => canGoNext && setPage(prev => prev + 1)}
-                      className={!canGoNext ? "opacity-40 pointer-events-none" : ""}
-                      aria-label="Pagina successiva"
-                    >
-                      <Lucide icon="ChevronRight" aria-hidden="true" className="w-4 h-4" />
-                    </Pagination.Link>
-                  </Pagination>
+                        <EmptyState
+                          compatta
+                          icon="Store"
+                          title="Nessun punto vendita disponibile"
+                          description="Usa Nuovo punto vendita o Importa Excel per aggiungerne."
+                        />
+                      )}
+                    </Table.Td>
+                  </Table.Tr>
+                ) : (
+                  puntiVendita.map((pv, idx) => (
+                    <Table.Tr key={pv.id}>
+                      <Table.Td className="tabular-nums">{baseIndex + idx + 1}</Table.Td>
+                      <Table.Td>
+                        <div className="font-medium text-slate-800">{pv.nome}</div>
+                        {pv.ragionesociale && (
+                          <div className="text-xs text-slate-500">{pv.ragionesociale}</div>
+                        )}
+                      </Table.Td>
+                      <Table.Td>{indirizzoCompleto(pv)}</Table.Td>
+                      <Table.Td>
+                        <span className="inline-flex items-center gap-1.5">
+                          <span aria-hidden="true" className="h-2.5 w-2.5 flex-none rounded-full" style={{ backgroundColor: coloreCanale(pv) }} />
+                          {pv.nome_canale || "-"}
+                        </span>
+                      </Table.Td>
+                      <Table.Td>{pv.nome_area || "-"}</Table.Td>
+                      {mostraCodiciGdo && (
+                        <Table.Td>
+                          {codiciGdo(pv.meta).map(c => (
+                            <div key={c.etichetta} className="text-xs">
+                              <span className="text-slate-500">{c.etichetta}:</span> {c.valore}
+                            </div>
+                          ))}
+                        </Table.Td>
+                      )}
+                      <Table.Td className="text-right">
+                        <Menu className="inline-block text-left">
+                          <Menu.Button
+                            as={Button}
+                            size="sm"
+                            variant="outline-secondary"
+                            aria-label={`Azioni punto vendita ${pv.nome}`}
+                          >
+                            <Lucide icon="EllipsisVertical" aria-hidden="true" className="h-4 w-4" />
+                          </Menu.Button>
+                          <Menu.Items className="w-44">
+                            <Menu.Item onClick={() => navigate(`/gestione-interna/punti-vendita/${pv.id}`)}>
+                              <Lucide icon="Eye" aria-hidden="true" className="mr-2 h-4 w-4" />
+                              Dettagli
+                            </Menu.Item>
+                            <Menu.Item onClick={() => handleModify(pv)}>
+                              <Lucide icon="Pencil" aria-hidden="true" className="mr-2 h-4 w-4" />
+                              Modifica
+                            </Menu.Item>
+                            <PermissionGate permission={PERMISSIONS.GDO.GESTISCI_PUNTI_VENDITA}>
+                              <Menu.Item className="text-danger" onClick={() => setPvDaEliminare(pv)}>
+                                <Lucide icon="Trash2" aria-hidden="true" className="mr-2 h-4 w-4" />
+                                Elimina
+                              </Menu.Item>
+                            </PermissionGate>
+                          </Menu.Items>
+                        </Menu>
+                      </Table.Td>
+                    </Table.Tr>
+                  ))
                 )}
-              </div>
-            </div>
+              </Table.Tbody>
+            </Table>
           </div>
-        </div>
-      </div>
+          <PaginazioneTabella
+            totale={totalItems}
+            pagina={page}
+            dimensionePagina={pageSize}
+            opzioniDimensione={pageSizeOptions}
+            onCambiaPagina={setPage}
+            onCambiaDimensione={setPageSize}
+          />
+        </Sezione>
+      </Pagina>
     </>
   );
 }

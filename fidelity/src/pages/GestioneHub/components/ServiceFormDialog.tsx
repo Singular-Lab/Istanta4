@@ -1,5 +1,6 @@
 import Button from "@/components/Base/Button";
 import { FormCheck, FormInput, FormLabel, FormSelect, FormSwitch, FormTextarea } from "@/components/Base/Form";
+import Alert from "@/components/Base/Alert";
 import { Dialog } from "@/components/Base/Headless";
 import Lucide from "@/components/Base/Lucide";
 import { useEffect, useMemo, useState } from "react";
@@ -178,11 +179,11 @@ const ServiceFormDialog = ({
     };
 
     return (
-      <section className="rounded-md border border-slate-200/80 bg-white p-4 sm:p-5">
+      <section className="rounded-card border border-slate-200 bg-white p-4 sm:p-5">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-sm font-semibold text-slate-800">{title}</div>
+          <h4 className="text-sm font-semibold text-slate-800">{title}</h4>
           <div className="flex items-center gap-2">
-            <span className="text-xs font-medium uppercase tracking-wide text-slate-400">
+            <span className="title-eyebrow">
               {options.filter((o) => selectedTargetKeys.includes(o.key)).length} / {options.length} sel.
             </span>
             {selectableKeys.length > 0 && (
@@ -200,7 +201,7 @@ const ServiceFormDialog = ({
             return (
               <FormCheck
                 key={target.key}
-                className={`items-start gap-3 rounded-xl border px-3 py-3 transition ${checked ? "border-primary/40 bg-primary/5" : "border-slate-200"} ${disabled ? "opacity-60" : ""}`}
+                className={`items-start gap-3 rounded-control border px-3 py-3 transition ${checked ? "border-primary/40 bg-primary/5" : "border-slate-200"} ${disabled ? "opacity-60" : ""}`}
               >
                 <FormCheck.Input
                   type="checkbox"
@@ -235,31 +236,24 @@ const ServiceFormDialog = ({
 
   return (
     <Dialog open={open} onClose={onClose} size="2xl">
-      <Dialog.Panel className="overflow-hidden lg:w-[980px] xl:w-[1080px]">
+      <Dialog.Panel className="overflow-hidden">
         <form onSubmit={handleSubmit} className="flex max-h-[calc(100vh-8rem)] flex-col">
-          <Dialog.Title className="gap-3 bg-white">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-md bg-primary/10 text-primary flex items-center justify-center">
-                <Lucide icon={mode === "edit-group" ? "PencilLine" : "Blocks"} className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="text-base font-semibold text-slate-800">{DIALOG_TITLES[mode]}</div>
-                <div className="text-sm font-normal text-slate-500">Gestione variante servizio Hub</div>
-              </div>
-            </div>
+          <Dialog.Title>
+            <Lucide icon={mode === "edit-group" ? "PencilLine" : "Blocks"} aria-hidden="true" className="h-5 w-5 text-primary" />
+            {DIALOG_TITLES[mode]}
           </Dialog.Title>
 
           <Dialog.Description className="min-h-0 flex-1 overflow-y-auto p-0">
-            <div className="space-y-5 bg-slate-50/50 px-5 py-5">
+            <div className="space-y-5 bg-slate-50 px-5 py-5">
+              <p className="text-sm text-slate-500">Gestione variante servizio Hub</p>
               {errorMessage && (
-                <div className="rounded-xl border border-danger/20 bg-danger/5 px-4 py-3 text-sm text-danger">
+                <Alert variant="soft-danger" icona="CircleAlert">
                   {errorMessage}
-                </div>
+                </Alert>
               )}
 
               {mode === "edit-group" && variantsToDelete.length > 0 && (
-                <div className="rounded-xl border border-danger/20 bg-danger/5 px-4 py-3 text-sm text-danger flex items-start gap-2">
-                  <Lucide icon="AlertTriangle" className="w-4 h-4 shrink-0 mt-0.5" />
+                <Alert variant="soft-danger" icona="TriangleAlert">
                   <span>
                     <strong>
                       {variantsToDelete.length === 1
@@ -269,13 +263,13 @@ const ServiceFormDialog = ({
                     </strong>{" "}
                     {variantsToDelete.map((v) => getServiceTargetLabel(v)).join(", ")}
                   </span>
-                </div>
+                </Alert>
               )}
 
               <div className="grid gap-5 xl:grid-cols-2">
-                <section className="rounded-md border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5">
+                <section className="rounded-card border border-slate-200 bg-white p-4 sm:p-5">
                   <div className="mb-5">
-                    <div className="text-sm font-semibold text-slate-800">Dati servizio</div>
+                    <h3 className="title-card">Dati servizio</h3>
                     <div className="mt-1 text-xs text-slate-500">Informazioni condivise dal gruppo e contenuti visibili nella card Hub.</div>
                   </div>
 
@@ -324,9 +318,9 @@ const ServiceFormDialog = ({
                   </div>
                 </section>
 
-                <section className="rounded-md border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5">
+                <section className="rounded-card border border-slate-200 bg-white p-4 sm:p-5">
                   <div className="mb-5">
-                    <div className="text-sm font-semibold text-slate-800">Configurazione variante</div>
+                    <h3 className="title-card">Configurazione variante</h3>
                     <div className="mt-1 text-xs text-slate-500">Impostazioni di navigazione, priorità e stato operativo della variante.</div>
                   </div>
 
@@ -344,7 +338,7 @@ const ServiceFormDialog = ({
                         </div>
                       </div>
                     ) : isInternalUrl ? (
-                      <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-700">
+                      <div className="rounded-control border border-info/20 bg-info/5 px-3 py-2 text-xs text-info">
                         Per i servizi con tipo URL <strong>Interno</strong>, l'apertura è automatica sulla start page dell'utente.
                       </div>
                     ) : (
@@ -421,7 +415,7 @@ const ServiceFormDialog = ({
                       />
                     </div>
 
-                    <div className="grid gap-3 rounded-md border border-slate-200/80 bg-slate-50/80 p-4 md:grid-cols-2">
+                    <div className="grid gap-3 rounded-card border border-slate-200 bg-slate-50 p-4 md:grid-cols-2">
                       <FormSwitch>
                         <FormSwitch.Input
                           id="service-attivo"
@@ -465,9 +459,9 @@ const ServiceFormDialog = ({
                 onVideosChange={(videos) => updateField("videos", videos)}
               />
 
-              <section className="space-y-4 rounded-md border border-slate-200/80 bg-slate-50/80 p-4 sm:p-5">
+              <section className="space-y-4 rounded-card border border-slate-200 bg-slate-50 p-4 sm:p-5">
                 <div>
-                  <div className="text-sm font-semibold text-slate-800">Target della variante</div>
+                  <h3 className="title-card">Target della variante</h3>
                   <div className="mt-1 text-xs text-slate-500">
                     Ogni tipo utente può essere abbinato a un ruolo specifico oppure lasciato senza ruolo.
                     Con un solo target viene usata la creazione singola; con più target viene usato il bulk.
@@ -481,7 +475,7 @@ const ServiceFormDialog = ({
                     allSelectableKeys.length > 0 &&
                     allSelectableKeys.every((k) => selectedTargetKeys.includes(k));
                   return (
-                    <div className="flex items-center justify-between rounded-xl border border-slate-200/80 bg-white px-4 py-3">
+                    <div className="flex items-center justify-between rounded-control border border-slate-200 bg-white px-4 py-3">
                       <div className="text-xs text-slate-500">
                         <span className="font-semibold text-slate-700">{selectedTargetKeys.length}</span>
                         {" "}target selezionati su {allSelectableKeys.length} disponibili
@@ -508,17 +502,16 @@ const ServiceFormDialog = ({
             </div>
           </Dialog.Description>
 
-          <Dialog.Footer className="flex flex-col-reverse gap-3 bg-white sm:flex-row sm:justify-end">
+          <Dialog.Footer>
             <Button
               variant="outline-secondary"
               type="button"
               onClick={onClose}
               disabled={submitting}
-              className="w-full sm:w-auto"
             >
               Annulla
             </Button>
-            <Button variant="primary" type="submit" loading={submitting} className="w-full sm:w-auto">
+            <Button variant="primary" type="submit" loading={submitting}>
               {mode === "edit-group" ? "Salva gruppo" : "Salva servizio"}
             </Button>
           </Dialog.Footer>

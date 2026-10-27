@@ -1,4 +1,4 @@
-import Lucide from "@/components/Base/Lucide";
+import Sezione from "@/components/Base/Sezione";
 import EmptyState from "@/components/EmptyState";
 import { FC, useMemo } from "react";
 import { getTimelineIconConfig } from "../config/stateConfig";
@@ -21,17 +21,7 @@ const Timeline: FC<TimelineProps> = ({
   }, [events, maxItems]);
 
   return (
-    <div className="box box--stacked p-6">
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-5">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100">
-          <Lucide icon="History" className="h-5 w-5 text-slate-600" />
-        </div>
-        <div>
-          <h3 className="text-base font-semibold text-slate-800">Attività Recenti</h3>
-          <p className="text-xs text-slate-500">Cronologia lavorazione</p>
-        </div>
-      </div>
+    <Sezione icona="History" titolo="Attività recenti" descrizione="Cronologia lavorazione">
 
       {/* Timeline Content */}
       {sortedEvents.length > 0 ? (
@@ -54,12 +44,13 @@ const Timeline: FC<TimelineProps> = ({
         </div>
       ) : (
         <EmptyState
+          compatta
           icon="Clock"
           title="Nessuna attività"
           description="Non sono disponibili informazioni sulla cronologia."
         />
       )}
-    </div>
+    </Sezione>
   );
 };
 

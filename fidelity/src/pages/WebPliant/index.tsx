@@ -22,6 +22,7 @@ import ContentRenderer from './components/ContentRenderer';
 
 // Styles
 import styleWp from "@/assets/css/webpliant/stylewp.module.scss";
+import { CLASSE_TITOLO_PANNELLO_PUBBLICO } from "@/pages/WebpliantLayout/StatiPubblici";
 
 // TypeScript interfaces
 
@@ -73,15 +74,15 @@ function createPageLayout(
 
   if (showSidebar) {
     return (
-      <main className={`mt-20 w-full min-h-svh ${styleWp["wp-shop-main"]}`}>
+      <main className={clsx("mt-20 w-full min-h-svh", styleWp["wp-shop-main"])}>
         <section
           className={clsx(
             styleWp["wp-shop-main"],
             styleWp["wp-d-flex"],
             styleWp["wp-mr-1"],
-            styleWp["wp-pt-xl-5"]
+            styleWp["wp-pt-xl-5"],
+            "ml-11 max-w-[85%] justify-self-center"
           )}
-          style={{ marginLeft: "2.75rem", maxWidth: "85%", justifySelf: "center" }}
         >
           <SidebarMenu
             sitemap={dataWebPliant.sitemap}
@@ -136,13 +137,7 @@ const SidebarMenu: React.FC<{
           styleWp["wp-align-items-center"]
         )}
       >
-        <h3
-          className={clsx(
-            styleWp["wp-text-uppercase"],
-            styleWp["wp-fs-6"],
-            styleWp["wp-mb-0"]
-          )}
-        >
+        <h3 className={clsx(CLASSE_TITOLO_PANNELLO_PUBBLICO, styleWp["wp-mb-0"])}>
           Filtra per
         </h3>
         <button

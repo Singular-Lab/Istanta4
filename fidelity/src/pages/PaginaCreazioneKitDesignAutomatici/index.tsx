@@ -3,6 +3,8 @@ import FiltroContext from '@/components/Base/FormFiltriContextDesign';
 import FilterBaseForm from '@/components/Base/FormFiltriDesign';
 import { Dialog } from '@/components/Base/Headless';
 import Lucide from '@/components/Base/Lucide';
+import Pagina from '@/components/Base/Pagina';
+import Sezione from '@/components/Base/Sezione';
 import { useNotification } from '@/context/NotificationContext';
 import { normalizzaFiltroContesto } from '@/utils/filtroContesto';
 import { useFetchAddestramenti, useFetchAllDeclinazioni, useFetchDatiPerCreazioneKitsDesign, useFetchFiltroContestoById } from '@/query/query';
@@ -209,79 +211,46 @@ export default function PaginaCreazioneKitDesignAutomatici() {
         );
       case 1:
         return (
-          <div className="box box--stacked">
-            <div className="flex items-center gap-3 border-b border-slate-200/60 px-5 py-4 bg-slate-50/50">
-              <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-orange-500/10">
-                <Lucide icon="Filter" className="w-5 h-5 text-orange-600" />
-              </div>
-              <div>
-                <h3 className="font-medium text-slate-800">Filtri di Contesto</h3>
-                <p className="text-xs text-slate-500 mt-0.5">Definisci i filtri di contesto per il raccoglitore</p>
-              </div>
-            </div>
-            <div className="p-5">
-              <FiltroContext
-                control={control as any}
-                register={register as any}
-                setValue={setValue as any}
-                errors={errors}
-                retriviedDataFiltriContesto={[]}
-                dataPerContesto={dataFiltroContestoSchema?.data ?? []}
-                namePrefix="filtroContesto"
-              />
-            </div>
-          </div>
+          <Sezione icona="Filter" titolo="Filtri di contesto" descrizione="Definisci i filtri di contesto per il raccoglitore">
+            <FiltroContext
+              control={control as any}
+              register={register as any}
+              setValue={setValue as any}
+              errors={errors}
+              retriviedDataFiltriContesto={[]}
+              dataPerContesto={dataFiltroContestoSchema?.data ?? []}
+              namePrefix="filtroContesto"
+            />
+          </Sezione>
         );
       case 2:
         return (
-          <div className="box box--stacked">
-            <div className="flex items-center gap-3 border-b border-slate-200/60 px-5 py-4 bg-slate-50/50">
-              <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-cyan-500/10">
-                <Lucide icon="Layers" className="w-5 h-5 text-cyan-600" />
-              </div>
-              <div>
-                <h3 className="font-medium text-slate-800">Filtri per Produzione</h3>
-                <p className="text-xs text-slate-500 mt-0.5">Configura i filtri di produzione</p>
-              </div>
-            </div>
-            <div className="p-5">
-              <FilterBaseForm
-                control={control as any}
-                register={register as any}
-                errors={errors}
-                dataFiltri={[]}
-                dataAddestramenti={dataAddestramenti?.data ?? []}
-                namePrefix="filtri"
-              />
-            </div>
-          </div>
+          <Sezione icona="Layers" titolo="Filtri per produzione" descrizione="Configura i filtri di produzione">
+            <FilterBaseForm
+              control={control as any}
+              register={register as any}
+              errors={errors}
+              dataFiltri={[]}
+              dataAddestramenti={dataAddestramenti?.data ?? []}
+              namePrefix="filtri"
+            />
+          </Sezione>
         );
       case 3:
         return (
-          <div className="box box--stacked">
-            <div className="flex items-center gap-3 border-b border-slate-200/60 px-5 py-4 bg-slate-50/50">
-              <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-indigo-500/10">
-                <Lucide icon="GitBranch" className="w-5 h-5 text-indigo-600" />
-              </div>
-              <div>
-                <h3 className="font-medium text-slate-800">Declinazioni</h3>
-                <p className="text-xs text-slate-500 mt-0.5">Configura le declinazioni del kit</p>
-              </div>
-            </div>
-            <div className="p-5">
-              <DeclinazioniSection
-                fields={fields}
-                append={append}
-                remove={remove}
-                control={control}
-                register={register as any}
-                errors={errors}
-                dataDeclinazioni={dataAllDeclinazioni}
-                dataAddestramenti={dataAddestramenti?.data ?? []}
-                handleRemoveDeclinazione={(i) => remove(i)}
-              />
-            </div>
-          </div>
+          <Sezione icona="GitBranch" titolo="Declinazioni" descrizione="Configura le declinazioni del kit">
+            <DeclinazioniSection
+              fields={fields}
+              append={append}
+              remove={remove}
+              control={control}
+              register={register as any}
+              errors={errors}
+              dataDeclinazioni={dataAllDeclinazioni}
+              dataAddestramenti={dataAddestramenti?.data ?? []}
+              handleRemoveDeclinazione={(i) => remove(i)}
+            />
+          </Sezione>
         );
     }
   };
@@ -291,15 +260,16 @@ export default function PaginaCreazioneKitDesignAutomatici() {
       {/* Success dialog */}
       <Dialog open={successModal} onClose={() => setSuccessModal(false)}>
         <Dialog.Panel>
-          <div className="p-5 text-center">
-            <Lucide icon="CircleCheck" className="w-16 h-16 mx-auto mt-3 text-success" />
-            <div className="mt-5 text-3xl">Kit combinazione creato!</div>
-            <div className="mt-2 text-slate-500">Il tuo kit combinazione è stato creato con successo.</div>
-          </div>
-          <div className="px-5 pb-8 text-center">
+          <Dialog.Title>
+            <Lucide icon="CircleCheck" aria-hidden="true" className="h-5 w-5 text-success" />
+            Kit design automatico creato
+          </Dialog.Title>
+          <Dialog.Description className="text-sm text-slate-600">
+            Il kit design automatico è stato creato con successo.
+          </Dialog.Description>
+          <Dialog.Footer>
             <Button
               variant="primary"
-              className="w-24"
               onClick={() => {
                 setSuccessModal(false);
                 history.back();
@@ -307,47 +277,46 @@ export default function PaginaCreazioneKitDesignAutomatici() {
             >
               Ok
             </Button>
-          </div>
+          </Dialog.Footer>
         </Dialog.Panel>
       </Dialog>
 
       {/* Template already exists dialog */}
       <Dialog open={showDialogTemplateEsisteGia} onClose={() => setShowDialogTemplateEsisteGia(false)}>
         <Dialog.Panel>
-          <Dialog.Description>
-            <div className="flex flex-col items-center gap-3">
-              <Lucide icon="OctagonAlert" className="w-16 h-16 text-danger" />
-              <span>
-                Esiste già un template con questa combinazione!
-                <br />
-                Cambia i dati per creare una nuova combinazione.
-              </span>
-            </div>
+          <Dialog.Title>
+            <Lucide icon="OctagonAlert" aria-hidden="true" className="h-5 w-5 text-danger" />
+            Combinazione già esistente
+          </Dialog.Title>
+          <Dialog.Description className="text-sm text-slate-600">
+            Esiste già un template con questa combinazione. Cambia i dati per creare una nuova combinazione.
           </Dialog.Description>
           <Dialog.Footer>
-            <div className="flex justify-end gap-3">
-              <Button variant="secondary" onClick={() => setShowDialogTemplateEsisteGia(false)}>
-                Cambia valori
-              </Button>
-            </div>
+            <Button variant="outline-secondary" onClick={() => setShowDialogTemplateEsisteGia(false)}>
+              Cambia valori
+            </Button>
           </Dialog.Footer>
         </Dialog.Panel>
       </Dialog>
 
-      <div className="flex flex-col items-center p-5">
-        <form onSubmit={handleSubmit(handleCreazione)} className="w-full">
+      <Pagina
+        titolo="Nuovo kit design automatico"
+        descrizione="Configura dati, filtri e declinazioni del nuovo kit design automatico"
+        indietro={{ to: "/impostazioni-di-produzione", etichetta: "Torna alle impostazioni di produzione" }}
+      >
+        <form onSubmit={handleSubmit(handleCreazione)}>
           <WizardShell
             steps={STEPS}
             currentStep={currentStep}
             onNext={handleNext}
             onPrevious={handlePrevious}
             isSubmitting={creazioneCombinazioni.isPending}
-            submitLabel="Crea Combinazione"
+            submitLabel="Crea kit design"
           >
             {renderStepContent()}
           </WizardShell>
         </form>
-      </div>
+      </Pagina>
     </>
   );
 }

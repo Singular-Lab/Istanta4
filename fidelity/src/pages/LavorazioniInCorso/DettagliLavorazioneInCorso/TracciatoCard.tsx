@@ -8,6 +8,9 @@ import { FormInput } from "../../../components/Base/Form";
 import { Dialog } from "../../../components/Base/Headless";
 import Lucide from "../../../components/Base/Lucide";
 import Spinner from "../../../components/Base/Spinner";
+import StatusBadge from "../../../components/Base/StatusBadge";
+import ConfirmDialog from "../../../components/ConfirmDialog";
+import type { TonoStato } from "../../../constants/stati";
 import { usePermissionContext } from "../../../context/PermissionContext";
 import { PERMISSIONS } from "../../../constants/permissions";
 
@@ -24,63 +27,28 @@ type TracciatoCardProps = {
     promoStorico: boolean;
 };
 
-// helper spostati fuori per usarli anche qui
-const getStatusStyle = (stato: string) => {
+// Tono e icona dello stato dell'importazione, con i colori comuni di StatusBadge
+const getStatusStyle = (stato: string): { tono: TonoStato; icon: string } => {
     switch (stato) {
         case "Terminata":
-            return {
-                bgColor: "bg-success/10",
-                textColor: "text-success",
-                borderColor: "border-success/20",
-                icon: "CircleCheck" as const,
-            };
+            return { tono: "success", icon: "CircleCheck" };
         case "TerminataConErrori":
-            return {
-                bgColor: "bg-danger/10",
-                textColor: "text-danger",
-                borderColor: "border-danger/20",
-                icon: "CircleAlert" as const,
-            };
+            return { tono: "danger", icon: "CircleAlert" };
         case "Cancellata":
         case "Scartata":
-            return {
-                bgColor: "bg-danger/10",
-                textColor: "text-danger",
-                borderColor: "border-danger/20",
-                icon: "CircleX" as const,
-            };
+            return { tono: "danger", icon: "CircleX" };
         case "Esaminata":
-            return {
-                bgColor: "bg-info/10",
-                textColor: "text-info",
-                borderColor: "border-info/20",
-                icon: "Eye" as const,
-            };
+            return { tono: "info", icon: "Eye" };
         case "InAttesaDiConfermaUtente":
-            return {
-                bgColor: "bg-warning/10",
-                textColor: "text-warning",
-                borderColor: "border-warning/20",
-                icon: "CircleAlert" as const,
-            };
+            return { tono: "warning", icon: "CircleAlert" };
         case "InAttesaDiAssegnazione":
         case "InCoda":
         case "ElaborazioneDati":
         case "AttesaIO":
         case "IO":
-            return {
-                bgColor: "bg-primary/10",
-                textColor: "text-primary",
-                borderColor: "border-primary/20",
-                icon: "Loader" as const,
-            };
+            return { tono: "brand", icon: "Loader" };
         default:
-            return {
-                bgColor: "bg-slate-100",
-                textColor: "text-slate-600",
-                borderColor: "border-slate-200",
-                icon: "Info" as const,
-            };
+            return { tono: "neutral", icon: "Info" };
     }
 };
 
@@ -166,15 +134,6 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
 
     const statusStyle = statusData ? getStatusStyle(statusData.stato) : null;
 
-    const cardClassName = `
-    border rounded-lg p-3 hover:shadow-md transition-all duration-200 group
-    ${statusStyle ? statusStyle.bgColor : "bg-white"}
-    ${statusStyle
-            ? statusStyle.borderColor
-            : "border-slate-200 hover:border-slate-300"
-        }
-  `;
-
     const isLoadingState =
         statusData?.stato === "InCoda" ||
         statusData?.stato === "ElaborazioneDati" ||
@@ -185,72 +144,50 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
     const canDeleteTracciato =
         tracciato.stato === "Scartato" || statusData?.stato === "Scartata";
 
+    // Comandi del tracciato: icone con nome accessibile, come le azioni di riga
+    const comando = "h-8 w-8 p-0";
+
     return (
         <Fragment>
-            <div key={tracciato.id} className={cardClassName}>
+            <div className="group rounded-card border border-slate-200 bg-white p-4 transition-colors hover:border-slate-300">
                 <div className="flex items-start gap-3">
-                    <div className="mt-1">
-                        <Lucide
-                            icon="FileText"
-                            className="w-5 h-5 text-primary flex-shrink-0"
-                        />
-                    </div>
+                    <Lucide icon="FileText" aria-hidden="true" className="mt-0.5 h-5 w-5 flex-shrink-0 text-slate-500" />
 
-                    <div className="flex-1 min-w-0 space-y-2">
+                    <div className="min-w-0 flex-1 space-y-2">
                         <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
-                                <h4 className="font-semibold text-slate-800 truncate text-sm" title={tracciato.nome}>
+                                <h3 className="title-card truncate" title={tracciato.nome}>
                                     {tracciato.nome}
-                                </h4>
+                                </h3>
                                 {tracciato.nome !== tracciato.filename && (
-                                    <div className="text-xs text-slate-500 truncate" title={tracciato.filename}>
+                                    <div className="truncate text-xs text-slate-500" title={tracciato.filename}>
                                         File originale: {tracciato.filename}
                                     </div>
                                 )}
 
                                 <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
-                                    <div className="flex items-center gap-1">
-                                        <Lucide
-                                            icon="Calendar"
-                                            className="w-3 h-3 text-slate-400"
-                                        />
-                                        <span>{formatDate(tracciato.createdat)}</span>
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                        <Lucide
-                                            icon="HardDrive"
-                                            className="w-3 h-3 text-slate-400"
-                                        />
-                                        <span>{getFileSize(tracciato.filesize)} MB</span>
-                                    </div>
+                                    <span className="flex items-center gap-1">
+                                        <Lucide icon="Calendar" aria-hidden="true" className="h-3 w-3 text-slate-400" />
+                                        {formatDate(tracciato.createdat)}
+                                    </span>
+                                    <span className="flex items-center gap-1 tabular-nums">
+                                        <Lucide icon="HardDrive" aria-hidden="true" className="h-3 w-3 text-slate-400" />
+                                        {getFileSize(tracciato.filesize)} MB
+                                    </span>
                                 </div>
                             </div>
 
                             {statusData && statusStyle && (
-                                <div className="flex flex-col items-end gap-1">
-                                    <div className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-white/70">
-                                        {isLoadingState ? (
-                                            <Spinner
-                                                decorativo
-                                                size="sm"
-                                                className={`w-3 h-3 ${statusStyle.textColor}`}
-                                            />
-                                        ) : (
-                                            <Lucide
-                                                icon={statusStyle.icon}
-                                                className={`w-3 h-3 ${statusStyle.textColor}`}
-                                            />
-                                        )}
-                                        <span
-                                            className={`text-2xs font-medium ${statusStyle.textColor}`}
-                                        >
-                                            {getStatusLabel(statusData.stato)}
-                                        </span>
-                                    </div>
-                                </div>
+                                <span className="inline-flex flex-none items-center gap-1.5">
+                                    {isLoadingState && <Spinner decorativo size="sm" className="h-3.5 w-3.5" />}
+                                    <StatusBadge
+                                        tono={statusStyle.tono}
+                                        etichetta={getStatusLabel(statusData.stato)}
+                                        icon={isLoadingState ? undefined : statusStyle.icon}
+                                    />
+                                </span>
                             )}
                         </div>
-
 
                         {tracciato.context?.length > 0 && (
                             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
@@ -276,7 +213,7 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
                                             return (
                                                 <div
                                                     key={idxContext}
-                                                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-white/70 rounded text-slate-700"
+                                                    className="inline-flex items-center gap-1 rounded-control bg-slate-50 px-2 py-0.5 text-slate-700"
                                                 >
                                                     <span className="font-medium">
                                                         {context.nome_field
@@ -310,7 +247,7 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
 
                                     return (
                                         <div className="space-y-1">
-                                            <pre className="whitespace-pre-wrap break-words font-mono text-2xs bg-danger/5 border border-danger/20 rounded p-2">
+                                            <pre className="whitespace-pre-wrap break-words rounded-control border border-danger/20 bg-danger/5 p-2 font-mono text-2xs">
                                                 {isExpanded ? fullError : shortError}
                                             </pre>
                                             {isLong && (
@@ -321,6 +258,7 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
                                                             isExpanded ? null : tracciato.id
                                                         )
                                                     }
+                                                    aria-expanded={isExpanded}
                                                     className="text-2xs font-medium text-danger underline underline-offset-2"
                                                 >
                                                     {isExpanded ? "Mostra meno" : "Mostra tutto"}
@@ -333,9 +271,12 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
                         )}
                     </div>
 
-                    <div className="flex flex-col items-end gap-2">
-                        <button
+                    <div className="flex flex-none flex-col items-end gap-2 sm:flex-row sm:items-start">
+                        <Button
                             type="button"
+                            size="sm"
+                            variant="outline-secondary"
+                            className={comando}
                             onClick={() => {
                                 if (promoStorico) {
                                     navigate(
@@ -347,106 +288,76 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
                                     );
                                 }
                             }}
-                            className="flex-shrink-0 w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-800 transition-all duration-200 flex items-center justify-center group-hover:scale-105"
                             title="Anteprima tracciato"
                             aria-label="Anteprima tracciato"
                         >
-                            <Lucide icon="Eye" aria-hidden="true" className="w-4 h-4" />
-                        </button>
-
-                        <button
+                            <Lucide icon="Eye" aria-hidden="true" className="h-4 w-4" />
+                        </Button>
+                        <Button
                             type="button"
+                            size="sm"
+                            variant="outline-secondary"
+                            className={comando}
                             onClick={() => handleDownload(tracciato)}
-                            className="flex-shrink-0 w-9 h-9 rounded-full bg-primary/10 hover:bg-primary text-primary hover:text-white transition-all duration-200 flex items-center justify-center group-hover:scale-110"
                             title="Scarica file"
                             aria-label="Scarica file"
                         >
-                            <Lucide icon="Download" aria-hidden="true" className="w-4 h-4" />
-                        </button>
+                            <Lucide icon="Download" aria-hidden="true" className="h-4 w-4" />
+                        </Button>
                         {!promoStorico && (
-                            <button
+                            <Button
                                 type="button"
+                                size="sm"
+                                variant="outline-secondary"
+                                className={comando}
                                 onClick={() => {
                                     setNuovoNome(tracciato.nome);
                                     rinominaMutation.reset();
                                     setShowDialogRinomina(true);
                                 }}
-                                className="flex-shrink-0 w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-800 transition-all duration-200 flex items-center justify-center group-hover:scale-105"
                                 title="Rinomina tracciato"
                                 aria-label="Rinomina tracciato"
                             >
-                                <Lucide icon="Pencil" aria-hidden="true" className="w-4 h-4" />
-                            </button>
+                                <Lucide icon="Pencil" aria-hidden="true" className="h-4 w-4" />
+                            </Button>
                         )}
                         {(canDeleteTracciato && !promoStorico) && (
-                            <button
+                            <Button
                                 type="button"
-                                onClick={() => {
-                                    setShowDialogEliminazioneDefinitiva(true);
-                                }}
-                                className="flex-shrink-0 w-9 h-9 rounded-full bg-danger/10 hover:bg-danger text-danger hover:text-white transition-all duration-200 flex items-center justify-center group-hover:scale-110"
+                                size="sm"
+                                variant="outline-danger"
+                                className={comando}
+                                onClick={() => setShowDialogEliminazioneDefinitiva(true)}
                                 title="Elimina tracciato"
                                 aria-label="Elimina tracciato"
                             >
-                                <Lucide icon="Trash2" aria-hidden="true" className="w-4 h-4" />
-                            </button>
+                                <Lucide icon="Trash2" aria-hidden="true" className="h-4 w-4" />
+                            </Button>
                         )}
                     </div>
                 </div>
             </div>
 
-            <Dialog
+            <ConfirmDialog
                 open={showDialogEliminazioneDefinitiva}
                 onClose={() => {
                     if (isDeletingTracciato) return;
                     setShowDialogEliminazioneDefinitiva(false);
                 }}
-            >
-                <Dialog.Panel>
-                    <Dialog.Title>
-                        <div className="flex items-center gap-2">
-                            <Lucide icon="Trash2" className="w-5 h-5 text-danger" />
-                            <h2 className="title-section">Elimina tracciato</h2>
-                        </div>
-                    </Dialog.Title>
-                    <Dialog.Description>
-                        <div className="py-2 text-sm text-slate-600">
-                            <p>
-                                Stai per eliminare definitivamente il tracciato:
-                                {" "}
-                                <span className="font-semibold text-slate-800">{tracciato.nome}</span>
-                            </p>
-                            <p className="mt-2 text-danger font-medium">
-                                Questa azione non può essere annullata.
-                            </p>
-                        </div>
-                    </Dialog.Description>
-                    <Dialog.Footer className="px-5 py-3 text-right border-t border-slate-200/60">
-                        <Button
-                            type="button"
-                            variant="outline-secondary"
-                            className="w-24 mr-2"
-                            onClick={() => setShowDialogEliminazioneDefinitiva(false)}
-                            disabled={isDeletingTracciato}
-                        >
-                            Annulla
-                        </Button>
-                        <Button
-                            type="button"
-                            variant="danger"
-                            className="w-36"
-                            onClick={() => {
-                                setShowDialogEliminazioneDefinitiva(false);
-                                onDeleteTracciato(tracciato);
-                            }}
-                            loading={isDeletingTracciato}
-                        >
-                            {!isDeletingTracciato && <Lucide icon="Trash2" aria-hidden="true" className="w-4 h-4 mr-2" />}
-                            Elimina
-                        </Button>
-                    </Dialog.Footer>
-                </Dialog.Panel>
-            </Dialog>
+                onConfirm={() => {
+                    setShowDialogEliminazioneDefinitiva(false);
+                    onDeleteTracciato(tracciato);
+                }}
+                loading={isDeletingTracciato}
+                title="Elimina tracciato"
+                confirmLabel="Elimina"
+                description={
+                    <p>
+                        Stai per eliminare definitivamente il tracciato{" "}
+                        <span className="font-semibold text-slate-800">{tracciato.nome}</span>. Questa azione non può essere annullata.
+                    </p>
+                }
+            />
 
             <Dialog
                 open={showDialogRinomina}
@@ -463,13 +374,11 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
                         }}
                     >
                         <Dialog.Title>
-                            <div className="flex items-center gap-2">
-                                <Lucide icon="Pencil" className="w-5 h-5 text-primary" />
-                                <h2 className="title-section">Rinomina tracciato</h2>
-                            </div>
+                            <Lucide icon="Pencil" aria-hidden="true" className="h-5 w-5 text-slate-500" />
+                            Rinomina tracciato
                         </Dialog.Title>
                         <Dialog.Description>
-                            <div className="py-2 text-sm text-slate-600 space-y-2">
+                            <div className="space-y-2 text-sm text-slate-600">
                                 <FormInput
                                     type="text"
                                     aria-label="Nuovo nome del tracciato"
@@ -486,11 +395,10 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
                                 )}
                             </div>
                         </Dialog.Description>
-                        <Dialog.Footer className="px-5 py-3 text-right border-t border-slate-200/60">
+                        <Dialog.Footer>
                             <Button
                                 type="button"
                                 variant="outline-secondary"
-                                className="w-24 mr-2"
                                 onClick={() => setShowDialogRinomina(false)}
                                 disabled={rinominaMutation.isPending}
                             >
@@ -499,7 +407,6 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
                             <Button
                                 type="submit"
                                 variant="primary"
-                                className="w-24"
                                 disabled={rinominaMutation.isPending || !nuovoNome.trim()}
                                 loading={rinominaMutation.isPending}
                             >

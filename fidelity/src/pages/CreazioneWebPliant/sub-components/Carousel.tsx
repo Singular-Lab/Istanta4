@@ -39,7 +39,7 @@ const SettingsSection: React.FC<{
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.2 }}
-      className="bg-white dark:bg-darkmode-700 rounded-xl border border-slate-200 dark:border-darkmode-500 shadow-sm hover:shadow-md transition-all duration-200"
+      className="bg-white dark:bg-darkmode-700 rounded-card border border-slate-200 dark:border-darkmode-500 shadow-sm hover:shadow-md transition-all duration-200"
     >
       {collapsible ? (
         // Sezione comprimibile: il titolo resta un heading e contiene il pulsante
@@ -51,7 +51,7 @@ const SettingsSection: React.FC<{
             aria-expanded={isExpanded}
           >
             <span className="flex items-center space-x-3">
-              <span className="w-8 h-8 bg-gradient-to-r from-primary/10 to-theme-2/10 rounded-lg flex items-center justify-center">
+              <span className="w-8 h-8 bg-gradient-to-r from-primary/10 to-theme-2/10 rounded-card flex items-center justify-center">
                 <Lucide icon={icon} aria-hidden="true" className="w-4 h-4 text-primary" />
               </span>
               <span className="font-semibold text-slate-800 dark:text-slate-200">{title}</span>
@@ -66,7 +66,7 @@ const SettingsSection: React.FC<{
       ) : (
         <div className="flex items-center justify-between p-4 rounded-t-xl">
           <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-gradient-to-r from-primary/10 to-theme-2/10 rounded-lg flex items-center justify-center">
+            <div className="w-8 h-8 bg-gradient-to-r from-primary/10 to-theme-2/10 rounded-card flex items-center justify-center">
               <Lucide icon={icon} aria-hidden="true" className="w-4 h-4 text-primary" />
             </div>
             <h4 className="font-semibold text-slate-800 dark:text-slate-200">{title}</h4>
@@ -155,7 +155,7 @@ const FileUploadArea: React.FC<{
     <Dropzone
       options={dropzoneOptions}
       getRef={(el) => { dropzoneRef.current = el; }}
-      className="rounded-xl p-6 text-center transition-all duration-300 hover:border-primary/60 hover:bg-primary/5 dark:hover:bg-primary/10"
+      className="rounded-card p-6 text-center transition-all duration-300 hover:border-primary/60 hover:bg-primary/5 dark:hover:bg-primary/10"
     >
       <div className="relative z-10">
         <div className="w-12 h-12 bg-gradient-to-r from-primary/10 to-theme-2/10 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -390,7 +390,7 @@ const CarouselContent: React.FC<CarouselContentProps> = ({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
-      className="space-y-6 rounded-xl"
+      className="space-y-6 rounded-card"
     >
       {/* Header */}
 
@@ -445,7 +445,7 @@ const CarouselContent: React.FC<CarouselContentProps> = ({
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: "auto" }}
                 exit={{ opacity: 0, height: 0 }}
-                className="space-y-4 p-4 bg-slate-50 dark:bg-darkmode-600 rounded-lg border border-slate-200 dark:border-darkmode-500"
+                className="space-y-4 p-4 bg-slate-50 dark:bg-darkmode-600 rounded-card border border-slate-200 dark:border-darkmode-500"
               >
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField label="Testo del Pulsante" helperText="Es. Vedi tutti i prodotti">
@@ -541,7 +541,7 @@ const CarouselContent: React.FC<CarouselContentProps> = ({
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
               >
-                <div className="p-3 border-2 border-slate-200 dark:border-darkmode-500 rounded-lg hover:border-primary/50 transition-colors">
+                <div className="p-3 border-2 border-slate-200 dark:border-darkmode-500 rounded-card hover:border-primary/50 transition-colors">
                   <FormCheck className="flex items-start space-x-3">
                     <FormCheck.Input
                       type="radio"
@@ -565,7 +565,7 @@ const CarouselContent: React.FC<CarouselContentProps> = ({
                   </FormCheck>
                 </div>
 
-                <div className="p-3 border-2 border-slate-200 dark:border-darkmode-500 rounded-lg hover:border-primary/50 transition-colors">
+                <div className="p-3 border-2 border-slate-200 dark:border-darkmode-500 rounded-card hover:border-primary/50 transition-colors">
                   <FormCheck className="flex items-start space-x-3">
                     <FormCheck.Input
                       type="radio"
@@ -589,7 +589,7 @@ const CarouselContent: React.FC<CarouselContentProps> = ({
                   </FormCheck>
                 </div>
 
-                <div className="p-3 border-2 border-slate-200 dark:border-darkmode-500 rounded-lg hover:border-primary/50 transition-colors">
+                <div className="p-3 border-2 border-slate-200 dark:border-darkmode-500 rounded-card hover:border-primary/50 transition-colors">
                   <FormCheck className="flex items-start space-x-3">
                     <FormCheck.Input
                       type="radio"
@@ -613,7 +613,7 @@ const CarouselContent: React.FC<CarouselContentProps> = ({
                   </FormCheck>
                 </div>
 
-                <div className="p-3 border-2 border-slate-200 dark:border-darkmode-500 rounded-lg hover:border-primary/50 transition-colors">
+                <div className="p-3 border-2 border-slate-200 dark:border-darkmode-500 rounded-card hover:border-primary/50 transition-colors">
                   <FormCheck className="flex items-start space-x-3">
                     <FormCheck.Input
                       type="radio"
@@ -638,7 +638,7 @@ const CarouselContent: React.FC<CarouselContentProps> = ({
                 </div>
               </motion.div>
 
-              <div className="p-3 border-2 border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
+              <div className="p-3 border-2 border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 rounded-card">
                 <FormCheck className="flex items-start space-x-3">
                   <FormCheck.Input
                     type="radio"
@@ -681,7 +681,7 @@ const CarouselContent: React.FC<CarouselContentProps> = ({
                       color: e.target.value,
                     }
                   })}
-                  className="w-16 h-10 rounded-lg border border-slate-300 dark:border-darkmode-500"
+                  className="w-16 h-10 rounded-card border border-slate-300 dark:border-darkmode-500"
                 />
                 <FormInput
                   type="text"
@@ -737,7 +737,7 @@ const CarouselContent: React.FC<CarouselContentProps> = ({
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-700"
+                  className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-card border border-blue-200 dark:border-blue-700"
                 >
                   <div className="flex items-center space-x-2 mb-2">
                     <Lucide icon="Info" className="w-4 h-4 text-blue-500" />
@@ -812,7 +812,7 @@ const CarouselContent: React.FC<CarouselContentProps> = ({
           <div className="space-y-6">
             {localContent?.filtersNew.map((filterGroup, groupIndex) => (
               <Fragment key={groupIndex}>
-                <div className="p-4 border rounded-md shadow-sm">
+                <div className="p-4 border rounded-control shadow-sm">
                   <h4 className="font-bold mb-4">Gruppo Filtri {groupIndex + 1}</h4>
                   <div className="space-y-3">
                     {filterGroup?.map((filter, filterIndex) => (
@@ -890,7 +890,7 @@ const CarouselContent: React.FC<CarouselContentProps> = ({
                           </Button>
                         </FormInline>
                         {filterIndex < filterGroup.length - 1 && (
-                          <span className="font-bold text-gray-500 mt-2">AND</span>
+                          <span className="font-bold text-slate-500 mt-2">AND</span>
                         )}
                       </div>
                     ))}
@@ -926,7 +926,7 @@ const CarouselContent: React.FC<CarouselContentProps> = ({
                   </div>
                 </div>
                 {groupIndex < (localContent?.filtersNew ?? []).length - 1 && (
-                  <div className="text-center font-bold text-gray-500 mt-4">OR</div>
+                  <div className="text-center font-bold text-slate-500 mt-4">OR</div>
                 )}
               </Fragment>
             ))}
@@ -1044,10 +1044,10 @@ const CarouselContent: React.FC<CarouselContentProps> = ({
                 <img
                   src={localContent?.backgroundImage}
                   alt="Background"
-                  className="max-w-full rounded-md shadow-md" />
+                  className="max-w-full rounded-control shadow-md" />
                 <Button
                   onClick={() => handleChange("backgroundImage", "")}
-                  className="absolute top-2 right-2 rounded-md"
+                  className="absolute top-2 right-2 rounded-control"
                   variant="danger"
                   size="xs"
                   aria-label="Rimuovi immagine di sfondo"
@@ -1084,10 +1084,10 @@ const CarouselContent: React.FC<CarouselContentProps> = ({
             <img
               src={localContent?.logo.srcLogoCarosello}
               alt="Logo Carosello"
-              className="max-w-full rounded-md shadow-md" />
+              className="max-w-full rounded-control shadow-md" />
             <Button
               onClick={() => handleLogoChange("srcLogoCarosello", "")}
-              className="absolute top-2 right-2 rounded-md"
+              className="absolute top-2 right-2 rounded-control"
               variant="danger"
               size="xs"
               aria-label="Rimuovi logo"

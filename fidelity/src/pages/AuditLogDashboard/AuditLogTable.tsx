@@ -1,24 +1,30 @@
+import Badge from "@/components/Base/Badge";
+import Button from "@/components/Base/Button";
 import Lucide from "@/components/Base/Lucide";
+import Table from "@/components/Base/Table";
+import EmptyState from "@/components/EmptyState";
+import { formatDataOraSecondi, formatRelativo, VALORE_ASSENTE } from "@/utils/format";
 import clsx from "clsx";
-import dayjs from "dayjs";
-import { FC, Fragment, useCallback, useRef, useState } from "react";
+import { FC, Fragment, useCallback, useState, type MouseEvent } from "react";
 import { Link } from "react-router-dom";
 import type { AuditLogRecord } from "../../../lib/auditTypes";
-import {
-  AUDIT_EVENT_LABELS,
-  AUDIT_SEVERITY_LABELS,
-  AuditEventType,
-  AuditSeverity,
-} from "../../../lib/auditTypes";
+import { AUDIT_EVENT_LABELS, AuditEventType } from "../../../lib/auditTypes";
+import { EsitoBadge, SeverityBadge } from "./statiAudit";
 
 interface AuditLogTableProps {
   items: AuditLogRecord[];
   sortBy: string;
   sortOrder: "ASC" | "DESC";
   onSort: (field: string) => void;
+  /** Ci sono filtri attivi: un elenco vuoto è "nessun risultato", non "nessun dato". */
+  filtriAttivi?: boolean;
+  onAzzeraFiltri?: () => void;
 }
 
-// ── Event categories with icons & colors ──
+/** Colonne della tabella: il pannello dei dettagli le occupa tutte. */
+const NUMERO_COLONNE = 8;
+
+// ── Categorie degli eventi ──
 
 type EventCategory = "auth" | "user" | "security" | "system" | "data";
 
@@ -53,48 +59,15 @@ const CATEGORY_LABELS: Record<EventCategory, string> = {
   data: "Dati",
 };
 
-const CATEGORY_STYLES: Record<
-  EventCategory,
-  { icon: string; bg: string; text: string; border: string; stripe: string }
-> = {
-  auth: {
-    icon: "KeyRound",
-    bg: "bg-blue-50",
-    text: "text-blue-700",
-    border: "border-blue-200",
-    stripe: "bg-blue-400",
-  },
-  user: {
-    icon: "UserCog",
-    bg: "bg-violet-50",
-    text: "text-violet-700",
-    border: "border-violet-200",
-    stripe: "bg-violet-400",
-  },
-  security: {
-    icon: "ShieldAlert",
-    bg: "bg-rose-50",
-    text: "text-rose-700",
-    border: "border-rose-200",
-    stripe: "bg-rose-400",
-  },
-  system: {
-    icon: "Settings",
-    bg: "bg-amber-50",
-    text: "text-amber-700",
-    border: "border-amber-200",
-    stripe: "bg-amber-400",
-  },
-  data: {
-    icon: "Database",
-    bg: "bg-emerald-50",
-    text: "text-emerald-700",
-    border: "border-emerald-200",
-    stripe: "bg-emerald-400",
-  },
+const CATEGORY_ICONS: Record<EventCategory, string> = {
+  auth: "KeyRound",
+  user: "UserCog",
+  security: "ShieldAlert",
+  system: "Settings",
+  data: "Database",
 };
 
-// ── Event-specific icons ──
+// ── Icone dei singoli eventi ──
 
 const EVENT_ICONS: Partial<Record<string, string>> = {
   LOGIN_SUCCESS: "LogIn",
@@ -117,80 +90,6 @@ const EVENT_ICONS: Partial<Record<string, string>> = {
   DATA_EXPORT: "Download",
   SENSITIVE_DATA_ACCESS: "FileKey",
   BULK_OPERATION: "Layers",
-
-};
-
-// ── Severity styles — stripe colora il bordo sinistro, row tinge lo sfondo ──
-
-const SEVERITY_STYLES: Record<
-  string,
-  { dot: string; bg: string; text: string; stripe: string; rowTint: string }
-> = {
-  CRITICAL: {
-    dot: "bg-red-500 animate-pulse",
-    bg: "bg-red-50",
-    text: "text-red-700",
-    stripe: "bg-red-500",
-    rowTint: "bg-red-50/60",
-  },
-  HIGH: {
-    dot: "bg-amber-500",
-    bg: "bg-amber-50",
-    text: "text-amber-700",
-    stripe: "bg-amber-400",
-    rowTint: "bg-amber-50/40",
-  },
-  MEDIUM: {
-    dot: "bg-sky-400",
-    bg: "bg-sky-50",
-    text: "text-sky-700",
-    stripe: "bg-sky-400",
-    rowTint: "",
-  },
-  LOW: {
-    dot: "bg-slate-300",
-    bg: "bg-slate-100",
-    text: "text-slate-500",
-    stripe: "bg-slate-300",
-    rowTint: "",
-  },
-};
-
-// ── Result styles ──
-
-const RESULT_CONFIG: Record<
-  string,
-  { icon: string; label: string; bg: string; text: string }
-> = {
-  SUCCESS: {
-    icon: "Check",
-    label: "OK",
-    bg: "bg-emerald-50",
-    text: "text-emerald-600",
-  },
-  FAILURE: {
-    icon: "X",
-    label: "Fallito",
-    bg: "bg-red-50",
-    text: "text-red-600",
-  },
-  PARTIAL: {
-    icon: "AlertTriangle",
-    label: "Parziale",
-    bg: "bg-amber-50",
-    text: "text-amber-600",
-  },
-};
-
-// ── User role styles ──
-
-const ROLE_STYLES: Record<string, { bg: string; text: string }> = {
-  Superadmin: { bg: "bg-purple-100", text: "text-purple-700" },
-  Agenzia: { bg: "bg-blue-100", text: "text-blue-700" },
-  GDO: { bg: "bg-teal-100", text: "text-teal-700" },
-  AdminGDO: { bg: "bg-cyan-100", text: "text-cyan-700" },
-  PuntoVendita: { bg: "bg-orange-100", text: "text-orange-700" },
-  Guest: { bg: "bg-slate-100", text: "text-slate-500" },
 };
 
 // ── User-Agent parser ──
@@ -293,12 +192,14 @@ function parseUserAgent(ua: string): ParsedUA {
   return result;
 }
 
-const DEVICE_CONFIG: Record<string, { label: string; icon: string; bg: string; text: string }> = {
-  desktop: { label: "Desktop", icon: "Monitor", bg: "bg-slate-100", text: "text-slate-600" },
-  mobile: { label: "Mobile", icon: "Smartphone", bg: "bg-sky-50", text: "text-sky-600" },
-  tablet: { label: "Tablet", icon: "Tablet", bg: "bg-violet-50", text: "text-violet-600" },
-  bot: { label: "Bot", icon: "Bot", bg: "bg-amber-50", text: "text-amber-600" },
+const DEVICE_CONFIG: Record<ParsedUA["device"], { label: string; icon: string }> = {
+  desktop: { label: "Desktop", icon: "Monitor" },
+  mobile: { label: "Mobile", icon: "Smartphone" },
+  tablet: { label: "Tablet", icon: "Tablet" },
+  bot: { label: "Bot", icon: "Bot" },
 };
+
+const CLASSE_CHIP = "inline-flex items-center gap-1.5 rounded-control border border-slate-200 bg-white px-2.5 py-1.5";
 
 // ── Parsed UA display component ──
 
@@ -308,57 +209,36 @@ const UserAgentDisplay: FC<{ raw: string }> = ({ raw }) => {
 
   return (
     <div className="flex flex-col gap-2.5">
-      {/* Chip row */}
       <div className="flex flex-wrap items-center gap-2">
-        {/* Browser chip */}
         {parsed.browser && (
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white border border-slate-200">
-            <Lucide icon={parsed.browserIcon} className="w-3.5 h-3.5 text-slate-500 flex-none" />
-            <span className="text-xs font-semibold text-slate-700">
-              {parsed.browser}
-            </span>
+          <div className={CLASSE_CHIP}>
+            <Lucide icon={parsed.browserIcon} aria-hidden="true" className="h-3.5 w-3.5 flex-none text-slate-500" />
+            <span className="text-xs font-medium text-slate-700">{parsed.browser}</span>
             {parsed.browserVersion && (
-              <span className="text-3xs text-slate-400 font-mono">
-                v{parsed.browserVersion}
-              </span>
+              <span className="font-mono text-2xs text-slate-500">v{parsed.browserVersion}</span>
             )}
           </div>
         )}
 
-        {/* OS chip */}
         {parsed.os && (
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white border border-slate-200">
-            <Lucide icon={parsed.osIcon} className="w-3.5 h-3.5 text-slate-500 flex-none" />
-            <span className="text-xs font-semibold text-slate-700">
-              {parsed.os}
-            </span>
-            {parsed.osVersion && (
-              <span className="text-3xs text-slate-400 font-mono">
-                {parsed.osVersion}
-              </span>
-            )}
+          <div className={CLASSE_CHIP}>
+            <Lucide icon={parsed.osIcon} aria-hidden="true" className="h-3.5 w-3.5 flex-none text-slate-500" />
+            <span className="text-xs font-medium text-slate-700">{parsed.os}</span>
+            {parsed.osVersion && <span className="font-mono text-2xs text-slate-500">{parsed.osVersion}</span>}
           </div>
         )}
 
-        {/* Device chip */}
-        <div className={clsx(
-          "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border",
-          deviceCfg.bg,
-          "border-transparent"
-        )}>
-          <Lucide icon={deviceCfg.icon} className={clsx("w-3.5 h-3.5 flex-none", deviceCfg.text)} />
-          <span className={clsx("text-xs font-semibold", deviceCfg.text)}>
-            {deviceCfg.label}
-          </span>
+        <div className={clsx(CLASSE_CHIP, "bg-slate-100")}>
+          <Lucide icon={deviceCfg.icon} aria-hidden="true" className="h-3.5 w-3.5 flex-none text-slate-600" />
+          <span className="text-xs font-medium text-slate-700">{deviceCfg.label}</span>
         </div>
       </div>
 
-      {/* Raw UA collapsed */}
-      <details className="group/ua">
-        <summary className="text-3xs text-slate-400 cursor-pointer hover:text-slate-500 transition-colors select-none w-fit">
+      <details>
+        <summary className="w-fit cursor-pointer select-none text-2xs text-slate-500 transition-colors hover:text-slate-700">
           Mostra stringa completa
         </summary>
-        <div className="mt-1.5 px-2.5 py-2 rounded-md bg-slate-900 text-slate-300 text-2xs font-mono break-all leading-relaxed max-w-lg">
+        <div className="mt-1.5 max-w-lg break-all rounded-control bg-slate-900 px-2.5 py-2 font-mono text-2xs leading-relaxed text-slate-300">
           {raw}
         </div>
       </details>
@@ -389,7 +269,7 @@ const DETAIL_LABELS: Record<string, string> = {
   os: "Sistema operativo",
 };
 
-// ── Sort header ──
+// ── Intestazione ordinabile ──
 
 const SortHeader: FC<{
   label: string;
@@ -397,60 +277,55 @@ const SortHeader: FC<{
   currentSort: string;
   currentOrder: "ASC" | "DESC";
   onSort: (field: string) => void;
-}> = ({ label, field, currentSort, currentOrder, onSort }) => (
-  <th
-    className="whitespace-nowrap cursor-pointer select-none group/sort px-4 py-3 text-left first:pl-8"
-    onClick={() => onSort(field)}
-  >
-    <div className="flex items-center gap-1.5">
-      {label}
-      <span
+}> = ({ label, field, currentSort, currentOrder, onSort }) => {
+  const attivo = currentSort === field;
+  return (
+    <Table.Th aria-sort={attivo ? (currentOrder === "ASC" ? "ascending" : "descending") : "none"}>
+      <button
+        type="button"
+        onClick={() => onSort(field)}
         className={clsx(
-          "transition-opacity",
-          currentSort === field
-            ? "opacity-100"
-            : "opacity-0 group-hover/sort:opacity-40"
+          "group/sort inline-flex items-center gap-1 uppercase transition-colors hover:text-slate-700",
+          attivo && "text-slate-700"
         )}
       >
+        {label}
         <Lucide
-          icon={
-            currentSort === field && currentOrder === "ASC"
-              ? "ChevronUp"
-              : "ChevronDown"
-          }
-          className="w-3.5 h-3.5"
+          icon={attivo && currentOrder === "ASC" ? "ChevronUp" : "ChevronDown"}
+          aria-hidden="true"
+          className={clsx(
+            "h-3.5 w-3.5 transition-opacity",
+            attivo ? "opacity-100" : "opacity-0 group-hover/sort:opacity-40"
+          )}
         />
-      </span>
-    </div>
-  </th>
-);
+      </button>
+    </Table.Th>
+  );
+};
 
-// ── Detail value renderer ──
+// ── Valore di un dettaglio ──
 
 const DetailValue: FC<{ value: unknown }> = ({ value }) => {
   if (value === null || value === undefined)
-    return <span className="text-slate-400 italic">null</span>;
+    return <span className="italic text-slate-400">null</span>;
   if (typeof value === "boolean")
     return (
-      <span
-        className={clsx(
-          "px-1.5 py-0.5 rounded text-3xs font-semibold uppercase",
-          value ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-600"
-        )}
-      >
+      <Badge variant={value ? "success" : "error"} size="sm">
         {value ? "true" : "false"}
-      </span>
+      </Badge>
     );
   if (typeof value === "number")
-    return <span className="font-mono text-slate-700">{value}</span>;
+    return <span className="font-mono tabular-nums text-slate-700">{value}</span>;
   if (typeof value === "object")
     return (
-      <pre className="mt-1 p-2.5 rounded-md bg-slate-900 text-slate-200 text-2xs font-mono overflow-x-auto max-h-40 leading-relaxed">
+      <pre className="mt-1 max-h-40 overflow-x-auto rounded-control bg-slate-900 p-2.5 font-mono text-2xs leading-relaxed text-slate-200">
         {JSON.stringify(value, null, 2)}
       </pre>
     );
-  return <span className="text-slate-700 break-all">{String(value)}</span>;
+  return <span className="break-all text-slate-700">{String(value)}</span>;
 };
+
+const Assente = () => <span className="text-xs text-slate-400">{VALORE_ASSENTE}</span>;
 
 // ── Main component ──
 
@@ -459,9 +334,10 @@ const AuditLogTable: FC<AuditLogTableProps> = ({
   sortBy,
   sortOrder,
   onSort,
+  filtriAttivi = false,
+  onAzzeraFiltri,
 }) => {
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
-  const detailRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const toggleRow = useCallback(
     (id: string) => setExpandedRow((prev) => (prev === id ? null : id)),
@@ -469,412 +345,253 @@ const AuditLogTable: FC<AuditLogTableProps> = ({
   );
 
   if (items.length === 0) {
-    return (
-      <div className="py-20 text-center">
-        <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-slate-100 mb-4">
-          <Lucide icon="FileSearch" className="w-8 h-8 text-slate-400" />
-        </div>
-        <p className="text-sm font-semibold text-slate-600">
-          Nessun evento trovato
-        </p>
-        <p className="text-xs text-slate-400 mt-1.5 max-w-xs mx-auto">
-          Prova a modificare i filtri di ricerca o il periodo selezionato
-        </p>
-      </div>
+    return filtriAttivi ? (
+      <EmptyState
+        compatta
+        icon="FileSearch"
+        title="Nessun evento per i filtri scelti"
+        description="Modifica i filtri o il periodo selezionato per vedere altri eventi."
+        buttonText={onAzzeraFiltri ? "Azzera filtri" : undefined}
+        buttonIcon="X"
+        onButtonClick={onAzzeraFiltri}
+      />
+    ) : (
+      <EmptyState
+        compatta
+        icon="FileSearch"
+        title="Nessun evento registrato"
+        description="Gli eventi di audit compariranno qui non appena il sistema li registra."
+      />
     );
   }
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead className="sticky top-0 z-10">
-          <tr className="text-2xs font-semibold uppercase tracking-wider text-slate-400 bg-slate-50/90 backdrop-blur-sm border-b border-slate-200">
-            <SortHeader
-              label="Quando"
-              field="createdat"
-              currentSort={sortBy}
-              currentOrder={sortOrder}
-              onSort={onSort}
-            />
-            <SortHeader
-              label="Evento"
-              field="event_type"
-              currentSort={sortBy}
-              currentOrder={sortOrder}
-              onSort={onSort}
-            />
-            <SortHeader
-              label="Severità"
-              field="severity"
-              currentSort={sortBy}
-              currentOrder={sortOrder}
-              onSort={onSort}
-            />
-            <th className="whitespace-nowrap px-4 py-3 text-left">Utente</th>
-            <th className="whitespace-nowrap px-4 py-3 text-left">Azione</th>
-            <th className="whitespace-nowrap px-4 py-3 text-left">Risorsa</th>
-            <SortHeader
-              label="Esito"
-              field="result"
-              currentSort={sortBy}
-              currentOrder={sortOrder}
-              onSort={onSort}
-            />
-            <th className="whitespace-nowrap w-10 px-4 py-3"></th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
+      <Table className="text-sm">
+        <Table.Thead>
+          <Table.Tr>
+            <SortHeader label="Quando" field="createdat" currentSort={sortBy} currentOrder={sortOrder} onSort={onSort} />
+            <SortHeader label="Evento" field="event_type" currentSort={sortBy} currentOrder={sortOrder} onSort={onSort} />
+            <SortHeader label="Severità" field="severity" currentSort={sortBy} currentOrder={sortOrder} onSort={onSort} />
+            <Table.Th>Utente</Table.Th>
+            <Table.Th>Azione</Table.Th>
+            <Table.Th>Risorsa</Table.Th>
+            <SortHeader label="Esito" field="result" currentSort={sortBy} currentOrder={sortOrder} onSort={onSort} />
+            <Table.Th className="w-10">
+              <span className="sr-only">Dettagli</span>
+            </Table.Th>
+          </Table.Tr>
+        </Table.Thead>
+        <Table.Tbody>
           {items.map((row) => {
             const isExpanded = expandedRow === row.id_audit_log;
             const eventLabel =
               AUDIT_EVENT_LABELS[row.event_type as AuditEventType] ??
               row.event_type;
-            const sevLabel =
-              AUDIT_SEVERITY_LABELS[row.severity as AuditSeverity] ??
-              row.severity;
             const category =
               EVENT_CATEGORY_MAP[row.event_type] ?? "system";
-            const catStyle = CATEGORY_STYLES[category];
             const catLabel = CATEGORY_LABELS[category];
-            const eventIcon = EVENT_ICONS[row.event_type] ?? catStyle.icon;
-            const sevStyle =
-              SEVERITY_STYLES[row.severity] ?? SEVERITY_STYLES.LOW;
-            const resultCfg = RESULT_CONFIG[row.result] ?? {
-              icon: "Minus",
-              label: row.result,
-              bg: "bg-slate-100",
-              text: "text-slate-500",
-            };
+            const eventIcon = EVENT_ICONS[row.event_type] ?? CATEGORY_ICONS[category];
             const userName = (
               (row.user_name ?? "") +
               " " +
               (row.user_surname ?? "")
             ).trim();
-            const roleStyle = row.user_type
-              ? ROLE_STYLES[row.user_type] ?? {
-                bg: "bg-slate-100",
-                text: "text-slate-500",
-              }
-              : null;
 
             const hasDetails =
               (row.details && Object.keys(row.details).length > 0) ||
               row.target_entity_type ||
               row.user_agent;
 
-            const ts = dayjs(row.createdat);
-            const relative = ts.fromNow();
-            const isCriticalOrHigh =
-              row.severity === "CRITICAL" || row.severity === "HIGH";
+            const dataCompleta = formatDataOraSecondi(row.createdat);
 
             return (
               <Fragment key={row.id_audit_log}>
-                <tr
-                  className={clsx(
-                    "group transition-colors relative",
-                    hasDetails && "cursor-pointer",
-                    isExpanded
-                      ? "bg-slate-50"
-                      : isCriticalOrHigh
-                        ? sevStyle.rowTint
-                        : "hover:bg-slate-50/70"
-                  )}
+                <Table.Tr
+                  className={clsx(hasDetails && "cursor-pointer", isExpanded && "[&_td]:bg-slate-50")}
                   onClick={() => hasDetails && toggleRow(row.id_audit_log)}
                 >
-                  {/* Quando — relative time primary, absolute secondary */}
-                  <td className="whitespace-nowrap px-4 py-3 first:pl-8">
-                    {/* Severity stripe */}
-                    <div
-                      className={clsx(
-                        "absolute left-0 top-0 bottom-0 w-1 rounded-r-full",
-                        sevStyle.stripe
-                      )}
-                    />
+                  {/* Quando: distanza da adesso, sotto la data completa */}
+                  <Table.Td className="whitespace-nowrap">
                     <div className="flex flex-col">
-                      <span className="text-xs font-semibold text-slate-700">
-                        {relative}
+                      <span title={dataCompleta} className="text-sm font-medium text-slate-700">
+                        {formatRelativo(row.createdat)}
                       </span>
-                      <span className="text-2xs text-slate-400 mt-0.5 tabular-nums">
-                        {ts.format("DD MMM YYYY · HH:mm:ss")}
-                      </span>
+                      <span className="mt-0.5 text-xs tabular-nums text-slate-500">{dataCompleta}</span>
                     </div>
-                  </td>
+                  </Table.Td>
 
-                  {/* Evento — icon + label + subtle category */}
-                  <td className="px-4 py-3">
+                  {/* Evento: icona, nome e categoria */}
+                  <Table.Td>
                     <div className="flex items-center gap-2.5">
-                      <div
-                        className={clsx(
-                          "flex items-center justify-center w-8 h-8 rounded-lg flex-none",
-                          catStyle.bg,
-                          catStyle.border,
-                          "border"
-                        )}
-                      >
-                        <Lucide
-                          icon={eventIcon}
-                          className={clsx("w-4 h-4", catStyle.text)}
-                        />
+                      <div className="flex h-8 w-8 flex-none items-center justify-center rounded-control bg-slate-100 text-slate-600">
+                        <Lucide icon={eventIcon} aria-hidden="true" className="h-4 w-4" />
                       </div>
-                      <div className="flex flex-col min-w-0">
-                        <span className="text-xs font-semibold text-slate-700 leading-tight truncate">
+                      <div className="flex min-w-0 flex-col">
+                        <span className="truncate text-sm font-medium leading-tight text-slate-700">
                           {eventLabel}
                         </span>
-                        <span
-                          className={clsx(
-                            "text-3xs font-medium mt-0.5",
-                            catStyle.text
-                          )}
-                        >
-                          {catLabel}
-                        </span>
+                        <span className="mt-0.5 text-xs text-slate-500">{catLabel}</span>
                       </div>
                     </div>
-                  </td>
+                  </Table.Td>
 
-                  {/* Severità — dot + label */}
-                  <td className="px-4 py-3">
-                    <div
-                      className={clsx(
-                        "inline-flex items-center gap-2 px-2.5 py-1 rounded-full",
-                        sevStyle.bg
-                      )}
-                    >
-                      <span
-                        className={clsx(
-                          "w-2 h-2 rounded-full flex-none",
-                          sevStyle.dot
-                        )}
-                      />
-                      <span
-                        className={clsx(
-                          "text-2xs font-bold uppercase tracking-wide",
-                          sevStyle.text
-                        )}
-                      >
-                        {sevLabel}
-                      </span>
-                    </div>
-                  </td>
+                  <Table.Td>
+                    <SeverityBadge severity={row.severity} />
+                  </Table.Td>
 
-                  {/* Utente — name + role */}
-                  <td className="px-4 py-3">
+                  {/* Utente: nome e ruolo, con il collegamento alla scheda */}
+                  <Table.Td>
                     {row.user_id ? (
                       <Link
                         to={`/gestione-interna/gestione-utenti?userId=${encodeURIComponent(row.user_id)}`}
                         onClick={(e) => e.stopPropagation()}
-                        className="inline-flex flex-col gap-0.5 rounded-md px-2 py-1 -mx-2 -my-1 transition-colors hover:bg-theme-1/5"
+                        className="-mx-2 -my-1 inline-flex flex-col gap-0.5 rounded-control px-2 py-1 transition-colors hover:bg-theme-1/5"
                         title={`Apri scheda utente (${row.user_id})`}
                       >
-                        <span className="text-xs font-semibold text-slate-700 truncate max-w-[160px]">
+                        <span className="max-w-40 truncate text-sm font-medium text-slate-700">
                           {userName || "Utente non trovato"}
                         </span>
-                        {roleStyle && row.user_type && (
-                          <span
-                            className={clsx(
-                              "text-3xs font-semibold px-1.5 py-0.5 rounded w-fit",
-                              roleStyle.bg,
-                              roleStyle.text
-                            )}
-                          >
+                        {row.user_type && (
+                          <Badge variant="secondary" size="sm" className="w-fit">
                             {row.user_type}
-                          </span>
+                          </Badge>
                         )}
                       </Link>
                     ) : (
                       <div className="flex items-center gap-1.5">
-                        <Lucide
-                          icon="Monitor"
-                          className="w-3.5 h-3.5 text-slate-300"
-                        />
-                        <span className="text-xs text-slate-400 italic">
-                          Sistema
-                        </span>
+                        <Lucide icon="Monitor" aria-hidden="true" className="h-3.5 w-3.5 text-slate-400" />
+                        <span className="text-xs italic text-slate-500">Sistema</span>
                       </div>
                     )}
-                  </td>
+                  </Table.Td>
 
-                  {/* Azione */}
-                  <td className="px-4 py-3">
+                  <Table.Td>
                     {row.action ? (
-                      <span className="text-xs text-slate-500 uppercase tracking-wider font-semibold">
+                      <span className="text-xs font-medium uppercase tracking-wide text-slate-600">
                         {row.action}
                       </span>
                     ) : (
-                      <span className="text-xs text-slate-300">—</span>
+                      <Assente />
                     )}
-                  </td>
+                  </Table.Td>
 
-                  {/* Risorsa */}
-                  <td className="px-4 py-3">
+                  <Table.Td>
                     {row.resource ? (
-                      <span className="text-xs font-mono text-slate-600 bg-slate-50 px-2 py-1 rounded-md border border-slate-150 inline-block max-w-[200px] truncate">
+                      <span className="inline-block max-w-52 truncate rounded-control border border-slate-200 bg-slate-50 px-2 py-1 font-mono text-xs text-slate-600">
                         {row.resource}
                       </span>
                     ) : (
-                      <span className="text-xs text-slate-300">—</span>
+                      <Assente />
                     )}
-                  </td>
+                  </Table.Td>
 
-                  {/* Esito */}
-                  <td className="px-4 py-3">
-                    <div
-                      className={clsx(
-                        "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full",
-                        resultCfg.bg,
-                        resultCfg.text
-                      )}
-                    >
-                      <Lucide icon={resultCfg.icon} className="w-3 h-3" />
-                      <span className="text-2xs font-bold uppercase tracking-wide">
-                        {resultCfg.label}
-                      </span>
-                    </div>
-                  </td>
+                  <Table.Td>
+                    <EsitoBadge result={row.result} />
+                  </Table.Td>
 
-                  {/* Expand */}
-                  <td className="px-4 py-3">
+                  <Table.Td className="text-right">
                     {hasDetails && (
-                      <button
+                      <Button
                         type="button"
-                        onClick={(e) => {
+                        variant="outline-secondary"
+                        size="sm"
+                        onClick={(e: MouseEvent<HTMLButtonElement>) => {
                           e.stopPropagation();
                           toggleRow(row.id_audit_log);
                         }}
-                        className={clsx(
-                          "p-1.5 rounded-lg transition-all",
-                          isExpanded
-                            ? "bg-theme-1/10 text-theme-1 rotate-180"
-                            : "text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-                        )}
                         title="Dettagli"
                         aria-label={isExpanded ? "Nascondi dettagli" : "Mostra dettagli"}
                         aria-expanded={isExpanded}
                       >
-                        <Lucide icon="ChevronDown" aria-hidden="true" className="w-4 h-4 transition-transform" />
-                      </button>
+                        <Lucide
+                          icon="ChevronDown"
+                          aria-hidden="true"
+                          className={clsx("h-4 w-4 transition-transform", isExpanded && "rotate-180")}
+                        />
+                      </Button>
                     )}
-                  </td>
-                </tr>
+                  </Table.Td>
+                </Table.Tr>
 
-                {/* ── Expanded detail panel ── */}
+                {/* ── Pannello dei dettagli ── */}
                 {isExpanded && hasDetails && (
-                  <tr>
-                    <td colSpan={8} className="!p-0">
-                      <div
-                        ref={(el) => {
-                          detailRefs.current[row.id_audit_log] = el;
-                        }}
-                        className="bg-gradient-to-br from-slate-50 via-white to-slate-50/50 border-b border-slate-200"
-                      >
-                        <div className="px-8 py-5 space-y-4">
-                          {/* ── Meta info bar ── */}
-                          {(row.target_entity_type || row.user_agent) && (
-                            <div className="flex flex-wrap gap-4">
-                              {row.target_entity_type && (
-                                <div className="flex items-center gap-2 bg-white rounded-lg border border-slate-200 px-3 py-2">
-                                  <Lucide
-                                    icon="Target"
-                                    className="w-4 h-4 text-slate-400 flex-none"
-                                  />
-                                  <div className="flex flex-col">
-                                    <span className="text-3xs font-semibold uppercase tracking-wider text-slate-400">
-                                      Entità target
-                                    </span>
-                                    <span className="text-xs font-mono text-slate-700">
-                                      {row.target_entity_type}
-                                      {row.target_entity_id && (
-                                        <span className="text-slate-400 ml-1">
-                                          ·{" "}
-                                          {row.target_entity_id.length > 24
-                                            ? `${row.target_entity_id.slice(0, 24)}...`
-                                            : row.target_entity_id}
-                                        </span>
-                                      )}
-                                    </span>
-                                  </div>
-                                </div>
-                              )}
-                              {row.user_agent && (
-                                <div className="flex items-start gap-2.5 bg-white rounded-lg border border-slate-200 px-4 py-3 max-w-xl">
-                                  <Lucide
-                                    icon="Globe"
-                                    className="w-4 h-4 text-slate-400 flex-none mt-1"
-                                  />
-                                  <div className="flex flex-col min-w-0 gap-0.5">
-                                    <span className="text-3xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                                      Dispositivo
-                                    </span>
-                                    <UserAgentDisplay raw={row.user_agent} />
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          )}
-
-                          {/* ── Detail key-value cards ── */}
-                          {row.details &&
-                            Object.keys(row.details).length > 0 && (
-                              <div>
-                                <div className="flex items-center gap-2 mb-3">
-                                  <Lucide
-                                    icon="List"
-                                    className="w-4 h-4 text-slate-400"
-                                  />
-                                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                                    Dettagli evento
+                  <Table.Tr className="[&:hover_td]:bg-slate-50">
+                    <Table.Td colSpan={NUMERO_COLONNE} className="bg-slate-50 p-0">
+                      <div className="space-y-4 px-5 py-5">
+                        {(row.target_entity_type || row.user_agent) && (
+                          <div className="flex flex-wrap gap-4">
+                            {row.target_entity_type && (
+                              <div className="flex items-center gap-2 rounded-card border border-slate-200 bg-white px-3 py-2">
+                                <Lucide icon="Target" aria-hidden="true" className="h-4 w-4 flex-none text-slate-400" />
+                                <div className="flex flex-col">
+                                  <span className="title-eyebrow">Entità target</span>
+                                  <span className="font-mono text-xs text-slate-700">
+                                    {row.target_entity_type}
+                                    {row.target_entity_id && (
+                                      <span className="ml-1 text-slate-400">
+                                        ·{" "}
+                                        {row.target_entity_id.length > 24
+                                          ? `${row.target_entity_id.slice(0, 24)}...`
+                                          : row.target_entity_id}
+                                      </span>
+                                    )}
                                   </span>
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-                                  {Object.entries(row.details).map(
-                                    ([key, value]) => {
-                                      const isComplex =
-                                        typeof value === "object" &&
-                                        value !== null;
-                                      const isError =
-                                        key === "error" || key === "reason";
-                                      return (
-                                        <div
-                                          key={key}
-                                          className={clsx(
-                                            "rounded-lg border p-3",
-                                            isError
-                                              ? "border-red-200 bg-red-50/50"
-                                              : "border-slate-200 bg-white",
-                                            isComplex &&
-                                            "sm:col-span-2 lg:col-span-3"
-                                          )}
-                                        >
-                                          <div
-                                            className={clsx(
-                                              "text-3xs font-bold uppercase tracking-wider mb-1.5",
-                                              isError
-                                                ? "text-red-400"
-                                                : "text-slate-400"
-                                            )}
-                                          >
-                                            {DETAIL_LABELS[key] ?? key}
-                                          </div>
-                                          <div className="text-xs">
-                                            <DetailValue value={value} />
-                                          </div>
-                                        </div>
-                                      );
-                                    }
-                                  )}
                                 </div>
                               </div>
                             )}
-                        </div>
+                            {row.user_agent && (
+                              <div className="flex max-w-xl items-start gap-2.5 rounded-card border border-slate-200 bg-white px-4 py-3">
+                                <Lucide icon="Globe" aria-hidden="true" className="mt-1 h-4 w-4 flex-none text-slate-400" />
+                                <div className="flex min-w-0 flex-col gap-1">
+                                  <span className="title-eyebrow">Dispositivo</span>
+                                  <UserAgentDisplay raw={row.user_agent} />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {row.details && Object.keys(row.details).length > 0 && (
+                          <div>
+                            <div className="mb-3 flex items-center gap-2">
+                              <Lucide icon="List" aria-hidden="true" className="h-4 w-4 text-slate-400" />
+                              <span className="title-eyebrow">Dettagli evento</span>
+                            </div>
+                            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+                              {Object.entries(row.details).map(([key, value]) => {
+                                const isComplex = typeof value === "object" && value !== null;
+                                const isError = key === "error" || key === "reason";
+                                return (
+                                  <div
+                                    key={key}
+                                    className={clsx(
+                                      "rounded-card border p-3",
+                                      isError ? "border-danger/20 bg-danger/5" : "border-slate-200 bg-white",
+                                      isComplex && "sm:col-span-2 lg:col-span-3"
+                                    )}
+                                  >
+                                    <div className={clsx("title-eyebrow mb-1.5", isError && "text-danger")}>
+                                      {DETAIL_LABELS[key] ?? key}
+                                    </div>
+                                    <div className="text-xs">
+                                      <DetailValue value={value} />
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    </td>
-                  </tr>
+                    </Table.Td>
+                  </Table.Tr>
                 )}
               </Fragment>
             );
           })}
-        </tbody>
-      </table>
+        </Table.Tbody>
+      </Table>
     </div>
   );
 };

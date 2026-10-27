@@ -1,33 +1,33 @@
+import Alert from "@/components/Base/Alert";
 import Button from "@/components/Base/Button";
 import Lucide from "@/components/Base/Lucide";
+import Pagina from "@/components/Base/Pagina";
+import Sezione from "@/components/Base/Sezione";
+import StatusBadge from "@/components/Base/StatusBadge";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import { PermissionGate } from "@/components/PermissionGate";
 import withSessionCheck from "@/components/SessionChecker";
 import { PERMISSIONS } from "@/constants/permissions";
-import { useState, useCallback } from "react";
+import { CodeBlock } from "@/pages/Documentazione/DocsCondivisi";
+import { useState } from "react";
 import { useLoaderData } from "react-router-dom";
-import { Dialog } from "../../../components/Base/Headless";
-import PageHeader from "../../../components/Base/PageHeader";
 import { useApiKeyManagement } from "../../GestioneApi/hooks/useApiKeyManagement";
 
 interface LoaderData {
   apiKey: string;
 }
 
+const BEST_PRACTICE = [
+  { titolo: "Non esporre mai", testo: "la tua API Key nel codice frontend o in repository pubblici" },
+  { titolo: "Usa variabili d'ambiente", testo: "per memorizzare le chiavi nei tuoi server" },
+  { titolo: "Rigenera periodicamente", testo: "le chiavi per mantenere un alto livello di sicurezza" },
+  { titolo: "Monitora le statistiche", testo: "per rilevare eventuali utilizzi anomali" },
+];
+
 function ApiKeysPage() {
   const { apiKey: apiKeyLoader } = useLoaderData<LoaderData>();
   const { apiKey, copied, isGenerating, generateKey, copyToClipboard } = useApiKeyManagement(apiKeyLoader);
   const [dialogOpen, setDialogOpen] = useState<boolean>(false);
-  const [copiedExample, setCopiedExample] = useState<string | null>(null);
-
-  const copyExample = useCallback(async (code: string, id: string) => {
-    try {
-      await navigator.clipboard.writeText(code);
-      setCopiedExample(id);
-      setTimeout(() => setCopiedExample(null), 2000);
-    } catch (err) {
-      console.error('Errore nella copia:', err);
-    }
-  }, []);
 
   const curlExample = `curl -H "x-api-key: ${apiKey || 'your-api-key'}" \\
   ${window.location.origin}/api/external/refs`;
@@ -44,255 +44,107 @@ function ApiKeysPage() {
 });`;
 
   return (
-    <div className="grid grid-cols-12 gap-y-10 gap-x-6">
-      <div className="col-span-12">
-        {/* Header */}
-        <PageHeader
-          title="API Keys"
-          description="Gestisci le chiavi di accesso alle API esterne"
-        />
-
-        {/* Dialog conferma generazione */}
-        <Dialog
-          open={dialogOpen}
-          onClose={() => setDialogOpen(false)}
-          staticBackdrop={true}
-        >
-          <Dialog.Panel>
-            <Dialog.Title>
-              <h2 className="title-card mr-auto">
-                Generazione nuova API Key
-              </h2>
-            </Dialog.Title>
-
-            <Dialog.Description className="space-y-4">
-              <p>
-                Creando una nuova chiave, la precedente verrà automaticamente revocata.
-                Assicurati di aggiornare tutti i servizi che la utilizzano prima di procedere.
-              </p>
-
-              <ul className="list-disc list-inside text-sm text-slate-600 space-y-1">
-                <li>Salva subito la nuova chiave: non sarà più mostrata dopo la chiusura del dialog.</li>
-                <li>Distribuisci la chiave solo a canali sicuri.</li>
-                <li>Rigenera periodicamente per mantenere un alto livello di sicurezza.</li>
-              </ul>
-
-              <div className="p-4 border border-amber-200 bg-amber-50 rounded">
-                <div className="flex items-center text-amber-700 font-medium mb-1">
-                  <Lucide icon="ShieldAlert" className="w-4 h-4 mr-2" />
-                  Stato attuale
-                </div>
-                <code className="block text-xs break-all">
-                  {apiKey ?? "Nessuna API Key attiva"}
-                </code>
-              </div>
-            </Dialog.Description>
-
-            <Dialog.Footer className="flex justify-end gap-2">
-              <Button
-                variant="outline-secondary"
-                type="button"
-                onClick={() => setDialogOpen(false)}
-                disabled={isGenerating}
-              >
-                Annulla
-              </Button>
-              <Button
-                variant="primary"
-                type="button"
-                onClick={async () => {
-                  await generateKey();
-                  setDialogOpen(false);
-                }}
-                loading={isGenerating}
-              >
-                {!isGenerating && <Lucide icon="KeyRound" aria-hidden="true" className="w-4 h-4 mr-2" />}
-                Conferma
-              </Button>
-            </Dialog.Footer>
-          </Dialog.Panel>
-        </Dialog>
-
-        {/* Content */}
-        <div className="mt-3.5">
-          <div className="flex flex-col box box--stacked">
-            <div className="p-5">
-              {/* Sezione Gestione API Key */}
-              <div className="mb-8">
-                <div className="flex items-center gap-3 mb-6">
-                  <Lucide icon="Key" className="w-6 h-6 text-primary" />
-                  <h2 className="title-section">Gestione API Key</h2>
-                </div>
-
-                <div className="box p-6 space-y-4">
-                  <p className="text-slate-600 mb-4">
-                    Le API Key sono necessarie per accedere agli endpoint protetti dell'External API.
-                    Mantieni sempre le tue chiavi al sicuro e non condividerle pubblicamente.
-                  </p>
-
-                  {apiKey ? (
-                    <div className="border border-success/30 bg-success/5 rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <Lucide icon="CircleCheck" className="w-5 h-5 text-success" />
-                          <span className="font-medium text-slate-900">API Key Attiva</span>
-                        </div>
-                        <Button
-                          variant="outline-secondary"
-                          size="sm"
-                          onClick={copyToClipboard}
-                          disabled={copied}
-                        >
-                          {copied ? (
-                            <>
-                              <Lucide icon="Check" className="w-4 h-4 mr-1 text-success" />
-                              Copiato!
-                            </>
-                          ) : (
-                            <>
-                              <Lucide icon="Copy" className="w-4 h-4 mr-1" />
-                              Copia
-                            </>
-                          )}
-                        </Button>
-                      </div>
-                      <div className="border border-slate-200 rounded-lg overflow-hidden">
-                        <pre className="bg-slate-900 text-slate-100 p-4 overflow-x-auto">
-                          <code className="text-sm font-mono">{apiKey}</code>
-                        </pre>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="border border-warning/30 bg-warning/5 rounded-lg p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Lucide icon="AlertTriangle" className="w-5 h-5 text-warning" />
-                        <span className="font-medium text-slate-900">Nessuna API Key Attiva</span>
-                      </div>
-                      <p className="text-slate-600 text-sm">
-                        Genera una nuova API Key per iniziare ad utilizzare le API esterne.
-                      </p>
-                    </div>
-                  )}
-
-                  <PermissionGate permission={PERMISSIONS.API.GESTISCI_CHIAVI} mode="disable">
-                    <Button
-                      variant="primary"
-                      onClick={() => setDialogOpen(true)}
-                    >
-                      <Lucide icon="Plus" className="w-4 h-4 mr-2" />
-                      Genera Nuova API Key
-                    </Button>
-                  </PermissionGate>
-                </div>
-              </div>
-
-              {/* Sezione Come Usare l'API Key */}
-              <div className="mb-8">
-                <div className="flex items-center gap-3 mb-6">
-                  <Lucide icon="Code" className="w-6 h-6 text-success" />
-                  <h2 className="title-section">Come Usare l'API Key</h2>
-                </div>
-
-                <div className="box p-6">
-                  <p className="text-slate-600 mb-6">
-                    Invia la tua API Key nell'header <code className="bg-slate-100 px-2 py-1 rounded text-sm font-mono">x-api-key</code> di ogni richiesta HTTP.
-                  </p>
-
-                  <div className="space-y-6">
-                    {/* Esempio cURL */}
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="title-card">Esempio cURL</h4>
-                        <Button
-                          variant="outline-secondary"
-                          size="sm"
-                          onClick={() => copyExample(curlExample, 'curl')}
-                        >
-                          {copiedExample === 'curl' ? (
-                            <>
-                              <Lucide icon="Check" className="w-4 h-4 mr-1" />
-                              Copiato!
-                            </>
-                          ) : (
-                            <>
-                              <Lucide icon="Copy" className="w-4 h-4 mr-1" />
-                              Copia
-                            </>
-                          )}
-                        </Button>
-                      </div>
-                      <div className="border border-slate-200 rounded-lg overflow-hidden">
-                        <pre className="bg-slate-900 text-slate-100 p-4 overflow-x-auto">
-                          <code className="text-sm font-mono">{curlExample}</code>
-                        </pre>
-                      </div>
-                    </div>
-
-                    {/* Esempio JavaScript */}
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="title-card">Esempio JavaScript</h4>
-                        <Button
-                          variant="outline-secondary"
-                          size="sm"
-                          onClick={() => copyExample(jsExample, 'js')}
-                        >
-                          {copiedExample === 'js' ? (
-                            <>
-                              <Lucide icon="Check" className="w-4 h-4 mr-1" />
-                              Copiato!
-                            </>
-                          ) : (
-                            <>
-                              <Lucide icon="Copy" className="w-4 h-4 mr-1" />
-                              Copia
-                            </>
-                          )}
-                        </Button>
-                      </div>
-                      <div className="border border-slate-200 rounded-lg overflow-hidden">
-                        <pre className="bg-slate-900 text-slate-100 p-4 overflow-x-auto">
-                          <code className="text-sm font-mono">{jsExample}</code>
-                        </pre>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Sezione Sicurezza */}
-              <div>
-                <div className="flex items-center gap-3 mb-6">
-                  <Lucide icon="Shield" className="w-6 h-6 text-warning" />
-                  <h2 className="title-section">Best Practice di Sicurezza</h2>
-                </div>
-
-                <div className="box p-6">
-                  <ul className="space-y-3 text-slate-600">
-                    <li className="flex items-start gap-2">
-                      <Lucide icon="Check" className="w-5 h-5 text-success mt-0.5 flex-shrink-0" />
-                      <span><strong>Non esporre mai</strong> la tua API Key nel codice frontend o in repository pubblici</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <Lucide icon="Check" className="w-5 h-5 text-success mt-0.5 flex-shrink-0" />
-                      <span><strong>Usa variabili d'ambiente</strong> per memorizzare le chiavi nei tuoi server</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <Lucide icon="Check" className="w-5 h-5 text-success mt-0.5 flex-shrink-0" />
-                      <span><strong>Rigenera periodicamente</strong> le chiavi per mantenere un alto livello di sicurezza</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <Lucide icon="Check" className="w-5 h-5 text-success mt-0.5 flex-shrink-0" />
-                      <span><strong>Monitora le statistiche</strong> per rilevare eventuali utilizzi anomali</span>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            </div>
+    <Pagina
+      titolo="API Keys"
+      descrizione="Gestisci le chiavi di accesso alle API esterne"
+      azioni={
+        <PermissionGate permission={PERMISSIONS.API.GESTISCI_CHIAVI} mode="disable">
+          <Button variant="primary" onClick={() => setDialogOpen(true)}>
+            <Lucide icon="Plus" aria-hidden="true" className="mr-2 h-4 w-4" />
+            Genera nuova API Key
+          </Button>
+        </PermissionGate>
+      }
+    >
+      {/* Conferma generazione: la chiave precedente viene revocata */}
+      <ConfirmDialog
+        open={dialogOpen}
+        title="Generare una nuova API Key?"
+        subtitle={apiKey ? "La chiave attuale verrà revocata" : "Nuova chiave di accesso"}
+        confirmLabel="Genera chiave"
+        confirmVariant={apiKey ? "danger" : "primary"}
+        loading={isGenerating}
+        onClose={() => setDialogOpen(false)}
+        onConfirm={async () => {
+          await generateKey();
+          setDialogOpen(false);
+        }}
+        description={
+          <div className="space-y-4">
+            <p>
+              Creando una nuova chiave, la precedente verrà automaticamente revocata.
+              Assicurati di aggiornare tutti i servizi che la utilizzano prima di procedere.
+            </p>
+            <ul className="list-inside list-disc space-y-1">
+              <li>Salva subito la nuova chiave: non sarà più mostrata dopo la chiusura del dialog.</li>
+              <li>Distribuisci la chiave solo a canali sicuri.</li>
+              <li>Rigenera periodicamente per mantenere un alto livello di sicurezza.</li>
+            </ul>
+            <Alert variant="soft-warning" icona="ShieldAlert" titolo="Stato attuale">
+              <code className="block break-all text-xs">{apiKey ?? "Nessuna API Key attiva"}</code>
+            </Alert>
           </div>
+        }
+      />
+
+      <Sezione
+        icona="Key"
+        titolo="Gestione API Key"
+        descrizione="Le API Key sono necessarie per accedere agli endpoint protetti dell'External API. Mantieni sempre le tue chiavi al sicuro e non condividerle pubblicamente."
+      >
+        {apiKey ? (
+          <div className="rounded-card border border-slate-200 bg-white p-4">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <h3 className="title-card">API Key attuale</h3>
+                <StatusBadge tono="success" etichetta="Attiva" />
+              </div>
+              <Button variant="outline-secondary" size="sm" onClick={copyToClipboard} disabled={copied}>
+                <Lucide icon={copied ? "Check" : "Copy"} aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                {copied ? "Copiato!" : "Copia"}
+              </Button>
+            </div>
+            <pre className="overflow-x-auto rounded-control bg-slate-900 p-4 text-slate-100">
+              <code className="font-mono text-sm">{apiKey}</code>
+            </pre>
+          </div>
+        ) : (
+          <Alert variant="soft-warning" icona="TriangleAlert" titolo="Nessuna API Key attiva">
+            Genera una nuova API Key per iniziare ad utilizzare le API esterne.
+          </Alert>
+        )}
+      </Sezione>
+
+      <Sezione
+        icona="Code"
+        titolo="Come usare l'API Key"
+        descrizione={
+          <>
+            Invia la tua API Key nell'header{" "}
+            <code className="rounded-control bg-slate-100 px-1.5 py-0.5 font-mono text-sm">x-api-key</code> di ogni
+            richiesta HTTP.
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <CodeBlock language="Esempio cURL" code={curlExample} />
+          <CodeBlock language="Esempio JavaScript" code={jsExample} />
         </div>
-      </div>
-    </div>
+      </Sezione>
+
+      <Sezione icona="Shield" titolo="Best practice di sicurezza">
+        <ul className="space-y-3 text-slate-600">
+          {BEST_PRACTICE.map((voce) => (
+            <li key={voce.titolo} className="flex items-start gap-2">
+              <Lucide icon="Check" aria-hidden="true" className="mt-0.5 h-5 w-5 flex-none text-success" />
+              <span>
+                <strong>{voce.titolo}</strong> {voce.testo}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </Sezione>
+    </Pagina>
   );
 }
 

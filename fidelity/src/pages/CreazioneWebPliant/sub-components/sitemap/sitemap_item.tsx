@@ -170,7 +170,7 @@ const SitemapItem: React.FC<{
         <motion.div
             ref={dropRef}
             className={clsx(
-                "bg-white dark:bg-darkmode-600 border dark:border-darkmode-500 rounded-lg shadow-sm transition-all mb-3",
+                "bg-white dark:bg-darkmode-600 border dark:border-darkmode-500 rounded-card shadow-sm transition-all mb-3",
                 { "ring-2 ring-primary/50": isOver },
                 { "opacity-50": isDragging }
             )}
@@ -204,7 +204,7 @@ const SitemapItem: React.FC<{
                             <button
                                 type="button"
                                 onClick={toggleEdit}
-                                className="w-full text-left flex items-center p-2 transition duration-300 ease-in-out rounded-md cursor-pointer hover:bg-slate-100 dark:hover:bg-darkmode-400"
+                                className="w-full text-left flex items-center p-2 transition duration-300 ease-in-out rounded-control cursor-pointer hover:bg-slate-100 dark:hover:bg-darkmode-400"
                                 >
                                 <Lucide icon="Pen" aria-hidden="true" className="w-4 h-4 mr-2" />
                                 {isEditing ? "Salva" : "Rinomina"}
@@ -214,7 +214,7 @@ const SitemapItem: React.FC<{
                                 onClick={() => !hasExternalLink && addPage()}
                                 disabled={hasExternalLink}
                                 className={clsx(
-                                    "w-full text-left flex items-center p-2 transition duration-300 ease-in-out rounded-md",
+                                    "w-full text-left flex items-center p-2 transition duration-300 ease-in-out rounded-control",
                                     hasExternalLink ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-slate-100 dark:hover:bg-darkmode-400"
                                 )}
                                 >
@@ -224,7 +224,7 @@ const SitemapItem: React.FC<{
                             <button
                                 type="button"
                                 onClick={toggleExternalLink}
-                                className="w-full text-left flex items-center p-2 transition duration-300 ease-in-out rounded-md cursor-pointer hover:bg-slate-100 dark:hover:bg-darkmode-400"
+                                className="w-full text-left flex items-center p-2 transition duration-300 ease-in-out rounded-control cursor-pointer hover:bg-slate-100 dark:hover:bg-darkmode-400"
                                 >
                                 <Lucide icon="Link" aria-hidden="true" className="w-4 h-4 mr-2" />
                                 {hasExternalLink ? "Rimuovi Link Esterno" : "Aggiungi Link Esterno"}
@@ -232,7 +232,7 @@ const SitemapItem: React.FC<{
                             <button
                                 type="button"
                                 onClick={toggleAdvancedSettings}
-                                className="w-full text-left flex items-center p-2 transition duration-300 ease-in-out rounded-md cursor-pointer hover:bg-slate-100 dark:hover:bg-darkmode-400"
+                                className="w-full text-left flex items-center p-2 transition duration-300 ease-in-out rounded-control cursor-pointer hover:bg-slate-100 dark:hover:bg-darkmode-400"
                                 >
                                 <Lucide icon="Settings" aria-hidden="true" className="w-4 h-4 mr-2" />
                                 Impostazioni
@@ -241,7 +241,7 @@ const SitemapItem: React.FC<{
                             <button
                                 type="button"
                                 onClick={deleteSitemap}
-                                className="w-full text-left flex items-center p-2 transition duration-300 ease-in-out rounded-md cursor-pointer text-danger hover:bg-danger/10"
+                                className="w-full text-left flex items-center p-2 transition duration-300 ease-in-out rounded-control cursor-pointer text-danger hover:bg-danger/10"
                                 >
                                 <Lucide icon="Trash2" aria-hidden="true" className="w-4 h-4 mr-2" />
                                 Elimina

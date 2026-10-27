@@ -1,4 +1,4 @@
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/utils/twMerge";
 import { Menu as HeadlessMenu, MenuButton, MenuItem, MenuItems,Transition } from '@headlessui/react'
 import React, { Fragment } from "react";
 import clsx from "clsx";

@@ -1,7 +1,9 @@
+import Alert from "@/components/Base/Alert";
 import Button from "@/components/Base/Button";
 import Lucide from "@/components/Base/Lucide";
 import PageError from "@/components/Base/PageError";
-import PageHeader from "@/components/Base/PageHeader";
+import Pagina from "@/components/Base/Pagina";
+import Sezione from "@/components/Base/Sezione";
 import Spinner from "@/components/Base/Spinner";
 import EmptyState from "@/components/EmptyState";
 import withSessionCheck from "@/components/SessionChecker";
@@ -31,8 +33,8 @@ function OptionCard({
       className={clsx(
         "group relative flex w-full flex-col gap-4 rounded-card border-2 p-5 text-left transition-all duration-150",
         selected
-          ? "border-primary bg-primary/[0.03] shadow-md shadow-primary/10"
-          : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm"
+          ? "border-primary bg-primary/5"
+          : "border-slate-200 bg-white hover:border-slate-300"
       )}
     >
       {/* Check badge */}
@@ -51,7 +53,7 @@ function OptionCard({
         <div
           className={clsx(
             "flex h-12 w-12 shrink-0 items-center justify-center rounded-card transition-colors",
-            selected ? "bg-primary/15" : "bg-slate-100 group-hover:bg-slate-150"
+            selected ? "bg-primary/15" : "bg-slate-100 group-hover:bg-slate-200"
           )}
         >
           <Lucide
@@ -61,14 +63,7 @@ function OptionCard({
           />
         </div>
         <div className="min-w-0 flex-1 pr-6">
-          <div
-            className={clsx(
-              "text-sm font-bold leading-snug",
-              selected ? "text-primary" : "text-slate-800"
-            )}
-          >
-            {option.titolo}
-          </div>
+          <span className={clsx("title-card block", selected && "text-primary")}>{option.titolo}</span>
           <p className="mt-1 text-xs leading-relaxed text-slate-500">
             {option.descrizione}
           </p>
@@ -125,17 +120,9 @@ function Main() {
           err?.status === 404 ||
           String(err?.message ?? "").toLowerCase().includes("nessun");
         showNotification(
-          <div className="flex items-start gap-3">
-            <Lucide icon="CircleAlert" className="h-6 w-6 shrink-0 text-danger" />
-            <div>
-              <div className="text-sm font-semibold">Calcolo non riuscito</div>
-              <div className="mt-1 text-xs text-slate-500">
-                {is404
-                  ? "Nessun confronto disponibile per questa opzione. Verifica i momenti dalla gestione lavorazioni."
-                  : err?.message || "Si è verificato un errore."}
-              </div>
-            </div>
-          </div>,
+          is404
+            ? "Calcolo non riuscito: nessun confronto disponibile per questa opzione. Verifica i momenti dalla gestione lavorazioni."
+            : `Calcolo non riuscito: ${err?.message || "si è verificato un errore."}`,
           { variant: "error" }
         );
       },
@@ -143,19 +130,19 @@ function Main() {
   };
 
   return (
-    <>
-      <PageHeader
-        title="Report Tracciati"
-        description="Seleziona un'analisi preconfigurata per il tuo cliente e avvia il calcolo."
-      />
-
-      <div className="grid grid-cols-12 gap-5">
-
+    <Pagina
+      titolo="Report tracciati"
+      descrizione="Seleziona un'analisi preconfigurata per il tuo cliente e avvia il calcolo."
+    >
+      <div className="grid grid-cols-12 gap-6">
         {/* ── Colonna principale ─────────────────────────────────────────── */}
-        <div className="col-span-12 xl:col-span-8">
-
+        <Sezione
+          className="col-span-12 xl:col-span-8"
+          titolo="Analisi disponibili"
+          descrizione="Le analisi preconfigurate per il tuo cliente"
+        >
           {optionsQuery.isLoading && (
-            <div role="status" className="box box--stacked p-8 flex flex-col items-center gap-3 text-slate-400">
+            <div role="status" className="flex flex-col items-center gap-3 py-8 text-slate-500">
               <Spinner decorativo />
               <span className="text-sm">Caricamento opzioni…</span>
             </div>
@@ -171,13 +158,12 @@ function Main() {
           )}
 
           {!optionsQuery.isLoading && !optionsQuery.isError && options.length === 0 && (
-            <div className="box box--stacked p-8">
-              <EmptyState
-                icon="FileChartLine"
-                title="Nessuna opzione disponibile"
-                description="Non sono state definite opzioni di report per questo cliente."
-              />
-            </div>
+            <EmptyState
+              compatta
+              icon="FileChartLine"
+              title="Nessuna opzione disponibile"
+              description="Non sono state definite opzioni di report per questo cliente."
+            />
           )}
 
           {options.length > 0 && (
@@ -192,95 +178,82 @@ function Main() {
               ))}
             </div>
           )}
-        </div>
+        </Sezione>
 
         {/* ── Sidebar ───────────────────────────────────────────────────── */}
-        <div className="col-span-12 xl:col-span-4 space-y-4">
-
-          {/* Riepilogo */}
-          <div className="box box--stacked p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <Lucide icon="FileSearch" aria-hidden="true" className="h-4 w-4 text-primary" />
-              <h3 className="title-card">Analisi selezionata</h3>
-            </div>
-
+        <Sezione as="aside" className="col-span-12 self-start xl:sticky xl:top-24 xl:col-span-4" titolo="Analisi selezionata" icona="FileSearch">
+          <div className="space-y-4">
             {activeOption ? (
               <div className="space-y-3">
-                <div className="rounded-md border border-primary/20 bg-primary/5 p-3">
-                  <div className="flex items-center gap-2 mb-1">
+                <div className="rounded-control border border-primary/20 bg-primary/5 p-3">
+                  <div className="mb-1 flex items-center gap-2">
                     <Lucide
                       icon={activeOption.icona ?? "FileBarChart"}
-                      className="h-4 w-4 text-primary shrink-0"
+                      aria-hidden="true"
+                      className="h-4 w-4 shrink-0 text-primary"
                     />
-                    <span className="text-sm font-semibold text-primary">
-                      {activeOption.titolo}
-                    </span>
+                    <span className="text-sm font-semibold text-primary">{activeOption.titolo}</span>
                   </div>
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    {activeOption.descrizione}
-                  </p>
+                  <p className="text-xs leading-relaxed text-slate-500">{activeOption.descrizione}</p>
                 </div>
 
                 {activeOption.plugins.length > 0 && (
                   <div>
-                    <div className="text-xs font-medium text-slate-500 mb-2 uppercase tracking-wide">
-                      Plugin inclusi
-                    </div>
-                    <div className="space-y-1.5">
+                    <h3 className="title-eyebrow mb-2">Plugin inclusi</h3>
+                    <ol className="space-y-1.5">
                       {activeOption.plugins.map((p, i) => (
-                        <div
-                          key={p.id}
-                          className="flex items-center gap-2 text-xs text-slate-700"
-                        >
-                          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-slate-500 font-medium text-xs shrink-0">
+                        <li key={p.id} className="flex items-center gap-2 text-xs text-slate-700">
+                          <span
+                            aria-hidden="true"
+                            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-medium tabular-nums text-slate-500"
+                          >
                             {i + 1}
                           </span>
                           {p.titolo}
-                        </div>
+                        </li>
                       ))}
-                    </div>
+                    </ol>
                   </div>
                 )}
               </div>
             ) : (
-              <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-xs text-slate-400 italic">
-                Nessuna analisi selezionata. Scegli un'opzione dalla lista.
-              </div>
+              <EmptyState
+                compatta
+                icon="MousePointerClick"
+                title="Nessuna analisi selezionata"
+                description="Scegli un'opzione dalla lista."
+                className="border border-dashed border-slate-200"
+              />
             )}
-          </div>
 
-          {/* Esegui */}
-          <Button
-            type="button"
-            variant="primary"
-            className="w-full justify-center"
-            disabled={!activeOptionId || queryMutation.isPending}
-            loading={queryMutation.isPending}
-            onClick={handleExecute}
-          >
-            {!queryMutation.isPending && <Lucide icon="Play" aria-hidden="true" className="mr-2 h-4 w-4" />}
-            Esegui analisi
-          </Button>
+            {/* Esegui */}
+            <Button
+              type="button"
+              variant="primary"
+              className="w-full"
+              disabled={!activeOptionId || queryMutation.isPending}
+              loading={queryMutation.isPending}
+              onClick={handleExecute}
+            >
+              {!queryMutation.isPending && <Lucide icon="Play" aria-hidden="true" className="mr-2 h-4 w-4" />}
+              Esegui analisi
+            </Button>
 
-          {queryMutation.isError && (
-            <div className="flex items-start gap-2.5 rounded-lg border border-danger/20 bg-danger/5 p-3">
-              <Lucide icon="CircleAlert" className="h-4 w-4 shrink-0 text-danger mt-0.5" />
-              <p className="text-xs text-danger leading-relaxed">
+            {queryMutation.isError && (
+              <Alert variant="soft-danger" icona="CircleAlert">
                 Nessun confronto disponibile per l'analisi selezionata. Verifica i momenti dalla gestione lavorazioni.
-              </p>
-            </div>
-          )}
+              </Alert>
+            )}
 
-          {/* Info */}
-          <div className="flex items-start gap-2.5 rounded-lg border border-blue-100 bg-blue-50/60 p-3">
-            <Lucide icon="Info" className="h-4 w-4 shrink-0 text-blue-500 mt-0.5" />
-            <p className="text-xs text-blue-700 leading-relaxed">
+            {/* Nota: non è un avviso, resta un testo d'aiuto */}
+            <p className="flex items-start gap-2 text-xs leading-relaxed text-slate-500">
+              <Lucide icon="Info" aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-info" />
               Le analisi richiedono che i momenti e i relativi confronti siano già stati calcolati dalla pagina di gestione lavorazioni.
             </p>
           </div>
-        </div>
+        </Sezione>
       </div>
-    </>
+    </Pagina>
   );
 }
 

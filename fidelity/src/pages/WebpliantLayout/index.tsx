@@ -40,11 +40,11 @@ import { useFetchAllPuntiVendita, useFetchConfig } from '@/query/query';
 
 // Utils
 import { filtroSitemMap } from './utility';
+import { CLASSE_CAMPO_PUBBLICO, CLASSE_TITOLO_PANNELLO_PUBBLICO } from './StatiPubblici';
 // Rimosso import vecchio sistema - ora si usa useWebpliantParamsManager
 import Dock from '@/components/Base/Dock';
 import CookieConsent from '@/components/CookieConsent';
 import { useWishlistEvents } from '@/utils/wishlistEvents';
-import { Colorize } from '../../../lib/Colorize';
 
 // =============================================
 // CUSTOM HOOKS FOR STATE MANAGEMENT
@@ -65,12 +65,6 @@ const useUIState = () => {
   const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
 
 
-  useEffect(() => {
-    console.log("isOpen", isOpen);
-  }, [isOpen]);
-  useEffect(() => {
-    console.log("MODE", mode);
-  }, [mode]);
 
   return {
     query, setQuery,
@@ -113,10 +107,6 @@ const useWebpliantParams = () => {
     return sessionWishlistId || searchParams.get('sessionWishlistId');
   });
   const [idPagina, setIdPagina] = useState<string | null>(searchParams.get('idPagina'));
-
-  useEffect(() => {
-    console.log(Colorize.bgBlue("GUID ID WISHLIST"), guidIdWishlist);
-  }, [guidIdWishlist]);
 
   return {
     location,
@@ -199,7 +189,6 @@ const useWebpliantAPI = (sessionWishlistId: string, guidIdWishlist: string | nul
   const fetchDataWishlist = useCallback(async (dataWebPliant: any, setters: any) => {
     try {
       const res = await ServerCall.get<any>(`/getParamsWishlistId?id=${guidIdWishlist}`);
-      console.log("Data wishlist:", res);
       const { idPV, idCanale, idArea, idGDO, idWorkspace, idPagina } = res;
 
       setters.setIdPV(idPV);
@@ -208,7 +197,6 @@ const useWebpliantAPI = (sessionWishlistId: string, guidIdWishlist: string | nul
       setters.setIdGDO(idGDO);
       setters.setIdWorkspace(idWorkspace);
       setters.setIdPagina(idPagina);
-      console.log("ID pagina:", idPagina);
       if (!idPagina) {
         const homepage = dataWebPliant?.webpliant?.find((s: PaginaWebPliant) => s.tipo === TIPO_PAGINA.HOMEPAGE);
         if (homepage) {
@@ -248,8 +236,6 @@ const useGeolocationFilter = (allPuntiVendita: PuntiVenditaAttributes[] | undefi
   const [allPuntiVenditaFiltered, setAllPuntiVenditaFiltered] = useState<PuntiVenditaAttributes[]>([]);
 
   const filtraPuntiVendita = useCallback((posizione: GeolocationPosition) => {
-    console.log(`Latitudine: ${posizione.coords.latitude}`);
-    console.log(`Longitudine: ${posizione.coords.longitude}`);
     const latitudine = posizione.coords.latitude;
     const longitudine = posizione.coords.longitude;
 
@@ -329,7 +315,7 @@ const DevConsoleButtons: FC<DevConsoleButtonsProps> = ({
     {
       icon: <Lucide icon="CircleAlert" width={48} height={48} />,
       label: "Gestione Errori",
-      className: "text-red-500",
+      className: "text-danger",
       onClick: () => {
         toggleOpen();
       }
@@ -337,7 +323,7 @@ const DevConsoleButtons: FC<DevConsoleButtonsProps> = ({
     {
       icon: <Lucide icon="ListChecks" width={48} height={48} />,
       label: "Gestione Referenze",
-      className: "text-blue-500",
+      className: "text-info",
       onClick: () => {
         handleFloatButtonClick();
       }
@@ -345,7 +331,7 @@ const DevConsoleButtons: FC<DevConsoleButtonsProps> = ({
     {
       icon: <Lucide icon="Clock" width={48} height={48} />,
       label: "Timeline",
-      className: "text-yellow-500",
+      className: "text-warning",
       onClick: () => {
         handleFloatButtonTimeLine();
       }
@@ -359,7 +345,7 @@ const DevConsoleButtons: FC<DevConsoleButtonsProps> = ({
       baseItemSize={50}
       distance={100}
       magnification={70}
-      className=" z-[9999999] "
+      className="z-[1100]"
     />
   );
 };
@@ -477,7 +463,6 @@ const WebpliantLayout: FC<WebpliantLayoutProps> = () => {
   // =============================================
 
   useEffect(() => {
-    console.log(Colorize.bgBlue("Fetching wishlist refs"), guidIdWishlist);
     if (guidIdWishlist) {
       fetchReferenzeWishlist();
       fetchDataWishlist(dataWebPliant, {
@@ -593,7 +578,6 @@ const WebpliantLayout: FC<WebpliantLayoutProps> = () => {
   useEffect(() => {
     // Funzione di refresh centralizzata per evitare duplicazioni
     const refreshSidebarWishlist = async (eventType: string) => {
-      console.log(`🔔 ${eventType} event received in WebpliantLayout, refreshing sidebar...`);
       if (sessionWishlistId) {
         setWishlistUpdating(true);
         try {
@@ -676,7 +660,6 @@ const WebpliantLayout: FC<WebpliantLayoutProps> = () => {
 
     if (navigator.share) {
       navigator.share(shareData)
-        .then(() => console.log('Condivisione avviata con successo'))
         .catch((error) => console.error('Errore durante la condivisione:', error));
     } else if (navigator.clipboard) {
       navigator.clipboard.writeText(currentUrl)
@@ -878,7 +861,7 @@ const WebpliantLayout: FC<WebpliantLayoutProps> = () => {
       >
         {/* HEADER MOBILE */}
         <div className={clsx(stylesWP["wp-header-mobile"], stylesWP["wp-header_sticky"], stylesWP["wp-position-absolute"])}>
-          <div className={clsx(stylesWP["wp-container"], stylesWP["wp-d-flex"], stylesWP["wp-align-items-center"], "h-100")} style={{ height: "100%" }}>
+          <div className={clsx(stylesWP["wp-container"], stylesWP["wp-d-flex"], stylesWP["wp-align-items-center"], "h-full")}>
             {
               oggettoHeaderWebpliant.showListaPagine && (
                 <button
@@ -949,28 +932,25 @@ const WebpliantLayout: FC<WebpliantLayoutProps> = () => {
                 <div className="w-11/12 max-w-lg">
                   <div className="flex items-start mb-10">
                     <button
+                      type="button"
                       onClick={() => setIsSearchOpen(false)}
-                      className="mr-4 text-gray-500 hover:text-gray-700"
+                      className={clsx(stylesWP["wp-text-secondary"], "mr-8")}
                       aria-label="Chiudi la ricerca"
                     >
-                      <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                      </svg>
+                      <Lucide icon="ArrowLeft" aria-hidden="true" className="h-6 w-6" />
                     </button>
-                    <h2 className="text-xl font-semibold">Cerca i prodotti in promozione</h2>
+                    <h2 className={clsx(CLASSE_TITOLO_PANNELLO_PUBBLICO, stylesWP["wp-mb-0"])}>Cerca i prodotti in promozione</h2>
                   </div>
 
                   <div className="relative mb-6">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                      </svg>
+                      <Lucide icon="Search" aria-hidden="true" className={clsx(stylesWP["wp-text-muted"], "h-5 w-5")} />
                     </div>
                     <input
-                      type="text"
+                      type="search"
+                      aria-label="Cerca i prodotti in promozione"
                       placeholder="Cosa stai cercando?"
-                      className={clsx("w-full border  py-3 pl-10 pr-4  border-black outline-none focus:border-black focus:ring-0  text-sm")}
-                      // className="w-full py-3 pl-10 pr-4 border-b-2 border-gray-300 focus:border-blue-500 outline-none text-lg"
+                      className={clsx(CLASSE_CAMPO_PUBBLICO, "!pl-10")}
                       value={query}
                       onChange={(e) => setQuery(e.target.value)}
                       onKeyDown={(e) => {
@@ -1023,8 +1003,8 @@ const WebpliantLayout: FC<WebpliantLayoutProps> = () => {
           </div>
 
           <nav className={clsx(stylesWP["wp-header-mobile__navigation"], stylesWP["wp-navigation"], stylesWP["wp-d-flex"], "flex-column", "w-full", stylesWP["wp-position-absolute"], "top-100", stylesWP["wp-bg-body"], "overflow-auto", "w-full")}>
-            <div className={stylesWP["wp-container"]} style={{ height: "100%" }}>
-              <div className={stylesWP["overflow-hidden"]} style={{ height: "100%" }}>
+            <div className={clsx(stylesWP["wp-container"], "h-full")}>
+              <div className="h-full overflow-hidden">
                 <ul
                   className={clsx(stylesWP["wp-navigation__list"], stylesWP["wp-list-unstyled"], stylesWP["wp-position-relative"])}
                   style={{ transform: isMenuOpenPhone ? "translateX(-100%)" : "translateX(0%)" }}
@@ -1222,7 +1202,8 @@ const WebpliantLayout: FC<WebpliantLayoutProps> = () => {
               <input
                 type="text"
                 placeholder="Cerca..."
-                className={clsx("w-full border border-black outline-none focus:border-black focus:ring-0  text-sm")}
+                className={CLASSE_CAMPO_PUBBLICO}
+                aria-label="Cerca i prodotti in promozione"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onFocus={() => setIsSearchOpen(true)}
@@ -1269,22 +1250,24 @@ const WebpliantLayout: FC<WebpliantLayoutProps> = () => {
           id="cartDrawer"
         >
           <div className={clsx(stylesWP["wp-aside-header"], stylesWP["wp-d-flex"], stylesWP["wp-align-items-center"])}>
-            <h3 className={clsx(stylesWP["wp-text-uppercase"], stylesWP["wp-fs-6"], stylesWP["wp-mb-0"])}>Punti vendita</h3>
+            <h3 className={clsx(CLASSE_TITOLO_PANNELLO_PUBBLICO, stylesWP["wp-mb-0"])}>Punti vendita</h3>
             <button
               className={clsx(stylesWP["wp-btn-close-lg"], stylesWP["wp-js-close-aside"], stylesWP["wp-btn-close-aside"], stylesWP["wp-ms-auto"])}
               onClick={() => setIsMenuVenditaOpen(!isMenuVenditaOpen)}
             />
           </div>
-          <div style={{ height: "87%" }} className={clsx(stylesWP["wp-aside-content"], stylesWP["wp-cart-drawer-items-list"])}>
+          <div className={clsx(stylesWP["wp-aside-content"], stylesWP["wp-cart-drawer-items-list"], "h-[87%]")}>
             <div className={clsx(stylesWP["wp-cart-drawer-item"], stylesWP["wp-d-flex"], stylesWP["wp-flex-column"], "mb-4")}>
               {erroreGeolocalizzazione && (
-                <p role="alert" className="mb-2 text-sm text-red-600">{erroreGeolocalizzazione}</p>
+                <p role="alert" className={clsx(stylesWP["wp-text-danger"], "mb-2 text-sm")}>{erroreGeolocalizzazione}</p>
               )}
               <input
                 id="capSearch"
                 type="text"
+                inputMode="numeric"
+                aria-label="CAP"
                 placeholder="Inserisci CAP"
-                className={clsx("w-full border border-black outline-none focus:border-black focus:ring-0  text-sm p-2")}
+                className={CLASSE_CAMPO_PUBBLICO}
                 onChange={(e) => {
                   const cap = e.target.value.trim();
                   if (cap) {
@@ -1371,11 +1354,11 @@ const WebpliantLayout: FC<WebpliantLayoutProps> = () => {
           id="wishlistDrawer"
         >
           <div className={clsx(stylesWP["wp-aside-header"], stylesWP["wp-d-flex"], stylesWP["wp-align-items-center"])}>
-            <h3 className={clsx(stylesWP["wp-text-uppercase"], stylesWP["wp-fs-6"], stylesWP["wp-mb-0"])}>
-              WishList
+            <h3 className={clsx(CLASSE_TITOLO_PANNELLO_PUBBLICO, stylesWP["wp-mb-0"])}>
+              Wishlist
               {wishlistUpdating && (
-                <span className="ml-2 text-blue-500 text-xs">
-                  🔄 Aggiornamento...
+                <span role="status" className={clsx(stylesWP["wp-text-secondary"], "ml-2 text-xs normal-case")}>
+                  Aggiornamento...
                 </span>
               )}
             </h3>
@@ -1384,8 +1367,8 @@ const WebpliantLayout: FC<WebpliantLayoutProps> = () => {
               onClick={() => setIsMenuLista(!isMenuLista)}
             />
           </div>
-          <div style={{ height: "87%" }} className={clsx(stylesWP["wp-aside-content"], stylesWP["wp-cart-drawer-items-list"], stylesWP["wp-d-flex"], stylesWP["wp-flex-column"])}>
-            <ul style={{ height: "78%", float: "right" }} className={clsx(stylesWP["wp-list-unstyled"], stylesWP["wp-p-0"], stylesWP["wp-m-0"])}>
+          <div className={clsx(stylesWP["wp-aside-content"], stylesWP["wp-cart-drawer-items-list"], stylesWP["wp-d-flex"], stylesWP["wp-flex-column"], "h-[87%]")}>
+            <ul className={clsx(stylesWP["wp-list-unstyled"], stylesWP["wp-p-0"], stylesWP["wp-m-0"], "float-right h-[78%]")}>
               {refLista && refLista.map((ref, i) => (
                 <li key={ref.codice_referenza as string} className={clsx(stylesWP["wp-d-flex"], stylesWP["wp-align-items-center"], stylesWP["wp-mb-2"])}>
                   <img src={urlFoto(ref["foto"])[0] ?? ""} alt="" className="w-14 h-14 mr-2 object-contain" />
@@ -1404,7 +1387,6 @@ const WebpliantLayout: FC<WebpliantLayoutProps> = () => {
                         // Emetti evento per notificare altri componenti
                         notifyItemRemoved(ref.codice_referenza as string, sessionWishlistId);
 
-                        console.log('✅ Item removed from wishlist sidebar:', ref.codice_referenza);
                       } catch (error) {
                         console.error('❌ Errore durante la rimozione dalla sidebar:', error);
                         // TODO: In caso di errore, potresti voler ricaricare la lista

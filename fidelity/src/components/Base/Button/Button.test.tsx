@@ -65,4 +65,13 @@ describe("Button", () => {
     expect(screen.getByTestId("icona")).toBeInTheDocument();
     expect(pulsante).not.toHaveAttribute("icon");
   });
+
+  it("ha il raggio dei controlli; rounded lo rende a pillola", () => {
+    const { unmount } = render(<Button>Salva</Button>);
+    expect(screen.getByRole("button", { name: "Salva" })).toHaveClass("rounded-control");
+    unmount();
+
+    render(<Button rounded>Filtra</Button>);
+    expect(screen.getByRole("button", { name: "Filtra" })).toHaveClass("rounded-full");
+  });
 });

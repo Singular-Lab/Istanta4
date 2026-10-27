@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import type { QRCodeProps as QRCodeComponentProps } from 'react-qr-code';
 import QRCodeModule from 'react-qr-code';
 // @ts-ignore
-import { twMerge } from 'tailwind-merge';
+import { twMerge } from "@/utils/twMerge";
 import { TIPO_PAGINA } from '../../../lib/enums';
 import Button from './Button';
 import FormSelect from './Form/FormSelect';
@@ -181,7 +181,7 @@ const QRCodeViewer: React.FC<QRCodeViewerProps> = ({
       <Dialog.Panel>
         <Dialog.Title>
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-medium text-slate-900 dark:text-slate-100">
+            <h3 className="title-section">
               QR Code - {channelItem?.nomeCanale || 'Canale'}
             </h3>
           </div>

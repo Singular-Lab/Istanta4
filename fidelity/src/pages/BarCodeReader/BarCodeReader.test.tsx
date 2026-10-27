@@ -42,6 +42,7 @@ describe("BarCodeReader", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    window.history.replaceState({}, "", "/");
   });
 
   it("senza permesso per la fotocamera lo dice, con il titolo della pagina", async () => {
@@ -58,5 +59,24 @@ describe("BarCodeReader", () => {
     const selettore = CLASSI_BOOTSTRAP.map((classe) => `.${classe}`).join(", ");
     expect(container.querySelector(selettore)).toBeNull();
     expect(container.querySelector("[style]")).toBeNull();
+  });
+
+  it("nel layout operatore non aggiunge margini propri sotto la barra in alto", async () => {
+    const { container } = render(<BarCodeReader />);
+    await screen.findByText("Accesso alla fotocamera negato.");
+
+    expect(container.querySelector(".mt-20, .mx-9")).toBeNull();
+    expect(container.querySelector(".box.box--stacked")).not.toBeNull();
+  });
+
+  it("nella vetrina pubblica resta nel tema della vetrina, senza la struttura operatore", async () => {
+    window.history.replaceState({}, "", "/webpliant/barcode-reader");
+    const { container } = render(<BarCodeReader />);
+
+    const errore = await screen.findByRole("alert");
+    expect(errore).toHaveTextContent("Fotocamera non disponibile");
+    expect(errore).toHaveTextContent("Accesso alla fotocamera negato.");
+    expect(screen.getByRole("heading", { level: 1, name: "Lettore codici a barre" })).not.toHaveClass("title-page");
+    expect(container.querySelector(".box")).toBeNull();
   });
 });

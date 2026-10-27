@@ -1,5 +1,11 @@
-import { FormInput, FormSelect } from "@/components/Base/Form";
+import BarraFiltri from "@/components/Base/BarraFiltri";
+import CampoRicerca from "@/components/Base/CampoRicerca";
+import { FormSelect } from "@/components/Base/Form";
 import Lucide from "@/components/Base/Lucide";
+import Sezione from "@/components/Base/Sezione";
+import StatusBadge from "@/components/Base/StatusBadge";
+import EmptyState from "@/components/EmptyState";
+import { formatNumero } from "@/utils/format";
 import clsx from "clsx";
 import { useMemo, useState } from "react";
 import { EXPORT_DI_SISTEMA } from "../../../lib/enums";
@@ -109,57 +115,53 @@ const ReferenzeInVolantinoBox: React.FC<ReferenzeInVolantinoBoxProps> = ({
     /* ======================================================
        RENDER
     ====================================================== */
+    const filtriAttivi = Boolean(searchText.trim() || selectedReparto);
+
     return (
-        <div className="box box--stacked p-6 lg:col-span-3">
-            {/* ================= HEADER ================= */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5">
-                <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-success/10">
-                        <Lucide icon="Package" className="h-5 w-5 text-success" />
-                    </div>
-                    <div>
-                        <h3 className="text-base font-semibold text-slate-800">
-                            Referenze in Volantino
-                        </h3>
-                        <p className="text-xs text-slate-500">
-                            {flyerInsights?.totaleReferenze || 0} referenze totali
-                        </p>
-                    </div>
-                </div>
-
-                {/* HEADER ACTIONS */}
-                <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-                    <div className="relative">
-                        <Lucide
-                            icon="Search"
-                            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"
-                        />
-                        <FormInput
-                            type="text"
-                            placeholder="Cerca referenza..."
-                            className="pl-9 rounded-lg h-9"
-                            value={searchText}
-                            onChange={(e) => setSearchText(e.target.value)}
-                        />
-                    </div>
-
-                    <FormSelect
-                        className="h-9 w-full sm:w-32"
-                        value={selectedReparto}
-                        onChange={(e) => setSelectedReparto(e.target.value)}
-                    >
-                        <option value="">Tutti</option>
-                        {repartoOptions.map((sigla) => (
-                            <option key={sigla} value={sigla}>
-                                {sigla}
-                            </option>
-                        ))}
-                    </FormSelect>
-                </div>
-            </div>
+        <Sezione
+            icona="Package"
+            titolo="Referenze in volantino"
+            descrizione={`${flyerInsights?.totaleReferenze || 0} referenze totali`}
+        >
+            <BarraFiltri variante="interna">
+                <CampoRicerca
+                    etichetta="Cerca referenza"
+                    placeholder="Cerca referenza…"
+                    value={searchText}
+                    onChange={setSearchText}
+                />
+                <FormSelect
+                    formSelectSize="sm"
+                    aria-label="Reparto"
+                    className="sm:w-40"
+                    value={selectedReparto}
+                    onChange={(e) => setSelectedReparto(e.target.value)}
+                >
+                    <option value="">Tutti i reparti</option>
+                    {repartoOptions.map((sigla) => (
+                        <option key={sigla} value={sigla}>
+                            {sigla}
+                        </option>
+                    ))}
+                </FormSelect>
+            </BarraFiltri>
 
             {/* ================= CONTENUTO ================= */}
-            <div className="max-h-[500px] overflow-y-auto pr-2 space-y-4">
+            <div className="max-h-[500px] space-y-4 overflow-y-auto pr-2">
+                {filteredGruppi.length === 0 && filtriAttivi && (
+                    <EmptyState
+                        compatta
+                        icon="SearchX"
+                        title="Nessun risultato"
+                        description="Nessuna referenza corrisponde alla ricerca o al reparto scelto."
+                        buttonText="Azzera filtri"
+                        buttonIcon="RotateCcw"
+                        onButtonClick={() => {
+                            setSearchText("");
+                            setSelectedReparto("");
+                        }}
+                    />
+                )}
                 {filteredGruppi.map((gruppo) => {
                     const colorClass = insightsConfig?.reparti?.colorStrategy
                         ? resolveColor(
@@ -169,39 +171,32 @@ const ReferenzeInVolantinoBox: React.FC<ReferenzeInVolantinoBoxProps> = ({
                         : "bg-slate-100 text-slate-700";
 
                     return (
-                        <div
-                            key={gruppo.sigla}
-                            className="border border-slate-200 rounded-xl overflow-hidden"
-                        >
+                        <div key={gruppo.sigla} className="overflow-hidden rounded-card border border-slate-200">
                             {/* HEADER GRUPPO */}
                             <div
                                 className={clsx(
-                                    "px-4 py-3 border-b border-slate-200 flex items-center justify-between",
+                                    "flex items-center justify-between border-b border-slate-200 px-4 py-3",
                                     colorClass.includes("bg-")
                                         ? `${colorClass.split(" ")[0]}/20`
                                         : "bg-slate-50"
                                 )}
                             >
-                                <div className="flex items-center gap-2">
-                                    <div
+                                <h3 className="title-card flex items-center gap-2">
+                                    <span
                                         className={clsx(
-                                            "inline-flex items-center justify-center rounded px-2 py-1 text-3xs font-bold",
+                                            "inline-flex items-center justify-center whitespace-nowrap rounded-full px-2 py-0.5 text-3xs font-bold",
                                             colorClass
                                         )}
                                     >
-                                        <span className="whitespace-nowrap">{gruppo.sigla}</span>
-                                    </div>
-                                    <span className="text-sm font-semibold text-slate-800">
-                                        {gruppo.descrizione}
+                                        {gruppo.sigla}
                                     </span>
-                                    <span className="text-xs text-slate-500">
-                                        ({gruppo.referenze.length})
-                                    </span>
-                                </div>
+                                    {gruppo.descrizione}
+                                    <span className="text-xs font-normal text-slate-500">({gruppo.referenze.length})</span>
+                                </h3>
                             </div>
 
                             {/* GRID REFERENZE */}
-                            <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                            <div className="grid grid-cols-1 gap-3 p-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                                 {gruppo.referenze.map((ref, idx) => {
                                     const foto = ref.foto?.[0] || ref.fotoGruppo;
 
@@ -221,49 +216,13 @@ const ReferenzeInVolantinoBox: React.FC<ReferenzeInVolantinoBoxProps> = ({
                                             </span>
                                         ));
 
-                                    const descrizioneParam = [
-                                        ref.descrizione,
-                                        ref.descrizioneDue,
-                                        ref.descrizioneTre,
-                                        ref.descrizioneQuattro,
-                                    ]
-                                        .filter(Boolean)
-                                        .join(" ")
-                                        .replace(/\$br/gi, " ")
-                                        .trim();
-
-                                    const categoriaParam =
-                                        ref.categoria ||
-                                        ref.categoriaMerceologica ||
-                                        ref.categoriaMerce ||
-                                        ref.categoriaMarketing;
-
-                                    const competitorParams = new URLSearchParams({
-                                        apikey: "sk_demo_12345",
-                                    });
-
-                                    if (descrizioneParam) {
-                                        competitorParams.set("descrizione", descrizioneParam);
-                                    }
-
-                                    if (ref.reparto || gruppo.descrizione) {
-                                        competitorParams.set(
-                                            "reparto",
-                                            ref.reparto || gruppo.descrizione
-                                        );
-                                    }
-
-                                    if (categoriaParam) {
-                                        competitorParams.set("categoria", categoriaParam);
-                                    }
-
                                     const fuoriListino = ref.origine === "fuori_listino";
 
                                     return (
                                         <div
                                             key={ref.id || idx}
                                             className={clsx(
-                                                "flex flex-col p-3 rounded-lg border bg-white hover:shadow-sm transition-all",
+                                                "flex flex-col rounded-control border bg-white p-3 transition-colors",
                                                 fuoriListino
                                                     ? "border-warning/40 ring-1 ring-warning/20 hover:border-warning/60"
                                                     : "border-slate-200 hover:border-slate-300"
@@ -271,17 +230,14 @@ const ReferenzeInVolantinoBox: React.FC<ReferenzeInVolantinoBoxProps> = ({
                                         >
                                             {/* Nel volantino c'era, a listino no: l'ha compilata una persona. */}
                                             {fuoriListino && (
-                                                <div className="mb-2 inline-flex items-center gap-1 self-start rounded-md border border-warning/30 bg-warning/10 px-2 py-0.5 text-3xs font-medium text-warning">
-                                                    <Lucide icon="TriangleAlert" className="h-3 w-3" />
-                                                    Fuori listino
-                                                </div>
+                                                <StatusBadge tono="warning" icon="TriangleAlert" etichetta="Fuori listino" className="mb-2 self-start" />
                                             )}
-                                            <div className="w-full aspect-square rounded-lg overflow-hidden bg-slate-100 flex items-center justify-center mb-3">
+                                            <div className="mb-3 flex aspect-square w-full items-center justify-center overflow-hidden rounded-control bg-slate-100">
                                                 {foto ? (
                                                     <img
                                                         src={foto}
                                                         alt={ref.descrizione || "Referenza"}
-                                                        className="w-full h-full object-contain"
+                                                        className="h-full w-full object-contain"
                                                         onError={(e) => {
                                                             const el = e.target as HTMLImageElement;
                                                             el.style.display = "none";
@@ -291,6 +247,7 @@ const ReferenzeInVolantinoBox: React.FC<ReferenzeInVolantinoBoxProps> = ({
                                                 ) : null}
                                                 <Lucide
                                                     icon="Image"
+                                                    aria-hidden="true"
                                                     className={clsx(
                                                         "h-10 w-10 text-slate-400",
                                                         foto && "hidden"
@@ -298,46 +255,25 @@ const ReferenzeInVolantinoBox: React.FC<ReferenzeInVolantinoBoxProps> = ({
                                                 />
                                             </div>
 
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-sm font-medium text-slate-800 line-clamp-3">
+                                            <div className="min-w-0 flex-1">
+                                                <p className="line-clamp-3 text-sm font-medium text-slate-800">
                                                     {descrizioneCompleta.length > 0
                                                         ? descrizioneCompleta
                                                         : "N/D"}
                                                 </p>
 
                                                 {ref.codiceReferenza && (
-                                                    <p className="text-3xs text-slate-500 mt-1 font-mono">
+                                                    <p className="mt-1 font-mono text-3xs text-slate-500">
                                                         {ref.codiceReferenza}
                                                     </p>
                                                 )}
 
                                                 {ref.prezzo && (
-                                                    <p className="text-lg font-semibold text-success mt-1">
-                                                        € {Number(ref.prezzo).toFixed(2)}
+                                                    <p className="mt-1 text-lg font-semibold tabular-nums text-success">
+                                                        € {formatNumero(ref.prezzo, 2)}
                                                     </p>
                                                 )}
                                             </div>
-
-                                            {/* <div className="relative mt-3">
-                                                <Button
-                                                    as="a"
-                                                    href={`https://www.istantabusiness.it/betatools/competitoranalyzer/ref_analyzer.php?${competitorParams.toString()}`}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    variant="outline-secondary"
-                                                    size="sm"
-                                                    className="w-full text-xs border-dashed border-warning/60 text-warning/80 hover:bg-warning/10 hover:border-warning"
-                                                >
-                                                    <Lucide
-                                                        icon="ChartNoAxesCombined"
-                                                        className="h-3.5 w-3.5 mr-1.5"
-                                                    />
-                                                    Competitor Analyzer
-                                                    <span className="ml-1.5 inline-flex items-center px-1 py-0.5 rounded text-3xs font-bold tracking-wide bg-warning/20 text-warning border border-warning/40 leading-none">
-                                                        BETA
-                                                    </span>
-                                                </Button>
-                                            </div> */}
                                         </div>
                                     );
                                 })}
@@ -346,7 +282,7 @@ const ReferenzeInVolantinoBox: React.FC<ReferenzeInVolantinoBoxProps> = ({
                     );
                 })}
             </div>
-        </div>
+        </Sezione>
     );
 };
 

@@ -22,6 +22,7 @@ import { useNotification } from "@/context/NotificationContext";
 import { useKeyframeManager } from "@/hooks/useKeyframeManager";
 import clsx from "clsx";
 import dayjs from "dayjs";
+import { formatData } from "@/utils/format";
 import { AnimatePresence } from "framer-motion";
 import * as lucideIcons from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
@@ -992,7 +993,7 @@ const PromotionTimeline: React.FC<PromotionTimelineProps> = ({
     if (mode === "keyframes") {
       return [{
         type: "item" as const,
-        label: contextDate ? `Nuovo keyframe qui (${contextDate.format("DD/MM/YYYY")})` : "Nuovo keyframe",
+        label: contextDate ? `Nuovo keyframe qui (${formatData(contextDate.toDate())})` : "Nuovo keyframe",
         shortcut: "Ctrl+N",
         onClick: (e: React.MouseEvent<HTMLDivElement>) => {
           e.stopPropagation();
@@ -1008,14 +1009,14 @@ const PromotionTimeline: React.FC<PromotionTimelineProps> = ({
     }
     return [{
       type: "item" as const,
-      label: contextDate ? `Imposta data: ${contextDate.format("DD/MM/YYYY")}` : "Imposta data qui",
+      label: contextDate ? `Imposta data: ${formatData(contextDate.toDate())}` : "Imposta data qui",
       shortcut: "Ctrl+D",
       onClick: (e: React.MouseEvent<HTMLDivElement>) => {
         e.stopPropagation();
         e.preventDefault();
         const base = contextDate || dayjs();
         dispatch({ type: "SET_SELECTED_DATE", payload: base.startOf("day") });
-        notify("Calendar", `Data impostata: ${base.format("DD/MM/YYYY")}`, "text-blue-600");
+        notify("Calendar", `Data impostata: ${formatData(base.toDate())}`, "text-blue-600");
       },
     }];
   }, [mode, contextDate, createKeyframeInstant, componentLaneIds, contextLaneIndex, notify]);
@@ -1047,7 +1048,7 @@ const PromotionTimeline: React.FC<PromotionTimelineProps> = ({
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-3 border-b border-slate-300">
             <div>
-              <h3 className="text-lg font-semibold text-slate-800">Timeline Componenti</h3>
+              <h3 className="title-section">Timeline componenti</h3>
               {mode === "keyframes" && (
                 <p className="text-xs text-slate-500 mt-1">
                   Clicca su un keyframe per selezionarlo • Doppio click per creare un nuovo keyframe
@@ -1055,15 +1056,15 @@ const PromotionTimeline: React.FC<PromotionTimelineProps> = ({
               )}
               {selectedDate && (
                 <div className="flex items-center gap-2 mt-1">
-                  <Lucide icon="Calendar" className="w-3 h-3 text-blue-500" />
-                  <span className="text-xs text-blue-600 font-medium">
-                    Data selezionata: {selectedDate.format("DD/MM/YYYY")}
+                  <Lucide icon="Calendar" aria-hidden="true" className="w-3 h-3 text-primary" />
+                  <span className="text-xs text-primary font-medium">
+                    Data selezionata: {formatData(selectedDate.toDate())}
                   </span>
                 </div>
               )}
             </div>
             <div className="flex items-center gap-3">
-              <div className="flex rounded-lg overflow-hidden border border-slate-300">
+              <div className="flex rounded-card overflow-hidden border border-slate-300">
                 <button
                   className={clsx("px-3 py-1.5 text-sm flex items-center", mode === "date" ? "bg-primary text-white" : "bg-white hover:bg-slate-50")}
                   onClick={() => dispatch({ type: "SET_MODE", payload: "date" })}
@@ -1086,7 +1087,7 @@ const PromotionTimeline: React.FC<PromotionTimelineProps> = ({
                   const today = dayjs().startOf("day");
                   dispatch({ type: "SET_SELECTED_DATE", payload: today });
                   setSelectedDate(today);
-                  notify("Calendar", `Data impostata a oggi: ${today.format("DD/MM/YYYY")}`, "text-blue-600");
+                  notify("Calendar", `Data impostata a oggi: ${formatData(today.toDate())}`, "text-blue-600");
                 }}
                 title="Imposta data a oggi"
               >
@@ -1271,7 +1272,7 @@ const PromotionTimeline: React.FC<PromotionTimelineProps> = ({
                                         <Popover.Button
                                           as={Button}
                                           variant="primary"
-                                          className="w-6 h-6 rounded-md shadow-lg flex items-center justify-center text-xs font-bold"
+                                          className="w-6 h-6 rounded-control shadow-lg flex items-center justify-center text-xs font-bold"
                                           title="Scegli tipo componente ibrido"
                                           disabled={!!(openPopoverId && openPopoverId !== `popover-${i}`)}
                                         >
@@ -1285,7 +1286,7 @@ const PromotionTimeline: React.FC<PromotionTimelineProps> = ({
                                                 {HYBRID_COMPONENT_TYPES.map((compType) => (
                                                   <button
                                                     key={compType.type}
-                                                    className="w-full flex flex-col items-start gap-1 p-2 rounded-md hover:bg-slate-50 transition-colors text-left h-full"
+                                                    className="w-full flex flex-col items-start gap-1 p-2 rounded-control hover:bg-slate-50 transition-colors text-left h-full"
                                                     onClick={(e) => {
                                                       e.stopPropagation();
                                                       e.preventDefault();
@@ -1386,7 +1387,7 @@ const PromotionTimeline: React.FC<PromotionTimelineProps> = ({
                             return (
                               <div
                                 key={promo.id}
-                                className="absolute rounded-md shadow-sm"
+                                className="absolute rounded-control shadow-sm"
                                 style={{
                                   top,
                                   left: startPos + TIMELINE_PADDING,
@@ -1689,7 +1690,7 @@ const PromotionTimeline: React.FC<PromotionTimelineProps> = ({
                 {/* Header Editor */}
                 <div className="flex items-center justify-between p-3 border-b border-slate-200 bg-slate-50">
                   <div>
-                    <h3 className="text-sm font-semibold text-slate-800">Editor Keyframe</h3>
+                    <h3 className="title-card">Editor keyframe</h3>
                     <p className="text-xs text-slate-500">
                       {selectedKeyframe.name || 'Keyframe senza nome'}
                     </p>
@@ -1787,7 +1788,7 @@ const PromotionTimeline: React.FC<PromotionTimelineProps> = ({
                       <option value="">Seleziona una promozione...</option>
                       {promos.map((promo) => (
                         <option key={promo.id} value={promo.id}>
-                          {promo.nome} ({dayjs(promo.validita_dal).format("DD/MM/YYYY")} - {dayjs(promo.validita_al).format("DD/MM/YYYY")})
+                          {promo.nome} ({formatData(promo.validita_dal)} - {formatData(promo.validita_al)})
                         </option>
                       ))}
                     </FormSelect>
@@ -2078,7 +2079,7 @@ const PromotionTimeline: React.FC<PromotionTimelineProps> = ({
                     <div className="border-t border-slate-200 pt-2">
                       <div className="text-slate-500 mb-1">Periodo:</div>
                       <div className="font-medium text-slate-700">
-                        {dayjs(selectedKeyframe.startDate).format('DD/MM/YYYY')} → {dayjs(selectedKeyframe.endDate).format('DD/MM/YYYY')}
+                        {formatData(selectedKeyframe.startDate)} → {formatData(selectedKeyframe.endDate)}
                       </div>
                     </div>
 

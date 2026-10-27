@@ -5,11 +5,13 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { ServerCall } from "../../../lib/server_call";
 import { TracciatiResponseDTO } from "../../../server/core/dto";
 import Button from "../../components/Base/Button";
-import { FormInput } from "../../components/Base/Form";
+import CampoRicerca from "../../components/Base/CampoRicerca";
 import Lucide from "../../components/Base/Lucide";
 import PageError from "../../components/Base/PageError";
 import Spinner from "../../components/Base/Spinner";
 import withSessionCheck from "../../components/SessionChecker";
+import EmptyState from "../../components/EmptyState";
+import { formatNumero } from "../../utils/format";
 import { getColor } from "../../utils/colors";
 import type { TemaFoglio } from "./disegnaFoglio";
 import {
@@ -548,7 +550,7 @@ const DettaglioAnteprimaTracciato: React.FC = () => {
             {/* Barra superiore */}
             <div className="flex items-center gap-3 px-4 py-2.5 border-b border-slate-200/80 bg-slate-50/60 flex-shrink-0 dark:border-darkmode-400 dark:bg-darkmode-700/40">
                 <Button size="sm" variant="outline-secondary" onClick={tornaAllaPromo} className="flex-shrink-0">
-                    <Lucide icon="ArrowLeft" aria-hidden="true" className="w-4 h-4 mr-1.5" />
+                    <Lucide icon="ArrowLeft" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
                     Torna alla promo
                 </Button>
                 <div className="h-6 w-px bg-slate-200 dark:bg-darkmode-400" />
@@ -557,9 +559,10 @@ const DettaglioAnteprimaTracciato: React.FC = () => {
                         <Lucide icon="FileSpreadsheet" aria-hidden="true" className="w-4 h-4 text-white" />
                     </div>
                     <div className="min-w-0">
-                        <div className="text-sm font-medium truncate text-slate-700 dark:text-slate-200" title={nomeTracciato}>
+                        {/* Pagina a tutto schermo: il nome del tracciato è il suo titolo */}
+                        <h1 className="title-card truncate dark:text-slate-200" title={nomeTracciato}>
                             {nomeTracciato}
-                        </div>
+                        </h1>
                         <div className="text-xs text-slate-400 truncate">
                             Anteprima tracciato
                             {tracciato?.filename && tracciato.nome && tracciato.nome !== tracciato.filename && ` · ${tracciato.filename}`}
@@ -570,45 +573,26 @@ const DettaglioAnteprimaTracciato: React.FC = () => {
                 <div className="ml-auto flex items-center gap-3">
                     {risultati !== null && (
                         <span className="text-xs text-slate-500 whitespace-nowrap">
-                            {risultati.toLocaleString("it-IT")} {risultati === 1 ? "riga trovata" : "righe trovate"}
+                            {formatNumero(risultati)} {risultati === 1 ? "riga trovata" : "righe trovate"}
                         </span>
                     )}
-                    <div className="relative w-72">
-                        <Lucide
-                            icon="Search"
-                            aria-hidden="true"
-                            className="absolute inset-y-0 left-0 z-10 w-4 h-4 my-auto ml-3 stroke-[1.3] text-slate-500"
-                        />
-                        <FormInput
-                            ref={ricercaRef}
-                            formInputSize="sm"
-                            value={termine}
-                            onChange={e => setTermine(e.target.value)}
-                            onKeyDown={e => {
-                                if (e.key === "Escape") {
-                                    setTermine("");
-                                    scrollRef.current?.focus();
-                                } else if (e.key === "Enter") {
-                                    scrollRef.current?.focus();
-                                }
-                            }}
-                            placeholder="Cerca nel tracciato (Ctrl+F)"
-                            aria-label="Cerca nel tracciato"
-                            disabled={stato !== "pronto"}
-                            className="pl-9 pr-9"
-                        />
-                        {termine && (
-                            <button
-                                type="button"
-                                onClick={() => setTermine("")}
-                                className="absolute inset-y-0 right-0 z-10 my-auto mr-3 text-slate-400 hover:text-slate-600 transition-colors"
-                                title="Cancella ricerca"
-                                aria-label="Cancella ricerca"
-                            >
-                                <Lucide icon="X" aria-hidden="true" className="w-4 h-4" />
-                            </button>
-                        )}
-                    </div>
+                    <CampoRicerca
+                        ref={ricercaRef}
+                        etichetta="Cerca nel tracciato"
+                        placeholder="Cerca nel tracciato (Ctrl+F)"
+                        value={termine}
+                        onChange={setTermine}
+                        onKeyDown={e => {
+                            if (e.key === "Escape") {
+                                setTermine("");
+                                scrollRef.current?.focus();
+                            } else if (e.key === "Enter") {
+                                scrollRef.current?.focus();
+                            }
+                        }}
+                        disabled={stato !== "pronto"}
+                        className="w-72"
+                    />
                 </div>
             </div>
 
@@ -668,26 +652,28 @@ const DettaglioAnteprimaTracciato: React.FC = () => {
                             className="min-h-0 w-full max-w-xl py-10"
                         />
                         <Button size="sm" variant="outline-secondary" onClick={tornaAllaPromo}>
-                            <Lucide icon="ArrowLeft" aria-hidden="true" className="w-4 h-4 mr-1.5" />
+                            <Lucide icon="ArrowLeft" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
                             Torna alla promo
                         </Button>
                     </div>
                 )}
 
                 {stato === "pronto" && layout && layout.righeFile === 0 && (
-                    <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-400 pointer-events-none">
-                        Il foglio è vuoto
+                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                        <EmptyState compatta icon="Sheet" title="Il foglio è vuoto" description="" />
                     </div>
                 )}
             </div>
 
             {/* Schede dei fogli e barra di stato */}
             <div className="flex items-stretch h-9 border-t border-slate-200/80 bg-slate-50/60 flex-shrink-0 text-xs dark:border-darkmode-400 dark:bg-darkmode-700/40">
-                <div className="flex items-stretch overflow-x-auto min-w-0">
+                <div role="tablist" aria-label="Fogli del tracciato" className="flex items-stretch overflow-x-auto min-w-0">
                     {fogli.map((f, i) => (
                         <button
                             key={`${i}-${f.nome}`}
                             type="button"
+                            role="tab"
+                            aria-selected={layout?.foglio === i}
                             onClick={() => invia({ tipo: "foglio", indice: i })}
                             className={clsx(
                                 "flex items-center gap-1.5 px-4 border-r border-slate-200/80 whitespace-nowrap transition-colors dark:border-darkmode-400",
@@ -695,9 +681,9 @@ const DettaglioAnteprimaTracciato: React.FC = () => {
                                     ? "bg-white font-medium text-primary shadow-[inset_0_-2px_0_0_rgb(var(--color-primary))] dark:bg-darkmode-600 dark:text-slate-200"
                                     : "text-slate-500 hover:bg-slate-100 dark:hover:bg-darkmode-500"
                             )}
-                            title={`${f.righe.toLocaleString("it-IT")} righe, ${f.colonne} colonne`}
+                            title={`${formatNumero(f.righe)} righe, ${f.colonne} colonne`}
                         >
-                            <Lucide icon="Sheet" className="w-3.5 h-3.5" />
+                            <Lucide icon="Sheet" aria-hidden="true" className="w-3.5 h-3.5" />
                             {f.nome || `Foglio ${i + 1}`}
                         </button>
                     ))}
@@ -711,23 +697,23 @@ const DettaglioAnteprimaTracciato: React.FC = () => {
                                 exit={{ opacity: 0 }}
                                 className={clsx("flex items-center gap-1 font-medium", copiate < 0 ? "text-danger" : "text-success")}
                             >
-                                <Lucide icon={copiate < 0 ? "CircleAlert" : "Check"} className="w-3.5 h-3.5" />
+                                <Lucide icon={copiate < 0 ? "CircleAlert" : "Check"} aria-hidden="true" className="w-3.5 h-3.5" />
                                 {copiate < 0
                                     ? "Impossibile copiare negli appunti"
-                                    : `${copiate.toLocaleString("it-IT")} ${copiate === 1 ? "cella copiata" : "celle copiate"}`}
+                                    : `${formatNumero(copiate)} ${copiate === 1 ? "cella copiata" : "celle copiate"}`}
                             </motion.span>
                         )}
                     </AnimatePresence>
                     {stat.celle > 1 && (
                         <>
                             {stat.numerici > 0 && stat.media !== null && <span>Media: {formatoNumero.format(stat.media)}</span>}
-                            <span>Conteggio: {stat.conteggio.toLocaleString("it-IT")}</span>
+                            <span>Conteggio: {formatNumero(stat.conteggio)}</span>
                             {stat.numerici > 0 && <span>Somma: {formatoNumero.format(stat.somma)}</span>}
                         </>
                     )}
                     {foglioAttivo && (
                         <span className="text-slate-400">
-                            {foglioAttivo.righe.toLocaleString("it-IT")} righe × {foglioAttivo.colonne} colonne
+                            {formatNumero(foglioAttivo.righe)} righe × {foglioAttivo.colonne} colonne
                         </span>
                     )}
                 </div>

@@ -1,4 +1,3 @@
-import Lucide from "@/components/Base/Lucide";
 import { useNotification } from '@/context/NotificationContext';
 import { normalizzaFiltroContesto } from '@/utils/filtroContesto';
 import { useMutation } from "@tanstack/react-query";
@@ -63,26 +62,11 @@ export const useCombinazioneMutations = (idCombinazione: string, refetchCombinaz
     const { showNotification } = useNotification();
     const navigate = useNavigate();
     const showSuccessNotification = (message: string) => {
-        showNotification(
-            <div className="flex flex-row items-center">
-                <Lucide icon="CircleCheck" className="text-success w-8 h-8" />
-                <div className="ml-4 mr-4">
-                    <div className="font-bold">{message}</div>
-                </div>
-            </div>
-        );
+        showNotification(message, { variant: 'success' });
     };
 
     const showErrorNotification = (title: string, error: Error) => {
-        showNotification(
-            <div className="flex flex-row items-center">
-                <Lucide icon="CircleAlert" className="text-danger w-8 h-8" />
-                <div className="ml-4 mr-4">
-                    <div className="font-bold">{title}</div>
-                    <div className="mt-1 text-slate-500">{error.message}</div>
-                </div>
-            </div>
-        );
+        showNotification(error?.message ? `${title}: ${error.message}` : title, { variant: 'error' });
     };
 
     const mutationCreazioneDeclinazioni = useMutation({

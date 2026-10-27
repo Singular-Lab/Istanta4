@@ -7,6 +7,7 @@ import { useGestioneHeaderWebpliant } from '@/context/GestioneHeaderWebpliant';
 import { useNavigate } from 'react-router-dom';
 import { useWebpliantParamsManager } from '@/hooks/useWebpliantParamsManager';
 import { useWishlistEvents } from '@/utils/wishlistEvents';
+import { CaricamentoPubblico, CLASSE_TITOLO_PUBBLICO, ErrorePubblico, VuotoPubblico } from '../WebpliantLayout/StatiPubblici';
 
 const WishlistWebpliant: React.FC = () => {
     const [refLista, setRefLista] = useState<DataFields[] | null>(null);
@@ -43,37 +44,6 @@ const WishlistWebpliant: React.FC = () => {
     // Sistema di eventi per la gestione della wishlist
     const { events: wishlistEvents, notifyItemRemoved } = useWishlistEvents();
 
-    // 🔍 DEBUG: Log completo dello stato del sistema webpliant (solo al mount)
-    useEffect(() => {
-        console.log('🔍 WishlistWebpliant: Stato completo webpliantParams:', {
-            sessionWishlistId,
-            idArea,
-            idCanale,
-            idGDO,
-            idPV,
-            idWorkspace,
-            idPagina,
-            isCondivisa,
-            isLoading,
-            error,
-            isReady
-        });
-        
-        // Debug aggiuntivo: mostra tutti i parametri dell'URL corrente
-        const urlParams = new URLSearchParams(window.location.search);
-        console.log('🔍 WishlistWebpliant: Parametri URL correnti:', {
-            guidIdWishlist: urlParams.get('guidIdWishlist'),
-            idArea: urlParams.get('idArea'),
-            idCanale: urlParams.get('idCanale'),
-            idGDO: urlParams.get('idGDO'),
-            idPV: urlParams.get('idPV'),
-            idWorkspace: urlParams.get('id'),
-            idPagina: urlParams.get('idPagina'),
-            isCondivisa: urlParams.get('c'),
-            fullUrl: window.location.href
-        });
-    }, []); // Esegui solo al mount per evitare loop
-
     // Configura header al mount (esegui solo una volta)
     useEffect(() => {
         setOggettoHeaderWebpliant({
@@ -92,9 +62,7 @@ const WishlistWebpliant: React.FC = () => {
         setWishlistError(null);
 
         try {
-            console.log('🔍 Fetching wishlist data for ID:', wishlistId);
             const refs = await ServerCall.get<DataFields[]>(`/getAllReferenzeFromWishlistId?id=${wishlistId}`);
-            console.log('✅ Wishlist data fetched successfully:', refs?.length || 0, 'items');
             setRefLista(refs);
         } catch (error) {
             console.error('❌ Error fetching wishlist data:', error);
@@ -121,7 +89,6 @@ const WishlistWebpliant: React.FC = () => {
     useEffect(() => {
         const unsubscribeUpdated = wishlistEvents.on('wishlist-updated', (event) => {
             if (!event.wishlistId || event.wishlistId === sessionWishlistId) {
-                console.log('🔔 Wishlist updated event received, refreshing...');
                 if (sessionWishlistId) {
                     fetchWishlistData(sessionWishlistId);
                 }
@@ -130,7 +97,6 @@ const WishlistWebpliant: React.FC = () => {
 
         const unsubscribeItemAdded = wishlistEvents.on('item-added', (event) => {
             if (!event.wishlistId || event.wishlistId === sessionWishlistId) {
-                console.log('🔔 Item added event received, refreshing...');
                 if (sessionWishlistId) {
                     fetchWishlistData(sessionWishlistId);
                 }
@@ -139,7 +105,6 @@ const WishlistWebpliant: React.FC = () => {
 
         const unsubscribeItemRemoved = wishlistEvents.on('item-removed', (event) => {
             if (!event.wishlistId || event.wishlistId === sessionWishlistId) {
-                console.log('🔔 Item removed event received, refreshing...');
                 if (sessionWishlistId) {
                     fetchWishlistData(sessionWishlistId);
                 }
@@ -164,7 +129,6 @@ const WishlistWebpliant: React.FC = () => {
 
         if (navigator.share) {
             navigator.share(shareData)
-                .then(() => console.log('Condivisione avviata con successo'))
                 .catch((error) => console.error('Errore durante la condivisione:', error));
         } else if (navigator.clipboard) {
             navigator.clipboard.writeText(currentUrl)
@@ -198,11 +162,8 @@ const WishlistWebpliant: React.FC = () => {
     // Loading state (considera sia il caricamento dei parametri che della wishlist)
     if (isLoading || wishlistLoading) {
         return (
-            <main className="mt-20 w-full p-5 h-full flex items-center justify-center">
-                <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-                    <p>Caricamento wishlist...</p>
-                </div>
+            <main className="mt-20 w-full p-5 h-full">
+                <CaricamentoPubblico testo="Caricamento wishlist..." />
             </main>
         );
     }
@@ -210,43 +171,36 @@ const WishlistWebpliant: React.FC = () => {
     // Error state (considera sia errori dei parametri che della wishlist)
     if (error || wishlistError) {
         return (
-            <main className="mt-20 w-full p-5 h-full flex items-center justify-center">
-                <div className="text-center text-red-600">
-                    <h2 className="text-xl font-bold mb-2">Errore</h2>
-                    <p>{error || wishlistError}</p>
-                    <button 
-                        onClick={() => window.location.reload()} 
-                        className={clsx(styleWp["wp-btn"], styleWp["wp-btn-primary"], "mt-4")}
-                    >
-                        Ricarica Pagina
-                    </button>
-                </div>
+            <main className="mt-20 w-full p-5 h-full">
+                <ErrorePubblico
+                    titolo="Impossibile caricare la wishlist"
+                    messaggio={error || wishlistError}
+                    onRiprova={() => window.location.reload()}
+                />
             </main>
         );
     }
 
     return (
         <main className="mt-20 w-full p-5 h-full">
-            <div className="text-center mb-4">
-                <h1 className={clsx("text-2xl font-bold mb-2")}>
-                    {isCondivisa ? "Wishlist Condivisa" : "La Mia Wishlist"}
-                </h1>
-            </div>
-            
-            <div className='flex flex-row items-center justify-center h-full mb-5 space-x-4 flex-wrap'>
+            <h1 className={clsx(CLASSE_TITOLO_PUBBLICO, styleWp["wp-mb-4"])}>
+                {isCondivisa ? "Wishlist condivisa" : "La mia wishlist"}
+            </h1>
+
+            <div className={clsx('flex flex-row flex-wrap items-center justify-center gap-4 mb-5')}>
                 <button
-                    className={clsx(styleWp["wp-btn"], styleWp["wp-btn-primary"], "mt-auto")}
+                    type="button"
+                    className={clsx(styleWp["wp-btn"], styleWp["wp-btn-primary"])}
                     onClick={handleBackToPromotion}
                     disabled={!isReady}
                 >
-                    Torna alla Promozione
+                    Torna alla promozione
                 </button>
-                
 
-                
                 {!isCondivisa && sessionWishlistId && (
                     <button
-                        className={clsx(styleWp["wp-btn"], styleWp["wp-btn-primary"], "mt-auto")}
+                        type="button"
+                        className={clsx(styleWp["wp-btn"], styleWp["wp-btn-primary"])}
                         onClick={handleShare}
                     >
                         {linkCopiato ? 'Link copiato negli appunti!' : 'Condividi la wishlist'}
@@ -258,17 +212,19 @@ const WishlistWebpliant: React.FC = () => {
                 <>
                     <div className={clsx("grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4")}>
                         {refLista.map((item) => (
-                            <div key={item.codice_referenza as string} className="border p-4 flex flex-col">
+                            <div key={item.codice_referenza as string} className={clsx(styleWp["wp-card"], "flex flex-col")}>
+                                <div className={clsx(styleWp["wp-card-body"], "flex flex-1 flex-col")}>
                                 <img
                                     src={Array.isArray(item["foto"]) ? item["foto"][0] as string : item["foto"] as string}
                                     alt={item?.descrizione_uno as string || 'Image'}
                                     className="w-full h-80 object-contain mb-2 mx-auto"
                                 />
-                                <h5 className="font-bold text-lg mb-4">
+                                <h5 className={clsx(styleWp["wp-h5"], styleWp["wp-card-title"], styleWp["wp-mb-4"])}>
                                     {item?.descrizione_uno} {item?.descrizione_due} {item?.descrizione_tre} {item?.descrizione_peso}
                                 </h5>
                                 {!isCondivisa && (
                                     <button
+                                        type="button"
                                         onClick={async () => {
                                             try {
                                                 // Aggiorna UI immediatamente per responsività
@@ -280,7 +236,6 @@ const WishlistWebpliant: React.FC = () => {
                                                 // Emetti evento per notificare altri componenti
                                                 notifyItemRemoved(item.codice_referenza as string, sessionWishlistId);
                                                 
-                                                console.log('✅ Item removed from wishlist:', item.codice_referenza);
                                             } catch (error) {
                                                 console.error('❌ Errore durante la rimozione:', error);
                                                 // In caso di errore, ricarica i dati
@@ -294,28 +249,18 @@ const WishlistWebpliant: React.FC = () => {
                                         Elimina
                                     </button>
                                 )}
+                                </div>
                             </div>
                         ))}
                     </div>
                 </>
-            ) : refLista === null ? (
-                <div className='flex flex-col items-center justify-center h-full'>
-                    <div className="text-center text-blue-500 text-lg mt-10">
-                        🔄 Caricamento referenze in corso...
-                    </div>
-                </div>
+            ) : refLista === null && sessionWishlistId ? (
+                <CaricamentoPubblico testo="Caricamento prodotti in corso..." />
             ) : (
-                <div className='flex flex-col items-center justify-center h-full'>
-                    <div className="text-center text-gray-500 text-lg mt-10">
-                        📭 Nessun prodotto trovato nella wishlist.
-                    </div>
-                    <div className="text-sm text-gray-400 mt-2">
-                        {sessionWishlistId ? 
-                            `WishlistId: ${sessionWishlistId}` : 
-                            'Nessun ID wishlist disponibile'
-                        }
-                    </div>
-                </div>
+                <VuotoPubblico
+                    titolo="Nessun prodotto nella wishlist"
+                    descrizione="Aggiungi i prodotti dal volantino per ritrovarli qui."
+                />
             )}
         </main>
     );

@@ -475,7 +475,7 @@ const Dropzone: React.FC<DropzoneProps> = ({
         >
           <Dialog.Panel>
             <Dialog.Title>
-              Modifica Contenuto Aggiuntivo
+              Modifica contenuto aggiuntivo
             </Dialog.Title>
             <Dialog.Description>
               <div className="flex flex-col">
@@ -592,7 +592,7 @@ const Dropzone: React.FC<DropzoneProps> = ({
                       onButtonClick={() => handleAddRegola(selectedContenutoAggiuntivo?.guidId)}
                     />
                   ) : (
-                    <div className="border overflow-hidden sm:rounded-md mt-4">
+                    <div className="border overflow-hidden sm:rounded-card mt-4">
                       <div className='p-4'>
                         <Button
                           onClick={() => {
@@ -606,7 +606,7 @@ const Dropzone: React.FC<DropzoneProps> = ({
                           Aggiungi regola
                         </Button>
                       </div>
-                      <ul className="w-full divide-y divide-gray-200">
+                      <ul className="w-full divide-y divide-slate-200">
                         {selectedContenutoAggiuntivo?.regole.map((regola, ruleIndex) => (
                           <li key={ruleIndex} className="px-4 py-4 sm:px-6">
                             <FormLabel>Regola {ruleIndex + 1}</FormLabel>
@@ -708,9 +708,9 @@ const Dropzone: React.FC<DropzoneProps> = ({
                 </div>
               </div>
             </Dialog.Description>
-            <Dialog.Footer className="flex gap-2 justify-end">
-              <Button onClick={() => { setOpenModaleContenutiAggiuntivi(false); }}>Chiudi</Button>
-              <Button variant="primary" onClick={() => {
+            <Dialog.Footer>
+              <Button type="button" variant="outline-secondary" onClick={() => { setOpenModaleContenutiAggiuntivi(false); }}>Chiudi</Button>
+              <Button type="button" variant="primary" loading={saveMutationContenutoAggiuntivo.isPending} onClick={() => {
                 saveMutationContenutoAggiuntivo.mutate([selectedContenutoAggiuntivo as ContenutoAggiuntivoReferenza]);
                 setOpenModaleContenutiAggiuntivi(false);
               }}>Salva</Button>
@@ -721,20 +721,20 @@ const Dropzone: React.FC<DropzoneProps> = ({
           <div className="flex flex-col md:h-10 gap-y-3 md:items-center md:flex-row mb-4 mx-4">
             <Tab.List
               variant="boxed-tabs"
-              className="text-center md:ml-auto bg-white box rounded-[0.6rem] border-slate-200 w-full"
+              className="text-center md:ml-auto w-full"
             >
               <Tab>
-                <Tab.Button className="w-full  text-slate-500 whitespace-nowrap rounded-[0.6rem]">
+                <Tab.Button className="w-full text-slate-500 whitespace-nowrap">
                   Editor
                 </Tab.Button>
               </Tab>
               <Tab>
-                <Tab.Button className="w-full  text-slate-500 whitespace-nowrap rounded-[0.6rem]">
+                <Tab.Button className="w-full text-slate-500 whitespace-nowrap">
                   Impostazioni
                 </Tab.Button>
               </Tab>
               <Tab>
-                <Tab.Button className="w-full  text-slate-500 whitespace-nowrap rounded-[0.6rem]">
+                <Tab.Button className="w-full text-slate-500 whitespace-nowrap">
                   Contenuti Aggiuntivi
                 </Tab.Button>
               </Tab>
@@ -749,7 +749,7 @@ const Dropzone: React.FC<DropzoneProps> = ({
                   dropzoneRef.current = node;
                 }}
                 className={clsx(
-                  "flex-1 min-h-[150px] p-2 transition-all duration-300 relative rounded-lg border-2 border-dashed",
+                  "flex-1 min-h-[150px] p-2 transition-all duration-300 relative rounded-card border-2 border-dashed",
                   {
                     "border-primary bg-primary/5 ring-2 ring-primary/20 ring-offset-2": isOver,
                     "border-slate-200 bg-slate-50/50": !isOver,
@@ -793,7 +793,7 @@ const Dropzone: React.FC<DropzoneProps> = ({
                     </motion.div>
                   ))
                 ) : (
-                  <div className="text-gray-500 text-center mt-2 flex items-center justify-center h-full">
+                  <div className="text-slate-500 text-center mt-2 flex items-center justify-center h-full">
                     <Lucide icon="Move" className="w-5 h-5 mr-2" />
                     <span>Trascina qui i componenti</span>
                   </div>
@@ -831,26 +831,26 @@ const Dropzone: React.FC<DropzoneProps> = ({
                       setSelectedContenutoAggiuntivo(ca);
                       setOpenModaleContenutiAggiuntivi(true);
                     }}
-                    className="p-6 hover:cursor-pointer bg-white dark:bg-darkmode-700 flex flex-col border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm hover:shadow-lg transition-shadow duration-300"
+                    className="p-4 hover:cursor-pointer bg-white dark:bg-darkmode-700 flex flex-col border border-slate-200 dark:border-slate-700 rounded-card hover:shadow-card transition-shadow duration-300"
                   >
                     {/* Header */}
                     <header className="mb-4">
-                      <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 break-words">
+                      <h3 className="title-card break-words dark:text-slate-100">
                         {ca.titolo ?? "Titolo"}
                       </h3>
                     </header>
 
                     {/* Body */}
                     <section className="flex-grow">
-                      <h5 className="text-sm font-semibold text-gray-600 dark:text-gray-300 mb-2">
+                      <p className="title-eyebrow mb-2">
                         Regole
-                      </h5>
+                      </p>
                       <ul className="space-y-2">
                         {ca.regole.length > 0 ? (
                           ca.regole.map((r, i) => (
                             <li
                               key={i}
-                              className="flex flex-col md:flex-row items-start md:items-center gap-1 md:gap-2 text-sm text-gray-700 dark:text-gray-200 break-words"
+                              className="flex flex-col md:flex-row items-start md:items-center gap-1 md:gap-2 text-sm text-slate-700 dark:text-slate-200 break-words"
                             >
                               <span className="font-medium md:w-2/4">{r.field}</span>
                               <span className="md:w-1/4">{r.operator}</span>
@@ -858,7 +858,7 @@ const Dropzone: React.FC<DropzoneProps> = ({
                             </li>
                           ))
                         ) : (
-                          <li className="text-sm text-gray-500 dark:text-gray-400 italic">
+                          <li className="text-sm text-slate-500 dark:text-slate-400 italic">
                             Nessuna regola presente
                           </li>
                         )}
@@ -866,7 +866,7 @@ const Dropzone: React.FC<DropzoneProps> = ({
                     </section>
                     {/* Footer (opzionale) */}
                     <footer className="mt-4 text-right">
-                      <button className="text-blue-600 hover:text-blue-800 text-sm">
+                      <button type="button" className="text-primary hover:underline text-sm">
                         Visualizza dettagli
                       </button>
                     </footer>
@@ -887,10 +887,10 @@ const Dropzone: React.FC<DropzoneProps> = ({
         ref={drop as any}
         className={clsx(
           "flex-1 overflow-auto",
-          "relative p-4 border-[1px] border-primary border-opacity-50 border-dashed rounded-lg bg-white min-h-[150px] transition-colors duration-200",
+          "relative p-4 border-[1px] border-primary border-opacity-50 border-dashed rounded-card bg-white min-h-[150px] transition-colors duration-200",
           {
-            "border-blue-400 bg-blue-50": isOver,
-            "border-gray-300": !isOver,
+            "border-primary bg-primary/5": isOver,
+            "border-slate-300": !isOver,
             "flex flex-row gap-4": type === "row",
             "flex flex-col gap-4": type === "column",
             "cursor-grab": activeTool === "move",
@@ -933,7 +933,7 @@ const Dropzone: React.FC<DropzoneProps> = ({
             </motion.div>
           ))
         ) : (
-          <div className="text-gray-500 text-center flex items-center justify-center h-full">
+          <div className="text-slate-500 text-center flex items-center justify-center h-full">
             <Lucide icon="Move" className="w-5 h-5 mr-2" />
             <span>Trascina qui i componenti</span>
           </div>

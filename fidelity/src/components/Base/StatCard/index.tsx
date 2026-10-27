@@ -3,7 +3,7 @@ import Skeleton from "@/components/Base/Skeleton";
 import type { TonoStato } from "@/constants/stati";
 import { VALORE_ASSENTE } from "@/utils/format";
 import type { ReactNode } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/utils/twMerge";
 
 type Direzione = "su" | "giu" | "stabile";
 

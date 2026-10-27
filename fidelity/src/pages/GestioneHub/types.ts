@@ -1,3 +1,4 @@
+import type { TonoStato } from "@/constants/stati";
 import type {
   HubNewsAdminDTO,
   HubNewsType,
@@ -70,7 +71,8 @@ export type NewsStatus = "draft" | "scheduled" | "online" | "expired";
 
 export interface NewsStatusMeta {
   label: string;
-  className: string;
+  /** Tono di StatusBadge con cui mostrare lo stato. */
+  tono: TonoStato;
   icon: string;
 }
 

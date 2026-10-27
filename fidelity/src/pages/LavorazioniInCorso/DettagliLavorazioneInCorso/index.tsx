@@ -1,27 +1,24 @@
+import Alert from "@/components/Base/Alert";
 import Badge from "@/components/Base/Badge";
 import Button from "@/components/Base/Button";
 import Dropzone from "@/components/Base/Dropzone";
 import { FormCheck, FormInput, FormLabel, FormSelect } from "@/components/Base/Form";
 import Lucide from "@/components/Base/Lucide";
 import PageError from "@/components/Base/PageError";
-import PageHeader from "@/components/Base/PageHeader";
+import Pagina from "@/components/Base/Pagina";
+import Sezione from "@/components/Base/Sezione";
 import Skeleton from "@/components/Base/Skeleton";
 import Spinner from "@/components/Base/Spinner";
 import StatusBadge from "@/components/Base/StatusBadge";
 import ContestoLavorazioneFields from "@/components/ContestoLavorazioneFields";
 import VisibilitaPromoFields from "@/components/VisibilitaPromoFields";
 import EmptyState from "@/components/EmptyState";
-import { PreviewImmaginePdf } from "@/components/PreviewImmaginePdf";
 import { useNotification } from "@/context/NotificationContext";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import axios from "axios";
 import clsx from "clsx";
 import dayjs from "dayjs";
-import "dayjs/locale/it";
 import customParseFormat from "dayjs/plugin/customParseFormat";
-import localizedFormat from "dayjs/plugin/localizedFormat";
-import relativeTime from "dayjs/plugin/relativeTime";
-import React, { Fragment, Suspense, useEffect, useRef, useState } from "react";
+import React, { Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Await,
   useAsyncError,
@@ -46,13 +43,13 @@ import { withSessionCheckOptimized } from "../../../components/SessionChecker";
 import { usePermissionContext } from '../../../context/PermissionContext';
 import { useUser } from "../../../context/UserContext";
 import { useContestoPerNuovaLavorazione, useFetchFunzionalita } from "../../../query/query";
+import CardVolantino from "../../shared/CardVolantino";
+import SpecificheLavorazione from "../../shared/SpecificheLavorazione";
 import GestioneMomenti from "./GestioneMomenti";
 import TracciatoCard from "./TracciatoCard";
 import { formatData, formatDataOraEstesa } from "@/utils/format";
-dayjs.extend(localizedFormat);
-dayjs.extend(relativeTime);
+// Serve per leggere le date nel formato DD/MM/YYYY (scadenza imminente)
 dayjs.extend(customParseFormat);
-dayjs.locale("it");
 
 // Definizione per ComboBox
 export type ComboBox = {
@@ -156,212 +153,42 @@ interface VolantinoKit {
   files?: FileItemKit[];
 }
 
-// Componente card per visualizzare un file volantino (stile Dashboard3)
-const VolantinoFileCard: React.FC<{
-  kit: VolantinoKit;
-  idPromo: string;
-  onNavigate: (kitId: string) => void;
-  validitaDal?: string;
-  validitaAl?: string;
-}> = ({ kit, idPromo, onNavigate, validitaDal, validitaAl }) => {
-  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
-  const [isDownloading, setIsDownloading] = useState(false);
-
-  const file = kit.files?.[0];
-  const previewUrl = file?.url ?? "";
-  const hasPreview = Boolean(previewUrl);
-  const canDownload = Boolean(file?.id_olimpo_cloud);
-
-  const handleDownload = async () => {
-    if (!file?.id_olimpo_cloud || isDownloading) return;
-    setIsDownloading(true);
-    try {
-      const url = ServerCall.getUrl();
-      const response = await axios.get(
-        `${url}/getFileFromOlimpo?id=${file.id_olimpo_cloud}`,
-        { responseType: "arraybuffer" }
-      );
-      const blob = new Blob([response.data], { type: "application/pdf" });
-      const blobUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = blobUrl;
-      link.download = file.nome || "volantino.pdf";
-      link.click();
-      window.URL.revokeObjectURL(blobUrl);
-    } catch (error) {
-      console.error("Errore durante il download del file:", error);
-    } finally {
-      setIsDownloading(false);
-    }
-  };
-
-  return (
-    <>
-      <div className="relative p-4 rounded-card border border-dashed border-slate-200/70 bg-white/90 backdrop-blur-sm shadow-card">
-        <div className="flex gap-4">
-          {/* Thumbnail Preview */}
-          <div className="relative shrink-0">
-            {hasPreview ? (
-              <button
-                type="button"
-                className="group/preview w-20 h-24 rounded-card overflow-hidden border border-theme-1/20 bg-slate-50 relative focus-visible:outline focus-visible:outline-theme-1/40"
-                onClick={() => setIsPreviewOpen(true)}
-              >
-                <img
-                  src={previewUrl}
-                  alt={kit.titolo}
-                  className="w-full h-full object-cover"
-                  loading="lazy"
-                />
-                <span className="absolute inset-0 bg-slate-900/30 opacity-0 group-hover/preview:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-medium">
-                  <Lucide icon="Eye" className="w-4 h-4 mr-1" /> Anteprima
-                </span>
-              </button>
-            ) : (
-              <div className="w-20 h-24 rounded-card border border-dashed border-slate-300 flex items-center justify-center bg-slate-50">
-                <Lucide icon="FileText" className="w-5 h-5 text-slate-400" />
-              </div>
-            )}
-          </div>
-
-          {/* Content */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <button
-                  type="button"
-                  className="block text-sm font-semibold text-slate-800 truncate hover:text-theme-1 transition-colors text-left"
-                  onClick={() => onNavigate(kit.guidId)}
-                >
-                  {kit.titolo}
-                </button>
-                {(kit.nomeArea || kit.nomeCanale) && (
-                  <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                    {kit.nomeArea && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-3xs font-medium rounded-full bg-slate-100 text-slate-600 border border-slate-200">
-                        <Lucide icon="MapPin" className="w-2.5 h-2.5" />
-                        {kit.nomeArea}
-                      </span>
-                    )}
-                    {kit.nomeCanale && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-3xs font-medium rounded-full bg-theme-1/10 text-theme-1 border border-theme-1/20">
-                        <Lucide icon="Store" className="w-2.5 h-2.5" />
-                        {kit.nomeCanale}
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-              <StatusBadge dominio="kitRuntime" stato={kit.stato_lavorazione} />
-            </div>
-
-            {/* File info */}
-            <div className="flex flex-wrap items-center gap-3 mt-3 text-2xs text-slate-500">
-              {(validitaDal || validitaAl) && (
-                <span className="inline-flex items-center gap-1 text-theme-1">
-                  <Lucide icon="Calendar" className="w-3 h-3" />
-                  {validitaDal && validitaAl ? (
-                    <>
-                      {dayjs(validitaDal).locale("it").format("D MMM")} - {dayjs(validitaAl).locale("it").format("D MMM YYYY")}
-                    </>
-                  ) : validitaAl ? (
-                    <>fino al {dayjs(validitaAl).locale("it").format("D MMM YYYY")}</>
-                  ) : validitaDal ? (
-                    <>dal {dayjs(validitaDal).locale("it").format("D MMM YYYY")}</>
-                  ) : null}
-                </span>
-              )}
-              {file?.tipo_export_codice && (
-                <span className="inline-flex items-center gap-1">
-                  <Lucide icon="Layers" className="w-3 h-3" />
-                  {file.tipo_export_codice}
-                </span>
-              )}
-              {file?.mime && (
-                <span className="inline-flex items-center gap-1">
-                  <Lucide icon="File" className="w-3 h-3" />
-                  {file.mime}
-                </span>
-              )}
-              {file?.pages && file.pages > 0 && (
-                <span className="inline-flex items-center gap-1">
-                  <Lucide icon="Book" className="w-3 h-3" />
-                  {file.pages} pp
-                </span>
-              )}
-            </div>
-
-            {/* Actions */}
-            <div className="flex items-center justify-end mt-4">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  className={clsx(
-                    "inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-full border",
-                    canDownload && !isDownloading
-                      ? "text-success border-success/30 bg-success/10 hover:bg-success/20"
-                      : "text-slate-400 border-slate-200 cursor-not-allowed"
-                  )}
-                  onClick={handleDownload}
-                  disabled={!canDownload || isDownloading}
-                  aria-busy={isDownloading || undefined}
-                >
-                  {isDownloading ? (
-                    <Spinner decorativo size="sm" className="w-3.5 h-3.5 text-current" />
-                  ) : (
-                    <Lucide icon="Download" aria-hidden="true" className="w-3.5 h-3.5" />
-                  )}
-                  {isDownloading ? "Download..." : "Scarica"}
-                </button>
-                <button
-                  type="button"
-                  className={clsx(
-                    "inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-full border",
-                    hasPreview
-                      ? "text-theme-1 border-theme-1/30 bg-theme-1/10 hover:bg-theme-1/20"
-                      : "text-slate-400 border-slate-200 cursor-not-allowed"
-                  )}
-                  onClick={() => hasPreview && setIsPreviewOpen(true)}
-                  disabled={!hasPreview}
-                >
-                  <Lucide icon="Focus" className="w-3.5 h-3.5" />
-                  Anteprima
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Preview Modal */}
-      {isPreviewOpen && hasPreview && (
-        <PreviewImmaginePdf
-          imageUrl={previewUrl}
-          totalPages={file?.pages ?? 1}
-          onClose={() => setIsPreviewOpen(false)}
-        />
-      )}
-    </>
-  );
-};
-
-// Skeleton per la sezione volantini
+// Segnaposto della lista volantini, con la stessa forma di CardVolantino
 const VolantiniSkeleton: React.FC = () => (
   <div className="space-y-3">
     {[1, 2, 3].map((i) => (
-      <div
-        key={i}
-        className="p-4 rounded-card border border-dashed border-slate-200/70 bg-white/80 flex items-center gap-4"
-      >
-        <Skeleton height="96px" width="80px" borderRadius="0.6rem" className="flex-shrink-0" />
+      <div key={i} className="flex items-center gap-4 rounded-card border border-slate-200 bg-white p-4">
+        <Skeleton className="h-24 w-20 flex-shrink-0 rounded-control" />
         <div className="flex-1 space-y-3">
-          <Skeleton height="12px" width="60%" />
-          <Skeleton height="12px" width="40%" />
-          <Skeleton height="12px" width="50%" />
+          <Skeleton className="h-3 w-3/5" />
+          <Skeleton className="h-3 w-2/5" />
+          <Skeleton className="h-3 w-1/2" />
         </div>
       </div>
     ))}
   </div>
+);
+
+// Riquadro di primo livello che porta a un'altra vista della promo: titolo e descrizione a sinistra, comando a destra
+const SezioneCollegamento: React.FC<{
+  icona: string;
+  titolo: string;
+  descrizione: string;
+  azione: ReactNode;
+  className?: string;
+}> = ({ icona, titolo, descrizione, azione, className }) => (
+  <Sezione aria-label={titolo} className={className}>
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+      <div className="flex min-w-0 items-start gap-3">
+        <Lucide icon={icona} aria-hidden="true" className="mt-1 h-5 w-5 flex-none text-slate-500" />
+        <div className="min-w-0">
+          <h2 className="title-section">{titolo}</h2>
+          <p className="text-sm text-slate-500">{descrizione}</p>
+        </div>
+      </div>
+      <div className="flex flex-none items-center gap-2">{azione}</div>
+    </div>
+  </Sezione>
 );
 
 // Passa ai figli il messaggio dell'errore rigettato da un <Await> (stringa vuota se assente)
@@ -1477,100 +1304,51 @@ function Main() {
     return end.diff(today, "days");
   };
 
+  // Accesso alla gestione dei kit, mostrato quando i dati delle lavorazioni sono arrivati
   const renderQuickActions = () => {
+    const intestazione = {
+      icona: "Package",
+      titolo: "Gestione kit",
+      descrizione: "Accedi alla pagina di gestione dei kit per questa lavorazione.",
+    };
     return (
       <Suspense
         fallback={
-          <div className="col-span-12 lg:col-span-4 h-full">
-            <div className="box box--stacked h-full">
-              <div className="flex flex-col p-4 h-full">
-                <div className="flex items-center mb-4">
-                  <Skeleton className="w-8 h-8 rounded-full mr-2" />
-                  <div>
-                    <Skeleton className="w-32 h-5 mb-1" />
-                    <Skeleton className="w-24 h-3" />
-                  </div>
-                </div>
-                <div className="flex-1 space-y-3">
-                  <Skeleton className="w-full h-10" />
-                  <Skeleton className="w-full h-10" />
-                  <Skeleton className="w-full h-10" />
-                  <Skeleton className="w-3/4 h-10" />
-                </div>
-              </div>
-            </div>
-          </div>
+          <Sezione {...intestazione} className="h-full">
+            <Skeleton className="h-9 w-full rounded-control" />
+          </Sezione>
         }
       >
-
-        {!isPromoFinalState(currentPromoData?.stato) && (
-          <Await
-            resolve={lavorazioni}
-            errorElement={
-              <div className="col-span-12 h-full">
-                <div className="box box--stacked h-full">
-                  <div className="flex flex-col p-4 h-full">
-                    <div className="flex-1 flex flex-col items-center justify-center space-y-3 text-center py-6">
-                      <Lucide icon="CircleAlert" className="w-6 h-6 text-danger" />
-                      <h4 className="title-card mb-2">
-                        Si è verificato un errore
-                      </h4>
-                      <p className="text-sm text-slate-500 mb-4">
-                        <ErroreAsync>{(messaggio) => messaggio || "Non è stato possibile recuperare i dati delle lavorazioni"}</ErroreAsync>
-                      </p>
-                      <Button
-                        variant="outline-primary"
-                        size="sm"
-                        onClick={() => refreshContent()}
-                        className="w-full"
-                      >
-                        <Lucide icon="RefreshCw" className="w-4 h-4 mr-2" />
-                        Riprova
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            }
-          >
-            {(lavorazioniResolved: any[] | null) => {
-              return (
-                <div className="col-span-12 h-full space-y-4">
-                  {/* Accesso Materiali - sempre visibile */}
-
-
-                  <div className="box box--stacked h-full">
-                    <div className="flex flex-col p-4 h-full">
-                      <div className="flex-1 flex flex-col items-center justify-center space-y-3 text-center py-6">
-                        <Lucide icon="Package" className="w-6 h-6 text-primary" />
-                        <h4 className="title-card mb-2">
-                          Gestione Kit
-                        </h4>
-                        <p className="text-sm text-slate-500 mb-4">
-                          Accedi alla pagina di gestione dei kit per questa
-                          lavorazione.
-                        </p>
-                        <Button
-                          variant="outline-primary"
-                          size="sm"
-                          className="w-full"
-                          onClick={() =>
-                            navigate(
-                              `/promozioni/in-corso/dettagli/${idPromo}/kits`
-                            )
-                          }
-                        >
-                          <Lucide icon="ArrowRight" className="w-4 h-4 mr-2" />
-                          Vai ai Kit
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            }}
-          </Await>
-        )}
+        <Await
+          resolve={lavorazioni}
+          errorElement={
+            <Sezione {...intestazione} className="h-full">
+              <ErroreAsync>
+                {(messaggio) => (
+                  <PageError
+                    compatta
+                    titolo="Lavorazioni non caricate"
+                    motivo={messaggio || "Non è stato possibile recuperare i dati delle lavorazioni"}
+                    onRiprova={() => refreshContent()}
+                  />
+                )}
+              </ErroreAsync>
+            </Sezione>
+          }
+        >
+          {() => (
+            <Sezione {...intestazione} className="h-full">
+              <Button
+                variant="outline-secondary"
+                className="w-full"
+                onClick={() => navigate(`/promozioni/in-corso/dettagli/${idPromo}/kits`)}
+              >
+                Vai ai kit
+                <Lucide icon="ArrowRight" aria-hidden="true" className="ml-2 h-4 w-4" />
+              </Button>
+            </Sezione>
+          )}
+        </Await>
       </Suspense>
     );
   };
@@ -1579,24 +1357,18 @@ function Main() {
     if (hasPermission("file.upload_tracciato")) {
       if (isExpired) {
         return (
-          <div className="border border-danger/20 rounded-lg p-4 bg-danger/5 mb-4">
-            <div className="flex items-center mb-3">
-              <Lucide icon="Info" className="w-4 h-4 text-danger mr-2" />
-              <h4 className="title-card text-danger">Lavorazione Scaduta</h4>
-            </div>
-            <p className="text-sm text-slate-600">
-              Questa lavorazione è scaduta il {formatData(currentPromoData?.data_scadenza)}. Non è più possibile caricare nuovi tracciati.
-            </p>
-          </div>
+          <Alert variant="soft-danger" icona="CalendarX" titolo="Lavorazione scaduta" className="mb-4">
+            Questa lavorazione è scaduta il {formatData(currentPromoData?.data_scadenza)}. Non è più possibile caricare nuovi tracciati.
+          </Alert>
         );
       }
 
       return (
-        <div className="border border-primary/20 rounded-lg p-4 bg-primary/5 mb-4">
-          <div className="flex items-center mb-3">
-            <Lucide icon="Upload" className="w-4 h-4 text-primary mr-2" />
-            <h4 className="title-card text-primary">Carica Nuovo Tracciato</h4>
-          </div>
+        <div className="mb-4 rounded-card border border-slate-200 bg-white p-4">
+          <h3 className="title-card mb-3 flex items-center gap-2">
+            <Lucide icon="Upload" aria-hidden="true" className="h-4 w-4 text-slate-500" />
+            Carica nuovo tracciato
+          </h3>
 
           <div className="space-y-3">
             {files.length === 0 ? (
@@ -1632,7 +1404,7 @@ function Main() {
                   addRemoveLinks: false,
                   uploadMultiple: true,
                 }}
-                className="dropzone border-2 border-dashed border-primary/30 rounded-lg p-4 text-center hover:border-primary/50 transition-colors"
+                className="dropzone rounded-card border-2 border-dashed border-slate-300 p-4 text-center transition-colors hover:border-theme-1/50"
                 getRef={(el: any) => {
                   if (el && el.dropzone) {
                     refDropzone.current = el.dropzone;
@@ -1643,8 +1415,8 @@ function Main() {
               >
                 <div className="space-y-2">
                   <div className="flex justify-center">
-                    <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
-                      <Lucide icon="Upload" className="w-4 h-4 text-primary" />
+                    <div className="flex h-8 w-8 items-center justify-center rounded-control bg-slate-100">
+                      <Lucide icon="Upload" aria-hidden="true" className="h-4 w-4 text-slate-500" />
                     </div>
                   </div>
                   <div>
@@ -1658,13 +1430,13 @@ function Main() {
             ) : null}
 
             {files.length > 0 && (
-              <div className="border rounded-lg p-3 bg-white">
+              <div className="rounded-control border border-slate-200 p-3">
                 {/* Lista file selezionati */}
                 <div className="space-y-2 mb-3">
                   {files.map((f, idx) => (
                     <div
                       key={idx}
-                      className="flex items-center justify-between bg-slate-50 rounded px-2 py-1 text-xs"
+                      className="flex items-center justify-between rounded-control bg-slate-50 px-2 py-1 text-xs"
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         <Lucide
@@ -1673,15 +1445,16 @@ function Main() {
                         />
                         <span className="truncate">{f.name}</span>
                       </div>
-                      <button
+                      <Button
                         type="button"
+                        variant="outline-danger"
+                        size="xs"
                         onClick={() => handleRemoveSingleFile(idx)}
-                        className="text-danger hover:text-danger/80"
                         title="Rimuovi questo file"
                         aria-label={`Rimuovi ${f.name}`}
                       >
-                        <Lucide icon="Trash2" aria-hidden="true" className="w-3 h-3" />
-                      </button>
+                        <Lucide icon="Trash2" aria-hidden="true" className="h-3 w-3" />
+                      </Button>
                     </div>
                   ))}
 
@@ -1695,7 +1468,7 @@ function Main() {
                       size="xs"
                       onClick={handleRemoveFile}
                     >
-                      <Lucide icon="Trash2" className="w-3 h-3 mr-1" />
+                      <Lucide icon="Trash2" aria-hidden="true" className="mr-1 h-3 w-3" />
                       Rimuovi tutti
                     </Button>
                   </div>
@@ -1703,21 +1476,16 @@ function Main() {
 
                 {/* Stato caricamento o configurazione contesto */}
                 {isUploading ? (
-                  <div className="text-center py-4">
-                    <div className="flex justify-center mb-2">
-                      <Spinner size="md" etichetta="Caricamento dei tracciati" />
-                    </div>
-                    <p className="text-sm font-medium">Caricamento...</p>
+                  <div className="flex flex-col items-center gap-2 py-4 text-sm text-slate-500">
+                    <Spinner size="md" etichetta="Caricamento dei tracciati" />
+                    <p aria-hidden="true">Caricamento…</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
                     <Suspense fallback={<Skeleton className="w-full h-32" />}>
                       {contextLavorazioneQuery.isLoading ? (
-                        <div className="border rounded-lg p-3 bg-slate-50">
-                          <h5 className="text-sm font-medium mb-3 flex items-center">
-                            <Lucide icon="Settings" className="w-3 h-3 mr-1" />
-                            Configurazione
-                          </h5>
+                        <div className="rounded-control border border-slate-200 bg-slate-50 p-3">
+                          <h4 className="title-eyebrow mb-3">Configurazione</h4>
                           <div className="space-y-3">
                             <Skeleton className="w-full h-8" />
                             <Skeleton className="w-full h-8" />
@@ -1734,15 +1502,10 @@ function Main() {
                       ) : (useSharedContext
                         ? contextLavorazione?.length > 0
                         : fileContexts.length > 0) ? (
-                        <div className="border rounded-lg p-3 bg-slate-50">
+                        <div className="rounded-control border border-slate-200 bg-slate-50 p-3">
                           {/* Header configurazione + toggle */}
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-1">
-                              <Lucide icon="Settings" className="w-3 h-3 mr-1" />
-                              <h5 className="text-sm font-medium">
-                                Configurazione
-                              </h5>
-                            </div>
+                          <div className="mb-3 flex items-center justify-between">
+                            <h4 className="title-eyebrow">Configurazione</h4>
                             <div className="flex items-center gap-3 text-xs">
 
                               <FormCheck className="inline-flex items-center cursor-pointer gap-1">
@@ -2178,18 +1941,18 @@ function Main() {
           <div className="space-y-3">
             {
               (!isExpired || lavorazioni == undefined) && (
-                <div className="border border-primary/20 rounded-lg p-4 bg-primary/5">
+                <div className="rounded-card border border-slate-200 bg-white p-4">
                   <div className="flex items-center mb-3">
-                    <div className="w-8 h-8 bg-primary/10 rounded-full mr-2" />
+                    <Skeleton className="mr-2 h-8 w-8 rounded-control" />
                     <div className="flex-1">
                       <Skeleton className="w-48 h-5 mb-1" />
                       <Skeleton className="w-36 h-3" />
                     </div>
                   </div>
-                  <div className="border-2 border-dashed border-primary/30 rounded-lg p-6">
+                  <div className="rounded-card border-2 border-dashed border-slate-300 p-6">
                     <div className="space-y-2 text-center">
                       <div className="flex justify-center">
-                        <div className="w-8 h-8 bg-primary/10 rounded-full" />
+                        <Skeleton className="h-8 w-8 rounded-control" />
                       </div>
                       <div className="space-y-1">
                         <Skeleton className="w-56 h-4 mx-auto" />
@@ -2203,7 +1966,7 @@ function Main() {
 
             {/* Skeleton TracciatoCard list */}
             {[1, 2, 3].map((i) => (
-              <div key={i} className="border rounded-lg p-3">
+              <div key={i} className="rounded-card border border-slate-200 p-3">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
@@ -2246,6 +2009,7 @@ function Main() {
                   {renderUploadForm()}
                   {!isExpired && (
                     <EmptyState
+                      compatta
                       title="Nessun tracciato caricato"
                       description="Carica il primo tracciato per iniziare le lavorazioni"
                       icon="FileText"
@@ -2292,8 +2056,8 @@ function Main() {
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
           {[1, 2, 3, 4, 5, 6].map((i) => (
             <div key={i} className="space-y-2">
-              <Skeleton height="h-4" className="w-full" />
-              <Skeleton height="h-6" className="w-3/4" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-6 w-3/4" />
             </div>
           ))}
         </div>
@@ -2304,58 +2068,23 @@ function Main() {
       return renderEditForm();
     }
 
+    const dati = [
+      { etichetta: "Nome promozione", valore: currentPromoData.nome },
+      { etichetta: "Offset visibilità", valore: `${currentPromoData.offset_visibilita} giorni` },
+      { etichetta: "Data inizio", valore: formatData(currentPromoData.validita_dal) },
+      { etichetta: "Data fine", valore: formatData(currentPromoData.validita_al) },
+      { etichetta: "Data scadenza", valore: formatData(currentPromoData.data_scadenza) },
+    ];
+
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-        <div className="space-y-2">
-          <div className="flex items-center text-sm text-slate-500 justify-center">
-            <Lucide icon="Tag" className="w-4 h-4 mr-1" />
-            Nome Promozione
+      <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        {dati.map((dato) => (
+          <div key={dato.etichetta}>
+            <dt className="title-eyebrow">{dato.etichetta}</dt>
+            <dd className="mt-1 break-words font-semibold tabular-nums text-slate-800">{dato.valore}</dd>
           </div>
-          <div className="text-lg font-semibold text-slate-800 text-center">
-            {currentPromoData.nome}
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <div className="flex items-center text-sm text-slate-500 justify-center">
-            <Lucide icon="Eye" className="w-4 h-4 mr-1" />
-            Offset Visibilità
-          </div>
-          <div className="text-lg font-semibold text-slate-800 text-center">
-            {currentPromoData.offset_visibilita}
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <div className="flex items-center text-sm text-slate-500 justify-center">
-            <Lucide icon="Play" className="w-4 h-4 mr-1" />
-            Data Inizio
-          </div>
-          <div className="text-lg font-semibold text-slate-800 text-center">
-            {formatData(currentPromoData.validita_dal)}
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <div className="flex items-center text-sm text-slate-500 justify-center">
-            <Lucide icon="CircleStop" className="w-4 h-4 mr-1" />
-            Data Fine
-          </div>
-          <div className="text-lg font-semibold text-slate-800 text-center">
-            {formatData(currentPromoData.validita_al)}
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <div className="flex items-center text-sm text-slate-500 justify-center">
-            <Lucide icon="Calendar" className="w-4 h-4 mr-1" />
-            Data Scadenza
-          </div>
-          <div className="text-lg font-semibold text-slate-800 text-center">
-            {formatData(currentPromoData.data_scadenza)}
-          </div>
-        </div>
-      </div>
+        ))}
+      </dl>
     );
   };
 
@@ -2497,44 +2226,27 @@ function Main() {
         </div>
 
         {/* Sezione contesto modificabile */}
-        {isLoadingContestoPerNuovaLavorazione ? (
-          <div className="border rounded-card dark:border-darkmode-400 relative mt-2 border-slate-200/80">
-            <div className="absolute left-0 px-3 ml-4 -mt-2 text-xs uppercase bg-white text-slate-500">
-              <div className="-mt-px">Specifiche di lavorazione</div>
-            </div>
-            <div className="px-5 py-4 mt-4 flex flex-col gap-3.5">
-              <Skeleton height="40px" className="rounded-md" />
-              <Skeleton height="40px" className="rounded-md" />
-              <Skeleton height="40px" className="rounded-md" />
-            </div>
-          </div>
-        ) : editContextLavorazione.length > 0 ? (
-          <div className="border rounded-card dark:border-darkmode-400 relative mt-2 border-slate-200/80">
-            <div className="absolute left-0 px-3 ml-4 -mt-2 text-xs uppercase bg-white text-slate-500">
-              <div className="-mt-px">Specifiche di lavorazione</div>
-            </div>
-            <div className="px-5 py-4 mt-4">
-              <ContestoLavorazioneFields
-                context={editContextLavorazione}
-                fieldValues={editFieldValues}
-                customLabelValue={editCustomLabelValue}
-                errors={editContextErrors}
-                maxCharCustomLabel={MAX_CHAR_CUSTOM_LABEL}
-                onChange={handleEditContextChange}
-                onCustomLabelChange={setEditCustomLabelValue}
-                idPrefix="edit_"
-              />
-            </div>
-          </div>
-        ) : null}
+        {(isLoadingContestoPerNuovaLavorazione || editContextLavorazione.length > 0) && (
+          <SpecificheLavorazione caricamento={isLoadingContestoPerNuovaLavorazione}>
+            <ContestoLavorazioneFields
+              context={editContextLavorazione}
+              fieldValues={editFieldValues}
+              customLabelValue={editCustomLabelValue}
+              errors={editContextErrors}
+              maxCharCustomLabel={MAX_CHAR_CUSTOM_LABEL}
+              onChange={handleEditContextChange}
+              onCustomLabelChange={setEditCustomLabelValue}
+              idPrefix="edit_"
+            />
+          </SpecificheLavorazione>
+        )}
 
         <VisibilitaPromoFields
           value={editFormData.meta?.visibilita}
           onChange={(visibilita) => handleEditFieldChange("meta", { ...editFormData.meta, visibilita })}
-          className="mt-2"
         />
 
-        <div className="flex justify-end space-x-3 pt-4 border-t border-slate-200">
+        <div className="flex flex-col-reverse gap-2 border-t border-slate-200 pt-4 sm:flex-row sm:justify-end">
           <Button
             variant="outline-secondary"
             size="sm"
@@ -2560,477 +2272,309 @@ function Main() {
     );
   };
 
+  const promoFinale = isPromoFinalState(currentPromoData?.stato);
+  // Legenda del grafico: stesso ordine e colori delle fette
+  const legendaStati = (lavorazioniResolved: any[] | null) => [
+    {
+      etichetta: "In lavorazione",
+      punto: "bg-primary/60",
+      variante: "primary" as const,
+      numero: lavorazioniResolved?.filter((l: any) => l.stato_lavorazione === STATO_LAVORAZIONE_KIT_RUNTIME.IN_LAVORAZIONE).length ?? 0,
+    },
+    {
+      etichetta: "Completate",
+      punto: "bg-success/60",
+      variante: "success" as const,
+      numero: lavorazioniResolved?.filter((l: any) => l.stato_lavorazione === STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO).length ?? 0,
+    },
+    {
+      etichetta: "In revisione",
+      punto: "bg-warning/60",
+      variante: "warning" as const,
+      numero: lavorazioniResolved?.filter((l: any) => l.stato_lavorazione === STATO_LAVORAZIONE_KIT_RUNTIME.IN_REVISIONE).length ?? 0,
+    },
+    {
+      etichetta: "In attesa di partenza",
+      punto: "bg-danger/60",
+      variante: "error" as const,
+      numero: lavorazioniResolved?.filter((l: any) => l.isDesignKit === true).length ?? 0,
+    },
+  ];
+
   return (
-    <Fragment>
-      {/* Dialog Anteprima */}
+    <Pagina
+      titolo="Dettagli promozione"
+      indietro={{
+        // Prima che la promo arrivi decide l'indirizzo: la pagina serve sia le promo in corso sia lo storico
+        to: (currentPromoData ? isPromoFinalState(currentPromoData.stato) : location.pathname.startsWith("/promozioni/storico"))
+          ? "/promozioni/storico"
+          : "/promozioni/in-corso",
+      }}
+      badges={currentPromoData && <StatusBadge dominio="promo" stato={currentPromoData.stato} />}
+      descrizione={
+        currentPromoData ? (
+          <>
+            {currentPromoData.nome} · creata il {formatDate(currentPromoData.data_registrazione)}
+          </>
+        ) : (
+          "Caricamento…"
+        )
+      }
+    >
+      {currentPromoData && isEndDateNear(currentPromoData.validita_al) && !isExpired && (
+        <Alert
+          variant="soft-warning"
+          icona="Clock"
+          titolo={
+            <span className="flex flex-wrap items-center gap-2">
+              Scadenza imminente
+              <Badge variant="warning" size="sm">
+                {getDaysUntilEnd(currentPromoData.validita_al)} giorni rimasti
+              </Badge>
+            </span>
+          }
+        >
+          La lavorazione scadrà il <strong>{formatData(currentPromoData.validita_al)}</strong>. Assicurati di completare
+          tutte le attività prima della scadenza.
+        </Alert>
+      )}
 
+      <Sezione
+        icona="Info"
+        titolo="Informazioni promozione"
+        descrizione="Dettagli e configurazione della promozione corrente"
+        azioni={
+          !isEditing &&
+          currentPromoData &&
+          currentPromoData.stato !== STATO_PROMO.ELIMINATA &&
+          !promoFinale && (
+            <Button variant="outline-secondary" size="sm" onClick={handleEditStart}>
+              <Lucide icon="Pencil" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+              Modifica
+            </Button>
+          )
+        }
+      >
+        {renderLavorazioneDetails()}
+      </Sezione>
 
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-        <PageHeader
-          title="Dettagli Promozione"
-          indietro={{
-            // Prima che la promo arrivi decide l'indirizzo: la pagina serve sia le promo in corso sia lo storico
-            to: (currentPromoData ? isPromoFinalState(currentPromoData.stato) : location.pathname.startsWith("/promozioni/storico"))
-              ? "/promozioni/storico"
-              : "/promozioni/in-corso",
-          }}
-          badges={currentPromoData && <StatusBadge dominio="promo" stato={currentPromoData.stato} />}
-          description={
-            <div className="flex items-center gap-2">
-              <span className="text-sm">
-                {currentPromoData?.nome || "Caricamento..."}{" "}
-                <span className="text-xs italic">
-                  (creata il{" "}
-                  {formatDate(currentPromoData?.data_registrazione)})
-                </span>
-              </span>
-            </div>
+      {showMenabo && (
+        <SezioneCollegamento
+          icona="Grid3x3"
+          titolo="Menabò"
+          descrizione="Gestisci il menabò dei volantini, pronto per la visualizzazione e il download."
+          azione={
+            <Button
+              variant="outline-secondary"
+              size="sm"
+              onClick={() => navigate(`/promozioni/${promoFinale ? "storico" : "in-corso"}/dettagli/${idPromo}/menabo`)}
+            >
+              Vai al menabò
+              <Lucide icon="ArrowRight" aria-hidden="true" className="ml-1.5 h-3.5 w-3.5" />
+            </Button>
           }
         />
-      </div>
+      )}
 
-      {currentPromoData &&
-        isEndDateNear(currentPromoData.validita_al) &&
-        !isExpired && (
-          <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
-            <div className="flex items-start">
-              <div className="flex-shrink-0">
-                <Lucide
-                  icon="Clock"
-                  className="w-5 h-5 text-orange-600 mt-0.5"
-                />
-              </div>
-              <div className="ml-3">
-                <div className="flex items-center">
-                  <h3 className="text-sm font-semibold text-orange-800">
-                    Scadenza Imminente
-                  </h3>
-                  <Badge variant="warning" size="sm" className="ml-2">
-                    {getDaysUntilEnd(currentPromoData.validita_al)} giorni rimasti
-                  </Badge>
-                </div>
-                <p className="text-sm text-orange-700 mt-1">
-                  La lavorazione scadrà il{" "}
-                  <strong>
-                    {formatData(currentPromoData.validita_al)}
-                  </strong>
-                  . Assicurati di completare tutte le attività prima della
-                  scadenza.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-      <div className="grid grid-cols-12 gap-6 mt-4">
-        <div className="col-span-12 ">
-          <div className="box box--stacked">
-            <div className="p-4">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center">
-                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 mr-2">
-                    <Lucide icon="Info" className="w-4 h-4 text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="title-section">
-                      Informazioni Promozione
-                    </h3>
-                    <p className="text-sm text-slate-500">
-                      Dettagli e configurazione della promozione corrente
-                    </p>
-                  </div>
-                </div>
-                {!isEditing &&
-                  currentPromoData &&
-                  currentPromoData.stato !== STATO_PROMO.ELIMINATA &&
-                  !isPromoFinalState(currentPromoData?.stato) && (
-                    <Button
-                      variant="outline-primary"
-                      size="sm"
-                      onClick={handleEditStart}
-                      className="flex items-center"
-                    >
-                      <Lucide icon="Pencil" className="w-4 h-4 mr-2" />
-                      Modifica
-                    </Button>
-                  )}
-              </div>
-              {renderLavorazioneDetails()}
-            </div>
-          </div>
-        </div>
-        {/* Sezione Volantini della Promozione */}
-        <div className="col-span-12 space-y-6">
-          {showMenabo && (
-            <div className="box box--stacked ">
-              <div className="p-5">
-                <div className="flex flex-col gap-1 ">
-                  <div className="flex items-center gap-3 justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center justify-center w-12 h-12 rounded-full bg-primary/10">
-                        <Lucide icon="Grid3x3" className="w-6 h-6 text-primary" />
-                      </div>
-                      <div>
-                        <div className="text-base font-semibold">Gestisci Menabò</div>
-                        <div className="text-slate-500 text-sm">Gestisci il menabò dei volantini, pronto per la visualizzazione e il download.</div>
-                      </div>
-                    </div>
-                    <Button
-                      variant="outline-primary"
-                      size="sm"
-                      onClick={() => {
-                        if (isPromoFinalState(currentPromoData?.stato)) {
-                          navigate(`/promozioni/storico/dettagli/${idPromo}/menabo`);
-                        } else {
-                          navigate(`/promozioni/in-corso/dettagli/${idPromo}/menabo`);
-                        }
-                      }}
-                    >
-                      <Lucide icon="ArrowRight" className="w-4 h-4 mr-2" />
-                      Vai al Menabò
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-          <div className="box box--stacked">
-            <div className="p-5">
-              <div className="flex flex-col gap-1 mb-5">
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center justify-center w-12 h-12 rounded-full bg-primary/10">
-                    <Lucide icon="BookOpen" className="w-6 h-6 text-primary" />
-                  </div>
-                  <div>
-                    <div className="text-base font-semibold">Volantini della Promozione</div>
-                    <div className="text-slate-500 text-sm">File volantini pronti per download e visualizzazione</div>
-                  </div>
-                </div>
-              </div>
-
-              <React.Suspense fallback={<VolantiniSkeleton />}>
-                <Await
-                  resolve={volantini}
-                  errorElement={
-                    <ErroreAsync>
-                      {(messaggio) => (
-                        <EmptyState
-                          icon="CircleAlert"
-                          title="Errore di caricamento"
-                          description={messaggio || "Non è stato possibile caricare i volantini"}
-                          iconColor="text-danger"
-                        />
-                      )}
-                    </ErroreAsync>
-                  }
-                >
-                  {(volantiniResolved: VolantinoKit[] | null) => {
-                    if (!volantiniResolved || volantiniResolved.length === 0) {
-                      return (
-                        <EmptyState
-                          icon="FolderOpen"
-                          title="Nessun volantino disponibile"
-                          description="Non ci sono file volantini pronti per questa promozione"
-                          iconColor="text-slate-400"
-                        />
-                      );
-                    }
-
-                    return (
-                      <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
-                        {volantiniResolved.map((kit: VolantinoKit) => (
-                          <VolantinoFileCard
-                            key={kit.guidId}
-                            kit={kit}
-                            idPromo={idPromo || ""}
-                            onNavigate={(kitId) => {
-                              if (isPromoFinalState(currentPromoData?.stato)) {
-                                navigate(`/promozioni/storico/dettagli/${idPromo}/kits/${kitId}`)
-                              } else {
-                                navigate(`/promozioni/in-corso/dettagli/${idPromo}/kits/${kitId}`)
-                              }
-                            }}
-                            validitaDal={currentPromoData?.validita_dal.toString()}
-                            validitaAl={currentPromoData?.validita_al.toString()}
-                          />
-                        ))}
-                      </div>
-                    );
-                  }}
-                </Await>
-              </React.Suspense>
-            </div>
-          </div>
-
-        </div>
-        <div className="col-span-12 grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
-          {idPromo && isPromoFinalState(currentPromoData?.stato) && (
-            // <div className="col-span-12 box box--stacked">
-            //   <PromoMaterialiAccess idPromo={idPromo} />
-            // </div>
-            <div className="box box--stacked col-span-12">
-              <div className="p-5">
-                <div className="flex flex-col gap-1 ">
-                  <div className="flex items-center gap-3 justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center justify-center w-12 h-12 rounded-full bg-primary/10">
-                        <Lucide icon="Grid3x3" className="w-6 h-6 text-primary" />
-                      </div>
-                      <div>
-                        <div className="text-base font-semibold">  Materiali Promozione</div>
-                        <div className="text-slate-500 text-sm">Visualizza i materiali per questa promozione</div>
-                      </div>
-                    </div>
-                    <Button
-                      variant="outline-primary"
-                      size="sm"
-                      onClick={() => {
-                        navigate(`/promozioni/storico/dettagli/${idPromo}/materiali`);
-                      }}
-                    >
-                      <Lucide icon="FolderOpen" className=" w-4 h-4 mr-2" />
-                      Visualizza Materiali
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-          <div className="col-span-12 lg:col-span-4 flex flex-col">
-            {renderQuickActions()}
-          </div>
-
-          <div
-            className={clsx(
-              "col-span-12 flex flex-col",
-              !isPromoFinalState(currentPromoData?.stato) && "lg:col-span-8"
-            )}
-          >
-            <div className="box box--stacked h-full">
-              <div className="p-4">
-                <div className="flex items-center mb-4">
-                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 mr-2">
-                    <Lucide icon="ChartPie" className="w-4 h-4 text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="title-section">Stato Lavorazioni</h3>
-                    <p className="text-sm text-slate-500">
-                      Panoramica dello stato delle lavorazioni
-                    </p>
-                  </div>
-                </div>
-
-                <React.Suspense
-                  fallback={
-                    <div className="flex flex-col lg:flex-row items-center justify-center min-h-[220px]">
-                      <div className="w-full lg:w-1/2 flex justify-center">
-                        <Skeleton className="w-48 h-48 rounded-full" />
-                      </div>
-                      <div className="w-full lg:w-1/2 mt-4 lg:mt-0 lg:pl-6 space-y-3">
-                        <Skeleton className="h-8 w-full" />
-                        <Skeleton className="h-8 w-full" />
-                        <Skeleton className="h-8 w-full" />
-                        <Skeleton className="h-8 w-full" />
-                      </div>
-                    </div>
-                  }
-                >
-                  <Await
-                    resolve={Promise.all([
-                      datoGraficoPaginaLavorazioni,
-                      lavorazioni,
-                    ])}
-                    errorElement={
-                      <div className="col-span-12 lg:col-span-4">
-                        <div className="flex flex-col p-4 h-full items-center justify-center text-center">
-                          <div className="flex items-center justify-center w-12 h-12 rounded-full bg-error/10 mb-3">
-                            <Lucide
-                              icon="CircleAlert"
-                              className="w-6 h-6 text-error"
-                            />
-                          </div>
-                          <h3 className="text-lg font-semibold text-error-700">
-                            Errore di Caricamento
-                          </h3>
-                          <p className="text-sm text-slate-500">
-                            <ErroreAsync>{(messaggio) => messaggio || "Impossibile caricare i dati del grafico."}</ErroreAsync>
-                          </p>
-                        </div>
-                      </div>
-                    }
-                  >
-                    {([datoGrafico, lavorazioniResolved]: [any, any[] | null]) => (
-                      <div className="flex flex-col lg:flex-row items-center justify-center">
-                        <div className="w-full lg:w-1/2 flex justify-center">
-                          <LazyChart
-                            height={220}
-                            type="doughnut"
-                            data={datoGrafico}
-                            options={{
-                              maintainAspectRatio: false,
-                              plugins: {
-                                legend: {
-                                  display: false,
-                                },
-                              },
-                              // @ts-ignore
-                              cutout: "75%",
-                            }}
-                          />
-                        </div>
-
-                        <div className="w-full lg:w-1/2 mt-4 lg:mt-0 lg:pl-6">
-                          <div className="space-y-3">
-                            <div className="flex items-center justify-between p-2 bg-primary/5 rounded-lg">
-                              <div className="flex items-center">
-                                <div className="w-3 h-3 rounded-full bg-primary/60 mr-2"></div>
-                                <span className="font-medium text-sm">
-                                  In Lavorazione
-                                </span>
-                              </div>
-                              <Badge variant="primary" size="sm">
-                                {
-                                  lavorazioniResolved?.filter(
-                                    (lavorazione: any) =>
-                                      lavorazione.stato_lavorazione ===
-                                      STATO_LAVORAZIONE_KIT_RUNTIME.IN_LAVORAZIONE
-                                  ).length
-                                }
-                              </Badge>
-                            </div>
-                            <div className="flex items-center justify-between p-2 bg-success/5 rounded-lg">
-                              <div className="flex items-center">
-                                <div className="w-3 h-3 rounded-full bg-success/60 mr-2"></div>
-                                <span className="font-medium text-sm">
-                                  Completate
-                                </span>
-                              </div>
-                              <Badge variant="success" size="sm">
-                                {
-                                  lavorazioniResolved?.filter(
-                                    (lavorazione: any) =>
-                                      lavorazione.stato_lavorazione ===
-                                      STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO
-                                  ).length
-                                }
-                              </Badge>
-                            </div>
-                            <div className="flex items-center justify-between p-2 bg-warning/5 rounded-lg">
-                              <div className="flex items-center">
-                                <div className="w-3 h-3 rounded-full bg-warning/60 mr-2"></div>
-                                <span className="font-medium text-sm">
-                                  In revisione
-                                </span>
-                              </div>
-                              <Badge variant="warning" size="sm">
-                                {
-                                  lavorazioniResolved?.filter(
-                                    (lavorazione: any) =>
-                                      lavorazione.stato_lavorazione ===
-                                      STATO_LAVORAZIONE_KIT_RUNTIME.IN_REVISIONE
-                                  ).length
-                                }
-                              </Badge>
-                            </div>
-                            <div className="flex items-center justify-between p-2 bg-danger/5 rounded-lg">
-                              <div className="flex items-center">
-                                <div className="w-3 h-3 rounded-full bg-danger/60 mr-2">
-                                  .
-                                </div>
-                                <span className="font-medium text-sm">
-                                  In attesa di partenza
-                                </span>
-                              </div>
-                              <Badge variant="error" size="sm">
-                                {
-                                  lavorazioniResolved?.filter(
-                                    (lavorazione: any) =>
-                                      lavorazione.isDesignKit === true
-                                  ).length
-                                }
-                              </Badge>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </Await>
-                </React.Suspense>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="col-span-12">
-          <div className="box box--stacked">
-            <div className="p-4">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center">
-                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 mr-2">
-                    <Lucide icon="Files" className="w-4 h-4 text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="title-section">Tracciati Caricati</h3>
-                    <p className="text-sm text-slate-500">
-                      {(() => {
-                        const count = tracciatiQuery.data?.length || 0;
-                        if (tracciatiQuery.isLoading) return "Caricamento...";
-                        if (count === 0) return "Nessun tracciato disponibile";
-                        return `${count} tracciat${count !== 1 ? "i" : "o"} disponibil${count !== 1 ? "i" : "e"}`;
-                      })()}
-                    </p>
-                  </div>
-                </div>
-                {(tracciatiQuery.data?.length ?? 0) > 1 && (
-                  <div className="flex items-center gap-1.5">
-                    <Lucide icon="ArrowUpDown" className="w-4 h-4 text-slate-400" />
-                    <FormSelect
-                      formSelectSize="sm"
-                      className="w-auto"
-                      aria-label="Ordina i tracciati"
-                      value={ordineTracciati}
-                      onChange={(e) => setOrdineTracciati(e.target.value as OrdineTracciati)}
-                    >
-                      {ORDINI_TRACCIATI.map((o) => (
-                        <option key={o.valore} value={o.valore}>
-                          {o.etichetta}
-                        </option>
-                      ))}
-                    </FormSelect>
-                  </div>
+      <Sezione icona="BookOpen" titolo="Volantini della promozione" descrizione="File volantini pronti per download e visualizzazione">
+        <React.Suspense fallback={<VolantiniSkeleton />}>
+          <Await
+            resolve={volantini}
+            errorElement={
+              <ErroreAsync>
+                {(messaggio) => (
+                  <PageError
+                    compatta
+                    titolo="Volantini non caricati"
+                    motivo={messaggio || "Non è stato possibile caricare i volantini"}
+                    onRiprova={() => refreshContent()}
+                  />
                 )}
-              </div>
-              {renderTracciatiContent()}
-            </div>
-          </div>
-        </div>
-        {showMomenti && (
-          <div className="col-span-12 mb-12">
-            <div className="box box--stacked">
-              <div className="p-4">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center">
-                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 mr-2">
-                      <Lucide icon="Timer" className="w-4 h-4 text-primary" />
-                    </div>
-                    <div>
-                      <h3 className="title-section">Gestione momenti</h3>
-                      <p className="text-sm text-slate-500">
-                        Gestisci i momenti in cui sono state importate le liste per l'analisi successiva dei dati.
-                      </p>
-                    </div>
-                  </div>
+              </ErroreAsync>
+            }
+          >
+            {(volantiniResolved: VolantinoKit[] | null) => {
+              if (!volantiniResolved || volantiniResolved.length === 0) {
+                return (
+                  <EmptyState
+                    compatta
+                    icon="FolderOpen"
+                    title="Nessun volantino disponibile"
+                    description="Non ci sono file volantini pronti per questa promozione"
+                  />
+                );
+              }
+
+              return (
+                <div className="max-h-[500px] space-y-3 overflow-y-auto pr-1">
+                  {volantiniResolved.map((kit: VolantinoKit) => {
+                    const file = kit.files?.[0];
+                    return (
+                      <CardVolantino
+                        key={kit.guidId}
+                        titolo={kit.titolo}
+                        stato={kit.stato_lavorazione}
+                        nomeArea={kit.nomeArea}
+                        nomeCanale={kit.nomeCanale}
+                        file={
+                          file && {
+                            nome: file.nome,
+                            anteprima: file.url,
+                            idOlimpoCloud: file.id_olimpo_cloud,
+                            tipoExport: file.tipo_export_codice,
+                            mime: file.mime,
+                            pagine: file.pages,
+                          }
+                        }
+                        validitaDal={currentPromoData?.validita_dal}
+                        validitaAl={currentPromoData?.validita_al}
+                        collegamento={`/promozioni/${promoFinale ? "storico" : "in-corso"}/dettagli/${idPromo}/kits/${kit.guidId}`}
+                      />
+                    );
+                  })}
                 </div>
-                <GestioneMomenti
-                  idPromo={idPromo}
-                  tracciati={tracciatiQuery.data ?? []}
-                />
+              );
+            }}
+          </Await>
+        </React.Suspense>
+      </Sezione>
+
+      {idPromo && promoFinale && (
+        <SezioneCollegamento
+          icona="FolderOpen"
+          titolo="Materiali promozione"
+          descrizione="Visualizza i materiali per questa promozione"
+          azione={
+            <Button variant="outline-secondary" size="sm" onClick={() => navigate(`/promozioni/storico/dettagli/${idPromo}/materiali`)}>
+              Visualizza materiali
+              <Lucide icon="ArrowRight" aria-hidden="true" className="ml-1.5 h-3.5 w-3.5" />
+            </Button>
+          }
+        />
+      )}
+
+      <div className="grid grid-cols-12 gap-6">
+        {!promoFinale && <div className="col-span-12 lg:col-span-4">{renderQuickActions()}</div>}
+
+        <Sezione
+          icona="ChartPie"
+          titolo="Stato lavorazioni"
+          descrizione="Panoramica dello stato delle lavorazioni"
+          className={clsx("col-span-12", !promoFinale && "lg:col-span-8")}
+        >
+          <React.Suspense
+            fallback={
+              <div className="flex flex-col items-center justify-center lg:flex-row">
+                <div className="flex w-full justify-center lg:w-1/2">
+                  <Skeleton className="h-48 w-48 rounded-full" />
+                </div>
+                <div className="mt-4 w-full space-y-3 lg:mt-0 lg:w-1/2 lg:pl-6">
+                  <Skeleton className="h-8 w-full" />
+                  <Skeleton className="h-8 w-full" />
+                  <Skeleton className="h-8 w-full" />
+                  <Skeleton className="h-8 w-full" />
+                </div>
               </div>
-            </div>
-          </div>
-        )}
+            }
+          >
+            <Await
+              resolve={Promise.all([datoGraficoPaginaLavorazioni, lavorazioni])}
+              errorElement={
+                <ErroreAsync>
+                  {(messaggio) => (
+                    <PageError
+                      compatta
+                      titolo="Grafico non caricato"
+                      motivo={messaggio || "Impossibile caricare i dati del grafico."}
+                      onRiprova={() => refreshContent()}
+                    />
+                  )}
+                </ErroreAsync>
+              }
+            >
+              {([datoGrafico, lavorazioniResolved]: [any, any[] | null]) => (
+                <div className="flex flex-col items-center justify-center lg:flex-row">
+                  <div className="flex w-full justify-center lg:w-1/2">
+                    <LazyChart
+                      height={220}
+                      type="doughnut"
+                      data={datoGrafico}
+                      options={{
+                        maintainAspectRatio: false,
+                        plugins: {
+                          legend: {
+                            display: false,
+                          },
+                        },
+                        // @ts-ignore
+                        cutout: "75%",
+                      }}
+                    />
+                  </div>
+
+                  <ul className="mt-4 w-full space-y-2 lg:mt-0 lg:w-1/2 lg:pl-6">
+                    {legendaStati(lavorazioniResolved).map((voce) => (
+                      <li
+                        key={voce.etichetta}
+                        className="flex items-center justify-between rounded-control border border-slate-100 px-3 py-2"
+                      >
+                        <span className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                          <span aria-hidden="true" className={clsx("h-3 w-3 rounded-full", voce.punto)} />
+                          {voce.etichetta}
+                        </span>
+                        <Badge variant={voce.variante} size="sm">
+                          {voce.numero}
+                        </Badge>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </Await>
+          </React.Suspense>
+        </Sezione>
       </div>
-    </Fragment>
+
+      <Sezione
+        icona="Files"
+        titolo="Tracciati caricati"
+        descrizione={(() => {
+          const count = tracciatiQuery.data?.length || 0;
+          if (tracciatiQuery.isLoading) return "Caricamento…";
+          if (count === 0) return "Nessun tracciato disponibile";
+          return `${count} tracciat${count !== 1 ? "i" : "o"} disponibil${count !== 1 ? "i" : "e"}`;
+        })()}
+        azioni={
+          (tracciatiQuery.data?.length ?? 0) > 1 && (
+            <FormSelect
+              formSelectSize="sm"
+              className="w-auto"
+              aria-label="Ordina i tracciati"
+              value={ordineTracciati}
+              onChange={(e) => setOrdineTracciati(e.target.value as OrdineTracciati)}
+            >
+              {ORDINI_TRACCIATI.map((o) => (
+                <option key={o.valore} value={o.valore}>
+                  {o.etichetta}
+                </option>
+              ))}
+            </FormSelect>
+          )
+        }
+      >
+        {renderTracciatiContent()}
+      </Sezione>
+
+      {showMomenti && (
+        <Sezione
+          icona="Timer"
+          titolo="Gestione momenti"
+          descrizione="Gestisci i momenti in cui sono state importate le liste per l'analisi successiva dei dati."
+        >
+          <GestioneMomenti idPromo={idPromo} tracciati={tracciatiQuery.data ?? []} />
+        </Sezione>
+      )}
+    </Pagina>
   );
 }
 

@@ -198,7 +198,7 @@ export default function TryItPanel({
   ];
 
   return (
-    <div className={clsx("mt-4 border border-primary/20 rounded-lg overflow-hidden", className)}>
+    <div className={clsx("mt-4 border border-primary/20 rounded-card overflow-hidden", className)}>
       {/* Header */}
       <div className="bg-primary/5 dark:bg-primary/10 px-4 py-3 flex items-center gap-2">
         <Lucide icon="Play" className="w-4 h-4 text-primary" />
@@ -208,7 +208,7 @@ export default function TryItPanel({
       <div className="p-4 space-y-4">
         {/* Avviso se manca API Key */}
         {!apiKey && (
-          <div className="p-3 bg-warning/10 border border-warning/20 rounded-lg flex items-start gap-3">
+          <div className="p-3 bg-warning/10 border border-warning/20 rounded-card flex items-start gap-3">
             <Lucide icon="TriangleAlert" className="w-5 h-5 text-warning flex-shrink-0 mt-0.5" />
             <div>
               <p className="text-sm text-warning font-medium">API Key non disponibile</p>
@@ -227,7 +227,7 @@ export default function TryItPanel({
               <Lucide icon="Package" className="w-4 h-4" />
               Template (Obbligatorio)
             </FormLabel>
-            <div className="max-h-40 overflow-y-auto space-y-1 border rounded-lg p-2 bg-slate-50 dark:bg-darkmode-600">
+            <div className="max-h-40 overflow-y-auto space-y-1 border rounded-card p-2 bg-slate-50 dark:bg-darkmode-600">
               {templates.map((t) => (
                 <FormCheck key={t.guidId} className="p-2 hover:bg-white dark:hover:bg-darkmode-500 rounded">
                   <FormCheck.Input
@@ -310,7 +310,7 @@ export default function TryItPanel({
             ) : (
               <div className="space-y-3">
                 {filterGroups.map((group, groupIndex) => (
-                  <div key={groupIndex} className="border rounded-lg p-3 bg-slate-50 dark:bg-darkmode-600">
+                  <div key={groupIndex} className="border rounded-card p-3 bg-slate-50 dark:bg-darkmode-600">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
                         Gruppo {groupIndex + 1} (AND)
@@ -392,7 +392,7 @@ export default function TryItPanel({
               <Lucide icon="Code" className="w-4 h-4" />
               Request Body Preview
             </FormLabel>
-            <pre className="bg-slate-800 text-slate-100 p-3 rounded-lg text-xs overflow-x-auto">
+            <pre className="bg-slate-800 text-slate-100 p-3 rounded-card text-xs overflow-x-auto">
               {JSON.stringify(buildRequestBody(), null, 2) || "{}"}
             </pre>
           </div>
@@ -401,19 +401,20 @@ export default function TryItPanel({
         {/* Pulsante Esegui */}
         <div className="flex items-center gap-3">
           <Button
+            type="button"
             variant="primary"
             onClick={executeRequest}
             disabled={isExecuteDisabled()}
+            loading={isLoading}
             className="flex-1"
           >
             {isLoading ? (
               <>
-                <Lucide icon="Loader" className="w-4 h-4 mr-2 animate-spin" />
                 Esecuzione...
               </>
             ) : (
               <>
-                <Lucide icon="Play" className="w-4 h-4 mr-2" />
+                <Lucide icon="Play" aria-hidden="true" className="w-4 h-4 mr-2" />
                 Esegui Richiesta
               </>
             )}
@@ -467,7 +468,7 @@ export default function TryItPanel({
               </div>
             </div>
 
-            <div className="rounded-lg overflow-hidden border border-slate-200 dark:border-darkmode-400">
+            <div className="rounded-card overflow-hidden border border-slate-200 dark:border-darkmode-400">
               <Editor
                 height="300px"
                 language="json"

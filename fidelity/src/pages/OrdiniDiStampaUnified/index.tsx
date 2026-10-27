@@ -1,4 +1,4 @@
-import PageHeader from "@/components/Base/PageHeader";
+import Pagina from "@/components/Base/Pagina";
 import { PermissionGate } from "@/components/PermissionGate";
 import { PERMISSIONS } from "@/constants/permissions";
 import { useNotification } from "@/context/NotificationContext";
@@ -8,11 +8,11 @@ import { useLoaderData, useNavigate, useRevalidator } from "react-router-dom";
 import { ServerCall } from "../../../lib/server_call";
 import { PromoResponseDTO, type OrdiniDiStampaResponseDTO } from "../../../server/core/dto";
 import withSessionCheck from "../../components/SessionChecker";
+import AzioniVisteODS from "./components/AzioniVisteODS";
 import CreateOrderDialog from "./components/CreateOrderDialog";
 import NuovoODSSection from "./components/NuovoODSSection";
 import ODSCompletatiSection from "./components/ODSCompletatiSection";
 import ODSInCorsoSection from "./components/ODSInCorsoSection";
-import SearchSection from "./components/SearchSection";
 
 type OrdineWithPromo = OrdiniDiStampaResponseDTO & { nomePromo: string };
 
@@ -76,45 +76,38 @@ function OrdiniDiStampaUnified() {
 
   return (
     <>
-      <div className="grid grid-cols-12 gap-y-10 gap-x-6">
-        <div className="col-span-12">
-          <PageHeader
-            title={title}
-            description={description}
+      <Pagina
+        titolo={title}
+        descrizione={description}
+        azioni={<AzioniVisteODS vista={filterType} onNaviga={navigate} />}
+      >
+        {filterType === 'nuovo' && (
+          <NuovoODSSection
+            promo={data.promo}
+            searchQuery={searchQuery}
+            onSearchQueryChange={setSearchQuery}
+            onCreateOrder={handleCreateOrder}
           />
+        )}
 
-          <div className="flex flex-col gap-8 mt-3.5">
-            <SearchSection
-              searchQuery={searchQuery}
-              setSearchQuery={setSearchQuery}
-            />
+        {filterType === 'in-corso' && (
+          <ODSInCorsoSection
+            ordini={data.ordini}
+            searchQuery={searchQuery}
+            onSearchQueryChange={setSearchQuery}
+            onRevisioneClick={handleRevisioneClick}
+          />
+        )}
 
-            {filterType === 'nuovo' && (
-              <NuovoODSSection
-                promo={data.promo}
-                searchQuery={searchQuery}
-                onCreateOrder={handleCreateOrder}
-              />
-            )}
-
-            {filterType === 'in-corso' && (
-              <ODSInCorsoSection
-                ordini={data.ordini}
-                searchQuery={searchQuery}
-                onRevisioneClick={handleRevisioneClick}
-              />
-            )}
-
-            {filterType === 'completati' && (
-              <ODSCompletatiSection
-                ordini={data.ordini}
-                searchQuery={searchQuery}
-                onViewDetails={handleViewDetails}
-              />
-            )}
-          </div>
-        </div>
-      </div>
+        {filterType === 'completati' && (
+          <ODSCompletatiSection
+            ordini={data.ordini}
+            searchQuery={searchQuery}
+            onSearchQueryChange={setSearchQuery}
+            onViewDetails={handleViewDetails}
+          />
+        )}
+      </Pagina>
 
       {filterType === 'nuovo' && (
         <PermissionGate permission={PERMISSIONS.ORDINI_STAMPA.CREA}>

@@ -11,7 +11,6 @@ export {
   InfoBadges,
   KitInfo,
   KitPreStartView,
-  StatCard,
   StatsGrid,
   Timeline,
   TimelineItem,

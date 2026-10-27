@@ -1,4 +1,5 @@
 import Lucide from "@/components/Base/Lucide";
+import Spinner from "@/components/Base/Spinner";
 import clsx from "clsx";
 import type { HubServiceDTO } from "../../../../lib/types";
 
@@ -12,10 +13,10 @@ interface FeaturedServiceCardProps {
 
 const colorMap: Record<string, { gradient: string; text: string; iconBg: string; button: string }> = {
   primary: { gradient: "from-theme-1 to-theme-2", text: "text-white", iconBg: "bg-white/20", button: "bg-white/20 hover:bg-white/30" },
-  info: { gradient: "from-cyan-500 to-blue-600", text: "text-white", iconBg: "bg-white/20", button: "bg-white/20 hover:bg-white/30" },
-  success: { gradient: "from-emerald-500 to-teal-600", text: "text-white", iconBg: "bg-white/20", button: "bg-white/20 hover:bg-white/30" },
-  warning: { gradient: "from-amber-500 to-orange-600", text: "text-white", iconBg: "bg-white/20", button: "bg-white/20 hover:bg-white/30" },
-  danger: { gradient: "from-red-500 to-rose-600", text: "text-white", iconBg: "bg-white/20", button: "bg-white/20 hover:bg-white/30" },
+  info: { gradient: "from-info to-info/80", text: "text-white", iconBg: "bg-white/20", button: "bg-white/20 hover:bg-white/30" },
+  success: { gradient: "from-success to-success/80", text: "text-white", iconBg: "bg-white/20", button: "bg-white/20 hover:bg-white/30" },
+  warning: { gradient: "from-warning to-warning/80", text: "text-white", iconBg: "bg-white/20", button: "bg-white/20 hover:bg-white/30" },
+  danger: { gradient: "from-danger to-danger/80", text: "text-white", iconBg: "bg-white/20", button: "bg-white/20 hover:bg-white/30" },
 };
 
 function isBase64Icon(icona: string): boolean {
@@ -39,7 +40,7 @@ const FeaturedServiceCard: React.FC<FeaturedServiceCardProps> = ({
       }
     : service.in_manutenzione
       ? {
-          gradient: "from-amber-500 to-orange-600",
+          gradient: "from-warning to-warning/80",
           text: "text-white",
           iconBg: "bg-white/20",
           button: "bg-white/15",
@@ -73,10 +74,10 @@ const FeaturedServiceCard: React.FC<FeaturedServiceCardProps> = ({
       disabled={isDisabled}
       aria-busy={isLoading}
       className={clsx(
-        "w-full text-left rounded-2xl p-6 sm:p-8 relative overflow-hidden",
+        "w-full text-left rounded-card p-6 sm:p-8 relative overflow-hidden",
         "bg-gradient-to-br", colors.gradient,
-        "shadow-lg transition-all duration-300",
-        !isDisabled && "hover:shadow-2xl hover:scale-[1.01] hover:-translate-y-0.5",
+        "shadow-card transition-all duration-300",
+        !isDisabled && "hover:shadow-overlay hover:scale-[1.01] hover:-translate-y-0.5",
         isLoading && "ring-2 ring-white/45",
         isDisabled && "opacity-70 cursor-not-allowed",
         "focus:outline-none focus:ring-2 focus:ring-white/40",
@@ -84,12 +85,12 @@ const FeaturedServiceCard: React.FC<FeaturedServiceCardProps> = ({
       )}
       style={{ animationDelay: `${index * 100}ms`, animationFillMode: "both" }}
     >
-      <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-white/5 -translate-y-1/2 translate-x-1/3" />
-      <div className="absolute bottom-0 left-0 w-24 h-24 rounded-full bg-white/5 translate-y-1/2 -translate-x-1/3" />
+      <div aria-hidden="true" className="absolute top-0 right-0 w-32 h-32 rounded-full bg-white/5 -translate-y-1/2 translate-x-1/3" />
+      <div aria-hidden="true" className="absolute bottom-0 left-0 w-24 h-24 rounded-full bg-white/5 translate-y-1/2 -translate-x-1/3" />
 
       <div className="relative z-10">
         <div className="flex items-start justify-between mb-4">
-          <div className={clsx("w-16 h-16 rounded-2xl flex items-center justify-center", colors.iconBg)}>
+          <div className={clsx("w-16 h-16 rounded-card flex items-center justify-center", colors.iconBg)}>
             {isBase64Icon(service.icona) ? (
               <img
                 src={service.icona}
@@ -102,6 +103,7 @@ const FeaturedServiceCard: React.FC<FeaturedServiceCardProps> = ({
             ) : (
               <Lucide
                 icon={service.icona as any}
+                aria-hidden="true"
                 className={clsx("w-8 h-8 text-white", isUnavailable && "opacity-90")}
               />
             )}
@@ -114,7 +116,7 @@ const FeaturedServiceCard: React.FC<FeaturedServiceCardProps> = ({
           )}
         </div>
 
-        <h3 className="font-space-grotesk font-bold text-xl sm:text-2xl text-white mb-2">
+        <h3 className="title-section mb-2 text-white">
           {service.nome}
         </h3>
         <p className="text-white/80 text-sm leading-relaxed mb-5 line-clamp-2">
@@ -122,18 +124,19 @@ const FeaturedServiceCard: React.FC<FeaturedServiceCardProps> = ({
         </p>
 
         {isLoading ? (
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-white/20">
-            <Lucide icon="Loader2" className="w-4 h-4 animate-spin" />
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-control text-sm font-medium text-white bg-white/20">
+            <Spinner size="sm" decorativo className="text-current" />
             Apertura servizio...
           </div>
         ) : (
           <div className={clsx(
-            "inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors",
+            "inline-flex items-center gap-2 px-4 py-2 rounded-control text-sm font-medium text-white transition-colors",
             colors.button
           )}>
             {footerLabel}
             <Lucide
               icon={footerIcon as any}
+              aria-hidden="true"
               className="w-4 h-4"
             />
           </div>

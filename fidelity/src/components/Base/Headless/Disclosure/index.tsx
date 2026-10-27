@@ -11,7 +11,7 @@ import {
   useEffect,
   useState,
 } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/utils/twMerge";
 
 type Variant = "default" | "boxed";
 

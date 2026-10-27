@@ -1,8 +1,11 @@
+import Alert from "@/components/Base/Alert";
 import Button from "@/components/Base/Button";
 import { FormCheck, FormField, FormInput, FormLabel, FormSelect, FormSwitch, FormTextarea } from "@/components/Base/Form";
 import { Dialog } from "@/components/Base/Headless";
 import Lucide from "@/components/Base/Lucide";
+import StatusBadge from "@/components/Base/StatusBadge";
 import Tippy from "@/components/Base/Tippy";
+import type { TonoStato } from "@/constants/stati";
 import { useEffect, useState, type ReactNode } from "react";
 import { ServerCall } from "../../../../lib/server_call";
 import type { AuthProviderAdminDTO, AuthProviderInput, StatoSegretoProvider } from "../../../../lib/types";
@@ -56,18 +59,19 @@ const ETICHETTE: Record<string, { label: string; aiuto?: string; placeholder?: s
   force_authn: { label: "Richiedi sempre le credenziali (ForceAuthn)" },
 };
 
-const STATO_SEGRETO: Record<StatoSegretoProvider, { testo: string; classe: string }> = {
-  cifrato: { testo: "Impostato, cifrato", classe: "bg-emerald-50 border-emerald-200 text-emerald-700" },
-  in_chiaro: { testo: "Impostato, in chiaro", classe: "bg-amber-50 border-amber-200 text-amber-700" },
-  assente: { testo: "Non impostato", classe: "bg-slate-100 border-slate-200 text-slate-500" },
+const STATO_SEGRETO: Record<StatoSegretoProvider, { testo: string; tono: TonoStato }> = {
+  cifrato: { testo: "Impostato, cifrato", tono: "success" },
+  in_chiaro: { testo: "Impostato, in chiaro", tono: "warning" },
+  assente: { testo: "Non impostato", tono: "neutral" },
 };
 
 const NOTA_SEGRETI = "I valori salvati non vengono mai mostrati: lascia il campo vuoto per mantenerli. Un nuovo valore viene cifrato.";
 
+/** Gruppo di campi del dialogo: card annidata con titolo h3 (non una Sezione di pagina). */
 const Sezione = ({ titolo, descrizione, children }: { titolo: string; descrizione?: ReactNode; children: ReactNode }) => (
-  <section className="rounded-md border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5">
+  <section className="rounded-card border border-slate-200 bg-white p-4 sm:p-5">
     <div className="mb-5">
-      <div className="text-sm font-semibold text-slate-800">{titolo}</div>
+      <h3 className="title-card">{titolo}</h3>
       {descrizione && <div className="mt-1 text-xs text-slate-500">{descrizione}</div>}
     </div>
     <div className="space-y-4">{children}</div>
@@ -75,14 +79,9 @@ const Sezione = ({ titolo, descrizione, children }: { titolo: string; descrizion
 );
 
 const Avviso = ({ tono, icona, children }: { tono: "ambra" | "azzurro"; icona: string; children: ReactNode }) => (
-  <div
-    className={`flex items-start gap-2 rounded-md border px-3 py-2 text-xs ${tono === "ambra"
-      ? "border-amber-200 bg-amber-50 text-amber-700"
-      : "border-sky-200 bg-sky-50 text-sky-700"}`}
-  >
-    <Lucide icon={icona} className="w-4 h-4 shrink-0" />
-    <span>{children}</span>
-  </div>
+  <Alert variant={tono === "ambra" ? "soft-warning" : "soft-info"} icona={icona} className="px-3 py-2 text-xs">
+    {children}
+  </Alert>
 );
 
 const MetodoFormDialog = ({ open, provider, submitting = false, onClose, onSubmit }: MetodoFormDialogProps) => {
@@ -224,7 +223,7 @@ const MetodoFormDialog = ({ open, provider, submitting = false, onClose, onSubmi
   const pulsanteImporta = (chi: "discovery" | "metadata-url", abilitato: boolean) => (
     <Button
       type="button"
-      variant="outline-primary"
+      variant="outline-secondary"
       className="shrink-0 whitespace-nowrap"
       loading={importazione === chi}
       disabled={!abilitato || importazione !== null}
@@ -243,11 +242,11 @@ const MetodoFormDialog = ({ open, provider, submitting = false, onClose, onSubmi
     return (
       <div key={nome} className="relative">
         {/* Lo stato del segreto sta sulla riga dell'etichetta e descrive il campo */}
-        <span
-          id={idStato}
-          className={`absolute right-0 top-0 inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${STATO_SEGRETO[daRimuovere ? "assente" : stato].classe}`}
-        >
-          {daRimuovere ? "Verrà rimosso" : STATO_SEGRETO[stato].testo}
+        <span id={idStato} className="absolute right-0 top-0">
+          <StatusBadge
+            tono={daRimuovere ? "danger" : STATO_SEGRETO[stato].tono}
+            etichetta={daRimuovere ? "Verrà rimosso" : STATO_SEGRETO[stato].testo}
+          />
         </span>
         <FormField etichetta={ETICHETTE_SEGRETI[nome] ?? nome}>
           {nome === "sp_private_key" ? (
@@ -323,31 +322,22 @@ const MetodoFormDialog = ({ open, provider, submitting = false, onClose, onSubmi
 
   return (
     <Dialog open={open} onClose={onClose} size="2xl">
-      <Dialog.Panel className="overflow-hidden lg:w-[980px] xl:w-[1080px]">
+      <Dialog.Panel className="overflow-hidden">
         <form onSubmit={invia} className="flex max-h-[calc(100vh-8rem)] flex-col">
-          <Dialog.Title className="gap-3 bg-white">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-md bg-primary/10 text-primary flex items-center justify-center">
-                <Lucide icon={modifica ? "PencilLine" : "KeyRound"} className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="text-base font-semibold text-slate-800">
-                  {modifica ? `Modifica ${provider?.nome}` : "Nuovo metodo di accesso"}
-                </div>
-                <div className="text-sm font-normal text-slate-500">
-                  {modifica ? `Codice ${provider?.codice}` : "Configurazione del metodo e del pulsante nella pagina di login"}
-                </div>
-              </div>
-            </div>
+          <Dialog.Title>
+            <Lucide icon={modifica ? "PencilLine" : "KeyRound"} aria-hidden="true" className="h-5 w-5 text-primary" />
+            {modifica ? `Modifica ${provider?.nome}` : "Nuovo metodo di accesso"}
           </Dialog.Title>
 
           <Dialog.Description className="min-h-0 flex-1 overflow-y-auto p-0">
             <div className="space-y-5 bg-slate-50/50 px-5 py-5">
+              <p className="text-sm text-slate-500">
+                {modifica ? `Codice ${provider?.codice}` : "Configurazione del metodo e del pulsante nella pagina di login"}
+              </p>
               {errore && (
-                <div role="alert" className="rounded-control border border-danger/20 bg-danger/5 px-4 py-3 text-sm text-danger flex items-start gap-2">
-                  <Lucide icon="AlertTriangle" className="w-4 h-4 shrink-0 mt-0.5" />
-                  <span>{errore}</span>
-                </div>
+                <Alert role="alert" variant="soft-danger" icona="AlertTriangle">
+                  {errore}
+                </Alert>
               )}
 
               <div className="grid gap-5 xl:grid-cols-2">
@@ -366,8 +356,8 @@ const MetodoFormDialog = ({ open, provider, submitting = false, onClose, onSubmi
                               onClick={() => cambiaTipo(t.value)}
                               className={`flex items-start gap-3 rounded-card border px-3 py-3 text-left transition ${scelto ? "border-primary/40 bg-primary/5" : "border-slate-200 bg-white hover:border-primary/30"}`}
                             >
-                              <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${scelto ? "bg-primary text-white" : "bg-slate-100 text-slate-500"}`}>
-                                <Lucide icon={t.icona} className="w-4 h-4" />
+                              <div className={`w-9 h-9 rounded-control flex items-center justify-center shrink-0 ${scelto ? "bg-primary text-white" : "bg-slate-100 text-slate-500"}`}>
+                                <Lucide icon={t.icona} aria-hidden="true" className="h-4 w-4" />
                               </div>
                               <div>
                                 <div className="text-sm font-medium text-slate-800">{t.label}</div>
@@ -407,12 +397,12 @@ const MetodoFormDialog = ({ open, provider, submitting = false, onClose, onSubmi
                       onChange={(v) => aggiorna("icona", v)}
                     />
                     <div className="rounded-card border border-dashed border-slate-200 bg-slate-50/80 p-4">
-                      <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Anteprima nella pagina di login</div>
+                      <div className="title-eyebrow">Anteprima nella pagina di login</div>
                       <div className="mt-3 max-w-sm">
                         <ProviderCard provider={anteprima} isExpanded={false} onClick={() => undefined} index={0} />
                       </div>
                     </div>
-                    <div className="grid gap-3 rounded-md border border-slate-200/80 bg-slate-50/80 p-4">
+                    <div className="grid gap-3 rounded-card border border-slate-200 bg-slate-50/80 p-4">
                       <FormSwitch>
                         <FormSwitch.Input id="metodo-attivo" type="checkbox" checked={valori.attivo} onChange={(e) => aggiorna("attivo", e.target.checked)} />
                         <FormSwitch.Label htmlFor="metodo-attivo">Attivo nella pagina di login</FormSwitch.Label>
@@ -520,7 +510,7 @@ const MetodoFormDialog = ({ open, provider, submitting = false, onClose, onSubmi
                           <div className="mt-2 flex justify-end">
                             <Button
                               type="button"
-                              variant="outline-primary"
+                              variant="outline-secondary"
                               size="sm"
                               loading={importazione === "metadata-xml"}
                               disabled={!xmlMetadati.trim() || importazione !== null}
@@ -579,7 +569,7 @@ const MetodoFormDialog = ({ open, provider, submitting = false, onClose, onSubmi
                           {campoTesto("server", "attributo_nome")}
                           {campoTesto("server", "attributo_cognome")}
                         </div>
-                        <div className="grid gap-3 rounded-md border border-slate-200/80 bg-slate-50/80 p-4 md:grid-cols-2">
+                        <div className="grid gap-3 rounded-card border border-slate-200 bg-slate-50/80 p-4 md:grid-cols-2">
                           {CAMPI_SERVER_BOOLEANI.saml.map(({ nome }) => flag(nome))}
                         </div>
                         {campoSegreto("sp_private_key", true)}
@@ -613,11 +603,11 @@ const MetodoFormDialog = ({ open, provider, submitting = false, onClose, onSubmi
             </div>
           </Dialog.Description>
 
-          <Dialog.Footer className="flex flex-col-reverse gap-3 bg-white sm:flex-row sm:justify-end">
-            <Button variant="outline-secondary" type="button" onClick={onClose} disabled={submitting} className="w-full sm:w-auto">
+          <Dialog.Footer className="bg-white">
+            <Button variant="outline-secondary" type="button" onClick={onClose} disabled={submitting}>
               Annulla
             </Button>
-            <Button variant="primary" type="submit" loading={submitting} className="w-full sm:w-auto">
+            <Button variant="primary" type="submit" loading={submitting}>
               {modifica ? "Salva modifiche" : "Crea metodo"}
             </Button>
           </Dialog.Footer>

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import SessionExpiredBanner from "./SessionExpiredBanner";
 
@@ -30,7 +30,7 @@ describe("SessionExpiredBanner", () => {
     render(<SessionExpiredBanner reason="saml_access_denied" onDismiss={vi.fn()} />);
 
     const avviso = screen.getByRole("alert");
-    expect(avviso).toHaveTextContent("Accesso negato:");
+    expect(within(avviso).getByText("Accesso negato")).toHaveClass("font-medium");
     expect(avviso).toHaveTextContent("Ruolo non abilitato");
   });
 
@@ -38,6 +38,15 @@ describe("SessionExpiredBanner", () => {
     render(<SessionExpiredBanner reason="oidc_rate_limited" onDismiss={vi.fn()} />);
 
     expect(screen.getByRole("alert")).toHaveTextContent("Troppi tentativi di accesso. Riprova tra qualche minuto");
+  });
+
+  it("l'accesso tramite Istanta è un avviso con titolo e il pulsante per andare su Istanta", () => {
+    render(<SessionExpiredBanner reason="istanta_required" onDismiss={vi.fn()} />);
+
+    const avviso = screen.getByRole("alert");
+    expect(within(avviso).getByText("Accesso tramite Istanta richiesto")).toBeInTheDocument();
+    expect(within(avviso).getByRole("button", { name: "Vai su Istanta" })).toBeInTheDocument();
+    expect(within(avviso).queryByRole("button", { name: "Chiudi" })).not.toBeInTheDocument();
   });
 
   it("un motivo sconosciuto non mostra nulla", () => {

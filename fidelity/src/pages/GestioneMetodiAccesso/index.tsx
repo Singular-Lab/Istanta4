@@ -1,8 +1,14 @@
+import Alert from "@/components/Base/Alert";
+import BarraFiltri from "@/components/Base/BarraFiltri";
 import Button from "@/components/Base/Button";
+import CampoRicerca from "@/components/Base/CampoRicerca";
 import Lucide from "@/components/Base/Lucide";
 import PageError from "@/components/Base/PageError";
-import PageHeader from "@/components/Base/PageHeader";
+import Pagina from "@/components/Base/Pagina";
+import Segmenti, { type OpzioneSegmento } from "@/components/Base/Segmenti";
+import Sezione from "@/components/Base/Sezione";
 import Spinner from "@/components/Base/Spinner";
+import StatCard, { StatCardGrid } from "@/components/Base/StatCard";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import EmptyState from "@/components/EmptyState";
 import withSessionCheck from "@/components/SessionChecker";
@@ -10,8 +16,8 @@ import { PERMISSIONS } from "@/constants/permissions";
 import { useNotification } from "@/context/NotificationContext";
 import { usePermissionContext } from "@/context/PermissionContext";
 import { METODI_ACCESSO_QUERY_KEY, useFetchAuthProvidersAdmin } from "@/query/query";
+import { formatNumero } from "@/utils/format";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import clsx from "clsx";
 import { useMemo, useState } from "react";
 import { ServerCall } from "../../../lib/server_call";
 import type {
@@ -33,13 +39,15 @@ type Conferma =
 
 const notifica = (icona: string, titolo: string, messaggio: string, colore: string) => (
   <div className="flex items-center gap-3">
-    <Lucide icon={icona} className={`w-6 h-6 ${colore}`} />
+    <Lucide icon={icona} aria-hidden="true" className={`h-6 w-6 ${colore}`} />
     <div>
       <div className="font-semibold text-slate-800">{titolo}</div>
       <div className="text-sm text-slate-500">{messaggio}</div>
     </div>
   </div>
 );
+
+const OPZIONI_FILTRO: OpzioneSegmento<FiltroMetodi>[] = FILTRI_METODI.map((f) => ({ valore: f.value, etichetta: f.label }));
 
 const messaggioErrore = (e: unknown, predefinito: string) => (e instanceof Error && e.message ? e.message : predefinito);
 
@@ -155,171 +163,145 @@ function GestioneMetodiAccesso() {
 
   return (
     <>
-      <PageHeader
-        title="Metodi di accesso"
-        description="I metodi con cui gli utenti entrano in Fidelity: email e password, OpenID Connect, SAML 2.0 e collegamenti esterni."
-      />
+      <Pagina
+        titolo="Metodi di accesso"
+        descrizione="I metodi con cui gli utenti entrano in Fidelity: email e password, OpenID Connect, SAML 2.0 e collegamenti esterni."
+        azioni={
+          !loading && canAccess ? (
+            <Button variant="primary" onClick={() => setDialogo({})}>
+              <Lucide icon="Plus" aria-hidden="true" className="mr-2 h-4 w-4" />
+              Nuovo metodo
+            </Button>
+          ) : undefined
+        }
+      >
+        {loading ? (
+          <Sezione>
+            <div role="status" className="flex items-center gap-3 text-slate-500">
+              <Spinner decorativo />
+              Verifica permessi in corso...
+            </div>
+          </Sezione>
+        ) : !canAccess ? (
+          <UnauthorizedState />
+        ) : (
+          <>
+            {providers.length > 0 && (
+              <StatCardGrid className="lg:grid-cols-3">
+                <StatCard densita="compatta" etichetta="Metodi" valore={formatNumero(providers.length)} icona="KeyRound" tono="brand" />
+                <StatCard densita="compatta" etichetta="Attivi" valore={formatNumero(attivi)} icona="CircleCheck" tono="success" />
+                <StatCard
+                  densita="compatta"
+                  etichetta="Segreti in chiaro"
+                  valore={formatNumero(inChiaro)}
+                  icona="LockOpen"
+                  tono={inChiaro > 0 ? "warning" : "neutral"}
+                  evidenzia={inChiaro > 0}
+                />
+              </StatCardGrid>
+            )}
 
-      {loading ? (
-        <div role="status" className="box box--stacked mt-6 p-8 flex items-center gap-3 text-slate-500">
-          <Spinner decorativo />
-          Verifica permessi in corso...
-        </div>
-      ) : !canAccess ? (
-        <UnauthorizedState />
-      ) : (
-        <div className="mt-3.5 flex flex-col gap-4">
-          {/* Header */}
-          <div className="box box--stacked p-5">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <div className="text-lg font-semibold text-slate-800">Metodi di accesso</div>
-                <div className="text-sm text-slate-500 mt-0.5">
-                  L'ordine è quello della pagina di login. I segreti restano sul server, cifrati, e non vengono mai mostrati.
-                </div>
-              </div>
-              <div className="flex flex-col gap-3 lg:items-end">
-                <div className="flex items-center gap-3">
-                  {providers.length > 0 && (
-                    <div className="hidden lg:flex items-center gap-4 mr-2 text-sm">
-                      <div className="text-center">
-                        <div className="text-xl font-bold text-slate-800 leading-none">{providers.length}</div>
-                        <div className="text-xs text-slate-500 mt-0.5">metodi</div>
-                      </div>
-                      <div className="w-px h-8 bg-slate-200" />
-                      <div className="text-center">
-                        <div className="text-xl font-bold text-emerald-600 leading-none">{attivi}</div>
-                        <div className="text-xs text-slate-500 mt-0.5">attivi</div>
-                      </div>
-                      <div className="w-px h-8 bg-slate-200" />
-                      <div className="text-center">
-                        <div className={clsx("text-xl font-bold leading-none", inChiaro > 0 ? "text-amber-600" : "text-slate-800")}>{inChiaro}</div>
-                        <div className="text-xs text-slate-500 mt-0.5">segreti in chiaro</div>
-                      </div>
-                    </div>
-                  )}
-                  <Button variant="primary" onClick={() => setDialogo({})} className="w-full sm:w-auto">
-                    <Lucide icon="Plus" className="w-4 h-4 mr-2" />
-                    Nuovo metodo
+            {/* Segreti in chiaro */}
+            {inChiaro > 0 && (
+              <Alert
+                variant="soft-warning"
+                icona="ShieldAlert"
+                titolo={inChiaro === 1 ? "1 segreto è salvato in chiaro" : `${inChiaro} segreti sono salvati in chiaro`}
+              >
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <span>
+                    Funzionano già, ma vanno cifrati con la chiave dell'installazione (FICO_SECRET). Se FICO_SECRET cambia, i segreti cifrati andranno reinseriti.
+                  </span>
+                  <Button variant="primary" size="sm" loading={migra.isPending} disabled={occupato} onClick={() => migra.mutate(true)} className="flex-none">
+                    {!migra.isPending && <Lucide icon="Lock" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />}
+                    Cifra segreti in chiaro
                   </Button>
                 </div>
-                {providers.length > 0 && (
-                  <div className="relative">
-                    <Lucide icon="Search" className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                    <input
-                      type="text"
-                      value={ricerca}
-                      onChange={(e) => setRicerca(e.target.value)}
-                      placeholder="Cerca per nome o codice..."
-                      aria-label="Cerca metodi di accesso"
-                      className="h-8 pl-8 pr-3 rounded-md border border-slate-200 bg-white text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary w-full sm:w-52"
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+              </Alert>
+            )}
 
-          {/* Segreti in chiaro */}
-          {inChiaro > 0 && (
-            <div className="box box--stacked flex flex-col gap-3 border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center">
-              <div className="flex items-start gap-3 flex-1">
-                <Lucide icon="ShieldAlert" className="w-5 h-5 shrink-0 mt-0.5 text-amber-600" />
-                <div className="text-sm">
-                  <div className="font-medium text-amber-700">
-                    {inChiaro === 1 ? "1 segreto è salvato in chiaro" : `${inChiaro} segreti sono salvati in chiaro`}
-                  </div>
-                  <div className="mt-0.5 text-amber-700/80">
-                    Funzionano già, ma vanno cifrati con la chiave dell'installazione (FICO_SECRET). Se FICO_SECRET cambia, i segreti cifrati andranno reinseriti.
-                  </div>
+            <Sezione
+              titolo="Metodi configurati"
+              descrizione="L'ordine è quello della pagina di login. I segreti restano sul server, cifrati, e non vengono mai mostrati."
+            >
+              {providers.length > 0 && (
+                <BarraFiltri
+                  variante="interna"
+                  destra={
+                    !riordinabile ? (
+                      <span className="text-xs text-slate-400">Per riordinare, mostra tutti i metodi senza ricerca.</span>
+                    ) : undefined
+                  }
+                >
+                  <CampoRicerca
+                    etichetta="Cerca metodi di accesso"
+                    placeholder="Cerca per nome o codice..."
+                    value={ricerca}
+                    onChange={setRicerca}
+                  />
+                  <Segmenti
+                    etichetta="Mostra"
+                    opzioni={OPZIONI_FILTRO}
+                    valore={filtro}
+                    onChange={setFiltro}
+                  />
+                </BarraFiltri>
+              )}
+
+              {isLoading ? (
+                <div className="flex justify-center py-10">
+                  <Spinner etichetta="Caricamento metodi di accesso..." />
                 </div>
-              </div>
-              <Button variant="primary" loading={migra.isPending} disabled={occupato} onClick={() => migra.mutate(true)} className="w-full sm:w-auto">
-                <Lucide icon="Lock" className="w-4 h-4 mr-2" />
-                Cifra segreti in chiaro
-              </Button>
-            </div>
-          )}
-
-          {/* Filtri */}
-          {providers.length > 0 && (
-            <div className="box box--stacked px-5 py-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide mr-1">Mostra:</span>
-                {FILTRI_METODI.map((pillola) => (
-                  <button
-                    key={pillola.value}
-                    type="button"
-                    onClick={() => setFiltro(pillola.value)}
-                    className={clsx(
-                      "inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium transition",
-                      filtro === pillola.value
-                        ? "bg-primary border-primary text-white"
-                        : "bg-white border-slate-200 text-slate-600 hover:border-primary/40 hover:text-primary"
-                    )}
-                  >
-                    {pillola.label}
-                  </button>
-                ))}
-                {!riordinabile && (
-                  <span className="ml-auto text-xs text-slate-400">Per riordinare, mostra tutti i metodi senza ricerca.</span>
-                )}
-              </div>
-            </div>
-          )}
-
-          {isLoading ? (
-            <div role="status" className="box box--stacked p-10 flex items-center justify-center gap-3 text-slate-500">
-              <Spinner decorativo />
-              Caricamento metodi di accesso...
-            </div>
-          ) : isError ? (
-            <PageError
-              compatta
-              titolo="Metodi di accesso non caricati"
-              motivo={messaggioErrore(error, "Impossibile caricare i metodi di accesso")}
-              onRiprova={() => refetch()}
-            />
-          ) : providers.length === 0 ? (
-            <div className="box box--stacked p-6">
-              <EmptyState
-                icon="KeyRound"
-                title="Nessun metodo di accesso"
-                description="Crea il primo metodo con cui gli utenti entreranno in Fidelity."
-                buttonText="Nuovo metodo"
-                buttonIcon="Plus"
-                onButtonClick={() => setDialogo({})}
-              />
-            </div>
-          ) : filtrati.length === 0 ? (
-            <div className="box box--stacked p-6">
-              <EmptyState
-                icon="SearchX"
-                title="Nessun risultato"
-                description="Nessun metodo corrisponde alla ricerca o al filtro selezionato."
-                buttonText="Azzera filtri"
-                onButtonClick={azzeraFiltri}
-              />
-            </div>
-          ) : (
-            filtrati.map((provider) => (
-              <MetodoCard
-                key={provider.id}
-                provider={provider}
-                primo={ids[0] === provider.id}
-                ultimo={ids[ids.length - 1] === provider.id}
-                occupato={occupato}
-                riordinabile={riordinabile}
-                onSposta={(direzione) => riordina.mutate(spostaMetodo(ids, provider.id, direzione))}
-                onCambiaStato={() => setConferma({ tipo: "stato", provider })}
-                onProva={() => avviaVerifica(provider)}
-                onModifica={() => setDialogo({ provider })}
-                onElimina={() => setConferma({ tipo: "elimina", provider })}
-              />
-            ))
-          )}
-        </div>
-      )}
+              ) : isError ? (
+                <PageError
+                  compatta
+                  titolo="Metodi di accesso non caricati"
+                  motivo={messaggioErrore(error, "Impossibile caricare i metodi di accesso")}
+                  onRiprova={() => refetch()}
+                />
+              ) : providers.length === 0 ? (
+                <EmptyState
+                  compatta
+                  icon="KeyRound"
+                  title="Nessun metodo di accesso"
+                  description="Crea il primo metodo con cui gli utenti entreranno in Fidelity."
+                  buttonText="Nuovo metodo"
+                  buttonIcon="Plus"
+                  onButtonClick={() => setDialogo({})}
+                />
+              ) : filtrati.length === 0 ? (
+                <EmptyState
+                  compatta
+                  icon="SearchX"
+                  title="Nessun risultato"
+                  description="Nessun metodo corrisponde alla ricerca o al filtro selezionato."
+                  buttonText="Azzera filtri"
+                  buttonIcon="X"
+                  onButtonClick={azzeraFiltri}
+                />
+              ) : (
+                <div className="flex flex-col gap-4">
+                  {filtrati.map((provider) => (
+                    <MetodoCard
+                      key={provider.id}
+                      provider={provider}
+                      primo={ids[0] === provider.id}
+                      ultimo={ids[ids.length - 1] === provider.id}
+                      occupato={occupato}
+                      riordinabile={riordinabile}
+                      onSposta={(direzione) => riordina.mutate(spostaMetodo(ids, provider.id, direzione))}
+                      onCambiaStato={() => setConferma({ tipo: "stato", provider })}
+                      onProva={() => avviaVerifica(provider)}
+                      onModifica={() => setDialogo({ provider })}
+                      onElimina={() => setConferma({ tipo: "elimina", provider })}
+                    />
+                  ))}
+                </div>
+              )}
+            </Sezione>
+          </>
+        )}
+      </Pagina>
 
       <MetodoFormDialog
         open={dialogo !== null}
@@ -361,10 +343,10 @@ function GestioneMetodiAccesso() {
             <>
               <strong>{conferma.provider.nome}</strong> sparirà dalla pagina di login e nessuno potrà più entrare con questo metodo.
               {conferma.provider.tipo === "internal" && (
-                <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                <Alert variant="soft-warning" icona="TriangleAlert" className="mt-3 text-xs">
                   Verifica prima che un altro metodo funzioni. In caso di blocco si riattiva con
                   <code className="font-mono"> yarn auth:segreti --riattiva-email-password</code>.
-                </div>
+                </Alert>
               )}
             </>
           ) : (

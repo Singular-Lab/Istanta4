@@ -1,4 +1,3 @@
-import IstantaLogo from "@/assets/images/logo_ext.png";
 import Alert from "@/components/Base/Alert";
 import Button from "@/components/Base/Button";
 import { FormField } from "@/components/Base/Form";
@@ -14,7 +13,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import * as yup from "yup";
 import { ServerCall } from "../../../lib/server_call";
 import CampoPassword from "../HubLogin/components/CampoPassword";
-import HubBackground from "../HubLogin/components/HubBackground";
+import CardAccesso from "../HubLogin/components/CardAccesso";
 
 // Schema di validazione
 const resetSchema = yup.object({
@@ -105,8 +104,7 @@ const ResetPassword: React.FC = () => {
   // Token non valido o mancante
   if (!ctx || tokenError || !tokenData?.valid) {
     return (
-      <CardAccesso>
-        <h1 className="title-page text-center text-slate-800 mb-6">Link non valido</h1>
+      <CardAccesso titolo="Link non valido">
         <PageError
           compatta
           titolo="Impossibile reimpostare la password"
@@ -162,8 +160,7 @@ const ResetPassword: React.FC = () => {
 
   // Form di reset password
   return (
-    <CardAccesso>
-      <h1 className="title-page text-center text-slate-800 mb-6">Reimposta Password</h1>
+    <CardAccesso titolo="Reimposta Password">
 
       {/* Saluto utente */}
       <div className="p-4 bg-slate-50/80 rounded-control border border-slate-200">
@@ -177,9 +174,8 @@ const ResetPassword: React.FC = () => {
 
       {/* Errore generale */}
       {resetMutation.error && (
-        <Alert variant="soft-danger" className="flex items-center gap-2 px-4 py-3 mt-4">
-          <Lucide icon="CircleAlert" aria-hidden="true" className="w-5 h-5 shrink-0" />
-          <span className="text-sm">{(resetMutation.error as any)?.message || "Errore durante il reset della password"}</span>
+        <Alert variant="soft-danger" icona="CircleAlert" className="mt-4 text-sm">
+          {(resetMutation.error as any)?.message || "Errore durante il reset della password"}
         </Alert>
       )}
 
@@ -229,26 +225,5 @@ const ResetPassword: React.FC = () => {
     </CardAccesso>
   );
 };
-
-// Stesso layout di HubLogin e RecuperoPassword: sfondo animato e card in vetro con il logo
-const CardAccesso: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <>
-    <HubBackground />
-    <div className="relative min-h-screen flex items-center justify-center px-4 py-10 sm:px-6">
-      <div className="w-full max-w-[460px]">
-        {/* Card glassmorphism: sullo sfondo a gradiente l'ombra standard della card non la stacca */}
-        <div className="backdrop-blur-xl bg-white/75 border border-white/30 rounded-card shadow-2xl p-8 sm:p-10">
-          <div className="flex justify-center mb-6">
-            <img src={IstantaLogo} alt="Istanta 2 GDO Suite" className="h-12 sm:h-14" />
-          </div>
-          {children}
-          <div className="text-center mt-8 text-xs text-slate-400">
-            Powered by Singular Lab
-          </div>
-        </div>
-      </div>
-    </div>
-  </>
-);
 
 export default ResetPassword;

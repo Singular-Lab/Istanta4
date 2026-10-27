@@ -23,6 +23,7 @@ import {
 } from 'react-leaflet';
 import {
     Await,
+    useAsyncError,
     useLoaderData,
     useNavigate,
     useSearchParams
@@ -39,7 +40,13 @@ import { Dialog } from '../../components/Base/Headless';
 import Litepicker from '../../components/Base/Litepicker';
 import Lucide from '../../components/Base/Lucide';
 import PageError from '../../components/Base/PageError';
-import PageHeader from '../../components/Base/PageHeader';
+import Badge from '../../components/Base/Badge';
+import CampoRicerca from '../../components/Base/CampoRicerca';
+import Pagina from '../../components/Base/Pagina';
+import Segmenti from '../../components/Base/Segmenti';
+import Sezione from '../../components/Base/Sezione';
+import Skeleton from '../../components/Base/Skeleton';
+import Spinner from '../../components/Base/Spinner';
 import StatusBadge from '../../components/Base/StatusBadge';
 import Table from '../../components/Base/Table';
 import EmptyState from '../../components/EmptyState';
@@ -47,6 +54,7 @@ import { PermissionGate } from '@/components/PermissionGate';
 import withSessionCheck from '../../components/SessionChecker';
 import { PERMISSIONS } from '@/constants/permissions';
 import { useNotification } from '@/context/NotificationContext';
+import { formatNumero } from '@/utils/format';
 
 dayjs.extend(customParseFormat);
 
@@ -164,37 +172,37 @@ const getCategoryConfig = (category?: string) => {
         case 'MARKETING':
             return {
                 label: 'Marketing',
-                className: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300',
+                variant: 'success' as const,
                 icon: 'TrendingUp' as const,
             };
         case 'UTILITY':
             return {
                 label: 'Utility',
-                className: 'bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-300',
+                variant: 'info' as const,
                 icon: 'Wrench' as const,
             };
         case 'AUTHENTICATION':
             return {
                 label: 'Autenticazione',
-                className: 'bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300',
+                variant: 'primary' as const,
                 icon: 'Shield' as const,
             };
         case 'TRANSACTIONAL':
             return {
                 label: 'Transazionale',
-                className: 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300',
+                variant: 'warning' as const,
                 icon: 'ShoppingCart' as const,
             };
         case 'SERVICE':
             return {
                 label: 'Servizio',
-                className: 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300',
+                variant: 'secondary' as const,
                 icon: 'Headphones' as const,
             };
         default:
             return {
                 label: category ?? 'N/A',
-                className: 'bg-slate-50 text-slate-700 dark:bg-darkmode-400/40 dark:text-slate-300',
+                variant: 'secondary' as const,
                 icon: 'Tag' as const,
             };
     }
@@ -277,69 +285,69 @@ const getButtonsInfo = (template: GDOWhatsappTemplateAttributes) => {
 // Skeleton / loader specifici per ogni contenuto
 
 const TemplatesListSkeleton: FC = () => (
-    <div className="flex flex-col box box--stacked">
-        <div className="p-5 border-b border-dashed">
-            <div className="h-9 bg-slate-100 dark:bg-darkmode-700 rounded animate-pulse" />
+    <div className="box box--stacked flex flex-col">
+        <div className="border-b border-dashed border-slate-200 p-5">
+            <Skeleton className="h-9 rounded-control" />
         </div>
-        <div className="px-5 py-3 bg-slate-50 dark:bg-darkmode-800/50 border-b border-dashed">
-            <div className="h-4 w-40 bg-slate-100 dark:bg-darkmode-700 rounded animate-pulse" />
-        </div>
-        <div className="p-5 space-y-3">
+        <div className="flex flex-col gap-3 p-5">
             {Array.from({ length: 4 }).map((_, i) => (
-                <div
-                    key={i}
-                    className="h-16 bg-slate-50 dark:bg-darkmode-700 rounded-md animate-pulse"
-                />
+                <Skeleton key={i} className="h-16 rounded-control" />
             ))}
         </div>
     </div>
 );
 
 const TemplatePreviewSkeleton: FC = () => (
-    <div className="box box--stacked p-5 space-y-4">
-        <div className="h-5 w-40 bg-slate-100 dark:bg-darkmode-700 rounded animate-pulse" />
-        <div className="h-64 bg-slate-50 dark:bg-darkmode-700 rounded-lg animate-pulse" />
-        <div className="h-10 bg-slate-100 dark:bg-darkmode-700 rounded animate-pulse" />
+    <div className="box box--stacked flex flex-col gap-4 p-5">
+        <Skeleton className="h-5 w-40" />
+        <Skeleton className="h-64 rounded-card" />
+        <Skeleton className="h-10 rounded-control" />
     </div>
 );
 
 const DestinatariSkeleton: FC = () => (
-    <div className="border border-dashed rounded-lg p-4 animate-pulse">
-        <div className="h-4 w-24 bg-slate-100 dark:bg-darkmode-700 rounded mb-3" />
-        <div className="h-6 w-32 bg-slate-100 dark:bg-darkmode-700 rounded mb-2" />
-        <div className="h-5 w-24 bg-slate-100 dark:bg-darkmode-700 rounded mb-2" />
-        <div className="h-4 w-40 bg-slate-100 dark:bg-darkmode-700 rounded" />
+    <div className="flex flex-col gap-2 rounded-card border border-slate-200 p-4">
+        <Skeleton className="h-4 w-24" />
+        <Skeleton className="h-6 w-32" />
+        <Skeleton className="h-5 w-24" />
+        <Skeleton className="h-4 w-40" />
     </div>
 );
 
-const MapSkeleton: FC = () => (
-    <div className="h-96 rounded-lg overflow-hidden border border-slate-200 dark:border-darkmode-500">
-        <div className="w-full h-full bg-slate-100 dark:bg-darkmode-700 animate-pulse" />
-    </div>
-);
+const MapSkeleton: FC = () => <Skeleton className="h-96 rounded-card" />;
 
 const SummarySkeleton: FC = () => (
-    <div className="p-5 space-y-4">
-        <div className="grid md:grid-cols-2 gap-4">
-            <div className="border border-dashed rounded-lg p-4 animate-pulse">
-                <div className="h-4 w-32 bg-slate-100 dark:bg-darkmode-700 rounded mb-2" />
-                <div className="h-5 w-40 bg-slate-100 dark:bg-darkmode-700 rounded mb-2" />
-                <div className="h-4 w-32 bg-slate-100 dark:bg-darkmode-700 rounded mb-2" />
-                <div className="h-5 w-24 bg-slate-100 dark:bg-darkmode-700 rounded" />
+    <div className="flex flex-col gap-4 p-5">
+        <div className="grid gap-4 md:grid-cols-2">
+            <div className="flex flex-col gap-2 rounded-card border border-slate-200 p-4">
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-5 w-40" />
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-5 w-24" />
             </div>
             <DestinatariSkeleton />
         </div>
-        <div className="border border-dashed rounded-lg p-4 animate-pulse h-32" />
-        <div className="border border-dashed rounded-lg p-4 animate-pulse h-40" />
-        <div className="border border-dashed rounded-lg p-4 animate-pulse h-72" />
+        <Skeleton className="h-32 rounded-card" />
+        <Skeleton className="h-40 rounded-card" />
+        <Skeleton className="h-72 rounded-card" />
     </div>
 );
 
 const MessagePreviewSkeleton: FC = () => (
-    <div className="p-5 bg-slate-50 dark:bg-darkmode-800/50">
-        <div className="bg-white dark:bg-darkmode-600 rounded-lg shadow-md overflow-hidden max-w-sm mx-auto animate-pulse h-72" />
+    <div className="bg-slate-50 p-5">
+        <Skeleton className="mx-auto h-72 max-w-sm rounded-card" />
     </div>
 );
+
+/** Errore del caricamento differito dei template (o dei punti vendita), al posto del contenuto. */
+const ErroreCaricamento: FC<{ titolo: string }> = ({ titolo }) => {
+    const errore = useAsyncError() as { message?: string } | undefined;
+    return (
+        <div className="p-5">
+            <PageError compatta titolo={titolo} motivo={errore?.message || "Non è stato possibile caricare i dati."} />
+        </div>
+    );
+};
 
 const InvioCampagnaWhatsapp: FC = () => {
     const { templatesWhatsappPromise, getPuntiLatLonPVPromise } =
@@ -791,18 +799,16 @@ const InvioCampagnaWhatsapp: FC = () => {
 
     return (
         <Fragment>
-            <Dialog open={dialogPartenzaCampagna} onClose={() => setDialogPartenzaCampagna(false)} size="md">
-                <Dialog.Panel className="w-full max-w-2xl mx-auto">
-                    <Dialog.Title className="font-semibold text-lg">
-                        Conferma Avvio Campagna WhatsApp
-                    </Dialog.Title>
-                    <Dialog.Description className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+            <Dialog open={dialogPartenzaCampagna} onClose={() => setDialogPartenzaCampagna(false)} size="lg">
+                <Dialog.Panel>
+                    <Dialog.Title>Conferma avvio campagna WhatsApp</Dialog.Title>
+                    <Dialog.Description className="text-sm text-slate-600">
                         Verifica i dettagli della campagna prima di procedere con l'invio. <strong className="text-danger">Questa azione non potrà essere annullata.</strong>
 
                         {/* Campo titolo campagna */}
                         <div className="mt-4">
-                            <FormLabel htmlFor="titolo-campagna" className="font-medium text-slate-700 dark:text-slate-300">
-                                Titolo Campagna *
+                            <FormLabel htmlFor="titolo-campagna">
+                                Titolo campagna <span aria-hidden="true" className="text-danger">*</span>
                             </FormLabel>
                             <FormInput
                                 id="titolo-campagna"
@@ -816,19 +822,19 @@ const InvioCampagnaWhatsapp: FC = () => {
                         </div>
 
                         {utentiGuestData && (
-                            <div className="mt-4 border border-slate-200 dark:border-darkmode-500 rounded-lg p-4">
+                            <div className="mt-4 rounded-card border border-slate-200 p-4">
                                 <div className="flex items-center justify-between mb-3">
                                     <span className="text-sm font-medium text-slate-600 dark:text-slate-400">
                                         Destinatari che riceveranno il messaggio
                                     </span>
-                                    <span className="text-2xl font-bold text-primary">
-                                        {utentiGuestData.count.toLocaleString('it-IT')}
+                                    <span className="text-2xl font-semibold tabular-nums text-primary">
+                                        {formatNumero(utentiGuestData.count)}
                                     </span>
                                 </div>
                                 <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
-                                    <span>Totale: {utentiGuestData.total.toLocaleString('it-IT')}</span>
+                                    <span>Totale: {formatNumero(utentiGuestData.total)}</span>
                                     <span>•</span>
-                                    <span>Esclusi: {utentiGuestData.missing.toLocaleString('it-IT')}</span>
+                                    <span>Esclusi: {formatNumero(utentiGuestData.missing)}</span>
                                 </div>
                             </div>
                         )}
@@ -851,9 +857,9 @@ const InvioCampagnaWhatsapp: FC = () => {
 
                     {/* Filtri applicati */}
 
-                    <Dialog.Footer className="mt-5 flex justify-end gap-3">
+                    <Dialog.Footer>
                         <Button
-                            variant="secondary"
+                            variant="outline-secondary"
                             onClick={() => setDialogPartenzaCampagna(false)}
                             disabled={isStartingCampaign}
                         >
@@ -887,10 +893,10 @@ const InvioCampagnaWhatsapp: FC = () => {
                     </Dialog.Footer>
                 </Dialog.Panel>
             </Dialog>
-            <PageHeader
-                title="Invio Campagna WhatsApp"
-                description="Seleziona un template e conferma i destinatari prima di avviare la campagna."
-            />
+            <Pagina
+                titolo="Invio Campagna WhatsApp"
+                descrizione="Seleziona un template e conferma i destinatari prima di avviare la campagna."
+            >
 
             <AnimatePresence mode="wait">
                 {step === 1 ? (
@@ -900,12 +906,12 @@ const InvioCampagnaWhatsapp: FC = () => {
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: -40 }}
                         transition={{ duration: 0.25, ease: 'easeInOut' }}
-                        className="mt-3.5 grid grid-cols-12 gap-5"
+                        className="grid grid-cols-12 gap-6"
                     >
                         {/* LISTA TEMPLATE (STEP 1) */}
                         <div className="col-span-12 lg:col-span-7 xl:col-span-8">
                             <Suspense fallback={<TemplatesListSkeleton />}>
-                                <Await resolve={templatesWhatsappPromise}>
+                                <Await resolve={templatesWhatsappPromise} errorElement={<ErroreCaricamento titolo="Template non caricati" />}>
                                     {(templates: (GDOWhatsappTemplateAttributes & { has_preset: boolean })[]) => {
                                         const filteredTemplates = templates.filter((template) =>
                                             template.nome_template_gdowhatsapptemplate
@@ -919,20 +925,20 @@ const InvioCampagnaWhatsapp: FC = () => {
                                         return (
                                             <div className="flex flex-col box box--stacked">
                                                 {/* Ricerca */}
-                                                <div className="p-5 border-b border-dashed">
-                                                    <FormInput
-                                                        type="text"
-                                                        placeholder="Cerca template per nome..."
+                                                <div className="border-b border-dashed border-slate-200 p-5">
+                                                    <CampoRicerca
+                                                        etichetta="Cerca template"
+                                                        placeholder="Cerca template per nome"
                                                         value={searchQuery}
-                                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                                        onChange={setSearchQuery}
                                                         className="w-full"
                                                     />
                                                 </div>
 
                                                 {/* Contatore risultati */}
-                                                <div className="px-5 py-3 bg-slate-50 dark:bg-darkmode-800/50 border-b border-dashed">
+                                                <div className="border-b border-dashed border-slate-200 px-5 py-3">
                                                     <div className="flex items-center justify-between text-xs">
-                                                        <span className="text-slate-600 dark:text-slate-400">
+                                                        <span className="text-slate-500">
                                                             {templatesWithPreset.length} template disponibili
                                                             {templatesWithoutPreset.length > 0 &&
                                                                 ` • ${templatesWithoutPreset.length} non configurati`}
@@ -946,13 +952,24 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                 {/* Lista */}
                                                 <div className="overflow-x-auto">
                                                     {filteredTemplates.length === 0 ? (
-                                                        <div className="p-10 text-center">
-                                                            <Lucide
-                                                                icon="Search"
-                                                                className="w-12 h-12 mx-auto mb-3 text-slate-300"
+                                                        templates.length > 0 ? (
+                                                            <EmptyState
+                                                                compatta
+                                                                icon="SearchX"
+                                                                title="Nessun risultato"
+                                                                description="Nessun template corrisponde alla ricerca."
+                                                                buttonText="Azzera ricerca"
+                                                                buttonIcon="X"
+                                                                onButtonClick={() => setSearchQuery('')}
                                                             />
-                                                            <p className="text-slate-500">Nessun template trovato</p>
-                                                        </div>
+                                                        ) : (
+                                                            <EmptyState
+                                                                compatta
+                                                                icon="MessageSquare"
+                                                                title="Nessun template"
+                                                                description="Non ci sono template WhatsApp da usare per una campagna."
+                                                            />
+                                                        )
                                                     ) : (
                                                         <Table className="w-full">
                                                             <Table.Tbody>
@@ -1003,33 +1020,22 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                                                     <div className="flex-1 min-w-0">
                                                                                         <div className="flex items-start justify-between gap-3 mb-2">
                                                                                             <div className="flex-1">
-                                                                                                <h3 className="title-card dark:text-slate-100 mb-1.5">
+                                                                                                <h3 className="title-card mb-1.5">
                                                                                                     {
                                                                                                         template.nome_template_gdowhatsapptemplate
                                                                                                     }
                                                                                                 </h3>
                                                                                                 <div className="flex flex-wrap items-center gap-2">
                                                                                                     {langCode && (
-                                                                                                        <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-3xs font-medium uppercase tracking-wider dark:bg-darkmode-400/40">
-                                                                                                            <Lucide
-                                                                                                                icon="Globe"
-                                                                                                                className="w-3 h-3"
-                                                                                                            />
-                                                                                                            {langCode}
-                                                                                                        </span>
+                                                                                                        <Badge variant="secondary" size="sm">
+                                                                                                            <Lucide icon="Globe" aria-hidden="true" className="h-3 w-3" />
+                                                                                                            {langCode.toUpperCase()}
+                                                                                                        </Badge>
                                                                                                     )}
-                                                                                                    <span
-                                                                                                        className={clsx(
-                                                                                                            'inline-flex items-center gap-1 rounded-md px-2 py-1 text-3xs font-medium',
-                                                                                                            categoryMeta.className,
-                                                                                                        )}
-                                                                                                    >
-                                                                                                        <Lucide
-                                                                                                            icon={categoryMeta.icon}
-                                                                                                            className="w-3 h-3"
-                                                                                                        />
+                                                                                                    <Badge variant={categoryMeta.variant} size="sm">
+                                                                                                        <Lucide icon={categoryMeta.icon} aria-hidden="true" className="h-3 w-3" />
                                                                                                         {categoryMeta.label}
-                                                                                                    </span>
+                                                                                                    </Badge>
                                                                                                     <StatusBadge
                                                                                                         dominio="waTemplate"
                                                                                                         stato={template.stato_meta_gdowhatsapptemplate}
@@ -1078,41 +1084,24 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                                                         <div className="flex items-start justify-between gap-3 mb-2">
                                                                                             <div className="flex-1">
                                                                                                 <div className="flex items-center gap-2 mb-1.5">
-                                                                                                    <h3 className="title-card text-slate-600 dark:text-slate-400">
+                                                                                                    <h3 className="title-card text-slate-500">
                                                                                                         {
                                                                                                             template.nome_template_gdowhatsapptemplate
                                                                                                         }
                                                                                                     </h3>
-                                                                                                    <span className="inline-flex items-center gap-1 rounded-md bg-warning/10 text-warning px-2 py-0.5 text-3xs font-semibold uppercase tracking-wider">
-                                                                                                        <Lucide
-                                                                                                            icon="CircleAlert"
-                                                                                                            className="w-3 h-3"
-                                                                                                        />
-                                                                                                        Non configurato
-                                                                                                    </span>
+                                                                                                    <StatusBadge tono="warning" etichetta="Non configurato" icon="CircleAlert" />
                                                                                                 </div>
                                                                                                 <div className="flex flex-wrap items-center gap-2">
                                                                                                     {langCode && (
-                                                                                                        <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-3xs font-medium uppercase tracking-wider dark:bg-darkmode-400/40">
-                                                                                                            <Lucide
-                                                                                                                icon="Globe"
-                                                                                                                className="w-3 h-3"
-                                                                                                            />
-                                                                                                            {langCode}
-                                                                                                        </span>
+                                                                                                        <Badge variant="secondary" size="sm">
+                                                                                                            <Lucide icon="Globe" aria-hidden="true" className="h-3 w-3" />
+                                                                                                            {langCode.toUpperCase()}
+                                                                                                        </Badge>
                                                                                                     )}
-                                                                                                    <span
-                                                                                                        className={clsx(
-                                                                                                            'inline-flex items-center gap-1 rounded-md px-2 py-1 text-3xs font-medium',
-                                                                                                            categoryMeta.className,
-                                                                                                        )}
-                                                                                                    >
-                                                                                                        <Lucide
-                                                                                                            icon={categoryMeta.icon}
-                                                                                                            className="w-3 h-3"
-                                                                                                        />
+                                                                                                    <Badge variant={categoryMeta.variant} size="sm">
+                                                                                                        <Lucide icon={categoryMeta.icon} aria-hidden="true" className="h-3 w-3" />
                                                                                                         {categoryMeta.label}
-                                                                                                    </span>
+                                                                                                    </Badge>
                                                                                                     <StatusBadge
                                                                                                         dominio="waTemplate"
                                                                                                         stato={template.stato_meta_gdowhatsapptemplate}
@@ -1145,7 +1134,7 @@ const InvioCampagnaWhatsapp: FC = () => {
                         <div className="col-span-12 lg:col-span-5 xl:col-span-4">
                             <div className="sticky top-5">
                                 <Suspense fallback={<TemplatePreviewSkeleton />}>
-                                    <Await resolve={templatesWhatsappPromise}>
+                                    <Await resolve={templatesWhatsappPromise} errorElement={<ErroreCaricamento titolo="Template non caricati" />}>
                                         {(templates: (GDOWhatsappTemplateAttributes & { has_preset: boolean })[]) => {
                                             const selectedTemplateData = templates.find(
                                                 (t) => t.id_gdowhatsapptemplate === selectedTemplate,
@@ -1153,27 +1142,22 @@ const InvioCampagnaWhatsapp: FC = () => {
 
                                             if (!selectedTemplateData) {
                                                 return (
-                                                    <div className="box box--stacked p-10 text-center">
-                                                        <Lucide
+                                                    <Sezione>
+                                                        <EmptyState
+                                                            compatta
                                                             icon="MessageSquare"
-                                                            className="w-16 h-16 mx-auto mb-4 text-slate-300"
+                                                            title="Seleziona un template"
+                                                            description="Scegli un template dalla lista per visualizzare l'anteprima e poi passare al riepilogo."
                                                         />
-                                                        <h3 className="title-section mb-2">
-                                                            Seleziona un Template
-                                                        </h3>
-                                                        <p className="text-sm text-slate-500">
-                                                            Scegli un template dalla lista per visualizzare l'anteprima e poi
-                                                            passare al riepilogo.
-                                                        </p>
-                                                    </div>
+                                                    </Sezione>
                                                 );
                                             }
 
                                             return (
                                                 <div className="flex flex-col box box--stacked">
-                                                    <div className="p-5 border-b border-dashed">
-                                                        <h3 className="title-section mb-1">Anteprima Template</h3>
-                                                        <p className="text-xs text-slate-500">
+                                                    <div className="border-b border-dashed border-slate-200 p-5">
+                                                        <h2 className="title-section">Anteprima Template</h2>
+                                                        <p className="text-sm text-slate-500">
                                                             Verifica rapidamente il contenuto del messaggio.
                                                         </p>
                                                     </div>
@@ -1315,28 +1299,28 @@ const InvioCampagnaWhatsapp: FC = () => {
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: -40 }}
                         transition={{ duration: 0.25, ease: 'easeInOut' }}
-                        className="mt-3.5 grid grid-cols-12 gap-5"
+                        className="grid grid-cols-12 gap-6"
                     >
                         {/* RIEPILOGO (STEP 2) */}
 
 
                         <div className="col-span-12 xl:col-span-7">
                             <div className="flex flex-col box box--stacked">
-                                <div className="p-5 border-b border-dashed flex items-center justify-between">
+                                <div className="flex items-center justify-between gap-3 border-b border-dashed border-slate-200 p-5">
                                     <div>
-                                        <h3 className="title-section mb-1">Riepilogo campagna</h3>
-                                        <p className="text-xs text-slate-500">
+                                        <h2 className="title-section">Riepilogo campagna</h2>
+                                        <p className="text-sm text-slate-500">
                                             Controlla i destinatari prima di avviare l'invio.
                                         </p>
                                     </div>
-                                    <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary px-3 py-1 text-xs font-medium">
-                                        <Lucide icon="ListChecks" className="w-4 h-4" />
-                                        Step 2 di 2
-                                    </span>
+                                    <Badge variant="primary">
+                                        <Lucide icon="ListChecks" aria-hidden="true" className="h-3.5 w-3.5" />
+                                        Passo 2 di 2
+                                    </Badge>
                                 </div>
 
                                 <Suspense fallback={<SummarySkeleton />}>
-                                    <Await resolve={templatesWhatsappPromise}>
+                                    <Await resolve={templatesWhatsappPromise} errorElement={<ErroreCaricamento titolo="Template non caricati" />}>
                                         {(templates: (GDOWhatsappTemplateAttributes & { has_preset: boolean })[]) => {
                                             const selectedTemplateData = templates.find(
                                                 (t) => t.id_gdowhatsapptemplate === selectedTemplate,
@@ -1346,12 +1330,12 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                 return (
                                                     <div className="p-5">
                                                         <EmptyState
+                                                            compatta
                                                             title="Nessun template selezionato"
                                                             description="Seleziona un template per visualizzarne l'anteprima."
                                                             icon="MonitorX"
-                                                            buttonText="Torna Indietro"
+                                                            buttonText="Torna indietro"
                                                             buttonIcon="ArrowLeft"
-                                                            iconColor="w-10 h-10 text-danger"
                                                             onButtonClick={handleBackToSelection}
                                                         />
                                                     </div>
@@ -1359,30 +1343,16 @@ const InvioCampagnaWhatsapp: FC = () => {
                                             }
                                             if (selectedTemplateData.has_preset == false) {
                                                 return (
-                                                    <div className="col-span-12">
-                                                        <div className="box box--stacked p-10 text-center">
-                                                            <Lucide
-                                                                icon="TriangleAlert"
-                                                                className="w-16 h-16 mx-auto mb-4 text-warning"
-                                                            />
-                                                            <h3 className="title-section mb-2">
-                                                                Template senza preset configurato
-                                                            </h3>
-                                                            <p className="text-sm text-slate-500">
-                                                                Il template selezionato non ha un preset configurato e non può essere
-                                                                utilizzato per l'invio della campagna. Torna indietro e seleziona un altro
-                                                                template.
-                                                            </p>
-                                                            <Button
-                                                                className="mt-4"
-                                                                variant="secondary"
-                                                                onClick={handleBackToSelection}
-                                                            >
-                                                                <Lucide icon="ArrowLeft" className="w-4 h-4 mr-2" />
-                                                                Torna Indietro
-                                                            </Button>
-                                                        </div>
-                                                    </div>
+                                                    <EmptyState
+                                                        compatta
+                                                        icon="TriangleAlert"
+                                                        iconColor="text-warning"
+                                                        title="Template senza preset configurato"
+                                                        description="Il template selezionato non ha un preset configurato e non può essere utilizzato per l'invio della campagna. Torna indietro e seleziona un altro template."
+                                                        buttonText="Torna indietro"
+                                                        buttonIcon="ArrowLeft"
+                                                        onButtonClick={handleBackToSelection}
+                                                    />
                                                 )
                                             }
 
@@ -1398,8 +1368,8 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                 <div className="p-5 space-y-5">
                                                     {/* Info preset + destinatari */}
                                                     <div className="grid md:grid-cols-2 gap-4">
-                                                        <div className="border border-dashed rounded-lg p-4">
-                                                            <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
+                                                        <div className="rounded-card border border-slate-200 p-4">
+                                                            <h4 className="title-eyebrow mb-2">
                                                                 Template selezionato
                                                             </h4>
                                                             <p className="font-semibold text-sm mb-1">
@@ -1418,33 +1388,33 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                         {isLoadingUtentiGuest ? (
                                                             <DestinatariSkeleton />
                                                         ) : utentiGuestData ? (
-                                                            <div className="border border-dashed rounded-lg p-4">
-                                                                <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
+                                                            <div className="rounded-card border border-slate-200 p-4">
+                                                                <h4 className="title-eyebrow mb-2">
                                                                     Destinatari
                                                                 </h4>
                                                                 <div className="flex items-end gap-3 mb-3">
                                                                     <div>
-                                                                        <p className="text-2xl font-semibold text-slate-800 dark:text-slate-100">
-                                                                            {utentiGuestData.count.toLocaleString('it-IT')}
+                                                                        <p className="text-2xl font-semibold tabular-nums text-slate-800">
+                                                                            {formatNumero(utentiGuestData.count)}
                                                                         </p>
-                                                                        <p className="text-2xs uppercase tracking-wide text-emerald-600 dark:text-emerald-400 font-semibold">
+                                                                        <p className="title-eyebrow text-success">
                                                                             verranno raggiunti
                                                                         </p>
                                                                     </div>
                                                                     <div className="h-10 w-px bg-slate-200 dark:bg-darkmode-500" />
                                                                     <div>
-                                                                        <p className="text-lg font-semibold text-slate-600 dark:text-slate-300">
-                                                                            {utentiGuestData.missing}
+                                                                        <p className="text-lg font-semibold tabular-nums text-slate-600">
+                                                                            {formatNumero(utentiGuestData.missing)}
                                                                         </p>
-                                                                        <p className="text-2xs uppercase tracking-wide text-slate-500">
+                                                                        <p className="title-eyebrow">
                                                                             esclusi dal target
                                                                         </p>
                                                                     </div>
                                                                 </div>
                                                                 <p className="text-2xs text-slate-500">
                                                                     Totale contatti nel segmento:{' '}
-                                                                    <span className="font-semibold text-slate-700 dark:text-slate-200">
-                                                                        {utentiGuestData.total.toLocaleString('it-IT')}
+                                                                    <span className="font-semibold tabular-nums text-slate-700">
+                                                                        {formatNumero(utentiGuestData.total)}
                                                                     </span>
                                                                 </p>
                                                             </div>
@@ -1459,10 +1429,10 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                     </div>
 
                                                     {/* FILTRO CAMPI UTENTE (con range date) */}
-                                                    <div className="border border-dashed rounded-lg p-4 space-y-4">
+                                                    <div className="flex flex-col gap-4 rounded-card border border-slate-200 p-4">
                                                         <div className="flex items-center justify-between mb-1">
                                                             <div>
-                                                                <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                                                <h4 className="title-eyebrow">
                                                                     Filtro per campi utente
                                                                 </h4>
                                                                 <p className="text-2xs text-slate-500">
@@ -1471,18 +1441,18 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                             </div>
 
                                                             {(sessoUtenteGuest || dateRange) && (
-                                                                <div className="inline-flex flex-wrap items-center gap-1 rounded-full bg-slate-50 px-2 py-[2px] border border-slate-200">
+                                                                <div className="inline-flex flex-wrap items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5">
                                                                     <span className="text-3xs font-medium text-slate-600">
                                                                         Filtri attivi:
                                                                     </span>
                                                                     {sessoUtenteGuest && (
-                                                                        <span className="text-3xs font-semibold text-sky-600">
+                                                                        <span className="text-3xs font-semibold text-info">
                                                                             sesso:{' '}
                                                                             {Object.entries(UTENTE_GENERE).find(([_, v]) => v === sessoUtenteGuest)?.[1]?.toLocaleLowerCase('it-IT') ?? sessoUtenteGuest}
                                                                         </span>
                                                                     )}
                                                                     {dateRange && (
-                                                                        <span className="text-3xs font-semibold text-emerald-600">
+                                                                        <span className="text-3xs font-semibold text-success">
                                                                             date: {dateRange}
                                                                         </span>
                                                                     )}
@@ -1494,7 +1464,7 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                             <div>
                                                                 <FormLabel
                                                                     htmlFor="sessoUtenteGuest"
-                                                                    className="text-2xs font-medium uppercase tracking-wide text-slate-500 mb-1"
+                                                                    className="title-eyebrow mb-1"
                                                                 >
                                                                     Sesso utente
                                                                 </FormLabel>
@@ -1548,10 +1518,10 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                     </div>
 
                                                     {/* Filtro zona chiamate */}
-                                                    <div className="border border-dashed rounded-lg p-4">
+                                                    <div className="rounded-card border border-slate-200 p-4">
                                                         <div className="flex items-center justify-between mb-3">
                                                             <div>
-                                                                <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                                                <h4 className="title-eyebrow">
                                                                     Filtro zona chiamate
                                                                 </h4>
                                                                 <p className="text-2xs text-slate-500">
@@ -1567,47 +1537,19 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                             </FormCheck>
                                                         </div>
 
-                                                        {/* Toggle modalità */}
-                                                        <div className="mb-3 flex items-center gap-2 text-2xs">
+                                                        {/* Modalità del filtro geografico */}
+                                                        <div className="mb-3 flex items-center gap-2 text-xs">
                                                             <span className="text-slate-500">Modalità:</span>
-                                                            <div className="inline-flex rounded-full bg-slate-100 p-1 dark:bg-darkmode-700">
-                                                                <button
-                                                                    type="button"
-                                                                    className={clsx(
-                                                                        'px-3 py-1 rounded-full transition text-xs',
-                                                                        callFilterMode === 'circle'
-                                                                            ? 'bg-white shadow text-slate-800 dark:bg-darkmode-600 dark:text-slate-100'
-                                                                            : 'text-slate-500 dark:text-slate-300',
-                                                                    )}
-                                                                    onClick={() => setCallFilterMode('circle')}
-                                                                >
-                                                                    Cerchio
-                                                                </button>
-                                                                <button
-                                                                    type="button"
-                                                                    className={clsx(
-                                                                        'px-3 py-1 rounded-full transition text-xs',
-                                                                        callFilterMode === 'comuni'
-                                                                            ? 'bg-white shadow text-slate-800 dark:bg-darkmode-600 dark:text-slate-100'
-                                                                            : 'text-slate-500 dark:text-slate-300',
-                                                                    )}
-                                                                    onClick={() => setCallFilterMode('comuni')}
-                                                                >
-                                                                    Comuni (Overpass)
-                                                                </button>
-                                                                <button
-                                                                    type="button"
-                                                                    className={clsx(
-                                                                        'px-3 py-1 rounded-full transition text-xs',
-                                                                        callFilterMode === 'regioni'
-                                                                            ? 'bg-white shadow text-slate-800 dark:bg-darkmode-600 dark:text-slate-100'
-                                                                            : 'text-slate-500 dark:text-slate-300',
-                                                                    )}
-                                                                    onClick={() => setCallFilterMode('regioni')}
-                                                                >
-                                                                    Regioni (Overpass)
-                                                                </button>
-                                                            </div>
+                                                            <Segmenti
+                                                                etichetta="Modalità del filtro geografico"
+                                                                valore={callFilterMode}
+                                                                onChange={setCallFilterMode}
+                                                                opzioni={[
+                                                                    { valore: 'circle', etichetta: 'Cerchio' },
+                                                                    { valore: 'comuni', etichetta: 'Comuni (Overpass)' },
+                                                                    { valore: 'regioni', etichetta: 'Regioni (Overpass)' },
+                                                                ]}
+                                                            />
                                                         </div>
 
                                                         {comuniError && callFilterMode !== 'circle' && (
@@ -1623,15 +1565,13 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                             {/* Mappa con loader dedicato per i punti PV */}
                                                             {callFilterEnabled && (
                                                                 <Suspense fallback={<MapSkeleton />}>
-                                                                    <Await resolve={getPuntiLatLonPVPromise}>
+                                                                    <Await resolve={getPuntiLatLonPVPromise} errorElement={<ErroreCaricamento titolo="Punti vendita non caricati" />}>
                                                                         {(puntiLatLonPV) => (
-                                                                            <div className="h-96 rounded-lg overflow-hidden border border-slate-200 dark:border-darkmode-500 relative">
+                                                                            <div className="relative h-96 overflow-hidden rounded-card border border-slate-200">
                                                                                 {(isLoadingComuneGeometry || isSearchingComuni) &&
                                                                                     callFilterMode !== 'circle' && (
-                                                                                        <div className="absolute inset-0 flex items-center justify-center bg-white/60 dark:bg-darkmode-800/60 z-[500]">
-                                                                                            <div className="text-xs text-slate-600 dark:text-slate-300">
-                                                                                                Caricamento dati area...
-                                                                                            </div>
+                                                                                        <div className="absolute inset-0 z-[500] flex items-center justify-center bg-white/60">
+                                                                                            <Spinner etichetta="Caricamento dati area…" />
                                                                                         </div>
                                                                                     )}
 
@@ -1735,9 +1675,9 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                                 <div>
                                                                     {callFilterMode === 'circle' ? (
                                                                         <>
-                                                                            <label className="block text-2xs font-medium uppercase tracking-wide text-slate-500 mb-1">
+                                                                            <p className="title-eyebrow mb-1">
                                                                                 Raggio zona (km)
-                                                                            </label>
+                                                                            </p>
                                                                             <FormInput
                                                                                 type="number"
                                                                                 min={1}
@@ -1753,9 +1693,9 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                                         </>
                                                                     ) : (
                                                                         <>
-                                                                            <label className="block text-2xs font-medium uppercase tracking-wide text-slate-500 mb-1">
+                                                                            <p className="title-eyebrow mb-1">
                                                                                 {callFilterMode === 'regioni' ? 'Regione' : 'Comune'}
-                                                                            </label>
+                                                                            </p>
                                                                             <div className="flex gap-2 mb-2">
                                                                                 <FormInput
                                                                                     type="text"
@@ -1775,8 +1715,9 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                                                     <Lucide icon="Search" aria-hidden="true" className="w-4 h-4" />
                                                                                 </Button>
                                                                             </div>
-                                                                            <select
-                                                                                className="w-full border-slate-200 rounded-md text-xs px-2 py-1.5 bg-white dark:bg-darkmode-700 dark:border-darkmode-500"
+                                                                            <FormSelect
+                                                                                formSelectSize="sm"
+                                                                                aria-label={callFilterMode === 'regioni' ? 'Regione' : 'Comune'}
                                                                                 value={selectedComuneId ?? ''}
                                                                                 onChange={(e) => handleSelectComune(e.target.value)}
                                                                             >
@@ -1787,7 +1728,7 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                                                         {opt.province ? ` (${opt.province})` : ''}
                                                                                     </option>
                                                                                 ))}
-                                                                            </select>
+                                                                            </FormSelect>
                                                                             <p className="mt-1 text-2xs text-slate-500">
                                                                                 La campagna raggiungerà solo i contatti {callFilterMode === 'regioni' ? 'della regione selezionata' : 'del comune selezionato'}.
                                                                             </p>
@@ -1829,7 +1770,7 @@ const InvioCampagnaWhatsapp: FC = () => {
                         </div>
                         {/* Mockup + invio test + conferma */}
                         <Suspense fallback={<MessagePreviewSkeleton />}>
-                            <Await resolve={templatesWhatsappPromise}>
+                            <Await resolve={templatesWhatsappPromise} errorElement={<ErroreCaricamento titolo="Template non caricati" />}>
                                 {(templates: (GDOWhatsappTemplateAttributes & { has_preset: boolean })[]) => {
                                     const selectedTemplateData = templates.find(
                                         (t) => t.id_gdowhatsapptemplate === selectedTemplate,
@@ -1842,15 +1783,15 @@ const InvioCampagnaWhatsapp: FC = () => {
                                         <div className="col-span-12 xl:col-span-5">
                                             <div className="flex flex-col box box--stacked">
                                                 {/* Mockup WhatsApp riepilogo */}
-                                                <div className="p-5 border-b border-dashed">
-                                                    <h3 className="title-section mb-1">Anteprima messaggio</h3>
-                                                    <p className="text-xs text-slate-500">
+                                                <div className="border-b border-dashed border-slate-200 p-5">
+                                                    <h2 className="title-section">Anteprima messaggio</h2>
+                                                    <p className="text-sm text-slate-500">
                                                         Così apparirà al cliente su WhatsApp.
                                                     </p>
                                                 </div>
 
                                                 <Suspense fallback={<MessagePreviewSkeleton />}>
-                                                    <Await resolve={templatesWhatsappPromise}>
+                                                    <Await resolve={templatesWhatsappPromise} errorElement={<ErroreCaricamento titolo="Template non caricati" />}>
                                                         {(templates: (GDOWhatsappTemplateAttributes & { has_preset: boolean })[]) => {
                                                             const selectedTemplateData = templates.find(
                                                                 (t) => t.id_gdowhatsapptemplate === selectedTemplate,
@@ -1967,19 +1908,19 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                 </Suspense>
 
                                                 {/* Invio test + azioni finali */}
-                                                <Suspense fallback={<div className="p-5 border-t bg-slate-50 dark:bg-darkmode-800/50 h-32 animate-pulse" />}>
-                                                    <Await resolve={templatesWhatsappPromise}>
+                                                <Suspense fallback={<div className="border-t border-slate-200 p-5"><Skeleton className="h-32 rounded-card" /></div>}>
+                                                    <Await resolve={templatesWhatsappPromise} errorElement={<ErroreCaricamento titolo="Template non caricati" />}>
                                                         {(templates: (GDOWhatsappTemplateAttributes & { has_preset: boolean })[]) => {
                                                             const selectedTemplateData = templates.find(
                                                                 (t) => t.id_gdowhatsapptemplate === selectedTemplate,
                                                             );
 
                                                             return (
-                                                                <div className="p-5 border-t bg-slate-50 dark:bg-darkmode-800/50 space-y-5 w-full">
+                                                                <div className="flex w-full flex-col gap-5 border-t border-slate-200 p-5">
                                                                     <div className={clsx(selectedTemplateData?.has_preset == false && "opacity-20")}>
-                                                                        <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                                                                        <h3 className="title-eyebrow">
                                                                             Invio messaggio di test
-                                                                        </label>
+                                                                        </h3>
                                                                         <div className="mt-2 flex flex-col sm:flex-row gap-2">
                                                                             <FormSelect
                                                                                 formSelectSize="sm"
@@ -1992,7 +1933,7 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                                             </FormSelect>
                                                                             <Button
                                                                                 type="button"
-                                                                                variant="outline-primary"
+                                                                                variant="outline-secondary"
                                                                                 loading={isSendingTest}
                                                                                 disabled={!idUtente || isSendingTest || !selectedTemplateData || selectedTemplateData.has_preset == false}
                                                                                 onClick={() => handleSendTest(selectedTemplateData)}
@@ -2010,11 +1951,11 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                                     <div className="flex flex-col sm:flex-row gap-2">
                                                                         <Button
                                                                             type="button"
-                                                                            variant="secondary"
+                                                                            variant="outline-secondary"
                                                                             className="flex-1"
                                                                             onClick={handleBackToSelection}
                                                                         >
-                                                                            <Lucide icon="ChevronLeft" className="w-4 h-4 mr-2" />
+                                                                            <Lucide icon="ChevronLeft" aria-hidden="true" className="mr-2 h-4 w-4" />
                                                                             Torna alla selezione
                                                                         </Button>
                                                                         <Button
@@ -2027,7 +1968,7 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                                             }
                                                                             onClick={() => setDialogPartenzaCampagna(true)}
                                                                         >
-                                                                            <Lucide icon="CircleCheck" className="w-4 h-4 mr-2" />
+                                                                            <Lucide icon="CircleCheck" aria-hidden="true" className="mr-2 h-4 w-4" />
                                                                             Conferma e avvia campagna
                                                                         </Button>
                                                                     </div>
@@ -2045,6 +1986,7 @@ const InvioCampagnaWhatsapp: FC = () => {
                     </motion.div>
                 )}
             </AnimatePresence>
+            </Pagina>
         </Fragment>
     );
 };

@@ -5,7 +5,7 @@ import { formatDataOraEstesa } from "@/utils/format";
 import clsx from "clsx";
 import { FC } from "react";
 import { Link } from "react-router-dom";
-import { STATO_PROMO } from "../../../../lib/enums";
+import { STATO_LAVORAZIONE_KIT_RUNTIME, STATO_PROMO } from "../../../../lib/enums";
 import { getStateConfig } from "../config/stateConfig";
 import { HeroBannerProps } from "../types";
 
@@ -24,10 +24,11 @@ const HeroBanner: FC<HeroBannerProps> = ({
   productionDuration,
   isTimerLive,
   primaryAction,
-  secondaryActions
+  secondaryActions,
+  aspetto,
+  data,
 }) => {
-  const config = getStateConfig(stato);
-  const { hero } = config;
+  const hero = aspetto ?? getStateConfig(stato ?? STATO_LAVORAZIONE_KIT_RUNTIME.IN_LAVORAZIONE).hero;
 
   const isPromoFinalState = (promoState?: STATO_PROMO | null) =>
     promoState === STATO_PROMO.VALIDA ||
@@ -40,7 +41,7 @@ const HeroBanner: FC<HeroBannerProps> = ({
 
   return (
     <div className={clsx(
-      "relative overflow-hidden rounded-2xl p-8",
+      "relative overflow-hidden rounded-card p-6 sm:p-8",
       `bg-gradient-to-br ${hero.gradient}`
     )}>
       {/* Background Pattern */}
@@ -54,25 +55,29 @@ const HeroBanner: FC<HeroBannerProps> = ({
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           {/* Left Side - Icon and Info */}
           <div className="flex items-center gap-5">
-            <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-sm">
-              <Lucide icon={hero.icon} className="h-10 w-10 text-white" />
+            <div aria-hidden="true" className="flex h-16 w-16 flex-none items-center justify-center rounded-card bg-white/20 backdrop-blur-sm sm:h-20 sm:w-20">
+              <Lucide icon={hero.icon} className="h-8 w-8 text-white sm:h-10 sm:w-10" />
             </div>
             <div>
-              <h2 className="title-page text-white mb-1">
+              <h1 className="title-page mb-1 text-white">
                 {lavorazione.titolo}
-              </h2>
+              </h1>
               <p className="text-white/80 text-sm">
                 {hero.subtitle}
               </p>
               <div className="flex items-center gap-2 mt-2 flex-wrap">
-                <StatusBadge dominio="kitRuntime" stato={stato} />
+                {stato ? (
+                  <StatusBadge dominio="kitRuntime" stato={stato} />
+                ) : (
+                  <StatusBadge tono="neutral" etichetta="Non avviato" />
+                )}
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/20 text-white text-xs font-medium">
                   <Lucide icon="Calendar" aria-hidden="true" className="h-3 w-3" />
-                  {formatDataOraEstesa(lavorazione.updatedAt || lavorazione.createdAt)}
+                  {formatDataOraEstesa(data ?? (lavorazione.updatedAt || lavorazione.createdAt))}
                 </span>
                 {productionDuration && (
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/20 text-white text-xs font-medium">
-                    <Lucide icon="Clock" className="h-3 w-3" />
+                    <Lucide icon="Clock" aria-hidden="true" className="h-3 w-3" />
                     Tempo: {productionDuration}
                     {isTimerLive && (
                       <span className="relative flex h-2 w-2 ml-1">
@@ -97,7 +102,7 @@ const HeroBanner: FC<HeroBannerProps> = ({
                 className="bg-white/10 border-white/30 text-white hover:bg-white/20"
               >
                 <Lucide icon="ArrowLeft" aria-hidden="true" className="h-4 w-4 mr-2" />
-                Vai alla Promozione
+                Vai alla promozione
               </Button>
             )}
 

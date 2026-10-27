@@ -165,7 +165,7 @@ const GrigliaReferenze: React.FC<GrigliaReferenzeProps> = ({
                     <div className="space-y-6">
                         {localContent.filtersNew.map((filterGroup : any, groupIndex : number) => (
                             <Fragment key={groupIndex}>
-                                <div className="p-4 border rounded-md shadow-sm">
+                                <div className="p-4 border rounded-control shadow-sm">
                                     <h4 className="font-bold mb-4">Gruppo Filtri {groupIndex + 1}</h4>
                                     <div className="space-y-3">
                                         {filterGroup?.map((filter:any, filterIndex:number) => (
@@ -243,7 +243,7 @@ const GrigliaReferenze: React.FC<GrigliaReferenzeProps> = ({
                                                     </Button>
                                                 </FormInline>
                                                 {filterIndex < filterGroup.length - 1 && (
-                                                    <span className="font-bold text-gray-500 mt-2">AND</span>
+                                                    <span className="font-bold text-slate-500 mt-2">AND</span>
                                                 )}
                                             </div>
                                         ))}
@@ -279,7 +279,7 @@ const GrigliaReferenze: React.FC<GrigliaReferenzeProps> = ({
                                     </div>
                                 </div>
                                 {groupIndex < (localContent.filtersNew ?? []).length - 1 && (
-                                    <div className="text-center font-bold text-gray-500 mt-4">OR</div>
+                                    <div className="text-center font-bold text-slate-500 mt-4">OR</div>
                                 )}
                             </Fragment>
                         ))}

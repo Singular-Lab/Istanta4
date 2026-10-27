@@ -53,23 +53,6 @@ html {
     .firma {
         font-family: theme("fontFamily.allura");
     }
-
-    /* Dimensioni imposte ai titoli che non usano ancora le classi .title-*:
-       le pagine passano alle classi lotto per lotto, poi questa regola sparisce */
-    h1:not([class*="title-"]) {
-        font-size: 1.875rem !important;
-        line-height: 2.25rem !important;
-    }
-
-    h2:not([class*="title-"]) {
-        font-size: 1.5rem !important;
-        line-height: 2rem !important;
-    }
-
-    h3:not([class*="title-"]) {
-        font-size: 1.25rem !important;
-        line-height: 1.75rem !important;
-    }
 }
 
 /* Titoli: titolo di pagina, di sezione, di card o finestra */
@@ -98,5 +81,16 @@ html {
         font-weight: 600;
         letter-spacing: 0;
         color: theme("colors.slate.800");
+    }
+
+    /* Etichetta piccola in maiuscolo sopra un valore o un gruppo (KPI, intestazioni di colonna) */
+    .title-eyebrow {
+        font-family: theme("fontFamily.urbanist");
+        font-size: theme("fontSize.2xs");
+        line-height: 1rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: theme("letterSpacing.wide");
+        color: theme("colors.slate.500");
     }
 }

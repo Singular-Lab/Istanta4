@@ -9,7 +9,7 @@ const ordine = (id: string, stato: string, data_di_conferma: string | null = "20
   ({ id: `${id}-0000-0000-0000-000000000000`, stato, data_di_conferma, nomePromo: `Promo ${id}` }) as any;
 
 const disegna = (ordini: any[], onViewDetails = vi.fn()) => {
-  render(<ODSCompletatiSection ordini={ordini} searchQuery="" onViewDetails={onViewDetails} />);
+  render(<ODSCompletatiSection ordini={ordini} searchQuery="" onSearchQueryChange={vi.fn()} onViewDetails={onViewDetails} />);
   return onViewDetails;
 };
 

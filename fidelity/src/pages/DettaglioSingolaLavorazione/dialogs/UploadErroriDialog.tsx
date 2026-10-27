@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRevalidator } from 'react-router-dom';
+import Alert from '@/components/Base/Alert';
 import Button from '@/components/Base/Button';
 import Lucide from '@/components/Base/Lucide';
 import { Dialog } from '@/components/Base/Headless';
-import LoadingIcon from '@/components/Base/LoadingIcon';
-import Badge from '@/components/Base/Badge';
+import StatusBadge from '@/components/Base/StatusBadge';
 import { LavorazioneType, StagedFile } from '../types';
 import { FileItemKit } from '../../../../lib/types';
 import { useNotification } from '@/context/NotificationContext';
@@ -90,85 +90,68 @@ const UploadErroriDialog = ({
         <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} size="xl">
             <Dialog.Panel>
                 <Dialog.Title>
-                    <div className="flex items-center">
-                        <Lucide icon="Upload" className="w-5 h-5 text-primary mr-2" />
-                        <h2 className="text-lg font-semibold text-slate-800">Carica File Corretti</h2>
-                    </div>
+                    <Lucide icon="Upload" aria-hidden="true" className="h-5 w-5 text-primary" />
+                    Carica file corretti
                 </Dialog.Title>
                 <Dialog.Description>
                     <div className="space-y-4">
-                        <div className="bg-warning/5 p-4 rounded-lg border border-warning/10">
-                            <div className="flex items-center space-x-2 mb-2">
-                                <Lucide icon="TriangleAlert" className="w-5 h-5 text-warning" />
-                                <h3 className="font-medium text-warning">File con Errori da Correggere</h3>
-                            </div>
-                            <p className="text-sm text-slate-600 mb-3">
-                                Carica i file corretti per sostituire quelli rifiutati. Dopo l'upload, il kit verrà mandato in revisione.
-                            </p>
-                        </div>
+                        <Alert variant="soft-warning" icona="TriangleAlert" titolo="File con errori da correggere">
+                            Carica i file corretti per sostituire quelli rifiutati. Dopo l&apos;upload, il kit verrà mandato in revisione.
+                        </Alert>
 
-                        <div className="space-y-3 max-h-96 overflow-y-auto">
+                        <ul className="max-h-96 space-y-3 overflow-y-auto">
                             {filesRejected.map((file: any) => {
                                 const isStagedInComponent = stagedFiles.some((sf: StagedFile) => sf.originalFile.id === file.id);
                                 const stagedFileFromComponent = stagedFiles.find((sf: StagedFile) => sf.originalFile.id === file.id);
 
                                 return (
-                                    <div key={file.id} className={`border rounded-lg p-4 bg-white ${isStagedInComponent ? 'border-primary/20 bg-primary/5' : 'border-slate-200'
-                                        }`}>
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center space-x-3">
-                                                <div className={`p-2 rounded-lg ${isStagedInComponent ? 'bg-primary/10' : 'bg-danger/10'
-                                                    }`}>
+                                    <li
+                                        key={file.id}
+                                        className={`rounded-card border p-4 ${isStagedInComponent ? 'border-primary/20 bg-primary/5' : 'border-slate-200 bg-white'}`}
+                                    >
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div className="flex min-w-0 items-center gap-3">
+                                                <div className={`rounded-control p-2 ${isStagedInComponent ? 'bg-primary/10' : 'bg-danger/10'}`}>
                                                     <Lucide
                                                         icon={isStagedInComponent ? "Clock" : "FileX"}
-                                                        className={`w-4 h-4 ${isStagedInComponent ? 'text-primary' : 'text-danger'
-                                                            }`}
+                                                        aria-hidden="true"
+                                                        className={`h-4 w-4 ${isStagedInComponent ? 'text-primary' : 'text-danger'}`}
                                                     />
                                                 </div>
-                                                <div>
-                                                    <h4 className="font-medium text-slate-800">{file.nome}</h4>
+                                                <div className="min-w-0">
+                                                    <h3 className="title-card truncate">{file.nome}</h3>
                                                     <p className="text-xs text-slate-500">
                                                         {file.rejectionReason || 'File rifiutato'}
                                                     </p>
                                                     {isStagedInComponent && (
-                                                        <p className="text-xs text-primary mt-1">
-                                                            <Lucide icon="Clock" className="w-3 h-3 mr-1 inline" />
+                                                        <p className="mt-1 text-xs text-primary">
+                                                            <Lucide icon="Clock" aria-hidden="true" className="mr-1 inline h-3 w-3" />
                                                             File in staging: {stagedFileFromComponent?.newFile.name}
                                                         </p>
                                                     )}
                                                 </div>
                                             </div>
-                                            <div className="flex items-center space-x-2">
-                                                <Badge
-                                                    variant={isStagedInComponent ? "warning" : "error"}
-                                                    size="sm"
-                                                >
-                                                    {isStagedInComponent ? "In Staging" : "Da Correggere"}
-                                                </Badge>
-                                            </div>
+                                            <StatusBadge
+                                                tono={isStagedInComponent ? "warning" : "danger"}
+                                                etichetta={isStagedInComponent ? "In staging" : "Da correggere"}
+                                            />
                                         </div>
-                                    </div>
+                                    </li>
                                 );
                             })}
-                        </div>
+                        </ul>
 
                         {stagedFiles.length > 0 && (
-                            <div className="bg-info/5 p-4 rounded-lg border border-info/10">
-                                <div className="flex items-center space-x-2 mb-2">
-                                    <Lucide icon="Info" className="w-5 h-5 text-info" />
-                                    <h3 className="font-medium text-info">Prossimo Passo</h3>
-                                </div>
-                                <p className="text-sm text-slate-600">
-                                    Hai {stagedFiles.length} file pronti per il caricamento. 
-                                    Dopo aver completato l'upload, il kit verrà mandato in revisione.
-                                </p>
-                            </div>
+                            <Alert variant="soft-info" icona="Info" titolo="Prossimo passo">
+                                Hai {stagedFiles.length} file pronti per il caricamento.
+                                Dopo aver completato l&apos;upload, il kit verrà mandato in revisione.
+                            </Alert>
                         )}
                     </div>
                 </Dialog.Description>
-                <Dialog.Footer className="flex justify-between">
+                <Dialog.Footer>
                     <Button
-                        variant="secondary"
+                        variant="outline-secondary"
                         onClick={() => setDialogOpen(false)}
                         disabled={isProcessing}
                     >
@@ -177,18 +160,16 @@ const UploadErroriDialog = ({
                     <Button
                         variant="primary"
                         onClick={handleProcessAll}
-                        disabled={!totalFilesReady || isProcessing}
+                        disabled={!totalFilesReady}
+                        loading={isProcessing}
                     >
                         {isProcessing ? (
-                            <div className="flex items-center">
-                                <LoadingIcon icon="oval" className="w-4 h-4 mr-2" />
-                                Processando...
-                            </div>
+                            'Elaborazione…'
                         ) : (
                             <>
-                                <Lucide icon="Send" className="w-4 h-4 mr-2" />
+                                <Lucide icon="Send" aria-hidden="true" className="mr-2 h-4 w-4" />
                                 {totalFilesReady ? 'Carica e manda in revisione' : 'Manda in revisione'}
-                                ({stagedFiles.length})
+                                {` (${stagedFiles.length})`}
                             </>
                         )}
                     </Button>

@@ -1,7 +1,10 @@
-import { FormLabel, FormSelect } from "@/components/Base/Form";
+import Alert from "@/components/Base/Alert";
+import Button from "@/components/Base/Button";
+import { FormInput, FormLabel, FormSelect } from "@/components/Base/Form";
 import Dialog from "@/components/Base/Headless/Dialog";
 import Lucide from "@/components/Base/Lucide";
 import PageError from "@/components/Base/PageError";
+import Spinner from "@/components/Base/Spinner";
 import withSessionCheck from "@/components/SessionChecker";
 import { useNotification } from "@/context/NotificationContext";
 import { useUser } from "@/context/UserContext";
@@ -459,9 +462,9 @@ function MenaboPromoPage() {
     const groupsListContent = (
         <>
             <div className="mb-3 flex items-center justify-between">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <h3 className="title-eyebrow">
                     Gruppi
-                </span>
+                </h3>
                 {canaleSelezionato && (
                     <span className="text-xs text-slate-400 italic">
                         trascina →
@@ -470,7 +473,10 @@ function MenaboPromoPage() {
             </div>
 
             {isLoading && (
-                <p className="text-sm text-slate-400 py-2">Caricamento…</p>
+                <div className="flex items-center gap-2 py-2 text-sm text-slate-400">
+                    <Spinner size="sm" etichetta="Caricamento dei gruppi" />
+                    Caricamento…
+                </div>
             )}
 
 
@@ -515,7 +521,7 @@ function MenaboPromoPage() {
                             aria-expanded={hasSubgroups ? isExpanded : undefined}
                             className={clsx([
                                 "group flex items-center py-2.5",
-                                "text-left w-full rounded px-1.5 transition-colors",
+                                "text-left w-full rounded-control px-1.5 transition-colors",
                                 hasAvailableRecords
                                     ? "cursor-grab active:cursor-grabbing hover:bg-slate-50 dark:hover:bg-darkmode-400"
                                     : "cursor-not-allowed opacity-40",
@@ -581,7 +587,7 @@ function MenaboPromoPage() {
                                             disabled={!hasSubgroupRecords}
                                             className={clsx([
                                                 "group flex items-center py-1.5",
-                                                "text-left w-full rounded px-1 transition-colors",
+                                                "text-left w-full rounded-control px-1 transition-colors",
                                                 hasSubgroupRecords
                                                     ? "cursor-grab active:cursor-grabbing hover:bg-slate-50 dark:hover:bg-darkmode-400"
                                                     : "cursor-not-allowed opacity-40",
@@ -631,24 +637,28 @@ function MenaboPromoPage() {
             {/* Striscia laterale quando il pannello è chiuso */}
             {!isSidebarOpen && (
                 <div className="w-8 flex-shrink-0 border-r border-slate-200/80 bg-slate-50/60 dark:border-darkmode-400 dark:bg-darkmode-700/40 flex flex-col items-center pt-3 gap-1">
-                    <button
+                    <Button
                         type="button"
+                        size="xs"
+                        variant="outline-secondary"
                         onClick={() => setIsSidebarOpen(true)}
-                        className="flex h-7 w-7 items-center justify-center rounded text-slate-400 hover:bg-white hover:text-slate-600 dark:hover:bg-darkmode-600"
+                        className="h-7 w-7 p-0"
                         title="Mostra pannello"
                         aria-label="Mostra pannello"
                     >
                         <Lucide icon="PanelLeftOpen" aria-hidden="true" className="h-3.5 w-3.5" />
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                         type="button"
+                        size="xs"
+                        variant="outline-secondary"
                         onClick={handleBackToPromo}
-                        className="flex h-7 w-7 items-center justify-center rounded text-slate-400 hover:bg-white hover:text-slate-600 dark:hover:bg-darkmode-600"
+                        className="h-7 w-7 p-0"
                         title="Torna alla promozione"
                         aria-label="Torna alla promozione"
                     >
                         <Lucide icon="ChevronLeft" aria-hidden="true" className="h-3.5 w-3.5" />
-                    </button>
+                    </Button>
                 </div>
             )}
 
@@ -657,28 +667,32 @@ function MenaboPromoPage() {
                 <div className="absolute inset-y-0 left-0 z-40 w-96 max-w-[85vw] flex-shrink-0 flex flex-col border-r border-slate-200/80 bg-white shadow-2xl dark:border-darkmode-400 dark:bg-darkmode-600 overflow-hidden lg:static lg:z-auto lg:shadow-none">
                     <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200/80 bg-slate-50/60 flex-shrink-0 dark:border-darkmode-400 dark:bg-darkmode-700/40">
                         <div>
-                            <div className="text-xs font-semibold text-slate-700 dark:text-slate-200">Contenuti</div>
+                            <h2 className="title-card dark:text-slate-200">Contenuti</h2>
                             <div className="text-xs text-slate-400">Trascina nel menabò</div>
                         </div>
                         <div className="flex items-center gap-1">
-                            <button
+                            <Button
                                 type="button"
+                                size="xs"
+                                variant="outline-secondary"
                                 onClick={handleBackToPromo}
-                                className="flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-500 dark:hover:bg-darkmode-500"
+                                className="h-7 w-7 p-0"
                                 title="Torna alla promozione"
                                 aria-label="Torna alla promozione"
                             >
                                 <Lucide icon="ChevronLeft" aria-hidden="true" className="h-3.5 w-3.5" />
-                            </button>
-                            <button
+                            </Button>
+                            <Button
                                 type="button"
+                                size="xs"
+                                variant="outline-secondary"
                                 onClick={() => setIsSidebarOpen(false)}
-                                className="flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-500 dark:hover:bg-darkmode-500"
+                                className="h-7 w-7 p-0"
                                 title="Comprimi pannello"
                                 aria-label="Comprimi pannello"
                             >
                                 <Lucide icon="PanelLeftClose" aria-hidden="true" className="h-3.5 w-3.5" />
-                            </button>
+                            </Button>
                         </div>
                     </div>
 
@@ -705,14 +719,14 @@ function MenaboPromoPage() {
 
                             {/* Riepilogo visivo: canali/aree occupati da altri (cliccabili per entrarci) */}
                             {divisioniOccupate.length > 0 && (
-                                <div className="flex flex-col gap-1 rounded border border-slate-200 bg-slate-50/60 p-2 dark:border-darkmode-400 dark:bg-darkmode-700/40">
-                                    <div className="px-0.5 text-2xs font-semibold uppercase tracking-wide text-slate-400">
+                                <div className="flex flex-col gap-1 rounded-control border border-slate-200 bg-slate-50/60 p-2 dark:border-darkmode-400 dark:bg-darkmode-700/40">
+                                    <div className="title-eyebrow px-0.5">
                                         {etichettaDivisione} in uso
                                     </div>
                                     {divisioniOccupate.map(({ r, editors }) => (
                                         <div
                                             key={r.id}
-                                            className="flex items-center justify-between gap-2 rounded px-1.5 py-1 hover:bg-slate-100 dark:hover:bg-darkmode-500"
+                                            className="flex items-center justify-between gap-2 rounded-control px-1.5 py-1 hover:bg-slate-100 dark:hover:bg-darkmode-500"
                                         >
                                             <button
                                                 type="button"
@@ -739,17 +753,20 @@ function MenaboPromoPage() {
                                                 </span>
                                             </button>
                                             {isSuperadmin && editors.some(e => e.userTipo !== TIPO_UTENTI.SUPERADMIN) && (
-                                                <button
+                                                <Button
                                                     type="button"
+                                                    size="xs"
+                                                    variant="outline-danger"
                                                     onClick={() => {
                                                         setPendingPresenceCanaleId(r.id);
                                                         setIsPresenceDialogOpen(true);
                                                     }}
-                                                    className="flex-shrink-0 rounded border border-red-200 bg-red-50 px-2 py-1 text-2xs font-semibold text-red-600 transition-colors hover:bg-red-100 dark:border-red-800/50 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40"
+                                                    className="flex-shrink-0"
                                                     title={`Rimuovi gli utenti da ${r.label}`}
+                                                    aria-label={`Rimuovi gli utenti da ${r.label}`}
                                                 >
                                                     Rimuovi
-                                                </button>
+                                                </Button>
                                             )}
                                         </div>
                                     ))}
@@ -758,9 +775,10 @@ function MenaboPromoPage() {
 
                             {/* Banner presenza: altri utenti stanno modificando questa divisione */}
                             {selectedId && (allPresences[selectedId] ?? []).filter(e => e.userId !== user?.id).map(editor => (
-                                <div
+                                <Alert
                                     key={editor.socketId}
-                                    className="flex items-center justify-between gap-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800/50 dark:bg-amber-900/20 dark:text-amber-300"
+                                    variant="soft-warning"
+                                    className="flex items-center justify-between gap-2 px-3 py-2 text-xs"
                                 >
                                     <div className="flex items-center gap-1.5 min-w-0">
                                         <span
@@ -772,36 +790,39 @@ function MenaboPromoPage() {
                                             {getInitials(editor.userName)}
                                         </span>
                                         <span className="truncate font-medium">{editor.userName}</span>
-                                        <span className="flex-shrink-0 text-amber-600 dark:text-amber-400">sta modificando</span>
+                                        <span className="flex-shrink-0">sta modificando</span>
                                     </div>
                                     {isSuperadmin && editor.userTipo !== TIPO_UTENTI.SUPERADMIN && (
-                                        <button
+                                        <Button
                                             type="button"
+                                            size="xs"
+                                            variant="outline-danger"
                                             onClick={() => kickEditor(editor.socketId)}
-                                            className="flex-shrink-0 rounded border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-medium text-red-600 hover:bg-red-100 dark:border-red-800/50 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40"
+                                            className="flex-shrink-0 bg-white dark:bg-transparent"
                                             title={`Rimuovi ${editor.userName} da ${etichettaDivisioneLow}`}
+                                            aria-label={`Rimuovi ${editor.userName} da ${etichettaDivisioneLow}`}
                                         >
                                             Rimuovi
-                                        </button>
+                                        </Button>
                                     )}
-                                </div>
+                                </Alert>
                             ))}
                         </div>
 
                         {/* Etichette libere */}
                         <div className="flex flex-col gap-y-2 border-t border-slate-200/80 pt-4 dark:border-darkmode-400">
                             <div className="flex items-center justify-between">
-                                <FormLabel className="mb-0 font-medium">Etichetta</FormLabel>
+                                <FormLabel htmlFor="menabo-etichetta" className="mb-0 font-medium">Etichetta</FormLabel>
                                 {labelText.trim() && (
                                     <span className="text-xs text-slate-400 italic">trascina →</span>
                                 )}
                             </div>
-                            <input
+                            <FormInput
+                                id="menabo-etichetta"
                                 type="text"
                                 value={labelText}
                                 onChange={e => setLabelText(e.target.value)}
                                 placeholder="Ricetta, Copertina..."
-                                className="h-9 rounded border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition-colors placeholder:text-slate-400 focus:border-primary/40 dark:border-darkmode-400 dark:bg-darkmode-700 dark:text-slate-100"
                             />
                             <div
                                 draggable={!!labelText.trim()}
@@ -810,9 +831,9 @@ function MenaboPromoPage() {
                                     onLabelDragStart(e, labelText);
                                 }}
                                 className={clsx(
-                                    "group flex items-center justify-between rounded border px-3 py-2 text-left transition-opacity",
+                                    "group flex items-center justify-between rounded-control border px-3 py-2 text-left transition-opacity",
                                     labelText.trim()
-                                        ? "cursor-grab active:cursor-grabbing border-primary/20 bg-primary/[0.06]"
+                                        ? "cursor-grab active:cursor-grabbing border-primary/20 bg-primary/5"
                                         : "cursor-not-allowed opacity-40 border-slate-200 bg-slate-50 dark:border-darkmode-400 dark:bg-darkmode-700/40",
                                 )}
                                 title={labelText.trim() ? "Trascina l'etichetta nella pagina" : "Scrivi un testo per abilitare il trascinamento"}
@@ -839,12 +860,12 @@ function MenaboPromoPage() {
                             <div
                                 draggable
                                 onDragStart={onNoteDragStart}
-                                className="group relative flex cursor-grab items-center justify-between overflow-hidden rounded-xl border border-amber-200/80 bg-gradient-to-br from-amber-50 via-white to-orange-50 px-3 py-2.5 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-amber-300 hover:shadow-md active:translate-y-0 active:cursor-grabbing dark:border-amber-500/30 dark:from-amber-950/35 dark:via-darkmode-700 dark:to-darkmode-700"
+                                className="group relative flex cursor-grab items-center justify-between overflow-hidden rounded-card border border-amber-200/80 bg-gradient-to-br from-amber-50 via-white to-orange-50 px-3 py-2.5 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-amber-300 hover:shadow-md active:translate-y-0 active:cursor-grabbing dark:border-amber-500/30 dark:from-amber-950/35 dark:via-darkmode-700 dark:to-darkmode-700"
                                 title="Trascina su una pagina per aggiungere un promemoria (non viene stampato)"
                             >
                                 <span className="absolute inset-y-2 left-0 w-1 rounded-r-full bg-amber-400/80 dark:bg-amber-300/70" />
                                 <span className="flex min-w-0 items-center gap-2 truncate pl-1 text-xs font-semibold text-slate-700 dark:text-slate-100">
-                                    <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700 ring-1 ring-amber-200/80 dark:bg-amber-500/15 dark:text-amber-200 dark:ring-amber-400/25">
+                                    <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-control bg-amber-100 text-amber-700 ring-1 ring-amber-200/80 dark:bg-amber-500/15 dark:text-amber-200 dark:ring-amber-400/25">
                                         <Lucide icon="StickyNote" className="h-3.5 w-3.5" />
                                     </span>
                                     <span className="flex min-w-0 flex-col">
@@ -884,14 +905,10 @@ function MenaboPromoPage() {
                         <p className="max-w-xl text-center text-sm leading-relaxed text-slate-500">
                             Il Menabò richiede che la promozione abbia almeno un'analisi del momento: se manca, configurala dalla pagina della promozione.
                         </p>
-                        <button
-                            type="button"
-                            onClick={handleBackToPromo}
-                            className="inline-flex items-center rounded-control border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-800 dark:border-darkmode-400 dark:bg-darkmode-600 dark:text-slate-200 dark:hover:bg-darkmode-500"
-                        >
+                        <Button type="button" variant="outline-secondary" onClick={handleBackToPromo}>
                             <Lucide icon="ChevronLeft" aria-hidden="true" className="mr-2 h-4 w-4" />
                             Torna alla promozione
-                        </button>
+                        </Button>
                     </div>
                 ) : (
                     <MenaboCanvas
@@ -917,26 +934,19 @@ function MenaboPromoPage() {
                 centered
             >
                 <Dialog.Panel>
-                    <Dialog.Title>
-                        <h2 className="mr-auto title-card dark:text-slate-100">
-                            Modifiche non salvate
-                        </h2>
-                    </Dialog.Title>
+                    <Dialog.Title>Modifiche non salvate</Dialog.Title>
                     <Dialog.Description>
                         <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-300">
                             Hai modifiche non salvate. Cambiando {etichettaDivisioneLow} le perderai.
                         </p>
                     </Dialog.Description>
                     <Dialog.Footer>
-                        <button
-                            type="button"
-                            onClick={() => setIsDirtyDialogOpen(false)}
-                            className="mr-1 w-24 rounded border border-slate-200 bg-white py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-darkmode-400 dark:bg-darkmode-800 dark:text-slate-300"
-                        >
+                        <Button type="button" variant="outline-secondary" onClick={() => setIsDirtyDialogOpen(false)}>
                             Rimani
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                             type="button"
+                            variant="danger"
                             onClick={() => {
                                 setIsDirtyDialogOpen(false);
                                 if (pendingCanaleId === null) return;
@@ -950,10 +960,9 @@ function MenaboPromoPage() {
                                     commitCanaleChange(id);
                                 }
                             }}
-                            className="w-40 rounded border border-danger/30 bg-danger/10 py-2 text-sm font-medium text-danger hover:bg-danger/20 dark:bg-danger/20"
                         >
                             Cambia senza salvare
-                        </button>
+                        </Button>
                     </Dialog.Footer>
                 </Dialog.Panel>
             </Dialog>
@@ -971,11 +980,7 @@ function MenaboPromoPage() {
                         centered
                     >
                         <Dialog.Panel>
-                            <Dialog.Title>
-                                <h2 className="mr-auto title-card dark:text-slate-100">
-                                    {etichettaDivisione} in uso
-                                </h2>
-                            </Dialog.Title>
+                            <Dialog.Title>{etichettaDivisione} in uso</Dialog.Title>
                             <Dialog.Description>
                                 <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-300">
                                     {occupiedEditors.map(e => e.userName).join(", ")}
@@ -984,38 +989,38 @@ function MenaboPromoPage() {
                                 </p>
                             </Dialog.Description>
                             <Dialog.Footer>
-                                <button
+                                <Button
                                     type="button"
+                                    variant="outline-secondary"
                                     onClick={() => { setIsPresenceDialogOpen(false); setPendingPresenceCanaleId(null); }}
-                                    className="mr-1 w-24 rounded border border-slate-200 bg-white py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-darkmode-400 dark:bg-darkmode-800 dark:text-slate-300"
                                 >
                                     Annulla
-                                </button>
+                                </Button>
                                 {isSuperadmin && removableEditors.length > 0 && (
-                                    <button
+                                    <Button
                                         type="button"
+                                        variant="outline-danger"
                                         onClick={() => {
                                             removableEditors.forEach(e => kickEditor(e.socketId));
                                             setIsPresenceDialogOpen(false);
                                             if (pendingPresenceCanaleId) commitCanaleChange(pendingPresenceCanaleId);
                                             setPendingPresenceCanaleId(null);
                                         }}
-                                        className="mr-1 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-100 dark:border-red-800/50 dark:bg-red-900/20 dark:text-red-400"
                                     >
                                         Rimuovi e entra
-                                    </button>
+                                    </Button>
                                 )}
-                                <button
+                                <Button
                                     type="button"
+                                    variant="primary"
                                     onClick={() => {
                                         setIsPresenceDialogOpen(false);
                                         if (pendingPresenceCanaleId) commitCanaleChange(pendingPresenceCanaleId);
                                         setPendingPresenceCanaleId(null);
                                     }}
-                                    className="rounded border border-primary/30 bg-primary/10 px-3 py-2 text-sm font-medium text-primary hover:bg-primary/20"
                                 >
                                     Entra comunque
-                                </button>
+                                </Button>
                             </Dialog.Footer>
                         </Dialog.Panel>
                     </Dialog>

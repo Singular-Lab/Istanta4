@@ -1,13 +1,10 @@
+import Sezione from "@/components/Base/Sezione";
 import Skeleton from "@/components/Base/Skeleton";
 import { FlyerInsights as FlyerInsightsComponent } from "@/components/FlyerInsights";
 import ReferenzeInVolantinoBox from "@/components/ReferenzeInVolantinoBox";
 import { useProductionTimer } from "@/hooks/useProductionTimer";
 import { useFetchFlyerInsights, useFetchFlyerInsightsConfig } from "@/query/query";
 import { resolveColor } from "@/utils/flyerInsightsHelpers";
-import dayjs from "dayjs";
-import "dayjs/locale/it";
-import duration from "dayjs/plugin/duration";
-import relativeTime from "dayjs/plugin/relativeTime";
 import { FC, useMemo, useState } from "react";
 import { EXPORT_DI_SISTEMA, STATO_LAVORAZIONE_KIT_RUNTIME, TIPO_LAVORAZIONE } from "../../../lib/enums";
 import { FileItemKit } from "../../../lib/types";
@@ -26,9 +23,6 @@ import {
 import { getStateConfig } from "./config/stateConfig";
 import { KitOverviewLayoutProps, RepartoGroup } from "./types";
 
-dayjs.extend(duration);
-dayjs.extend(relativeTime);
-dayjs.locale("it");
 
 /**
  * KitOverviewLayout - Layout unificato per tutti gli stati del Kit
@@ -183,14 +177,14 @@ const KitOverviewLayout: FC<KitOverviewLayoutProps> = ({
   // Loading state
   if (isLoadingFiles) {
     return (
-      <div className="space-y-6">
-        <Skeleton height="200px" className="rounded-xl" />
-        <div className="grid grid-cols-4 gap-4">
+      <div className="flex flex-col gap-6" aria-busy="true">
+        <Skeleton height="200px" className="rounded-card" />
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {[1, 2, 3, 4].map(i => (
-            <Skeleton key={i} height="100px" className="rounded-xl" />
+            <Skeleton key={i} height="72px" className="rounded-control" />
           ))}
         </div>
-        <Skeleton height="400px" className="rounded-xl" />
+        <Skeleton height="400px" className="rounded-card" />
       </div>
     );
   }
@@ -204,7 +198,7 @@ const KitOverviewLayout: FC<KitOverviewLayoutProps> = ({
     : 0;
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
       {/* Hero Banner */}
       <HeroBanner
         lavorazione={lavorazione}
@@ -214,7 +208,7 @@ const KitOverviewLayout: FC<KitOverviewLayoutProps> = ({
         primaryAction={
           stato === STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO && onDownloadZip
             ? {
-              label: "Scarica Tutto (ZIP)",
+              label: "Scarica tutto (ZIP)",
               icon: "Download",
               onClick: onDownloadZip,
               loading: isDownloading,
@@ -253,18 +247,18 @@ const KitOverviewLayout: FC<KitOverviewLayoutProps> = ({
       />
 
       {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Left Column - Main content (2/3) */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="flex min-w-0 flex-col gap-6 lg:col-span-2">
           {/* FlyerInsights - Only for VOLANTINO with VOL export */}
           {showVolantinoComponents && (flyerInsights || isLoadingInsights) && (
-            <div className="box box--stacked p-6">
+            <Sezione>
               <FlyerInsightsComponent
                 insights={flyerInsights || null}
                 isLoading={isLoadingInsights}
                 exportCodes={exportCodes}
               />
-            </div>
+            </Sezione>
           )}
 
           {/* Report import da storico: sotto gli insights, cosi le anomalie si vedono prima dei file */}
@@ -311,7 +305,7 @@ const KitOverviewLayout: FC<KitOverviewLayoutProps> = ({
         </div>
 
         {/* Right Column - Sidebar (1/3) */}
-        <div className="space-y-6">
+        <div className="flex flex-col gap-6">
           {/* Correggo Card - Only when CORREGGO export is present */}
           {hasCorreggoExport && (
             <CorreggoCard

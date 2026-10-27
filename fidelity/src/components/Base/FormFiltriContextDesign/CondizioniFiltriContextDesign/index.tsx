@@ -83,7 +83,7 @@ const CondizioniSchemaForm = forwardRef(({
                                         {...register(`${namePrefix}.${conditionIndex}.schemaScelto`, {
                                             required: "Lo schema è obbligatorio"
                                         })}
-                                        className="border-gray-300 rounded-md w-full"
+                                        className="border-slate-300 rounded-md w-full"
                                         value={currentSchema}
                                         onChange={(e) => {
                                             setValue(`${namePrefix}.${conditionIndex}.schemaScelto`, e.target.value, { shouldValidate: true });
@@ -112,7 +112,7 @@ const CondizioniSchemaForm = forwardRef(({
                                             {...register(`${namePrefix}.${conditionIndex}.colonna`, {
                                                 required: "Il nome del campo è obbligatorio",
                                             })}
-                                            className="border-gray-300 rounded-md w-full"
+                                            className="border-slate-300 rounded-md w-full"
                                             value={currentColumn}
                                             onChange={(e) => {
                                                 setValue(`${namePrefix}.${conditionIndex}.colonna`, e.target.value, { shouldValidate: true });
@@ -127,7 +127,7 @@ const CondizioniSchemaForm = forwardRef(({
                                             ))}
                                         </FormSelect>
                                     ) : (
-                                        <span className="text-gray-500">Nessuna colonna disponibile</span>
+                                        <span className="text-slate-500">Nessuna colonna disponibile</span>
                                     )}
                                     {errors && (errors[namePrefix] as any)?.[conditionIndex]?.colonna && (
                                         <span className="text-red-500">
@@ -140,7 +140,7 @@ const CondizioniSchemaForm = forwardRef(({
                                         {...register(`${namePrefix}.${conditionIndex}.operatore`, {
                                             required: "L'operatore è obbligatorio"
                                         })}
-                                        className="border-gray-300 rounded-md w-full"
+                                        className="border-slate-300 rounded-md w-full"
                                         value={currentOperatore}
                                         onChange={(e) => setValue(`${namePrefix}.${conditionIndex}.operatore`, e.target.value, { shouldValidate: true })}
                                     >
@@ -164,7 +164,7 @@ const CondizioniSchemaForm = forwardRef(({
                                             {...register(`${namePrefix}.${conditionIndex}.valore`, {
                                                 required: "Il nome del campo è obbligatorio",
                                             })}
-                                            className="border-gray-300 rounded-md w-full"
+                                            className="border-slate-300 rounded-md w-full"
                                             value={currentValue}
                                             onChange={(e) => setValue(`${namePrefix}.${conditionIndex}.valore`, e.target.value, { shouldValidate: true })}
                                         >
@@ -181,7 +181,7 @@ const CondizioniSchemaForm = forwardRef(({
                                                 required: "Il nome del campo è obbligatorio",
                                             })}
                                             placeholder="Valore"
-                                            className="border-gray-300 rounded-md w-full"
+                                            className="border-slate-300 rounded-md w-full"
                                         />
                                     )}
                                     {errors && (errors[namePrefix] as any)?.[conditionIndex]?.valore && (

@@ -1,4 +1,9 @@
-import { FC, useCallback, useEffect, useRef, useState } from "react";
+import { FC, useCallback, useEffect, useId, useRef, useState } from "react";
+import BarraFiltri from "@/components/Base/BarraFiltri";
+import Button from "@/components/Base/Button";
+import CampoRicerca from "@/components/Base/CampoRicerca";
+import FormInput from "@/components/Base/Form/FormInput";
+import FormSelect from "@/components/Base/Form/FormSelect";
 import Lucide from "@/components/Base/Lucide";
 import type { AuditLogFilters as FiltersType } from "@/query/query";
 
@@ -17,6 +22,8 @@ const AuditLogFilters: FC<AuditLogFiltersProps> = ({
   eventTypes,
   severities,
 }) => {
+  const idDal = useId();
+  const idAl = useId();
   const [searchInput, setSearchInput] = useState(filters.searchTerm ?? "");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -37,11 +44,6 @@ const AuditLogFilters: FC<AuditLogFiltersProps> = ({
     };
   }, []);
 
-  const selectClass =
-    "h-9 px-3 pr-8 rounded-md border border-slate-200 bg-white text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-theme-1/30 focus:border-theme-1 appearance-none cursor-pointer";
-  const inputClass =
-    "h-9 px-3 rounded-md border border-slate-200 bg-white text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-theme-1/30 focus:border-theme-1";
-
   const hasActiveFilters =
     filters.eventType ||
     filters.severity ||
@@ -51,129 +53,92 @@ const AuditLogFilters: FC<AuditLogFiltersProps> = ({
     filters.dateTo;
 
   return (
-    <div className="flex flex-wrap items-end gap-3">
-      {/* Ricerca */}
-      <div className="flex flex-col gap-1">
-        <label className="text-2xs font-medium text-slate-500 uppercase tracking-wider">
-          Ricerca
-        </label>
-        <div className="relative">
-          <Lucide
-            icon="Search"
-            className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"
-          />
-          <input
-            type="text"
-            placeholder="Cerca nei log..."
-            value={searchInput}
-            onChange={(e) => handleSearchChange(e.target.value)}
-            className={`${inputClass} pl-9 w-52`}
-          />
-        </div>
-      </div>
+    <BarraFiltri
+      destra={
+        hasActiveFilters ? (
+          <Button type="button" variant="outline-secondary" size="sm" onClick={onReset}>
+            <Lucide icon="X" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+            Azzera filtri
+          </Button>
+        ) : undefined
+      }
+    >
+      <CampoRicerca
+        etichetta="Cerca nei log"
+        placeholder="Cerca nei log…"
+        value={searchInput}
+        onChange={handleSearchChange}
+        className="sm:w-60"
+      />
 
-      {/* Tipo evento */}
-      <div className="flex flex-col gap-1">
-        <label className="text-2xs font-medium text-slate-500 uppercase tracking-wider">
-          Tipo evento
-        </label>
-        <select
-          value={filters.eventType ?? ""}
-          onChange={(e) =>
-            onChange({ eventType: e.target.value || undefined, page: 1 })
-          }
-          className={selectClass}
-        >
-          <option value="">Tutti</option>
-          {eventTypes.map((et) => (
-            <option key={et.value} value={et.value}>
-              {et.label}
-            </option>
-          ))}
-        </select>
-      </div>
+      <FormSelect
+        formSelectSize="sm"
+        aria-label="Tipo evento"
+        value={filters.eventType ?? ""}
+        onChange={(e) => onChange({ eventType: e.target.value || undefined, page: 1 })}
+        className="sm:w-48"
+      >
+        <option value="">Tutti i tipi di evento</option>
+        {eventTypes.map((et) => (
+          <option key={et.value} value={et.value}>
+            {et.label}
+          </option>
+        ))}
+      </FormSelect>
 
-      {/* Severita */}
-      <div className="flex flex-col gap-1">
-        <label className="text-2xs font-medium text-slate-500 uppercase tracking-wider">
-          Severita
-        </label>
-        <select
-          value={filters.severity ?? ""}
-          onChange={(e) =>
-            onChange({ severity: e.target.value || undefined, page: 1 })
-          }
-          className={selectClass}
-        >
-          <option value="">Tutte</option>
-          {severities.map((s) => (
-            <option key={s.value} value={s.value}>
-              {s.label}
-            </option>
-          ))}
-        </select>
-      </div>
+      <FormSelect
+        formSelectSize="sm"
+        aria-label="Severità"
+        value={filters.severity ?? ""}
+        onChange={(e) => onChange({ severity: e.target.value || undefined, page: 1 })}
+        className="sm:w-40"
+      >
+        <option value="">Tutte le severità</option>
+        {severities.map((s) => (
+          <option key={s.value} value={s.value}>
+            {s.label}
+          </option>
+        ))}
+      </FormSelect>
 
-      {/* Risultato */}
-      <div className="flex flex-col gap-1">
-        <label className="text-2xs font-medium text-slate-500 uppercase tracking-wider">
-          Risultato
-        </label>
-        <select
-          value={filters.result ?? ""}
-          onChange={(e) =>
-            onChange({ result: e.target.value || undefined, page: 1 })
-          }
-          className={selectClass}
-        >
-          <option value="">Tutti</option>
-          <option value="SUCCESS">Successo</option>
-          <option value="FAILURE">Fallito</option>
-          <option value="PARTIAL">Parziale</option>
-        </select>
-      </div>
+      <FormSelect
+        formSelectSize="sm"
+        aria-label="Esito"
+        value={filters.result ?? ""}
+        onChange={(e) => onChange({ result: e.target.value || undefined, page: 1 })}
+        className="sm:w-36"
+      >
+        <option value="">Tutti gli esiti</option>
+        <option value="SUCCESS">Successo</option>
+        <option value="FAILURE">Fallito</option>
+        <option value="PARTIAL">Parziale</option>
+      </FormSelect>
 
-      {/* Date range */}
-      <div className="flex flex-col gap-1">
-        <label className="text-2xs font-medium text-slate-500 uppercase tracking-wider">
-          Da
+      <div className="flex items-center gap-2">
+        <label htmlFor={idDal} className="text-sm text-slate-500">
+          Dal
         </label>
-        <input
+        <FormInput
+          id={idDal}
           type="date"
+          formInputSize="sm"
           value={filters.dateFrom ?? ""}
-          onChange={(e) =>
-            onChange({ dateFrom: e.target.value || undefined, page: 1 })
-          }
-          className={inputClass}
+          onChange={(e) => onChange({ dateFrom: e.target.value || undefined, page: 1 })}
+          className="sm:w-auto"
         />
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <label className="text-2xs font-medium text-slate-500 uppercase tracking-wider">
-          A
+        <label htmlFor={idAl} className="text-sm text-slate-500">
+          al
         </label>
-        <input
+        <FormInput
+          id={idAl}
           type="date"
+          formInputSize="sm"
           value={filters.dateTo ?? ""}
-          onChange={(e) =>
-            onChange({ dateTo: e.target.value || undefined, page: 1 })
-          }
-          className={inputClass}
+          onChange={(e) => onChange({ dateTo: e.target.value || undefined, page: 1 })}
+          className="sm:w-auto"
         />
       </div>
-
-      {/* Reset */}
-      {hasActiveFilters && (
-        <button
-          type="button"
-          onClick={onReset}
-          className="h-9 px-3 rounded-md border border-slate-200 bg-white text-sm text-slate-500 hover:bg-slate-50 flex items-center gap-1.5 transition-colors"
-        >
-          <Lucide icon="X" className="w-3.5 h-3.5" />
-          Reset
-        </button>
-      )}
-    </div>
+    </BarraFiltri>
   );
 };
 

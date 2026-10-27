@@ -1,7 +1,10 @@
 import Button from "@/components/Base/Button";
 import { FormInput, FormLabel, FormSelect } from "@/components/Base/Form";
 import Lucide from "@/components/Base/Lucide";
+import PageError from "@/components/Base/PageError";
 import Spinner from "@/components/Base/Spinner";
+import ConfirmDialog from "@/components/ConfirmDialog";
+import EmptyState from "@/components/EmptyState";
 import { useNotification } from "@/context/NotificationContext";
 import {
   useDeleteRegoleMenabo,
@@ -78,12 +81,13 @@ function PaginaRow({
   onRemove: () => void;
 }) {
   return (
-    <div className="flex items-center gap-3 p-2.5 rounded-lg bg-white border border-slate-200">
+    <div className="flex items-center gap-3 rounded-control border border-slate-200 bg-white p-2.5">
       <span className="text-xs font-medium text-slate-400 w-5 shrink-0 text-center">
         {index + 1}
       </span>
       <div className="flex-1 min-w-0">
         <FormInput
+          aria-label={`Etichetta della pagina ${index + 1}`}
           placeholder="Etichetta (opzionale)"
           value={pagina.etichetta ?? ""}
           onChange={(e) => onChange({ ...pagina, etichetta: e.target.value })}
@@ -92,6 +96,7 @@ function PaginaRow({
       <div className="w-32 shrink-0">
         <FormInput
           type="number"
+          aria-label={`Referenze massime della pagina ${index + 1}`}
           min={1}
           max={50}
           placeholder="Referenze"
@@ -142,15 +147,16 @@ function DivisioneCard({
   };
 
   return (
-    <div className="rounded-lg border border-slate-200 overflow-hidden">
+    <div className="overflow-hidden rounded-card border border-slate-200">
       {/* Header */}
       <button
         type="button"
         className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 transition-colors text-left"
         onClick={onToggle}
+        aria-expanded={expanded}
       >
         <div className="flex items-center gap-2">
-          <Lucide icon="LayoutList" className="w-4 h-4 text-slate-400" />
+          <Lucide icon="LayoutList" aria-hidden="true" className="w-4 h-4 text-slate-400" />
           <span className="text-sm font-medium text-slate-700">{d.nomeDisplay}</span>
           <span className="text-xs text-slate-400 ml-1">
             {d.pagine.length} {d.pagine.length === 1 ? "pagina" : "pagine"}
@@ -158,6 +164,7 @@ function DivisioneCard({
         </div>
         <Lucide
           icon={expanded ? "ChevronUp" : "ChevronDown"}
+          aria-hidden="true"
           className="w-4 h-4 text-slate-400 shrink-0"
         />
       </button>
@@ -166,10 +173,10 @@ function DivisioneCard({
       {expanded && (
         <div className="p-4 space-y-2 bg-slate-50/30">
           {/* Header colonne */}
-          <div className="flex items-center gap-3 px-2.5 mb-1">
+          <div aria-hidden="true" className="mb-1 flex items-center gap-3 px-2.5">
             <span className="w-5" />
-            <span className="flex-1 text-xs text-slate-400 font-medium">Etichetta pagina</span>
-            <span className="w-32 text-xs text-slate-400 font-medium">Referenze max</span>
+            <span className="title-eyebrow flex-1">Etichetta pagina</span>
+            <span className="title-eyebrow w-32">Referenze max</span>
             <span className="w-8" />
           </div>
 
@@ -187,11 +194,11 @@ function DivisioneCard({
           <Button
             type="button"
             size="sm"
-            variant="outline-primary"
+            variant="outline-secondary"
             className="mt-1"
             onClick={addPagina}
           >
-            <Lucide icon="Plus" className="w-3.5 h-3.5 mr-1" />
+            <Lucide icon="Plus" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
             Aggiungi pagina
           </Button>
         </div>
@@ -205,8 +212,20 @@ export default function PanelMenabo() {
   const { showNotification } = useNotification();
   const queryClient = useQueryClient();
 
-  const { data: regole, isLoading: isLoadingRegole } = useFetchRegoleMenabo();
-  const { data: entita, isLoading: isLoadingEntita } = useFetchAreeCanaliECombinazioni();
+  const {
+    data: regole,
+    isLoading: isLoadingRegole,
+    isError: isErrorRegole,
+    error: erroreRegole,
+    refetch: refetchRegole,
+  } = useFetchRegoleMenabo();
+  const {
+    data: entita,
+    isLoading: isLoadingEntita,
+    isError: isErrorEntita,
+    error: erroreEntita,
+    refetch: refetchEntita,
+  } = useFetchAreeCanaliECombinazioni();
   const { mutate: salva, isPending: isSaving } = useSaveRegoleMenabo();
   const { mutate: elimina, isPending: isDeleting } = useDeleteRegoleMenabo();
 
@@ -214,6 +233,7 @@ export default function PanelMenabo() {
   const [divisioni, setDivisioni] = useState<FormDivisione[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
+  const [confermaRipristino, setConfermaRipristino] = useState(false);
   const hasHydratedFromServerRef = useRef(false);
 
   const canali = useMemo(() => entita?.canali ?? [], [entita]);
@@ -269,6 +289,8 @@ export default function PanelMenabo() {
         setIsDirty(false);
       },
       onError: () => showNotification("Errore durante il ripristino", { variant: "error" }),
+      // La conferma resta aperta, col pulsante in caricamento, fino alla risposta
+      onSettled: () => setConfermaRipristino(false),
     });
   };
 
@@ -279,6 +301,20 @@ export default function PanelMenabo() {
       <div className="flex items-center justify-center py-8">
         <Spinner etichetta="Caricamento menabò…" />
       </div>
+    );
+  }
+
+  if (isErrorRegole || isErrorEntita) {
+    return (
+      <PageError
+        compatta
+        titolo="Regole menabò non caricate"
+        motivo={((erroreRegole ?? erroreEntita) as Error | null)?.message || "Non è stato possibile caricare le regole del menabò."}
+        onRiprova={() => {
+          if (isErrorRegole) refetchRegole();
+          if (isErrorEntita) refetchEntita();
+        }}
+      />
     );
   }
 
@@ -303,11 +339,14 @@ export default function PanelMenabo() {
 
       {/* Scheletro per ogni divisione */}
       <div>
-        <FormLabel>Scheletro pagine</FormLabel>
+        <h3 className="title-card mb-2">Scheletro pagine</h3>
         {divisioni.length === 0 ? (
-          <p className="text-sm text-slate-400 italic py-4">
-            Nessuna entità disponibile per il tipo di divisione selezionato.
-          </p>
+          <EmptyState
+            compatta
+            icon="LayoutList"
+            title="Nessuna entità disponibile"
+            description="Non ci sono entità per il tipo di divisione selezionato."
+          />
         ) : (
           <div className="space-y-2">
             {divisioni.map((d) => (
@@ -324,30 +363,38 @@ export default function PanelMenabo() {
       </div>
 
       {/* Azioni */}
-      <div className="flex items-center justify-between pt-2 border-t border-slate-200/80">
+      <div className="flex items-center justify-between border-t border-dashed border-slate-200 pt-5">
         <Button
           type="button"
-          variant="outline-secondary"
-          size="sm"
-          onClick={handleReset}
-          disabled={isSaving}
-          loading={isDeleting}
+          variant="outline-danger"
+          onClick={() => setConfermaRipristino(true)}
+          disabled={isSaving || isDeleting}
         >
-          {!isDeleting && <Lucide icon="RotateCcw" aria-hidden="true" className="w-4 h-4 mr-1" />}
+          <Lucide icon="RotateCcw" aria-hidden="true" className="mr-2 h-4 w-4" />
           Ripristina default
         </Button>
         <Button
           type="button"
           variant="primary"
-          size="sm"
           onClick={handleSave}
           disabled={!isDirty}
           loading={isSaving}
         >
-          {!isSaving && <Lucide icon="Save" aria-hidden="true" className="w-4 h-4 mr-1" />}
+          {!isSaving && <Lucide icon="Save" aria-hidden="true" className="mr-2 h-4 w-4" />}
           Salva
         </Button>
       </div>
+
+      {/* Il ripristino cancella le regole salvate: si chiede conferma */}
+      <ConfirmDialog
+        open={confermaRipristino}
+        title="Ripristinare le regole predefinite?"
+        description="Le regole del menabò salvate verranno eliminate e sostituite da quelle predefinite. Questa operazione non può essere annullata."
+        confirmLabel="Ripristina default"
+        loading={isDeleting}
+        onClose={() => setConfermaRipristino(false)}
+        onConfirm={handleReset}
+      />
     </div>
   );
 }

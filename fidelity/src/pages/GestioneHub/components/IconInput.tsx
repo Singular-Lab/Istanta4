@@ -61,10 +61,10 @@ const IconInput = ({ label, value, name, helperText, mostraAnteprima = true, onC
       </div>
 
       {mostraAnteprima && (
-        <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/80 p-4">
-          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Preview</div>
+        <div className="rounded-card border border-dashed border-slate-200 bg-slate-50 p-4">
+          <div className="title-eyebrow">Preview</div>
           <div className="mt-3 flex items-center gap-3">
-            <div className="w-14 h-14 rounded-xl border border-slate-200 bg-white flex items-center justify-center overflow-hidden">
+            <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-control border border-slate-200 bg-white">
               {hasImage ? (
                 <img src={value} alt="" className="w-full h-full object-contain" />
               ) : (

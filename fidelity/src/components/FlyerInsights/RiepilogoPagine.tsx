@@ -163,7 +163,7 @@ const RiepilogoPagine: FC<Props> = ({ riepilogo, selectedPage, onSelectPage, con
   return (
     <div className="p-4">
       <div className="mb-4 flex items-center justify-between">
-        <h4 className="title-card">{config.title}</h4>
+        <h3 className="title-card">{config.title}</h3>
         {selectedPage !== null && (
           <button
             type="button"
@@ -199,14 +199,14 @@ const RiepilogoPagine: FC<Props> = ({ riepilogo, selectedPage, onSelectPage, con
             aria-pressed={selectedPage === pag.pagina}
             onClick={() => onSelectPage(pag.pagina === selectedPage ? null : pag.pagina)}
             className={clsx(
-              "flex items-center gap-2 rounded-lg border p-2 text-left transition",
+              "flex items-center gap-2 rounded-control border p-2 text-left transition",
               selectedPage === pag.pagina
                 ? "border-primary bg-primary/5"
                 : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
             )}
           >
             <div className={clsx(
-              "flex h-7 w-7 items-center justify-center rounded text-xs font-bold",
+              "flex h-7 w-7 items-center justify-center rounded-control text-xs font-bold",
               selectedPage === pag.pagina
                 ? "bg-primary text-white"
                 : "bg-slate-100 text-slate-700"

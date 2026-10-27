@@ -1,8 +1,6 @@
-import Button from "@/components/Base/Button";
-import Lucide from "@/components/Base/Lucide";
+import SchermataErrore from "@/components/AppErrorFallback/SchermataErrore";
 import React, { startTransition, useEffect } from "react";
 import { useLoaderData, useNavigate } from "react-router-dom";
-import { Colorize } from "../../../lib/Colorize";
 import { AppLoaderBridge } from "../../components/AppLoaderBridge";
 
 
@@ -19,9 +17,6 @@ const Auth: React.FC = () => {
         } | null;
         errore?: string;
     };
-    useEffect(() => {
-        console.log(Colorize.bgBrightCyan("CIAO DA AUTH"));
-    }, [])
     const funzioneRedirect = (auth: {
         publicKey: string;
         route: string;
@@ -60,17 +55,15 @@ const Auth: React.FC = () => {
 
     if (!auth) {
         return (
-            <div className="min-h-screen bg-white flex flex-col items-center justify-center text-center p-4">
+            <>
                 <AppLoaderBridge />
-                <Lucide icon="CircleAlert" aria-hidden="true" className="w-16 h-16 text-danger" />
-                <h1 className="mt-4 title-page">Autenticazione fallita</h1>
-                <p className="mt-2 text-sm text-slate-500 max-w-md">
-                    {errore || "Si è verificato un errore durante l'autenticazione."}
-                </p>
-                <Button type="button" variant="primary" className="mt-6" onClick={() => navigate("/login")}>
-                    Torna al Login
-                </Button>
-            </div>
+                <SchermataErrore
+                    icona="CircleAlert"
+                    titolo="Autenticazione fallita"
+                    messaggio={errore || "Si è verificato un errore durante l'autenticazione."}
+                    azione={{ etichetta: "Torna al Login", onClick: () => navigate("/login") }}
+                />
+            </>
         );
     }
 

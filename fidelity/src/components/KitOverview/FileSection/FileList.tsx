@@ -1,5 +1,7 @@
 import Button from "@/components/Base/Button";
 import Lucide from "@/components/Base/Lucide";
+import Sezione from "@/components/Base/Sezione";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import EmptyState from "@/components/EmptyState";
 import { PermissionGate } from "@/components/PermissionGate";
 import { PreviewImmaginePdf } from "@/components/PreviewImmaginePdf";
@@ -31,7 +33,7 @@ const FileList: FC<FileListProps> = ({
   onToggleShowAll,
   onDownload,
   onDelete,
-  title = "File Pubblicati",
+  title = "File pubblicati",
   subtitle,
   showDeleteButton = false
 }) => {
@@ -40,6 +42,8 @@ const FileList: FC<FileListProps> = ({
     totalPages: number;
     initialPage: number;
   } | null>(null);
+  // L'eliminazione di un file caricato è irreversibile: passa da una conferma
+  const [fileDaEliminare, setFileDaEliminare] = useState<FileItemKit | null>(null);
 
   // Calcola statistiche file raggruppate per tipo export
   const fileStats: FileStats = useMemo(() => {
@@ -71,48 +75,32 @@ const FileList: FC<FileListProps> = ({
   const closePreview = () => setPreviewState(null);
 
   return (
-    <div className="box box--stacked p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-5">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-theme-1/10">
-            <Lucide icon="FolderOpen" className="h-5 w-5 text-theme-1" />
-          </div>
-          <div>
-            <h3 className="text-base font-semibold text-slate-800">{title}</h3>
-            <p className="text-xs text-slate-500">
-              {subtitle || `${fileStats.total} file totali`}
-            </p>
-          </div>
-        </div>
-        {fileStats.total > 3 && onToggleShowAll && (
-          <Button
-            variant="outline-secondary"
-            size="sm"
-            onClick={onToggleShowAll}
-          >
+    <Sezione
+      icona="FolderOpen"
+      titolo={title}
+      descrizione={subtitle || `${fileStats.total} file totali`}
+      azioni={
+        fileStats.total > 3 && onToggleShowAll ? (
+          <Button variant="outline-secondary" size="sm" onClick={onToggleShowAll} aria-expanded={showAllFiles}>
             {showAllFiles ? "Mostra meno" : "Mostra tutti"}
-            <Lucide
-              icon={showAllFiles ? "ChevronUp" : "ChevronDown"}
-              className="h-4 w-4 ml-1"
-            />
+            <Lucide icon={showAllFiles ? "ChevronUp" : "ChevronDown"} aria-hidden="true" className="ml-1 h-3.5 w-3.5" />
           </Button>
-        )}
-      </div>
-
+        ) : undefined
+      }
+    >
       {/* File List by Export Type */}
       <div className="space-y-4">
         {Object.entries(fileStats.byExportType).map(([exportCode, stats]) => (
-          <div key={exportCode} className="border border-slate-200 rounded-xl overflow-hidden">
+          <div key={exportCode} className="overflow-hidden rounded-card border border-slate-200">
             {/* Export Type Header */}
-            <div className="px-4 py-3 bg-slate-50/80 border-b border-slate-200 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Lucide icon="FileStack" className="h-4 w-4 text-theme-1" />
-                <span className="text-sm font-semibold text-slate-800">{exportCode}</span>
-                <span className="text-xs text-slate-500">
+            <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3">
+              <h3 className="title-card flex items-center gap-2">
+                <Lucide icon="FileStack" aria-hidden="true" className="h-4 w-4 text-slate-500" />
+                {exportCode}
+                <span className="text-xs font-normal text-slate-500">
                   ({stats.count} file, {stats.pages} pagine)
                 </span>
-              </div>
+              </h3>
             </div>
 
             {/* Files */}
@@ -123,11 +111,11 @@ const FileList: FC<FileListProps> = ({
                 return (
                   <div
                     key={`${file.id}-${idx}`}
-                    className="rounded-lg border border-slate-200 overflow-hidden"
+                    className="overflow-hidden rounded-control border border-slate-200"
                   >
-                    <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <Lucide icon="File" className="h-4 w-4 text-slate-400 shrink-0" />
+                    <div className="flex items-center justify-between bg-slate-50 px-3 py-2">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <Lucide icon="File" aria-hidden="true" className="h-4 w-4 shrink-0 text-slate-400" />
                         <span className="text-sm font-medium text-slate-700 truncate">
                           {file.nome}
                         </span>
@@ -154,7 +142,7 @@ const FileList: FC<FileListProps> = ({
                         {(file.url_download || file.url || onDownload) && (
                           <PermissionGate permission={PERMISSIONS.FILE.DOWNLOAD} mode="disable">
                             <Button
-                              variant="outline-primary"
+                              variant="outline-secondary"
                               size="sm"
                               className="px-2"
                               title="Scarica file"
@@ -183,7 +171,7 @@ const FileList: FC<FileListProps> = ({
                               className="px-2"
                               title="Elimina file"
                               aria-label="Elimina file"
-                              onClick={() => onDelete(file.id!)}
+                              onClick={() => setFileDaEliminare(file)}
                             >
                               <Lucide icon="Trash" aria-hidden="true" className="h-3.5 w-3.5" />
                             </Button>
@@ -208,6 +196,7 @@ const FileList: FC<FileListProps> = ({
         {/* Empty State */}
         {Object.keys(fileStats.byExportType).length === 0 && (
           <EmptyState
+            compatta
             icon="FileX"
             title="Nessun file"
             description="Non ci sono file disponibili per questo kit."
@@ -224,7 +213,23 @@ const FileList: FC<FileListProps> = ({
           onClose={closePreview}
         />
       )}
-    </div>
+
+      <ConfirmDialog
+        open={fileDaEliminare !== null}
+        onClose={() => setFileDaEliminare(null)}
+        onConfirm={() => {
+          if (fileDaEliminare?.id && onDelete) onDelete(fileDaEliminare.id);
+          setFileDaEliminare(null);
+        }}
+        title="Elimina file"
+        confirmLabel="Elimina"
+        description={
+          <p>
+            Il file <span className="font-semibold text-slate-800">{fileDaEliminare?.nome}</span> verrà eliminato dal kit.
+          </p>
+        }
+      />
+    </Sezione>
   );
 };
 

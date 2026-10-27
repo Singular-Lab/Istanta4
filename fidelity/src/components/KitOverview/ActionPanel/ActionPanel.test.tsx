@@ -59,3 +59,33 @@ describe("ActionPanel, rilavorazione", () => {
     expect(inerte(/^Rilavora$/)).toBe(false);
   });
 });
+
+describe("ActionPanel, aspetto", () => {
+  it("ha un titolo e durante la pubblicazione il comando è in attesa e non ripetibile", () => {
+    contesto.permessi = new Set<string>(Object.values(PERMISSIONS.KIT_RUNTIME));
+    render(
+      <ActionPanel
+        stato={STATO_LAVORAZIONE_KIT_RUNTIME.IN_REVISIONE}
+        tipoKit={TIPO_KIT_DESIGN.MANUALE}
+        lavorazione={{} as any}
+        canProceed
+        hasAccepted
+        hasRejected={false}
+        filesCount={1}
+        acceptedCount={1}
+        rejectedCount={0}
+        onStartRevision={vi.fn()}
+        onPublish={vi.fn()}
+        onRejectAndRework={vi.fn()}
+        onDelete={vi.fn()}
+        onRework={vi.fn()}
+        isProcessing
+      />
+    );
+
+    expect(screen.getByRole("heading", { name: "Azioni" })).toBeInTheDocument();
+    const pubblica = screen.getByRole("button", { name: /Pubblicazione/ });
+    expect(pubblica).toHaveAttribute("aria-busy", "true");
+    expect(pubblica).toBeDisabled();
+  });
+});

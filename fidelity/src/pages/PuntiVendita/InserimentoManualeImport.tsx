@@ -1,7 +1,9 @@
+import Alert from "@/components/Base/Alert";
 import Button from "@/components/Base/Button";
 import { FormInput, FormLabel, FormSelect } from "@/components/Base/Form";
 import { Dialog } from "@/components/Base/Headless";
 import Lucide from "@/components/Base/Lucide";
+import StatusBadge from "@/components/Base/StatusBadge";
 import clsx from "clsx";
 import "leaflet/dist/leaflet.css";
 import { useEffect, useMemo, useState } from "react";
@@ -10,7 +12,6 @@ import { ServerCall } from "../../../lib/server_call";
 import type { IndirizzoTrovatoDTO, RigaInAttesaImportDTO } from "../../../server/core/dto";
 import {
   applicaIndirizzo,
-  BADGE_PUNTEGGIO,
   canaliEAree,
   chiaveIndirizzo,
   classePunteggio,
@@ -170,9 +171,9 @@ export function InserimentoManualeImport({
     <Dialog size="xl" open onClose={onRiduci} staticBackdrop>
       <Dialog.Panel>
         <Dialog.Title>
-          <h2 className="title-card mr-auto">Inserimento manuale · riga {riga.riga}</h2>
-          <span className={clsx("px-2 py-0.5 text-2xs font-semibold rounded-full border", BADGE_PUNTEGGIO[classePunteggio(riga.punteggio)])}>
-            affidabilità {riga.punteggio}/100
+          Inserimento manuale · riga {riga.riga}
+          <span className="ml-auto">
+            <StatusBadge tono={classePunteggio(riga.punteggio)} etichetta={`affidabilità ${riga.punteggio}/100`} />
           </span>
         </Dialog.Title>
         <Dialog.Description>
@@ -229,13 +230,13 @@ export function InserimentoManualeImport({
             {campo("telefono", "Telefono")}
 
             <div className="col-span-12 flex flex-wrap items-center gap-2">
-              <Button variant="outline-primary" disabled={!dati.indirizzo.trim()} loading={ricercaInCorso} onClick={cerca}>
-                {!ricercaInCorso && <Lucide icon="Search" aria-hidden="true" className="w-4 h-4 mr-2" />}
+              <Button variant="outline-secondary" disabled={!dati.indirizzo.trim()} loading={ricercaInCorso} onClick={cerca}>
+                {!ricercaInCorso && <Lucide icon="Search" aria-hidden="true" className="mr-2 h-4 w-4" />}
                 Cerca indirizzo sulla mappa
               </Button>
               {indirizzoValido ? (
                 <span className="text-xs text-success flex items-center">
-                  <Lucide icon="CheckCircle" className="w-4 h-4 mr-1" /> Indirizzo confermato
+                  <Lucide icon="CheckCircle" aria-hidden="true" className="mr-1 h-4 w-4" /> Indirizzo confermato
                 </span>
               ) : (
                 <span className="text-xs text-slate-500">Scegli il risultato giusto per confermare l'indirizzo</span>
@@ -252,8 +253,8 @@ export function InserimentoManualeImport({
                   onChange={e => setCoordinateIncollate(e.target.value)}
                   onKeyDown={e => e.key === "Enter" && coordinateIncollate.trim() && usaCoordinate()}
                 />
-                <Button variant="outline-primary" className="whitespace-nowrap" disabled={!coordinateIncollate.trim()} onClick={usaCoordinate}>
-                  <Lucide icon="MapPin" className="w-4 h-4 mr-2" />
+                <Button variant="outline-secondary" className="whitespace-nowrap" disabled={!coordinateIncollate.trim()} onClick={usaCoordinate}>
+                  <Lucide icon="MapPin" aria-hidden="true" className="mr-2 h-4 w-4" />
                   Usa coordinate
                 </Button>
               </div>
@@ -261,7 +262,7 @@ export function InserimentoManualeImport({
 
             {risultati.length > 0 && (
               <>
-                <div className="col-span-12 lg:col-span-5 max-h-64 overflow-y-auto divide-y border rounded">
+                <div className="col-span-12 lg:col-span-5 max-h-64 overflow-y-auto divide-y divide-slate-200 rounded-control border border-slate-200">
                   {risultati.map(r => (
                     <button
                       key={`${r.lat},${r.lon}`}
@@ -276,8 +277,8 @@ export function InserimentoManualeImport({
                     </button>
                   ))}
                 </div>
-                <div className="col-span-12 lg:col-span-7 relative h-64">
-                  <MapContainer center={[41.8719, 12.5674]} zoom={6} scrollWheelZoom={false} className="absolute inset-0 rounded-md">
+                <div className="col-span-12 lg:col-span-7 relative h-64 overflow-hidden rounded-control">
+                  <MapContainer center={[41.8719, 12.5674]} zoom={6} scrollWheelZoom={false} className="absolute inset-0">
                     <TileLayer
                       url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
                       attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -301,17 +302,22 @@ export function InserimentoManualeImport({
               </>
             )}
 
-            {errore && <div className="col-span-12 text-sm text-danger">{errore}</div>}
+            {errore && (
+              <Alert variant="soft-danger" icona="CircleAlert" className="col-span-12">
+                {errore}
+              </Alert>
+            )}
           </div>
         </Dialog.Description>
         <Dialog.Footer>
-          <Button variant="outline-secondary" className="mr-auto" disabled={occupato} loading={annullamentoInCorso} onClick={onAnnullaImport}>
+          {/* Annulla import resta separato a sinistra: interrompe tutto l'import, non solo la riga */}
+          <Button variant="outline-secondary" className="sm:mr-auto" disabled={occupato} loading={annullamentoInCorso} onClick={onAnnullaImport}>
             Annulla import
           </Button>
-          <Button variant="outline-secondary" className="mr-1" onClick={onRiduci}>
+          <Button variant="outline-secondary" onClick={onRiduci}>
             Più tardi
           </Button>
-          <Button variant="outline-danger" className="mr-1" disabled={occupato} loading={invioInCorso === "scarta"} onClick={() => decidi("scarta")}>
+          <Button variant="outline-danger" disabled={occupato} loading={invioInCorso === "scarta"} onClick={() => decidi("scarta")}>
             Scarta riga
           </Button>
           <Button variant="primary" disabled={!pronto || occupato} loading={invioInCorso === "inserisci"} onClick={() => decidi("inserisci")}>

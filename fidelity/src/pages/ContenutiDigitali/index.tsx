@@ -1,11 +1,15 @@
+import BarraFiltri from "@/components/Base/BarraFiltri";
 import Button from "@/components/Base/Button";
-import { FormInput, FormSelect } from "@/components/Base/Form";
-import { Menu, Popover } from "@/components/Base/Headless";
+import CampoRicerca from "@/components/Base/CampoRicerca";
+import { FormLabel, FormSelect } from "@/components/Base/Form";
+import { Popover } from "@/components/Base/Headless";
 import Lucide from "@/components/Base/Lucide";
 import withSessionCheck from "@/components/SessionChecker";
 import PageError from "@/components/Base/PageError";
-import PageHeader from "@/components/Base/PageHeader";
-import Pagination from "@/components/Base/Pagination";
+import Pagina from "@/components/Base/Pagina";
+import PaginazioneTabella from "@/components/Base/PaginazioneTabella";
+import Sezione from "@/components/Base/Sezione";
+import Skeleton from "@/components/Base/Skeleton";
 import EmptyState from "@/components/EmptyState";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useFetchAllContenutiDigitali, useFetchAree, useFetchCanali, useFetchFormati, useFetchLavorazioni, useFetchTipiExport } from "@/query/query";
@@ -139,427 +143,283 @@ const ContenutiDigitali: React.FC = () => {
     }));
   };
 
+  // Filtri del pannello Filtra effettivamente impostati (la ricerca per nome ha il suo campo)
+  const filtriAttivi = [filters.idLavorazione, filters.idTipoExport, filters.idFormato, filters.idArea, filters.idCanale].filter(Boolean).length;
+
+  const azzeraFiltri = () => {
+    setTestoRicerca("");
+    setFilters({
+      idArea: '',
+      idCanale: '',
+      nome: '',
+      idTipoExport: '',
+      idFormato: '',
+      idPuntoVendita: '',
+      idLavorazione: '',
+      idCombinazione: '',
+      idDeclinazione: ''
+    });
+    setPage(1);
+  };
+
+  // Ogni filtro del pannello riparte dalla prima pagina
+  const impostaFiltro = (campo: keyof typeof filters, valore: string) => {
+    setFilters((precedenti) => ({ ...precedenti, [campo]: valore }));
+    setPage(1);
+  };
+
   // Render loading state based on current display mode
   const renderLoadingState = () => {
     const ghostFiles = generateGhostFiles(pageSize);
 
     if (itemDisposition === ItemDisposition.grid) {
       return (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 p-5">
+        <div className="grid grid-cols-1 gap-3 p-5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4" aria-busy="true">
           {ghostFiles.map((ghost) => (
-            <div key={ghost.id} className="flex flex-col p-3 bg-slate-50 rounded-md border border-slate-200 animate-pulse">
-              <div className="w-full h-40 flex items-center justify-center rounded bg-slate-200 mb-3">
-                <Lucide icon="Image" className="w-12 h-12 text-slate-300 stroke-[1.3]" />
-              </div>
-              <div className="w-full h-4 bg-slate-200 rounded mb-2"></div>
-              <div className="w-1/2 h-4 bg-slate-200 rounded mb-3"></div>
-              <div className="w-full h-8 bg-slate-200 rounded"></div>
-            </div>
-          ))}
-        </div>
-      );
-    } else {
-      return (
-        <div className="divide-y divide-slate-200">
-          {ghostFiles.map((ghost) => (
-            <div key={ghost.id} className="flex items-center py-3 px-2 rounded-md animate-pulse">
-              <div className="flex items-center justify-center w-10 h-10 mr-3 bg-slate-200 rounded">
-                <Lucide icon="Image" className="w-5 h-5 text-slate-300 stroke-[1.3]" />
-              </div>
-              <div className="flex-grow min-w-0">
-                <div className="w-48 h-4 bg-slate-200 rounded mb-2"></div>
-              </div>
-              <div className="ml-2 w-24 h-8 bg-slate-200 rounded"></div>
+            <div key={ghost.id} className="flex flex-col gap-3 rounded-card border border-slate-200 bg-white p-3">
+              <Skeleton className="h-40 rounded-control" />
+              <Skeleton className="h-4" />
+              <Skeleton className="h-8 w-1/2 rounded-control" />
             </div>
           ))}
         </div>
       );
     }
+    return (
+      <div className="divide-y divide-slate-100 px-5" aria-busy="true">
+        {ghostFiles.map((ghost) => (
+          <div key={ghost.id} className="flex items-center gap-3 py-3">
+            <Skeleton className="h-10 w-10 flex-none rounded-control" />
+            <Skeleton className="h-4 w-48" />
+            <Skeleton className="ml-auto h-8 w-24 rounded-control" />
+          </div>
+        ))}
+      </div>
+    );
   };
 
+  const filtriSelezionabili: { campo: keyof typeof filters; etichetta: string; vuoto: string; opzioni: { id?: string; nome: string }[] }[] = [
+    { campo: "idLavorazione", etichetta: "Promozione", vuoto: "Tutte le promozioni", opzioni: allPromo.data ?? [] },
+    {
+      campo: "idTipoExport",
+      etichetta: "Tipo di export",
+      vuoto: "Tutti i tipi di export",
+      opzioni: (allTipoExport.data ?? []).filter((tipo) => tipo.codice !== "WEB" && tipo.codice !== EXPORT_DI_SISTEMA.CORREGGO),
+    },
+    { campo: "idFormato", etichetta: "Formato", vuoto: "Tutti i formati", opzioni: allFormato.data ?? [] },
+    { campo: "idArea", etichetta: "Area", vuoto: "Tutte le aree", opzioni: allArea.data ?? [] },
+    { campo: "idCanale", etichetta: "Canale", vuoto: "Tutti i canali", opzioni: allCanale.data ?? [] },
+  ];
+
+  const elencoFile = files.data?.files ?? [];
+  const ricercaAttiva = Boolean(filters.nome) || filtriAttivi > 0;
+
   return (
-    <div className="grid grid-cols-12 gap-y-10 gap-x-6">
-      <div className="col-span-12">
-        <PageHeader
-          title="Contenuti Digitali"
-          description="Gestione Contenuti Digitali"
-        />
-        <div className="mt-3.5">
-          <div className="flex flex-col box box--stacked">
-            <div className="flex flex-col p-5 sm:items-center sm:flex-row gap-y-2">
-              <div>
-                <div className="relative">
-                  <Lucide
-                    icon="Search"
-                    aria-hidden="true"
-                    className="absolute inset-y-0 left-0 z-10 w-4 h-4 my-auto ml-3 stroke-[1.3] text-slate-500"
-                  />
-                  <FormInput
-                    type="text"
-                    value={testoRicerca}
-                    onChange={(e) => {
-                      setTestoRicerca(e.target.value);
-                      applicaRicerca(e.target.value);
-                    }}
-                    placeholder="Ricerca contenuti..."
-                    aria-label="Cerca contenuti"
-                    className="pl-9 sm:w-64 rounded-control"
-                  />
-                </div>
-              </div>
-              <div className="flex flex-col sm:flex-row gap-x-3 gap-y-2 sm:ml-auto">
-                <Menu>
-                  <Menu.Button
-                    as={Button}
-                    disabled={files.data?.files.length == 0}
-                    variant="outline-secondary"
-                    className="w-full sm:w-auto"
-                  >
-                    <Lucide
-                      icon="Download"
-                      className="stroke-[1.3] w-4 h-4 mr-2"
-                    />
-                    Scarica
-                    <div className="flex items-center justify-center h-5 px-1.5 ml-2 text-xs font-medium border rounded-full bg-slate-100">
-                      {files.data?.files.length}
+    <Pagina titolo="Contenuti digitali" descrizione="Volantini e materiali pubblicati, da cercare e scaricare">
+      <Sezione senzaPadding aria-label="Contenuti digitali">
+        <BarraFiltri
+          destra={
+            <Popover className="inline-block">
+              {({ close }) => (
+                <>
+                  <Popover.Button as={Button} size="sm" variant="outline-secondary" className="w-full sm:w-auto">
+                    <Lucide icon="ArrowDownWideNarrow" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                    Filtra
+                    {/* Spazi come testo, fuori dagli span: dentro si perdono e il nome letto diventa "Filtra1filtri attivi" */}
+                    {filtriAttivi > 0 && " "}
+                    {filtriAttivi > 0 && (
+                      <span className="ml-1.5 rounded-full bg-slate-100 px-1.5 text-2xs font-medium tabular-nums text-slate-600">
+                        {filtriAttivi}
+                        {" "}
+                        <span className="sr-only">filtri attivi</span>
+                      </span>
+                    )}
+                  </Popover.Button>
+
+                  <Popover.Panel placement="bottom-end" className="mt-2">
+                    <div className="flex w-72 flex-col gap-3 p-2">
+                      {filtriSelezionabili.map((filtro) => (
+                        <div key={filtro.campo}>
+                          <FormLabel htmlFor={`filtro-${filtro.campo}`}>{filtro.etichetta}</FormLabel>
+                          <FormSelect
+                            id={`filtro-${filtro.campo}`}
+                            formSelectSize="sm"
+                            value={filters[filtro.campo]}
+                            onChange={(e) => impostaFiltro(filtro.campo, e.target.value)}
+                          >
+                            <option value="">{filtro.vuoto}</option>
+                            {filtro.opzioni.map((opzione) => (
+                              <option key={opzione.id ?? opzione.nome} value={opzione.id}>
+                                {opzione.nome}
+                              </option>
+                            ))}
+                          </FormSelect>
+                        </div>
+                      ))}
+
+                      <div className="mt-1 flex justify-end gap-2">
+                        <Button size="sm" variant="outline-secondary" onClick={azzeraFiltri}>
+                          <Lucide icon="RefreshCcw" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                          Reset
+                        </Button>
+                        <Button size="sm" variant="outline-secondary" onClick={() => close()}>
+                          Chiudi
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="primary"
+                          onClick={() => {
+                            files.refetch();
+                            close();
+                          }}
+                        >
+                          Filtra
+                        </Button>
+                      </div>
                     </div>
-                  </Menu.Button>
-                </Menu>
-                <Popover className="inline-block">
-                  {({ close }) => (
-                    <>
-                      <Popover.Button
-                        as={Button}
-                        variant="outline-secondary"
-                        className="w-full sm:w-auto"
-                      >
-                        <Lucide
-                          icon="ArrowDownWideNarrow"
-                          className="stroke-[1.3] w-4 h-4 mr-2"
-                        />
-                        Filtra
-                        <div className="flex items-center justify-center h-5 px-1.5 ml-2 text-xs font-medium border rounded-full bg-slate-100">
-                          X
-                        </div>
-                      </Popover.Button>
+                  </Popover.Panel>
+                </>
+              )}
+            </Popover>
+          }
+        >
+          <CampoRicerca
+            etichetta="Cerca contenuti"
+            placeholder="Ricerca contenuti…"
+            value={testoRicerca}
+            onChange={(valore) => {
+              setTestoRicerca(valore);
+              applicaRicerca(valore);
+            }}
+          />
+        </BarraFiltri>
 
-                      <Popover.Panel placement="bottom-end" className={"mt-2"}>
-                        <div className="p-2">
-                          <div>
-                            <div className="text-left text-slate-500">
-                              Promozione
-                            </div>
-                            <FormSelect
-                              onChange={(e) => {
-                                setFilters({ ...filters, idLavorazione: e.target.value });
-                              }}
-                              value={filters.idLavorazione}
-                              className="flex-1 mt-2">
-                              <option value={""}>Seleziona una promozione</option>
-                              {allPromo.data?.map((promo) => (
-                                <option value={promo.id}>{promo.nome}</option>
-                              ))}
-                            </FormSelect>
-                          </div>
-                          <div className="mt-3">
-                            <div className="text-left text-slate-500">
-                              Tipo di export
-                            </div>
-                            <FormSelect
-                              onChange={(e) => {
-                                setFilters({ ...filters, idTipoExport: e.target.value });
-                              }}
-                              value={filters.idTipoExport}
-                              className="flex-1 mt-2">
-                              <option value={""}>Seleziona un tipo di export</option>
-                              {allTipoExport.data?.filter((tipo_expot) => tipo_expot.codice !== "WEB" && tipo_expot.codice !== EXPORT_DI_SISTEMA.CORREGGO).map((tipo_expot) => (
-                                <option value={tipo_expot.id}>{tipo_expot.nome}</option>
-                              ))}
-                            </FormSelect>
-                          </div>
-                          <div className="mt-3">
-                            <div className="text-left text-slate-500">
-                              Formati
-                            </div>
-                            <FormSelect
-                              onChange={(e) => {
-                                setFilters({ ...filters, idFormato: e.target.value });
-                              }}
-                              value={filters.idFormato}
-                              className="flex-1 mt-2">
-                              <option value={""}>Seleziona un formato</option>
-                              {allFormato.data?.map((formato) => (
-                                <option value={formato.id}>{formato.nome}</option>
-                              ))}
-                            </FormSelect>
-                          </div>
-
-                          <div className="mt-3">
-                            <div className="text-left text-slate-500">
-                              Area
-                            </div>
-                            <FormSelect
-                              onChange={(e) => {
-                                setFilters({ ...filters, idArea: e.target.value });
-                              }}
-                              value={filters.idArea}
-                              className="flex-1 mt-2">
-                              <option value="">Seleziona un'area</option>
-                              {allArea.data?.map((area) => (
-                                <option value={area.id}>{area.nome}</option>
-                              ))}
-                            </FormSelect>
-                          </div>
-
-                          <div className="mt-3">
-                            <div className="text-left text-slate-500">
-                              Canale
-                            </div>
-                            <FormSelect
-                              onChange={(e) => {
-                                setFilters({ ...filters, idCanale: e.target.value });
-                              }}
-                              value={filters.idCanale}
-                              className="flex-1 mt-2">
-                              <option value={""}>Seleziona un canale</option>
-                              {allCanale.data?.map((canale) => (
-                                <option value={canale.id}>{canale.nome}</option>
-                              ))}
-                            </FormSelect>
-                          </div>
-
-                          <div className="flex items-center mt-4">
-                            <Button
-                              variant="secondary"
-                              onClick={() => {
-                                close();
-                              }}
-                              className="w-32 ml-auto"
-                            >
-                              Chiudi
-                            </Button>
-                            <Button onClick={() => {
-                              setTestoRicerca("");
-                              setFilters({
-                                idArea: '',
-                                idCanale: '',
-                                nome: '',
-                                idTipoExport: '',
-                                idFormato: '',
-                                idPuntoVendita: '',
-                                idLavorazione: '',
-                                idCombinazione: '',
-                                idDeclinazione: ''
-                              });
-                              setPage(1);
-                            }}
-                              variant="primary"
-                              className="w-32 ml-2">
-                              Reset
-                              <Lucide icon="RefreshCcw" aria-hidden="true" className="w-4 h-4 stroke-[1.5]" />
-                            </Button>
-                            <Button onClick={() => {
-                              files.refetch()
-                            }} variant="primary" className="w-32 ml-2">
-                              Filtra
-                            </Button>
-                          </div>
-                        </div>
-                      </Popover.Panel>
-                    </>
+        {filesQuery.isError ? (
+          <PageError
+            compatta
+            className="m-5"
+            titolo="Contenuti non caricati"
+            motivo={filesQuery.error?.message || "Si è verificato un errore durante il recupero dei contenuti digitali."}
+            onRiprova={() => filesQuery.refetch()}
+          />
+        ) : files.isLoading ? (
+          renderLoadingState()
+        ) : elencoFile.length === 0 ? (
+          ricercaAttiva ? (
+            <EmptyState
+              compatta
+              icon="SearchX"
+              title="Nessun risultato"
+              description="Nessun contenuto corrisponde alla ricerca o ai filtri scelti."
+              buttonText="Azzera filtri"
+              buttonIcon="RotateCcw"
+              onButtonClick={azzeraFiltri}
+            />
+          ) : (
+            <EmptyState
+              compatta
+              icon="FileX"
+              title="Nessun contenuto trovato"
+              description="Al momento non ci sono contenuti disponibili."
+            />
+          )
+        ) : itemDisposition === ItemDisposition.grid ? (
+          <ul className="grid grid-cols-1 gap-3 p-5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+            {elencoFile.map((file, index) => (
+              <li key={index} className="flex flex-col gap-3 rounded-card border border-slate-200 bg-white p-3">
+                <div className="flex h-40 w-full items-center justify-center overflow-hidden rounded-control border border-slate-200 bg-slate-50">
+                  {file.url ? (
+                    <img
+                      src={file.url}
+                      alt=""
+                      className="h-full w-full object-scale-down"
+                      onLoad={(e) => {
+                        e.currentTarget.style.opacity = '1';
+                        if (file.url) {
+                          cacheImage(file.url);
+                        }
+                      }}
+                      onError={(e) => {
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src = '';
+                      }}
+                      style={{
+                        opacity: '0',
+                        transition: 'opacity 0.3s ease-in-out',
+                      }}
+                      loading="lazy"
+                    />
+                  ) : (
+                    <Lucide icon={getFileIcon(file.nome)} aria-hidden="true" className="h-12 w-12 text-slate-400" />
                   )}
-                </Popover>
+                </div>
+                <p className="truncate text-sm font-medium text-slate-700" title={file.nome}>
+                  {file.nome}
+                </p>
+                <Button
+                  onClick={handleDownloadSingleFile(file)}
+                  variant="outline-secondary"
+                  size="sm"
+                  className="self-start"
+                  aria-label={`Scarica ${file.nome}`}
+                >
+                  <Lucide icon="Download" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                  Scarica
+                </Button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <ul className="divide-y divide-slate-100 px-5">
+            {elencoFile.map((file, index) => (
+              <li key={index} className="flex items-center gap-3 py-3">
+                <div className="flex h-10 w-10 flex-none items-center justify-center rounded-control border border-slate-200 bg-white">
+                  {file.url ? (
+                    <img
+                      src={file.url}
+                      alt=""
+                      className="h-full w-full object-contain p-1"
+                      onLoad={(e) => (e.currentTarget.style.opacity = '1')}
+                      onError={(e) => {
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src = '';
+                      }}
+                      style={{
+                        opacity: '0',
+                        transition: 'opacity 0.3s ease-in-out',
+                      }}
+                      loading="lazy"
+                    />
+                  ) : (
+                    <Lucide icon={getFileIcon(file.nome)} aria-hidden="true" className="h-5 w-5 text-slate-400" />
+                  )}
+                </div>
+                <p className="min-w-0 flex-grow truncate text-sm font-medium text-slate-700">{file.nome}</p>
+                <Button
+                  onClick={handleDownloadSingleFile(file)}
+                  variant="outline-secondary"
+                  size="sm"
+                  className="whitespace-nowrap"
+                  aria-label={`Scarica ${file.nome}`}
+                >
+                  <Lucide icon="Download" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                  Scarica
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
 
-              </div>
-            </div>
-
-            {filesQuery.isError && (
-              <PageError
-                compatta
-                className="mx-5 mb-5"
-                titolo="Contenuti non caricati"
-                motivo={filesQuery.error?.message || "Si è verificato un errore durante il recupero dei contenuti digitali."}
-                onRiprova={() => filesQuery.refetch()}
-              />
-            )}
-            {Array.isArray(files?.data?.files) && files?.data?.files.length === 0 && (
-              <EmptyState
-                icon="FileX"
-                title="Nessun contenuto trovato"
-                description="Al momento non ci sono contenuti disponibili."
-              />
-            )}
-            {files.isLoading ? (
-              renderLoadingState()
-            ) : (
-              <>
-                {files?.data && files.data.files?.length > 0 && (
-                  <>
-                    {/* Visualizzazione a griglia */}
-                    {itemDisposition === ItemDisposition.grid && (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 p-5">
-                        {files?.data.files.map((file, index) => (
-                          <div
-                            key={index}
-                            className="flex flex-col p-3 bg-slate-50 rounded-md hover:bg-slate-100 transition-colors border border-slate-200"
-                          >
-                            <div className="w-full h-[80%] flex items-center justify-center rounded bg-white border border-slate-200 overflow-hidden mb-3">
-                              {file.url ? (
-                                <img
-                                  src={file.url}
-                                  alt={file.nome}
-                                  className="w-full h-full object-scale-down"
-                                  onLoad={(e) => {
-                                    e.currentTarget.style.opacity = '1';
-                                    if (file.url) {
-                                      cacheImage(file.url);
-                                    }
-                                  }}
-                                  onError={(e) => {
-                                    e.currentTarget.onerror = null;
-                                    e.currentTarget.src = '';
-                                  }}
-                                  style={{
-                                    opacity: '0',
-                                    transition: 'opacity 0.3s ease-in-out',
-                                  }}
-                                  loading="lazy"
-                                />
-                              ) : (
-                                <div className="flex items-center justify-center w-full h-full bg-gray-100">
-                                  <Lucide
-                                    icon={getFileIcon(file.nome)}
-                                    className="w-12 h-12 stroke-[1.5]"
-                                  />
-                                </div>
-                              )}
-                            </div>
-                            <div className="w-full min-w-0">
-                              <div className="text-sm font-medium text-slate-700 truncate">
-                                {file.nome}
-                              </div>
-                            </div>
-                            <Button
-                              onClick={handleDownloadSingleFile(file)}
-                              variant="outline-secondary"
-                              className="mt-2 text-xs"
-                            >
-                              Scarica &nbsp;
-                              <Lucide icon="Download" className="w-4 h-4 stroke-[1.5]" />
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Visualizzazione a lista */}
-                    {itemDisposition === ItemDisposition.list && (
-                      <div className="divide-y divide-slate-200">
-                        {files?.data?.files.map((file, index) => (
-                          <div
-                            key={index}
-                            className="flex items-center py-3 hover:bg-slate-50 transition-colors px-2 rounded-md"
-                          >
-                            <div className="flex items-center justify-center w-10 h-10 mr-3 bg-white rounded border border-slate-200">
-                              {file.url ? (
-                                <img
-                                  src={file.url}
-                                  alt={file.nome}
-                                  className="w-full h-full object-contain p-1"
-                                  onLoad={(e) => (e.currentTarget.style.opacity = '1')}
-                                  onError={(e) => {
-                                    e.currentTarget.onerror = null;
-                                    e.currentTarget.src = '';
-                                  }}
-                                  style={{
-                                    opacity: '0',
-                                    transition: 'opacity 0.3s ease-in-out',
-                                  }}
-                                  loading="lazy"
-                                />
-                              ) : (
-                                <Lucide
-                                  icon={getFileIcon(file.nome)}
-                                  className="w-5 h-5 stroke-[1.5]"
-                                />
-                              )}
-                            </div>
-                            <div className="flex-grow min-w-0">
-                              <div className="text-sm font-medium text-slate-700 truncate">
-                                {file.nome}
-                              </div>
-                            </div>
-                            <Button
-                              onClick={handleDownloadSingleFile(file)}
-                              variant="outline-secondary"
-                              size="sm"
-                              className="ml-2 text-xs whitespace-nowrap"
-                            >
-                              Scarica &nbsp;
-                              <Lucide
-                                icon="Download"
-                                className="w-4 h-4 stroke-[1.5]"
-                              />
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </>
-                )}
-              </>
-            )}
-            {/* Se invece ci sono file, mostriamo la visualizzazione grid/list */}
-            <div className="flex flex-col-reverse flex-wrap items-center p-5 flex-reverse gap-y-2 sm:flex-row">
-              <Pagination aria-label="Paginazione" className="flex-1 w-full mr-auto sm:w-auto">
-                <Pagination.Link aria-label="Prima pagina" onClick={() => setPage(1)}>
-                  <Lucide icon="ChevronsLeft" aria-hidden="true" className="w-4 h-4" />
-                </Pagination.Link>
-                <Pagination.Link aria-label="Pagina precedente" onClick={() => setPage((prev) => Math.max(prev - 1, 1))}>
-                  <Lucide icon="ChevronLeft" aria-hidden="true" className="w-4 h-4" />
-                </Pagination.Link>
-                <Pagination.Link>...</Pagination.Link>
-                {files?.data?.totalPages && Array.from({ length: files.data.totalPages }, (_, i) => i + 1).map((pageNumber) => {
-                  const isCurrentPage = pageNumber === files.data?.currentPage;
-                  const isNearCurrentPage = Math.abs(pageNumber - (files.data?.currentPage ?? 0)) <= 3;
-
-                  if (isCurrentPage || isNearCurrentPage) {
-                    return (
-                      <Pagination.Link
-                        key={pageNumber}
-                        active={isCurrentPage}
-                        onClick={() => setPage(pageNumber)}
-                      >
-                        {pageNumber}
-                      </Pagination.Link>
-                    );
-                  }
-
-                  return null;
-                })}
-                <Pagination.Link>...</Pagination.Link>
-                <Pagination.Link aria-label="Pagina successiva" onClick={() => setPage((prev) => Math.min(prev + 1, files?.data?.totalPages || 1))}>
-                  <Lucide icon="ChevronRight" aria-hidden="true" className="w-4 h-4" />
-                </Pagination.Link>
-                <Pagination.Link aria-label="Ultima pagina" onClick={() => setPage(files?.data?.totalPages || 1)}>
-                  <Lucide icon="ChevronsRight" aria-hidden="true" className="w-4 h-4" />
-                </Pagination.Link>
-              </Pagination>
-              <FormSelect aria-label="Contenuti per pagina" onChange={(e) => {
-                setPageSize(parseInt(e.target.value));
-              }} className="sm:w-20 rounded-control">
-                <option value={10}>10</option>
-                <option value={25}>25</option>
-                <option value={35}>35</option>
-                <option value={50}>50</option>
-              </FormSelect>
-            </div>
-
-          </div>
-        </div>
-
-      </div>
-    </div>
+        <PaginazioneTabella
+          totale={files.data?.totalItems ?? 0}
+          pagina={page}
+          dimensionePagina={pageSize}
+          onCambiaPagina={setPage}
+          onCambiaDimensione={setPageSize}
+          opzioniDimensione={[10, 25, 35, 50]}
+        />
+      </Sezione>
+    </Pagina>
   );
 }
 

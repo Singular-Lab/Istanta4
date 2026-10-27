@@ -1,10 +1,12 @@
+import Badge from '@/components/Base/Badge';
 import Button from '@/components/Base/Button';
-import { FormInput, FormLabel, FormSelect, FormTextarea } from '@/components/Base/Form';
-import { Dialog, Popover } from "@/components/Base/Headless";
+import { FormField, FormInput, FormSelect, FormTextarea } from '@/components/Base/Form';
+import { Dialog } from "@/components/Base/Headless";
 import Lucide from '@/components/Base/Lucide';
-import PageError from '@/components/Base/PageError';
-import Spinner from '@/components/Base/Spinner';
-import EmptyState from '@/components/EmptyState';
+import Table from '@/components/Base/Table';
+import ConfirmDialog from '@/components/ConfirmDialog';
+import { valoreOAssente } from '@/utils/format';
+import PannelloElenco from '../PannelloElenco';
 import { useNotification } from '@/context/NotificationContext';
 import { useFetchFormati } from '@/query/query';
 import { yupResolver } from '@hookform/resolvers/yup';
@@ -41,6 +43,14 @@ const schemaFormati = yup.object().shape({
   createdat: yup.date().optional(),
   updatedat: yup.date().optional()
 });
+
+// Opzioni dei tipi di lavorazione (chiavi numeriche dell'enum), per filtro e modifica
+const OPZIONI_TIPO_LAVORAZIONE = Object.keys(TIPO_LAVORAZIONE)
+  .filter(key => !isNaN(Number(key)))
+  .map((key) => {
+    const enumKey = parseInt(key, 10) as unknown as keyof typeof TIPO_LAVORAZIONE;
+    return <option key={enumKey} value={enumKey}>{TIPO_LAVORAZIONE[enumKey]}</option>;
+  });
 
 const PanelFormati = forwardRef<PanelFormatiRefHandle>((props, ref) => {
   // Hooks e state
@@ -86,28 +96,14 @@ const PanelFormati = forwardRef<PanelFormatiRefHandle>((props, ref) => {
       return await ServerCall.delete(`/deleteFormato/${guidId}`);
     },
     onSuccess: () => {
-      showNotification(
-        <div className="flex flex-row items-center">
-          <Lucide icon="CircleCheck" className="text-success w-8 h-8" />
-          <div className="ml-4 mr-4">
-            <div className="font-bold">Formato eliminato con successo</div>
-          </div>
-        </div>
-      );
+      showNotification("Formato eliminato con successo", { variant: "success" });
       refetch();
       handleChiudiModaleEliminazione();
     },
     onError: (error) => {
       showNotification(
-        <div className="flex flex-row items-center">
-          <Lucide icon="CircleX" className="text-danger w-8 h-8" />
-          <div className="ml-4 mr-4">
-            <div className="font-bold">Errore durante l'eliminazione del formato</div>
-            <div className="mt-1 text-slate-500">
-              {error instanceof Error ? error.message : "Dettagli in console."}
-            </div>
-          </div>
-        </div>
+        `Errore durante l'eliminazione del formato: ${error instanceof Error ? error.message : "dettagli in console."}`,
+        { variant: "error" }
       );
       console.error("Errore eliminazione formato:", error);
       handleChiudiModaleEliminazione();
@@ -120,28 +116,14 @@ const PanelFormati = forwardRef<PanelFormatiRefHandle>((props, ref) => {
       return await ServerCall.put(`/salvaFormato`, data);
     },
     onSuccess: () => {
-      showNotification(
-        <div className="flex flex-row items-center">
-          <Lucide icon="CircleCheck" className="text-success w-8 h-8" />
-          <div className="ml-4 mr-4">
-            <div className="font-bold">Formato aggiornato con successo</div>
-          </div>
-        </div>
-      );
+      showNotification("Formato aggiornato con successo", { variant: "success" });
       refetch();
       handleChiudiModaleModifica();
     },
     onError: (error) => {
       showNotification(
-        <div className="flex flex-row items-center">
-          <Lucide icon="CircleX" className="text-danger w-8 h-8" />
-          <div className="ml-4 mr-4">
-            <div className="font-bold">Errore durante l'aggiornamento del formato</div>
-            <div className="mt-1 text-slate-500">
-              {error instanceof Error ? error.message : 'Errore sconosciuto'}
-            </div>
-          </div>
-        </div>
+        `Errore durante l'aggiornamento del formato: ${error instanceof Error ? error.message : "errore sconosciuto"}`,
+        { variant: "error" }
       );
       console.error("Errore aggiornamento formato:", error);
     }
@@ -192,17 +174,7 @@ const PanelFormati = forwardRef<PanelFormatiRefHandle>((props, ref) => {
       mutationAggiornamentoFormato.mutate(payload);
     } else {
       console.error("ID del formato selezionato non disponibile per l'aggiornamento.");
-      showNotification(
-        <div className="flex flex-row items-center">
-          <Lucide icon="TriangleAlert" className="text-warning w-8 h-8" />
-          <div className="ml-4 mr-4">
-            <div className="font-bold">ID Formato Mancante</div>
-            <div className="mt-1 text-slate-500">
-              Non è stato possibile aggiornare il formato.
-            </div>
-          </div>
-        </div>
-      );
+      showNotification("ID formato mancante: non è stato possibile aggiornare il formato.", { variant: "warning" });
     }
   };
 
@@ -219,42 +191,16 @@ const PanelFormati = forwardRef<PanelFormatiRefHandle>((props, ref) => {
   // Render del componente
   return (
     <>
-      {/* Modale di Eliminazione */}
-      <Dialog
+      {/* Conferma di eliminazione */}
+      <ConfirmDialog
         open={isModaleEliminazioneAperto && selectedFormato !== null}
+        title="Eliminare il formato?"
+        description={<>Il formato <strong>{selectedFormato?.nome}</strong> verrà eliminato. Questa operazione non può essere annullata.</>}
+        confirmLabel="Elimina"
+        loading={mutationEliminazioneFormato.isPending}
         onClose={handleChiudiModaleEliminazione}
-      >
-        <Dialog.Panel className="p-1">
-          <Dialog.Title className="px-5 pt-5">
-            <h2 className="title-card mr-auto">
-              Elimina formato: <span className="font-semibold text-danger">{selectedFormato?.nome}</span>
-            </h2>
-          </Dialog.Title>
-          <Dialog.Description className="p-5">
-            Sei sicuro di voler eliminare questo formato? Questa operazione non può essere annullata.
-          </Dialog.Description>
-          <Dialog.Footer className="px-5 py-3 text-right border-t border-slate-200/60 dark:border-darkmode-400">
-            <Button
-              type="button"
-              variant="outline-secondary"
-              onClick={handleChiudiModaleEliminazione}
-              className="w-24 mr-2"
-              disabled={mutationEliminazioneFormato.isPending}
-            >
-              Annulla
-            </Button>
-            <Button
-              type="button"
-              variant="danger"
-              onClick={handleEliminaFormato}
-              className="min-w-24"
-              loading={mutationEliminazioneFormato.isPending}
-            >
-              Elimina
-            </Button>
-          </Dialog.Footer>
-        </Dialog.Panel>
-      </Dialog>
+        onConfirm={handleEliminaFormato}
+      />
 
       {/* Modale di Modifica Formato */}
       <Dialog
@@ -262,49 +208,31 @@ const PanelFormati = forwardRef<PanelFormatiRefHandle>((props, ref) => {
         onClose={handleChiudiModaleModifica}
         size="lg"
       >
-        <Dialog.Panel className="p-1">
+        <Dialog.Panel>
           <form onSubmit={handleSubmitModifica(handleModificaFormatoSubmit)}>
-            <Dialog.Title className="px-5 pt-5">
-              <h2 className="title-card mr-auto">
-                Modifica Formato: <span className="font-semibold text-primary">{selectedFormato?.nome}</span>
-              </h2>
-            </Dialog.Title>
-            <Dialog.Description className="grid grid-cols-12 gap-4 p-5 gap-y-5">
-              <div className="col-span-12 sm:col-span-6">
-                <FormLabel htmlFor="modifica-nome-formato">Nome</FormLabel>
-                <FormInput id="modifica-nome-formato" type="text" {...registerModifica("nome")} className={errorsModifica.nome ? "border-danger" : ""} />
-                {errorsModifica.nome && <div className="mt-1 text-xs text-danger">{errorsModifica.nome.message}</div>}
-              </div>
-              <div className="col-span-12 sm:col-span-6">
-                <FormLabel htmlFor="modifica-codice-formato">Codice</FormLabel>
-                <FormInput id="modifica-codice-formato" type="text" {...registerModifica("codice")} className={errorsModifica.codice ? "border-danger" : ""} />
-                {errorsModifica.codice && <div className="mt-1 text-xs text-danger">{errorsModifica.codice.message}</div>}
-              </div>
-              <div className="col-span-12">
-                <FormLabel htmlFor="modifica-descrizione-formato">Descrizione</FormLabel>
-                <FormTextarea id="modifica-descrizione-formato" rows={3} {...registerModifica("descrizione")} className={errorsModifica.descrizione ? "border-danger" : ""} />
-                {errorsModifica.descrizione && <div className="mt-1 text-xs text-danger">{errorsModifica.descrizione.message}</div>}
-              </div>
-              <div className="col-span-12">
-                <FormLabel htmlFor="modifica-tipo-lavorazione">Tipo Lavorazione</FormLabel>
-                <FormSelect id="modifica-tipo-lavorazione" {...registerModifica("tipo_lavorazione")} className={errorsModifica.tipo_lavorazione ? "border-danger" : ""}>
+            <Dialog.Title>Modifica formato {selectedFormato?.nome}</Dialog.Title>
+            <Dialog.Description className="grid grid-cols-12 gap-4">
+              <FormField className="col-span-12 sm:col-span-6" etichetta="Nome" obbligatorio errore={errorsModifica.nome?.message}>
+                <FormInput id="modifica-nome-formato" type="text" {...registerModifica("nome")} />
+              </FormField>
+              <FormField className="col-span-12 sm:col-span-6" etichetta="Codice" obbligatorio errore={errorsModifica.codice?.message}>
+                <FormInput id="modifica-codice-formato" type="text" {...registerModifica("codice")} />
+              </FormField>
+              <FormField className="col-span-12" etichetta="Descrizione" obbligatorio errore={errorsModifica.descrizione?.message}>
+                <FormTextarea id="modifica-descrizione-formato" rows={3} {...registerModifica("descrizione")} />
+              </FormField>
+              <FormField className="col-span-12" etichetta="Tipo lavorazione" obbligatorio errore={errorsModifica.tipo_lavorazione?.message}>
+                <FormSelect id="modifica-tipo-lavorazione" {...registerModifica("tipo_lavorazione")}>
                   <option value="">Seleziona un tipo</option>
-                  {Object.keys(TIPO_LAVORAZIONE)
-                    .filter(key => !isNaN(Number(key)))
-                    .map((key) => {
-                      const enumKey = parseInt(key, 10) as unknown as keyof typeof TIPO_LAVORAZIONE;
-                      return <option key={enumKey} value={enumKey}>{TIPO_LAVORAZIONE[enumKey]}</option>;
-                    })}
+                  {OPZIONI_TIPO_LAVORAZIONE}
                 </FormSelect>
-                {errorsModifica.tipo_lavorazione && <div className="mt-1 text-xs text-danger">{errorsModifica.tipo_lavorazione.message}</div>}
-              </div>
+              </FormField>
             </Dialog.Description>
-            <Dialog.Footer className="px-5 py-3 text-right border-t border-slate-200/60 dark:border-darkmode-400">
+            <Dialog.Footer>
               <Button
                 type="button"
                 variant="outline-secondary"
                 onClick={handleChiudiModaleModifica}
-                className="w-32 mr-2"
                 disabled={mutationAggiornamentoFormato.isPending}
               >
                 Annulla
@@ -312,249 +240,100 @@ const PanelFormati = forwardRef<PanelFormatiRefHandle>((props, ref) => {
               <Button
                 type="submit"
                 variant="primary"
-                className="min-w-36"
                 loading={mutationAggiornamentoFormato.isPending}
               >
-                Salva Modifiche
+                Salva modifiche
               </Button>
             </Dialog.Footer>
           </form>
         </Dialog.Panel>
       </Dialog>
 
-      {/* Contenuto principale */}
-      <div className="grid grid-cols-12 gap-y-7 gap-x-6 mt-3.5">
-        <div className="col-span-12">
-          <div className="flex flex-col gap-y-7">
-            <div className="flex flex-col">
-              {/* Barra di ricerca e filtri */}
-              <div className="flex flex-col p-5 sm:items-center sm:flex-row gap-y-2">
-                <div className="flex-1">
-                  <div className="relative">
-                    <Lucide
-                      icon="Search"
-                      className="absolute inset-y-0 left-0 z-10 w-4 h-4 my-auto ml-3 stroke-[1.3] text-slate-500"
-                    />
-                    <FormInput
-                      type="text"
-                      placeholder="Cerca formati..."
-                      className="pl-9 sm:w-80 rounded-[0.5rem]"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                  </div>
-                </div>
-                <div className="flex flex-col sm:flex-row gap-x-3 gap-y-2 sm:ml-auto">
-                  <Popover className="inline-block">
-                    {({ close }) => (
-                      <>
-                        <Popover.Button
-                          as={Button}
-                          variant="outline-secondary"
-                          className="w-full sm:w-auto"
-                        >
-                          <Lucide
-                            icon="Filter"
-                            className="stroke-[1.3] w-4 h-4 mr-2"
-                          />
-                          Filtri
-                          {filterTipo && (
-                            <div className="flex items-center justify-center h-5 px-1.5 ml-2 text-xs font-medium border rounded-full bg-primary/10 text-primary border-primary/20">
-                              1
-                            </div>
-                          )}
-                        </Popover.Button>
-                        <Popover.Panel placement="bottom-end" className="p-4 w-64">
-                          <div className="mb-4">
-                            <div className="text-left text-slate-600 font-medium mb-2">
-                              Tipo Lavorazione
-                            </div>
-                            <FormSelect
-                              className="w-full"
-                              value={filterTipo}
-                              onChange={(e) => setFilterTipo(e.target.value)}
-                            >
-                              <option value="">Tutti i tipi</option>
-                              {Object.keys(TIPO_LAVORAZIONE)
-                                .filter(key => !isNaN(Number(key)))
-                                .map((key) => {
-                                  const enumKey = parseInt(key, 10) as unknown as keyof typeof TIPO_LAVORAZIONE;
-                                  return (
-                                    <option key={enumKey} value={enumKey}>
-                                      {TIPO_LAVORAZIONE[enumKey]}
-                                    </option>
-                                  );
-                                })}
-                            </FormSelect>
-                          </div>
-                          <div className="flex items-center gap-2 pt-2 border-t border-slate-200">
-                            <Button
-                              variant="outline-secondary"
-                              size="sm"
-                              onClick={handleClearFilters}
-                              className="flex-1"
-                            >
-                              Pulisci
-                            </Button>
-                            <Button
-                              variant="primary"
-                              size="sm"
-                              className="flex-1"
-                              onClick={() => close()}
-                            >
-                              Applica
-                            </Button>
-                          </div>
-                        </Popover.Panel>
-                      </>
-                    )}
-                  </Popover>
-                </div>
+      <PannelloElenco
+        ricerca={searchTerm}
+        onRicerca={setSearchTerm}
+        etichettaRicerca="Cerca formati"
+        placeholderRicerca="Cerca formati…"
+        filtri={
+          <FormSelect
+            formSelectSize="sm"
+            aria-label="Tipo lavorazione"
+            className="sm:w-48"
+            value={filterTipo}
+            onChange={(e) => setFilterTipo(e.target.value)}
+          >
+            <option value="">Tutti i tipi</option>
+            {OPZIONI_TIPO_LAVORAZIONE}
+          </FormSelect>
+        }
+        caricamento={isLoading}
+        etichettaCaricamento="Caricamento formati…"
+        errore={isError ? {
+          titolo: "Formati non caricati",
+          motivo: (error as Error)?.message || "Non è stato possibile caricare i formati.",
+          onRiprova: () => refetch(),
+        } : null}
+        totale={formati?.length ?? 0}
+        filtrati={filteredFormati?.length ?? 0}
+        vuoto={{
+          icona: "FileImage",
+          titolo: "Nessun formato disponibile",
+          descrizione: "Non ci sono formati configurati. Aggiungine uno con Nuovo formato.",
+        }}
+        onAzzeraFiltri={handleClearFilters}
+        intestazione={
+          <>
+            <Table.Th>Formato</Table.Th>
+            <Table.Th>Codice formato</Table.Th>
+            <Table.Th>Descrizione</Table.Th>
+            <Table.Th>Tipo lavorazione</Table.Th>
+            <Table.Th className="text-right"><span className="sr-only">Azioni</span></Table.Th>
+          </>
+        }
+      >
+        {filteredFormati?.map((formato, index) => (
+          <Table.Tr key={formato.id || index}>
+            <Table.Td className="font-medium text-slate-800">{formato.nome}</Table.Td>
+            <Table.Td>
+              <span className="rounded-control bg-slate-100 px-2 py-1 font-mono text-sm text-slate-600">
+                {formato.codice}
+              </span>
+            </Table.Td>
+            <Table.Td>
+              <div className="line-clamp-2 max-w-xs text-sm text-slate-600">
+                {valoreOAssente(formato.descrizione)}
               </div>
-
-              {/* Stati loading, error e empty */}
-              {isLoading && (
-                <div className="flex justify-center items-center py-16">
-                  <div role="status" className="text-center">
-                    <Spinner size="lg" decorativo className="mx-auto mb-4" />
-                    <div className="text-slate-600 font-medium">Caricamento formati...</div>
-                    <div className="text-slate-500 text-sm mt-1">Attendere prego</div>
-                  </div>
-                </div>
-              )}
-
-              {isError && (
-                <div className="p-5">
-                  <PageError
-                    compatta
-                    titolo="Formati non caricati"
-                    motivo={(error as Error)?.message || "Non è stato possibile caricare i formati."}
-                    onRiprova={() => refetch()}
-                  />
-                </div>
-              )}
-
-              {!isLoading && !isError && (!formati || formati.length === 0) && (
-                <div className="p-5">
-                  <EmptyState
-                    icon="FileImage"
-                    title="Nessun formato disponibile"
-                    description="Non ci sono formati configurati. Aggiungine uno per iniziare."
-                    buttonText="Ricarica"
-                    onButtonClick={refetch}
-                    iconColor="text-slate-400"
-                  />
-                </div>
-              )}
-
-              {!isLoading && !isError && formati && formati.length > 0 && filteredFormati?.length === 0 && (
-                <div className="p-5">
-                  <EmptyState
-                    icon="Search"
-                    title="Nessun risultato trovato"
-                    description="Nessun formato corrisponde ai criteri di ricerca. Prova a modificare i filtri."
-                    buttonText="Pulisci filtri"
-                    onButtonClick={handleClearFilters}
-                    iconColor="text-slate-400"
-                  />
-                </div>
-              )}
-
-              {/* Lista dei formati in formato tabella professionale */}
-              {!isLoading && !isError && filteredFormati && filteredFormati.length > 0 && (
-                <div className="p-5">
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b border-slate-200">
-                          <th className="text-left py-3 px-4 font-semibold text-slate-700 text-sm uppercase tracking-wide">
-                            Formato
-                          </th>
-                          <th className="text-left py-3 px-4 font-semibold text-slate-700 text-sm uppercase tracking-wide">
-                            Codice Formato
-                          </th>
-                          <th className="text-left py-3 px-4 font-semibold text-slate-700 text-sm uppercase tracking-wide">
-                            Descrizione
-                          </th>
-                          <th className="text-left py-3 px-4 font-semibold text-slate-700 text-sm uppercase tracking-wide">
-                            Tipo Lavorazione
-                          </th>
-                          <th className="text-center py-3 px-4 font-semibold text-slate-700 text-sm uppercase tracking-wide">
-                            Azioni
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredFormati.map((formato, index) => (
-                          <tr
-                            key={formato.id || index}
-                            className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors duration-150"
-                          >
-                            <td className="py-4 px-4">
-                              <div className="flex items-center">
-                                <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/10 mr-3">
-                                  <Lucide
-                                    icon="FileImage"
-                                    className="w-5 h-5 text-primary"
-                                  />
-                                </div>
-                                <div>
-                                  <div className="font-medium text-slate-800">
-                                    {formato.nome}
-                                  </div>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="py-4 px-4">
-                              <div className="text-sm font-mono text-slate-600 bg-slate-100 px-2 py-1 rounded">
-                                {formato.codice}
-                              </div>
-                            </td>
-                            <td className="py-4 px-4">
-                              <div className="text-sm text-slate-600 max-w-xs">
-                                <div className="line-clamp-2">
-                                  {formato.descrizione || "Nessuna descrizione"}
-                                </div>
-                              </div>
-                            </td>
-                            <td className="py-4 px-4">
-                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
-                                {TIPO_LAVORAZIONE[formato.tipo_lavorazione] || "Non specificato"}
-                              </span>
-                            </td>
-                            <td className="py-4 px-4">
-                              <div className="flex items-center justify-center gap-2">
-                                <Button
-                                  variant="outline-primary"
-                                  size="sm"
-                                  onClick={() => handleAperturaModaleModifica(formato)}
-                                  className="hover:bg-primary/5"
-                                >
-                                  <Lucide icon="PenLine" className="w-4 h-4 mr-1.5" />
-                                  Modifica
-                                </Button>
-                                <Button
-                                  variant="outline-danger"
-                                  size="sm"
-                                  onClick={() => handleAperturaModaleEliminazione(formato)}
-                                  className="hover:bg-danger/5"
-                                  aria-label={`Elimina formato ${formato.nome}`}
-                                >
-                                  <Lucide icon="Trash2" aria-hidden="true" className="w-4 h-4" />
-                                </Button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
+            </Table.Td>
+            <Table.Td>
+              <Badge variant="secondary" size="sm">
+                {TIPO_LAVORAZIONE[formato.tipo_lavorazione] || "Non specificato"}
+              </Badge>
+            </Table.Td>
+            <Table.Td className="text-right">
+              <div className="flex items-center justify-end gap-2">
+                <Button
+                  variant="outline-secondary"
+                  size="sm"
+                  onClick={() => handleAperturaModaleModifica(formato)}
+                  aria-label={`Modifica formato ${formato.nome}`}
+                  title="Modifica"
+                >
+                  <Lucide icon="PenLine" aria-hidden="true" className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  variant="outline-danger"
+                  size="sm"
+                  onClick={() => handleAperturaModaleEliminazione(formato)}
+                  aria-label={`Elimina formato ${formato.nome}`}
+                  title="Elimina"
+                >
+                  <Lucide icon="Trash2" aria-hidden="true" className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </Table.Td>
+          </Table.Tr>
+        ))}
+      </PannelloElenco>
     </>
   );
 });

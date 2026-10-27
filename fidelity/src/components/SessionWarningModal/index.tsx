@@ -212,55 +212,37 @@ export const SessionWarningModal: React.FC<SessionWarningModalProps> = ({
   return (
     <Dialog open={showWarning} onClose={() => { }} staticBackdrop>
       <Dialog.Panel>
-        <div className="p-8 text-center">
-          {/* Icona warning */}
-          <div className="flex justify-center mb-4">
-            <Lucide icon="Clock" className="w-16 h-16 text-warning" />
-          </div>
-
-          {/* Titolo */}
-          <h2 className="text-2xl font-bold mb-3">
-            La tua sessione sta per scadere
-          </h2>
-
-          {/* Descrizione */}
-          <p className="text-slate-600 mb-6">
+        <Dialog.Title>
+          <Lucide icon="Clock" aria-hidden="true" className="h-5 w-5 text-warning" />
+          La tua sessione sta per scadere
+        </Dialog.Title>
+        <Dialog.Description className="text-center">
+          <p className="text-slate-600">
             Per motivi di sicurezza, la tua sessione scadrà tra:
           </p>
 
           {/* Countdown */}
-          <div className="mb-8">
-            <div className="text-6xl font-bold text-primary">
+          <div className="my-6" aria-live="polite">
+            <div className="font-space-grotesk text-5xl font-semibold tabular-nums text-primary">
               {formatTime(timeRemaining)}
             </div>
-            <div className="text-sm text-slate-500 mt-2">
+            <div className="mt-2 text-sm text-slate-500">
               minuti : secondi
             </div>
           </div>
 
-          {/* Messaggio */}
-          <p className="text-slate-600 mb-6">
+          <p className="text-slate-600">
             Vuoi continuare a lavorare o preferisci uscire?
           </p>
-
-          {/* Pulsanti */}
-          <div className="flex gap-3 justify-center">
-            <Button
-              variant="outline-secondary"
-              onClick={handleLogout}
-              className="w-32"
-            >
-              Esci
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handleExtend}
-              className="w-48"
-            >
-              Continua sessione
-            </Button>
-          </div>
-        </div>
+        </Dialog.Description>
+        <Dialog.Footer>
+          <Button type="button" variant="outline-secondary" onClick={handleLogout}>
+            Esci
+          </Button>
+          <Button type="button" variant="primary" onClick={handleExtend}>
+            Continua sessione
+          </Button>
+        </Dialog.Footer>
       </Dialog.Panel>
     </Dialog>
   );

@@ -68,7 +68,7 @@ const RicorrenzaField: React.FC<{
       </FormSelect>
 
       <div className="flex items-center gap-2">
-        <label className="text-sm text-gray-600 w-24">Inizio</label>
+        <label className="text-sm text-slate-600 w-24">Inizio</label>
         <FormInput
           formInputSize="sm"
           type="date"
@@ -79,7 +79,7 @@ const RicorrenzaField: React.FC<{
       </div>
 
       <div className="flex items-center gap-2">
-        <label className="text-sm text-gray-600 w-24">Fine</label>
+        <label className="text-sm text-slate-600 w-24">Fine</label>
         <FormInput
           formInputSize="sm"
           type="date"
@@ -90,13 +90,13 @@ const RicorrenzaField: React.FC<{
       </div>
 
       {isInvalidRange && (
-        <p className="text-red-500 text-xs">
+        <p className="text-danger text-xs">
           La data di fine è precedente alla data di inizio!
         </p>
       )}
 
       {localType === "custom" && (
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-slate-500">
           Configura qui la ricorrenza personalizzata...
         </p>
       )}
@@ -378,7 +378,7 @@ const PolicyDiVisualizzazione: React.FC<PolicyDiVisualizzazioneProps> = ({
 
   // render principale
   return (
-    <div className="border border-gray-200 rounded-md p-4 mt-4">
+    <div className="border border-slate-200 rounded-control p-4 mt-4">
       <Button
         size="xs"
         onClick={handlePolicyDiVisualizzazione}
@@ -392,37 +392,37 @@ const PolicyDiVisualizzazione: React.FC<PolicyDiVisualizzazioneProps> = ({
           {/* --- Sezione VISUALIZZAZIONE --- */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-md font-semibold">Visualizzazione</h3>
+              <h3 className="title-card">Visualizzazione</h3>
               <Button size="xs" variant="primary" onClick={handleAddVisualizzazioneRegola}>
                 Aggiungi Regola
               </Button>
             </div>
             {localPolicy?.visualizzazione?.length === 0 ? (
-              <p className="text-sm text-gray-500 italic">
+              <p className="text-sm text-slate-500 italic">
                 Nessuna regola di visualizzazione impostata.
               </p>
             ) : (
               localPolicy?.visualizzazione?.map((visual, i) => (
                 <div
                   key={i}
-                  className="p-3 mb-3 border border-gray-100 rounded-md bg-gray-50 relative"
+                  className="p-3 mb-3 border border-slate-100 rounded-control bg-slate-50 relative"
                 >
                   <button
                     type="button"
                     onClick={() => handleRemoveRegola("visualizzazione", i)}
-                    className="absolute top-2 right-2 text-gray-400 hover:text-red-600"
+                    className="absolute top-2 right-2 text-slate-400 hover:text-danger"
                     aria-label="Rimuovi regola di visualizzazione"
                   >
                     <Lucide aria-hidden="true" icon="Trash2" className="w-4 h-4" />
                   </button>
-                  <p className="font-medium text-sm text-gray-700 mb-2">
+                  <p className="font-medium text-sm text-slate-700 mb-2">
                     Regola n. {i + 1}
                   </p>
 
                   {/* INCLUSIONE */}
                   <div className="mb-2">
                     <div className="flex items-center justify-between mb-1">
-                      <p className="text-sm text-gray-600 font-semibold">Includi se</p>
+                      <p className="text-sm text-slate-600 font-semibold">Includi se</p>
                       <Button
                         size="xs"
                         variant="secondary"
@@ -433,11 +433,11 @@ const PolicyDiVisualizzazione: React.FC<PolicyDiVisualizzazioneProps> = ({
                       </Button>
                     </div>
                     {visual.inclusione.length === 0 ? (
-                      <p className="text-sm text-gray-400 italic">Nessuna inclusione</p>
+                      <p className="text-sm text-slate-400 italic">Nessuna inclusione</p>
                     ) : (
                       <ul className="mt-1 space-y-2">
                         {visual.inclusione.map((item, idx) => (
-                          <li key={idx} className="flex items-center gap-2 bg-white p-2 rounded">
+                          <li key={idx} className="flex items-center gap-2 bg-white p-2 rounded-control">
                             <FormSelect
                               formSelectSize="sm"
                               value={item.tipo}
@@ -473,7 +473,7 @@ const PolicyDiVisualizzazione: React.FC<PolicyDiVisualizzazioneProps> = ({
                               onClick={() =>
                                 handleRemoveItem("visualizzazione", i, "inclusione", idx)
                               }
-                              className="text-red-500 hover:text-red-700 ml-2"
+                              className="text-danger hover:text-danger/80 ml-2"
                               aria-label="Rimuovi inclusione"
                             >
                               <Lucide aria-hidden="true" icon="Trash2" className="w-4 h-4" />
@@ -487,7 +487,7 @@ const PolicyDiVisualizzazione: React.FC<PolicyDiVisualizzazioneProps> = ({
                   {/* ESCLUSIONE */}
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <p className="text-sm text-gray-600 font-semibold">Escludi se</p>
+                      <p className="text-sm text-slate-600 font-semibold">Escludi se</p>
                       <Button
                         size="xs"
                         variant="secondary"
@@ -498,11 +498,11 @@ const PolicyDiVisualizzazione: React.FC<PolicyDiVisualizzazioneProps> = ({
                       </Button>
                     </div>
                     {visual.esclusione.length === 0 ? (
-                      <p className="text-sm text-gray-400 italic">Nessuna esclusione</p>
+                      <p className="text-sm text-slate-400 italic">Nessuna esclusione</p>
                     ) : (
                       <ul className="mt-1 space-y-2">
                         {visual.esclusione.map((item, idx) => (
-                          <li key={idx} className="flex items-center gap-2 bg-white p-2 rounded">
+                          <li key={idx} className="flex items-center gap-2 bg-white p-2 rounded-control">
                             <FormSelect
                               formSelectSize="sm"
                               value={item.tipo}
@@ -538,7 +538,7 @@ const PolicyDiVisualizzazione: React.FC<PolicyDiVisualizzazioneProps> = ({
                               onClick={() =>
                                 handleRemoveItem("visualizzazione", i, "esclusione", idx)
                               }
-                              className="text-red-500 hover:text-red-700 ml-2"
+                              className="text-danger hover:text-danger/80 ml-2"
                               aria-label="Rimuovi esclusione"
                             >
                               <Lucide aria-hidden="true" icon="Trash2" className="w-4 h-4" />
@@ -558,32 +558,32 @@ const PolicyDiVisualizzazione: React.FC<PolicyDiVisualizzazioneProps> = ({
           {/* --- Sezione FILTRI DI CONTENUTO --- */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-md font-semibold">Filtri di Contenuto</h3>
+              <h3 className="title-card">Filtri di contenuto</h3>
               <Button size="xs" variant="primary" onClick={handleAddFiltriRegola}>
                 Aggiungi Regola
               </Button>
             </div>
             {localPolicy?.filtri_contenuto?.length === 0 ? (
-              <p className="text-sm text-gray-500 italic">Nessuna regola di filtro impostata.</p>
+              <p className="text-sm text-slate-500 italic">Nessuna regola di filtro impostata.</p>
             ) : (
               localPolicy?.filtri_contenuto?.map((filtro, i) => (
                 <div
                   key={i}
-                  className="p-3 mb-3 border border-gray-100 rounded-md bg-gray-50 relative"
+                  className="p-3 mb-3 border border-slate-100 rounded-control bg-slate-50 relative"
                 >
                   <button
                     onClick={() => handleRemoveRegola("filtri_contenuto", i)}
-                    className="absolute top-2 right-2 text-gray-400 hover:text-red-600"
+                    className="absolute top-2 right-2 text-slate-400 hover:text-danger"
                     aria-label="Rimuovi regola di filtro"
                   >
                     <Lucide aria-hidden="true" icon="Trash2" className="w-4 h-4" />
                   </button>
-                  <p className="font-medium text-sm text-gray-700 mb-2">Filtro n. {i + 1}</p>
+                  <p className="font-medium text-sm text-slate-700 mb-2">Filtro n. {i + 1}</p>
 
                   {/* INCLUSIONE */}
                   <div className="mb-2">
                     <div className="flex items-center justify-between mb-1">
-                      <p className="text-sm text-gray-600 font-semibold">Includi se</p>
+                      <p className="text-sm text-slate-600 font-semibold">Includi se</p>
                       <Button
                         size="xs"
                         variant="secondary"
@@ -594,11 +594,11 @@ const PolicyDiVisualizzazione: React.FC<PolicyDiVisualizzazioneProps> = ({
                       </Button>
                     </div>
                     {filtro.inclusione.length === 0 ? (
-                      <p className="text-sm text-gray-400 italic">Nessuna inclusione</p>
+                      <p className="text-sm text-slate-400 italic">Nessuna inclusione</p>
                     ) : (
                       <ul className="mt-1 space-y-2">
                         {filtro.inclusione.map((item, idx) => (
-                          <li key={idx} className="flex items-center gap-2 bg-white p-2 rounded">
+                          <li key={idx} className="flex items-center gap-2 bg-white p-2 rounded-control">
                             <FormSelect
                               formSelectSize="sm"
                               value={item.tipo}
@@ -634,7 +634,7 @@ const PolicyDiVisualizzazione: React.FC<PolicyDiVisualizzazioneProps> = ({
                               onClick={() =>
                                 handleRemoveItem("filtri_contenuto", i, "inclusione", idx)
                               }
-                              className="text-red-500 hover:text-red-700 ml-2"
+                              className="text-danger hover:text-danger/80 ml-2"
                               aria-label="Rimuovi inclusione"
                             >
                               <Lucide aria-hidden="true" icon="Trash2" className="w-4 h-4" />
@@ -648,7 +648,7 @@ const PolicyDiVisualizzazione: React.FC<PolicyDiVisualizzazioneProps> = ({
                   {/* ESCLUSIONE */}
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <p className="text-sm text-gray-600 font-semibold">Escludi se</p>
+                      <p className="text-sm text-slate-600 font-semibold">Escludi se</p>
                       <Button
                         size="xs"
                         variant="secondary"
@@ -659,11 +659,11 @@ const PolicyDiVisualizzazione: React.FC<PolicyDiVisualizzazioneProps> = ({
                       </Button>
                     </div>
                     {filtro.esclusione.length === 0 ? (
-                      <p className="text-sm text-gray-400 italic">Nessuna esclusione</p>
+                      <p className="text-sm text-slate-400 italic">Nessuna esclusione</p>
                     ) : (
                       <ul className="mt-1 space-y-2">
                         {filtro.esclusione.map((item, idx) => (
-                          <li key={idx} className="flex items-center gap-2 bg-white p-2 rounded">
+                          <li key={idx} className="flex items-center gap-2 bg-white p-2 rounded-control">
                             <FormSelect
                               formSelectSize="sm"
                               value={item.tipo}
@@ -699,7 +699,7 @@ const PolicyDiVisualizzazione: React.FC<PolicyDiVisualizzazioneProps> = ({
                               onClick={() =>
                                 handleRemoveItem("filtri_contenuto", i, "esclusione", idx)
                               }
-                              className="text-red-500 hover:text-red-700 ml-2"
+                              className="text-danger hover:text-danger/80 ml-2"
                               aria-label="Rimuovi esclusione"
                             >
                               <Lucide aria-hidden="true" icon="Trash2" className="w-4 h-4" />

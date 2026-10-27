@@ -1,4 +1,4 @@
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/utils/twMerge";
 import { createContext, useContext } from "react";
 
 interface TableProps
@@ -25,11 +25,12 @@ const tableContext = createContext<{
   sm: false,
 });
 
+// Le righe si evidenziano al passaggio del mouse salvo hover={false}
 function Table({
   className,
   dark,
   bordered,
-  hover,
+  hover = true,
   striped,
   sm,
   ...props
@@ -70,17 +71,17 @@ const theadContext = createContext<{
   variant: "default",
 });
 
-const TableThead: React.FC<TheadProps> = ({ className, ...props }) => {
+const TableThead: React.FC<TheadProps> = ({ className, variant, ...props }) => {
   return (
     <theadContext.Provider
       value={{
-        variant: props.variant,
+        variant,
       }}
     >
       <thead
         className={twMerge([
-          props.variant === "light" && "bg-slate-200/60 dark:bg-slate-200",
-          props.variant === "dark" && "bg-dark text-white dark:bg-black/30",
+          variant === "light" && "bg-slate-200/60 dark:bg-slate-200",
+          variant === "dark" && "bg-dark text-white dark:bg-black/30",
           className,
         ])}
         {...props}
@@ -109,7 +110,7 @@ const TableTr: React.FC<TrProps> = ({ className, ...props }) => {
     <tr
       className={twMerge([
         table.hover &&
-          "[&:hover_td]:bg-slate-100 [&:hover_td]:dark:bg-darkmode-300 [&:hover_td]:dark:bg-opacity-50",
+          "[&:hover_td]:bg-slate-50 [&:hover_td]:dark:bg-darkmode-300 [&:hover_td]:dark:bg-opacity-50",
         table.striped &&
           "[&:nth-of-type(odd)_td]:bg-slate-100 [&:nth-of-type(odd)_td]:dark:bg-darkmode-300 [&:nth-of-type(odd)_td]:dark:bg-opacity-50",
         className,
@@ -130,10 +131,12 @@ const TableTh: React.FC<ThProps> = ({ className, ...props }) => {
   return (
     <th
       className={twMerge([
-        "font-medium px-5 py-3 border-b-2 dark:border-darkmode-300",
-        thead.variant === "light" && "border-b-0 text-slate-700",
-        thead.variant === "dark" && "border-b-0",
-        table.dark && "border-slate-600 dark:border-darkmode-300",
+        "whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-2.5 text-2xs font-medium uppercase tracking-wide text-slate-500",
+        "dark:border-darkmode-300 dark:bg-transparent dark:text-slate-400",
+        // Le varianti colorate del Thead danno sfondo e testo a tutta la riga
+        thead.variant === "light" && "border-b-0 bg-transparent text-slate-700",
+        thead.variant === "dark" && "border-b-0 bg-transparent text-white",
+        table.dark && "border-slate-600 bg-transparent text-slate-300 dark:border-darkmode-300",
         table.bordered && "border-l border-r border-t",
         table.sm && "px-4 py-2",
         className,
@@ -153,9 +156,9 @@ const TableTd: React.FC<TdProps> = ({ className, ...props }) => {
   return (
     <td
       className={twMerge([
-        "px-5 py-3 border-b dark:border-darkmode-300",
+        "px-5 py-3 border-b border-slate-100 dark:border-darkmode-300",
+        table.bordered && "border-l border-r border-t border-slate-200",
         table.dark && "border-slate-600 dark:border-darkmode-300",
-        table.bordered && "border-l border-r border-t",
         table.sm && "px-4 py-2",
         className,
       ])}

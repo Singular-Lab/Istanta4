@@ -77,4 +77,12 @@ describe("ConfirmDialog", () => {
     expect(icona).toHaveClass("text-primary");
     expect(icona).not.toHaveClass("text-danger");
   });
+
+  it("il nome della finestra è il titolo, con la tipografia dei titoli di dialog", async () => {
+    apriDialog();
+
+    const finestra = await screen.findByRole("dialog", { name: "Eliminare il kit?" });
+    expect(within(finestra).getByText("Eliminare il kit?")).toHaveClass("title-section");
+    expect(within(finestra).getByText("Azione irreversibile")).toBeInTheDocument();
+  });
 });

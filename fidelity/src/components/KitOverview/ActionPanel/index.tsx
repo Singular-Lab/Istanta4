@@ -1,3 +1,4 @@
+import Sezione from "@/components/Base/Sezione";
 import { FC } from "react";
 import { STATO_LAVORAZIONE_KIT_RUNTIME, TIPO_KIT_DESIGN } from "../../../../lib/enums";
 import { ActionPanelProps } from "../types";
@@ -92,11 +93,9 @@ const ActionPanel: FC<ActionPanelProps> = ({
   };
 
   return (
-    <div className="box my-5 mb-10">
-      <div className="pt-5 p-4 mt-auto">
-        {renderContent()}
-      </div>
-    </div>
+    <Sezione icona="Zap" titolo="Azioni" descrizione="Prossimi passi della lavorazione">
+      {renderContent()}
+    </Sezione>
   );
 };
 

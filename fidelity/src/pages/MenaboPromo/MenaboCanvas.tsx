@@ -5,6 +5,7 @@ import {
     ContextMenuSeparator,
     ContextMenuTrigger,
 } from "@/components/Base/ContextMenu";
+import Button from "@/components/Base/Button";
 import Dialog from "@/components/Base/Headless/Dialog";
 import { FormTextarea } from "@/components/Base/Form";
 import Menu from "@/components/Base/Headless/Menu";
@@ -1309,16 +1310,16 @@ export default function MenaboCanvas({
             {/* ── Toolbar ── */}
             <div className="flex flex-wrap items-center gap-2 border-b border-slate-200/80 bg-slate-50/80 px-4 py-3 select-none dark:border-darkmode-400 dark:bg-darkmode-700/40">
                 <div className="mr-auto flex items-center gap-2">
-                    <span className="flex h-8 w-8 items-center justify-center rounded border border-slate-200 bg-white text-slate-500 dark:border-darkmode-400 dark:bg-darkmode-600 dark:text-slate-300">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-control border border-slate-200 bg-white text-slate-500 dark:border-darkmode-400 dark:bg-darkmode-600 dark:text-slate-300">
                         <Lucide icon="FileText" className="h-4 w-4" />
                     </span>
                     <div className="leading-tight">
                         <div className="flex items-center gap-1.5">
-                            <span className="text-sm font-semibold text-slate-700 dark:text-slate-100">Gestione Menabò</span>
+                            <h1 className="title-card dark:text-slate-100">Gestione Menabò</h1>
                             {nomePromo && (
                                 <>
                                     <span className="text-slate-300 dark:text-darkmode-400">·</span>
-                                    <span className="text-sm font-medium text-primary truncate max-w-[260px]" title={nomePromo}>{nomePromo}</span>
+                                    <span className="max-w-64 truncate text-sm font-medium text-primary" title={nomePromo}>{nomePromo}</span>
                                 </>
                             )}
                         </div>
@@ -1334,8 +1335,10 @@ export default function MenaboCanvas({
                 </div>
 
                 {/* Tool mode */}
-                <div className="flex h-8 items-center overflow-hidden rounded border border-slate-200 bg-white dark:border-darkmode-400 dark:bg-darkmode-600">
+                <div className="flex h-8 items-center overflow-hidden rounded-control border border-slate-200 bg-white dark:border-darkmode-400 dark:bg-darkmode-600">
                     <button
+                        type="button"
+                        aria-pressed={toolMode === "select"}
                         onClick={() => setToolMode("select")}
                         className={clsx(
                             "flex h-8 items-center gap-1.5 px-2.5 text-xs font-medium transition-colors active:scale-[0.98]",
@@ -1349,6 +1352,8 @@ export default function MenaboCanvas({
                         Cursore
                     </button>
                     <button
+                        type="button"
+                        aria-pressed={toolMode === "pan"}
                         onClick={() => setToolMode("pan")}
                         className={clsx(
                             "flex h-8 items-center gap-1.5 border-l border-slate-200 px-2.5 text-xs font-medium transition-colors active:scale-[0.98] dark:border-darkmode-400",
@@ -1364,8 +1369,9 @@ export default function MenaboCanvas({
                 </div>
 
                 {/* Undo / Redo */}
-                <div className="flex h-8 items-center overflow-hidden rounded border border-slate-200 bg-white dark:border-darkmode-400 dark:bg-darkmode-600">
+                <div className="flex h-8 items-center overflow-hidden rounded-control border border-slate-200 bg-white dark:border-darkmode-400 dark:bg-darkmode-600">
                     <button
+                        type="button"
                         onClick={undo}
                         disabled={!canUndo}
                         className="flex h-8 w-8 items-center justify-center text-slate-500 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-30 active:scale-[0.98] dark:text-slate-300 dark:hover:bg-darkmode-500"
@@ -1375,6 +1381,7 @@ export default function MenaboCanvas({
                         <Lucide aria-hidden="true" icon="Undo2" className="h-3.5 w-3.5" />
                     </button>
                     <button
+                        type="button"
                         onClick={redo}
                         disabled={!canRedo}
                         className="flex h-8 w-8 items-center justify-center border-l border-slate-200 text-slate-500 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-30 active:scale-[0.98] dark:border-darkmode-400 dark:text-slate-300 dark:hover:bg-darkmode-500"
@@ -1387,14 +1394,10 @@ export default function MenaboCanvas({
 
                 {/* Export */}
                 <Menu>
-                    <Menu.Button
-                        as="button"
-                        type="button"
-                        className="flex h-8 items-center gap-1.5 rounded border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-50 active:scale-[0.98] dark:border-darkmode-400 dark:bg-darkmode-600 dark:text-slate-300 dark:hover:bg-darkmode-500"
-                    >
-                        <Lucide icon="Download" className="h-3.5 w-3.5" />
+                    <Menu.Button as={Button} type="button" size="sm" variant="outline-secondary" className="h-8">
+                        <Lucide icon="Download" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
                         Esporta
-                        <Lucide icon="ChevronDown" className="h-3 w-3 text-slate-400" />
+                        <Lucide icon="ChevronDown" aria-hidden="true" className="ml-1 h-3 w-3 text-slate-400" />
                     </Menu.Button>
                     <Menu.Items className="w-44">
                         <Menu.Item
@@ -1403,8 +1406,8 @@ export default function MenaboCanvas({
                             disabled={isExportingExcel || !idPromo || !currentDivisionLayout}
                             className="w-full gap-2 text-left text-xs text-slate-600 dark:text-slate-200 disabled:opacity-50"
                         >
-                            <Lucide icon="FileSpreadsheet" className="h-4 w-4 text-emerald-600" />
-                            {isExportingExcel ? "Esportazione..." : "Excel"}
+                            <Lucide icon="FileSpreadsheet" aria-hidden="true" className="h-4 w-4 text-success" />
+                            {isExportingExcel ? "Esportazione…" : "Excel"}
                         </Menu.Item>
                         {
                             user?.is_admin && (
@@ -1414,8 +1417,8 @@ export default function MenaboCanvas({
                                     disabled={isExportingIndesignJson || !idPromo || !currentDivisionLayout}
                                     className="w-full gap-2 text-left text-xs text-slate-600 dark:text-slate-200 disabled:opacity-50"
                                 >
-                                    <Lucide icon="Braces" className="h-4 w-4 text-sky-600" />
-                                    {isExportingIndesignJson ? "Esportazione..." : "InDesign JSON"}
+                                    <Lucide icon="Braces" aria-hidden="true" className="h-4 w-4 text-info" />
+                                    {isExportingIndesignJson ? "Esportazione…" : "InDesign JSON"}
                                 </Menu.Item>
                             )
                         }
@@ -1423,25 +1426,24 @@ export default function MenaboCanvas({
                 </Menu>
 
                 {/* Save */}
-                <button
+                <Button
                     type="button"
+                    size="sm"
+                    variant={isDirty ? "primary" : "outline-secondary"}
+                    className="h-8"
                     onClick={handleSaveLayout}
-                    disabled={!onSaveLayout || !currentDivisionLayout || isSavingLayout}
-                    className={clsx(
-                        "flex h-8 items-center gap-1.5 rounded border px-2.5 text-xs font-medium transition-colors active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45",
-                        isDirty
-                            ? "border-primary bg-primary text-white hover:bg-primary/90"
-                            : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 dark:border-darkmode-400 dark:bg-darkmode-600 dark:text-slate-300 dark:hover:bg-darkmode-500",
-                    )}
+                    disabled={!onSaveLayout || !currentDivisionLayout}
+                    loading={isSavingLayout}
                     title={isDirty ? "Salva il menabò costruito" : "Menabò allineato all'ultimo salvataggio"}
                 >
-                    <Lucide icon="Save" className="h-3.5 w-3.5" />
-                    {isSavingLayout ? "Salvataggio..." : isDirty ? "Salva*" : "Salva"}
-                </button>
+                    {!isSavingLayout && <Lucide icon="Save" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />}
+                    {isSavingLayout ? "Salvataggio…" : isDirty ? "Salva*" : "Salva"}
+                </Button>
 
                 {/* Zoom */}
-                <div className="flex h-8 items-center overflow-hidden rounded border border-slate-200 bg-white dark:border-darkmode-400 dark:bg-darkmode-600">
+                <div className="flex h-8 items-center overflow-hidden rounded-control border border-slate-200 bg-white dark:border-darkmode-400 dark:bg-darkmode-600">
                     <button
+                        type="button"
                         onClick={() => changeZoom(-0.1)}
                         className="flex h-8 w-8 items-center justify-center text-slate-500 transition-colors hover:bg-slate-50 active:scale-[0.98] dark:text-slate-300 dark:hover:bg-darkmode-500"
                         title="Riduci zoom (Ctrl+-)"
@@ -1450,13 +1452,15 @@ export default function MenaboCanvas({
                         <Lucide aria-hidden="true" icon="Minus" className="h-3.5 w-3.5" />
                     </button>
                     <button
+                        type="button"
                         onClick={resetZoom}
-                        className="h-8 min-w-[48px] border-x border-slate-200 px-2 text-center text-xs font-medium leading-8 text-slate-600 transition-colors hover:bg-slate-50 dark:border-darkmode-400 dark:text-slate-300 dark:hover:bg-darkmode-500"
+                        className="h-8 min-w-12 border-x border-slate-200 px-2 text-center text-xs font-medium leading-8 text-slate-600 transition-colors hover:bg-slate-50 dark:border-darkmode-400 dark:text-slate-300 dark:hover:bg-darkmode-500"
                         title="Adatta allo spazio disponibile (Ctrl+0)"
                     >
                         {Math.round(scale * 100)}%
                     </button>
                     <button
+                        type="button"
                         onClick={() => changeZoom(0.1)}
                         className="flex h-8 w-8 items-center justify-center text-slate-500 transition-colors hover:bg-slate-50 active:scale-[0.98] dark:text-slate-300 dark:hover:bg-darkmode-500"
                         title="Aumenta zoom (Ctrl++)"
@@ -1467,17 +1471,17 @@ export default function MenaboCanvas({
                 </div>
 
                 {/* Page controls */}
-                <div className="flex h-8 items-center gap-1 rounded border border-slate-200 bg-white px-1.5 dark:border-darkmode-400 dark:bg-darkmode-600">
+                <div className="flex h-8 items-center gap-1 rounded-control border border-slate-200 bg-white px-1.5 dark:border-darkmode-400 dark:bg-darkmode-600">
                     <button
                         disabled={effectivePageCount <= 1}
                         onClick={decreasePageCount}
-                        className="flex h-6 w-6 items-center justify-center rounded text-slate-500 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-30 dark:text-slate-300 dark:hover:bg-darkmode-500"
+                        className="flex h-6 w-6 items-center justify-center rounded-control text-slate-500 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-30 dark:text-slate-300 dark:hover:bg-darkmode-500"
                         title="Rimuovi ultima pagina"
                         aria-label="Rimuovi ultima pagina"
                     >
                         <Lucide aria-hidden="true" icon="ChevronLeft" className="h-3.5 w-3.5" />
                     </button>
-                    <span className="min-w-[58px] text-center text-xs font-medium text-slate-600 dark:text-slate-300">
+                    <span className="min-w-14 text-center text-xs font-medium text-slate-600 dark:text-slate-300">
                         {effectivePageCount} {effectivePageCount === 1 ? "pagina" : "pagine"}
                     </span>
                     <button
@@ -1486,7 +1490,7 @@ export default function MenaboCanvas({
                             markDirty();
                             setPageCount(p => Math.max(p, effectivePageCount) + 1);
                         }}
-                        className="flex h-6 w-6 items-center justify-center rounded text-slate-500 transition-colors hover:bg-slate-50 active:scale-[0.98] dark:text-slate-300 dark:hover:bg-darkmode-500"
+                        className="flex h-6 w-6 items-center justify-center rounded-control text-slate-500 transition-colors hover:bg-slate-50 active:scale-[0.98] dark:text-slate-300 dark:hover:bg-darkmode-500"
                         title="Aggiungi pagina"
                         aria-label="Aggiungi pagina"
                     >
@@ -1495,37 +1499,32 @@ export default function MenaboCanvas({
                 </div>
 
                 {/* Delete all */}
-                <button
+                <Button
                     type="button"
+                    size="sm"
+                    variant="outline-danger"
+                    className="h-8"
                     onClick={() => setIsClearAllDialogOpen(true)}
                     disabled={!hasClearableContent}
-                    className={clsx(
-                        "flex h-8 items-center gap-1.5 rounded border px-2.5 text-xs font-medium transition-colors active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-30",
-                        hasClearableContent
-                            ? "border-danger/30 bg-danger/5 text-danger hover:bg-danger/10"
-                            : "border-slate-200 bg-white text-slate-400 dark:border-darkmode-400 dark:bg-darkmode-600",
-                    )}
                     title="Elimina tutte le referenze e le etichette del menabò corrente"
                 >
-                    <Lucide icon="Trash2" className="h-3.5 w-3.5" />
+                    <Lucide icon="Trash2" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
                     Elimina tutto
-                </button>
+                </Button>
 
                 {/* Delete selected */}
-                <button
+                <Button
+                    type="button"
+                    size="sm"
+                    variant="outline-danger"
+                    className="h-8 w-8 p-0"
                     onClick={deleteSelected}
                     disabled={!selectedId}
-                    className={clsx(
-                        "flex h-8 w-8 items-center justify-center rounded border transition-colors active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-30",
-                        selectedId
-                            ? "border-danger/30 bg-danger/5 text-danger hover:bg-danger/10"
-                            : "border-slate-200 bg-white text-slate-400 dark:border-darkmode-400 dark:bg-darkmode-600",
-                    )}
                     title="Elimina selezionato (Canc)"
                     aria-label="Elimina selezionato (Canc)"
                 >
                     <Lucide aria-hidden="true" icon="Trash2" className="h-3.5 w-3.5" />
-                </button>
+                </Button>
 
             </div>
 
@@ -1584,7 +1583,7 @@ export default function MenaboCanvas({
                                         return (
                                             <div key={pageIdx} className="group/page flex flex-col items-center gap-2">
                                                 {/* Page header */}
-                                                <div className="flex items-center gap-2 rounded border border-slate-200 bg-white px-2.5 py-1.5 shadow-sm dark:border-darkmode-400 dark:bg-darkmode-600">
+                                                <div className="flex items-center gap-2 rounded-control border border-slate-200 bg-white px-2.5 py-1.5 shadow-sm dark:border-darkmode-400 dark:bg-darkmode-600">
                                                     <span className="select-none text-xs font-medium text-slate-500 dark:text-slate-300">
                                                         Pagina {pageIdx + 1} / {effectivePageCount}
                                                     </span>
@@ -1603,7 +1602,7 @@ export default function MenaboCanvas({
                                                         onChange={e => handlePageMaxChange(pageIdx, e.target.value)}
                                                         onClick={e => e.stopPropagation()}
                                                         title="Massimo referenze in pagina"
-                                                        className="h-6 w-14 rounded border border-slate-200 bg-white px-1.5 text-center text-xs font-semibold tabular-nums text-slate-600 outline-none transition-colors focus:border-primary/50 dark:border-darkmode-400 dark:bg-darkmode-700 dark:text-slate-200"
+                                                        className="h-6 w-14 rounded-control border border-slate-200 bg-white px-1.5 text-center text-xs font-semibold tabular-nums text-slate-600 outline-none transition-colors focus:border-primary/50 dark:border-darkmode-400 dark:bg-darkmode-700 dark:text-slate-200"
                                                     />
                                                     {pageLabel && (
                                                         <>
@@ -1620,7 +1619,7 @@ export default function MenaboCanvas({
                                                                 onClick={() => removePageLabel(pageIdx)}
                                                                 title="Rimuovi etichetta e sblocca pagina"
                                                                 aria-label="Rimuovi etichetta e sblocca pagina"
-                                                                className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded transition-colors hover:bg-slate-100 dark:hover:bg-darkmode-500"
+                                                                className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full transition-colors hover:bg-slate-100 dark:hover:bg-darkmode-500"
                                                                 style={{ color: pageLabelColor }}
                                                             >
                                                                 <Lucide aria-hidden="true" icon="X" className="h-2.5 w-2.5" />
@@ -1642,7 +1641,7 @@ export default function MenaboCanvas({
                                                                 }}
                                                                 title="Elimina questa pagina"
                                                                 aria-label="Elimina questa pagina"
-                                                                className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded text-slate-400 transition-colors hover:bg-danger/10 hover:text-danger dark:hover:bg-danger/20"
+                                                                className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-danger/10 hover:text-danger dark:hover:bg-danger/20"
                                                             >
                                                                 <Lucide aria-hidden="true" icon="Trash2" className="h-2.5 w-2.5" />
                                                             </button>
@@ -1987,7 +1986,7 @@ export default function MenaboCanvas({
 
                                                     {isNotesOpen && (
                                                         <div
-                                                            className="absolute z-40 flex max-h-full w-72 max-w-full flex-col overflow-hidden rounded-2xl border border-amber-200/80 bg-white/95 shadow-[0_24px_70px_-32px_rgba(146,64,14,0.55),0_10px_28px_-20px_rgba(15,23,42,0.45)] backdrop-blur dark:border-amber-500/30 dark:bg-darkmode-700/95"
+                                                            className="absolute z-40 flex max-h-full w-72 max-w-full flex-col overflow-hidden rounded-card border border-amber-200/80 bg-white/95 shadow-[0_24px_70px_-32px_rgba(146,64,14,0.55),0_10px_28px_-20px_rgba(15,23,42,0.45)] backdrop-blur dark:border-amber-500/30 dark:bg-darkmode-700/95"
                                                             style={isSingleColumn
                                                                 // In colonna singola la pagina occupa tutta la larghezza:
                                                                 // il pannello si apre dentro il foglio per non creare overflow
@@ -1998,7 +1997,7 @@ export default function MenaboCanvas({
                                                         >
                                                             <div className="flex items-start justify-between gap-3 border-b border-amber-100/80 bg-gradient-to-br from-amber-50 via-white to-orange-50 px-3.5 py-3 dark:border-amber-500/20 dark:from-amber-500/10 dark:via-darkmode-700 dark:to-darkmode-700">
                                                                 <div className="flex min-w-0 items-start gap-2.5">
-                                                                    <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700 ring-1 ring-amber-200/80 dark:bg-amber-500/15 dark:text-amber-200 dark:ring-amber-400/25">
+                                                                    <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-card bg-amber-100 text-amber-700 ring-1 ring-amber-200/80 dark:bg-amber-500/15 dark:text-amber-200 dark:ring-amber-400/25">
                                                                         <Lucide icon="StickyNote" className="h-4 w-4" />
                                                                     </span>
                                                                     <div className="min-w-0">
@@ -2022,14 +2021,14 @@ export default function MenaboCanvas({
                                                                     onClick={() => closeNotesPanel(pageIdx)}
                                                                     title="Chiudi"
                                                                     aria-label="Chiudi"
-                                                                    className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-white/80 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 dark:text-slate-500 dark:hover:bg-darkmode-600 dark:hover:text-slate-200"
+                                                                    className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-control text-slate-400 transition-colors hover:bg-white/80 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 dark:text-slate-500 dark:hover:bg-darkmode-600 dark:hover:text-slate-200"
                                                                 >
                                                                     <Lucide aria-hidden="true" icon="X" className="h-3.5 w-3.5" />
                                                                 </button>
                                                             </div>
                                                             <div className="flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top_left,rgba(251,191,36,0.10),transparent_42%)] p-3">
                                                                 {notes.length === 0 ? (
-                                                                    <div className="rounded-xl border border-dashed border-amber-200 bg-amber-50/60 px-3 py-5 text-center dark:border-amber-500/25 dark:bg-amber-500/10">
+                                                                    <div className="rounded-card border border-dashed border-amber-200 bg-amber-50/60 px-3 py-5 text-center dark:border-amber-500/25 dark:bg-amber-500/10">
                                                                         <Lucide icon="PencilLine" className="mx-auto mb-2 h-4 w-4 text-amber-500 dark:text-amber-300" />
                                                                         <p className="text-2xs font-medium text-slate-500 dark:text-slate-300">
                                                                             Nessuna nota per questa pagina.
@@ -2041,7 +2040,7 @@ export default function MenaboCanvas({
                                                                 ) : (
                                                                     <div className="flex flex-col gap-2.5">
                                                                         {notes.map((note, noteIdx) => (
-                                                                            <div key={note.id} className="group/note relative overflow-hidden rounded-xl border border-amber-100 bg-white p-2.5 shadow-[0_10px_28px_-22px_rgba(146,64,14,0.65)] transition-all duration-200 hover:-translate-y-0.5 hover:border-amber-200 hover:shadow-[0_16px_34px_-24px_rgba(146,64,14,0.75)] dark:border-amber-500/15 dark:bg-darkmode-600">
+                                                                            <div key={note.id} className="group/note relative overflow-hidden rounded-card border border-amber-100 bg-white p-2.5 shadow-[0_10px_28px_-22px_rgba(146,64,14,0.65)] transition-all duration-200 hover:-translate-y-0.5 hover:border-amber-200 hover:shadow-[0_16px_34px_-24px_rgba(146,64,14,0.75)] dark:border-amber-500/15 dark:bg-darkmode-600">
                                                                                 <span className="absolute inset-y-3 left-0 w-1 rounded-r-full bg-amber-300/80 dark:bg-amber-300/50" />
                                                                                 <div className="mb-2 flex items-center justify-between gap-2 pl-1">
                                                                                     <span className="flex items-center gap-1.5 text-3xs font-semibold tracking-wide text-slate-500 dark:text-slate-300">
@@ -2053,7 +2052,7 @@ export default function MenaboCanvas({
                                                                                         onClick={() => removePageNote(pageIdx, note.id)}
                                                                                         title="Elimina nota"
                                                                                         aria-label="Elimina nota"
-                                                                                        className="flex h-6 w-6 items-center justify-center rounded-lg text-slate-300 opacity-70 transition-all hover:bg-red-50 hover:text-red-500 hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-200 dark:text-slate-500 dark:hover:bg-red-500/10 dark:hover:text-red-300"
+                                                                                        className="flex h-6 w-6 items-center justify-center rounded-control text-slate-300 opacity-70 transition-all hover:bg-red-50 hover:text-red-500 hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-200 dark:text-slate-500 dark:hover:bg-red-500/10 dark:hover:text-red-300"
                                                                                     >
                                                                                         <Lucide aria-hidden="true" icon="Trash2" className="h-3.5 w-3.5" />
                                                                                     </button>
@@ -2076,7 +2075,7 @@ export default function MenaboCanvas({
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => addPageNote(pageIdx)}
-                                                                    className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 py-2 text-xs font-semibold text-amber-800 transition-all duration-200 hover:-translate-y-0.5 hover:border-amber-300 hover:bg-amber-100 hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 active:translate-y-0 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-200 dark:hover:border-amber-400/50 dark:hover:bg-amber-500/15"
+                                                                    className="flex w-full items-center justify-center gap-1.5 rounded-card border border-amber-200 bg-amber-50 py-2 text-xs font-semibold text-amber-800 transition-all duration-200 hover:-translate-y-0.5 hover:border-amber-300 hover:bg-amber-100 hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 active:translate-y-0 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-200 dark:hover:border-amber-400/50 dark:hover:bg-amber-500/15"
                                                                 >
                                                                     <Lucide icon="Plus" className="h-3.5 w-3.5" /> Aggiungi nota
                                                                 </button>
@@ -2113,7 +2112,7 @@ export default function MenaboCanvas({
                             <div className="flex items-start justify-between gap-3 border-b border-slate-200/80 bg-slate-50/80 px-4 py-3 dark:border-darkmode-400 dark:bg-darkmode-700/40">
                                 <div className="flex min-w-0 items-start gap-2.5">
                                     <span
-                                        className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded border"
+                                        className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-control border"
                                         style={{
                                             color: selectedColor,
                                             borderColor: hexToRgba(selectedColor, 0.28),
@@ -2123,17 +2122,16 @@ export default function MenaboCanvas({
                                         <Lucide icon="List" className="h-4 w-4" />
                                     </span>
                                     <div className="min-w-0">
-                                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                                            Anteprima referenze
-                                        </div>
-                                        <div className="truncate text-sm font-semibold text-slate-700 dark:text-slate-100">
-                                            {selectedItem.label}
-                                        </div>
+                                        <p className="title-eyebrow">Anteprima referenze</p>
+                                        <h2 className="title-card truncate dark:text-slate-100">{selectedItem.label}</h2>
                                     </div>
                                 </div>
                                 <div className="flex flex-shrink-0 items-center gap-1">
-                                    <button
+                                    <Button
                                         type="button"
+                                        size="xs"
+                                        variant="outline-secondary"
+                                        className="h-7 w-7 p-0"
                                         onClick={handleCopiaCodici}
                                         disabled={selectedPreviewItems.every(item => !item.codice || item.codice === "—")}
                                         title={codiciCopiati ? "Codici copiati" : "Copia tutti i codici"}
@@ -2142,13 +2140,13 @@ export default function MenaboCanvas({
                                         <Lucide
                                             aria-hidden="true"
                                             icon={codiciCopiati ? "Check" : "Copy"}
-                                            className={clsx("h-3.5 w-3.5", codiciCopiati && "text-green-500")}
+                                            className={clsx("h-3.5 w-3.5", codiciCopiati && "text-success")}
                                         />
-                                    </button>
+                                    </Button>
                                     <button
                                         type="button"
                                         onClick={() => setIsPreviewPanelOpen(false)}
-                                        className="flex h-7 w-7 items-center justify-center rounded text-slate-400 transition-colors hover:bg-white hover:text-slate-600 active:scale-[0.98] dark:hover:bg-darkmode-600 dark:hover:text-slate-200"
+                                        className="flex h-7 w-7 items-center justify-center rounded-control text-slate-400 transition-colors hover:bg-white hover:text-slate-600 active:scale-[0.98] dark:hover:bg-darkmode-600 dark:hover:text-slate-200"
                                         title="Nascondi anteprima"
                                         aria-label="Nascondi anteprima"
                                     >
@@ -2159,13 +2157,13 @@ export default function MenaboCanvas({
 
 
                             <div className="grid grid-cols-2 gap-2 border-b border-slate-200/80 px-4 py-3 text-xs dark:border-darkmode-400">
-                                <div className="rounded border border-slate-200/80 bg-slate-50 px-2.5 py-2 dark:border-darkmode-400 dark:bg-darkmode-700/40">
+                                <div className="rounded-control border border-slate-200/80 bg-slate-50 px-2.5 py-2 dark:border-darkmode-400 dark:bg-darkmode-700/40">
                                     <div className="text-slate-400">Referenze</div>
                                     <div className="mt-0.5 font-semibold tabular-nums text-slate-700 dark:text-slate-100">
                                         {selectedPreviewItems.length}
                                     </div>
                                 </div>
-                                <div className="rounded border border-slate-200/80 bg-slate-50 px-2.5 py-2 dark:border-darkmode-400 dark:bg-darkmode-700/40">
+                                <div className="rounded-control border border-slate-200/80 bg-slate-50 px-2.5 py-2 dark:border-darkmode-400 dark:bg-darkmode-700/40">
                                     <div className="text-slate-400">Pagina</div>
                                     <div className="mt-0.5 font-semibold tabular-nums text-slate-700 dark:text-slate-100">
                                         {selectedGroupPagesLabel}
@@ -2184,9 +2182,9 @@ export default function MenaboCanvas({
                                         {selectedPreviewItems.map((preview, index) => (
                                             <div
                                                 key={`${preview.codice}-${index}`}
-                                                className="flex gap-3 rounded border border-slate-200/80 bg-slate-50/70 p-2.5 transition-colors hover:border-slate-300 hover:bg-white dark:border-darkmode-400 dark:bg-darkmode-700/30 dark:hover:bg-darkmode-700/60"
+                                                className="flex gap-3 rounded-control border border-slate-200/80 bg-slate-50/70 p-2.5 transition-colors hover:border-slate-300 hover:bg-white dark:border-darkmode-400 dark:bg-darkmode-700/30 dark:hover:bg-darkmode-700/60"
                                             >
-                                                <div className="relative flex h-24 w-24 flex-shrink-0 items-center justify-center overflow-hidden rounded border border-slate-200 bg-white dark:border-darkmode-400 dark:bg-darkmode-600">
+                                                <div className="relative flex h-24 w-24 flex-shrink-0 items-center justify-center overflow-hidden rounded-control border border-slate-200 bg-white dark:border-darkmode-400 dark:bg-darkmode-600">
                                                     <Lucide icon="Image" className="h-6 w-6 text-slate-300" />
                                                     {preview.foto_url && (
                                                         <img
@@ -2231,7 +2229,7 @@ export default function MenaboCanvas({
                                                                 return (
                                                                     <span
                                                                         key={campo.nome_campo}
-                                                                        className="inline-flex max-w-full items-center gap-1 rounded border border-slate-200 bg-white px-2 py-1 text-2xs font-medium text-slate-500 dark:border-darkmode-400 dark:bg-darkmode-600 dark:text-slate-300"
+                                                                        className="inline-flex max-w-full items-center gap-1 rounded-control border border-slate-200 bg-white px-2 py-1 text-2xs font-medium text-slate-500 dark:border-darkmode-400 dark:bg-darkmode-600 dark:text-slate-300"
                                                                         title={`${campo.label}: ${valore}`}
                                                                     >
                                                                         <span className="text-slate-400">{campo.label}</span>
@@ -2253,7 +2251,7 @@ export default function MenaboCanvas({
                             <button
                                 type="button"
                                 onClick={() => setIsPreviewPanelOpen(true)}
-                                className="flex h-7 w-7 items-center justify-center rounded text-slate-400 transition-colors hover:bg-white hover:text-slate-600 active:scale-[0.98] dark:hover:bg-darkmode-600 dark:hover:text-slate-200"
+                                className="flex h-7 w-7 items-center justify-center rounded-control text-slate-400 transition-colors hover:bg-white hover:text-slate-600 active:scale-[0.98] dark:hover:bg-darkmode-600 dark:hover:text-slate-200"
                                 title="Mostra anteprima"
                                 aria-label="Mostra anteprima"
                             >
@@ -2299,11 +2297,7 @@ export default function MenaboCanvas({
                 centered
             >
                 <Dialog.Panel>
-                    <Dialog.Title>
-                        <h2 className="mr-auto text-base font-medium text-slate-700 dark:text-slate-100">
-                            Rimuovi pagina
-                        </h2>
-                    </Dialog.Title>
+                    <Dialog.Title>Rimuovi pagina</Dialog.Title>
                     <Dialog.Description>
                         <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-300">
                             La pagina {pendingPageRemoval ? pendingPageRemoval.pageIndex + 1 : ""} contiene{" "}
@@ -2313,23 +2307,19 @@ export default function MenaboCanvas({
                         </p>
                     </Dialog.Description>
                     <Dialog.Footer>
-                        <button
-                            type="button"
-                            onClick={() => setPendingPageRemoval(null)}
-                            className="mr-2 inline-flex h-9 items-center justify-center rounded border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 dark:border-darkmode-400 dark:bg-darkmode-600 dark:text-slate-200 dark:hover:bg-darkmode-500"
-                        >
+                        <Button type="button" variant="outline-secondary" onClick={() => setPendingPageRemoval(null)}>
                             Annulla
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                             type="button"
+                            variant="danger"
                             onClick={() => {
                                 if (!pendingPageRemoval) return;
                                 removePageAtIndex(pendingPageRemoval.pageIndex);
                             }}
-                            className="inline-flex h-9 items-center justify-center rounded border border-danger bg-danger px-4 text-sm font-medium text-white transition-colors hover:bg-danger/90"
                         >
                             Rimuovi
-                        </button>
+                        </Button>
                     </Dialog.Footer>
                 </Dialog.Panel>
             </Dialog>
@@ -2341,31 +2331,19 @@ export default function MenaboCanvas({
                 centered
             >
                 <Dialog.Panel>
-                    <Dialog.Title>
-                        <h2 className="mr-auto text-base font-medium text-slate-700 dark:text-slate-100">
-                            Elimina tutto
-                        </h2>
-                    </Dialog.Title>
+                    <Dialog.Title>Elimina tutto</Dialog.Title>
                     <Dialog.Description>
                         <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-300">
                             Verranno rimosse tutte le referenze e le etichette del menabò corrente.
                         </p>
                     </Dialog.Description>
                     <Dialog.Footer>
-                        <button
-                            type="button"
-                            onClick={() => setIsClearAllDialogOpen(false)}
-                            className="mr-2 inline-flex h-9 items-center justify-center rounded border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 dark:border-darkmode-400 dark:bg-darkmode-600 dark:text-slate-200 dark:hover:bg-darkmode-500"
-                        >
+                        <Button type="button" variant="outline-secondary" onClick={() => setIsClearAllDialogOpen(false)}>
                             Annulla
-                        </button>
-                        <button
-                            type="button"
-                            onClick={clearAllContent}
-                            className="inline-flex h-9 items-center justify-center rounded border border-danger bg-danger px-4 text-sm font-medium text-white transition-colors hover:bg-danger/90"
-                        >
+                        </Button>
+                        <Button type="button" variant="danger" onClick={clearAllContent}>
                             Elimina tutto
-                        </button>
+                        </Button>
                     </Dialog.Footer>
                 </Dialog.Panel>
             </Dialog>

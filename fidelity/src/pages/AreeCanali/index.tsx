@@ -1,11 +1,16 @@
 import Button from "@/components/Base/Button";
 import { FormField, FormInput, FormSelect } from "@/components/Base/Form";
-import { Dialog, Popover } from "@/components/Base/Headless";
+import BarraFiltri from "@/components/Base/BarraFiltri";
+import CampoRicerca from "@/components/Base/CampoRicerca";
+import { Dialog, Menu } from "@/components/Base/Headless";
 import Lucide from "@/components/Base/Lucide";
 import PageError from "@/components/Base/PageError";
-import PageHeader from "@/components/Base/PageHeader";
+import Pagina from "@/components/Base/Pagina";
+import Sezione from "@/components/Base/Sezione";
 import Spinner from "@/components/Base/Spinner";
 import StatusBadge from "@/components/Base/StatusBadge";
+import ConfirmDialog from "@/components/ConfirmDialog";
+import EmptyState from "@/components/EmptyState";
 import { PermissionGate } from "@/components/PermissionGate";
 import Table from "@/components/Base/Table";
 import withSessionChecked from "@/components/SessionChecker";
@@ -55,6 +60,7 @@ function Main() {
   const [showDialogEliminazioneAree, setShowDialogEliminazioneAree] = useState(false);
   const [showDialogEliminazioneCanali, setShowDialogEliminazioneCanali] = useState(false);
   const [showDialogEliminazioneCombinazioni, setShowDialogEliminazioneCombinazioni] = useState(false);
+  const [ricerca, setRicerca] = useState("");
   const { showNotification } = useNotification();
 
   const {
@@ -144,7 +150,6 @@ function Main() {
 
   const saveCombinazione = async (combinazione: { guidID: string; guidIDCanale: string; guidIDArea: string; enabled: string }): Promise<void> => {
     const combinazioneData = isEditingCombinazione ? { ...combinazione, id: editingCombinazioneId } : combinazione;
-    console.log("Combinazione:", combinazioneData);
     const result = await ServerCall.put<ServerResponse<CombinazioneCanaleAreaAttributes>>('/ACPV/setCombinazione', combinazioneData);
 
     if (result.esito && result.data) {
@@ -396,102 +401,67 @@ function Main() {
 
 
 
+  // Ricerca locale sulle tre tabelle, senza distinzione fra maiuscole e minuscole
+  const termine = ricerca.trim().toLowerCase();
+  const corrisponde = (...valori: (string | null | undefined)[]) =>
+    !termine || valori.some((valore) => (valore ?? "").toLowerCase().includes(termine));
+  const areeVisibili = (dataAreeCanaliECombinazioni?.aree ?? []).filter((area) => corrisponde(area.nome, area.codice));
+  const canaliVisibili = (dataAreeCanaliECombinazioni?.canali ?? []).filter((canale) => corrisponde(canale.nome, canale.codice));
+  const combinazioniVisibili = (dataAreeCanaliECombinazioni?.combinazioni ?? []).filter((combinazione) =>
+    corrisponde(combinazione.sigla)
+  );
+
+  // Riga vuota della tabella: distingue l'assenza di dati da una ricerca senza risultati
+  const rigaVuota = (colonne: number, senzaDati: boolean, titolo: string, icona: "MapPin" | "Radio" | "Box") => (
+    <Table.Tr>
+      <Table.Td colSpan={colonne} className="p-0">
+        {senzaDati ? (
+          <EmptyState compatta icon={icona} title={titolo} description="Usa Crea per aggiungerne." />
+        ) : (
+          <EmptyState compatta icon="SearchX" title="Nessun risultato" description={`Nessun elemento corrisponde a "${ricerca.trim()}".`} />
+        )}
+      </Table.Td>
+    </Table.Tr>
+  );
+
   return (
     <>
-      <Dialog open={showDialogEliminazioneAree} onClose={() => {
-        setShowDialogEliminazioneAree(false);
-      }}>
-        <Dialog.Panel>
-          <Dialog.Title>
-            <h2 className="title-card mr-auto">
-              Elimina Area
-            </h2>
-          </Dialog.Title>
-          <Dialog.Description>
-            <p>Sei sicuro di voler eliminare l'area?</p>
-          </Dialog.Description>
-          <Dialog.Footer>
-            <Button type="button" variant="primary" onClick={() => {
-              setShowDialogEliminazioneAree(false);
-            }}
-              className="w-20 mr-1"
-            >
-              Annulla
-            </Button>
-            <Button variant="danger" type="button" className="w-20" onClick={() => {
-              deleteAreaMutation.mutate(idAreaSelezionata);
-              setShowDialogEliminazioneAree(false);
-            }}>
-              Elimina
-            </Button>
-          </Dialog.Footer>
-        </Dialog.Panel>
-      </Dialog>
-      <Dialog open={showDialogEliminazioneCanali} onClose={() => {
-        setShowDialogEliminazioneCanali(false);
-      }}>
-        <Dialog.Panel>
-          <Dialog.Title>
-            <h2 className="title-card mr-auto">
-              Elimina Canale
-            </h2>
-          </Dialog.Title>
-          <Dialog.Description>
-            <p>Sei sicuro di voler eliminare il canale?</p>
-          </Dialog.Description>
-          <Dialog.Footer>
-            <Button type="button" variant="primary" onClick={() => {
-              setShowDialogEliminazioneCanali(false);
-            }}
-              className="w-20 mr-1"
-            >
-              Annulla
-            </Button>
-            <Button variant="danger" type="button" className="w-20" onClick={() => {
-              deleteCanaleMutation.mutate(idCanaleSelezionato);
-              setShowDialogEliminazioneCanali(false);
-            }}>
-              Elimina
-            </Button>
-          </Dialog.Footer>
-        </Dialog.Panel>
-      </Dialog>
-      <Dialog open={showDialogEliminazioneCombinazioni} onClose={() => {
-        setShowDialogEliminazioneCombinazioni(false);
-      }}>
-        <Dialog.Panel>
-          <Dialog.Title>
-            <h2 className="title-card mr-auto">
-              Elimina Combinazione
-            </h2>
-          </Dialog.Title>
-          <Dialog.Description>
-            <p>Sei sicuro di voler eliminare la combinazione?</p>
-          </Dialog.Description>
-          <Dialog.Footer>
-            <Button type="button" variant="primary" onClick={() => {
-              setShowDialogEliminazioneCombinazioni(false);
-            }}
-              className="w-20 mr-1"
-            >
-              Annulla
-            </Button>
-            <Button variant="danger" type="button" className="w-20" onClick={() => {
-              deleteCombinazioneMutation.mutate(idCombinazioneSelezionata);
-              setShowDialogEliminazioneCombinazioni(false);
-            }}>
-              Elimina
-            </Button>
-          </Dialog.Footer>
-        </Dialog.Panel>
-      </Dialog>
+      <ConfirmDialog
+        open={showDialogEliminazioneAree}
+        title="Elimina area"
+        description="Sei sicuro di voler eliminare l'area?"
+        confirmLabel="Elimina"
+        onClose={() => setShowDialogEliminazioneAree(false)}
+        onConfirm={() => {
+          deleteAreaMutation.mutate(idAreaSelezionata);
+          setShowDialogEliminazioneAree(false);
+        }}
+      />
+      <ConfirmDialog
+        open={showDialogEliminazioneCanali}
+        title="Elimina canale"
+        description="Sei sicuro di voler eliminare il canale?"
+        confirmLabel="Elimina"
+        onClose={() => setShowDialogEliminazioneCanali(false)}
+        onConfirm={() => {
+          deleteCanaleMutation.mutate(idCanaleSelezionato);
+          setShowDialogEliminazioneCanali(false);
+        }}
+      />
+      <ConfirmDialog
+        open={showDialogEliminazioneCombinazioni}
+        title="Elimina combinazione"
+        description="Sei sicuro di voler eliminare la combinazione?"
+        confirmLabel="Elimina"
+        onClose={() => setShowDialogEliminazioneCombinazioni(false)}
+        onConfirm={() => {
+          deleteCombinazioneMutation.mutate(idCombinazioneSelezionata);
+          setShowDialogEliminazioneCombinazioni(false);
+        }}
+      />
       <Dialog open={isAreaDialogOpen} onClose={closeAreaDialog}>
         <Dialog.Panel>
-          <Dialog.Title>
-            <h2 className="title-card mr-auto">
-              {isEditingArea ? 'Modifica Area' : 'Crea Area'}
-            </h2>
-          </Dialog.Title>
+          <Dialog.Title>{isEditingArea ? 'Modifica Area' : 'Crea Area'}</Dialog.Title>
           <Dialog.Description className="grid grid-cols-12 gap-4 gap-y-3">
             <FormField className="col-span-12 sm:col-span-6" etichetta="Nome" obbligatorio>
               <FormInput type="text" value={nomeArea} onChange={(e) => { setNomeArea(e.target.value) }} />
@@ -501,15 +471,12 @@ function Main() {
             </FormField>
           </Dialog.Description>
           <Dialog.Footer>
-            <Button type="button" variant="outline-danger" onClick={closeAreaDialog}
-              className="w-20 mr-1"
-            >
+            <Button type="button" variant="outline-secondary" onClick={closeAreaDialog}>
               Annulla
             </Button>
             <Button
               variant="primary"
               type="button"
-              className="min-w-20"
               disabled={!nomeArea.trim() || !siglaArea.trim()}
               loading={saveAreaMutation.isPending}
               onClick={() =>
@@ -527,11 +494,7 @@ function Main() {
       {/* Dialog per Crea Canale */}
       <Dialog open={isCanaleDialogOpen} onClose={closeCanaleDialog}>
         <Dialog.Panel>
-          <Dialog.Title>
-            <h2 className="title-card mr-auto">
-              {isEditingCanale ? 'Modifica Canale' : 'Crea Canale'}
-            </h2>
-          </Dialog.Title>
+          <Dialog.Title>{isEditingCanale ? 'Modifica Canale' : 'Crea Canale'}</Dialog.Title>
           <Dialog.Description className="grid grid-cols-12 gap-4 gap-y-3">
             <FormField className="col-span-12 sm:col-span-6" etichetta="Nome" obbligatorio>
               <FormInput type="text" value={nomeCanale} onChange={(e) => { setNomeCanale(e.target.value) }} />
@@ -541,15 +504,12 @@ function Main() {
             </FormField>
           </Dialog.Description>
           <Dialog.Footer>
-            <Button type="button" variant="outline-danger" onClick={closeCanaleDialog}
-              className="w-20 mr-1"
-            >
+            <Button type="button" variant="outline-secondary" onClick={closeCanaleDialog}>
               Annulla
             </Button>
             <Button
               variant="primary"
               type="button"
-              className="min-w-20"
               disabled={!nomeCanale.trim() || !siglaCanale.trim()}
               loading={saveCanaleMutation.isPending}
               onClick={() => saveCanaleMutation.mutate({ nome: nomeCanale, sigla: siglaCanale, id: isEditingCanale ? editingCanaleId : undefined })}
@@ -561,11 +521,7 @@ function Main() {
       </Dialog>
       <Dialog open={isCombinazioneDialogOpen} onClose={closeCombinazioneDialog}>
         <Dialog.Panel>
-          <Dialog.Title>
-            <h2 className="title-card mr-auto">
-              {isEditingCombinazione ? 'Modifica Combinazione' : 'Crea Combinazione'}
-            </h2>
-          </Dialog.Title>
+          <Dialog.Title>{isEditingCombinazione ? 'Modifica Combinazione' : 'Crea Combinazione'}</Dialog.Title>
           <Dialog.Description className="grid grid-cols-12 gap-4 gap-y-3">
             <FormField className="col-span-12 sm:col-span-6" etichetta="Area">
               <FormSelect className="w-full" value={idAreaSelezionata} onChange={(e) => { setIdAreaSelezionata(e.target.value) }}>
@@ -593,15 +549,12 @@ function Main() {
             </FormField>
           </Dialog.Description>
           <Dialog.Footer>
-            <Button type="button" variant="outline-danger" onClick={() => { setIdAreaSelezionata(""); setIdCanaleSelezionato(""); closeCombinazioneDialog() }}
-              className="w-20 mr-1"
-            >
+            <Button type="button" variant="outline-secondary" onClick={() => { setIdAreaSelezionata(""); setIdCanaleSelezionato(""); closeCombinazioneDialog() }}>
               Annulla
             </Button>
             <Button
               variant="primary"
               type="button"
-              className="min-w-20"
               loading={saveCombinazioneMutation.isPending}
               onClick={() => saveCombinazioneMutation.mutate({ guidID: isEditingCombinazione ? editingCombinazioneId : "", guidIDCanale: idCanaleSelezionato, guidIDArea: idAreaSelezionata, enabled: enabledCombinazione })}
             >
@@ -610,298 +563,219 @@ function Main() {
           </Dialog.Footer>
         </Dialog.Panel>
       </Dialog>
-      <div className="grid grid-cols-12 gap-y-10 gap-x-6">
-        <div className="col-span-12">
-          <PageHeader
-            title="Aree e Canali"
-            description="Gestione aree e canali"
-          />
-          <div className="mt-3.5">
-            <div className="flex flex-col box box--stacked">
-              <div className="flex flex-col p-5 sm:items-center sm:flex-row gap-y-2">
-                <div>
-                  <div className="relative">
-                    <Lucide
-                      icon="Search"
-                      className="absolute inset-y-0 left-0 z-10 w-4 h-4 my-auto ml-3 stroke-[1.3] text-slate-500"
-                    />
-                    <FormInput
-                      type="text"
-                      placeholder="Cerca promozione..."
-                      className="pl-9 sm:w-64 rounded-control"
-                    />
-                  </div>
-                </div>
+      <Pagina
+        titolo="Aree e Canali"
+        descrizione="Gestione aree e canali"
+        azioni={
+          <PermissionGate permission={PERMISSIONS.GDO.GESTISCI_AREE_CANALI} mode="disable">
+            <Menu className="inline-block text-left">
+              <Menu.Button as={Button} variant="primary">
+                <Lucide icon="Plus" aria-hidden="true" className="mr-2 h-4 w-4" />
+                Crea
+                <Lucide icon="ChevronDown" aria-hidden="true" className="ml-2 h-4 w-4" />
+              </Menu.Button>
+              <Menu.Items className="w-56">
+                <Menu.Item onClick={() => handleCreateClick("area")}>
+                  <Lucide icon="MapPin" aria-hidden="true" className="mr-2 h-4 w-4" />
+                  Crea Area
+                </Menu.Item>
+                <Menu.Item onClick={() => handleCreateClick("canale")}>
+                  <Lucide icon="Radio" aria-hidden="true" className="mr-2 h-4 w-4" />
+                  Crea Canale
+                </Menu.Item>
+                <Menu.Item onClick={() => handleCreateClick("combinazione")}>
+                  <Lucide icon="Box" aria-hidden="true" className="mr-2 h-4 w-4" />
+                  Crea Combinazione
+                </Menu.Item>
+              </Menu.Items>
+            </Menu>
+          </PermissionGate>
+        }
+      >
+        <Sezione senzaPadding titolo="Aree, canali e combinazioni" descrizione="Le aree e i canali dei punti vendita e le loro combinazioni">
+          <BarraFiltri>
+            <CampoRicerca
+              etichetta="Cerca aree, canali e combinazioni"
+              placeholder="Cerca per nome, codice o sigla"
+              value={ricerca}
+              onChange={setRicerca}
+            />
+          </BarraFiltri>
 
-                <div className="flex flex-col sm:flex-row gap-x-3 gap-y-2 sm:ml-auto">
-
-                  <PermissionGate permission={PERMISSIONS.GDO.GESTISCI_AREE_CANALI} mode="disable">
-                  <Popover className="inline-block">
-                    {({ close }) => (
-                      <>
-                        <Popover.Button
-                          as={Button}
-                          variant="outline-secondary"
-                          className="w-full sm:w-auto"
-                        >
-                          <Lucide
-                            icon="Plus"
-                            className="stroke-[1.3] w-4 h-4 mr-2"
-                          />
-                          Crea
-                          <Lucide
-                            icon="ChevronDown"
-                            className="stroke-[1.3] w-4 h-4 ml-2"
-                          />
-                        </Popover.Button>
-                        <Popover.Panel className="w-60">
-                          <div className="p-2">
-                            <button
-                              type="button"
-                              className="flex w-full items-center p-2 text-left transition-colors duration-200 rounded-md cursor-pointer hover:bg-slate-100 dark:hover:bg-darkmode-600"
-                              onClick={() => {
-                                handleCreateClick("area");
-                                close();
-                              }}
-                            >
-                              <Lucide icon="MapPin" aria-hidden="true" className="w-4 h-4 mr-2" />
-                              Crea Area
-                            </button>
-                            <button
-                              type="button"
-                              className="flex w-full items-center p-2 text-left transition-colors duration-200 rounded-md cursor-pointer hover:bg-slate-100 dark:hover:bg-darkmode-600"
-                              onClick={() => {
-                                handleCreateClick("canale");
-                                close();
-                              }}
-                            >
-                              <Lucide icon="Radio" aria-hidden="true" className="w-4 h-4 mr-2" />
-                              Crea Canale
-                            </button>
-                            <button
-                              type="button"
-                              className="flex w-full items-center p-2 text-left transition-colors duration-200 rounded-md cursor-pointer hover:bg-slate-100 dark:hover:bg-darkmode-600"
-                              onClick={() => {
-                                handleCreateClick("combinazione");
-                                close();
-                              }}
-                            >
-                              <Lucide icon="Box" aria-hidden="true" className="w-4 h-4 mr-2" />
-                              Crea Combinazione
-                            </button>
-                          </div>
-                        </Popover.Panel>
-                      </>
-                    )}
-                  </Popover>
-                  </PermissionGate>
-                </div>
-              </div>
-
-              {caricamentoAreeCanali ? (
-                <div className="flex justify-center py-10 border-t border-dashed">
-                  <Spinner etichetta="Caricamento aree e canali…" />
-                </div>
-              ) : erroreAreeCanali ? (
-                <div className="px-5 pb-5">
-                  <PageError
-                    compatta
-                    titolo="Aree e canali non caricati"
-                    motivo={(dettaglioErroreAreeCanali as Error)?.message || "Errore durante il recupero di aree e canali"}
-                    onRiprova={() => ricaricaAreeCanali()}
-                  />
-                </div>
-              ) : (
-              <div className="overflow-hidden">
-                <div className="grid grid-cols-12 gap-6 px-5 -mx-5 border-dashed border-y">
-                  <div className="overflow-x-auto lg:col-span-6 sm:col-span-12 xs:col-span-12 px-5">
-                    <div className="px-5 border rounded-card dark:border-darkmode-400 relative mt-7 mb-4 border-slate-200/80">
-                      <div className="absolute left-0 px-3 ml-4 -mt-2 text-xs uppercase bg-white dark:bg-darkmode-600 text-slate-500 dark:text-slate-400">
-                        <div className="-mt-px">Aree</div>
-                      </div>
-                      <div className="py-2 mt-4 flex flex-col gap-3.5 overflow-x-auto">
-                        <Table>
-                          <Table.Thead>
-                            <Table.Tr>
-                              <Table.Th className="whitespace-nowrap">#</Table.Th>
-                              <Table.Th className="whitespace-nowrap">Nome Area</Table.Th>
-                              <Table.Th className="whitespace-nowrap">Codice Area</Table.Th>
-                              <Table.Th className="whitespace-nowrap">Azioni</Table.Th>
-                            </Table.Tr>
-                          </Table.Thead>
-                          <Table.Tbody>
-                            {dataAreeCanaliECombinazioni?.aree?.length === 0 ? (
-                              <Table.Tr>
-                                <Table.Td colSpan={4} className="text-center">Nessuna area disponibile</Table.Td>
-                              </Table.Tr>
-                            ) : (
-                              dataAreeCanaliECombinazioni?.aree?.map((area, index) => (
-                                <Table.Tr key={area.id}>
-                                  <Table.Td className="whitespace-nowrap">{index + 1}</Table.Td>
-                                  <Table.Td className="whitespace-nowrap">{area.nome}</Table.Td>
-                                  <Table.Td className="whitespace-nowrap">{area.codice}</Table.Td>
-                                  <Table.Td className="whitespace-nowrap">
-                                    <div className="flex gap-2">
-                                      <button
-                                        type="button"
-                                        className="text-primary hover:text-primary/80 transition-colors"
-                                        onClick={() => handleEditArea(area)}
-                                        title="Modifica area"
-                                        aria-label={`Modifica area ${area.nome}`}
-                                      >
-                                        <Lucide icon="Pencil" aria-hidden="true" className="w-4 h-4" />
-                                      </button>
-                                      <PermissionGate permission={PERMISSIONS.GDO.GESTISCI_AREE_CANALI}>
-                                        <button
-                                          type="button"
-                                          className="text-danger hover:text-danger/80 transition-colors"
-                                          onClick={() => handleDeleteArea(area.id as string)}
-                                          title="Elimina area"
-                                          aria-label={`Elimina area ${area.nome}`}
-                                        >
-                                          <Lucide icon="Trash2" aria-hidden="true" className="w-4 h-4" />
-                                        </button>
-                                      </PermissionGate>
-                                    </div>
-                                  </Table.Td>
-                                </Table.Tr>
-                              ))
-                            )}
-                          </Table.Tbody>
-                        </Table>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="overflow-x-auto lg:col-span-6 sm:col-span-12 xs:col-span-12 px-5">
-                    <div className="px-5 border rounded-card dark:border-darkmode-400 relative mt-7 mb-4 border-slate-200/80">
-                      <div className="absolute left-0 px-3 ml-4 -mt-2 text-xs uppercase bg-white dark:bg-darkmode-600 text-slate-500 dark:text-slate-400">
-                        <div className="-mt-px">Canali</div>
-                      </div>
-                      <div className="py-2 mt-4 flex flex-col gap-3.5 overflow-x-auto">
-                        <Table>
-                          <Table.Thead>
-                            <Table.Tr>
-                              <Table.Th className="whitespace-nowrap">#</Table.Th>
-                              <Table.Th className="whitespace-nowrap">Nome Canale</Table.Th>
-                              <Table.Th className="whitespace-nowrap">Codice Canale</Table.Th>
-                              <Table.Th className="whitespace-nowrap">Azioni</Table.Th>
-                            </Table.Tr>
-                          </Table.Thead>
-                          <Table.Tbody>
-                            {dataAreeCanaliECombinazioni?.canali?.length === 0 ? (
-                              <Table.Tr>
-                                <Table.Td colSpan={4} className="text-center">Nessun canale disponibile</Table.Td>
-                              </Table.Tr>
-                            ) : (
-                              dataAreeCanaliECombinazioni?.canali?.map((canale, index) => (
-                                <Table.Tr key={canale.id}>
-                                  <Table.Td className="whitespace-nowrap">{index + 1}</Table.Td>
-                                  <Table.Td className="whitespace-nowrap">{canale.nome}</Table.Td>
-                                  <Table.Td className="whitespace-nowrap">{canale.codice}</Table.Td>
-                                  <Table.Td className="whitespace-nowrap">
-                                    <div className="flex gap-2">
-                                      <button
-                                        type="button"
-                                        className="text-primary hover:text-primary/80 transition-colors"
-                                        onClick={() => handleEditCanale(canale)}
-                                        title="Modifica canale"
-                                        aria-label={`Modifica canale ${canale.nome}`}
-                                      >
-                                        <Lucide icon="Pencil" aria-hidden="true" className="w-4 h-4" />
-                                      </button>
-                                      <PermissionGate permission={PERMISSIONS.GDO.GESTISCI_AREE_CANALI}>
-                                        <button
-                                          type="button"
-                                          className="text-danger hover:text-danger/80 transition-colors"
-                                          onClick={() => handleDeleteCanale(canale.id as string)}
-                                          title="Elimina canale"
-                                          aria-label={`Elimina canale ${canale.nome}`}
-                                        >
-                                          <Lucide icon="Trash2" aria-hidden="true" className="w-4 h-4" />
-                                        </button>
-                                      </PermissionGate>
-                                    </div>
-                                  </Table.Td>
-                                </Table.Tr>
-                              ))
-                            )}
-                          </Table.Tbody>
-                        </Table>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="overflow-x-auto px-5">
-                  <div className="px-5 border rounded-card dark:border-darkmode-400 relative mt-7 mb-4 border-slate-200/80">
-                    <div className="absolute left-0 px-3 ml-4 -mt-2 text-xs uppercase bg-white dark:bg-darkmode-600 text-slate-500 dark:text-slate-400">
-                      <div className="-mt-px">Combinazioni</div>
-                    </div>
-                    <div className="py-2 mt-4 flex flex-col gap-3.5 overflow-x-auto" >
-                      <Table>
-                        <Table.Thead>
-                          <Table.Tr>
-                            <Table.Th className="whitespace-nowrap">#</Table.Th>
-                            <Table.Th className="whitespace-nowrap">Sigla</Table.Th>
-                            <Table.Th className="whitespace-nowrap">Stato</Table.Th>
-                            <Table.Th className="whitespace-nowrap">Azioni</Table.Th>
+          {caricamentoAreeCanali ? (
+            <div className="flex justify-center py-10">
+              <Spinner etichetta="Caricamento aree e canali…" />
+            </div>
+          ) : erroreAreeCanali ? (
+            <div className="p-5">
+              <PageError
+                compatta
+                titolo="Aree e canali non caricati"
+                motivo={(dettaglioErroreAreeCanali as Error)?.message || "Errore durante il recupero di aree e canali"}
+                onRiprova={() => ricaricaAreeCanali()}
+              />
+            </div>
+          ) : (
+            <div className="grid grid-cols-12 gap-5 p-5">
+              <div className="col-span-12 overflow-hidden rounded-card border border-slate-200 bg-white lg:col-span-6">
+                <h3 className="title-card px-4 py-3">Aree</h3>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th className="w-12">#</Table.Th>
+                        <Table.Th>Nome Area</Table.Th>
+                        <Table.Th>Codice Area</Table.Th>
+                        <Table.Th className="text-right"><span className="sr-only">Azioni</span></Table.Th>
+                      </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {areeVisibili.length === 0
+                        ? rigaVuota(4, !dataAreeCanaliECombinazioni?.aree?.length, "Nessuna area disponibile", "MapPin")
+                        : areeVisibili.map((area, index) => (
+                          <Table.Tr key={area.id}>
+                            <Table.Td className="whitespace-nowrap tabular-nums">{index + 1}</Table.Td>
+                            <Table.Td className="whitespace-nowrap">{area.nome}</Table.Td>
+                            <Table.Td className="whitespace-nowrap">{area.codice}</Table.Td>
+                            <Table.Td className="whitespace-nowrap text-right">
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline-secondary"
+                                  onClick={() => handleEditArea(area)}
+                                  title="Modifica area"
+                                  aria-label={`Modifica area ${area.nome}`}
+                                >
+                                  <Lucide icon="Pencil" aria-hidden="true" className="h-4 w-4" />
+                                </Button>
+                                <PermissionGate permission={PERMISSIONS.GDO.GESTISCI_AREE_CANALI}>
+                                  <Button
+                                    size="sm"
+                                    variant="outline-danger"
+                                    onClick={() => handleDeleteArea(area.id as string)}
+                                    title="Elimina area"
+                                    aria-label={`Elimina area ${area.nome}`}
+                                  >
+                                    <Lucide icon="Trash2" aria-hidden="true" className="h-4 w-4" />
+                                  </Button>
+                                </PermissionGate>
+                              </div>
+                            </Table.Td>
                           </Table.Tr>
-                        </Table.Thead>
-                        <Table.Tbody>
-                          {dataAreeCanaliECombinazioni?.combinazioni?.length === 0 ? (
-                            <Table.Tr>
-                              <Table.Td colSpan={4} className="text-center">Nessuna combinazione disponibile</Table.Td>
-                            </Table.Tr>
-                          ) : (
-                            dataAreeCanaliECombinazioni?.combinazioni?.map((combinazione, index) => (
-                              <Table.Tr key={combinazione.id}>
-                                <Table.Td className="whitespace-nowrap">{index + 1}</Table.Td>
-                                <Table.Td className="whitespace-nowrap">{combinazione.sigla}</Table.Td>
-                                <Table.Td className="whitespace-nowrap">
-                                  <StatusBadge
-                                    tono={combinazione.stato === "ATTIVO" ? "success" : "neutral"}
-                                    etichetta={combinazione.stato === "ATTIVO" ? "Attivo" : "Disattivo"}
-                                  />
-                                </Table.Td>
-                                <Table.Td className="whitespace-nowrap">
-                                  <div className="flex gap-2">
-                                    <button
-                                      type="button"
-                                      className="text-primary hover:text-primary/80 transition-colors"
-                                      onClick={() => handleEditCombinazione(combinazione)}
-                                      title="Modifica combinazione"
-                                      aria-label={`Modifica combinazione ${combinazione.sigla}`}
-                                    >
-                                      <Lucide icon="Pencil" aria-hidden="true" className="w-4 h-4" />
-                                    </button>
-                                    <PermissionGate permission={PERMISSIONS.GDO.GESTISCI_AREE_CANALI}>
-                                      <button
-                                        type="button"
-                                        className="text-danger hover:text-danger/80 transition-colors"
-                                        onClick={() => handleDeleteCombinazione(combinazione.id as string)}
-                                        title="Elimina combinazione"
-                                        aria-label={`Elimina combinazione ${combinazione.sigla}`}
-                                      >
-                                        <Lucide icon="Trash2" aria-hidden="true" className="w-4 h-4" />
-                                      </button>
-                                    </PermissionGate>
-                                  </div>
-                                </Table.Td>
-                              </Table.Tr>
-                            ))
-                          )}
-                        </Table.Tbody>
-                      </Table>
-                    </div>
-                  </div>
+                        ))}
+                    </Table.Tbody>
+                  </Table>
                 </div>
               </div>
-              )}
-              <div className="flex flex-col-reverse flex-wrap items-center p-5 flex-reverse gap-y-2 sm:flex-row">
+              <div className="col-span-12 overflow-hidden rounded-card border border-slate-200 bg-white lg:col-span-6">
+                <h3 className="title-card px-4 py-3">Canali</h3>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th className="w-12">#</Table.Th>
+                        <Table.Th>Nome Canale</Table.Th>
+                        <Table.Th>Codice Canale</Table.Th>
+                        <Table.Th className="text-right"><span className="sr-only">Azioni</span></Table.Th>
+                      </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {canaliVisibili.length === 0
+                        ? rigaVuota(4, !dataAreeCanaliECombinazioni?.canali?.length, "Nessun canale disponibile", "Radio")
+                        : canaliVisibili.map((canale, index) => (
+                          <Table.Tr key={canale.id}>
+                            <Table.Td className="whitespace-nowrap tabular-nums">{index + 1}</Table.Td>
+                            <Table.Td className="whitespace-nowrap">{canale.nome}</Table.Td>
+                            <Table.Td className="whitespace-nowrap">{canale.codice}</Table.Td>
+                            <Table.Td className="whitespace-nowrap text-right">
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline-secondary"
+                                  onClick={() => handleEditCanale(canale)}
+                                  title="Modifica canale"
+                                  aria-label={`Modifica canale ${canale.nome}`}
+                                >
+                                  <Lucide icon="Pencil" aria-hidden="true" className="h-4 w-4" />
+                                </Button>
+                                <PermissionGate permission={PERMISSIONS.GDO.GESTISCI_AREE_CANALI}>
+                                  <Button
+                                    size="sm"
+                                    variant="outline-danger"
+                                    onClick={() => handleDeleteCanale(canale.id as string)}
+                                    title="Elimina canale"
+                                    aria-label={`Elimina canale ${canale.nome}`}
+                                  >
+                                    <Lucide icon="Trash2" aria-hidden="true" className="h-4 w-4" />
+                                  </Button>
+                                </PermissionGate>
+                              </div>
+                            </Table.Td>
+                          </Table.Tr>
+                        ))}
+                    </Table.Tbody>
+                  </Table>
+                </div>
+              </div>
+              <div className="col-span-12 overflow-hidden rounded-card border border-slate-200 bg-white">
+                <h3 className="title-card px-4 py-3">Combinazioni</h3>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th className="w-12">#</Table.Th>
+                        <Table.Th>Sigla</Table.Th>
+                        <Table.Th>Stato</Table.Th>
+                        <Table.Th className="text-right"><span className="sr-only">Azioni</span></Table.Th>
+                      </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {combinazioniVisibili.length === 0
+                        ? rigaVuota(4, !dataAreeCanaliECombinazioni?.combinazioni?.length, "Nessuna combinazione disponibile", "Box")
+                        : combinazioniVisibili.map((combinazione, index) => (
+                          <Table.Tr key={combinazione.id}>
+                            <Table.Td className="whitespace-nowrap tabular-nums">{index + 1}</Table.Td>
+                            <Table.Td className="whitespace-nowrap">{combinazione.sigla}</Table.Td>
+                            <Table.Td className="whitespace-nowrap">
+                              <StatusBadge
+                                tono={combinazione.stato === "ATTIVO" ? "success" : "neutral"}
+                                etichetta={combinazione.stato === "ATTIVO" ? "Attivo" : "Disattivo"}
+                              />
+                            </Table.Td>
+                            <Table.Td className="whitespace-nowrap text-right">
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline-secondary"
+                                  onClick={() => handleEditCombinazione(combinazione)}
+                                  title="Modifica combinazione"
+                                  aria-label={`Modifica combinazione ${combinazione.sigla}`}
+                                >
+                                  <Lucide icon="Pencil" aria-hidden="true" className="h-4 w-4" />
+                                </Button>
+                                <PermissionGate permission={PERMISSIONS.GDO.GESTISCI_AREE_CANALI}>
+                                  <Button
+                                    size="sm"
+                                    variant="outline-danger"
+                                    onClick={() => handleDeleteCombinazione(combinazione.id as string)}
+                                    title="Elimina combinazione"
+                                    aria-label={`Elimina combinazione ${combinazione.sigla}`}
+                                  >
+                                    <Lucide icon="Trash2" aria-hidden="true" className="h-4 w-4" />
+                                  </Button>
+                                </PermissionGate>
+                              </div>
+                            </Table.Td>
+                          </Table.Tr>
+                        ))}
+                    </Table.Tbody>
+                  </Table>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
-      </div>
+          )}
+        </Sezione>
+      </Pagina>
     </>
   );
 }

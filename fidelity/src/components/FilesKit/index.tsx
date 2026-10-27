@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { v4 as uuidv4 } from 'uuid';
+import Alert from '@/components/Base/Alert';
 import Button from '@/components/Base/Button';
+import EmptyState from '@/components/EmptyState';
 import FormInput from '@/components/Base/Form/FormInput';
 import FormTextarea from '@/components/Base/Form/FormTextarea';
 import { FileItemKit } from '../../../lib/types';
@@ -56,72 +58,79 @@ const FileManagement: React.FC<FileManagementProps> = ({ files, setFiles, setNam
 
 
     return (
-        <div className="space-y-6">
-            <div className="p-4 bg-primary/10 rounded-lg shadow">
-                <p className="text-gray-800 dark:text-white">
-                    In questa sezione puoi aggiungere manualmente i file. Clicca sul bottone
-                    <span className="font-bold mx-1">"Aggiungi file"</span> per creare un nuovo file.
-                    Potrai poi modificare il nome e inserire eventuali direttive.
-                </p>
-            </div>
+        <div className="flex flex-col gap-4">
+            <Alert variant="soft-primary" icona="Info">
+                In questa sezione puoi aggiungere manualmente i file. Clicca sul bottone
+                <span className="mx-1 font-semibold">&quot;Aggiungi file&quot;</span> per creare un nuovo file.
+                Potrai poi modificare il nome e inserire eventuali direttive.
+            </Alert>
 
             <div className="flex justify-end">
-                <Button variant="outline-primary" onClick={handleAddFile}>
-                    <Lucide icon="Plus" className="w-4 h-4 mr-1" />
+                <Button variant="outline-secondary" size="sm" onClick={handleAddFile}>
+                    <Lucide icon="Plus" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
                     Aggiungi file
                 </Button>
             </div>
 
-            <Table sm bordered className="w-full border bg-slate-50 dark:bg-darkmode-700">
-                <Table.Thead>
-                    <Table.Tr>
-                        <Table.Th className='w-1/3'>Nome File</Table.Th>
-                        <Table.Th className='w-2/3'>Direttive</Table.Th>
-                        <Table.Th>Azioni</Table.Th>
-                    </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>
-                {files.length === 0 ? (
-                    <Table.Tr>
-                        <Table.Td colSpan={3} className='text-center'>
-                            Nessun file aggiunto.
-                        </Table.Td>
-                    </Table.Tr>
-                    ) : (
-                        files.map((file, index) => (
-                            <Table.Tr key={index}>
-                                <Table.Td>
-                                    <FormInput
+            <div className="overflow-x-auto rounded-card border border-slate-200">
+                <Table sm>
+                    <Table.Thead>
+                        <Table.Tr>
+                            <Table.Th className="w-1/3">Nome file</Table.Th>
+                            <Table.Th className="w-2/3">Direttive</Table.Th>
+                            <Table.Th className="text-right">
+                                <span className="sr-only">Azioni</span>
+                            </Table.Th>
+                        </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>
+                        {files.length === 0 ? (
+                            <Table.Tr>
+                                <Table.Td colSpan={3} className="p-0">
+                                    <EmptyState
+                                        compatta
+                                        icon="FilePlus"
+                                        title="Nessun file aggiunto"
+                                        description="Aggiungi i file attesi dal kit con il pulsante Aggiungi file."
+                                    />
+                                </Table.Td>
+                            </Table.Tr>
+                        ) : (
+                            files.map((file, index) => (
+                                <Table.Tr key={index}>
+                                    <Table.Td>
+                                        <FormInput
+                                            aria-label={`Nome del file ${index + 1}`}
                                             value={file.nome}
-                                            onChange={(e) =>
-                                                handleFileNameChange(index, e.target.value)
-                                            }
+                                            onChange={(e) => handleFileNameChange(index, e.target.value)}
                                             placeholder="Inserisci il nome del file"
                                         />
-                                </Table.Td>
-                                <Table.Td>
-                                <FormTextarea
-                                    className="w-full p-2"
-                                    placeholder="Inserisci direttive per questo file"
-                                    value={file.direttive}
-                                    onChange={(e) => handleDirectiveChange(index, e.target.value)}
-                                />
-                                </Table.Td>
-                                <Table.Td className='text-center'>
-                                <Button
+                                    </Table.Td>
+                                    <Table.Td>
+                                        <FormTextarea
+                                            aria-label={`Direttive del file ${index + 1}`}
+                                            className="w-full p-2"
+                                            placeholder="Inserisci direttive per questo file"
+                                            value={file.direttive}
+                                            onChange={(e) => handleDirectiveChange(index, e.target.value)}
+                                        />
+                                    </Table.Td>
+                                    <Table.Td className="text-right">
+                                        <Button
                                             variant="outline-danger"
                                             size="sm"
                                             onClick={() => handleDeleteFile(index)}
-                                            aria-label="Rimuovi file"
+                                            aria-label={`Rimuovi ${file.nome}`}
                                         >
-                                            <Lucide aria-hidden="true" icon="Trash2" className="w-4 h-4" />
+                                            <Lucide aria-hidden="true" icon="Trash2" className="h-3.5 w-3.5" />
                                         </Button>
-                                </Table.Td>
-                            </Table.Tr>
-                        ))
-                    )}
-                </Table.Tbody>
-            </Table>
+                                    </Table.Td>
+                                </Table.Tr>
+                            ))
+                        )}
+                    </Table.Tbody>
+                </Table>
+            </div>
         </div>
     );
 };

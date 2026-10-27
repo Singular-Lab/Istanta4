@@ -6,10 +6,13 @@ import { toRGB } from "./helper";
 // I colori del tema cambiano con lo schema scelto: tutto ciò che li legge va chiamato
 // al render (o dentro useMemo), mai al caricamento del modulo.
 
-/** Colori che seguono i due del tema, nell'ordine usato finora dai grafici. */
+/**
+ * Colori fra il primo e il secondo del tema. Le prime serie hanno tinte lontane fra loro e dal
+ * navy del tema; niente rosso puro, che nei grafici vuol dire "negativo" (coloreSemantico).
+ */
 const SERIE_FISSA = [
-  "#2563eb", "#059669", "#d97706", "#dc2626", "#0891b2", "#7c3aed",
-  "#65a30d", "#be123c", "#0f766e", "#9333ea", "#ea580c", "#4f46e5",
+  "#0891b2", "#d97706", "#059669", "#7c3aed", "#be123c", "#2563eb",
+  "#65a30d", "#ea580c", "#0f766e", "#9333ea", "#4f46e5",
 ] as const;
 
 /** Numero di colori distinti prima che la palette ricominci. */
@@ -21,11 +24,12 @@ const conAlpha = (hex: string, alpha: number) => `rgb(${toRGB(hex)} / ${alpha})`
 export const paletteColore = (indice: number, alpha: number = 1): string => {
   const posizione = ((Math.trunc(indice) % LUNGHEZZA_PALETTE) + LUNGHEZZA_PALETTE) % LUNGHEZZA_PALETTE;
   if (posizione === 0) return getColor("theme.1", alpha);
-  if (posizione === 1) return getColor("theme.2", alpha);
-  return conAlpha(SERIE_FISSA[posizione - 2], alpha);
+  // Il secondo colore del tema, vicino al primo, viene per ultimo
+  if (posizione === LUNGHEZZA_PALETTE - 1) return getColor("theme.2", alpha);
+  return conAlpha(SERIE_FISSA[posizione - 1], alpha);
 };
 
-/** Palette categorica completa: i due colori del tema, poi la serie fissa. */
+/** Palette categorica completa: il primo colore del tema, la serie fissa, poi il secondo del tema. */
 export const paletteCategorica = (alpha: number = 1): string[] =>
   Array.from({ length: LUNGHEZZA_PALETTE }, (_, indice) => paletteColore(indice, alpha));
 

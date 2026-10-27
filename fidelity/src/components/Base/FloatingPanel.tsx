@@ -78,7 +78,7 @@ export const FloatingPanel = ({
         className="flex items-center justify-between p-4 py-2 border-b border-slate-200 dark:border-darkmode-500 cursor-move"
         onMouseDown={handleDragStart}
       >
-        <h3 className="font-semibold text-slate-800 dark:text-slate-200">{title}</h3>
+        <h3 className="title-card">{title}</h3>
         <button 
           onClick={onClose}
           className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 p-1 rounded-full hover:bg-slate-100 dark:hover:bg-darkmode-500 transition-colors"

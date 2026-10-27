@@ -51,7 +51,7 @@ const getIconColorClass = (iconColor?: string): string => {
     purple: "text-purple-500",
     pink: "text-pink-500",
     indigo: "text-indigo-500",
-    gray: "text-gray-500",
+    gray: "text-slate-500",
     slate: "text-slate-500",
     zinc: "text-zinc-500",
     neutral: "text-neutral-500",
@@ -339,7 +339,7 @@ function Main(props: MainProps) {
                     </div>
                     <FormInput
                       ref={inputRef}
-                      className="pl-12 pr-14 py-3.5 text-base rounded-lg focus:ring-0 border-0 shadow-lg"
+                      className="pl-12 pr-14 py-3.5 text-base rounded-card focus:ring-0 border-0 shadow-overlay"
                       type="text"
                       placeholder="Ricerca rapida..."
                       value={search}
@@ -347,14 +347,14 @@ function Main(props: MainProps) {
                       onKeyDown={handleKeyDown}
                     />
                     <div className="absolute inset-y-0 right-0 flex items-center w-14">
-                      <div className="px-2 py-1 mr-auto text-xs border rounded-[0.4rem] bg-slate-100 text-slate-500/80">ESC</div>
+                      <div className="px-2 py-1 mr-auto text-xs border rounded-control bg-slate-100 text-slate-500/80">ESC</div>
                     </div>
                   </div>
 
                   {/* risultati */}
                   <div
                     ref={scrollContainerRef}
-                    className="relative z-10 pb-1 mt-1 bg-white rounded-lg shadow-lg max-h-[468px] sm:max-h-[615px] overflow-y-auto"
+                    className="relative z-10 pb-1 mt-1 bg-white rounded-card shadow-overlay max-h-[468px] sm:max-h-[615px] overflow-y-auto"
                   >
                     {/* SEZIONE: ricerca */}
                     {search.trim() ? (
@@ -367,7 +367,7 @@ function Main(props: MainProps) {
                               <div key={category} className="mb-6 last:mb-0">
                                 {/* header categoria */}
                                 <div className="flex items-center mb-3">
-                                  <div className="text-xs font-medium uppercase text-slate-500">{category}</div>
+                                  <div className="title-eyebrow">{category}</div>
                                   <div className="ml-2 text-xs text-slate-400">({items.length})</div>
                                 </div>
 
@@ -381,11 +381,11 @@ function Main(props: MainProps) {
                                         key={`${item.title}-${runningIndex}`}
                                         data-item-index={runningIndex}
                                         onClick={() => handleItemClick(item)}
-                                        className={`flex items-center w-full p-3 text-left transition-colors rounded-lg focus:outline-none ${
+                                        className={`flex items-center w-full p-3 text-left transition-colors rounded-control focus:outline-none ${
                                           isSelected ? "bg-slate-100" : "hover:bg-slate-100 focus:bg-slate-100"
                                         }`}
                                       >
-                                        <div className="flex items-center justify-center w-8 h-8 mr-3 rounded-lg bg-slate-100">
+                                        <div className="flex items-center justify-center w-8 h-8 mr-3 rounded-control bg-slate-100">
                                           <Lucide
                                             icon={item.icon as any}
                                             className={`w-4 h-4 stroke-[1.3] ${getIconColorClass(item.icon_color)}`}

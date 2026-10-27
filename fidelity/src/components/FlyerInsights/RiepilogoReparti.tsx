@@ -90,7 +90,7 @@ const RiepilogoReparti: FC<Props> = ({ riepilogo, config }) => {
 
   return (
     <div className="p-4">
-      <h4 className="title-card mb-4">{config.title}</h4>
+      <h3 className="title-card mb-4">{config.title}</h3>
 
       <div className="flex gap-6">
         {/* Donut Chart */}
@@ -124,7 +124,7 @@ const RiepilogoReparti: FC<Props> = ({ riepilogo, config }) => {
             return (
               <div
                 key={badgeValue || label}
-                className="flex items-center justify-between rounded-lg border border-slate-200 p-2.5"
+                className="flex items-center justify-between rounded-control border border-slate-200 p-2.5"
               >
                 <div className="flex items-center gap-2.5">
                   <div
@@ -132,7 +132,7 @@ const RiepilogoReparti: FC<Props> = ({ riepilogo, config }) => {
                     style={{ backgroundColor: getChartColor(colorKey) }}
                   />
                   {fields.badgeField && (
-                    <div className={`flex h-7 w-7 items-center justify-center rounded text-3xs font-bold ${getColorClass(colorKey)}`}>
+                    <div className={`flex h-7 w-7 items-center justify-center rounded-control text-3xs font-bold ${getColorClass(colorKey)}`}>
                       {badgeValue.substring(0, fields.badgeMaxChars ?? 3)}
                     </div>
                   )}

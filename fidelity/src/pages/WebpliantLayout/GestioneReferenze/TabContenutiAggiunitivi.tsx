@@ -5,6 +5,8 @@ import EmptyState from "@/components/EmptyState";
 import Button from "@/components/Base/Button";
 import { FormInline, FormInput, FormLabel, FormSelect } from "@/components/Base/Form";
 import Lucide from "@/components/Base/Lucide";
+import PageError from "@/components/Base/PageError";
+import Spinner from "@/components/Base/Spinner";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ServerCall } from "../../../../lib/server_call";
 import { Disclosure } from "@/components/Base/Headless";
@@ -135,20 +137,32 @@ const TabContenutiAggiuntivi: FC<TabContenutiAggiuntiviProps> = ({ referenza }) 
     };
 
     // Render loading state
-    if (isLoading) return <div>Caricamento...</div>;
+    if (isLoading) return (
+        <div className="flex justify-center py-8">
+            <Spinner etichetta="Caricamento contenuti aggiuntivi" />
+        </div>
+    );
 
     // Render error state
-    if (error) return <div>Errore nel caricamento dei contenuti</div>;
+    if (error) return (
+        <PageError
+            compatta
+            titolo="Impossibile caricare i contenuti aggiuntivi"
+            motivo={error instanceof Error ? error.message : "Errore nel caricamento dei contenuti"}
+        />
+    );
 
     return (
         <Fragment>
-            <h3 className="text-lg font-medium text-gray-900">Contenuti Aggiuntivi</h3>
+            <h3 className="title-card">Contenuti aggiuntivi</h3>
 
             {contenutoAggiuntivoReferenza.length === 0 && (
                 <EmptyState
                     title="Nessun contenuto aggiuntivo"
                     description="Non sono presenti contenuti aggiuntivi per questa referenza"
-                    icon="X"
+                    icon="FilePlus"
+                    buttonIcon="Plus"
+                    compatta
                     buttonText='Aggiungi contenuto aggiuntivo'
                     onButtonClick={handleAddContenutoAggiuntivo}
                 />
@@ -166,7 +180,7 @@ const TabContenutiAggiuntivi: FC<TabContenutiAggiuntiviProps> = ({ referenza }) 
                                         setContenutoAggiuntivoReferenza(prev => prev.filter(item => item.guidId !== contenuto.guidId));
 
                                     }}
-                                    variant="soft-danger"
+                                    variant="outline-danger"
                                     size='sm'
                                     aria-label="Rimuovi contenuto aggiuntivo"
                                 >
@@ -192,22 +206,24 @@ const TabContenutiAggiuntivi: FC<TabContenutiAggiuntiviProps> = ({ referenza }) 
                                             <EmptyState
                                                 title="Nessuna regola"
                                                 description="Non sono presenti regole per questo contenuto aggiuntivo"
-                                                icon="X"
+                                                icon="ListFilter"
+                                                buttonIcon="Plus"
+                                                compatta
                                                 buttonText='Aggiungi regola'
                                                 onButtonClick={() => handleAddRegola(contenuto.guidId)}
                                             />
                                         ) : (
-                                            <div className="border overflow-hidden sm:rounded-md">
+                                            <div className="overflow-hidden rounded-card border border-slate-200">
                                                 <div className='p-4'>
                                                     <Button
                                                         onClick={() => handleAddRegola(contenuto.guidId)}
-                                                        variant="soft-primary"
+                                                        variant="outline-secondary"
                                                         size='sm'
                                                     >
                                                         Aggiungi regola
                                                     </Button>
                                                 </div>
-                                                <ul className="w-full divide-y divide-gray-200">
+                                                <ul className="w-full divide-y divide-slate-200">
                                                     {contenuto.regole.map((regola, ruleIndex) => (
                                                         <li key={ruleIndex} className="px-4 py-4 sm:px-6">
                                                             <FormLabel>Regola {ruleIndex + 1}</FormLabel>
@@ -265,7 +281,7 @@ const TabContenutiAggiuntivi: FC<TabContenutiAggiuntiviProps> = ({ referenza }) 
                                                                             ruleIndex
                                                                         )
                                                                     }
-                                                                    variant="soft-danger"
+                                                                    variant="outline-danger"
                                                                     size='sm'
                                                                     aria-label="Rimuovi regola"
                                                                 >
@@ -280,12 +296,13 @@ const TabContenutiAggiuntivi: FC<TabContenutiAggiuntiviProps> = ({ referenza }) 
 
                                         <div className='mt-4 flex justify-end'>
                                             <Button
+                                                type="button"
                                                 onClick={() => saveMutation.mutate(contenutoAggiuntivoReferenza)}
                                                 variant="primary"
-                                                disabled={saveMutation.isPending}
+                                                loading={saveMutation.isPending}
                                             >
-                                                {saveMutation.isPending ? 'Salvataggio...' : 'Salva'}
-                                                <Lucide icon='Save' />
+                                                {!saveMutation.isPending && <Lucide icon='Save' aria-hidden="true" className="mr-2 h-4 w-4" />}
+                                                Salva
                                             </Button>
                                         </div>
                                     </React.Fragment>
@@ -299,9 +316,11 @@ const TabContenutiAggiuntivi: FC<TabContenutiAggiuntiviProps> = ({ referenza }) 
             {contenutoAggiuntivoReferenza.length > 0 && (
                 <div className="mt-6">
                     <Button
+                        type="button"
                         onClick={handleAddContenutoAggiuntivo}
                         variant="primary"
                     >
+                        <Lucide icon="Plus" aria-hidden="true" className="mr-2 h-4 w-4" />
                         Aggiungi contenuto aggiuntivo
                     </Button>
                 </div>

@@ -37,4 +37,18 @@ describe("PageHeader", () => {
 
     expect(screen.getByText("Valida")).toBeInTheDocument();
   });
+
+  it("il titolo usa la tipografia title-page", () => {
+    disegna(<PageHeader title="Punti vendita" />);
+
+    expect(screen.getByRole("heading", { level: 1, name: "Punti vendita" })).toHaveClass("title-page");
+  });
+
+  it("className può togliere il margine inferiore predefinito", () => {
+    const { container } = disegna(<PageHeader title="Punti vendita" className="mb-0" />);
+    const intestazione = container.firstElementChild;
+
+    expect(intestazione).toHaveClass("mb-0");
+    expect(intestazione).not.toHaveClass("mb-5");
+  });
 });

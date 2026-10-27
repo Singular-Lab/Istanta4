@@ -147,11 +147,11 @@ const DettaglioKitContent: React.FC<{
   if (isLoadingFiles && !filesData) {
     return (
       <div className="space-y-6">
-        <Skeleton height="80px" className="rounded-xl" />
-        <Skeleton height="200px" className="rounded-xl" />
+        <Skeleton height="80px" className="rounded-card" />
+        <Skeleton height="200px" className="rounded-card" />
         <div className="grid grid-cols-4 gap-4">
           {[1, 2, 3, 4].map(i => (
-            <Skeleton key={i} height="100px" className="rounded-xl" />
+            <Skeleton key={i} height="100px" className="rounded-card" />
           ))}
         </div>
       </div>
@@ -324,7 +324,7 @@ const DettaglioKit: React.FC = () => {
   if (!abortController) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Skeleton height="100%" className="rounded-xl" />
+        <Skeleton height="100%" className="rounded-card" />
       </div>
     );
   }
