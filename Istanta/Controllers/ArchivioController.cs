@@ -66,82 +66,67 @@ namespace Istanta.Controllers
         // codice -> merceologia leggendo l'ultimo tracciato che cita il codice.
         // La mappa cambia solo a ogni importazione, quindi la tengo in memoria
         // per qualche minuto invece di rileggerla a ogni ricerca.
+        //
+        // TASK-a77bd7b2: scaduta, non la aspetta piu' la richiesta che la trova:
+        // si risponde con quella di prima e la si rilegge in background
+        // (CacheConRinnovo). Solo la prima apertura dopo l'avvio aspetta.
         // ------------------------------------------------------------------
-        private static Dictionary<string, string[]>? _cacheMerceologia = null;
-        private static DateTime _cacheMerceologiaScadenza = DateTime.MinValue;
+        private static Utility.CacheConRinnovo<Dictionary<string, string[]>>? _cacheMerceologia = null;
         private static readonly object _lockMerceologia = new object();
 
         private Dictionary<string, string[]> getMerceologia()
         {
+            Utility.CacheConRinnovo<Dictionary<string, string[]>> cache;
             lock (_lockMerceologia)
             {
-                if (_cacheMerceologia != null && DateTime.Now < _cacheMerceologiaScadenza)
-                    return _cacheMerceologia;
+                // La fabbrica dei contesti e il logger sono singleton: il rinnovo in background puo'
+                // usarli anche dopo la fine di questa richiesta.
+                var fabbrica = this._dbContextFactory;
+                var logger = this._logger;
+                _cacheMerceologia ??= new Utility.CacheConRinnovo<Dictionary<string, string[]>>(
+                    () => caricaMerceologia(fabbrica, logger),
+                    // Senza merceologia la pagina funziona lo stesso, solo senza
+                    // i filtri per reparto: non e' un motivo per non rispondere.
+                    () => new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase),
+                    TimeSpan.FromMinutes(5),
+                    ex => logger.LogWarning("Archivio: merceologia non disponibile -> {Messaggio}", ex.Message));
+                cache = _cacheMerceologia;
             }
+            return cache.Leggi();
+        }
 
+        private static Dictionary<string, string[]> caricaMerceologia(IDbContextFactory<edro21_dbContext> fabbrica, ILogger logger)
+        {
+            var cronometro = System.Diagnostics.Stopwatch.StartNew();
             var mappa = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
 
-            try
+            using (var ctxLocale = fabbrica.CreateDbContext())
             {
-                using (var ctxLocale = this._dbContextFactory.CreateDbContext())
+                var conn = ctxLocale.Database.GetDbConnection();
+                if (conn.State != System.Data.ConnectionState.Open) conn.Open();
+                using (var cmd = conn.CreateCommand())
                 {
-                    var conn = ctxLocale.Database.GetDbConnection();
-                    if (conn.State != System.Data.ConnectionState.Open) conn.Open();
-                    using (var cmd = conn.CreateCommand())
+                    // CORREZIONE 7/9/2026: la query si sceglie in base al motore (RicercaArchivio.QueryMerceologia).
+                    bool suPostgres = (ctxLocale.Database.ProviderName ?? "").Contains("Npgsql");
+                    cmd.CommandText = Utility.RicercaArchivio.QueryMerceologia(suPostgres);
+                    cmd.CommandTimeout = 30;
+                    using (var rd = cmd.ExecuteReader())
                     {
-                        // CORREZIONE 7/9/2026. Questa query era scritta solo in T-SQL:
-                        //   JSON_VALUE(CAST(dato AS nvarchar(max)), '$.reparto')
-                        // Su PostgreSQL non esiste ne JSON_VALUE ne il tipo nvarchar, quindi la
-                        // lettura falliva. L'eccezione veniva inghiottita dal catch qui sotto e la
-                        // pagina rispondeva lo stesso, ma SENZA i filtri per reparto, settore e
-                        // categoria: un guasto silenzioso. Ora la query si sceglie in base al motore.
-                        bool suPostgres = (ctxLocale.Database.ProviderName ?? "").Contains("Npgsql");
-                        cmd.CommandText = suPostgres
-                            ? "WITH ultimo AS (" +
-                              "  SELECT codice," +
-                              "         (dato::json ->> 'reparto')   AS reparto," +
-                              "         (dato::json ->> 'settore')   AS settore," +
-                              "         (dato::json ->> 'categoria') AS categoria," +
-                              "         ROW_NUMBER() OVER (PARTITION BY codice ORDER BY id DESC) AS rn" +
-                              "  FROM promo_tracciati_records WHERE codice IS NOT NULL AND dato IS JSON" +
-                              ") SELECT codice, reparto, settore, categoria FROM ultimo WHERE rn = 1"
-                            : "WITH ultimo AS (" +
-                              "  SELECT codice," +
-                              "         JSON_VALUE(CAST(dato AS nvarchar(max)), '$.reparto')   AS reparto," +
-                              "         JSON_VALUE(CAST(dato AS nvarchar(max)), '$.settore')   AS settore," +
-                              "         JSON_VALUE(CAST(dato AS nvarchar(max)), '$.categoria') AS categoria," +
-                              "         ROW_NUMBER() OVER (PARTITION BY codice ORDER BY id DESC) AS rn" +
-                              "  FROM promo_tracciati_records WHERE codice IS NOT NULL" +
-                              ") SELECT codice, reparto, settore, categoria FROM ultimo WHERE rn = 1";
-                        cmd.CommandTimeout = 30;
-                        using (var rd = cmd.ExecuteReader())
+                        while (rd.Read())
                         {
-                            while (rd.Read())
-                            {
-                                string cod = rd.GetString(0);
-                                if (string.IsNullOrEmpty(cod)) continue;
-                                mappa[cod] = new string[] {
-                                    rd.IsDBNull(1) ? "" : rd.GetString(1),
-                                    rd.IsDBNull(2) ? "" : rd.GetString(2),
-                                    rd.IsDBNull(3) ? "" : rd.GetString(3)
-                                };
-                            }
+                            string cod = rd.GetString(0);
+                            if (string.IsNullOrEmpty(cod)) continue;
+                            mappa[cod] = new string[] {
+                                rd.IsDBNull(1) ? "" : rd.GetString(1),
+                                rd.IsDBNull(2) ? "" : rd.GetString(2),
+                                rd.IsDBNull(3) ? "" : rd.GetString(3)
+                            };
                         }
                     }
                 }
             }
-            catch (Exception ex)
-            {
-                // Senza merceologia la pagina funziona lo stesso, solo senza
-                // i filtri per reparto: non e' un motivo per non rispondere.
-                Console.WriteLine("Archivio: merceologia non disponibile -> " + ex.Message);
-            }
 
-            lock (_lockMerceologia)
-            {
-                _cacheMerceologia = mappa;
-                _cacheMerceologiaScadenza = DateTime.Now.AddMinutes(5);
-            }
+            logger.LogInformation("Archivio: merceologia di {Codici} codici letta in {Millisecondi} ms", mappa.Count, cronometro.ElapsedMilliseconds);
             return mappa;
         }
 
@@ -179,7 +164,12 @@ namespace Istanta.Controllers
             ViewBag.search_foto = search_foto;
             ViewBag.ordinamento = ordinamento;
 
+            // TASK-a77bd7b2: quanto dura ogni fase, nel log, per sapere dove va il tempo della pagina.
+            var cronometro = System.Diagnostics.Stopwatch.StartNew();
+            long msMerceologia, msTotaleArchivio, msConteggi, msPagina;
+
             var merceologia = getMerceologia();
+            msMerceologia = cronometro.ElapsedMilliseconds;
             ViewBag.merceologia = merceologia;
 
             // Le tendine si popolano da quello che c'e' davvero, non da un
@@ -189,18 +179,14 @@ namespace Istanta.Controllers
             ViewBag.elencoSettori = merceologia.Values.Select(v => v[1]).Where(v => v != "").Distinct().OrderBy(v => v).ToList();
             ViewBag.elencoCategorie = merceologia.Values.Select(v => v[2]).Where(v => v != "").Distinct().OrderBy(v => v).ToList();
 
-            // AsSplitQuery aggiunto il 9/9/2026. Con due Include di collezioni EF
-            // costruisce UNA query con due giunzioni, e ogni articolo esce ripetuto
-            // (numero foto x numero descrizioni). EF stesso lo segnala a ogni chiamata:
-            //   "Compiling a query which loads related collections for more than one
-            //    collection navigation ... no QuerySplittingBehavior"
-            // Con lo split diventano tre query piccole e le righe non si moltiplicano.
-            var query = ctx.Articolis.Include(a => a.ArticoliFotos)
-                .Include(a => a.ArticoliDescrizionis)
-                .AsSplitQuery()
-                .Where(a => a.ArticoliDescrizionis.Any());
+            // TASK-a77bd7b2: la ricerca senza Include. Descrizioni e foto si leggono solo per gli
+            // articoli della pagina (RicercaArchivio.PaginaAsync): incluse qui, le loro query
+            // ripetevano tutta la ricerca.
+            IQueryable<Articoli> query = ctx.Articolis.Where(a => a.ArticoliDescrizionis!.Any());
 
+            var inizioFase = cronometro.ElapsedMilliseconds;
             ViewBag.totaleArchivio = await ctx.Articolis.CountAsync();
+            msTotaleArchivio = cronometro.ElapsedMilliseconds - inizioFase;
 
             // TASK-6e4320b7: i filtri di testo non distinguono maiuscole e minuscole: ILIKE invece di
             // Contains, che su PostgreSQL le distingueva. Stanno in RicercaArchivio, che i test provano.
@@ -234,45 +220,14 @@ namespace Istanta.Controllers
                 query = query.Where(a => codici.Contains(a.Codice));
             }
 
-            switch (ordinamento)
-            {
-                case "codice_desc":
-                    query = query.OrderByDescending(a => a.Codice);
-                    break;
-                case "recenti":
-                    query = query.OrderByDescending(a => a.DataModifica ?? a.DataInserimento);
-                    break;
-                case "descrizione":
-                    // RISCRITTO 7/9/2026 come giunzione con la riga base, non come sottoquery.
-                    //
-                    // Cosa si e visto sui dati veri: articoli.descrizione1..4 sono VUOTE su tutti
-                    // e 51 gli articoli del demo, sia su SQL Server sia su PostgreSQL. Il nome del
-                    // prodotto sta solo in articoli_descrizioni.descrizione_1 della riga 'base',
-                    // quella con area e canale vuoti. Ordinare per articoli.descrizione1 sarebbe
-                    // stato istantaneo e SBAGLIATO: avrebbe ordinato per una colonna vuota.
-                    //
-                    // La forma precedente chiedeva quella descrizione con una sottoquery correlata:
-                    // il motore la eseguiva una volta per articolo, 200.051 volte, ~730 ms a volume
-                    // pieno, e nessun indice poteva evitarlo. Chiesta come giunzione, il motore
-                    // percorre l'indice gia in ordine e si ferma dopo quaranta righe.
-                    //
-                    // Serve l'indice: articoli_descrizioni (descrizione_1, id_articolo)
-                    //                 WHERE area IS NULL AND canale IS NULL     -> ix_ad_ordine
-                    //
-                    // Nota: la giunzione duplicherebbe un articolo che avesse piu di una riga base.
-                    // Verificato sui dati veri: nessun articolo ne ha piu di una.
-                    query = from a in query
-                            join d in ctx.ArticoliDescrizionis.Where(x => x.Area == null && x.Canale == null)
-                                 on (Int64?)a.Id equals d.IdArticolo
-                            orderby d.Descrizione1
-                            select a;
-                    break;
-                default:
-                    query = query.OrderBy(a => a.Codice);
-                    break;
-            }
+            query = Utility.RicercaArchivio.Ordina(ctx, query, ordinamento);
 
-            ViewBag.conteggio = await query.CountAsync();
+            // TASK-a77bd7b2: i contatori di testata, sull'intero risultato della ricerca e non sulla
+            // sola pagina, in una query sola: prima erano due, ognuna con tutti i filtri.
+            inizioFase = cronometro.ElapsedMilliseconds;
+            var conteggi = await Utility.RicercaArchivio.ContaAsync(query);
+            msConteggi = cronometro.ElapsedMilliseconds - inizioFase;
+            ViewBag.conteggio = conteggi.Totale;
 
             ViewBag.TotPagine = (Int32)ViewBag.conteggio / this.recordPerPage;
             if ((Int32)ViewBag.conteggio % this.recordPerPage != 0)
@@ -291,13 +246,23 @@ namespace Istanta.Controllers
                 ViewBag.CurrentPage = Page;
             }
 
-            var result = await query.Skip(skip).Take(recordPerPage).ToListAsync();
+            inizioFase = cronometro.ElapsedMilliseconds;
+            var result = await Utility.RicercaArchivio.PaginaAsync(ctx, query, skip, recordPerPage);
+            msPagina = cronometro.ElapsedMilliseconds - inizioFase;
             ViewBag.lista_ricerca = result;
 
-            // Contatori di testata, calcolati sull'intero risultato della
-            // ricerca e non sulla sola pagina mostrata.
-            ViewBag.kpiConFoto = await query.CountAsync(a => a.ArticoliFotos.Any());
-            ViewBag.kpiSenzaFoto = (Int32)ViewBag.conteggio - (Int32)ViewBag.kpiConFoto;
+            ViewBag.kpiConFoto = conteggi.ConFoto;
+            ViewBag.kpiSenzaFoto = conteggi.Totale - conteggi.ConFoto;
+
+            // I campi compilati, non il loro testo.
+            var campi = new[] {
+                ("codice", search_codice), ("generico", search_generic), ("nome", search_nome), ("brand", search_brand),
+                ("tipogusto", search_tipogusto), ("grammatura", search_gramm), ("reparto", search_reparto),
+                ("settore", search_settore), ("categoria", search_categoria), ("foto", search_foto)
+            }.Where(c => !string.IsNullOrEmpty(c.Item2)).Select(c => c.Item1);
+            _logger.LogInformation("Archivio: pagina {Pagina} in {Tutto} ms (merceologia {Merceologia} ms, totale archivio {TotaleArchivio} ms, conteggi {Conteggi} ms, articoli della pagina {ArticoliPagina} ms); filtri: {Filtri}; ordinamento: {Ordinamento}; trovati {Trovati}",
+                (Int32)ViewBag.CurrentPage, cronometro.ElapsedMilliseconds, msMerceologia, msTotaleArchivio, msConteggi, msPagina,
+                string.Join(",", campi), ordinamento ?? "codice", conteggi.Totale);
 
             return View();
         }
