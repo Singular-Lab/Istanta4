@@ -1,6 +1,6 @@
 import { Children, cloneElement, forwardRef, isValidElement } from "react";
 import { twMerge } from "tailwind-merge";
-import Lucide from "../Lucide";
+import Spinner from "../Spinner";
 
 type Variant =
   | "primary"
@@ -74,11 +74,18 @@ const Button: ButtonComponent = forwardRef(
       rounded,
       children,
       loading,
+      icon,
       ...props
     }: ButtonProps<C>,
     ref?: PolymorphicRef<C>
   ) => {
     const Component = as || "button";
+    // Durante il caricamento il comando non si ripete: disattivato per i button, aria-disabled per i link
+    const statoCaricamento = loading
+      ? Component === "button"
+        ? { disabled: true, "aria-busy": true }
+        : { "aria-disabled": true, "aria-busy": true }
+      : {};
 
     // General Styles
     const generalStyles = [
@@ -315,15 +322,13 @@ const Button: ButtonComponent = forwardRef(
           props.className,
           loading && "opacity-70 pointer-events-none",
         ])}
+        {...statoCaricamento}
       >
-        {loading ? (
-          <Lucide icon="Loader" className="animate-spin" />
-        ) : (
-          children
-        )}
-        {props.icon && (
+        {loading && <Spinner decorativo size="sm" className="mr-2 text-current" />}
+        {children}
+        {icon && (
           <span className="ml-2">
-            {props.icon}
+            {icon}
           </span>
         )}
       </Component>

@@ -1,4 +1,5 @@
 // src/components/LoadingSpinner.tsx
+import Spinner from '@/components/Base/Spinner';
 import { FC } from 'react';
 
 interface LoadingSpinnerProps {
@@ -6,27 +7,21 @@ interface LoadingSpinnerProps {
   size?: 'small' | 'medium' | 'large';
 }
 
-const LoadingSpinner: FC<LoadingSpinnerProps> = ({ 
-  message = 'Caricamento...', 
-  size = 'medium' 
-}) => {
-  const sizeClasses = {
-    small: 'w-4 h-4 border-2',
-    medium: 'w-8 h-8 border-4',
-    large: 'w-12 h-12 border-4',
-  };
+const MISURE = { small: 'sm', medium: 'md', large: 'lg' } as const;
 
-  return (
-    <div className="flex flex-col items-center justify-center w-full h-full p-4">
-      <div 
-        className={`${sizeClasses[size]} border-t-primary border-gray-200 rounded-full animate-spin`}
-        role="status"
-      />
-      {message && (
-        <p className="mt-4 text-sm text-gray-700">{message}</p>
-      )}
-    </div>
-  );
-};
+// Spinner centrato con messaggio: lo spinner è quello comune di Base/Spinner
+const LoadingSpinner: FC<LoadingSpinnerProps> = ({
+  message = 'Caricamento...',
+  size = 'medium'
+}) => (
+  <div role="status" className="flex flex-col items-center justify-center w-full h-full p-4">
+    <Spinner decorativo size={MISURE[size]} />
+    {message ? (
+      <p className="mt-4 text-sm text-slate-700">{message}</p>
+    ) : (
+      <span className="sr-only">Caricamento…</span>
+    )}
+  </div>
+);
 
 export default LoadingSpinner;
