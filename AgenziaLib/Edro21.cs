@@ -283,6 +283,17 @@ namespace AgenziaLib
             return BoxNormaleInSezioneSdb(record) ? combinazione.Replace("_sdb", "") : combinazione;
         }
 
+        /// I20-1145: il logo Conad Piacersi non va alle ref di un tema focus (tipo tema o sezione che
+        /// contengono "focus"), regola che c'era da prima. Fa eccezione, nel volantino, la ref benessere
+        /// della sezione Scelte di Benessere: esce col box normale, senza logo SDB, e senza questa
+        /// eccezione restava anche senza il logo Piacersi. Il PoP resta com'era.
+        public static bool LogoPiacersiAmmesso(Dictionary<string, object> record, int tipoLavorazione)
+        {
+            var temaFocus = Testo(record, Edro21Context.Meta.tipo_tema).ToLowerInvariant().Contains("focus")
+                || Testo(record, Edro21Context.Meta.sezione).ToLowerInvariant().Contains("focus");
+            return !temaFocus || (tipoLavorazione == 1 && BoxNormaleInSezioneSdb(record));
+        }
+
         private static string Testo(Dictionary<string, object> record, string chiave)
         {
             return record != null && record.TryGetValue(chiave, out var valore) && valore != null
@@ -11570,7 +11581,7 @@ Descrizione3.EndsWith("\r\n");
                         prodotto_conad = "conad_saporiidee";
                     else if (gusto.Contains("piacersi") || desc1.Contains("piacersi") || brand.Contains("piacersi"))
                     {
-                        if (!(tipo_tema.Contains("focus") || sezione.Contains("focus")))
+                        if (SceltaDiBenessereEdro21.LogoPiacersiAmmesso(oItem, tipo_lavorazione))
                         {
                             prodotto_conad = "conad_piacersi";
                         }
