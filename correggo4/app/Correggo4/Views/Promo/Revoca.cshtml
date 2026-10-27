@@ -55,6 +55,11 @@ th{color:var(--ink-3);font-weight:600;font-size:12px}
   <div class="card">
     <h1>Revoca della versione @Model.Versione</h1>
     <p style="margin:0 0 14px;color:var(--ink-2)"><b>@Model.Titolo</b> (@Model.Classificazione) tornerà alla <b>versione @Model.Precedente</b>.</p>
+    @if (Model.Precedente == 0)
+    {
+        @* I20-1149: revocare la versione 1 porta il volantino alla versione 0 *@
+        <div class="avviso">È l'unica versione del volantino: con la revoca il volantino va alla <b>versione 0</b> e nessuno potrà aprirlo né correggerlo finché non ne arriverà una nuova da Fidelity.</div>
+    }
     @if (totale == 0)
     {
         <div class="avviso" style="background:var(--ok-bg);color:var(--ok-fg)">Sulla versione @Model.Versione non ci sono correzioni: la revoca non fa perdere niente.</div>

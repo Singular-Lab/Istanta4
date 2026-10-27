@@ -95,7 +95,10 @@ public class VolantiniController : Controller
         }
 
         // L'ultima versione si legge dalle pagine, come fa Dettaglio: e' quella che l'editor apre.
+        // I20-1149: solo le versioni valide. Le revocate hanno numeri negativi: un volantino con
+        // tutte le versioni revocate e' alla versione 0, senza pagine.
         var pagine = await ctx.VolantiniPagines.AsNoTracking()
+            .Where(p => p.Versione > 0)
             .Select(p => new { p.Id, p.IdVol, p.Versione, p.Numero })
             .ToListAsync();
 
@@ -266,8 +269,13 @@ public class VolantiniController : Controller
             return RedirectToAction(nameof(Index));
         }
 
-        short versione = await ctx.VolantiniPagines.Where(p => p.IdVol == id)
+        short versione = await ctx.VolantiniPagines.Where(p => p.IdVol == id && p.Versione > 0)
                             .MaxAsync(p => (short?)p.Versione) ?? 0;
+        if (versione == 0)
+        {
+            TempData["Avviso"] = ServizioCorrezioni.AvvisoVersioneZero(vol.Titolo);
+            return RedirectToAction(nameof(Index));
+        }
         var numeri = await ctx.VolantiniPagines.AsNoTracking()
             .Where(p => p.IdVol == id && p.Versione == versione)
             .OrderBy(p => p.Numero)
@@ -322,10 +330,17 @@ public class VolantiniController : Controller
             return RedirectToAction(nameof(Index));
         }
 
-        short ultimaVersione = await ctx.VolantiniPagines.Where(p => p.IdVol == id)
+        // I20-1149: solo le versioni valide (le revocate sono negative). Alla versione 0 il volantino
+        // non si apre: si torna alla home con il messaggio.
+        short ultimaVersione = await ctx.VolantiniPagines.Where(p => p.IdVol == id && p.Versione > 0)
                             .MaxAsync(p => (short?)p.Versione) ?? 0;
         short versione = v is > 0 && await ctx.VolantiniPagines.AnyAsync(p => p.IdVol == id && p.Versione == v)
                          ? v.Value : ultimaVersione;
+        if (versione == 0)
+        {
+            TempData["Avviso"] = ServizioCorrezioni.AvvisoVersioneZero(vol.Titolo);
+            return RedirectToAction(nameof(Index));
+        }
 
         var modello = new VolantinoInCorrezione
         {

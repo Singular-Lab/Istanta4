@@ -103,8 +103,10 @@ public sealed class ImportatorePack
         esito.IdVolantino = vol.Id;
 
         // --- versione: chiudo la precedente, apro la nuova ---
+        // I20-1149: si conta dall'ultima versione valida. Le revocate sono negative: con tutte
+        // revocate (versione 0) la nuova e' la 1, non la 0 o una negativa.
         short ultima = await ctx.VolantiniVersionis
-            .Where(v => v.IdVol == vol.Id)
+            .Where(v => v.IdVol == vol.Id && v.Versione > 0)
             .MaxAsync(v => (short?)v.Versione) ?? 0;
 
         foreach (var aperta in await ctx.VolantiniVersionis

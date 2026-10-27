@@ -117,6 +117,9 @@ public sealed partial class ServizioPropagazione
                                 where e.IdParent == null && e.Basecode != ""
                                       && v.Status == StatoVolantinoAperto && v.DataScadenza > adesso
                                       && !(p.IdVol == idVol && p.Versione == versioneNuova)
+                                      // I20-1149: mai dalle versioni revocate (negative), neanche di
+                                      // un volantino alla versione 0
+                                      && p.Versione > 0
                                 select new { e, p.IdVol, p.Versione, v.Titolo, v.Classificazione }).ToListAsync();
             // "ultima versione di ogni volantino" come il precalcolo dell'originale (Worker.cs:1517-1545)
             var ultima = grezzi.GroupBy(x => x.IdVol).ToDictionary(g => g.Key, g => g.Max(x => x.Versione));
