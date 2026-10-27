@@ -191,6 +191,7 @@ h2.sec small{font-size:12.5px;font-weight:500;color:var(--ink-3)}
 .pdf{
   display:flex;align-items:center;gap:8px;width:100%;border:0;background:none;cursor:pointer;text-align:left;
   padding:6px 6px;border-radius:6px;font-size:13px;color:var(--ink);
+  text-decoration:none;   /* I20-1148: e' un link all'editor, ma deve restare com'era */
 }
 .pdf:hover{background:#fff;box-shadow:0 0 0 1px var(--line)}
 .pdf.on{background:#fff;box-shadow:0 0 0 1.5px var(--teal)}
@@ -792,9 +793,11 @@ function pdfPerCanale(c, vols){
         const tim = TIMONE_DA_FARE.has(v.id)
           ? `<span class="st tim" title="Il Marketing ha chiuso la finestra e ha chiesto delle modifiche col timone: entra nel volantino e riportale sull'impaginato">TIMONE</span>`
           : "";
-        return `<button class="pdf ${S.hl===v.id?"on":""}" type="button" data-k="${esc(k)}" data-id="${v.id}" title="${esc(v.titolo)}.pdf">
+        // I20-1148: il PDF apre il volantino nell'editor, come "Apri editor" sulla card. Prima
+        // evidenziava soltanto la card. E' un link: Cmd+clic lo apre in un'altra scheda.
+        return `<a class="pdf ${S.hl===v.id?"on":""}" href="${C4_BASE}Volantini/Dettaglio/${v.id}" data-k="${esc(k)}" data-id="${v.id}" title="Apri ${esc(v.titolo)}">
           <span class="fi">PDF</span><span class="nm">${esc(nomeBreve(v.titolo, k))}</span><span class="mt">v${v.versione} · ${v.pagine}p</span>${tim}${st}
-        </button>`;
+        </a>`;
       }).join("");
   }).join("");
 }
@@ -969,13 +972,9 @@ $("#tabs")?.addEventListener("click", e => {   // tab tolti l'11/9: resta innocu
 $("#camps").addEventListener("click", e => {
   const tog = e.target.closest("[data-tog]");
   if(tog){ const k = tog.dataset.tog; S.aperta = (S.aperta===k) ? null : k; render(); return; }
-  const pdf = e.target.closest(".pdf");
-  if(pdf){
-    S.sel = pdf.dataset.k; S.canale = S.area = ""; S.hl = +pdf.dataset.id; render();
-    const card = document.querySelector(`.vcard[data-id="${S.hl}"]`);
-    if(card){ card.scrollIntoView({behavior:"smooth", block:"center"}); card.classList.remove("flash"); void card.offsetWidth; card.classList.add("flash"); }
-    return;
-  }
+  // I20-1148: il clic sul PDF dell'elenco lo lascia al link (apre l'editor): qui non si
+  // evidenzia piu' la card.
+  if(e.target.closest(".pdf")) return;
   const can = e.target.closest(".pdf-can");
   if(can){ S.sel = can.dataset.k; S.area = ""; S.hl = null; S.canale = (S.canale===can.dataset.can) ? "" : can.dataset.can; render(); return; }
   const head = e.target.closest(".camp-head"); if(!head) return;
