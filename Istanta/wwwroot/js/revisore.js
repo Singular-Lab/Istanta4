@@ -949,8 +949,27 @@
         console.log(list);
     }
 
+    /// TASK-e9620c69: prima di partire le revisioni passano dall'agenzia (IAgenzia.preparaRevisioniDaSalvare):
+    /// Edro21 svuota le descrizioni fatte solo di spazi e a capo. Senza l'aggancio, con una risposta che non
+    /// e' una lista o con un errore, partono come sono: il salvataggio non si ferma per questo.
+    preparaRevisioniDaSalvare(listAct) {
+        const agenzia = this.agenzia;
+        if (agenzia == null || typeof agenzia.preparaRevisioniDaSalvare !== "function") {
+            return listAct;
+        }
+        try {
+            const preparate = agenzia.preparaRevisioniDaSalvare(listAct);
+            return Array.isArray(preparate) ? preparate : listAct;
+        }
+        catch (e) {
+            console.error("Revisioni non preparate dall'agenzia, partono come sono:", e);
+            return listAct;
+        }
+    }
+
     salvaFunction(listAct, callback, senderButton) {
         let ME = this;
+        listAct = this.preparaRevisioniDaSalvare(listAct);
         let IdTracciato = parseInt($("#CmbTracciato").val());
         showLoading();
         console.log("Salva function")

@@ -266,4 +266,11 @@ class IAgenzia {
         console.warn("Chiamata nascondiFiltroTracciato non implementata");
         return false;
     }
+
+    /// TASK-e9620c69: le revisioni che il revisore web o la pagina Archivio stanno per mandare al server
+    /// (Revisore/salva), una per scheda: { Descrizione1..4, DescrizioneIndd, Extra, Peso, Um, Codice o
+    /// CodiceGruppo, ... }. L'agenzia puo' correggerle prima del salvataggio; di norma partono come sono.
+    preparaRevisioniDaSalvare(revisioni) {
+        return revisioni;
+    }
 }
