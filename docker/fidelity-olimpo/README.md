@@ -473,8 +473,10 @@ archivi siano rileggibili, e scrive `SHA256SUMS` e un `MANIFEST` con versioni e
 provenienza. Le applicazioni possono restare in funzione.
 
 Non esporta redis — sono sessioni e cache — **né i file**: immagini, materiali e
-volantini stanno nei volumi Docker e vanno salvati a parte. Lo script lo ripete
-in coda, perché è la cosa che si dà per fatta quando non lo è.
+volantini stanno nei volumi Docker (o, su un'origine installata fuori da Docker,
+in cartelle dell'host) e vanno copiati a parte, come spiegato in
+[Trasportare i file di Olimpo](#trasportare-i-file-di-olimpo). Lo script lo
+ripete in coda, perché è la cosa che si dà per fatta quando non lo è.
 
 Sui target installati prima che MongoDB fosse tolto dal compose resta il volume
 `mongo_data`, che nessun servizio monta più. `docker compose up` non lo
@@ -578,7 +580,7 @@ SQL
 ```
 
 Annota i valori **prima** di sovrascriverli: sono le directory da cui copiare i
-file fisici.
+file fisici (vedi [Trasportare i file di Olimpo](#trasportare-i-file-di-olimpo)).
 
 Poi si riavvia:
 
@@ -595,6 +597,99 @@ una tabella non riconciliata si manifesta molto dopo, come errore a runtime.
 `seed-fidelity.sh` qui **non** va eseguito: utenti, menu e provider arrivano con
 il dump, e un secondo amministratore creerebbe solo confusione.
 
+### Trasportare i file di Olimpo
+
+Il dump porta i record, non i file archiviati: foto, materiali, versioni web e
+video vanno copiati a parte, dalle cartelle dell'origine dentro il volume
+`olimpo_uploads` di questo target. Vale anche quando sull'origine Olimpo non
+gira in Docker e i file stanno in cartelle qualsiasi dell'host.
+
+Basta copiare il **contenuto** di ciascuna cartella: nei record Olimpo non
+scrive il percorso completo, ma l'id della riga di `absolute_paths` più il nome
+del file (in `foto`, per esempio, `id_path_archivio` e `file_name`). Il percorso
+vero lo decide `absolute_paths`, che dopo la copia si riallinea con l'`UPDATE`
+di [Dopo il ripristino](#dopo-il-ripristino).
+
+**1. Sull'origine, dove stanno i file.** Prima di qualsiasi `UPDATE`:
+
+```bash
+sudo -u postgres psql -d olimpo_db -c "SELECT id, tipo, path, active FROM absolute_paths ORDER BY tipo, id;"
+```
+
+Il nome del database dipende dall'installazione (`psql -l` li elenca). Se per
+lo stesso tipo ci sono **più righe** — per esempio due `ARCHIVIO`, di cui una
+non più attiva — fermati: l'`UPDATE` le farebbe puntare tutte alla stessa
+cartella, e file con lo stesso nome finirebbero uno sopra l'altro.
+
+**2. rsync va installato anche sull'origine.** rsync lavora sui due lati della
+connessione; se sull'origine manca, il comando si ferma subito con:
+
+```
+bash: line 1: rsync: command not found
+rsync: connection unexpectedly closed (0 bytes received so far) [Receiver]
+```
+
+Si installa una volta:
+
+```bash
+ssh root@<origine> 'apt-get install -y rsync'   # RHEL/CentOS: dnf install -y rsync
+```
+
+**3. Sul target, il volume giusto.** Il nome ha come prefisso il progetto
+compose, che non è sempre `istanta4`: su un target installato in
+`/opt/company-ai/projects/fidelity-olimpo` può essere
+`fidelity-olimpo_olimpo_uploads`.
+
+```bash
+sudo docker volume ls | grep olimpo_uploads
+VOL=$(sudo docker volume inspect <nome-trovato> -f '{{.Mountpoint}}')
+ls "$VOL"    # devono esserci web archivio materiali video FTP
+```
+
+Se le cinque cartelle non ci sono, è il volume sbagliato oppure
+`prepare-target.sh` non l'ha ancora preparato: non copiare.
+
+**4. La copia**, dal target, una volta per tipo, con i `path` letti al punto 1:
+
+```bash
+sudo rsync -aH --info=progress2 --partial \
+  root@<origine>:/percorso/di/ARCHIVIO/   "$VOL/archivio/"
+# WEB -> web/, MATERIALI -> materiali/, VIDEO -> video/
+```
+
+La `/` finale sulla sorgente conta: copia il contenuto della cartella, non la
+cartella stessa. Se l'utente ssh dell'origine non può leggere tutto, aggiungi
+`--rsync-path="sudo rsync"`. rsync si può interrompere e rilanciare: riparte da
+dove era arrivato. La prima passata, la più lunga, può girare con Olimpo acceso;
+l'ultima si fa con Olimpo fermo (`compose stop olimpo`) e copia solo le
+differenze.
+
+Se rsync sull'origine non si può installare, lo stesso risultato si ottiene con
+`tar` attraverso ssh, che però dopo un'interruzione riparte da capo:
+
+```bash
+ssh root@<origine> 'tar -C /percorso/di/ARCHIVIO -cf - .' | sudo tar -C "$VOL/archivio" -xpf -
+```
+
+**5. Proprietario, percorsi, riavvio.** Olimpo gira come utente `1000`
+(`UID_APP` di `prepare-target.sh`), e i file copiati da root non sarebbero suoi:
+
+```bash
+sudo chown -R 1000:1000 "$VOL"/{web,archivio,materiali,video}
+```
+
+Poi l'`UPDATE absolute_paths` di [Dopo il ripristino](#dopo-il-ripristino), se
+non è già stato fatto, e il riavvio di Olimpo.
+
+**6. Controllo.** Il numero di file per tipo deve coincidere sui due lati:
+
+```bash
+ssh root@<origine> 'find /percorso/di/ARCHIVIO -type f | wc -l'
+sudo find "$VOL/archivio" -type f | wc -l
+```
+
+e qualche foto aperta dall'archivio dall'interfaccia deve comparire.
+
 ### Cose che il ripristino non porta
 
 - **I job di `pgagent`.** Se la macchina di origine ne aveva, compaiono come
@@ -602,6 +697,6 @@ il dump, e un secondo amministratore creerebbe solo confusione.
   non è nell'immagine e richiederebbe un demone a parte. Se però quei job
   facevano lavoro vero — una pulizia notturna, una vista da rinfrescare — vanno
   ricreati altrimenti, con `cron` sull'host o un servizio nel compose.
-- **I file.** Vedi sopra: i database sanno dove stanno le immagini, ma le
-  immagini vanno spostate a parte.
+- **I file.** I database sanno dove stanno le immagini, ma le immagini vanno
+  spostate a parte: vedi [Trasportare i file di Olimpo](#trasportare-i-file-di-olimpo).
 
