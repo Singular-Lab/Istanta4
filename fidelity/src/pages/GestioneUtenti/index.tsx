@@ -1,26 +1,30 @@
 import { FormCheck, FormField, FormInput, FormSelect } from "@/components/Base/Form";
-import { Dialog, Menu, Popover } from "@/components/Base/Headless";
+import BarraFiltri from "@/components/Base/BarraFiltri";
+import Badge from "@/components/Base/Badge";
+import CampoRicerca from "@/components/Base/CampoRicerca";
+import { Dialog, Menu } from "@/components/Base/Headless";
 import Lucide from "@/components/Base/Lucide";
-import Pagination from "@/components/Base/Pagination";
+import Pagina from "@/components/Base/Pagina";
+import PaginazioneTabella from "@/components/Base/PaginazioneTabella";
+import Sezione from "@/components/Base/Sezione";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import { PermissionGate } from "@/components/PermissionGate";
 import withSessionCheck from "@/components/SessionChecker";
 import { PERMISSIONS } from "@/constants/permissions";
-import Tippy from '@tippyjs/react';
 // import users from "@/fakers/users";
 import Button from "@/components/Base/Button";
 import Table from "@/components/Base/Table";
 import clsx from "clsx";
 // import { useLoaderData } from "react-router-dom";
 import PageError from "@/components/Base/PageError";
-import PageHeader from "@/components/Base/PageHeader";
 import Spinner from "@/components/Base/Spinner";
 import StatusBadge from "@/components/Base/StatusBadge";
 import EmptyState from "@/components/EmptyState";
+import { formatData, formatDataOra } from "@/utils/format";
 import { useFetchAllGDO, useFetchAllRuoliGDO, useFetchAllUtentiPaginated, useFetchPuntiVenditaFromIdGDO } from "@/query/query";
 import { yupResolver } from "@hookform/resolvers/yup";
 import { useMutation } from "@tanstack/react-query";
 import dayjs from "dayjs";
-import duration from "dayjs/plugin/duration";
 import { saveAs } from "file-saver";
 import React, { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -31,7 +35,6 @@ import { CanaliInterazioneAttributes } from "../../../lib/types";
 import { GDOResponseDTO, PuntoVenditaResponseDTO, RuoloUtenteGDOResponseDTO, UtenteResponseDTO } from "../../../server/core/dto";
 import { useUser } from "../../context/UserContext";
 import { useNotification } from "../../context/NotificationContext";
-dayjs.extend(duration);
 const filterSchema = yup.object().shape({
   canaleInterazione: yup.string().required(),
   tipoUtente: yup.string().required(),
@@ -134,6 +137,52 @@ const userEditSchema = yup.object().shape({
   sesso: yup.string().notRequired(),
 })
 
+/** Colonne della tabella desktop: selezione, nome, canale, stato, registrazione, tipo, ruolo GDO, punto vendita, azioni. */
+const NUMERO_COLONNE = 9;
+
+const ICONE_CANALE: Record<string, string> = {
+  WHATSAPP: "MessageCircle",
+  EMAIL: "Mail",
+  TELEGRAM: "Send",
+  FACEBOOK: "MessageCircle",
+  INSTAGRAM: "Camera",
+  LINKEDIN: "Briefcase",
+  GOOGLE: "Globe",
+  SMS: "Smartphone",
+};
+
+const ETICHETTE_CANALE: Record<string, string> = {
+  WHATSAPP: "WhatsApp",
+  EMAIL: "Email",
+  TELEGRAM: "Telegram",
+  FACEBOOK: "Facebook",
+  INSTAGRAM: "Instagram",
+  LINKEDIN: "LinkedIn",
+  GOOGLE: "Google",
+  SMS: "SMS",
+};
+
+const ETICHETTE_TIPO: Record<string, string> = {
+  [TIPO_UTENTI.SUPERADMIN]: "Superadmin",
+  [TIPO_UTENTI.AGENZIA]: "Agenzia",
+  [TIPO_UTENTI.PUNTOVENDITA]: "Punto Vendita",
+  [TIPO_UTENTI.GUEST]: "Guest",
+  [TIPO_UTENTI.GDO]: "GDO",
+  [TIPO_UTENTI.CATEGORY]: "Category",
+  [TIPO_UTENTI.MARKETING]: "Marketing",
+  [TIPO_UTENTI.IT]: "IT",
+};
+
+const etichettaTipo = (tipo?: string | null) => (tipo && ETICHETTE_TIPO[tipo]) || "Unknown";
+
+/** Canale da cui è arrivato l'utente: icona ed etichetta ("Interno" se non ce n'è uno). */
+const CanaleArrivo = ({ tipo }: { tipo?: string | null }) => (
+  <span className="flex items-center gap-2 whitespace-nowrap">
+    <Lucide icon={(tipo && ICONE_CANALE[tipo]) || "User"} aria-hidden="true" className="h-4 w-4 text-slate-500" />
+    {(tipo && ETICHETTE_CANALE[tipo]) || "Interno"}
+  </span>
+);
+
 const GestioneUtenti: React.FC = () => {
   const puntiVendita = useFetchPuntiVenditaFromIdGDO();
   const [allChecked, setAllChecked] = useState(false);
@@ -143,7 +192,6 @@ const GestioneUtenti: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [rateLimitDialogOpen, setRateLimitDialogOpen] = useState(false);
-  const [rateLimitDialogLoading, setRateLimitDialogLoading] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedUserForEdit, setSelectedUserForEdit] = useState<any>(null);
   const [filters, setFilters] = useState<{
@@ -160,15 +208,6 @@ const GestioneUtenti: React.FC = () => {
   const { showNotification } = useNotification();
   const { data: allRuoliGDO } = useFetchAllRuoliGDO();
   const { data: allGDO } = useFetchAllGDO();
-  // Funzione per gestire la chiusura del dialog con loading
-  const handleRateLimitDialogClose = async () => {
-    setRateLimitDialogLoading(true);
-    // Simula un'operazione asincrona
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    setRateLimitDialogLoading(false);
-    setRateLimitDialogOpen(false);
-  };
-
   // Form per la creazione utente
   const { register, handleSubmit, formState: { errors }, reset, setValue, watch } = useForm({
     resolver: yupResolver(userCreationSchema),
@@ -342,7 +381,6 @@ const GestioneUtenti: React.FC = () => {
   };
 
   const onSubmitFilters = (data: any) => {
-    console.log("Filtri applicati:", data);
     setFilters(data);
     setCurrentPage(1); // Reset alla prima pagina quando si applicano i filtri
   };
@@ -531,136 +569,67 @@ const GestioneUtenti: React.FC = () => {
     }
   }, [editDialogOpen, selectedUserForEdit, setValueEdit]);
 
+  const filtriAttivi = Boolean(filters.searchTerm || tipoUtente || stato || sesso);
+  const statoVuoto = filtriAttivi ? (
+    <EmptyState
+      compatta
+      icon="SearchX"
+      title="Nessun risultato"
+      description="Nessun utente corrisponde alla ricerca o ai filtri."
+      buttonText="Azzera filtri"
+      buttonIcon="X"
+      onButtonClick={resetFilters}
+    />
+  ) : (
+    <EmptyState compatta icon="UserX" title="Nessun utente trovato" description="Non ci sono utenti da mostrare." />
+  );
+
   return (
     <>
-      <Dialog open={rateLimitDialogOpen} onClose={() => {
-        if (!rateLimitDialogLoading) {
-          setRateLimitDialogOpen(false);
-        }
-      }}>
+      {/* Il server non indica fra quanto si può riprovare: nessuna durata mostrata */}
+      <Dialog open={rateLimitDialogOpen} onClose={() => setRateLimitDialogOpen(false)}>
         <Dialog.Panel>
           <Dialog.Title>
-            <div className="flex items-center gap-3">
-              <div className="flex-shrink-0">
-                <Lucide icon="Timer" className="w-6 h-6 text-warning" />
-              </div>
-              <h2 className="title-card">
-                Limite di richieste superato
-              </h2>
-            </div>
+            <Lucide icon="Timer" aria-hidden="true" className="h-5 w-5 text-warning" />
+            Limite di richieste superato
           </Dialog.Title>
-          <Dialog.Description className="mt-4">
-            <div className="flex items-start gap-3">
-              <Lucide icon="Clock" className="w-5 h-5 text-slate-500 mt-0.5 flex-shrink-0" />
-              <div className="text-sm text-slate-600">
-                <p className="mb-2">
-                  Hai superato il limite di richieste al server. Per favore attendi prima di riprovare.
-                </p>
-                <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
-                  <div className="flex items-center gap-2 text-slate-700">
-                    <Lucide icon="Timer" className="w-4 h-4" />
-                    <span className="font-medium">Riprova tra:</span>
-                    <span className="font-mono text-warning font-semibold">
-                      {dayjs.duration(36000).format("HH:mm:ss")}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
+          <Dialog.Description className="text-sm text-slate-600">
+            Hai superato il limite di richieste al server. Attendi qualche minuto prima di riprovare.
           </Dialog.Description>
-          <Dialog.Footer className="mt-6 flex gap-3 justify-end">
-            <Button
-              variant="outline-secondary"
-              onClick={() => {
-                setRateLimitDialogOpen(false);
-              }}
-              disabled={rateLimitDialogLoading}
-              className="px-4"
-            >
-              <Lucide icon="X" className="w-4 h-4 mr-2" />
-              Chiudi
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handleRateLimitDialogClose}
-              loading={rateLimitDialogLoading}
-              className="px-4"
-            >
-              {!rateLimitDialogLoading && <Lucide icon="Check" aria-hidden="true" className="w-4 h-4 mr-2" />}
+          <Dialog.Footer>
+            <Button variant="primary" onClick={() => setRateLimitDialogOpen(false)}>
               Ho capito
             </Button>
           </Dialog.Footer>
         </Dialog.Panel>
       </Dialog>
-      <Dialog open={deleteDialogOpen} onClose={() => {
-        if (!eliminaUtenteMutation.isPending) {
-          setDeleteDialogOpen(false);
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        title="Elimina utente"
+        description={
+          <>
+            <p>Sei sicuro di voler eliminare questo utente? Questa azione non può essere annullata.</p>
+            {selectedUtente && (
+              <div className="mt-3 rounded-control border border-slate-200 bg-slate-50 p-3">
+                <div className="font-medium text-slate-800">
+                  {selectedUtente.nome} {selectedUtente.cognome}
+                </div>
+                {selectedUtente.email && <div className="text-slate-500">{selectedUtente.email}</div>}
+              </div>
+            )}
+          </>
         }
-      }}>
-        <Dialog.Panel>
-          <Dialog.Title>
-            <div className="flex items-center gap-3">
-              <div className="flex-shrink-0">
-                <Lucide icon="UserMinus" className="w-6 h-6 text-danger" />
-              </div>
-              <h2 className="title-card">
-                Elimina utente
-              </h2>
-            </div>
-          </Dialog.Title>
-          <Dialog.Description className="mt-4">
-            <div className="flex items-start gap-3">
-              <Lucide icon="UserX" className="w-5 h-5 text-slate-500 mt-0.5 flex-shrink-0" />
-              <div className="text-sm text-slate-600">
-                <p className="mb-3">
-                  Sei sicuro di voler eliminare questo utente? Questa azione non può essere annullata.
-                </p>
-                {selectedUtente && (
-                  <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
-                    <div className="flex items-center gap-2 text-slate-700">
-                      <Lucide icon="User" className="w-4 h-4" />
-                      <span className="font-medium">Utente:</span>
-                      <span className="font-semibold text-slate-800">
-                        {selectedUtente.nome} {selectedUtente.cognome}
-                      </span>
-                    </div>
-                    {selectedUtente.email && (
-                      <div className="flex items-center gap-2 text-slate-600 mt-1">
-                        <Lucide icon="Mail" className="w-4 h-4" />
-                        <span className="text-sm">{selectedUtente.email}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          </Dialog.Description>
-          <Dialog.Footer className="mt-6 flex gap-3 justify-end">
-            <Button
-              variant="outline-secondary"
-              onClick={() => {
-                setDeleteDialogOpen(false);
-              }}
-              disabled={eliminaUtenteMutation.isPending}
-              className="px-4"
-            >
-              <Lucide icon="X" className="w-4 h-4 mr-2" />
-              Annulla
-            </Button>
-            <Button
-              variant="danger"
-              onClick={() => {
-                eliminaUtenteMutation.mutate({ id: selectedUtente.id, tipoUtente: selectedUtente.tipo });
-              }}
-              loading={eliminaUtenteMutation.isPending}
-              className="px-4"
-            >
-              {!eliminaUtenteMutation.isPending && <Lucide icon="Trash2" aria-hidden="true" className="w-4 h-4 mr-2" />}
-              Elimina
-            </Button>
-          </Dialog.Footer>
-        </Dialog.Panel>
-      </Dialog>
+        confirmLabel="Elimina"
+        loading={eliminaUtenteMutation.isPending}
+        onClose={() => {
+          if (!eliminaUtenteMutation.isPending) {
+            setDeleteDialogOpen(false);
+          }
+        }}
+        onConfirm={() => {
+          eliminaUtenteMutation.mutate({ id: selectedUtente.id, tipoUtente: selectedUtente.tipo });
+        }}
+      />
 
       {/* Dialog di modifica utente */}
       <Dialog size="xl" open={editDialogOpen} onClose={() => {
@@ -671,14 +640,8 @@ const GestioneUtenti: React.FC = () => {
       }}>
         <Dialog.Panel>
           <Dialog.Title>
-            <div className="flex items-center gap-3">
-              <div className="flex-shrink-0">
-                <Lucide icon="User" className="w-6 h-6 text-primary" />
-              </div>
-              <h2 className="title-card">
-                Modifica utente
-              </h2>
-            </div>
+            <Lucide icon="User" aria-hidden="true" className="h-5 w-5 text-primary" />
+            Modifica utente
           </Dialog.Title>
           <Dialog.Description>
             <form onSubmit={handleSubmitEdit(onSubmitEditForm)}>
@@ -832,7 +795,7 @@ const GestioneUtenti: React.FC = () => {
               </div>
             </form>
           </Dialog.Description>
-          <Dialog.Footer className="mt-6 flex gap-3 justify-end">
+          <Dialog.Footer>
             <Button
               variant="outline-secondary"
               onClick={() => {
@@ -841,18 +804,14 @@ const GestioneUtenti: React.FC = () => {
                 resetEdit();
               }}
               disabled={updateUtenteMutation.isPending}
-              className="px-4"
             >
-              <Lucide icon="X" className="w-4 h-4 mr-2" />
               Annulla
             </Button>
             <Button
               variant="primary"
               onClick={handleSubmitEdit(onSubmitEditForm)}
               loading={updateUtenteMutation.isPending}
-              className="px-4"
             >
-              {!updateUtenteMutation.isPending && <Lucide icon="Save" aria-hidden="true" className="w-4 h-4 mr-2" />}
               Salva modifiche
             </Button>
           </Dialog.Footer>
@@ -862,13 +821,10 @@ const GestioneUtenti: React.FC = () => {
       <Dialog size="xl" open={dialogUserCreationOpen} onClose={() => {
         setDialogUserCreationOpen(false);
       }}>
-        <Dialog.Panel className="">
-          <Dialog.Title>
-            <h2 className="title-card mr-auto">
-              Crea nuovo utente
-            </h2></Dialog.Title>
-          <Dialog.Description>
-            <form onSubmit={handleSubmit(onSubmitUserForm)}>
+        <Dialog.Panel>
+          <Dialog.Title>Crea nuovo utente</Dialog.Title>
+          <form onSubmit={handleSubmit(onSubmitUserForm)}>
+            <Dialog.Description>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField etichetta="Nome" obbligatorio errore={errors.nome?.message}>
                   <FormInput
@@ -1026,544 +982,262 @@ const GestioneUtenti: React.FC = () => {
                   />
                 </FormField>
               </div>
-              <Dialog.Footer className="flex flex-col sm:flex-row gap-2 justify-end mt-6">
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    setDialogUserCreationOpen(false);
-                  }}
-                  type="button"
-                  className="w-full sm:w-auto"
-                >
-                  Annulla
-                </Button>
-                <Button variant="primary" type="submit" className="w-full sm:w-auto">Crea</Button>
-              </Dialog.Footer>
-            </form>
-          </Dialog.Description>
+            </Dialog.Description>
+            <Dialog.Footer>
+              <Button
+                variant="outline-secondary"
+                onClick={() => {
+                  setDialogUserCreationOpen(false);
+                }}
+                type="button"
+              >
+                Annulla
+              </Button>
+              <Button variant="primary" type="submit" loading={registerUtenteMutation.isPending}>Crea</Button>
+            </Dialog.Footer>
+          </form>
         </Dialog.Panel>
       </Dialog>
-      <div className="grid grid-cols-12 gap-y-10 gap-x-6">
-        <div className="col-span-12">
-          <div className="flex flex-col gap-y-3 lg:h-10 lg:items-center lg:flex-row">
-            <PageHeader
-              title="Gestione Utenti"
-              description="Gestisci e amministra tutti gli utenti del sistema con controllo completo su ruoli, permessi e stati account"
-            />
-            <div className="flex flex-col sm:flex-row gap-x-3 gap-y-2 lg:ml-auto">
-              <PermissionGate permission={PERMISSIONS.UTENTI.CREA} mode="disable">
-                <Button
-                  variant="primary"
-                  className="group-[.mode--light]:!bg-white/[0.12] group-[.mode--light]:!text-slate-200 group-[.mode--light]:!border-transparent w-full sm:w-auto"
-                  onClick={() => {
-                    setDialogUserCreationOpen(true);
-                  }}
-                >
-                  <Lucide icon="PenLine" className="stroke-[1.3] w-4 h-4 mr-2" />{" "}
-                  <span className="hidden sm:inline">Aggiungi un nuovo utente</span>
-                  <span className="sm:hidden">Nuovo utente</span>
-                </Button>
+      <Pagina
+        titolo="Gestione Utenti"
+        descrizione="Gestisci e amministra tutti gli utenti del sistema con controllo completo su ruoli, permessi e stati account"
+        azioni={
+          <PermissionGate permission={PERMISSIONS.UTENTI.CREA} mode="disable">
+            <Button
+              variant="primary"
+              onClick={() => {
+                setDialogUserCreationOpen(true);
+              }}
+            >
+              <Lucide icon="Plus" aria-hidden="true" className="mr-2 h-4 w-4" />
+              <span className="hidden sm:inline">Aggiungi un nuovo utente</span>
+              <span className="sm:hidden">Nuovo utente</span>
+            </Button>
+          </PermissionGate>
+        }
+      >
+        <Sezione senzaPadding titolo="Utenti" descrizione="Utenti registrati, con il loro tipo, ruolo e stato">
+          <BarraFiltri
+            destra={
+              <PermissionGate permission={PERMISSIONS.UTENTI.ESPORTA} mode="disable">
+                <Menu className="inline-block text-left">
+                  <Menu.Button as={Button} size="sm" variant="outline-secondary">
+                    <Lucide icon="Download" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Esporta come</span>
+                    <span className="sm:hidden">Esporta</span>
+                    <Lucide icon="ChevronDown" aria-hidden="true" className="ml-1.5 h-3.5 w-3.5" />
+                  </Menu.Button>
+                  <Menu.Items className="w-40">
+                    <Menu.Item onClick={() => exportData('pdf')}>
+                      <Lucide icon="FileText" aria-hidden="true" className="mr-2 h-4 w-4" />
+                      PDF
+                    </Menu.Item>
+                    <Menu.Item onClick={() => exportData('csv')}>
+                      <Lucide icon="FileSpreadsheet" aria-hidden="true" className="mr-2 h-4 w-4" />
+                      CSV
+                    </Menu.Item>
+                    <Menu.Item onClick={() => exportData('xlsx')}>
+                      <Lucide icon="FileSpreadsheet" aria-hidden="true" className="mr-2 h-4 w-4" />
+                      Excel
+                    </Menu.Item>
+                    <Menu.Item onClick={() => exportData('xls')}>
+                      <Lucide icon="FileSpreadsheet" aria-hidden="true" className="mr-2 h-4 w-4" />
+                      Excel (legacy)
+                    </Menu.Item>
+                    <Menu.Item onClick={() => exportData('json')}>
+                      <Lucide icon="FileJson2" aria-hidden="true" className="mr-2 h-4 w-4" />
+                      JSON
+                    </Menu.Item>
+                  </Menu.Items>
+                </Menu>
               </PermissionGate>
-            </div>
-          </div>
-          <div className="flex flex-col gap-8 mt-3.5">
-            <div className="flex flex-col box box--stacked">
-              <div className="flex flex-col p-3 sm:p-5 sm:items-center sm:flex-row gap-y-3">
-                <div className="">
-                  <div className="relative">
-                    <Lucide
-                      icon="Search"
-                      className="absolute inset-y-0 left-0 z-10 w-4 h-4 my-auto ml-3 stroke-[1.3] text-slate-500"
-                    />
-                    <FormInput
-                      type="text"
-                      placeholder="Cerca utenti"
-                      className="pl-9 w-full sm:w-64 rounded-[0.5rem]"
-                      value={filters.searchTerm}
+            }
+          >
+            <CampoRicerca
+              etichetta="Cerca utenti"
+              placeholder="Cerca utenti"
+              value={filters.searchTerm ?? ""}
+              onChange={(valore) => {
+                onSubmitFilters({ ...filters, searchTerm: valore });
+              }}
+            />
+            {/* Tre filtri: select in linea (STANDARD §4), applicati subito come prima */}
+            <FormSelect
+              formSelectSize="sm"
+              aria-label="Stato"
+              className="sm:w-36"
+              value={stato}
+              onChange={(e) => {
+                onSubmitFilters({ ...filters, stato: e.target.value });
+              }}
+            >
+              <option value="">Tutti gli stati</option>
+              <option value="ATTIVO">Attivo</option>
+              <option value="DISATTIVO">Disattivo</option>
+            </FormSelect>
+            <FormSelect
+              formSelectSize="sm"
+              aria-label="Tipo di utenti"
+              className="sm:w-40"
+              value={tipoUtente}
+              onChange={(e) => {
+                onSubmitFilters({ ...filters, tipoUtente: e.target.value });
+              }}
+            >
+              <option value="">Tutti i tipi</option>
+              {Object.keys(TIPO_UTENTI).map((key) => {
+                const tipoKey = key as keyof typeof TIPO_UTENTI;
+                return <option key={tipoKey} value={TIPO_UTENTI[tipoKey]}>{TIPO_UTENTI[tipoKey]}</option>
+              })}
+            </FormSelect>
+            <FormSelect
+              formSelectSize="sm"
+              aria-label="Sesso"
+              className="sm:w-40"
+              value={sesso}
+              onChange={(e) => {
+                onSubmitFilters({ ...filters, sesso: e.target.value });
+              }}
+            >
+              <option value="">Tutti i sessi</option>
+              <option value="M">Maschio</option>
+              <option value="F">Femmina</option>
+              <option value="N">Non specificato</option>
+            </FormSelect>
+            {filtriAttivi && (
+              <Button type="button" size="sm" variant="outline-secondary" onClick={resetFilters}>
+                Azzera filtri
+              </Button>
+            )}
+          </BarraFiltri>
+
+          {/* Vista Desktop - Tabella */}
+          <div className="hidden overflow-x-auto lg:block">
+            <Table>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th className="w-5">
+                    <FormCheck.Input
+                      type="checkbox"
+                      aria-label="Seleziona tutti gli utenti"
                       onChange={(e) => {
-                        onSubmitFilters({ ...filters, searchTerm: e.target.value });
+                        setAllChecked(e.target.checked);
                       }}
                     />
-                  </div>
-                </div>
-                <div className="flex flex-col sm:flex-row gap-x-3 gap-y-2 sm:ml-auto w-full sm:w-auto">
-                  <PermissionGate permission={PERMISSIONS.UTENTI.ESPORTA} mode="disable">
-                    <Menu>
-                      <Menu.Button
-                        as={Button}
-                        variant="outline-secondary"
-                        className="w-full sm:w-auto"
-                      >
-                        <Lucide
-                          icon="Download"
-                          className="stroke-[1.3] w-4 h-4 mr-2"
-                        />
-                        <span className="hidden sm:inline">Esporta come</span>
-                        <span className="sm:hidden">Esporta</span>
-                        <Lucide
-                          icon="ChevronDown"
-                          className="stroke-[1.3] w-4 h-4 ml-2"
-                        />
-                      </Menu.Button>
-                      <Menu.Items className="w-40">
-                        <Menu.Item onClick={() => exportData('pdf')}>
-                          <Lucide icon="FileText" className="w-4 h-4 mr-2" />{" "}
-                          PDF
-                        </Menu.Item>
-                        <Menu.Item onClick={() => exportData('csv')}>
-                          <Lucide icon="FileSpreadsheet" className="w-4 h-4 mr-2" />
-                          CSV
-                        </Menu.Item>
-                        <Menu.Item onClick={() => exportData('xlsx')}>
-                          <Lucide icon="FileSpreadsheet" className="w-4 h-4 mr-2" />
-                          Excel
-                        </Menu.Item>
-                        <Menu.Item onClick={() => exportData('xls')}>
-                          <Lucide icon="FileSpreadsheet" className="w-4 h-4 mr-2" />
-                          Excel (legacy)
-                        </Menu.Item>
-                        <Menu.Item onClick={() => exportData('json')}>
-                          <Lucide icon="FileJson2" className="w-4 h-4 mr-2" />
-                          JSON
-                        </Menu.Item>
-                      </Menu.Items>
-                    </Menu>
-                  </PermissionGate>
-                  <Popover className="inline-block">
-                    {({ close }) => (
-                      <>
-                        <Popover.Button
-                          as={Button}
-                          variant="outline-secondary"
-                          className="w-full sm:w-auto"
-                        >
-                          <Lucide
-                            icon="ArrowDownWideNarrow"
-                            className="stroke-[1.3] w-4 h-4 mr-2"
-                          />
-                          <span className="hidden sm:inline">Filtri</span>
-                          <span className="sm:hidden">Filtri</span>
-                          {Object.values({ tipoUtente, stato, sesso }).filter(value => value !== "").length > 0 && (
-                            <span className="ml-1.5 px-2 py-[1px] rounded-full bg-primary/10 text-primary text-xs font-medium">
-                              {Object.values({ tipoUtente, stato, sesso }).filter(value => value !== "").length}
-                            </span>
-                          )}
-                        </Popover.Button>
-                        <Popover.Panel placement="bottom-end">
-                          <div className="p-2">
-                            <div>
-                              <div className="text-left text-slate-500">
-                                Stato
-                              </div>
-                              <FormSelect
-                                value={stato}
-                                onChange={(e) => {
-                                  onSubmitFilters({ ...filters, stato: e.target.value });
-                                }}
-                                className="flex-1 mt-2">
-                                <option value="">Tutti</option>
-                                <option value="ATTIVO">Attivo</option>
-                                <option value="DISATTIVO">Disattivo</option>
-                              </FormSelect>
-                            </div>
-                            <div className="mt-3">
-                              <div className="text-left text-slate-500">
-                                Tipo di utenti
-                              </div>
-                              <FormSelect
-                                value={tipoUtente}
-                                onChange={(e) => {
-                                  onSubmitFilters({ ...filters, tipoUtente: e.target.value });
-                                }}
-                                className="flex-1 mt-2">
-                                <option value="">Tutti</option>
-                                {Object.keys(TIPO_UTENTI).map((key) => {
-                                  const tipoKey = key as keyof typeof TIPO_UTENTI;
-                                  return <option key={tipoKey} value={TIPO_UTENTI[tipoKey]}>{TIPO_UTENTI[tipoKey]}</option>
-                                })}
-                              </FormSelect>
-                            </div>
-                            <div className="mt-3">
-                              <div className="text-left text-slate-500">
-                                Sesso
-                              </div>
-                              <FormSelect
-                                value={sesso}
-                                onChange={(e) => {
-                                  onSubmitFilters({ ...filters, sesso: e.target.value });
-                                }}
-                                className="flex-1 mt-2">
-                                <option value="">Tutti</option>
-                                <option value="M">Maschio</option>
-                                <option value="F">Femmina</option>
-                                <option value="N">Non specificato</option>
-                              </FormSelect>
-                            </div>
-                            <div className="flex items-center mt-4">
-                              <Button
-                                variant="secondary"
-                                onClick={() => {
-                                  close();
-                                }}
-                                className="w-24 ml-auto"
-                              >
-                                Chiudi
-                              </Button>
-                              <Button
-                                variant="outline-secondary"
-                                onClick={() => {
-                                  resetFilters();
-                                  close();
-                                }}
-                                className="w-24 ml-2"
-                              >
-                                Reset
-                              </Button>
-                              <Button
-                                onClick={() => {
-                                  onSubmitFilters(filters);
-                                  close();
-                                }}
-                                variant="primary"
-                                className="w-24 ml-2">
-                                Applica
-                              </Button>
-                            </div>
-                          </div>
-                        </Popover.Panel>
-                      </>
-                    )}
-                  </Popover>
-                </div>
-              </div>
-              {/* Vista Desktop - Tabella */}
-              <div className="hidden lg:block overflow-auto xl:overflow-visible">
-                <Table className="border-b border-slate-200/60">
-                  <Table.Thead>
-                    <Table.Tr>
-                      <Table.Td className="w-5 py-4 font-medium border-t bg-slate-50 border-slate-200/60 text-slate-500">
-                        <FormCheck.Input type="checkbox" onChange={(e) => {
-                          setAllChecked(e.target.checked);
-                        }} />
-                      </Table.Td>
-                      <Table.Td className="py-4 font-medium border-t bg-slate-50 border-slate-200/60 text-slate-500">
-                        Nome & Cognome
-                      </Table.Td>
-                      <Table.Td className="py-4 font-medium border-t bg-slate-50 border-slate-200/60 text-slate-500">
-                        Canale di arrivo
-                      </Table.Td>
-                      <Table.Td className="py-4 font-medium text-center border-t bg-slate-50 border-slate-200/60 text-slate-500">
-                        Stato
-                      </Table.Td>
-                      <Table.Td className="py-4 font-medium border-t bg-slate-50 border-slate-200/60 text-slate-500">
-                        Data di registrazione
-                      </Table.Td>
-                      <Table.Td className="py-4 font-medium border-t bg-slate-50 border-slate-200/60 text-slate-500">
-                        Tipo Utente
-                      </Table.Td>
-                      <Table.Td className="py-4 font-medium border-t bg-slate-50 border-slate-200/60 text-slate-500">
-                        Ruolo GDO
-                      </Table.Td>
-                      <Table.Td className="py-4 font-medium border-t bg-slate-50 border-slate-200/60 text-slate-500">
-                        Punto Vendita
-                      </Table.Td>
-                      <Table.Td className="w-20 py-4 font-medium text-center border-t bg-slate-50 border-slate-200/60 text-slate-500">
-                        Azioni
-                      </Table.Td>
-                    </Table.Tr>
-                  </Table.Thead>
-                  <Table.Tbody>
-                    {dataUtentiPaginated?.isLoading && (
-                      <Table.Tr>
-                        <Table.Td colSpan={8} className="py-8 text-center text-slate-500">
-                          <div className="flex items-center justify-center">
-                            <Spinner etichetta="Caricamento utenti…" />
-                          </div>
-                        </Table.Td>
-                      </Table.Tr>
-                    )}
-                    {dataUtentiPaginated?.isError && (
-                      <Table.Tr>
-                        <Table.Td colSpan={8} className="py-4">
-                          <PageError
-                            compatta
-                            titolo="Utenti non caricati"
-                            motivo={(dataUtentiPaginated.error as Error)?.message || "Errore durante il recupero degli utenti"}
-                            onRiprova={() => dataUtentiPaginated.refetch()}
-                          />
-                        </Table.Td>
-                      </Table.Tr>
-                    )}
-                    {!dataUtentiPaginated?.isLoading && dataUtentiPaginated?.data?.utenti?.length === 0 && (
-                      <Table.Tr>
-                        <Table.Td colSpan={8} className="py-4 text-center text-slate-500">
-                          <EmptyState
-                            icon="UserX"
-                            title="Nessun utente trovato"
-                            description="Non ci sono utenti da mostrare."
-                          />
-                        </Table.Td>
-                      </Table.Tr>
-                    )}
-                    {!dataUtentiPaginated?.isLoading && dataUtentiPaginated?.data?.utenti?.map((utente: UtenteResponseDTO & {
-                      canali_interazione: Array<CanaliInterazioneAttributes>;
-                      ruolo_gdo?: { id: string; ruolo: string } | null;
-                      punto_vendita_collegato?: { id: string; nome: string } | null;
-                    }, key: any) => (
-                      <Table.Tr key={key} className="[&_td]:last:border-b-0">
-                        <Table.Td className="py-4 border-dashed dark:bg-darkmode-600">
-                          <FormCheck.Input type="checkbox" checked={allChecked} onChange={() => { }} />
-                        </Table.Td>
-                        <Table.Td className="py-4 border-dashed w-80 dark:bg-darkmode-600">
-                          <div className="flex items-center">
-                            <div className="w-9 h-9 image-fit zoom-in">
-                              <Tippy
-                                className="rounded-full shadow-[0px_0px_0px_2px_white,_1px_1px_5px_rgba(0,0,0,0.32)] dark:shadow-[0px_0px_0px_2px_rgb(63_72_101),_1px_1px_5px_rgba(0,0,0,0.32)]"
-                                content={`${utente.nome_completo}`}
-                              />
-                            </div>
-                            <div className="ml-3.5">
-                              <a
-                                href=""
-                                className="font-medium whitespace-nowrap"
-                              >
-                                {utente.nome_completo}
-                              </a>
-                              <div className="text-slate-500 text-xs whitespace-nowrap mt-0.5">
-                                {utente.email}
-                              </div>
-                            </div>
-                          </div>
-                        </Table.Td>
-                        <Table.Td className="py-4 border-dashed dark:bg-darkmode-600">
-                          <p className="font-medium whitespace-nowrap">
-                            <span className="flex items-center gap-2">
-                              <Lucide
-                                icon={(() => {
-                                  switch (utente?.canali_interazione?.[0]?.tipo_canaliinterazione) {
-                                    case "WHATSAPP":
-                                      return "MessageCircle";
-                                    case "EMAIL":
-                                      return "Mail";
-                                    case "TELEGRAM":
-                                      return "Send";
-                                    case "FACEBOOK":
-                                      return "MessageCircle";
-                                    case "INSTAGRAM":
-                                      return "Camera";
-                                    case "LINKEDIN":
-                                      return "Briefcase";
-                                    case "GOOGLE":
-                                      return "Globe";
-                                    case "SMS":
-                                      return "Smartphone";
-                                    default:
-                                      return "User";
-                                  }
-                                })()}
-                                className={clsx("w-4 h-4", {
-                                  "text-green-500": utente?.canali_interazione?.[0]?.tipo_canaliinterazione === "WHATSAPP",
-                                  "text-blue-500": utente?.canali_interazione?.[0]?.tipo_canaliinterazione === "EMAIL",
-                                  "text-blue-400": utente?.canali_interazione?.[0]?.tipo_canaliinterazione === "TELEGRAM",
-                                  "text-blue-600": utente?.canali_interazione?.[0]?.tipo_canaliinterazione === "FACEBOOK",
-                                  "text-pink-500": utente?.canali_interazione?.[0]?.tipo_canaliinterazione === "INSTAGRAM",
-                                  "text-blue-700": utente?.canali_interazione?.[0]?.tipo_canaliinterazione === "LINKEDIN",
-                                  "text-red-500": utente?.canali_interazione?.[0]?.tipo_canaliinterazione === "GOOGLE",
-                                  "text-yellow-500": utente?.canali_interazione?.[0]?.tipo_canaliinterazione === "SMS",
-                                  "text-gray-500": !utente?.canali_interazione?.[0]?.tipo_canaliinterazione
-                                })}
-                              />
-                              {(() => {
-                                switch (utente?.canali_interazione?.[0]?.tipo_canaliinterazione) {
-                                  case "WHATSAPP":
-                                    return "WhatsApp";
-                                  case "EMAIL":
-                                    return "Email";
-                                  case "TELEGRAM":
-                                    return "Telegram";
-                                  case "FACEBOOK":
-                                    return "Facebook";
-                                  case "INSTAGRAM":
-                                    return "Instagram";
-                                  case "LINKEDIN":
-                                    return "LinkedIn";
-                                  case "GOOGLE":
-                                    return "Google";
-                                  case "SMS":
-                                    return "SMS";
-                                  default:
-                                    return "Interno";
-                                }
-                              })()}
-                            </span>
-                          </p>
-                        </Table.Td>
-                        <Table.Td className="py-4 border-dashed dark:bg-darkmode-600">
-                          <div className="flex items-center justify-center">
-                            <StatusBadge dominio="utente" stato={utente.stato} />
-                          </div>
-                        </Table.Td>
-                        <Table.Td className="py-4 border-dashed dark:bg-darkmode-600">
-                          <div className="whitespace-nowrap">
-                            {dayjs(utente.createdat).locale("it").format("DD MMMM, YYYY HH:mm")}
-                          </div>
-                        </Table.Td>
-                        <Table.Td className="py-4 border-dashed dark:bg-darkmode-600">
-                          <div className="whitespace-nowrap">
-                            {(() => {
-                              switch (utente.tipo) {
-                                case TIPO_UTENTI.SUPERADMIN:
-                                  return "Superadmin";
-                                case TIPO_UTENTI.AGENZIA:
-                                  return "Agenzia";
-                                case TIPO_UTENTI.PUNTOVENDITA:
-                                  if (utente.punto_vendita_collegato) return "Punto Vendita"
-                                  return "Punto Vendita";
-                                case TIPO_UTENTI.GUEST:
-                                  return "Guest";
-                                case TIPO_UTENTI.GDO:
-                                  return "GDO";
-                                case TIPO_UTENTI.CATEGORY:
-                                  return "Category";
-                                case TIPO_UTENTI.MARKETING:
-                                  return "Marketing";
-                                case TIPO_UTENTI.IT:
-                                  return "IT";
-                                default:
-                                  return "Unknown";
-                              }
-                            })()}
-                          </div>
-                        </Table.Td>
-                        <Table.Td className="py-4 border-dashed dark:bg-darkmode-600">
-                          <div className="whitespace-nowrap">
-                            {utente.ruolo_gdo ? (
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                {utente.ruolo_gdo.ruolo.replace("_", " ")}
-                              </span>
-                            ) : (
-                              <span className="text-slate-400">-</span>
-                            )}
-                          </div>
-                        </Table.Td>
-                        <Table.Td className="py-4 border-dashed dark:bg-darkmode-600">
-                          <div className="whitespace-nowrap text-center">
-                            {utente.punto_vendita_collegato ? (
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                {utente.punto_vendita_collegato.nome}
-                              </span>
-                            ) : (
-                              <span className="text-slate-400">-</span>
-                            )}
-                          </div>
-                        </Table.Td>
-                        <Table.Td className="relative py-4 border-dashed dark:bg-darkmode-600">
-                          <div className="flex items-center justify-center">
-                            <Popover className="h-5">
-                              <Popover.Button
-                                aria-label={`Azioni utente ${utente.nome_completo ?? ""}`.trim()}
-                                className=" flex items-center justify-center w-5 h-5 text-slate-500 hover:bg-slate-100 rounded-full transition duration-300"
-                              >
-                                <Lucide
-                                  icon="EllipsisVertical"
-                                  aria-hidden="true"
-                                  className="w-5 h-5"
-                                />
-                              </Popover.Button>
-                              <Popover.Panel className="absolute right-0 z-10 mt-2 w-40 bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
-                                <div className="py-1">
-                                  <button
-                                    onClick={() => {
-                                      handleEditUser(utente);
-                                    }}
-                                    className="flex items-center w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 transition duration-150"
-                                  >
-                                    <Lucide
-                                      icon="User"
-                                      className="w-4 h-4 mr-2"
-                                    />
-                                    Modifica
-                                  </button>
-                                  <PermissionGate permission={PERMISSIONS.UTENTI.ELIMINA}>
-                                    <button
-                                      onClick={() => {
-                                        setDeleteDialogOpen(true);
-                                        setSelectedUtente(utente);
-                                      }}
-                                      className="flex items-center w-full px-4 py-2 text-sm text-danger hover:bg-slate-100 transition duration-150"
-                                    >
-                                      <Lucide
-                                        icon="Trash2"
-                                        className="w-4 h-4 mr-2"
-                                      />
-                                      Elimina
-                                    </button>
-                                  </PermissionGate>
-                                </div>
-                              </Popover.Panel>
-                            </Popover>
-                          </div>
-                        </Table.Td>
-                      </Table.Tr>
-                    ))}
-                  </Table.Tbody>
-                </Table>
-              </div>
-
-              {/* Vista Mobile - Card */}
-              <div className="lg:hidden space-y-4 p-4">
+                  </Table.Th>
+                  <Table.Th>Nome & Cognome</Table.Th>
+                  <Table.Th>Canale di arrivo</Table.Th>
+                  <Table.Th className="text-center">Stato</Table.Th>
+                  <Table.Th>Data di registrazione</Table.Th>
+                  <Table.Th>Tipo Utente</Table.Th>
+                  <Table.Th>Ruolo GDO</Table.Th>
+                  <Table.Th className="text-center">Punto Vendita</Table.Th>
+                  <Table.Th className="w-20 text-right"><span className="sr-only">Azioni</span></Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
                 {dataUtentiPaginated?.isLoading && (
-                  <div className="flex items-center justify-center py-8 text-slate-500">
-                    <Spinner etichetta="Caricamento utenti…" />
-                  </div>
+                  <Table.Tr>
+                    <Table.Td colSpan={NUMERO_COLONNE} className="py-8 text-center text-slate-500">
+                      <div className="flex items-center justify-center">
+                        <Spinner etichetta="Caricamento utenti…" />
+                      </div>
+                    </Table.Td>
+                  </Table.Tr>
                 )}
                 {dataUtentiPaginated?.isError && (
-                  <PageError
-                    compatta
-                    titolo="Utenti non caricati"
-                    motivo={(dataUtentiPaginated.error as Error)?.message || "Errore durante il recupero degli utenti"}
-                    onRiprova={() => dataUtentiPaginated.refetch()}
-                  />
+                  <Table.Tr>
+                    <Table.Td colSpan={NUMERO_COLONNE}>
+                      <PageError
+                        compatta
+                        titolo="Utenti non caricati"
+                        motivo={(dataUtentiPaginated.error as Error)?.message || "Errore durante il recupero degli utenti"}
+                        onRiprova={() => dataUtentiPaginated.refetch()}
+                      />
+                    </Table.Td>
+                  </Table.Tr>
                 )}
-
                 {!dataUtentiPaginated?.isLoading && dataUtentiPaginated?.data?.utenti?.length === 0 && (
-                  <div className="py-8 text-center text-slate-500">
-                    <EmptyState
-                      icon="UserX"
-                      title="Nessun utente trovato"
-                      description="Non ci sono utenti da mostrare."
-                    />
-                  </div>
+                  <Table.Tr>
+                    <Table.Td colSpan={NUMERO_COLONNE} className="p-0">
+                      {statoVuoto}
+                    </Table.Td>
+                  </Table.Tr>
                 )}
-
                 {!dataUtentiPaginated?.isLoading && dataUtentiPaginated?.data?.utenti?.map((utente: UtenteResponseDTO & {
                   canali_interazione: Array<CanaliInterazioneAttributes>;
                   ruolo_gdo?: { id: string; ruolo: string } | null;
                   punto_vendita_collegato?: { id: string; nome: string } | null;
                 }, key: any) => (
-                  <div key={key} className="bg-white rounded-lg border border-slate-200 p-4 shadow-sm">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center">
-                          <Lucide icon="User" className="w-5 h-5 text-slate-500" />
+                  <Table.Tr key={key}>
+                    <Table.Td>
+                      <FormCheck.Input
+                        type="checkbox"
+                        aria-label={`Seleziona ${utente.nome_completo ?? "utente"}`}
+                        checked={allChecked}
+                        onChange={() => { }}
+                      />
+                    </Table.Td>
+                    <Table.Td className="w-80">
+                      <div className="flex items-center">
+                        <div aria-hidden="true" className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-slate-100">
+                          <Lucide icon="User" className="h-4 w-4 text-slate-500" />
                         </div>
-                        <div>
-                          <h3 className="font-medium text-slate-900">{utente.nome_completo}</h3>
-                          <p className="text-sm text-slate-500">{utente.email}</p>
+                        <div className="ml-3.5">
+                          <div className="whitespace-nowrap font-medium text-slate-800">
+                            {utente.nome_completo}
+                          </div>
+                          <div className="mt-0.5 whitespace-nowrap text-xs text-slate-500">
+                            {utente.email}
+                          </div>
                         </div>
                       </div>
-                      <Menu className="h-5">
+                    </Table.Td>
+                    <Table.Td className="font-medium">
+                      <CanaleArrivo tipo={utente?.canali_interazione?.[0]?.tipo_canaliinterazione} />
+                    </Table.Td>
+                    <Table.Td className="text-center">
+                      <StatusBadge dominio="utente" stato={utente.stato} />
+                    </Table.Td>
+                    <Table.Td className="whitespace-nowrap tabular-nums">
+                      {formatDataOra(utente.createdat)}
+                    </Table.Td>
+                    <Table.Td className="whitespace-nowrap">
+                      {etichettaTipo(utente.tipo)}
+                    </Table.Td>
+                    <Table.Td className="whitespace-nowrap">
+                      {utente.ruolo_gdo ? (
+                        <Badge variant="info" size="sm">
+                          {utente.ruolo_gdo.ruolo.replace("_", " ")}
+                        </Badge>
+                      ) : (
+                        <span className="text-slate-400">-</span>
+                      )}
+                    </Table.Td>
+                    <Table.Td className="whitespace-nowrap text-center">
+                      {utente.punto_vendita_collegato ? (
+                        <Badge variant="secondary" size="sm">
+                          {utente.punto_vendita_collegato.nome}
+                        </Badge>
+                      ) : (
+                        <span className="text-slate-400">-</span>
+                      )}
+                    </Table.Td>
+                    <Table.Td className="text-right">
+                      <Menu className="inline-block text-left">
                         <Menu.Button
+                          as={Button}
+                          size="sm"
+                          variant="outline-secondary"
                           aria-label={`Azioni utente ${utente.nome_completo ?? ""}`.trim()}
-                          className="flex items-center justify-center w-8 h-8 text-slate-500 hover:bg-slate-100 rounded-full transition duration-300"
                         >
-                          <Lucide icon="EllipsisVertical" aria-hidden="true" className="w-5 h-5" />
+                          <Lucide icon="EllipsisVertical" aria-hidden="true" className="h-4 w-4" />
                         </Menu.Button>
                         <Menu.Items className="w-40">
                           <Menu.Item onClick={() => {
                             handleEditUser(utente);
                           }}>
-                            <Lucide icon="User" className="w-4 h-4 mr-2" />
+                            <Lucide icon="User" aria-hidden="true" className="mr-2 h-4 w-4" />
                             Modifica
                           </Menu.Item>
                           <PermissionGate permission={PERMISSIONS.UTENTI.ELIMINA}>
@@ -1571,244 +1245,139 @@ const GestioneUtenti: React.FC = () => {
                               setDeleteDialogOpen(true);
                               setSelectedUtente(utente);
                             }} className="text-danger">
-                              <Lucide icon="Trash2" className="w-4 h-4 mr-2" />
+                              <Lucide icon="Trash2" aria-hidden="true" className="mr-2 h-4 w-4" />
                               Elimina
                             </Menu.Item>
                           </PermissionGate>
                         </Menu.Items>
                       </Menu>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3 text-sm">
-                      <div>
-                        <span className="text-slate-500">Stato:</span>
-                        <div className="mt-1">
-                          <StatusBadge dominio="utente" stato={utente.stato} />
-                        </div>
-                      </div>
-
-                      <div>
-                        <span className="text-slate-500">Tipo:</span>
-                        <div className="mt-1">
-                          {(() => {
-                            switch (utente.tipo) {
-                              case TIPO_UTENTI.SUPERADMIN:
-                                return "Superadmin";
-                              case TIPO_UTENTI.AGENZIA:
-                                return "Agenzia";
-                              case TIPO_UTENTI.PUNTOVENDITA:
-                                return "Punto Vendita";
-                              case TIPO_UTENTI.GUEST:
-                                return "Guest";
-                              case TIPO_UTENTI.GDO:
-                                return "GDO";
-                              case TIPO_UTENTI.CATEGORY:
-                                return "Category";
-                              case TIPO_UTENTI.MARKETING:
-                                return "Marketing";
-                              case TIPO_UTENTI.IT:
-                                return "IT";
-                              default:
-                                return "Unknown";
-                            }
-                          })()}
-                        </div>
-                      </div>
-
-                      <div>
-                        <span className="text-slate-500">Canale:</span>
-                        <div className="flex items-center mt-1">
-                          <Lucide
-                            icon={(() => {
-                              switch (utente?.canali_interazione?.[0]?.tipo_canaliinterazione) {
-                                case "WHATSAPP":
-                                  return "MessageCircle";
-                                case "EMAIL":
-                                  return "Mail";
-                                case "TELEGRAM":
-                                  return "Send";
-                                case "FACEBOOK":
-                                  return "MessageCircle";
-                                case "INSTAGRAM":
-                                  return "Camera";
-                                case "LINKEDIN":
-                                  return "Briefcase";
-                                case "GOOGLE":
-                                  return "Globe";
-                                case "SMS":
-                                  return "Smartphone";
-                                default:
-                                  return "User";
-                              }
-                            })()}
-                            className={clsx("w-4 h-4 mr-1", {
-                              "text-green-500": utente?.canali_interazione?.[0]?.tipo_canaliinterazione === "WHATSAPP",
-                              "text-blue-500": utente?.canali_interazione?.[0]?.tipo_canaliinterazione === "EMAIL",
-                              "text-blue-400": utente?.canali_interazione?.[0]?.tipo_canaliinterazione === "TELEGRAM",
-                              "text-blue-600": utente?.canali_interazione?.[0]?.tipo_canaliinterazione === "FACEBOOK",
-                              "text-pink-500": utente?.canali_interazione?.[0]?.tipo_canaliinterazione === "INSTAGRAM",
-                              "text-blue-700": utente?.canali_interazione?.[0]?.tipo_canaliinterazione === "LINKEDIN",
-                              "text-red-500": utente?.canali_interazione?.[0]?.tipo_canaliinterazione === "GOOGLE",
-                              "text-yellow-500": utente?.canali_interazione?.[0]?.tipo_canaliinterazione === "SMS",
-                              "text-gray-500": !utente?.canali_interazione?.[0]?.tipo_canaliinterazione
-                            })}
-                          />
-                          {(() => {
-                            switch (utente?.canali_interazione?.[0]?.tipo_canaliinterazione) {
-                              case "WHATSAPP":
-                                return "WhatsApp";
-                              case "EMAIL":
-                                return "Email";
-                              case "TELEGRAM":
-                                return "Telegram";
-                              case "FACEBOOK":
-                                return "Facebook";
-                              case "INSTAGRAM":
-                                return "Instagram";
-                              case "LINKEDIN":
-                                return "LinkedIn";
-                              case "GOOGLE":
-                                return "Google";
-                              case "SMS":
-                                return "SMS";
-                              default:
-                                return "Interno";
-                            }
-                          })()}
-                        </div>
-                      </div>
-
-                      <div>
-                        <span className="text-slate-500">Registrato:</span>
-                        <div className="mt-1 text-xs">
-                          {dayjs(utente.createdat).locale("it").format("DD/MM/YYYY")}
-                        </div>
-                      </div>
-                    </div>
-
-                    {(utente.ruolo_gdo || utente.punto_vendita_collegato) && (
-                      <div className="mt-3 pt-3 border-t border-slate-200">
-                        <div className="flex flex-wrap gap-2">
-                          {utente.ruolo_gdo && (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                              {utente.ruolo_gdo.ruolo.replace("_", " ")}
-                            </span>
-                          )}
-                          {utente.punto_vendita_collegato && (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                              {utente.punto_vendita_collegato.nome}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                    </Table.Td>
+                  </Table.Tr>
                 ))}
-              </div>
-              <div className="flex flex-col-reverse flex-wrap items-center p-3 sm:p-5 flex-reverse gap-y-2 sm:flex-row">
-                {/* Informazioni sulla paginazione */}
-                <div className="text-xs sm:text-sm text-slate-500 mr-auto text-center sm:text-left">
-                  {dataUtentiPaginated?.isLoading ? (
-                    "Caricamento..."
-                  ) : (
-                    <span className="hidden sm:inline">
-                      Mostrando {dataUtentiPaginated?.data?.total ? ((currentPage - 1) * pageSize) + 1 : 0}-{Math.min(currentPage * pageSize, dataUtentiPaginated?.data?.total || 0)} di {dataUtentiPaginated?.data?.total || 0} utenti
-                    </span>
-                  )}
-                  <span className="sm:hidden">
-                    Pagina {currentPage} di {dataUtentiPaginated?.data?.total_pages || 1}
-                  </span>
-                </div>
-                <Pagination className="flex-1 w-full mr-auto sm:w-auto">
-                  <Pagination.Link
-                    onClick={() => currentPage !== 1 && handlePageChange(1)}
-                    className={currentPage === 1 ? "opacity-50 cursor-not-allowed" : ""}
-                  >
-                    <Lucide icon="ChevronsLeft" className="w-4 h-4" />
-                  </Pagination.Link>
-                  <Pagination.Link
-                    onClick={() => currentPage !== 1 && handlePageChange(currentPage - 1)}
-                    className={currentPage === 1 ? "opacity-50 cursor-not-allowed" : ""}
-                  >
-                    <Lucide icon="ChevronLeft" className="w-4 h-4" />
-                  </Pagination.Link>
-
-                  {/* Logica per mostrare le pagine */}
-                  {(() => {
-                    const totalPages = dataUtentiPaginated?.data?.total_pages || 1;
-                    const pages = [];
-
-                    // Mostra sempre la prima pagina
-                    if (currentPage > 3) {
-                      pages.push(
-                        <Pagination.Link key={1} onClick={() => handlePageChange(1)}>
-                          1
-                        </Pagination.Link>
-                      );
-                      if (currentPage > 4) {
-                        pages.push(<Pagination.Link key="ellipsis1">...</Pagination.Link>);
-                      }
-                    }
-
-                    // Mostra le pagine intorno alla pagina corrente
-                    const startPage = Math.max(1, currentPage - 2);
-                    const endPage = Math.min(totalPages, currentPage + 2);
-
-                    for (let i = startPage; i <= endPage; i++) {
-                      pages.push(
-                        <Pagination.Link
-                          key={i}
-                          active={i === currentPage}
-                          onClick={() => handlePageChange(i)}
-                        >
-                          {i}
-                        </Pagination.Link>
-                      );
-                    }
-
-                    // Mostra sempre l'ultima pagina
-                    if (currentPage < totalPages - 2) {
-                      if (currentPage < totalPages - 3) {
-                        pages.push(<Pagination.Link key="ellipsis2">...</Pagination.Link>);
-                      }
-                      pages.push(
-                        <Pagination.Link key={totalPages} onClick={() => handlePageChange(totalPages)}>
-                          {totalPages}
-                        </Pagination.Link>
-                      );
-                    }
-
-                    return pages;
-                  })()}
-
-                  <Pagination.Link
-                    onClick={() => currentPage < (dataUtentiPaginated?.data?.total_pages || 1) && handlePageChange(currentPage + 1)}
-                    className={currentPage >= (dataUtentiPaginated?.data?.total_pages || 1) ? "opacity-50 cursor-not-allowed" : ""}
-                  >
-                    <Lucide icon="ChevronRight" className="w-4 h-4" />
-                  </Pagination.Link>
-                  <Pagination.Link
-                    onClick={() => currentPage < (dataUtentiPaginated?.data?.total_pages || 1) && handlePageChange(dataUtentiPaginated?.data?.total_pages || 1)}
-                    className={currentPage >= (dataUtentiPaginated?.data?.total_pages || 1) ? "opacity-50 cursor-not-allowed" : ""}
-                  >
-                    <Lucide icon="ChevronsRight" className="w-4 h-4" />
-                  </Pagination.Link>
-                </Pagination>
-                <FormSelect
-                  className="w-full sm:w-20 rounded-[0.5rem] text-xs sm:text-sm"
-                  value={pageSize}
-                  onChange={(e) => handlePageSizeChange(Number(e.target.value))}
-                >
-                  <option value={10}>10</option>
-                  <option value={25}>25</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                </FormSelect>
-              </div>
-            </div>
+              </Table.Tbody>
+            </Table>
           </div>
-        </div>
-      </div>
+
+          {/* Vista Mobile - Card */}
+          <div className="flex flex-col gap-4 p-4 lg:hidden">
+            {dataUtentiPaginated?.isLoading && (
+              <div className="flex items-center justify-center py-8 text-slate-500">
+                <Spinner etichetta="Caricamento utenti…" />
+              </div>
+            )}
+            {dataUtentiPaginated?.isError && (
+              <PageError
+                compatta
+                titolo="Utenti non caricati"
+                motivo={(dataUtentiPaginated.error as Error)?.message || "Errore durante il recupero degli utenti"}
+                onRiprova={() => dataUtentiPaginated.refetch()}
+              />
+            )}
+
+            {!dataUtentiPaginated?.isLoading && dataUtentiPaginated?.data?.utenti?.length === 0 && statoVuoto}
+
+            {!dataUtentiPaginated?.isLoading && dataUtentiPaginated?.data?.utenti?.map((utente: UtenteResponseDTO & {
+              canali_interazione: Array<CanaliInterazioneAttributes>;
+              ruolo_gdo?: { id: string; ruolo: string } | null;
+              punto_vendita_collegato?: { id: string; nome: string } | null;
+            }, key: any) => (
+              <div key={key} className="rounded-card border border-slate-200 bg-white p-4">
+                <div className="mb-3 flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div aria-hidden="true" className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100">
+                      <Lucide icon="User" className="h-5 w-5 text-slate-500" />
+                    </div>
+                    <div>
+                      <h3 className="title-card">{utente.nome_completo}</h3>
+                      <p className="text-sm text-slate-500">{utente.email}</p>
+                    </div>
+                  </div>
+                  <Menu className="inline-block text-left">
+                    <Menu.Button
+                      as={Button}
+                      size="sm"
+                      variant="outline-secondary"
+                      aria-label={`Azioni utente ${utente.nome_completo ?? ""}`.trim()}
+                    >
+                      <Lucide icon="EllipsisVertical" aria-hidden="true" className="h-4 w-4" />
+                    </Menu.Button>
+                    <Menu.Items className="w-40">
+                      <Menu.Item onClick={() => {
+                        handleEditUser(utente);
+                      }}>
+                        <Lucide icon="User" aria-hidden="true" className="mr-2 h-4 w-4" />
+                        Modifica
+                      </Menu.Item>
+                      <PermissionGate permission={PERMISSIONS.UTENTI.ELIMINA}>
+                        <Menu.Item onClick={() => {
+                          setDeleteDialogOpen(true);
+                          setSelectedUtente(utente);
+                        }} className="text-danger">
+                          <Lucide icon="Trash2" aria-hidden="true" className="mr-2 h-4 w-4" />
+                          Elimina
+                        </Menu.Item>
+                      </PermissionGate>
+                    </Menu.Items>
+                  </Menu>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <span className="text-slate-500">Stato:</span>
+                    <div className="mt-1">
+                      <StatusBadge dominio="utente" stato={utente.stato} />
+                    </div>
+                  </div>
+
+                  <div>
+                    <span className="text-slate-500">Tipo:</span>
+                    <div className="mt-1">{etichettaTipo(utente.tipo)}</div>
+                  </div>
+
+                  <div>
+                    <span className="text-slate-500">Canale:</span>
+                    <div className="mt-1">
+                      <CanaleArrivo tipo={utente?.canali_interazione?.[0]?.tipo_canaliinterazione} />
+                    </div>
+                  </div>
+
+                  <div>
+                    <span className="text-slate-500">Registrato:</span>
+                    <div className="mt-1 text-xs tabular-nums">
+                      {formatData(utente.createdat)}
+                    </div>
+                  </div>
+                </div>
+
+                {(utente.ruolo_gdo || utente.punto_vendita_collegato) && (
+                  <div className="mt-3 border-t border-slate-200 pt-3">
+                    <div className="flex flex-wrap gap-2">
+                      {utente.ruolo_gdo && (
+                        <Badge variant="info" size="sm">
+                          {utente.ruolo_gdo.ruolo.replace("_", " ")}
+                        </Badge>
+                      )}
+                      {utente.punto_vendita_collegato && (
+                        <Badge variant="secondary" size="sm">
+                          {utente.punto_vendita_collegato.nome}
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <PaginazioneTabella
+            totale={dataUtentiPaginated?.data?.total || 0}
+            pagina={currentPage}
+            dimensionePagina={pageSize}
+            onCambiaPagina={handlePageChange}
+            onCambiaDimensione={handlePageSizeChange}
+          />
+        </Sezione>
+      </Pagina>
     </>
   );
 };

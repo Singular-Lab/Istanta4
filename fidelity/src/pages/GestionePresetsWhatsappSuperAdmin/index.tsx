@@ -1,5 +1,3 @@
-import clsx from 'clsx';
-import dayjs from 'dayjs';
 import React, { useEffect, useState } from 'react';
 import { useLoaderData, useRevalidator } from 'react-router-dom';
 import ConfirmDialog from "@/components/ConfirmDialog";
@@ -10,6 +8,7 @@ import { ServerCall } from '../../../lib/server_call';
 import type { GDOWhatsappPresetAttributes } from '../../../lib/types';
 import Button from '../../components/Base/Button';
 import {
+    FormField,
     FormInput,
     FormLabel,
     FormSelect,
@@ -17,28 +16,13 @@ import {
 } from '../../components/Base/Form';
 import Lucide from '../../components/Base/Lucide';
 import PageError from '../../components/Base/PageError';
-import PageHeader from '../../components/Base/PageHeader';
+import Pagina from '../../components/Base/Pagina';
+import Sezione from '../../components/Base/Sezione';
 import StatusBadge from '../../components/Base/StatusBadge';
 import Table from '../../components/Base/Table';
 import EmptyState from '../../components/EmptyState';
 import { useNotification } from '../../context/NotificationContext';
-
-const Card: React.FC<{
-    title?: string;
-    right?: React.ReactNode;
-    children: React.ReactNode;
-    className?: string;
-}> = ({ title, right, children, className }) => (
-    <div className={clsx('box box--stacked p-5 mb-5', className)}>
-        {title && (
-            <div className="flex items-center justify-between mb-3">
-                <h3 className="title-card">{title}</h3>
-                {right}
-            </div>
-        )}
-        {children}
-    </div>
-);
+import { formatDataOraEstesa, VALORE_ASSENTE } from '../../utils/format';
 
 const extractParamsFromText = (text: string): number[] => {
     const regex = /\{\{(\d+)\}\}/g;
@@ -229,17 +213,7 @@ const GestionePresetsWhatsappSuperAdmin: React.FC = () => {
                     contenuto_preset: payload,
                 });
                 if (!result.success) {
-                    showNotification(
-                        <div className="flex flex-row items-center">
-                            <Lucide icon="CircleX" className="text-danger w-8 h-8" />
-                            <div className="ml-4 mr-4">
-                                <div className="font-bold">Errore nella modifica del preset</div>
-                                <div className="mt-1 text-slate-500">
-                                    {result.error || 'Si è verificato un errore sconosciuto.'}
-                                </div>
-                            </div>
-                        </div>
-                    );
+                    showNotification(`Errore nella modifica del preset: ${result.error || 'Si è verificato un errore sconosciuto.'}`, { variant: 'error' });
                     return;
                 } else {
                     revalidate();
@@ -256,17 +230,7 @@ const GestionePresetsWhatsappSuperAdmin: React.FC = () => {
                 });
 
                 if (!result.success) {
-                    showNotification(
-                        <div className="flex flex-row items-center">
-                            <Lucide icon="CircleX" className="text-danger w-8 h-8" />
-                            <div className="ml-4 mr-4">
-                                <div className="font-bold">Errore nella creazione del preset</div>
-                                <div className="mt-1 text-slate-500">
-                                    {result.error || 'Si è verificato un errore sconosciuto.'}
-                                </div>
-                            </div>
-                        </div>
-                    );
+                    showNotification(`Errore nella creazione del preset: ${result.error || 'Si è verificato un errore sconosciuto.'}`, { variant: 'error' });
                     return;
                 } else {
                     revalidate();
@@ -285,17 +249,7 @@ const GestionePresetsWhatsappSuperAdmin: React.FC = () => {
             { id_preset }
         );
         if (!result.success) {
-            showNotification(
-                <div className="flex flex-row items-center">
-                    <Lucide icon="CircleX" className="text-danger w-8 h-8" />
-                    <div className="ml-4 mr-4">
-                        <div className="font-bold">Errore nell'impostare il preset come default</div>
-                        <div className="mt-1 text-slate-500">
-                            {result.error || 'Si è verificato un errore sconosciuto.'}
-                        </div>
-                    </div>
-                </div>
-            );
+            showNotification(`Errore nell'impostare il preset come default: ${result.error || 'Si è verificato un errore sconosciuto.'}`, { variant: 'error' });
             return;
         }
         revalidate();
@@ -345,7 +299,7 @@ const GestionePresetsWhatsappSuperAdmin: React.FC = () => {
     // -------------------- RENDER ---------------------------------------------
 
     return (
-        <div>
+        <>
             <ConfirmDialog
                 open={!!presetDaEliminare}
                 title="Eliminare il preset?"
@@ -355,9 +309,9 @@ const GestionePresetsWhatsappSuperAdmin: React.FC = () => {
                 onClose={() => !eliminazioneInCorso && setPresetDaEliminare(null)}
                 onConfirm={eliminaPreset}
             />
-            <PageHeader
-                title="Preset WhatsApp"
-                description={
+            <Pagina
+                titolo="Preset WhatsApp"
+                descrizione={
                     template?.nome_template_gdowhatsapptemplate
                         ? `Preset del template ${template.nome_template_gdowhatsapptemplate}: come si compilano i suoi segnaposto.`
                         : 'Preset del template: come si compilano i suoi segnaposto.'
@@ -366,7 +320,7 @@ const GestionePresetsWhatsappSuperAdmin: React.FC = () => {
                     to: `/whatsapp/gestione-whatsapp-superadmin/templates?id=${template?.id_gdo_gdowhatsapptemplate ?? ''}`,
                     etichetta: 'Torna ai template',
                 }}
-            />
+            >
 
             {errore || !template ? (
                 <PageError
@@ -375,32 +329,33 @@ const GestionePresetsWhatsappSuperAdmin: React.FC = () => {
                     onRiprova={revalidate}
                 />
             ) : (
-            <div className="space-y-6">
-                {/* Card 1: preset esistenti (sempre in alto, full width) */}
-                <Card title="Preset esistenti">
+            <>
+                {/* Preset esistenti (sempre in alto, full width) */}
+                <Sezione senzaPadding titolo="Preset esistenti">
                     {presets.length === 0 ? (
                         <EmptyState
-                            title="Nessun Preset Disponibile"
-                            description="Non ci sono preset di WhatsApp disponibili per il Super Admin."
+                            compatta
+                            title="Nessun preset"
+                            description="Questo template non ha ancora preset: creane uno con il modulo qui sotto."
                             icon="CircleOff"
                         />
                     ) : (
                         <div className="overflow-x-auto">
-                            <Table sm bordered>
-                                <Table.Thead variant="light">
+                            <Table>
+                                <Table.Thead>
                                     <Table.Tr>
                                         <Table.Th>Nome</Table.Th>
                                         <Table.Th>Stato</Table.Th>
                                         <Table.Th>Hash</Table.Th>
-                                        <Table.Th>Ultimo update</Table.Th>
-                                        <Table.Th>Azioni</Table.Th>
+                                        <Table.Th>Ultimo aggiornamento</Table.Th>
+                                        <Table.Th className="text-right"><span className="sr-only">Azioni</span></Table.Th>
                                     </Table.Tr>
                                 </Table.Thead>
                                 <Table.Tbody>
                                     {presets.map((preset, i) => (
                                         <Table.Tr key={i}>
-                                            <Table.Td className="font-semibold">
-                                                <Lucide icon="MessageSquare" className="inline-block mr-2 text-primary w-4 h-4 align-middle" />
+                                            <Table.Td className="font-medium text-slate-800">
+                                                <Lucide icon="MessageSquare" aria-hidden="true" className="mr-2 inline-block h-4 w-4 align-middle text-slate-400" />
                                                 {preset.nome_preset_gdowhatsappreset}
                                             </Table.Td>
                                             <Table.Td>
@@ -408,21 +363,19 @@ const GestionePresetsWhatsappSuperAdmin: React.FC = () => {
                                                     <StatusBadge tono="success" etichetta="Predefinito" />
                                                 )}
                                             </Table.Td>
-                                            <Table.Td className="text-primary">
-                                                <code className="bg-slate-100 rounded px-2 py-1 text-xs font-mono">
+                                            <Table.Td>
+                                                <code className="rounded-control bg-slate-100 px-2 py-1 font-mono text-xs text-slate-600">
                                                     {preset.hash_gdowhatsappreset}
                                                 </code>
                                             </Table.Td>
                                             <Table.Td>
-                                                {preset.updatedat
-                                                    ? dayjs(preset.updatedat).format('DD/MM/YYYY [alle] HH:mm:ss')
-                                                    : '—'}
+                                                {preset.updatedat ? formatDataOraEstesa(preset.updatedat) : VALORE_ASSENTE}
                                             </Table.Td>
-                                            <Table.Td>
-                                                <div className="flex flex-wrap gap-1">
+                                            <Table.Td className="text-right">
+                                                <div className="flex flex-wrap justify-end gap-2">
                                                     <PermissionGate permission={PERMISSIONS.WHATSAPP.GESTISCI_PRESETS} mode="disable">
                                                         <Button
-                                                            size="xs"
+                                                            size="sm"
                                                             onClick={async () => {
                                                                 setPresetDefaultInCorso(preset.id_gdowhatsappreset ?? null);
                                                                 try {
@@ -433,25 +386,23 @@ const GestionePresetsWhatsappSuperAdmin: React.FC = () => {
                                                                     setPresetDefaultInCorso(null);
                                                                 }
                                                             }}
-                                                            variant={preset.is_default_gdowhatsappreset ? 'primary' : 'outline-primary'}
+                                                            variant="outline-secondary"
                                                             loading={presetDefaultInCorso === preset.id_gdowhatsappreset}
                                                             disabled={preset.is_default_gdowhatsappreset || presetDefaultInCorso !== null}
                                                             title="Imposta come default"
                                                         >
                                                             {presetDefaultInCorso !== preset.id_gdowhatsappreset && (
-                                                                <Lucide icon="Star" aria-hidden="true" className="w-4 h-4 mr-1" />
+                                                                <Lucide icon="Star" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
                                                             )}
                                                             Default
                                                         </Button>
                                                     </PermissionGate>
                                                     <PermissionGate permission={PERMISSIONS.WHATSAPP.GESTISCI_PRESETS} mode="disable">
                                                         <Button
-                                                            size="xs"
-                                                            variant={
-                                                                isEditing && selectedPreset === preset.id_gdowhatsappreset
-                                                                    ? 'secondary'
-                                                                    : 'outline-secondary'
-                                                            }
+                                                            size="sm"
+                                                            variant="outline-secondary"
+                                                            aria-pressed={isEditing && selectedPreset === preset.id_gdowhatsappreset}
+                                                            className={isEditing && selectedPreset === preset.id_gdowhatsappreset ? 'bg-slate-100' : undefined}
                                                             onClick={() => {
                                                                 if (isEditing && selectedPreset === preset.id_gdowhatsappreset) {
                                                                     // Deseleziona e resetta form
@@ -472,18 +423,19 @@ const GestionePresetsWhatsappSuperAdmin: React.FC = () => {
                                                             }}
 
                                                         >
-                                                            <Lucide icon="Pen" aria-hidden="true" className="w-4 h-4 mr-1" />
+                                                            <Lucide icon="Pen" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
                                                             Modifica
                                                         </Button>
                                                     </PermissionGate>
                                                     <PermissionGate permission={PERMISSIONS.WHATSAPP.GESTISCI_PRESETS} mode="disable">
                                                         <Button
-                                                            size="xs"
+                                                            size="sm"
                                                             variant="outline-danger"
                                                             title="Elimina"
+                                                            aria-label={`Elimina preset ${preset.nome_preset_gdowhatsappreset}`}
                                                             onClick={() => setPresetDaEliminare(preset)}
                                                         >
-                                                            <Lucide icon="Trash2" aria-hidden="true" className="w-4 h-4 mr-1" /> Elimina
+                                                            <Lucide icon="Trash2" aria-hidden="true" className="h-3.5 w-3.5" />
                                                         </Button>
                                                     </PermissionGate>
                                                 </div>
@@ -494,30 +446,29 @@ const GestionePresetsWhatsappSuperAdmin: React.FC = () => {
                             </Table>
                         </div>
                     )}
-                </Card>
+                </Sezione>
 
-                {/* Card 2: crea / aggiorna preset (sotto, full width) */}
-                <Card title="Crea / aggiorna preset" className="h-full">
+                {/* Crea / aggiorna preset (sotto, full width) */}
+                <Sezione titolo={isEditing ? "Aggiorna preset" : "Crea preset"}>
                     <form className="flex flex-col gap-6" onSubmit={handleSubmit}>
                         {/* Nome preset */}
-                        <div>
-                            <FormLabel htmlFor="presetName">Nome preset</FormLabel>
+                        <FormField
+                            etichetta="Nome preset"
+                            aiuto={<>Usa <strong>“default”</strong> se vuoi che sia quello di esercizio.</>}
+                        >
                             <FormInput
                                 id="presetName"
                                 name="presetName"
                                 placeholder="default"
                             />
-                            <p className="text-xs mt-1 text-slate-500">
-                                Usa <strong>“default”</strong> se vuoi che sia quello di esercizio.
-                            </p>
-                        </div>
+                        </FormField>
 
                         {/* TESTO (header / body / footer) */}
                         {textParamUsages.length > 0 && (
-                            <div className="border-t border-slate-200 pt-4">
-                                <div className="font-semibold mb-2">
+                            <div className="border-t border-dashed border-slate-200 pt-5">
+                                <h3 className="title-card mb-2">
                                     Testo (header / body / footer)
-                                </div>
+                                </h3>
 
                                 <div className="flex flex-col gap-4">
                                     {textParamUsages.map((usage) => {
@@ -530,7 +481,7 @@ const GestionePresetsWhatsappSuperAdmin: React.FC = () => {
                                                 className="p-3 rounded-control border border-slate-200 bg-slate-50"
                                             >
                                                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-1 mb-2">
-                                                    <div className="text-sm font-semibold">
+                                                    <div className="text-sm font-medium text-slate-700">
                                                         {usage.label} · &#123;&#123;{usage.param}&#125;&#125;
                                                     </div>
                                                 </div>
@@ -540,8 +491,7 @@ const GestionePresetsWhatsappSuperAdmin: React.FC = () => {
                                                     <div>
                                                         <FormLabel
                                                             htmlFor={`${key}_bind`}
-                                                            className="text-xs"
-                                                        >
+                                                            >
                                                             Bind
                                                         </FormLabel>
                                                         <FormSelect
@@ -572,7 +522,6 @@ const GestionePresetsWhatsappSuperAdmin: React.FC = () => {
                                                             <div>
                                                                 <FormLabel
                                                                     htmlFor={`${key}_sample`}
-                                                                    className="text-xs"
                                                                 >
                                                                     Sample
                                                                 </FormLabel>
@@ -591,7 +540,6 @@ const GestionePresetsWhatsappSuperAdmin: React.FC = () => {
                                                             <div>
                                                                 <FormLabel
                                                                     htmlFor={`${key}_value`}
-                                                                    className="text-xs"
                                                                 >
                                                                     Value
                                                                 </FormLabel>
@@ -624,7 +572,7 @@ const GestionePresetsWhatsappSuperAdmin: React.FC = () => {
 
                         {/* PULSANTI URL */}
                         {buttonParamUsages.length > 0 && (
-                            <div className="border-t border-slate-200 pt-4">
+                            <div className="border-t border-dashed border-slate-200 pt-5">
                                 <h3 className="title-card mb-1">
                                     Pulsanti URL
                                 </h3>
@@ -645,13 +593,13 @@ const GestionePresetsWhatsappSuperAdmin: React.FC = () => {
                                                 className="p-3 rounded-control border border-slate-200 bg-slate-50"
                                             >
                                                 <div className="text-sm mb-1">
-                                                    <span className="font-semibold">
+                                                    <span className="font-medium text-slate-700">
                                                         Bottone #{btn.buttonIndex} - «{btn.label}»
                                                     </span>
                                                 </div>
                                                 <div className="text-xs text-slate-500 mb-3">
                                                     URL base:{' '}
-                                                    <span className="text-pink-500 break-all">
+                                                    <span className="break-all text-primary">
                                                         {btn.url}
                                                     </span>
                                                 </div>
@@ -661,8 +609,7 @@ const GestionePresetsWhatsappSuperAdmin: React.FC = () => {
                                                     <div>
                                                         <FormLabel
                                                             htmlFor={`${key}_bind`}
-                                                            className="text-xs"
-                                                        >
+                                                            >
                                                             Bind
                                                         </FormLabel>
                                                         <FormSelect
@@ -692,7 +639,6 @@ const GestionePresetsWhatsappSuperAdmin: React.FC = () => {
                                                             <div>
                                                                 <FormLabel
                                                                     htmlFor={`${key}_sample`}
-                                                                    className="text-xs"
                                                                 >
                                                                     Sample
                                                                 </FormLabel>
@@ -713,7 +659,6 @@ const GestionePresetsWhatsappSuperAdmin: React.FC = () => {
                                                             <div>
                                                                 <FormLabel
                                                                     htmlFor={`${key}_value`}
-                                                                    className="text-xs"
                                                                 >
                                                                     Value
                                                                 </FormLabel>
@@ -747,7 +692,7 @@ const GestionePresetsWhatsappSuperAdmin: React.FC = () => {
                         )}
 
                         {/* Messaggio (se ti serve tenerlo) */}
-                        <div className="border-t border-slate-200 pt-4">
+                        <div className="border-t border-dashed border-slate-200 pt-5">
                             <FormLabel htmlFor="presetMessage">
                                 Messaggio WhatsApp
                             </FormLabel>
@@ -759,18 +704,19 @@ const GestionePresetsWhatsappSuperAdmin: React.FC = () => {
                             />
                         </div>
 
-                        <div className="pt-2">
+                        <div className="flex justify-end">
                             <PermissionGate permission={PERMISSIONS.WHATSAPP.GESTISCI_PRESETS} mode="disable">
-                                <Button type="submit" variant="submit" className="w-full md:w-auto" loading={salvataggioInCorso}>
-                                    {isEditing ? 'Aggiorna Preset' : 'Crea Preset'}
+                                <Button type="submit" variant="primary" className="w-full md:w-auto" loading={salvataggioInCorso}>
+                                    {isEditing ? 'Aggiorna preset' : 'Crea preset'}
                                 </Button>
                             </PermissionGate>
                         </div>
                     </form>
-                </Card>
-            </div>
+                </Sezione>
+            </>
             )}
-        </div>
+            </Pagina>
+        </>
     );
 };
 

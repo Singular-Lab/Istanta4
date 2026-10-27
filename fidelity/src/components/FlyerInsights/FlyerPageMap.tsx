@@ -1,6 +1,7 @@
 import Button from "@/components/Base/Button";
 import Lucide from "@/components/Base/Lucide";
 import { ColorStrategy, MappaConfig, ReferenzaPosizione } from "@/types/flyerInsights";
+import { VALORE_ASSENTE } from "@/utils/format";
 import { resolveColor } from "@/utils/flyerInsightsHelpers";
 import clsx from "clsx";
 import { FC, memo, useCallback, useMemo, useState } from "react";
@@ -93,7 +94,7 @@ const RefBox: FC<RefBoxProps> = memo(({ ref_data, isHovered, onMouseEnter, onMou
     <div
       className={clsx(
         "absolute rounded-sm cursor-pointer transition-opacity duration-150",
-        isHovered ? "z-20 border-2 border-white shadow-lg opacity-100" : "border border-white/60 z-10 opacity-70 hover:opacity-90"
+        isHovered ? "z-20 border-2 border-white shadow-overlay opacity-100" : "border border-white/60 z-10 opacity-70 hover:opacity-90"
       )}
       style={{
         left: `${leftPerc}%`,
@@ -140,7 +141,7 @@ const PageMap: FC<PageMapProps> = memo(({ pageNumber, referenze, hoveredRefId, o
     return (
       <div
         className={clsx(
-          "relative rounded-lg border-2 border-dashed border-slate-200 bg-slate-50 flex items-center justify-center",
+          "relative rounded-control border-2 border-dashed border-slate-200 bg-slate-50 flex items-center justify-center",
           position === 'left' && "rounded-r-none border-r-0",
           position === 'right' && "rounded-l-none border-l-0"
         )}
@@ -165,14 +166,14 @@ const PageMap: FC<PageMapProps> = memo(({ pageNumber, referenze, hoveredRefId, o
   const pageNumPosition = position === 'left' ? "right-1" : "left-1";
   const labelPosition = position === 'left' ? "left-1" : "right-1";
   const labelStyle = position === 'left'
-    ? "bg-blue-100 text-blue-600"
-    : "bg-green-100 text-green-600";
+    ? "bg-sky-100 text-sky-800"
+    : "bg-teal-100 text-teal-800";
   const labelText = position === 'single' ? '' : (position === 'left' ? 'SX' : 'DX');
 
   return (
     <div
       className={clsx(
-        "relative rounded-lg border-2 border-slate-300 bg-white shadow-inner overflow-hidden",
+        "relative rounded-control border-2 border-slate-300 bg-white shadow-inner overflow-hidden",
         borderClass
       )}
       style={{
@@ -237,8 +238,8 @@ interface RefInfoPanelProps {
 const RefInfoPanel: FC<RefInfoPanelProps> = memo(({ ref_data, getColorFn, config }) => {
   if (!ref_data) {
     return (
-      <div className="rounded-lg min-h-[14rem] border border-dashed border-slate-200 bg-slate-50/50 p-3 text-center">
-        <Lucide icon="MousePointer2" className="mx-auto h-5 w-5 text-slate-400 mb-1" />
+      <div className="rounded-card min-h-[14rem] border border-dashed border-slate-200 bg-slate-50 p-3 text-center">
+        <Lucide icon="MousePointer2" aria-hidden="true" className="mx-auto h-5 w-5 text-slate-400 mb-1" />
         <p className="text-2xs text-slate-500">
           Passa sopra una referenza per vedere i dettagli
         </p>
@@ -251,26 +252,26 @@ const RefInfoPanel: FC<RefInfoPanelProps> = memo(({ ref_data, getColorFn, config
   const showIngombro = config?.infoPanel?.showIngombro !== false;
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+    <div className="rounded-card border border-slate-200 bg-slate-50 p-3">
       <p className="text-xs font-semibold text-slate-800 mb-2 line-clamp-2">
         {ref_data.descrizione || 'Senza descrizione'}
       </p>
       <div className="space-y-1.5 text-2xs text-slate-600">
         <div className="flex items-center gap-1.5">
           <Lucide icon="Barcode" className="h-3 w-3" />
-          <span>{ref_data.codiceReferenza || 'N/D'}</span>
+          <span>{ref_data.codiceReferenza || VALORE_ASSENTE}</span>
         </div>
         <div className="flex items-center gap-1.5">
           <div
             className="h-3 w-3 rounded"
             style={{ backgroundColor: getColorFn(ref_data.reparto) }}
           />
-          <span>{ref_data.reparto} - {ref_data.descrizioneReparto || 'N/D'}</span>
+          <span>{ref_data.reparto} - {ref_data.descrizioneReparto || VALORE_ASSENTE}</span>
         </div>
         {showMeccanica && (
           <div className="flex items-center gap-1.5">
             <Lucide icon="Tag" className="h-3 w-3" />
-            <span>{ref_data.meccanica || 'N/D'}</span>
+            <span>{ref_data.meccanica || VALORE_ASSENTE}</span>
           </div>
         )}
         {showPrice && ref_data.prezzo && (
@@ -417,9 +418,9 @@ const FlyerPageMap: FC<Props> = ({ referenze, paginaCorrente, onChangePage, tota
     <div className="p-4">
       {/* Navigation */}
       <div className="flex items-center justify-between mb-4">
-        <h4 className="title-card">
+        <h3 className="title-card">
           {config?.title ?? 'Mappa Volantino'} - {spreadLabel}
-        </h4>
+        </h3>
         <div className="flex items-center gap-2">
           <Button
             type="button"
@@ -504,7 +505,7 @@ const FlyerPageMap: FC<Props> = ({ referenze, paginaCorrente, onChangePage, tota
 
           {/* Mini navigation */}
           {config?.display?.showMiniNavigation !== false && (
-            <div className="mt-3 p-2 bg-slate-50 rounded-lg border border-slate-100">
+            <div className="mt-3 p-2 bg-slate-50 rounded-card border border-slate-100">
               <p className="text-3xs text-slate-500 mb-2 font-medium">Vai a spread:</p>
               <div className="flex flex-wrap gap-1">
                 {Array.from({ length: totalSpreads }, (_, i) => (
@@ -515,7 +516,7 @@ const FlyerPageMap: FC<Props> = ({ referenze, paginaCorrente, onChangePage, tota
                     aria-current={i === currentSpread ? "true" : undefined}
                     onClick={() => handleSpreadClick(i)}
                     className={clsx(
-                      "w-6 h-6 rounded text-3xs font-semibold transition-colors",
+                      "w-6 h-6 rounded-control text-3xs font-semibold transition-colors",
                       i === currentSpread
                         ? "bg-primary text-white"
                         : "bg-white border border-slate-200 text-slate-600 hover:border-primary hover:text-primary"

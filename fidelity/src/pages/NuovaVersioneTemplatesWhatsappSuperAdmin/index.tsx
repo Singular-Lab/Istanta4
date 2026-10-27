@@ -8,11 +8,12 @@ import type { GDOWhatsappTemplateAttributes } from "../../../lib/types";
 import Alert from "../../components/Base/Alert";
 import Badge from "../../components/Base/Badge";
 import Button from "../../components/Base/Button";
-import { FormInput, FormLabel, FormSelect, FormTextarea } from "../../components/Base/Form";
+import { FormField, FormInput, FormSelect, FormTextarea } from "../../components/Base/Form";
 import { Dialog } from "../../components/Base/Headless";
 import Lucide from "../../components/Base/Lucide";
 import PageError from "../../components/Base/PageError";
-import PageHeader from "../../components/Base/PageHeader";
+import Pagina from "../../components/Base/Pagina";
+import Sezione from "../../components/Base/Sezione";
 import StatusBadge from "../../components/Base/StatusBadge";
 import { descriviStato } from "../../constants/stati";
 import { useNotification } from "../../context/NotificationContext";
@@ -145,35 +146,15 @@ function isDynamicUrlValid(url?: string) {
     }
 }
 
-const HelperLabel: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-    <div className="text-xs text-slate-500 mt-1">{children}</div>
-);
-
 const Counter: React.FC<{ value: string; max: number }> = ({ value, max }) => (
     <Badge variant="secondary" size="sm">
         {value.length}/{max}
     </Badge>
 );
 
+// Errore di un gruppo di campi senza etichetta propria (bottoni): stesso aspetto dell'errore di FormField
 const ErrorMsg: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-    <div className="text-danger text-xs mt-1">{children}</div>
-);
-
-const Card: React.FC<{ title?: string; right?: React.ReactNode; children: React.ReactNode }> = ({
-    title,
-    right,
-    children,
-}) => (
-    <div className="box box--stacked p-5 mb-5">
-        {(title || right) && (
-            <div className="flex items-center justify-between mb-3 gap-3">
-                {title && <h3 className="title-card">{title}</h3>}
-                {right}
-            </div>
-        )}
-
-        {children}
-    </div>
+    <p className="mt-1.5 text-xs text-danger">{children}</p>
 );
 
 /** ------------------ Pagina principale ------------------ */
@@ -509,76 +490,73 @@ const NuovaVersioneTemplatesWhatsappSuperAdmin: React.FC = () => {
         }
     }
 
-    const intestazione = (
-        <PageHeader
-            title="Nuova versione Template WhatsApp"
-            description="Configura una nuova versione del template, pronta per l’approvazione Meta."
-            indietro={{
-                to: `/whatsapp/gestione-whatsapp-superadmin/templates?id=${template?.id_gdo_gdowhatsapptemplate ?? ""}`,
-                etichetta: "Torna ai template",
-            }}
-            badges={
-                (template || isSavedInLocale) && (
-                    <>
-                        {template && <StatusBadge dominio="waTemplate" stato={template.stato_meta_gdowhatsapptemplate} />}
-                        {isSavedInLocale && <StatusBadge tono="success" etichetta="Salvato in locale" />}
-                    </>
-                )
-            }
-        />
-    );
+    const proprietaPagina = {
+        titolo: "Nuova versione Template WhatsApp",
+        descrizione: "Configura una nuova versione del template, pronta per l’approvazione Meta.",
+        indietro: {
+            to: `/whatsapp/gestione-whatsapp-superadmin/templates?id=${template?.id_gdo_gdowhatsapptemplate ?? ""}`,
+            etichetta: "Torna ai template",
+        },
+        badges:
+            (template || isSavedInLocale) && (
+                <>
+                    {template && <StatusBadge dominio="waTemplate" stato={template.stato_meta_gdowhatsapptemplate} />}
+                    {isSavedInLocale && <StatusBadge tono="success" etichetta="Salvato in locale" />}
+                </>
+            ),
+    };
 
     // I preset non servono qui: blocca solo il template mancante
     if (!template) {
         return (
-            <div className="space-y-6">
-                {intestazione}
+            <Pagina {...proprietaPagina}>
                 <PageError
                     titolo="Template non caricato"
                     motivo={errore || "Il template indicato non esiste o non è più disponibile."}
                     onRiprova={revalidate}
                 />
-            </div>
+            </Pagina>
         );
     }
 
     return (
-        <div className="space-y-6">
-            {intestazione}
+        <Pagina {...proprietaPagina}>
 
             {/* DIALOG INVIO META */}
             <Dialog open={isDialogApprovazioneOpen} onClose={() => setIsDialogApprovazioneOpen(false)} size="md">
                 <Dialog.Panel>
-                    <Dialog.Title>
-                        <h3 className="title-section">Invia per approvazione</h3>
-                    </Dialog.Title>
+                    <Dialog.Title>Invia per approvazione</Dialog.Title>
                     <Dialog.Description>
                         Sei sicuro di voler inviare questo template a Meta per l’approvazione?
                         Una volta inviato, non potrai modificarlo fino alla fine della revisione.
                         {errors && Object.keys(errors).length > 0 && (
-                            <div className="text-danger text-sm mt-2">
+                            <p className="mt-2 text-sm text-danger">
                                 Correggi gli errori nel form prima di inviare.
-                            </div>
+                            </p>
                         )}
                         {isSubmitting && (
-                            <Alert className="mt-2" variant="outline-pending">
-                                Invio in corso...
+                            <Alert className="mt-3" variant="soft-secondary" icona="Send">
+                                Invio in corso…
                             </Alert>
                         )}
                         {submitError && (
-                            <Alert className="mt-2" variant="danger">
+                            <Alert className="mt-3" variant="soft-danger" icona="CircleAlert">
                                 {submitError}
                             </Alert>
                         )}
                         {submitSuccess && (
-                            <Alert className="mt-2" variant={submitSuccess === STATO_GDO_WHATSAPP_TEMPLATE.REJECTED ? "danger" : "success"}>
+                            <Alert
+                                className="mt-3"
+                                variant={submitSuccess === STATO_GDO_WHATSAPP_TEMPLATE.REJECTED ? "soft-danger" : "soft-success"}
+                                icona={submitSuccess === STATO_GDO_WHATSAPP_TEMPLATE.REJECTED ? "CircleAlert" : "CircleCheck"}
+                            >
                                 Template inviato a Meta: {descriviStato("waTemplate", submitSuccess).etichetta}
                             </Alert>
                         )}
                     </Dialog.Description>
-                    <Dialog.Footer className="flex justify-end gap-2">
+                    <Dialog.Footer>
                         <Button
-                            variant="secondary"
+                            variant="outline-secondary"
                             onClick={() => setIsDialogApprovazioneOpen(false)}
                             disabled={isSubmitting}
                         >
@@ -621,10 +599,7 @@ const NuovaVersioneTemplatesWhatsappSuperAdmin: React.FC = () => {
             {/* ALERT STATO MODIFICA */}
             {template?.stato_meta_gdowhatsapptemplate ===
                 STATO_GDO_WHATSAPP_TEMPLATE.CREATED_BUT_NOT_SYNCED && (
-                    <Alert className="flex flex-row items-center" variant="soft-warning">
-                        <span className="mr-2 flex items-center">
-                            <Lucide icon="TriangleAlert" className="w-8 h-8" />
-                        </span>
+                    <Alert variant="soft-warning" icona="TriangleAlert">
                         Il template è stato modificato ma non è ancora sincronizzato con Meta.
                         Fino a che il template non viene inviato, al template non gli verrà aumentata la versione.
                     </Alert>
@@ -632,24 +607,20 @@ const NuovaVersioneTemplatesWhatsappSuperAdmin: React.FC = () => {
 
             {/* LAYOUT A DUE COLONNE: FORM + PREVIEW */}
             <form onSubmit={handleSubmit}>
-                <div className="grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
+                <div className="grid grid-cols-12 gap-6">
                     {/* COLONNA SINISTRA: FORM */}
-                    <div className="space-y-4">
-                        <Card title="Informazioni generali">
+                    <div className="col-span-12 flex flex-col gap-6 xl:col-span-8">
+                        <Sezione titolo="Informazioni generali">
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div>
-                                    <FormLabel>Nome template</FormLabel>
+                                <FormField etichetta="Nome template" aiuto="Minuscole/underscore, niente spazi." errore={errors.name}>
                                     <FormInput
                                         placeholder="es. promo_fidelity_settembre"
                                         value={form.name}
                                         onChange={(e) => update("name", e.target.value.trim())}
                                     />
-                                    <HelperLabel>Minuscole/underscore, niente spazi.</HelperLabel>
-                                    {errors.name && <ErrorMsg>{errors.name}</ErrorMsg>}
-                                </div>
+                                </FormField>
 
-                                <div>
-                                    <FormLabel>Categoria</FormLabel>
+                                <FormField etichetta="Categoria" errore={errors.category}>
                                     <FormSelect
                                         value={form.category}
                                         onChange={(e) =>
@@ -662,11 +633,9 @@ const NuovaVersioneTemplatesWhatsappSuperAdmin: React.FC = () => {
                                         <option value="TRANSACTIONAL">Transactional</option>
                                         <option value="SERVICE">Service</option>
                                     </FormSelect>
-                                    {errors.category && <ErrorMsg>{errors.category}</ErrorMsg>}
-                                </div>
+                                </FormField>
 
-                                <div>
-                                    <FormLabel>Lingua</FormLabel>
+                                <FormField etichetta="Lingua" errore={errors.language}>
                                     <FormSelect
                                         value={form.language}
                                         onChange={(e) => update("language", e.target.value)}
@@ -677,15 +646,13 @@ const NuovaVersioneTemplatesWhatsappSuperAdmin: React.FC = () => {
                                             </option>
                                         ))}
                                     </FormSelect>
-                                    {errors.language && <ErrorMsg>{errors.language}</ErrorMsg>}
-                                </div>
+                                </FormField>
                             </div>
-                        </Card>
+                        </Sezione>
 
-                        <Card title="Header">
+                        <Sezione titolo="Header">
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div>
-                                    <FormLabel>Formato</FormLabel>
+                                <FormField etichetta="Formato">
                                     <FormSelect
                                         value={form.headerFormat}
                                         onChange={(e) =>
@@ -698,19 +665,19 @@ const NuovaVersioneTemplatesWhatsappSuperAdmin: React.FC = () => {
                                         <option value="DOCUMENT">Documento</option>
                                         <option value="VIDEO">Video</option>
                                     </FormSelect>
-                                </div>
+                                </FormField>
 
                                 {form.headerFormat === "TEXT" && (
-                                    <div className="md:col-span-2">
-                                        <FormLabel className="flex items-center">
-                                            Testo header
-                                            <span className="ml-auto">
-                                                <Counter
-                                                    value={form.headerText}
-                                                    max={MAX_HEADER_TEXT}
-                                                />
+                                    <FormField
+                                        className="md:col-span-2"
+                                        etichetta={
+                                            <span className="flex items-center gap-2">
+                                                Testo header
+                                                <Counter value={form.headerText} max={MAX_HEADER_TEXT} />
                                             </span>
-                                        </FormLabel>
+                                        }
+                                        errore={errors.headerText}
+                                    >
                                         <FormInput
                                             placeholder="Es. Istanta 2 GDO Suite"
                                             value={form.headerText}
@@ -718,15 +685,16 @@ const NuovaVersioneTemplatesWhatsappSuperAdmin: React.FC = () => {
                                                 update("headerText", e.target.value)
                                             }
                                         />
-                                        {errors.headerText && (
-                                            <ErrorMsg>{errors.headerText}</ErrorMsg>
-                                        )}
-                                    </div>
+                                    </FormField>
                                 )}
 
                                 {["IMAGE", "DOCUMENT", "VIDEO"].includes(form.headerFormat) && (
-                                    <div className="md:col-span-2">
-                                        <FormLabel>Esempio media (URL/handle)</FormLabel>
+                                    <FormField
+                                        className="md:col-span-2"
+                                        etichetta="Esempio media (URL/handle)"
+                                        aiuto="Per i media header, Meta richiede un esempio per la review."
+                                        errore={errors.headerSampleMediaUrl}
+                                    >
                                         <FormInput
                                             placeholder="https://… (consigliato per approvazione)"
                                             value={form.headerSampleMediaUrl || ""}
@@ -734,41 +702,38 @@ const NuovaVersioneTemplatesWhatsappSuperAdmin: React.FC = () => {
                                                 update("headerSampleMediaUrl", e.target.value)
                                             }
                                         />
-                                        <HelperLabel>
-                                            Per i media header, Meta richiede un esempio per la
-                                            review.
-                                        </HelperLabel>
-                                        {errors.headerSampleMediaUrl && (
-                                            <ErrorMsg>{errors.headerSampleMediaUrl}</ErrorMsg>
-                                        )}
-                                    </div>
+                                    </FormField>
                                 )}
                             </div>
-                        </Card>
+                        </Sezione>
 
-                        <Card
-                            title="Body"
-                            right={<Counter value={form.bodyText} max={MAX_BODY} />}
-                        >
-                            <FormTextarea
-                                rows={6}
-                                placeholder={`Es. Ciao {{1}}, la tua fidelity è attiva! Sconto del {{2}}% su volantini web.\nValido fino al {{3}}.`}
-                                value={form.bodyText}
-                                onChange={(e) => update("bodyText", e.target.value)}
-                            />
-                            <HelperLabel>
-                                Usa segnaposto sequenziali: <code>{`{{1}}`}</code>,{" "}
-                                <code>{`{{2}}`}</code>…; niente salti.
-                            </HelperLabel>
-                            {errors.bodyText && <ErrorMsg>{errors.bodyText}</ErrorMsg>}
+                        <Sezione titolo="Body" azioni={<Counter value={form.bodyText} max={MAX_BODY} />}>
+                            <FormField
+                                etichetta="Corpo del messaggio"
+                                aiuto={
+                                    <>
+                                        Usa segnaposto sequenziali: <code>{`{{1}}`}</code>,{" "}
+                                        <code>{`{{2}}`}</code>…; niente salti.
+                                    </>
+                                }
+                                errore={errors.bodyText}
+                            >
+                                <FormTextarea
+                                    rows={6}
+                                    placeholder={`Es. Ciao {{1}}, la tua fidelity è attiva! Sconto del {{2}}% su volantini web.\nValido fino al {{3}}.`}
+                                    value={form.bodyText}
+                                    onChange={(e) => update("bodyText", e.target.value)}
+                                />
+                            </FormField>
 
                             {needBodyExamples && (
-                                <div className="mt-3">
-                                    <FormLabel>Esempi (uno per placeholder)</FormLabel>
+                                <fieldset className="mt-4">
+                                    <legend className="mb-2 text-sm font-medium text-slate-700">Esempi (uno per segnaposto)</legend>
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                                         {bodyPlaceholders.map((n, idx) => (
                                             <FormInput
                                                 key={n}
+                                                aria-label={`Esempio per {{${n}}}`}
                                                 placeholder={`Esempio per {{${n}}}`}
                                                 value={form.bodyExamples[idx] || ""}
                                                 onChange={(e) => {
@@ -782,26 +747,23 @@ const NuovaVersioneTemplatesWhatsappSuperAdmin: React.FC = () => {
                                     {errors.bodyExamples && (
                                         <ErrorMsg>{errors.bodyExamples}</ErrorMsg>
                                     )}
-                                </div>
+                                </fieldset>
                             )}
-                        </Card>
+                        </Sezione>
 
-                        <Card
-                            title="Footer"
-                            right={<Counter value={form.footerText} max={MAX_FOOTER_TEXT} />}
-                        >
-                            <FormInput
-                                placeholder="Es. Servizio clienti 9-18"
-                                value={form.footerText}
-                                onChange={(e) => update("footerText", e.target.value)}
-                            />
-                            {errors.footerText && <ErrorMsg>{errors.footerText}</ErrorMsg>}
-                        </Card>
+                        <Sezione titolo="Footer" azioni={<Counter value={form.footerText} max={MAX_FOOTER_TEXT} />}>
+                            <FormField etichetta="Testo footer" errore={errors.footerText}>
+                                <FormInput
+                                    placeholder="Es. Servizio clienti 9-18"
+                                    value={form.footerText}
+                                    onChange={(e) => update("footerText", e.target.value)}
+                                />
+                            </FormField>
+                        </Sezione>
 
-                        <Card title="Bottoni">
+                        <Sezione titolo="Bottoni">
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div>
-                                    <FormLabel>Tipo bottoni</FormLabel>
+                                <FormField etichetta="Tipo bottoni" aiuto={<>Quick Reply <b>oppure</b> CTA (non insieme).</>}>
                                     <FormSelect
                                         value={form.buttonKind}
                                         onChange={(e) =>
@@ -816,10 +778,7 @@ const NuovaVersioneTemplatesWhatsappSuperAdmin: React.FC = () => {
                                             Call-To-Action (max 2)
                                         </option>
                                     </FormSelect>
-                                    <HelperLabel>
-                                        Quick Reply <b>oppure</b> CTA (non insieme).
-                                    </HelperLabel>
-                                </div>
+                                </FormField>
 
                                 {form.buttonKind === "QUICK_REPLY" && (
                                     <div className="md:col-span-2">
@@ -828,7 +787,8 @@ const NuovaVersioneTemplatesWhatsappSuperAdmin: React.FC = () => {
                                                 Quick Reply
                                             </span>
                                             <Button
-                                                variant="primary"
+                                                size="sm"
+                                                variant="outline-secondary"
                                                 type="button"
                                                 onClick={() =>
                                                     update("quickReplies", [
@@ -838,13 +798,15 @@ const NuovaVersioneTemplatesWhatsappSuperAdmin: React.FC = () => {
                                                 }
                                                 disabled={form.quickReplies.length >= 3}
                                             >
-                                                + Aggiungi
+                                                <Lucide icon="Plus" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                                                Aggiungi
                                             </Button>
                                         </div>
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                                             {form.quickReplies.map((q, i) => (
                                                 <FormInput
                                                     key={i}
+                                                    aria-label={`Quick reply ${i + 1}`}
                                                     placeholder="Es. Vedi offerte"
                                                     value={q.text}
                                                     onChange={(e) => {
@@ -868,7 +830,8 @@ const NuovaVersioneTemplatesWhatsappSuperAdmin: React.FC = () => {
                                     <div className="md:col-span-2 space-y-3">
                                         <div className="flex items-center gap-2">
                                             <Button
-                                                variant="primary"
+                                                size="sm"
+                                                variant="outline-secondary"
                                                 type="button"
                                                 onClick={() =>
                                                     update(
@@ -887,10 +850,12 @@ const NuovaVersioneTemplatesWhatsappSuperAdmin: React.FC = () => {
                                                 }
                                                 disabled={form.ctas.length >= 2}
                                             >
-                                                + CTA URL
+                                                <Lucide icon="Plus" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                                                CTA URL
                                             </Button>
                                             <Button
-                                                variant="secondary"
+                                                size="sm"
+                                                variant="outline-secondary"
                                                 type="button"
                                                 onClick={() =>
                                                     update(
@@ -909,7 +874,8 @@ const NuovaVersioneTemplatesWhatsappSuperAdmin: React.FC = () => {
                                                 }
                                                 disabled={form.ctas.length >= 2}
                                             >
-                                                + CTA Telefono
+                                                <Lucide icon="Plus" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                                                CTA telefono
                                             </Button>
                                         </div>
 
@@ -919,6 +885,7 @@ const NuovaVersioneTemplatesWhatsappSuperAdmin: React.FC = () => {
                                                 className="grid grid-cols-1 md:grid-cols-3 gap-3"
                                             >
                                                 <FormInput
+                                                    aria-label={`Etichetta CTA ${i + 1}`}
                                                     placeholder="Label bottone"
                                                     value={c.text}
                                                     onChange={(e) => {
@@ -932,6 +899,7 @@ const NuovaVersioneTemplatesWhatsappSuperAdmin: React.FC = () => {
                                                 />
 
                                                 <FormSelect
+                                                    aria-label={`Tipo CTA ${i + 1}`}
                                                     value={c.type}
                                                     onChange={(e) => {
                                                         const t = e.target.value as CtaType;
@@ -957,6 +925,7 @@ const NuovaVersioneTemplatesWhatsappSuperAdmin: React.FC = () => {
 
                                                 {c.type === "URL" ? (
                                                     <FormInput
+                                                        aria-label={`URL CTA ${i + 1}`}
                                                         placeholder="https://example.com/{{1}}"
                                                         value={
                                                             (
@@ -980,6 +949,7 @@ const NuovaVersioneTemplatesWhatsappSuperAdmin: React.FC = () => {
                                                     />
                                                 ) : (
                                                     <FormInput
+                                                        aria-label={`Telefono CTA ${i + 1}`}
                                                         placeholder="+39055…"
                                                         value={
                                                             (
@@ -1023,12 +993,12 @@ const NuovaVersioneTemplatesWhatsappSuperAdmin: React.FC = () => {
                                     </div>
                                 )}
                             </div>
-                        </Card>
+                        </Sezione>
                     </div>
 
                     {/* COLONNA DESTRA: PREVIEW + AZIONI */}
-                    <div className="space-y-4 lg:sticky lg:top-24 self-start">
-                        <Card title="Anteprima WhatsApp">
+                    <div className="col-span-12 flex flex-col gap-6 self-start xl:sticky xl:top-24 xl:col-span-4">
+                        <Sezione titolo="Anteprima WhatsApp">
                             <WhatsAppMessageShadowPreview
                                 data={{
                                     headerFormat: form.headerFormat,
@@ -1052,34 +1022,27 @@ const NuovaVersioneTemplatesWhatsappSuperAdmin: React.FC = () => {
                                         : undefined)
                                 }
                             />
-                        </Card>
+                        </Sezione>
 
-                        <Card>
+                        <Sezione compatta titolo="Azioni">
                             <div className="flex flex-col gap-3">
+                                {/* Lo stato "salvato in locale" è nei badge dell'intestazione */}
                                 <Button
                                     type="button"
-                                    variant="primary"
+                                    variant="outline-secondary"
                                     loading={isLoadingSave}
                                     onClick={() => {
                                         const payload = buildPayload();
                                         salvaInLocale(payload);
                                     }}
                                 >
-                                    {isLoadingSave
-                                        ? template?.stato_meta_gdowhatsapptemplate === STATO_GDO_WHATSAPP_TEMPLATE.CREATED_BUT_NOT_SYNCED
-                                            ? "Modifica in corso..."
-                                            : "Salvataggio in corso..."
-                                        : isSavedInLocale
-                                            ? template?.stato_meta_gdowhatsapptemplate === STATO_GDO_WHATSAPP_TEMPLATE.CREATED_BUT_NOT_SYNCED
-                                                ? "Modificato in locale ✔️"
-                                                : "Salvato in locale ✔️"
-                                            : template?.stato_meta_gdowhatsapptemplate === STATO_GDO_WHATSAPP_TEMPLATE.CREATED_BUT_NOT_SYNCED
-                                                ? "Modifica in locale"
-                                                : "Salva in locale"}
+                                    {template?.stato_meta_gdowhatsapptemplate === STATO_GDO_WHATSAPP_TEMPLATE.CREATED_BUT_NOT_SYNCED
+                                        ? "Modifica in locale"
+                                        : "Salva in locale"}
                                 </Button>
                                 <Button
                                     type="button"
-                                    variant="secondary"
+                                    variant="primary"
                                     disabled={isLoadingSave}
                                     onClick={() => {
                                         setErrors(validation);
@@ -1091,17 +1054,17 @@ const NuovaVersioneTemplatesWhatsappSuperAdmin: React.FC = () => {
                                     Invia per approvazione (Meta)
                                 </Button>
                                 {Object.keys(errors).length > 0 && (
-                                    <p className="text-xs text-danger mt-1">
+                                    <p className="mt-1 text-xs text-danger">
                                         Ci sono errori nel form: controlla i campi evidenziati
                                         prima di inviare.
                                     </p>
                                 )}
                             </div>
-                        </Card>
+                        </Sezione>
                     </div>
                 </div>
             </form>
-        </div>
+        </Pagina>
     );
 };
 

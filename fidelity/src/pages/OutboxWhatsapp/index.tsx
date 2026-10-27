@@ -1,7 +1,4 @@
 import clsx from 'clsx';
-import dayjs from 'dayjs';
-import 'dayjs/locale/it';
-import relativeTime from 'dayjs/plugin/relativeTime';
 import { AnimatePresence, motion } from 'framer-motion';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -11,8 +8,10 @@ import Button from '../../components/Base/Button';
 import { Dialog } from '../../components/Base/Headless';
 import Lucide from '../../components/Base/Lucide';
 import PageError from '../../components/Base/PageError';
-import PageHeader from '../../components/Base/PageHeader';
+import Pagina from '../../components/Base/Pagina';
+import Sezione from '../../components/Base/Sezione';
 import Spinner from '../../components/Base/Spinner';
+import StatCard, { StatCardGrid } from '../../components/Base/StatCard';
 import StatusBadge from '../../components/Base/StatusBadge';
 import Table from '../../components/Base/Table';
 import ConfirmDialog from '../../components/ConfirmDialog';
@@ -20,9 +19,8 @@ import EmptyState from '../../components/EmptyState';
 import { useNotification } from '../../context/NotificationContext';
 import withSessionCheck from '../../components/SessionChecker';
 import { useSocket } from '../../hooks/useSocket';
+import { formatDataOra, formatNumero, formatRelativo, VALORE_ASSENTE } from '../../utils/format';
 
-dayjs.extend(relativeTime);
-dayjs.locale('it');
 
 // ============= TYPES =============
 interface BulkStatus {
@@ -166,10 +164,7 @@ const CampaignCard: React.FC<{
 
     const cancelled = bulk.cancelled ?? 0;
     const processed = bulk.processed ?? bulk.success + bulk.failed + cancelled;
-    const subtitle =
-        bulk.createdAt != null
-            ? `Creata ${dayjs(bulk.createdAt).fromNow()} • ${processed}/${bulk.total} processati`
-            : `${processed}/${bulk.total} processati`;
+    const processati = `${processed}/${bulk.total} processati`;
 
     const etaLabel = formatEta(bulk.etaSeconds);
     const showEta = isActive && etaLabel;
@@ -179,7 +174,7 @@ const CampaignCard: React.FC<{
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
-            className="border border-slate-300 rounded-sm border-dashed dark:border-darkmode-400 p-4 mb-3 last:mb-0"
+            className="rounded-card border border-slate-200 bg-white p-4"
         >
             {/* Header */}
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -198,16 +193,23 @@ const CampaignCard: React.FC<{
                     </div>
                     <div className="space-y-1">
                         <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="title-card dark:text-slate-100">
+                            <h3 className="title-card">
                                 {bulk.titolo || `Campagna #${bulk.bulkId.substring(0, 8)}`}
                             </h3>
                             <StatusBadge dominio="waCampagna" stato={bulk.status} />
                         </div>
-                        <p className="text-xs text-slate-500">{subtitle}</p>
+                        <p className="text-xs text-slate-500">
+                            {bulk.createdAt != null && (
+                                <>
+                                    Creata <span title={formatDataOra(bulk.createdAt)}>{formatRelativo(bulk.createdAt)}</span> •{' '}
+                                </>
+                            )}
+                            {processati}
+                        </p>
 
                         {showEta && (
-                            <p className="text-xs text-slate-400 flex items-center gap-1">
-                                <Lucide icon="Timer" className="w-3 h-3" />
+                            <p className="flex items-center gap-1 text-xs text-slate-500">
+                                <Lucide icon="Timer" aria-hidden="true" className="h-3 w-3" />
                                 <span>Tempo stimato rimanente: ~{etaLabel}</span>
                             </p>
                         )}
@@ -217,18 +219,18 @@ const CampaignCard: React.FC<{
                 {/* Actions */}
                 <div className="flex items-center gap-2 self-end md:self-start">
                     <Button variant="outline-secondary" size="sm" onClick={onViewDetails}>
-                        <Lucide icon="List" className="w-4 h-4 mr-1" />
+                        <Lucide icon="List" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
                         Dettagli
                     </Button>
                     {isActive && (
                         <Button variant="outline-danger" size="sm" onClick={onCancel} disabled={disabilitato}>
-                            <Lucide icon="CircleStop" aria-hidden="true" className="w-4 h-4 mr-1" />
+                            <Lucide icon="CircleStop" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
                             Annulla
                         </Button>
                     )}
                     {bulk.status === 'COMPLETED' && bulk.failed > 0 && (
-                        <Button variant="outline-primary" size="sm" onClick={onRetry} disabled={disabilitato}>
-                            <Lucide icon="RotateCw" aria-hidden="true" className="w-4 h-4 mr-1" />
+                        <Button variant="outline-secondary" size="sm" onClick={onRetry} disabled={disabilitato}>
+                            <Lucide icon="RotateCw" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
                             Riprova falliti
                         </Button>
                     )}
@@ -238,26 +240,26 @@ const CampaignCard: React.FC<{
             {/* Stats + progress */}
             <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-6 items-center">
                 <div className="text-center md:text-left">
-                    <div className="text-xs uppercase tracking-wide text-slate-400">Totali</div>
-                    <div className="text-lg font-semibold text-slate-800 dark:text-slate-100">
+                    <div className="title-eyebrow">Totali</div>
+                    <div className="text-lg font-semibold tabular-nums text-slate-800">
                         {bulk.total}
                     </div>
                 </div>
                 <div className="text-center md:text-left">
-                    <div className="text-xs uppercase tracking-wide text-slate-400">Inviati</div>
-                    <div className="text-lg font-semibold text-success">{bulk.success}</div>
+                    <div className="title-eyebrow">Inviati</div>
+                    <div className="text-lg font-semibold tabular-nums text-success">{bulk.success}</div>
                 </div>
                 <div className="text-center md:text-left">
-                    <div className="text-xs uppercase tracking-wide text-slate-400">Falliti</div>
-                    <div className="text-lg font-semibold text-danger">{bulk.failed}</div>
+                    <div className="title-eyebrow">Falliti</div>
+                    <div className="text-lg font-semibold tabular-nums text-danger">{bulk.failed}</div>
                 </div>
                 <div className="text-center md:text-left">
-                    <div className="text-xs uppercase tracking-wide text-slate-400">Annullati</div>
-                    <div className="text-lg font-semibold text-slate-500">{cancelled}</div>
+                    <div className="title-eyebrow">Annullati</div>
+                    <div className="text-lg font-semibold tabular-nums text-slate-500">{cancelled}</div>
                 </div>
                 <div className="text-center md:text-left">
-                    <div className="text-xs uppercase tracking-wide text-slate-400">In coda</div>
-                    <div className="text-lg font-semibold text-warning">{bulk.pending}</div>
+                    <div className="title-eyebrow">In coda</div>
+                    <div className="text-lg font-semibold tabular-nums text-warning">{bulk.pending}</div>
                 </div>
                 <div className="col-span-2 md:col-span-1">
                     <ProgressBar value={bulk.percentuale} status={bulk.status} />
@@ -332,14 +334,12 @@ const JobDetailsModal: React.FC<{
         <Dialog open={isOpen} onClose={onClose} size="xl">
             <Dialog.Panel>
                 <Dialog.Title>
-                    <div className="flex items-center gap-2">
-                        <Lucide icon="List" aria-hidden="true" className="w-5 h-5" />
-                        <h2 className="title-section">Dettagli campagna</h2>
-                    </div>
+                    <Lucide icon="List" aria-hidden="true" className="h-5 w-5" />
+                    Dettagli campagna
                 </Dialog.Title>
 
                 <Dialog.Description>
-                    <div className="mt-5">
+                    <div>
                         {loading ? (
                             <div className="flex items-center justify-center py-10">
                                 <Spinner size="lg" etichetta="Caricamento dei messaggi…" />
@@ -353,6 +353,7 @@ const JobDetailsModal: React.FC<{
                             />
                         ) : jobs.length === 0 ? (
                             <EmptyState
+                                compatta
                                 icon="Inbox"
                                 title="Nessun messaggio"
                                 description="Non ci sono messaggi per questa campagna."
@@ -376,19 +377,19 @@ const JobDetailsModal: React.FC<{
                                             .map(job => {
                                                 return (
                                                     <Table.Tr key={job.jobId}>
-                                                        <Table.Td>{job.index + 1}</Table.Td>
+                                                        <Table.Td className="tabular-nums">{job.index + 1}</Table.Td>
                                                         <Table.Td className="font-mono">{job.telefono}</Table.Td>
                                                         <Table.Td>
                                                             <StatusBadge dominio="waMessaggio" stato={job.status} />
                                                         </Table.Td>
-                                                        <Table.Td>{job.attempts}</Table.Td>
+                                                        <Table.Td className="tabular-nums">{job.attempts}</Table.Td>
                                                         <Table.Td>
                                                             {job.error ? (
                                                                 <span className="text-xs text-danger break-all">
                                                                     {job.error}
                                                                 </span>
                                                             ) : (
-                                                                <span className="text-xs text-slate-400">-</span>
+                                                                <span className="text-xs text-slate-400">{VALORE_ASSENTE}</span>
                                                             )}
                                                         </Table.Td>
                                                     </Table.Tr>
@@ -548,111 +549,75 @@ const OutboxWhatsapp: React.FC = () => {
     };
 
     return (
-        <div className="px-5 py-8">
-            <PageHeader
-                title="Campagne WhatsApp"
-                description="Monitora in tempo reale lo stato delle campagne WhatsApp inviate."
-                actions={
-                    <div className="flex gap-2">
-                        <Button
-                            variant="secondary"
-                            size="sm"
-                            loading={loading}
-                            onClick={fetchCampaigns}
-                        >
-                            {!loading && <Lucide icon="RefreshCw" aria-hidden="true" className="w-4 h-4 mr-1" />}
-                            Aggiorna
-                        </Button>
-                        <Button
-                            variant="primary"
-                            size="sm"
-                            onClick={() => navigate('/whatsapp/invio-campagna-whatsapp?step=1')}
-                        >
-                            <Lucide icon="Send" aria-hidden="true" className="w-4 h-4 mr-1" />
-                            Nuova campagna
-                        </Button>
-                    </div>
-                }
-            />
+        <Pagina
+            titolo="Campagne WhatsApp"
+            descrizione="Monitora in tempo reale lo stato delle campagne WhatsApp inviate."
+            azioni={
+                <>
+                    <Button
+                        variant="outline-secondary"
+                        loading={loading}
+                        onClick={fetchCampaigns}
+                    >
+                        {!loading && <Lucide icon="RefreshCw" aria-hidden="true" className="mr-2 h-4 w-4" />}
+                        Aggiorna
+                    </Button>
+                    <Button
+                        variant="primary"
+                        onClick={() => navigate('/whatsapp/invio-campagna-whatsapp?step=1')}
+                    >
+                        <Lucide icon="Plus" aria-hidden="true" className="mr-2 h-4 w-4" />
+                        Nuova campagna
+                    </Button>
+                </>
+            }
+        >
+            {/* Riepilogo */}
+            <StatCardGrid className="lg:grid-cols-5">
+                <StatCard densita="compatta" etichetta="Campagne totali" valore={formatNumero(overview.totalCampaigns)} icona="Megaphone" />
+                <StatCard densita="compatta" etichetta="Messaggi totali" valore={formatNumero(overview.totalMessages)} icona="MessageSquare" />
+                <StatCard densita="compatta" etichetta="In corso / in attesa" valore={formatNumero(overview.running)} icona="Loader" tono="info" />
+                <StatCard densita="compatta" etichetta="Completate" valore={formatNumero(overview.completed)} icona="CircleCheck" tono="success" />
+                <StatCard densita="compatta" etichetta="Fallite" valore={formatNumero(overview.failed)} icona="CircleX" tono="danger" />
+            </StatCardGrid>
 
-            {/* Overview */}
-            <div className="mt-6 box box--stacked p-4 grid grid-cols-2 md:grid-cols-5 gap-4">
-                <div>
-                    <div className="text-xs uppercase tracking-wide text-slate-400">
-                        Campagne totali
-                    </div>
-                    <div className="text-xl font-semibold text-slate-800 dark:text-slate-100">
-                        {overview.totalCampaigns}
-                    </div>
-                </div>
-                <div>
-                    <div className="text-xs uppercase tracking-wide text-slate-400">
-                        Messaggi totali
-                    </div>
-                    <div className="text-xl font-semibold text-slate-800 dark:text-slate-100">
-                        {overview.totalMessages}
-                    </div>
-                </div>
-                <div>
-                    <div className="text-xs uppercase tracking-wide text-slate-400">
-                        In corso / in attesa
-                    </div>
-                    <div className="text-xl font-semibold text-primary">
-                        {overview.running}
-                    </div>
-                </div>
-                <div>
-                    <div className="text-xs uppercase tracking-wide text-slate-400">
-                        Completate
-                    </div>
-                    <div className="text-xl font-semibold text-success">
-                        {overview.completed}
-                    </div>
-                </div>
-                <div>
-                    <div className="text-xs uppercase tracking-wide text-slate-400">
-                        Fallite
-                    </div>
-                    <div className="text-xl font-semibold text-danger">
-                        {overview.failed}
-                    </div>
-                </div>
-            </div>
-
-            {/* Campaign list */}
-            <div className="mt-6">
-                {loading ? (
-                    <div className="box box--stacked flex items-center justify-center py-16">
-                        <Spinner size="lg" etichetta="Caricamento delle campagne…" />
-                    </div>
-                ) : errore ? (
-                    <PageError titolo="Campagne non caricate" motivo={errore} onRiprova={fetchCampaigns} />
-                ) : campaigns.length === 0 ? (
-                    <EmptyState
-                        icon="Send"
-                        title="Nessuna campagna"
-                        description="Non hai ancora inviato campagne WhatsApp. Inizia creando la tua prima campagna."
-                        buttonText="Crea campagna"
-                        buttonIcon="Plus"
-                        onButtonClick={() => navigate('/whatsapp/invio-campagna-whatsapp?step=1')}
-                    />
-                ) : (
-                    <div className="box box--stacked p-3">
-                        <AnimatePresence initial={false}>
-                            {campaigns.map(campaign => (
-                                <CampaignCard
-                                    key={campaign.bulkId}
-                                    bulk={campaign}
-                                    onViewDetails={() => setSelectedBulkId(campaign.bulkId)}
-                                    onCancel={() => setAzioneCampagna({ tipo: 'cancel', bulk: campaign })}
-                                    onRetry={() => setAzioneCampagna({ tipo: 'retry', bulk: campaign })}
-                                    disabilitato={azioneInCorso}
-                                />
-                            ))}
-                        </AnimatePresence>
-                    </div>
-                )}
-            </div>
+            {/* Elenco campagne */}
+            {errore && !loading ? (
+                <PageError titolo="Campagne non caricate" motivo={errore} onRiprova={fetchCampaigns} />
+            ) : (
+                <Sezione titolo="Campagne">
+                    {loading ? (
+                        <div className="flex items-center justify-center py-16">
+                            <Spinner size="lg" etichetta="Caricamento delle campagne…" />
+                        </div>
+                    ) : campaigns.length === 0 ? (
+                        <EmptyState
+                            compatta
+                            icon="Send"
+                            title="Nessuna campagna"
+                            description="Non hai ancora inviato campagne WhatsApp. Inizia creando la tua prima campagna."
+                            buttonText="Crea campagna"
+                            buttonIcon="Plus"
+                            onButtonClick={() => navigate('/whatsapp/invio-campagna-whatsapp?step=1')}
+                        />
+                    ) : (
+                        <div className="flex flex-col gap-3">
+                            <AnimatePresence initial={false}>
+                                {campaigns.map(campaign => (
+                                    <CampaignCard
+                                        key={campaign.bulkId}
+                                        bulk={campaign}
+                                        onViewDetails={() => setSelectedBulkId(campaign.bulkId)}
+                                        onCancel={() => setAzioneCampagna({ tipo: 'cancel', bulk: campaign })}
+                                        onRetry={() => setAzioneCampagna({ tipo: 'retry', bulk: campaign })}
+                                        disabilitato={azioneInCorso}
+                                    />
+                                ))}
+                            </AnimatePresence>
+                        </div>
+                    )}
+                </Sezione>
+            )}
 
             {/* Job Details Modal */}
             <JobDetailsModal
@@ -674,7 +639,7 @@ const OutboxWhatsapp: React.FC = () => {
                 onClose={() => !azioneInCorso && setAzioneCampagna(null)}
                 onConfirm={eseguiAzioneCampagna}
             />
-        </div>
+        </Pagina>
     );
 };
 

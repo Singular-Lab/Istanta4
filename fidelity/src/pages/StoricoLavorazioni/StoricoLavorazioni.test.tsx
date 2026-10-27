@@ -74,12 +74,25 @@ describe("Storico promozioni", () => {
   });
 
   it("i comandi di paginazione con sola icona hanno un nome", () => {
-    finti.query.data = [promo("f", "Promo pagina", "ARCHIVIATA")];
+    // 11 promo con 10 righe per pagina: due pagine
+    finti.query.data = Array.from({ length: 11 }, (_, i) => promo(`f${i}`, `Promo pagina ${i}`, "ARCHIVIATA"));
     apri();
 
     for (const nome of ["Prima pagina", "Pagina precedente", "Pagina successiva", "Ultima pagina"]) {
       expect(screen.getByLabelText(nome)).toBeInTheDocument();
     }
+    expect(screen.getByText("Mostrati 1–10 di 11")).toBeInTheDocument();
+  });
+
+  it("senza risultati per la ricerca lo dice e permette di azzerarla", () => {
+    finti.query.data = [promo("g", "Volantino estate", "ARCHIVIATA")];
+    apri();
+
+    fireEvent.change(screen.getByRole("searchbox", { name: "Cerca nello storico" }), { target: { value: "inverno" } });
+    expect(screen.getByText("Nessun risultato")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Azzera ricerca" }));
+    expect(screen.getAllByText("Volantino estate").length).toBeGreaterThan(0);
   });
 
   it("se il caricamento fallisce mostra il motivo e Riprova ricarica", () => {

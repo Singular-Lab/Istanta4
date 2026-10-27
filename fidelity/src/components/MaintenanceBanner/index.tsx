@@ -3,15 +3,11 @@ import { usePermissionContext } from "@/context/PermissionContext";
 import { PERMISSIONS } from "@/constants/permissions";
 import { useSocket } from "@/hooks/useSocket";
 import { useFetchAvvisoManutenzione } from "@/query/query";
+import { formatData } from "@/utils/format";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { ServerCall } from "../../../lib/server_call";
 import { AvvisoManutenzione } from "../../../lib/types";
-
-function formatDate(isoDate: string): string {
-  const d = new Date(isoDate + "T00:00:00");
-  return d.toLocaleDateString("it-IT", { day: "numeric", month: "short", year: "numeric" });
-}
 
 function calcMinutiRimanenti(avviso: AvvisoManutenzione): number {
   if (!avviso.minutiRimanenti || !avviso.creatoIl) return 0;
@@ -68,9 +64,9 @@ export default function MaintenanceBanner() {
   const isSuperadmin = hasPermission(PERMISSIONS.SISTEMA.MANUTENZIONE);
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-[60] bg-amber-500 text-white px-5 py-2.5 flex items-center justify-between gap-3 shadow-sm">
+    <div role="status" className="fixed top-0 left-0 right-0 z-[60] bg-warning text-white px-5 py-2.5 flex items-center justify-between gap-3 shadow-sm">
       <div className="flex items-center gap-2 flex-1 min-w-0">
-        <Lucide icon="AlertTriangle" className="w-4 h-4 flex-shrink-0" />
+        <Lucide icon="TriangleAlert" aria-hidden="true" className="w-4 h-4 flex-shrink-0" />
         <span className="text-sm font-medium leading-snug">
           {isCountdown ? (
             minutiRimanenti > 0 ? (
@@ -84,7 +80,7 @@ export default function MaintenanceBanner() {
           ) : (
             <>
               Il sistema sarà offline per manutenzione il{" "}
-              <strong>{formatDate(avviso.giorno)}</strong> dalle{" "}
+              <strong>{formatData(avviso.giorno)}</strong> dalle{" "}
               <strong>{avviso.oraInizio}</strong> alle{" "}
               <strong>{avviso.oraFine}</strong>
             </>
@@ -99,7 +95,7 @@ export default function MaintenanceBanner() {
           type="button"
           onClick={() => deleteMutation.mutate()}
           disabled={deleteMutation.isPending}
-          className="flex-shrink-0 p-1 rounded hover:bg-amber-600 transition-colors disabled:opacity-50"
+          className="flex-shrink-0 p-1 rounded-control hover:bg-white/20 transition-colors disabled:opacity-50"
           title="Rimuovi avviso"
           aria-label="Rimuovi avviso"
         >

@@ -59,13 +59,13 @@ const ContextFilterForm = <T extends FieldValues>({
                 <div className="flex sm:flex-row xs:flex-col xs:items-end 2xl:items-center gap-y-3">
                     <Tab.List
                         variant="boxed-tabs"
-                        className="flex-col sm:flex-row sm:w-auto mr-auto bg-white box rounded-[0.6rem] border-slate-200"
+                        className="flex-col sm:flex-row sm:w-auto mr-auto bg-white box rounded-card border-slate-200"
                     >
                         {fields.map((field, index) => (
                             <Tab key={field.id}>
                                 <Tab.Button
                                     type="button"
-                                    className="w-full xl:w-40 py-2.5 text-slate-500 whitespace-nowrap rounded-[0.6rem] flex items-center justify-center text-[0.94rem]"
+                                    className="w-full xl:w-40 py-2.5 text-slate-500 whitespace-nowrap rounded-control flex items-center justify-center text-sm"
                                     as="button"
                                 >
                                     {`Filtro ${index + 1}`}

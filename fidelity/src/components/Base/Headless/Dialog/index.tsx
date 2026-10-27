@@ -1,6 +1,6 @@
 import { Description, DialogPanel, DialogTitle, Dialog as HeadlessDialog, Transition, TransitionChild } from "@headlessui/react";
 import { Fragment, createContext, useContext, useRef, useState } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/utils/twMerge";
 
 type Size = "sm" | "md" | "lg" | "xl" | "2xl";
 
@@ -114,7 +114,7 @@ function DialogPanelComponent({
           <DialogPanel
             as={as}
             className={twMerge([
-              "w-[90%] mx-auto bg-white relative rounded-lg shadow-lg transition-all duration-400",
+              "w-[90%] mx-auto bg-white relative rounded-card shadow-overlay transition-all duration-400",
               "transform-gpu animate-dialog-open dark:bg-darkmode-600",
               dialog.size == "md" && "sm:w-[460px]",
               dialog.size == "sm" && "sm:w-[300px]",
@@ -137,6 +137,7 @@ function DialogPanelComponent({
 // Assegna la funzione componente a Dialog.Panel
 Dialog.Panel = DialogPanelComponent;
 
+// Il titolo ha già la tipografia title-section: le pagine passano solo testo ed eventuale icona
 Dialog.Title = ({
   children,
   className,
@@ -147,7 +148,7 @@ Dialog.Title = ({
     <DialogTitle
       as={as}
       className={twMerge([
-        "flex items-center px-5 py-3 border-b border-slate-200/60 dark:border-darkmode-400",
+        "title-section flex items-center gap-2 px-5 py-3 border-b border-slate-200/60 dark:border-darkmode-400 dark:text-slate-200",
         "animate-fade-in-right",
         className,
       ])}
@@ -192,7 +193,9 @@ Dialog.Footer = <C extends React.ElementType = "div">({
   return (
     <Component
       className={twMerge([
-        "px-5 py-3 text-right border-t border-slate-200/60 dark:border-darkmode-400",
+        // Su mobile i pulsanti vanno in colonna con la conferma in alto; da sm in riga, a destra
+        "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
+        "px-5 py-3 border-t border-slate-200/60 dark:border-darkmode-400",
         "animate-fade-in-up delay-150",
         className,
       ])}

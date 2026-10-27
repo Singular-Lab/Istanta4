@@ -1,28 +1,12 @@
 import Alert from "@/components/Base/Alert";
-import Button from "@/components/Base/Button";
 import { Tab } from "@/components/Base/Headless";
 import Lucide from "@/components/Base/Lucide";
-import { useState } from "react";
 import { Link, useLoaderData } from "react-router-dom";
 import { ServerCall } from "../../../../lib/server_call";
-import PageHeader from "../../../components/Base/PageHeader";
+import { CodeBlock, DocsCapitolo, DocsCard, DocsCollegamento, DocsGuida } from "../DocsCondivisi";
 
 interface LoaderData {
   apiKey: string;
-}
-
-// Componente Breadcrumb per navigazione
-function DocsBreadcrumb() {
-  return (
-    <nav className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 mb-6">
-      <Link to="/documentazione" className="hover:text-primary flex items-center gap-1">
-        <Lucide icon="BookOpen" className="w-4 h-4" />
-        Documentazione
-      </Link>
-      <Lucide icon="ChevronRight" className="w-4 h-4" />
-      <span className="text-slate-700 dark:text-slate-200 font-medium">Guida Rapida</span>
-    </nav>
-  );
 }
 
 // Componente Step
@@ -38,59 +22,27 @@ function Step({
   completed?: boolean;
 }) {
   return (
-    <div className="relative pl-12 pb-8 last:pb-0">
-      {/* Linea verticale */}
-      <div className="absolute left-[18px] top-10 bottom-0 w-0.5 bg-slate-200 dark:bg-darkmode-400 last:hidden" />
+    <li className="group relative pb-8 pl-12 last:pb-0">
+      {/* Linea verticale fino al passo successivo */}
+      <div aria-hidden="true" className="absolute bottom-0 left-4 top-10 w-0.5 bg-slate-200 group-last:hidden" />
 
       {/* Numero step */}
       <div
-        className={`absolute left-0 top-0 w-9 h-9 rounded-full flex items-center justify-center font-bold text-white ${completed ? "bg-success" : "bg-primary"
-          }`}
+        aria-hidden="true"
+        className={`absolute left-0 top-0 flex h-9 w-9 items-center justify-center rounded-full font-bold text-white ${completed ? "bg-success" : "bg-primary"}`}
       >
-        {completed ? <Lucide icon="Check" className="w-5 h-5" /> : number}
+        {completed ? <Lucide icon="Check" className="h-5 w-5" /> : number}
       </div>
 
       {/* Contenuto */}
       <div>
-        <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-3">{title}</h3>
-        <div className="text-slate-600 dark:text-slate-300">{children}</div>
+        <h2 className="title-section mb-3">
+          <span className="sr-only">Passo {number}: </span>
+          {title}
+        </h2>
+        <div className="text-slate-600">{children}</div>
       </div>
-    </div>
-  );
-}
-
-// Componente CodeBlock semplificato
-function CodeBlock({ code, language }: { code: string; language: string }) {
-  const [copied, setCopied] = useState(false);
-
-  const copyToClipboard = async () => {
-    await navigator.clipboard.writeText(code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  return (
-    <div className="border border-slate-200 dark:border-darkmode-400 rounded-lg overflow-hidden">
-      <div className="bg-slate-100 dark:bg-darkmode-400 px-4 py-2 flex items-center justify-between">
-        <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{language}</span>
-        <Button variant="primary" size="sm" onClick={copyToClipboard}>
-          {copied ? (
-            <>
-              <Lucide icon="Check" className="w-4 h-4 mr-1" />
-              Copiato!
-            </>
-          ) : (
-            <>
-              <Lucide icon="Copy" className="w-4 h-4 mr-1" />
-              Copia
-            </>
-          )}
-        </Button>
-      </div>
-      <pre className="bg-slate-900 text-slate-100 p-4 overflow-x-auto">
-        <code className="text-sm font-mono">{code}</code>
-      </pre>
-    </div>
+    </li>
   );
 }
 
@@ -100,24 +52,14 @@ function DocumentazioneGettingStartedPage() {
   const baseUrl = ServerCall.getUrl();
 
   return (
-    <div className="grid grid-cols-12 gap-y-10 gap-x-6">
-      <div className="col-span-12">
-        {/* Header */}
-        <PageHeader
-          title="Guida Rapida"
-          description="Inizia a usare le External API in pochi minuti"
-        />
-
-        {/* Content */}
-        <div className="mt-3.5">
-          <div className="flex flex-col box box--stacked">
-            <div className="p-5 sm:p-8">
-              {/* Breadcrumb */}
-              <DocsBreadcrumb />
-
+    <DocsGuida
+      titolo="Guida Rapida"
+      descrizione="Inizia a usare le External API in pochi minuti"
+      corrente="Guida Rapida"
+    >
               {/* Intro */}
-              <div className="mb-10 max-w-3xl">
-                <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
+              <div className="max-w-3xl">
+                <p className="leading-relaxed text-slate-600">
                   Questa guida ti accompagna passo dopo passo nell'integrazione delle External API.
                   Alla fine sarai in grado di recuperare dati delle promozioni dal tuo server o
                   visualizzarli direttamente nel browser con il Plugin JavaScript.
@@ -125,22 +67,16 @@ function DocumentazioneGettingStartedPage() {
               </div>
 
               {/* Prerequisites */}
-              <Alert variant="soft-primary" className="mb-10">
-                <div className="flex items-start gap-3">
-                  <Lucide icon="Info" className="w-5 h-5 mt-0.5" />
-                  <div>
-                    <h4 className="font-semibold mb-1">Prerequisiti</h4>
-                    <ul className="text-sm space-y-1">
-                      <li>Account Istanta 2 GDO Suite con ruolo GDO, Agenzia o superiore</li>
-                      <li>Almeno una promozione attiva con referenze</li>
-                      <li>Per test API: client HTTP (Postman, cURL, browser)</li>
-                    </ul>
-                  </div>
-                </div>
+              <Alert variant="soft-primary" icona="Info" titolo="Prerequisiti">
+                <ul className="space-y-1 text-sm">
+                  <li>Account Istanta 2 GDO Suite con ruolo GDO, Agenzia o superiore</li>
+                  <li>Almeno una promozione attiva con referenze</li>
+                  <li>Per test API: client HTTP (Postman, cURL, browser)</li>
+                </ul>
               </Alert>
 
               {/* Steps */}
-              <div className="max-w-3xl">
+              <ol className="max-w-3xl">
                 {/* Step 1 */}
                 <Step number={1} title="Genera la tua API Key">
                   <p className="mb-4">
@@ -148,23 +84,21 @@ function DocumentazioneGettingStartedPage() {
                     Ogni organizzazione può avere più chiavi per ambienti diversi (produzione, staging, test).
                   </p>
 
-                  <div className="box p-4 bg-slate-50 dark:bg-darkmode-600 mb-4">
-                    <div className="flex items-center gap-3 mb-3">
-                      <Lucide icon="Key" className="w-5 h-5 text-primary" />
-                      <span className="font-medium text-slate-900 dark:text-slate-100">
-                        La tua API Key attuale:
-                      </span>
+                  <div className="mb-4 rounded-card border border-slate-200 bg-slate-50 p-4">
+                    <div className="mb-3 flex items-center gap-3">
+                      <Lucide icon="Key" aria-hidden="true" className="h-4 w-4 text-primary" />
+                      <span className="font-medium text-slate-800">La tua API Key attuale:</span>
                     </div>
-                    <code className="block bg-slate-900 text-green-400 px-4 py-2 rounded font-mono text-sm break-all">
+                    <code className="block break-all rounded-control bg-slate-900 px-4 py-2 font-mono text-sm text-success">
                       {apiKey}
                     </code>
                   </div>
 
                   <Link
                     to="/gestione-api/keys"
-                    className="inline-flex items-center gap-2 text-primary hover:text-primary/80 font-medium"
+                    className="inline-flex items-center gap-2 font-medium text-primary hover:text-primary/80"
                   >
-                    <Lucide icon="Settings" className="w-4 h-4" />
+                    <Lucide icon="Settings" aria-hidden="true" className="h-4 w-4" />
                     Gestisci le tue API Keys
                   </Link>
                 </Step>
@@ -232,13 +166,8 @@ print(response.json())  # {'success': True, 'status': 'ok'}`}
                     </Tab.Panels>
                   </Tab.Group>
 
-                  <Alert variant="soft-success" className="mt-4">
-                    <div className="flex items-center gap-2">
-                      <Lucide icon="Check" className="w-4 h-4" />
-                      <span>
-                        Risposta attesa: <code className="bg-white/50 px-1 rounded">{`{"success": true, "status": "ok"}`}</code>
-                      </span>
-                    </div>
+                  <Alert variant="soft-success" icona="Check" className="mt-4">
+                    Risposta attesa: <code className="rounded-control bg-white/50 px-1">{`{"success": true, "status": "ok"}`}</code>
                   </Alert>
                 </Step>
 
@@ -339,11 +268,9 @@ console.log('Referenze:', data.risposta);`}
                     </Tab.Panels>
                   </Tab.Group>
 
-                  <div className="mt-4 p-4 bg-slate-50 dark:bg-darkmode-600 rounded-lg">
-                    <h5 className="font-medium text-slate-900 dark:text-slate-100 mb-2">
-                      Struttura risposta:
-                    </h5>
-                    <pre className="text-xs text-slate-600 dark:text-slate-300 overflow-x-auto">
+                  <div className="mt-4 rounded-card border border-slate-200 bg-slate-50 p-4">
+                    <h3 className="title-card mb-2">Struttura risposta:</h3>
+                    <pre className="overflow-x-auto text-xs text-slate-600">
                       {`{
   "success": true,
   "data": {
@@ -372,7 +299,7 @@ console.log('Referenze:', data.risposta);`}
                   <p className="mb-4">
                     Se vuoi visualizzare le referenze direttamente in una pagina web,
                     il Plugin JavaScript gestisce automaticamente autenticazione e rendering.
-                    Il plugin richiede uno <code className="bg-slate-100 dark:bg-darkmode-400 px-1 rounded">slug</code> per caricare la configurazione dal Filter Template.
+                    Il plugin richiede uno <code className="rounded-control bg-slate-100 px-1">slug</code> per caricare la configurazione dal Filter Template.
                   </p>
 
                   <CodeBlock
@@ -399,39 +326,26 @@ fp.init({
 
                   <Link
                     to="/documentazione/plugin"
-                    className="inline-flex items-center gap-2 text-primary hover:text-primary/80 font-medium mt-4"
+                    className="mt-4 inline-flex items-center gap-2 font-medium text-primary hover:text-primary/80"
                   >
-                    <Lucide icon="BookOpen" className="w-4 h-4" />
+                    <Lucide icon="BookOpen" aria-hidden="true" className="h-4 w-4" />
                     Documentazione completa Plugin
                   </Link>
                 </Step>
-              </div>
+              </ol>
 
               {/* Troubleshooting */}
-              <div className="mt-12 pt-8 border-t border-slate-200 dark:border-darkmode-400">
-                <div className="flex items-center gap-3 mb-6">
-                  <Lucide icon="AlertTriangle" className="w-6 h-6 text-warning" />
-                  <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">
-                    Risoluzione Problemi Comuni
-                  </h2>
-                </div>
-
-                <div className="space-y-4 max-w-3xl">
-                  <div className="box p-4">
-                    <h4 className="font-medium text-slate-900 dark:text-slate-100 mb-2 flex items-center gap-2">
-                      <code className="text-danger">401 Unauthorized</code>
-                    </h4>
-                    <p className="text-sm text-slate-600 dark:text-slate-300">
+              <DocsCapitolo icona="TriangleAlert" coloreIcona="text-warning" titolo="Risoluzione Problemi Comuni">
+                <div className="max-w-3xl space-y-4">
+                  <DocsCard titolo={<code className="text-danger">401 Unauthorized</code>}>
+                    <p className="text-sm text-slate-600">
                       API Key mancante o non valida. Verifica che l'header <code>x-api-key</code> sia
                       presente e contenga una chiave valida. Le chiavi sono sensibili alle maiuscole.
                     </p>
-                  </div>
+                  </DocsCard>
 
-                  <div className="box p-4">
-                    <h4 className="font-medium text-slate-900 dark:text-slate-100 mb-2 flex items-center gap-2">
-                      <code className="text-danger">400 Bad Request</code>
-                    </h4>
-                    <p className="text-sm text-slate-600 dark:text-slate-300">
+                  <DocsCard titolo={<code className="text-danger">400 Bad Request</code>}>
+                    <p className="text-sm text-slate-600">
                       Parametri mancanti o non validi. Assicurati che <code>template_id</code> sia
                       un array con almeno un ID valido. Usa{" "}
                       <Link to="/gestione-api/test" className="text-primary hover:underline">
@@ -439,83 +353,52 @@ fp.init({
                       </Link>{" "}
                       per verificare gli ID disponibili.
                     </p>
-                  </div>
+                  </DocsCard>
 
-                  <div className="box p-4">
-                    <h4 className="font-medium text-slate-900 dark:text-slate-100 mb-2 flex items-center gap-2">
-                      <code className="text-danger">CORS Error</code>
-                    </h4>
-                    <p className="text-sm text-slate-600 dark:text-slate-300">
+                  <DocsCard titolo={<code className="text-danger">CORS Error</code>}>
+                    <p className="text-sm text-slate-600">
                       Per chiamate browser-based, usa il Plugin JavaScript invece di chiamate
                       fetch dirette. Il Plugin gestisce automaticamente l'autenticazione con
                       Ephemeral Token.
                     </p>
-                  </div>
+                  </DocsCard>
 
-                  <div className="box p-4">
-                    <h4 className="font-medium text-slate-900 dark:text-slate-100 mb-2">
-                      Risposta vuota o nessuna referenza
-                    </h4>
-                    <p className="text-sm text-slate-600 dark:text-slate-300">
+                  <DocsCard titolo="Risposta vuota o nessuna referenza">
+                    <p className="text-sm text-slate-600">
                       Verifica che: (1) la promozione sia attualmente valida (date inizio/fine),
                       (2) i template_id siano corretti, (3) esistano referenze associate ai template.
                     </p>
-                  </div>
+                  </DocsCard>
                 </div>
-              </div>
+              </DocsCapitolo>
 
               {/* Next Steps */}
-              <div className="mt-10">
-                <div className="flex items-center gap-3 mb-6">
-                  <Lucide icon="ArrowRight" className="w-6 h-6 text-primary" />
-                  <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">
-                    Prossimi Passi
-                  </h2>
-                </div>
-                <div className="grid sm:grid-cols-3 gap-4">
-                  <Link
+              <DocsCapitolo icona="ArrowRight" coloreIcona="text-primary" titolo="Prossimi Passi">
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <DocsCollegamento
                     to="/documentazione/api"
-                    className="box p-4 hover:bg-slate-50 dark:hover:bg-darkmode-600 transition-colors group"
-                  >
-                    <Lucide icon="Code" className="w-8 h-8 text-info mb-2" />
-                    <h4 className="font-medium text-slate-900 dark:text-slate-100 group-hover:text-primary">
-                      API Reference
-                    </h4>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                      Esplora tutti gli endpoint e i filtri avanzati
-                    </p>
-                  </Link>
-                  <Link
+                    icona="Code"
+                    coloreIcona="text-info"
+                    titolo="API Reference"
+                    descrizione="Esplora tutti gli endpoint e i filtri avanzati"
+                  />
+                  <DocsCollegamento
                     to="/documentazione/filter-templates"
-                    className="box p-4 hover:bg-slate-50 dark:hover:bg-darkmode-600 transition-colors group"
-                  >
-                    <Lucide icon="Filter" className="w-8 h-8 text-pending mb-2" />
-                    <h4 className="font-medium text-slate-900 dark:text-slate-100 group-hover:text-primary">
-                      Filter Templates
-                    </h4>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                      Crea configurazioni riutilizzabili con slug
-                    </p>
-                  </Link>
-                  <Link
+                    icona="Filter"
+                    coloreIcona="text-pending"
+                    titolo="Filter Templates"
+                    descrizione="Crea configurazioni riutilizzabili con slug"
+                  />
+                  <DocsCollegamento
                     to="/documentazione/statistiche"
-                    className="box p-4 hover:bg-slate-50 dark:hover:bg-darkmode-600 transition-colors group"
-                  >
-                    <Lucide icon="BarChart3" className="w-8 h-8 text-danger mb-2" />
-                    <h4 className="font-medium text-slate-900 dark:text-slate-100 group-hover:text-primary">
-                      Statistiche
-                    </h4>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                      Monitora le chiamate API e analizza i dati
-                    </p>
-                  </Link>
+                    icona="BarChart3"
+                    coloreIcona="text-danger"
+                    titolo="Statistiche"
+                    descrizione="Monitora le chiamate API e analizza i dati"
+                  />
                 </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+              </DocsCapitolo>
+    </DocsGuida>
   );
 }
 

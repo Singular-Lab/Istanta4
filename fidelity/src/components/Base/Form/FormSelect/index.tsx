@@ -1,6 +1,6 @@
 import React, { useContext, forwardRef } from 'react';
 import { formInlineContext } from '../FormInline';
-import { twMerge } from 'tailwind-merge';
+import { twMerge } from "@/utils/twMerge";
 
 interface FormSelectProps extends React.ComponentPropsWithoutRef<'select'> {
   formSelectSize?: 'sm' | 'lg';

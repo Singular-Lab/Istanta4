@@ -52,7 +52,7 @@ const DraggableItem: React.FC<DraggableItemProps> = memo(({
   // Memoizza le classi CSS per evitare ricalcoli
   const containerClasses = useMemo(() => clsx(
     "react-dnd-draggable",
-    "flex items-center p-3 bg-white dark:bg-darkmode-600 text-slate-700 dark:text-slate-300 rounded-lg",
+    "flex items-center p-3 bg-white dark:bg-darkmode-600 text-slate-700 dark:text-slate-300 rounded-card",
     "hover:bg-primary/10 hover:text-primary dark:hover:bg-primary/10 dark:hover:text-primary transition-all duration-200 cursor-pointer",
     "border-2 border-transparent translate-x-0",
     {
@@ -66,7 +66,7 @@ const DraggableItem: React.FC<DraggableItemProps> = memo(({
       ref={drag as any}
       className={containerClasses}
     >
-      <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center bg-slate-100 dark:bg-darkmode-500 rounded-md mr-3">
+      <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center bg-slate-100 dark:bg-darkmode-500 rounded-control mr-3">
         <Lucide icon={icon} className="w-5 h-5 text-slate-500 dark:text-slate-400" />
       </div>
       <span className="font-medium text-sm">{content}</span>

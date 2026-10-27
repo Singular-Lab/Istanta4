@@ -81,7 +81,7 @@ function Toast({ toast, onRemove }: { toast: ToastItem; onRemove: (id: string) =
         >
             <div className="relative">
                 <button
-                    className="text-gray-500 hover:text-gray-700 absolute -top-2 -right-2"
+                    className="text-slate-500 hover:text-slate-700 absolute -top-2 -right-2"
                     onClick={handleRemove}
                     aria-label="Chiudi notifica"
                 >

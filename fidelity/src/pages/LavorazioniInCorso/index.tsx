@@ -1,14 +1,19 @@
+import BarraFiltri from "@/components/Base/BarraFiltri";
 import Button from "@/components/Base/Button";
-import { FormInline, FormInput, FormLabel, FormSelect } from "@/components/Base/Form";
-import { Dialog, Menu } from "@/components/Base/Headless";
+import CampoRicerca from "@/components/Base/CampoRicerca";
+import { FormSelect } from "@/components/Base/Form";
+import Alert from "@/components/Base/Alert";
+import { Menu } from "@/components/Base/Headless";
 import Lucide from "@/components/Base/Lucide";
 import PageError from "@/components/Base/PageError";
-import PageHeader from "@/components/Base/PageHeader";
-import Pagination from "@/components/Base/Pagination";
+import Pagina from "@/components/Base/Pagina";
+import PaginazioneTabella from "@/components/Base/PaginazioneTabella";
+import Sezione from "@/components/Base/Sezione";
 import Spinner from "@/components/Base/Spinner";
 import StatusBadge from "@/components/Base/StatusBadge";
 import Table from "@/components/Base/Table";
 
+import ConfirmDialog from "@/components/ConfirmDialog";
 import withSessionCheck from "@/components/SessionChecker";
 import { descriviStato } from "@/constants/stati";
 import { useNotification } from "@/context/NotificationContext";
@@ -16,7 +21,7 @@ import { useFetchLavorazioniInCorso } from "@/query/query";
 import { formatData } from "@/utils/format";
 import { useMutation } from "@tanstack/react-query";
 import dayjs from "dayjs";
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import * as xlsx from "xlsx";
 import { STATO_PROMO } from "../../../lib/enums";
@@ -24,6 +29,7 @@ import { ServerCall, type CustomError } from "../../../lib/server_call";
 import { PromoResponseDTO } from "../../../server/core/dto";
 import EmptyState from "../../components/EmptyState";
 import PermissionGate from "../../components/PermissionGate";
+import IntestazioneOrdinabile, { ARIA_SORT, type DirezioneOrdinamento } from "../shared/IntestazioneOrdinabile";
 
 // Istanta non elimina definitivamente una promo con importazioni, tracciati o lavorazioni (I20-1052)
 const RIFIUTI_ELIMINAZIONE_DEFINITIVA = [
@@ -33,34 +39,17 @@ const RIFIUTI_ELIMINAZIONE_DEFINITIVA = [
 ];
 
 type SortField = 'nome' | 'data_scadenza' | 'validita_dal' | 'validita_al' | 'stato' | 'offset_visibilita';
-type SortDirection = 'asc' | 'desc';
+type SortDirection = DirezioneOrdinamento;
 
-const ARIA_SORT: Record<SortDirection, "ascending" | "descending"> = { asc: "ascending", desc: "descending" };
-
-// Fuori da Main: un componente ridefinito a ogni render perderebbe il focus dopo il click
-const SortableHeader = ({ direzione, onClick, children }: { direzione?: SortDirection; onClick: () => void; children: React.ReactNode }) => (
-  <button
-    type="button"
-    className="flex w-full items-center gap-2 cursor-pointer hover:text-slate-900 select-none group rounded-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40"
-    onClick={onClick}
-  >
-    {children}
-    <span aria-hidden="true" className="flex flex-col">
-      <Lucide
-        icon="ChevronUp"
-        className={`w-3 h-3 -mb-1 transition-colors ${
-          direzione === 'asc' ? 'text-slate-800' : 'text-slate-400 group-hover:text-slate-600'
-        }`}
-      />
-      <Lucide
-        icon="ChevronDown"
-        className={`w-3 h-3 -mt-1 transition-colors ${
-          direzione === 'desc' ? 'text-slate-800' : 'text-slate-400 group-hover:text-slate-600'
-        }`}
-      />
-    </span>
-  </button>
-);
+// Campi su cui cercare: la ricerca filtra mentre si scrive
+const CAMPI_RICERCA: { valore: SortField; etichetta: string }[] = [
+  { valore: "nome", etichetta: "Nome promo" },
+  { valore: "data_scadenza", etichetta: "Data di scadenza" },
+  { valore: "validita_dal", etichetta: "Valida dal" },
+  { valore: "validita_al", etichetta: "Valida al" },
+  { valore: "stato", etichetta: "Stato" },
+  { valore: "offset_visibilita", etichetta: "Offset visibilità" },
+];
 
 function Main() {
   const [showDialogEliminazione, setShowDialogEliminazione] = useState<{ show: boolean; idPromo: string; stato?: string; isDeletable?: boolean; numero_kit_collegati?: number; motivoRifiuto?: string }>();
@@ -222,13 +211,33 @@ function Main() {
     return filteredData.slice(startIndex, endIndex);
   }, [filteredData, currentPage, pageSize]);
 
-  // Calcola il numero totale di pagine
-  const totalPages = Math.ceil(filteredData.length / pageSize);
-
-  // Reset alla prima pagina quando cambia il filtro
-  const onFilter = () => {
+  // Ogni cambio del filtro riparte dalla prima pagina
+  const cambiaFiltro = (modifica: Partial<typeof filter>) => {
+    setFilter((precedente) => ({ ...precedente, ...modifica }));
     setCurrentPage(1);
   };
+
+  const chiudiDialogEliminazione = () => setShowDialogEliminazione({ show: false, idPromo: "", numero_kit_collegati: 0 });
+
+  const confermaDialogEliminazione = () => {
+    setLoadingEliminazione(true);
+    if (showDialogEliminazione) {
+      deleteLavorazione.mutate({
+        id: showDialogEliminazione.idPromo,
+        stato: showDialogEliminazione.stato as string,
+        isDeletable: showDialogEliminazione.isDeletable,
+      });
+    }
+  };
+
+  const apriDialogEliminazione = (promo: PromoResponseDTO) =>
+    setShowDialogEliminazione({
+      show: true,
+      idPromo: promo.id,
+      stato: promo.stato,
+      isDeletable: promo.is_deletable,
+      numero_kit_collegati: promo.numero_kit_collegati,
+    });
 
   const onResetFilter = () => {
     setFilter({
@@ -419,678 +428,316 @@ function Main() {
     printWindow.document.close();
   };
 
+  const dialog = showDialogEliminazione;
+  const kitCollegati = dialog?.numero_kit_collegati ?? 0;
+  const ripristino = dialog?.stato === STATO_PROMO.ELIMINATA;
+  const filtroAttivo = filter.value !== "";
+
   return (
     <>
-      <Dialog open={showDialogEliminazione?.show} onClose={() => setShowDialogEliminazione({ show: false, idPromo: "", numero_kit_collegati: 0 })}>
-        {(() => {
-          if (showDialogEliminazione?.stato !== STATO_PROMO.ELIMINATA) {
-            return (
-              <Dialog.Panel>
-                <Dialog.Title>
-                  <div className="flex items-center gap-3">
-                    <Lucide icon="CircleX" aria-hidden="true" className="w-6 h-6 text-danger" />
-                    <h2 className="mr-auto title-card">
-                      {showDialogEliminazione?.isDeletable ? 'Eliminazione Definitiva' : 'Elimina Lavorazione'}
-                    </h2>
-                  </div>
-                </Dialog.Title>
-                <Dialog.Description>
-                  <div className="text-center py-4">
-                    <Lucide icon="TriangleAlert" className="w-16 h-16 mx-auto text-danger mb-4" />
-                    <div className="text-slate-600">
-                      {showDialogEliminazione?.isDeletable ? (
-                        <>
-                          <span className="font-semibold text-danger">ATTENZIONE:</span> Stai per eliminare definitivamente questa lavorazione. <br />
-                          <span className="font-semibold text-danger">Questa azione non può essere annullata.</span>
-                          {showDialogEliminazione?.numero_kit_collegati !== undefined && showDialogEliminazione.numero_kit_collegati > 0 && (
-                            <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
-                              <div className="flex items-center gap-2">
-                                <Lucide icon="CircleAlert" className="w-4 h-4 text-danger" />
-                                <span className="font-medium text-danger">
-                                  {showDialogEliminazione.numero_kit_collegati} kit collegati
-                                </span>
-                              </div>
-                              <p className="text-sm text-danger mt-1">
-                                <span className="font-semibold">IMPORTANTE:</span> Questa lavorazione ha {showDialogEliminazione.numero_kit_collegati} kit associati che verranno eliminati definitivamente insieme alla lavorazione.
-                              </p>
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          {showDialogEliminazione?.motivoRifiuto && (
-                            <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-danger">
-                              <span className="font-semibold">Eliminazione definitiva non possibile.</span> {showDialogEliminazione.motivoRifiuto}
-                            </div>
-                          )}
-                          Sei sicuro di voler eliminare questa lavorazione? <br />
-                          <span className="text-slate-500">La lavorazione verrà spostata nella sezione "Eliminate" e potrà essere ripristinata.</span>
-                          {(showDialogEliminazione?.numero_kit_collegati ?? 0) > 0 && (
-                            <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                              <div className="flex items-center gap-2">
-                                <Lucide icon="Package" className="w-4 h-4 text-amber-600" />
-                                <span className="font-medium text-amber-800">
-                                  {showDialogEliminazione?.numero_kit_collegati} kit collegati
-                                </span>
-                              </div>
-                              <p className="text-sm text-amber-700 mt-1">
-                                Questa lavorazione ha {showDialogEliminazione?.numero_kit_collegati} kit associati che potrebbero essere influenzati dall'eliminazione.
-                              </p>
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </Dialog.Description>
-                <Dialog.Footer className="px-5 py-3 text-right border-t border-slate-200/60 dark:border-darkmode-400">
-                  <Button
-                    type="button"
-                    variant="outline-secondary"
-                    onClick={() => setShowDialogEliminazione({ show: false, idPromo: "", numero_kit_collegati: 0 })}
-                    className="w-24 mr-1"
-                  >
-                    Annulla
-                  </Button>
+      <ConfirmDialog
+        open={Boolean(dialog?.show)}
+        onClose={chiudiDialogEliminazione}
+        onConfirm={confermaDialogEliminazione}
+        loading={loadingEliminazione}
+        confirmVariant={ripristino ? "primary" : "danger"}
+        title={ripristino ? "Ripristina lavorazione" : dialog?.isDeletable ? "Eliminazione definitiva" : "Elimina lavorazione"}
+        subtitle={ripristino ? "Torna in lavorazione" : dialog?.isDeletable ? "Azione irreversibile" : "Si potrà ripristinare"}
+        confirmLabel={ripristino ? "Ripristina" : dialog?.isDeletable ? "Elimina definitivamente" : "Elimina"}
+        description={
+          ripristino ? (
+            <p>Questa lavorazione è attualmente eliminata. Vuoi ripristinarla e riportarla in lavorazione?</p>
+          ) : dialog?.isDeletable ? (
+            <div className="flex flex-col gap-3">
+              <p>
+                Stai per eliminare definitivamente questa lavorazione.{" "}
+                <span className="font-medium text-danger">Questa azione non può essere annullata.</span>
+              </p>
+              {kitCollegati > 0 && (
+                <Alert variant="soft-danger" icona="CircleAlert" titolo={`${kitCollegati} kit collegati`}>
+                  Questa lavorazione ha {kitCollegati} kit associati che verranno eliminati definitivamente insieme alla lavorazione.
+                </Alert>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {dialog?.motivoRifiuto && (
+                <Alert variant="soft-danger" icona="CircleAlert" titolo="Eliminazione definitiva non possibile">
+                  {dialog.motivoRifiuto}
+                </Alert>
+              )}
+              <p>
+                Sei sicuro di voler eliminare questa lavorazione? La lavorazione verrà spostata nella sezione
+                &quot;Eliminate&quot; e potrà essere ripristinata.
+              </p>
+              {kitCollegati > 0 && (
+                <Alert variant="soft-warning" icona="Package" titolo={`${kitCollegati} kit collegati`}>
+                  Questa lavorazione ha {kitCollegati} kit associati che potrebbero essere influenzati dall&apos;eliminazione.
+                </Alert>
+              )}
+            </div>
+          )
+        }
+      />
+      <Pagina titolo="Promozioni in corso" descrizione="Gestione lavorazioni in corso">
+        <Sezione senzaPadding aria-label="Elenco delle promozioni in corso">
+          <BarraFiltri
+            destra={
+              <>
+                <Button size="sm" variant="outline-secondary" onClick={onPrint}>
+                  <Lucide icon="Printer" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                  Stampa
+                </Button>
+                <Menu>
+                  <Menu.Button as={Button} size="sm" variant="outline-secondary">
+                    <Lucide icon="Download" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                    Esporta
+                    <Lucide icon="ChevronDown" aria-hidden="true" className="ml-1.5 h-3.5 w-3.5" />
+                  </Menu.Button>
+                  <Menu.Items className="w-40">
+                    <Menu.Item onClick={onExportCsv}>
+                      <Lucide icon="FileText" aria-hidden="true" className="mr-2 h-4 w-4" /> Export CSV
+                    </Menu.Item>
+                    <Menu.Item onClick={onExportJson}>
+                      <Lucide icon="FileCode" aria-hidden="true" className="mr-2 h-4 w-4" /> Export JSON
+                    </Menu.Item>
+                    <Menu.Item onClick={onExportXlsx}>
+                      <Lucide icon="FileSpreadsheet" aria-hidden="true" className="mr-2 h-4 w-4" /> Export XLSX
+                    </Menu.Item>
+                    <Menu.Item onClick={onExportHtml}>
+                      <Lucide icon="Globe" aria-hidden="true" className="mr-2 h-4 w-4" /> Export HTML
+                    </Menu.Item>
+                  </Menu.Items>
+                </Menu>
+              </>
+            }
+          >
+            <FormSelect
+              formSelectSize="sm"
+              aria-label="Cerca per"
+              className="sm:w-48"
+              value={filter.field}
+              onChange={(e) => cambiaFiltro({ field: e.target.value })}
+            >
+              {CAMPI_RICERCA.map((campo) => (
+                <option key={campo.valore} value={campo.valore}>
+                  {campo.etichetta}
+                </option>
+              ))}
+            </FormSelect>
+            <CampoRicerca
+              etichetta="Cerca promozioni"
+              value={filter.value}
+              onChange={(valore) => cambiaFiltro({ value: valore })}
+            />
+          </BarraFiltri>
 
-                  <Button
-                    type="button"
-                    variant="danger"
-                    className="w-30"
-                    onClick={() => {
-                      setLoadingEliminazione(true);
-                      if (showDialogEliminazione) {
-                        deleteLavorazione.mutate({
-                          id: showDialogEliminazione.idPromo,
-                          stato: showDialogEliminazione.stato as string,
-                          isDeletable: showDialogEliminazione.isDeletable
-                        });
-                      }
-                    }}
-                    loading={loadingEliminazione}
-                  >
-                    {loadingEliminazione
-                      ? 'Eliminando...'
-                      : showDialogEliminazione?.isDeletable ? 'Elimina Definitivamente' : 'Elimina'}
-                  </Button>
-
-                </Dialog.Footer>
-              </Dialog.Panel>
-            );
-          } else if (showDialogEliminazione?.stato === STATO_PROMO.ELIMINATA) {
-            return (
-              <Dialog.Panel>
-                <Dialog.Title>
-                  <div className="flex items-center gap-3">
-                    <Lucide icon="TriangleAlert" aria-hidden="true" className="w-6 h-6 text-warning" />
-                    <h2 className="mr-auto title-card">
-                      Ripristina Lavorazione
-                    </h2>
-                  </div>
-                </Dialog.Title>
-                <Dialog.Description>
-                  <div className="text-center py-4">
-                    <Lucide icon="TriangleAlert" className="w-16 h-16 mx-auto text-warning mb-4" />
-                    <p className="text-slate-600">
-                      Questa lavorazione è attualmente eliminata. <br />
-                      Vuoi ripristinarla e riportarla in lavorazione?
-                    </p>
-                  </div>
-                </Dialog.Description>
-                <Dialog.Footer className="px-5 py-3 text-right border-t border-slate-200/60 dark:border-darkmode-400">
-                  <Button
-                    type="button"
-                    variant="outline-secondary"
-                    onClick={() => setShowDialogEliminazione({ show: false, idPromo: "", numero_kit_collegati: 0 })}
-                    className="w-24 mr-1"
-                  >
-                    Annulla
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="primary"
-                    className="w-24"
-                    onClick={() => {
-                      setLoadingEliminazione(true);
-                      if (showDialogEliminazione) {
-                        deleteLavorazione.mutate({
-                          id: showDialogEliminazione.idPromo,
-                          stato: showDialogEliminazione.stato as string,
-                          isDeletable: showDialogEliminazione.isDeletable
-                        });
-                      }
-                    }}
-                    loading={loadingEliminazione}
-                  >
-                    {loadingEliminazione ? "Ripristinando..." : "Ripristina"}
-                  </Button>
-                </Dialog.Footer>
-              </Dialog.Panel>
-            );
-          }
-        })() as React.ReactNode}
-      </Dialog>
-      <div className="grid grid-cols-12 gap-y-10 gap-x-6">
-        <div className="col-span-12">
-          <PageHeader
-            title="Promozioni in corso"
-            description="Gestione lavorazioni in corso"
-          />
-          <div className="flex flex-col gap-8 mt-3.5">
-            <div className="flex flex-col box box--stacked">
-              <div className="flex flex-col p-5 xl:items-center xl:flex-row gap-y-2">
-                <form
-                  id="tabulator-html-filter-form"
-                  className="flex xl:flex-row flex-col border-dashed gap-x-5 gap-y-2 border border-slate-300/80 xl:border-0 rounded-control p-4 sm:p-5 xl:p-0"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    onFilter();
-                  }}
-                >
-                  <FormInline className="flex-col items-start xl:flex-row xl:items-center gap-y-2">
-                    <FormLabel className="mr-3 whitespace-nowrap flex items-center gap-2">
-                      <Lucide icon="Search" className="w-4 h-4 text-primary" />
-                      Cerca per
-                    </FormLabel>
-                    <FormSelect
-                      id="tabulator-html-filter-field"
-                      value={filter.field}
-                      onChange={(e) => {
-                        setFilter({ ...filter, field: e.target.value });
-                      }}
-                    >
-                      <option value="nome">Nome Promo</option>
-                      <option value="data_scadenza">Data di scadenza</option>
-                      <option value="validita_dal">Valida Dal</option>
-                      <option value="validita_al">Valida Al</option>
-                      <option value="stato">Stato</option>
-                      <option value="offset_visibilita">Offset visibilità</option>
-                    </FormSelect>
-                  </FormInline>
-                  <FormInline className="flex-col items-start xl:flex-row xl:items-center gap-y-2">
-                    <FormLabel className="mr-3 whitespace-nowrap flex items-center gap-2">
-                      <Lucide icon="Filter" className="w-4 h-4 text-primary" />
-                      Parola chiave
-                    </FormLabel>
-                    <FormInput
-                      id="tabulator-html-filter-value"
-                      value={filter.value}
-                      onChange={(e) => {
-                        setFilter({ ...filter, value: e.target.value });
-                      }}
-                      type="text"
-                      placeholder="Cerca..."
-                    />
-                  </FormInline>
-                  <div className="flex flex-col gap-2 mt-2 sm:flex-row xl:mt-0">
-                    <Button
-                      id="tabulator-html-filter-go"
-                      variant="outline-primary"
-                      type="submit"
-                      className="w-full sm:w-auto bg-primary/5 border-primary/20"
-                    >
-                      <Lucide icon="Search" className="w-4 h-4 mr-2" />
-                      Cerca
-                    </Button>
-                    <Button
-                      id="tabulator-html-filter-reset"
-                      variant="outline-secondary"
-                      type="button"
-                      className="w-full sm:w-auto bg-slate-50/50"
-                      onClick={onResetFilter}
-                    >
-                      <Lucide icon="RotateCcw" className="w-4 h-4 mr-2" />
-                      Resetta
-                    </Button>
-                  </div>
-                </form>
-                <div className="flex flex-col mt-3 sm:flex-row gap-x-3 gap-y-2 xl:ml-auto xl:mt-0">
-                  <Button variant="outline-secondary" onClick={onPrint}>
-                    <Lucide icon="Printer" className="stroke-[1.3] w-4 h-4 mr-2" />
-                    Stampa
-                  </Button>
-                  <Menu className="sm:ml-auto xl:ml-0">
-                    <Menu.Button as={Button} variant="outline-secondary" className="w-full sm:w-auto">
-                      <Lucide icon="Download" className="stroke-[1.3] w-4 h-4 mr-2" />
-                      Esporta
-                      <Lucide icon="ChevronDown" className="stroke-[1.3] w-4 h-4 ml-2" />
-                    </Menu.Button>
-                    <Menu.Items className="w-40">
-                      <Menu.Item onClick={onExportCsv}>
-                        <Lucide icon="FileText" className="w-4 h-4 mr-2" /> Export CSV
-                      </Menu.Item>
-                      <Menu.Item onClick={onExportJson}>
-                        <Lucide icon="FileCode" className="w-4 h-4 mr-2" /> Export JSON
-                      </Menu.Item>
-                      <Menu.Item onClick={onExportXlsx}>
-                        <Lucide icon="FileSpreadsheet" className="w-4 h-4 mr-2" /> Export XLSX
-                      </Menu.Item>
-                      <Menu.Item onClick={onExportHtml}>
-                        <Lucide icon="Globe" className="w-4 h-4 mr-2" /> Export HTML
-                      </Menu.Item>
-                    </Menu.Items>
-                  </Menu>
-                </div>
-              </div>
-              <div className="overflow-x-auto">
-                {data.isLoading ? (
-                  <div className="flex flex-col items-center justify-center py-10 px-5">
-                    <Spinner size="lg" etichetta="Caricamento delle lavorazioni in corso" />
-                    <div className="mt-3 text-slate-500">Caricamento in corso...</div>
-                  </div>
-                ) : data.isError ? (
-                  <PageError
-                    compatta
-                    className="m-5"
-                    titolo="Lavorazioni non caricate"
-                    motivo={data.error?.message || "Impossibile caricare le lavorazioni in corso."}
-                    onRiprova={() => data.refetch()}
-                  />
-                ) : filteredData.length === 0 ? (
-                  <EmptyState
-                    icon="CircleAlert"
-                    title="Nessuna lavorazione in corso"
-                    description="Non ci sono lavorazioni in corso che corrispondono ai filtri selezionati."
-                  />
-                ) : (
-                  <>
-                    <div className="border-t border-slate-200 dark:border-darkmode-400 hidden xl:block">
-                      <Table>
-                        <Table.Thead variant="light">
-                          <Table.Tr>
-                            <Table.Th className="whitespace-nowrap font-semibold text-slate-700 dark:text-slate-200" aria-sort={ariaSort("nome")}>
-                              <SortableHeader {...ordinamento("nome")}>
-                                <Lucide icon="FileText" className="w-4 h-4" />
-                                Nome Lavorazione
-                              </SortableHeader>
-                            </Table.Th>
-                            <Table.Th className="whitespace-nowrap text-center font-semibold text-slate-700 dark:text-slate-200" aria-sort={ariaSort("data_scadenza")}>
-                              <SortableHeader {...ordinamento("data_scadenza")}>
-                                <Lucide icon="CalendarClock" className="w-4 h-4" />
-                                Scadenza
-                              </SortableHeader>
-                            </Table.Th>
-                            <Table.Th className="whitespace-nowrap text-center font-semibold text-slate-700 dark:text-slate-200" aria-sort={ariaSort("validita_dal")}>
-                              <SortableHeader {...ordinamento("validita_dal")}>
-                                <Lucide icon="CalendarCheck" className="w-4 h-4" />
-                                Valida dal
-                              </SortableHeader>
-                            </Table.Th>
-                            <Table.Th className="whitespace-nowrap text-center font-semibold text-slate-700 dark:text-slate-200" aria-sort={ariaSort("validita_al")}>
-                              <SortableHeader {...ordinamento("validita_al")}>
-                                <Lucide icon="CalendarX" className="w-4 h-4" />
-                                Valida al
-                              </SortableHeader>
-                            </Table.Th>
-                            <Table.Th className="whitespace-nowrap text-center font-semibold text-slate-700 dark:text-slate-200" aria-sort={ariaSort("stato")}>
-                              <SortableHeader {...ordinamento("stato")}>
-                                <Lucide icon="Activity" className="w-4 h-4" />
-                                Stato
-                              </SortableHeader>
-                            </Table.Th>
-                            <Table.Th className="whitespace-nowrap text-center font-semibold text-slate-700 dark:text-slate-200" aria-sort={ariaSort("offset_visibilita")}>
-                              <SortableHeader {...ordinamento("offset_visibilita")}>
-                                <Lucide icon="Eye" className="w-4 h-4" />
-                                Visibilità
-                              </SortableHeader>
-                            </Table.Th>
-                            <Table.Th className="whitespace-nowrap text-center font-semibold text-slate-700 dark:text-slate-200">
-                              <div className="flex items-center justify-center gap-2">
-                                <Lucide icon="Settings" className="w-4 h-4" />
-                                Azioni
-                              </div>
-                            </Table.Th>
-                          </Table.Tr>
-                        </Table.Thead>
-                        <Table.Tbody>
-                          {paginatedData.map((promo) => (
-                            <Table.Tr key={promo.id}>
-                              <Table.Td className="min-w-[200px]">
-                                <div className="flex items-center gap-2.5">
-                                  <div className="flex items-center justify-center w-8 h-8 rounded bg-slate-100 dark:bg-darkmode-700">
-                                    <Lucide icon="FileText" className="w-4 h-4 text-slate-600 dark:text-slate-400" />
-                                  </div>
-                                  <div>
-                                    <div className="font-medium text-slate-800 dark:text-slate-100 whitespace-nowrap">
-                                      {promo.nome}
-                                    </div>
-                                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                                      ID: {promo.id.slice(0, 8)}
-                                    </div>
-                                  </div>
-                                </div>
-                              </Table.Td>
-                              <Table.Td>
-                                <div className="flex items-center justify-center gap-2">
-                                  <Lucide icon="Calendar" className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
-                                  <div className="text-sm text-slate-700 dark:text-slate-300 whitespace-nowrap">
-                                    {formatData(promo.data_scadenza)}
-                                  </div>
-                                </div>
-                              </Table.Td>
-                              <Table.Td>
-                                <div className="flex items-center justify-center gap-2">
-                                  <Lucide icon="Calendar" className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
-                                  <div className="text-sm text-slate-700 dark:text-slate-300 whitespace-nowrap">
-                                    {formatData(promo.validita_dal)}
-                                  </div>
-                                </div>
-                              </Table.Td>
-                              <Table.Td>
-                                <div className="flex items-center justify-center gap-2">
-                                  <Lucide icon="Calendar" className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
-                                  <div className="text-sm text-slate-700 dark:text-slate-300 whitespace-nowrap">
-                                    {formatData(promo.validita_al)}
-                                  </div>
-                                </div>
-                              </Table.Td>
-                              <Table.Td>
-                                <div className="flex justify-center">
-                                  <StatusBadge dominio="promo" stato={promo.stato} />
-                                </div>
-                              </Table.Td>
-                              <Table.Td>
-                                <div className="flex items-center justify-center gap-1.5">
-                                  <Lucide icon="Eye" className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
-                                  <span className="text-sm text-slate-700 dark:text-slate-300 whitespace-nowrap">
-                                    {promo.offset_visibilita} giorni
-                                  </span>
-                                </div>
-                              </Table.Td>
-                              <Table.Td>
-                                {promo.stato !== "ELIMINATA" ? (
-                                  <div className="flex items-center justify-center gap-2">
-                                    <PermissionGate permission="promo.visualizza">
-                                      <Button
-                                        variant="outline-primary"
-                                        size="sm"
-                                        className="shadow-sm hover:shadow-md transition-shadow"
-                                        onClick={() => navigate(`/promozioni/in-corso/dettagli/${promo.id}`)}
-                                      >
-                                        <Lucide icon="Eye" className="w-3.5 h-3.5 stroke-[1.7] mr-1.5" />
-                                        Visualizza
-                                      </Button>
-                                    </PermissionGate>
-                                    <PermissionGate permission="promo.elimina">
-                                      <Button
-                                        variant="outline-danger"
-                                        size="sm"
-                                        className="shadow-sm hover:shadow-md transition-shadow"
-                                        onClick={() =>
-                                          setShowDialogEliminazione({
-                                            show: true,
-                                            idPromo: promo.id,
-                                            stato: promo.stato,
-                                            isDeletable: promo.is_deletable,
-                                            numero_kit_collegati: promo.numero_kit_collegati
-                                          })
-                                        }
-                                      >
-                                        <Lucide icon="Trash2" className="w-3.5 h-3.5 stroke-[1.7] mr-1.5" />
-                                        Elimina
-                                      </Button>
-                                    </PermissionGate>
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center justify-center gap-2">
-                                    <Button
-                                      variant="outline-secondary"
-                                      size="sm"
-                                      className="shadow-sm hover:shadow-md transition-shadow"
-                                      onClick={() => navigate(`/promozioni/in-corso/dettagli/${promo.id}`)}
-                                    >
-                                      <Lucide icon="FileText" className="w-3.5 h-3.5 stroke-[1.7] mr-1.5" />
-                                      Dettagli
-                                    </Button>
-                                    <Button
-                                      variant="outline-primary"
-                                      size="sm"
-                                      className="shadow-sm hover:shadow-md transition-shadow"
-                                      onClick={() =>
-                                        setShowDialogEliminazione({
-                                          show: true,
-                                          idPromo: promo.id,
-                                          stato: promo.stato,
-                                          isDeletable: promo.is_deletable,
-                                          numero_kit_collegati: promo.numero_kit_collegati
-                                        })
-                                      }
-                                    >
-                                      <Lucide icon="Undo" className="w-3.5 h-3.5 stroke-[1.7] mr-1.5" />
-                                      Ripristina
-                                    </Button>
-                                  </div>
-                                )}
-                              </Table.Td>
-                            </Table.Tr>
-                          ))}
-                        </Table.Tbody>
-                      </Table>
-                    </div>
-
-                    {/* Mobile Card View */}
-                    <div className="xl:hidden border-t border-slate-200 dark:border-darkmode-400">
-                      {paginatedData.map((promo) => (
-                        <div
-                          key={promo.id}
-                          className="p-4 border-b border-slate-200 dark:border-darkmode-400 hover:bg-slate-50 dark:hover:bg-darkmode-700/50 transition-colors"
-                        >
-                          {/* Header with icon and name */}
-                          <div className="flex items-start gap-2.5 mb-3">
-                            <div className="flex items-center justify-center w-9 h-9 rounded bg-slate-100 dark:bg-darkmode-700 flex-shrink-0">
-                              <Lucide icon="FileText" className="w-4 h-4 text-slate-600 dark:text-slate-400" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="font-medium text-slate-800 dark:text-slate-100 text-sm break-words">
-                                {promo.nome}
-                              </div>
-                              <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                                ID: {promo.id.slice(0, 8)}
-                              </div>
-                            </div>
-                            <div className="flex-shrink-0">
-                              <StatusBadge dominio="promo" stato={promo.stato} />
-                            </div>
-                          </div>
-
-                          {/* Info Grid */}
-                          <div className="grid grid-cols-2 gap-3 mb-3">
-                            <div className="flex flex-col gap-1">
-                              <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-                                <Lucide icon="Calendar" className="w-3.5 h-3.5" />
-                                <span>Scadenza</span>
-                              </div>
-                              <div className="text-sm text-slate-700 dark:text-slate-300">
-                                {formatData(promo.data_scadenza)}
-                              </div>
-                            </div>
-                            <div className="flex flex-col gap-1">
-                              <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-                                <Lucide icon="Eye" className="w-3.5 h-3.5" />
-                                <span>Visibilità</span>
-                              </div>
-                              <div className="text-sm text-slate-700 dark:text-slate-300">
-                                {promo.offset_visibilita} giorni
-                              </div>
-                            </div>
-                            <div className="flex flex-col gap-1">
-                              <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-                                <Lucide icon="Calendar" className="w-3.5 h-3.5" />
-                                <span>Valida dal</span>
-                              </div>
-                              <div className="text-sm text-slate-700 dark:text-slate-300">
-                                {formatData(promo.validita_dal)}
-                              </div>
-                            </div>
-                            <div className="flex flex-col gap-1">
-                              <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-                                <Lucide icon="Calendar" className="w-3.5 h-3.5" />
-                                <span>Valida al</span>
-                              </div>
-                              <div className="text-sm text-slate-700 dark:text-slate-300">
-                                {formatData(promo.validita_al)}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Actions */}
-                          <div className="flex flex-col sm:flex-row gap-2 pt-3 border-t border-slate-100 dark:border-darkmode-600">
-                            {promo.stato !== "ELIMINATA" ? (
-                              <>
-                                <Button
-                                  variant="outline-primary"
-                                  size="sm"
-                                  className="flex-1 shadow-sm"
-                                  onClick={() => navigate(`/promozioni/in-corso/dettagli/${promo.id}`)}
-                                >
-                                  <Lucide icon="Eye" className="w-3.5 h-3.5 stroke-[1.7] mr-1.5" />
-                                  Visualizza
-                                </Button>
-                                <Button
-                                  variant="outline-danger"
-                                  size="sm"
-                                  className="flex-1 shadow-sm"
-                                  onClick={() =>
-                                    setShowDialogEliminazione({
-                                      show: true,
-                                      idPromo: promo.id,
-                                      stato: promo.stato,
-                                      isDeletable: promo.is_deletable,
-                                      numero_kit_collegati: promo.numero_kit_collegati
-                                    })
-                                  }
-                                >
-                                  <Lucide icon="Trash2" className="w-3.5 h-3.5 stroke-[1.7] mr-1.5" />
-                                  Elimina
-                                </Button>
-                              </>
-                            ) : (
-                              <>
+          {data.isLoading ? (
+            <div className="flex justify-center px-5 py-12">
+              <Spinner size="lg" etichetta="Caricamento delle lavorazioni in corso" />
+            </div>
+          ) : data.isError ? (
+            <PageError
+              compatta
+              className="m-5"
+              titolo="Lavorazioni non caricate"
+              motivo={data.error?.message || "Impossibile caricare le lavorazioni in corso."}
+              onRiprova={() => data.refetch()}
+            />
+          ) : filteredData.length === 0 ? (
+            filtroAttivo ? (
+              <EmptyState
+                compatta
+                icon="SearchX"
+                title="Nessun risultato"
+                description="Nessuna lavorazione in corso corrisponde alla ricerca."
+                buttonText="Azzera ricerca"
+                buttonIcon="RotateCcw"
+                onButtonClick={onResetFilter}
+              />
+            ) : (
+              <EmptyState
+                compatta
+                icon="CircleAlert"
+                title="Nessuna lavorazione in corso"
+                description="Le promozioni create compariranno qui finché sono in lavorazione."
+              />
+            )
+          ) : (
+            <>
+              <div className="hidden overflow-x-auto xl:block">
+                <Table>
+                  <Table.Thead>
+                    <Table.Tr>
+                      <Table.Th aria-sort={ariaSort("nome")}>
+                        <IntestazioneOrdinabile {...ordinamento("nome")}>Nome lavorazione</IntestazioneOrdinabile>
+                      </Table.Th>
+                      <Table.Th aria-sort={ariaSort("data_scadenza")}>
+                        <IntestazioneOrdinabile {...ordinamento("data_scadenza")}>Scadenza</IntestazioneOrdinabile>
+                      </Table.Th>
+                      <Table.Th aria-sort={ariaSort("validita_dal")}>
+                        <IntestazioneOrdinabile {...ordinamento("validita_dal")}>Valida dal</IntestazioneOrdinabile>
+                      </Table.Th>
+                      <Table.Th aria-sort={ariaSort("validita_al")}>
+                        <IntestazioneOrdinabile {...ordinamento("validita_al")}>Valida al</IntestazioneOrdinabile>
+                      </Table.Th>
+                      <Table.Th aria-sort={ariaSort("stato")}>
+                        <IntestazioneOrdinabile {...ordinamento("stato")}>Stato</IntestazioneOrdinabile>
+                      </Table.Th>
+                      <Table.Th aria-sort={ariaSort("offset_visibilita")}>
+                        <IntestazioneOrdinabile {...ordinamento("offset_visibilita")}>Visibilità</IntestazioneOrdinabile>
+                      </Table.Th>
+                      <Table.Th className="text-right">
+                        <span className="sr-only">Azioni</span>
+                      </Table.Th>
+                    </Table.Tr>
+                  </Table.Thead>
+                  <Table.Tbody>
+                    {paginatedData.map((promo) => (
+                      <Table.Tr key={promo.id}>
+                        <Table.Td className="min-w-48">
+                          <div className="whitespace-nowrap font-medium text-slate-800 dark:text-slate-100">{promo.nome}</div>
+                          <div className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">ID: {promo.id.slice(0, 8)}</div>
+                        </Table.Td>
+                        <Table.Td className="whitespace-nowrap tabular-nums text-slate-600">{formatData(promo.data_scadenza)}</Table.Td>
+                        <Table.Td className="whitespace-nowrap tabular-nums text-slate-600">{formatData(promo.validita_dal)}</Table.Td>
+                        <Table.Td className="whitespace-nowrap tabular-nums text-slate-600">{formatData(promo.validita_al)}</Table.Td>
+                        <Table.Td>
+                          <StatusBadge dominio="promo" stato={promo.stato} />
+                        </Table.Td>
+                        <Table.Td className="whitespace-nowrap tabular-nums text-slate-600">{promo.offset_visibilita} giorni</Table.Td>
+                        <Table.Td>
+                          {promo.stato !== "ELIMINATA" ? (
+                            <div className="flex items-center justify-end gap-2">
+                              <PermissionGate permission="promo.visualizza">
                                 <Button
                                   variant="outline-secondary"
                                   size="sm"
-                                  className="flex-1 shadow-sm"
                                   onClick={() => navigate(`/promozioni/in-corso/dettagli/${promo.id}`)}
                                 >
-                                  <Lucide icon="FileText" className="w-3.5 h-3.5 stroke-[1.7] mr-1.5" />
-                                  Dettagli
+                                  Visualizza
+                                  <Lucide icon="ArrowRight" aria-hidden="true" className="ml-1.5 h-3.5 w-3.5" />
                                 </Button>
+                              </PermissionGate>
+                              <PermissionGate permission="promo.elimina">
                                 <Button
-                                  variant="outline-primary"
+                                  variant="outline-danger"
                                   size="sm"
-                                  className="flex-1 shadow-sm"
-                                  onClick={() =>
-                                    setShowDialogEliminazione({
-                                      show: true,
-                                      idPromo: promo.id,
-                                      stato: promo.stato,
-                                      isDeletable: promo.is_deletable,
-                                      numero_kit_collegati: promo.numero_kit_collegati
-                                    })
-                                  }
+                                  aria-label={`Elimina ${promo.nome}`}
+                                  title="Elimina"
+                                  onClick={() => apriDialogEliminazione(promo)}
                                 >
-                                  <Lucide icon="Undo" className="w-3.5 h-3.5 stroke-[1.7] mr-1.5" />
-                                  Ripristina
+                                  <Lucide icon="Trash2" aria-hidden="true" className="h-3.5 w-3.5" />
                                 </Button>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Pagination controls */}
-                    <div className="flex flex-col lg:flex-row items-center justify-between gap-4 px-5 py-4 bg-slate-50/30 dark:bg-darkmode-800/20 border-t border-slate-200 dark:border-darkmode-400">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-slate-600 dark:text-slate-400">Righe per pagina:</span>
-                        <FormSelect
-                          value={pageSize}
-                          onChange={(e) => {
-                            setPageSize(Number(e.target.value));
-                            setCurrentPage(1);
-                          }}
-                          className="w-16 text-xs"
-                        >
-                          <option value="10">10</option>
-                          <option value="20">20</option>
-                          <option value="30">30</option>
-                          <option value="40">40</option>
-                        </FormSelect>
-                      </div>
-
-                      <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
-                        <span>
-                          Pagina {currentPage} di {totalPages}
-                        </span>
-                        <span className="text-slate-400">·</span>
-                        <span>
-                          {filteredData.length} {filteredData.length === 1 ? 'risultato' : 'risultati'}
-                        </span>
-                      </div>
-
-                      <Pagination aria-label="Paginazione">
-                        <Pagination.Link
-                          onClick={() => setCurrentPage(1)}
-                          active={false}
-                          aria-label="Prima pagina"
-                        >
-                          <Lucide icon="ChevronsLeft" aria-hidden="true" className="w-4 h-4" />
-                        </Pagination.Link>
-                        <Pagination.Link
-                          onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                          active={false}
-                          aria-label="Pagina precedente"
-                        >
-                          <Lucide icon="ChevronLeft" aria-hidden="true" className="w-4 h-4" />
-                        </Pagination.Link>
-
-                        {/* Page numbers */}
-                        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                          let pageNum: number = 1;
-                          if (totalPages <= 5) {
-                            pageNum = i + 1;
-                          } else if (currentPage <= 3) {
-                            pageNum = i + 1;
-                          } else if (currentPage >= totalPages - 2) {
-                            pageNum = totalPages - 4 + i;
-                          } else {
-                            pageNum = currentPage - 2 + i;
-                          }
-
-                          return (
-                            <Pagination.Link
-                              key={pageNum}
-                              active={currentPage === pageNum}
-                              onClick={() => setCurrentPage(pageNum)}
-                            >
-                              {pageNum}
-                            </Pagination.Link>
-                          );
-                        })}
-
-                        <Pagination.Link
-                          onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                          active={false}
-                          aria-label="Pagina successiva"
-                        >
-                          <Lucide icon="ChevronRight" aria-hidden="true" className="w-4 h-4" />
-                        </Pagination.Link>
-                        <Pagination.Link
-                          onClick={() => setCurrentPage(totalPages)}
-                          active={false}
-                          aria-label="Ultima pagina"
-                        >
-                          <Lucide icon="ChevronsRight" aria-hidden="true" className="w-4 h-4" />
-                        </Pagination.Link>
-                      </Pagination>
-                    </div>
-                  </>
-                )}
+                              </PermissionGate>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-end gap-2">
+                              <Button
+                                variant="outline-secondary"
+                                size="sm"
+                                onClick={() => navigate(`/promozioni/in-corso/dettagli/${promo.id}`)}
+                              >
+                                Dettagli
+                                <Lucide icon="ArrowRight" aria-hidden="true" className="ml-1.5 h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                variant="outline-secondary"
+                                size="sm"
+                                aria-label={`Ripristina ${promo.nome}`}
+                                title="Ripristina"
+                                onClick={() => apriDialogEliminazione(promo)}
+                              >
+                                <Lucide icon="Undo" aria-hidden="true" className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          )}
+                        </Table.Td>
+                      </Table.Tr>
+                    ))}
+                  </Table.Tbody>
+                </Table>
               </div>
-            </div>
-          </div>
-        </div>
-      </div>
+
+              {/* Sotto xl le righe diventano schede */}
+              <ul className="xl:hidden">
+                {paginatedData.map((promo) => (
+                  <li key={promo.id} className="border-b border-slate-100 px-5 py-4 dark:border-darkmode-400">
+                    <div className="mb-3 flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="break-words font-medium text-slate-800 dark:text-slate-100">{promo.nome}</div>
+                        <div className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">ID: {promo.id.slice(0, 8)}</div>
+                      </div>
+                      <StatusBadge dominio="promo" stato={promo.stato} />
+                    </div>
+                    <dl className="mb-3 grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <dt className="title-eyebrow">Scadenza</dt>
+                        <dd className="tabular-nums text-slate-700 dark:text-slate-300">{formatData(promo.data_scadenza)}</dd>
+                      </div>
+                      <div>
+                        <dt className="title-eyebrow">Visibilità</dt>
+                        <dd className="tabular-nums text-slate-700 dark:text-slate-300">{promo.offset_visibilita} giorni</dd>
+                      </div>
+                      <div>
+                        <dt className="title-eyebrow">Valida dal</dt>
+                        <dd className="tabular-nums text-slate-700 dark:text-slate-300">{formatData(promo.validita_dal)}</dd>
+                      </div>
+                      <div>
+                        <dt className="title-eyebrow">Valida al</dt>
+                        <dd className="tabular-nums text-slate-700 dark:text-slate-300">{formatData(promo.validita_al)}</dd>
+                      </div>
+                    </dl>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      {promo.stato !== "ELIMINATA" ? (
+                        <>
+                          <Button
+                            variant="outline-secondary"
+                            size="sm"
+                            className="flex-1"
+                            onClick={() => navigate(`/promozioni/in-corso/dettagli/${promo.id}`)}
+                          >
+                            Visualizza
+                            <Lucide icon="ArrowRight" aria-hidden="true" className="ml-1.5 h-3.5 w-3.5" />
+                          </Button>
+                          <Button variant="outline-danger" size="sm" className="flex-1" onClick={() => apriDialogEliminazione(promo)}>
+                            <Lucide icon="Trash2" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                            Elimina
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <Button
+                            variant="outline-secondary"
+                            size="sm"
+                            className="flex-1"
+                            onClick={() => navigate(`/promozioni/in-corso/dettagli/${promo.id}`)}
+                          >
+                            Dettagli
+                            <Lucide icon="ArrowRight" aria-hidden="true" className="ml-1.5 h-3.5 w-3.5" />
+                          </Button>
+                          <Button variant="outline-secondary" size="sm" className="flex-1" onClick={() => apriDialogEliminazione(promo)}>
+                            <Lucide icon="Undo" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                            Ripristina
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+
+              <PaginazioneTabella
+                totale={filteredData.length}
+                pagina={currentPage}
+                dimensionePagina={pageSize}
+                onCambiaPagina={setCurrentPage}
+                onCambiaDimensione={setPageSize}
+              />
+            </>
+          )}
+        </Sezione>
+      </Pagina>
     </>
   );
 }

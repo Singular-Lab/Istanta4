@@ -1,7 +1,7 @@
 import { useContext, forwardRef } from "react";
 import { formInlineContext } from "../FormInline";
 import { InputGroupContext } from "../InputGroup";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/utils/twMerge";
 
 interface FormInputProps extends React.ComponentPropsWithoutRef<"input"> {
   formInputSize?: "sm" | "lg";

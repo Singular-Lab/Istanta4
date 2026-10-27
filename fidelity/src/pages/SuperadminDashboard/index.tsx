@@ -1,22 +1,36 @@
+import Badge from "@/components/Base/Badge";
+import Button from "@/components/Base/Button";
 import Chart from "@/components/Base/Chart";
+import { Tab } from "@/components/Base/Headless";
 import Lucide from "@/components/Base/Lucide";
 import PageError from "@/components/Base/PageError";
-import PageHeader from "@/components/Base/PageHeader";
+import Pagina from "@/components/Base/Pagina";
+import Sezione from "@/components/Base/Sezione";
 import Skeleton from "@/components/Base/Skeleton";
 import Spinner from "@/components/Base/Spinner";
 import StatCard from "@/components/Base/StatCard";
 import StatusBadge from "@/components/Base/StatusBadge";
+import Table from "@/components/Base/Table";
+import EmptyState from "@/components/EmptyState";
 import type { TonoStato } from "@/constants/stati";
 import { COLORI_SEMANTICI, coloreSemantico, opzioniBase, paletteColore } from "@/utils/chartTheme";
 import { getColor } from "@/utils/colors";
-import { formatData, formatDataOra } from "@/utils/format";
+import {
+    formatData,
+    formatDataOra,
+    formatDataOraSecondi,
+    formatNumero,
+    formatRelativo,
+    VALORE_ASSENTE,
+} from "@/utils/format";
+import { twMerge } from "@/utils/twMerge";
 import type { ChartOptions, TooltipItem } from "chart.js";
-import clsx from "clsx";
 import dayjs from "dayjs";
 import { FC, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLoaderData, useSearchParams } from "react-router-dom";
 import { ServerCall } from "../../../lib/server_call";
 import withSessionCheck from "../../components/SessionChecker";
+import { SeverityBadge } from "../AuditLogDashboard/statiAudit";
 import Dashboard3, { Dashboard3LoaderData } from "../Dashboard3";
 
 const AuditLogDashboard = lazy(() => import("../AuditLogDashboard"));
@@ -114,39 +128,27 @@ interface SuperadminDashboardLoaderData {
 // ─── Skeleton ───────────────────────────────────────────────────────────────
 
 const DashboardSkeleton: FC = () => (
-    <div className="grid grid-cols-12 gap-5 mt-5">
+    <div role="status" className="grid grid-cols-12 gap-6">
+        <span className="sr-only">Caricamento della dashboard…</span>
         {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="flex flex-col col-span-12 sm:col-span-6 p-5 box box--stacked">
-                <div className="flex flex-col gap-5">
-                    <div className="grid grid-cols-2 gap-3">
-                        {[1, 2].map((j) => (
-                            <div key={j} className="flex items-center gap-3 rounded-control border px-4 py-3">
-                                <Skeleton className="w-9 h-9 rounded-full" />
-                                <div className="flex flex-col gap-1">
-                                    <Skeleton className="h-3 w-16" />
-                                    <Skeleton className="h-5 w-10" />
-                                </div>
+            <div key={i} aria-hidden="true" className="col-span-12 box box--stacked p-5 xl:col-span-6">
+                <Skeleton className="mb-5 h-6 w-48" />
+                <div className="grid grid-cols-2 gap-3">
+                    {[1, 2].map((j) => (
+                        <div key={j} className="flex items-center gap-3 rounded-control border border-slate-200 px-4 py-3">
+                            <div className="flex flex-col gap-1">
+                                <Skeleton className="h-3 w-16" />
+                                <Skeleton className="h-5 w-10" />
                             </div>
-                        ))}
-                    </div>
+                        </div>
+                    ))}
                 </div>
             </div>
         ))}
     </div>
 );
 
-// ─── Severity Badge ─────────────────────────────────────────────────────────
-
-const TONO_SEVERITA: Record<string, TonoStato> = {
-    CRITICAL: "danger",
-    HIGH: "warning",
-    MEDIUM: "info",
-    LOW: "neutral",
-};
-
-const SeverityBadge: FC<{ severity: string }> = ({ severity }) => (
-    <StatusBadge tono={TONO_SEVERITA[severity] ?? "neutral"} etichetta={severity} />
-);
+// ─── Alert ──────────────────────────────────────────────────────────────────
 
 const alertSourceLabels: Record<AlertSource, string> = {
     DATABASE: "Database",
@@ -155,16 +157,24 @@ const alertSourceLabels: Record<AlertSource, string> = {
     SESSIONI: "Sessioni",
 };
 
-const TONO_STATO_ALERT: Record<AlertStatus, TonoStato> = {
-    NUOVO: "danger",
-    ACK: "warning",
-    RISOLTO: "success",
+const STATI_ALERT: Record<AlertStatus, { etichetta: string; tono: TonoStato }> = {
+    NUOVO: { etichetta: "Nuovo", tono: "danger" },
+    ACK: { etichetta: "Preso in carico", tono: "warning" },
+    RISOLTO: { etichetta: "Risolto", tono: "success" },
 };
 
-const alertActionButtonClass: Record<DashboardAlertAction["variant"], string> = {
-    primary: "bg-theme-1/10 text-theme-1 hover:bg-theme-1/20",
-    secondary: "bg-slate-100 text-slate-700 hover:bg-slate-200",
-    danger: "bg-danger/10 text-danger hover:bg-danger/20",
+// Bordo e sfondo della card dell'alert secondo la severità
+const CLASSI_SEVERITA_ALERT: Record<AlertSeverity, string> = {
+    CRITICAL: "border-danger/40 bg-danger/5",
+    HIGH: "border-warning/40 bg-warning/5",
+    MEDIUM: "border-info/40 bg-info/5",
+    LOW: "border-slate-200 bg-slate-50",
+};
+
+const VARIANTE_AZIONE_ALERT: Record<DashboardAlertAction["variant"], "primary" | "outline-secondary" | "outline-danger"> = {
+    primary: "primary",
+    secondary: "outline-secondary",
+    danger: "outline-danger",
 };
 
 // ─── Status helpers ─────────────────────────────────────────────────────────
@@ -192,6 +202,7 @@ const SuperadminDashboard: FC = () => {
     const [data, setData] = useState<SuperadminOverviewResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [aggiornando, setAggiornando] = useState(false);
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const gdoLoaderDataRef = useRef<Dashboard3LoaderData | null>(null);
     const tabFromQuery = searchParams.get(DASHBOARD_TAB_QUERY_KEY);
@@ -404,10 +415,12 @@ const SuperadminDashboard: FC = () => {
     const gdoDashboardContent = useMemo(() => {
         if (!gdoLoaderData) {
             return (
-                <div role="status" className="box box--stacked p-8 text-center mt-5">
-                    <Spinner size="lg" decorativo className="mx-auto mb-3" />
-                    <p className="text-slate-500">Caricamento dashboard GDO...</p>
-                </div>
+                <Sezione>
+                    <div className="flex flex-col items-center gap-3 py-8 text-slate-500">
+                        <Spinner size="lg" etichetta="Caricamento dashboard GDO…" />
+                        <p aria-hidden="true">Caricamento dashboard GDO…</p>
+                    </div>
+                </Sezione>
             );
         }
 
@@ -417,471 +430,457 @@ const SuperadminDashboard: FC = () => {
     // ─── Chart data: Response Time Line ─────────────────────────────────────
     const responseTimeValue = data?.database.health.responseTimeMs ?? 0;
 
+    const aggiorna = useCallback(async () => {
+        setAggiornando(true);
+        try {
+            await fetchOverview();
+        } finally {
+            setAggiornando(false);
+        }
+    }, [fetchOverview]);
+
+    const titolo = "Dashboard Superadmin";
+    const descrizione = "Panoramica dello stato del sistema.";
+
     if (loading) {
         return (
-            <>
-                <PageHeader title="Dashboard Superadmin" description="Panoramica dello stato del sistema." />
+            <Pagina titolo={titolo} descrizione={descrizione}>
                 <DashboardSkeleton />
-            </>
+            </Pagina>
         );
     }
 
     if (error || !data) {
         return (
-            <>
-                <PageHeader title="Dashboard Superadmin" description="Panoramica dello stato del sistema." />
+            <Pagina titolo={titolo} descrizione={descrizione}>
                 <PageError
                     titolo="Errore caricamento dashboard"
                     motivo={error ?? "Dati non disponibili."}
                     onRiprova={fetchOverview}
-                    className="mt-5"
                 />
-            </>
+            </Pagina>
         );
     }
 
     const { health, metrics, averages } = data.database;
     const dbStatus = statusConfig[health.status];
+    const indiceTab = Math.max(0, tabs.findIndex((tab) => tab.id === activeTab));
 
     return (
-        <>
-            <PageHeader title="Dashboard Superadmin" description="Panoramica dello stato del sistema." />
-
-            <div className="box box--stacked p-3 mt-5">
-                <div role="tablist" aria-label="Sezioni della dashboard" className="flex flex-wrap items-center gap-2">
+        <Pagina
+            titolo={titolo}
+            descrizione={descrizione}
+            azioni={
+                activeTab === "superadmin" && (
+                    <Button variant="outline-secondary" onClick={aggiorna} loading={aggiornando} disabled={aggiornando}>
+                        {!aggiornando && <Lucide icon="RefreshCw" aria-hidden="true" className="mr-2 h-4 w-4" />}
+                        Aggiorna
+                    </Button>
+                )
+            }
+        >
+            <Tab.Group
+                className="flex flex-col gap-6"
+                selectedIndex={indiceTab}
+                onChange={(indice: number) => handleTabChange(tabs[indice].id)}
+            >
+                <Tab.List variant="boxed-tabs" aria-label="Sezioni della dashboard" className="bg-white shadow-card">
                     {tabs.map((tab) => (
-                        <button
-                            key={tab.id}
-                            type="button"
-                            role="tab"
-                            aria-selected={activeTab === tab.id}
-                            onClick={() => handleTabChange(tab.id)}
-                            className={clsx(
-                                "inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm border transition-colors",
-                                activeTab === tab.id
-                                    ? "bg-theme-1/10 text-theme-1 border-theme-1/30"
-                                    : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-                            )}
-                        >
-                            <Lucide icon={tab.icon} aria-hidden="true" className="w-4 h-4" />
-                            {tab.label}
-                        </button>
+                        <Tab key={tab.id}>
+                            <Tab.Button
+                                as="button"
+                                className="flex w-full items-center justify-center gap-2 whitespace-nowrap py-2"
+                            >
+                                <Lucide icon={tab.icon} aria-hidden="true" className="h-4 w-4" />
+                                {tab.label}
+                            </Tab.Button>
+                        </Tab>
                     ))}
-                </div>
-            </div>
+                </Tab.List>
 
-            {activeTab === "gdo" ? (
-                <div className="mt-5">{gdoDashboardContent}</div>
-            ) : activeTab === "audit" ? (
-                <div className="mt-5">
-                    <Suspense
-                        fallback={
-                            <div role="status" className="box box--stacked p-8 text-center">
-                                <Spinner size="lg" decorativo className="mx-auto mb-3" />
-                                <p className="text-slate-500">Caricamento registro audit...</p>
-                            </div>
-                        }
-                    >
-                        <AuditLogDashboard />
-                    </Suspense>
-                </div>
-            ) : (
-                <div className="grid grid-cols-12 gap-5 mt-5">
-                    {/* ── Stato Database — KPI Cards ── */}
-                    <div className="flex flex-col col-span-12 sm:col-span-6 p-5 box box--stacked">
-                        <div className="flex flex-col gap-1 mb-5">
-                            <div className="flex items-center gap-3">
-                                <div className="flex items-center justify-center w-12 h-12 rounded-full bg-primary/10">
-                                    <Lucide icon="Database" className="w-6 h-6 text-primary" />
-                                </div>
-                                <div>
-                                    <h2 className="title-card">Stato Database</h2>
-                                    <div className="text-slate-500 text-sm">PostgreSQL — {health.message}</div>
-                                </div>
-                            </div>
-                            <div className="text-2xs text-slate-400 pl-14">
-                                Aggiornato {formatDataOra(metrics.timestamp)}
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-3 mb-4">
-                            <StatCard
-                                densita="compatta"
-                                etichetta="Stato"
-                                valore={dbStatus.label}
-                                icona="Activity"
-                                tono={dbStatus.tone}
-                            />
-                            <StatCard
-                                densita="compatta"
-                                etichetta="Tempo risposta"
-                                valore={`${responseTimeValue} ms`}
-                                icona="Clock"
-                                tono={responseTimeValue > 1000 ? "danger" : responseTimeValue > 500 ? "warning" : "info"}
-                            />
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                            <StatCard
-                                densita="compatta"
-                                etichetta="Connessioni attive"
-                                valore={metrics.activeConnections}
-                                icona="Zap"
-                                tono="brand"
-                            />
-                            <StatCard
-                                densita="compatta"
-                                etichetta="In attesa"
-                                valore={metrics.waitingRequests}
-                                icona="Hourglass"
-                                tono={metrics.waitingRequests > 0 ? "warning" : "info"}
-                            />
-                        </div>
-                    </div>
-
-                    {/* ── Grafici Database ── */}
-                    <div className="flex flex-col col-span-12 sm:col-span-6 p-5 box box--stacked">
-                        <div className="flex flex-col gap-1 mb-5">
-                            <div className="flex items-center gap-3">
-                                <div className="flex items-center justify-center w-12 h-12 rounded-full bg-info/10">
-                                    <Lucide icon="ChartBar" className="w-6 h-6 text-info" />
-                                </div>
-                                <div>
-                                    <h2 className="title-card">Pool Connessioni</h2>
-                                    <div className="text-slate-500 text-sm">
-                                        Utilizzo: {metrics.utilizationPercent}% — Picco: {averages.peakUtilization}%
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            {/* Doughnut — Pool Utilization */}
-                            <div className="flex flex-col items-center">
-                                <span className="text-xs font-medium text-slate-500 mb-2">Utilizzo pool</span>
-                                <div className="relative w-full" style={{ height: 140 }}>
-                                    {poolUtilizationChartData && (
-                                        <Chart
-                                            type="doughnut"
-                                            data={poolUtilizationChartData.data}
-                                            options={poolUtilizationChartData.options}
-                                            className="w-full h-full"
-                                        />
-                                    )}
-                                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                        <span className="text-2xl font-bold text-slate-800">
-                                            {metrics.utilizationPercent}%
+                <Tab.Panels>
+                    {/* L'ordine dei pannelli segue quello di tabs */}
+                    <Tab.Panel>
+                        <div className="grid grid-cols-12 gap-6">
+                            {/* ── Stato Database — KPI Cards ── */}
+                            <Sezione
+                                className="col-span-12 xl:col-span-6"
+                                icona="Database"
+                                titolo="Stato Database"
+                                descrizione={
+                                    <>
+                                        PostgreSQL — {health.message}
+                                        <span className="block text-xs text-slate-400">
+                                            Aggiornato {formatDataOra(metrics.timestamp)}
                                         </span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Bar — Connections Breakdown */}
-                            <div className="flex flex-col">
-                                <span className="text-xs font-medium text-slate-500 mb-2">Connessioni</span>
-                                <div style={{ height: 140 }}>
-                                    {connectionsBarChartData && (
-                                        <Chart
-                                            type="bar"
-                                            data={connectionsBarChartData.data}
-                                            options={connectionsBarChartData.options}
-                                            className="w-full h-full"
-                                        />
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* ── Storico Connessioni (Line Chart) ── */}
-                    <div className="flex flex-col col-span-12 p-5 box box--stacked">
-                        <div className="flex flex-col gap-1 mb-5">
-                            <div className="flex items-center gap-3">
-                                <div className="flex items-center justify-center w-12 h-12 rounded-full bg-primary/10">
-                                    <Lucide icon="TrendingUp" className="w-6 h-6 text-primary" />
-                                </div>
-                                <div>
-                                    <h2 className="title-card">Storico connessioni</h2>
-                                    <div className="text-slate-500 text-sm">
-                                        Media: {averages.avgActiveConnections} attive — Picco: {averages.peakActiveConnections}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {historyLineChartData ? (
-                            <div style={{ height: 220 }}>
-                                <Chart
-                                    type="line"
-                                    data={historyLineChartData.data}
-                                    options={historyLineChartData.options}
-                                    className="w-full h-full"
-                                />
-                            </div>
-                        ) : (
-                            <div className="py-8 text-center text-slate-400">
-                                <Lucide icon="Clock" className="w-8 h-8 mx-auto mb-2" />
-                                <p className="text-sm">Storico non ancora disponibile — i dati si accumulano nel tempo.</p>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* ── Utenti Online ── */}
-                    <div className="flex flex-col col-span-12 sm:col-span-6 p-5 box box--stacked">
-                        <div className="flex flex-col gap-1 mb-5">
-                            <div className="flex items-center gap-3">
-                                <div className="flex items-center justify-center w-12 h-12 rounded-full bg-primary/10">
-                                    <Lucide icon="Server" className="w-6 h-6 text-primary" />
-                                </div>
-                                <div>
-                                    <h2 className="title-card">Stato sistema</h2>
-                                    <div className="text-slate-500 text-sm">Sessioni e connessioni attive</div>
-                                </div>
-                            </div>
-                            <div className="text-2xs text-slate-400 pl-14">
-                                Aggiornato {formatData(new Date())}
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-3 mb-4">
-                            <StatCard
-                                densita="compatta"
-                                etichetta="Sessioni attive"
-                                valore={data.onlineUsers.activeSessions}
-                                icona="Users"
-                                tono="brand"
-                            />
-                            <StatCard
-                                densita="compatta"
-                                etichetta="WebSocket"
-                                valore={data.onlineUsers.wsConnections}
-                                icona="Radio"
-                                tono="info"
-                            />
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                            <StatCard
-                                densita="compatta"
-                                etichetta="Ultimo audit"
-                                valore={
-                                    data.audit.lastAuditTime
-                                        ? dayjs(data.audit.lastAuditTime).format("HH:mm:ss")
-                                        : null
+                                    </>
                                 }
-                                icona="Clock"
-                                tono="info"
-                            />
-                            <StatCard
-                                densita="compatta"
-                                etichetta="Pool idle"
-                                valore={metrics.idleConnections}
-                                icona="Pause"
-                                tono="info"
-                            />
-                        </div>
-                    </div>
-
-                    {/* ── Audit & Sicurezza ── */}
-                    <div className="flex flex-col col-span-12 sm:col-span-6 p-5 box box--stacked">
-                        <div className="flex flex-col gap-1 mb-5">
-                            <div className="flex items-center gap-3">
-                                <div className="flex items-center justify-center w-12 h-12 rounded-full bg-warning/10">
-                                    <Lucide icon="Shield" className="w-6 h-6 text-warning" />
+                            >
+                                <div className="grid grid-cols-2 gap-3">
+                                    <StatCard
+                                        densita="compatta"
+                                        etichetta="Stato"
+                                        valore={dbStatus.label}
+                                        icona="Activity"
+                                        tono={dbStatus.tone}
+                                    />
+                                    <StatCard
+                                        densita="compatta"
+                                        etichetta="Tempo risposta"
+                                        valore={`${formatNumero(responseTimeValue)} ms`}
+                                        icona="Clock"
+                                        tono={responseTimeValue > 1000 ? "danger" : responseTimeValue > 500 ? "warning" : "info"}
+                                    />
+                                    <StatCard
+                                        densita="compatta"
+                                        etichetta="Connessioni attive"
+                                        valore={formatNumero(metrics.activeConnections)}
+                                        icona="Zap"
+                                        tono="brand"
+                                    />
+                                    <StatCard
+                                        densita="compatta"
+                                        etichetta="In attesa"
+                                        valore={formatNumero(metrics.waitingRequests)}
+                                        icona="Hourglass"
+                                        tono={metrics.waitingRequests > 0 ? "warning" : "info"}
+                                    />
                                 </div>
-                                <div>
-                                    <h2 className="title-card">Audit & Sicurezza</h2>
-                                    <div className="text-slate-500 text-sm">Metriche di sicurezza del sistema</div>
-                                </div>
-                            </div>
-                            <div className="text-2xs text-slate-400 pl-14">
-                                {data.audit.totalEvents} eventi totali registrati
-                            </div>
-                        </div>
+                            </Sezione>
 
-                        <div className="grid grid-cols-2 gap-3 mb-4">
-                            <StatCard
-                                densita="compatta"
-                                etichetta="Login falliti"
-                                valore={data.audit.failedLogins}
-                                icona="ShieldOff"
-                                tono={data.audit.failedLogins > 0 ? "danger" : "brand"}
-                            />
-                            <StatCard
-                                densita="compatta"
-                                etichetta="Attività sospette"
-                                valore={data.audit.suspiciousActivities}
-                                icona="TriangleAlert"
-                                tono={data.audit.suspiciousActivities > 0 ? "danger" : "brand"}
-                            />
-                        </div>
-
-                        <div className="flex flex-col gap-2 px-1">
-                            <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">
-                                Per severità
-                            </span>
-                            {(["CRITICAL", "HIGH", "MEDIUM", "LOW"] as const).map((sev) => (
-                                <div key={sev} className="flex items-center justify-between text-sm">
-                                    <SeverityBadge severity={sev} />
-                                    <span className="font-semibold text-slate-700">
-                                        {data.audit.eventsBySeverity[sev] ?? 0}
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* ── Centro Alert Azionabile ── */}
-                    <div className="flex flex-col col-span-12 p-5 box box--stacked">
-                        <div className="flex flex-col gap-1 mb-5">
-                            <div className="flex items-center gap-3">
-                                <div className="flex items-center justify-center w-12 h-12 rounded-full bg-danger/10">
-                                    <Lucide icon="BellRing" className="w-6 h-6 text-danger" />
-                                </div>
-                                <div>
-                                    <h2 className="title-card">Centro alert azionabile</h2>
-                                    <div className="text-slate-500 text-sm">
-                                        Prioritizza criticità e intervieni con azioni rapide
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="text-2xs text-slate-400 pl-14">
-                                {data.alerts?.length ?? 0} alert attivi
-                            </div>
-                        </div>
-
-                        {!data.alerts || data.alerts.length === 0 ? (
-                            <div className="py-8 text-center text-slate-400">
-                                <Lucide icon="ShieldCheck" className="w-10 h-10 mx-auto mb-2 text-success" />
-                                <p>Nessun alert attivo al momento.</p>
-                            </div>
-                        ) : (
-                            <div className="grid grid-cols-12 gap-3">
-                                {data.alerts.map((alert) => (
-                                    <div
-                                        key={alert.id}
-                                        className={clsx(
-                                            "col-span-12 border rounded-lg px-4 py-3",
-                                            alert.severity === "CRITICAL" && "border-danger/40 bg-danger/5",
-                                            alert.severity === "HIGH" && "border-warning/40 bg-warning/5",
-                                            alert.severity === "MEDIUM" && "border-info/40 bg-info/5",
-                                            alert.severity === "LOW" && "border-slate-200 bg-slate-50/70"
-                                        )}
-                                    >
-                                        <div className="flex flex-wrap items-center gap-2 mb-2">
-                                            <SeverityBadge severity={alert.severity} />
-                                            <StatusBadge tono={TONO_STATO_ALERT[alert.status] ?? "neutral"} etichetta={alert.status} />
-                                            <span className="px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600">
-                                                {alertSourceLabels[alert.source]}
-                                            </span>
-                                            <span className="text-2xs text-slate-500">
-                                                {formatDataOra(alert.createdAt)}
-                                            </span>
-                                        </div>
-
-                                        <div className="font-semibold text-slate-800 mb-1">{alert.title}</div>
-                                        <p className="text-sm text-slate-600 mb-2">{alert.description}</p>
-
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            {typeof alert.metricValue === "number" && (
-                                                <span className="text-2xs px-2 py-1 rounded bg-white border border-slate-200 text-slate-600">
-                                                    Valore: {alert.metricValue}
-                                                </span>
+                            {/* ── Grafici Database ── */}
+                            <Sezione
+                                className="col-span-12 xl:col-span-6"
+                                icona="ChartBar"
+                                titolo="Pool connessioni"
+                                descrizione={`Utilizzo: ${metrics.utilizationPercent}% — Picco: ${averages.peakUtilization}%`}
+                            >
+                                <div className="grid grid-cols-2 gap-4">
+                                    {/* Doughnut — Pool Utilization */}
+                                    <div className="flex flex-col items-center">
+                                        <span className="title-eyebrow mb-2">Utilizzo pool</span>
+                                        <div className="relative w-full" style={{ height: 140 }}>
+                                            {poolUtilizationChartData && (
+                                                <Chart
+                                                    type="doughnut"
+                                                    data={poolUtilizationChartData.data}
+                                                    options={poolUtilizationChartData.options}
+                                                    className="h-full w-full"
+                                                />
                                             )}
-                                            {typeof alert.threshold === "number" && (
-                                                <span className="text-2xs px-2 py-1 rounded bg-white border border-slate-200 text-slate-600">
-                                                    Soglia: {alert.threshold}
+                                            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                                                <span className="text-2xl font-bold tabular-nums text-slate-800">
+                                                    {metrics.utilizationPercent}%
                                                 </span>
-                                            )}
-                                        </div>
-
-                                        {alert.actions.length > 0 && (
-                                            <div className="flex flex-wrap gap-2 mt-3">
-                                                {alert.actions.map((action, idx) => (
-                                                    <Link
-                                                        key={`${alert.id}-action-${idx}`}
-                                                        to={action.href}
-                                                        className={clsx(
-                                                            "text-xs font-medium px-3 py-1.5 rounded transition-colors",
-                                                            alertActionButtonClass[action.variant]
-                                                        )}
-                                                    >
-                                                        {action.label}
-                                                    </Link>
-                                                ))}
                                             </div>
-                                        )}
+                                        </div>
                                     </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
 
-                    {/* ── Ultimi Errori ── */}
-                    <div className="flex flex-col col-span-12 p-5 box box--stacked">
-                        <div className="flex flex-col gap-1 mb-5">
-                            <div className="flex items-center gap-3">
-                                <div className="flex items-center justify-center w-12 h-12 rounded-full bg-danger/10">
-                                    <Lucide icon="OctagonAlert" className="w-6 h-6 text-danger" />
-                                </div>
-                                <div>
-                                    <h2 className="title-card">Ultimi errori</h2>
-                                    <div className="text-slate-500 text-sm">
-                                        Eventi CRITICAL e HIGH — ultimi 30
+                                    {/* Bar — Connections Breakdown */}
+                                    <div className="flex flex-col">
+                                        <span className="title-eyebrow mb-2">Connessioni</span>
+                                        <div style={{ height: 140 }}>
+                                            {connectionsBarChartData && (
+                                                <Chart
+                                                    type="bar"
+                                                    data={connectionsBarChartData.data}
+                                                    options={connectionsBarChartData.options}
+                                                    className="h-full w-full"
+                                                />
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        </div>
+                            </Sezione>
 
-                        {data.recentErrors.length === 0 ? (
-                            <div className="py-8 text-center text-slate-400">
-                                <Lucide icon="CircleCheck" className="w-10 h-10 mx-auto mb-2 text-success" />
-                                <p>Nessun errore recente registrato.</p>
-                            </div>
-                        ) : (
-                            <div className="overflow-x-auto -mx-5">
-                                <table className="table table-hover">
-                                    <thead>
-                                        <tr>
-                                            <th className="whitespace-nowrap">Timestamp</th>
-                                            <th className="whitespace-nowrap">Severità</th>
-                                            <th className="whitespace-nowrap">Tipo evento</th>
-                                            <th className="whitespace-nowrap">Utente</th>
-                                            <th className="whitespace-nowrap">IP</th>
-                                            <th>Dettagli</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {data.recentErrors.map((evt, idx) => (
-                                            <tr key={idx}>
-                                                <td className="whitespace-nowrap text-xs">
-                                                    {formatDataOra(evt.timestamp)}
-                                                </td>
-                                                <td>
-                                                    <SeverityBadge severity={evt.severity} />
-                                                </td>
-                                                <td className="text-xs font-mono">
-                                                    {evt.eventType}
-                                                </td>
-                                                <td className="text-xs">
-                                                    {evt.userId ?? "—"}
-                                                </td>
-                                                <td className="text-xs font-mono">
-                                                    {evt.ipAddress ?? "—"}
-                                                </td>
-                                                <td className="text-xs max-w-xs truncate">
-                                                    {evt.details
-                                                        ? JSON.stringify(evt.details).slice(0, 100)
-                                                        : "—"}
-                                                </td>
-                                            </tr>
+                            {/* ── Storico Connessioni (Line Chart) ── */}
+                            <Sezione
+                                className="col-span-12"
+                                icona="TrendingUp"
+                                titolo="Storico connessioni"
+                                descrizione={`Media: ${averages.avgActiveConnections} attive — Picco: ${averages.peakActiveConnections}`}
+                            >
+                                {historyLineChartData ? (
+                                    <div style={{ height: 220 }}>
+                                        <Chart
+                                            type="line"
+                                            data={historyLineChartData.data}
+                                            options={historyLineChartData.options}
+                                            className="h-full w-full"
+                                        />
+                                    </div>
+                                ) : (
+                                    <EmptyState
+                                        compatta
+                                        icon="Clock"
+                                        title="Storico non ancora disponibile"
+                                        description="I dati si accumulano nel tempo."
+                                    />
+                                )}
+                            </Sezione>
+
+                            {/* ── Utenti Online ── */}
+                            <Sezione
+                                className="col-span-12 xl:col-span-6"
+                                icona="Server"
+                                titolo="Stato sistema"
+                                descrizione={
+                                    <>
+                                        Sessioni e connessioni attive
+                                        <span className="block text-xs text-slate-400">
+                                            Aggiornato {formatData(new Date())}
+                                        </span>
+                                    </>
+                                }
+                            >
+                                <div className="grid grid-cols-2 gap-3">
+                                    <StatCard
+                                        densita="compatta"
+                                        etichetta="Sessioni attive"
+                                        valore={formatNumero(data.onlineUsers.activeSessions)}
+                                        icona="Users"
+                                        tono="brand"
+                                    />
+                                    <StatCard
+                                        densita="compatta"
+                                        etichetta="WebSocket"
+                                        valore={formatNumero(data.onlineUsers.wsConnections)}
+                                        icona="Radio"
+                                        tono="info"
+                                    />
+                                    <StatCard
+                                        densita="compatta"
+                                        etichetta="Ultimo audit"
+                                        valore={
+                                            data.audit.lastAuditTime ? (
+                                                <span title={formatDataOraSecondi(data.audit.lastAuditTime)}>
+                                                    {formatRelativo(data.audit.lastAuditTime)}
+                                                </span>
+                                            ) : null
+                                        }
+                                        icona="Clock"
+                                        tono="info"
+                                    />
+                                    <StatCard
+                                        densita="compatta"
+                                        etichetta="Pool idle"
+                                        valore={formatNumero(metrics.idleConnections)}
+                                        icona="Pause"
+                                        tono="info"
+                                    />
+                                </div>
+                            </Sezione>
+
+                            {/* ── Audit & Sicurezza ── */}
+                            <Sezione
+                                className="col-span-12 xl:col-span-6"
+                                icona="Shield"
+                                titolo="Audit & Sicurezza"
+                                descrizione={
+                                    <>
+                                        Metriche di sicurezza del sistema
+                                        <span className="block text-xs text-slate-400">
+                                            {formatNumero(data.audit.totalEvents)} eventi totali registrati
+                                        </span>
+                                    </>
+                                }
+                            >
+                                <div className="grid grid-cols-2 gap-3">
+                                    <StatCard
+                                        densita="compatta"
+                                        etichetta="Login falliti"
+                                        valore={formatNumero(data.audit.failedLogins)}
+                                        icona="ShieldOff"
+                                        tono={data.audit.failedLogins > 0 ? "danger" : "brand"}
+                                    />
+                                    <StatCard
+                                        densita="compatta"
+                                        etichetta="Attività sospette"
+                                        valore={formatNumero(data.audit.suspiciousActivities)}
+                                        icona="TriangleAlert"
+                                        tono={data.audit.suspiciousActivities > 0 ? "danger" : "brand"}
+                                    />
+                                </div>
+
+                                <h3 className="title-eyebrow mb-2 mt-5">Per severità</h3>
+                                <dl className="flex flex-col gap-2">
+                                    {(["CRITICAL", "HIGH", "MEDIUM", "LOW"] as const).map((sev) => (
+                                        <div key={sev} className="flex items-center justify-between text-sm">
+                                            <dt>
+                                                <SeverityBadge severity={sev} />
+                                            </dt>
+                                            <dd className="font-semibold tabular-nums text-slate-700">
+                                                {formatNumero(data.audit.eventsBySeverity[sev] ?? 0)}
+                                            </dd>
+                                        </div>
+                                    ))}
+                                </dl>
+                            </Sezione>
+
+                            {/* ── Centro Alert Azionabile ── */}
+                            <Sezione
+                                className="col-span-12"
+                                icona="BellRing"
+                                titolo="Centro alert azionabile"
+                                descrizione={
+                                    <>
+                                        Prioritizza criticità e intervieni con azioni rapide
+                                        <span className="block text-xs text-slate-400">
+                                            {formatNumero(data.alerts?.length ?? 0)} alert attivi
+                                        </span>
+                                    </>
+                                }
+                            >
+                                {!data.alerts || data.alerts.length === 0 ? (
+                                    <EmptyState
+                                        compatta
+                                        icon="ShieldCheck"
+                                        iconColor="text-success"
+                                        title="Nessun alert attivo"
+                                        description="Al momento non ci sono criticità da gestire."
+                                    />
+                                ) : (
+                                    <div className="flex flex-col gap-3">
+                                        {data.alerts.map((alert) => (
+                                            <div
+                                                key={alert.id}
+                                                className={twMerge(
+                                                    "rounded-card border p-4",
+                                                    CLASSI_SEVERITA_ALERT[alert.severity] ?? CLASSI_SEVERITA_ALERT.LOW
+                                                )}
+                                            >
+                                                <div className="mb-2 flex flex-wrap items-center gap-2">
+                                                    <SeverityBadge severity={alert.severity} />
+                                                    <StatusBadge
+                                                        tono={STATI_ALERT[alert.status]?.tono ?? "neutral"}
+                                                        etichetta={STATI_ALERT[alert.status]?.etichetta ?? alert.status}
+                                                    />
+                                                    <Badge variant="secondary" size="sm">
+                                                        {alertSourceLabels[alert.source] ?? alert.source}
+                                                    </Badge>
+                                                    <span className="text-xs text-slate-500">
+                                                        {formatDataOra(alert.createdAt)}
+                                                    </span>
+                                                </div>
+
+                                                <h3 className="title-card mb-1">{alert.title}</h3>
+                                                <p className="mb-2 text-sm text-slate-600">{alert.description}</p>
+
+                                                {(typeof alert.metricValue === "number" || typeof alert.threshold === "number") && (
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        {typeof alert.metricValue === "number" && (
+                                                            <Badge variant="secondary" size="sm" border className="bg-white tabular-nums">
+                                                                Valore: {formatNumero(alert.metricValue)}
+                                                            </Badge>
+                                                        )}
+                                                        {typeof alert.threshold === "number" && (
+                                                            <Badge variant="secondary" size="sm" border className="bg-white tabular-nums">
+                                                                Soglia: {formatNumero(alert.threshold)}
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                )}
+
+                                                {alert.actions.length > 0 && (
+                                                    <div className="mt-3 flex flex-wrap gap-2">
+                                                        {alert.actions.map((action, idx) => (
+                                                            <Button
+                                                                key={`${alert.id}-action-${idx}`}
+                                                                as={Link}
+                                                                to={action.href}
+                                                                size="sm"
+                                                                variant={VARIANTE_AZIONE_ALERT[action.variant] ?? "outline-secondary"}
+                                                            >
+                                                                {action.label}
+                                                            </Button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
                                         ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            )}
-        </>
+                                    </div>
+                                )}
+                            </Sezione>
+
+                            {/* ── Ultimi Errori ── */}
+                            <Sezione
+                                className="col-span-12"
+                                senzaPadding
+                                icona="OctagonAlert"
+                                titolo="Ultimi errori"
+                                descrizione="Eventi critici e alti — ultimi 30"
+                            >
+                                {data.recentErrors.length === 0 ? (
+                                    <div className="px-5 pb-5">
+                                        <EmptyState
+                                            compatta
+                                            icon="CircleCheck"
+                                            iconColor="text-success"
+                                            title="Nessun errore recente"
+                                            description="Non sono stati registrati eventi critici o alti."
+                                        />
+                                    </div>
+                                ) : (
+                                    <div className="overflow-x-auto">
+                                        <Table>
+                                            <Table.Thead>
+                                                <Table.Tr>
+                                                    <Table.Th>Data e ora</Table.Th>
+                                                    <Table.Th>Severità</Table.Th>
+                                                    <Table.Th>Tipo evento</Table.Th>
+                                                    <Table.Th>Utente</Table.Th>
+                                                    <Table.Th>IP</Table.Th>
+                                                    <Table.Th>Dettagli</Table.Th>
+                                                </Table.Tr>
+                                            </Table.Thead>
+                                            <Table.Tbody>
+                                                {data.recentErrors.map((evt, idx) => (
+                                                    <Table.Tr key={idx}>
+                                                        <Table.Td className="whitespace-nowrap text-xs tabular-nums">
+                                                            {formatDataOraSecondi(evt.timestamp)}
+                                                        </Table.Td>
+                                                        <Table.Td>
+                                                            <SeverityBadge severity={evt.severity} />
+                                                        </Table.Td>
+                                                        <Table.Td className="font-mono text-xs">{evt.eventType}</Table.Td>
+                                                        <Table.Td className="text-xs">{evt.userId ?? VALORE_ASSENTE}</Table.Td>
+                                                        <Table.Td className="font-mono text-xs">
+                                                            {evt.ipAddress ?? VALORE_ASSENTE}
+                                                        </Table.Td>
+                                                        <Table.Td className="max-w-xs truncate text-xs">
+                                                            {evt.details
+                                                                ? JSON.stringify(evt.details).slice(0, 100)
+                                                                : VALORE_ASSENTE}
+                                                        </Table.Td>
+                                                    </Table.Tr>
+                                                ))}
+                                            </Table.Tbody>
+                                        </Table>
+                                    </div>
+                                )}
+                            </Sezione>
+                        </div>
+                    </Tab.Panel>
+
+                    <Tab.Panel>
+                        <Suspense
+                            fallback={
+                                <Sezione>
+                                    <div className="flex flex-col items-center gap-3 py-8 text-slate-500">
+                                        <Spinner size="lg" etichetta="Caricamento registro audit…" />
+                                        <p aria-hidden="true">Caricamento registro audit…</p>
+                                    </div>
+                                </Sezione>
+                            }
+                        >
+                            <AuditLogDashboard />
+                        </Suspense>
+                    </Tab.Panel>
+
+                    <Tab.Panel>{gdoDashboardContent}</Tab.Panel>
+                </Tab.Panels>
+            </Tab.Group>
+        </Pagina>
     );
 };
 

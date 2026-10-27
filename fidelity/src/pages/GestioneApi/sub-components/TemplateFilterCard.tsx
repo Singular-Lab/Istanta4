@@ -1,5 +1,7 @@
+import Badge from "@/components/Base/Badge";
 import Button from "@/components/Base/Button";
 import Lucide from "@/components/Base/Lucide";
+import StatusBadge from "@/components/Base/StatusBadge";
 import clsx from "clsx";
 import { useNotification } from "../../../context/NotificationContext";
 
@@ -78,17 +80,14 @@ function TemplateFilterCard({
     return (
         <div
             className={clsx(
-                "w-full rounded-xl border transition-all relative overflow-hidden",
-                "bg-white dark:bg-darkmode-700",
+                "relative w-full overflow-hidden rounded-card border bg-white transition-colors",
                 selected
                     ? "border-primary/40 ring-1 ring-primary/20"
-                    : "border-slate-200 dark:border-slate-600 hover:border-primary/30",
+                    : "border-slate-200 hover:border-primary/30",
                 !template.is_active && "opacity-90"
             )}
         >
-            {/* =======================
-          BODY: seleziona il template
-      ======================= */}
+            {/* Corpo: seleziona il template */}
             <button
                 type="button"
                 onClick={() => {
@@ -96,64 +95,55 @@ function TemplateFilterCard({
                 }}
                 aria-pressed={selected}
                 className={clsx(
-                    "w-full text-left cursor-pointer p-5 flex flex-col gap-4 transition-opacity ",
-                    !template.is_active && "text-slate-400 dark:text-slate-400"
-
+                    "flex w-full cursor-pointer flex-col gap-4 p-5 text-left transition-opacity",
+                    !template.is_active && "text-slate-400"
                 )}
             >
-
-                {/* HEADER */}
+                {/* Intestazione */}
                 <span className="flex items-start justify-between gap-4">
-                    <span className="min-w-0 flex-1 flex flex-col gap-1">
+                    <span className="flex min-w-0 flex-1 flex-col gap-1">
                         <span className="flex items-center gap-2">
-                            <span className="text-base font-semibold text-slate-900 dark:text-slate-100 truncate">
+                            <span className="title-card truncate">
                                 {template.nome}
                             </span>
 
                             {!template.is_active && (
-                                <span className="px-2 py-0.5 text-2xs font-semibold rounded-full
-                   bg-slate-200 text-slate-600
-                   dark:bg-darkmode-500 dark:text-slate-300">
-                                    Inattivo
-                                </span>
+                                <StatusBadge tono="neutral" etichetta="Inattivo" />
                             )}
-
                         </span>
 
                         <span className="flex items-center gap-1.5 text-xs text-slate-500">
-                            <Lucide icon="Hash" aria-hidden="true" className="w-3.5 h-3.5 text-slate-400" />
-                            <code className="font-mono bg-slate-100 dark:bg-darkmode-500 px-1.5 py-0.5 rounded">
+                            <Lucide icon="Hash" aria-hidden="true" className="h-3.5 w-3.5 text-slate-400" />
+                            <code className="rounded-control bg-slate-100 px-1.5 py-0.5 font-mono">
                                 {template.slug}
                             </code>
                         </span>
                     </span>
 
                     {selected && (
-                        <span className="px-2 py-1 text-xs font-medium rounded-md bg-primary text-white">
-                            Selezionato
-                        </span>
+                        <StatusBadge tono="brand" icon="Check" etichetta="Selezionato" />
                     )}
                 </span>
 
-                {/* DESCRIZIONE */}
+                {/* Descrizione */}
                 {template.descrizione && (
-                    <span className="block text-sm text-slate-600 dark:text-slate-300 leading-relaxed line-clamp-2">
+                    <span className="line-clamp-2 block text-sm leading-relaxed text-slate-600">
                         {template.descrizione}
                     </span>
                 )}
 
-                {/* BADGES */}
+                {/* Sorgente e modalità di rendering */}
                 <span className="flex flex-wrap gap-2 pt-1">
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-light text-dark">
+                    <Badge variant="secondary" size="sm" className="gap-1.5">
                         <Lucide
                             icon={getEndpointIcon(template.endpoint_type)}
                             aria-hidden="true"
-                            className="w-3.5 h-3.5"
+                            className="h-3 w-3"
                         />
                         {getEndpointLabel(template.endpoint_type)}
-                    </span>
+                    </Badge>
 
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-700 dark:bg-darkmode-500 dark:text-slate-200">
+                    <Badge variant="secondary" size="sm" className="gap-1.5">
                         <Lucide
                             icon={
                                 template.render_type === "grid"
@@ -163,67 +153,63 @@ function TemplateFilterCard({
                                         : "ArrowLeftRight"
                             }
                             aria-hidden="true"
-                            className="w-3.5 h-3.5"
+                            className="h-3 w-3"
                         />
                         {template.render_type === "grid" ? "Griglia" : template.render_type === "list" ? "Lista" : "Carousel"}
-                    </span>
+                    </Badge>
                 </span>
 
-                {/* STATS */}
-                <span className="pt-3 mt-2 border-t border-slate-100 dark:border-darkmode-600 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-500">
+                {/* Conteggi */}
+                <span className="mt-2 flex flex-wrap gap-x-5 gap-y-2 border-t border-slate-100 pt-3 text-xs text-slate-500">
                     {template.template_ids.length > 0 && (
                         <span className="flex items-center gap-1.5">
-                            <Lucide icon="Layers" aria-hidden="true" className="w-4 h-4 text-slate-400" />
+                            <Lucide icon="Layers" aria-hidden="true" className="h-4 w-4 text-slate-400" />
                             {template.template_ids.length} template
                         </span>
                     )}
 
                     {template.export_codes?.length > 0 && (
                         <span className="flex items-center gap-1.5">
-                            <Lucide icon="FileType" aria-hidden="true" className="w-4 h-4 text-slate-400" />
+                            <Lucide icon="FileType" aria-hidden="true" className="h-4 w-4 text-slate-400" />
                             {template.export_codes.length} export
                         </span>
                     )}
 
                     {template.filters.length > 0 && (
                         <span className="flex items-center gap-1.5">
-                            <Lucide icon="Filter" aria-hidden="true" className="w-4 h-4 text-slate-400" />
+                            <Lucide icon="Filter" aria-hidden="true" className="h-4 w-4 text-slate-400" />
                             {template.filters.length} filtri
                         </span>
                     )}
                 </span>
             </button>
 
-            {/* =======================
-          FOOTER
-      ======================= */}
-            <div className="px-5 py-3 border-t border-slate-100 dark:border-darkmode-600 flex justify-between">
+            {/* Azioni */}
+            <div className="flex justify-between gap-2 border-t border-slate-100 px-5 py-3">
                 <Button
                     variant="outline-secondary"
                     size="sm"
                     onClick={copySlug}
-                    className="text-xs"
                 >
-                    <Lucide icon="Copy" className="w-3.5 h-3.5 mr-1.5" />
+                    <Lucide icon="Copy" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
                     Copia slug
                 </Button>
                 {onEdit && (
                     <Button
-                        variant="outline-primary"
+                        variant="outline-secondary"
                         size="sm"
                         onClick={(e: React.MouseEvent) => {
                             e.stopPropagation();
                             onEdit();
                         }}
-                        className="text-xs"
                     >
-                        <Lucide icon="Pen" className="w-3.5 h-3.5 mr-1.5" />
+                        <Lucide icon="Pen" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
                         Modifica
                     </Button>
                 )}
             </div>
             {!template.is_active && (
-                <div className="absolute inset-0 bg-white/40 dark:bg-darkmode-700/40 pointer-events-none" />
+                <div className="pointer-events-none absolute inset-0 bg-white/40" />
             )}
         </div>
     );

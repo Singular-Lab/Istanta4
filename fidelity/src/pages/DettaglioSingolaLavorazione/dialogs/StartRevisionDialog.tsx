@@ -1,5 +1,6 @@
 import React from 'react';
 import { useMutation } from '@tanstack/react-query';
+import Alert from '@/components/Base/Alert';
 import Button from '@/components/Base/Button';
 import Lucide from '@/components/Base/Lucide';
 import { Dialog } from '@/components/Base/Headless';
@@ -16,43 +17,33 @@ const StartRevisionDialog = ({ mutationAvvioRevisione, dialogOpen, setDialogOpen
     <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)}>
         <Dialog.Panel>
             <Dialog.Title>
-                <div className="flex items-center">
-                    <Lucide icon="FileCheck" className="w-5 h-5 text-info mr-2" />
-                    <h2 className="text-lg font-semibold text-slate-800 text-center">Sottoponi a revisione</h2>
-                </div>
+                <Lucide icon="FileCheck" aria-hidden="true" className="h-5 w-5 text-info" />
+                Sottoponi a revisione
             </Dialog.Title>
-            <Dialog.Description className="text-center p-2">
-                <div className="bg-info/5 p-3 rounded-lg border border-info/10 mb-3">
-                    <p className="text-sm text-slate-700">
-                        Stai per avviare la revisione per:
-                    </p>
-                    <div className="font-semibold text-info mt-1">
+            <Dialog.Description className="flex flex-col gap-3 text-sm text-slate-600">
+                <Alert variant="soft-info">
+                    Stai per avviare la revisione per:
+                    <div className="mt-1 font-semibold">
                         {lavorazione.nomeArea} - {lavorazione.nomeCanale}
                     </div>
-                </div>
-                <p className="text-sm text-slate-500">
-                    Questa azione non può essere annullata una volta confermata.
-                </p>
+                </Alert>
+                <p>Questa azione non può essere annullata una volta confermata.</p>
                 <p className="text-xs text-slate-500">
                     La revisione permetterà di verificare e approvare i file caricati.
                 </p>
             </Dialog.Description>
-            <Dialog.Footer className="flex justify-end gap-4">
-                <Button
-                    variant="secondary"
-                    onClick={() => setDialogOpen(false)}
-                >
-                    <Lucide icon="X" className="w-4 h-4 mr-2" />
+            <Dialog.Footer>
+                <Button variant="outline-secondary" onClick={() => setDialogOpen(false)}>
                     Annulla
                 </Button>
                 <Button
-                    variant="soft-primary"
+                    variant="primary"
                     onClick={() => {
                         setDialogOpen(false);
                         mutationAvvioRevisione.mutate(lavorazione.guidId);
                     }}
                 >
-                    <Lucide icon="FileCheck" className="w-4 h-4 mr-2" />
+                    <Lucide icon="FileCheck" aria-hidden="true" className="mr-2 h-4 w-4" />
                     Sottoponi a revisione
                 </Button>
             </Dialog.Footer>

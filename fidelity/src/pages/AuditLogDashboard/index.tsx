@@ -1,6 +1,8 @@
 import Button from "@/components/Base/Button";
 import Lucide from "@/components/Base/Lucide";
-import Pagination from "@/components/Base/Pagination";
+import PageError from "@/components/Base/PageError";
+import PaginazioneTabella from "@/components/Base/PaginazioneTabella";
+import Sezione from "@/components/Base/Sezione";
 import Spinner from "@/components/Base/Spinner";
 import StatCard, { StatCardGrid } from "@/components/Base/StatCard";
 import {
@@ -10,7 +12,8 @@ import {
   useFetchAuditSummary,
   type AuditLogFilters as FiltersType,
 } from "@/query/query";
-import { FC, useCallback, useEffect, useMemo, useState } from "react";
+import { formatNumero } from "@/utils/format";
+import { FC, useCallback, useEffect, useState } from "react";
 import { ServerCall } from "../../../lib/server_call";
 import { useNotification } from "../../context/NotificationContext";
 import AuditLogFilters from "./AuditLogFilters";
@@ -23,14 +26,23 @@ const DEFAULT_FILTERS: FiltersType = {
   sortOrder: "DESC",
 };
 
+const ETICHETTE_RIEPILOGO = ["Totale eventi", "Eventi oggi", "Critici", "Alti"];
+
 const AuditLogDashboard: FC = () => {
   const [filters, setFilters] = useState<FiltersType>(DEFAULT_FILTERS);
   const [isExporting, setIsExporting] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  // Cambia a ogni azzeramento: i filtri ripartono da capo, compreso il testo della ricerca
+  const [versioneFiltri, setVersioneFiltri] = useState(0);
   const { showNotification } = useNotification();
 
-  const { data: logsData, isLoading: logsLoading, refetch: refetchLogs } =
-    useFetchAuditLogs(filters);
+  const {
+    data: logsData,
+    isLoading: logsLoading,
+    isError: logsIsError,
+    error: logsError,
+    refetch: refetchLogs,
+  } = useFetchAuditLogs(filters);
   const { data: summary, isLoading: summaryLoading, refetch: refetchSummary } =
     useFetchAuditSummary();
   const { data: eventTypes, refetch: refetchEventTypes } = useFetchAuditEventTypes();
@@ -45,6 +57,7 @@ const AuditLogDashboard: FC = () => {
 
   const handleReset = useCallback(() => {
     setFilters(DEFAULT_FILTERS);
+    setVersioneFiltri((versione) => versione + 1);
   }, []);
 
   const handleSort = useCallback((field: string) => {
@@ -138,47 +151,43 @@ const AuditLogDashboard: FC = () => {
     }
   }, [filters, showNotification]);
 
-  const totalPages = logsData?.totalPages ?? 0;
   const currentPage = filters.page ?? 1;
-
-  const pageNumbers = useMemo(() => {
-    if (totalPages <= 1) return [];
-    const pages: number[] = [];
-    const start = Math.max(1, currentPage - 2);
-    const end = Math.min(totalPages, currentPage + 2);
-    for (let i = start; i <= end; i++) pages.push(i);
-    return pages;
-  }, [totalPages, currentPage]);
+  const filtriAttivi = Boolean(
+    filters.eventType ||
+      filters.severity ||
+      filters.result ||
+      filters.searchTerm ||
+      filters.dateFrom ||
+      filters.dateTo
+  );
 
   return (
-    <div className="flex flex-col gap-5">
-      {/* ── Summary cards ── */}
+    <div className="flex flex-col gap-6">
+      {/* ── KPI ── */}
       <StatCardGrid>
         {summaryLoading ? (
-          <>
-            {["Totale eventi", "Eventi oggi", "Critici", "Alti"].map((etichetta) => (
-              <StatCard key={etichetta} etichetta={etichetta} valore={null} densita="compatta" loading />
-            ))}
-          </>
+          ETICHETTE_RIEPILOGO.map((etichetta) => (
+            <StatCard key={etichetta} etichetta={etichetta} valore={null} densita="compatta" loading />
+          ))
         ) : summary ? (
           <>
             <StatCard
               etichetta="Totale eventi"
-              valore={summary.totalEvents.toLocaleString("it-IT")}
+              valore={formatNumero(summary.totalEvents)}
               icona="Activity"
               tono="neutral"
               densita="compatta"
             />
             <StatCard
               etichetta="Eventi oggi"
-              valore={summary.totalToday.toLocaleString("it-IT")}
+              valore={formatNumero(summary.totalToday)}
               icona="CalendarDays"
               tono="info"
               densita="compatta"
             />
             <StatCard
               etichetta="Critici"
-              valore={summary.criticalCount.toLocaleString("it-IT")}
+              valore={formatNumero(summary.criticalCount)}
               icona="OctagonAlert"
               tono={summary.criticalCount > 0 ? "danger" : "neutral"}
               evidenzia={summary.criticalCount > 0}
@@ -187,147 +196,92 @@ const AuditLogDashboard: FC = () => {
             />
             <StatCard
               etichetta="Alti"
-              valore={summary.highCount.toLocaleString("it-IT")}
+              valore={formatNumero(summary.highCount)}
               icona="TriangleAlert"
               tono={summary.highCount > 0 ? "warning" : "neutral"}
               evidenzia={summary.highCount > 0}
               densita="compatta"
             />
           </>
-        ) : null}
+        ) : (
+          // Riepilogo non arrivato: lo si dice al posto dei valori, non si nascondono le card
+          ETICHETTE_RIEPILOGO.map((etichetta) => (
+            <StatCard key={etichetta} etichetta={etichetta} valore={null} densita="compatta" errore="Non disponibile" />
+          ))
+        )}
       </StatCardGrid>
 
-      {/* ── Filters + Export ── */}
-      <div className="box box--stacked p-4">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <AuditLogFilters
-            filters={filters}
-            onChange={handleFilterChange}
-            onReset={handleReset}
-            eventTypes={eventTypes ?? []}
-            severities={severities ?? []}
-          />
-          <div className="flex flex-wrap items-center gap-2">
+      {/* ── Registro: filtri, tabella e paginazione ── */}
+      <Sezione
+        senzaPadding
+        titolo="Registro eventi"
+        descrizione="Eventi di audit registrati dal sistema"
+        azioni={
+          <>
             <Button
               type="button"
-              variant="neutral"
+              variant="outline-secondary"
+              size="sm"
               onClick={handleRefresh}
               loading={isRefreshing}
             >
-              {!isRefreshing && <Lucide icon="RefreshCw" aria-hidden="true" className="mr-2 h-4 w-4" />}
+              {!isRefreshing && <Lucide icon="RefreshCw" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />}
               Aggiorna
             </Button>
             <Button
               type="button"
-              variant="soft-primary"
+              variant="outline-secondary"
+              size="sm"
               onClick={handleExportCsv}
               loading={isExporting}
             >
-              {!isExporting && <Lucide icon="Download" aria-hidden="true" className="mr-2 h-4 w-4" />}
-              Export CSV
+              {!isExporting && <Lucide icon="Download" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />}
+              Esporta CSV
             </Button>
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      >
+        <AuditLogFilters
+          key={versioneFiltri}
+          filters={filters}
+          onChange={handleFilterChange}
+          onReset={handleReset}
+          eventTypes={eventTypes ?? []}
+          severities={severities ?? []}
+        />
 
-      {/* ── Table ── */}
-      <div className="box box--stacked p-0 overflow-hidden">
         {logsLoading ? (
-          <div role="status" className="p-12 flex flex-col items-center gap-3">
-            <Spinner size="lg" decorativo />
-            <p className="text-sm text-slate-500 mt-2">
-              Caricamento audit log...
-            </p>
+          <div className="flex justify-center p-12">
+            <Spinner size="lg" etichetta="Caricamento del registro audit…" />
+          </div>
+        ) : logsIsError ? (
+          <div className="p-5">
+            <PageError
+              compatta
+              titolo="Impossibile caricare il registro audit"
+              motivo={(logsError as Error | null)?.message || "Il servizio non ha restituito gli eventi."}
+              onRiprova={() => refetchLogs()}
+            />
           </div>
         ) : (
-          <AuditLogTable
-            items={logsData?.items ?? []}
-            sortBy={filters.sortBy ?? "createdat"}
-            sortOrder={filters.sortOrder ?? "DESC"}
-            onSort={handleSort}
-          />
+          <>
+            <AuditLogTable
+              items={logsData?.items ?? []}
+              sortBy={filters.sortBy ?? "createdat"}
+              sortOrder={filters.sortOrder ?? "DESC"}
+              onSort={handleSort}
+              filtriAttivi={filtriAttivi}
+              onAzzeraFiltri={handleReset}
+            />
+            <PaginazioneTabella
+              totale={logsData?.totalItems ?? 0}
+              pagina={currentPage}
+              dimensionePagina={filters.limit ?? DEFAULT_FILTERS.limit ?? 50}
+              onCambiaPagina={(pagina) => handleFilterChange({ page: pagina })}
+            />
+          </>
         )}
-
-        {/* ── Pagination ── */}
-        {totalPages > 1 && (
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-5 py-3.5 bg-slate-50/50">
-            <span className="text-xs text-slate-500">
-              Pagina{" "}
-              <span className="font-semibold text-slate-700">
-                {currentPage}
-              </span>{" "}
-              di{" "}
-              <span className="font-semibold text-slate-700">
-                {totalPages}
-              </span>{" "}
-              —{" "}
-              <span className="font-semibold text-slate-700">
-                {logsData?.totalItems ?? 0}
-              </span>{" "}
-              risultati
-            </span>
-            <Pagination>
-              <Pagination.Link
-                aria-label="Pagina precedente"
-                title="Pagina precedente"
-                onClick={() =>
-                  handleFilterChange({ page: Math.max(1, currentPage - 1) })
-                }
-              >
-                <Lucide icon="ChevronLeft" aria-hidden="true" className="w-4 h-4" />
-              </Pagination.Link>
-              {pageNumbers[0] > 1 && (
-                <>
-                  <Pagination.Link
-                    onClick={() => handleFilterChange({ page: 1 })}
-                  >
-                    1
-                  </Pagination.Link>
-                  {pageNumbers[0] > 2 && (
-                    <span className="px-1 text-slate-400 text-xs self-end pb-1.5">
-                      ...
-                    </span>
-                  )}
-                </>
-              )}
-              {pageNumbers.map((p) => (
-                <Pagination.Link
-                  key={p}
-                  active={p === currentPage}
-                  onClick={() => handleFilterChange({ page: p })}
-                >
-                  {p}
-                </Pagination.Link>
-              ))}
-              {pageNumbers[pageNumbers.length - 1] < totalPages && (
-                <>
-                  {pageNumbers[pageNumbers.length - 1] < totalPages - 1 && (
-                    <span className="px-1 text-slate-400 text-xs self-end pb-1.5">
-                      ...
-                    </span>
-                  )}
-                  <Pagination.Link
-                    onClick={() => handleFilterChange({ page: totalPages })}
-                  >
-                    {totalPages}
-                  </Pagination.Link>
-                </>
-              )}
-              <Pagination.Link
-                aria-label="Pagina successiva"
-                title="Pagina successiva"
-                onClick={() =>
-                  handleFilterChange({
-                    page: Math.min(totalPages, currentPage + 1),
-                  })
-                }
-              >
-                <Lucide icon="ChevronRight" aria-hidden="true" className="w-4 h-4" />
-              </Pagination.Link>
-            </Pagination>
-          </div>
-        )}
-      </div>
+      </Sezione>
     </div>
   );
 };

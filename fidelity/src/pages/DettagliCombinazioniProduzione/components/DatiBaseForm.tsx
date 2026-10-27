@@ -2,6 +2,7 @@ import Button from "@/components/Base/Button";
 import { FormCheck, FormInput, FormLabel, FormSelect } from "@/components/Base/Form";
 import FilterBaseForm from '@/components/Base/FormFiltriDesign';
 import Lucide from "@/components/Base/Lucide";
+import Sezione from "@/components/Base/Sezione";
 import Skeleton from "@/components/Base/Skeleton";
 import TomSelect from "@/components/Base/TomSelect";
 import React from 'react';
@@ -66,19 +67,10 @@ const DatiBaseForm: React.FC<DatiBaseFormProps> = ({
     const webhookStates = useWatch({ control: controlDatiKit, name: 'tipiDiExportInKit' }) ?? [];
 
     return (
-        <div className="flex flex-col gap-y-5">
-            {/* Informazioni di Base */}
-            <div className="box box--stacked">
-                <div className="flex items-center gap-3 border-b border-slate-200/60 px-5 py-4 bg-slate-50/50">
-                    <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-blue-500/10">
-                        <Lucide icon="Info" className="w-5 h-5 text-blue-600" />
-                    </div>
-                    <div>
-                        <h3 className="font-medium text-slate-800">Informazioni di Base</h3>
-                        <p className="text-xs text-slate-500 mt-0.5">Configura i dati principali del raccoglitore</p>
-                    </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5 p-5">
+        <div className="flex flex-col gap-6">
+            {/* Informazioni di base */}
+            <Sezione titolo="Informazioni di base" descrizione="Configura i dati principali del raccoglitore" icona="Info">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
                     <div className="col-span-2">
                         <FormLabel htmlFor="titolo">Titolo</FormLabel>
                         {datiPerCreazioneFormati ? (
@@ -96,7 +88,7 @@ const DatiBaseForm: React.FC<DatiBaseFormProps> = ({
                                 )}
                             />
                         ) : <Skeleton height="40px" />}
-                        {errorsDatiKit.titolo && <p className="text-danger mt-2">{errorsDatiKit.titolo.message as string}</p>}
+                        {errorsDatiKit.titolo && <p className="mt-1.5 text-xs text-danger">{errorsDatiKit.titolo.message as string}</p>}
                     </div>
                     <div>
                         <FormLabel htmlFor="formato">Formato</FormLabel>
@@ -115,7 +107,7 @@ const DatiBaseForm: React.FC<DatiBaseFormProps> = ({
                                 )}
                             />
                         ) : <Skeleton height="40px" />}
-                        {errorsDatiKit.guidFormato && <p className="text-danger mt-2">{errorsDatiKit.guidFormato.message as string}</p>}
+                        {errorsDatiKit.guidFormato && <p className="mt-1.5 text-xs text-danger">{errorsDatiKit.guidFormato.message as string}</p>}
                     </div>
                     <div>
                         <FormLabel htmlFor="quantita">Quantità</FormLabel>
@@ -139,7 +131,7 @@ const DatiBaseForm: React.FC<DatiBaseFormProps> = ({
                                 )}
                             />
                         ) : <Skeleton height="40px" />}
-                        {errorsDatiKit.quantita && <p className="text-danger mt-2">{errorsDatiKit.quantita.message as string}</p>}
+                        {errorsDatiKit.quantita && <p className="mt-1.5 text-xs text-danger">{errorsDatiKit.quantita.message as string}</p>}
                     </div>
                     <div>
                         <FormLabel htmlFor="tags">Tags</FormLabel>
@@ -169,7 +161,7 @@ const DatiBaseForm: React.FC<DatiBaseFormProps> = ({
                                 )}
                             />
                         ) : <Skeleton height="40px" />}
-                        {errorsDatiKit.tags && <p className="text-danger mt-2">{errorsDatiKit.tags.message as string}</p>}
+                        {errorsDatiKit.tags && <p className="mt-1.5 text-xs text-danger">{errorsDatiKit.tags.message as string}</p>}
                     </div>
                     <div className="col-span-2">
                         <p className="text-xs text-slate-500 -mt-2">
@@ -178,20 +170,11 @@ const DatiBaseForm: React.FC<DatiBaseFormProps> = ({
                     </div>
 
                 </div>
-            </div>
+            </Sezione>
 
             {/* Targeting */}
-            <div className="box box--stacked">
-                <div className="flex items-center gap-3 border-b border-slate-200/60 px-5 py-4 bg-slate-50/50">
-                    <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-purple-500/10">
-                        <Lucide icon="Target" className="w-5 h-5 text-purple-600" />
-                    </div>
-                    <div>
-                        <h3 className="font-medium text-slate-800">Targeting</h3>
-                        <p className="text-xs text-slate-500 mt-0.5">Seleziona canali, aree e punti vendita</p>
-                    </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5 p-5">
+            <Sezione titolo="Targeting" descrizione="Seleziona canali, aree e punti vendita" icona="Target">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
                     <div>
                         <FormLabel htmlFor="idCanali">Canali</FormLabel>
                         {datiPerCreazioneFormati ? (
@@ -215,7 +198,7 @@ const DatiBaseForm: React.FC<DatiBaseFormProps> = ({
                                 )}
                             />
                         ) : <Skeleton height="40px" />}
-                        {errorsDatiKit.guidCanali && <p className="text-danger mt-2">{errorsDatiKit.guidCanali.message as string}</p>}
+                        {errorsDatiKit.guidCanali && <p className="mt-1.5 text-xs text-danger">{errorsDatiKit.guidCanali.message as string}</p>}
                     </div>
                     <div>
                         <FormLabel htmlFor="guidAree">Aree</FormLabel>
@@ -240,7 +223,7 @@ const DatiBaseForm: React.FC<DatiBaseFormProps> = ({
                                 )}
                             />
                         ) : <Skeleton height="40px" />}
-                        {errorsDatiKit.guidAree && <p className="text-danger mt-2">{errorsDatiKit.guidAree.message as string}</p>}
+                        {errorsDatiKit.guidAree && <p className="mt-1.5 text-xs text-danger">{errorsDatiKit.guidAree.message as string}</p>}
                     </div>
                     <div className="col-span-2">
                         <FormLabel htmlFor="id_pv">Punti Vendita (opzionale)</FormLabel>
@@ -266,20 +249,11 @@ const DatiBaseForm: React.FC<DatiBaseFormProps> = ({
                         ) : <Skeleton height="40px" />}
                     </div>
                 </div>
-            </div>
+            </Sezione>
 
-            {/* Configurazione Export */}
-            <div className="box box--stacked">
-                <div className="flex items-center gap-3 border-b border-slate-200/60 px-5 py-4 bg-slate-50/50">
-                    <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-green-500/10">
-                        <Lucide icon="Download" className="w-5 h-5 text-green-600" />
-                    </div>
-                    <div>
-                        <h3 className="font-medium text-slate-800">Configurazione Export</h3>
-                        <p className="text-xs text-slate-500 mt-0.5">Configura i tipi di export e i relativi filtri</p>
-                    </div>
-                </div>
-                <div className="p-5">
+            {/* Configurazione export */}
+            <Sezione titolo="Configurazione export" descrizione="Configura i tipi di export e i relativi filtri" icona="Download">
+                <div>
                     <div className="col-span-4 md:col-span-4">
                         <FormLabel htmlFor="tipiDiExportInKit">Tipi di Export</FormLabel>
                         {datiPerCreazioneFormati ? (
@@ -326,18 +300,18 @@ const DatiBaseForm: React.FC<DatiBaseFormProps> = ({
                                 )}
                             />
                         ) : <Skeleton height="40px" />}
-                        {errorsDatiKit.tipiDiExportInKit && <p className="text-danger mt-2">{errorsDatiKit.tipiDiExportInKit.message as string}</p>}
+                        {errorsDatiKit.tipiDiExportInKit && <p className="mt-1.5 text-xs text-danger">{errorsDatiKit.tipiDiExportInKit.message as string}</p>}
                     </div>
                     {tipoKitWatch == TIPO_KIT_DESIGN.AUTOMATICO && (
                         <div className="col-span-4 md:col-span-4 mt-5">
                             {tipiDiExportInKitWatch?.map((tipo: any, index: number) => (
-                                <div key={index} className="flex flex-col gap-y-3 mt-4 border rounded-lg p-4 bg-slate-50 dark:bg-darkmode-600">
+                                <div key={index} className="mt-4 flex flex-col gap-y-3 rounded-card border border-slate-200 bg-slate-50 p-4 dark:bg-darkmode-600">
                                     <div className="flex items-center justify-between">
-                                        <div className="text-lg font-medium text-primary">
+                                        <h3 className="title-card">
                                             Filtro per: {(datiPerCreazioneFormati?.data?.tipiExport ?? []).find(
                                                 (tp: any) => tp.id === tipo.tipoDiExportGuidID
                                             )?.nome}
-                                        </div>
+                                        </h3>
                                         <Button
                                             type="button" size='sm' variant="outline-danger"
                                             onClick={() => {
@@ -391,7 +365,7 @@ const DatiBaseForm: React.FC<DatiBaseFormProps> = ({
                         </div>
                     )}
                 </div>
-            </div>
+            </Sezione>
         </div>
     );
 };

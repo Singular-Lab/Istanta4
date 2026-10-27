@@ -1,5 +1,5 @@
 import { createContext } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/utils/twMerge";
 
 type FormInlineProps = React.PropsWithChildren &
   React.ComponentPropsWithoutRef<"div">;

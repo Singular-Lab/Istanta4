@@ -1,8 +1,4 @@
-import Button from "@/components/Base/Button";
-import Lucide from "@/components/Base/Lucide";
-// @ts-ignore
-import lottieAnimation from "@/assets/animations/animazione_loading_session.lottie?url";
-import { DotLottieReact } from "@lottiefiles/dotlottie-react";
+import SchermataErrore from "@/components/AppErrorFallback/SchermataErrore";
 import React, { startTransition, useEffect } from "react";
 import { useLoaderData, useNavigate } from "react-router-dom";
 import { AppLoaderBridge } from "../../components/AppLoaderBridge";
@@ -39,39 +35,15 @@ const ErrorView: React.FC<{ errorCode: ISErrorCode }> = ({ errorCode }) => {
     const config = ERROR_CONFIG[errorCode] ?? ERROR_CONFIG.auth_failed;
 
     return (
-        <div className="fixed inset-0 flex items-center justify-center bg-primary/90 backdrop-blur-md z-[100000] transition-opacity duration-300">
+        <>
             <AppLoaderBridge />
-            <div className="text-center flex flex-col items-center">
-                <Lucide
-                    icon={config.icon}
-                    aria-hidden="true"
-                    className="w-20 h-20 text-warning animate-pulse"
-                />
-                <h1 className="mt-6 title-page text-white">
-                    {config.title}
-                </h1>
-                <p className="mt-2 text-gray-300 text-sm max-w-sm">
-                    {config.message}
-                </p>
-                <Button
-                    type="button"
-                    variant="primary"
-                    onClick={() => { window.location.href = "/login"; }}
-                    rounded
-                    className="mt-6 px-6 py-2 bg-white text-primary font-semibold hover:bg-gray-100"
-                >
-                    Torna al Login
-                </Button>
-                <div className="mt-10">
-                    <DotLottieReact
-                        autoplay
-                        loop
-                        data={lottieAnimation}
-                        style={{ height: "150px", width: "150px" }}
-                    />
-                </div>
-            </div>
-        </div>
+            <SchermataErrore
+                icona={config.icon}
+                titolo={config.title}
+                messaggio={config.message}
+                azione={{ etichetta: "Torna al Login", onClick: () => { window.location.href = "/login"; } }}
+            />
+        </>
     );
 };
 

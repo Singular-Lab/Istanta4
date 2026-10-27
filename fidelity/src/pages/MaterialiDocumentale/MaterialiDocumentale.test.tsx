@@ -128,4 +128,15 @@ describe("Materiali documentale", () => {
 
     expect(screen.queryByRole("button", { name: "Torna alla promo" })).not.toBeInTheDocument();
   });
+
+  it("ogni filtro ha un'etichetta collegata al proprio campo", async () => {
+    await apri();
+
+    expect(screen.getByLabelText("Promozione")).toBeInstanceOf(HTMLSelectElement);
+    expect(screen.getByLabelText("Nome della promozione")).toHaveAttribute("type", "text");
+    expect(screen.getByLabelText("Campo metadata")).toBeInstanceOf(HTMLSelectElement);
+    expect(screen.getByLabelText("Valore metadata")).toBeDisabled();
+    expect(screen.getByLabelText("Area")).toBeInstanceOf(HTMLSelectElement);
+    expect(screen.getByLabelText("Formato")).toBeInstanceOf(HTMLSelectElement);
+  });
 });

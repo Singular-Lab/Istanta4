@@ -2,8 +2,11 @@ import Badge from "@/components/Base/Badge";
 import Button from "@/components/Base/Button";
 import Dropzone, { DropzoneElement } from "@/components/Base/Dropzone";
 import { FormSelect } from "@/components/Base/Form";
-import LoadingIcon from "@/components/Base/LoadingIcon";
+import Alert from "@/components/Base/Alert";
 import Lucide from "@/components/Base/Lucide";
+import Sezione from "@/components/Base/Sezione";
+import StatCard, { StatCardGrid } from "@/components/Base/StatCard";
+import EmptyState from "@/components/EmptyState";
 import { PermissionGate } from "@/components/PermissionGate";
 import { PERMISSIONS } from "@/constants/permissions";
 import Skeleton from "@/components/Base/Skeleton";
@@ -11,7 +14,6 @@ import clsx from "clsx";
 import type { Dropzone as DropzoneJs, DropzoneOptions } from "dropzone";
 import { FC, useCallback, useMemo, useRef, useState } from "react";
 import { FileItemKit, OggettoTipiDiExport } from "../../../../lib/types";
-import { StatCard } from "../components";
 import { StagedUploadFile, UploadFileData } from "../types";
 
 // ============================================
@@ -127,7 +129,7 @@ const FileUploadCard: FC<FileUploadCardProps> = ({
 
   return (
     <div
-      className={clsx("border rounded-xl p-4 transition-all", {
+      className={clsx("rounded-card border p-4 transition-all", {
         "border-success/50 bg-success/5": stagedFile && !isError,
         "border-danger/50 bg-danger/5": isError,
         "border-primary/50 bg-primary/5": isUploading,
@@ -138,7 +140,8 @@ const FileUploadCard: FC<FileUploadCardProps> = ({
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <div
-            className={clsx("flex h-10 w-10 items-center justify-center rounded-xl shrink-0", {
+            aria-hidden="true"
+            className={clsx("flex h-10 w-10 shrink-0 items-center justify-center rounded-control", {
               "bg-success/10": stagedFile && !isError,
               "bg-danger/10": isError,
               "bg-primary/10": isUploading,
@@ -156,7 +159,7 @@ const FileUploadCard: FC<FileUploadCardProps> = ({
             />
           </div>
           <div>
-            <span className="font-medium text-slate-800">{file.nome}</span>
+            <h3 className="title-card">{file.nome}</h3>
             <div className="flex items-center gap-2 mt-0.5">
               <Badge variant={file.isOptional ? "warning" : "primary"} size="sm">
                 {file.isOptional ? "Opzionale" : "Obbligatorio"}
@@ -200,10 +203,10 @@ const FileUploadCard: FC<FileUploadCardProps> = ({
             getRef={(el) => {
               dropzoneRef.current = el;
             }}
-            className="flex-1 dropzone border-2 border-dashed border-slate-300 rounded-xl hover:border-primary transition-colors cursor-pointer"
+            className="dropzone flex-1 cursor-pointer rounded-card border-2 border-dashed border-slate-300 transition-colors hover:border-primary"
           >
             <div className="flex items-center justify-center gap-2 py-4 px-3">
-              <Lucide icon="Upload" className="w-5 h-5 text-slate-400" />
+              <Lucide icon="Upload" aria-hidden="true" className="h-5 w-5 text-slate-400" />
               <span className="text-sm text-slate-600">Trascina qui o clicca per selezionare</span>
             </div>
           </Dropzone>
@@ -212,15 +215,15 @@ const FileUploadCard: FC<FileUploadCardProps> = ({
 
       {/* File staged preview */}
       {stagedFile && !isError && (
-        <div className="mt-4 flex items-center justify-between bg-success/10 p-3 rounded-lg border border-success/20">
+        <div className="mt-4 flex items-center justify-between rounded-control border border-success/20 bg-success/10 p-3">
           <div className="flex items-center gap-3">
-            <Lucide icon="FileCheck" className="w-5 h-5 text-success" />
+            <Lucide icon="FileCheck" aria-hidden="true" className="h-5 w-5 text-success" />
             <div>
               <span className="font-medium text-success">{stagedFile.file.name}</span>
               <span className="text-sm text-slate-500 ml-2">({formatFileSize(stagedFile.file.size)})</span>
             </div>
           </div>
-          <Button variant="soft-danger" size="sm" className="p-1.5" onClick={onRemove} aria-label="Rimuovi il file selezionato">
+          <Button variant="outline-danger" size="sm" className="p-1.5" onClick={onRemove} aria-label="Rimuovi il file selezionato">
             <Lucide icon="X" aria-hidden="true" className="w-4 h-4" />
           </Button>
         </div>
@@ -228,17 +231,16 @@ const FileUploadCard: FC<FileUploadCardProps> = ({
 
       {/* Validation error */}
       {validationError && (
-        <div className="mt-4 flex items-center gap-2 text-danger text-sm bg-danger/5 p-3 rounded-lg border border-danger/20">
-          <Lucide icon="CircleAlert" className="w-4 h-4 shrink-0" />
-          <span>{validationError}</span>
-        </div>
+        <Alert variant="soft-danger" icona="CircleAlert" className="mt-4 text-sm">
+          {validationError}
+        </Alert>
       )}
 
       {/* Progress bar */}
       {isUploading && (
         <div className="mt-4">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-xs text-primary font-medium">Caricamento in corso...</span>
+            <span className="text-xs font-medium text-primary">Caricamento in corso…</span>
             <span className="text-xs text-slate-500">{progress}%</span>
           </div>
           <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
@@ -396,13 +398,13 @@ const FileUploader: FC<FileUploaderProps> = ({
   // Loading state
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="flex flex-col gap-6" aria-busy="true">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {[1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} height="80px" className="rounded-xl" />
+            <Skeleton key={i} height="72px" className="rounded-control" />
           ))}
         </div>
-        <Skeleton height="300px" className="rounded-xl" />
+        <Skeleton height="300px" className="rounded-card" />
       </div>
     );
   }
@@ -410,68 +412,30 @@ const FileUploader: FC<FileUploaderProps> = ({
   // Automatic workflow - files are managed by the system
   if (isAutomatic) {
     return (
-      <div className="space-y-6">
-        {/* Stats Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <StatCard
-            icon="Files"
-            iconBg="bg-info/10"
-            iconColor="text-info"
-            value={filesData.length}
-            label="File totali"
-          />
-          <StatCard
-            icon="FileCheck"
-            iconBg="bg-success/10"
-            iconColor="text-success"
-            value={uploadedFiles.length}
-            label="File generati"
-          />
-          <StatCard
-            icon="Clock"
-            iconBg="bg-warning/10"
-            iconColor="text-warning"
-            value={filesToUpload.length}
-            label="In attesa"
-          />
-          <StatCard
-            icon="Bot"
-            iconBg="bg-primary/10"
-            iconColor="text-primary"
-            value="Auto"
-            label="Gestione"
-          />
-        </div>
+      <div className="flex flex-col gap-6">
+        <StatCardGrid>
+          <StatCard densita="compatta" icona="Files" tono="info" etichetta="File totali" valore={filesData.length} />
+          <StatCard densita="compatta" icona="FileCheck" tono="success" etichetta="File generati" valore={uploadedFiles.length} />
+          <StatCard densita="compatta" icona="Clock" tono="warning" etichetta="In attesa" valore={filesToUpload.length} />
+          <StatCard densita="compatta" icona="Bot" tono="brand" etichetta="Gestione" valore="Auto" />
+        </StatCardGrid>
 
-        {/* Automatic workflow info box */}
-        <div className="box box--stacked p-6">
-          <div className="text-center py-8">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 mx-auto mb-4">
-              <Lucide icon="Bot" className="w-8 h-8 text-primary" />
-            </div>
-            <h3 className="text-base font-semibold text-slate-800">Lavorazione Automatica</h3>
-            <p className="text-sm text-slate-500 mt-2 max-w-md mx-auto">
-              I file per questa lavorazione vengono generati e caricati automaticamente dal sistema.
-              Non è richiesto alcun intervento manuale.
-            </p>
-            {filesToUpload.length > 0 && (
-              <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-warning/10 text-warning">
-                <Lucide icon="Clock" className="w-4 h-4" />
-                <span className="text-sm font-medium">
-                  {filesToUpload.length} file in attesa di generazione
-                </span>
-              </div>
-            )}
-            {filesToUpload.length === 0 && uploadedFiles.length > 0 && (
-              <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-success/10 text-success">
-                <Lucide icon="CircleCheck" className="w-4 h-4" />
-                <span className="text-sm font-medium">
-                  Tutti i file sono stati generati ({uploadedFiles.length})
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
+        <Sezione icona="Bot" titolo="Lavorazione automatica" descrizione="I file vengono generati e caricati dal sistema">
+          <p className="text-sm text-slate-500">
+            I file per questa lavorazione vengono generati e caricati automaticamente dal sistema.
+            Non è richiesto alcun intervento manuale.
+          </p>
+          {filesToUpload.length > 0 && (
+            <Alert variant="soft-warning" icona="Clock" className="mt-4">
+              {filesToUpload.length} file in attesa di generazione
+            </Alert>
+          )}
+          {filesToUpload.length === 0 && uploadedFiles.length > 0 && (
+            <Alert variant="soft-success" icona="CircleCheck" className="mt-4">
+              Tutti i file sono stati generati ({uploadedFiles.length})
+            </Alert>
+          )}
+        </Sezione>
       </div>
     );
   }
@@ -485,56 +449,21 @@ const FileUploader: FC<FileUploaderProps> = ({
     );
 
   return (
-    <div className="space-y-6">
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard
-          icon="Files"
-          iconBg="bg-info/10"
-          iconColor="text-info"
-          value={stats.total}
-          label="File richiesti"
-        />
-        <StatCard
-          icon="FileCheck"
-          iconBg="bg-success/10"
-          iconColor="text-success"
-          value={stats.uploaded}
-          label="Già caricati"
-        />
-        <StatCard
-          icon="Clock"
-          iconBg="bg-warning/10"
-          iconColor="text-warning"
-          value={stats.staged}
-          label="Pronti per upload"
-        />
-        <StatCard
-          icon="CircleAlert"
-          iconBg="bg-primary/10"
-          iconColor="text-primary"
-          value={stats.required}
-          label="Obbligatori"
-        />
-      </div>
+    <div className="flex flex-col gap-6">
+      <StatCardGrid>
+        <StatCard densita="compatta" icona="Files" tono="info" etichetta="File richiesti" valore={stats.total} />
+        <StatCard densita="compatta" icona="FileCheck" tono="success" etichetta="Già caricati" valore={stats.uploaded} />
+        <StatCard densita="compatta" icona="Clock" tono="warning" etichetta="Pronti per upload" valore={stats.staged} />
+        <StatCard densita="compatta" icona="CircleAlert" tono="brand" etichetta="Obbligatori" valore={stats.required} />
+      </StatCardGrid>
 
       {/* Main Upload Area */}
       {filesToUpload.length > 0 && (
-        <div className="box box--stacked p-6">
-          {/* Header */}
-          <div className="flex items-center gap-3 mb-5">
-            <div className="p-2.5 bg-gradient-to-br from-primary/10 to-primary/5 rounded-xl">
-              <Lucide icon="Upload" className="w-5 h-5 text-primary" />
-            </div>
-            <div>
-              <h3 className="text-base font-semibold text-slate-800">Carica File Richiesti</h3>
-              <p className="text-xs text-slate-500">
-                Seleziona i file uno per uno. Formati supportati: PDF, JPG, PNG, DOC, DOCX, XLS, XLSX (max 200MB)
-              </p>
-            </div>
-          </div>
-
-          {/* File Cards */}
+        <Sezione
+          icona="Upload"
+          titolo="Carica file richiesti"
+          descrizione="Seleziona i file uno per uno. Formati supportati: PDF, JPG, PNG, DOC, DOCX, XLS, XLSX (max 200MB)"
+        >
           <div className="space-y-4">
             {filesToUpload.map((file) => {
               const fileKey = file.id || file.nome;
@@ -560,71 +489,56 @@ const FileUploader: FC<FileUploaderProps> = ({
 
           {/* Footer with batch upload action */}
           {stagedFiles.length > 0 && (
-            <div className="border-t border-slate-200 pt-5 mt-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="mt-5 flex flex-col items-center justify-between gap-4 border-t border-slate-200 pt-5 sm:flex-row">
               <div className="flex items-center gap-2">
-                <Lucide icon="Info" className="w-4 h-4 text-info" />
+                <Lucide icon="Info" aria-hidden="true" className="h-4 w-4 text-info" />
                 <span className="text-sm text-slate-600">
                   <span className="font-semibold text-info">{stagedFiles.length}</span> file pronti per il
                   caricamento
                 </span>
                 {!allRequiredStaged && (
-                  <span className="text-sm text-warning ml-2">
-                    (mancano alcuni file obbligatori)
-                  </span>
+                  <span className="ml-2 text-sm text-warning">(mancano alcuni file obbligatori)</span>
                 )}
               </div>
               <PermissionGate permission={PERMISSIONS.FILE.UPLOAD_MATERIALE} mode="disable">
                 <Button
                   variant="primary"
                   onClick={handleUploadAll}
-                  disabled={isUploading || stagedFiles.length === 0}
+                  disabled={stagedFiles.length === 0}
+                  loading={isUploading}
                 >
-                  {isUploading ? (
-                    <>
-                      <LoadingIcon icon="oval" className="w-4 h-4 mr-2" />
-                      Caricamento in corso...
-                    </>
-                  ) : (
-                    <>
-                      <Lucide icon="Upload" className="w-4 h-4 mr-2" />
-                      Carica Tutti ({stagedFiles.length})
-                    </>
-                  )}
+                  {!isUploading && <Lucide icon="Upload" aria-hidden="true" className="mr-2 h-4 w-4" />}
+                  {isUploading ? "Caricamento in corso…" : `Carica tutti (${stagedFiles.length})`}
                 </Button>
               </PermissionGate>
             </div>
           )}
-        </div>
+        </Sezione>
       )}
 
       {/* Empty state when no files to upload */}
       {filesToUpload.length === 0 && uploadedFiles.length === 0 && (
-        <div className="box box--stacked p-6">
-          <div className="text-center py-12">
-            <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-slate-100 mx-auto mb-4">
-              <Lucide icon="FileQuestion" className="w-10 h-10 text-slate-400" />
-            </div>
-            <h3 className="text-base font-semibold text-slate-700">Nessun file richiesto</h3>
-            <p className="text-sm text-slate-500 mt-1">
-              Non ci sono file da caricare per questa lavorazione.
-            </p>
-          </div>
-        </div>
+        <Sezione>
+          <EmptyState
+            compatta
+            icon="FileQuestionMark"
+            title="Nessun file richiesto"
+            description="Non ci sono file da caricare per questa lavorazione."
+          />
+        </Sezione>
       )}
 
       {/* All files uploaded */}
       {filesToUpload.length === 0 && uploadedFiles.length > 0 && (
-        <div className="box box--stacked p-6">
-          <div className="text-center py-8">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-success/10 mx-auto mb-4">
-              <Lucide icon="CircleCheck" className="w-8 h-8 text-success" />
-            </div>
-            <h3 className="text-base font-semibold text-success">Tutti i file sono stati caricati</h3>
-            <p className="text-sm text-slate-500 mt-1">
-              {uploadedFiles.length} file caricati con successo
-            </p>
-          </div>
-        </div>
+        <Sezione>
+          <EmptyState
+            compatta
+            icon="CircleCheck"
+            iconColor="text-success"
+            title="Tutti i file sono stati caricati"
+            description={`${uploadedFiles.length} file caricati con successo`}
+          />
+        </Sezione>
       )}
     </div>
   );

@@ -8,7 +8,7 @@ import Lucide from "@/components/Base/Lucide";
 import { useAppDispatch, useAppSelector } from "@/stores/hooks";
 import { fetchSideMenu, selectSideMenu, selectSideMenuError } from "@/stores/sideMenuSlice_istanta";
 import clsx from "clsx";
-import { createRef, Fragment, startTransition, useContext, useEffect, useState } from "react";
+import { createRef, startTransition, useContext, useEffect, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { FormattedMenu, nestedMenu } from "./side-menu";
 import SideMenu from "./SideMenu";
@@ -19,7 +19,7 @@ import ActivitiesPanel from "@/components/ActivitiesPanel";
 import {
   ContextMenu
 } from "@/components/Base/ContextMenu";
-import Popover from "@/components/Base/Headless/Popover";
+import Menu from "@/components/Base/Headless/Menu";
 import SmartBreadcrumb from "@/components/Base/SmartBreadcrumb";
 import MaintenanceBanner from "@/components/MaintenanceBanner";
 import MaintenanceModal from "@/components/MaintenanceModal";
@@ -94,7 +94,6 @@ function Layout() {
   const [maintenanceModal, setMaintenanceModal] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const pathnames = location.pathname.split('/').filter((x) => x);
   const attivita = useFetchAttivita();
   const avviso = useFetchAvvisoManutenzione();
   const bannerActive = !!(avviso.data?.attivo);
@@ -260,50 +259,6 @@ function Layout() {
       navigate("/login");
     }
   })
-  const menuItems = [
-    {
-      type: "item" as const,
-      label: "Copia",
-      shortcut: "⌘+C",
-      realShortcut: "cmd+c",
-      onClick: () => navigator.clipboard.writeText("testo da copiare"),
-    },
-    {
-      type: "item" as const,
-      label: "Incolla",
-      shortcut: "⌘+V",
-      realShortcut: "cmd+v",
-      onClick: () => navigator.clipboard.readText(),
-    },
-    {
-      type: "separator" as const,
-    },
-    {
-      type: "checkbox" as const,
-      label: "Mostra griglia",
-      checked: true,
-      onClick: () => console.log("Toggle griglia"),
-    },
-    {
-      type: "sub" as const,
-      label: "Più opzioni",
-      items: [
-        {
-          type: "item" as const,
-          label: "Opzione 1",
-          onClick: () => console.log("Opzione 1"),
-        },
-        {
-          type: "item" as const,
-          label: "Opzione 2",
-          onClick: () => console.log("Opzione 2"),
-        },
-      ],
-    },
-  ];
-  const filteredPathnames = pathnames.filter((value) => value);
-
-
 
   return (
     <SocketProvider>
@@ -369,9 +324,9 @@ function Layout() {
                   to={startPage?.pathname ?? ""}
                   prefetch="intent"
                   aria-label="Istanta 2 – pagina iniziale"
-                  className="flex items-center min-w-0 flex-1 -ml-1.5 p-1.5 rounded-lg transition-colors duration-150 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-theme-1/50"
+                  className="flex items-center min-w-0 flex-1 -ml-1.5 p-1.5 rounded-control transition-colors duration-150 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-theme-1/50"
                 >
-                  <img className="flex-none w-8 h-8 rounded-[7px]" src={logoI2} alt="Istanta 2" />
+                  <img className="flex-none w-8 h-8 rounded-control" src={logoI2} alt="Istanta 2" />
                   <div
                     className={clsx([
                       "ml-2.5 min-w-0 leading-tight whitespace-nowrap transition-opacity duration-200",
@@ -386,7 +341,7 @@ function Layout() {
                   <div
                     title="Logo GDO"
                     className={clsx([
-                      "flex-none flex items-center justify-center w-8 h-8 ml-2 p-0.5 bg-white border border-slate-200 rounded-md transition-opacity duration-200",
+                      "flex-none flex items-center justify-center w-8 h-8 ml-2 p-0.5 bg-white border border-slate-200 rounded-control transition-opacity duration-200",
                       { "xl:opacity-0": menuRidotto },
                     ])}
                   >
@@ -429,14 +384,15 @@ function Layout() {
             <div style={{ top: bannerActive ? BANNER_H : 0 }} className={clsx("fixed h-[65px] mt-3.5 inset-x-0 top-0 transition-[margin] duration-200", menuCompresso ? "xl:ml-[76px]" : "xl:ml-[275px]")}>
               <div
                 className={clsx([
-                  "top-bar absolute left-0 xl:left-3.5 right-0 h-full mx-5 group",
+                  // Stessi margini laterali dell'area contenuto: barra e pagina restano allineate
+                  "top-bar absolute inset-x-0 h-full mx-4 sm:mx-6 xl:mx-8 group",
                   "before:content-[''] before:absolute before:top-0 before:inset-x-0 before:-mt-[15px] before:h-[20px] before:backdrop-blur",
                   topBarActive && "top-bar--active",
                 ])}
               >
                 <div
                   className="
-                  container flex items-center w-full h-full transition-[padding,background-color,border-color] ease-in-out duration-300 box bg-transparent border-transparent shadow-none
+                  flex items-center w-full h-full transition-[padding,background-color,border-color] ease-in-out duration-300 box bg-transparent border-transparent shadow-none
                   group-[.top-bar--active]:box group-[.top-bar--active]:px-2
                   group-[.top-bar--active]:bg-transparent group-[.top-bar--active]:border-transparent group-[.top-bar--active]:bg-gradient-to-r group-[.top-bar--active]:from-theme-1 group-[.top-bar--active]:to-theme-2
                 "
@@ -449,7 +405,7 @@ function Layout() {
                       title="Apri/chiudi menu"
                       aria-label="Apri/chiudi menu"
                     >
-                      <Lucide icon="PanelLeftClose" className="w-[18px] h-[18px]" />
+                      <Lucide icon="PanelLeftClose" aria-hidden="true" className="h-5 w-5" />
                     </button>
                     <button
                       type="button"
@@ -457,7 +413,7 @@ function Layout() {
                       aria-label="Ricerca veloce"
                       onClick={() => setQuickSearch(true)}
                     >
-                      <Lucide icon="Search" className="w-[18px] h-[18px]" />
+                      <Lucide icon="Search" aria-hidden="true" className="h-5 w-5" />
                     </button>
                   </div>
                   <div className="flex-1 block order-0 float-start min-w-0 px-2">
@@ -467,8 +423,8 @@ function Layout() {
                     className="relative justify-center flex-1 hidden xl:flex flex-shrink-0"
                     onClick={() => setQuickSearch(true)}
                   >
-                    <div className="bg-white/[0.12] border-transparent border w-[350px] flex items-center py-2 px-3.5 rounded-[0.5rem] text-white/60 cursor-pointer hover:bg-white/[0.15] transition-colors duration-300 hover:duration-100">
-                      <Lucide icon="Search" className="w-[18px] h-[18px]" />
+                    <div className="bg-white/10 border-transparent border w-[350px] flex items-center py-2 px-3.5 rounded-control text-white/60 cursor-pointer hover:bg-white/15 transition-colors duration-300 hover:duration-100">
+                      <Lucide icon="Search" aria-hidden="true" className="h-5 w-5" />
                       <div className="ml-2.5 mr-auto">Ricerca veloce...</div>
                       <div>⌘K</div>
                     </div>
@@ -490,13 +446,13 @@ function Layout() {
                         setActivitiesPanel(true);
                       }}
                     >
-                      <Lucide icon="LayoutGrid" className="w-[18px] h-[18px]" />
+                      <Lucide icon="LayoutGrid" aria-hidden="true" className="h-5 w-5" />
                     </a>
                     <a
                       href=""
                       className="p-2 text-white rounded-full hover:bg-white/5"
                     >
-                      <Lucide icon="Moon" className="w-[18px] h-[18px]" />
+                      <Lucide icon="Moon" aria-hidden="true" className="h-5 w-5" />
                     </a> */}
                       <button
                         type="button"
@@ -510,20 +466,20 @@ function Layout() {
                           }
                         }}
                       >
-                        <Lucide icon={isFullScreen ? "Minimize" : "Expand"} className="w-[18px] h-[18px]" />
+                        <Lucide icon={isFullScreen ? "Minimize" : "Expand"} aria-hidden="true" className="h-5 w-5" />
                       </button>
                       {hasPermission(PERMISSIONS.SISTEMA.MANUTENZIONE) && (
                         <button
                           type="button"
-                          className={`relative p-2 text-white rounded-full hover:bg-white/5 ${avviso.data?.attivo ? "text-amber-300" : ""}`}
+                          className={`relative p-2 text-white rounded-full hover:bg-white/5 ${avviso.data?.attivo ? "text-warning" : ""}`}
                           onClick={() => setMaintenanceModal(true)}
                           title="Avviso manutenzione"
                           aria-label="Avviso manutenzione"
                         >
-                          <Lucide icon="Wrench" className="w-[18px] h-[18px]" />
+                          <Lucide icon="Wrench" aria-hidden="true" className="h-5 w-5" />
                           {avviso.data?.attivo && (
                             <div className="absolute top-1 right-1 w-3 h-3 flex items-center justify-center">
-                              <span className="block w-2 h-2 bg-amber-400 border-2 border-white rounded-full shadow-lg"></span>
+                              <span className="block w-2 h-2 bg-warning border-2 border-white rounded-full shadow-lg"></span>
                             </div>
                           )}
                         </button>
@@ -534,7 +490,7 @@ function Layout() {
                         aria-label={hasUnreadAttivita ? "Notifiche, ci sono attività non lette" : "Notifiche"}
                         onClick={() => setNotificationsPanel(true)}
                       >
-                        <Lucide icon="Bell" className="w-[18px] h-[18px]" />
+                        <Lucide icon="Bell" aria-hidden="true" className="h-5 w-5" />
                         {/* Mostra la bubble solo se ci sono attività */}
                         {/* Mostra il pallino di notifica solo se ci sono attività non lette */}
                         {hasUnreadAttivita && (
@@ -547,94 +503,57 @@ function Layout() {
                         )}
                       </button>
                     </div>
-                    <Popover className="ml-5">
-                      {({ close }) => (
-                        <>
-                          <Popover.Button aria-label="Menu utente" className="overflow-hidden rounded-full w-[36px] h-[36px] border-[3px] border-white/[0.15] image-fit">
-                            <img
-                              alt=""
-                              src={user?.meta?.photo ? `data:image/png;base64,${user?.meta?.photo}` : userIcon}
-                            />
-                          </Popover.Button>
-                          <Popover.Panel className="w-56 mt-1 right-0">
-                            <div className="py-1">
-                              {user?.outsider == false && (
-                                <Fragment>
-                                  <button
-                                    className="flex items-center w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
-                                    onClick={() => {
-                                      setSwitchAccount(true);
-                                      close();
-                                    }}
-                                  >
-                                    <Lucide icon="ToggleLeft" className="w-4 h-4 mr-2" />
-                                    Cambia Account
-                                  </button><button
-                                    className="flex items-center w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
-                                    onClick={() => {
-                                      startTransition(() => { navigate("profilo-utente?page=connected-services"); });
-                                      close();
-                                    }}
-                                  >
-                                    <Lucide icon="Settings" className="w-4 h-4 mr-2" />
-                                    Servizi Connessi
-                                  </button><button
-                                    className="flex items-center w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
-                                    onClick={() => {
-                                      startTransition(() => { navigate("profilo-utente?page=email-profilo-utente"); });
-                                      close();
-                                    }}
-                                  >
-                                    <Lucide icon="Inbox" className="w-4 h-4 mr-2" />
-                                    Impostazioni Email
-                                  </button><button
-                                    className="flex items-center w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
-                                    onClick={() => {
-                                      startTransition(() => { navigate("profilo-utente?page=security"); });
-                                      close();
-                                    }}
-                                  >
-                                    <Lucide icon="Lock" className="w-4 h-4 mr-2" />
-                                    Reimposta Password
-                                  </button>
-                                </Fragment>
-                              )}
-                              <div className="border-t border-slate-200 my-1" />
-                              <button
-                                className="flex items-center w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
-                                onClick={() => {
-                                  startTransition(() => { navigate("profilo-utente"); });
-                                  close();
-                                }}
-                              >
-                                <Lucide icon="Users" className="w-4 h-4 mr-2" />
-                                Profilo Utente
-                              </button>
-                              <button
-                                className="flex items-center w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
-                                onClick={() => {
-                                  startTransition(() => { navigate("hub"); });
-                                  close();
-                                }}
-                              >
-                                <Lucide icon="SquareArrowRightExit" className="w-4 h-4 mr-2" />
-                                Torna al Hub
-                              </button>
-                              <button
-                                className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50"
-                                onClick={() => {
-                                  mutationLogout.mutate();
-                                  close();
-                                }}
-                              >
-                                <Lucide icon="Power" className="w-4 h-4 mr-2" />
-                                Esci
-                              </button>
-                            </div>
-                          </Popover.Panel>
-                        </>
-                      )}
-                    </Popover>
+                    <Menu className="ml-5">
+                      <Menu.Button
+                        as="button"
+                        type="button"
+                        aria-label="Menu utente"
+                        className="overflow-hidden rounded-full w-9 h-9 border-2 border-white/15 image-fit"
+                      >
+                        <img
+                          alt=""
+                          src={user?.meta?.photo ? `data:image/png;base64,${user?.meta?.photo}` : userIcon}
+                        />
+                      </Menu.Button>
+                      <Menu.Items className="w-56 text-sm text-slate-700">
+                        {user?.outsider == false && (
+                          <>
+                            <Menu.Item onClick={() => setSwitchAccount(true)}>
+                              <Lucide icon="ToggleLeft" aria-hidden="true" className="w-4 h-4 mr-2" />
+                              Cambia Account
+                            </Menu.Item>
+                            <Menu.Item onClick={() => startTransition(() => { navigate("profilo-utente?page=connected-services"); })}>
+                              <Lucide icon="Settings" aria-hidden="true" className="w-4 h-4 mr-2" />
+                              Servizi Connessi
+                            </Menu.Item>
+                            <Menu.Item onClick={() => startTransition(() => { navigate("profilo-utente?page=email-profilo-utente"); })}>
+                              <Lucide icon="Inbox" aria-hidden="true" className="w-4 h-4 mr-2" />
+                              Impostazioni Email
+                            </Menu.Item>
+                            <Menu.Item onClick={() => startTransition(() => { navigate("profilo-utente?page=security"); })}>
+                              <Lucide icon="Lock" aria-hidden="true" className="w-4 h-4 mr-2" />
+                              Reimposta Password
+                            </Menu.Item>
+                            <Menu.Divider />
+                          </>
+                        )}
+                        <Menu.Item onClick={() => startTransition(() => { navigate("profilo-utente"); })}>
+                          <Lucide icon="Users" aria-hidden="true" className="w-4 h-4 mr-2" />
+                          Profilo Utente
+                        </Menu.Item>
+                        <Menu.Item onClick={() => startTransition(() => { navigate("hub"); })}>
+                          <Lucide icon="SquareArrowRightExit" aria-hidden="true" className="w-4 h-4 mr-2" />
+                          Torna al Hub
+                        </Menu.Item>
+                        <Menu.Item
+                          onClick={() => mutationLogout.mutate()}
+                          className="text-danger hover:bg-danger/10"
+                        >
+                          <Lucide icon="Power" aria-hidden="true" className="w-4 h-4 mr-2" />
+                          Esci
+                        </Menu.Item>
+                      </Menu.Items>
+                    </Menu>
                   </div>
                   <ActivitiesPanel
                     activitiesPanel={activitiesPanel}
@@ -661,15 +580,14 @@ function Layout() {
           </div>
           <div
             className={clsx([
-              "h-full transition-[margin] duration-200 xl:pl-3.5 pt-[54px] pb-16 relative z-10 group mode",
+              "h-full transition-[margin] duration-200 pt-[54px] pb-16 relative z-10 group mode",
               menuCompresso ? "xl:ml-[76px]" : "xl:ml-[275px]",
               { "mode--light": !topBarActive },
             ])}
           >
-            <div className="px-1 sm:px-5 mt-16">
-              <div className="mx-1 sm:mx-5">
-                {accessoConsentito ? <Outlet /> : <AccessoNegato />}
-              </div>
+            {/* Un solo contenitore, con margini uguali ai due lati */}
+            <div className="mt-16 px-4 sm:px-6 xl:px-8">
+              {accessoConsentito ? <Outlet /> : <AccessoNegato />}
             </div>
           </div>
         </div>

@@ -1,5 +1,8 @@
 import IstantaLogo from "@/assets/images/logo_ext.png";
+import Badge from "@/components/Base/Badge";
 import Lucide from "@/components/Base/Lucide";
+import Skeleton from "@/components/Base/Skeleton";
+import EmptyState from "@/components/EmptyState";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -205,12 +208,12 @@ const ServicesDashboard: React.FC = () => {
 
         {/* Welcome banner */}
         {loadingUser ? (
-          <div className="bg-white border border-slate-200 rounded-xl p-8 animate-pulse shadow-sm">
+          <div className="rounded-card border border-slate-200 bg-white p-8 shadow-card">
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-xl bg-slate-100" />
-              <div>
-                <div className="h-7 bg-slate-200 rounded w-48 mb-2" />
-                <div className="h-4 bg-slate-100 rounded w-32" />
+              <Skeleton className="h-14 w-14 flex-none rounded-card" />
+              <div className="w-48 space-y-2">
+                <Skeleton className="h-7 w-48" />
+                <Skeleton className="h-4 w-32" />
               </div>
             </div>
           </div>
@@ -227,8 +230,8 @@ const ServicesDashboard: React.FC = () => {
         {/* ═══ Sezione In Evidenza ═══ */}
         {!loadingServices && featuredServices.length > 0 && (
           <section className="mt-10">
-            <div className="flex items-center gap-2 mb-4">
-              <Lucide icon="Star" className="w-4 h-4 text-slate-500" />
+            <div className="mb-4 flex items-center gap-2">
+              <Lucide icon="Star" aria-hidden="true" className="h-4 w-4 text-slate-500" />
               <h2 className="title-section">
                 In evidenza
               </h2>
@@ -251,20 +254,18 @@ const ServicesDashboard: React.FC = () => {
           </section>
         )}
 
-
-
         {/* ═══ Sezione Tutti i Servizi ═══ */}
         <section className="mt-10">
           {loadingServices ? (
             <div className="space-y-8">
               <div>
-                <div className="flex items-center gap-2 mb-4">
-                  <Lucide icon="LayoutGrid" className="w-4 h-4 text-emerald-600" />
+                <div className="mb-4 flex items-center gap-2">
+                  <Lucide icon="LayoutGrid" aria-hidden="true" className="h-4 w-4 text-success" />
                   <h3 className="title-card">
                     Servizi attivi
                   </h3>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                   {Array.from({ length: 4 }).map((_, i) => (
                     <ServiceCardSkeleton key={`active-skeleton-${i}`} />
                   ))}
@@ -272,13 +273,13 @@ const ServicesDashboard: React.FC = () => {
               </div>
 
               <div>
-                <div className="flex items-center gap-2 mb-4">
-                  <Lucide icon="CircleOff" className="w-4 h-4 text-slate-500" />
+                <div className="mb-4 flex items-center gap-2">
+                  <Lucide icon="CircleOff" aria-hidden="true" className="h-4 w-4 text-slate-500" />
                   <h3 className="title-card">
                     Servizi non attivi
                   </h3>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                   {Array.from({ length: 2 }).map((_, i) => (
                     <ServiceCardSkeleton key={`inactive-skeleton-${i}`} />
                   ))}
@@ -288,99 +289,87 @@ const ServicesDashboard: React.FC = () => {
           ) : regularServices.length > 0 ? (
             <div className="space-y-8">
               <div>
-                <div className="flex items-center gap-2 mb-4">
-                  <Lucide icon="LayoutGrid" className="w-4 h-4 text-emerald-600" />
-                  <div className="flex items-center gap-2">
-                    <h3 className="title-card">
-                      Servizi attivi
-                    </h3>
-                    <span className="px-2 py-0.5 text-xs font-medium bg-emerald-50 text-emerald-700 rounded-full border border-emerald-100">
-                      {activeRegularServices.length}
-                    </span>
-                  </div>
+                <div className="mb-4 flex items-center gap-2">
+                  <Lucide icon="LayoutGrid" aria-hidden="true" className="h-4 w-4 text-success" />
+                  <h3 className="title-card">
+                    Servizi attivi
+                  </h3>
+                  <Badge variant="success" size="sm">
+                    {activeRegularServices.length}
+                  </Badge>
                 </div>
 
                 {activeRegularServices.length > 0 ? (
                   renderServiceGrid(activeRegularServices)
                 ) : (
-                  <div className="rounded-xl border border-dashed border-emerald-200 bg-emerald-50/40 px-5 py-6">
-                    <p className="text-sm text-emerald-800 font-medium">
-                      Nessun servizio attivo in questa sezione.
-                    </p>
-                    <p className="text-sm text-emerald-700/80 mt-1">
-                      I servizi disponibili compariranno qui non appena saranno abilitati.
-                    </p>
-                  </div>
+                  <EmptyState
+                    compatta
+                    icon="LayoutGrid"
+                    title="Nessun servizio attivo in questa sezione"
+                    description="I servizi disponibili compariranno qui non appena saranno abilitati."
+                    className="border border-dashed border-slate-200"
+                  />
                 )}
               </div>
 
               <div>
-                <div className="flex items-center gap-2 mb-4">
-                  <Lucide icon="CircleOff" className="w-4 h-4 text-slate-500" />
-                  <div className="flex items-center gap-2">
-                    <h3 className="title-card">
-                      Servizi non attivi
-                    </h3>
-                    <span className="px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-600 rounded-full border border-slate-200">
-                      {inactiveRegularServices.length}
-                    </span>
-                  </div>
+                <div className="mb-4 flex items-center gap-2">
+                  <Lucide icon="CircleOff" aria-hidden="true" className="h-4 w-4 text-slate-500" />
+                  <h3 className="title-card">
+                    Servizi non attivi
+                  </h3>
+                  <Badge variant="secondary" size="sm">
+                    {inactiveRegularServices.length}
+                  </Badge>
                 </div>
 
                 {inactiveRegularServices.length > 0 ? (
                   renderServiceGrid(inactiveRegularServices)
                 ) : (
-                  <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-5 py-6">
-                    <p className="text-sm text-slate-700 font-medium">
-                      Nessun servizio non attivo al momento.
-                    </p>
-                    <p className="text-sm text-slate-500 mt-1">
-                      I servizi disattivati o in manutenzione verranno mostrati qui.
-                    </p>
-                  </div>
+                  <EmptyState
+                    compatta
+                    icon="CircleOff"
+                    title="Nessun servizio non attivo al momento"
+                    description="I servizi disattivati o in manutenzione verranno mostrati qui."
+                    className="border border-dashed border-slate-200"
+                  />
                 )}
               </div>
             </div>
           ) : !featuredServices.length ? (
-            <div className="text-center py-16 bg-white border border-slate-200 rounded-xl">
-              <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
-                <Lucide icon="PackageOpen" className="w-8 h-8 text-slate-400" />
-              </div>
-              <h3 className="text-lg font-medium text-slate-600 mb-1">
-                Nessun servizio disponibile
-              </h3>
-              <p className="text-sm text-slate-400">
-                Non ci sono servizi disponibili per il tuo ruolo.
-              </p>
-            </div>
+            <EmptyState
+              icon="PackageOpen"
+              title="Nessun servizio disponibile"
+              description="Non ci sono servizi disponibili per il tuo ruolo."
+              className="border border-slate-200 shadow-card"
+            />
           ) : (
-            <div className="rounded-xl border border-dashed border-slate-200 bg-white/70 px-5 py-6">
-              <p className="text-sm text-slate-700 font-medium">
-                Tutti i servizi disponibili sono gi\u00e0 presenti nella sezione In evidenza.
-              </p>
-              <p className="text-sm text-slate-500 mt-1">
-                Qui compariranno automaticamente eventuali altri servizi attivi o non disponibili.
-              </p>
-            </div>
+            <EmptyState
+              compatta
+              icon="Star"
+              title="Tutti i servizi disponibili sono già presenti nella sezione In evidenza"
+              description="Qui compariranno automaticamente eventuali altri servizi attivi o non disponibili."
+              className="border border-dashed border-slate-200"
+            />
           )}
         </section>
         {/* ═══ Sezione News ═══ */}
         {(loadingNews || news.length > 0) && (
           <section className="mt-10">
-            <div className="flex items-center gap-2 mb-4">
-              <Lucide icon="Newspaper" className="w-4 h-4 text-slate-500" />
+            <div className="mb-4 flex items-center gap-2">
+              <Lucide icon="Newspaper" aria-hidden="true" className="h-4 w-4 text-slate-500" />
               <h2 className="title-section">
                 Novità e aggiornamenti
               </h2>
             </div>
             {loadingNews ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {Array.from({ length: 3 }).map((_, i) => (
                   <NewsCardSkeleton key={i} />
                 ))}
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {news.slice(0, 6).map((item, index) => (
                   <NewsCard key={item.id} news={item} index={index} />
                 ))}
@@ -396,8 +385,8 @@ const ServicesDashboard: React.FC = () => {
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             {/* Branding */}
             <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-theme-1 to-theme-2 flex items-center justify-center">
-                <span className="text-3xs font-bold text-white leading-none">SL</span>
+              <div aria-hidden="true" className="flex h-6 w-6 items-center justify-center rounded-control bg-gradient-to-br from-theme-1 to-theme-2">
+                <span className="text-3xs font-bold leading-none text-white">SL</span>
               </div>
               <span className="text-sm font-medium text-slate-500">
                 Powered by <span className="text-slate-700 font-semibold">Singular Lab</span>

@@ -5,6 +5,7 @@ import {
   Text,
   View,
 } from "@react-pdf/renderer";
+import { formatData, formatDataOra, formatNumero, valoreOAssente } from "@/utils/format";
 import type { ApiStatistics } from "./types";
 
 // ── Palette corporate ─────────────────────────────────────────────────────────
@@ -202,16 +203,11 @@ const S = StyleSheet.create({
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function nowDateStr(): string {
-  return new Intl.DateTimeFormat("it-IT", {
-    day: "2-digit", month: "2-digit", year: "numeric",
-  }).format(new Date());
+  return formatData(new Date());
 }
 
 function nowDateTimeStr(): string {
-  return new Intl.DateTimeFormat("it-IT", {
-    day: "2-digit", month: "2-digit", year: "numeric",
-    hour: "2-digit", minute: "2-digit",
-  }).format(new Date());
+  return formatDataOra(new Date());
 }
 
 function statusStyle(code: number) {
@@ -286,10 +282,10 @@ export function StatistichePdfDocument({ aggregate, details }: StatistichePdfDoc
             <View style={S.sectionRule} />
             <View style={S.kpiRow}>
               {[
-                { label: "Totale Richieste", value: aggregate.totale_richieste.toLocaleString("it-IT"), unit: "richieste", color: P.primary },
+                { label: "Totale Richieste", value: formatNumero(aggregate.totale_richieste), unit: "richieste", color: P.primary },
                 { label: "Tasso Successo",   value: `${successRate}%`,                                  unit: "richieste riuscite", color: P.success },
                 { label: "Tempo Medio",      value: `${avgMs}`,                                          unit: "ms per risposta", color: P.warning },
-                { label: "Richieste Oggi",   value: aggregate.richieste_oggi?.toLocaleString("it-IT") ?? "—", unit: "oggi", color: P.inkSoft },
+                { label: "Richieste Oggi",   value: formatNumero(aggregate.richieste_oggi), unit: "oggi", color: P.inkSoft },
               ].map((kpi) => (
                 <View key={kpi.label} style={S.kpiCell}>
                   <View style={S.kpiCard}>
@@ -336,7 +332,7 @@ export function StatistichePdfDocument({ aggregate, details }: StatistichePdfDoc
               {topEndpoints.map((ep, i) => (
                 <View key={ep.endpoint} style={[S.tableRow, i % 2 !== 0 ? S.tableRowAlt : {}]}>
                   <Text style={[S.tableCellMono, { flex: 5 }]}>{truncEnd(ep.endpoint, 55)}</Text>
-                  <Text style={[S.tableCell, { flex: 2 }]}>{ep.richieste.toLocaleString("it-IT")}</Text>
+                  <Text style={[S.tableCell, { flex: 2 }]}>{formatNumero(ep.richieste)}</Text>
                   <Text style={[S.tableCell, { flex: 2 }]}>{Math.round(ep.tempo_medio_ms)} ms</Text>
                 </View>
               ))}
@@ -369,7 +365,7 @@ export function StatistichePdfDocument({ aggregate, details }: StatistichePdfDoc
                   <Text style={[S.tableCell, { flex: 1, fontFamily: "Helvetica-Bold", color: P.primary }]}>{row.metodo}</Text>
                   <Text style={[statusStyle(row.codice_risposta), { flex: 1 }]}>{row.codice_risposta}</Text>
                   <Text style={[S.tableCell, { flex: 1 }]}>{row.tempo_risposta_ms} ms</Text>
-                  <Text style={[S.tableCell, { flex: 2, color: P.muted }]}>{row.ruolo_utente || "—"}</Text>
+                  <Text style={[S.tableCell, { flex: 2, color: P.muted }]}>{valoreOAssente(row.ruolo_utente)}</Text>
                 </View>
               ))}
             </View>

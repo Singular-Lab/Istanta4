@@ -1,7 +1,7 @@
 import { FormInput } from "@/components/Base/Form";
 import Lucide from "@/components/Base/Lucide";
 import { forwardRef, useState } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/utils/twMerge";
 
 type CampoPasswordProps = Omit<React.ComponentPropsWithoutRef<"input">, "type">;
 

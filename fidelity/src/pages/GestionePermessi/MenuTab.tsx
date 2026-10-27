@@ -1,9 +1,16 @@
+import Alert from '@/components/Base/Alert';
+import Badge from '@/components/Base/Badge';
 import Button from '@/components/Base/Button';
 import { FormInput, FormSelect } from '@/components/Base/Form';
 import FormSwitch from '@/components/Base/Form/FormSwitch';
-import { Dialog } from '@/components/Base/Headless';
 import Lucide from '@/components/Base/Lucide';
+import PageError from '@/components/Base/PageError';
+import Segmenti, { type OpzioneSegmento } from '@/components/Base/Segmenti';
+import Sezione from '@/components/Base/Sezione';
 import Spinner from '@/components/Base/Spinner';
+import StatusBadge from '@/components/Base/StatusBadge';
+import ConfirmDialog from '@/components/ConfirmDialog';
+import EmptyState from '@/components/EmptyState';
 import { useNotification } from '@/context/NotificationContext';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
@@ -43,13 +50,14 @@ const PermessoDellaPagina = ({ pathname, piccolo }: { pathname?: string | null; 
       : pagina.permesso === null
         ? 'Tutti gli autenticati'
         : voceDi(pagina.permesso)?.nome ?? pagina.permesso;
+  // Il codice del permesso resta leggibile al passaggio del mouse sul contenitore
   return (
-    <span
-      title={pagina?.permesso ?? undefined}
-      className={`inline-flex max-w-full items-center gap-1 truncate rounded-md px-2 py-1 ${piccolo ? 'text-2xs' : 'text-xs'} ${pathname && !pagina ? 'bg-warning/10 text-warning' : 'bg-slate-100 text-slate-600 dark:bg-darkmode-400 dark:text-slate-300'}`}
-    >
-      <Lucide icon={pagina?.permesso ? 'Lock' : 'LockOpen'} className="h-3 w-3 flex-shrink-0" />
-      <span className="truncate">{testo}</span>
+    <span title={pagina?.permesso ?? undefined} className={`inline-flex max-w-full ${piccolo ? '' : 'py-0.5'}`}>
+      <StatusBadge
+        tono={pathname && !pagina ? 'warning' : 'neutral'}
+        icon={pagina?.permesso ? 'Lock' : 'LockOpen'}
+        etichetta={testo}
+      />
     </span>
   );
 };
@@ -155,7 +163,7 @@ const MenuItemRow = memo(function MenuItemRow({
   onRemoveSubItem,
 }: MenuItemRowProps) {
   return (
-    <div className="box box--stacked overflow-hidden">
+    <div className="overflow-hidden rounded-card border border-slate-200 bg-white dark:border-darkmode-400 dark:bg-darkmode-600">
       {item.tipo === 'separator' ? (
         /* Separator row */
         <div className="flex items-center gap-3 px-4 py-3 bg-slate-50 dark:bg-darkmode-700">
@@ -181,7 +189,7 @@ const MenuItemRow = memo(function MenuItemRow({
           </div>
           <div className="flex items-center gap-2 flex-1">
             <Lucide icon="Minus" className="w-4 h-4 text-slate-400" />
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Separatore</span>
+            <span className="title-eyebrow">Separatore</span>
             <span className="text-xs text-slate-400">-</span>
             <FormInput
               type="text"
@@ -227,8 +235,8 @@ const MenuItemRow = memo(function MenuItemRow({
             </div>
 
             {/* Icon preview */}
-            <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-primary/10 flex-shrink-0">
-              <Lucide icon={item.icona || 'Circle'} className="w-4.5 h-4.5 text-primary" />
+            <div className="flex items-center justify-center w-9 h-9 rounded-control bg-primary/10 flex-shrink-0">
+              <Lucide icon={item.icona || 'Circle'} aria-hidden="true" className="h-4 w-4 text-primary" />
             </div>
 
             {/* Fields */}
@@ -341,10 +349,11 @@ const MenuItemRow = memo(function MenuItemRow({
               className="block px-4 pb-2 text-left cursor-pointer"
               onClick={() => onToggleExpand(index)}
             >
-              <span className="inline-flex items-center gap-1 text-xs text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                <Lucide icon="CornerDownRight" aria-hidden="true" className="w-3 h-3" />
-                {item.subMenu.length} sotto-voc{item.subMenu.length === 1 ? 'e' : 'i'}
-              </span>
+              <StatusBadge
+                tono="brand"
+                icon="CornerDownRight"
+                etichetta={`${item.subMenu.length} sotto-voc${item.subMenu.length === 1 ? 'e' : 'i'}`}
+              />
             </button>
           )}
 
@@ -381,7 +390,7 @@ const MenuItemRow = memo(function MenuItemRow({
                   <Lucide icon="CornerDownRight" className="w-3.5 h-3.5 text-slate-300 flex-shrink-0" />
 
                   {/* Sub icon preview */}
-                  <div className="flex items-center justify-center w-7 h-7 rounded bg-primary/5 flex-shrink-0">
+                  <div className="flex items-center justify-center w-7 h-7 rounded-control bg-primary/5 flex-shrink-0">
                     <Lucide icon={sub.icona || 'Circle'} className="w-3.5 h-3.5 text-primary/70" />
                   </div>
 
@@ -474,7 +483,7 @@ export default function MenuTab() {
   const ruoloGdoParam = selectedRuoloGdo ? `?ruoloGdo=${selectedRuoloGdo}` : '';
   const menuQueryKey = ['menu-items', selectedTipo, selectedRuoloGdo || 'base'];
 
-  const { data: menuData, isLoading } = useQuery<MenuItemDTO[]>({
+  const { data: menuData, isLoading, isError, error: erroreMenu, refetch: refetchMenu } = useQuery<MenuItemDTO[]>({
     queryKey: menuQueryKey,
     queryFn: () => ServerCall.get<MenuItemDTO[]>(`/menu/${selectedTipo}${ruoloGdoParam}`),
   });
@@ -635,40 +644,34 @@ export default function MenuTab() {
     setShowPasteDialog(false);
   }, [clipboard]);
 
+  const opzioniTipo: OpzioneSegmento<string>[] = TIPI_UTENTE_MENU.map(tipo => ({ valore: tipo, etichetta: TIPO_LABELS[tipo] }));
+
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-6">
       {/* Selettore tipo utente + GDO role */}
-      <div className="flex flex-col box box--stacked">
-        <div className="flex flex-col p-5 xl:items-center xl:flex-row gap-4">
-          <div className="flex-1">
-            <label className="block text-xs font-medium text-slate-500 mb-2 uppercase tracking-wider">Tipo Utente</label>
-            <div className="flex flex-wrap gap-2">
-              {TIPI_UTENTE_MENU.map(tipo => (
-                <button
-                  key={tipo}
-                  onClick={() => {
-                    setSelectedTipo(tipo);
-                    setSelectedRuoloGdo('');
-                  }}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${selectedTipo === tipo
-                    ? 'bg-primary text-white shadow-md shadow-primary/30'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-darkmode-600 dark:text-slate-300'
-                    }`}
-                >
-                  <Lucide icon={TIPO_ICONS[tipo]} className="w-4 h-4" />
-                  {TIPO_LABELS[tipo]}
-                </button>
-              ))}
-            </div>
+      <Sezione titolo="Menu per tipo di utente" descrizione="Scegli il tipo di utente e, se serve, il sotto-ruolo di cui modificare il menu.">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-end">
+          <div className="min-w-0 flex-1">
+            <div className="title-eyebrow mb-2">Tipo Utente</div>
+            <Segmenti
+              etichetta="Tipo Utente"
+              opzioni={opzioniTipo}
+              valore={selectedTipo}
+              onChange={(tipo) => {
+                setSelectedTipo(tipo);
+                setSelectedRuoloGdo('');
+              }}
+            />
           </div>
 
           {/* Sotto-ruolo */}
           {!!selectedTipo && selectedTipo !== TIPO_UTENTI.SUPERADMIN && ruoliGdo && ruoliGdo.length > 0 && (
             <div className="xl:w-56">
-              <label className="block text-xs font-medium text-slate-500 mb-2 uppercase tracking-wider">
+              <label htmlFor="menu-ruolo-gdo" className="title-eyebrow mb-2 block">
                 Ruolo
               </label>
               <FormSelect
+                id="menu-ruolo-gdo"
                 value={selectedRuoloGdo}
                 onChange={(e) => setSelectedRuoloGdo(e.target.value)}
               >
@@ -685,34 +688,40 @@ export default function MenuTab() {
 
         {/* Info: sotto-ruolo selezionato */}
         {selectedRuoloGdo && (
-          <div className="border-t border-slate-200/60 dark:border-darkmode-400 bg-blue-50/50 dark:bg-blue-900/10 px-5 py-3">
-            <div className="flex items-center gap-2.5">
-              <Lucide icon="Info" className="w-4 h-4 text-blue-500 flex-shrink-0" />
-              <span className="text-sm text-blue-700 dark:text-blue-300">
-                Stai modificando il menu specifico per il sotto-ruolo selezionato.
-              </span>
-            </div>
-          </div>
+          <Alert variant="soft-info" icona="Info" className="mt-4">
+            Stai modificando il menu specifico per il sotto-ruolo selezionato.
+          </Alert>
         )}
-      </div>
+      </Sezione>
 
       {/* Menu items editor */}
       {isLoading ? (
-        <div role="status" className="box box--stacked p-16 flex flex-col items-center justify-center gap-3">
-          <Spinner size="lg" decorativo />
-          <span className="text-sm text-slate-500">Caricamento menu...</span>
-        </div>
+        <Sezione>
+          <div className="flex justify-center py-12">
+            <Spinner size="lg" etichetta="Caricamento menu..." />
+          </div>
+        </Sezione>
+      ) : isError ? (
+        <Sezione>
+          <PageError
+            compatta
+            titolo="Menu non caricato"
+            motivo={(erroreMenu as any)?.message || 'Impossibile caricare il menu'}
+            onRiprova={() => refetchMenu()}
+          />
+        </Sezione>
       ) : (
-        <>
-          {/* Action bar */}
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-2">
+        <Sezione
+          titolo="Voci del menu"
+          descrizione="Ordine, titoli, icone e percorsi delle voci"
+          azioni={
+            <>
               <Button variant="primary" size="sm" onClick={addItem}>
-                <Lucide icon="Plus" className="w-4 h-4 mr-1.5" />
+                <Lucide icon="Plus" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
                 Aggiungi Voce
               </Button>
               <Button variant="outline-secondary" size="sm" onClick={addSeparator}>
-                <Lucide icon="Minus" className="w-4 h-4 mr-1.5" />
+                <Lucide icon="Minus" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
                 Aggiungi Separatore
               </Button>
               <Button
@@ -722,24 +731,21 @@ export default function MenuTab() {
                 disabled={items.length === 0}
                 title="Copia questo menu negli appunti"
               >
-                <Lucide icon="Copy" className="w-4 h-4 mr-1.5" />
+                <Lucide icon="Copy" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
                 Copia menu
               </Button>
-            </div>
-            <div className="flex items-center gap-2">
               {clipboard && (
                 <Button
                   variant="outline-secondary"
                   size="sm"
                   onClick={() => setShowPasteDialog(true)}
                   title={`Incolla menu copiato da: ${clipboard.label}`}
-                  className="border-violet-300 text-violet-600 hover:bg-violet-50 dark:border-violet-600 dark:text-violet-400"
                 >
-                  <Lucide icon="ClipboardPaste" className="w-4 h-4 mr-1.5" />
+                  <Lucide icon="ClipboardPaste" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
                   Incolla da: {clipboard.label}
-                  <span className="ml-1.5 text-3xs bg-violet-100 dark:bg-violet-800/40 text-violet-600 dark:text-violet-300 px-1.5 py-0.5 rounded-full font-medium">
+                  <Badge variant="primary" size="sm" className="ml-1.5 tabular-nums">
                     {clipboard.items.length}
-                  </span>
+                  </Badge>
                 </Button>
               )}
               {selectedTipo === TIPO_UTENTI.SUPERADMIN && (
@@ -748,9 +754,10 @@ export default function MenuTab() {
                   size="sm"
                   onClick={() => setShowSeedDialog(true)}
                   disabled={seedMutation.isPending}
+                  loading={seedMutation.isPending}
                 >
-                  <Lucide icon="RotateCcw" className="w-4 h-4 mr-1.5" />
-                  {seedMutation.isPending ? 'Ripristino...' : 'Ripristina menu predefiniti'}
+                  {!seedMutation.isPending && <Lucide icon="RotateCcw" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />}
+                  Ripristina menu predefiniti
                 </Button>
               )}
               <Button
@@ -758,26 +765,24 @@ export default function MenuTab() {
                 size="sm"
                 onClick={() => saveMutation.mutate()}
                 disabled={!isDirty || saveMutation.isPending}
+                loading={saveMutation.isPending}
               >
-                <Lucide icon="Save" className="w-4 h-4 mr-1.5" />
-                {saveMutation.isPending ? 'Salvataggio...' : 'Salva Menu'}
+                {!saveMutation.isPending && <Lucide icon="Save" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />}
+                Salva Menu
               </Button>
-            </div>
-          </div>
-
+            </>
+          }
+        >
           {/* Items list */}
           {items.length === 0 ? (
-            <div className="box box--stacked p-12 flex flex-col items-center justify-center gap-3">
-              <div className="flex items-center justify-center w-14 h-14 rounded-full bg-slate-100 dark:bg-darkmode-600">
-                <Lucide icon="LayoutList" className="w-7 h-7 text-slate-400" />
-              </div>
-              <div className="text-center">
-                <h3 className="title-card dark:text-slate-200">Nessuna voce di menu</h3>
-                <p className="text-sm text-slate-500 mt-1">Aggiungi voci di menu o importa la configurazione da JSON.</p>
-              </div>
-            </div>
+            <EmptyState
+              compatta
+              icon="LayoutList"
+              title="Nessuna voce di menu"
+              description="Aggiungi voci di menu o importa la configurazione da JSON."
+            />
           ) : (
-            <div className="space-y-2 box box--stacked p-4">
+            <div className="flex flex-col gap-2">
               {items.map((item, index) => (
                 <MenuItemRow
                   key={item.id_menu_item || index}
@@ -798,134 +803,89 @@ export default function MenuTab() {
               ))}
             </div>
           )}
-        </>
+        </Sezione>
       )}
 
-      {/* Sticky save bar */}
+      {/* Barra delle modifiche in sospeso: come quella dei permessi dei ruoli */}
       {isDirty && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-darkmode-600 border-t border-slate-200 dark:border-darkmode-400 shadow-lg px-6 py-3.5 flex items-center justify-between z-50">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-800/30">
-              <Lucide icon="Pencil" className="w-4 h-4 text-blue-600" />
+        <div className="sticky bottom-4 z-20">
+          <div className="box box--stacked flex flex-col gap-3 border-warning/40 bg-white/95 p-4 shadow-overlay backdrop-blur-sm dark:bg-darkmode-600/95 sm:flex-row sm:items-center">
+            <div className="flex flex-1 items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+              <span aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-warning" />
+              <span>
+                <span className="font-medium">Menu modificato</span>: salvare le modifiche?
+              </span>
             </div>
-            <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
-              Menu modificato - salvare le modifiche?
-            </span>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline-secondary"
-              onClick={() => {
-                if (menuData) setItems(menuData);
-                setIsDirty(false);
-              }}
-              size="sm"
-            >
-              <Lucide icon="X" className="w-3.5 h-3.5 mr-1.5" />
-              Annulla
-            </Button>
-            <Button
-              variant="primary"
-              onClick={() => saveMutation.mutate()}
-              disabled={saveMutation.isPending}
-              size="sm"
-            >
-              <Lucide icon="Save" className="w-3.5 h-3.5 mr-1.5" />
-              {saveMutation.isPending ? 'Salvataggio...' : 'Salva menu'}
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline-secondary"
+                onClick={() => {
+                  if (menuData) setItems(menuData);
+                  setIsDirty(false);
+                }}
+                size="sm"
+              >
+                Annulla
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => saveMutation.mutate()}
+                disabled={saveMutation.isPending}
+                loading={saveMutation.isPending}
+                size="sm"
+              >
+                {!saveMutation.isPending && <Lucide icon="Save" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />}
+                Salva menu
+              </Button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Dialog conferma ripristino del menu predefinito */}
-      <Dialog
+      {/* Conferma ripristino del menu predefinito */}
+      <ConfirmDialog
         open={showSeedDialog}
-        onClose={() => setShowSeedDialog(false)}
-        staticBackdrop
-      >
-        <Dialog.Panel>
-          <Dialog.Title>
-            <h2 className="title-card mr-auto">Ripristina menu predefiniti</h2>
-          </Dialog.Title>
-          <Dialog.Description className="space-y-4">
-            <div className="p-4 border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800/30 rounded-lg">
-              <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300 font-medium mb-2">
-                <Lucide icon="AlertTriangle" className="w-5 h-5" />
-                Attenzione
-              </div>
-              <p className="text-sm text-amber-800 dark:text-amber-200">
-                Il menu del Superadmin tornerà quello con cui nasce l'installazione.
-              </p>
-            </div>
-            <ul className="list-disc list-inside text-sm text-slate-600 dark:text-slate-400 space-y-1">
+        title="Ripristina menu predefiniti"
+        confirmLabel="Ripristina"
+        confirmVariant="primary"
+        description={
+          <div className="space-y-4">
+            <Alert variant="soft-warning" icona="TriangleAlert" titolo="Attenzione">
+              Il menu del Superadmin tornerà quello con cui nasce l'installazione.
+            </Alert>
+            <ul className="list-inside list-disc space-y-1">
               <li>Le voci aggiunte, tolte o spostate nel menu del Superadmin andranno perse</li>
               <li>I menu degli altri tipi di utente non cambiano</li>
               <li>Se il ripristino non riesce, il menu resta quello attuale</li>
             </ul>
-          </Dialog.Description>
-          <Dialog.Footer className="flex justify-end gap-2">
-            <Button
-              variant="outline-secondary"
-              onClick={() => setShowSeedDialog(false)}
-            >
-              Annulla
-            </Button>
-            <Button
-              variant="primary"
-              onClick={() => {
-                setShowSeedDialog(false);
-                seedMutation.mutate();
-              }}
-            >
-              <Lucide icon="RotateCcw" className="w-4 h-4 mr-1.5" />
-              Ripristina
-            </Button>
-          </Dialog.Footer>
-        </Dialog.Panel>
-      </Dialog>
+          </div>
+        }
+        onClose={() => setShowSeedDialog(false)}
+        onConfirm={() => {
+          setShowSeedDialog(false);
+          seedMutation.mutate();
+        }}
+      />
 
-      {/* Dialog conferma Incolla */}
-      <Dialog
+      {/* Conferma Incolla */}
+      <ConfirmDialog
         open={showPasteDialog}
+        title="Incolla menu"
+        subtitle="Sostituisce il menu corrente"
+        confirmLabel="Incolla menu"
+        confirmVariant="primary"
+        description={
+          <div className="space-y-4">
+            <Alert variant="soft-info" icona="ClipboardPaste" titolo="Conferma incolla">
+              Stai per sostituire il menu corrente con le <strong>{clipboard?.items.length ?? 0} voci</strong> copiate da{' '}
+              <strong>{clipboard?.label}</strong>.
+            </Alert>
+            <p>Il menu attuale verrà sovrascritto. Le modifiche saranno visibili al salvataggio.</p>
+          </div>
+        }
         onClose={() => setShowPasteDialog(false)}
-        staticBackdrop
-      >
-        <Dialog.Panel>
-          <Dialog.Title>
-            <h2 className="title-card mr-auto">Incolla menu</h2>
-          </Dialog.Title>
-          <Dialog.Description className="space-y-4">
-            <div className="p-4 border border-violet-200 bg-violet-50 dark:bg-violet-900/20 dark:border-violet-800/30 rounded-lg">
-              <div className="flex items-center gap-2 text-violet-700 dark:text-violet-300 font-medium mb-2">
-                <Lucide icon="ClipboardPaste" className="w-5 h-5" />
-                Conferma incolla
-              </div>
-              <p className="text-sm text-violet-800 dark:text-violet-200">
-                Stai per sostituire il menu corrente con le <strong>{clipboard?.items.length ?? 0} voci</strong> copiate da{' '}
-                <strong>{clipboard?.label}</strong>.
-              </p>
-            </div>
-            <p className="text-sm text-slate-600 dark:text-slate-400">
-              Il menu attuale verrà sovritto. Le modifiche saranno visibili al salvataggio.
-            </p>
-          </Dialog.Description>
-          <Dialog.Footer className="flex justify-end gap-2">
-            <Button
-              variant="outline-secondary"
-              onClick={() => setShowPasteDialog(false)}
-            >
-              Annulla
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handlePaste}
-            >
-              <Lucide icon="ClipboardPaste" className="w-4 h-4 mr-1.5" />
-              Incolla menu
-            </Button>
-          </Dialog.Footer>
-        </Dialog.Panel>
-      </Dialog>
+        onConfirm={handlePaste}
+      />
     </div>
   );
 }

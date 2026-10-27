@@ -100,16 +100,32 @@ export default [
       // TypeScript specifico per React
       "@typescript-eslint/no-explicit-any": "warn",
 
-      // Stile unificato: niente misure di testo arbitrarie né colori esadecimali nelle classi
+      // Stile unificato: niente misure, raggi e spaziature arbitrarie, colori esadecimali o gray nelle classi
       "no-restricted-syntax": [
         "error",
         {
-          selector: "JSXAttribute[name.name='className'] Literal[value=/(^|[\\s:])text-\\[\\d+(\\.\\d+)?px\\]/]",
-          message: "Usa text-3xs, text-2xs, text-xs, text-sm… invece di text-[Npx].",
+          selector: "JSXAttribute[name.name='className'] Literal[value=/(^|[\\s:])text-\\[\\d+(\\.\\d+)?(px|rem|em)\\]/]",
+          message: "Usa text-3xs, text-2xs, text-xs, text-sm… invece di text-[N].",
         },
         {
-          selector: "JSXAttribute[name.name='className'] TemplateElement[value.raw=/(^|[\\s:])text-\\[\\d+(\\.\\d+)?px\\]/]",
-          message: "Usa text-3xs, text-2xs, text-xs, text-sm… invece di text-[Npx].",
+          selector: "JSXAttribute[name.name='className'] TemplateElement[value.raw=/(^|[\\s:])text-\\[\\d+(\\.\\d+)?(px|rem|em)\\]/]",
+          message: "Usa text-3xs, text-2xs, text-xs, text-sm… invece di text-[N].",
+        },
+        {
+          selector: "JSXAttribute[name.name='className'] Literal[value=/(^|[\\s:])(rounded(-[a-z]{1,2})?|tracking)-\\[/]",
+          message: "Niente raggi o spaziature arbitrarie: usa rounded-card, rounded-control, rounded-full, title-eyebrow o tracking-*.",
+        },
+        {
+          selector: "JSXAttribute[name.name='className'] TemplateElement[value.raw=/(^|[\\s:])(rounded(-[a-z]{1,2})?|tracking)-\\[/]",
+          message: "Niente raggi o spaziature arbitrarie: usa rounded-card, rounded-control, rounded-full, title-eyebrow o tracking-*.",
+        },
+        {
+          selector: "JSXAttribute[name.name='className'] Literal[value=/(^|[\\s:])[a-z-]+-gray-\\d/]",
+          message: "Usa la scala slate-* invece di gray-*.",
+        },
+        {
+          selector: "JSXAttribute[name.name='className'] TemplateElement[value.raw=/(^|[\\s:])[a-z-]+-gray-\\d/]",
+          message: "Usa la scala slate-* invece di gray-*.",
         },
         {
           selector: "JSXAttribute[name.name='className'] Literal[value=/#[0-9a-fA-F]{3,8}\\b/]",

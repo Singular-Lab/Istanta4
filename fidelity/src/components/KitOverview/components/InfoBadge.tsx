@@ -17,12 +17,12 @@ const InfoBadge: FC<InfoBadgeProps> = ({
 
   return (
     <div className={clsx(
-      "inline-flex items-center gap-2 rounded-lg border px-3 py-2",
+      "inline-flex items-center gap-2 rounded-control border px-3 py-2",
       variantClasses
     )}>
-      <Lucide icon={icon as any} className="h-4 w-4 opacity-70" />
+      <Lucide icon={icon as any} aria-hidden="true" className="h-4 w-4 opacity-70" />
       <div>
-        <p className="text-3xs uppercase tracking-wider opacity-60">{label}</p>
+        <p className="text-3xs uppercase tracking-wide opacity-70">{label}</p>
         <p className="text-sm font-semibold">{value}</p>
       </div>
     </div>

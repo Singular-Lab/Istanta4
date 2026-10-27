@@ -1,7 +1,10 @@
+import Button from "@/components/Base/Button";
 import Lucide from "@/components/Base/Lucide";
+import Pagina from "@/components/Base/Pagina";
+import Sezione from "@/components/Base/Sezione";
 import withSessionCheck from "@/components/SessionChecker";
 import { Link } from "react-router-dom";
-import PageHeader from "../../components/Base/PageHeader";
+import { twMerge } from "@/utils/twMerge";
 
 interface DocSection {
   id: string;
@@ -9,7 +12,9 @@ interface DocSection {
   description: string;
   icon: string;
   path: string;
+  /** Colore dell'icona. */
   color: string;
+  /** Sfondo della tessera dell'icona. */
   bgColor: string;
 }
 
@@ -21,7 +26,7 @@ const docSections: DocSection[] = [
     icon: "BookOpen",
     path: "/documentazione/panoramica",
     color: "text-primary",
-    bgColor: "bg-primary/10 border-primary/20",
+    bgColor: "bg-primary/10",
   },
   {
     id: "guida-rapida",
@@ -30,7 +35,7 @@ const docSections: DocSection[] = [
     icon: "Rocket",
     path: "/documentazione/guida-rapida",
     color: "text-success",
-    bgColor: "bg-success/10 border-success/20",
+    bgColor: "bg-success/10",
   },
   {
     id: "api",
@@ -39,7 +44,7 @@ const docSections: DocSection[] = [
     icon: "Code",
     path: "/documentazione/api",
     color: "text-info",
-    bgColor: "bg-info/10 border-info/20",
+    bgColor: "bg-info/10",
   },
   {
     id: "plugin",
@@ -48,7 +53,7 @@ const docSections: DocSection[] = [
     icon: "Package",
     path: "/documentazione/plugin",
     color: "text-warning",
-    bgColor: "bg-warning/10 border-warning/20",
+    bgColor: "bg-warning/10",
   },
   {
     id: "filter-templates",
@@ -57,7 +62,7 @@ const docSections: DocSection[] = [
     icon: "Filter",
     path: "/documentazione/filter-templates",
     color: "text-pending",
-    bgColor: "bg-pending/10 border-pending/20",
+    bgColor: "bg-pending/10",
   },
   {
     id: "statistiche",
@@ -66,133 +71,94 @@ const docSections: DocSection[] = [
     icon: "BarChart3",
     path: "/documentazione/statistiche",
     color: "text-danger",
-    bgColor: "bg-danger/10 border-danger/20",
+    bgColor: "bg-danger/10",
   },
+];
+
+const linkRapidi = [
+  { to: "/gestione-api/keys", icon: "Key", label: "Gestisci API Keys" },
+  { to: "/gestione-api/plugin", icon: "Settings", label: "Configura Plugin" },
+  { to: "/gestione-api/statistiche", icon: "BarChart3", label: "Dashboard Statistiche" },
+  { to: "/gestione-api/test", icon: "PlayCircle", label: "Test API" },
 ];
 
 function DocumentazioneHubPage() {
   return (
-    <div className="grid grid-cols-12 gap-y-10 gap-x-6">
-      <div className="col-span-12">
-        {/* Header */}
-        <PageHeader
-          title="Documentazione Web API"
-          description="Guida completa all'integrazione delle External API di Istanta 2 GDO Suite"
-        />
+    <Pagina
+      titolo="Documentazione Web API"
+      descrizione="Guida completa all'integrazione delle External API di Istanta 2 GDO Suite"
+    >
+      <Sezione titolo="Benvenuto nella Documentazione">
+        <div className="flex flex-col gap-8">
+          {/* Intro */}
+          <div className="max-w-3xl space-y-4 leading-relaxed text-slate-600">
+            <p>
+              Le External API di Istanta 2 GDO Suite ti permettono di accedere a referenze prodotto,
+              promozioni e file direttamente dal tuo sistema. Puoi integrare i dati tramite
+              chiamate REST dirette oppure utilizzare il Plugin JavaScript per il rendering
+              automatico nel browser.
+            </p>
+            <p>
+              Scegli una sezione per iniziare oppure segui la{" "}
+              <Link to="/documentazione/guida-rapida" className="font-medium text-primary hover:text-primary/80">
+                Guida Rapida
+              </Link>{" "}
+              per essere operativo in pochi minuti.
+            </p>
+          </div>
 
-        {/* Content */}
-        <div className="mt-3.5">
-          <div className="flex flex-col box box--stacked">
-            <div className="p-5 sm:p-8">
-              {/* Intro Section */}
-              <div className="mb-10">
-                <div className="max-w-3xl">
-                  <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-4">
-                    Benvenuto nella Documentazione
-                  </h2>
-                  <p className="text-slate-600 dark:text-slate-300 text-base leading-relaxed mb-4">
-                    Le External API di Istanta 2 GDO Suite ti permettono di accedere a referenze prodotto,
-                    promozioni e file direttamente dal tuo sistema. Puoi integrare i dati tramite
-                    chiamate REST dirette oppure utilizzare il Plugin JavaScript per il rendering
-                    automatico nel browser.
-                  </p>
-                  <p className="text-slate-600 dark:text-slate-300 text-base leading-relaxed">
-                    Scegli una sezione per iniziare oppure segui la{" "}
-                    <Link
-                      to="/documentazione/guida-rapida"
-                      className="text-primary hover:text-primary/80 font-medium"
-                    >
-                      Guida Rapida
-                    </Link>{" "}
-                    per essere operativo in pochi minuti.
-                  </p>
+          {/* Sezioni della documentazione */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {docSections.map((section) => (
+              <Link
+                key={section.id}
+                to={section.path}
+                className="group flex flex-col rounded-card border border-slate-200 bg-white p-4 transition-colors hover:border-primary/40 hover:shadow-card"
+              >
+                <div className="mb-3 flex items-center gap-3">
+                  <div className={twMerge("flex-none rounded-control p-2", section.bgColor, section.color)}>
+                    <Lucide icon={section.icon} aria-hidden="true" className="h-5 w-5" />
+                  </div>
+                  <h3 className="title-card">{section.title}</h3>
                 </div>
-              </div>
-
-              {/* Sections Grid */}
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                {docSections.map((section) => (
-                  <Link
-                    key={section.id}
-                    to={section.path}
-                    className={`
-                      group flex flex-col p-6 rounded-xl border-2 transition-all duration-200
-                      ${section.bgColor}
-                      hover:shadow-lg hover:scale-[1.02]
-                    `}
-                  >
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className={`p-2 rounded-lg bg-white dark:bg-darkmode-600 ${section.color}`}>
-                        <Lucide icon={section.icon as any} className="w-6 h-6" />
-                      </div>
-                      <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                        {section.title}
-                      </h3>
-                    </div>
-                    <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed flex-1">
-                      {section.description}
-                    </p>
-                    <div className="mt-4 flex items-center text-sm font-medium text-slate-500 dark:text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-200">
-                      Vai alla sezione
-                      <Lucide icon="ArrowRight" className="w-4 h-4 ml-1 transition-transform group-hover:translate-x-1" />
-                    </div>
-                  </Link>
-                ))}
-              </div>
-
-              {/* Quick Links */}
-              <div className="mt-10 pt-8 border-t border-slate-200 dark:border-darkmode-400">
-                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">
-                  Link Rapidi
-                </h3>
-                <div className="flex flex-wrap gap-3">
-                  <Link
-                    to="/gestione-api/keys"
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-100 dark:bg-darkmode-400 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-darkmode-300 transition-colors"
-                  >
-                    <Lucide icon="Key" className="w-4 h-4" />
-                    Gestisci API Keys
-                  </Link>
-                  <Link
-                    to="/gestione-api/plugin"
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-100 dark:bg-darkmode-400 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-darkmode-300 transition-colors"
-                  >
-                    <Lucide icon="Settings" className="w-4 h-4" />
-                    Configura Plugin
-                  </Link>
-                  <Link
-                    to="/gestione-api/statistiche"
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-100 dark:bg-darkmode-400 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-darkmode-300 transition-colors"
-                  >
-                    <Lucide icon="BarChart3" className="w-4 h-4" />
-                    Dashboard Statistiche
-                  </Link>
-                  <Link
-                    to="/gestione-api/test"
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-100 dark:bg-darkmode-400 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-darkmode-300 transition-colors"
-                  >
-                    <Lucide icon="PlayCircle" className="w-4 h-4" />
-                    Test API
-                  </Link>
+                <p className="flex-1 text-sm leading-relaxed text-slate-600">{section.description}</p>
+                <div className="mt-4 flex items-center text-sm font-medium text-slate-500 group-hover:text-slate-700">
+                  Vai alla sezione
+                  <Lucide
+                    icon="ArrowRight"
+                    aria-hidden="true"
+                    className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1"
+                  />
                 </div>
-              </div>
+              </Link>
+            ))}
+          </div>
 
-              {/* Version Info */}
-              <div className="mt-8 p-4 rounded-lg bg-slate-50 dark:bg-darkmode-600 border border-slate-200 dark:border-darkmode-400">
-                <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-                  <Lucide icon="Info" className="w-4 h-4" />
-                  <span>
-                    API Version: <code className="bg-slate-200 dark:bg-darkmode-400 px-1.5 py-0.5 rounded text-xs font-mono">v1</code>
-                    {" "}&bull;{" "}
-                    Ultimo aggiornamento: Gennaio 2026
-                  </span>
-                </div>
-              </div>
+          {/* Link rapidi */}
+          <div className="border-t border-dashed border-slate-200 pt-6">
+            <h3 className="title-card mb-4">Link Rapidi</h3>
+            <div className="flex flex-wrap gap-2">
+              {linkRapidi.map((link) => (
+                <Button key={link.to} as={Link} to={link.to} variant="outline-secondary">
+                  <Lucide icon={link.icon} aria-hidden="true" className="mr-2 h-4 w-4" />
+                  {link.label}
+                </Button>
+              ))}
             </div>
           </div>
+
+          {/* Versione */}
+          <div className="flex items-center gap-2 rounded-card border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+            <Lucide icon="Info" aria-hidden="true" className="h-4 w-4 flex-none" />
+            <span>
+              API Version: <code className="rounded-control bg-slate-200 px-1.5 py-0.5 font-mono text-xs">v1</code>
+              {" "}&bull;{" "}
+              Ultimo aggiornamento: Gennaio 2026
+            </span>
+          </div>
         </div>
-      </div>
-    </div>
+      </Sezione>
+    </Pagina>
   );
 }
 

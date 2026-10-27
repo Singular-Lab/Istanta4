@@ -1,9 +1,10 @@
 /* eslint-disable no-console */
 import Button from "@/components/Base/Button";
-import { FormInput, FormSelect } from "@/components/Base/Form";
+import { FormField, FormInput, FormSelect } from "@/components/Base/Form";
 import Lucide from "@/components/Base/Lucide";
 import PageError from "@/components/Base/PageError";
-import PageHeader from "@/components/Base/PageHeader";
+import Pagina from "@/components/Base/Pagina";
+import Sezione from "@/components/Base/Sezione";
 import StatusBadge from "@/components/Base/StatusBadge";
 import EmptyState from "@/components/EmptyState";
 import { PreviewImmaginePdf } from "@/components/PreviewImmaginePdf";
@@ -26,7 +27,8 @@ import { FileItemKit } from "../../../lib/types";
 import Skeleton from "../../components/Base/Skeleton";
 import withSessionCheck from "../../components/SessionChecker";
 import { usePromoName } from "@/hooks/usePromoName";
-import { formatData } from "@/utils/format";
+import { descriviStato } from "@/constants/stati";
+import { formatData, formatNumero } from "@/utils/format";
 
 export interface MaterialiDocumentaleLoaderData {
   title: string;
@@ -38,25 +40,33 @@ export interface MaterialiDocumentaleLoaderData {
 // Soglia per determinare se mostrare select o text input
 const MAX_VALUES_FOR_SELECT = 5;
 
+// Attributi che FormField passa al campo per collegarlo a etichetta, aiuto ed errore
+type AttributiCampo = {
+  id?: string;
+  "aria-invalid"?: boolean;
+  "aria-describedby"?: string;
+  "aria-required"?: boolean;
+};
+
 // Componente per l'input del valore metadata (Select o TextInput in base al numero di valori)
-interface MetadataValueInputProps {
+interface MetadataValueInputProps extends AttributiCampo {
   field: string;
   value: string;
   onChange: (value: string) => void;
 }
 
-const MetadataValueInput: React.FC<MetadataValueInputProps> = ({ field, value, onChange }) => {
+const MetadataValueInput: React.FC<MetadataValueInputProps> = ({ field, value, onChange, ...attributi }) => {
   const { data: fieldValues = [], isLoading } = useFetchFilesFieldValues(field, !!field);
 
   // Se non c'è un campo selezionato, mostra input disabilitato
   if (!field) {
     return (
       <FormInput
+        {...attributi}
         type="text"
-        placeholder="Seleziona prima una chiave..."
+        placeholder="Seleziona prima un campo…"
         value=""
         disabled
-        className="w-full"
       />
     );
   }
@@ -64,25 +74,23 @@ const MetadataValueInput: React.FC<MetadataValueInputProps> = ({ field, value, o
   // Se sta caricando o ci sono troppi valori o nessun valore, mostra TextInput
   if (isLoading || fieldValues.length === 0 || fieldValues.length > MAX_VALUES_FOR_SELECT) {
     return (
-      <div>
-        <FormInput
-          type="text"
-          placeholder={isLoading ? "Caricamento valori..." : "Inserisci valore..."}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-full"
-          disabled={isLoading}
-        />
-      </div>
+      <FormInput
+        {...attributi}
+        type="text"
+        placeholder={isLoading ? "Caricamento valori…" : "Inserisci valore…"}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={isLoading}
+      />
     );
   }
 
   // Altrimenti mostra select con i valori disponibili
   return (
     <FormSelect
+      {...attributi}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full"
     >
       <option value="">Seleziona valore</option>
       {fieldValues.map((val, i) => (
@@ -459,558 +467,470 @@ const MaterialiDocumentale: React.FC = () => {
     return promo?.nome ?? preselectedPromoName ?? null;
   }, [filters.idPromo, promoOptions, preselectedPromoName]);
 
+  const azzeraFiltri = () => {
+    setFilters({
+      ...defaultFilters,
+      idPromo: preselectedPromoId,
+    });
+    setSelectedMetadataKey('');
+    setSelectedMetadataValue('');
+  };
+
+  const nomeFile = (file: FileItemKit) => file.nome.split(' (Lavorazione:')[0];
+
+  const apriAnteprima = (file: FileItemKit) => {
+    if (file.url) {
+      setLightboxImage(file.url);
+      setPagesLightBoxImage(file.pages ?? null);
+    }
+  };
+
+  const conteggioFile = `${formatNumero(filesQuery.data?.totalItems || 0)} file trovati${
+    activeFiltersCount > 0 ? ` · ${activeFiltersCount} ${activeFiltersCount === 1 ? "filtro attivo" : "filtri attivi"}` : ""
+  }`;
+
   return (
-    <div className="grid grid-cols-12 gap-y-10 gap-x-6">
-      <div className="col-span-12">
-        {/* Con la promo preselezionata il titolo la nomina e l'indietro riporta alla promo */}
-        <PageHeader
-          title={isPromoPreselected && selectedPromoName ? `Materiali: ${selectedPromoName}` : loaderData.title}
-          description={loaderData.description}
-          indietro={isPromoPreselected ? { onClick: handleBackToPromo, etichetta: "Torna alla promo" } : undefined}
-        />
+    <>
+      {/* Con la promo preselezionata il titolo la nomina e l'indietro riporta alla promo */}
+      <Pagina
+        titolo={isPromoPreselected && selectedPromoName ? `Materiali: ${selectedPromoName}` : loaderData.title}
+        descrizione={loaderData.description}
+        indietro={isPromoPreselected ? { onClick: handleBackToPromo, etichetta: "Torna alla promo" } : undefined}
+      >
+        <Sezione
+          titolo="File disponibili"
+          descrizione={conteggioFile}
+          azioni={
+            <>
+              <Button type="button" variant="outline-secondary" size="sm" onClick={azzeraFiltri}>
+                <Lucide icon="RotateCcw" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                Azzera filtri
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={itemDisposition === ItemDisposition.grid ? "primary" : "outline-secondary"}
+                onClick={() => setItemDisposition(ItemDisposition.grid)}
+                aria-label="Vista griglia"
+                aria-pressed={itemDisposition === ItemDisposition.grid}
+                title="Vista griglia"
+              >
+                <Lucide icon="LayoutGrid" aria-hidden="true" className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={itemDisposition === ItemDisposition.list ? "primary" : "outline-secondary"}
+                onClick={() => setItemDisposition(ItemDisposition.list)}
+                aria-label="Vista elenco"
+                aria-pressed={itemDisposition === ItemDisposition.list}
+                title="Vista elenco"
+              >
+                <Lucide icon="List" aria-hidden="true" className="h-3.5 w-3.5" />
+              </Button>
+            </>
+          }
+        >
+          {/* Filtri: dentro la sezione che filtrano */}
+          <div className="mb-5 space-y-5 border-b border-dashed border-slate-200 pb-5">
+            {/* Filtri della promozione: nascosti se la promo è preselezionata */}
+            {!isPromoPreselected && (
+              <fieldset>
+                <legend className="title-card mb-3">Promozione</legend>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <FormField etichetta="Promozione">
+                    <FormSelect
+                      value={filters.idPromo}
+                      onChange={(e) => setFilters({ ...filters, idPromo: e.target.value })}
+                    >
+                      <option value="">Tutte le promozioni</option>
+                      {promoOptions.map((promo) => (
+                        <option key={promo.id} value={promo.id}>
+                          {promo.nome} ({descriviStato("promo", promo.stato).etichetta})
+                        </option>
+                      ))}
+                    </FormSelect>
+                  </FormField>
 
-        <div className="mt-3.5">
-          <div className="flex flex-col box box--stacked">
-            {/* Header with stats and view controls */}
-            <div className="p-5 border-b border-slate-200">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div className="flex-1">
-                  <p className="text-sm text-slate-600">
-                    {filesQuery.data?.totalItems || 0} file trovati
-                    {activeFiltersCount > 0 && ` (${activeFiltersCount} filtri attivi)`}
-                  </p>
+                  <FormField etichetta="Nome della promozione">
+                    <FormInput
+                      type="text"
+                      placeholder="Cerca per nome…"
+                      value={filters.nomePromo}
+                      onChange={(e) => setFilters({ ...filters, nomePromo: e.target.value })}
+                    />
+                  </FormField>
+
+                  {!basePromoFilter.lockStatusSelect && (
+                    <FormField etichetta="Stato">
+                      <FormSelect
+                        value={filters.statoPromo}
+                        onChange={(e) => setFilters({ ...filters, statoPromo: e.target.value })}
+                      >
+                        {availableStati.map((stato) => (
+                          <option key={stato} value={stato}>
+                            {descriviStato("promo", stato).etichetta}
+                          </option>
+                        ))}
+                      </FormSelect>
+                    </FormField>
+                  )}
+
+                  <FormField etichetta="Validità dal">
+                    <FormInput
+                      type="date"
+                      value={filters.validitaDal}
+                      onChange={(e) => setFilters({ ...filters, validitaDal: e.target.value })}
+                    />
+                  </FormField>
+
+                  <FormField etichetta="Validità al">
+                    <FormInput
+                      type="date"
+                      value={filters.validitaAl}
+                      onChange={(e) => setFilters({ ...filters, validitaAl: e.target.value })}
+                    />
+                  </FormField>
                 </div>
+              </fieldset>
+            )}
 
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant="outline-secondary"
-                    onClick={() => {
-                      setFilters({
-                        ...defaultFilters,
-                        idPromo: preselectedPromoId,
-                      });
-                      setSelectedMetadataKey('');
+            {/* Filtri dei file */}
+            <fieldset>
+              <legend className="title-card mb-3">File</legend>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+                {/* Campo metadata: sostituisce Nome file / Metadata */}
+                <FormField etichetta="Campo metadata">
+                  <FormSelect
+                    value={selectedMetadataKey}
+                    onChange={(e) => {
+                      setSelectedMetadataKey(e.target.value);
                       setSelectedMetadataValue('');
                     }}
                   >
-                    <Lucide icon="RotateCcw" aria-hidden="true" className="w-4 h-4 mr-2" />
-                    Reset Filtri
-                  </Button>
+                    <option value="">Seleziona campo</option>
+                    {metadataFields.map((field) => {
+                      // Mostra solo l'ultimo segmento del path
+                      const parts = field.split('.');
+                      const label = parts[parts.length - 1];
+                      return (
+                        <option key={field} value={field}>
+                          {label.charAt(0).toUpperCase() + label.slice(1)}
+                        </option>
+                      );
+                    })}
+                  </FormSelect>
+                </FormField>
 
-                  <Button
-                    type="button"
-                    variant={itemDisposition === ItemDisposition.grid ? "primary" : "outline-secondary"}
-                    onClick={() => setItemDisposition(ItemDisposition.grid)}
-                    aria-label="Vista griglia"
-                    aria-pressed={itemDisposition === ItemDisposition.grid}
-                    title="Vista griglia"
+                <FormField etichetta="Valore metadata">
+                  <MetadataValueInput
+                    field={selectedMetadataKey}
+                    value={selectedMetadataValue}
+                    onChange={setSelectedMetadataValue}
+                  />
+                </FormField>
+
+                <FormField etichetta="Area">
+                  <FormSelect
+                    value={filters.idArea}
+                    onChange={(e) => setFilters({ ...filters, idArea: e.target.value })}
                   >
-                    <Lucide icon="LayoutGrid" aria-hidden="true" className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={itemDisposition === ItemDisposition.list ? "primary" : "outline-secondary"}
-                    onClick={() => setItemDisposition(ItemDisposition.list)}
-                    aria-label="Vista elenco"
-                    aria-pressed={itemDisposition === ItemDisposition.list}
-                    title="Vista elenco"
+                    <option value="">Tutte</option>
+                    {allArea.data?.map((area) => (
+                      <option key={area.id} value={area.id}>{area.nome}</option>
+                    ))}
+                  </FormSelect>
+                </FormField>
+
+                <FormField etichetta="Canale">
+                  <FormSelect
+                    value={filters.idCanale}
+                    onChange={(e) => setFilters({ ...filters, idCanale: e.target.value })}
                   >
-                    <Lucide icon="List" aria-hidden="true" className="w-4 h-4" />
-                  </Button>
-                </div>
+                    <option value="">Tutti</option>
+                    {allCanale.data?.map((canale) => (
+                      <option key={canale.id} value={canale.id}>{canale.nome}</option>
+                    ))}
+                  </FormSelect>
+                </FormField>
+
+                <FormField etichetta="Tipo export">
+                  <FormSelect
+                    value={filters.idTipoExport}
+                    onChange={(e) => setFilters({ ...filters, idTipoExport: e.target.value })}
+                  >
+                    <option value="">Tutti</option>
+                    {allTipoExport.data?.filter((tipo_expot) => tipo_expot.codice !== "WEB" && tipo_expot.codice !== EXPORT_DI_SISTEMA.CORREGGO).map((tipo_expot) => (
+                      <option key={tipo_expot.id} value={tipo_expot.id}>{tipo_expot.nome}</option>
+                    ))}
+                  </FormSelect>
+                </FormField>
+
+                <FormField etichetta="Formato">
+                  <FormSelect
+                    value={filters.idFormato}
+                    onChange={(e) => setFilters({ ...filters, idFormato: e.target.value })}
+                  >
+                    <option value="">Tutti</option>
+                    {allFormato.data?.map((formato) => (
+                      <option key={formato.id} value={formato.id}>{formato.nome}</option>
+                    ))}
+                  </FormSelect>
+                </FormField>
               </div>
+            </fieldset>
+          </div>
+
+          {/* Elenco dei file */}
+          {filesQuery.isLoading ? (
+            <div className="space-y-4" aria-busy="true">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="space-y-3">
+                  <Skeleton height="32px" width="35%" className="mb-1 rounded-control" />
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                    {[1, 2, 3, 4].map((j) => (
+                      <Skeleton key={j} height="160px" className="rounded-control" />
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
+          ) : filesQuery.isError && !filesQuery.data ? (
+            <PageError
+              compatta
+              titolo="Impossibile caricare i file"
+              motivo={filesQuery.error?.message || "Il servizio non ha restituito i file."}
+              onRiprova={() => filesQuery.refetch()}
+            />
+          ) : !filesQuery.data || !filesQuery.data.promos || filesQuery.data.promos.length === 0 ? (
+            <EmptyState
+              compatta
+              icon="FileX"
+              title="Nessun file trovato"
+              description="Non ci sono file disponibili con i filtri selezionati"
+            />
+          ) : (
+            (() => {
+              const promos = filesQuery.data?.promos ?? [];
+              const promosToRender = filters.idPromo
+                ? promos.filter((promo) => promo.id === filters.idPromo)
+                : promos;
+              const areFiltersEmpty = Object.values(filters).every((value) => value === "");
+              if (promosToRender.length === 0) {
+                return (
+                  <EmptyState
+                    compatta
+                    icon="FolderX"
+                    title="Nessuna promozione trovata"
+                    description={
+                      areFiltersEmpty
+                        ? "Non ci sono promozioni attive in questo momento."
+                        : "Prova a modificare i filtri per visualizzare i file disponibili."
+                    }
+                  />
+                );
+              }
 
-            {/* Expanded Filters Section */}
-            <div className="p-5 border-b border-slate-200 bg-slate-50">
-              <div className="space-y-4">
-                {/* Promozione Filters - nascondi se promo preselezionata */}
-                {!isPromoPreselected && (
-                  <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <div aria-hidden="true" className="w-1 h-5 bg-primary rounded-full"></div>
-                      <h3 className="title-card">
-                        Promozione
-                      </h3>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                      <div>
-                        <label className="text-xs font-medium text-slate-700 mb-1.5 block">
-                          Seleziona Promozione
-                        </label>
-                        <FormSelect
-                          value={filters.idPromo}
-                          onChange={(e) => setFilters({ ...filters, idPromo: e.target.value })}
-                          className="w-full"
-                        >
-                          <option value="">Tutte le promozioni</option>
-                          {promoOptions.map((promo) => (
-                            <option key={promo.id} value={promo.id}>
-                              {promo.nome} ({promo.stato})
-                            </option>
-                          ))}
-                        </FormSelect>
-                      </div>
-
-                      <div>
-                        <label className="text-xs font-medium text-slate-700 mb-1.5 block">
-                          Nome Promozione
-                        </label>
-                        <FormInput
-                          type="text"
-                          placeholder="Cerca per nome..."
-                          value={filters.nomePromo}
-                          onChange={(e) => setFilters({ ...filters, nomePromo: e.target.value })}
-                          className="w-full"
-                        />
-                      </div>
-
-                      {!basePromoFilter.lockStatusSelect && (
-                        <div>
-                          <label className="text-xs font-medium text-slate-700 mb-1.5 block">
-                            Stato
-                          </label>
-                          <FormSelect
-                            value={filters.statoPromo}
-                            onChange={(e) => setFilters({ ...filters, statoPromo: e.target.value })}
-                            className="w-full"
-                          >
-                            {availableStati.map((stato) => (
-                              <option key={stato} value={stato}>
-                                {stato.replace(/_/g, " ").toLowerCase().split(" ").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")}
-                              </option>
-                            ))}
-                          </FormSelect>
-                        </div>
-                      )}
-
-                      <div>
-                        <label className="text-xs font-medium text-slate-700 mb-1.5 block">
-                          Validità Da
-                        </label>
-                        <FormInput
-                          type="date"
-                          value={filters.validitaDal}
-                          onChange={(e) => setFilters({ ...filters, validitaDal: e.target.value })}
-                          className="w-full"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="text-xs font-medium text-slate-700 mb-1.5 block">
-                          Validità A
-                        </label>
-                        <FormInput
-                          type="date"
-                          value={filters.validitaAl}
-                          onChange={(e) => setFilters({ ...filters, validitaAl: e.target.value })}
-                          className="w-full"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* File Filters */}
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <div aria-hidden="true" className="w-1 h-5 bg-primary rounded-full"></div>
-                    <h3 className="title-card">
-                      File
-                    </h3>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
-                    {/* Campo Metadata - sostituisce Nome File / Metadata */}
-                    <div>
-                      <label className="text-xs font-medium text-slate-700 mb-1.5 block">
-                        Campo Metadata
-                      </label>
-                      <FormSelect
-                        value={selectedMetadataKey}
-                        onChange={(e) => {
-                          setSelectedMetadataKey(e.target.value);
-                          setSelectedMetadataValue('');
-                        }}
-                        className="w-full"
-                      >
-                        <option value="">Seleziona campo</option>
-                        {metadataFields.map((field) => {
-                          // Mostra solo l'ultimo segmento del path
-                          const parts = field.split('.');
-                          const label = parts[parts.length - 1];
-                          return (
-                            <option key={field} value={field}>
-                              {label.charAt(0).toUpperCase() + label.slice(1)}
-                            </option>
-                          );
-                        })}
-                      </FormSelect>
-                    </div>
-
-                    <div>
-                      <label className="text-xs font-medium text-slate-700 mb-1.5 block">
-                        Valore Metadata
-                      </label>
-                      <MetadataValueInput
-                        field={selectedMetadataKey}
-                        value={selectedMetadataValue}
-                        onChange={setSelectedMetadataValue}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-xs font-medium text-slate-700 mb-1.5 block">
-                        Area
-                      </label>
-                      <FormSelect
-                        value={filters.idArea}
-                        onChange={(e) => setFilters({ ...filters, idArea: e.target.value })}
-                        className="w-full"
-                      >
-                        <option value="">Tutte</option>
-                        {allArea.data?.map((area) => (
-                          <option key={area.id} value={area.id}>{area.nome}</option>
-                        ))}
-                      </FormSelect>
-                    </div>
-
-                    <div>
-                      <label className="text-xs font-medium text-slate-700 mb-1.5 block">
-                        Canale
-                      </label>
-                      <FormSelect
-                        value={filters.idCanale}
-                        onChange={(e) => setFilters({ ...filters, idCanale: e.target.value })}
-                        className="w-full"
-                      >
-                        <option value="">Tutti</option>
-                        {allCanale.data?.map((canale) => (
-                          <option key={canale.id} value={canale.id}>{canale.nome}</option>
-                        ))}
-                      </FormSelect>
-                    </div>
-
-                    <div>
-                      <label className="text-xs font-medium text-slate-700 mb-1.5 block">
-                        Tipo Export
-                      </label>
-                      <FormSelect
-                        value={filters.idTipoExport}
-                        onChange={(e) => setFilters({ ...filters, idTipoExport: e.target.value })}
-                        className="w-full"
-                      >
-                        <option value="">Tutti</option>
-                        {allTipoExport.data?.filter((tipo_expot) => tipo_expot.codice !== "WEB" && tipo_expot.codice !== EXPORT_DI_SISTEMA.CORREGGO).map((tipo_expot) => (
-                          <option key={tipo_expot.id} value={tipo_expot.id}>{tipo_expot.nome}</option>
-                        ))}
-                      </FormSelect>
-                    </div>
-
-                    <div>
-                      <label className="text-xs font-medium text-slate-700 mb-1.5 block">
-                        Formato
-                      </label>
-                      <FormSelect
-                        value={filters.idFormato}
-                        onChange={(e) => setFilters({ ...filters, idFormato: e.target.value })}
-                        className="w-full"
-                      >
-                        <option value="">Tutti</option>
-                        {allFormato.data?.map((formato) => (
-                          <option key={formato.id} value={formato.id}>{formato.nome}</option>
-                        ))}
-                      </FormSelect>
-                    </div>
-                  </div>
-                </div>
-
-              </div>
-            </div>
-
-            {/* Files List */}
-            {filesQuery.isLoading ? (
-              <div className="p-5">
-                <div className="space-y-4">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="space-y-3">
-                      <Skeleton height="32px" width="35%" className="rounded mb-1" />
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                        {[1, 2, 3, 4].map((j) => (
-                          <Skeleton key={j} height="160px" className="rounded" />
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : filesQuery.isError && !filesQuery.data ? (
-              <div className="p-5">
-                <PageError
-                  compatta
-                  titolo="Impossibile caricare i file"
-                  motivo={filesQuery.error?.message || "Il servizio non ha restituito i file."}
-                  onRiprova={() => filesQuery.refetch()}
-                />
-              </div>
-            ) : !filesQuery.data || !filesQuery.data.promos || filesQuery.data.promos.length === 0 ? (
-              <div className="p-5">
-                <EmptyState
-                  icon="FileX"
-                  title="Nessun file trovato"
-                  description="Non ci sono file disponibili con i filtri selezionati"
-                />
-              </div>
-            ) : (
-              <div className="p-5">
-                {(() => {
-                  const promos = filesQuery.data?.promos ?? [];
-                  const promosToRender = filters.idPromo
-                    ? promos.filter((promo) => promo.id === filters.idPromo)
-                    : promos;
-                  const areFiltersEmpty = Object.values(filters).every((value) => value === "");
-                  if (promosToRender.length === 0 && areFiltersEmpty) {
-                    return (
-                      <EmptyState
-                        icon="FolderX"
-                        title="Nessuna promozione trovata"
-                        description="Non ci sono promozioni attive in questo momento."
-                      />
-                    );
-                  }
-                  if (promosToRender.length === 0 && !areFiltersEmpty) {
-                    return (
-                      <EmptyState
-                        icon="FolderX"
-                        title="Nessuna promozione trovata"
-                        description="Prova a modificare i filtri per visualizzare i file disponibili."
-                      />
-                    );
-                  }
-
-                  return promosToRender.map((promo) => {
+              return (
+                <div className="space-y-8">
+                  {promosToRender.map((promo) => {
                     const hasFiles = promo.kits && promo.kits.length > 0;
 
                     return (
-                      <div key={promo.id} className="mb-8 last:mb-0">
-                        <div className="mb-4 pb-3 border-b border-slate-200">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <h3 className="title-section">
-                                {promo.nome}
-                              </h3>
-                              <div className="flex items-center gap-3 mt-1 text-sm text-slate-600">
-                                <span className="flex items-center">
-                                  <Lucide icon="Calendar" aria-hidden="true" className="w-4 h-4 mr-1" />
-                                  {formatData(promo.validita_dal)}
-                                  {' - '}
-                                  {formatData(promo.validita_al)}
-                                </span>
-                                <StatusBadge dominio="promo" stato={promo.stato} />
-                              </div>
+                      <div key={promo.id}>
+                        <div className="mb-4 flex flex-col gap-3 border-b border-slate-200 pb-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="min-w-0">
+                            <h3 className="title-card">{promo.nome}</h3>
+                            <div className="mt-1 flex flex-wrap items-center gap-3 text-sm text-slate-500">
+                              <span className="flex items-center tabular-nums">
+                                <Lucide icon="Calendar" aria-hidden="true" className="mr-1.5 h-4 w-4" />
+                                {formatData(promo.validita_dal)}
+                                {' – '}
+                                {formatData(promo.validita_al)}
+                              </span>
+                              <StatusBadge dominio="promo" stato={promo.stato} />
                             </div>
-                            {hasFiles && (
-                              <Button
-                                type="button"
-                                variant="primary"
-                                size="sm"
-                                onClick={handleDownloadPromoZip(promo.id, promo.nome)}
-                                disabled={downloadingPromoId === promo.id}
-                                loading={downloadingPromoId === promo.id}
-                              >
-                                {downloadingPromoId !== promo.id && (
-                                  <Lucide icon="Download" aria-hidden="true" className="w-4 h-4 mr-2" />
-                                )}
-                                Scarica tutti i file come ZIP
-                              </Button>
-                            )}
                           </div>
+                          {hasFiles && (
+                            <Button
+                              type="button"
+                              variant="primary"
+                              size="sm"
+                              onClick={handleDownloadPromoZip(promo.id, promo.nome)}
+                              disabled={downloadingPromoId === promo.id}
+                              loading={downloadingPromoId === promo.id}
+                            >
+                              {downloadingPromoId !== promo.id && (
+                                <Lucide icon="Download" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                              )}
+                              Scarica tutti i file come ZIP
+                            </Button>
+                          )}
                         </div>
 
                         {!hasFiles ? (
-                          <div className="p-4 bg-slate-50 rounded-md border border-slate-200">
-                            <p className="text-sm text-slate-600 text-center">
-                              <Lucide icon="FileX" aria-hidden="true" className="w-5 h-5 inline-block mr-2" />
-                              Nessun file disponibile per questa promozione
-                            </p>
-                          </div>
+                          <EmptyState
+                            compatta
+                            icon="FileX"
+                            title="Nessun file disponibile per questa promozione"
+                            description=""
+                            className="border border-slate-200"
+                          />
                         ) : (
-                          promo.kits.map((kit) => {
-                            const files = kit.files as FileItemKit[];
+                          <div className="space-y-4">
+                            {promo.kits.map((kit) => {
+                              const files = kit.files as FileItemKit[];
 
-                            return (
-                              <div key={kit.id} className="mb-4 last:mb-0 rounded-lg border border-slate-200 overflow-hidden">
-                                <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 border-b border-slate-200">
-                                  <Lucide icon="Package" aria-hidden="true" className="w-4 h-4 text-primary shrink-0" />
-                                  <h4 className="title-card truncate">
-                                    {kit.nome}
-                                  </h4>
-                                  <span className="ml-auto text-xs text-slate-400 shrink-0">
-                                    {files.length} {files.length === 1 ? 'file' : 'file'}
-                                  </span>
-                                </div>
-
-                                {itemDisposition === ItemDisposition.grid ? (
-                                  <div className="p-3 max-h-64 sm:max-h-72 md:max-h-80 lg:max-h-96 overflow-y-auto">
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                                      {files.map((file, idx) => (
-                                        <div
-                                          key={idx}
-                                          className="flex flex-col p-3 bg-slate-50 rounded-md hover:bg-slate-100 transition-colors border border-slate-200"
-                                        >
-                                          <button
-                                            type="button"
-                                            aria-label={`Anteprima ${file.nome}`}
-                                            disabled={!file.url}
-                                            className="w-full h-32 flex items-center justify-center rounded bg-white border border-slate-200 overflow-hidden mb-2 cursor-pointer disabled:cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40"
-                                            onClick={() => {
-                                              if (file.url) {
-                                                setLightboxImage(file.url);
-                                                setPagesLightBoxImage(file.pages ?? null)
-                                              }
-                                            }}
-                                          >
-                                            {file.url ? (
-                                              <img
-                                                src={file.url}
-                                                alt={file.nome}
-                                                className="w-full h-full object-scale-down"
-                                                loading="lazy"
-                                              />
-                                            ) : (
-                                              <Lucide
-                                                icon={getFileIcon(file.nome)}
-                                                aria-hidden="true"
-                                                className="w-10 h-10 stroke-[1.5] text-slate-400"
-                                              />
-                                            )}
-                                          </button>
-                                          <div className="text-xs font-medium text-slate-700 truncate mb-1">
-                                            {file.nome.split(' (Lavorazione:')[0]}
-                                          </div>
-                                          {file.tipo_export_codice && (
-                                            <div className="text-xs text-slate-500 truncate mb-2">
-                                              {file.tipo_export_codice}
-                                            </div>
-                                          )}
-                                          <div className="flex flex-col gap-2 mt-2">
-                                            <Button
-                                              onClick={handleDownloadSingleFile(file)}
-                                              variant="outline-secondary"
-                                              className="text-xs"
-                                              size="sm"
-                                            >
-                                              <Lucide icon="Download" className="w-3 h-3 mr-1" />
-                                              Scarica
-                                            </Button>
-                                            <Button
-                                              onClick={handlePrintSingleFile(file)}
-                                              variant="outline-secondary"
-                                              size="sm"
-                                              className="text-xs"
-                                            >
-                                              <Lucide icon="Printer" className="w-4 h-4 mr-1" />
-                                              Stampa
-                                            </Button>
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
+                              return (
+                                <div key={kit.id} className="overflow-hidden rounded-card border border-slate-200 bg-white">
+                                  <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2.5">
+                                    <Lucide icon="Package" aria-hidden="true" className="h-4 w-4 shrink-0 text-primary" />
+                                    <h4 className="title-card truncate">{kit.nome}</h4>
+                                    <span className="ml-auto shrink-0 text-xs tabular-nums text-slate-500">
+                                      {formatNumero(files.length)} file
+                                    </span>
                                   </div>
-                                ) : (
-                                  <div className="max-h-64 sm:max-h-72 md:max-h-80 lg:max-h-96 overflow-y-auto">
-                                    <div className="divide-y divide-slate-200">
-                                      {files.map((file, idx) => (
-                                        <div
-                                          key={idx}
-                                          className="flex items-center py-3 hover:bg-slate-50 transition-colors px-2 rounded-md"
-                                        >
-                                          <button
-                                            type="button"
-                                            aria-label={`Anteprima ${file.nome}`}
-                                            disabled={!file.url}
-                                            className="flex items-center justify-center w-10 h-10 mr-3 bg-white rounded border border-slate-200 cursor-pointer flex-shrink-0 disabled:cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40"
-                                            onClick={() => {
-                                              if (file.url) {
-                                                setLightboxImage(file.url);
-                                                setPagesLightBoxImage(file.pages ?? null)
-                                              }
-                                            }}
+
+                                  {itemDisposition === ItemDisposition.grid ? (
+                                    <div className="max-h-64 overflow-y-auto p-4 sm:max-h-72 md:max-h-80 lg:max-h-96">
+                                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                                        {files.map((file, idx) => (
+                                          <div
+                                            key={idx}
+                                            className="flex flex-col rounded-control border border-slate-200 bg-slate-50 p-3 transition-colors hover:bg-slate-100"
                                           >
-                                            {file.url ? (
-                                              <img
-                                                src={file.url}
-                                                alt={file.nome}
-                                                className="w-full h-full object-contain p-1"
-                                                loading="lazy"
-                                              />
-                                            ) : (
-                                              <Lucide
-                                                icon={getFileIcon(file.nome)}
-                                                aria-hidden="true"
-                                                className="w-5 h-5 stroke-[1.5]"
-                                              />
-                                            )}
-                                          </button>
-                                          <div className="flex-grow min-w-0">
-                                            <div className="text-sm font-medium text-slate-700 truncate">
-                                              {file.nome.split(' (Lavorazione:')[0]}
+                                            <button
+                                              type="button"
+                                              aria-label={`Anteprima ${file.nome}`}
+                                              disabled={!file.url}
+                                              className="mb-2 flex h-32 w-full cursor-pointer items-center justify-center overflow-hidden rounded-control border border-slate-200 bg-white disabled:cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40"
+                                              onClick={() => apriAnteprima(file)}
+                                            >
+                                              {file.url ? (
+                                                <img
+                                                  src={file.url}
+                                                  alt={file.nome}
+                                                  className="h-full w-full object-scale-down"
+                                                  loading="lazy"
+                                                />
+                                              ) : (
+                                                <Lucide
+                                                  icon={getFileIcon(file.nome)}
+                                                  aria-hidden="true"
+                                                  className="h-10 w-10 stroke-[1.5] text-slate-400"
+                                                />
+                                              )}
+                                            </button>
+                                            <div className="mb-1 truncate text-xs font-medium text-slate-700" title={nomeFile(file)}>
+                                              {nomeFile(file)}
                                             </div>
                                             {file.tipo_export_codice && (
-                                              <div className="text-xs text-slate-500">
+                                              <div className="mb-2 truncate text-xs text-slate-500">
                                                 {file.tipo_export_codice}
                                               </div>
                                             )}
+                                            <div className="mt-2 flex flex-col gap-2">
+                                              <Button type="button" onClick={handleDownloadSingleFile(file)} variant="outline-secondary" size="sm">
+                                                <Lucide icon="Download" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                                                Scarica
+                                              </Button>
+                                              <Button type="button" onClick={handlePrintSingleFile(file)} variant="outline-secondary" size="sm">
+                                                <Lucide icon="Printer" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                                                Stampa
+                                              </Button>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="max-h-64 divide-y divide-slate-100 overflow-y-auto sm:max-h-72 md:max-h-80 lg:max-h-96">
+                                      {files.map((file, idx) => (
+                                        <div
+                                          key={idx}
+                                          className="flex items-center gap-2 px-4 py-3 transition-colors hover:bg-slate-50"
+                                        >
+                                          <button
+                                            type="button"
+                                            aria-label={`Anteprima ${file.nome}`}
+                                            disabled={!file.url}
+                                            className="mr-1 flex h-10 w-10 flex-shrink-0 cursor-pointer items-center justify-center rounded-control border border-slate-200 bg-white disabled:cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40"
+                                            onClick={() => apriAnteprima(file)}
+                                          >
+                                            {file.url ? (
+                                              <img
+                                                src={file.url}
+                                                alt={file.nome}
+                                                className="h-full w-full object-contain p-1"
+                                                loading="lazy"
+                                              />
+                                            ) : (
+                                              <Lucide
+                                                icon={getFileIcon(file.nome)}
+                                                aria-hidden="true"
+                                                className="h-5 w-5 stroke-[1.5] text-slate-400"
+                                              />
+                                            )}
+                                          </button>
+                                          <div className="min-w-0 flex-grow">
+                                            <div className="truncate text-sm font-medium text-slate-700" title={nomeFile(file)}>
+                                              {nomeFile(file)}
+                                            </div>
+                                            {file.tipo_export_codice && (
+                                              <div className="text-xs text-slate-500">{file.tipo_export_codice}</div>
+                                            )}
                                           </div>
                                           <Button
+                                            type="button"
                                             onClick={handleDownloadSingleFile(file)}
                                             variant="outline-secondary"
                                             size="sm"
-                                            className="ml-2 text-xs whitespace-nowrap"
+                                            className="whitespace-nowrap"
                                           >
-                                            <Lucide icon="Download" className="w-4 h-4 mr-1" />
+                                            <Lucide icon="Download" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
                                             Scarica
                                           </Button>
                                           <Button
+                                            type="button"
                                             onClick={handlePrintSingleFile(file)}
                                             variant="outline-secondary"
                                             size="sm"
-                                            className="ml-2 text-xs whitespace-nowrap"
+                                            className="whitespace-nowrap"
                                           >
-                                            <Lucide icon="Printer" className="w-4 h-4 mr-1" />
+                                            <Lucide icon="Printer" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
                                             Stampa
                                           </Button>
                                         </div>
                                       ))}
                                     </div>
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
                         )}
                       </div>
                     );
-                  });
-                })()}
-              </div>
-            )}
-          </div>
-        </div>
+                  })}
+                </div>
+              );
+            })()
+          )}
+        </Sezione>
+      </Pagina>
 
-        {/* Lightbox */}
-        {lightboxImage && (
-          <PreviewImmaginePdf
-            imageUrl={lightboxImage}
-            onClose={() => {
-              setLightboxImage(null);
-              setPagesLightBoxImage(null);
-            }}
-            totalPages={pagesLightBoxImage || 1}
-          />
-        )}
-      </div>
-    </div>
+      {/* Lightbox */}
+      {lightboxImage && (
+        <PreviewImmaginePdf
+          imageUrl={lightboxImage}
+          onClose={() => {
+            setLightboxImage(null);
+            setPagesLightBoxImage(null);
+          }}
+          totalPages={pagesLightBoxImage || 1}
+        />
+      )}
+    </>
   );
 };
 

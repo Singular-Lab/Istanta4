@@ -5,6 +5,15 @@ import { ReferenzeIstanta } from '../../../lib/types';
 import { useFetchConfig } from '@/query/query';
 import BoxRef from '../WebPliant/BoxRef';
 import { useWebpliantParamsManager } from '@/hooks/useWebpliantParamsManager';
+import styleWp from "@/assets/css/webpliant/stylewp.module.scss";
+import clsx from 'clsx';
+import {
+    CaricamentoPubblico,
+    CLASSE_CAMPO_PUBBLICO,
+    CLASSE_TITOLO_PUBBLICO,
+    ErrorePubblico,
+    VuotoPubblico,
+} from '../WebpliantLayout/StatiPubblici';
 
 const WebpliantRicerca: React.FC = () => {
     const config = useFetchConfig();
@@ -78,35 +87,43 @@ const WebpliantRicerca: React.FC = () => {
     
     return (
         <main className="w-full mt-20 min-h-screen bg-white px-4 py-6 md:px-6 md:py-8 lg:px-8">
-            <div className=" mx-auto">
+            <div className="mx-auto">
                 <div className="mb-8 flex flex-col justify-center items-center">
-                    <h1 className="text-2xl md:text-3xl font-bold mb-2">Ricerca dei prodotti</h1>
-                    <p className="text-gray-600 text-center">
+                    <h1 className={clsx(CLASSE_TITOLO_PUBBLICO, styleWp["wp-mb-2"])}>Ricerca dei prodotti</h1>
+                    <p className={clsx(styleWp["wp-text-muted"], styleWp["wp-text-center"], styleWp["wp-mb-0"])}>
                         Inserisci il nome del prodotto o parte di esso per trovare le referenze disponibili
                     </p>
                 </div>
-                
-                <div className="relative mb-6 max-w-7xl mx-auto flex justify-center items-center">
+
+                <div className="mb-6 max-w-7xl mx-auto">
                     <input
-                        type="text"
+                        type="search"
+                        aria-label="Cerca prodotti"
                         value={searchValue}
-                        className="w-full border border-black outline-none focus:border-black focus:ring-0 p-3 md:p-4 rounded-md text-base"
+                        className={CLASSE_CAMPO_PUBBLICO}
                         placeholder="Cerca..."
                         onChange={(e) => setSearchValue(e.target.value)}
                     />
-                    {isLoading && (
-                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                            <span className="text-gray-500">Loading...</span>
-                        </div>
-                    )}
                 </div>
-                
-                {debouncedQuery && queryResultRicerca.data?.length === 0 && !isLoading && (
-                    <div className="my-6 p-4 bg-gray-50 rounded-md text-center">
-                        <p className="text-gray-600">Nessun risultato per "<span className="font-semibold">{debouncedQuery}</span>"</p>
-                    </div>
+
+                {isLoading && <CaricamentoPubblico testo="Ricerca in corso..." />}
+
+                {debouncedQuery && queryResultRicerca.isError && !isLoading && (
+                    <ErrorePubblico
+                        titolo="Ricerca non riuscita"
+                        messaggio={queryResultRicerca.error instanceof Error ? queryResultRicerca.error.message : "Riprova tra qualche istante."}
+                        onRiprova={() => queryResultRicerca.refetch()}
+                        etichettaRiprova="Riprova"
+                    />
                 )}
-                
+
+                {debouncedQuery && queryResultRicerca.data?.length === 0 && !isLoading && (
+                    <VuotoPubblico
+                        titolo={`Nessun risultato per "${debouncedQuery}"`}
+                        descrizione="Prova con un altro nome o con una parte di esso."
+                    />
+                )}
+
                 <div className="my-10 p-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-4 lg:gap-5">
                     {queryResultRicerca.data
                         ?.sort((a, b) => b.score - a.score)

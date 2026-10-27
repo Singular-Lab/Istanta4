@@ -1,6 +1,9 @@
+import Badge from "@/components/Base/Badge";
 import Lucide from "@/components/Base/Lucide";
+import Spinner from "@/components/Base/Spinner";
+import EmptyState from "@/components/EmptyState";
 import clsx from "clsx";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { HubServiceDocumentAsset, HubServiceDTO } from "../../../../lib/types";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -44,11 +47,11 @@ function getDocumentIcon(doc: HubServiceDocumentAsset): { icon: string; colorCla
   if (mime.includes("pdf") || ext === "pdf")
     return { icon: "FileText", colorClass: "text-slate-600" };
   if (mime.includes("spreadsheet") || mime.includes("excel") || ext === "xls" || ext === "xlsx")
-    return { icon: "Table", colorClass: "text-green-600" };
+    return { icon: "Table", colorClass: "text-success" };
   if (mime.includes("wordprocessing") || mime.includes("word") || mime.includes("msword") || ext === "doc" || ext === "docx")
-    return { icon: "FileText", colorClass: "text-blue-600" };
+    return { icon: "FileText", colorClass: "text-primary" };
   if (mime.includes("csv") || ext === "csv")
-    return { icon: "Grid3x3", colorClass: "text-teal-600" };
+    return { icon: "Grid3x3", colorClass: "text-info" };
   return { icon: "File", colorClass: "text-slate-500" };
 }
 
@@ -65,7 +68,7 @@ const ServiceMediaFallback: React.FC<ServiceMediaFallbackProps> = ({
 }) => (
   <div
     className={clsx(
-      "flex items-center justify-center rounded-xl border border-white/10 bg-white/5",
+      "flex items-center justify-center rounded-card border border-white/10 bg-white/5",
       className
     )}
   >
@@ -74,19 +77,20 @@ const ServiceMediaFallback: React.FC<ServiceMediaFallbackProps> = ({
         src={service.icona}
         alt={service.nome}
         className={clsx(
-          "object-contain rounded-2xl",
+          "object-contain rounded-card",
           compact ? "w-16 h-16 sm:w-20 sm:h-20" : "w-16 h-16"
         )}
       />
     ) : (
       <div
         className={clsx(
-          "flex items-center justify-center rounded-2xl border border-white/10 bg-white/10",
+          "flex items-center justify-center rounded-card border border-white/10 bg-white/10",
           compact ? "w-20 h-20 sm:w-24 sm:h-24" : "w-16 h-16"
         )}
       >
         <Lucide
           icon={service.icona}
+          aria-hidden="true"
           className={clsx(
             "text-white/80",
             compact ? "w-10 h-10 sm:w-12 sm:h-12" : "w-8 h-8"
@@ -309,7 +313,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       {!isPlaying && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="w-16 h-16 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center">
-            <Lucide icon="Play" className="w-7 h-7 text-white ml-1" />
+            <Lucide icon="Play" aria-hidden="true" className="w-7 h-7 text-white ml-1" />
           </div>
         </div>
       )}
@@ -326,6 +330,7 @@ const ServiceDetailsModal = ({
   onClose,
   onOpenService,
 }: ServiceDetailsModalProps) => {
+  const idTitolo = useId();
   // Active video IDs
   const [activeTrailerId, setActiveTrailerId] = useState<string | null>(null);
   const [activeGuideId, setActiveGuideId] = useState<string | null>(null);
@@ -457,7 +462,12 @@ const ServiceDetailsModal = ({
   const showTrailerThumbnailOverlay = !trailerPlaying && trailerTime <= 0.1;
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-[9999] overflow-y-auto">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={idTitolo}
+      className="fixed inset-0 bg-black/60 z-[9999] overflow-y-auto"
+    >
       <div className="min-h-full flex items-stretch">
         <div className="bg-white w-full animate-fade-in-up">
 
@@ -657,7 +667,7 @@ const ServiceDetailsModal = ({
                 "focus:outline-none focus:ring-2 focus:ring-white/40"
               )}
             >
-              <Lucide icon="X" className="w-4 h-4" />
+              <Lucide icon="X" aria-hidden="true" className="w-4 h-4" />
             </button>
 
             {/* Layout responsive: info sopra su mobile, affiancate da desktop */}
@@ -682,7 +692,7 @@ const ServiceDetailsModal = ({
                     className="mb-4 h-16 w-16 self-start border-white/20 bg-white/10 sm:h-20 sm:w-20"
                   />
                 )}
-                <h1 className="font-space-grotesk text-2xl font-bold leading-tight text-white sm:text-3xl">
+                <h1 id={idTitolo} className="title-page text-white">
                   {service.nome}
                 </h1>
                 <button
@@ -690,24 +700,24 @@ const ServiceDetailsModal = ({
                   disabled={isUnavailable || isOpening}
                   onClick={(e) => { e.stopPropagation(); onOpenService(service); }}
                   className={clsx(
-                    "mt-3 w-fit inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg",
+                    "mt-3 w-fit inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-control",
                     "bg-white text-slate-900 text-xs font-semibold transition-all duration-200",
                     "focus:outline-none focus:ring-2 focus:ring-white/60",
                     isUnavailable
                       ? "opacity-40 cursor-not-allowed"
                       : isOpening
                         ? "opacity-60 cursor-wait"
-                        : "hover:bg-white/90 hover:shadow-lg cursor-pointer"
+                        : "hover:bg-white/90 hover:shadow-card cursor-pointer"
                   )}
                 >
                   {isOpening ? (
                     <>
-                      <Lucide icon="Loader2" className="w-4 h-4 animate-spin" />
+                      <Spinner size="sm" decorativo className="text-current" />
                       Apertura...
                     </>
                   ) : isUnavailable ? (
                     <>
-                      <Lucide icon={!service.attivo ? "CircleOff" : "Wrench"} className="w-4 h-4" />
+                      <Lucide icon={!service.attivo ? "CircleOff" : "Wrench"} aria-hidden="true" className="w-4 h-4" />
                       {!service.attivo ? "Servizio disattivato" : "In manutenzione"}
                     </>
                   ) : (
@@ -719,6 +729,7 @@ const ServiceDetailsModal = ({
                             ? "ExternalLink"
                             : "ArrowRight"
                         }
+                        aria-hidden="true"
                         className="w-4 h-4"
                       />
                     </>
@@ -739,10 +750,10 @@ const ServiceDetailsModal = ({
                     {/* Video 16:9 */}
                     <div
                       className={clsx(
-                        "relative overflow-hidden cursor-pointer rounded-xl",
+                        "relative overflow-hidden cursor-pointer rounded-card",
                         trailerFullscreen
                           ? "flex-1 min-h-0 bg-black"
-                          : "aspect-video max-h-full shadow-xl"
+                          : "aspect-video max-h-full shadow-overlay"
                       )}
                       onClick={toggleTrailerPlay}
                       onMouseMove={() => {
@@ -795,7 +806,7 @@ const ServiceDetailsModal = ({
                       {!trailerPlaying && (
                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                           <div className="w-12 h-12 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center">
-                            <Lucide icon="Play" className="w-6 h-6 text-white ml-0.5" />
+                            <Lucide icon="Play" aria-hidden="true" className="w-6 h-6 text-white ml-0.5" />
                           </div>
                         </div>
                       )}
@@ -872,8 +883,8 @@ const ServiceDetailsModal = ({
             {service.descrizione && (
               <div className="border-b border-slate-100 pb-8">
                 <div className="flex items-center gap-2 mb-3">
-                  <Lucide icon="AlignLeft" className="w-4 h-4 text-slate-400" />
-                  <h2 className="font-space-grotesk text-base font-semibold text-slate-800">
+                  <Lucide icon="AlignLeft" aria-hidden="true" className="w-4 h-4 text-slate-400" />
+                  <h2 className="title-section">
                     Descrizione
                   </h2>
                 </div>
@@ -888,13 +899,13 @@ const ServiceDetailsModal = ({
             {trailers.length > 1 && (
               <div>
                 <div className="flex items-center gap-2 mb-4">
-                  <Lucide icon="PlayCircle" className="w-4 h-4 text-slate-500" />
-                  <h2 className="font-space-grotesk text-base font-semibold text-slate-800">
+                  <Lucide icon="PlayCircle" aria-hidden="true" className="w-4 h-4 text-slate-500" />
+                  <h2 className="title-section">
                     Trailer
                   </h2>
-                  <span className="px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-600 rounded-full">
+                  <Badge variant="secondary" size="sm">
                     {trailers.length}
-                  </span>
+                  </Badge>
                 </div>
                 <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
                   {trailers.map(v => (
@@ -903,11 +914,11 @@ const ServiceDetailsModal = ({
                       type="button"
                       onClick={() => setActiveTrailerId(v.id)}
                       className={clsx(
-                        "shrink-0 min-w-[200px] text-left rounded-xl border p-3 transition-all duration-200",
+                        "shrink-0 min-w-[200px] text-left rounded-card border p-3 transition-all duration-200",
                         "focus:outline-none focus:ring-2 focus:ring-slate-300",
                         v.id === activeTrailer?.id
-                          ? "border-slate-800 bg-slate-50 shadow-sm"
-                          : "border-slate-200 hover:border-slate-300 hover:shadow-sm"
+                          ? "border-slate-800 bg-slate-50 shadow-card"
+                          : "border-slate-200 hover:border-slate-300 hover:shadow-card"
                       )}
                     >
                       <p className="text-sm font-medium text-slate-800 truncate">{v.title}</p>
@@ -922,13 +933,13 @@ const ServiceDetailsModal = ({
             {guides.length > 0 && (
               <div>
                 <div className="flex items-center gap-2 mb-5">
-                  <Lucide icon="BookOpen" className="w-4 h-4 text-slate-500" />
-                  <h2 className="font-space-grotesk text-base font-semibold text-slate-800">
+                  <Lucide icon="BookOpen" aria-hidden="true" className="w-4 h-4 text-slate-500" />
+                  <h2 className="title-section">
                     Video guida
                   </h2>
-                  <span className="px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-600 rounded-full">
+                  <Badge variant="secondary" size="sm">
                     {guides.length}
-                  </span>
+                  </Badge>
                 </div>
 
                 <div className="flex gap-6 items-start">
@@ -940,11 +951,11 @@ const ServiceDetailsModal = ({
                         type="button"
                         onClick={() => setActiveGuideId(v.id)}
                         className={clsx(
-                          "w-full text-left rounded-xl border p-3 transition-all duration-200",
+                          "w-full text-left rounded-card border p-3 transition-all duration-200",
                           "focus:outline-none focus:ring-2 focus:ring-slate-300",
                           v.id === activeGuide?.id
-                            ? "border-theme-1 bg-theme-1/5 shadow-sm"
-                            : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm"
+                            ? "border-theme-1 bg-theme-1/5 shadow-card"
+                            : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-card"
                         )}
                       >
                         <p className="text-sm font-medium text-slate-800 truncate">{v.title}</p>
@@ -956,10 +967,10 @@ const ServiceDetailsModal = ({
                   {/* Player 16:9 — destra */}
                   {activeGuide && (
                     <div className="w-[58%] shrink-0">
-                      <div className="relative rounded-xl overflow-hidden bg-gradient-to-br from-slate-800 to-slate-900 p-4">
-                        <div className="absolute top-0 right-0 w-40 h-40 rounded-full bg-white/5 -translate-y-1/2 translate-x-1/3 pointer-events-none" />
-                        <div className="absolute bottom-0 left-0 w-28 h-28 rounded-full bg-white/5 translate-y-1/2 -translate-x-1/3 pointer-events-none" />
-                        <div className="relative aspect-video rounded-lg overflow-hidden shadow-lg">
+                      <div className="relative rounded-card overflow-hidden bg-gradient-to-br from-slate-800 to-slate-900 p-4">
+                        <div aria-hidden="true" className="absolute top-0 right-0 w-40 h-40 rounded-full bg-white/5 -translate-y-1/2 translate-x-1/3 pointer-events-none" />
+                        <div aria-hidden="true" className="absolute bottom-0 left-0 w-28 h-28 rounded-full bg-white/5 translate-y-1/2 -translate-x-1/3 pointer-events-none" />
+                        <div className="relative aspect-video rounded-control overflow-hidden shadow-card">
                           <VideoPlayer
                             key={activeGuide.id}
                             videoKey={activeGuide.id}
@@ -979,23 +990,23 @@ const ServiceDetailsModal = ({
             {/* Documentation — sempre visibile */}
             <div>
               <div className="flex items-center gap-2 mb-5">
-                <h2 className="font-space-grotesk text-base font-semibold text-slate-800">
+                <h2 className="title-section">
                   Documentazione
                 </h2>
               </div>
 
               {documents.length === 0 ? (
-                <div className="flex items-center gap-3 py-5 px-4 rounded-xl bg-slate-50 border border-slate-100">
-                  <Lucide icon="FileX" className="w-5 h-5 text-slate-300 shrink-0" />
-                  <p className="text-sm text-slate-400">
-                    Non è presente documentazione per questo servizio.
-                  </p>
-                </div>
+                <EmptyState
+                  compatta
+                  icon="FileX"
+                  title="Nessuna documentazione"
+                  description="Non è presente documentazione per questo servizio."
+                  className="border border-slate-200"
+                />
               ) : (
                 <div>
                   {documents.map((doc, index) => {
                     const { icon, colorClass } = getDocumentIcon(doc);
-                    console.log(colorClass);
                     return (
                       <a
                         key={doc.id}
@@ -1009,10 +1020,10 @@ const ServiceDetailsModal = ({
                           index !== 0 && "border-t border-slate-100"
                         )}
                       >
-                        <Lucide icon={icon} className={clsx("w-5 h-5 shrink-0", colorClass)} />
+                        <Lucide icon={icon} aria-hidden="true" className={clsx("w-5 h-5 shrink-0", colorClass)} />
 
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-blue-600 truncate leading-snug group-hover:text-blue-800 group-hover:underline">
+                          <p className="text-sm font-medium text-primary truncate leading-snug group-hover:underline">
                             {doc.title}
                           </p>
                         </div>
@@ -1027,7 +1038,7 @@ const ServiceDetailsModal = ({
                             {formatBytes(doc.size)}
                           </span>
                           {doc.extension && (
-                            <span className="text-3xs font-semibold uppercase tracking-wide text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded w-10 text-center">
+                            <span className="text-3xs font-semibold uppercase tracking-wide text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-control w-10 text-center">
                               {doc.extension}
                             </span>
                           )}
@@ -1035,6 +1046,7 @@ const ServiceDetailsModal = ({
 
                         <Lucide
                           icon="ExternalLink"
+                          aria-hidden="true"
                           className="w-4 h-4 shrink-0 text-slate-300 group-hover:text-slate-500 transition-colors duration-150"
                         />
                       </a>

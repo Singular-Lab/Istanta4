@@ -116,7 +116,7 @@ const CondizioniAddestramentiForm = ({
                   {...register(`${namePrefix}.${condizioneIndex}.idAddestramento`, {
                     required: "L'addestramento è obbligatorio"
                   })}
-                  className="border-gray-300 rounded-md w-full"
+                  className="border-slate-300 rounded-md w-full"
                   onChange={(e) => handleAddestramentoChange(e, condizioneIndex)}
                   value={selectedAddestramenti[condizioneIndex] ?? ''}
                 >
@@ -138,7 +138,7 @@ const CondizioniAddestramentiForm = ({
                   {...register(`${namePrefix}.${condizioneIndex}.nome_field`, {
                     required: "Il nome del campo è obbligatorio",
                   })}
-                  className="border-gray-300 rounded-md w-full"
+                  className="border-slate-300 rounded-md w-full"
                   onChange={(e) => handleColonnaChange(e, condizioneIndex)}
                   value={selectedColonna[condizioneIndex] || ''}
                 >
@@ -160,7 +160,7 @@ const CondizioniAddestramentiForm = ({
               <Table.Td className="w-full sm:w-auto">
                 <FormSelect
                   {...register(`${namePrefix}.${condizioneIndex}.operatore`)}
-                  className="border-gray-300 rounded-md w-full"
+                  className="border-slate-300 rounded-md w-full"
                   defaultValue={(condizione as any).operatore || '='}
                 >
                   <option value="=">Uguale</option>
@@ -177,7 +177,7 @@ const CondizioniAddestramentiForm = ({
                     required: "Il valore è obbligatorio",
                   })}
                   placeholder="Valore"
-                  className="border-gray-300 rounded-md w-full"
+                  className="border-slate-300 rounded-md w-full"
                   defaultValue={(condizione as any).valore || ''}
                 />
                 {errors && (errors[namePrefix] as any)?.[condizioneIndex]?.valore && (

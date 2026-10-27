@@ -1,3 +1,4 @@
+import Spinner from "@/components/Base/Spinner";
 import Lucide from '@/components/Base/Lucide';
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -25,7 +26,7 @@ const DirectoryNode: React.FC<{
   return (
     <div>
       <div
-        className={`flex items-center gap-1.5 px-2 py-1.5 rounded-md cursor-pointer transition-colors text-sm ${isSelected
+        className={`flex items-center gap-1.5 px-2 py-1.5 rounded-control cursor-pointer transition-colors text-sm ${isSelected
           ? 'bg-primary/10 text-primary font-medium'
           : 'hover:bg-slate-100 text-slate-700'
           }`}
@@ -182,7 +183,7 @@ const DirectoryPicker: React.FC<DirectoryPickerProps> = ({
     <div
       ref={dropdownRef}
       style={dropdownStyle}
-      className="bg-white border border-slate-200 rounded-lg shadow-lg"
+      className="bg-white border border-slate-200 rounded-card shadow-overlay"
     >
       {directories.length === 0 ? (
         <div className="px-4 py-6 text-center text-sm text-slate-400">
@@ -225,7 +226,7 @@ const DirectoryPicker: React.FC<DirectoryPickerProps> = ({
       <button
         ref={triggerRef}
         type="button"
-        className={`w-full flex items-center gap-2 px-3 py-2 rounded-md border text-sm text-left transition-colors ${disabled
+        className={`w-full flex items-center gap-2 px-3 py-2 rounded-control border text-sm text-left transition-colors ${disabled
           ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
           : open
             ? 'border-primary/50 ring-2 ring-primary/20 bg-white'
@@ -236,7 +237,7 @@ const DirectoryPicker: React.FC<DirectoryPickerProps> = ({
       >
         {loading ? (
           <>
-            <Lucide icon="Loader" className="w-4 h-4 animate-spin text-slate-400" />
+            <Spinner size="sm" decorativo className="text-slate-400" />
             <span className="text-slate-400">Caricamento...</span>
           </>
         ) : value ? (

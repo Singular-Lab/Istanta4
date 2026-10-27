@@ -15,7 +15,15 @@ vi.mock("@/context/NotificationContext", () => ({ useNotification: () => ({ show
 vi.mock("@/query/query", () => ({ useFetchLavorazioniInCorso: () => finti.query }));
 vi.mock("../../../lib/server_call", () => ({ ServerCall: { delete: vi.fn() } }));
 
+import { ServerCall } from "../../../lib/server_call";
 import LavorazioniInCorso from ".";
+
+// jsdom non implementa ResizeObserver, usato da Headless UI all'apertura dei Dialog
+globalThis.ResizeObserver ??= class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+};
 
 const promo = (id: string, nome: string, stato: string) => ({
   id: `${id}-0000-0000`,
@@ -73,21 +81,47 @@ describe("Promozioni in corso", () => {
     finti.query.data = [promo("d", "Promo uno", "PIANIFICATA"), promo("e", "Promo due", "VALIDA")];
     apri();
 
-    const nome = screen.getByRole("button", { name: /Nome Lavorazione/ });
+    const nome = screen.getByRole("button", { name: /Nome lavorazione/ });
     expect(nome.closest("th")).not.toHaveAttribute("aria-sort");
     expect(screen.getByRole("button", { name: /Scadenza/ }).closest("th")).toHaveAttribute("aria-sort", "ascending");
 
     fireEvent.click(nome);
-    expect(screen.getByRole("button", { name: /Nome Lavorazione/ }).closest("th")).toHaveAttribute("aria-sort", "ascending");
+    expect(screen.getByRole("button", { name: /Nome lavorazione/ }).closest("th")).toHaveAttribute("aria-sort", "ascending");
   });
 
   it("i comandi di paginazione con sola icona hanno un nome", () => {
-    finti.query.data = [promo("f", "Promo pagina", "PIANIFICATA")];
+    // 11 promo con 10 righe per pagina: due pagine
+    finti.query.data = Array.from({ length: 11 }, (_, i) => promo(`f${i}`, `Promo pagina ${i}`, "PIANIFICATA"));
     apri();
 
     for (const nome of ["Prima pagina", "Pagina precedente", "Pagina successiva", "Ultima pagina"]) {
       expect(screen.getByLabelText(nome)).toBeInTheDocument();
     }
+    expect(screen.getByText("Mostrati 1–10 di 11")).toBeInTheDocument();
+  });
+
+  it("la ricerca filtra mentre si scrive e distingue l'assenza di risultati", () => {
+    finti.query.data = [promo("g", "Volantino Natale", "PIANIFICATA"), promo("h", "Speciale Pasqua", "VALIDA")];
+    apri();
+
+    fireEvent.change(screen.getByRole("searchbox", { name: "Cerca promozioni" }), { target: { value: "natale" } });
+    expect(screen.getAllByText("Volantino Natale").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Speciale Pasqua")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("searchbox", { name: "Cerca promozioni" }), { target: { value: "inesistente" } });
+    expect(screen.getByText("Nessun risultato")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Azzera ricerca" }));
+    expect(screen.getAllByText("Speciale Pasqua").length).toBeGreaterThan(0);
+  });
+
+  it("l'eliminazione chiede conferma prima di chiamare il servizio", async () => {
+    finti.query.data = [promo("i", "Promo da eliminare", "PIANIFICATA")];
+    apri();
+
+    fireEvent.click(screen.getByRole("button", { name: "Elimina Promo da eliminare" }));
+    const finestra = await screen.findByRole("dialog");
+    expect(within(finestra).getByText("Elimina lavorazione")).toBeInTheDocument();
+    expect(ServerCall.delete).not.toHaveBeenCalled();
   });
 
   it("se il caricamento fallisce mostra il motivo e Riprova ricarica", () => {

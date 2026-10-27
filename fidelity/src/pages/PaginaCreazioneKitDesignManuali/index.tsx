@@ -2,6 +2,8 @@ import Badge from '@/components/Base/Badge';
 import Button from '@/components/Base/Button';
 import { Dialog } from '@/components/Base/Headless';
 import Lucide from '@/components/Base/Lucide';
+import Pagina from '@/components/Base/Pagina';
+import Sezione from '@/components/Base/Sezione';
 import FileManagement from '@/components/FilesKit';
 import { useNotification } from '@/context/NotificationContext';
 import { useFetchAddestramenti, useFetchDatiPerCreazioneKitsDesign } from '@/query/query';
@@ -175,47 +177,14 @@ export default function PaginaCreazioneKitDesignManuali() {
         );
       case 1:
         return (
-          <div className="flex flex-col gap-5">
-            {/* Info banner */}
-            <div className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-100 rounded-lg">
-              <Lucide icon="Info" className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
-              <p className="text-sm text-slate-700">
-                Aggiungi i file che faranno parte di questo kit manuale. Potrai modificarne il nome
-                e inserire eventuali direttive.
-              </p>
-            </div>
-
-            <div className="box box--stacked">
-              <div className="flex items-center gap-3 border-b border-slate-200/60 px-5 py-4 bg-slate-50/50">
-                <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-orange-500/10">
-                  <Lucide icon="Files" className="w-5 h-5 text-orange-600" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-medium text-slate-800">Lista file</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    {files.length === 0 ? 'Nessun file aggiunto' : `${files.length} file`}
-                  </p>
-                </div>
-                {files.length === 0 && (
-                  <Badge variant="info" size="sm">Opzionale</Badge>
-                )}
-              </div>
-              <div className="p-5">
-                {files.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-10 border-2 border-dashed border-slate-200 rounded-lg text-slate-400">
-                    <Lucide icon="FileX" className="w-10 h-10 mb-2" />
-                    <p className="text-sm">Nessun file aggiunto</p>
-                  </div>
-                ) : (
-                  <FileManagement
-                    files={files}
-                    setFiles={setFiles}
-                    setNameToPreview={setNameToPreview}
-                  />
-                )}
-              </div>
-            </div>
-          </div>
+          <Sezione
+            icona="Files"
+            titolo="Lista file"
+            descrizione={files.length === 0 ? 'Nessun file aggiunto' : `${files.length} file`}
+            azioni={files.length === 0 ? <Badge variant="info" size="sm">Opzionale</Badge> : undefined}
+          >
+            <FileManagement files={files} setFiles={setFiles} setNameToPreview={setNameToPreview} />
+          </Sezione>
         );
     }
   };
@@ -225,15 +194,16 @@ export default function PaginaCreazioneKitDesignManuali() {
       {/* Success dialog */}
       <Dialog open={successModal} onClose={() => setSuccessModal(false)}>
         <Dialog.Panel>
-          <div className="p-5 text-center">
-            <Lucide icon="CircleCheck" className="w-16 h-16 mx-auto mt-3 text-success" />
-            <div className="mt-5 text-3xl">Kit combinazione creato!</div>
-            <div className="mt-2 text-slate-500">Il tuo kit combinazione è stato creato con successo.</div>
-          </div>
-          <div className="px-5 pb-8 text-center">
+          <Dialog.Title>
+            <Lucide icon="CircleCheck" aria-hidden="true" className="h-5 w-5 text-success" />
+            Kit design manuale creato
+          </Dialog.Title>
+          <Dialog.Description className="text-sm text-slate-600">
+            Il kit design manuale è stato creato con successo.
+          </Dialog.Description>
+          <Dialog.Footer>
             <Button
               variant="primary"
-              className="w-24"
               onClick={() => {
                 setSuccessModal(false);
                 history.back();
@@ -241,47 +211,46 @@ export default function PaginaCreazioneKitDesignManuali() {
             >
               Ok
             </Button>
-          </div>
+          </Dialog.Footer>
         </Dialog.Panel>
       </Dialog>
 
       {/* Template already exists dialog */}
       <Dialog open={showDialogTemplateEsisteGia} onClose={() => setShowDialogTemplateEsisteGia(false)}>
         <Dialog.Panel>
-          <Dialog.Description>
-            <div className="flex flex-col items-center gap-3">
-              <Lucide icon="OctagonAlert" className="w-16 h-16 text-danger" />
-              <span>
-                Esiste già un template con questa combinazione!
-                <br />
-                Cambia i dati per creare una nuova combinazione.
-              </span>
-            </div>
+          <Dialog.Title>
+            <Lucide icon="OctagonAlert" aria-hidden="true" className="h-5 w-5 text-danger" />
+            Combinazione già esistente
+          </Dialog.Title>
+          <Dialog.Description className="text-sm text-slate-600">
+            Esiste già un template con questa combinazione. Cambia i dati per creare una nuova combinazione.
           </Dialog.Description>
           <Dialog.Footer>
-            <div className="flex justify-end gap-3">
-              <Button variant="secondary" onClick={() => setShowDialogTemplateEsisteGia(false)}>
-                Cambia valori
-              </Button>
-            </div>
+            <Button variant="outline-secondary" onClick={() => setShowDialogTemplateEsisteGia(false)}>
+              Cambia valori
+            </Button>
           </Dialog.Footer>
         </Dialog.Panel>
       </Dialog>
 
-      <div className="flex flex-col items-center p-5">
-        <form onSubmit={handleSubmit(handleCreazione)} className="w-full">
+      <Pagina
+        titolo="Nuovo kit design manuale"
+        descrizione="Configura i dati e i file attesi del nuovo kit design manuale"
+        indietro={{ to: "/impostazioni-di-produzione", etichetta: "Torna alle impostazioni di produzione" }}
+      >
+        <form onSubmit={handleSubmit(handleCreazione)}>
           <WizardShell
             steps={STEPS}
             currentStep={currentStep}
             onNext={handleNext}
             onPrevious={handlePrevious}
             isSubmitting={creazioneCombinazioni.isPending}
-            submitLabel="Crea Combinazione"
+            submitLabel="Crea kit design"
           >
             {renderStepContent()}
           </WizardShell>
         </form>
-      </div>
+      </Pagina>
     </>
   );
 }

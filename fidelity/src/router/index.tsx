@@ -1,9 +1,18 @@
+import { lazy, Suspense } from "react";
 import {
   RouteObject,
   redirect,
   type LoaderFunctionArgs,
   type ShouldRevalidateFunctionArgs,
 } from "react-router-dom";
+
+// Stati della vetrina caricati solo quando servono: portano con sé il CSS del tema wp
+const PaginaNonTrovataPubblica = lazy(() =>
+  import("@/pages/WebpliantLayout/StatiPubblici").then((m) => ({ default: m.PaginaNonTrovataPubblica }))
+);
+const ErroreRottaPubblica = lazy(() =>
+  import("@/pages/WebpliantLayout/StatiPubblici").then((m) => ({ default: m.ErroreRottaPubblica }))
+);
 
 
 import { RouteErrorFallback } from "@/components/AppErrorFallback";
@@ -1044,6 +1053,11 @@ const routes: RouteObject[] = [
   // NODO /webpliant con error boundary e catch-all locale
   {
     path: "/webpliant",
+    errorElement: (
+      <Suspense fallback={null}>
+        <ErroreRottaPubblica />
+      </Suspense>
+    ),
     lazy: async () => {
       const { default: WebpliantLayout } = await import(
         "@/pages/WebpliantLayout/index"
@@ -1108,7 +1122,11 @@ const routes: RouteObject[] = [
       {
         path: "*",
         loader: throw404,
-        errorElement: <NotFoundPage />,
+        errorElement: (
+          <Suspense fallback={null}>
+            <PaginaNonTrovataPubblica />
+          </Suspense>
+        ),
       },
 
     ],

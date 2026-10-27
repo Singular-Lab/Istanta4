@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -74,5 +74,22 @@ describe("Report tracciati", () => {
     expect(esegui).toBeDisabled();
     expect(esegui).toHaveAttribute("aria-busy", "true");
     expect(screen.queryByText("Calcolo in corso…")).not.toBeInTheDocument();
+  });
+
+  it("se il calcolo non riesce l'avviso si legge come alert nella colonna dell'analisi", () => {
+    finti.opzioni = { ...finti.opzioni, data: [opzione("o1", "Variazioni prezzi")] };
+    finti.calcolo = { ...finti.calcolo, isError: true };
+    apri();
+
+    const colonna = screen.getByRole("complementary");
+    expect(within(colonna).getByRole("alert")).toHaveTextContent("Nessun confronto disponibile per l'analisi selezionata");
+  });
+
+  it("le opzioni stanno nella sezione delle analisi disponibili", () => {
+    finti.opzioni = { ...finti.opzioni, data: [opzione("o1", "Variazioni prezzi")] };
+    apri();
+
+    const sezione = screen.getByRole("region", { name: "Analisi disponibili" });
+    expect(within(sezione).getByRole("button", { name: /Variazioni prezzi/ })).toBeInTheDocument();
   });
 });

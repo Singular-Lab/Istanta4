@@ -10,7 +10,9 @@ import type { GDOWhatsappTemplateAttributes } from "../../../lib/types";
 import Button from "../../components/Base/Button";
 import Lucide from "../../components/Base/Lucide";
 import PageError from "../../components/Base/PageError";
-import PageHeader from "../../components/Base/PageHeader";
+import Badge from "../../components/Base/Badge";
+import Pagina from "../../components/Base/Pagina";
+import Sezione from "../../components/Base/Sezione";
 import StatusBadge from "../../components/Base/StatusBadge";
 import Table from "../../components/Base/Table";
 import EmptyState from "../../components/EmptyState";
@@ -186,224 +188,173 @@ const GestioneTemplatesWhatsappSuperAdmin: React.FC = () => {
                 onClose={() => !eliminazioneInCorso && setTemplateDaEliminare(null)}
                 onConfirm={eliminaTemplate}
             />
-            <div className="space-y-6">
-                <PageHeader
-                    title={
-                        "Gestione Templates WhatsApp" +
-                        (dettagliGDO?.nome ? ` · ${dettagliGDO.nome}` : "")
-                    }
-                    description="Visualizza, filtra e gestisci i template Meta WhatsApp associati al cliente."
-                    indietro={{ to: "/whatsapp/gestione-whatsapp-superadmin", etichetta: "Torna alle GDO" }}
-                    actions={
-                        <>
-                            <PermissionGate permission={PERMISSIONS.WHATSAPP.GESTISCI_TEMPLATES} mode="disable">
-                                <Button
-                                    variant="secondary"
-                                    onClick={syncFromMeta}
-                                    loading={syncing}
-                                    disabled={syncing || !dettagliGDO || !!hasPendingTemplates}
-                                    className="whitespace-nowrap shadow-sm"
-                                    title={
-                                        hasPendingTemplates
-                                            ? "Il template non può essere sincronizzato perché c'è almeno un template che non è ancora stato validato"
-                                            : undefined
-                                    }
-                                >
-                                    {!syncing && <Lucide icon="RefreshCw" aria-hidden="true" className="-ml-0.5 mr-2 h-4 w-4" />}
-                                    Sincronizza da Meta
-                                </Button>
-                            </PermissionGate>
+            <Pagina
+                titolo={
+                    "Gestione Templates WhatsApp" +
+                    (dettagliGDO?.nome ? ` · ${dettagliGDO.nome}` : "")
+                }
+                descrizione="Visualizza e gestisci i template Meta WhatsApp associati al cliente."
+                indietro={{ to: "/whatsapp/gestione-whatsapp-superadmin", etichetta: "Torna alle GDO" }}
+                azioni={
+                    <>
+                        <PermissionGate permission={PERMISSIONS.WHATSAPP.GESTISCI_TEMPLATES} mode="disable">
+                            <Button
+                                variant="outline-secondary"
+                                onClick={syncFromMeta}
+                                loading={syncing}
+                                disabled={syncing || !dettagliGDO || !!hasPendingTemplates}
+                                className="whitespace-nowrap"
+                                title={
+                                    hasPendingTemplates
+                                        ? "Il template non può essere sincronizzato perché c'è almeno un template che non è ancora stato validato"
+                                        : undefined
+                                }
+                            >
+                                {!syncing && <Lucide icon="RefreshCw" aria-hidden="true" className="mr-2 h-4 w-4" />}
+                                Sincronizza da Meta
+                            </Button>
+                        </PermissionGate>
 
-                            <PermissionGate permission={PERMISSIONS.WHATSAPP.GESTISCI_TEMPLATES} mode="disable">
-                                <Button
-                                    variant="primary"
-                                    onClick={() => {
-                                        navigate(`crea?id=${encodeURIComponent(idGDO)}`);
-                                    }}
-                                    disabled={!idGDO}
-                                    className="whitespace-nowrap shadow-sm"
-                                >
-                                    <Lucide icon="Plus" aria-hidden="true" className="-ml-0.5 mr-2 h-4 w-4" />
-                                    Crea nuovo template
-                                </Button>
-                            </PermissionGate>
-                        </>
-                    }
-                />
-
+                        <PermissionGate permission={PERMISSIONS.WHATSAPP.GESTISCI_TEMPLATES} mode="disable">
+                            <Button
+                                variant="primary"
+                                onClick={() => {
+                                    navigate(`crea?id=${encodeURIComponent(idGDO)}`);
+                                }}
+                                disabled={!idGDO}
+                                className="whitespace-nowrap"
+                            >
+                                <Lucide icon="Plus" aria-hidden="true" className="mr-2 h-4 w-4" />
+                                Crea nuovo template
+                            </Button>
+                        </PermissionGate>
+                    </>
+                }
+            >
                 {/* CONTENUTO PRINCIPALE */}
                 {errore ? (
                     <PageError motivo={errore} onRiprova={revalidate} />
                 ) : dettagliGDO ? (
-                    <div className="space-y-5">
-                        {/* TABELLA TEMPLATE */}
-                        <div className="box box--stacked p-4">
-                            {templatesWhatsapp && templatesWhatsapp.length > 0 ? (
-                                <Table className="w-full rounded-card border" bordered>
-                                    <Table.Thead variant="light">
-                                        <Table.Tr className="border-b border-slate-200">
-                                            <Table.Th className="w-2/12 text-left font-semibold text-slate-700">
-                                                Nome Template
-                                            </Table.Th>
-                                            <Table.Th className="w-2/12 text-center font-semibold text-slate-700">
-                                                Categoria
-                                            </Table.Th>
-                                            <Table.Th className="w-2/12 text-center font-semibold text-slate-700">
-                                                Lingua
-                                            </Table.Th>
-                                            <Table.Th className="w-2/12 text-center font-semibold text-slate-700">
-                                                Stato
-                                            </Table.Th>
-                                            <Table.Th className="w-3/12 text-right font-semibold text-slate-700">
-                                                Azioni
-                                            </Table.Th>
+                    <Sezione
+                        senzaPadding
+                        titolo="Template"
+                        descrizione={`${templatesCount} template del cliente`}
+                    >
+                        {templatesWhatsapp && templatesWhatsapp.length > 0 ? (
+                            <div className="overflow-x-auto">
+                                <Table>
+                                    <Table.Thead>
+                                        <Table.Tr>
+                                            <Table.Th className="w-3/12">Nome template</Table.Th>
+                                            <Table.Th className="w-2/12 text-center">Categoria</Table.Th>
+                                            <Table.Th className="w-1/12 text-center">Lingua</Table.Th>
+                                            <Table.Th className="w-2/12 text-center">Stato</Table.Th>
+                                            <Table.Th className="w-4/12 text-right"><span className="sr-only">Azioni</span></Table.Th>
                                         </Table.Tr>
                                     </Table.Thead>
                                     <Table.Tbody>
-                                        {templatesWhatsapp.map((template, idx) => (
-                                            <Table.Tr
-                                                key={template.id_gdowhatsapptemplate}
-                                                className={`align-middle transition-colors hover:bg-slate-50/50 ${idx !== templatesWhatsapp.length - 1 ? 'border-b border-slate-100' : ''
-                                                    }`}
-                                            >
-                                                <Table.Td className="">
-                                                    <div className="font-medium text-slate-900">
-                                                        {template.nome_template_gdowhatsapptemplate}
-                                                    </div>
-                                                </Table.Td>
+                                        {templatesWhatsapp.map((template) => {
+                                            const stato = template.stato_meta_gdowhatsapptemplate;
+                                            const attivo =
+                                                stato !== STATO_GDO_WHATSAPP_TEMPLATE.PENDING &&
+                                                stato !== STATO_GDO_WHATSAPP_TEMPLATE.CREATED_BUT_NOT_SYNCED &&
+                                                stato !== STATO_GDO_WHATSAPP_TEMPLATE.REJECTED;
+                                            return (
+                                                <Table.Tr key={template.id_gdowhatsapptemplate} className="align-middle">
+                                                    <Table.Td>
+                                                        <div className="font-medium text-slate-800">
+                                                            {template.nome_template_gdowhatsapptemplate}
+                                                        </div>
+                                                    </Table.Td>
 
-                                                <Table.Td className="text-center ">
-                                                    <span className="inline-flex items-center justify-center rounded-control bg-slate-100 px-2.5 py-1.5 text-2xs font-semibold uppercase tracking-wider text-slate-700">
-                                                        {template.categoria_template_gdowhatsapptemplate}
-                                                    </span>
-                                                </Table.Td>
+                                                    <Table.Td className="text-center">
+                                                        <Badge variant="secondary" size="sm">
+                                                            {template.categoria_template_gdowhatsapptemplate}
+                                                        </Badge>
+                                                    </Table.Td>
 
-                                                <Table.Td className="text-center ">
-                                                    <span className="inline-flex items-center justify-center rounded-control bg-slate-100 px-2.5 py-1.5 text-2xs font-semibold uppercase tracking-wider text-slate-700">
-                                                        {template.lingua_template_gdowhatsapptemplate?.toUpperCase()}
-                                                    </span>
-                                                </Table.Td>
+                                                    <Table.Td className="text-center">
+                                                        <Badge variant="secondary" size="sm">
+                                                            {template.lingua_template_gdowhatsapptemplate?.toUpperCase()}
+                                                        </Badge>
+                                                    </Table.Td>
 
-                                                <Table.Td className="text-center ">
-                                                    <div className="flex justify-center">
-                                                        <StatusBadge
-                                                            dominio="waTemplate"
-                                                            stato={template.stato_meta_gdowhatsapptemplate}
-                                                        />
-                                                    </div>
-                                                </Table.Td>
+                                                    <Table.Td className="text-center">
+                                                        <StatusBadge dominio="waTemplate" stato={stato} />
+                                                    </Table.Td>
 
-                                                <Table.Td className="">
-                                                    <div className="flex justify-end gap-2">
-                                                        {template.stato_meta_gdowhatsapptemplate === STATO_GDO_WHATSAPP_TEMPLATE.REJECTED && (
-                                                            <Button
-                                                                size="sm"
-                                                                variant="soft-danger"
-                                                                onClick={() => {
-                                                                    // ponytail: niente pagina di dettaglio; la nuova versione mostra il template da correggere
-                                                                    navigate(
-                                                                        "nuova-versione?id=" +
-                                                                        template.id_gdowhatsapptemplate
-                                                                    );
-                                                                }}
-                                                                className="text-xs py-1.5 px-3 shadow-sm"
-                                                            >
-                                                                Dettaglio
-                                                            </Button>
-                                                        )}
-                                                        {template.stato_meta_gdowhatsapptemplate === STATO_GDO_WHATSAPP_TEMPLATE.CREATED_BUT_NOT_SYNCED && (
-                                                            <Button
-                                                                size="sm"
-                                                                variant="soft-primary"
-                                                                onClick={() => {
-                                                                    navigate(
-                                                                        "nuova-versione?id=" +
-                                                                        template.id_gdowhatsapptemplate
-                                                                    );
-                                                                }}
-                                                                className="text-xs py-1.5 px-3 shadow-sm"
-                                                            >
-                                                                Modifica
-                                                            </Button>
-                                                        )}
-                                                        {(template.stato_meta_gdowhatsapptemplate !== STATO_GDO_WHATSAPP_TEMPLATE.PENDING &&
-                                                            template.stato_meta_gdowhatsapptemplate !== STATO_GDO_WHATSAPP_TEMPLATE.CREATED_BUT_NOT_SYNCED &&
-                                                            template.stato_meta_gdowhatsapptemplate !== STATO_GDO_WHATSAPP_TEMPLATE.REJECTED
-                                                        ) && (
+                                                    <Table.Td className="text-right">
+                                                        <div className="flex justify-end gap-2">
+                                                            {stato === STATO_GDO_WHATSAPP_TEMPLATE.REJECTED && (
+                                                                // ponytail: niente pagina di dettaglio; la nuova versione mostra il template da correggere
+                                                                <Button size="sm" variant="outline-secondary" onClick={() => navigate("nuova-versione?id=" + template.id_gdowhatsapptemplate)}>
+                                                                    Dettaglio
+                                                                </Button>
+                                                            )}
+                                                            {stato === STATO_GDO_WHATSAPP_TEMPLATE.CREATED_BUT_NOT_SYNCED && (
+                                                                <Button size="sm" variant="outline-secondary" onClick={() => navigate("nuova-versione?id=" + template.id_gdowhatsapptemplate)}>
+                                                                    Modifica
+                                                                </Button>
+                                                            )}
+                                                            {attivo && (
                                                                 <>
-                                                                    <Button
-                                                                        size="sm"
-                                                                        variant="soft-primary"
-                                                                        onClick={() => {
-                                                                            navigate(
-                                                                                "nuova-versione?id=" +
-                                                                                template.id_gdowhatsapptemplate
-                                                                            );
-                                                                        }}
-                                                                        className="text-xs py-1.5 px-3 shadow-sm"
-                                                                    >
-                                                                        Inc. versione
+                                                                    <Button size="sm" variant="outline-secondary" onClick={() => navigate("nuova-versione?id=" + template.id_gdowhatsapptemplate)}>
+                                                                        Nuova versione
                                                                     </Button>
                                                                     <Button
                                                                         size="sm"
-                                                                        variant="soft-pending"
+                                                                        variant="outline-secondary"
                                                                         onClick={() => {
-                                                                            navigate(
-                                                                                "presets?id=" +
-                                                                                template.id_gdowhatsapptemplate
-                                                                            );
+                                                                            navigate("presets?id=" + template.id_gdowhatsapptemplate);
                                                                         }}
-                                                                        className="text-xs py-1.5 px-3 shadow-sm"
                                                                     >
-                                                                        Preset ({template.preset_count || 0})
+                                                                        Preset (<span className="tabular-nums">{template.preset_count || 0}</span>)
                                                                     </Button>
                                                                 </>
                                                             )}
-                                                        <PermissionGate permission={PERMISSIONS.WHATSAPP.GESTISCI_TEMPLATES} mode="disable">
-                                                            <Button
-                                                                size="sm"
-                                                                variant="outline-danger"
-                                                                title="Elimina"
-                                                                onClick={() => setTemplateDaEliminare(template)}
-                                                                className="text-xs py-1.5 px-3 shadow-sm"
-                                                            >
-                                                                Elimina
-                                                            </Button>
-                                                        </PermissionGate>
-                                                    </div>
-                                                </Table.Td>
-                                            </Table.Tr>
-                                        ))}
+                                                            <PermissionGate permission={PERMISSIONS.WHATSAPP.GESTISCI_TEMPLATES} mode="disable">
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="outline-danger"
+                                                                    title="Elimina"
+                                                                    aria-label={`Elimina template ${template.nome_template_gdowhatsapptemplate}`}
+                                                                    onClick={() => setTemplateDaEliminare(template)}
+                                                                >
+                                                                    <Lucide icon="Trash2" aria-hidden="true" className="h-3.5 w-3.5" />
+                                                                </Button>
+                                                            </PermissionGate>
+                                                        </div>
+                                                    </Table.Td>
+                                                </Table.Tr>
+                                            );
+                                        })}
                                     </Table.Tbody>
                                 </Table>
-                            ) : (
-                                <div className="px-6 py-12">
-                                    <EmptyState
-                                        title="Nessun template trovato"
-                                        description="Non ci sono template che corrispondono ai filtri selezionati o al cliente corrente."
-                                        icon="Notebook"
-                                    />
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                ) : (
-                    <div className="box box--stacked">
-                        <div className="px-6 py-12">
+                            </div>
+                        ) : (
                             <EmptyState
-                                title="Canale WhatsApp non configurato"
-                                description="Configura il numero WhatsApp della GDO per gestirne i template."
-                                icon="Settings"
-                                buttonText="Configura il canale"
-                                buttonIcon="Settings"
-                                onButtonClick={() => {
-                                    navigate(`/whatsapp/gestione-whatsapp-superadmin/setup?id=${encodeURIComponent(idGDO)}`);
-                                }}
+                                compatta
+                                title="Nessun template"
+                                description="Il cliente non ha ancora template WhatsApp: creane uno o sincronizzali da Meta."
+                                icon="Notebook"
                             />
-                        </div>
-                    </div>
+                        )}
+                    </Sezione>
+                ) : (
+                    <Sezione>
+                        <EmptyState
+                            title="Canale WhatsApp non configurato"
+                            description="Configura il numero WhatsApp della GDO per gestirne i template."
+                            icon="Settings"
+                            buttonText="Configura il canale"
+                            buttonIcon="Settings"
+                            onButtonClick={() => {
+                                navigate(`/whatsapp/gestione-whatsapp-superadmin/setup?id=${encodeURIComponent(idGDO)}`);
+                            }}
+                        />
+                    </Sezione>
                 )}
-            </div>
+            </Pagina>
         </Fragment>
     );
 };

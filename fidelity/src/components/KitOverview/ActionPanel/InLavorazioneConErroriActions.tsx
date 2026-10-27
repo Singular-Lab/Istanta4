@@ -1,5 +1,5 @@
+import Alert from "@/components/Base/Alert";
 import Button from "@/components/Base/Button";
-import LoadingIcon from "@/components/Base/LoadingIcon";
 import Lucide from "@/components/Base/Lucide";
 import { PermissionGate } from "@/components/PermissionGate";
 import { PERMISSIONS } from "@/constants/permissions";
@@ -37,22 +37,16 @@ const InLavorazioneConErroriActions: FC<InLavorazioneConErroriActionsProps> = ({
   return (
     <div className="flex flex-col gap-3">
       {/* Error warning banner */}
-      <div className="text-center bg-danger/10 py-3 rounded-lg">
-        <Lucide icon="CircleX" className="w-5 h-5 mx-auto text-danger mb-2" />
-        <p className="text-sm font-medium text-danger">Kit con Errori</p>
-        <p className="text-xs text-slate-600">
-          {rejectedCount} file rifiutati da correggere
-        </p>
-      </div>
+      <Alert variant="soft-danger" icona="CircleX" titolo="Kit con errori">
+        {rejectedCount} file rifiutati da correggere
+      </Alert>
 
       {/* Primary action */}
       <div className="flex gap-2">
         {isLavorazioneAutomatica ? (
-          <div className="w-full text-center bg-warning/10 border border-warning/20 py-2.5 px-3 rounded-lg">
-            <p className="text-xs text-warning font-medium">
-              Per la lavorazione automatica devi riesportare il file da InDesign e ricaricarlo.
-            </p>
-          </div>
+          <Alert variant="soft-warning" icona="TriangleAlert" className="w-full text-xs">
+            Per la lavorazione automatica devi riesportare il file da InDesign e ricaricarlo.
+          </Alert>
         ) : (
           <PermissionGate permission={PERMISSIONS.KIT_RUNTIME.REVISIONE} mode="disable">
             <Button
@@ -60,19 +54,11 @@ const InLavorazioneConErroriActions: FC<InLavorazioneConErroriActionsProps> = ({
               size="sm"
               className="flex-1"
               onClick={onUploadAndSubmit}
-              disabled={isProcessing || !canSubmit}
+              disabled={!canSubmit}
+              loading={isProcessing}
             >
-              {isProcessing ? (
-                <>
-                  <LoadingIcon icon="oval" className="w-4 h-4 mr-2" />
-                  Elaborazione...
-                </>
-              ) : (
-                <>
-                  <Lucide icon="Eye" className="w-4 h-4 mr-2" />
-                  Carica i file e manda in revisione
-                </>
-              )}
+              {!isProcessing && <Lucide icon="Eye" aria-hidden="true" className="mr-2 h-4 w-4" />}
+              {isProcessing ? "Elaborazione…" : "Carica i file e manda in revisione"}
             </Button>
           </PermissionGate>
         )}
@@ -82,25 +68,25 @@ const InLavorazioneConErroriActions: FC<InLavorazioneConErroriActionsProps> = ({
       <div className="flex gap-2">
         <PermissionGate permission={PERMISSIONS.KIT_RUNTIME.ELIMINA}>
           <Button
-            variant="outline-secondary"
-            size="xs"
+            variant="outline-danger"
+            size="sm"
             className="flex-1"
             onClick={onDelete}
             disabled={isProcessing}
           >
-            <Lucide icon="Trash2" className="w-3 h-3 mr-1" />
+            <Lucide icon="Trash2" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
             Elimina
           </Button>
         </PermissionGate>
         <PermissionGate permission={PERMISSIONS.KIT_RUNTIME.ELIMINA} mode="disable">
           <Button
-            variant="outline-warning"
-            size="xs"
+            variant="outline-danger"
+            size="sm"
             className="flex-1"
             onClick={onRework}
             disabled={isProcessing}
           >
-            <Lucide icon="RotateCcw" className="w-3 h-3 mr-1" />
+            <Lucide icon="RotateCcw" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
             Rilavora
           </Button>
         </PermissionGate>
@@ -108,7 +94,7 @@ const InLavorazioneConErroriActions: FC<InLavorazioneConErroriActionsProps> = ({
 
       {/* Status info */}
       {!isLavorazioneAutomatica && (
-        <div className="text-xs text-center text-slate-500 bg-slate-50 py-2 rounded">
+        <div className="rounded-control bg-slate-50 py-2 text-center text-xs text-slate-500">
           <span className="font-medium text-success">{acceptedCount}</span> approvati •
           <span className="font-medium text-danger ml-1">{rejectedCount}</span> rifiutati
           {stagedFilesCount > 0 && (

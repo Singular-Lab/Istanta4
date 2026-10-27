@@ -1,23 +1,25 @@
+import Skeleton from "@/components/Base/Skeleton";
+
 const NewsCardSkeleton: React.FC = () => (
-  <div className="bg-white rounded-xl border border-slate-200 p-5 animate-pulse flex flex-col">
+  <div aria-hidden="true" className="flex flex-col rounded-card border border-slate-200 bg-white p-5 shadow-card">
     {/* Badges row */}
-    <div className="flex items-center gap-2 mb-3">
-      <div className="h-4 w-24 bg-slate-100 rounded-full" />
+    <div className="mb-3 flex items-center gap-2">
+      <Skeleton className="h-4 w-24 rounded-full" />
     </div>
     {/* Titolo con icona */}
-    <div className="flex items-center gap-2.5 mb-3">
-      <div className="w-8 h-8 rounded-lg bg-slate-100 shrink-0" />
-      <div className="h-4 bg-slate-200 rounded w-2/3" />
+    <div className="mb-3 flex items-center gap-2.5">
+      <Skeleton className="h-8 w-8 flex-none rounded-control" />
+      <Skeleton className="h-4 w-2/3" />
     </div>
     {/* Contenuto */}
-    <div className="space-y-1.5 mb-3 grow">
-      <div className="h-3 bg-slate-100 rounded w-full" />
-      <div className="h-3 bg-slate-100 rounded w-4/5" />
-      <div className="h-3 bg-slate-100 rounded w-3/5" />
+    <div className="mb-3 grow space-y-1.5">
+      <Skeleton className="h-3 w-full" />
+      <Skeleton className="h-3 w-4/5" />
+      <Skeleton className="h-3 w-3/5" />
     </div>
     {/* Footer */}
-    <div className="pt-1 border-t border-slate-100">
-      <div className="h-3 bg-slate-100 rounded w-28" />
+    <div className="border-t border-slate-100 pt-1">
+      <Skeleton className="mt-1 h-3 w-28" />
     </div>
   </div>
 );

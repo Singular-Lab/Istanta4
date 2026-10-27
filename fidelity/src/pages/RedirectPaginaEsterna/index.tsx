@@ -1,7 +1,8 @@
+import Button from "@/components/Base/Button";
 import Lucide from "@/components/Base/Lucide";
+import SchermataStato from "@/components/SchermataStato";
 import { useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
-import Button from "../../components/Base/Button";
 
 const RedirectPaginaEsterna = () => {
   const [searchParams] = useSearchParams();
@@ -17,30 +18,29 @@ const RedirectPaginaEsterna = () => {
   }, [url]);
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-6 ">
-      <div className="bg-white dark:bg-darkmode-600 rounded-card shadow-card p-8 w-full">
-        <Lucide icon="ExternalLink" aria-hidden="true" className="w-16 h-16 mx-auto mb-4 text-primary" />
-        <h1 className="title-page mb-2">Entra nella beta di Competitor Analyzer</h1>
-        <p className="text-slate-500 dark:text-slate-400 mb-4">
-          Verrai reindirizzato a una pagina esterna.
-        </p>
-        {url && (
-          <>
-            <p className="text-sm text-slate-400 mb-4 break-all">{url}</p>
-            <Button
-              as={"a"}
-              variant="primary"
-              href={url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full"
-            >
-              Apri ora
-            </Button>
-          </>
-        )}
-      </div>
-    </div>
+    <SchermataStato
+      icona="ExternalLink"
+      titolo="Entra nella beta di Competitor Analyzer"
+      descrizione="Verrai reindirizzato a una pagina esterna."
+      azioni={
+        url ? (
+          <Button
+            as="a"
+            variant="primary"
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            rounded
+            className="px-5 py-2.5"
+          >
+            <Lucide icon="ExternalLink" aria-hidden="true" className="mr-2 h-4 w-4" />
+            Apri ora
+          </Button>
+        ) : undefined
+      }
+    >
+      {url && <p className="break-all text-sm text-slate-400">{url}</p>}
+    </SchermataStato>
   );
 };
 

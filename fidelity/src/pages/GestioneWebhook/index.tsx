@@ -1,10 +1,14 @@
 import Badge from "@/components/Base/Badge";
 import Button from "@/components/Base/Button";
 import { FormCheck, FormField, FormInput, FormSelect, FormTextarea } from "@/components/Base/Form";
-import { Dialog } from "@/components/Base/Headless";
+import BarraFiltri from "@/components/Base/BarraFiltri";
+import CampoRicerca from "@/components/Base/CampoRicerca";
+import { Dialog, Menu } from "@/components/Base/Headless";
 import Lucide from "@/components/Base/Lucide";
 import PageError from "@/components/Base/PageError";
-import PageHeader from "@/components/Base/PageHeader";
+import Pagina from "@/components/Base/Pagina";
+import Sezione from "@/components/Base/Sezione";
+import StatCard, { StatCardGrid } from "@/components/Base/StatCard";
 import Spinner from "@/components/Base/Spinner";
 import StatusBadge from "@/components/Base/StatusBadge";
 import ConfirmDialog from "@/components/ConfirmDialog";
@@ -13,12 +17,12 @@ import Table from "@/components/Base/Table";
 import EmptyState from "@/components/EmptyState";
 import withSessionCheck from "@/components/SessionChecker";
 import { PERMISSIONS } from "@/constants/permissions";
+import { formatDataOra, formatNumero } from "@/utils/format";
 import type { TonoStato } from "@/constants/stati";
 import { useNotification } from "@/context/NotificationContext";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
-import dayjs from "dayjs";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { SubmitHandler, useForm } from "react-hook-form";
 import { EVENTI_WEBHOOK, STATO_TENTATIVO_WEBHOOK, STATO_WEBHOOK } from "../../../lib/enums";
 import { ServerCall } from "../../../lib/server_call";
@@ -73,11 +77,6 @@ function GestioneWebhook() {
             eventi_webhook: []
         }
     });
-    // Monitora i cambiamenti nei campi del form
-    const watchAllFields = watch();
-    useEffect(() => {
-        console.log('Valori del form aggiornati:', watchAllFields);
-    }, [watchAllFields]);
 
     // Query per ottenere i webhook
     const { data: webhooks = [], isLoading, isError, error: erroreWebhook, refetch } = useQuery<WebhookAttributes[]>({
@@ -214,7 +213,12 @@ function GestioneWebhook() {
     });
 
     // Query per ottenere statistiche webhook
-    const { data: webhookStats, refetch: refetchStats } = useQuery({
+    const {
+        data: webhookStats,
+        refetch: refetchStats,
+        isError: erroreStatistiche,
+        error: dettaglioErroreStatistiche,
+    } = useQuery({
         queryKey: ['webhook-stats', selectedWebhookForAction?.id_webhook],
         queryFn: async () => {
             if (!selectedWebhookForAction?.id_webhook) return null;
@@ -318,226 +322,172 @@ function GestioneWebhook() {
 
     return (
         <>
-            <div className="grid grid-cols-12 gap-y-6 gap-x-6">
-                <div className="col-span-12">
-                    <PageHeader
-                        title="Gestione Webhook"
-                        description="Gestisci i webhook per ricevere notifiche degli eventi del sistema"
-                    />
-                </div>
-
-                <div className="col-span-12">
-                    <div className="box box--stacked">
-                        {/* Header con ricerca e azioni */}
-                        <div className="bg-slate-50 border-b border-slate-200 p-5">
-                            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                                <div className="flex-1">
-                                    <div className="relative">
-                                        <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                                            <Lucide icon="Search" className="w-4 h-4 text-slate-400" />
-                                        </div>
-                                        <FormInput
-                                            type="text"
-                                            placeholder="Cerca webhook per descrizione o URL..."
-                                            value={searchQuery}
-                                            onChange={(e) => setSearchQuery(e.target.value)}
-                                            className="pl-10"
-                                        />
-                                    </div>
-                                </div>
-                                <div className="flex gap-2">
-                                    <PermissionGate permission={PERMISSIONS.WEBHOOK.GESTISCI} mode="disable">
-                                        <Button
-                                            variant="primary"
-                                            onClick={handleCreateWebhook}
-                                            className="flex items-center"
-                                        >
-                                            <Lucide icon="Plus" className="w-4 h-4 mr-2" />
-                                            Nuovo Webhook
-                                        </Button>
-                                    </PermissionGate>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Conteggio risultati */}
-                        <div className="flex justify-between items-center mb-5 p-5">
-                            <div className="text-sm text-slate-500">
-                                {filteredWebhooks.length} {filteredWebhooks.length === 1 ? 'webhook' : 'webhook'} trovati
-                            </div>
-                            {searchQuery && (
-                                <button
-                                    type="button"
-                                    onClick={() => setSearchQuery('')}
-                                    className="text-xs text-primary hover:text-primary/80 flex items-center"
-                                >
-                                    <Lucide icon="X" aria-hidden="true" className="w-3.5 h-3.5 mr-1" />
+            <Pagina
+                titolo="Gestione Webhook"
+                descrizione="Gestisci i webhook per ricevere notifiche degli eventi del sistema"
+                azioni={
+                    <PermissionGate permission={PERMISSIONS.WEBHOOK.GESTISCI} mode="disable">
+                        <Button variant="primary" onClick={handleCreateWebhook}>
+                            <Lucide icon="Plus" aria-hidden="true" className="mr-2 h-4 w-4" />
+                            Nuovo Webhook
+                        </Button>
+                    </PermissionGate>
+                }
+            >
+                <Sezione
+                    senzaPadding
+                    titolo="Webhook"
+                    descrizione={
+                        isLoading || isError
+                            ? undefined
+                            : `${filteredWebhooks.length} ${filteredWebhooks.length === 1 ? "webhook trovato" : "webhook trovati"}`
+                    }
+                >
+                    <BarraFiltri
+                        destra={
+                            searchQuery ? (
+                                <Button type="button" size="sm" variant="outline-secondary" onClick={() => setSearchQuery("")}>
+                                    <Lucide icon="X" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
                                     Cancella ricerca
-                                </button>
-                            )}
-                        </div>
+                                </Button>
+                            ) : undefined
+                        }
+                    >
+                        <CampoRicerca
+                            etichetta="Cerca webhook"
+                            placeholder="Cerca per descrizione o URL"
+                            value={searchQuery}
+                            onChange={setSearchQuery}
+                        />
+                    </BarraFiltri>
 
-                        {/* Tabella webhook */}
-                        <div className="overflow-x-auto">
-                            <Table bordered className="border-b border-slate-200/60">
-                                <Table.Thead>
+                    {/* Tabella webhook */}
+                    <div className="overflow-x-auto">
+                        <Table>
+                            <Table.Thead>
+                                <Table.Tr>
+                                    <Table.Th>Webhook</Table.Th>
+                                    <Table.Th>Eventi</Table.Th>
+                                    <Table.Th className="text-center">Stato</Table.Th>
+                                    <Table.Th>Configurazione</Table.Th>
+                                    <Table.Th>Ultima Modifica</Table.Th>
+                                    <Table.Th className="text-right"><span className="sr-only">Azioni</span></Table.Th>
+                                </Table.Tr>
+                            </Table.Thead>
+                            <Table.Tbody>
+                                {isLoading ? (
                                     <Table.Tr>
-                                        <Table.Td className="py-4 font-medium border-t bg-slate-50 border-slate-200/60 text-slate-500">
-                                            Webhook
-                                        </Table.Td>
-                                        <Table.Td className="py-4 font-medium border-t bg-slate-50 border-slate-200/60 text-slate-500">
-                                            Eventi
-                                        </Table.Td>
-                                        <Table.Td className="py-4 font-medium text-center border-t bg-slate-50 border-slate-200/60 text-slate-500">
-                                            Stato
-                                        </Table.Td>
-                                        <Table.Td className="py-4 font-medium border-t bg-slate-50 border-slate-200/60 text-slate-500">
-                                            Configurazione
-                                        </Table.Td>
-                                        <Table.Td className="py-4 font-medium border-t bg-slate-50 border-slate-200/60 text-slate-500">
-                                            Ultima Modifica
-                                        </Table.Td>
-                                        <Table.Td className="w-32 py-4 font-medium text-center border-t bg-slate-50 border-slate-200/60 text-slate-500">
-                                            Azioni
+                                        <Table.Td colSpan={6} className="py-8 text-center">
+                                            <div className="flex items-center justify-center">
+                                                <Spinner etichetta="Caricamento webhook…" />
+                                            </div>
                                         </Table.Td>
                                     </Table.Tr>
-                                </Table.Thead>
-                                <Table.Tbody>
-                                    {isLoading ? (
-                                        <Table.Tr>
-                                            <Table.Td colSpan={6} className="py-8 text-center">
-                                                <div className="flex items-center justify-center">
-                                                    <Spinner etichetta="Caricamento webhook…" />
+                                ) : isError ? (
+                                    <Table.Tr>
+                                        <Table.Td colSpan={6}>
+                                            <PageError
+                                                compatta
+                                                titolo="Webhook non caricati"
+                                                motivo={(erroreWebhook as Error)?.message || "Errore durante il recupero dei webhook"}
+                                                onRiprova={() => refetch()}
+                                            />
+                                        </Table.Td>
+                                    </Table.Tr>
+                                ) : filteredWebhooks.length > 0 ? (
+                                    filteredWebhooks.map((webhook: WebhookAttributes) => (
+                                        <Table.Tr key={webhook.id_webhook}>
+                                            <Table.Td>
+                                                <div className="font-medium text-slate-800">{webhook.descrizione_webhook}</div>
+                                                <div className="break-all text-xs text-slate-500">{webhook.url_webhook}</div>
+                                            </Table.Td>
+                                            <Table.Td>
+                                                <div className="flex flex-wrap gap-1">
+                                                    {webhook.eventi_webhook.slice(0, 3).map((evento, idx) => (
+                                                        <Badge key={idx} variant="secondary" size="sm">
+                                                            {evento.replace('_', ' ')}
+                                                        </Badge>
+                                                    ))}
+                                                    {webhook.eventi_webhook.length > 3 && (
+                                                        <Badge variant="secondary" size="sm">
+                                                            +{webhook.eventi_webhook.length - 3}
+                                                        </Badge>
+                                                    )}
                                                 </div>
                                             </Table.Td>
-                                        </Table.Tr>
-                                    ) : isError ? (
-                                        <Table.Tr>
-                                            <Table.Td colSpan={6} className="py-4">
-                                                <PageError
-                                                    compatta
-                                                    titolo="Webhook non caricati"
-                                                    motivo={(erroreWebhook as Error)?.message || "Errore durante il recupero dei webhook"}
-                                                    onRiprova={() => refetch()}
-                                                />
+                                            <Table.Td className="text-center">
+                                                <StatusBadge dominio="webhook" stato={webhook.stato_webhook} />
                                             </Table.Td>
-                                        </Table.Tr>
-                                    ) : filteredWebhooks.length > 0 ? (
-                                        filteredWebhooks.map((webhook: WebhookAttributes) => (
-                                            <Table.Tr key={webhook.id_webhook} className="[&_td]:last:border-b-0">
-                                                <Table.Td className="py-4 border-dashed dark:bg-darkmode-600">
-                                                    <div>
-                                                        <div className="font-medium text-sm mb-1">{webhook.descrizione_webhook}</div>
-                                                        <div className="text-slate-500 text-xs break-all">{webhook.url_webhook}</div>
-                                                    </div>
-                                                </Table.Td>
-                                                <Table.Td className="py-4 border-dashed dark:bg-darkmode-600">
-                                                    <div className="flex flex-wrap gap-1">
-                                                        {webhook.eventi_webhook.slice(0, 3).map((evento, idx) => (
-                                                            <Badge key={idx} variant="secondary" className="text-xs px-2 py-1">
-                                                                {evento.replace('_', ' ')}
-                                                            </Badge>
-                                                        ))}
-                                                        {webhook.eventi_webhook.length > 3 && (
-                                                            <Badge variant="secondary" className="text-xs px-2 py-1">
-                                                                +{webhook.eventi_webhook.length - 3}
-                                                            </Badge>
-                                                        )}
-                                                    </div>
-                                                </Table.Td>
-                                                <Table.Td className="py-4 border-dashed dark:bg-darkmode-600 text-center">
-                                                    <StatusBadge dominio="webhook" stato={webhook.stato_webhook} />
-                                                </Table.Td>
-                                                <Table.Td className="py-4 border-dashed dark:bg-darkmode-600">
-                                                    <div className="text-xs text-slate-500">
-                                                        <div>Timeout: {webhook.timeout_webhook}s</div>
-                                                        <div>Retry: {webhook.retry_count_webhook}</div>
-                                                    </div>
-                                                </Table.Td>
-                                                <Table.Td className="py-4 border-dashed dark:bg-darkmode-600">
-                                                    <div className="text-xs text-slate-500">
-                                                        {dayjs(webhook.updatedat_webhook).format("DD/MM/YYYY HH:mm")}
-                                                    </div>
-                                                </Table.Td>
-                                                <Table.Td className="py-4 border-dashed dark:bg-darkmode-600">
-                                                    <div className="flex items-center justify-center gap-1">
-                                                        <Button
-                                                            variant="outline-secondary"
-                                                            size="sm"
-                                                            onClick={() => handleTestWebhook(webhook)}
-                                                            className="px-2 py-1"
-                                                            title="Test Webhook"
-                                                            aria-label={`Test Webhook ${webhook.nome_webhook}`}
-                                                        >
-                                                            <Lucide icon="Play" aria-hidden="true" className="w-3 h-3" />
-                                                        </Button>
-                                                        <Button
-                                                            variant="outline-secondary"
-                                                            size="sm"
-                                                            onClick={() => handleShowStats(webhook)}
-                                                            className="px-2 py-1"
-                                                            title="Statistiche"
-                                                            aria-label={`Statistiche ${webhook.nome_webhook}`}
-                                                        >
-                                                            <Lucide icon="ChartBar" aria-hidden="true" className="w-3 h-3" />
-                                                        </Button>
-                                                        <Button
-                                                            variant="outline-secondary"
-                                                            size="sm"
-                                                            onClick={() => handleEditWebhook(webhook)}
-                                                            className="px-2 py-1"
-                                                            title="Modifica"
-                                                            aria-label={`Modifica ${webhook.nome_webhook}`}
-                                                        >
-                                                            <Lucide icon="Pencil" aria-hidden="true" className="w-3 h-3" />
-                                                        </Button>
+                                            <Table.Td>
+                                                <div className="text-xs text-slate-500">
+                                                    <div>Timeout: {webhook.timeout_webhook}s</div>
+                                                    <div>Retry: {webhook.retry_count_webhook}</div>
+                                                </div>
+                                            </Table.Td>
+                                            <Table.Td className="whitespace-nowrap text-xs tabular-nums text-slate-500">
+                                                {formatDataOra(webhook.updatedat_webhook)}
+                                            </Table.Td>
+                                            <Table.Td className="text-right">
+                                                <Menu className="inline-block text-left">
+                                                    <Menu.Button
+                                                        as={Button}
+                                                        size="sm"
+                                                        variant="outline-secondary"
+                                                        aria-label={`Azioni webhook ${webhook.nome_webhook}`}
+                                                    >
+                                                        <Lucide icon="EllipsisVertical" aria-hidden="true" className="h-4 w-4" />
+                                                    </Menu.Button>
+                                                    <Menu.Items className="w-48">
+                                                        <Menu.Item onClick={() => handleTestWebhook(webhook)}>
+                                                            <Lucide icon="Play" aria-hidden="true" className="mr-2 h-4 w-4" />
+                                                            Test webhook
+                                                        </Menu.Item>
+                                                        <Menu.Item onClick={() => handleShowStats(webhook)}>
+                                                            <Lucide icon="ChartBar" aria-hidden="true" className="mr-2 h-4 w-4" />
+                                                            Statistiche
+                                                        </Menu.Item>
+                                                        <Menu.Item onClick={() => handleEditWebhook(webhook)}>
+                                                            <Lucide icon="Pencil" aria-hidden="true" className="mr-2 h-4 w-4" />
+                                                            Modifica
+                                                        </Menu.Item>
                                                         <PermissionGate permission={PERMISSIONS.WEBHOOK.GESTISCI}>
-                                                            <Button
-                                                                variant="outline-danger"
-                                                                size="sm"
-                                                                onClick={() => setWebhookDaEliminare(webhook)}
-                                                                className="px-2 py-1"
-                                                                title="Elimina"
-                                                                aria-label={`Elimina ${webhook.nome_webhook}`}
-                                                            >
-                                                                <Lucide icon="Trash2" aria-hidden="true" className="w-3 h-3" />
-                                                            </Button>
+                                                            <Menu.Item className="text-danger" onClick={() => setWebhookDaEliminare(webhook)}>
+                                                                <Lucide icon="Trash2" aria-hidden="true" className="mr-2 h-4 w-4" />
+                                                                Elimina
+                                                            </Menu.Item>
                                                         </PermissionGate>
-                                                    </div>
-                                                </Table.Td>
-                                            </Table.Tr>
-                                        ))
-                                    ) : (
-                                        <Table.Tr>
-                                            <Table.Td colSpan={6} className="py-8 border-dashed dark:bg-darkmode-600">
-                                                <EmptyState
-                                                    icon="Webhook"
-                                                    title="Nessun webhook trovato"
-                                                    description={searchQuery
-                                                        ? `Nessun webhook corrisponde a "${searchQuery}"`
-                                                        : "Non sono stati configurati webhook. Crea il primo webhook per iniziare."
-                                                    }
-                                                />
+                                                    </Menu.Items>
+                                                </Menu>
                                             </Table.Td>
                                         </Table.Tr>
-                                    )}
-                                </Table.Tbody>
-                            </Table>
-                        </div>
+                                    ))
+                                ) : (
+                                    <Table.Tr>
+                                        <Table.Td colSpan={6} className="p-0">
+                                            <EmptyState
+                                                compatta
+                                                icon={searchQuery ? "SearchX" : "Webhook"}
+                                                title={searchQuery ? "Nessun risultato" : "Nessun webhook configurato"}
+                                                description={searchQuery
+                                                    ? `Nessun webhook corrisponde a "${searchQuery}"`
+                                                    : "Non sono stati configurati webhook. Crea il primo webhook per iniziare."
+                                                }
+                                            />
+                                        </Table.Td>
+                                    </Table.Tr>
+                                )}
+                            </Table.Tbody>
+                        </Table>
                     </div>
-                </div>
-            </div>
+                </Sezione>
+            </Pagina>
 
             {/* Dialog per creare/modificare webhook */}
             <Dialog open={isDialogOpen} onClose={() => setIsDialogOpen(false)} size="xl">
                 <Dialog.Panel>
-                    <Dialog.Title>
-                        <h2 className="title-card mr-auto">
-                            {editingWebhook ? 'Modifica Webhook' : 'Nuovo Webhook'}
-                        </h2>
-                    </Dialog.Title>
-                    <Dialog.Description>
-                        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+                    <Dialog.Title>{editingWebhook ? 'Modifica Webhook' : 'Nuovo Webhook'}</Dialog.Title>
+                    <form onSubmit={handleSubmit(onSubmit)}>
+                        <Dialog.Description>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <FormField className="md:col-span-2" etichetta="Nome" obbligatorio errore={errors.nome_webhook?.message}>
                                     <FormInput
@@ -682,41 +632,36 @@ function GestioneWebhook() {
                                     />
                                 </FormField>
                             </div>
-
-                            <div className="flex justify-end space-x-2 pt-4 border-t">
-                                <Button
-                                    type="button"
-                                    variant="outline-secondary"
-                                    onClick={() => setIsDialogOpen(false)}
-                                >
-                                    Annulla
-                                </Button>
-                                <Button
-                                    type="submit"
-                                    variant="primary"
-                                    loading={createWebhookMutation.isPending || updateWebhookMutation.isPending}
-                                >
-                                    {editingWebhook ? 'Aggiorna Webhook' : 'Crea Webhook'}
-                                </Button>
-                            </div>
-                        </form>
-                    </Dialog.Description>
+                        </Dialog.Description>
+                        <Dialog.Footer>
+                            <Button
+                                type="button"
+                                variant="outline-secondary"
+                                onClick={() => setIsDialogOpen(false)}
+                            >
+                                Annulla
+                            </Button>
+                            <Button
+                                type="submit"
+                                variant="primary"
+                                loading={createWebhookMutation.isPending || updateWebhookMutation.isPending}
+                            >
+                                {editingWebhook ? 'Aggiorna Webhook' : 'Crea Webhook'}
+                            </Button>
+                        </Dialog.Footer>
+                    </form>
                 </Dialog.Panel>
             </Dialog>
 
             {/* Dialog per testare webhook */}
             <Dialog open={testDialogOpen} onClose={() => setTestDialogOpen(false)} size="md">
                 <Dialog.Panel>
-                    <Dialog.Title>
-                        <h2 className="title-card mr-auto">
-                            Test Webhook: {selectedWebhookForAction?.nome_webhook}
-                        </h2>
-                    </Dialog.Title>
+                    <Dialog.Title>Test Webhook: {selectedWebhookForAction?.nome_webhook}</Dialog.Title>
                     <Dialog.Description>
                         <div className="space-y-4">
-                            <div className="bg-slate-50 p-4 rounded-card">
-                                <div className="text-sm text-slate-600 mb-2">URL Webhook:</div>
-                                <div className="text-sm font-mono bg-white p-2 rounded border break-all">
+                            <div className="rounded-card bg-slate-50 p-4">
+                                <div className="mb-2 text-sm text-slate-600">URL Webhook:</div>
+                                <div className="break-all rounded-control border border-slate-200 bg-white p-2 font-mono text-sm">
                                     {selectedWebhookForAction?.url_webhook}
                                 </div>
                             </div>
@@ -729,133 +674,143 @@ function GestioneWebhook() {
                                     id="test-data"
                                 />
                             </FormField>
-
-                            <div className="flex justify-end space-x-2 pt-4 border-t">
-                                <Button
-                                    type="button"
-                                    variant="outline-secondary"
-                                    onClick={() => setTestDialogOpen(false)}
-                                >
-                                    Annulla
-                                </Button>
-                                <Button
-                                    type="button"
-                                    variant="primary"
-                                    loading={testWebhookMutation.isPending}
-                                    onClick={() => {
-                                        const testDataElement = document.getElementById('test-data') as HTMLTextAreaElement;
-                                        let testData = {};
-                                        try {
-                                            testData = JSON.parse(testDataElement.value);
-                                        } catch (e) {
-                                            testData = { message: testDataElement.value };
-                                        }
-                                        testWebhookMutation.mutate({
-                                            id: selectedWebhookForAction!.id_webhook,
-                                            testData
-                                        });
-                                    }}
-                                >
-                                    Invia Test
-                                </Button>
-                            </div>
                         </div>
                     </Dialog.Description>
+                    <Dialog.Footer>
+                        <Button
+                            type="button"
+                            variant="outline-secondary"
+                            onClick={() => setTestDialogOpen(false)}
+                        >
+                            Annulla
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="primary"
+                            loading={testWebhookMutation.isPending}
+                            onClick={() => {
+                                const testDataElement = document.getElementById('test-data') as HTMLTextAreaElement;
+                                let testData = {};
+                                try {
+                                    testData = JSON.parse(testDataElement.value);
+                                } catch (e) {
+                                    testData = { message: testDataElement.value };
+                                }
+                                testWebhookMutation.mutate({
+                                    id: selectedWebhookForAction!.id_webhook,
+                                    testData
+                                });
+                            }}
+                        >
+                            Invia Test
+                        </Button>
+                    </Dialog.Footer>
                 </Dialog.Panel>
             </Dialog>
 
             {/* Dialog per statistiche webhook */}
             <Dialog open={statsDialogOpen} onClose={() => setStatsDialogOpen(false)} size="xl">
                 <Dialog.Panel>
-                    <Dialog.Title>
-                        <h2 className="title-card mr-auto">
-                            Statistiche Webhook: {selectedWebhookForAction?.nome_webhook}
-                        </h2>
-                    </Dialog.Title>
+                    <Dialog.Title>Statistiche Webhook: {selectedWebhookForAction?.nome_webhook}</Dialog.Title>
                     <Dialog.Description>
-                        <div className="space-y-6">
-                            {webhookStats ? (
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    <div className="bg-slate-50 p-4 rounded-card text-center">
-                                        <div className="text-2xl font-bold text-primary">
-                                            {webhookStats.statistiche_base.chiamate_totali || 0}
-                                        </div>
-                                        <div className="text-sm text-slate-600">Totale Chiamate</div>
-                                    </div>
-                                    <div className="bg-success/10 p-4 rounded-card text-center">
-                                        <div className="text-2xl font-bold text-success">
-                                            {webhookStats.statistiche_base.chiamate_successo || 0}
-                                        </div>
-                                        <div className="text-sm text-slate-600">Successi</div>
-                                    </div>
-                                    <div className="bg-danger/10 p-4 rounded-card text-center">
-                                        <div className="text-2xl font-bold text-danger">
-                                            {webhookStats.statistiche_base.chiamate_fallite || 0}
-                                        </div>
-                                        <div className="text-sm text-slate-600">Fallimenti</div>
-                                    </div>
-                                    <div className="col-span-1 md:col-span-3 mt-4">
-                                        <h3 className="title-section mb-2">Tentativi Recenti</h3>
-                                        <div className="overflow-x-auto">
-                                            <table className="min-w-full divide-y divide-gray-200">
-                                                <thead className="bg-gray-50">
-                                                    <tr>
-                                                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data</th>
-                                                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stato</th>
-                                                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">HTTP Status</th>
-                                                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Durata (ms)</th>
-                                                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Errore</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="bg-white divide-y divide-gray-200">
-                                                    {webhookStats.tentativi_recenti.map((tentativo : any, index : number) => (
-                                                        <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                                                            <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500">
-                                                                {new Date(tentativo.createdat_tentativo).toLocaleString()}
-                                                            </td>
-                                                            <td className="px-3 py-2 whitespace-nowrap text-sm">
-                                                                <StatusBadge {...descriviTentativo(tentativo.stato_tentativo)} />
-                                                            </td>
-                                                            <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500">
-                                                                {tentativo.http_status_tentativo || '-'}
-                                                            </td>
-                                                            <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500">
-                                                                {tentativo.durata_ms_tentativo}
-                                                            </td>
-                                                            <td className="px-3 py-2 text-sm text-gray-500 max-w-xs truncate">
-                                                                {tentativo.messaggio_errore_tentativo || '-'}
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                    {webhookStats.tentativi_recenti.length === 0 && (
-                                                        <tr>
-                                                            <td colSpan={5} className="px-3 py-4 text-center text-sm text-gray-500">
-                                                                Nessun tentativo registrato
-                                                            </td>
-                                                        </tr>
-                                                    )}
-                                                </tbody>
-                                            </table>
-                                        </div>
+                        {webhookStats ? (
+                            <div className="flex flex-col gap-5">
+                                <StatCardGrid className="lg:grid-cols-3">
+                                    <StatCard
+                                        densita="compatta"
+                                        etichetta="Totale chiamate"
+                                        valore={formatNumero(webhookStats.statistiche_base.chiamate_totali || 0)}
+                                        icona="Send"
+                                        tono="brand"
+                                    />
+                                    <StatCard
+                                        densita="compatta"
+                                        etichetta="Successi"
+                                        valore={formatNumero(webhookStats.statistiche_base.chiamate_successo || 0)}
+                                        icona="CircleCheck"
+                                        tono="success"
+                                    />
+                                    <StatCard
+                                        densita="compatta"
+                                        etichetta="Fallimenti"
+                                        valore={formatNumero(webhookStats.statistiche_base.chiamate_fallite || 0)}
+                                        icona="CircleX"
+                                        tono="danger"
+                                        evidenzia={(webhookStats.statistiche_base.chiamate_fallite || 0) > 0}
+                                    />
+                                </StatCardGrid>
+                                <div>
+                                    <h3 className="title-card mb-2">Tentativi Recenti</h3>
+                                    <div className="overflow-x-auto rounded-card border border-slate-200">
+                                        <Table>
+                                            <Table.Thead>
+                                                <Table.Tr>
+                                                    <Table.Th>Data</Table.Th>
+                                                    <Table.Th>Stato</Table.Th>
+                                                    <Table.Th>HTTP Status</Table.Th>
+                                                    <Table.Th className="text-right">Durata (ms)</Table.Th>
+                                                    <Table.Th>Errore</Table.Th>
+                                                </Table.Tr>
+                                            </Table.Thead>
+                                            <Table.Tbody>
+                                                {webhookStats.tentativi_recenti.map((tentativo : any, index : number) => (
+                                                    <Table.Tr key={index}>
+                                                        <Table.Td className="whitespace-nowrap tabular-nums text-slate-500">
+                                                            {formatDataOra(tentativo.createdat_tentativo)}
+                                                        </Table.Td>
+                                                        <Table.Td className="whitespace-nowrap">
+                                                            <StatusBadge {...descriviTentativo(tentativo.stato_tentativo)} />
+                                                        </Table.Td>
+                                                        <Table.Td className="whitespace-nowrap tabular-nums text-slate-500">
+                                                            {tentativo.http_status_tentativo || '-'}
+                                                        </Table.Td>
+                                                        <Table.Td className="whitespace-nowrap text-right tabular-nums text-slate-500">
+                                                            {tentativo.durata_ms_tentativo}
+                                                        </Table.Td>
+                                                        <Table.Td className="max-w-xs truncate text-slate-500">
+                                                            {tentativo.messaggio_errore_tentativo || '-'}
+                                                        </Table.Td>
+                                                    </Table.Tr>
+                                                ))}
+                                                {webhookStats.tentativi_recenti.length === 0 && (
+                                                    <Table.Tr>
+                                                        <Table.Td colSpan={5} className="p-0">
+                                                            <EmptyState
+                                                                compatta
+                                                                icon="FileClock"
+                                                                title="Nessun tentativo registrato"
+                                                                description="Le chiamate al webhook compariranno qui."
+                                                            />
+                                                        </Table.Td>
+                                                    </Table.Tr>
+                                                )}
+                                            </Table.Tbody>
+                                        </Table>
                                     </div>
                                 </div>
-                            ) : (
-                                <div className="flex justify-center py-8">
-                                    <Spinner etichetta="Caricamento statistiche…" />
-                                </div>
-                            )}
-
-                            <div className="flex justify-end pt-4 border-t">
-                                <Button
-                                    type="button"
-                                    variant="outline-secondary"
-                                    onClick={() => setStatsDialogOpen(false)}
-                                >
-                                    Chiudi
-                                </Button>
                             </div>
-                        </div>
+                        ) : erroreStatistiche ? (
+                            <PageError
+                                compatta
+                                titolo="Statistiche non caricate"
+                                motivo={(dettaglioErroreStatistiche as Error)?.message || "Errore durante il recupero delle statistiche"}
+                                onRiprova={() => refetchStats()}
+                            />
+                        ) : (
+                            <div className="flex justify-center py-8">
+                                <Spinner etichetta="Caricamento statistiche…" />
+                            </div>
+                        )}
                     </Dialog.Description>
+                    <Dialog.Footer>
+                        <Button
+                            type="button"
+                            variant="outline-secondary"
+                            onClick={() => setStatsDialogOpen(false)}
+                        >
+                            Chiudi
+                        </Button>
+                    </Dialog.Footer>
                 </Dialog.Panel>
             </Dialog>
 

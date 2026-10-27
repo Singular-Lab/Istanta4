@@ -1,13 +1,15 @@
-import React, { useState, useEffect, Fragment } from 'react';
-import { Listbox, Transition, Disclosure } from '@headlessui/react';
-import { ChevronDown, Trash2, Plus, SlidersHorizontal, Tag, Filter, Code, Eye, Check, Paintbrush, List, TextSelect } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Disclosure } from '@headlessui/react';
+import { ChevronDown, Trash2, Plus } from 'lucide-react';
+import Badge from '@/components/Base/Badge';
 import Button from '@/components/Base/Button';
 import ConfirmDialog from '@/components/ConfirmDialog';
-import { FormInput, FormLabel } from '@/components/Base/Form';
+import EmptyState from '@/components/EmptyState';
+import { FormCheck, FormField, FormInput, FormLabel, FormSelect } from '@/components/Base/Form';
 import Lucide from '@/components/Base/Lucide';
-import BoxRef from '@/pages/WebPliant/BoxRef';
-import { Config, ConfigWebpliant, ReferenzeIstanta, StileBoxReferenza, Struttura, ClassiCssCondizionali } from '../../../../lib/types';
-import Popover from '@/components/Base/Headless/Popover';
+import Sezione from '@/components/Base/Sezione';
+import StatusBadge from '@/components/Base/StatusBadge';
+import { Config, ReferenzeIstanta, StileBoxReferenza, Struttura, ClassiCssCondizionali } from '../../../../lib/types';
 
 /* ──────────────────────────────────────────────────────────────── */
 /*                             INTERFACES                           */
@@ -112,7 +114,7 @@ const ConditionsEditor: React.FC<{
   return (
     <div className="space-y-4">
       {conditions.map((cond, idx) => (
-        <div key={idx} className="border rounded p-4 bg-slate-50">
+        <div key={idx} className="rounded-card border border-slate-200 bg-slate-50 p-4">
           <div className="flex gap-2 mb-3">
             <FormInput
               value={cond.nome_campo}
@@ -122,13 +124,15 @@ const ConditionsEditor: React.FC<{
             />
             <Button
               variant="outline-danger"
+              aria-label={`Rimuovi condizione ${idx + 1}`}
               onClick={() => onChange(conditions.filter((_, i) => i !== idx))}
-              icon={<Trash2 size={16} />}
-            />
+            >
+              <Trash2 aria-hidden="true" className="h-4 w-4" />
+            </Button>
           </div>
 
           <div className="space-y-2">
-            <label className="block text-sm font-medium">Valori:</label>
+            <FormLabel>Valori</FormLabel>
             {cond.valori.map((val, vi) => (
               <div key={vi} className="flex gap-2">
                 <FormInput
@@ -141,33 +145,36 @@ const ConditionsEditor: React.FC<{
                 />
                 <Button
                   variant="outline-danger"
+                  aria-label={`Rimuovi valore ${vi + 1}`}
                   onClick={() => 
                     updateCondition(idx, 'valori', cond.valori.filter((_, i) => i !== vi))
                   }
-                  icon={<Trash2 size={14} />}
-                />
+                >
+                  <Trash2 aria-hidden="true" className="h-3.5 w-3.5" />
+                </Button>
               </div>
             ))}
             <Button
-              variant="invisible"
+              variant="outline-secondary"
+              size="sm"
               onClick={() => 
                 updateCondition(idx, 'valori', [...cond.valori, ''])
               }
-              icon={<Plus size={14} />}
-              className="text-primary"
             >
-              Aggiungi Valore
+              <Plus aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+              Aggiungi valore
             </Button>
           </div>
         </div>
       ))}
 
       <Button
+        variant="outline-secondary"
         onClick={() => onChange([...conditions, { nome_campo: '', valori: [] }])}
-        icon={<Plus size={16} />}
-        className="w-full border-dashed"
+        className="w-full"
       >
-        Aggiungi Condizione
+        <Plus aria-hidden="true" className="mr-2 h-4 w-4" />
+        Aggiungi condizione
       </Button>
     </div>
   );
@@ -187,7 +194,7 @@ const ConditionalClassEditor: React.FC<{
   return (
     <div className="space-y-3">
       {conditionalClasses.map((cls, idx) => (
-        <div key={idx} className="border rounded p-3 bg-gray-50">
+        <div key={idx} className="rounded-card border border-slate-200 bg-slate-50 p-3">
           <div className="grid grid-cols-2 gap-2 mb-2">
             <FormInput
               value={cls.nome_campo}
@@ -214,17 +221,21 @@ const ConditionalClassEditor: React.FC<{
           </div>
           <Button
             variant="outline-danger"
+            size="sm"
+            aria-label={`Rimuovi classe condizionale ${idx + 1}`}
             onClick={() => onChange(conditionalClasses.filter((_, i) => i !== idx))}
-            icon={<Trash2 size={14} />}
-          />
+          >
+            <Trash2 aria-hidden="true" className="h-3.5 w-3.5" />
+          </Button>
         </div>
       ))}
       <Button
+        variant="outline-secondary"
         onClick={() => onChange([...conditionalClasses, { nome_campo: '', operatore: 'contains', valore: '', classi_css: [] }])}
-        icon={<Plus size={14} />}
-        className="w-full border-dashed"
+        className="w-full"
       >
-        Aggiungi Classe Condizionale
+        <Plus aria-hidden="true" className="mr-2 h-4 w-4" />
+        Aggiungi classe condizionale
       </Button>
     </div>
   );
@@ -244,23 +255,26 @@ const HtmlNodeEditor: React.FC<{
   const canDelete = !isCore && onDelete;
 
   return (
-    <div className={`border rounded-lg mb-4 ${isCore ? 'bg-blue-50 border-blue-200' : 'bg-slate-50'}`}>
-      <div className="p-3 bg-white border-b flex justify-between items-center">
+    <div className={`mb-4 rounded-card border ${isCore ? 'border-info/20 bg-info/5' : 'border-slate-200 bg-slate-50'}`}>
+      <div className="flex items-center justify-between rounded-t-card border-b border-slate-200 bg-white p-3">
         <div className="flex items-center gap-2">
-          <span className={`font-semibold ${isCore ? 'text-blue-700' : ''}`}>
+          <span className={`font-medium ${isCore ? 'text-info' : 'text-slate-700'}`}>
             {node.tag || 'nuovo elemento'}
           </span>
           {isCore && (
-            <span className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded">
+            <Badge variant="info" size="sm">
               CORE
-            </span>
+            </Badge>
           )}
           {canDelete && (
             <Button
               variant="outline-danger"
+              size="sm"
+              aria-label={`Elimina elemento ${node.tag || 'nuovo elemento'}`}
               onClick={onDelete}
-              icon={<Trash2 size={14} />}
-            />
+            >
+              <Trash2 aria-hidden="true" className="h-3.5 w-3.5" />
+            </Button>
           )}
         </div>
       </div>
@@ -286,19 +300,18 @@ const HtmlNodeEditor: React.FC<{
 
         <div className="space-y-4">
           <div className="flex items-center gap-4">
-            <label className="flex items-center gap-2">
-              <input
+            <FormCheck>
+              <FormCheck.Input
                 type="checkbox"
                 checked={node.html_puro || false}
                 onChange={(e) => updateField('html_puro', e.target.checked)}
-                className="rounded"
               />
-              <span>HTML Puro</span>
-            </label>
+              <FormCheck.Label>HTML puro</FormCheck.Label>
+            </FormCheck>
             {isCore && (
-              <span className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded">
-                Elemento CORE - Non eliminabile
-              </span>
+              <Badge variant="warning" size="sm">
+                Elemento CORE, non eliminabile
+              </Badge>
             )}
           </div>
 
@@ -337,10 +350,10 @@ const HtmlNodeEditor: React.FC<{
 
         <Disclosure>
           {({ open }) => (
-            <div className="border rounded-lg">
-              <Disclosure.Button className="w-full p-3 bg-slate-50 flex justify-between items-center">
-                <span>Classi CSS Condizionali</span>
-                <ChevronDown className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+            <div className="rounded-card border border-slate-200">
+              <Disclosure.Button className="flex w-full items-center justify-between rounded-card bg-slate-50 p-3 text-sm font-medium text-slate-700">
+                <span>Classi CSS condizionali</span>
+                <ChevronDown aria-hidden="true" className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`} />
               </Disclosure.Button>
               <Disclosure.Panel className="p-4">
                 <ConditionalClassEditor
@@ -375,15 +388,15 @@ const HtmlNodeEditor: React.FC<{
 
         <Disclosure defaultOpen>
           {({ open }) => (
-            <div className="border rounded-lg">
-              <Disclosure.Button className="w-full p-3 bg-slate-50 flex justify-between items-center">
+            <div className="rounded-card border border-slate-200">
+              <Disclosure.Button className="flex w-full items-center justify-between rounded-card bg-slate-50 p-3 text-sm font-medium text-slate-700">
                 <span>Figli</span>
-                <ChevronDown className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+                <ChevronDown aria-hidden="true" className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`} />
               </Disclosure.Button>
               <Disclosure.Panel className="p-4 space-y-4">
                 {node.figli?.map((child, idx) => 
                   typeof child === 'string' ? (
-                    <div key={idx} className="p-2 bg-gray-100 rounded">
+                    <div key={idx} className="rounded-control bg-slate-100 p-2">
                       <span>Testo: {child}</span>
                     </div>
                   ) : (
@@ -403,13 +416,14 @@ const HtmlNodeEditor: React.FC<{
                   )
                 )}
                 <Button
+                  variant="outline-secondary"
                   onClick={() => {
                     updateField('figli', [...(node.figli || []), { classi_css: [], tag: 'div' }]);
                   }}
-                  icon={<Plus size={14} />}
                   className="w-full"
                 >
-                  Aggiungi Figlio
+                  <Plus aria-hidden="true" className="mr-2 h-4 w-4" />
+                  Aggiungi figlio
                 </Button>
               </Disclosure.Panel>
             </div>
@@ -509,122 +523,91 @@ const EditorStiliReferenza: React.FC<{
     setConfermaElimina(false);
   };
 
+  const selezionaStile = (nome: string) => {
+    setActiveStyle(styles.find((stile) => stile.nome_stile === nome) ?? null);
+  };
+
+  const classiCard = "rounded-card border border-slate-200 bg-white p-4";
+  const classiDisclosure = "flex w-full items-center justify-between rounded-card bg-slate-50 p-3 text-sm font-medium text-slate-700";
+
   return (
-    <section className="container mx-auto p-6">
-      <header className="mb-8 border-b pb-6">
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Lucide icon={"Paintbrush"} className="w-6 h-6" />
-          Editor Stili Referenza
-        </h1>
-      </header>
+    <Sezione
+      icona="Paintbrush"
+      titolo="Editor stili referenza"
+      descrizione="Struttura HTML e condizioni dei box referenza del volantino"
+    >
+      <div className="grid grid-cols-12 gap-6">
+        {/* Selezione dello stile */}
+        <div className={`${classiCard} col-span-12 flex flex-col gap-4 self-start lg:col-span-4 xl:col-span-3`}>
+          <h3 className="title-card flex items-center gap-2">
+            <Lucide icon="List" aria-hidden="true" className="h-4 w-4" />
+            Elenco stili
+          </h3>
 
-      <div className="flex gap-6 flex-col lg:flex-row">
-        {/* Sidebar selezione stili */}
-        <div className="lg:w-80 space-y-4">
-          <div className="bg-white rounded-lg p-4 shadow border">
-            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <Lucide icon={"List"} className="w-5 h-5" />
-              Elenco Stili
-            </h2>
+          <FormSelect
+            aria-label="Stile da modificare"
+            value={activeStyle?.nome_stile ?? ""}
+            onChange={(e) => selezionaStile(e.target.value)}
+          >
+            <option value="" disabled>Seleziona stile…</option>
+            {styles.map((style) => (
+              <option key={style.nome_stile} value={style.nome_stile}>
+                {style.nome_stile}
+              </option>
+            ))}
+          </FormSelect>
 
-            {/* Utilizzo del componente Popover da @components/Base/Headless/Popover/index.tsx */}
+          <div className="flex flex-col gap-2">
+            <Button variant="outline-secondary" onClick={handleCreateStyle} className="w-full">
+              <Lucide icon="Plus" aria-hidden="true" className="mr-2 h-4 w-4" />
+              Nuovo stile
+            </Button>
 
-            <Popover className="w-full">
-              <Popover.Button className="w-full p-3 border rounded-md flex justify-between items-center bg-white">
-                <span className="truncate">
-                  {activeStyle?.nome_stile || "Seleziona stile..."}
-                </span>
-                <ChevronDown className="w-4 h-4" />
-              </Popover.Button>
-              <Popover.Panel className="w-full mt-1 max-h-60 overflow-auto bg-white border rounded-md shadow-lg p-0">
-                <div>
-                  {styles.map((style) => (
-                    <div
-                      key={style.nome_stile}
-                      className={`p-3 cursor-pointer flex justify-between items-center hover:bg-primary/10 transition-colors ${
-                        activeStyle?.nome_stile === style.nome_stile ? 'bg-primary/10' : ''
-                      }`}
-                      onClick={() => setActiveStyle(style)}
-                      role="option"
-                      aria-selected={activeStyle?.nome_stile === style.nome_stile}
-                      tabIndex={0}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter' || e.key === ' ') setActiveStyle(style);
-                      }}
-                    >
-                      <span className={activeStyle?.nome_stile === style.nome_stile ? 'font-semibold' : ''}>
-                        {style.nome_stile}
-                      </span>
-                      {activeStyle?.nome_stile === style.nome_stile && <Check className="w-4 h-4 text-primary" />}
-                    </div>
-                  ))}
-                </div>
-              </Popover.Panel>
-            </Popover>
-
-            <div className="space-y-2">
+            {activeStyle && (
               <Button
-                onClick={handleCreateStyle}
-                icon={<Plus />}
+                variant="outline-danger"
+                onClick={() => setConfermaElimina(true)}
                 className="w-full"
               >
-                Nuovo Stile
+                <Lucide icon="Trash2" aria-hidden="true" className="mr-2 h-4 w-4" />
+                Elimina stile
               </Button>
-              
-              {activeStyle && (
-                <Button
-                  variant="outline-danger"
-                  onClick={() => setConfermaElimina(true)}
-                  icon={<Trash2 />}
-                  className="w-full"
-                >
-                  Elimina Stile
-                </Button>
-              )}
-              <ConfirmDialog
-                open={confermaElimina && !!activeStyle}
-                title="Eliminare lo stile?"
-                description={`Lo stile "${activeStyle?.nome_stile ?? ""}" e le sue condizioni verranno rimossi dalla configurazione del volantino.`}
-                confirmLabel="Elimina stile"
-                onClose={() => setConfermaElimina(false)}
-                onConfirm={() => handleDeleteStyle(activeStyle?.id)}
-              />
-            </div>
+            )}
+            <ConfirmDialog
+              open={confermaElimina && !!activeStyle}
+              title="Eliminare lo stile?"
+              description={`Lo stile "${activeStyle?.nome_stile ?? ""}" e le sue condizioni verranno rimossi dalla configurazione del volantino.`}
+              confirmLabel="Elimina stile"
+              onClose={() => setConfermaElimina(false)}
+              onConfirm={() => handleDeleteStyle(activeStyle?.id)}
+            />
           </div>
         </div>
 
         {/* Editor principale */}
-        <div className="flex-1 bg-white rounded-lg shadow border p-6">
+        <div className={`${classiCard} col-span-12 lg:col-span-8 xl:col-span-9`}>
           {activeStyle ? (
-            <div className="space-y-6">
-              <header className="pb-4 border-b mb-6">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-xl font-bold flex items-center gap-2">
-                    <Lucide icon={"SlidersHorizontal"} className="w-5 h-5" />
-                    {activeStyle.nome_stile}
-                  </h3>
-                  <div className="flex items-center gap-2">
-                    {activeStyle.id && (
-                      <span className="badge bg-primary/10 text-primary">
-                        ID: {activeStyle.id}
-                      </span>
-                    )}
-                    {validateCoreStructure(activeStyle.struttura as StrutturaCore) ? (
-                      <span className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded flex items-center gap-1">
-                        <Check size={12} />
-                        Struttura Valida
-                      </span>
-                    ) : (
-                      <span className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded">
-                        ⚠ Struttura Incompleta
-                      </span>
-                    )}
-                  </div>
+            <div className="flex flex-col gap-5">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-dashed border-slate-200 pb-4">
+                <h3 className="title-card flex items-center gap-2">
+                  <Lucide icon="SlidersHorizontal" aria-hidden="true" className="h-4 w-4" />
+                  {activeStyle.nome_stile}
+                </h3>
+                <div className="flex items-center gap-2">
+                  {activeStyle.id && (
+                    <Badge variant="primary" size="sm">
+                      ID: {activeStyle.id}
+                    </Badge>
+                  )}
+                  {validateCoreStructure(activeStyle.struttura as StrutturaCore) ? (
+                    <StatusBadge tono="success" etichetta="Struttura valida" icon="Check" />
+                  ) : (
+                    <StatusBadge tono="danger" etichetta="Struttura incompleta" icon="TriangleAlert" />
+                  )}
                 </div>
-              </header>
+              </div>
 
-              <div>
-                <FormLabel>Nome Stile</FormLabel>
+              <FormField etichetta="Nome stile">
                 <FormInput
                   value={activeStyle.nome_stile}
                   onChange={(e) => {
@@ -633,17 +616,17 @@ const EditorStiliReferenza: React.FC<{
                     setStyles(styles.map(s => s === activeStyle ? updated : s));
                   }}
                 />
-              </div>
+              </FormField>
 
               <Disclosure defaultOpen>
                 {({ open }) => (
-                  <div className="border rounded-lg">
-                    <Disclosure.Button className="w-full p-3 bg-slate-50 flex justify-between items-center">
-                      <div className="flex items-center gap-2">
-                        <Lucide icon={"Filter"} className="w-4 h-4" />
-                        <span>Condizioni</span>
-                      </div>
-                      <ChevronDown className={`transform ${open ? 'rotate-180' : ''}`} />
+                  <div className="rounded-card border border-slate-200">
+                    <Disclosure.Button className={classiDisclosure}>
+                      <span className="flex items-center gap-2">
+                        <Lucide icon="ListFilter" aria-hidden="true" className="h-4 w-4" />
+                        Condizioni
+                      </span>
+                      <ChevronDown aria-hidden="true" className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`} />
                     </Disclosure.Button>
                     <Disclosure.Panel className="p-4">
                       <ConditionsEditor
@@ -661,13 +644,13 @@ const EditorStiliReferenza: React.FC<{
 
               <Disclosure defaultOpen>
                 {({ open }) => (
-                  <div className="border rounded-lg">
-                    <Disclosure.Button className="w-full p-3 bg-slate-50 flex justify-between items-center">
-                      <div className="flex items-center gap-2">
-                        <Lucide icon={"Code"} className="w-4 h-4" />
-                        <span>Struttura HTML</span>
-                      </div>
-                      <ChevronDown className={`transform ${open ? 'rotate-180' : ''}`} />
+                  <div className="rounded-card border border-slate-200">
+                    <Disclosure.Button className={classiDisclosure}>
+                      <span className="flex items-center gap-2">
+                        <Lucide icon="Code" aria-hidden="true" className="h-4 w-4" />
+                        Struttura HTML
+                      </span>
+                      <ChevronDown aria-hidden="true" className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`} />
                     </Disclosure.Button>
                     <Disclosure.Panel className="p-4">
                       <HtmlNodeEditor
@@ -684,27 +667,18 @@ const EditorStiliReferenza: React.FC<{
                   </div>
                 )}
               </Disclosure>
-
-              <div className="border rounded-lg">
-                <div className="p-3 bg-slate-50 border-b flex items-center gap-2">
-                  <Lucide icon={"Eye"} className="w-4 h-4" />
-                  <span>Anteprima</span>
-                </div>
-                <div className="p-4">
-                  {/* <BoxRef referenza={demoRef as ReferenzeIstanta} config={config} /> */}
-                </div>
-              </div>
             </div>
           ) : (
-            <div className="text-center py-12 text-slate-500">
-              <Lucide icon={"TextSelect"} className="w-12 h-12 mx-auto mb-4" />
-              <h2 className="text-lg font-semibold">Seleziona uno stile</h2>
-              <p className="text-sm">Crea un nuovo stile o selezionane uno esistente</p>
-            </div>
+            <EmptyState
+              compatta
+              icon="MousePointerClick"
+              title="Seleziona uno stile"
+              description="Crea un nuovo stile o selezionane uno esistente"
+            />
           )}
         </div>
       </div>
-    </section>
+    </Sezione>
   );
 };
 

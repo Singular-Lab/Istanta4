@@ -1,6 +1,6 @@
+import Alert from "@/components/Base/Alert";
 import Button from "@/components/Base/Button";
 import Lucide from "@/components/Base/Lucide";
-import LoadingIcon from "@/components/Base/LoadingIcon";
 import { PermissionGate } from "@/components/PermissionGate";
 import { PERMISSIONS } from "@/constants/permissions";
 import { FC } from "react";
@@ -22,13 +22,9 @@ const PubblicatoActions: FC<PubblicatoActionsProps> = ({
   return (
     <div className="flex flex-col gap-3">
       {/* Success banner */}
-      <div className="text-center bg-success/10 py-3 rounded-lg">
-        <Lucide icon="CircleCheck" className="w-5 h-5 mx-auto text-success mb-2" />
-        <p className="text-sm font-medium text-success">Kit Pubblicato</p>
-        <p className="text-xs text-slate-600">
-          Il kit è ora disponibile per l'utilizzo
-        </p>
-      </div>
+      <Alert variant="soft-success" icona="CircleCheck" titolo="Kit pubblicato">
+        Il kit è ora disponibile per l&apos;utilizzo
+      </Alert>
 
       {/* Primary action - Download */}
       {onDownloadZip && (
@@ -38,19 +34,10 @@ const PubblicatoActions: FC<PubblicatoActionsProps> = ({
             size="sm"
             className="w-full"
             onClick={onDownloadZip}
-            disabled={isDownloading}
+            loading={isDownloading}
           >
-            {isDownloading ? (
-              <>
-                <LoadingIcon icon="oval" className="w-4 h-4 mr-2" />
-                Download in corso...
-              </>
-            ) : (
-              <>
-                <Lucide icon="Download" className="w-4 h-4 mr-2" />
-                Scarica ZIP
-              </>
-            )}
+            {!isDownloading && <Lucide icon="Download" aria-hidden="true" className="mr-2 h-4 w-4" />}
+            {isDownloading ? "Download in corso…" : "Scarica ZIP"}
           </Button>
         </PermissionGate>
       )}

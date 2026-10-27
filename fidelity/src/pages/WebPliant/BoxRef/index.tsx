@@ -176,14 +176,12 @@ const BoxRef: React.FC<BoxReferenzeProps> = ({
         ...referenza,
         foto: fotos,
       };
-      console.log("refConFoto", refConFoto);
       const result = await ServerCall.put("/insertReferenzaInWishlist", { referenza: refConFoto, idWishList: ids.sessionWishlistId });
       
       // Emetti evento per notificare l'aggiunta dell'elemento
       const { wishlistEvents } = await import('@/utils/wishlistEvents');
       wishlistEvents.emit('item-added', refConFoto, ids.sessionWishlistId);
       
-      console.log('✅ Prodotto aggiunto alla wishlist:', refConFoto.descrizione_uno);
       
     } catch (error) {
       console.error("Errore durante l'inserimento nella wishlist:", error);
@@ -533,7 +531,6 @@ const BoxRef: React.FC<BoxReferenzeProps> = ({
       ref={containerRef}
       onDoubleClick={() => {
         setReferenza(referenza)
-        console.log(referenza);
       }}
       data-tooltip={`ciccio-tooltip-${referenza.dataFields.codice_referenza}`}
       {...divProps}
@@ -670,7 +667,6 @@ const BoxRef: React.FC<BoxReferenzeProps> = ({
                 const handleWishlistClick = async (e: React.MouseEvent<HTMLButtonElement>) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  console.log("Aggiungi alla wishlist");
                   if (!isInWishListState) {
                     await handleAddToCart();
                     setIsInWishListState(true);

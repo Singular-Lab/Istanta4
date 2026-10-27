@@ -1,7 +1,7 @@
 import { useContext, forwardRef, useState } from "react";
 import { formInlineContext } from "../FormInline";
 import { InputGroupContext } from "../InputGroup";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/utils/twMerge";
 
 interface FormTextareaProps extends React.ComponentPropsWithoutRef<"textarea"> {
   formTextareaSize?: "sm" | "lg";

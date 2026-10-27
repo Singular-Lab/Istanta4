@@ -1,7 +1,9 @@
 import Button from '@/components/Base/Button';
 import { FormField, FormInput, FormLabel } from '@/components/Base/Form';
 import Lucide from '@/components/Base/Lucide';
-import PageHeader from '@/components/Base/PageHeader';
+import PageError from '@/components/Base/PageError';
+import Pagina from '@/components/Base/Pagina';
+import Sezione from '@/components/Base/Sezione';
 import Skeleton from '@/components/Base/Skeleton';
 import StatusBadge from '@/components/Base/StatusBadge';
 import { useNotification } from '@/context/NotificationContext';
@@ -27,12 +29,12 @@ const ModificaApprofondimentoVini: React.FC = () => {
   });
 
   // Query per recuperare i dati del vino
-  const { data: approfondimento, isLoading, error } = useQuery({
+  const { data: approfondimento, isLoading, error, refetch: refetchApprofondimento } = useQuery({
     queryKey: ['approfondimento-vini', codice],
     queryFn: () => ServerCall.get<ApprofondimentoVino>(`/get_approfondimento_vino?codice=${codice}`),
     enabled: !!codice, // Esegui query solo se c'è un codice
   });
-  const { data: dataReferenza, isLoading: isLoadingReferenza, error: errorReferenza } = useQuery({
+  const { data: dataReferenza, isLoading: isLoadingReferenza, error: errorReferenza, refetch: refetchReferenza } = useQuery({
     queryKey: ['referenza-vini', codice],
     queryFn: () => ServerCall.get<ReferenzeIstanta>(`/getReferenzaByCodice?codice=${codice}`),
     enabled: !!codice, // Esegui query solo se c'è un codice
@@ -41,7 +43,6 @@ const ModificaApprofondimentoVini: React.FC = () => {
   // Mutation per creare un nuovo vino
   const createMutation = useMutation({
     mutationFn: (payload: { anno: number; nome: string; cantina: string; codice: string }) => {
-      console.log(payload);
       return ServerCall.put('/create_approfondimento_vino', payload)
     },
     onSuccess: (data) => {
@@ -50,7 +51,7 @@ const ModificaApprofondimentoVini: React.FC = () => {
 
       showNotification(<>
         <div className="flex items-center gap-2">
-          <Lucide icon="CircleCheck" className="w-4 h-4 text-green-500" />
+          <Lucide icon="CircleCheck" aria-hidden="true" className="h-4 w-4 text-success" />
           <span>Approfondimento vino generato con successo</span>
         </div>
       </>, {
@@ -86,7 +87,7 @@ const ModificaApprofondimentoVini: React.FC = () => {
     onSuccess: () => {
       showNotification(<>
         <div className="flex items-center gap-2">
-          <Lucide icon="CircleCheck" className="w-4 h-4 text-green-500" />
+          <Lucide icon="CircleCheck" aria-hidden="true" className="h-4 w-4 text-success" />
           <span>Vino aggiornato con successo</span>
         </div>
       </>, {
@@ -135,22 +136,6 @@ const ModificaApprofondimentoVini: React.FC = () => {
     }
   }, [approfondimento]);
 
-  // Gestisce gli errori di fetch
-  useEffect(() => {
-    if (error) {
-      showNotification(<>
-        <div className="flex items-center gap-2">
-          <Lucide icon="CircleAlert" className="w-4 h-4 text-danger" />
-          <span>Errore nel caricamento dei dati</span>
-        </div>
-      </>, {
-        variant: "error",
-        duration: 3000,
-        position: "top-right"
-      });
-    }
-  }, [error, showNotification]);
-
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormValues(prev => ({
@@ -197,7 +182,6 @@ const ModificaApprofondimentoVini: React.FC = () => {
       ...(codice && { codice })
     };
 
-    console.log(approfondimento);
     if (approfondimento != null && approfondimento.id) {
       updateMutation.mutate(payload);
     } else {
@@ -211,293 +195,233 @@ const ModificaApprofondimentoVini: React.FC = () => {
 
   const isSaving = createMutation.isPending || updateMutation.isPending;
   const isNewWine = !approfondimento?.id;
-
-  // Componente Skeleton per il loading
-  const LoadingSkeleton = () => (
-    <div className="space-y-6">
-      {/* Header Skeleton */}
-      <div className="space-y-3">
-        <Skeleton height="32px" width="300px" />
-        <Skeleton height="20px" width="150px" />
-      </div>
-
-      {/* Form Section Skeleton */}
-      <div className="box p-6">
-        <div className="space-y-6">
-          {/* Dati Modificabili Section */}
-          <div>
-            <div className="flex items-center mb-4">
-              <Skeleton height="20px" width="20px" borderRadius="4px" className="mr-2" />
-              <Skeleton height="24px" width="180px" />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-              {/* Anno */}
-              <div>
-                <Skeleton height="20px" width="60px" className="mb-2" />
-                <Skeleton height="42px" width="100%" borderRadius="6px" />
-              </div>
-              {/* Nome Vino */}
-              <div>
-                <Skeleton height="20px" width="90px" className="mb-2" />
-                <Skeleton height="42px" width="100%" borderRadius="6px" />
-              </div>
-              {/* Cantina */}
-              <div>
-                <Skeleton height="20px" width="70px" className="mb-2" />
-                <Skeleton height="42px" width="100%" borderRadius="6px" />
-              </div>
-            </div>
-          </div>
-
-          {/* Informazioni Dettagliate Section */}
-          <div>
-            <div className="flex items-center mb-4">
-              <Skeleton height="20px" width="20px" borderRadius="4px" className="mr-2" />
-              <Skeleton height="24px" width="220px" />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Colonna Sinistra */}
-              <div className="space-y-4">
-                {['Provenienza', 'Colore', 'Tasso Alcolico', 'Temperatura di Servizio'].map((_, index) => (
-                  <div key={index}>
-                    <Skeleton height="20px" width="120px" className="mb-2" />
-                    <Skeleton height="42px" width="100%" borderRadius="6px" />
-                  </div>
-                ))}
-              </div>
-              {/* Colonna Destra */}
-              <div className="space-y-4">
-                <div>
-                  <Skeleton height="20px" width="80px" className="mb-2" />
-                  <Skeleton height="80px" width="100%" borderRadius="6px" />
-                </div>
-                <div>
-                  <Skeleton height="20px" width="60px" className="mb-2" />
-                  <Skeleton height="80px" width="100%" borderRadius="6px" />
-                </div>
-                <div>
-                  <Skeleton height="20px" width="100px" className="mb-2" />
-                  <Skeleton height="60px" width="100%" borderRadius="6px" />
-                </div>
-              </div>
-            </div>
-            {/* Dettagli Cantina - Full Width */}
-            <div className="mt-4">
-              <Skeleton height="20px" width="140px" className="mb-2" />
-              <Skeleton height="80px" width="100%" borderRadius="6px" />
-            </div>
-          </div>
-
-          {/* Actions Skeleton */}
-          <div className="flex justify-end space-x-3 pt-5 border-t">
-            <Skeleton height="40px" width="100px" borderRadius="6px" />
-            <Skeleton height="40px" width="120px" borderRadius="6px" />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  const indietro = { to: '/gestione-approfondimento-vini', etichetta: 'Torna alla lista' };
+  const classeSolaLettura = 'rounded-control border border-slate-200 bg-slate-50 px-3 py-2 text-slate-700';
 
   if (isLoading) {
-    return <LoadingSkeleton />;
+    return (
+      <Pagina titolo="Approfondimento vino" indietro={indietro}>
+        <Sezione aria-busy="true">
+          <span className="sr-only">Caricamento dell'approfondimento…</span>
+          <div className="flex flex-col gap-6">
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+              {[0, 1, 2].map((indice) => (
+                <div key={indice}>
+                  <Skeleton className="mb-2 h-5 w-24" />
+                  <Skeleton className="h-10 rounded-control" />
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              {[0, 1].map((colonna) => (
+                <div key={colonna} className="flex flex-col gap-4">
+                  {[0, 1, 2].map((indice) => (
+                    <div key={indice}>
+                      <Skeleton className="mb-2 h-5 w-32" />
+                      <Skeleton className="h-16 rounded-control" />
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        </Sezione>
+      </Pagina>
+    );
+  }
+
+  if (error) {
+    return (
+      <Pagina titolo="Approfondimento vino" indietro={indietro}>
+        <Sezione>
+          <PageError
+            compatta
+            titolo="Approfondimento non caricato"
+            motivo={(error as Error)?.message || "Errore nel caricamento dei dati"}
+            onRiprova={() => refetchApprofondimento()}
+          />
+        </Sezione>
+      </Pagina>
+    );
   }
 
   return (
-    <div className="flex-1 space-y-5">
-      {/* Titolo principale */}
-      <PageHeader title={formValues.nome || 'Nuovo Vino'} />
-
+    <Pagina
+      titolo={formValues.nome || 'Nuovo Vino'}
+      descrizione={codice ? `Codice: ${codice}` : undefined}
+      indietro={indietro}
+      badges={
+        approfondimento?.id ? (
+          <StatusBadge tono="success" etichetta="Generato" icon="CircleCheck" />
+        ) : (
+          <StatusBadge tono="warning" etichetta="Da generare" icon="Sparkles" />
+        )
+      }
+    >
       {/* Sezione Foto e Info Prodotto */}
-      <div className="box box--stacked mb-6">
-        <div className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="title-section flex items-center">
-              <Lucide icon="Wine" aria-hidden="true" className="w-5 h-5 mr-2 text-primary" />
-              Foto Prodotto
-            </h2>
-            {approfondimento?.id ? (
-              <StatusBadge tono="success" etichetta="Generato" icon="CircleCheck" />
-            ) : (
-              <StatusBadge tono="warning" etichetta="Da generare" icon="Sparkles" />
-            )}
-          </div>
+      <Sezione titolo="Foto Prodotto" icona="Wine">
+        {errorReferenza ? (
+          <PageError
+            compatta
+            titolo="Foto del prodotto non caricata"
+            motivo={(errorReferenza as Error)?.message || "Errore nel caricamento della referenza"}
+            onRiprova={() => refetchReferenza()}
+          />
+        ) : (
           <div className="flex items-center gap-4">
-            {dataReferenza?.foto?.[0] ? (
+            {isLoadingReferenza ? (
+              <Skeleton className="h-32 w-32 rounded-card" />
+            ) : dataReferenza?.foto?.[0] ? (
               <img
                 src={urlFoto(dataReferenza.foto)[0]}
                 alt={formValues.nome || 'Vino'}
-                className="object-contain w-32 h-32 rounded-lg border border-slate-200 shadow-sm"
+                className="h-32 w-32 rounded-card border border-slate-200 object-contain"
               />
             ) : (
-              <div className="w-32 h-32 rounded-lg bg-slate-100 flex items-center justify-center border border-slate-200">
-                <Lucide icon="Wine" className="w-8 h-8 text-slate-400" />
+              <div className="flex h-32 w-32 items-center justify-center rounded-card border border-slate-200 bg-slate-100">
+                <Lucide icon="Wine" aria-hidden="true" className="h-8 w-8 text-slate-400" />
               </div>
             )}
             {codice && (
               <p className="text-sm text-slate-500">Codice: {codice}</p>
             )}
           </div>
-        </div>
-      </div>
+        )}
+      </Sezione>
 
-      {/* Form Section */}
-      <div className="box p-6">
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Dati Editabili */}
-          <div>
-            <h3 className="title-card mb-4 flex items-center">
-              <Lucide icon="PenTool" aria-hidden="true" className="w-5 h-5 mr-2 text-primary" />
-              Dati Modificabili
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-              <FormField etichetta="Anno" obbligatorio aiuto="Anno di produzione del vino">
-                <FormInput
-                  name="anno"
-                  type="number"
-                  value={formValues.anno.toString()}
-                  onChange={handleChange}
-                  min="1800"
-                  max={new Date().getFullYear() + 10}
-                  className={!formValues.anno ? 'border-amber-300' : ''}
-                />
-              </FormField>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+        {/* Dati Editabili */}
+        <Sezione titolo="Dati Modificabili" icona="PenTool">
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+            <FormField etichetta="Anno" obbligatorio aiuto="Anno di produzione del vino">
+              <FormInput
+                name="anno"
+                type="number"
+                value={formValues.anno.toString()}
+                onChange={handleChange}
+                min="1800"
+                max={new Date().getFullYear() + 10}
+                className={!formValues.anno ? 'border-warning' : ''}
+              />
+            </FormField>
 
-              <FormField etichetta="Nome Vino" obbligatorio aiuto="Nome completo della denominazione">
-                <FormInput
-                  name="nome"
-                  type="text"
-                  value={formValues.nome}
-                  onChange={handleChange}
-                  placeholder="Es. Barolo, Chianti Classico..."
-                  className={!formValues.nome ? 'border-amber-300' : ''}
-                />
-              </FormField>
+            <FormField etichetta="Nome Vino" obbligatorio aiuto="Nome completo della denominazione">
+              <FormInput
+                name="nome"
+                type="text"
+                value={formValues.nome}
+                onChange={handleChange}
+                placeholder="Es. Barolo, Chianti Classico..."
+                className={!formValues.nome ? 'border-warning' : ''}
+              />
+            </FormField>
 
-              <FormField etichetta="Cantina" obbligatorio aiuto="Nome del produttore">
-                <FormInput
-                  name="cantina"
-                  type="text"
-                  value={formValues.cantina}
-                  onChange={handleChange}
-                  placeholder="Es. Antinori, Gaja..."
-                  className={!formValues.cantina ? 'border-amber-300' : ''}
-                />
-              </FormField>
-            </div>
+            <FormField etichetta="Cantina" obbligatorio aiuto="Nome del produttore">
+              <FormInput
+                name="cantina"
+                type="text"
+                value={formValues.cantina}
+                onChange={handleChange}
+                placeholder="Es. Antinori, Gaja..."
+                className={!formValues.cantina ? 'border-warning' : ''}
+              />
+            </FormField>
           </div>
+        </Sezione>
 
-          {/* Dati Read-Only (solo se esistono) */}
-          {approfondimento && (
-            <div className="pt-6 border-t border-slate-200">
-              <h3 className="title-card mb-4 flex items-center">
-                <Lucide icon="Lock" aria-hidden="true" className="w-5 h-5 mr-2 text-slate-400" />
-                Informazioni Generate dall'AI
-                <span className="ml-2 text-xs font-normal text-slate-500">(sola lettura)</span>
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Colonna Sinistra */}
-                <div className="space-y-4">
-                  <div>
-                    <FormLabel>Provenienza</FormLabel>
-                    <div className="bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-slate-700">
-                      {approfondimento.provenienza || 'Non specificata'}
-                    </div>
-                  </div>
-
-                  <div>
-                    <FormLabel>Colore</FormLabel>
-                    <div className="bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-slate-700">
-                      {approfondimento.colore || 'Non specificato'}
-                    </div>
-                  </div>
-
-                  <div>
-                    <FormLabel>Tasso Alcolico</FormLabel>
-                    <div className="bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-slate-700">
-                      {approfondimento.tasso_alcolico || 'Non specificato'}
-                    </div>
-                  </div>
-
-                  <div>
-                    <FormLabel>Temperatura di Servizio</FormLabel>
-                    <div className="bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-slate-700">
-                      {approfondimento.temperatura_di_servizio || 'Non specificata'}
-                    </div>
+        {/* Dati Read-Only (solo se esistono) */}
+        {approfondimento && (
+          <Sezione titolo="Informazioni Generate dall'AI" descrizione="Sola lettura" icona="Lock">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              {/* Colonna Sinistra */}
+              <div className="flex flex-col gap-4">
+                <div>
+                  <FormLabel>Provenienza</FormLabel>
+                  <div className={classeSolaLettura}>
+                    {approfondimento.provenienza || 'Non specificata'}
                   </div>
                 </div>
 
-                {/* Colonna Destra */}
-                <div className="space-y-4">
-                  <div>
-                    <FormLabel>Profumo</FormLabel>
-                    <div className="bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-slate-700 min-h-[80px]">
-                      {approfondimento.profumo || 'Non specificato'}
-                    </div>
+                <div>
+                  <FormLabel>Colore</FormLabel>
+                  <div className={classeSolaLettura}>
+                    {approfondimento.colore || 'Non specificato'}
                   </div>
+                </div>
 
-                  <div>
-                    <FormLabel>Gusto</FormLabel>
-                    <div className="bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-slate-700 min-h-[80px]">
-                      {approfondimento.gusto || 'Non specificato'}
-                    </div>
+                <div>
+                  <FormLabel>Tasso Alcolico</FormLabel>
+                  <div className={classeSolaLettura}>
+                    {approfondimento.tasso_alcolico || 'Non specificato'}
                   </div>
+                </div>
 
-                  <div>
-                    <FormLabel>Abbinamenti</FormLabel>
-                    <div className="bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-slate-700 min-h-[60px]">
-                      {approfondimento.abbinamenti || 'Non specificati'}
-                    </div>
+                <div>
+                  <FormLabel>Temperatura di Servizio</FormLabel>
+                  <div className={classeSolaLettura}>
+                    {approfondimento.temperatura_di_servizio || 'Non specificata'}
                   </div>
                 </div>
               </div>
 
-              {/* Dettagli Cantina - Full Width */}
-              {approfondimento.dettagli_cantina && (
-                <div className="mt-4">
-                  <FormLabel>Dettagli Cantina</FormLabel>
-                  <div className="bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-slate-700 min-h-[80px]">
-                    {approfondimento.dettagli_cantina}
+              {/* Colonna Destra */}
+              <div className="flex flex-col gap-4">
+                <div>
+                  <FormLabel>Profumo</FormLabel>
+                  <div className={`${classeSolaLettura} min-h-20`}>
+                    {approfondimento.profumo || 'Non specificato'}
                   </div>
                 </div>
-              )}
+
+                <div>
+                  <FormLabel>Gusto</FormLabel>
+                  <div className={`${classeSolaLettura} min-h-20`}>
+                    {approfondimento.gusto || 'Non specificato'}
+                  </div>
+                </div>
+
+                <div>
+                  <FormLabel>Abbinamenti</FormLabel>
+                  <div className={`${classeSolaLettura} min-h-16`}>
+                    {approfondimento.abbinamenti || 'Non specificati'}
+                  </div>
+                </div>
+              </div>
             </div>
-          )}
 
-          {/* Actions */}
-          <div className="flex justify-end space-x-3 pt-5 border-t">
-            <Button
-              type="button"
-              variant="outline-secondary"
-              onClick={handleCancel}
-            >
-              <Lucide icon="X" className="w-4 h-4 mr-2" />
-              {approfondimento?.id ? 'Indietro' : 'Annulla'}
-            </Button>
-
-            {/* Mostra il pulsante per tornare alla lista solo se esiste un approfondimento */}
-            {approfondimento?.id && (
-              <Button
-                type="button"
-                variant="outline-primary"
-                onClick={() => navigate('/gestione-approfondimento-vini')}
-              >
-                <Lucide icon="List" className="w-4 h-4 mr-2" />
-                Torna alla Lista
-              </Button>
+            {/* Dettagli Cantina - Full Width */}
+            {approfondimento.dettagli_cantina && (
+              <div className="mt-4">
+                <FormLabel>Dettagli Cantina</FormLabel>
+                <div className={`${classeSolaLettura} min-h-20`}>
+                  {approfondimento.dettagli_cantina}
+                </div>
+              </div>
             )}
+          </Sezione>
+        )}
 
-            <Button
-              type="submit"
-              variant="primary"
-              loading={isSaving}
-            >
-              {!isSaving && <Lucide icon="Sparkles" aria-hidden="true" className="w-4 h-4 mr-2" />}
-              {isNewWine ? 'Genera' : 'Rigenera'}
-            </Button>
-          </div>
-        </form>
-      </div>
-    </div>
+        {/* Azioni: il ritorno all'elenco è già nell'intestazione */}
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button
+            type="button"
+            variant="outline-secondary"
+            onClick={handleCancel}
+          >
+            {approfondimento?.id ? 'Indietro' : 'Annulla'}
+          </Button>
+
+          <Button
+            type="submit"
+            variant="primary"
+            loading={isSaving}
+          >
+            {!isSaving && <Lucide icon="Sparkles" aria-hidden="true" className="mr-2 h-4 w-4" />}
+            {isNewWine ? 'Genera' : 'Rigenera'}
+          </Button>
+        </div>
+      </form>
+    </Pagina>
   );
 };
 

@@ -27,7 +27,6 @@ const RicetteContent: React.FC<RicetteContentProps> = memo(function RicetteConte
 
   const renderRicette = useCallback(() => {
     const ricette = item.content?.ricettaAI || [];
-    console.log(ricette);
     // Filtra le ricette in base a dataScadenza di TUTTE le referenze
     return ricette.map((ricetta: Ricette, index: number) => {
       if (ricetta.guid_id !== "") {

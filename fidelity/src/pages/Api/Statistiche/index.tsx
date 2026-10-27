@@ -4,41 +4,41 @@ import consoleSVG from "@/assets/images/icons/console.svg";
 import linuxSVG from "@/assets/images/icons/linux.svg";
 import unknownSVG from "@/assets/images/icons/unknown.svg";
 import windowsSVG from "@/assets/images/icons/windows.svg";
+import Badge from "@/components/Base/Badge";
 import Button from "@/components/Base/Button";
 import Chart from "@/components/Base/Chart";
 import Lucide from "@/components/Base/Lucide";
 import PageError from "@/components/Base/PageError";
-import PageHeader from "@/components/Base/PageHeader";
-import StatCard from "@/components/Base/StatCard";
+import Pagina from "@/components/Base/Pagina";
+import Sezione from "@/components/Base/Sezione";
+import Skeleton from "@/components/Base/Skeleton";
+import StatCard, { StatCardGrid } from "@/components/Base/StatCard";
 import StatusBadge from "@/components/Base/StatusBadge";
+import EmptyState from "@/components/EmptyState";
 import withSessionCheck from "@/components/SessionChecker";
-import { valoreOAssente } from "@/utils/format";
+import { formatNumero, valoreOAssente } from "@/utils/format";
 import clsx from "clsx";
-import { useMemo, type ReactNode } from "react";
+import { useMemo } from "react";
 import ActivityTable from "../../GestioneApi/components/statistics/ActivityTable";
 import ExportButton from "../../GestioneApi/components/statistics/ExportButton";
 import { useStatistics } from "../../GestioneApi/hooks/useStatistics";
 import type { ApiStatistics } from "../../GestioneApi/types";
 import { createChartOptions, createEndpointChartData, createSuccessRateChartData, createTemporalChartData } from "../../GestioneApi/utils/chartHelpers";
 
-const numberFormatter = new Intl.NumberFormat("it-IT");
-
-function formatNumber(value: number) {
-  return numberFormatter.format(value);
-}
-
 function formatMs(value: number) {
-  return `${Math.round(value)}ms`;
+  return `${formatNumero(Math.round(value))} ms`;
 }
 
 function formatPercent(value: number) {
-  return `${value.toFixed(1)}%`;
+  return `${formatNumero(value, 1)}%`;
 }
 
 function safeRate(partial: number, total: number) {
   if (total <= 0) return 0;
   return (partial / total) * 100;
 }
+
+const ETICHETTE_KPI = ["Richieste totali", "Tasso di successo", "Errori", "Tempo medio", "Richieste oggi", "Endpoint leader"];
 
 function StatistichePage() {
   const {
@@ -49,135 +49,79 @@ function StatistichePage() {
   } = useStatistics();
 
   return (
-    <div className="grid grid-cols-12 gap-y-10 gap-x-6">
-      <div className="col-span-12">
-        <PageHeader
-          title="Statistiche API"
-          description="Monitora le performance e l'utilizzo delle API esterne"
-          className="mb-4"
-          badges={stats && (
-            <StatusBadge
-              tono={stats.crescita_settimanale_percentuale >= 0 ? "success" : "danger"}
-              icon={stats.crescita_settimanale_percentuale >= 0 ? "TrendingUp" : "TrendingDown"}
-              etichetta={`${stats.crescita_settimanale_percentuale >= 0 ? "+" : ""}${formatPercent(stats.crescita_settimanale_percentuale)} settimana`}
-            />
-          )}
-          actions={
-            <div className="flex flex-wrap items-center justify-end gap-2 lg:gap-3">
-              {stats && stats.attivita_recente && (
-                <ExportButton aggregate={stats} details={stats.attivita_recente} />
-              )}
-              <Button
-                onClick={() => { void refetchStats(); }}
-                size="sm"
-                loading={statsLoading}
-              >
-                {!statsLoading && <Lucide icon="RefreshCw" aria-hidden="true" className="w-4 h-4 mr-2" />}
-                Aggiorna
-              </Button>
-            </div>
-          }
+    <Pagina
+      titolo="Statistiche API"
+      descrizione="Monitora le performance e l'utilizzo delle API esterne"
+      badges={stats && (
+        <StatusBadge
+          tono={stats.crescita_settimanale_percentuale >= 0 ? "success" : "danger"}
+          icon={stats.crescita_settimanale_percentuale >= 0 ? "TrendingUp" : "TrendingDown"}
+          etichetta={`${stats.crescita_settimanale_percentuale >= 0 ? "+" : ""}${formatPercent(stats.crescita_settimanale_percentuale)} settimana`}
         />
-
-        <div className="mt-5">
-          {statsLoading ? (
-            <LoadingSkeleton />
-          ) : statsError ? (
-            <PageError
-              titolo="Errore nel caricamento"
-              motivo="Non è stato possibile caricare le statistiche API"
-              onRiprova={() => { void refetchStats(); }}
-            />
-          ) : stats ? (
-            <StatsContent stats={stats} />
-          ) : (
-            <EmptyState />
+      )}
+      azioni={
+        <>
+          {stats && stats.attivita_recente && (
+            <ExportButton aggregate={stats} details={stats.attivita_recente} />
           )}
-        </div>
-      </div>
-    </div>
+          <Button
+            variant="outline-secondary"
+            onClick={() => { void refetchStats(); }}
+            loading={statsLoading}
+          >
+            {!statsLoading && <Lucide icon="RefreshCw" aria-hidden="true" className="mr-2 h-4 w-4" />}
+            Aggiorna
+          </Button>
+        </>
+      }
+    >
+      {statsLoading ? (
+        <LoadingSkeleton />
+      ) : statsError ? (
+        <PageError
+          titolo="Errore nel caricamento"
+          motivo="Non è stato possibile caricare le statistiche API"
+          onRiprova={() => { void refetchStats(); }}
+        />
+      ) : stats ? (
+        <StatsContent stats={stats} />
+      ) : (
+        <Sezione>
+          <EmptyState
+            compatta
+            icon="Database"
+            title="Nessun dato disponibile"
+            description="Le statistiche API verranno visualizzate qui quando disponibili"
+          />
+        </Sezione>
+      )}
+    </Pagina>
   );
 }
 
 function LoadingSkeleton() {
   return (
-    <div className="space-y-5 lg:space-y-6">
-      <div className="grid grid-cols-12 gap-5">
-        <div className="col-span-12 xl:col-span-8 box p-6 animate-pulse">
-          <div className="h-3 bg-slate-200 rounded w-32 mb-3" />
-          <div className="h-7 bg-slate-200 rounded w-2/3 mb-4" />
-          <div className="h-3 bg-slate-200 rounded w-4/5 mb-5" />
-          <div className="grid grid-cols-2 gap-3">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-16 rounded-lg bg-slate-100" />
-            ))}
-          </div>
-        </div>
-        <div className="col-span-12 xl:col-span-4 grid grid-cols-2 gap-3 animate-pulse">
-          <div className="h-24 box bg-slate-100 border-slate-100" />
-          <div className="h-24 box bg-slate-100 border-slate-100" />
-          <div className="h-24 box bg-slate-100 border-slate-100 col-span-2" />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-12 gap-4">
-        {[...Array(4)].map((_, i) => (
-          <div key={i} className="col-span-12 sm:col-span-6 xl:col-span-3 box p-5 border-l-4 border-l-slate-200 animate-pulse">
-            <div className="h-3 bg-slate-200 rounded w-1/2 mb-3" />
-            <div className="h-7 bg-slate-200 rounded w-3/4 mb-2" />
-          </div>
+    <>
+      <StatCardGrid className="lg:grid-cols-3 2xl:grid-cols-6">
+        {ETICHETTE_KPI.map((etichetta) => (
+          <StatCard key={etichetta} etichetta={etichetta} valore={null} densita="compatta" loading />
         ))}
+      </StatCardGrid>
+      <div className="grid grid-cols-12 gap-6">
+        <Sezione as="div" className="col-span-12 xl:col-span-8">
+          <Skeleton className="mb-4 h-4 w-1/4" />
+          <Skeleton className="h-64" />
+        </Sezione>
+        <Sezione as="div" className="col-span-12 xl:col-span-4">
+          <Skeleton className="mb-4 h-4 w-1/3" />
+          <Skeleton className="h-64" />
+        </Sezione>
       </div>
-
-      <div className="grid grid-cols-12 gap-5">
-        <div className="col-span-12 lg:col-span-8 box p-5 animate-pulse">
-          <div className="h-4 bg-slate-200 rounded w-1/4 mb-4" />
-          <div className="h-64 bg-slate-100 rounded" />
-        </div>
-        <div className="col-span-12 lg:col-span-4 box p-5 animate-pulse">
-          <div className="h-4 bg-slate-200 rounded w-1/3 mb-4" />
-          <div className="h-64 bg-slate-100 rounded" />
-        </div>
-      </div>
-
-      <div className="box p-5 animate-pulse">
-        <div className="h-4 bg-slate-200 rounded w-1/4 mb-4" />
-        <div className="h-52 bg-slate-100 rounded" />
-      </div>
-    </div>
-  );
-}
-
-function EmptyState() {
-  return (
-    <div className="box p-8 sm:p-10">
-      <div className="flex flex-col items-center justify-center text-center">
-        <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center mb-4">
-          <Lucide icon="Database" className="w-7 h-7 text-slate-400" />
-        </div>
-        <h3 className="text-base font-semibold text-slate-900 mb-1">Nessun dato disponibile</h3>
-        <p className="text-sm text-slate-500">Le statistiche API verranno visualizzate qui quando disponibili</p>
-      </div>
-    </div>
-  );
-}
-
-function SectionTitle({ icon, label, sub, right }: { icon: string; label: string; sub?: string; right?: ReactNode }) {
-  return (
-    <div className="mb-4 pb-3 border-b border-slate-100">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-start gap-3">
-          <div className="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
-            <Lucide icon={icon} aria-hidden="true" className="w-4.5 h-4.5" />
-          </div>
-          <div>
-            <h3 className="title-card">{label}</h3>
-            {sub && <p className="text-xs text-slate-500 mt-0.5">{sub}</p>}
-          </div>
-        </div>
-        {right}
-      </div>
-    </div>
+      <Sezione as="div">
+        <Skeleton className="mb-4 h-4 w-1/4" />
+        <Skeleton className="h-52" />
+      </Sezione>
+    </>
   );
 }
 
@@ -197,143 +141,67 @@ function StatsContent({ stats }: { stats: ApiStatistics }) {
         : "latenza da monitorare";
 
   return (
-    <div className="space-y-5 lg:space-y-6 animate-fade-in-up">
-      <div className="grid grid-cols-12 gap-5">
-        <div className="col-span-12 xl:col-span-8 box p-6 bg-gradient-to-r from-primary/10 via-white to-success/5 border-primary/20">
-          <div className="text-2xs uppercase tracking-[0.18em] text-primary/80 font-semibold mb-2">
-            API Health Snapshot
-          </div>
-          <div className="flex flex-wrap items-center gap-3 mb-3">
-            <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900">
-              {formatPercent(successRate)} richieste completate con successo
-            </h2>
-            <span
-              className={clsx(
-                "inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border",
-                trendPositive ? "text-success bg-success/10 border-success/20" : "text-danger bg-danger/10 border-danger/20"
-              )}
-            >
-              <Lucide icon={trendPositive ? "ArrowUpRight" : "ArrowDownRight"} aria-hidden="true" className="w-3.5 h-3.5 mr-1" />
-              {trendPositive ? "+" : ""}
-              {formatPercent(stats.crescita_settimanale_percentuale)} su base settimanale
-            </span>
-          </div>
-          <p className="text-sm text-slate-600 max-w-3xl mb-5">
-            Traffico API monitorato in tempo reale: volume richieste, affidabilita risposta e carico endpoint
-            con focus operativo su errori e latenza.
-          </p>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <StatCard
-              densita="compatta"
-              tono="neutral"
-              etichetta="Richieste totali"
-              valore={formatNumber(stats.totale_richieste)}
-            />
-            <StatCard
-              densita="compatta"
-              tono="danger"
-              evidenzia
-              etichetta="Errori"
-              valore={formatNumber(stats.richieste_fallite)}
-            />
-            <StatCard
-              densita="compatta"
-              tono="neutral"
-              etichetta="Tempo medio"
-              valore={formatMs(stats.tempo_medio_risposta_ms)}
-            />
-            <StatCard
-              densita="compatta"
-              tono="neutral"
-              etichetta="Endpoint leader"
-              valore={<span title={endpointLeader} className="text-sm">{endpointLeader}</span>}
-            />
-          </div>
-        </div>
+    <>
+      <StatCardGrid className="lg:grid-cols-3 2xl:grid-cols-6">
+        <StatCard
+          densita="compatta"
+          etichetta="Richieste totali"
+          valore={formatNumero(stats.totale_richieste)}
+          icona="Activity"
+          tono="brand"
+        />
+        <StatCard
+          densita="compatta"
+          etichetta="Tasso di successo"
+          valore={formatPercent(successRate)}
+          icona="CircleCheck"
+          tono="success"
+          variazione={{
+            valore: `${formatNumero(stats.richieste_riuscite)} riuscite`,
+            direzione: trendPositive ? "su" : "giu",
+          }}
+        />
+        <StatCard
+          densita="compatta"
+          etichetta="Errori"
+          valore={formatNumero(stats.richieste_fallite)}
+          icona="TriangleAlert"
+          tono="danger"
+          evidenzia={stats.richieste_fallite > 0}
+          sottotitolo={`Failure rate ${formatPercent(failureRate)}`}
+        />
+        <StatCard
+          densita="compatta"
+          etichetta="Tempo medio"
+          valore={formatMs(stats.tempo_medio_risposta_ms)}
+          icona="Clock"
+          tono="warning"
+          sottotitolo={responseHint}
+        />
+        <StatCard
+          densita="compatta"
+          etichetta="Richieste oggi"
+          valore={formatNumero(stats.richieste_oggi)}
+          icona="Calendar"
+          tono="neutral"
+          sottotitolo={`${formatNumero(stats.statistiche_temporali.ultimo_giorno.richieste_totali)} nell'ultimo giorno`}
+        />
+        <StatCard
+          densita="compatta"
+          etichetta="Endpoint leader"
+          valore={<span title={endpointLeader} className="font-mono text-sm">{endpointLeader}</span>}
+          icona="Route"
+          tono="neutral"
+        />
+      </StatCardGrid>
 
-        <div className="col-span-12 xl:col-span-4 grid grid-cols-2 gap-3 auto-rows-fr">
-          <StatCard
-            densita="compatta"
-            icona="Calendar"
-            etichetta="Richieste oggi"
-            valore={formatNumber(stats.richieste_oggi)}
-            tono="brand"
-          />
-          <StatCard
-            densita="compatta"
-            icona="ShieldCheck"
-            etichetta="Failure rate"
-            valore={formatPercent(failureRate)}
-            tono="success"
-          />
-          <StatCard
-            densita="compatta"
-            icona="Gauge"
-            etichetta="Stato latenza"
-            valore={responseHint}
-            tono="warning"
-            className="col-span-2"
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-12 gap-4">
-        <div className="col-span-12 sm:col-span-6 xl:col-span-4">
-          <StatCard
-            etichetta="Richieste Totali"
-            valore={formatNumber(stats.totale_richieste)}
-            icona="Activity"
-            tono="brand"
-            className="h-full"
-          />
-        </div>
-        <div className="col-span-12 sm:col-span-6 xl:col-span-3">
-          <StatCard
-            etichetta="Tasso di Successo"
-            valore={formatPercent(successRate)}
-            icona="CircleCheck"
-            tono="success"
-            variazione={{
-              valore: `${formatNumber(stats.richieste_riuscite)} riuscite`,
-              direzione: trendPositive ? "su" : "giu",
-            }}
-            className="h-full"
-          />
-        </div>
-        <div className="col-span-12 sm:col-span-6 xl:col-span-2">
-          <StatCard
-            etichetta="Tempo Medio"
-            valore={formatMs(stats.tempo_medio_risposta_ms)}
-            icona="Clock"
-            tono="warning"
-            sottotitolo={responseHint}
-            className="h-full"
-          />
-        </div>
-        <div className="col-span-12 sm:col-span-6 xl:col-span-3">
-          <StatCard
-            etichetta="Richieste Oggi"
-            valore={formatNumber(stats.richieste_oggi)}
-            icona="Calendar"
-            tono="neutral"
-            sottotitolo={`${formatNumber(stats.statistiche_temporali.ultimo_giorno.richieste_totali)} nell'ultimo giorno`}
-            className="h-full"
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-12 gap-5">
-        <div className="col-span-12 lg:col-span-8 box p-5 lg:p-6">
-          <SectionTitle
-            icon="ChartLine"
-            label="Trend Temporale"
-            sub="Andamento richieste per ultimo giorno, settimana e mese"
-            right={
-              <span className="hidden sm:inline-flex text-xs px-2 py-1 rounded-full bg-primary/10 text-primary font-medium">
-                serie comparativa
-              </span>
-            }
-          />
+      <div className="grid grid-cols-12 gap-6">
+        <Sezione
+          className="col-span-12 xl:col-span-8"
+          icona="ChartLine"
+          titolo="Trend temporale"
+          descrizione="Andamento richieste per ultimo giorno, settimana e mese"
+        >
           <div className="relative h-64 overflow-hidden">
             <Chart
               type="line"
@@ -341,28 +209,28 @@ function StatsContent({ stats }: { stats: ApiStatistics }) {
               options={chartOptions.line}
               width="auto"
               height="auto"
-              className="w-full h-full"
+              className="h-full w-full"
             />
           </div>
-        </div>
-        <div className="col-span-12 lg:col-span-4 box p-5 lg:p-6">
-          <SectionTitle
-            icon="ChartPie"
-            label="Tasso di Successo"
-            sub="Distribuzione chiamate riuscite e fallite"
-            right={
-              <div className="hidden sm:flex items-center gap-2 text-2xs text-slate-500">
-                <span className="inline-flex items-center gap-1">
-                  <span className="w-2.5 h-2.5 rounded-full bg-success" />
-                  OK
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <span className="w-2.5 h-2.5 rounded-full bg-danger" />
-                  KO
-                </span>
-              </div>
-            }
-          />
+        </Sezione>
+        <Sezione
+          className="col-span-12 xl:col-span-4"
+          icona="ChartPie"
+          titolo="Tasso di successo"
+          descrizione="Distribuzione chiamate riuscite e fallite"
+          azioni={
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <span className="inline-flex items-center gap-1">
+                <span aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-success" />
+                OK
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <span aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-danger" />
+                KO
+              </span>
+            </div>
+          }
+        >
           <div className="relative h-64 overflow-hidden">
             <Chart
               type="doughnut"
@@ -370,15 +238,17 @@ function StatsContent({ stats }: { stats: ApiStatistics }) {
               options={chartOptions.pie}
               width="auto"
               height="auto"
-              className="w-full h-full"
+              className="h-full w-full"
             />
           </div>
-        </div>
-      </div>
+        </Sezione>
 
-      <div className="grid grid-cols-12 gap-5">
-        <div className="col-span-12 lg:col-span-7 box p-5 lg:p-6">
-          <SectionTitle icon="ChartBar" label="Endpoint Più Usati" sub="Top 5 endpoint per volume di richieste" />
+        <Sezione
+          className="col-span-12 xl:col-span-7"
+          icona="ChartBar"
+          titolo="Endpoint più usati"
+          descrizione="Top 5 endpoint per volume di richieste"
+        >
           <div className="relative h-64 overflow-hidden">
             <Chart
               type="bar"
@@ -386,18 +256,18 @@ function StatsContent({ stats }: { stats: ApiStatistics }) {
               options={chartOptions.bar}
               width="auto"
               height="auto"
-              className="w-full h-full"
+              className="h-full w-full"
             />
           </div>
-        </div>
-        <div className="col-span-12 lg:col-span-5 box p-5 lg:p-6">
-          <SectionTitle
-            icon="MonitorSmartphone"
-            label="Sistemi Operativi"
-            sub={`${osList.length} piattaforme rilevate`}
-          />
+        </Sezione>
+        <Sezione
+          className="col-span-12 xl:col-span-5"
+          icona="MonitorSmartphone"
+          titolo="Sistemi operativi"
+          descrizione={`${formatNumero(osList.length)} piattaforme rilevate`}
+        >
           {osList.length > 0 ? (
-            <div className="space-y-3.5 overflow-y-auto max-h-64 pr-1">
+            <ul className="max-h-64 space-y-3 overflow-y-auto pr-1">
               {osList.map(os => (
                 <OsStatRow
                   key={os.os}
@@ -407,34 +277,37 @@ function StatsContent({ stats }: { stats: ApiStatistics }) {
                   tempoMedio={Math.round(os.tempo_medio_ms)}
                 />
               ))}
-            </div>
+            </ul>
           ) : (
-            <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-4 text-sm text-slate-500">
-              Nessun sistema operativo rilevato nel periodo selezionato.
-            </div>
+            <EmptyState
+              compatta
+              icon="MonitorSmartphone"
+              title="Nessun sistema operativo rilevato"
+              description="Nel periodo selezionato non ci sono richieste con un sistema operativo riconosciuto."
+            />
           )}
-        </div>
+        </Sezione>
       </div>
 
-      <div className="box p-5 lg:p-6">
-        <SectionTitle
-          icon="History"
-          label="Attività Recente"
-          sub={`${activityCount} ${activityCount === 1 ? "richiesta" : "richieste"} registrate`}
-          right={
-            <div className="hidden sm:flex items-center gap-2 text-2xs text-slate-500">
-              <span className="inline-flex items-center px-2 py-1 rounded-full border border-slate-200 bg-slate-50">
-                {formatNumber(stats.richieste_riuscite)} ok
-              </span>
-              <span className="inline-flex items-center px-2 py-1 rounded-full border border-danger/20 bg-danger/10 text-danger">
-                {formatNumber(stats.richieste_fallite)} errori
-              </span>
-            </div>
-          }
-        />
+      <Sezione
+        senzaPadding
+        icona="History"
+        titolo="Attività recente"
+        descrizione={`${formatNumero(activityCount)} ${activityCount === 1 ? "richiesta" : "richieste"} registrate`}
+        azioni={
+          <>
+            <Badge variant="secondary" size="sm" className="tabular-nums">
+              {formatNumero(stats.richieste_riuscite)} ok
+            </Badge>
+            <Badge variant="error" size="sm" className="tabular-nums">
+              {formatNumero(stats.richieste_fallite)} errori
+            </Badge>
+          </>
+        }
+      >
         <ActivityTable activities={stats.attivita_recente || []} />
-      </div>
-    </div>
+      </Sezione>
+    </>
   );
 }
 
@@ -458,26 +331,21 @@ function OsStatRow({ os, totale, riuscite, tempoMedio }: OsStatRowProps) {
     return unknownSVG;
   };
 
-  const statusStyle =
-    successRate >= 95
-      ? "bg-success/10 text-success border-success/20"
-      : successRate >= 80
-        ? "bg-warning/10 text-warning border-warning/20"
-        : "bg-danger/10 text-danger border-danger/20";
+  const tono = successRate >= 95 ? "success" : successRate >= 80 ? "warning" : "danger";
 
   return (
-    <div className="rounded-lg border border-slate-100 bg-slate-50/50 px-3 py-2.5 hover:border-slate-200 transition-colors">
+    <li className="rounded-control border border-slate-100 bg-slate-50 px-3 py-2.5 transition-colors hover:border-slate-200">
       <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-md bg-white border border-slate-200 flex items-center justify-center flex-shrink-0">
-          <img src={resolveIconSrc(os)} alt={os} className="w-4 h-4 object-contain" />
+        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-control border border-slate-200 bg-white">
+          <img src={resolveIconSrc(os)} alt="" className="h-4 w-4 object-contain" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between mb-1.5 gap-3">
             <span className="text-xs font-semibold text-slate-700 truncate">{os}</span>
             <div className="flex items-center gap-2 ml-2 flex-shrink-0">
-              <span className="text-2xs text-slate-500">{formatNumber(totale)} req</span>
-              <span className="text-2xs text-slate-300">·</span>
-              <span className="text-2xs font-mono text-slate-500">{formatMs(tempoMedio)}</span>
+              <span className="text-2xs tabular-nums text-slate-500">{formatNumero(totale)} req</span>
+              <span aria-hidden="true" className="text-2xs text-slate-400">·</span>
+              <span className="font-mono text-2xs text-slate-500">{formatMs(tempoMedio)}</span>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -490,13 +358,11 @@ function OsStatRow({ os, totale, riuscite, tempoMedio }: OsStatRowProps) {
                 style={{ width: `${Math.min(successRate, 100)}%` }}
               />
             </div>
-            <span className={clsx("text-2xs px-2 py-0.5 rounded-full border font-semibold", statusStyle)}>
-              {formatPercent(successRate)}
-            </span>
+            <StatusBadge tono={tono} etichetta={formatPercent(successRate)} className="tabular-nums" />
           </div>
         </div>
       </div>
-    </div>
+    </li>
   );
 }
 

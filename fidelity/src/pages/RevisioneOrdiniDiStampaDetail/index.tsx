@@ -1,8 +1,14 @@
+import Alert from '@/components/Base/Alert';
+import BarraFiltri from '@/components/Base/BarraFiltri';
 import Button from '@/components/Base/Button';
-import { FormCheck, FormInput } from '@/components/Base/Form';
-import { Dialog } from '@/components/Base/Headless';
+import CampoRicerca from '@/components/Base/CampoRicerca';
+import { FormCheck, FormField, FormInput } from '@/components/Base/Form';
 import Lucide from '@/components/Base/Lucide';
+import Pagina from '@/components/Base/Pagina';
+import Sezione from '@/components/Base/Sezione';
+import StatCard, { StatCardGrid } from '@/components/Base/StatCard';
 import StatusBadge from '@/components/Base/StatusBadge';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import EmptyState from '@/components/EmptyState';
 import type { TonoStato } from '@/constants/stati';
 import { useNotification } from '@/context/NotificationContext';
@@ -16,7 +22,6 @@ import { ServerCall } from '../../../lib/server_call';
 import { FileItemKit, MergedGroupFile, OrdiniDiStampaAttributes, OrdiniDiStampaInviiAttributes, RUNTIME_KIT, VirtualDirectory } from '../../../lib/types';
 // Importa il client Socket.IO
 import docThumbnailFallback from '@/assets/images/icons/icon_doc_locandinaA4.png';
-import PageHeader from '@/components/Base/PageHeader';
 import Progress from '@/components/Base/Progress';
 import { formatDataOra, formatDataOraEstesa } from '@/utils/format';
 import dayjs from 'dayjs';
@@ -1135,96 +1140,94 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
   // Funzione per renderizzare gruppi di kit inviati
   const renderGruppiInvii = (gruppi: { invio: OrdiniDiStampaInviiAttributes; kit: RUNTIME_KIT[]; kitTotali: number; }[]) => {
     return gruppi.map((gruppo, index) => (
-      <div key={gruppo.invio.id_ordinistampainvii || index} className="border border-slate-200 rounded-lg overflow-hidden shadow-sm">
-        {/* Header del gruppo */}
-        <div className="p-4 border-b bg-gradient-to-r from-green-50 to-emerald-50">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between">
-            <div className="flex items-center gap-x-2">
-              <div className="flex items-center justify-center w-8 h-8 rounded-full text-success bg-success/20">
-                <Lucide icon="SendHorizontal" className="w-4 h-4 stroke-[2]" />
+      <div key={gruppo.invio.id_ordinistampainvii || index} className="overflow-hidden rounded-card border border-slate-200 bg-white">
+        {/* Intestazione del gruppo */}
+        <div className="flex flex-col gap-3 border-b border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-success/10 text-success">
+              <Lucide icon="SendHorizontal" aria-hidden="true" className="h-4 w-4" />
+            </div>
+            <div className="min-w-0">
+              <div className="title-card flex flex-wrap items-center gap-2">
+                Ordine di invio #{gruppo.invio.id_ordinistampainvii?.slice(0, 8)}
+                <StatusBadge tono="success" etichetta="Inviato" />
               </div>
-              <div>
-                <div className="font-medium text-success">
-                  Ordine di invio #{gruppo.invio.id_ordinistampainvii?.slice(0, 8)}
-                  <StatusBadge tono="success" etichetta="Inviato" className="ml-2" />
-                </div>
-                <div className="text-xs text-slate-700 mt-1">
-                  <Lucide icon="Calendar" aria-hidden="true" className="w-3 h-3 inline-block mr-1" />
-                  Inviato il {formatDataOraEstesa(gruppo.invio?.createdat)}
-                </div>
+              <div className="mt-1 flex items-center gap-1 text-xs text-slate-500">
+                <Lucide icon="Calendar" aria-hidden="true" className="h-3.5 w-3.5" />
+                Inviato il {formatDataOraEstesa(gruppo.invio?.createdat)}
               </div>
             </div>
-            <Button
-              onClick={async () => {
-                if (gruppo.invio?.id_ordinistampainvii) {
-                  try {
-                    const response = await axios.get(
-                      `${ServerCall.getUrl()}/downloadReportExcel?id=${gruppo.invio.id_ordinistampainvii}`,
-                      {
-                        responseType: 'arraybuffer',
-                        withCredentials: true,
-                      }
-                    );
-
-                    if (response.status === 200) {
-                      const blob = new Blob([response.data], {
-                        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-                      });
-                      const url = window.URL.createObjectURL(blob);
-                      const link = document.createElement('a');
-                      link.href = url;
-                      link.download = `report_invio_${gruppo.invio.id_ordinistampainvii}_${dayjs(gruppo.invio.createdat).format('YYYY-MM-DD')}.xlsx`;
-                      document.body.appendChild(link);
-                      link.click();
-                      setTimeout(() => {
-                        document.body.removeChild(link);
-                        window.URL.revokeObjectURL(url);
-                      }, 100);
-                    }
-                  } catch (error) {
-                    console.error('Errore durante il download del report:', error);
-                    setFtpErrorMessage('Errore durante il download del report Excel.');
-                  }
-                }
-              }}
-              variant="dark"
-              className="text-sm mt-2 sm:mt-0"
-            >
-              <Lucide icon="FileSpreadsheet" className="w-4 h-4 mr-1 stroke-[1.5]" />
-              Scarica report di invio
-            </Button>
           </div>
+          <Button
+            onClick={async () => {
+              if (gruppo.invio?.id_ordinistampainvii) {
+                try {
+                  const response = await axios.get(
+                    `${ServerCall.getUrl()}/downloadReportExcel?id=${gruppo.invio.id_ordinistampainvii}`,
+                    {
+                      responseType: 'arraybuffer',
+                      withCredentials: true,
+                    }
+                  );
+
+                  if (response.status === 200) {
+                    const blob = new Blob([response.data], {
+                      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                    });
+                    const url = window.URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = `report_invio_${gruppo.invio.id_ordinistampainvii}_${dayjs(gruppo.invio.createdat).format('YYYY-MM-DD')}.xlsx`;
+                    document.body.appendChild(link);
+                    link.click();
+                    setTimeout(() => {
+                      document.body.removeChild(link);
+                      window.URL.revokeObjectURL(url);
+                    }, 100);
+                  }
+                } catch (error) {
+                  console.error('Errore durante il download del report:', error);
+                  setFtpErrorMessage('Errore durante il download del report Excel.');
+                }
+              }
+            }}
+            variant="outline-secondary"
+            size="sm"
+            className="flex-none"
+          >
+            <Lucide icon="FileSpreadsheet" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+            Scarica report di invio
+          </Button>
         </div>
 
         {/* Lista dei kit del gruppo */}
-        <div className="divide-y divide-gray-100">
+        <div className="divide-y divide-slate-100">
           {gruppo.kit.map((kit) => (
-            <div key={kit.guidId} className="p-4 bg-white hover:bg-slate-50 transition-colors">
-              <div className="flex items-center gap-x-3">
-                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-green-100 text-green-700">
-                  <Lucide icon="Check" className="w-4 h-4 stroke-[2]" />
+            <div key={kit.guidId} className="p-4 transition-colors hover:bg-slate-50">
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-success/10 text-success">
+                  <Lucide icon="Check" aria-hidden="true" className="h-4 w-4" />
                 </div>
-                <div className="flex-1">
-                  <div className="text-base font-medium text-slate-700">{kit.titolo}</div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-1 text-xs text-slate-500 mt-1">
+                <div className="min-w-0 flex-1">
+                  <div className="font-medium text-slate-800">{kit.titolo}</div>
+                  <div className="mt-1 grid grid-cols-1 gap-x-4 gap-y-1 text-xs text-slate-500 sm:grid-cols-3">
                     <div>Area: {kit.nomeArea || kit.guidArea}</div>
                     <div>Canale: {kit.nomeCanale || kit.guidCanale}</div>
                     <div>Copie: {kit.quantitaCopie}</div>
                   </div>
                 </div>
-                <div className="flex items-center gap-x-2">
+                <div className="flex items-center gap-2">
                   {kit.files && kit.files.length > 0 && (
                     <Button
                       onClick={() => navigate(`/ods-in-corso/kit-dettagli?id=${kit.guidId}&idOrdine=${id}`)}
                       variant="outline-secondary"
                       size="sm"
-                      className="text-xs"
                     >
-                      <Lucide icon="ExternalLink" className="w-3 h-3 mr-1" />
+                      <Lucide icon="ExternalLink" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
                       {kit.files.length} file
                     </Button>
                   )}
-                  <div className="text-xs text-slate-500 whitespace-nowrap">
+                  <div className="whitespace-nowrap text-xs text-slate-500">
                     ID: {kit.guidId.substring(0, 8)}...
                   </div>
                 </div>
@@ -1239,68 +1242,54 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
   // Vista di sola lettura per ordini completati
   if (statoSbagliato) {
     return (
-      <div className="grid grid-cols-12 gap-y-10 gap-x-6">
-        <div className="col-span-12">
-          <PageHeader
-            title="Dettaglio ordine completato"
-            description={`Promo: ${promo.nome}`}
-            indietro={{ onClick: () => navigate(-1), etichetta: 'Torna indietro' }}
-            badges={<StatusBadge dominio="ordineStampa" stato={ordine.stato_ordinistampa} />}
-          />
-
-          <div>
-            {/* Info Card */}
-            <div className="box box--stacked p-5 mb-5">
-              <div className="flex items-start gap-3">
-                <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-success/10">
-                  <Lucide icon="CircleCheck" className="w-5 h-5 text-success" />
-                </div>
-                <div>
-                  <h3 className="title-section">Ordine completato</h3>
-                  <p className="text-sm text-slate-600 mt-1">
-                    Questo ordine è stato completato e inviato alla tipografia. Di seguito puoi visualizzare i report degli invii effettuati.
-                  </p>
-                </div>
-              </div>
+      <Pagina
+        titolo="Dettaglio ordine completato"
+        descrizione={`Promo: ${promo.nome}`}
+        indietro={{ onClick: () => navigate(-1), etichetta: 'Torna indietro' }}
+        badges={<StatusBadge dominio="ordineStampa" stato={ordine.stato_ordinistampa} />}
+      >
+        <Sezione>
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 flex-none items-center justify-center rounded-control bg-success/10 text-success">
+              <Lucide icon="CircleCheck" aria-hidden="true" className="h-5 w-5" />
             </div>
-
-            {/* Search Bar */}
-            <div className="box box--stacked p-5 mb-5">
-              <FormInput
-                type="text"
-                placeholder="Cerca nei kit inviati..."
-                aria-label="Cerca nei kit inviati"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full"
-              />
+            <div>
+              <h2 className="title-section">Ordine completato</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Questo ordine è stato completato e inviato alla tipografia. Di seguito puoi visualizzare i report degli invii effettuati.
+              </p>
             </div>
-
-            {/* Report Invii */}
-            {gruppInvii && gruppInvii.length > 0 ? (
-              <div className="box box--stacked">
-                <div className="flex items-center gap-3 p-5 border-b border-slate-200/60">
-                  <Lucide icon="Package" aria-hidden="true" className="w-5 h-5 text-slate-600" />
-                  <h2 className="title-section">
-                    Invii effettuati ({gruppInvii.length})
-                  </h2>
-                </div>
-                <div className="p-5 space-y-4">
-                  {renderGruppiInvii(gruppInvii)}
-                </div>
-              </div>
-            ) : (
-              <div className="box box--stacked">
-                <EmptyState
-                  title="Nessun invio trovato"
-                  description={searchTerm ? `Nessun kit trovato per "${searchTerm}"` : "Non sono stati trovati invii per questo ordine."}
-                  icon="Search"
-                />
-              </div>
-            )}
           </div>
-        </div>
-      </div>
+        </Sezione>
+
+        {/* Report invii, con la ricerca dentro la sezione che filtra */}
+        <Sezione
+          senzaPadding
+          icona="Package"
+          titolo={`Invii effettuati (${gruppInvii?.length ?? 0})`}
+        >
+          <BarraFiltri>
+            <CampoRicerca
+              etichetta="Cerca nei kit inviati"
+              placeholder="Cerca nei kit inviati…"
+              value={searchTerm}
+              onChange={setSearchTerm}
+            />
+          </BarraFiltri>
+          {gruppInvii && gruppInvii.length > 0 ? (
+            <div className="space-y-4 p-5">
+              {renderGruppiInvii(gruppInvii)}
+            </div>
+          ) : (
+            <EmptyState
+              compatta
+              title="Nessun invio trovato"
+              description={searchTerm ? `Nessun kit trovato per "${searchTerm}"` : "Non sono stati trovati invii per questo ordine."}
+              icon="Search"
+            />
+          )}
+        </Sezione>
+      </Pagina>
     );
   }
 
@@ -1309,13 +1298,12 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
     return dettagli.map((kit) => {
       // Ora questa funzione gestisce solo i kit disponibili (non ancora inviati)
       return (
-        <div key={kit.guidId} className="group border border-slate-200/80 rounded-lg overflow-hidden shadow-sm bg-white transition-all duration-200 hover:shadow-lg hover:border-slate-300">
-          <div className="flex flex-col sm:flex-row sm:items-center p-4">
-            <div className="flex items-center gap-x-3 flex-1">
+        <div key={kit.guidId} className="overflow-hidden rounded-card border border-slate-200 bg-white transition-colors hover:border-slate-300">
+          <div className="flex flex-col p-4 sm:flex-row sm:items-center">
+            <div className="flex flex-1 items-center gap-3">
               <FormCheck className='flex items-center'>
                 <FormCheck.Input
                   type="checkbox"
-                  className='!rounded-md'
                   aria-label={`Seleziona ${kit.titolo}`}
                   checked={!!selectedKits[kit.guidId]}
                   onChange={(e) => e.stopPropagation()}
@@ -1327,14 +1315,14 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
                 type="button"
                 aria-expanded={!!expandedKits[kit.guidId]}
                 onClick={() => toggleKitExpansion(kit.guidId)}
-                className="flex items-center gap-x-4 cursor-pointer flex-1 min-w-0 text-left rounded-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40"
+                className="flex min-w-0 flex-1 cursor-pointer items-center gap-4 rounded-control text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40"
               >
-                <span className="flex flex-none items-center justify-center w-11 h-11 rounded-full bg-primary/10 text-primary">
-                  <Lucide icon="Package" aria-hidden="true" className="w-6 h-6 stroke-[1.5]" />
+                <span className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <Lucide icon="Package" aria-hidden="true" className="h-5 w-5" />
                 </span>
-                <span className="block flex-1 min-w-0">
-                  <span className="block text-base font-semibold text-slate-800">{kit.titolo}</span>
-                  <span className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-1 text-xs text-slate-500 mt-1">
+                <span className="block min-w-0 flex-1">
+                  <span className="block font-medium text-slate-800">{kit.titolo}</span>
+                  <span className="mt-1 grid grid-cols-1 gap-x-4 gap-y-1 text-xs text-slate-500 sm:grid-cols-3">
                     <span>Area: <span className="font-medium text-slate-600">{kit.nomeArea || kit.guidArea}</span></span>
                     <span>Canale: <span className="font-medium text-slate-600">{kit.nomeCanale || kit.guidCanale}</span></span>
                     <span>Copie: <span className="font-medium text-slate-600">{kit.quantitaCopie}</span></span>
@@ -1342,16 +1330,16 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
                 </span>
               </button>
             </div>
-            <div className="flex items-center gap-x-4 mt-4 sm:mt-0 sm:ml-auto">
+            <div className="mt-4 flex items-center gap-4 sm:ml-auto sm:mt-0">
               <StatusBadge dominio="kitRuntime" stato={kit.stato_lavorazione} />
               <button
                 type="button"
                 aria-label={expandedKits[kit.guidId] ? 'Comprimi kit' : 'Espandi kit'}
                 aria-expanded={!!expandedKits[kit.guidId]}
                 onClick={() => toggleKitExpansion(kit.guidId)}
-                className="cursor-pointer p-1.5 rounded-md hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40"
+                className="cursor-pointer rounded-control p-1.5 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40"
               >
-                <Lucide icon={expandedKits[kit.guidId] ? 'ChevronUp' : 'ChevronDown'} aria-hidden="true" className="w-5 h-5 stroke-[1.5] text-slate-500" />
+                <Lucide icon={expandedKits[kit.guidId] ? 'ChevronUp' : 'ChevronDown'} aria-hidden="true" className="h-5 w-5 text-slate-500" />
               </button>
             </div>
           </div>
@@ -1362,31 +1350,35 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
                 transition={{ duration: 0.2 }}
-                className="bg-slate-50/70"
+                className="bg-slate-50"
               >
-                <div className="p-4 border-t border-slate-200/80">
-                  <div className='flex justify-between items-center'>
-                    <h3 className="title-card mb-1">Dettaglio files</h3>
+                <div className="border-t border-slate-200 p-4">
+                  <div className='flex flex-wrap items-center justify-between gap-2'>
+                    <h4 className="title-card">Dettaglio files</h4>
                     <div className="text-xs text-slate-500">
                       {kit.files?.length || 0} file totali
                       {kit.files && numeroFileProblematici > 0 && numeroFileProblematici < 50 && (
-                        <span className="text-amber-600 ml-2">{numeroFileProblematiciTesto}</span>
+                        <span className="ml-2 text-warning">{numeroFileProblematiciTesto}</span>
                       )}
                     </div>
                   </div>
 
                   {(!kit.files || kit.files.length === 0) ? (
-                    <div className="p-4 mt-2 bg-slate-100 rounded text-sm text-slate-500 text-center border border-slate-200/80">
-                      Nessun file disponibile per questo kit.
-                    </div>
+                    <EmptyState
+                      compatta
+                      icon="FileX"
+                      title="Nessun file disponibile per questo kit"
+                      description=""
+                      className="mt-3 border border-dashed border-slate-200"
+                    />
                   ) : (
-                    <div className="mt-4 flex flex-col sm:flex-row gap-2 justify-end">
-                      <Button onClick={() => navigate(`/ods-in-corso/kit-dettagli?id=${kit.guidId}&idOrdine=${id}`)} variant="outline-secondary" className="text-sm bg-white">
-                        <Lucide icon="ExternalLink" className="w-4 h-4 mr-2 stroke-[1.5]" />
+                    <div className="mt-4 flex flex-col justify-end gap-2 sm:flex-row">
+                      <Button onClick={() => navigate(`/ods-in-corso/kit-dettagli?id=${kit.guidId}&idOrdine=${id}`)} variant="outline-secondary" size="sm">
+                        <Lucide icon="ExternalLink" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
                         Mostra tutti i file ({kit.files.length})
                       </Button>
-                      <Button disabled={kit.files?.length === 0 || isDownloading} onClick={() => handleDownloadZip(kit.guidId)} variant="outline-primary" className="text-sm">
-                        <Lucide icon="Download" className="w-4 h-4 mr-2 stroke-[1.5]" />
+                      <Button disabled={kit.files?.length === 0 || isDownloading} onClick={() => handleDownloadZip(kit.guidId)} variant="outline-secondary" size="sm">
+                        <Lucide icon="Download" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
                         Scarica ZIP
                       </Button>
                     </div>
@@ -1400,198 +1392,141 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
     });
   };
 
+  const descrizioneFase = (fase: string) =>
+    fase === 'caricamento_dati' ? 'Caricamento dati'
+      : fase === 'creazione_cartelle' ? 'Creazione cartelle'
+        : fase === 'creazione_excel' ? 'Report Excel'
+          : fase.replace(/_/g, ' ');
+
+  const erroreTrasferimento = Boolean(ftpErrorMessage) && !isTransferring;
+
   return (
     <>
-      <Dialog centered size='md' open={showDialogInvioFTP} onClose={() => setShowDialogInvioFTP(false)}>
-        <Dialog.Panel className="p-2">
-          <Dialog.Title>
-            <h2 className="title-section">Conferma invio alla tipografia</h2>
-          </Dialog.Title>
-          <Dialog.Description className="p-4">
-            <div className="text-sm text-slate-600 space-y-3">
-              <div className="flex items-start p-3.5 rounded-lg bg-amber-50/80 border border-amber-200/60">
-                <Lucide icon="TriangleAlert" aria-hidden="true" className="w-5 h-5 mr-3 text-amber-500 flex-shrink-0 mt-0.5" />
-                <span>Stai per inviare <strong>{selectedKitsCount}</strong> kit selezionati alla tipografia. Questa operazione è irreversibile e modificherà lo stato dell'ordine.</span>
-              </div>
-              {numeroFileProblematici > 0 && (
-                <div className="bg-red-50 p-3.5 rounded-lg border border-red-200/60 text-red-700/90 text-xs">
-                  <div className='flex items-start'>
-                    <Lucide icon="OctagonAlert" className="w-4 h-4 mr-2.5 inline-block" />
-                    <div className='flex-1'>
-                      <strong>Attenzione:</strong> Sono stati rilevati {numeroFileProblematici} file duplicati che potrebbero causare problemi durante l'elaborazione.
-                    </div>
-                  </div>
+      <ConfirmDialog
+        open={showDialogInvioFTP}
+        title="Conferma invio alla tipografia"
+        confirmLabel="Conferma invio"
+        confirmVariant="primary"
+        onClose={() => setShowDialogInvioFTP(false)}
+        onConfirm={() => {
+          setShowDialogInvioFTP(false);
+          mutationInvioFileFTP.mutate(selezioneInvio);
+        }}
+        description={
+          <div className="space-y-3">
+            <p>
+              Stai per inviare <strong>{selectedKitsCount}</strong> kit selezionati alla tipografia. Questa operazione è irreversibile e modificherà lo stato dell'ordine.
+            </p>
+            {numeroFileProblematici > 0 && (
+              <Alert variant="soft-danger" icona="OctagonAlert">
+                <div>
+                  <strong>Attenzione:</strong> Sono stati rilevati {numeroFileProblematici} file duplicati che potrebbero causare problemi durante l'elaborazione.
                 </div>
-              )}
-            </div>
-          </Dialog.Description>
-          <Dialog.Footer className="flex justify-end gap-x-2 p-4 bg-slate-50/50 border-t border-slate-200/60">
-            <Button
-              onClick={() => setShowDialogInvioFTP(false)}
-              variant="outline-secondary"
-            >
-              Annulla
-            </Button>
-            <Button
-              onClick={() => {
-                setShowDialogInvioFTP(false);
-                mutationInvioFileFTP.mutate(selezioneInvio);
-              }}
-              variant="primary"
-            >
-              <Lucide icon="Send" className="w-4 h-4 mr-2" />
-              Conferma invio
-            </Button>
-          </Dialog.Footer>
-        </Dialog.Panel>
-      </Dialog>
-      <PageHeader
-        title="Revisione ordine di stampa"
-        description={`Promo: ${promo.nome}`}
+              </Alert>
+            )}
+          </div>
+        }
+      />
+      <Pagina
+        titolo="Revisione ordine di stampa"
+        descrizione={`Promo: ${promo.nome}`}
         indietro={{ to: '/ods-in-corso', etichetta: 'Torna agli ordini' }}
         badges={<StatusBadge dominio="ordineStampa" stato={ordine.stato_ordinistampa} />}
-      />
-      <div className="grid grid-cols-12 gap-y-6 gap-x-6">
+      >
+        {/* KPI dell'ordine */}
+        <StatCardGrid className="lg:grid-cols-3">
+          <StatCard densita="compatta" tono="neutral" icona="Package" etichetta="Kit totali" valore={dettagli?.length || 0} />
+          <StatCard
+            densita="compatta"
+            tono="success"
+            icona="SendHorizontal"
+            etichetta="Kit già inviati"
+            valore={kitInviati.length}
+            sottotitolo={ordiniInvii && ordiniInvii.length > 0 ? `${ordiniInvii.length} report Excel disponibili per gli invii precedenti` : undefined}
+          />
+          <StatCard densita="compatta" tono="info" icona="PackageCheck" etichetta="Kit disponibili" valore={kitDisponibili.length} />
+        </StatCardGrid>
 
-        <div className="col-span-12">
-
-          {/* Info Card */}
-          <div className="box box--stacked p-6 mb-6">
-            <div className="flex items-center gap-x-3 mb-5">
-              <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-slate-100">
-                <Lucide icon="FileText" className="w-5 h-5 text-slate-600" />
-              </div>
+        <Sezione titolo="Dettagli ordine" descrizione="Informazioni generali sull'ordine di stampa" icona="FileText">
+          <dl className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="flex items-center gap-2">
+              <Lucide icon="Hash" aria-hidden="true" className="h-4 w-4 text-slate-400" />
               <div>
-                <h3 className="title-section">Dettagli ordine</h3>
-                <p className="text-sm text-slate-500">Informazioni generali sull'ordine di stampa</p>
+                <dt className="text-xs text-slate-500">ID Ordine</dt>
+                <dd className="font-medium text-slate-800">#{ordine.id_ordinistampa?.slice(0, 8)}</dd>
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="flex items-center gap-x-2">
-                <Lucide icon="Hash" className="w-4 h-4 text-slate-400" />
-                <div>
-                  <div className="text-xs text-slate-500">ID Ordine</div>
-                  <div className="font-medium">#{ordine.id_ordinistampa?.slice(0, 8)}</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-x-2">
-                <Lucide icon="Calendar" className="w-4 h-4 text-slate-400" />
-                <div>
-                  <div className="text-xs text-slate-500">Data Conferma</div>
-                  <div className="font-medium">
-                    {formatDataOra(ordine.data_di_conferma_ordinistampa)}
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-x-2">
-                <Lucide icon="Package" className="w-4 h-4 text-slate-400" />
-                <div>
-                  <div className="text-xs text-slate-500">Totale Kit</div>
-                  <div className="font-medium">{dettagli?.length || 0} kit</div>
-                </div>
+            <div className="flex items-center gap-2">
+              <Lucide icon="Calendar" aria-hidden="true" className="h-4 w-4 text-slate-400" />
+              <div>
+                <dt className="text-xs text-slate-500">Data Conferma</dt>
+                <dd className="font-medium text-slate-800">
+                  {formatDataOra(ordine.data_di_conferma_ordinistampa)}
+                </dd>
               </div>
             </div>
+          </dl>
+        </Sezione>
 
-            {/* Statistiche invii */}
-            <div className="mt-5 pt-5 border-t border-slate-200">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="flex items-center gap-x-2">
-                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-success/10">
-                    <Lucide icon="SendHorizontal" className="w-4 h-4 text-success" />
-                  </div>
-                  <div>
-                    <div className="text-xs text-slate-500">Kit già inviati</div>
-                    <div className="font-medium text-success">{kitInviati.length} kit</div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-x-2">
-                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100">
-                    <Lucide icon="PackageCheck" className="w-4 h-4 text-blue-600" />
-                  </div>
-                  <div>
-                    <div className="text-xs text-slate-500">Kit disponibili</div>
-                    <div className="font-medium text-blue-600">{kitDisponibili.length} kit</div>
-                  </div>
-                </div>
-              </div>
-              {ordiniInvii && ordiniInvii.length > 0 && (
-                <div className="mt-3 text-xs text-slate-500 flex items-center gap-x-1">
-                  <Lucide icon="FileSpreadsheet" className="w-3 h-3" />
-                  <span>{ordiniInvii.length} report Excel disponibili per gli invii precedenti</span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Sezione raggruppamento file uguali */}
-          <div className="box box--stacked p-6 mb-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
-              <div className="flex items-center gap-x-3">
-                <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-indigo-100">
-                  <Lucide icon="Copy" className="w-5 h-5 text-indigo-600" />
-                </div>
-                <div>
-                  <h3 className="title-section">Raggruppamento file uguali</h3>
-                  <p className="text-sm text-slate-500">Identifica file PDF con contenuto identico tra i kit disponibili</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {groupingStatus !== 'idle' && groupingStatus !== 'running' && (
-                  <Button type="button" variant="outline-secondary" size="sm" onClick={resetGroupingState}>
-                    <Lucide icon="RotateCcw" aria-hidden="true" className="w-4 h-4 mr-1" />
-                    Reset
-                  </Button>
-                )}
-                <Button
-                  type="button"
-                  variant="primary"
-                  onClick={() => mutationGrouping.mutate()}
-                  disabled={groupingStatus === 'running' || mutationGrouping.isPending || kitDisponibili.length === 0}
-                  loading={groupingStatus === 'running' || mutationGrouping.isPending}
-                >
-                  {groupingStatus !== 'running' && !mutationGrouping.isPending && (
-                    <Lucide icon="ScanSearch" aria-hidden="true" className="w-4 h-4 mr-2" />
-                  )}
-                  Avvia raggruppamento
+        {/* Sezione raggruppamento file uguali */}
+        <Sezione
+          titolo="Raggruppamento file uguali"
+          descrizione="Identifica file PDF con contenuto identico tra i kit disponibili"
+          icona="Copy"
+          azioni={
+            <>
+              {groupingStatus !== 'idle' && groupingStatus !== 'running' && (
+                <Button type="button" variant="outline-secondary" size="sm" onClick={resetGroupingState}>
+                  <Lucide icon="RotateCcw" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                  Reset
                 </Button>
-              </div>
-            </div>
-
-            {/* Stats row */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-              <div className="p-3 rounded-lg border border-slate-200 bg-slate-50/50">
-                <div className="text-xs text-slate-500">Kit disponibili</div>
-                <div className="text-lg font-semibold text-slate-800">{kitDisponibili.length}</div>
-              </div>
-              <div className="p-3 rounded-lg border border-slate-200 bg-slate-50/50">
-                <div className="text-xs text-slate-500">File totali</div>
-                <div className="text-lg font-semibold text-slate-800">
-                  {kitDisponibili.reduce((acc, kit) => acc + (kit.files?.length || 0), 0)}
-                </div>
-              </div>
-              <div className="p-3 rounded-lg border border-slate-200 bg-slate-50/50">
-                <div className="text-xs text-slate-500">Stato</div>
-                <StatusBadge
-                  tono={STATO_RAGGRUPPAMENTO[groupingStatus].tono}
-                  etichetta={STATO_RAGGRUPPAMENTO[groupingStatus].etichetta}
-                  className="mt-1"
-                />
-              </div>
-              <div className="p-3 rounded-lg border border-slate-200 bg-slate-50/50">
-                <div className="text-xs text-slate-500">Gruppi trovati</div>
-                <div className="text-lg font-semibold text-slate-800">
-                  {groupingResult?.groupCount ?? '-'}
-                </div>
-              </div>
-            </div>
+              )}
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                onClick={() => mutationGrouping.mutate()}
+                disabled={groupingStatus === 'running' || mutationGrouping.isPending || kitDisponibili.length === 0}
+                loading={groupingStatus === 'running' || mutationGrouping.isPending}
+              >
+                {groupingStatus !== 'running' && !mutationGrouping.isPending && (
+                  <Lucide icon="ScanSearch" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                Avvia raggruppamento
+              </Button>
+            </>
+          }
+        >
+          <div className="flex flex-col gap-4">
+            <StatCardGrid>
+              <StatCard densita="compatta" tono="neutral" etichetta="Kit disponibili" valore={kitDisponibili.length} />
+              <StatCard
+                densita="compatta"
+                tono="neutral"
+                etichetta="File totali"
+                valore={kitDisponibili.reduce((acc, kit) => acc + (kit.files?.length || 0), 0)}
+              />
+              <StatCard
+                densita="compatta"
+                tono="neutral"
+                etichetta="Stato"
+                valore={
+                  <StatusBadge
+                    tono={STATO_RAGGRUPPAMENTO[groupingStatus].tono}
+                    etichetta={STATO_RAGGRUPPAMENTO[groupingStatus].etichetta}
+                  />
+                }
+              />
+              <StatCard densita="compatta" tono="neutral" etichetta="Gruppi trovati" valore={groupingResult?.groupCount} />
+            </StatCardGrid>
 
             {/* Progress bar */}
             {groupingStatus === 'running' && (
-              <div className="space-y-2 mb-4">
+              <div className="space-y-2">
                 <Progress className="h-2.5" progress={groupingProgress} classNameProgress="bg-primary" />
                 {groupingMessage && (
                   <div
-                    className="text-xs text-slate-600 text-center truncate"
+                    className="truncate text-center text-xs text-slate-600"
                     dangerouslySetInnerHTML={{ __html: groupingMessage }}
                   />
                 )}
@@ -1600,48 +1535,45 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
 
             {/* Error message */}
             {groupingError && (
-              <div className="rounded-lg border border-danger/30 bg-danger/10 p-3 mb-4">
-                <div className="flex items-start gap-2">
-                  <Lucide icon="CircleAlert" className="w-4 h-4 text-danger mt-0.5 flex-shrink-0" />
-                  <p className="text-sm text-danger">{groupingError}</p>
-                </div>
-              </div>
+              <Alert variant="soft-danger" icona="CircleAlert">
+                {groupingError}
+              </Alert>
             )}
 
             {/* Results */}
             {groupingStatus === 'completed' && groupingResult && (
               <div className="space-y-3">
-                <div className="flex items-center gap-2 text-sm text-success mb-2">
-                  <Lucide icon="CircleCheck" className="w-4 h-4" />
+                <div className="flex items-center gap-2 text-sm text-success">
+                  <Lucide icon="CircleCheck" aria-hidden="true" className="h-4 w-4" />
                   <span>Analisi completata: {groupingResult.groupCount} gruppi trovati su {groupingResult.analyzedFiles} file analizzati</span>
                 </div>
 
                 {groupingResult?.groups?.length > 0 ? (
                   <div className="space-y-3">
                     {groupingResult.groups.map((group) => (
-                      <div key={group.groupId} className="border border-slate-200 rounded-lg overflow-hidden">
-                        <div className="px-4 py-2.5 bg-indigo-50/50 border-b border-slate-200 flex items-center justify-between">
+                      <div key={group.groupId} className="overflow-hidden rounded-card border border-slate-200 bg-white">
+                        <div className="flex items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2.5">
                           <div className="flex items-center gap-2">
-                            <Lucide icon="Copy" className="w-4 h-4 text-indigo-600" />
-                            <span className="text-sm font-medium text-slate-700">
+                            <Lucide icon="Copy" aria-hidden="true" className="h-4 w-4 text-primary" />
+                            <h3 className="title-card">
                               Gruppo {group.groupId}
-                            </span>
+                            </h3>
                           </div>
                           <span className="text-xs text-slate-500">{group.size} file identici</span>
                         </div>
-                        <div className="max-h-[32rem] overflow-y-auto p-3 bg-slate-50/30">
-                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-2">
+                        <div className="max-h-96 overflow-y-auto bg-slate-50 p-3">
+                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
                             {group.files.map((file, i) => {
                               const thumbSrc = file.id_olimpo_cloud ? buildGroupingThumbnailUrl(file.id_olimpo_cloud) : docThumbnailFallback;
                               return (
                                 <div
                                   key={`${file.id_olimpo_cloud}-${i}`}
-                                  className="rounded-md border border-slate-200 bg-white overflow-hidden shadow-sm text-xs"
+                                  className="overflow-hidden rounded-control border border-slate-200 bg-white text-xs shadow-sm"
                                 >
                                   <button
                                     type="button"
                                     aria-label={`Anteprima ${file.nome}`}
-                                    className="relative w-full aspect-square border-b border-slate-200 bg-slate-50 overflow-hidden flex items-center justify-center cursor-pointer group/thumb focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-theme-1/40"
+                                    className="group/thumb relative flex aspect-square w-full cursor-pointer items-center justify-center overflow-hidden border-b border-slate-200 bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-theme-1/40"
                                     onClick={() => {
                                       const baseUrl = file.id_olimpo_cloud ? buildGroupingPreviewBaseUrl(file.id_olimpo_cloud) : '';
                                       if (baseUrl) {
@@ -1652,7 +1584,7 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
                                     <img
                                       src={thumbSrc}
                                       alt={`Anteprima ${file.nome}`}
-                                      className="w-full h-full object-contain p-1 transition-transform duration-200 group-hover/thumb:scale-110"
+                                      className="h-full w-full object-contain p-1 transition-transform duration-200 group-hover/thumb:scale-110"
                                       loading="lazy"
                                       onError={(event) => {
                                         const target = event.currentTarget;
@@ -1661,15 +1593,15 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
                                         }
                                       }}
                                     />
-                                    <span className="absolute inset-0 bg-black/0 group-hover/thumb:bg-black/10 transition-colors flex items-center justify-center">
-                                      <Lucide icon="ZoomIn" aria-hidden="true" className="w-5 h-5 text-white opacity-0 group-hover/thumb:opacity-100 transition-opacity drop-shadow-md" />
+                                    <span className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover/thumb:bg-black/10">
+                                      <Lucide icon="ZoomIn" aria-hidden="true" className="h-5 w-5 text-white opacity-0 drop-shadow-md transition-opacity group-hover/thumb:opacity-100" />
                                     </span>
                                   </button>
                                   <div className="p-1.5">
-                                    <div className="font-medium text-slate-700 truncate" title={file.nome}>{file.nome}</div>
-                                    <div className="text-3xs text-slate-500 truncate">
+                                    <div className="truncate font-medium text-slate-700" title={file.nome}>{file.nome}</div>
+                                    <div className="truncate text-3xs text-slate-500">
                                       {file.nome_kit || file.id_runtime}
-                                      {file.pages ? ` \u2022 ${file.pages}p` : ''}
+                                      {file.pages ? ` • ${file.pages}p` : ''}
                                     </div>
                                   </div>
                                 </div>
@@ -1687,15 +1619,15 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
                           const groupFileNames = new Set(group.files.map(f => f.nome));
                           const nameCollision = currentName.length > 0 && groupFileNames.has(currentName);
                           return (
-                            <div className="px-4 py-3 border-t border-slate-200 bg-white">
+                            <div className="border-t border-slate-200 bg-white px-4 py-3">
                               {isMerged ? (
-                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                  <div className="flex items-center gap-2 text-sm text-success min-w-0">
-                                    <Lucide icon="CircleCheck" className="w-4 h-4 flex-shrink-0" />
+                                <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
+                                  <div className="flex min-w-0 items-center gap-2 text-sm text-success">
+                                    <Lucide icon="CircleCheck" aria-hidden="true" className="h-4 w-4 flex-shrink-0" />
                                     <span className="truncate">
                                       Gruppo unificato: <strong>{mergeState?.nome}</strong>
                                       {mergeState?.virtualDir && (
-                                        <span className="text-slate-500 font-normal ml-1.5">
+                                        <span className="ml-1.5 font-normal text-slate-500">
                                           in {mergeState.virtualDir}
                                         </span>
                                       )}
@@ -1705,36 +1637,33 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
                                     type="button"
                                     variant="outline-danger"
                                     size="sm"
-                                    className="text-xs whitespace-nowrap flex-shrink-0"
+                                    className="flex-shrink-0 whitespace-nowrap"
                                     disabled={isMerging}
                                     loading={isMerging}
                                     onClick={() => handleDeleteMerge(group.groupId)}
                                   >
-                                    {!isMerging && <Lucide icon="Undo2" aria-hidden="true" className="w-3.5 h-3.5 mr-1" />}
+                                    {!isMerging && <Lucide icon="Undo2" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />}
                                     Annulla unione
                                   </Button>
                                 </div>
                               ) : (
-                                <div className="flex flex-col sm:flex-row gap-3 items-end">
-                                  <div className="flex-1 min-w-0">
-                                    <label className="text-xs font-medium text-slate-600 mb-1 block">Nome file unificato</label>
+                                <div className="flex flex-col items-end gap-3 sm:flex-row">
+                                  <FormField
+                                    etichetta="Nome file unificato"
+                                    errore={nameCollision ? 'Il nome coincide con uno dei file del gruppo' : undefined}
+                                    className="w-full min-w-0 flex-1"
+                                  >
                                     <FormInput
                                       type="text"
                                       placeholder="Nome file..."
                                       value={mergeState?.nome || ''}
                                       onChange={(e) => updateGroupMerge(group.groupId, { nome: e.target.value })}
                                       disabled={isMerging}
-                                      className={`text-sm ${nameCollision ? 'border-danger focus:border-danger focus:ring-danger/20' : ''}`}
+                                      className={nameCollision ? 'border-danger focus:border-danger focus:ring-danger/20' : undefined}
                                     />
-                                    {nameCollision && (
-                                      <p className="text-xs text-danger mt-1 flex items-center gap-1">
-                                        <Lucide icon="CircleAlert" className="w-3 h-3 flex-shrink-0" />
-                                        Il nome coincide con uno dei file del gruppo
-                                      </p>
-                                    )}
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <label className="text-xs font-medium text-slate-600 mb-1 block">Directory di destinazione</label>
+                                  </FormField>
+                                  <div className="w-full min-w-0 flex-1">
+                                    <span className="mb-2 inline-block">Directory di destinazione</span>
                                     <DirectoryPicker
                                       directories={virtualDirs}
                                       value={mergeState?.virtualDir || ''}
@@ -1753,14 +1682,14 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
                                     loading={isMerging}
                                     onClick={() => handleMergeGroup(group)}
                                   >
-                                    {!isMerging && <Lucide icon="Merge" aria-hidden="true" className="w-4 h-4 mr-1.5" />}
+                                    {!isMerging && <Lucide icon="Merge" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />}
                                     Unisci gruppo
                                   </Button>
                                 </div>
                               )}
                               {mergeState?.error && (
-                                <div className="mt-2 text-xs text-danger flex items-center gap-1.5">
-                                  <Lucide icon="CircleAlert" className="w-3.5 h-3.5 flex-shrink-0" />
+                                <div className="mt-2 flex items-center gap-1.5 text-xs text-danger">
+                                  <Lucide icon="CircleAlert" aria-hidden="true" className="h-3.5 w-3.5 flex-shrink-0" />
                                   {mergeState.error}
                                 </div>
                               )}
@@ -1771,127 +1700,108 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
                     ))}
                   </div>
                 ) : (
-                  <div className="text-sm text-slate-500 text-center py-4">
-                    Nessun file duplicato trovato. Tutti i file sono unici.
-                  </div>
+                  <EmptyState
+                    compatta
+                    icon="CircleCheck"
+                    title="Nessun file duplicato trovato"
+                    description="Tutti i file sono unici."
+                  />
                 )}
               </div>
             )}
 
             {kitDisponibili.length === 0 && groupingStatus === 'idle' && (
-              <div className="text-sm text-slate-500 text-center py-4">
-                Nessun kit disponibile per il raggruppamento.
-              </div>
+              <EmptyState
+                compatta
+                icon="PackageX"
+                title="Nessun kit disponibile per il raggruppamento"
+                description=""
+              />
             )}
           </div>
+        </Sezione>
 
-          {/* Sezione progress trasferimento FTP inline */}
-          <AnimatePresence>
-            {(isTransferring || progress > 0 || globalProgress > 0 || transferComplete || ftpErrorMessage) && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                transition={{ duration: 0.3 }}
-                className="overflow-hidden"
+        {/* Sezione progress trasferimento FTP inline */}
+        <AnimatePresence>
+          {(isTransferring || progress > 0 || globalProgress > 0 || transferComplete || ftpErrorMessage) && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.3 }}
+              className="overflow-hidden"
+            >
+              <Sezione
+                icona={isTransferring ? 'Upload' : transferComplete ? 'CircleCheck' : 'CircleAlert'}
+                titolo={transferComplete ? 'Trasferimento completato' : erroreTrasferimento ? 'Errore di trasferimento' : 'Trasferimento in corso'}
+                descrizione={
+                  transferComplete
+                    ? `${ftpTransferDetail.totalFiles > 0 ? `${ftpTransferDetail.totalFiles} file` : 'File'} inviati con successo${ftpTransferDetail.totalKits > 0 ? ` da ${ftpTransferDetail.totalKits} kit` : ''}`
+                    : erroreTrasferimento
+                      ? 'Si è verificato un problema durante il trasferimento'
+                      : ftpTransferDetail.kit
+                        ? `Kit in elaborazione: ${ftpTransferDetail.kit}`
+                        : 'Invio dei file selezionati alla tipografia'
+                }
+                azioni={
+                  (transferComplete || erroreTrasferimento) && (
+                    <Button
+                      type="button"
+                      variant="outline-secondary"
+                      size="sm"
+                      aria-label="Chiudi riepilogo trasferimento"
+                      title="Chiudi riepilogo trasferimento"
+                      onClick={() => {
+                        setTransferComplete(false);
+                        setFtpProgressMessage('');
+                        setFtpErrorMessage('');
+                        setProgress(0);
+                        setGlobalProgress(0);
+                        ftpProgressTrackerRef.current = { activeKitIndex: 1, totalKits: 0 };
+                        setFtpTransferDetail({ fase: '', kit: '', fileName: '', currentFile: 0, totalFiles: 0, totalKits: 0, message: '' });
+                      }}
+                    >
+                      <Lucide icon="X" aria-hidden="true" className="h-4 w-4" />
+                    </Button>
+                  )
+                }
               >
-                <div className="box box--stacked p-6 mb-6">
-                  <div className="flex items-center justify-between gap-x-3 mb-4">
-                    <div className="flex items-center gap-x-3">
-                      <div className={`flex items-center justify-center w-10 h-10 rounded-lg ${transferComplete ? 'bg-success/10' : ftpErrorMessage && !isTransferring ? 'bg-danger/10' : 'bg-primary/10'
-                        }`}>
-                        {isTransferring ? (
-                          <Lucide icon="Upload" className="w-5 h-5 text-primary animate-pulse" />
-                        ) : transferComplete ? (
-                          <Lucide icon="CircleCheck" className="w-5 h-5 text-success" />
-                        ) : (
-                          <Lucide icon="CircleAlert" className="w-5 h-5 text-danger" />
-                        )}
-                      </div>
-                      <div>
-                        <h3 className="title-section">
-                          {transferComplete ? 'Trasferimento completato' : ftpErrorMessage && !isTransferring ? 'Errore di trasferimento' : 'Trasferimento in corso'}
-                        </h3>
-                        <p className="text-sm text-slate-500">
-                          {transferComplete
-                            ? `${ftpTransferDetail.totalFiles > 0 ? `${ftpTransferDetail.totalFiles} file` : 'File'} inviati con successo${ftpTransferDetail.totalKits > 0 ? ` da ${ftpTransferDetail.totalKits} kit` : ''}`
-                            : ftpErrorMessage && !isTransferring
-                              ? 'Si è verificato un problema durante il trasferimento'
-                              : ftpTransferDetail.kit
-                                ? `Kit in elaborazione: ${ftpTransferDetail.kit}`
-                                : 'Invio dei file selezionati alla tipografia'
-                          }
-                        </p>
-                      </div>
-                    </div>
-                    {(transferComplete || (ftpErrorMessage && !isTransferring)) && (
-                      <Button
-                        type="button"
-                        variant="outline-secondary"
-                        size="sm"
-                        aria-label="Chiudi riepilogo trasferimento"
-                        title="Chiudi riepilogo trasferimento"
-                        onClick={() => {
-                          setTransferComplete(false);
-                          setFtpProgressMessage('');
-                          setFtpErrorMessage('');
-                          setProgress(0);
-                          setGlobalProgress(0);
-                          ftpProgressTrackerRef.current = { activeKitIndex: 1, totalKits: 0 };
-                          setFtpTransferDetail({ fase: '', kit: '', fileName: '', currentFile: 0, totalFiles: 0, totalKits: 0, message: '' });
-                        }}
-                      >
-                        <Lucide icon="X" aria-hidden="true" className="w-4 h-4" />
-                      </Button>
-                    )}
-                  </div>
-
+                <div className="flex flex-col gap-4">
                   {/* Dettagli fase e contatori - visibili durante il trasferimento */}
                   {isTransferring && (ftpTransferDetail.fase || ftpTransferDetail.totalFiles > 0) && (
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                    <StatCardGrid>
                       {ftpTransferDetail.fase && (
-                        <div className="p-2.5 rounded-lg border border-slate-200 bg-slate-50/50">
-                          <div className="text-3xs uppercase tracking-wider text-slate-400 font-medium">Fase</div>
-                          <div className="text-sm font-medium text-slate-700 truncate">
-                            {ftpTransferDetail.fase === 'caricamento_dati' ? 'Caricamento dati'
-                              : ftpTransferDetail.fase === 'creazione_cartelle' ? 'Creazione cartelle'
-                                : ftpTransferDetail.fase === 'creazione_excel' ? 'Report Excel'
-                                  : ftpTransferDetail.fase.replace(/_/g, ' ')}
-                          </div>
-                        </div>
+                        <StatCard densita="compatta" tono="neutral" etichetta="Fase" valore={descrizioneFase(ftpTransferDetail.fase)} />
                       )}
                       {ftpTransferDetail.kit && (
-                        <div className="p-2.5 rounded-lg border border-slate-200 bg-slate-50/50">
-                          <div className="text-3xs uppercase tracking-wider text-slate-400 font-medium">Kit</div>
-                          <div className="text-sm font-medium text-slate-700 truncate" title={ftpTransferDetail.kit}>
-                            {ftpTransferDetail.kit}
-                          </div>
-                        </div>
+                        <StatCard
+                          densita="compatta"
+                          tono="neutral"
+                          etichetta="Kit"
+                          valore={<span title={ftpTransferDetail.kit}>{ftpTransferDetail.kit}</span>}
+                        />
                       )}
                       {ftpTransferDetail.totalFiles > 0 && (
-                        <div className="p-2.5 rounded-lg border border-slate-200 bg-slate-50/50">
-                          <div className="text-3xs uppercase tracking-wider text-slate-400 font-medium">File</div>
-                          <div className="text-sm font-medium text-slate-700">
-                            {ftpTransferDetail.currentFile > 0 ? `${ftpTransferDetail.currentFile} / ${ftpTransferDetail.totalFiles}` : `${ftpTransferDetail.totalFiles} totali`}
-                          </div>
-                        </div>
+                        <StatCard
+                          densita="compatta"
+                          tono="neutral"
+                          etichetta="File"
+                          valore={ftpTransferDetail.currentFile > 0 ? `${ftpTransferDetail.currentFile} / ${ftpTransferDetail.totalFiles}` : `${ftpTransferDetail.totalFiles} totali`}
+                        />
                       )}
                       {ftpTransferDetail.totalKits > 0 && (
-                        <div className="p-2.5 rounded-lg border border-slate-200 bg-slate-50/50">
-                          <div className="text-3xs uppercase tracking-wider text-slate-400 font-medium">Kit totali</div>
-                          <div className="text-sm font-medium text-slate-700">{ftpTransferDetail.totalKits}</div>
-                        </div>
+                        <StatCard densita="compatta" tono="neutral" etichetta="Kit totali" valore={ftpTransferDetail.totalKits} />
                       )}
-                    </div>
+                    </StatCardGrid>
                   )}
 
                   {/* Progress bar - visibile durante il trasferimento */}
                   {(isTransferring || ((progress > 0 || globalProgress > 0) && !transferComplete && !ftpErrorMessage)) && (
-                    <div className="space-y-3 mb-4">
+                    <div className="space-y-3">
                       <div>
-                        <div className="flex items-center justify-between text-2xs text-slate-500 mb-1">
+                        <div className="mb-1 flex items-center justify-between text-2xs text-slate-500">
                           <span>Avanzamento globale</span>
-                          <span>{Math.round(globalProgress * 100)}%</span>
+                          <span className="tabular-nums">{Math.round(globalProgress * 100)}%</span>
                         </div>
                         <Progress
                           className="h-2.5"
@@ -1900,9 +1810,9 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
                         />
                       </div>
                       <div>
-                        <div className="flex items-center justify-between text-2xs text-slate-500 mb-1">
+                        <div className="mb-1 flex items-center justify-between text-2xs text-slate-500">
                           <span>Avanzamento kit corrente</span>
-                          <span>{Math.round(progress * 100)}%</span>
+                          <span className="tabular-nums">{Math.round(progress * 100)}%</span>
                         </div>
                         <Progress
                           className="h-3"
@@ -1911,12 +1821,12 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
                         />
                       </div>
                       {ftpTransferDetail.fileName && (
-                        <div className="text-xs text-slate-600 text-center pt-1 truncate" title={ftpTransferDetail.fileName}>
+                        <div className="truncate pt-1 text-center text-xs text-slate-600" title={ftpTransferDetail.fileName}>
                           {ftpTransferDetail.fileName}
                         </div>
                       )}
                       {!ftpTransferDetail.fileName && ftpTransferDetail.message && (
-                        <div className="text-xs text-slate-600 text-center pt-1 truncate">
+                        <div className="truncate pt-1 text-center text-xs text-slate-600">
                           {ftpTransferDetail.message}
                         </div>
                       )}
@@ -1925,175 +1835,156 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
 
                   {/* Messaggio di successo */}
                   {transferComplete && (
-                    <div className="flex items-start p-3 rounded-lg bg-success/5 border border-success/20">
-                      <Lucide icon="CircleCheck" className="w-4 h-4 mr-2.5 text-success flex-shrink-0 mt-0.5" />
-                      <div className="text-sm text-success">
+                    <Alert variant="soft-success" icona="CircleCheck">
+                      <div className="text-sm">
                         <span>{ftpProgressMessage || 'Processo completato con successo'}</span>
                         {(ftpTransferDetail.totalFiles > 0 || ftpTransferDetail.totalKits > 0) && (
-                          <span className="text-success/70 ml-1.5">
+                          <span className="ml-1.5 opacity-70">
                             ({ftpTransferDetail.totalFiles > 0 && `${ftpTransferDetail.totalFiles} file`}
                             {ftpTransferDetail.totalFiles > 0 && ftpTransferDetail.totalKits > 0 && ', '}
                             {ftpTransferDetail.totalKits > 0 && `${ftpTransferDetail.totalKits} kit`})
                           </span>
                         )}
                       </div>
-                    </div>
+                    </Alert>
                   )}
 
                   {/* Messaggio di errore */}
                   {ftpErrorMessage && (
-                    <div className="flex items-start p-3 rounded-lg bg-danger/5 border border-danger/20">
-                      <Lucide icon="CircleAlert" className="w-4 h-4 mr-2.5 text-danger flex-shrink-0 mt-0.5" />
-                      <div className="space-y-1 flex-1">
-                        <p className="text-sm font-medium text-danger">Si è verificato un errore</p>
-                        <p className="text-xs text-danger/80 break-words">{ftpErrorMessage}</p>
-                      </div>
-                    </div>
+                    <Alert variant="soft-danger" icona="CircleAlert" titolo="Si è verificato un errore">
+                      <p className="break-words text-sm">{ftpErrorMessage}</p>
+                    </Alert>
                   )}
                 </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+              </Sezione>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-          <div>
-            <div className="flex flex-col box box--stacked rounded-card shadow-sm border border-slate-200/80">
-              <div className="flex flex-col p-6 gap-y-4 rounded-t-card border-b border-slate-200/80">
-                <div className="flex items-center gap-x-3">
-                  <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-blue-50">
-                    <Lucide icon="Package" className="w-5 h-5 text-blue-600" />
-                  </div>
-                  <div>
-                    <h3 className="title-section">Kit dell'ordine</h3>
-                    <p className="text-sm text-slate-500">{kitInviati.length} inviati, {kitDisponibili.length} disponibili</p>
-                  </div>
-                </div>
-                <div className="relative">
-                  <Lucide icon="Search" aria-hidden="true" className="absolute inset-y-0 left-0 z-10 w-4 h-4 my-auto ml-3 stroke-[1.3] text-slate-500" />
-                  <FormInput
-                    type="text"
-                    placeholder="Cerca per titolo, area, canale..."
-                    aria-label="Cerca per titolo, area, canale"
-                    className="pl-9 sm:w-72 rounded-control"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                </div>
-              </div>
+        <Sezione
+          senzaPadding
+          icona="Package"
+          titolo="Kit dell'ordine"
+          descrizione={`${kitInviati.length} inviati, ${kitDisponibili.length} disponibili`}
+        >
+          <BarraFiltri>
+            <CampoRicerca
+              etichetta="Cerca per titolo, area, canale"
+              placeholder="Cerca per titolo, area, canale…"
+              value={searchTerm}
+              onChange={setSearchTerm}
+            />
+          </BarraFiltri>
 
-              <div className="p-6">
-                {(!filteredKitDisponibili || filteredKitDisponibili.length === 0) &&
-                  (!gruppInvii || gruppInvii.length === 0) ? (
-                  <div className="flex flex-col items-center justify-center h-64 text-lg bg-slate-50 border border-dashed border-slate-300 rounded-lg p-6">
-                    <Lucide icon="SearchX" className="w-12 h-12 mb-4 stroke-[1] text-slate-400" />
-                    {searchTerm ? (
-                      <>
-                        <p className="font-medium text-slate-600">Nessuna lavorazione trovata</p>
-                        <p className="text-sm mt-1 text-slate-500">Prova a modificare i criteri di ricerca.</p>
-                      </>
-                    ) : (
-                      <>
-                        <p className="font-medium text-slate-600">Nessun kit da revisionare</p>
-                        <p className="text-sm mt-1 text-slate-500">Non ci sono kit disponibili per questo ordine di stampa.</p>
-                      </>
-                    )}
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    {/* Sezione kit già inviati */}
-                    {gruppInvii && gruppInvii.length > 0 && (
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-x-3 pb-2 border-b border-slate-200/60">
-                          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-green-100 text-green-600">
-                            <Lucide icon="CheckCheck" className="w-4 h-4" />
-                          </div>
-                          <div>
-                            <h3 className="title-card">Kit già inviati alla tipografia</h3>
-                            <p className="text-xs text-slate-500">
-                              {gruppInvii.length} invio{gruppInvii.length !== 1 ? 'i' : ''} completat{gruppInvii.length !== 1 ? 'i' : 'o'}
-                              {searchTerm && (
-                                <span className="ml-1">
-                                  • {gruppInvii.reduce((acc, gruppo) => acc + gruppo.kit.length, 0)} kit visualizzati
-                                </span>
-                              )}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="space-y-3">
-                          {renderGruppiInvii(gruppInvii)}
-                        </div>
+          <div className="p-5">
+            {(!filteredKitDisponibili || filteredKitDisponibili.length === 0) &&
+              (!gruppInvii || gruppInvii.length === 0) ? (
+              searchTerm ? (
+                <EmptyState
+                  compatta
+                  icon="SearchX"
+                  title="Nessuna lavorazione trovata"
+                  description="Prova a modificare i criteri di ricerca."
+                />
+              ) : (
+                <EmptyState
+                  compatta
+                  icon="PackageX"
+                  title="Nessun kit da revisionare"
+                  description="Non ci sono kit disponibili per questo ordine di stampa."
+                />
+              )
+            ) : (
+              <div className="space-y-6">
+                {/* Sezione kit già inviati */}
+                {gruppInvii && gruppInvii.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3 border-b border-slate-200 pb-2">
+                      <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-success/10 text-success">
+                        <Lucide icon="CheckCheck" aria-hidden="true" className="h-4 w-4" />
                       </div>
-                    )}
-
-                    {/* Sezione kit disponibili per l'invio */}
-                    {filteredKitDisponibili && filteredKitDisponibili.length > 0 && (
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-x-3 pb-2 border-b border-slate-200/60">
-                          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-600">
-                            <Lucide icon="Package" className="w-4 h-4" />
-                          </div>
-                          <div>
-                            <h3 className="title-card">Kit disponibili per l'invio</h3>
-                            <p className="text-xs text-slate-500">{filteredKitDisponibili.length} kit pronti</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center text-sm p-3 bg-slate-50/80 rounded-lg border border-slate-200/80">
-                          <FormCheck className='flex items-center'>
-                            <FormCheck.Input
-                              id="selectAll"
-                              type="checkbox"
-                              className='!rounded-md'
-                              checked={selectAll}
-                              onChange={handleSelectAll}
-                            />
-                            <FormCheck.Label htmlFor="selectAll" className="select-none font-medium ml-2">
-                              Seleziona tutti ({filteredKitDisponibili.length})
-                            </FormCheck.Label>
-                          </FormCheck>
-                          {selectedKitsCount > 0 && (
-                            <div className="ml-auto text-slate-600 font-medium">{selectedKitsCount} kit selezionati</div>
+                      <div>
+                        <h3 className="title-card">Kit già inviati alla tipografia</h3>
+                        <p className="text-xs text-slate-500">
+                          {gruppInvii.length} invio{gruppInvii.length !== 1 ? 'i' : ''} completat{gruppInvii.length !== 1 ? 'i' : 'o'}
+                          {searchTerm && (
+                            <span className="ml-1">
+                              • {gruppInvii.reduce((acc, gruppo) => acc + gruppo.kit.length, 0)} kit visualizzati
+                            </span>
                           )}
-                        </div>
-                        <div className="space-y-3">
-                          {renderDettagli(filteredKitDisponibili)}
-                        </div>
+                        </p>
                       </div>
-                    )}
+                    </div>
+                    <div className="space-y-3">
+                      {renderGruppiInvii(gruppInvii)}
+                    </div>
+                  </div>
+                )}
 
-                    {/* Messaggio quando tutti i kit sono stati inviati */}
-
+                {/* Sezione kit disponibili per l'invio */}
+                {filteredKitDisponibili && filteredKitDisponibili.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3 border-b border-slate-200 pb-2">
+                      <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-primary/10 text-primary">
+                        <Lucide icon="Package" aria-hidden="true" className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <h3 className="title-card">Kit disponibili per l'invio</h3>
+                        <p className="text-xs text-slate-500">{filteredKitDisponibili.length} kit pronti</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center rounded-control border border-slate-200 bg-slate-50 p-3 text-sm">
+                      <FormCheck className='flex items-center'>
+                        <FormCheck.Input
+                          id="selectAll"
+                          type="checkbox"
+                          checked={selectAll}
+                          onChange={handleSelectAll}
+                        />
+                        <FormCheck.Label htmlFor="selectAll" className="ml-2 select-none font-medium">
+                          Seleziona tutti ({filteredKitDisponibili.length})
+                        </FormCheck.Label>
+                      </FormCheck>
+                      {selectedKitsCount > 0 && (
+                        <div className="ml-auto font-medium text-slate-600">{selectedKitsCount} kit selezionati</div>
+                      )}
+                    </div>
+                    <div className="space-y-3">
+                      {renderDettagli(filteredKitDisponibili)}
+                    </div>
                   </div>
                 )}
               </div>
-
-              {filteredKitDisponibili && filteredKitDisponibili.length > 0 && (
-                <div className="p-6 border-t border-slate-200/80 flex items-center justify-between">
-                  <div className="text-xs text-slate-500">
-                    {numeroFileProblematici > 0 && (
-                      <div className="flex items-center gap-x-2 text-amber-600">
-                        <Lucide icon="TriangleAlert" className="w-4 h-4" />
-                        <span>
-                          {numeroFileProblematiciTesto}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  <Button
-                    type="button"
-                    onClick={() => setShowDialogInvioFTP(true)}
-                    disabled={selectedKitsCount === 0 || isTransferring}
-                    loading={isTransferring}
-                    variant="primary"
-                    className="text-sm min-w-48"
-                  >
-                    Manda file alla tipografia
-                    {!isTransferring && <Lucide icon="Send" aria-hidden="true" className="w-4 h-4 ml-2 stroke-[1.5]" />}
-                  </Button>
-                </div>
-              )}
-            </div>
+            )}
           </div>
-        </div>
-      </div>
+
+          {filteredKitDisponibili && filteredKitDisponibili.length > 0 && (
+            <div className="flex flex-col gap-3 border-t border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-xs text-slate-500">
+                {numeroFileProblematici > 0 && (
+                  <div className="flex items-center gap-2 text-warning">
+                    <Lucide icon="TriangleAlert" aria-hidden="true" className="h-4 w-4 flex-none" />
+                    <span>
+                      {numeroFileProblematiciTesto}
+                    </span>
+                  </div>
+                )}
+              </div>
+              <Button
+                type="button"
+                onClick={() => setShowDialogInvioFTP(true)}
+                disabled={selectedKitsCount === 0 || isTransferring}
+                loading={isTransferring}
+                variant="primary"
+                className="min-w-48"
+              >
+                Manda file alla tipografia
+                {!isTransferring && <Lucide icon="Send" aria-hidden="true" className="ml-2 h-4 w-4" />}
+              </Button>
+            </div>
+          )}
+        </Sezione>
+      </Pagina>
 
       {/* Preview PDF */}
       {previewFile && (

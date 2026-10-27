@@ -1,7 +1,11 @@
 import Button from "@/components/Base/Button";
 import { FormCheck, FormInput, FormLabel, FormSelect } from "@/components/Base/Form";
+import Alert from "@/components/Base/Alert";
+import Badge from "@/components/Base/Badge";
+import CampoRicerca from "@/components/Base/CampoRicerca";
 import { Dialog } from "@/components/Base/Headless";
 import Lucide from "@/components/Base/Lucide";
+import Sezione from "@/components/Base/Sezione";
 import { useEffect, useState } from "react";
 import { useNotification } from "../../../../context/NotificationContext";
 import { operatorOptions } from "../../constants";
@@ -86,27 +90,27 @@ function GetRefsTestPanel({ fieldOptions, apiKey, isLoading, testResponse, onTes
   return (
     <>
       <div className="grid grid-cols-12 gap-6">
-        <div className="col-span-12 lg:col-span-6">
-          <div className="box p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium">Test chiamata per richiesta delle referenze</h3>
+        <Sezione
+          className="col-span-12 xl:col-span-6"
+          titolo="Test chiamata per richiesta delle referenze"
+          azioni={
+            <>
               <Button
                 variant="outline-secondary"
                 size="sm"
                 onClick={copyJsonToClipboard}
               >
-                <Lucide icon="Copy" className="w-4 h-4 mr-1" />
+                <Lucide icon="Copy" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
                 Copia JSON
               </Button>
-            </div>
+            </>
+          }
+        >
 
             {!apiKey && !testMode && (
-              <div className="p-3 bg-amber-50 rounded-lg border border-amber-200 mb-4">
-                <div className="flex items-center">
-                  <Lucide icon="Info" className="w-4 h-4 text-amber-600 mr-2" />
-                  <span className="text-sm font-medium text-amber-800">API Key necessaria per il testing</span>
-                </div>
-              </div>
+              <Alert variant="soft-warning" icona="Info" className="mb-4">
+              API Key necessaria per il testing
+            </Alert>
             )}
 
             <div className="space-y-6">
@@ -118,7 +122,7 @@ function GetRefsTestPanel({ fieldOptions, apiKey, isLoading, testResponse, onTes
                 </FormLabel>
                 <div className="space-y-2 mt-2">
                   {template.map((tmpl, index) => (
-                    <FormCheck key={index} className="p-3 border rounded-lg hover:bg-slate-50 cursor-pointer">
+                    <FormCheck key={index} className="cursor-pointer rounded-control border border-slate-200 p-3 hover:bg-slate-50">
                       <FormCheck.Input
                         id={tmpl.guidId}
                         type="checkbox"
@@ -130,7 +134,7 @@ function GetRefsTestPanel({ fieldOptions, apiKey, isLoading, testResponse, onTes
                             setSelectedTemplates(selectedTemplates.filter(id => id !== tmpl.guidId));
                           }
                         }}
-                        className="mr-3 !rounded-md"
+                        className="mr-3"
                       />
                       <FormCheck.Label htmlFor={tmpl.guidId}>
                         <div className="font-medium text-sm">{tmpl.titolo}</div>
@@ -153,14 +157,14 @@ function GetRefsTestPanel({ fieldOptions, apiKey, isLoading, testResponse, onTes
                     size="sm"
                     onClick={addFilterGroup}
                   >
-                    <Lucide icon="Plus" className="w-4 h-4 mr-1" />
+                    <Lucide icon="Plus" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
                     Gruppo Filtro
                   </Button>
                 </div>
 
                 <div className="space-y-4 mt-3">
                   {filterGroups.map((group, groupIndex) => (
-                    <div key={groupIndex} className="border border-slate-200 rounded-lg p-4">
+                    <div key={groupIndex} className="rounded-card border border-slate-200 p-4">
                       <div className="flex items-center justify-between mb-3">
                         <span className="text-sm font-medium text-slate-600">
                           Gruppo {groupIndex + 1} {groupIndex > 0 && <span className="text-xs text-slate-400">(OR)</span>}
@@ -234,7 +238,7 @@ function GetRefsTestPanel({ fieldOptions, apiKey, isLoading, testResponse, onTes
                             </div>
                             {filterIndex < group.length - 1 && (
                               <div className="col-span-12 text-center">
-                                <span className="text-xs text-slate-400 bg-slate-100 px-2 py-1 rounded">AND</span>
+                                <Badge variant="secondary" size="sm">AND</Badge>
                               </div>
                             )}
                           </div>
@@ -246,7 +250,7 @@ function GetRefsTestPanel({ fieldOptions, apiKey, isLoading, testResponse, onTes
                               size="sm"
                               onClick={() => addFilterToGroup(groupIndex)}
                             >
-                              <Lucide icon="Plus" className="w-4 h-4 mr-1" />
+                              <Lucide icon="Plus" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
                               Aggiungi Filtro
                             </Button>
                           </div>
@@ -258,7 +262,7 @@ function GetRefsTestPanel({ fieldOptions, apiKey, isLoading, testResponse, onTes
               </div>
 
               {/* Controlli Risultati */}
-              <div className="border border-slate-200 rounded-lg p-4">
+              <div className="rounded-card border border-slate-200 p-4">
                 <div className="flex items-center justify-between mb-3">
                   <FormLabel className="flex items-center">
                     <Lucide icon="Settings" className="w-4 h-4 mr-2" />
@@ -295,7 +299,7 @@ function GetRefsTestPanel({ fieldOptions, apiKey, isLoading, testResponse, onTes
                     </div>
                   )}
 
-                  <div className="text-xs text-slate-500 bg-slate-50 p-2 rounded">
+                  <div className="rounded-control bg-slate-50 p-2 text-xs text-slate-500">
                     💡 <strong>Suggerimento:</strong> Per risposte molto grandi, abilita la limitazione
                     per migliorare le performance. Puoi sempre scaricare il file completo.
                   </div>
@@ -303,19 +307,19 @@ function GetRefsTestPanel({ fieldOptions, apiKey, isLoading, testResponse, onTes
               </div>
 
               {/* Preview JSON Richiesta */}
-              <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-slate-50 dark:bg-slate-900">
+              <div className="rounded-card border border-slate-200 bg-slate-50 p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">JSON Richiesta (Preview)</span>
+                  <span className="title-eyebrow">JSON Richiesta (Preview)</span>
                   <Button
                     variant="outline-secondary"
                     size="sm"
                     onClick={copyJsonToClipboard}
                   >
-                    <Lucide icon="Copy" className="w-3 h-3 mr-1" />
+                    <Lucide icon="Copy" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
                     Copia
                   </Button>
                 </div>
-                <pre className="text-xs bg-white dark:bg-slate-800 p-3 rounded border border-slate-200 dark:border-slate-700 overflow-auto max-h-40">
+                <pre className="max-h-40 overflow-auto rounded-control border border-slate-200 bg-white p-3 text-xs">
                   {JSON.stringify({
                     template_id: selectedTemplates,
                     ...(filterGroups.filter(g => g.length > 0 && g.some(f => f.field && f.operator && f.value)).length > 0 && {
@@ -331,27 +335,19 @@ function GetRefsTestPanel({ fieldOptions, apiKey, isLoading, testResponse, onTes
                 onClick={onTest}
                 disabled={isLoading || template.length === 0 || (!testMode && !apiKey)}
                 className="w-full"
+                loading={isLoading}
               >
-                {isLoading ? (
-                  <>
-                    <Lucide icon="Loader" className="w-4 h-4 mr-2 animate-spin" />
-                    Test getRefs in corso...
-                  </>
-                ) : (
-                  <>
-                    <Lucide icon="Play" className="w-4 h-4 mr-2" />
-                    Esegui Test getRefs
-                  </>
-                )}
+                {!isLoading && <Lucide icon="Play" aria-hidden="true" className="mr-2 h-4 w-4" />}
+                {isLoading ? "Test getRefs in corso..." : "Esegui Test getRefs"}
               </Button>
             </div>
-          </div>
-        </div>
+        </Sezione>
 
-        <div className="col-span-12 lg:col-span-6">
-          <div className="box p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium">Risposta</h3>
+        <Sezione
+          className="col-span-12 xl:col-span-6"
+          titolo="Risposta"
+          azioni={
+            <>
               <div className="flex gap-2">
                 {testResponse && (
                   <>
@@ -360,7 +356,7 @@ function GetRefsTestPanel({ fieldOptions, apiKey, isLoading, testResponse, onTes
                       size="sm"
                       onClick={() => { setFullscreenSearch(""); setFullscreenOpen(true); }}
                     >
-                      <Lucide icon="Maximize2" className="w-4 h-4 mr-1" />
+                      <Lucide icon="Maximize2" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
                       Espandi
                     </Button>
                     <Button
@@ -378,7 +374,7 @@ function GetRefsTestPanel({ fieldOptions, apiKey, isLoading, testResponse, onTes
                         );
                       }}
                     >
-                      <Lucide icon="Copy" className="w-4 h-4 mr-1" />
+                      <Lucide icon="Copy" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
                       Copia
                     </Button>
                     <Button
@@ -409,7 +405,7 @@ function GetRefsTestPanel({ fieldOptions, apiKey, isLoading, testResponse, onTes
                         }
                       }}
                     >
-                      <Lucide icon="Code" className="w-4 h-4 mr-1" />
+                      <Lucide icon="Code" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
                       Formatta
                     </Button>
                     <Button
@@ -435,27 +431,29 @@ function GetRefsTestPanel({ fieldOptions, apiKey, isLoading, testResponse, onTes
                         );
                       }}
                     >
-                      <Lucide icon="Download" className="w-4 h-4 mr-1" />
+                      <Lucide icon="Download" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
                       Download
                     </Button>
                   </>
                 )}
               </div>
-            </div>
+            </>
+          }
+        >
 
             {testResponse && (
               <div className="mb-4">
-                <FormInput
-                  type="text"
-                  placeholder="Cerca nella risposta..."
-                  value={responseSearch}
-                  onChange={(e) => setResponseSearch(e.target.value)}
-                  className="w-full"
-                />
+                <CampoRicerca
+                etichetta="Cerca nella risposta"
+                placeholder="Cerca nella risposta…"
+                value={responseSearch}
+                onChange={setResponseSearch}
+                className="sm:w-full"
+              />
               </div>
             )}
 
-            <div className="rounded-lg overflow-hidden">
+            <div className="overflow-hidden rounded-card">
               <MonacoJsonViewer
                 value={testResponse}
                 searchTerm={responseSearch}
@@ -478,29 +476,26 @@ function GetRefsTestPanel({ fieldOptions, apiKey, isLoading, testResponse, onTes
                 </span>
               </div>
             )}
-          </div>
-        </div>
+        </Sezione>
       </div>
 
       {/* Dialog fullscreen risposta */}
       <Dialog
         open={fullscreenOpen}
         onClose={() => setFullscreenOpen(false)}
-        size="xl"
+        size="2xl"
         centered
       >
-        <Dialog.Panel className="!w-[95vw] max-w-none h-[calc(100vh-8rem)] flex flex-col">
-          <Dialog.Title>
-            <div className="flex items-center justify-between w-full">
-              <span className="font-semibold">Risposta getRefs</span>
-              <div className="flex items-center gap-2">
-                <FormInput
-                  type="text"
-                  placeholder="Cerca nella risposta..."
-                  value={fullscreenSearch}
-                  onChange={(e) => setFullscreenSearch(e.target.value)}
-                  className="w-56 h-8 text-sm"
-                />
+        <Dialog.Panel className="flex h-[calc(100vh-8rem)] flex-col">
+          <Dialog.Title>Risposta getRefs</Dialog.Title>
+          <div className="flex flex-wrap items-center gap-2 border-b border-slate-200/60 px-5 py-3">
+                <CampoRicerca
+                etichetta="Cerca nella risposta"
+                placeholder="Cerca nella risposta…"
+                value={fullscreenSearch}
+                onChange={setFullscreenSearch}
+                className="sm:w-56"
+              />
                 <Button
                   variant="outline-secondary"
                   size="sm"
@@ -516,7 +511,7 @@ function GetRefsTestPanel({ fieldOptions, apiKey, isLoading, testResponse, onTes
                     );
                   }}
                 >
-                  <Lucide icon="Copy" className="w-4 h-4 mr-1" />
+                  <Lucide icon="Copy" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
                   Copia
                 </Button>
                 <Button
@@ -534,29 +529,19 @@ function GetRefsTestPanel({ fieldOptions, apiKey, isLoading, testResponse, onTes
                     URL.revokeObjectURL(url);
                   }}
                 >
-                  <Lucide icon="Download" className="w-4 h-4 mr-1" />
+                  <Lucide icon="Download" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
                   Download
                 </Button>
-                <Button
-                  variant="outline-secondary"
-                  size="sm"
-                  onClick={() => setFullscreenOpen(false)}
-                  aria-label="Chiudi schermo intero"
-                >
-                  <Lucide aria-hidden="true" icon="X" className="w-4 h-4" />
-                </Button>
               </div>
-            </div>
-          </Dialog.Title>
           <div className="flex-1 min-h-0 p-3">
             <MonacoJsonViewer
               value={testResponse}
               searchTerm={fullscreenSearch}
-              height="calc(100vh - 14rem)"
+              height="calc(100vh - 21rem)"
             />
           </div>
           {testResponse && (
-            <div className="px-5 py-2 text-xs text-slate-500 border-t border-slate-200/60 dark:border-darkmode-400 flex items-center gap-4">
+            <div className="px-5 py-2 text-xs text-slate-500 border-t border-slate-200/60 flex items-center gap-4">
               <span>Caratteri: {testResponse.length}</span>
               <span>Righe: {testResponse.split('\n').length}</span>
               {fullscreenSearch && (
@@ -566,6 +551,11 @@ function GetRefsTestPanel({ fieldOptions, apiKey, isLoading, testResponse, onTes
               )}
             </div>
           )}
+          <Dialog.Footer>
+            <Button variant="outline-secondary" onClick={() => setFullscreenOpen(false)}>
+              Chiudi
+            </Button>
+          </Dialog.Footer>
         </Dialog.Panel>
       </Dialog>
     </>

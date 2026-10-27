@@ -1,4 +1,5 @@
 import Lucide from "@/components/Base/Lucide";
+import Spinner from "@/components/Base/Spinner";
 import { useKeyframeEvents } from "@/context/KeyframeEventContext";
 import { useUser } from "@/context/UserContext";
 import clsx from "clsx";
@@ -247,8 +248,8 @@ const GridItem: React.FC<GridItemProps> = ({
         "text-center p-4",
 
       )}>
-        <Lucide icon="Loader" className="w-6 h-6 mx-auto animate-spin text-gray-400 mb-2" />
-        <p className="text-gray-500">In attesa della configurazione...</p>
+        <Spinner decorativo className="mx-auto mb-2 block" />
+        <p role="status" className="text-slate-500">In attesa della configurazione...</p>
       </div>
     );
 
@@ -258,8 +259,8 @@ const GridItem: React.FC<GridItemProps> = ({
           "text-center p-4",
 
         )}>
-          <Lucide icon="Loader" className="w-6 h-6 mx-auto animate-spin text-gray-400 mb-2" />
-          <p className="text-gray-500">In attesa della configurazione...</p>
+          <Spinner decorativo className="mx-auto mb-2 block" />
+          <p role="status" className="text-slate-500">In attesa della configurazione...</p>
         </div>
       );
     }
@@ -279,8 +280,8 @@ const GridItem: React.FC<GridItemProps> = ({
                   "text-center p-4",
                   // Fallback per assenza di props
                 )}>
-                  <Lucide icon="Loader" className="w-6 h-6 mx-auto animate-spin text-gray-400 mb-2" />
-                  <p className="text-gray-500">In attesa della configurazione...</p>
+                  <Spinner decorativo className="mx-auto mb-2 block" />
+                  <p role="status" className="text-slate-500">In attesa della configurazione...</p>
                 </div>
               )}
             </Suspense>
@@ -316,7 +317,7 @@ const GridItem: React.FC<GridItemProps> = ({
             {content?.src ? (
               <img src={content.src} alt="preview" className="max-w-full h-auto" />
             ) : (
-              <div className="p-4 bg-gray-200 text-center text-gray-500 w-full h-full">
+              <div className="p-4 bg-slate-200 text-center text-slate-500 w-full h-full">
                 Immagine
               </div>
             )}
@@ -347,7 +348,7 @@ const GridItem: React.FC<GridItemProps> = ({
       case "ruota_della_fortuna":
         return (
           <div className={clsx(
-            "p-4 bg-gray-200 text-center text-gray-500",
+            "p-4 bg-slate-200 text-center text-slate-500",
 
           )}>
             <Lucide icon="CircleDashed" className="mx-auto mb-2" />
@@ -357,7 +358,7 @@ const GridItem: React.FC<GridItemProps> = ({
       case "space":
         return (
           <div className={clsx(
-            "p-4 bg-gray-100 text-center text-gray-400 italic",
+            "p-4 bg-slate-100 text-center text-slate-400 italic",
 
           )}>
             Spazio Vuoto
@@ -366,10 +367,10 @@ const GridItem: React.FC<GridItemProps> = ({
       case "html":
         return (
           <div className={clsx(
-            "p-4 rounded-lg",
+            "p-4 rounded-card",
             // Usa bordo predefinito se non ibrido
           )}>
-            <div className="text-gray-500 font-mono text-xs">
+            <div className="text-slate-500 font-mono text-xs">
               {parse(content?.html || "<div>Codice HTML personalizzato</div>")}
             </div>
           </div>
@@ -390,7 +391,7 @@ const GridItem: React.FC<GridItemProps> = ({
         return (
           <div className={clsx(
             "relative", // Assicura posizionamento relativo per potenziali figli assoluti o overlay
-            isHybrid && "border-2 border-dashed border-pink-500 rounded-lg p-1" // Aggiungi padding per rendere il bordo visibile attorno al Dropzone
+            isHybrid && "border-2 border-dashed border-pink-500 rounded-card p-1" // Aggiungi padding per rendere il bordo visibile attorno al Dropzone
           )}>
             <Dropzone
               type={dropzoneType}
@@ -417,7 +418,7 @@ const GridItem: React.FC<GridItemProps> = ({
       case "pdf_volantino":
         return (
           <div className={clsx(
-            "p-4 bg-gray-100 text-center text-gray-500",
+            "p-4 bg-slate-100 text-center text-slate-500",
 
           )}>
             <Lucide icon="FileText" className="mx-auto mb-2" />

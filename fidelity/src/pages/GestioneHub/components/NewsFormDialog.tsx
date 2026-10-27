@@ -1,6 +1,7 @@
 import Button from "@/components/Base/Button";
 import { ClassicEditor } from "@/components/Base/Ckeditor";
 import { FormCheck, FormInput, FormLabel, FormSelect, FormSwitch } from "@/components/Base/Form";
+import Alert from "@/components/Base/Alert";
 import { Dialog } from "@/components/Base/Headless";
 import Lucide from "@/components/Base/Lucide";
 import { useEffect, useMemo, useState } from "react";
@@ -107,13 +108,13 @@ const NewsFormDialog = ({
     if (options.length === 0) return null;
 
     return (
-      <section className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5">
+      <section className="rounded-card border border-slate-200 bg-white p-4 sm:p-5">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <div className="text-sm font-semibold text-slate-800">{title}</div>
+            <h4 className="text-sm font-semibold text-slate-800">{title}</h4>
             <div className="mt-1 text-xs text-slate-500">La news sarà visibile solo ai destinatari selezionati.</div>
           </div>
-          <div className="text-xs font-medium uppercase tracking-wide text-slate-400">{options.length} ruoli</div>
+          <div className="title-eyebrow">{options.length} ruoli</div>
         </div>
         <div className="mt-4 grid gap-3 lg:grid-cols-2">
           {options.map((option) => {
@@ -122,7 +123,7 @@ const NewsFormDialog = ({
             return (
               <FormCheck
                 key={option.value}
-                className={`items-start gap-3 rounded-xl border px-3 py-3 transition ${checked ? "border-primary/40 bg-primary/5" : "border-slate-200"}`}
+                className={`items-start gap-3 rounded-control border px-3 py-3 transition ${checked ? "border-primary/40 bg-primary/5" : "border-slate-200"}`}
               >
                 <FormCheck.Input
                   type="checkbox"
@@ -142,33 +143,27 @@ const NewsFormDialog = ({
   };
 
   return (
-    <Dialog open={open} onClose={onClose} size="xl">
-      <Dialog.Panel className="overflow-hidden lg:w-[980px] xl:w-[1080px]">
+    <Dialog open={open} onClose={onClose} size="2xl">
+      <Dialog.Panel className="overflow-hidden">
         <form onSubmit={handleSubmit} className="flex max-h-[calc(100vh-8rem)] flex-col">
-          <Dialog.Title className="gap-3 bg-white">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center">
-                <Lucide icon={mode === "edit" ? "PencilLine" : "Newspaper"} className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="text-base font-semibold text-slate-800">{DIALOG_TITLES[mode]}</div>
-                <div className="text-sm font-normal text-slate-500">Archivio news e aggiornamenti Hub</div>
-              </div>
-            </div>
+          <Dialog.Title>
+            <Lucide icon={mode === "edit" ? "PencilLine" : "Newspaper"} aria-hidden="true" className="h-5 w-5 text-primary" />
+            {DIALOG_TITLES[mode]}
           </Dialog.Title>
 
           <Dialog.Description className="min-h-0 flex-1 overflow-y-auto p-0">
-            <div className="space-y-5 bg-slate-50/50 px-5 py-5">
+            <div className="space-y-5 bg-slate-50 px-5 py-5">
+              <p className="text-sm text-slate-500">Archivio news e aggiornamenti Hub</p>
               {errorMessage && (
-                <div className="rounded-xl border border-danger/20 bg-danger/5 px-4 py-3 text-sm text-danger">
+                <Alert variant="soft-danger" icona="CircleAlert">
                   {errorMessage}
-                </div>
+                </Alert>
               )}
 
               <div className="grid gap-5 xl:grid-cols-2">
-                <section className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5">
+                <section className="rounded-card border border-slate-200 bg-white p-4 sm:p-5">
                   <div className="mb-5">
-                    <div className="text-sm font-semibold text-slate-800">Informazioni principali</div>
+                    <h3 className="title-card">Informazioni principali</h3>
                     <div className="mt-1 text-xs text-slate-500">Titolo, categorizzazione e identità visiva della news.</div>
                   </div>
 
@@ -223,9 +218,9 @@ const NewsFormDialog = ({
                   </div>
                 </section>
 
-                <section className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5">
+                <section className="rounded-card border border-slate-200 bg-white p-4 sm:p-5">
                   <div className="mb-5">
-                    <div className="text-sm font-semibold text-slate-800">Pubblicazione</div>
+                    <h3 className="title-card">Pubblicazione</h3>
                     <div className="mt-1 text-xs text-slate-500">Stato, visibilità temporale e link di approfondimento.</div>
                   </div>
 
@@ -265,7 +260,7 @@ const NewsFormDialog = ({
                       </div>
                     </div>
 
-                    <div className="grid gap-3 rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4 md:grid-cols-2">
+                    <div className="grid gap-3 rounded-card border border-slate-200 bg-slate-50 p-4 md:grid-cols-2">
                       <FormSwitch>
                         <FormSwitch.Input
                           id="news-attiva"
@@ -287,22 +282,22 @@ const NewsFormDialog = ({
                       </FormSwitch>
                     </div>
 
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                    <div className="rounded-control border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
                       Se non selezioni destinatari, la news sarà visibile a tutti gli utenti Hub compatibili con la pubblicazione.
                     </div>
                   </div>
                 </section>
               </div>
 
-              <section className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5">
+              <section className="rounded-card border border-slate-200 bg-white p-4 sm:p-5">
                 <div className="mb-5">
-                  <FormLabel htmlFor="news-contenuto" className="text-sm font-semibold text-slate-800">
+                  <FormLabel htmlFor="news-contenuto" className="title-card mb-0">
                     Contenuto
                   </FormLabel>
                   <div className="mt-1 text-xs text-slate-500">Usa l’editor rich text per il testo mostrato nelle card pubbliche del Hub.</div>
                 </div>
 
-                <div className="rounded-2xl border border-slate-200 bg-white p-2 sm:p-3 [&_.ck-editor__editable_inline]:min-h-[260px]">
+                <div className="rounded-control border border-slate-200 bg-white p-2 sm:p-3 [&_.ck-editor__editable_inline]:min-h-[260px]">
                   <ClassicEditor
                     value={values.contenuto}
                     onChange={(nextValue) => updateField("contenuto", nextValue)}
@@ -311,9 +306,9 @@ const NewsFormDialog = ({
                 </div>
               </section>
 
-              <section className="space-y-4 rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4 sm:p-5">
+              <section className="space-y-4 rounded-card border border-slate-200 bg-slate-50 p-4 sm:p-5">
                 <div>
-                  <div className="text-sm font-semibold text-slate-800">Destinatari</div>
+                  <h3 className="title-card">Destinatari</h3>
                   <div className="mt-1 text-xs text-slate-500">Seleziona i ruoli che devono vedere la news nell’Hub pubblico.</div>
                 </div>
                 {renderRecipients("Tipi utente base", roleGroups.base)}
@@ -322,17 +317,16 @@ const NewsFormDialog = ({
             </div>
           </Dialog.Description>
 
-          <Dialog.Footer className="flex flex-col-reverse gap-3 bg-white sm:flex-row sm:justify-end">
+          <Dialog.Footer>
             <Button
               variant="outline-secondary"
               type="button"
               onClick={onClose}
               disabled={submitting}
-              className="w-full sm:w-auto"
             >
               Annulla
             </Button>
-            <Button variant="primary" type="submit" loading={submitting} className="w-full sm:w-auto">
+            <Button variant="primary" type="submit" loading={submitting}>
               {mode === "edit" ? "Salva news" : "Crea news"}
             </Button>
           </Dialog.Footer>

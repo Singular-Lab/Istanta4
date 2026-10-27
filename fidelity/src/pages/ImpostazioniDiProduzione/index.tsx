@@ -1,5 +1,5 @@
-import { FormInput, FormLabel, FormSelect, FormTextarea } from "@/components/Base/Form";
-import { Dialog, Popover } from "@/components/Base/Headless";
+import { FormField, FormInput, FormSelect, FormTextarea } from "@/components/Base/Form";
+import { Dialog } from "@/components/Base/Headless";
 import Lucide from "@/components/Base/Lucide";
 
 import Button from "@/components/Base/Button";
@@ -17,7 +17,8 @@ import { useLocation, useNavigate, useRevalidator } from "react-router-dom";
 type TipiExportEditState = TipiDiExportAttributes & { id?: string };
 
 import FilterBaseForm from '@/components/Base/FormFiltriDesign';
-import PageHeader from "@/components/Base/PageHeader";
+import Pagina from "@/components/Base/Pagina";
+import Sezione from "@/components/Base/Sezione";
 import NamingConvention from "@/components/NamingConvention";
 import { PermissionGate } from "@/components/PermissionGate";
 import withSessionCheck from "@/components/SessionChecker";
@@ -137,26 +138,11 @@ function Main() {
         setShowDialogModificaTipiExport(false);
         setTipiExportEdit(null);
         if (refPannelloTipiExport.current) refPannelloTipiExport.current?.refetchTipiExport();
-        showNotification(
-          <div className="flex flex-row items-center">
-            <Lucide icon="CircleCheck" className="text-success w-8 h-8" />
-            <div className="ml-4 mr-4">
-              <div className="font-bold">Tipo di export modificato con successo</div>
-            </div>
-          </div>
-        );
+        showNotification("Tipo di export modificato con successo", { variant: "success" });
         revalidator.revalidate();
       })
       .catch((error) => {
-        showNotification(
-          <div className="flex flex-row items-center">
-            <Lucide icon="CircleAlert" className="text-danger w-8 h-8" />
-            <div className="ml-4 mr-4">
-              <div className="font-bold">Errore durante la modifica</div>
-              <div className="mt-1 text-slate-500">{error.message}</div>
-            </div>
-          </div>
-        );
+        showNotification(`Errore durante la modifica: ${error.message}`, { variant: "error" });
         revalidator.revalidate();
       });
   };
@@ -211,34 +197,13 @@ function Main() {
     },
     mutationKey: ["creaTipoExport"],
     onSuccess: async () => {
-      showNotification(
-        <div className="flex flex-row items-center">
-          <Lucide icon="CircleCheck" className="text-success w-8 h-8" />
-          <div className="ml-4 mr-4">
-            <div className="font-bold">Creazione tipo di export avvenuta con successo</div>
-            <div className="mt-1 text-slate-500">
-              Il tipo di export è stato creato correttamente.
-            </div>
-          </div>
-        </div>
-      );
-      console.log("Refetching tipi export", refPannelloTipiExport.current);
+      showNotification("Tipo di export creato con successo", { variant: "success" });
       if (refPannelloTipiExport.current) {
         refPannelloTipiExport.current?.refetchTipiExport();
       }
     },
     onError: async (error) => {
-      showNotification(
-        <div className="flex flex-row items-center">
-          <Lucide icon="CircleAlert" className="text-danger w-8 h-8" />
-          <div className="ml-4 mr-4">
-            <div className="font-bold">Errore durante il salvataggio del tipo di export</div>
-            <div className="mt-1 text-slate-500">
-              {error.message}
-            </div>
-          </div>
-        </div>
-      );
+      showNotification(`Errore durante il salvataggio del tipo di export: ${error.message}`, { variant: "error" });
       revalidator.revalidate();
       if (refPannelloTipiExport.current) {
         refPannelloTipiExport.current?.refetchTipiExport();
@@ -253,28 +218,14 @@ function Main() {
     },
     mutationKey: ["salvaFormato"],
     onSuccess: async (result) => {
-      console.log(refPannelloFormati)
       if (refPannelloFormati) {
         refPannelloFormati.current?.refetchFormati();
       }
 
       if (result.esito && result.data) {
-        const message = result.isUpdate
-          ? "Formato aggiornato con successo"
-          : "Formato creato con successo";
-        const icon = result.isUpdate ? "CircleCheck" : "CircleCheck";
-        const iconColor = result.isUpdate ? "text-success" : "text-success";
-
         showNotification(
-          <div className="flex flex-row items-center">
-            <Lucide icon={icon} className={`${iconColor} w-8 h-8`} />
-            <div className="ml-4 mr-4">
-              <div className="font-bold">{message}</div>
-              <div className="mt-1 text-slate-500">
-                Il formato è stato {result.isUpdate ? 'aggiornato' : 'creato'} correttamente.
-              </div>
-            </div>
-          </div>
+          result.isUpdate ? "Formato aggiornato con successo" : "Formato creato con successo",
+          { variant: "success" }
         );
         revalidator.revalidate();
       }
@@ -285,17 +236,7 @@ function Main() {
         refPannelloFormati.current?.refetchFormati();
       }
       revalidator.revalidate();
-      showNotification(
-        <div className="flex flex-row items-center">
-          <Lucide icon="CircleAlert" className="text-danger w-8 h-8" />
-          <div className="ml-4 mr-4">
-            <div className="font-bold">Errore durante il salvataggio del formato</div>
-            <div className="mt-1 text-slate-500">
-              {error.message}
-            </div>
-          </div>
-        </div>
-      );
+      showNotification(`Errore durante il salvataggio del formato: ${error.message}`, { variant: "error" });
     }
   })
 
@@ -317,22 +258,9 @@ function Main() {
     mutationKey: ["creaNamingConvention"],
     onSuccess: async (result) => {
       if (result.esito && result.data) {
-        const message = result.isUpdate
-          ? "Naming convention aggiornata con successo"
-          : "Naming convention creata con successo";
-        const icon = result.isUpdate ? "CircleCheck" : "CircleCheck";
-        const iconColor = result.isUpdate ? "text-success" : "text-success";
-
         showNotification(
-          <div className="flex flex-row items-center">
-            <Lucide icon={icon} className={`${iconColor} w-8 h-8`} />
-            <div className="ml-4 mr-4">
-              <div className="font-bold">{message}</div>
-              <div className="mt-1 text-slate-500">
-                La naming convention è stata {result.isUpdate ? 'aggiornata' : 'creata'} correttamente.
-              </div>
-            </div>
-          </div>
+          result.isUpdate ? "Naming convention aggiornata con successo" : "Naming convention creata con successo",
+          { variant: "success" }
         );
         revalidator.revalidate();
       }
@@ -349,17 +277,7 @@ function Main() {
     },
     onError: async (error) => {
       revalidator.revalidate();
-      showNotification(
-        <div className="flex flex-row items-center">
-          <Lucide icon="CircleAlert" className="text-danger w-8 h-8" />
-          <div className="ml-4 mr-4">
-            <div className="font-bold">Errore durante il salvataggio della naming convention</div>
-            <div className="mt-1 text-slate-500">
-              {error.message}
-            </div>
-          </div>
-        </div>
-      );
+      showNotification(`Errore durante il salvataggio della naming convention: ${error.message}`, { variant: "error" });
       datiNamingConvention.refetch();
     }
   });
@@ -382,8 +300,6 @@ function Main() {
       is_modifica: false
     };
 
-    console.log("Raw form data:", data);
-    console.log("Processed data:", processedData);
     setShowDialogCreazioneTipiExport(false);
     creazioneTipiDiExport.mutate(processedData);
     reset({
@@ -425,7 +341,6 @@ function Main() {
 
 
   const handleChange = useCallback((result: any) => {
-    console.log(result);
     setNamingConvention(result);
     if (isModificaNamingConvention) {
       setNamingConventionData(result);
@@ -475,149 +390,154 @@ function Main() {
     quantitaKit: number;
     codiceFormato: string;
   }) => {
-    console.log(data);
+    // Nessuna azione: la modifica del template avviene dalla pagina di dettaglio
+    void data;
   }
+
+  const chiudiDialogNamingConvention = () => {
+    setShowDialogCreazioneNamingConvention(false);
+    setIsModificaNamingConvention(false);
+    setNamingConventionDaModificare(null);
+    setNomeNamingConvention('');
+    setDescrizioneNamingConvention('');
+    setNamingConvention([]);
+    setNamingConventionData([]);
+  };
+
+  // Opzioni comuni ai dialog dei tipi di export
+  const opzioniModalita = Object.keys(MODALITA_TIPO_EXPORT).map((key, index) => (
+    <option key={index} value={MODALITA_TIPO_EXPORT[key as keyof typeof MODALITA_TIPO_EXPORT]}>{key.replace(/_/g, " ")}</option>
+  ));
+  const opzioniNamingConvention = dataNamingConventionLocali?.data?.map((namingConvention: { id: string; nome: string }, index: number) => (
+    <option key={index} value={namingConvention.id}>{namingConvention.nome}</option>
+  ));
 
   return (
     <>
-
       <Dialog size="md" open={showDialogCreazioneFormati} onClose={handleCloseDialogCreazioneFormati}>
         <Dialog.Panel>
-          <Dialog.Title >
-            <h2 className="title-card mr-auto">
-              Crea Formato
-            </h2>
-          </Dialog.Title>
-          <Dialog.Description>
-            <form onSubmit={handleSubmitFormati(handleCreazioneFormati)}>
-              <div className="grid grid-cols-2 gap-y-3 gap-x-6">
-                <div className="col-span-1">
-                  <FormLabel htmlFor="nome_formato">Nome</FormLabel>
-                  <FormInput placeholder="Nome" id="nome_formato" {...registerFormati("nome")} />
-                  {errorsFormati.nome && <p className="text-red-500">{errorsFormati.nome.message}</p>}
-                </div>
-                <div className="col-span-1">
-                  <FormLabel htmlFor="codice_formato">Codice</FormLabel>
-                  <FormInput placeholder="Codice" id="codice_formato" {...registerFormati("codice")} />
-                  {errorsFormati.codice && <p className="text-red-500">{errorsFormati.codice.message}</p>}
-                </div>
-                <div className="col-span-2">
-                  <FormLabel htmlFor="descrizione_formato">Descrizione</FormLabel>
-                  <FormTextarea placeholder="Descrizione" id="descrizione_formato" {...registerFormati("descrizione")} />
-                  {errorsFormati.descrizione && <p className="text-red-500">{errorsFormati.descrizione.message}</p>}
-                </div>
-                <div className="col-span-2">
-                  <FormLabel htmlFor="tipi_formato">Tipi di formato</FormLabel>
-                  <FormSelect id="tipi_formato" defaultValue={0} {...registerFormati("tipo_lavorazione")}>
-                    <option value="">Seleziona un tipo</option>
-                    {Object.keys(TIPO_LAVORAZIONE)
-                      .filter(key => !isNaN(Number(key))) // Filtra le chiavi numeriche
-                      .map((key, index) => {
-                        const tipo = TIPO_LAVORAZIONE[key as keyof typeof TIPO_LAVORAZIONE];
-                        return <option key={index} value={TIPO_LAVORAZIONE[tipo]}>{tipo}</option>;
-                      })}
-                  </FormSelect>
-                  {errorsFormati.tipo_lavorazione && <p className="text-red-500">{errorsFormati.tipo_lavorazione.message}</p>}
-                </div>
-              </div>
-              <Dialog.Footer>
-                <div className="flex flex-row justify-end gap-x-3">
-                  <Button variant="secondary" onClick={handleCloseDialogCreazioneFormati}>Annulla</Button>
-                  <Button variant="primary" type="submit" loading={creazioneFormati.isPending} disabled={creazioneFormati.isPending}>Crea</Button>
-                </div>
-              </Dialog.Footer>
-            </form>
-          </Dialog.Description>
+          <Dialog.Title>Crea formato</Dialog.Title>
+          <form onSubmit={handleSubmitFormati(handleCreazioneFormati)}>
+            <Dialog.Description className="grid grid-cols-2 gap-x-6 gap-y-4">
+              <FormField etichetta="Nome" obbligatorio errore={errorsFormati.nome?.message}>
+                <FormInput placeholder="Nome" id="nome_formato" {...registerFormati("nome")} />
+              </FormField>
+              <FormField etichetta="Codice" obbligatorio errore={errorsFormati.codice?.message}>
+                <FormInput placeholder="Codice" id="codice_formato" {...registerFormati("codice")} />
+              </FormField>
+              <FormField className="col-span-2" etichetta="Descrizione" obbligatorio errore={errorsFormati.descrizione?.message}>
+                <FormTextarea placeholder="Descrizione" id="descrizione_formato" {...registerFormati("descrizione")} />
+              </FormField>
+              <FormField className="col-span-2" etichetta="Tipo di formato" obbligatorio errore={errorsFormati.tipo_lavorazione?.message}>
+                <FormSelect id="tipi_formato" defaultValue={0} {...registerFormati("tipo_lavorazione")}>
+                  <option value="">Seleziona un tipo</option>
+                  {Object.keys(TIPO_LAVORAZIONE)
+                    .filter(key => !isNaN(Number(key))) // Filtra le chiavi numeriche
+                    .map((key, index) => {
+                      const tipo = TIPO_LAVORAZIONE[key as keyof typeof TIPO_LAVORAZIONE];
+                      return <option key={index} value={TIPO_LAVORAZIONE[tipo]}>{tipo}</option>;
+                    })}
+                </FormSelect>
+              </FormField>
+            </Dialog.Description>
+            <Dialog.Footer>
+              <Button type="button" variant="outline-secondary" onClick={handleCloseDialogCreazioneFormati}>Annulla</Button>
+              <Button variant="primary" type="submit" loading={creazioneFormati.isPending} disabled={creazioneFormati.isPending}>Crea</Button>
+            </Dialog.Footer>
+          </form>
         </Dialog.Panel>
       </Dialog>
       <Dialog size="xl" open={showDialogCreazioneTipiExport} onClose={handleCloseDialogCreazioneTipiExport}>
         <Dialog.Panel>
-          <Dialog.Title>
-            <h2 className="title-card mr-auto">
-              Crea Tipo di Export
-            </h2>
-          </Dialog.Title>
-          <Dialog.Description>
-            <form onSubmit={handleSubmit(handleCreazioneTipiExport)}>
-              <div className="grid grid-cols-2 gap-y-3 gap-x-6">
-                <div className="col-span-1">
-                  <FormLabel htmlFor="nome_export">Nome Export</FormLabel>
-                  <FormInput placeholder="Nome" id="nome_export" {...register("nome_tipiexport")} />
-                  {errors.nome_tipiexport && <p className="text-red-500">{errors.nome_tipiexport.message}</p>}
-                </div>
-                <div className="col-span-1">
-                  <FormLabel htmlFor="descrizione_export">Codice</FormLabel>
-                  <FormInput placeholder="Codice" id="descrizione_export" {...register("codice_tipiexport")} />
-                  {errors.codice_tipiexport && <p className="text-red-500">{errors.codice_tipiexport.message}</p>}
-                </div>
-                <div className="col-span-1">
-                  <FormLabel htmlFor="modalita_export">Modalità</FormLabel>
-                  <FormSelect id="modalita_export" defaultValue={""} {...register("modalita_tipiexport")}>
-                    <option value="">Seleziona una modalità</option>
-                    {Object.keys(MODALITA_TIPO_EXPORT).map((key, index) => {
-                      return <option key={index} value={MODALITA_TIPO_EXPORT[key as keyof typeof MODALITA_TIPO_EXPORT]}>{key.replace(
-                        /_/g,
-                        " "
-                      )}</option>;
-                    })}
-                  </FormSelect>
-                  {errors.modalita_tipiexport && <p className="text-red-500">{errors.modalita_tipiexport.message}</p>}
-                </div>
-                <div className="col-span-1">
-                  <FormLabel htmlFor="guid_naming_convention" >Naming Convention</FormLabel>
-                  <FormSelect id="guid_naming_convention" {...register("guid_namingconvention_tipiexport")}>
-                    <option value="">Seleziona una naming convention</option>
-                    {dataNamingConventionLocali?.data?.map((namingConvention: { id: string | number | readonly string[] | undefined; nome: string | number | boolean | React.ReactElement<any, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | Iterable<React.ReactNode> | null | undefined; }, index: React.Key | null | undefined) => (
-                      <option key={index} value={namingConvention.id}>{namingConvention.nome}</option>
-                    ))}
-                  </FormSelect>
-                  {errors.guid_namingconvention_tipiexport && <p className="text-red-500">{errors.guid_namingconvention_tipiexport.message}</p>}
-                </div>
-                <div className="col-span-2">
-                  <FilterBaseForm
-                    control={control}
-                    register={register}
-                    errors={errors}
-                    dataAddestramenti={dataAddestramenti.data}
-                    namePrefix="filtri_tipiexport"
-                  />
-                </div>
+          <Dialog.Title>Crea tipo di export</Dialog.Title>
+          <form onSubmit={handleSubmit(handleCreazioneTipiExport)}>
+            <Dialog.Description className="grid grid-cols-2 gap-x-6 gap-y-4">
+              <FormField etichetta="Nome export" obbligatorio errore={errors.nome_tipiexport?.message}>
+                <FormInput placeholder="Nome" id="nome_export" {...register("nome_tipiexport")} />
+              </FormField>
+              <FormField etichetta="Codice" obbligatorio errore={errors.codice_tipiexport?.message}>
+                <FormInput placeholder="Codice" id="descrizione_export" {...register("codice_tipiexport")} />
+              </FormField>
+              <FormField etichetta="Modalità" errore={errors.modalita_tipiexport?.message}>
+                <FormSelect id="modalita_export" defaultValue={""} {...register("modalita_tipiexport")}>
+                  <option value="">Seleziona una modalità</option>
+                  {opzioniModalita}
+                </FormSelect>
+              </FormField>
+              <FormField etichetta="Naming convention" errore={errors.guid_namingconvention_tipiexport?.message}>
+                <FormSelect id="guid_naming_convention" {...register("guid_namingconvention_tipiexport")}>
+                  <option value="">Seleziona una naming convention</option>
+                  {opzioniNamingConvention}
+                </FormSelect>
+              </FormField>
+              <div className="col-span-2">
+                <FilterBaseForm
+                  control={control}
+                  register={register}
+                  errors={errors}
+                  dataAddestramenti={dataAddestramenti.data}
+                  namePrefix="filtri_tipiexport"
+                />
               </div>
-              <Dialog.Footer>
-                <div className="flex flex-row justify-end gap-x-3">
-                  <Button variant="secondary" onClick={handleCloseDialogCreazioneTipiExport}>Annulla</Button>
-                  <Button variant="primary" type="submit" loading={creazioneTipiDiExport.isPending} disabled={creazioneTipiDiExport.isPending}>Crea</Button>
-                </div>
-              </Dialog.Footer>
-            </form>
-          </Dialog.Description>
+            </Dialog.Description>
+            <Dialog.Footer>
+              <Button type="button" variant="outline-secondary" onClick={handleCloseDialogCreazioneTipiExport}>Annulla</Button>
+              <Button variant="primary" type="submit" loading={creazioneTipiDiExport.isPending} disabled={creazioneTipiDiExport.isPending}>Crea</Button>
+            </Dialog.Footer>
+          </form>
         </Dialog.Panel>
       </Dialog>
-      <Dialog size="xl" open={showDialogCreazioneNamingConvention} onClose={() => {
-        setShowDialogCreazioneNamingConvention(false);
-        setIsModificaNamingConvention(false);
-        setNamingConventionDaModificare(null);
-        setNomeNamingConvention('');
-        setDescrizioneNamingConvention('');
-        setNamingConvention([]);
-        setNamingConventionData([]);
-      }}>
+      <Dialog size="xl" open={showDialogModificaTipiExport} onClose={handleCloseDialogModificaTipiExport}>
         <Dialog.Panel>
-          <Dialog.Title>
-            <h2 className="title-card mr-auto">
-              {isModificaNamingConvention ? 'Modifica Naming Convention' : 'Crea Naming Convention'}
-            </h2>
-          </Dialog.Title>
-          <Dialog.Description>
-            <div className="grid grid-cols-2 p-4 gap-y-3 gap-x-6">
-              <div className="col-span-1">
-                <FormLabel htmlFor="nome_naming">Nome</FormLabel>
+          <Dialog.Title>Modifica tipo di export</Dialog.Title>
+          <form onSubmit={handleSubmitEdit(handleModificaTipiExport)}>
+            <Dialog.Description className="grid grid-cols-2 gap-x-6 gap-y-4">
+              <FormField etichetta="Nome export" obbligatorio errore={errorsEdit.nome_tipiexport?.message}>
+                <FormInput placeholder="Nome" id="nome_export_edit" {...registerEdit("nome_tipiexport")} />
+              </FormField>
+              <FormField etichetta="Codice" obbligatorio errore={errorsEdit.codice_tipiexport?.message}>
+                <FormInput placeholder="Codice" id="descrizione_export_edit" {...registerEdit("codice_tipiexport")} />
+              </FormField>
+              <FormField etichetta="Modalità" errore={errorsEdit.modalita_tipiexport?.message}>
+                <FormSelect id="modalita_export_edit" defaultValue={""} {...registerEdit("modalita_tipiexport")}>
+                  <option value="">Seleziona una modalità</option>
+                  {opzioniModalita}
+                </FormSelect>
+              </FormField>
+              <FormField etichetta="Naming convention" errore={errorsEdit.guid_namingconvention_tipiexport?.message}>
+                <FormSelect id="guid_naming_convention_edit" {...registerEdit("guid_namingconvention_tipiexport")}>
+                  <option value="">Seleziona una naming convention</option>
+                  {opzioniNamingConvention}
+                </FormSelect>
+              </FormField>
+              <div className="col-span-2">
+                <FilterBaseForm
+                  control={controlEdit}
+                  register={registerEdit}
+                  errors={errorsEdit}
+                  dataAddestramenti={dataAddestramenti.data}
+                  namePrefix="filtri_tipiexport"
+                />
+              </div>
+            </Dialog.Description>
+            <Dialog.Footer>
+              <Button type="button" variant="outline-secondary" onClick={handleCloseDialogModificaTipiExport}>Annulla</Button>
+              <Button variant="primary" type="submit" loading={isSubmittingEdit} disabled={isSubmittingEdit}>Salva</Button>
+            </Dialog.Footer>
+          </form>
+        </Dialog.Panel>
+      </Dialog>
+      <Dialog size="xl" open={showDialogCreazioneNamingConvention} onClose={chiudiDialogNamingConvention}>
+        <Dialog.Panel>
+          <Dialog.Title>{isModificaNamingConvention ? 'Modifica naming convention' : 'Crea naming convention'}</Dialog.Title>
+          <Dialog.Description className="flex flex-col gap-4">
+            <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+              <FormField etichetta="Nome">
                 <FormInput value={nomeNamingConvention} onChange={(e) => { setNomeNamingConvention(e.target.value) }} placeholder="Nome" id="nome_naming" />
-              </div>
-              <div className="col-span-1">
-                <FormLabel htmlFor="descrizione_naming">Descrizione</FormLabel>
+              </FormField>
+              <FormField etichetta="Descrizione">
                 <FormInput value={descrizioneNamingConvention} onChange={(e) => { setDescrizioneNamingConvention(e.target.value) }} placeholder="Descrizione" id="descrizione_naming" />
-              </div>
+              </FormField>
             </div>
             <NamingConvention
               ref={refNamingConvention}
@@ -626,153 +546,85 @@ function Main() {
             />
           </Dialog.Description>
           <Dialog.Footer>
-            <div className="flex flex-row justify-between gap-x-3">
-              <Button variant="secondary" onClick={() => {
-                setShowDialogCreazioneNamingConvention(false);
-                setIsModificaNamingConvention(false);
-                setNamingConventionDaModificare(null);
-                setNomeNamingConvention('');
-                setDescrizioneNamingConvention('');
-                setNamingConvention([]);
-                setNamingConventionData([]);
-              }}>Annulla</Button>
-              <Button variant="primary" onClick={() => {
-                setShowDialogCreazioneNamingConvention(false);
+            <Button variant="outline-secondary" onClick={chiudiDialogNamingConvention} disabled={creazioneNamingConvention.isPending}>Annulla</Button>
+            <Button
+              variant="primary"
+              loading={creazioneNamingConvention.isPending}
+              disabled={creazioneNamingConvention.isPending}
+              onClick={() => {
                 creazioneNamingConvention.mutate({
                   namingConvention,
                   nome: nomeNamingConvention,
                   descrizione: descrizioneNamingConvention,
                   id_naming_convention: isModificaNamingConvention ? namingConventionDaModificare?.id : undefined
+                }, {
+                  // Il dialog resta aperto, col pulsante in caricamento, fino alla risposta
+                  onSettled: () => setShowDialogCreazioneNamingConvention(false),
                 })
-              }}>
-                {isModificaNamingConvention ? 'Salva' : 'Crea'}
-              </Button>
-            </div>
+              }}
+            >
+              {isModificaNamingConvention ? 'Salva' : 'Crea'}
+            </Button>
           </Dialog.Footer>
         </Dialog.Panel>
       </Dialog>
-      <div className="flex items-center justify-between">
-        <PageHeader
-          title="Impostazioni di Produzione"
-          description="Pannello di controllo per la configurazione di formati, export e combinazioni."
-        />
-        <Popover>
-          <Popover.Button
-            as={Button}
-            variant="primary"
-            className="shadow-lg"
-          >
-            <Lucide icon="Plus" className="w-4 h-4 mr-2" />
-            Crea Nuovo
-            <Lucide icon="ChevronDown" className="w-4 h-4 ml-2" />
-          </Popover.Button>
-          <Popover.Panel className="w-60 mt-1">
-            <PermissionGate permission={PERMISSIONS.IMPOSTAZIONI.GESTISCI_FORMATI} mode="disable">
-              <button
-                type="button"
-                className="w-full text-left cursor-pointer p-3 hover:bg-slate-100 flex items-center rounded-control"
-                onClick={() => { setShowDialogCreazioneFormati(true); }}
-              >
-                <Lucide aria-hidden="true" icon="LayoutTemplate" className="w-5 h-5 mr-3" />
-                <div>
-                  <div className="font-medium">Formato</div>
-                  <div className="text-xs text-slate-500">Crea nuovo formato</div>
-                </div>
-              </button>
-            </PermissionGate>
-            <PermissionGate permission={PERMISSIONS.IMPOSTAZIONI.GESTISCI_TIPO_EXPORT} mode="disable">
-              <button
-                type="button"
-                className="w-full text-left cursor-pointer p-3 hover:bg-slate-100 flex items-center rounded-control"
-                onClick={() => { setShowDialogCreazioneTipiExport(true); }}
-              >
-                <Lucide aria-hidden="true" icon="FileOutput" className="w-5 h-5 mr-3" />
-                <div>
-                  <div className="font-medium">Tipo di Export</div>
-                  <div className="text-xs text-slate-500">Crea tipo di export</div>
-                </div>
-              </button>
-            </PermissionGate>
-            <PermissionGate permission={PERMISSIONS.IMPOSTAZIONI.GESTISCI_NAMING_CONVENTION} mode="disable">
-              <button
-                type="button"
-                className="w-full text-left cursor-pointer p-3 hover:bg-slate-100 flex items-center rounded-control"
-                onClick={() => { setShowDialogCreazioneNamingConvention(true); }}
-              >
-                <Lucide aria-hidden="true" icon="FileText" className="w-5 h-5 mr-3" />
-                <div>
-                  <div className="font-medium">Naming Convention</div>
-                  <div className="text-xs text-slate-500">Crea naming convention</div>
-                </div>
-              </button>
-            </PermissionGate>
-            <hr className="my-2" />
-            <button
-              type="button"
-              className="w-full text-left cursor-pointer p-3 hover:bg-slate-100 flex items-center rounded-control"
-              onClick={() => { navigate('/impostazioni-di-produzione/creazione-kit-automatico'); }}
-            >
-              <Lucide aria-hidden="true" icon="Cog" className="w-5 h-5 mr-3" />
-              <div>
-                <div className="font-medium">Kit Automatico</div>
-                <div className="text-xs text-slate-500">Crea kit automatico</div>
-              </div>
-            </button>
-            <button
-              type="button"
-              className="w-full text-left cursor-pointer p-3 hover:bg-slate-100 flex items-center rounded-control"
-              onClick={() => { navigate('/impostazioni-di-produzione/creazione-kit-manuale'); }}
-            >
-              <Lucide aria-hidden="true" icon="Package" className="w-5 h-5 mr-3" />
-              <div>
-                <div className="font-medium">Kit Manuale</div>
-                <div className="text-xs text-slate-500">Crea kit manuale</div>
-              </div>
-            </button>
-          </Popover.Panel>
-        </Popover>
-      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-6 gap-y-8">
+      <Pagina
+        titolo="Impostazioni di Produzione"
+        descrizione="Pannello di controllo per la configurazione di formati, export e combinazioni."
+      >
         {/* Combinazioni */}
-        <div className="col-span-1 lg:col-span-2 p-5 box box--stacked">
-          <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-200/80">
-            <div className="flex items-center gap-3">
-              <Lucide icon="Layers" className="w-5 h-5 text-primary" />
-              <h2 className="title-section">Combinazioni</h2>
-            </div>
-            <Button size="sm" onClick={() => navigate('/impostazioni-di-produzione/creazione-kit-automatico')} variant='outline-primary'>
-              <Lucide icon="Plus" className="w-4 h-4 mr-2" /> Nuovo Kit
-            </Button>
-          </div>
+        <Sezione
+          icona="Layers"
+          titolo="Combinazioni"
+          descrizione="Template dei kit e combinazioni di produzione"
+          azioni={
+            <>
+              <Button size="sm" variant="outline-secondary" onClick={() => navigate('/impostazioni-di-produzione/creazione-kit-manuale')}>
+                <Lucide icon="Package" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                Kit manuale
+              </Button>
+              <Button size="sm" variant="outline-secondary" onClick={() => navigate('/impostazioni-di-produzione/creazione-kit-automatico')}>
+                <Lucide icon="Plus" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                Nuovo kit automatico
+              </Button>
+            </>
+          }
+        >
           <PanelCombinazioni ref={refPanelCombinazioni} callbackEditaTemplate={handleEditTemplate} />
-        </div>
+        </Sezione>
 
         {/* Formati */}
-        <div className="col-span-1 lg:col-span-2 p-5 box box--stacked">
-          <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-200/80">
-            <div className="flex items-center gap-3">
-              <Lucide icon="LayoutTemplate" className="w-5 h-5 text-primary" />
-              <h2 className="title-section">Formati</h2>
-            </div>
-            <Button size="sm" onClick={() => setShowDialogCreazioneFormati(true)} variant='outline-primary'>
-              <Lucide icon="Plus" className="w-4 h-4 mr-2" /> Nuovo Formato
-            </Button>
-          </div>
+        <Sezione
+          senzaPadding
+          icona="LayoutTemplate"
+          titolo="Formati"
+          azioni={
+            <PermissionGate permission={PERMISSIONS.IMPOSTAZIONI.GESTISCI_FORMATI} mode="disable">
+              <Button size="sm" variant="outline-secondary" onClick={() => setShowDialogCreazioneFormati(true)}>
+                <Lucide icon="Plus" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                Nuovo formato
+              </Button>
+            </PermissionGate>
+          }
+        >
           <PanelFormati ref={refPannelloFormati} />
-        </div>
+        </Sezione>
 
         {/* Tipi di Export */}
-        <div className="col-span-1 lg:col-span-2 p-5 box box--stacked">
-          <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-200/80">
-            <div className="flex items-center gap-3">
-              <Lucide icon="FileOutput" className="w-5 h-5 text-primary" />
-              <h2 className="title-section">Tipi di Export</h2>
-            </div>
-            <Button size="sm" onClick={() => setShowDialogCreazioneTipiExport(true)} variant='outline-primary'>
-              <Lucide icon="Plus" className="w-4 h-4 mr-2" /> Nuovo Tipo
-            </Button>
-          </div>
+        <Sezione
+          senzaPadding
+          icona="FileOutput"
+          titolo="Tipi di export"
+          azioni={
+            <PermissionGate permission={PERMISSIONS.IMPOSTAZIONI.GESTISCI_TIPO_EXPORT} mode="disable">
+              <Button size="sm" variant="outline-secondary" onClick={() => setShowDialogCreazioneTipiExport(true)}>
+                <Lucide icon="Plus" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                Nuovo tipo
+              </Button>
+            </PermissionGate>
+          }
+        >
           <PanelTipiExport ref={refPannelloTipiExport} onEditTipoExport={(data) => {
             openDialogModificaTipiExport({
               id: data.id || '',
@@ -783,112 +635,40 @@ function Main() {
               filtri_tipiexport: data.filtri || [],
             })
           }} />
-          {/* Dialog Modifica Tipi di Export */}
-          <Dialog size="xl" open={showDialogModificaTipiExport} onClose={handleCloseDialogModificaTipiExport}>
-            <Dialog.Panel>
-              <Dialog.Title>
-                <h2 className="title-card mr-auto">
-                  Modifica Tipo di Export
-                </h2>
-              </Dialog.Title>
-              <Dialog.Description>
-                <form onSubmit={handleSubmitEdit(handleModificaTipiExport)}>
-                  <div className="grid grid-cols-2 gap-y-3 gap-x-6">
-                    <div className="col-span-1">
-                      <FormLabel htmlFor="nome_export_edit">Nome Export</FormLabel>
-                      <FormInput placeholder="Nome" id="nome_export_edit" {...registerEdit("nome_tipiexport")} />
-                      {errorsEdit.nome_tipiexport && <p className="text-red-500">{errorsEdit.nome_tipiexport.message}</p>}
-                    </div>
-                    <div className="col-span-1">
-                      <FormLabel htmlFor="descrizione_export_edit">Codice</FormLabel>
-                      <FormInput placeholder="Codice" id="descrizione_export_edit" {...registerEdit("codice_tipiexport")} />
-                      {errorsEdit.codice_tipiexport && <p className="text-red-500">{errorsEdit.codice_tipiexport.message}</p>}
-                    </div>
-                    <div className="col-span-1">
-                      <FormLabel htmlFor="modalita_export_edit">Modalità</FormLabel>
-                      <FormSelect id="modalita_export_edit" defaultValue={""} {...registerEdit("modalita_tipiexport")}>
-                        <option value="">Seleziona una modalità</option>
-                        {Object.keys(MODALITA_TIPO_EXPORT).map((key, index) => {
-                          return <option key={index} value={MODALITA_TIPO_EXPORT[key as keyof typeof MODALITA_TIPO_EXPORT]}>{key.replace(/_/g, " ")}</option>;
-                        })}
-                      </FormSelect>
-                      {errorsEdit.modalita_tipiexport && <p className="text-red-500">{errorsEdit.modalita_tipiexport.message}</p>}
-                    </div>
-                    <div className="col-span-1">
-                      <FormLabel htmlFor="guid_naming_convention_edit" >Naming Convention</FormLabel>
-                      <FormSelect id="guid_naming_convention_edit" {...registerEdit("guid_namingconvention_tipiexport")}>
-                        <option value="">Seleziona una naming convention</option>
-                        {dataNamingConventionLocali?.data?.map((namingConvention: { id: string | number | readonly string[] | undefined; nome: string | number | boolean | React.ReactElement<any, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | Iterable<React.ReactNode> | null | undefined; }, index: React.Key | null | undefined) => (
-                          <option key={index} value={namingConvention.id}>{namingConvention.nome}</option>
-                        ))}
-                      </FormSelect>
-                      {errorsEdit.guid_namingconvention_tipiexport && <p className="text-red-500">{errorsEdit.guid_namingconvention_tipiexport.message}</p>}
-                    </div>
-                    <div className="col-span-2">
-                      <FilterBaseForm
-                        control={controlEdit}
-                        register={registerEdit}
-                        errors={errorsEdit}
-                        dataAddestramenti={dataAddestramenti.data}
-                        namePrefix="filtri_tipiexport"
-                      />
-                    </div>
-                  </div>
-                  <Dialog.Footer>
-                    <div className="flex flex-row justify-end gap-x-3">
-                      <Button variant="secondary" onClick={handleCloseDialogModificaTipiExport}>Annulla</Button>
-                      <Button variant="primary" type="submit" loading={isSubmittingEdit} disabled={isSubmittingEdit}>Salva</Button>
-                    </div>
-                  </Dialog.Footer>
-                </form>
-              </Dialog.Description>
-            </Dialog.Panel>
-          </Dialog>
-        </div>
+        </Sezione>
 
         {/* Naming Convention */}
-        <div className="col-span-1 lg:col-span-2 p-5 box box--stacked">
-          <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-200/80">
-            <div className="flex items-center gap-3">
-              <Lucide icon="FileText" className="w-5 h-5 text-primary" />
-              <h2 className="title-section">Naming Convention</h2>
-            </div>
-            <Button size="sm" onClick={() => setShowDialogCreazioneNamingConvention(true)} variant='outline-primary'>
-              <Lucide icon="Plus" className="w-4 h-4 mr-2" /> Nuova Convention
-            </Button>
-          </div>
+        <Sezione
+          senzaPadding
+          icona="FileText"
+          titolo="Naming convention"
+          azioni={
+            <PermissionGate permission={PERMISSIONS.IMPOSTAZIONI.GESTISCI_NAMING_CONVENTION} mode="disable">
+              <Button size="sm" variant="outline-secondary" onClick={() => setShowDialogCreazioneNamingConvention(true)}>
+                <Lucide icon="Plus" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                Nuova convention
+              </Button>
+            </PermissionGate>
+          }
+        >
           <PanelNamingConvention ref={refPannelloNamingConvention} onEditNamingConvention={handleEditNamingConvention} />
-        </div>
+        </Sezione>
 
         {/* Schemi di Momenti */}
-        <div className="col-span-1 lg:col-span-2 p-5 box box--stacked">
-          <div className="flex items-center pb-4 mb-4 border-b border-slate-200/80">
-            <div className="flex items-center gap-3">
-              <Lucide icon="GitCompare" className="w-5 h-5 text-primary" />
-              <h2 className="title-section">Schemi di Momenti</h2>
-            </div>
-          </div>
+        <Sezione icona="GitCompare" titolo="Schemi di momenti">
           <GestioneSchemi />
-        </div>
+        </Sezione>
 
         {/* Funzionalità della GDO */}
-        <div className="col-span-1 lg:col-span-2 p-5 box box--stacked">
-          <div className="flex items-center gap-3 pb-4 mb-4 border-b border-slate-200/80">
-            <Lucide icon="ToggleRight" className="w-5 h-5 text-primary" />
-            <h2 className="title-section">Funzionalità</h2>
-          </div>
+        <Sezione icona="ToggleRight" titolo="Funzionalità">
           <PanelFunzionalita />
-        </div>
+        </Sezione>
 
         {/* Menabò */}
-        <div className="col-span-1 lg:col-span-2 p-5 box box--stacked">
-          <div className="flex items-center gap-3 pb-4 mb-4 border-b border-slate-200/80">
-            <Lucide icon="LayoutList" className="w-5 h-5 text-primary" />
-            <h2 className="title-section">Menabò</h2>
-          </div>
+        <Sezione icona="LayoutList" titolo="Menabò">
           <PanelMenabo />
-        </div>
-      </div>
+        </Sezione>
+      </Pagina>
     </>
   );
 }

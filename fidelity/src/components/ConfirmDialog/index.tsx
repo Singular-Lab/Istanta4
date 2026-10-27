@@ -30,26 +30,28 @@ const ConfirmDialog = ({
   return (
     <Dialog open={open} onClose={onClose} size="md" centered>
       <Dialog.Panel>
-        <Dialog.Title className="gap-3">
+        {/* Il sottotitolo sta fuori da Dialog.Title: il nome della finestra è solo il titolo */}
+        <div className="flex items-center gap-3 border-b border-slate-200/60 px-5 py-3 dark:border-darkmode-400">
           <div
             data-testid="icona-conferma"
+            aria-hidden="true"
             className={
               confirmVariant === "danger"
-                ? "w-10 h-10 rounded-full bg-danger/10 text-danger flex items-center justify-center"
-                : "w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center"
+                ? "w-10 h-10 flex-none rounded-full bg-danger/10 text-danger flex items-center justify-center"
+                : "w-10 h-10 flex-none rounded-full bg-primary/10 text-primary flex items-center justify-center"
             }
           >
             <Lucide icon={confirmVariant === "danger" ? "TriangleAlert" : "Info"} className="w-5 h-5" />
           </div>
-          <div>
-            <div className="text-base font-semibold text-slate-800">{title}</div>
-            <div className="text-sm font-normal text-slate-500">{subtitle}</div>
+          <div className="min-w-0">
+            <Dialog.Title className="border-0 p-0">{title}</Dialog.Title>
+            <p className="text-sm text-slate-500">{subtitle}</p>
           </div>
-        </Dialog.Title>
+        </div>
         <Dialog.Description className="text-sm leading-relaxed text-slate-600">
           {description}
         </Dialog.Description>
-        <Dialog.Footer className="flex justify-end gap-3">
+        <Dialog.Footer>
           <Button variant="outline-secondary" onClick={onClose} disabled={loading}>
             Annulla
           </Button>

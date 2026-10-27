@@ -1,7 +1,13 @@
+import Alert from '@/components/Base/Alert';
+import BarraFiltri from '@/components/Base/BarraFiltri';
 import Button from '@/components/Base/Button';
-import { FormInput, FormSelect } from '@/components/Base/Form';
+import CampoRicerca from '@/components/Base/CampoRicerca';
+import { FormField, FormInput, FormSelect } from '@/components/Base/Form';
 import Lucide from '@/components/Base/Lucide';
-import PageHeader from '@/components/Base/PageHeader';
+import Pagina from '@/components/Base/Pagina';
+import Sezione from '@/components/Base/Sezione';
+import StatusBadge from '@/components/Base/StatusBadge';
+import EmptyState from '@/components/EmptyState';
 import withSessionCheck from "@/components/SessionChecker";
 import { useNotification } from '@/context/NotificationContext';
 import { useFetchAree, useFetchCanali } from '@/query/query';
@@ -33,6 +39,8 @@ const ConfigurazioneWebpliant: React.FC = () => {
   const [logos, setLogos] = useState<LoghiInsegne[]>(config?.webpliant.logo_header || []);
   const editorRef = useRef<any>(null);
   const stylesEditorRef = useRef<any>(null);
+  const inputIconaRef = useRef<HTMLInputElement>(null);
+  const inputLogoRef = useRef<HTMLInputElement>(null);
   const revalidator = useRevalidator();
 
   const canali = useFetchCanali();
@@ -125,18 +133,6 @@ const ConfigurazioneWebpliant: React.FC = () => {
   // ------------------------------
   const mutationCSSTEXT = useMutation({
     mutationFn: async (data: { css: string; stili: any[]; logos: LoghiInsegne[], dataFields?: { expected_input: string; expected_output: string }[] }) => {
-      console.log({
-        ...config,
-        webpliant: {
-          ...config.webpliant,
-          logo_header: logos,
-          color_gdo: colorGDO,
-          icona_pagina: iconaPagina,
-          css_text: data.css,
-          stili: data.stili,
-          data_fields_refs: data.dataFields,
-        }
-      })
       const result = await ServerCall.post('/saveWebpliantConfig', {
         ...config,
         webpliant: {
@@ -152,27 +148,10 @@ const ConfigurazioneWebpliant: React.FC = () => {
       return result;
     },
     onError: () => {
-      showNotification(
-        <div className="flex items-center">
-          <Lucide icon="CircleAlert" className="text-danger w-14 h-14" />
-          <div className="ml-4">
-            <div className="font-bold">Errore durante il salvataggio</div>
-            <div className="mt-1 text-slate-500">
-              Si è verificato un problema. Riprova più tardi.
-            </div>
-          </div>
-        </div>
-      );
+      showNotification("Errore durante il salvataggio: si è verificato un problema. Riprova più tardi.", { variant: "error" });
     },
     onSuccess: () => {
-      showNotification(
-        <div className="flex items-center">
-          <Lucide icon="CircleCheck" className="text-success w-8 h-8" />
-          <div className="ml-4">
-            <div className="font-bold">Salvataggio completato con successo</div>
-          </div>
-        </div>
-      );
+      showNotification("Salvataggio completato con successo", { variant: "success" });
       revalidator.revalidate();
     },
   });
@@ -187,17 +166,7 @@ const ConfigurazioneWebpliant: React.FC = () => {
         parsedStyles = JSON.parse(stylesJSONText);
       } catch (error) {
         console.error('Errore nel parsing JSON degli stili:', error);
-        showNotification(
-          <div className="flex items-center">
-            <Lucide icon="CircleAlert" className="text-danger w-14 h-14" />
-            <div className="ml-4">
-              <div className="font-bold">Errore nel formato JSON</div>
-              <div className="mt-1 text-slate-500">
-                Controlla il contenuto JSON prima di salvare.
-              </div>
-            </div>
-          </div>
-        );
+        showNotification("Errore nel formato JSON: controlla il contenuto JSON prima di salvare.", { variant: "error" });
         return; // blocca il salvataggio
       }
 
@@ -222,17 +191,7 @@ const ConfigurazioneWebpliant: React.FC = () => {
     const handleAddField = () => {
       if (!newFieldInput.trim() || !newFieldOutput.trim()) return;
       if (dataFields.some(field => field.expected_input === newFieldInput.trim() || field.expected_output === newFieldOutput.trim())) {
-        showNotification(
-          <div className="flex items-center">
-            <Lucide icon="CircleAlert" className="text-warning w-6 h-6" />
-            <div className="ml-4">
-              <div className="font-medium">Campo già esistente</div>
-              <div className="mt-1 text-slate-500">
-                Un campo con questo input o output è già presente nell'elenco.
-              </div>
-            </div>
-          </div>
-        );
+        showNotification("Campo già esistente: un campo con questo input o output è già presente nell'elenco.", { variant: "warning" });
         return;
       }
 
@@ -245,17 +204,7 @@ const ConfigurazioneWebpliant: React.FC = () => {
     const handleRemoveField = (index: number) => {
       const field = dataFields[index];
       if (field.core) {
-        showNotification(
-          <div className="flex items-center">
-            <Lucide icon="CircleAlert" className="text-warning w-6 h-6" />
-            <div className="ml-4">
-              <div className="font-medium">Campo core non eliminabile</div>
-              <div className="mt-1 text-slate-500">
-                I campi core sono essenziali e non possono essere rimossi.
-              </div>
-            </div>
-          </div>
-        );
+        showNotification("Campo core non eliminabile: i campi core sono essenziali e non possono essere rimossi.", { variant: "warning" });
         return;
       }
       setDataFields(dataFields?.filter((_, i) => i !== index));
@@ -281,17 +230,7 @@ const ConfigurazioneWebpliant: React.FC = () => {
     const handleStartEdit = (index: number) => {
       const field = dataFields[index];
       if (field.core) {
-        showNotification(
-          <div className="flex items-center">
-            <Lucide icon="CircleAlert" className="text-warning w-6 h-6" />
-            <div className="ml-4">
-              <div className="font-medium">Campo core non modificabile</div>
-              <div className="mt-1 text-slate-500">
-                I campi core sono essenziali e non possono essere modificati.
-              </div>
-            </div>
-          </div>
-        );
+        showNotification("Campo core non modificabile: i campi core sono essenziali e non possono essere modificati.", { variant: "warning" });
         return;
       }
       setEditingIndex(index);
@@ -310,17 +249,7 @@ const ConfigurazioneWebpliant: React.FC = () => {
       );
 
       if (isDuplicate) {
-        showNotification(
-          <div className="flex items-center">
-            <Lucide icon="CircleAlert" className="text-warning w-6 h-6" />
-            <div className="ml-4">
-              <div className="font-medium">Campo già esistente</div>
-              <div className="mt-1 text-slate-500">
-                Un campo con questo input o output è già presente nell'elenco.
-              </div>
-            </div>
-          </div>
-        );
+        showNotification("Campo già esistente: un campo con questo input o output è già presente nell'elenco.", { variant: "warning" });
         return;
       }
 
@@ -352,7 +281,6 @@ const ConfigurazioneWebpliant: React.FC = () => {
       // Aggiorna i dataFields nel config quando il form principale viene salvato
       const originalMutate = mutationCSSTEXT.mutate;
       mutationCSSTEXT.mutate = (data) => {
-        console.log('Dati salvati con mapping di traduzione:', dataFields);
         return originalMutate({
           ...data,
           dataFields: dataFields || [],
@@ -365,39 +293,33 @@ const ConfigurazioneWebpliant: React.FC = () => {
     }, [dataFields]);
 
     return (
-      <section className="mt-10">
-        <h2 className="title-section">Mapping Traduzione DataFields</h2>
-        <p className="text-sm text-slate-500 mb-4">
-          Gestisci le mappature di traduzione tra i campi originali delle referenze e i campi utilizzati nel webpliant.
-          Ogni mapping specifica come tradurre un campo da input (nome originale) a output (nome tradotto).
-          <span className="font-medium text-primary"> I campi core sono essenziali e non possono essere modificati.</span>
-        </p>
-
+      <Sezione
+        titolo="Mapping traduzione DataFields"
+        descrizione={
+          <>
+            Gestisci le mappature di traduzione tra i campi originali delle referenze e i campi utilizzati nel webpliant.
+            Ogni mapping specifica come tradurre un campo da input (nome originale) a output (nome tradotto).
+            <span className="font-medium text-primary"> I campi core sono essenziali e non possono essere modificati.</span>
+          </>
+        }
+      >
         {/* Form di aggiunta */}
-        <div className="space-y-4 mb-4 p-4 bg-light rounded-lg">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-dark mb-1">
-                Campo Originale (Input)
-              </label>
+        <div className="mb-5 flex flex-col gap-4 rounded-card border border-slate-200 bg-slate-50 p-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <FormField etichetta="Campo originale (input)">
               <FormInput
                 type="text"
                 placeholder="es. titolo, prezzo, descrizione..."
                 value={newFieldInput}
                 onChange={(e) => setNewFieldInput(e.target.value)}
-                className="w-full"
               />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-dark mb-1">
-                Campo Tradotto (Output)
-              </label>
+            </FormField>
+            <FormField etichetta="Campo tradotto (output)">
               <FormInput
                 type="text"
                 placeholder="es. title, price, description..."
                 value={newFieldOutput}
                 onChange={(e) => setNewFieldOutput(e.target.value)}
-                className="w-full"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault();
@@ -405,65 +327,61 @@ const ConfigurazioneWebpliant: React.FC = () => {
                   }
                 }}
               />
-            </div>
+            </FormField>
           </div>
-          <Button
-            variant="primary"
-            className="w-full"
-            onClick={handleAddField}
-            disabled={!newFieldInput.trim() || !newFieldOutput.trim() || editingIndex !== null}
+          <div className="flex justify-end">
+            <Button
+              variant="outline-secondary"
+              onClick={handleAddField}
+              disabled={!newFieldInput.trim() || !newFieldOutput.trim() || editingIndex !== null}
+            >
+              <Plus aria-hidden="true" className="mr-2 h-4 w-4" />
+              Aggiungi mapping di traduzione
+            </Button>
+          </div>
+          {editingIndex !== null && (
+            <Alert variant="soft-warning" icona="TriangleAlert">
+              Completa la modifica del campo in corso prima di aggiungerne uno nuovo.
+            </Alert>
+          )}
+        </div>
+
+        {/* Ricerca ed elenco dei campi */}
+        <div className="rounded-card border border-slate-200 bg-white">
+          <BarraFiltri
+            className="p-4"
+            destra={
+              <span className="text-sm text-slate-500">
+                Totale: <span className="tabular-nums">{dataFields.length}</span> mapping, di cui core: <span className="tabular-nums">{dataFields.filter(f => f.core).length}</span>
+              </span>
+            }
           >
-            <Plus className="w-5 h-5" />
-            <span className="ml-1">
-              {editingIndex !== null ? 'Completare modifica in corso...' : 'Aggiungi Mapping di Traduzione'}
-            </span>
-          </Button>
-          {editingIndex !== null && (
-            <div className="text-sm text-pending font-medium text-center">
-              ⚠️ Completa la modifica del campo in corso prima di aggiungerne uno nuovo
-            </div>
-          )}
-        </div>
-
-        {/* Barra di ricerca */}
-        <div className="mb-4">
-          <FormInput
-            type="text"
-            placeholder="Cerca campi..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full"
-            disabled={editingIndex !== null}
-          />
-          {editingIndex !== null && (
-            <div className="text-sm text-slate-500 mt-1">
-              La ricerca è disabilitata durante la modifica
-            </div>
-          )}
-        </div>
-
-        {/* Lista dei campi */}
-        <div className="bg-white border border-light rounded-md">
+            <CampoRicerca
+              etichetta="Cerca campi"
+              placeholder="Cerca campi…"
+              value={searchTerm}
+              onChange={setSearchTerm}
+              disabled={editingIndex !== null}
+              title={editingIndex !== null ? "La ricerca è disabilitata durante la modifica" : undefined}
+            />
+          </BarraFiltri>
           <div className="max-h-96 overflow-y-auto">
             {filteredFields.length > 0 ? (
-              <ul className="divide-y divide-light">
+              <ul className="divide-y divide-slate-100">
                 {filteredFields.map((field, index) => {
                   const originalIndex = dataFields.findIndex(f => f.expected_input === field.expected_input && f.expected_output === field.expected_output);
                   const isEditing = editingIndex === originalIndex;
                   const isCore = field.core === true;
 
                   return (
-                    <li key={index} className={`p-4 transition-colors ${isEditing ? 'bg-primary/5 border-l-4 border-primary' : isCore ? 'bg-info/5 border-l-4 border-info' : 'hover:bg-light'}`}>
+                    <li key={index} className={`p-4 transition-colors ${isEditing ? 'border-l-4 border-primary bg-primary/5' : isCore ? 'border-l-4 border-info bg-info/5' : 'hover:bg-slate-50'}`}>
                       <div className="flex items-start justify-between">
                         <div className="flex-grow space-y-2">
                           {/* Badge per campo core */}
                           {isCore && (
-                            <div className="flex items-center gap-2 mb-2">
-                              <div className="inline-flex items-center px-2 py-1 rounded-full text-sm font-medium bg-info/10 text-info border border-info/20">
-                                <Lucide icon="Shield" className="w-4 h-4 mr-1" />
-                                Campo Core
-                              </div>
-                              <span className="text-sm text-info">
+                            <div className="mb-2 flex items-center gap-2">
+                              <StatusBadge tono="info" etichetta="Campo core" icon="Shield" />
+                              <span className="text-sm text-slate-500">
                                 Questo campo è essenziale e non può essere modificato
                               </span>
                             </div>
@@ -472,29 +390,21 @@ const ConfigurazioneWebpliant: React.FC = () => {
                           {isEditing ? (
                             // Modalità editing
                             <div className="space-y-4">
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                  <label className="text-sm font-semibold text-dark uppercase tracking-wide mb-1 block">
-                                    Campo Originale
-                                  </label>
+                              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                <FormField etichetta="Campo originale">
                                   <FormInput
                                     type="text"
                                     value={editingFieldInput}
                                     onChange={(e) => setEditingFieldInput(e.target.value)}
-                                    className="w-full"
                                     placeholder="es. titolo, prezzo..."
                                     disabled={isCore}
                                   />
-                                </div>
-                                <div>
-                                  <label className="text-sm font-semibold text-dark uppercase tracking-wide mb-1 block">
-                                    Campo Tradotto
-                                  </label>
+                                </FormField>
+                                <FormField etichetta="Campo tradotto" aiuto="Premi Invio per salvare, Esc per annullare.">
                                   <FormInput
                                     type="text"
                                     value={editingFieldOutput}
                                     onChange={(e) => setEditingFieldOutput(e.target.value)}
-                                    className="w-full"
                                     disabled={isCore}
                                     placeholder="es. title, price..."
                                     onKeyDown={(e) => {
@@ -507,57 +417,50 @@ const ConfigurazioneWebpliant: React.FC = () => {
                                       }
                                     }}
                                   />
-                                </div>
+                                </FormField>
                               </div>
-                              <div className="flex items-center space-x-2">
+                              <div className="flex items-center gap-2">
                                 {isCore && (
-                                  <div className="text-sm text-info font-medium">
-                                    ⚠️ Questo campo è core e non può essere modificato
-                                  </div>
+                                  <span className="text-sm font-medium text-info">
+                                    Questo campo è core e non può essere modificato
+                                  </span>
                                 )}
                                 <Button
-                                  variant="primary"
-                                  size="xs"
-                                  onClick={handleSaveEdit}
-                                  disabled={!editingFieldInput.trim() || !editingFieldOutput.trim() || isCore}
-                                >
-                                  <Lucide icon="Check" className="w-4 h-4" />
-                                  <span className="ml-1">Salva</span>
-                                </Button>
-                                <Button
                                   variant="outline-secondary"
-                                  size="xs"
+                                  size="sm"
                                   onClick={handleCancelEdit}
                                   disabled={isCore}
                                 >
-                                  <X className="w-4 h-4" />
-                                  <span className="ml-1">Annulla</span>
+                                  <X aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                                  Annulla
                                 </Button>
-                              </div>
-                              <div className="text-sm text-primary font-medium">
-                                💡 Premi Enter per salvare, Esc per annullare
+                                <Button
+                                  variant="primary"
+                                  size="sm"
+                                  onClick={handleSaveEdit}
+                                  disabled={!editingFieldInput.trim() || !editingFieldOutput.trim() || isCore}
+                                >
+                                  <Lucide icon="Check" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                                  Salva
+                                </Button>
                               </div>
                             </div>
                           ) : (
                             // Modalità visualizzazione
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <dl className="grid grid-cols-1 gap-4 md:grid-cols-2">
                               <div>
-                                <label className="text-sm font-semibold text-dark uppercase tracking-wide">
-                                  Campo Originale
-                                </label>
-                                <div className={`font-mono text-sm px-3 py-2 rounded ${isCore ? 'bg-info/10 text-info border border-info/20' : 'bg-light text-dark'}`}>
+                                <dt className="title-eyebrow mb-1">Campo originale</dt>
+                                <dd className={`rounded-control px-3 py-2 font-mono text-sm ${isCore ? 'border border-info/20 bg-info/10 text-info' : 'bg-slate-100 text-slate-700'}`}>
                                   {field.expected_input}
-                                </div>
+                                </dd>
                               </div>
                               <div>
-                                <label className="text-sm font-semibold text-dark uppercase tracking-wide">
-                                  Campo Tradotto
-                                </label>
-                                <div className={`font-mono text-sm px-3 py-2 rounded ${isCore ? 'bg-info/10 text-info border border-info/20' : 'bg-secondary text-dark'}`}>
+                                <dt className="title-eyebrow mb-1">Campo tradotto</dt>
+                                <dd className={`rounded-control px-3 py-2 font-mono text-sm ${isCore ? 'border border-info/20 bg-info/10 text-info' : 'bg-slate-100 text-slate-700'}`}>
                                   {field.expected_output}
-                                </div>
+                                </dd>
                               </div>
-                            </div>
+                            </dl>
                           )}
 
                           {!isEditing && (
@@ -568,46 +471,46 @@ const ConfigurazioneWebpliant: React.FC = () => {
                         </div>
 
                         {!isEditing && (
-                          <div className="flex items-center space-x-1 ml-4">
+                          <div className="ml-4 flex items-center gap-1">
                             <Button
-                              variant="outline-primary"
-                              size="xs"
+                              variant="outline-secondary"
+                              size="sm"
                               onClick={() => handleStartEdit(originalIndex)}
                               title={isCore ? "Campo core non modificabile" : "Modifica"}
-                              className={`hover:bg-primary/5 ${isCore ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              aria-label={`Modifica il mapping ${field.expected_input}`}
                               disabled={isCore}
                             >
-                              <Edit className="w-4 h-4" />
+                              <Edit aria-hidden="true" className="h-3.5 w-3.5" />
                             </Button>
                             <Button
                               variant="outline-secondary"
-                              size="xs"
+                              size="sm"
                               onClick={() => handleMoveUp(originalIndex)}
                               disabled={originalIndex === 0 || editingIndex !== null}
-                              className={(originalIndex === 0 || editingIndex !== null) ? "opacity-50 cursor-not-allowed" : ""}
                               title={editingIndex !== null ? "Disabilitato durante modifica" : "Sposta su"}
+                              aria-label={`Sposta su ${field.expected_input}`}
                             >
-                              <ChevronUp className="w-4 h-4" />
+                              <ChevronUp aria-hidden="true" className="h-3.5 w-3.5" />
                             </Button>
                             <Button
                               variant="outline-secondary"
-                              size="xs"
+                              size="sm"
                               onClick={() => handleMoveDown(originalIndex)}
                               disabled={originalIndex === dataFields.length - 1 || editingIndex !== null}
-                              className={(originalIndex === dataFields.length - 1 || editingIndex !== null) ? "opacity-50 cursor-not-allowed" : ""}
                               title={editingIndex !== null ? "Disabilitato durante modifica" : "Sposta giù"}
+                              aria-label={`Sposta giù ${field.expected_input}`}
                             >
-                              <ChevronDown className="w-4 h-4" />
+                              <ChevronDown aria-hidden="true" className="h-3.5 w-3.5" />
                             </Button>
                             <Button
                               variant="outline-danger"
-                              size="xs"
+                              size="sm"
                               onClick={() => handleRemoveField(originalIndex)}
                               disabled={editingIndex !== null || isCore}
-                              className={editingIndex !== null || isCore ? "opacity-50 cursor-not-allowed" : ""}
                               title={isCore ? "Campo core non eliminabile" : editingIndex !== null ? "Disabilitato durante modifica" : "Elimina"}
+                              aria-label={`Elimina il mapping ${field.expected_input}`}
                             >
-                              <Trash className="w-4 h-4" />
+                              <Trash aria-hidden="true" className="h-3.5 w-3.5" />
                             </Button>
                           </div>
                         )}
@@ -617,25 +520,16 @@ const ConfigurazioneWebpliant: React.FC = () => {
                 })}
               </ul>
             ) : (
-              <div className="flex flex-col items-center justify-center p-8 text-center">
-                <Lucide icon="SearchX" className="w-12 h-12 text-slate-400 mb-3" />
-                <p className="text-slate-500">Nessun campo trovato.</p>
-                <p className="text-sm text-slate-400 mt-1">
-                  Aggiungi mapping di traduzione per i campi del webpliant
-                </p>
-              </div>
+              <EmptyState
+                compatta
+                icon="SearchX"
+                title="Nessun campo trovato"
+                description="Aggiungi mapping di traduzione per i campi del webpliant"
+              />
             )}
           </div>
-          <div className="bg-light p-3 border-t border-light text-sm text-slate-500">
-            <div className="flex justify-between items-center">
-              <span>Totale: {dataFields.length} mapping di traduzione</span>
-              <span className="text-info">
-                Campi core: {dataFields.filter(f => f.core).length}
-              </span>
-            </div>
-          </div>
         </div>
-      </section>
+      </Sezione>
     );
   };
 
@@ -645,286 +539,259 @@ const ConfigurazioneWebpliant: React.FC = () => {
   // RENDER: WRAPPER PRINCIPALE
   // ------------------------------
   return (
-    <div className="grid grid-cols-12 gap-y-10 gap-x-6 p-6">
-      <div className="col-span-12">
-        {/* HEADER GENERALE */}
-        <PageHeader title="Configurazione Webpliant" />
-        {/* WRAPPER CONTAINER */}
-        <div className="box box--stacked p-10 bg-white rounded-lg shadow-sm">
-          {/* PARAMETRI GENERALI */}
-          <section className="mb-10 bg-white p-6 rounded-lg shadow-sm">
-            <h2 className="title-section mb-6 border-b pb-2">Parametri Generali</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
-              {/* Colore GDO */}
-              <div className="flex flex-col bg-gray-50 p-4 rounded-md border border-gray-100">
-                <label className="block text-sm font-medium text-dark mb-2">
-                  Icona pagina
-                </label>
-                <div className="relative w-fit bg-white border border-gray-200 rounded-md p-3 hover:shadow-md transition-shadow">
-                  {!iconaPagina ? (
-                    <div className="flex flex-col items-center justify-center w-44 h-44 border-2 border-dashed border-gray-300 rounded-md">
-                      <Lucide icon="Image" className="w-10 h-10 text-gray-400 mb-2" />
-                      <FormInput
-                        formInputSize="sm"
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            const reader = new FileReader();
-                            reader.onload = (ev) => {
-                              const base64 = ev.target?.result;
-                              if (typeof base64 === 'string') {
-                                setIconaPagina(
-                                  base64.replace(/^data:.+;base64,/, '')
-                                );
-                              }
-                            };
-                            reader.readAsDataURL(file);
+    <Pagina titolo="Configurazione Webpliant" descrizione="Parametri, loghi, stili e CSS del volantino digitale">
+      {/* PARAMETRI GENERALI */}
+      <Sezione titolo="Parametri generali">
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
+          {/* Icona pagina */}
+          <div className="flex flex-col rounded-card border border-slate-200 bg-white p-4">
+            <h3 className="title-card mb-3">Icona pagina</h3>
+            <div className="relative w-fit rounded-control border border-slate-200 bg-white p-3">
+              {!iconaPagina ? (
+                <div className="flex h-44 w-44 flex-col items-center justify-center gap-3 rounded-control border-2 border-dashed border-slate-300">
+                  <Lucide icon="Image" aria-hidden="true" className="h-10 w-10 text-slate-400" />
+                  <input
+                    ref={inputIconaRef}
+                    type="file"
+                    accept="image/*"
+                    aria-label="File dell'icona pagina"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                          const base64 = ev.target?.result;
+                          if (typeof base64 === 'string') {
+                            setIconaPagina(
+                              base64.replace(/^data:.+;base64,/, '')
+                            );
                           }
-                        }}
-                        className="hidden"
-                        id="icona-pagina-input"
-                      />
-                      <label
-                        htmlFor="icona-pagina-input"
-                        className="bg-blue-600 text-white text-xs px-3 py-2 rounded cursor-pointer hover:bg-blue-700"
-                      >
-                        Seleziona file
-                      </label>
-                    </div>
-                  ) : (
-                    <img
-                      src={`${iconaPagina}`}
-                      alt="Icona pagina"
-                      className="w-44 h-44 rounded-sm object-contain"
-                    />
-                  )}
-                  {iconaPagina && (
-                    <Button
-                      onClick={() => setIconaPagina(null)}
-                      size="xs"
-                      variant="danger"
-                      className="absolute top-2 right-2 p-1.5 text-xs rounded-full shadow-sm"
-                      aria-label="Rimuovi icona pagina"
-                    >
-                      <Lucide icon="X" aria-hidden="true" />
-                    </Button>
-                  )}
-                </div>
-                <p className="text-xs text-slate-500 mt-3 italic">
-                  Icona usata come favicon o simbolo pagina.
-                </p>
-              </div>
-
-              <div className="flex flex-col bg-gray-50 p-4 rounded-md border border-gray-100">
-                <label className="block text-sm font-medium text-dark mb-2">
-                  Colore GDO
-                </label>
-                <div className="flex items-center gap-3">
-                  <FormInput
-                    type="color"
-                    value={colorGDO || '#000000'}
-                    onChange={(e) => setColorGDO(e.target.value)}
-                    className="w-16 h-8 border border-light rounded-md bg-light/80"
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                    className="hidden"
+                    id="icona-pagina-input"
                   />
-                  <span className="text-sm font-mono">{colorGDO || '#000000'}</span>
+                  <Button size="sm" variant="outline-secondary" onClick={() => inputIconaRef.current?.click()}>
+                    Seleziona file
+                  </Button>
                 </div>
-                <p className="text-xs text-slate-500 mt-3 italic">
-                  Colore principale applicato al brand GDO.
-                </p>
-              </div>
-
-              {/* Loghi Base64 */}
-
+              ) : (
+                <img
+                  src={`${iconaPagina}`}
+                  alt="Icona pagina"
+                  className="h-44 w-44 rounded-control object-contain"
+                />
+              )}
+              {iconaPagina && (
+                <Button
+                  onClick={() => setIconaPagina(null)}
+                  size="sm"
+                  variant="outline-danger"
+                  className="absolute right-2 top-2 rounded-full bg-white p-1.5"
+                  aria-label="Rimuovi icona pagina"
+                >
+                  <Lucide icon="X" aria-hidden="true" className="h-3.5 w-3.5" />
+                </Button>
+              )}
             </div>
-            <div className='mt-6'>
-              <h2 className="title-section mb-2">Loghi</h2>
-              <p className="text-sm text-slate-500 mb-2">
-                Aggiungi loghi in formato Base64. Puoi caricare immagini direttamente dal tuo dispositivo.
-              </p>
-              <div className="flex flex-wrap gap-4">
-                <div className="flex flex-col box p-4">
-                  <label className="block text-sm font-medium text-dark mb-2">
-                    Loghi base64
-                  </label>
-                  <div className="flex flex-wrap gap-4 max-h-96 overflow-y-auto p-2">
-                    {logos &&
-                      logos.map((logo, index) => (
-                        <div
-                          key={index}
-                          className="relative w-fit bg-white border border-gray-200 rounded-md p-3 hover:shadow-md transition-shadow group"
-                        >
-                          <img
-                            src={
-                              logo.url
-                                ? `${logo.url}`
-                                : logo.base64 ? `data:image/*;base64,${logo.base64}`
-                                  : ''
-                            }
-                            alt={`Logo ${index + 1}`}
-                            className="w-60 h-60 rounded-sm object-contain"
-                          />
-                          <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <label
-                              htmlFor={`update-logo-${index}`}
-                              className="cursor-pointer"
-                            >
-                              <Button size="xs" variant="secondary" className="p-1.5 text-xs bg-white shadow-sm">
-                                <Edit className="w-3 h-3" />
-                              </Button>
-                            </label>
-                            <input
-                              type="file"
-                              id={`update-logo-${index}`}
-                              accept="image/*"
-                              className="hidden"
-                              onChange={(e) => handleLogoUpdateFileChange(index, e)}
-                            />
-                            <Button
-                              size="xs"
-                              variant="danger"
-                              className="p-1.5 text-xs shadow-sm"
-                              onClick={() => handleRemoveLogo(index)}
-                              aria-label={`Rimuovi logo ${index + 1}`}
-                            >
-                              <Lucide icon="X" aria-hidden="true" className="w-3 h-3" />
-                            </Button>
-                          </div>
-                          <div className='absolute bottom-0 left-0 right-0 flex gap-2 justify-between p-2'>
-                            <FormSelect
-                              value={logo.idCanale}
-                              onChange={(e) => {
-                                const updatedLogos = [...logos];
-                                updatedLogos[index].idCanale = e.target.value;
-                                setLogos(updatedLogos);
-                              }}
-                            >
-                              <option value="">Seleziona Canale</option>
-                              {canali?.data?.map((canale) => (
-                                <option key={canale.id} value={canale.id}>
-                                  {canale.nome}
-                                </option>
-                              ))}
-                            </FormSelect>
-                            <FormSelect
-                              value={logo.idArea}
-                              onChange={(e) => {
-                                const updatedLogos = [...logos];
-                                updatedLogos[index].idArea = e.target.value;
-                                setLogos(updatedLogos);
-                              }}
-                            >
-                              <option value="">Seleziona Area</option>
-                              {aree?.data?.map((area) => (
-                                <option key={area.id} value={area.id}>
-                                  {area.nome}
-                                </option>
-                              ))}
-                            </FormSelect>
-                          </div>
-                          <div className="text-xs text-center mt-2 text-gray-500 truncate w-44">
-                            Logo {index + 1}
-                          </div>
+            <p className="mt-3 text-xs text-slate-500">
+              Icona usata come favicon o simbolo pagina.
+            </p>
+          </div>
 
-                        </div>
-                      ))}
-                    <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-md p-4 w-44 h-44 hover:bg-gray-50 transition-colors">
-                      <Lucide icon="Plus" className="w-8 h-8 text-gray-400 mb-2" />
-                      <input
-                        type="file"
-                        id="add-logo-input"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={handleLogoFileChange}
-                      />
-                      <label
-                        htmlFor="add-logo-input"
-                        className="bg-blue-600 text-white text-xs px-3 py-2 rounded cursor-pointer hover:bg-blue-700"
-                      >
-                        Aggiungi logo
-                      </label>
-                    </div>
-                  </div>
-                  <p className="text-xs text-slate-500 mt-3 italic">
-                    Aggiungi, rimuovi o modifica i loghi in formato Base64.
-                  </p>
+          {/* Colore GDO */}
+          <div className="flex flex-col rounded-card border border-slate-200 bg-white p-4">
+            <h3 className="title-card mb-3">Colore GDO</h3>
+            <div className="flex items-center gap-3">
+              <FormInput
+                type="color"
+                aria-label="Colore GDO"
+                value={colorGDO || '#000000'}
+                onChange={(e) => setColorGDO(e.target.value)}
+                className="h-8 w-16 p-1"
+              />
+              <span className="font-mono text-sm">{colorGDO || '#000000'}</span>
+            </div>
+            <p className="mt-3 text-xs text-slate-500">
+              Colore principale applicato al brand GDO.
+            </p>
+          </div>
+        </div>
+      </Sezione>
+
+      {/* LOGHI */}
+      <Sezione
+        titolo="Loghi"
+        descrizione="Aggiungi, rimuovi o modifica i loghi in formato Base64, caricando le immagini dal tuo dispositivo."
+      >
+        <div className="flex max-h-96 flex-wrap gap-4 overflow-y-auto">
+          {logos &&
+            logos.map((logo, index) => (
+              <div
+                key={index}
+                className="group relative w-fit rounded-card border border-slate-200 bg-white p-3"
+              >
+                <img
+                  src={
+                    logo.url
+                      ? `${logo.url}`
+                      : logo.base64 ? `data:image/*;base64,${logo.base64}`
+                        : ''
+                  }
+                  alt={`Logo ${index + 1}`}
+                  className="h-60 w-60 rounded-control object-contain"
+                />
+                <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+                  <Button
+                    size="sm"
+                    variant="outline-secondary"
+                    className="bg-white"
+                    aria-label={`Sostituisci logo ${index + 1}`}
+                    onClick={() => document.getElementById(`update-logo-${index}`)?.click()}
+                  >
+                    <Edit aria-hidden="true" className="h-3.5 w-3.5" />
+                  </Button>
+                  <input
+                    type="file"
+                    id={`update-logo-${index}`}
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => handleLogoUpdateFileChange(index, e)}
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline-danger"
+                    className="bg-white"
+                    onClick={() => handleRemoveLogo(index)}
+                    aria-label={`Rimuovi logo ${index + 1}`}
+                  >
+                    <Lucide icon="X" aria-hidden="true" className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+                <div className="mt-2 flex justify-between gap-2">
+                  <FormSelect
+                    formSelectSize="sm"
+                    aria-label={`Canale del logo ${index + 1}`}
+                    value={logo.idCanale}
+                    onChange={(e) => {
+                      const updatedLogos = [...logos];
+                      updatedLogos[index].idCanale = e.target.value;
+                      setLogos(updatedLogos);
+                    }}
+                  >
+                    <option value="">Seleziona canale</option>
+                    {canali?.data?.map((canale) => (
+                      <option key={canale.id} value={canale.id}>
+                        {canale.nome}
+                      </option>
+                    ))}
+                  </FormSelect>
+                  <FormSelect
+                    formSelectSize="sm"
+                    aria-label={`Area del logo ${index + 1}`}
+                    value={logo.idArea}
+                    onChange={(e) => {
+                      const updatedLogos = [...logos];
+                      updatedLogos[index].idArea = e.target.value;
+                      setLogos(updatedLogos);
+                    }}
+                  >
+                    <option value="">Seleziona area</option>
+                    {aree?.data?.map((area) => (
+                      <option key={area.id} value={area.id}>
+                        {area.nome}
+                      </option>
+                    ))}
+                  </FormSelect>
+                </div>
+                <div className="mt-2 w-60 truncate text-center text-xs text-slate-500">
+                  Logo {index + 1}
                 </div>
               </div>
-            </div>
-          </section>
-          {/* STILI EDITOR */}
-          <EditorStiliReferenza
-            config={config}
-            onChangeStili={(c) => {
-              setStyles(c.webpliant.stili);
-            }}
-          />
-
-          {/* CSS PERSONALIZZATO */}
-          <section>
-            <h2 className="title-section">CSS Personalizzato</h2>
-            <p className="text-sm text-slate-500 mb-2">
-              Modifica il CSS per personalizzare lo stile della pagina. Usa Ctrl+S per salvare rapidamente.
-            </p>
-            <Editor
-              theme="vs-dark"
-              className="border border-light rounded-md"
-              height="50vh"
-              onChange={(val) => val && setCssText(val)}
-              defaultLanguage="css"
-              value={cssText}
-              onMount={(editor, monaco) => {
-                editorRef.current = editor;
-              }}
-              options={{
-                minimap: { enabled: false },
-                scrollBeyondLastLine: false,
-                automaticLayout: true,
-                formatOnPaste: true,
-                formatOnType: true,
-              }}
+            ))}
+          <div className="flex h-44 w-44 flex-col items-center justify-center gap-3 rounded-card border-2 border-dashed border-slate-300 p-4">
+            <Lucide icon="ImagePlus" aria-hidden="true" className="h-8 w-8 text-slate-400" />
+            <input
+              ref={inputLogoRef}
+              type="file"
+              id="add-logo-input"
+              accept="image/*"
+              aria-label="File del nuovo logo"
+              className="hidden"
+              onChange={handleLogoFileChange}
             />
-            <div className="mt-2 flex justify-end">
-
-            </div>
-          </section>
-
-          <section className="mt-10">
-            <DataFieldsManager />
-          </section>
-
-          <section className="mt-10">
-            <h2 className="title-section">Stili JSON</h2>
-            <p className="text-sm text-slate-500 mb-2">
-              Modifica gli stili in formato JSON. Il parsing avviene solo al momento del salvataggio.
-            </p>
-            <Editor
-              theme="vs-dark"
-              className="border border-light rounded-md"
-              height="50vh"
-              defaultLanguage="json"
-              value={stylesJSONText}
-              onChange={(val) => val && setStylesJSONText(val)}
-              options={{
-                minimap: { enabled: true },
-                scrollBeyondLastLine: false,
-                automaticLayout: true,
-                formatOnPaste: true,
-                formatOnType: true,
-              }}
-            />
-          </section>
-
-
-          <div className='flex justify-end mt-10'>
-            <Button variant="success" onClick={handleSave}>
-              Salva
+            <Button size="sm" variant="outline-secondary" onClick={() => inputLogoRef.current?.click()}>
+              <Lucide icon="Plus" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+              Aggiungi logo
             </Button>
           </div>
         </div>
+      </Sezione>
+
+      {/* STILI EDITOR */}
+      <EditorStiliReferenza
+        config={config}
+        onChangeStili={(c) => {
+          setStyles(c.webpliant.stili);
+        }}
+      />
+
+      {/* CSS PERSONALIZZATO */}
+      <Sezione
+        titolo="CSS personalizzato"
+        descrizione="Modifica il CSS per personalizzare lo stile della pagina. Usa Ctrl+S per salvare rapidamente."
+      >
+        <Editor
+          theme="vs-dark"
+          className="overflow-hidden rounded-control border border-slate-200"
+          height="50vh"
+          onChange={(val) => val && setCssText(val)}
+          defaultLanguage="css"
+          value={cssText}
+          onMount={(editor) => {
+            editorRef.current = editor;
+          }}
+          options={{
+            minimap: { enabled: false },
+            scrollBeyondLastLine: false,
+            automaticLayout: true,
+            formatOnPaste: true,
+            formatOnType: true,
+          }}
+        />
+      </Sezione>
+
+      <DataFieldsManager />
+
+      <Sezione
+        titolo="Stili JSON"
+        descrizione="Modifica gli stili in formato JSON. Il parsing avviene solo al momento del salvataggio."
+      >
+        <Editor
+          theme="vs-dark"
+          className="overflow-hidden rounded-control border border-slate-200"
+          height="50vh"
+          defaultLanguage="json"
+          value={stylesJSONText}
+          onChange={(val) => val && setStylesJSONText(val)}
+          options={{
+            minimap: { enabled: true },
+            scrollBeyondLastLine: false,
+            automaticLayout: true,
+            formatOnPaste: true,
+            formatOnType: true,
+          }}
+        />
+      </Sezione>
+
+      <div className="flex justify-end">
+        <Button variant="primary" onClick={handleSave} loading={mutationCSSTEXT.isPending}>
+          Salva
+        </Button>
       </div>
-    </div>
+    </Pagina>
   );
 };
 

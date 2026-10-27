@@ -1,66 +1,30 @@
 // src/components/AppErrorFallback.tsx
-//@ts-ignore
-import lottieAnimation from "@/assets/animations/animazione_loading_session.lottie?url";
-
-import Button from "@/components/Base/Button";
-import Lucide from "@/components/Base/Lucide";
-import { lazy, Suspense } from "react";
 import { isRouteErrorResponse, useRouteError } from "react-router-dom";
-
-const DotLottieReact = lazy(() =>
-  import("@lottiefiles/dotlottie-react").then((m) => ({ default: m.DotLottieReact }))
-);
-
+import SchermataErrore from "./SchermataErrore";
 
 interface AppErrorFallbackProps {
     error?: Error;
+    /** Titolo fisso della schermata; il messaggio d'errore va sotto, mai nel titolo. */
+    titolo?: string;
     message?: string;
 }
 
-const AppErrorFallback = ({ error, message: messaggio }: AppErrorFallbackProps) => {
+const AppErrorFallback = ({ error, titolo = "Errore imprevisto", message: messaggio }: AppErrorFallbackProps) => {
     const message =
         messaggio || error?.message || "Si è verificato un errore imprevisto nell'applicazione.";
 
     return (
-        <div className="fixed inset-0 flex items-center justify-center bg-primary/90 backdrop-blur-md z-[100000] transition-opacity duration-300">
-            <div className="text-center flex flex-col items-center">
-                <Lucide
-                    icon="TriangleAlert"
-                    aria-hidden="true"
-                    className="w-20 h-20 text-warning animate-pulse"
-                />
-                <h1 className="mt-6 title-page text-white">
-                    {message}
-                </h1>
-
-                {process.env.NODE_ENV === "development" && error?.stack && (
-                    <p className="mt-2 text-gray-300 text-xs max-w-sm whitespace-pre-wrap text-left">
-                        {error.stack}
-                    </p>
-                )}
-
-                <Button
-                    type="button"
-                    variant="primary"
-                    onClick={() => window.location.reload()}
-                    rounded
-                    className="mt-6 px-6 py-2 bg-white text-primary font-semibold hover:bg-gray-100"
-                >
-                    Ricarica la pagina
-                </Button>
-
-                <div className="mt-10">
-                    <Suspense fallback={null}>
-                        <DotLottieReact
-                            autoplay
-                            loop
-                            src={lottieAnimation}
-                            style={{ height: "150px", width: "150px" }}
-                        />
-                    </Suspense>
-                </div>
-            </div>
-        </div>
+        <SchermataErrore
+            titolo={titolo}
+            messaggio={message}
+            azione={{ etichetta: "Ricarica la pagina", onClick: () => window.location.reload() }}
+        >
+            {process.env.NODE_ENV === "development" && error?.stack && (
+                <p className="mt-2 max-w-sm whitespace-pre-wrap text-left text-xs text-slate-300">
+                    {error.stack}
+                </p>
+            )}
+        </SchermataErrore>
     );
 };
 
@@ -71,9 +35,15 @@ const AppErrorFallback = ({ error, message: messaggio }: AppErrorFallbackProps) 
 export const RouteErrorFallback = () => {
     const error = useRouteError();
     if (isRouteErrorResponse(error)) {
-        return (
+        return error.status === 404 ? (
             <AppErrorFallback
-                message={error.status === 404 ? "Pagina non trovata." : "Impossibile caricare la pagina. Riprova."}
+                titolo="Pagina non trovata"
+                message="L'indirizzo richiesto non esiste o non è più disponibile."
+            />
+        ) : (
+            <AppErrorFallback
+                titolo="Impossibile caricare la pagina"
+                message="Si è verificato un errore durante il caricamento. Ricarica la pagina per riprovare."
             />
         );
     }

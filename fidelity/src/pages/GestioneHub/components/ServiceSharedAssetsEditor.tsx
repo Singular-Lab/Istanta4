@@ -1,7 +1,10 @@
 import Button from "@/components/Base/Button";
 import { FormInput, FormLabel, FormSelect } from "@/components/Base/Form";
+import Badge from "@/components/Base/Badge";
 import Lucide from "@/components/Base/Lucide";
-import clsx from "clsx";
+import StatCard from "@/components/Base/StatCard";
+import StatusBadge from "@/components/Base/StatusBadge";
+import EmptyState from "@/components/EmptyState";
 import { useRef } from "react";
 import type { HubServiceVideoKind } from "../../../../lib/types";
 import type {
@@ -54,11 +57,9 @@ const VIDEO_KIND_OPTIONS: Array<{ value: HubServiceVideoKind; label: string }> =
   { value: "guide", label: "Video guida" },
 ];
 
-const SECTION_SURFACE_CLASS =
-  "rounded-md border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5";
-const ASSET_GROUP_CLASS =
-  "rounded-md border border-slate-200/80 bg-slate-50/80 p-4 sm:p-5";
-const ASSET_CARD_CLASS = "rounded-md border border-slate-200/90 bg-white p-4 shadow-sm";
+const SECTION_SURFACE_CLASS = "rounded-card border border-slate-200 bg-white p-4 sm:p-5";
+const ASSET_GROUP_CLASS = "rounded-card border border-slate-200 bg-slate-50 p-4 sm:p-5";
+const ASSET_CARD_CLASS = "rounded-card border border-slate-200 bg-white p-4";
 
 const ServiceSharedAssetsEditor = ({
   mode,
@@ -143,11 +144,11 @@ const ServiceSharedAssetsEditor = ({
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-md border border-primary/15 bg-primary/[0.08] px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-primary">
-              <Lucide icon="LibraryBig" className="h-3.5 w-3.5" />
+            <p className="title-eyebrow flex items-center gap-2">
+              <Lucide icon="LibraryBig" aria-hidden="true" className="h-3.5 w-3.5" />
               Contenuti condivisi
-            </div>
-            <h3 className="mt-3 text-base font-semibold text-slate-800 sm:text-lg">
+            </p>
+            <h3 className="title-card mt-2">
               Documentazioni e video del gruppo servizio
             </h3>
             <p className="mt-1 max-w-3xl text-sm text-slate-500">
@@ -159,7 +160,7 @@ const ServiceSharedAssetsEditor = ({
           </div>
 
           {!editable && (
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 lg:max-w-xs">
+            <div className="rounded-control border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 lg:max-w-xs">
               Modifica non disponibile in modalita{" "}
               <span className="font-semibold text-slate-800">Aggiungi variante</span>.
             </div>
@@ -167,56 +168,40 @@ const ServiceSharedAssetsEditor = ({
         </div>
 
         <div className="grid gap-3 sm:grid-cols-3">
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3">
-            <div className="text-2xs font-semibold uppercase tracking-wide text-slate-500">
-              Documentazioni
-            </div>
-            <div className="mt-1 text-xl font-semibold text-slate-800">{documents.length}</div>
-            <div className="text-xs text-slate-500">
-              {pendingDocumentsCount > 0
-                ? `${pendingDocumentsCount} da caricare su Olimpo`
-                : "Tutte sincronizzate"}
-            </div>
-          </div>
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3">
-            <div className="text-2xs font-semibold uppercase tracking-wide text-slate-500">
-              Video
-            </div>
-            <div className="mt-1 text-xl font-semibold text-slate-800">{videos.length}</div>
-            <div className="text-xs text-slate-500">
-              {pendingVideosCount > 0
-                ? `${pendingVideosCount} da caricare su Olimpo`
-                : "Tutti sincronizzati"}
-            </div>
-          </div>
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3">
-            <div className="text-2xs font-semibold uppercase tracking-wide text-slate-500">
-              Totale contenuti
-            </div>
-            <div className="mt-1 text-xl font-semibold text-slate-800">{totalAssets}</div>
-            <div className="text-xs text-slate-500">
-              {pendingAssets > 0
-                ? `${pendingAssets} in attesa di upload`
-                : "Nessun upload in attesa"}
-            </div>
-          </div>
+          <StatCard
+            densita="compatta"
+            tono="neutral"
+            etichetta="Documentazioni"
+            valore={documents.length}
+            sottotitolo={pendingDocumentsCount > 0 ? `${pendingDocumentsCount} da caricare su Olimpo` : "Tutte sincronizzate"}
+          />
+          <StatCard
+            densita="compatta"
+            tono="neutral"
+            etichetta="Video"
+            valore={videos.length}
+            sottotitolo={pendingVideosCount > 0 ? `${pendingVideosCount} da caricare su Olimpo` : "Tutti sincronizzati"}
+          />
+          <StatCard
+            densita="compatta"
+            tono="neutral"
+            etichetta="Totale contenuti"
+            valore={totalAssets}
+            sottotitolo={pendingAssets > 0 ? `${pendingAssets} in attesa di upload` : "Nessun upload in attesa"}
+          />
         </div>
       </div>
 
-      <div className="mt-6 grid gap-5 ">
+      <div className="mt-6 grid gap-5">
         <div className={ASSET_GROUP_CLASS}>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-800">
                 <Lucide icon="FileStack" className="h-4 w-4 shrink-0 text-primary" />
                 <span>Documentazioni</span>
-                <span className="inline-flex items-center rounded-md border border-slate-200 bg-white px-2 py-0.5 text-2xs font-medium text-slate-600">
-                  {documents.length}
-                </span>
+                <Badge variant="secondary" size="sm" border className="bg-white">{documents.length}</Badge>
                 {pendingDocumentsCount > 0 && (
-                  <span className="inline-flex items-center rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-2xs font-medium text-amber-700">
-                    {pendingDocumentsCount} da caricare
-                  </span>
+                  <StatusBadge tono="warning" etichetta={`${pendingDocumentsCount} da caricare`} />
                 )}
               </div>
               <div className="mt-1 text-xs text-slate-500">
@@ -252,15 +237,13 @@ const ServiceSharedAssetsEditor = ({
           </div>
 
           {documents.length === 0 ? (
-            <div className="mt-4 rounded-md border border-dashed border-slate-200 bg-white px-4 py-6 text-center">
-              <Lucide icon="FileSearch" className="mx-auto h-8 w-8 text-slate-300" />
-              <div className="mt-3 text-sm font-medium text-slate-700">
-                Nessuna documentazione associata
-              </div>
-              <div className="mt-1 text-xs text-slate-500">
-                Aggiungi manuali, guide PDF o materiali di supporto.
-              </div>
-            </div>
+            <EmptyState
+              compatta
+              icon="FileSearch"
+              title="Nessuna documentazione associata"
+              description="Aggiungi manuali, guide PDF o materiali di supporto."
+              className="mt-4 border border-dashed border-slate-200"
+            />
           ) : (
             <div className="mt-4 space-y-3">
               {documents.map((document) => {
@@ -271,7 +254,7 @@ const ServiceSharedAssetsEditor = ({
                   <div key={document.id} className={ASSET_CARD_CLASS}>
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="flex min-w-0 items-start gap-3">
-                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-primary/15 bg-primary/[0.08] text-primary">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-control border border-primary/15 bg-primary/10 text-primary">
                           <Lucide icon="FileText" className="h-5 w-5" />
                         </div>
 
@@ -280,16 +263,7 @@ const ServiceSharedAssetsEditor = ({
                             <div className="truncate text-sm font-semibold text-slate-800">
                               {document.original_name}
                             </div>
-                            <span
-                              className={clsx(
-                                "inline-flex items-center rounded-md border px-2 py-0.5 text-2xs font-medium",
-                                pendingUpload
-                                  ? "border-amber-200 bg-amber-50 text-amber-700"
-                                  : "border-emerald-200 bg-emerald-50 text-emerald-700"
-                              )}
-                            >
-                              {pendingUpload ? "Da caricare su Olimpo" : "Su Olimpo"}
-                            </span>
+                            <StatusBadge tono={pendingUpload ? "warning" : "success"} etichetta={pendingUpload ? "Da caricare su Olimpo" : "Su Olimpo"} />
                           </div>
 
                           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
@@ -367,13 +341,9 @@ const ServiceSharedAssetsEditor = ({
               <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-800">
                 <Lucide icon="Clapperboard" className="h-4 w-4 shrink-0 text-theme-2" />
                 <span>Video</span>
-                <span className="inline-flex items-center rounded-md border border-slate-200 bg-white px-2 py-0.5 text-2xs font-medium text-slate-600">
-                  {videos.length}
-                </span>
+                <Badge variant="secondary" size="sm" border className="bg-white">{videos.length}</Badge>
                 {pendingVideosCount > 0 && (
-                  <span className="inline-flex items-center rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-2xs font-medium text-amber-700">
-                    {pendingVideosCount} da caricare
-                  </span>
+                  <StatusBadge tono="warning" etichetta={`${pendingVideosCount} da caricare`} />
                 )}
               </div>
               <div className="mt-1 text-xs text-slate-500">
@@ -409,13 +379,13 @@ const ServiceSharedAssetsEditor = ({
           </div>
 
           {videos.length === 0 ? (
-            <div className="mt-4 rounded-md border border-dashed border-slate-200 bg-white px-4 py-6 text-center">
-              <Lucide icon="MonitorPlay" className="mx-auto h-8 w-8 text-slate-300" />
-              <div className="mt-3 text-sm font-medium text-slate-700">Nessun video associato</div>
-              <div className="mt-1 text-xs text-slate-500">
-                Aggiungi un trailer oppure una guida rapida del servizio.
-              </div>
-            </div>
+            <EmptyState
+              compatta
+              icon="MonitorPlay"
+              title="Nessun video associato"
+              description="Aggiungi un trailer oppure una guida rapida del servizio."
+              className="mt-4 border border-dashed border-slate-200"
+            />
           ) : (
             <div className="mt-4 space-y-3">
               {videos.map((video) => {
@@ -426,7 +396,7 @@ const ServiceSharedAssetsEditor = ({
                   <div key={video.id} className={ASSET_CARD_CLASS}>
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="flex min-w-0 items-start gap-3">
-                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-theme-2/15 bg-theme-2/[0.08] text-theme-2">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-control border border-theme-2/15 bg-theme-2/10 text-theme-2">
                           <Lucide icon="CirclePlay" className="h-5 w-5" />
                         </div>
 
@@ -435,16 +405,7 @@ const ServiceSharedAssetsEditor = ({
                             <div className="truncate text-sm font-semibold text-slate-800">
                               {video.original_name}
                             </div>
-                            <span
-                              className={clsx(
-                                "inline-flex items-center rounded-md border px-2 py-0.5 text-2xs font-medium",
-                                pendingUpload
-                                  ? "border-amber-200 bg-amber-50 text-amber-700"
-                                  : "border-emerald-200 bg-emerald-50 text-emerald-700"
-                              )}
-                            >
-                              {pendingUpload ? "Da caricare su Olimpo" : "Su Olimpo"}
-                            </span>
+                            <StatusBadge tono={pendingUpload ? "warning" : "success"} etichetta={pendingUpload ? "Da caricare su Olimpo" : "Su Olimpo"} />
                           </div>
                           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
                             <span>{video.mime_type}</span>

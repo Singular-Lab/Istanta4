@@ -32,26 +32,21 @@ export interface HeroBannerAction {
 
 export interface HeroBannerProps {
   lavorazione: RUNTIME_KIT;
-  stato: STATO_LAVORAZIONE_KIT_RUNTIME;
+  /** Stato del kit runtime; assente per un kit non ancora avviato. */
+  stato?: STATO_LAVORAZIONE_KIT_RUNTIME;
   productionDuration?: string | null;
   isTimerLive?: boolean;
   primaryAction?: HeroBannerAction;
   secondaryActions?: HeroBannerAction[];
+  /** Icona, sottotitolo e sfondo al posto di quelli dello stato (kit non ancora avviato). */
+  aspetto?: { icon: string; subtitle: string; gradient: string };
+  /** Data mostrata nell'intestazione; predefinita l'ultima modifica o la creazione. */
+  data?: Date | string;
 }
 
 // ============================================
 // STATS GRID TYPES
 // ============================================
-
-export interface StatCardProps {
-  icon: keyof typeof icons;
-  iconColor: string;
-  iconBg: string;
-  value: string | number;
-  label: string;
-  sublabel?: string;
-  isLive?: boolean;
-}
 
 export interface StatsGridProps {
   filesCount: number;

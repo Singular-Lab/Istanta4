@@ -16,6 +16,7 @@ interface WizardShellProps {
   submitLabel?: string;
   nextDisabled?: boolean;
   submitDisabled?: boolean;
+  /** Contenuto del passo corrente: una o più Sezione, la cornice non aggiunge un box. */
   children: React.ReactNode;
 }
 
@@ -26,6 +27,10 @@ const variants = {
 };
 const transition = { duration: 0.15, ease: 'easeInOut' };
 
+/**
+ * Procedura a passi: indicatore dei passi in una card, contenuto del passo (le sue Sezioni)
+ * e comandi Precedente / Successivo / conferma in fondo a destra.
+ */
 export default function WizardShell({
   steps,
   currentStep,
@@ -40,90 +45,77 @@ export default function WizardShell({
   const isLastStep = currentStep === steps.length - 1;
 
   return (
-    <>
+    <div className="flex flex-col gap-6">
       {/* Step indicator */}
-      <div className="flex flex-col lg:items-center lg:flex-row gap-y-2 mb-5">
-        {steps.map((step, index) => (
-          <div
-            key={index}
-            className={clsx([
-              'flex items-center lg:justify-center flex-1 lg:first:justify-start lg:last:justify-end group',
-              currentStep === index && 'active',
-              'after:hidden before:hidden after:lg:block before:lg:block',
-              "first:after:content-[''] first:after:w-full first:after:bg-slate-300/60 first:after:h-[2px] first:after:ml-5 group-[.mode--light]:first:after:bg-slate-300/20",
-              "last:before:content-[''] last:before:w-full last:before:bg-slate-300/60 last:before:h-[2px] last:before:mr-5 group-[.mode--light]:last:before:bg-slate-300/20",
-              "last:after:hidden after:content-[''] after:w-full after:bg-slate-300/60 after:h-[2px] after:ml-5 group-[.mode--light]:after:bg-slate-300/20",
-              "first:before:hidden before:content-[''] before:w-full before:bg-slate-300/60 before:h-[2px] before:mr-5 group-[.mode--light]:before:bg-slate-300/20",
-            ])}
-          >
-            <div className="flex items-center">
-              <div className="bg-white border rounded-full group-[.mode--light]:!bg-transparent group-[.active]:bg-primary group-[.active]:text-white group-[.mode--light]:!text-slate-200 group-[.mode--light]:!border-white/[0.25] [.group.mode--light_.group.active_&]:!bg-white/[0.12] [.group.mode--light_.group.active_&]:!border-white/[0.15]">
-                <div className="flex items-center justify-center w-10 h-10">{index + 1}</div>
-              </div>
-              <div className="ml-3.5 group-[.mode--light]:!text-slate-300 font-medium whitespace-nowrap text-slate-500 group-[.active]:text-current [.group.mode--light_.group.active_&]:!text-slate-100">
-                {step.title}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
+      <nav aria-label="Passi della procedura" className="box box--stacked p-5">
+        <ol className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-0">
+          {steps.map((step, index) => {
+            const attivo = currentStep === index;
+            const completato = index < currentStep;
+            return (
+              <li key={index} className="flex flex-1 items-center gap-3 lg:last:flex-none">
+                <span
+                  aria-current={attivo ? 'step' : undefined}
+                  className="flex items-center gap-3"
+                >
+                  <span
+                    className={clsx(
+                      'flex h-9 w-9 flex-none items-center justify-center rounded-full border text-sm font-medium tabular-nums',
+                      attivo && 'border-primary bg-primary text-white',
+                      completato && 'border-primary/30 bg-primary/10 text-primary',
+                      !attivo && !completato && 'border-slate-300 bg-white text-slate-500'
+                    )}
+                  >
+                    {completato ? <Lucide icon="Check" aria-hidden="true" className="h-4 w-4" /> : index + 1}
+                  </span>
+                  <span className={clsx('whitespace-nowrap font-medium', attivo ? 'text-slate-800' : 'text-slate-500')}>
+                    {step.title}
+                  </span>
+                </span>
+                {index < steps.length - 1 && (
+                  <span aria-hidden="true" className="mx-4 hidden h-px flex-1 bg-slate-300/60 lg:block" />
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      </nav>
 
       {/* Content */}
-      <div className="bg-white p-4 md:p-6 rounded-lg shadow">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={currentStep}
-            variants={variants}
-            initial="enter"
-            animate="center"
-            exit="exit"
-            transition={transition}
-            layout
-          >
-            {children}
-            <hr className="w-full border-slate-300 mt-6" />
-            <div className="flex flex-col md:flex-row justify-between mb-2 mt-4 gap-2">
-              {currentStep > 0 && (
-                <Button type="button" size="sm" variant="outline-secondary" onClick={onPrevious}>
-                  <Lucide icon="ArrowLeft" className="w-4 h-4 mr-2" />
-                  Precedente
-                </Button>
-              )}
-              {!isLastStep && (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="soft-primary"
-                  onClick={onNext}
-                  className="md:ml-auto"
-                  disabled={nextDisabled}
-                >
-                  Successivo
-                  <Lucide icon="ArrowRight" className="w-4 h-4 ml-2" />
-                </Button>
-              )}
-              {isLastStep && (
-                <Button
-                  size="sm"
-                  variant="primary"
-                  type="submit"
-                  className="md:ml-auto"
-                  disabled={isSubmitting || submitDisabled}
-                >
-                  {isSubmitting ? (
-                    <span className="flex items-center gap-2">
-                      <Lucide icon="Loader" className="w-4 h-4 animate-spin" />
-                      Operazione in corso...
-                    </span>
-                  ) : (
-                    submitLabel
-                  )}
-                </Button>
-              )}
-            </div>
-          </motion.div>
-        </AnimatePresence>
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={currentStep}
+          variants={variants}
+          initial="enter"
+          animate="center"
+          exit="exit"
+          transition={transition}
+          layout
+        >
+          {children}
+        </motion.div>
+      </AnimatePresence>
+
+      {/* Comandi */}
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        {currentStep > 0 && (
+          <Button type="button" variant="outline-secondary" onClick={onPrevious} className="sm:mr-auto">
+            <Lucide icon="ArrowLeft" aria-hidden="true" className="mr-2 h-4 w-4" />
+            Precedente
+          </Button>
+        )}
+        {!isLastStep && (
+          <Button type="button" variant="primary" onClick={onNext} disabled={nextDisabled}>
+            Successivo
+            <Lucide icon="ArrowRight" aria-hidden="true" className="ml-2 h-4 w-4" />
+          </Button>
+        )}
+        {isLastStep && (
+          <Button variant="primary" type="submit" disabled={submitDisabled} loading={isSubmitting}>
+            {isSubmitting ? 'Operazione in corso…' : submitLabel}
+          </Button>
+        )}
       </div>
-    </>
+    </div>
   );
 }

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import Spinner from "@/components/Base/Spinner";
 import { useDeviceSocket } from "@/hooks/useDeviceSocket";
 
 /* ======================================================
@@ -199,9 +200,8 @@ export default function DisplayPage() {
   if (loading) {
     return (
       <div style={centeredContainerStyle}>
-        <style>{`@keyframes display-spin { to { transform: rotate(360deg); } }`}</style>
-        <div style={spinnerStyle} />
-        <p style={{ color: "#aaa", marginTop: 16 }}>Caricamento display...</p>
+        <Spinner size="lg" decorativo className="text-white" />
+        <p role="status" style={{ color: "#aaa", marginTop: 16 }}>Caricamento display...</p>
       </div>
     );
   }
@@ -308,15 +308,6 @@ const centeredContainerStyle: React.CSSProperties = {
   alignItems: "center",
   justifyContent: "center",
   background: "#000",
-};
-
-const spinnerStyle: React.CSSProperties = {
-  width: 40,
-  height: 40,
-  border: "3px solid rgba(255,255,255,0.2)",
-  borderTopColor: "#fff",
-  borderRadius: "50%",
-  animation: "display-spin 0.8s linear infinite",
 };
 
 const indicatorsContainerStyle: React.CSSProperties = {

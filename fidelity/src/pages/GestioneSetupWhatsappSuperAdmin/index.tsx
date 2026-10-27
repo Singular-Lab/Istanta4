@@ -1,4 +1,4 @@
-import React, { Fragment, useState } from 'react';
+import React, { useState } from 'react';
 import { useLoaderData, useRevalidator } from 'react-router-dom';
 import { STATO_GDO_WHATSAPP_NUMBER } from '../../../lib/enums';
 import withSessionCheck from "@/components/SessionChecker";
@@ -6,7 +6,9 @@ import { ServerCall } from '../../../lib/server_call';
 import Button from '../../components/Base/Button';
 import { FormField, FormInput, FormLabel, FormSelect, InputGroup } from '../../components/Base/Form';
 import PageError from '../../components/Base/PageError';
-import PageHeader from '../../components/Base/PageHeader';
+import Lucide from '../../components/Base/Lucide';
+import Pagina from '../../components/Base/Pagina';
+import Sezione from '../../components/Base/Sezione';
 import StatusBadge from '../../components/Base/StatusBadge';
 import { descriviStato } from '../../constants/stati';
 import { useNotification } from '../../context/NotificationContext';
@@ -87,44 +89,31 @@ const GestioneSetupWhatsappSuperAdmin: React.FC = () => {
         }
     };
 
-    const intestazione = (
-        <PageHeader
-            title={"Gestione Whatsapp" + (dettagliGDO?.nome ? ` per ${dettagliGDO.nome}` : "")}
-            description="Gestisci il setup per il cliente"
-            indietro={{ to: "/whatsapp/gestione-whatsapp-superadmin", etichetta: "Torna alle GDO" }}
-            badges={
-                dettagliGDO
-                    ? <StatusBadge dominio="waNumero" stato={dettagliGDO.stato} />
-                    : !errore && <StatusBadge tono="neutral" etichetta="Non configurato" />
-            }
-        />
-    );
+    const proprietaPagina = {
+        titolo: "Gestione WhatsApp" + (dettagliGDO?.nome ? ` per ${dettagliGDO.nome}` : ""),
+        descrizione: "Gestisci il setup per il cliente",
+        indietro: { to: "/whatsapp/gestione-whatsapp-superadmin", etichetta: "Torna alle GDO" },
+        badges: dettagliGDO
+            ? <StatusBadge dominio="waNumero" stato={dettagliGDO.stato} />
+            : !errore && <StatusBadge tono="neutral" etichetta="Non configurato" />,
+    };
 
     if (errore) {
         return (
-            <Fragment>
-                {intestazione}
+            <Pagina {...proprietaPagina}>
                 <PageError motivo={errore} onRiprova={revalidate} />
-            </Fragment>
+            </Pagina>
         );
     }
 
     return (
-        <Fragment>
-            {intestazione}
-
-            <div className="col-span-12">
-                {/* Contenitore principale con altezza indipendente tra i box */}
-                <div className="flex flex-col lg:flex-row w-full gap-2 items-start">
-
-                    {/* Colonna principale */}
-                    <form noValidate onSubmit={salva} className="box box--stacked p-4 sm:p-5 mb-2 w-full lg:basis-2/3 lg:flex-none">
-                        <h2 className="title-section">
-                            Dati canale WhatsApp del cliente
-                        </h2>
-
-                        <div className='flex flex-col sm:flex-row mt-4 gap-4'>
-                            <FormField className='w-full sm:w-1/2' etichetta="Display Name (WhatsApp)" obbligatorio>
+        <Pagina {...proprietaPagina}>
+            <div className="grid grid-cols-12 items-start gap-6">
+                {/* Colonna principale: dati del canale e credenziali, salvati insieme */}
+                <Sezione className="col-span-12 xl:col-span-8" titolo="Dati canale WhatsApp del cliente">
+                    <form noValidate onSubmit={salva} className="flex flex-col gap-4">
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <FormField etichetta="Display Name (WhatsApp)" obbligatorio>
                                 <FormInput
                                     id="display_name"
                                     type="text"
@@ -133,7 +122,7 @@ const GestioneSetupWhatsappSuperAdmin: React.FC = () => {
                                     onChange={(e) => setDisplayName(e.target.value)}
                                 />
                             </FormField>
-                            <FormField className='w-full sm:w-1/2' etichetta="Stato">
+                            <FormField etichetta="Stato">
                                 <FormSelect
                                     id="stato"
                                     value={stato}
@@ -146,10 +135,7 @@ const GestioneSetupWhatsappSuperAdmin: React.FC = () => {
                                     ))}
                                 </FormSelect>
                             </FormField>
-                        </div>
-
-                        <div className='flex flex-col sm:flex-row mt-4 gap-4'>
-                            <FormField className='w-full sm:w-1/2' etichetta="WABA ID (WhatsApp Business Account)" obbligatorio>
+                            <FormField etichetta="WABA ID (WhatsApp Business Account)" obbligatorio>
                                 <FormInput
                                     id="waba_id"
                                     type="text"
@@ -158,7 +144,7 @@ const GestioneSetupWhatsappSuperAdmin: React.FC = () => {
                                     onChange={(e) => setWabaId(e.target.value)}
                                 />
                             </FormField>
-                            <FormField className='w-full sm:w-1/2' etichetta="Phone Number ID" obbligatorio>
+                            <FormField etichetta="Phone Number ID" obbligatorio>
                                 <FormInput
                                     id="phone_number_id"
                                     type="text"
@@ -169,101 +155,94 @@ const GestioneSetupWhatsappSuperAdmin: React.FC = () => {
                             </FormField>
                         </div>
 
-                        <hr className="my-6 border-t border-gray-200" />
+                        <div className="mt-2 border-t border-dashed border-slate-200 pt-5">
+                            <h3 className="title-card mb-4">Credenziali</h3>
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                <FormField
+                                    etichetta="Access Token"
+                                    obbligatorio={!dettagliGDO?.access_token_configurato}
+                                    aiuto={aiutoToken(dettagliGDO?.access_token_configurato)}
+                                >
+                                    <FormInput
+                                        id="access_token"
+                                        type="password"
+                                        autoComplete="new-password"
+                                        spellCheck={false}
+                                        placeholder={dettagliGDO?.access_token_configurato ? '••••••••' : ''}
+                                        value={accessToken}
+                                        onChange={(e) => setAccessToken(e.target.value)}
+                                    />
+                                </FormField>
+                                <FormField
+                                    etichetta="Verify Token"
+                                    obbligatorio={!dettagliGDO?.verify_token_configurato}
+                                    aiuto={aiutoToken(dettagliGDO?.verify_token_configurato)}
+                                >
+                                    <FormInput
+                                        id="verify_token"
+                                        type="password"
+                                        autoComplete="new-password"
+                                        spellCheck={false}
+                                        placeholder={dettagliGDO?.verify_token_configurato ? '••••••••' : ''}
+                                        value={verifyToken}
+                                        onChange={(e) => setVerifyToken(e.target.value)}
+                                    />
+                                </FormField>
+                            </div>
+                        </div>
 
-                        <FormField
-                            etichetta="Access Token"
-                            obbligatorio={!dettagliGDO?.access_token_configurato}
-                            aiuto={aiutoToken(dettagliGDO?.access_token_configurato)}
-                        >
-                            <FormInput
-                                id="access_token"
-                                type="password"
-                                autoComplete="new-password"
-                                spellCheck={false}
-                                placeholder={dettagliGDO?.access_token_configurato ? '••••••••' : ''}
-                                value={accessToken}
-                                onChange={(e) => setAccessToken(e.target.value)}
-                            />
-                        </FormField>
-
-                        <div className="mt-6 flex justify-end">
+                        <div className="flex justify-end">
                             <Button type="submit" variant="primary" loading={salvataggio}>
                                 Salva
                             </Button>
                         </div>
                     </form>
+                </Sezione>
 
-                    {/* Colonna laterale */}
-
-                    <div className='flex flex-col w-full '>
-                        <div className="box box--stacked p-4 sm:p-5 mb-2 w-full lg:flex-none">
-                            <h2 className="title-section">
-                                Webhook • Impostazioni
-                            </h2>
-
-                            <div className='w-full mt-4'>
-                                <FormLabel htmlFor="webhook_url">Webhook URL</FormLabel>
-                                <InputGroup>
-                                    <FormInput
-                                        id="webhook_url"
-                                        type="text"
-                                        readOnly
-                                        spellCheck={false}
-                                        value={webhookUrl}
-                                    />
-                                    <InputGroup.Button
-                                        onClick={() => {
-                                            navigator.clipboard.writeText(webhookUrl);
-                                            setHasCopiedWebhookUrl(true);
-                                            setTimeout(() => setHasCopiedWebhookUrl(false), 4000);
-                                        }}
-                                    >
-                                        {hasCopiedWebhookUrl ? 'Copiato!' : 'Copia'}
-                                    </InputGroup.Button>
-                                </InputGroup>
-                            </div>
-
-                            <FormField
-                                className='w-full mt-4'
-                                etichetta="Verify Token"
-                                obbligatorio={!dettagliGDO?.verify_token_configurato}
-                                aiuto={aiutoToken(dettagliGDO?.verify_token_configurato)}
+                {/* Colonna laterale */}
+                <div className="col-span-12 flex flex-col gap-6 xl:col-span-4">
+                    <Sezione
+                        titolo="Webhook"
+                        descrizione="Indirizzo da registrare su Meta insieme al Verify Token del canale."
+                    >
+                        <FormLabel htmlFor="webhook_url">Webhook URL</FormLabel>
+                        <InputGroup>
+                            <FormInput
+                                id="webhook_url"
+                                type="text"
+                                readOnly
+                                spellCheck={false}
+                                value={webhookUrl}
+                            />
+                            <InputGroup.Button
+                                onClick={() => {
+                                    navigator.clipboard.writeText(webhookUrl);
+                                    setHasCopiedWebhookUrl(true);
+                                    setTimeout(() => setHasCopiedWebhookUrl(false), 4000);
+                                }}
                             >
-                                <FormInput
-                                    id="verify_token"
-                                    type="password"
-                                    autoComplete="new-password"
-                                    spellCheck={false}
-                                    placeholder={dettagliGDO?.verify_token_configurato ? '••••••••' : ''}
-                                    value={verifyToken}
-                                    onChange={(e) => setVerifyToken(e.target.value)}
-                                />
-                            </FormField>
-                            <p className="mt-2 text-xs text-slate-500">Il verify token si salva con il pulsante Salva dei dati del canale.</p>
-                        </div>
-                        <div className="box box--stacked p-4 sm:p-5 mb-2 w-full lg:flex-none">
-                            <h2 className="title-section">
-                                Template • Sincronizza
-                            </h2>
-                            <p className="mb-3 text-xs text-slate-500">
-                                Recupera i template approvati dal WABA del cliente.
-                            </p>
-
-                            <Button
-                                variant="outline-primary"
-                                className="w-full"
-                                loading={syncing}
-                                disabled={!dettagliGDO}
-                                onClick={handleSyncTemplates}
-                            >
-                                Sincronizza
-                            </Button>
-                        </div>
-                    </div>
+                                {hasCopiedWebhookUrl ? 'Copiato!' : 'Copia'}
+                            </InputGroup.Button>
+                        </InputGroup>
+                    </Sezione>
+                    <Sezione
+                        titolo="Sincronizza template"
+                        descrizione="Recupera i template approvati dal WABA del cliente."
+                    >
+                        <Button
+                            variant="outline-secondary"
+                            className="w-full"
+                            loading={syncing}
+                            disabled={!dettagliGDO}
+                            onClick={handleSyncTemplates}
+                        >
+                            {!syncing && <Lucide icon="RefreshCw" aria-hidden="true" className="mr-2 h-4 w-4" />}
+                            Sincronizza
+                        </Button>
+                    </Sezione>
                 </div>
             </div>
-        </Fragment>
+        </Pagina>
     );
 };
 

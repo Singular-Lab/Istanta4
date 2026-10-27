@@ -1,8 +1,11 @@
+import Button from "@/components/Base/Button";
 import Lucide from "@/components/Base/Lucide";
+import Pagina from "@/components/Base/Pagina";
+import Sezione from "@/components/Base/Sezione";
+import EmptyState from "@/components/EmptyState";
 import withSessionCheck from "@/components/SessionChecker";
 import { useState } from "react";
 import { useLoaderData, useSearchParams } from "react-router-dom";
-import PageHeader from "../../../components/Base/PageHeader";
 import { useFetchFieldOptions, useFetchTipiExport } from "../../../query/query";
 import FilterTemplateForm from "../../GestioneApi/components/plugin/FilterTemplateForm";
 import FilterTemplateList from "../../GestioneApi/components/plugin/FilterTemplateList";
@@ -78,136 +81,93 @@ function PluginPage() {
   // Mostra form creazione/modifica
   if (formMode === 'create' || formMode === 'edit') {
     return (
-      <div className="grid grid-cols-12 gap-y-10 gap-x-6">
-        <div className="col-span-12">
-          <PageHeader
-            title={formMode === 'create' ? 'Nuovo Filter Template' : 'Modifica Filter Template'}
-            description={formMode === 'create' ? 'Definisci sorgente dati, filtri e parametri di rendering del nuovo template' : 'Modifica la configurazione del template selezionato'}
+      <Pagina
+        titolo={formMode === 'create' ? 'Nuovo Filter Template' : 'Modifica Filter Template'}
+        descrizione={formMode === 'create' ? 'Definisci sorgente dati, filtri e parametri di rendering del nuovo template' : 'Modifica la configurazione del template selezionato'}
+        indietro={{ onClick: handleFormCancel, etichetta: "Torna ai Filter Template" }}
+      >
+        <Sezione
+          icona={formMode === 'create' ? "Plus" : "Pencil"}
+          titolo={formMode === 'create' ? 'Configurazione nuovo template' : `Modifica template: ${selectedTemplate?.nome ?? ""}`}
+        >
+          <FilterTemplateForm
+            mode={formMode}
+            template={formMode === 'edit' ? selectedTemplate : undefined}
+            templates={templates}
+            tipiExport={tipiExport}
+            fieldOptions={fieldOptions}
+            onSuccess={handleFormSuccess}
+            onCancel={handleFormCancel}
+            apiKey={apiKey}
           />
-          {/* Content */}
-          <div className="mt-3.5">
-            <div className="flex flex-col box box--stacked">
-              <div className="p-5">
-                {/* Sezione Form */}
-                <div>
-                  <div className="flex items-center gap-3 mb-6">
-                    <Lucide icon={formMode === 'create' ? "Plus" : "Pencil"} className="w-6 h-6 text-primary" />
-                    <h2 className="title-section">
-                      {formMode === 'create' ? 'Configurazione Nuovo Template' : `Modifica Template: ${selectedTemplate?.nome}`}
-                    </h2>
-                  </div>
-
-                  <FilterTemplateForm
-                    mode={formMode}
-                    template={formMode === 'edit' ? selectedTemplate : undefined}
-                    templates={templates}
-                    tipiExport={tipiExport}
-                    fieldOptions={fieldOptions}
-                    onSuccess={handleFormSuccess}
-                    onCancel={handleFormCancel}
-                    apiKey={apiKey}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+        </Sezione>
+      </Pagina>
     );
   }
 
   // Vista normale
   return (
-    <div className="grid grid-cols-12 gap-y-10 gap-x-6">
-      <div className="col-span-12">
-        {/* Header */}
-        <PageHeader
-          title="Plugin"
-          description="Gestisci i Filter Template del plugin: definisci sorgenti dati, predicati di filtro e modalità di rendering"
+    <Pagina
+      titolo="Plugin"
+      descrizione="Gestisci i Filter Template del plugin: definisci sorgenti dati, predicati di filtro e modalità di rendering"
+    >
+      <Sezione
+        icona="Filter"
+        titolo="Filter Template"
+        descrizione={
+          <>
+            I Filter Template sono lo strumento principale per governare il comportamento del plugin.
+            Ogni template incapsula sorgente dati, predicati di filtro, modalità di rendering e parametri di layout,
+            e viene referenziato a runtime tramite il proprio{" "}
+            <code className="rounded-control bg-slate-100 px-1.5 py-0.5 font-mono text-sm">slug</code> univoco.
+          </>
+        }
+        azioni={filterTemplates.length > 0 && (
+          <>
+            <Button
+              variant="outline-secondary"
+              size="sm"
+              disabled={!selectedTemplateId}
+              onClick={() => selectedTemplateId && handleEdit(selectedTemplateId)}
+            >
+              <Lucide icon="Pen" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+              Modifica
+            </Button>
+            <Button variant="primary" size="sm" onClick={handleCreateNew}>
+              <Lucide icon="Plus" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+              Nuovo template
+            </Button>
+          </>
+        )}
+      >
+        <FilterTemplateList
+          filterTemplates={filterTemplates}
+          selectedId={selectedTemplateId}
+          onSelect={handleSelect}
+          onCreateNew={handleCreateNew}
+          onEdit={handleEdit}
         />
-        {/* Content */}
-        <div className="mt-3.5">
-          <div className="flex flex-col box box--stacked">
-            <div className="p-5">
-              {/* Sezione Filter Templates */}
-              <div className="mb-8">
-                <div className="flex items-center gap-3 mb-6">
-                  <Lucide icon="Filter" className="w-6 h-6 text-primary" />
-                  <h2 className="title-section">Filter Templates</h2>
-                </div>
+      </Sezione>
 
-                <div className="box p-6">
-                  <p className="text-slate-600 mb-6">
-                    I Filter Template sono lo strumento principale per governare il comportamento del plugin.
-                    Ogni template incapsula sorgente dati, predicati di filtro, modalità di rendering e parametri di layout,
-                    e viene referenziato a runtime tramite il proprio <code className="bg-slate-100 px-2 py-1 rounded text-sm font-mono">slug</code> univoco.
-                  </p>
-
-                  <FilterTemplateList
-                    filterTemplates={filterTemplates}
-                    selectedId={selectedTemplateId}
-                    onSelect={handleSelect}
-                    onCreateNew={handleCreateNew}
-                    onEdit={handleEdit}
-                  />
-                </div>
-              </div>
-
-              {/* Sezione Configurazione */}
-              {selectedTemplate && (
-                <div>
-                  <div className="flex items-center gap-3 mb-6">
-                    <Lucide icon="Settings" className="w-6 h-6 text-success" />
-                    <h2 className="title-section">Configurazione Plugin</h2>
-                  </div>
-
-                  <PluginConfigPanel
-                    template={selectedTemplate}
-                    templates={templates}
-                  />
-                </div>
-              )}
-
-              {/* Messaggio quando nessun template selezionato */}
-              {!selectedTemplate && filterTemplates.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-3 mb-6">
-                    <Lucide icon="Info" className="w-6 h-6 text-info" />
-                    <h2 className="title-section">Inizia</h2>
-                  </div>
-
-                  <div className="box p-8 text-center">
-                    <Lucide icon="MousePointerClick" className="w-12 h-12 text-slate-400 mx-auto mb-4" />
-                    <p className="text-slate-600">
-                      Seleziona un template dalla lista sopra per visualizzarne la configurazione,
-                      oppure crea un nuovo template.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* Messaggio quando non ci sono template */}
-              {filterTemplates.length === 0 && (
-                <div>
-                  <div className="flex items-center gap-3 mb-6">
-                    <Lucide icon="CircleAlert" className="w-6 h-6 text-warning" />
-                    <h2 className="title-section">Nessun Template</h2>
-                  </div>
-
-                  <div className="box p-8 text-center">
-                    <Lucide icon="Package" className="w-12 h-12 text-slate-400 mx-auto mb-4" />
-                    <p className="text-slate-600 mb-4">
-                      Non hai ancora creato nessun Filter Template.
-                      Crea il tuo primo template per iniziare a configurare il plugin.
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+      {/* Senza template lo stato vuoto è solo quello dell'elenco */}
+      {filterTemplates.length > 0 && (
+        <Sezione icona="Settings" titolo="Configurazione plugin">
+          {selectedTemplate ? (
+            <PluginConfigPanel
+              template={selectedTemplate}
+              templates={templates}
+            />
+          ) : (
+            <EmptyState
+              compatta
+              icon="MousePointerClick"
+              title="Nessun template selezionato"
+              description="Seleziona un template dall'elenco sopra per visualizzarne la configurazione, oppure crea un nuovo template."
+            />
+          )}
+        </Sezione>
+      )}
+    </Pagina>
   );
 }
 

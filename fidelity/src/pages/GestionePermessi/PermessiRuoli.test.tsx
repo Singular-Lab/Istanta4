@@ -5,13 +5,10 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PERMESSI, TUTTI_I_PERMESSI } from "../../../lib/accessi/catalogo";
 
-const finti = vi.hoisted(() => ({ mutate: vi.fn(), configurazioni: {} as Record<string, any> }));
+const finti = vi.hoisted(() => ({ mutate: vi.fn(), configurazioni: {} as Record<string, any>, ruoli: {} as Record<string, any> }));
 
 vi.mock("./api", () => ({
-  useRuoliGestibili: () => ({
-    data: { tipi: ["Agenzia", "GDO"], ruoliGdo: [], gdo: [] },
-    isLoading: false,
-  }),
+  useRuoliGestibili: () => finti.ruoli,
   useConfigurazione: (ambito: { tipo: string }) => ({
     data: finti.configurazioni[ambito.tipo],
     isLoading: false,
@@ -45,6 +42,12 @@ const apriArea = async (nome: string) => {
 describe("Gestione accessi: permessi dei ruoli", () => {
   beforeEach(() => {
     finti.mutate.mockReset();
+    finti.ruoli = {
+      data: { tipi: ["Agenzia", "GDO"], ruoliGdo: [], gdo: [] },
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    };
     finti.configurazioni = {
       GDO: configurazione("GDO", [PERMESSI.PROMO.VISUALIZZA]),
       Agenzia: configurazione("Agenzia", [PERMESSI.PROMO.VISUALIZZA, PERMESSI.PROMO.ELIMINA]),
@@ -123,5 +126,38 @@ describe("Gestione accessi: permessi dei ruoli", () => {
     const dialogo = await screen.findByRole("dialog");
     expect(within(dialogo).getByText("Togliere l'accesso all'area?")).toBeInTheDocument();
     expect(within(dialogo).getByText("Creare promozioni")).toBeInTheDocument();
+  });
+
+  it("il filtro dei permessi è un gruppo a scelta singola e nasconde le aree senza risultati", async () => {
+    render(<PermessiRuoli />);
+
+    const filtro = screen.getByRole("radiogroup", { name: "Filtro" });
+    expect(within(filtro).getByRole("radio", { name: "Tutti" })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("button", { name: /^Materiali/ })).toBeInTheDocument();
+
+    await userEvent.click(within(filtro).getByRole("radio", { name: "Abilitati" }));
+    expect(within(filtro).getByRole("radio", { name: "Abilitati" })).toHaveAttribute("aria-checked", "true");
+    // GDO ha abilitato solo "Consultare le promozioni": l'area Materiali sparisce, Promozioni resta
+    expect(screen.queryByRole("button", { name: /^Materiali/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Promozioni/ })).toBeInTheDocument();
+  });
+
+  it("se i ruoli non arrivano mostra l'errore con Riprova invece di un elenco vuoto", async () => {
+    finti.ruoli = { data: undefined, isLoading: false, isError: true, error: new Error("Servizio non raggiungibile"), refetch: vi.fn() };
+    render(<PermessiRuoli />);
+
+    const avviso = screen.getAllByRole("alert").find((elemento) => elemento.textContent?.includes("Ruoli non caricati"));
+    expect(avviso).toHaveTextContent("Servizio non raggiungibile");
+    await userEvent.click(within(avviso!).getByRole("button", { name: "Riprova" }));
+    expect(finti.ruoli.refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("le etichette dei permessi sono badge di stato", async () => {
+    render(<PermessiRuoli />);
+    await apriArea("Promozioni");
+    await userEvent.click(screen.getByLabelText("Eliminare promozioni"));
+
+    expect(screen.getAllByTitle("Distruttiva")[0]).toHaveAttribute("data-tono", "danger");
+    expect(screen.getAllByTitle("Non salvato")[0]).toHaveAttribute("data-tono", "warning");
   });
 });

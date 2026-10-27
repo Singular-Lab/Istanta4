@@ -1,13 +1,17 @@
+import Badge from "@/components/Base/Badge";
 import Button from "@/components/Base/Button";
 import Chart from "@/components/Base/Chart";
 import Lucide from "@/components/Base/Lucide";
 import PageError from "@/components/Base/PageError";
-import PageHeader from "@/components/Base/PageHeader";
+import Pagina from "@/components/Base/Pagina";
+import Segmenti from "@/components/Base/Segmenti";
+import Sezione from "@/components/Base/Sezione";
 import Skeleton from "@/components/Base/Skeleton";
 import StatCard, { StatCardGrid } from "@/components/Base/StatCard";
+import Table from "@/components/Base/Table";
 import EmptyState from "@/components/EmptyState";
 import { COLORI_ASSI, coloreScore, opzioniAssi, opzioniBase, paletteColore, tonoScore } from "@/utils/chartTheme";
-import { formatData } from "@/utils/format";
+import { formatData, formatNumero, VALORE_ASSENTE } from "@/utils/format";
 import { useQuery } from "@tanstack/react-query";
 import type { ChartOptions, TooltipItem } from "chart.js";
 import clsx from "clsx";
@@ -245,17 +249,17 @@ const buildCanaleAreaRepartoSeries = (scoreboards: SavedPromoScoreboard[]): Cana
 const ETICHETTE_KPI = ["Promozioni", "Score medio", "Trend positivi", "Trend negativi"];
 
 const MarketingSkeleton: React.FC = () => (
-    <div className="grid grid-cols-12 gap-5">
-        <StatCardGrid className="col-span-12">
+    <>
+        <StatCardGrid>
             {ETICHETTE_KPI.map((etichetta) => (
-                <StatCard key={etichetta} etichetta={etichetta} valore={null} loading />
+                <StatCard key={etichetta} etichetta={etichetta} valore={null} densita="compatta" loading />
             ))}
         </StatCardGrid>
-        <div className="box box--stacked col-span-12 p-5">
-            <Skeleton height="18px" width="220px" className="mb-5" />
-            <Skeleton height="360px" />
-        </div>
-    </div>
+        <Sezione as="div">
+            <Skeleton className="mb-5 h-5 w-56" />
+            <Skeleton className="h-96" />
+        </Sezione>
+    </>
 );
 
 const PerformerCard: React.FC<{
@@ -263,26 +267,58 @@ const PerformerCard: React.FC<{
     rank: number;
     variant: "top" | "bottom";
 }> = ({ series, rank, variant }) => (
-    <div className={clsx(
-        "flex items-center gap-3 rounded-lg border p-3",
+    <li className={clsx(
+        "flex items-center gap-3 rounded-card border p-3",
         variant === "top" ? "border-success/20 bg-success/5" : "border-danger/20 bg-danger/5",
     )}>
         <div className={clsx(
-            "flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-sm font-bold",
+            "flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-sm font-bold tabular-nums",
             variant === "top" ? "bg-success/15 text-success" : "bg-danger/15 text-danger",
         )}>
             #{rank}
         </div>
         <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-semibold text-slate-800">{series.label}</div>
+            <h3 className="title-card truncate">{series.label}</h3>
             <div className="text-xs text-slate-500">{series.nomeArea} · {series.nomeCanale}</div>
         </div>
         <div className="text-right">
-            <div className={clsx("text-lg font-extrabold", scoreColorCls(series.average))}>{series.average}</div>
-            <div className="text-xs text-slate-400">media</div>
+            <div className={clsx("text-lg font-extrabold tabular-nums", scoreColorCls(series.average))}>{series.average}</div>
+            <div className="text-xs text-slate-500">media</div>
         </div>
-    </div>
+    </li>
 );
+
+// Intestazione di colonna che ordina la tabella; la freccia compare solo sulla colonna attiva
+const IntestazioneOrdinabile: React.FC<{
+    colonna: SortKey;
+    attiva: SortKey;
+    direzione: SortDir;
+    onOrdina: (colonna: SortKey) => void;
+    children: React.ReactNode;
+}> = ({ colonna, attiva, direzione, onOrdina, children }) => {
+    const selezionata = colonna === attiva;
+    return (
+        <Table.Th
+            aria-sort={selezionata ? (direzione === "asc" ? "ascending" : "descending") : undefined}
+            className={selezionata ? "text-slate-700" : undefined}
+        >
+            <button
+                type="button"
+                onClick={() => onOrdina(colonna)}
+                className="inline-flex items-center gap-1 uppercase hover:text-slate-700"
+            >
+                {children}
+                {selezionata && (
+                    <Lucide
+                        icon={direzione === "asc" ? "ChevronUp" : "ChevronDown"}
+                        aria-hidden="true"
+                        className="h-3.5 w-3.5"
+                    />
+                )}
+            </button>
+        </Table.Th>
+    );
+};
 
 const DashboardMarketing: React.FC = () => {
     const [sortKey, setSortKey] = useState<SortKey>("average");
@@ -435,35 +471,26 @@ const DashboardMarketing: React.FC = () => {
         });
     }, [series, sortKey, sortDir]);
 
-    const sortArrow = (col: SortKey) => {
-        if (col !== sortKey) return <Lucide icon="ChevronsUpDown" className="ml-1 inline h-3.5 w-3.5 text-slate-300" />;
-        return sortDir === "asc"
-            ? <Lucide icon="ChevronUp" className="ml-1 inline h-3.5 w-3.5 text-theme-1" />
-            : <Lucide icon="ChevronDown" className="ml-1 inline h-3.5 w-3.5 text-theme-1" />;
-    };
-
     const isLoading = scoreboardsQuery.isLoading;
     const isError = scoreboardsQuery.isError;
     const isEmpty = scoreboards.length === 0 || series.length === 0;
 
     return (
-        <>
-            <PageHeader
-                title="Dashboard Marketing"
-                description="Analisi scoreboard promo con trend, distribuzione e confronto combinazioni area/canale"
-                actions={(
-                    <Button
-                        type="button"
-                        variant="outline-primary"
-                        onClick={() => scoreboardsQuery.refetch()}
-                        loading={scoreboardsQuery.isFetching}
-                    >
-                        {!scoreboardsQuery.isFetching && <Lucide icon="RefreshCw" aria-hidden="true" className="mr-2 h-4 w-4" />}
-                        Aggiorna
-                    </Button>
-                )}
-            />
-
+        <Pagina
+            titolo="Dashboard Marketing"
+            descrizione="Analisi scoreboard promo con trend, distribuzione e confronto combinazioni area/canale"
+            azioni={(
+                <Button
+                    type="button"
+                    variant="outline-secondary"
+                    onClick={() => scoreboardsQuery.refetch()}
+                    loading={scoreboardsQuery.isFetching}
+                >
+                    {!scoreboardsQuery.isFetching && <Lucide icon="RefreshCw" aria-hidden="true" className="mr-2 h-4 w-4" />}
+                    Aggiorna
+                </Button>
+            )}
+        >
             {isLoading ? (
                 <MarketingSkeleton />
             ) : isError ? (
@@ -472,41 +499,45 @@ const DashboardMarketing: React.FC = () => {
                     onRiprova={() => scoreboardsQuery.refetch()}
                 />
             ) : isEmpty ? (
-                <div className="box box--stacked p-8">
+                <Sezione>
                     <EmptyState
+                        compatta
                         icon="ChartBar"
                         title="Nessuno scoreboard calcolato"
                         description="Quando le promo avranno uno scoreboard salvato, il riepilogo marketing comparirà qui."
                     />
-                </div>
+                </Sezione>
             ) : (
-                <div className="grid grid-cols-12 gap-5">
-
+                <>
                     {/* A — Score Pulse */}
-                    <StatCardGrid className="col-span-12">
+                    <StatCardGrid>
                         <StatCard
+                            densita="compatta"
                             etichetta="Promozioni"
-                            valore={scoreboards.length.toLocaleString("it-IT")}
+                            valore={formatNumero(scoreboards.length)}
                             icona="Megaphone"
                             sottotitolo={lastComputedAt ? `Ultimo: ${formatData(lastComputedAt.computedAt)}` : undefined}
                         />
                         <StatCard
+                            densita="compatta"
                             etichetta="Score medio"
                             valore={`${averageScore}/100`}
                             icona="Gauge"
                             tono={tonoScore(averageScore)}
-                            sottotitolo={`${series.length} combinazioni area/canale`}
+                            sottotitolo={`${formatNumero(series.length)} combinazioni area/canale`}
                         />
                         <StatCard
+                            densita="compatta"
                             etichetta="Trend positivi"
-                            valore={trendPositivi.toLocaleString("it-IT")}
+                            valore={formatNumero(trendPositivi)}
                             icona="TrendingUp"
                             tono="success"
                             variazione={{ valore: "Ultima vs penultima promo", direzione: "su" }}
                         />
                         <StatCard
+                            densita="compatta"
                             etichetta="Trend negativi"
-                            valore={trendNegativi.toLocaleString("it-IT")}
+                            valore={formatNumero(trendNegativi)}
                             icona="TrendingDown"
                             tono="danger"
                             variazione={{ valore: "Ultima vs penultima promo", direzione: "giu" }}
@@ -514,184 +545,127 @@ const DashboardMarketing: React.FC = () => {
                     </StatCardGrid>
 
                     {/* B — Snapshot + Distribuzione */}
-                    <div className="col-span-12 grid grid-cols-12 gap-5">
-                        <div className="col-span-12 box box--stacked lg:col-span-8">
-                            <div className="flex items-center gap-3 border-b border-slate-200/70 p-5">
-                                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-theme-1/10">
-                                    <Lucide icon="ChartBar" className="h-4 w-4 text-theme-1" />
-                                </div>
-                                <div>
-                                    <h2 className="title-card">Snapshot ultimo score</h2>
-                                    <p className="text-xs text-slate-500">Score più recente per ogni combinazione, ordinato decrescente</p>
-                                </div>
+                    <div className="grid grid-cols-12 gap-6">
+                        <Sezione
+                            className="col-span-12 xl:col-span-8"
+                            icona="ChartBar"
+                            titolo="Snapshot ultimo score"
+                            descrizione="Score più recente per ogni combinazione, ordinato decrescente"
+                        >
+                            <div style={{ height: snapshotChartHeight }}>
+                                <Chart type="bar" data={snapshotChartData as any} options={snapshotOptions as any} height={snapshotChartHeight} />
                             </div>
-                            <div className="p-5">
-                                <div style={{ height: snapshotChartHeight }}>
-                                    <Chart type="bar" data={snapshotChartData as any} options={snapshotOptions as any} height={snapshotChartHeight} />
-                                </div>
-                            </div>
-                        </div>
-                        <div className="col-span-12 box box--stacked lg:col-span-4">
-                            <div className="flex items-center gap-3 border-b border-slate-200/70 p-5">
-                                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-info/10">
-                                    <Lucide icon="ChartColumn" className="h-4 w-4 text-info" />
-                                </div>
-                                <div>
-                                    <h2 className="title-card">Distribuzione score</h2>
-                                    <p className="text-xs text-slate-500">{allScoreValues.length} punti score totali</p>
-                                </div>
-                            </div>
-                            <div className="p-5">
-                                <Chart type="bar" data={distChartData as any} options={distOptions as any} height={220} />
-                            </div>
-                        </div>
+                        </Sezione>
+                        <Sezione
+                            className="col-span-12 xl:col-span-4"
+                            icona="ChartColumn"
+                            titolo="Distribuzione score"
+                            descrizione={`${formatNumero(allScoreValues.length)} punti score totali`}
+                        >
+                            <Chart type="bar" data={distChartData as any} options={distOptions as any} height={220} />
+                        </Sezione>
+
+                        {/* C — Top / Bottom performer */}
+                        {series.length >= 2 && (
+                            <>
+                                <Sezione
+                                    className="col-span-12 xl:col-span-6"
+                                    icona="Trophy"
+                                    titolo="Top performer"
+                                    descrizione="Score medio più alto"
+                                >
+                                    <ol className="flex flex-col gap-2">
+                                        {top3.map((s, i) => <PerformerCard key={s.key} series={s} rank={i + 1} variant="top" />)}
+                                    </ol>
+                                </Sezione>
+                                <Sezione
+                                    className="col-span-12 xl:col-span-6"
+                                    icona="TriangleAlert"
+                                    titolo="Da migliorare"
+                                    descrizione="Score medio più basso"
+                                >
+                                    <ol className="flex flex-col gap-2">
+                                        {bottom3.map((s, i) => <PerformerCard key={s.key} series={s} rank={i + 1} variant="bottom" />)}
+                                    </ol>
+                                </Sezione>
+                            </>
+                        )}
                     </div>
 
-                    {/* C — Top / Bottom performer */}
-                    {series.length >= 2 && (
-                        <div className="col-span-12 grid grid-cols-12 gap-5">
-                            <div className="col-span-12 box box--stacked lg:col-span-6">
-                                <div className="flex items-center gap-3 border-b border-slate-200/70 p-5">
-                                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-success/10">
-                                        <Lucide icon="Trophy" className="h-4 w-4 text-success" />
-                                    </div>
-                                    <div>
-                                        <h2 className="title-card">Top performer</h2>
-                                        <p className="text-xs text-slate-500">Score medio più alto</p>
-                                    </div>
-                                </div>
-                                <div className="flex flex-col gap-2 p-5">
-                                    {top3.map((s, i) => <PerformerCard key={s.key} series={s} rank={i + 1} variant="top" />)}
-                                </div>
-                            </div>
-                            <div className="col-span-12 box box--stacked lg:col-span-6">
-                                <div className="flex items-center gap-3 border-b border-slate-200/70 p-5">
-                                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-danger/10">
-                                        <Lucide icon="TriangleAlert" className=" h-4 w-4 text-danger" />
-                                    </div>
-                                    <div>
-                                        <h2 className="title-card">Da migliorare</h2>
-                                        <p className="text-xs text-slate-500">Score medio più basso</p>
-                                    </div>
-                                </div>
-                                <div className="flex flex-col gap-2 p-5">
-                                    {bottom3.map((s, i) => <PerformerCard key={s.key} series={s} rank={i + 1} variant="bottom" />)}
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
                     {/* D — Andamento nel tempo */}
-                    <div className="box box--stacked col-span-12">
-                        <div className="flex flex-col gap-3 border-b border-slate-200/70 p-5 lg:flex-row lg:items-center lg:justify-between">
-                            <div className="flex items-center gap-3">
-                                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-theme-1/10">
-                                    <Lucide icon="ChartLine" className="h-4 w-4 text-theme-1" />
-                                </div>
-                                <div>
-                                    <h2 className="title-section">Andamento nel tempo</h2>
-                                    <p className="text-xs text-slate-500">Trend reparti per coppia canale/area con mappatura CoopFi da AgenziaLib</p>
-                                </div>
-                            </div>
-                            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-500">
-                                {(activeCanaleArea?.series.length ?? 0).toLocaleString("it-IT")} reparti
-                            </div>
-                        </div>
-
+                    <Sezione
+                        icona="ChartLine"
+                        titolo="Andamento nel tempo"
+                        descrizione="Trend reparti per coppia canale/area con mappatura CoopFi da AgenziaLib"
+                        azioni={(
+                            <Badge variant="secondary" size="sm" className="tabular-nums">
+                                {formatNumero(activeCanaleArea?.series.length ?? 0)} reparti
+                            </Badge>
+                        )}
+                    >
                         {canaleAreaRepartoSeries.length === 0 ? (
-                            <div className="p-5">
-                                <EmptyState
-                                    icon="Network"
-                                    title="Nessun dettaglio canale/area disponibile"
-                                    description="I trend per reparto appariranno qui appena presenti nei report scoreboard."
-                                />
-                            </div>
+                            <EmptyState
+                                compatta
+                                icon="Network"
+                                title="Nessun dettaglio canale/area disponibile"
+                                description="I trend per reparto appariranno qui appena presenti nei report scoreboard."
+                            />
                         ) : (
                             <>
-                                <div className="border-b border-slate-100 px-5 py-4">
-                                    <div className="flex flex-wrap gap-2">
-                                        {canaleAreaRepartoSeries.map((view) => (
-                                            <button
-                                                key={view.key}
-                                                type="button"
-                                                aria-pressed={activeCanaleArea?.key === view.key}
-                                                onClick={() => setSelectedCanaleAreaKey(view.key)}
-                                                className={clsx(
-                                                    "rounded-full border px-3 py-1 text-xs font-semibold transition",
-                                                    activeCanaleArea?.key === view.key
-                                                        ? "border-theme-1 bg-theme-1 text-white shadow-sm"
-                                                        : "border-slate-300 bg-white text-slate-600 hover:border-theme-1/50 hover:text-theme-1",
-                                                )}
-                                            >
-                                                {view.label}
-                                            </button>
+                                <Segmenti
+                                    etichetta="Canale e area"
+                                    valore={activeCanaleArea?.key ?? ""}
+                                    onChange={setSelectedCanaleAreaKey}
+                                    opzioni={canaleAreaRepartoSeries.map((view) => ({ valore: view.key, etichetta: view.label }))}
+                                />
+                                {activeCanaleArea && (
+                                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                                        {activeCanaleArea.series.map((serie) => (
+                                            <Badge key={`${activeCanaleArea.key}-${serie.reparto}`} variant="secondary" size="sm">
+                                                {serie.reparto}
+                                            </Badge>
                                         ))}
                                     </div>
-                                    {activeCanaleArea && (
-                                        <div className="mt-3 flex flex-wrap items-center gap-2">
-                                            {activeCanaleArea.series.map((serie) => (
-                                                <span
-                                                    key={`${activeCanaleArea.key}-${serie.reparto}`}
-                                                    className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-2xs font-medium text-slate-600"
-                                                >
-                                                    {serie.reparto}
-                                                </span>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="overflow-x-auto p-5">
+                                )}
+                                <div className="mt-5 overflow-x-auto">
                                     <div className="min-w-[760px]">
                                         <Chart type="line" data={lineChartData as any} options={lineOptions as any} height={420} />
                                     </div>
                                 </div>
                             </>
                         )}
-                    </div>
+                    </Sezione>
 
                     {/* E — Tabella dettaglio con trend */}
-                    <div className="box box--stacked col-span-12">
-                        <div className="border-b border-slate-200/70 p-5">
-                            <h2 className="title-section">Dettaglio combinazioni</h2>
-                            <p className="mt-0.5 text-xs text-slate-500">
-                                Click sull'intestazione per ordinare · Δ trend = variazione rispetto alla penultima promo disponibile
-                            </p>
-                        </div>
+                    <Sezione
+                        senzaPadding
+                        icona="Table"
+                        titolo="Dettaglio combinazioni"
+                        descrizione="Clic sull'intestazione per ordinare · Δ trend = variazione rispetto alla penultima promo disponibile"
+                    >
                         <div className="overflow-x-auto">
-                            <table className="w-full text-left text-sm">
-                                <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
-                                    <tr>
-                                        <th
-                                            className="cursor-pointer select-none px-5 py-3 font-semibold hover:text-slate-600"
-                                            onClick={() => handleSort("label")}
-                                        >
-                                            Area / Canale {sortArrow("label")}
-                                        </th>
-                                        <th
-                                            className="cursor-pointer select-none px-5 py-3 font-semibold hover:text-slate-600"
-                                            onClick={() => handleSort("average")}
-                                        >
-                                            Score medio {sortArrow("average")}
-                                        </th>
-                                        <th
-                                            className="cursor-pointer select-none px-5 py-3 font-semibold hover:text-slate-600"
-                                            onClick={() => handleSort("latestScore")}
-                                        >
-                                            Ultimo score {sortArrow("latestScore")}
-                                        </th>
-                                        <th
-                                            className="cursor-pointer select-none px-5 py-3 font-semibold hover:text-slate-600"
-                                            onClick={() => handleSort("trend")}
-                                        >
-                                            Δ Trend {sortArrow("trend")}
-                                        </th>
-                                        <th className="px-5 py-3 font-semibold">Promo con dato</th>
-                                        <th className="px-5 py-3 font-semibold">Referenze</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100">
+                            <Table>
+                                <Table.Thead>
+                                    <Table.Tr>
+                                        <IntestazioneOrdinabile colonna="label" attiva={sortKey} direzione={sortDir} onOrdina={handleSort}>
+                                            Area / Canale
+                                        </IntestazioneOrdinabile>
+                                        <IntestazioneOrdinabile colonna="average" attiva={sortKey} direzione={sortDir} onOrdina={handleSort}>
+                                            Score medio
+                                        </IntestazioneOrdinabile>
+                                        <IntestazioneOrdinabile colonna="latestScore" attiva={sortKey} direzione={sortDir} onOrdina={handleSort}>
+                                            Ultimo score
+                                        </IntestazioneOrdinabile>
+                                        <IntestazioneOrdinabile colonna="trend" attiva={sortKey} direzione={sortDir} onOrdina={handleSort}>
+                                            Δ Trend
+                                        </IntestazioneOrdinabile>
+                                        <Table.Th>Promo con dato</Table.Th>
+                                        <Table.Th className="text-right">Referenze</Table.Th>
+                                    </Table.Tr>
+                                </Table.Thead>
+                                <Table.Tbody>
                                     {sortedSeries.map((s) => {
-                                        const trendLabel = s.trend === null ? "—"
+                                        const trendLabel = s.trend === null ? VALORE_ASSENTE
                                             : s.trend > 0 ? `↑ +${s.trend}`
                                                 : s.trend < 0 ? `↓ ${s.trend}`
                                                     : "→ 0";
@@ -699,36 +673,35 @@ const DashboardMarketing: React.FC = () => {
                                             ? "text-slate-400"
                                             : s.trend > 0 ? "text-success font-medium" : "text-danger font-medium";
                                         return (
-                                            <tr key={s.key} className="bg-white hover:bg-slate-50/50">
-                                                <td className="px-5 py-4">
+                                            <Table.Tr key={s.key}>
+                                                <Table.Td>
                                                     <div className="font-semibold text-slate-800">{s.label}</div>
-                                                    <div className="mt-0.5 text-xs text-slate-400">{s.nomeArea} / {s.nomeCanale}</div>
-                                                </td>
-                                                <td className="px-5 py-4">
+                                                    <div className="mt-0.5 text-xs text-slate-500">{s.nomeArea} / {s.nomeCanale}</div>
+                                                </Table.Td>
+                                                <Table.Td className="tabular-nums">
                                                     <span className={scoreColorCls(s.average)}>{s.average}/100</span>
-                                                </td>
-                                                <td className="px-5 py-4">
+                                                </Table.Td>
+                                                <Table.Td className="tabular-nums">
                                                     <div className={s.latestScore !== null ? scoreColorCls(s.latestScore) : "text-slate-400"}>
-                                                        {s.latestScore === null ? "—" : `${s.latestScore}/100`}
+                                                        {s.latestScore === null ? VALORE_ASSENTE : `${s.latestScore}/100`}
                                                     </div>
                                                     {s.latestPromo && (
-                                                        <div className="mt-0.5 max-w-[220px] truncate text-xs text-slate-400">{s.latestPromo}</div>
+                                                        <div className="mt-0.5 max-w-56 truncate text-xs text-slate-500">{s.latestPromo}</div>
                                                     )}
-                                                </td>
-                                                <td className={clsx("px-5 py-4", trendCls)}>{trendLabel}</td>
-                                                <td className="px-5 py-4 text-slate-600">{s.count} / {scoreboards.length}</td>
-                                                <td className="px-5 py-4 text-slate-600">{s.referenze.toLocaleString("it-IT")}</td>
-                                            </tr>
+                                                </Table.Td>
+                                                <Table.Td className={clsx("tabular-nums", trendCls)}>{trendLabel}</Table.Td>
+                                                <Table.Td className="tabular-nums text-slate-600">{s.count} / {scoreboards.length}</Table.Td>
+                                                <Table.Td className="text-right tabular-nums text-slate-600">{formatNumero(s.referenze)}</Table.Td>
+                                            </Table.Tr>
                                         );
                                     })}
-                                </tbody>
-                            </table>
+                                </Table.Tbody>
+                            </Table>
                         </div>
-                    </div>
-
-                </div>
+                    </Sezione>
+                </>
             )}
-        </>
+        </Pagina>
     );
 };
 

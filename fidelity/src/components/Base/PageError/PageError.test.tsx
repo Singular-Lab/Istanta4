@@ -35,4 +35,13 @@ describe("PageError", () => {
     expect(screen.queryByRole("heading")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Riprova" })).toBeInTheDocument();
   });
+
+  it("i titoli usano la tipografia condivisa: title-page a pagina intera, title-card nella compatta", () => {
+    const { unmount } = render(<PageError motivo="Timeout" />);
+    expect(screen.getByRole("heading", { level: 1, name: "Impossibile caricare la pagina" })).toHaveClass("title-page");
+    unmount();
+
+    render(<PageError compatta titolo="Statistiche non caricate" motivo="Timeout" />);
+    expect(screen.getByText("Statistiche non caricate")).toHaveClass("title-card");
+  });
 });

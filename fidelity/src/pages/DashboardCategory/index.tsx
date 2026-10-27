@@ -1,18 +1,22 @@
+import Badge from "@/components/Base/Badge";
+import BarraFiltri from "@/components/Base/BarraFiltri";
 import Button from "@/components/Base/Button";
 import Chart from "@/components/Base/Chart";
-import { FormField, FormInput } from "@/components/Base/Form";
+import { FormInput, FormLabel } from "@/components/Base/Form";
 import Lucide from "@/components/Base/Lucide";
 import PageError from "@/components/Base/PageError";
-import PageHeader from "@/components/Base/PageHeader";
+import Pagina from "@/components/Base/Pagina";
+import Segmenti from "@/components/Base/Segmenti";
+import Sezione from "@/components/Base/Sezione";
 import Skeleton from "@/components/Base/Skeleton";
-import StatCard from "@/components/Base/StatCard";
+import StatCard, { StatCardGrid } from "@/components/Base/StatCard";
 import StatusBadge from "@/components/Base/StatusBadge";
+import Table from "@/components/Base/Table";
 import EmptyState from "@/components/EmptyState";
-import { opzioniBase, paletteColore } from "@/utils/chartTheme";
-import { formatData, VALORE_ASSENTE } from "@/utils/format";
+import { opzioniBase, paletteColore, tonoScore } from "@/utils/chartTheme";
+import { formatData, formatNumero, VALORE_ASSENTE } from "@/utils/format";
 import { useQuery } from "@tanstack/react-query";
 import type { ChartOptions, TooltipItem } from "chart.js";
-import clsx from "clsx";
 import dayjs from "dayjs";
 import "dayjs/locale/it";
 import React, { useCallback, useMemo, useState } from "react";
@@ -43,11 +47,15 @@ type VolantiniInCorso = {
 
 const clampScore = (v: number) => Math.max(0, Math.min(100, Math.round(v)));
 
-function getScoreColor(score: number) {
-    if (score >= 70) return { bg: "bg-success/10", text: "text-success" };
-    if (score >= 40) return { bg: "bg-warning/10", text: "text-warning" };
-    return { bg: "bg-danger/10", text: "text-danger" };
-}
+/** Score 0-100 nel colore della sua fascia (positivo, attenzione, negativo). */
+const PunteggioScore: React.FC<{ score: number | null }> = ({ score }) =>
+    score === null ? (
+        <span className="text-slate-400">{VALORE_ASSENTE}</span>
+    ) : (
+        <StatusBadge tono={tonoScore(score)} etichetta={`${score}/100`} className="tabular-nums" />
+    );
+
+const PERIODI_RAPIDI = [7, 30, 90] as const;
 
 type RepartoSeries = CategoryScoreboardTimeline["series"][number];
 type CanaleAreaSeries = CategoryScoreboardTimeline["canaleAreaSeries"][number];
@@ -105,18 +113,18 @@ function promoOverlapsRange(
 const ETICHETTE_KPI = ["Score medio reparti", "Promozioni", "Reparti monitorati"];
 
 const CategorySkeleton: React.FC = () => (
-    <div className="grid grid-cols-12 gap-5">
-        <div className="col-span-12 grid grid-cols-1 gap-3 md:grid-cols-3">
+    <>
+        <StatCardGrid className="lg:grid-cols-3">
             {ETICHETTE_KPI.map(etichetta => (
-                <StatCard key={etichetta} etichetta={etichetta} valore={null} loading />
+                <StatCard key={etichetta} etichetta={etichetta} valore={null} densita="compatta" loading />
             ))}
+        </StatCardGrid>
+        <div className="grid grid-cols-12 gap-6">
+            <Sezione as="div" className="col-span-12 xl:col-span-6"><Skeleton className="h-52" /></Sezione>
+            <Sezione as="div" className="col-span-12 xl:col-span-6"><Skeleton className="h-52" /></Sezione>
+            <Sezione as="div" className="col-span-12"><Skeleton className="h-96" /></Sezione>
         </div>
-        <div className="col-span-12 grid grid-cols-1 gap-5 lg:grid-cols-2">
-            <div className="box box--stacked p-5"><Skeleton height="200px" /></div>
-            <div className="box box--stacked p-5"><Skeleton height="200px" /></div>
-        </div>
-        <div className="box box--stacked col-span-12 p-5"><Skeleton height="360px" /></div>
-    </div>
+    </>
 );
 
 const DashboardCategory: React.FC = () => {
@@ -237,6 +245,14 @@ const DashboardCategory: React.FC = () => {
         setDateFrom(from);
         setDateTo(to);
     }, []);
+
+    // Periodo rapido che corrisponde all'intervallo scelto (0 se l'intervallo è personalizzato)
+    const periodoRapido = useMemo<number>(() => {
+        if (dateTo !== dayjs().format("YYYY-MM-DD")) return 0;
+        return PERIODI_RAPIDI.find(
+            giorni => dayjs().subtract(giorni - 1, "day").format("YYYY-MM-DD") === dateFrom,
+        ) ?? 0;
+    }, [dateFrom, dateTo]);
 
     const timelineRows = useMemo(
         () => timelinePromos.map((promo, index) => ({
@@ -406,19 +422,20 @@ const DashboardCategory: React.FC = () => {
             },
         },
     }), []);
+    const titolo = "Dashboard Category";
+    const descrizione = "Andamento scoreboard per i reparti assegnati";
+
     if (filtersQuery.isLoading || categoryTimelineQuery.isLoading) {
         return (
-            <>
-                <PageHeader title="Dashboard Category" description="Caricamento in corso..." />
+            <Pagina titolo={titolo} descrizione={descrizione}>
                 <CategorySkeleton />
-            </>
+            </Pagina>
         );
     }
 
     if (filtersQuery.isError || categoryTimelineQuery.isError || !filters) {
         return (
-            <>
-                <PageHeader title="Dashboard Category" description="" />
+            <Pagina titolo={titolo} descrizione={descrizione}>
                 <PageError
                     motivo={filtersQuery.isError || !filters
                         ? "Impossibile caricare i filtri utente."
@@ -428,387 +445,365 @@ const DashboardCategory: React.FC = () => {
                         categoryTimelineQuery.refetch();
                     }}
                 />
-            </>
+            </Pagina>
         );
     }
 
     if (!settoriNomi.length) {
         return (
-            <>
-                <PageHeader title="Dashboard Category" description="" />
-                <div className="box box--stacked p-8">
+            <Pagina titolo={titolo} descrizione={descrizione}>
+                <Sezione>
                     <EmptyState
+                        compatta
                         icon="ShieldOff"
                         title="Nessun reparto assegnato"
                         description="Il profilo non ha reparti configurati. Contatta l'amministratore."
                     />
-                </div>
-            </>
+                </Sezione>
+            </Pagina>
         );
     }
 
-    const scoreColor = getScoreColor(averageScore);
-
     return (
-        <>
-            <PageHeader
-                title="Dashboard Category"
-                description="Andamento scoreboard per i reparti assegnati"
-                actions={
-                    <Button
-                        type="button"
-                        variant="outline-primary"
-                        onClick={() => {
-                            categoryTimelineQuery.refetch();
-                            volantiniQuery.refetch();
-                            promoQuery.refetch();
-                        }}
-                        loading={categoryTimelineQuery.isFetching}
-                    >
-                        {!categoryTimelineQuery.isFetching && <Lucide icon="RefreshCw" aria-hidden="true" className="mr-2 h-4 w-4" />}
-                        Aggiorna
-                    </Button>
-                }
-            />
-
-            {/* Banner reparti assegnati */}
-            <div className="mb-5 flex flex-wrap items-center gap-2 rounded-xl border border-theme-1/20 bg-theme-1/5 px-4 py-3">
-                {filters.ruolo && (
-                    <span className="rounded-full bg-theme-1 px-3 py-1 text-xs font-bold uppercase tracking-wide text-white">
-                        {filters.ruolo}
-                    </span>
-                )}
-                {settoriNomi.map(nome => (
-                    <span key={nome} className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-700">
-                        {nome}
-                    </span>
-                ))}
-                <span className="ml-auto text-xs text-slate-400">
-                    {settoriNomi.length === 1 ? "1 reparto assegnato" : `${settoriNomi.length} reparti assegnati`}
-                </span>
-            </div>
-
-            <div className="mb-5 rounded-xl border border-slate-200 bg-white px-4 py-3">
-                <div className="flex flex-wrap items-end gap-3">
-                    <FormField etichetta="Da" className="min-w-[180px]">
+        <Pagina
+            titolo={titolo}
+            descrizione={descrizione}
+            azioni={
+                <Button
+                    type="button"
+                    variant="outline-secondary"
+                    onClick={() => {
+                        categoryTimelineQuery.refetch();
+                        volantiniQuery.refetch();
+                        promoQuery.refetch();
+                    }}
+                    loading={categoryTimelineQuery.isFetching}
+                >
+                    {!categoryTimelineQuery.isFetching && <Lucide icon="RefreshCw" aria-hidden="true" className="mr-2 h-4 w-4" />}
+                    Aggiorna
+                </Button>
+            }
+        >
+            {/* Periodo e reparti assegnati: valgono per tutta la pagina */}
+            <Sezione compatta aria-label="Periodo e reparti">
+                <BarraFiltri
+                    variante="libera"
+                    destra={
+                        <span className="text-xs text-slate-500" aria-live="polite">
+                            {isDateRangeActive
+                                ? `Filtro attivo: ${formatNumero(timelinePromos.length)} promo nel periodo`
+                                : "Nessun filtro data attivo"}
+                        </span>
+                    }
+                >
+                    <div className="flex items-center gap-2">
+                        <FormLabel htmlFor="category-date-from" className="mb-0 text-sm">Da</FormLabel>
                         <FormInput
                             id="category-date-from"
                             type="date"
+                            formInputSize="sm"
+                            className="sm:w-40"
                             value={dateFrom}
                             onChange={(e) => handleDateFromChange(e.target.value)}
                         />
-                    </FormField>
-                    <FormField etichetta="A" className="min-w-[180px]">
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <FormLabel htmlFor="category-date-to" className="mb-0 text-sm">A</FormLabel>
                         <FormInput
                             id="category-date-to"
                             type="date"
+                            formInputSize="sm"
+                            className="sm:w-40"
                             value={dateTo}
                             onChange={(e) => handleDateToChange(e.target.value)}
                         />
-                    </FormField>
-                    <div className="flex flex-wrap items-center gap-2">
-                        <Button type="button" variant="outline-secondary" aria-label="Ultimi 7 giorni" title="Ultimi 7 giorni" onClick={() => applyPresetDays(7)}>7g</Button>
-                        <Button type="button" variant="outline-secondary" aria-label="Ultimi 30 giorni" title="Ultimi 30 giorni" onClick={() => applyPresetDays(30)}>30g</Button>
-                        <Button type="button" variant="outline-secondary" aria-label="Ultimi 90 giorni" title="Ultimi 90 giorni" onClick={() => applyPresetDays(90)}>90g</Button>
-                        <Button type="button" variant="outline-secondary" onClick={clearDateRange} disabled={!isDateRangeActive}>
-                            Reset
-                        </Button>
                     </div>
-                    <div className="ml-auto text-xs text-slate-500">
-                        {isDateRangeActive
-                            ? `Filtro attivo: ${timelinePromos.length} promo nel periodo`
-                            : "Nessun filtro data attivo"}
-                    </div>
+                    <Segmenti
+                        etichetta="Periodo rapido"
+                        valore={periodoRapido}
+                        onChange={applyPresetDays}
+                        opzioni={PERIODI_RAPIDI.map(giorni => ({ valore: giorni, etichetta: `${giorni} giorni` }))}
+                    />
+                    <Button type="button" variant="outline-secondary" size="sm" onClick={clearDateRange} disabled={!isDateRangeActive}>
+                        <Lucide icon="X" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                        Azzera
+                    </Button>
+                </BarraFiltri>
+
+                <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-dashed border-slate-200 pt-4">
+                    {filters.ruolo && <Badge variant="primary" size="sm">{filters.ruolo}</Badge>}
+                    {settoriNomi.map(nome => (
+                        <Badge key={nome} variant="secondary" size="sm">{nome}</Badge>
+                    ))}
+                    <span className="ml-auto text-xs text-slate-500">
+                        {settoriNomi.length === 1 ? "1 reparto assegnato" : `${formatNumero(settoriNomi.length)} reparti assegnati`}
+                    </span>
                 </div>
-            </div>
+            </Sezione>
 
-            <div className="grid grid-cols-12 gap-5">
-                {/* KPI */}
-                <div className="col-span-12 grid grid-cols-1 gap-3 md:grid-cols-3">
-                    <StatCard
-                        etichetta="Score medio reparti"
-                        valore={timelinePromos.length ? `${averageScore}/100` : null}
-                        icona="Gauge"
-                        tono={averageScore >= 70 ? "success" : averageScore >= 40 ? "warning" : "brand"}
-                    />
-                    <StatCard
-                        etichetta="Promozioni"
-                        valore={timelinePromos.length.toLocaleString("it-IT")}
-                        icona="Megaphone"
-                    />
-                    <StatCard
-                        etichetta="Reparti monitorati"
-                        valore={settoriNomi.length.toLocaleString("it-IT")}
-                        icona="Package"
-                        tono="info"
-                    />
+            {/* KPI */}
+            <StatCardGrid className="lg:grid-cols-3">
+                <StatCard
+                    densita="compatta"
+                    etichetta="Score medio reparti"
+                    valore={timelinePromos.length ? `${averageScore}/100` : null}
+                    icona="Gauge"
+                    tono={averageScore >= 70 ? "success" : averageScore >= 40 ? "warning" : "brand"}
+                />
+                <StatCard
+                    densita="compatta"
+                    etichetta="Promozioni"
+                    valore={formatNumero(timelinePromos.length)}
+                    icona="Megaphone"
+                />
+                <StatCard
+                    densita="compatta"
+                    etichetta="Reparti monitorati"
+                    valore={formatNumero(settoriNomi.length)}
+                    icona="Package"
+                    tono="info"
+                />
+            </StatCardGrid>
 
-                </div>
-
+            <div className="grid grid-cols-12 gap-6">
                 {/* Volantini in corso */}
-                <div className="col-span-12 lg:col-span-6">
-                    <div className="box box--stacked h-full">
-                        <div className="flex items-center gap-3 border-b border-slate-200/70 p-5">
-                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-info/10">
-                                <Lucide icon="FileText" className="h-4 w-4 text-info" />
-                            </div>
-                            <div>
-                                <h2 className="title-card">Volantini in corso</h2>
-                                <p className="text-xs text-slate-500">Pubblicazioni attive nel sistema</p>
-                            </div>
-                            {volantiniQuery.data != null && (
-                                <span className="ml-auto rounded-full bg-info/10 px-2.5 py-0.5 text-xs font-semibold text-info">
-                                    {isDateRangeActive ? filteredVolantini.length : volantiniQuery.data.totale}
-                                </span>
+                <Sezione
+                    className="col-span-12 xl:col-span-6"
+                    icona="FileText"
+                    titolo="Volantini in corso"
+                    descrizione="Pubblicazioni attive nel sistema"
+                    azioni={volantiniQuery.data != null && (
+                        <Badge variant="info" size="sm" className="tabular-nums">
+                            {formatNumero(isDateRangeActive ? filteredVolantini.length : volantiniQuery.data.totale)}
+                        </Badge>
+                    )}
+                >
+                    {volantiniQuery.isLoading ? (
+                        <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-9" />)}</div>
+                    ) : volantiniQuery.isError ? (
+                        <PageError
+                            compatta
+                            titolo="Volantini non caricati"
+                            motivo="Il servizio non ha restituito i volantini in corso."
+                            onRiprova={() => volantiniQuery.refetch()}
+                        />
+                    ) : !filteredVolantini.length ? (
+                        <EmptyState
+                            compatta
+                            icon="FileText"
+                            title={isDateRangeActive ? "Nessun volantino nel periodo" : "Nessun volantino in corso"}
+                            description={isDateRangeActive ? "Modifica l'intervallo date per vedere altri volantini." : ""}
+                        />
+                    ) : (
+                        <ul className="max-h-52 space-y-2 overflow-y-auto pr-1">
+                            {filteredVolantini.slice(0, 10).map(kit => (
+                                <li key={kit.id} className="flex items-center gap-3 rounded-control border border-slate-100 bg-slate-50 px-3 py-2">
+                                    <Lucide icon="FileImage" aria-hidden="true" className="h-4 w-4 shrink-0 text-slate-400" />
+                                    <div className="min-w-0 flex-1">
+                                        <div className="truncate text-xs font-medium text-slate-700">{kit.titolo || kit.nome_promo}</div>
+                                        <div className="text-xs text-slate-500">{[kit.nome_area, kit.nome_canale].filter(Boolean).join(" / ")}</div>
+                                    </div>
+                                    <StatusBadge dominio="kitRuntime" stato={kit.stato_lavorazione} className="shrink-0" />
+                                </li>
+                            ))}
+                            {filteredVolantini.length > 10 && (
+                                <li className="text-center text-xs text-slate-500">+{formatNumero(filteredVolantini.length - 10)} altri</li>
                             )}
-                        </div>
-                        <div className="p-5">
-                            {volantiniQuery.isLoading ? (
-                                <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} height="36px" />)}</div>
-                            ) : !filteredVolantini.length ? (
-                                <p className="text-center text-sm text-slate-400">Nessun volantino in corso</p>
-                            ) : (
-                                <div className="max-h-52 space-y-2 overflow-y-auto pr-1">
-                                    {filteredVolantini.slice(0, 10).map(kit => (
-                                        <div key={kit.id} className="flex items-center gap-3 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
-                                            <Lucide icon="FileImage" className="h-4 w-4 shrink-0 text-slate-400" />
-                                            <div className="min-w-0 flex-1">
-                                                <div className="truncate text-xs font-medium text-slate-700">{kit.titolo || kit.nome_promo}</div>
-                                                <div className="text-xs text-slate-400">{[kit.nome_area, kit.nome_canale].filter(Boolean).join(" / ")}</div>
-                                            </div>
-                                            <StatusBadge dominio="kitRuntime" stato={kit.stato_lavorazione} className="shrink-0" />
-                                        </div>
-                                    ))}
-                                    {filteredVolantini.length > 10 && (
-                                        <p className="text-center text-xs text-slate-400">+{filteredVolantini.length - 10} altri</p>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
+                        </ul>
+                    )}
+                </Sezione>
 
                 {/* Promozioni in corso */}
-                <div className="col-span-12 lg:col-span-6">
-                    <div className="box box--stacked h-full">
-                        <div className="flex items-center gap-3 border-b border-slate-200/70 p-5">
-                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-theme-1/10">
-                                <Lucide icon="Megaphone" className="h-4 w-4 text-theme-1" />
-                            </div>
-                            <div>
-                                <h2 className="title-card">Promozioni in corso</h2>
-                                <p className="text-xs text-slate-500">Campagne attive non archiviate</p>
-                            </div>
-                            {promoQuery.data && (
-                                <span className="ml-auto rounded-full bg-theme-1/10 px-2.5 py-0.5 text-xs font-semibold text-theme-1">
-                                    {filteredPromozioniInCorso.length}
-                                </span>
-                            )}
-                        </div>
-                        <div className="p-5">
-                            {promoQuery.isLoading ? (
-                                <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} height="36px" />)}</div>
-                            ) : !filteredPromozioniInCorso.length ? (
-                                <p className="text-center text-sm text-slate-400">Nessuna promozione in corso</p>
-                            ) : (
-                                <div className="max-h-52 space-y-2 overflow-y-auto pr-1">
-                                    {filteredPromozioniInCorso.slice(0, 10).map(promo => (
-                                        <div key={promo.id} className="flex items-center gap-3 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
-                                            <Lucide icon="CalendarRange" className="h-4 w-4 shrink-0 text-slate-400" />
-                                            <div className="min-w-0 flex-1">
-                                                <div className="truncate text-xs font-medium text-slate-700">
-                                                    {promo.nome || VALORE_ASSENTE}
-                                                </div>
-                                                <div className="text-xs text-slate-400">
-                                                    {formatData(promo.validita_dal)} — {formatData(promo.validita_al)}
-                                                </div>
-                                            </div>
+                <Sezione
+                    className="col-span-12 xl:col-span-6"
+                    icona="Megaphone"
+                    titolo="Promozioni in corso"
+                    descrizione="Campagne attive non archiviate"
+                    azioni={promoQuery.data && (
+                        <Badge variant="primary" size="sm" className="tabular-nums">
+                            {formatNumero(filteredPromozioniInCorso.length)}
+                        </Badge>
+                    )}
+                >
+                    {promoQuery.isLoading ? (
+                        <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-9" />)}</div>
+                    ) : promoQuery.isError ? (
+                        <PageError
+                            compatta
+                            titolo="Promozioni non caricate"
+                            motivo="Il servizio non ha restituito le promozioni in corso."
+                            onRiprova={() => promoQuery.refetch()}
+                        />
+                    ) : !filteredPromozioniInCorso.length ? (
+                        <EmptyState
+                            compatta
+                            icon="Megaphone"
+                            title={isDateRangeActive ? "Nessuna promozione nel periodo" : "Nessuna promozione in corso"}
+                            description={isDateRangeActive ? "Modifica l'intervallo date per vedere altre promozioni." : ""}
+                        />
+                    ) : (
+                        <ul className="max-h-52 space-y-2 overflow-y-auto pr-1">
+                            {filteredPromozioniInCorso.slice(0, 10).map(promo => (
+                                <li key={promo.id} className="flex items-center gap-3 rounded-control border border-slate-100 bg-slate-50 px-3 py-2">
+                                    <Lucide icon="CalendarRange" aria-hidden="true" className="h-4 w-4 shrink-0 text-slate-400" />
+                                    <div className="min-w-0 flex-1">
+                                        <div className="truncate text-xs font-medium text-slate-700">
+                                            {promo.nome || VALORE_ASSENTE}
                                         </div>
-                                    ))}
-                                    {(filteredPromozioniInCorso.length ?? 0) > 10 && (
-                                        <p className="text-center text-xs text-slate-400">+{(filteredPromozioniInCorso.length ?? 0) - 10} altre</p>
-                                    )}
-                                </div>
+                                        <div className="text-xs tabular-nums text-slate-500">
+                                            {formatData(promo.validita_dal)} — {formatData(promo.validita_al)}
+                                        </div>
+                                    </div>
+                                </li>
+                            ))}
+                            {filteredPromozioniInCorso.length > 10 && (
+                                <li className="text-center text-xs text-slate-500">+{formatNumero(filteredPromozioniInCorso.length - 10)} altre</li>
                             )}
-                        </div>
-                    </div>
-                </div>
+                        </ul>
+                    )}
+                </Sezione>
 
                 {/* Grafico andamento + tabella + dettaglio */}
                 {timelinePromos.length === 0 ? (
-                    <div className="box box--stacked col-span-12 p-8">
+                    <Sezione className="col-span-12" icona="ChartLine" titolo="Andamento dei reparti">
                         <EmptyState
+                            compatta
                             icon="ChartLine"
-                            title={isDateRangeActive ? "Nessun dato nel range selezionato" : "Nessun scoreboard disponibile"}
+                            title={isDateRangeActive ? "Nessun dato nel periodo selezionato" : "Nessuno scoreboard disponibile"}
                             description={isDateRangeActive
                                 ? "Modifica l'intervallo date per visualizzare dati disponibili."
                                 : "Quando le promozioni avranno uno scoreboard calcolato per i tuoi reparti, il grafico apparirà qui."}
+                            buttonText={isDateRangeActive ? "Azzera periodo" : undefined}
+                            buttonIcon="X"
+                            onButtonClick={clearDateRange}
                         />
-                    </div>
+                    </Sezione>
                 ) : (
                     <>
                         {/* Canale/Area focus */}
                         {canaleAreaSeries.length > 0 && (
-                            <div className="box box--stacked col-span-12">
-                                <div className="border-b border-slate-200/70 p-5">
-                                    <div className="flex flex-wrap items-center gap-3">
-                                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-info/10">
-                                            <Lucide icon="Network" className="h-4 w-4 text-info" />
-                                        </div>
-                                        <div className="flex-1">
-                                            <h2 className="title-section">Focus per canale / area</h2>
-                                            <p className="text-sm text-slate-500">Seleziona una coppia canale-area per vedere il trend dei tuoi reparti.</p>
-                                        </div>
-                                        {activeCanaleArea && (
-                                            <span className={clsx("rounded-full px-3 py-1 text-sm font-bold", getScoreColor(activeCanaleArea.average).bg, getScoreColor(activeCanaleArea.average).text)}>
-                                                Media {activeCanaleArea.average}/100
-                                            </span>
-                                        )}
-                                    </div>
-                                    <div className="mt-4 flex flex-wrap gap-2">
-                                        {canaleAreaSeries.map(ca => (
-                                            <button
-                                                key={ca.key}
-                                                type="button"
-                                                aria-pressed={activeCanaleArea?.key === ca.key}
-                                                onClick={() => setSelectedCanaleAreaKey(ca.key)}
-                                                className={clsx(
-                                                    "rounded-full border px-3 py-1 text-xs font-semibold transition",
-                                                    activeCanaleArea?.key === ca.key
-                                                        ? "border-theme-1 bg-theme-1 text-white shadow-sm"
-                                                        : "border-slate-300 bg-white text-slate-600 hover:border-theme-1/50 hover:text-theme-1",
-                                                )}
-                                            >
-                                                {ca.label}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
+                            <Sezione
+                                className="col-span-12"
+                                icona="Network"
+                                titolo="Focus per canale / area"
+                                descrizione="Seleziona una coppia canale-area per vedere il trend dei tuoi reparti."
+                                azioni={activeCanaleArea && (
+                                    <span className="flex items-center gap-2 text-sm text-slate-500">
+                                        Media <PunteggioScore score={activeCanaleArea.average} />
+                                    </span>
+                                )}
+                            >
+                                <Segmenti
+                                    etichetta="Canale e area"
+                                    valore={activeCanaleArea?.key ?? ""}
+                                    onChange={setSelectedCanaleAreaKey}
+                                    opzioni={canaleAreaSeries.map(ca => ({ valore: ca.key, etichetta: ca.label }))}
+                                />
                                 {activeCanaleArea && (
-                                    <div className="p-5 overflow-x-auto">
+                                    <div className="mt-5 overflow-x-auto">
                                         <div className="min-w-[640px]">
                                             <Chart type="line" data={canaleAreaChartData as any} options={canaleAreaChartOptions as any} height={320} />
                                         </div>
-                                        <div className="mt-5 overflow-x-auto rounded-xl border border-slate-200">
-                                            <table className="w-full text-left text-sm">
-                                                <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
-                                                    <tr>
-                                                        <th className="px-4 py-3 font-semibold">Promozione</th>
-                                                        <th className="px-4 py-3 font-semibold">Data</th>
+                                        <div className="mt-5 overflow-x-auto rounded-card border border-slate-200">
+                                            <Table>
+                                                <Table.Thead>
+                                                    <Table.Tr>
+                                                        <Table.Th>Promozione</Table.Th>
+                                                        <Table.Th>Data</Table.Th>
                                                         {settoriNomi.map(n => (
-                                                            <th key={`${activeCanaleArea.key}-${n}`} className="px-4 py-3 font-semibold">{n}</th>
+                                                            <Table.Th key={`${activeCanaleArea.key}-${n}`}>{n}</Table.Th>
                                                         ))}
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-slate-100">
+                                                    </Table.Tr>
+                                                </Table.Thead>
+                                                <Table.Tbody>
                                                     {activeCanaleAreaRowsAsc.map(({ promo, scoreByReparto }) => (
-                                                        <tr key={`${activeCanaleArea.key}-${promo.id}`} className="bg-white hover:bg-slate-50/40">
-                                                            <td className="px-4 py-3">
-                                                                <div className="max-w-[240px] truncate font-medium text-slate-800">
+                                                        <Table.Tr key={`${activeCanaleArea.key}-${promo.id}`}>
+                                                            <Table.Td>
+                                                                <div className="max-w-60 truncate font-medium text-slate-800">
                                                                     {promo.nome || promo.id}
                                                                 </div>
-                                                            </td>
-                                                            <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-400">
+                                                            </Table.Td>
+                                                            <Table.Td className="whitespace-nowrap text-xs tabular-nums text-slate-500">
                                                                 {formatData(promo.validaDal)}
                                                                 {promo.validaAl ? ` — ${formatData(promo.validaAl)}` : ""}
-                                                            </td>
+                                                            </Table.Td>
                                                             {settoriNomi.map(reparto => {
                                                                 const raw = scoreByReparto.get(reparto);
-                                                                const score = typeof raw === "number" ? clampScore(raw) : null;
-                                                                const color = score !== null ? getScoreColor(score) : null;
                                                                 return (
-                                                                    <td key={`${promo.id}-${reparto}`} className="px-4 py-3">
-                                                                        {score !== null && color ? (
-                                                                            <span className={clsx("inline-block rounded-full px-2.5 py-0.5 text-xs font-bold", color.bg, color.text)}>
-                                                                                {score}/100
-                                                                            </span>
-                                                                        ) : (
-                                                                            <span className="text-xs text-slate-400">{VALORE_ASSENTE}</span>
-                                                                        )}
-                                                                    </td>
+                                                                    <Table.Td key={`${promo.id}-${reparto}`}>
+                                                                        <PunteggioScore score={typeof raw === "number" ? clampScore(raw) : null} />
+                                                                    </Table.Td>
                                                                 );
                                                             })}
-                                                        </tr>
+                                                        </Table.Tr>
                                                     ))}
-                                                </tbody>
-                                            </table>
+                                                </Table.Tbody>
+                                            </Table>
                                         </div>
                                     </div>
                                 )}
-                            </div>
+                            </Sezione>
                         )}
 
                         {/* Promo × Reparto table */}
-                        <div className="box box--stacked col-span-12">
-                            <div className="border-b border-slate-200/70 p-5">
-                                <h2 className="title-section">Score per promo per reparto</h2>
-                                <p className="mt-1 text-sm text-slate-500">Ogni riga è una promozione; le colonne mostrano lo score per ciascun reparto assegnato.</p>
-                            </div>
+                        <Sezione
+                            className="col-span-12"
+                            senzaPadding
+                            icona="Table"
+                            titolo="Score per promo per reparto"
+                            descrizione="Ogni riga è una promozione; le colonne mostrano lo score per ciascun reparto assegnato."
+                        >
                             <div className="overflow-x-auto">
-                                <table className="w-full text-left text-sm">
-                                    <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
-                                        <tr>
-                                            <th className="px-5 py-3 font-semibold">Promozione</th>
-                                            <th className="px-5 py-3 font-semibold">Data</th>
+                                <Table>
+                                    <Table.Thead>
+                                        <Table.Tr>
+                                            <Table.Th>Promozione</Table.Th>
+                                            <Table.Th>Data</Table.Th>
                                             {settoriNomi.map(n => (
-                                                <th key={n} className="px-4 py-3 font-semibold">{n}</th>
+                                                <Table.Th key={n}>{n}</Table.Th>
                                             ))}
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-100">
-                                        {[...timelineRows].reverse().map(({ promo, scoreByReparto }) => {
-                                            return (
-                                                <tr key={promo.id} className="bg-white hover:bg-slate-50/50">
-                                                    <td className="px-5 py-3">
-                                                        <div className="max-w-[220px] truncate font-medium text-slate-800">
-                                                            {promo.nome || promo.id}
-                                                        </div>
-                                                    </td>
-                                                    <td className="whitespace-nowrap px-5 py-3 text-xs text-slate-400">
-                                                        {formatData(promo.validaDal)}
-                                                        {promo.validaAl ? ` — ${formatData(promo.validaAl)}` : ""}
-                                                    </td>
-                                                    {settoriNomi.map(nome => {
-                                                        const raw = scoreByReparto.get(nome);
-                                                        const s = typeof raw === "number" ? clampScore(raw) : null;
-                                                        const c = s !== null ? getScoreColor(s) : null;
-                                                        return (
-                                                            <td key={nome} className="px-4 py-3">
-                                                                {s !== null && c ? (
-                                                                    <span className={clsx("inline-block rounded-full px-2.5 py-0.5 text-xs font-bold", c.bg, c.text)}>
-                                                                        {s}/100
-                                                                    </span>
-                                                                ) : (
-                                                                    <span className="text-xs text-slate-400">{VALORE_ASSENTE}</span>
-                                                                )}
-                                                            </td>
-                                                        );
-                                                    })}
-                                                </tr>
-                                            );
-                                        })}
-                                        <tr className="bg-slate-50 font-semibold">
-                                            <td className="px-5 py-3 text-xs uppercase tracking-wide text-slate-500" colSpan={2}>Media totale</td>
-                                            {repartoSeries.map(s => {
-                                                const c = getScoreColor(s.average);
-                                                return (
-                                                    <td key={s.reparto} className="px-4 py-3">
-                                                        <span className={clsx("inline-block rounded-full px-2.5 py-0.5 text-xs font-bold", c.bg, c.text)}>
-                                                            {s.average}/100
-                                                        </span>
-                                                    </td>
-                                                );
-                                            })}
-                                        </tr>
-                                    </tbody>
-                                </table>
+                                        </Table.Tr>
+                                    </Table.Thead>
+                                    <Table.Tbody>
+                                        {[...timelineRows].reverse().map(({ promo, scoreByReparto }) => (
+                                            <Table.Tr key={promo.id}>
+                                                <Table.Td>
+                                                    <div className="max-w-56 truncate font-medium text-slate-800">
+                                                        {promo.nome || promo.id}
+                                                    </div>
+                                                </Table.Td>
+                                                <Table.Td className="whitespace-nowrap text-xs tabular-nums text-slate-500">
+                                                    {formatData(promo.validaDal)}
+                                                    {promo.validaAl ? ` — ${formatData(promo.validaAl)}` : ""}
+                                                </Table.Td>
+                                                {settoriNomi.map(nome => {
+                                                    const raw = scoreByReparto.get(nome);
+                                                    return (
+                                                        <Table.Td key={nome}>
+                                                            <PunteggioScore score={typeof raw === "number" ? clampScore(raw) : null} />
+                                                        </Table.Td>
+                                                    );
+                                                })}
+                                            </Table.Tr>
+                                        ))}
+                                        <Table.Tr className="[&_td]:bg-slate-50">
+                                            <Table.Td colSpan={2}>
+                                                <span className="title-eyebrow">Media totale</span>
+                                            </Table.Td>
+                                            {repartoSeries.map(s => (
+                                                <Table.Td key={s.reparto}>
+                                                    <PunteggioScore score={s.average} />
+                                                </Table.Td>
+                                            ))}
+                                        </Table.Tr>
+                                    </Table.Tbody>
+                                </Table>
                             </div>
-                        </div>
-
+                        </Sezione>
                     </>
                 )}
             </div>
-        </>
+        </Pagina>
     );
 };
 

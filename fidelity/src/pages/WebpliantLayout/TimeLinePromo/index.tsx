@@ -6,6 +6,7 @@ import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
 import Lucide from "@/components/Base/Lucide";
 import { FormCheck } from "@/components/Base/Form";
 import clsx from "clsx";
+import { formatData } from "@/utils/format";
 import Tippy from '@tippyjs/react';
 import { TimelinePromoItem } from "../../../../lib/types";
 import { useLocation, useNavigate, useRevalidator } from "react-router-dom";
@@ -23,7 +24,6 @@ const TimeLinePromo: React.FC<TimelineProps> = ({
   height = "h-[320px]",
   onClose,
 }) => {
-  useEffect(() => { console.log(initialTasks) }, [initialTasks])
   // Stati principali
   const [tasks, setTasks] = useState<TimelinePromoItem[]>(initialTasks);
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -157,7 +157,7 @@ const TimeLinePromo: React.FC<TimelineProps> = ({
 
   return (
     <div className={clsx(
-      "bg-white rounded-xl shadow-lg border border-slate-200/60 backdrop-blur-sm overflow-hidden",
+      "bg-white rounded-card shadow-lg border border-slate-200/60 backdrop-blur-sm overflow-hidden",
       "transition-all duration-500 ease-out transform",
       isCollapsed ? "h-12 translate-y-2 opacity-90" : "h-[520px] translate-y-0 opacity-100",
       // Animazione slide-up dal basso
@@ -167,7 +167,7 @@ const TimeLinePromo: React.FC<TimelineProps> = ({
       <div className="flex items-center px-4 py-3 border-b border-slate-200/60 bg-gradient-to-r from-slate-50 to-slate-100/50 backdrop-blur-sm">
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className="mr-3 p-2 hover:bg-white/60 rounded-lg text-slate-700 transition-all duration-200 hover:shadow-sm group"
+          className="mr-3 p-2 hover:bg-white/60 rounded-control text-slate-700 transition-all duration-200 hover:shadow-sm group"
           aria-expanded={!isCollapsed}
           aria-label={isCollapsed ? "Espandi timeline" : "Comprimi timeline"}
         >
@@ -181,30 +181,31 @@ const TimeLinePromo: React.FC<TimelineProps> = ({
         <div className="flex-1 flex items-center gap-4">
           <div className="flex items-center gap-2">
             <div className="w-1 h-5 bg-gradient-to-b from-primary to-primary/70 rounded-full"></div>
-            <h3 className="font-semibold text-slate-800 text-sm tracking-tight">Timeline Promozioni</h3>
+            <h3 className="title-card">Timeline promozioni</h3>
           </div>
-          <div className="flex items-center gap-2 px-2.5 py-1 bg-white/70 rounded-md border border-slate-200/50">
+          <div className="flex items-center gap-2 px-2.5 py-1 bg-white/70 rounded-control border border-slate-200/50">
             <Lucide icon="Calendar" className="w-3.5 h-3.5 text-slate-500" />
             <span className="text-slate-600 text-xs font-medium">
-              {dates[0].format("DD MMM")} - {dates[dates.length - 1].format("DD MMM YYYY")}
+              {formatData(dates[0].toDate())} - {formatData(dates[dates.length - 1].toDate())}
             </span>
           </div>
         </div>
 
         <div className="flex items-center gap-1">
           <button 
-            className="p-2 hover:bg-white/60 rounded-lg text-slate-600 transition-all duration-200 hover:shadow-sm hover:text-primary group"
+            className="p-2 hover:bg-white/60 rounded-control text-slate-600 transition-all duration-200 hover:shadow-sm hover:text-primary group"
             onClick={scrollToToday}
             title="Vai a oggi"
+            aria-label="Vai a oggi"
           >
-            <Lucide icon="CalendarDays" className="w-4 h-4 group-hover:scale-110 transition-transform duration-200" />
+            <Lucide icon="CalendarDays" aria-hidden="true" className="w-4 h-4 group-hover:scale-110 transition-transform duration-200" />
           </button>
-          <button className="p-2 hover:bg-white/60 rounded-lg text-slate-600 transition-all duration-200 hover:shadow-sm hover:text-primary group" aria-label="Aumenta zoom">
+          <button className="p-2 hover:bg-white/60 rounded-control text-slate-600 transition-all duration-200 hover:shadow-sm hover:text-primary group" aria-label="Aumenta zoom">
             <Lucide icon="ZoomIn" aria-hidden="true" className="w-4 h-4 group-hover:scale-110 transition-transform duration-200" />
           </button>
           <div className="w-px h-4 bg-slate-300 mx-1"></div>
           <button 
-            className="p-2 hover:bg-red-50 rounded-lg text-slate-600 hover:text-red-600 transition-all duration-200 hover:shadow-sm group" 
+            className="p-2 hover:bg-danger/10 rounded-control text-slate-600 hover:text-danger transition-all duration-200 hover:shadow-sm group" 
             onClick={onClose}
             aria-label="Chiudi timeline"
           >
@@ -313,14 +314,14 @@ const TimeLinePromo: React.FC<TimelineProps> = ({
                     className={clsx(
                       "group flex items-center justify-between px-4 py-2 border-b border-slate-200/40 hover:bg-white/70 transition-all duration-200 hover:shadow-sm relative", 
                       task.disabled && "opacity-60",
-                      hasError && "bg-red-50/50 hover:bg-red-50/80"
+                      hasError && "bg-danger/5 hover:bg-danger/10"
                     )}
                     style={{ height: `${TASK_HEIGHT}px` }}
                   >
                     {/* Indicatore laterale */}
                     <div className={clsx(
                       "absolute left-0 top-0 bottom-0 w-1 transition-all duration-200",
-                      hasError ? "bg-red-400" : 
+                      hasError ? "bg-danger/70" : 
                       task.disabled ? "bg-slate-300" : "bg-transparent group-hover:bg-primary/40"
                     )} />
                     
@@ -342,39 +343,39 @@ const TimeLinePromo: React.FC<TimelineProps> = ({
                         <span className={clsx(
                           "block text-xs font-medium truncate transition-colors duration-200",
                           task.disabled ? "text-slate-400" :
-                          hasError ? "text-red-700" : "text-slate-800"
+                          hasError ? "text-danger" : "text-slate-800"
                         )}>
                           {task.name}
                         </span>
                         
                         <div className="flex items-center gap-1.5 mt-0.5">
                           {hasError && errorInfo && (
-                            <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-3xs font-medium">
+                            <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-control bg-danger/10 text-danger text-3xs font-medium">
                               <Lucide icon="TriangleAlert" className="w-2.5 h-2.5" />
                               {errorInfo.numeroRefPromo}
                             </div>
                           )}
                           
                           <div className="flex items-center gap-1 text-3xs text-slate-500">
-                            <span>{dayjs(task.startDate, 'DD/MM/YYYY').format("DD/MM")}</span>
+                            <span>{formatData(dayjs(task.startDate, 'DD/MM/YYYY').toDate())}</span>
                             <Lucide icon="ArrowRight" className="w-2.5 h-2.5" />
-                            <span>{dayjs(task.endDate, 'DD/MM/YYYY').format("DD/MM")}</span>
+                            <span>{formatData(dayjs(task.endDate, 'DD/MM/YYYY').toDate())}</span>
                           </div>
                         </div>
                       </div>
                     </div>
 
                     <Menu as="div" className="relative">
-                      <MenuButton className="p-1.5 hover:bg-white/80 rounded-md text-slate-500 opacity-0 group-hover:opacity-100 transition-all duration-200 hover:text-slate-700 hover:shadow-sm">
+                      <MenuButton className="p-1.5 hover:bg-white/80 rounded-control text-slate-500 opacity-0 group-hover:opacity-100 transition-all duration-200 hover:text-slate-700 hover:shadow-sm">
                         <Lucide icon="EllipsisVertical" className="w-3.5 h-3.5" />
                       </MenuButton>
 
-                      <MenuItems className="absolute right-0 mt-1 w-40 bg-white rounded-lg shadow-lg border border-slate-200/60 z-20 py-1 backdrop-blur-sm">
+                      <MenuItems className="absolute right-0 mt-1 w-40 bg-white rounded-card shadow-lg border border-slate-200/60 z-20 py-1 backdrop-blur-sm">
                         <MenuItem as="button" className="flex items-center gap-2 w-full px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 transition-colors duration-150">
                           <Lucide icon="Pen" className="w-3.5 h-3.5" /> Modifica
                         </MenuItem>
                         <div className="h-px bg-slate-200/60 my-1 mx-2"></div>
-                        <MenuItem as="button" className="flex items-center gap-2 w-full px-3 py-2 text-xs text-red-600 hover:bg-red-50 transition-colors duration-150">
+                        <MenuItem as="button" className="flex items-center gap-2 w-full px-3 py-2 text-xs text-danger hover:bg-danger/10 transition-colors duration-150">
                           <Lucide icon="Trash2" className="w-3.5 h-3.5" /> Elimina
                         </MenuItem>
                       </MenuItems>
@@ -445,18 +446,18 @@ const TimeLinePromo: React.FC<TimelineProps> = ({
                     <Tippy
                       key={i}
                       content={
-                        <div className="p-3 rounded-lg bg-white border border-slate-200/60 shadow-xl backdrop-blur-sm max-w-xs">
+                        <div className="p-3 rounded-card bg-white border border-slate-200/60 shadow-xl backdrop-blur-sm max-w-xs">
                           <div className="font-semibold text-slate-800 mb-1 text-xs">{task.name}</div>
                           <div className="flex items-center gap-1.5 text-3xs text-slate-600 mb-1">
                             <div className="flex items-center gap-1">
                               <Lucide icon="Calendar" className="w-2.5 h-2.5" />
-                              <span>{dayjs(task.startDate, 'DD/MM/YYYY').format("DD MMM")}</span>
+                              <span>{formatData(dayjs(task.startDate, 'DD/MM/YYYY').toDate())}</span>
                             </div>
                             <Lucide icon="ArrowRight" className="w-2.5 h-2.5" />
-                            <span>{dayjs(task.endDate, 'DD/MM/YYYY').format("DD MMM")}</span>
+                            <span>{formatData(dayjs(task.endDate, 'DD/MM/YYYY').toDate())}</span>
                           </div>
                           {hasError && (
-                            <div className="flex items-center gap-1.5 px-2 py-1 bg-red-50 rounded text-3xs text-red-700 border border-red-200/60">
+                            <div className="flex items-center gap-1.5 px-2 py-1 bg-danger/5 rounded-control text-3xs text-danger border border-danger/20">
                               <Lucide icon="TriangleAlert" className="w-3 h-3" />
                               <span className="font-medium">{errorCount} referenze mancanti</span>
                             </div>
@@ -476,13 +477,13 @@ const TimeLinePromo: React.FC<TimelineProps> = ({
                         }}
                       >
                         <div className={clsx(
-                          "h-full rounded-md relative transition-all duration-200 shadow-sm hover:shadow-md group-hover:scale-[1.02]",
-                          hasError ? "bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700" : 
+                          "h-full rounded-control relative transition-all duration-200 shadow-sm hover:shadow-md group-hover:scale-[1.02]",
+                          hasError ? "bg-gradient-to-r from-danger/90 to-danger hover:from-danger hover:to-danger" : 
                           "bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary"
                         )}>
                           {/* Maniglie ridimensionamento */}
-                          <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-md bg-black/10 cursor-ew-resize hover:bg-black/20 transition-all duration-200 opacity-0 group-hover:opacity-100" />
-                          <div className="absolute right-0 top-0 bottom-0 w-1 rounded-r-md bg-black/10 cursor-ew-resize hover:bg-black/20 transition-all duration-200 opacity-0 group-hover:opacity-100" />
+                          <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-control bg-black/10 cursor-ew-resize hover:bg-black/20 transition-all duration-200 opacity-0 group-hover:opacity-100" />
+                          <div className="absolute right-0 top-0 bottom-0 w-1 rounded-r-control bg-black/10 cursor-ew-resize hover:bg-black/20 transition-all duration-200 opacity-0 group-hover:opacity-100" />
                           
                           {/* Etichetta */}
                           {width > 60 && (
@@ -513,14 +514,14 @@ const TimeLinePromo: React.FC<TimelineProps> = ({
           {/* Footer */}
           <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200/60 bg-gradient-to-r from-slate-50 to-slate-100/30">
             <button
-              className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-white/60 rounded-md text-slate-600 hover:text-primary transition-all duration-200 hover:shadow-sm group"
+              className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-white/60 rounded-control text-slate-600 hover:text-primary transition-all duration-200 hover:shadow-sm group"
               onClick={() => updateDateRange(Math.max(0, sliderValue - 1), onDateRangeChange)}
             >
               <Lucide icon="ChevronLeft" className="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform duration-200" />
               <span className="text-xs font-medium">Precedente</span>
             </button>
 
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-white/70 rounded-md border border-slate-200/50 shadow-sm">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-white/70 rounded-control border border-slate-200/50 shadow-sm">
               <Lucide icon="Calendar" className="w-3.5 h-3.5 text-primary" />
               <div className="text-xs text-slate-700 font-semibold">
                 {selectedDate.format("dddd, D MMMM YYYY")}
@@ -528,7 +529,7 @@ const TimeLinePromo: React.FC<TimelineProps> = ({
             </div>
 
             <button
-              className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-white/60 rounded-md text-slate-600 hover:text-primary transition-all duration-200 hover:shadow-sm group"
+              className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-white/60 rounded-control text-slate-600 hover:text-primary transition-all duration-200 hover:shadow-sm group"
               onClick={() => updateDateRange(Math.min(range - 1, sliderValue + 1), onDateRangeChange)}
             >
               <span className="text-xs font-medium">Successivo</span>

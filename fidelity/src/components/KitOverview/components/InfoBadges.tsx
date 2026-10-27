@@ -1,4 +1,4 @@
-import dayjs from "dayjs";
+import { formatDataOra } from "@/utils/format";
 import { TIPO_KIT_DESIGN, TIPO_LAVORAZIONE } from "../../../../lib/enums";
 import { FC } from "react";
 import { InfoBadgesProps } from "../types";
@@ -40,7 +40,7 @@ const InfoBadges: FC<InfoBadgesProps> = ({
         <InfoBadge
           icon="History"
           label="Recuperato dallo storico"
-          value={dayjs(origineStorico.importatoIl).format("DD/MM/YYYY HH:mm")}
+          value={formatDataOra(origineStorico.importatoIl)}
           variant="info"
         />
       )}

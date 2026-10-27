@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/utils/twMerge";
 
 type ProgressSegment = {
   value: number; // valore in percentuale per questo segmento

@@ -1,5 +1,4 @@
-import Button from "@/components/Base/Button";
-import Lucide from "@/components/Base/Lucide";
+import { CodeBlock } from "@/pages/Documentazione/DocsCondivisi";
 
 interface PluginConfigPanelProps {
   template: any;
@@ -39,40 +38,27 @@ function PluginConfigPanel({ template, templates }: PluginConfigPanelProps) {
   })();
 </script>`;
 
-  const copyCode = () => {
-    navigator.clipboard.writeText(pluginCode);
-  };
-
   return (
-    <div className="box p-6">
-      <div className="space-y-4">
-        <div>
-          <label className="text-sm font-medium text-slate-700">Nome Template</label>
-          <p className="text-base">{template.nome}</p>
-        </div>
-
-        <div>
-          <label className="text-sm font-medium text-slate-700">Slug (identificatore runtime)</label>
-          <code className="block p-2 bg-slate-100 rounded text-sm mt-1">{template.slug}</code>
-        </div>
-
-        <div>
-          <label className="text-sm font-medium text-slate-700">Snippet di integrazione</label>
-          <div className="relative">
-            <pre className="p-4 bg-slate-900 text-slate-100 rounded text-xs overflow-x-auto">{pluginCode}</pre>
-            <Button
-              variant="outline-secondary"
-              size="sm"
-              onClick={copyCode}
-              className="absolute top-2 right-2"
-              aria-label="Copia snippet"
-            >
-              <Lucide aria-hidden="true" icon="Copy" className="w-4 h-4" />
-            </Button>
-          </div>
-        </div>
+    <dl className="space-y-4">
+      <div>
+        <dt className="text-sm font-medium text-slate-700">Nome template</dt>
+        <dd className="mt-1 text-slate-800">{template.nome}</dd>
       </div>
-    </div>
+
+      <div>
+        <dt className="text-sm font-medium text-slate-700">Slug (identificatore runtime)</dt>
+        <dd className="mt-1">
+          <code className="block rounded-control bg-slate-100 p-2 font-mono text-sm">{template.slug}</code>
+        </dd>
+      </div>
+
+      <div>
+        <dt className="mb-1 text-sm font-medium text-slate-700">Snippet di integrazione</dt>
+        <dd>
+          <CodeBlock language="HTML" code={pluginCode} />
+        </dd>
+      </div>
+    </dl>
   );
 }
 

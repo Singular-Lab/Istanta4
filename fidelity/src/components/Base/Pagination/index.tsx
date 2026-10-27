@@ -1,4 +1,4 @@
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/utils/twMerge";
 import Button from "../Button";
 
 type PaginationProps = React.PropsWithChildren &

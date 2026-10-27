@@ -1,5 +1,5 @@
 import { cloneElement, isValidElement, ReactElement, ReactNode, useId } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/utils/twMerge";
 import FormLabel from "../FormLabel";
 
 type AttributiCampo = {

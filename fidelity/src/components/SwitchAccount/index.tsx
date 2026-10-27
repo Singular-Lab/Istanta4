@@ -1,8 +1,10 @@
-
 import userIcon from "@/assets/images/users/user_icon_profile.png";
-import { FormCheck, FormInput } from "@/components/Base/Form";
+import Alert from "@/components/Base/Alert";
+import Button from "@/components/Base/Button";
+import { FormCheck, FormField } from "@/components/Base/Form";
 import { Dialog } from "@/components/Base/Headless";
 import Lucide from "@/components/Base/Lucide";
+import CampoPassword from "@/pages/HubLogin/components/CampoPassword";
 import { useFetchAllAccount } from "@/query/query";
 import { useEffect, useState } from "react";
 import { ServerCall } from "../../../lib/server_call";
@@ -17,7 +19,8 @@ function CambiaAccount(props: MainProps) {
   const [isPassordModalOpen, setIsPassordModalOpen] = useState(false);
   const [password, setPassword] = useState("");
   const [isPasswordValid, setIsPasswordValid] = useState(false);
-  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+  const [accessoInCorso, setAccessoInCorso] = useState(false);
+  const [erroreAccesso, setErroreAccesso] = useState<string | null>(null);
   const accounts = useFetchAllAccount();
 
 
@@ -35,64 +38,54 @@ function CambiaAccount(props: MainProps) {
           setIsPassordModalOpen(false);
         }}
       >
-        <Dialog.Panel className="p-0">
-          <Dialog.Title className="flex items-center justify-center h-14 border-b border-slate-200/60">
-            <h2 className="text-lg font-medium">Cambia account</h2>
-          </Dialog.Title>
-          <Dialog.Description className="p-5">
-            <div className="flex flex-col gap-3">
-              <label htmlFor="switch-account-password" className="block text-sm font-medium text-slate-700 mb-1">
-                Inserisci la tua password
-              </label>
-              <div className="relative">
-                <FormInput
-                  id="switch-account-password"
-                  type={isPasswordVisible ? "text" : "password"}
-                  placeholder="Password"
-                  value={password}
-                  onChange={(e) => {
-                    setPassword(e.target.value);
-                  }}
-                  className="pr-10"
-                />
-                <button
-                  type="button"
-                  className="absolute right-0 top-0 h-full flex items-center pr-3 cursor-pointer"
-                  onClick={() => setIsPasswordVisible(!isPasswordVisible)}
-                  aria-label={isPasswordVisible ? "Nascondi password" : "Mostra password"}
-                >
-                  <Lucide
-                    icon={isPasswordVisible ? "EyeOff" : "Eye"}
-                    aria-hidden="true"
-                    className="w-5 h-5 text-slate-500 hover:text-slate-700 transition-colors"
-                  />
-                </button>
-              </div>
-              <div className="flex justify-end mt-3 space-x-2">
-                <button
-                  className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-200 rounded-md hover:bg-slate-300 transition-colors"
-                  onClick={() => setIsPassordModalOpen(false)}
-                >
-                  Annulla
-                </button>
-                <button
-                  className="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary/80 transition-colors"
-                  onClick={() => {
-                    // Handle password validation logic here
-                    setIsPasswordValid(password.length > 0);
-                    ServerCall.post("/login_user", {
-                      email: accounts.data?.find((account) => account.id === switchAccount)?.email,
-                      password
-                    }).then((res) => {
-                      window.location.reload();
-                    })
-                  }}
-                >
-                  Conferma
-                </button>
-              </div>
-            </div>
+        <Dialog.Panel>
+          <Dialog.Title>Cambia account</Dialog.Title>
+          <Dialog.Description className="space-y-4">
+            <FormField etichetta="Inserisci la tua password">
+              <CampoPassword
+                id="switch-account-password"
+                placeholder="Password"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setErroreAccesso(null);
+                }}
+              />
+            </FormField>
+            {erroreAccesso && (
+              <Alert variant="soft-danger" icona="CircleAlert" className="text-sm">
+                {erroreAccesso}
+              </Alert>
+            )}
           </Dialog.Description>
+          <Dialog.Footer>
+            <Button type="button" variant="outline-secondary" onClick={() => setIsPassordModalOpen(false)}>
+              Annulla
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              loading={accessoInCorso}
+              onClick={() => {
+                // Handle password validation logic here
+                setIsPasswordValid(password.length > 0);
+                setAccessoInCorso(true);
+                setErroreAccesso(null);
+                ServerCall.post("/login_user", {
+                  email: accounts.data?.find((account) => account.id === switchAccount)?.email,
+                  password
+                }).then((res) => {
+                  window.location.reload();
+                }).catch((errore: unknown) => {
+                  // Prima l'errore restava silenzioso: ora resta nella finestra
+                  setAccessoInCorso(false);
+                  setErroreAccesso(errore instanceof Error && errore.message ? errore.message : "Accesso non riuscito. Verifica la password.");
+                })
+              }}
+            >
+              Conferma
+            </Button>
+          </Dialog.Footer>
         </Dialog.Panel>
       </Dialog>
       <Dialog
@@ -102,18 +95,16 @@ function CambiaAccount(props: MainProps) {
         }}
       >
         <Dialog.Panel>
-          <Dialog.Title className="justify-center h-14">
-            <h2 className="text-base font-medium">Cambia account</h2>
-          </Dialog.Title>
+          <Dialog.Title>Cambia account</Dialog.Title>
           <Dialog.Description className="px-2.5 pt-3.5 pb-4">
             <div className="flex flex-col gap-1.5">
               {accounts.data?.map((faker, fakerKey) => (
                 <FormCheck.Label
                   htmlFor={`switch-account-${fakerKey}`}
-                  className="flex items-center px-2.5 py-1 rounded-lg hover:bg-slate-100 cursor-pointer"
+                  className="flex items-center px-2.5 py-1 rounded-control hover:bg-slate-100 cursor-pointer"
                   key={fakerKey}
                 >
-                  <div className="overflow-hidden rounded-full w-11 h-11 image-fit border-[3px] border-slate-200/70">
+                  <div className="overflow-hidden rounded-full w-11 h-11 image-fit border-2 border-slate-200/70">
                     <img
                       alt=""
                       src={faker.photo ? `data:image/png;base64,${faker.photo}` : userIcon}
@@ -137,7 +128,7 @@ function CambiaAccount(props: MainProps) {
                       className="absolute z-10 w-full h-full opacity-0 peer"
                     />
                     <div className="absolute inset-0 flex items-center justify-center w-6 h-6 m-auto text-white transition-all border rounded-full opacity-0 bg-theme-1/80 border-theme-1 peer-checked:opacity-100">
-                      <Lucide icon="Check" className="stroke-[1.5] w-3 h-3" />
+                      <Lucide icon="Check" aria-hidden="true" className="w-3 h-3" />
                     </div>
                     <div className="absolute inset-0 flex items-center justify-center w-6 h-6 m-auto transition-all border rounded-full text-primary border-theme-1/20 bg-theme-1/5 peer-checked:opacity-0 peer-hover:bg-theme-1/10"></div>
                   </div>
@@ -145,21 +136,25 @@ function CambiaAccount(props: MainProps) {
               ))}
             </div>
           </Dialog.Description>
-          <Dialog.Footer className="flex items-center justify-center text-center h-14">
-            {switchAccount !== props.currentUserId ? (
-              <button
+          <Dialog.Footer>
+            {switchAccount === props.currentUserId && (
+              <span className="self-center text-sm text-slate-400 sm:mr-auto">
+                Account attualmente in uso
+              </span>
+            )}
+            <Button type="button" variant="outline-secondary" onClick={() => props.setSwitchAccount(false)}>
+              Chiudi
+            </Button>
+            {switchAccount !== props.currentUserId && (
+              <Button
                 type="button"
+                variant="primary"
                 onClick={() => {
                   setIsPassordModalOpen(true);
                 }}
-                className="block -mt-1 text-primary hover:cursor-pointer"
               >
                 Esegui il login con questo account
-              </button>
-            ) : (
-              <span className="block -mt-1 text-slate-400">
-                Account attualmente in uso
-              </span>
+              </Button>
             )}
           </Dialog.Footer>
         </Dialog.Panel>

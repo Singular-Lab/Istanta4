@@ -1,25 +1,27 @@
+import Alert from '@/components/Base/Alert';
+import BarraFiltri from '@/components/Base/BarraFiltri';
 import Button from '@/components/Base/Button';
-import { FormCheck, FormInput, FormSelect } from '@/components/Base/Form';
+import CampoRicerca from '@/components/Base/CampoRicerca';
+import { FormCheck, FormField, FormInput, FormSelect } from '@/components/Base/Form';
 import { Dialog } from '@/components/Base/Headless';
 import Lucide from '@/components/Base/Lucide';
 import PageError from '@/components/Base/PageError';
-import PageHeader from '@/components/Base/PageHeader';
-import Pagination from '@/components/Base/Pagination';
+import Pagina from '@/components/Base/Pagina';
+import PaginazioneTabella from '@/components/Base/PaginazioneTabella';
+import Sezione from '@/components/Base/Sezione';
 import Spinner from '@/components/Base/Spinner';
+import StatCard, { StatCardGrid } from '@/components/Base/StatCard';
 import StatusBadge from '@/components/Base/StatusBadge';
 import withSessionCheck from "@/components/SessionChecker";
-import Progress from '@/components/Base/Progress';
 import EmptyState from '@/components/EmptyState';
 import { PreviewImmaginePdf } from '@/components/PreviewImmaginePdf';
 import type { TonoStato } from '@/constants/stati';
 import { useFetchKitRuntimeFilesPaginated } from '@/query/query';
-import { formatDataOra, VALORE_ASSENTE } from '@/utils/format';
-import { useMutation } from '@tanstack/react-query';
+import { formatDataOra, formatNumero, VALORE_ASSENTE } from '@/utils/format';
+import { twMerge } from '@/utils/twMerge';
 import axios from 'axios';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useLoaderData, useNavigate } from 'react-router-dom';
-import type { Socket } from 'socket.io-client';
-import io from 'socket.io-client';
 import { ItemDisposition, STATO_LOG_FILE } from '../../../lib/enums';
 import { ServerCall } from '../../../lib/server_call';
 import { FileItemKit, RUNTIME_KIT } from '../../../lib/types';
@@ -69,6 +71,36 @@ const descriviStatoFile = (stato?: string): { tono: TonoStato; etichetta: string
     ? STATI_FILE[stato]
     : { tono: 'neutral', etichetta: stato.replace(/_/g, ' ') };
 };
+
+const VISTE = [
+  { valore: ItemDisposition.grid, etichetta: 'Vista griglia', icona: 'LayoutGrid' },
+  { valore: ItemDisposition.list, etichetta: 'Vista elenco', icona: 'List' },
+] as const;
+
+// Due comandi con sola icona: ognuno ha un nome e dice se è la vista attiva
+const SceltaVista = ({ valore, onChange }: { valore: ItemDisposition; onChange: (vista: ItemDisposition) => void }) => (
+  <div role="group" aria-label="Disposizione dei file" className="inline-flex rounded-control border border-slate-200 bg-slate-50 p-0.5">
+    {VISTE.map((vista) => {
+      const attiva = valore === vista.valore;
+      return (
+        <button
+          key={vista.valore}
+          type="button"
+          aria-label={vista.etichetta}
+          aria-pressed={attiva}
+          title={vista.etichetta}
+          onClick={() => onChange(vista.valore)}
+          className={twMerge(
+            'flex h-7 w-8 items-center justify-center rounded-control text-slate-500 transition-colors hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40',
+            attiva && 'bg-white text-slate-800 shadow-sm ring-1 ring-slate-200'
+          )}
+        >
+          <Lucide icon={vista.icona} aria-hidden="true" className="h-4 w-4" />
+        </button>
+      );
+    })}
+  </div>
+);
 
 type SelectedFileEntry = {
   selected: boolean;
@@ -156,28 +188,6 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
     }
   }, [paginatedData, page]);
 
-  // Pagination range computation
-  const paginationRange = useMemo<(number | string)[]>(() => {
-    if (totalPages <= 1) return [];
-    const range: (number | string)[] = [];
-    const delta = 1;
-    const left = Math.max(2, page - delta);
-    const right = Math.min(totalPages - 1, page + delta);
-
-    range.push(1);
-    if (left > 2) range.push('left-ellipsis');
-    for (let i = left; i <= right; i++) range.push(i);
-    if (right < totalPages - 1) range.push('right-ellipsis');
-    if (totalPages > 1) range.push(totalPages);
-
-    return range.filter((value, index, self) => self.indexOf(value) === index);
-  }, [page, totalPages]);
-
-  const canGoPrev = page > 1;
-  const canGoNext = totalPages > 0 && page < totalPages;
-  const showingFrom = totalItems === 0 ? 0 : (page - 1) * pageSize + 1;
-  const showingTo = totalItems === 0 ? 0 : Math.min(showingFrom + files.length - 1, totalItems);
-
   const getFileIcon = (fileName: string) => {
     const extension = fileName.split('.').pop()?.toLowerCase();
     switch (extension) {
@@ -228,7 +238,7 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
 
   const getErrorMessage = (error: unknown): string => {
     if (error instanceof Error) return error.message;
-    return 'Si e verificato un errore imprevisto.';
+    return 'Si è verificato un errore imprevisto.';
   };
 
   // Selection logic (cross-page aware)
@@ -456,569 +466,410 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
     }
   };
 
+  const fileVisibili = (file: FileItemKit) => ({
+    meta: file.meta_olimpo_cloud || {},
+    status: file.log?.stato,
+    price: formatCurrency(file.meta_olimpo_cloud?.prezzo),
+    fileKey: getFileKey(file),
+    isSelected: !!selectedFiles[getFileKey(file)],
+  });
+
+  const apriAnteprima = (file: FileItemKit) => {
+    if (file.url) {
+      setPreviewFile({ imageUrl: file.url, pages: file.pages || 1 });
+    }
+  };
+
+  const filtriAttivi = Boolean(searchProperty || searchValue);
+  const verificaInCorso = mergeStep === 'checking';
+  const unioneInCorso = mergeStep === 'merging';
+
   return (
     <>
-      <div className="grid grid-cols-12 gap-y-10 gap-x-6">
-        <div className="col-span-12">
-          <PageHeader
-            title={kit?.titolo || 'Dettaglio Kit'}
-            description={`Visualizza i file associati al kit`}
-            indietro={{ onClick: () => navigate(-1) }}
-          />
+      <Pagina
+        titolo={kit?.titolo || 'Dettaglio kit'}
+        descrizione="Visualizza i file associati al kit"
+        indietro={{ onClick: () => navigate(-1) }}
+      >
+        <StatCardGrid>
+          <StatCard densita="compatta" etichetta="Totale file" valore={formatNumero(stats?.totalFiles ?? 0)} icona="Files" tono="brand" />
+          <StatCard densita="compatta" etichetta="In revisione" valore={formatNumero(stats?.inRevisionCount ?? 0)} icona="Clock" tono="warning" />
+          <StatCard densita="compatta" etichetta="Con referenza" valore={formatNumero(stats?.filesWithMetaCount ?? 0)} icona="Tag" tono="success" />
+          <StatCard densita="compatta" etichetta="Selezionati" valore={formatNumero(selectedCount)} icona="SquareCheck" tono="info" />
+        </StatCardGrid>
 
-          <div className="mt-3.5">
-            <div className="flex flex-col box box--stacked shadow-sm rounded-card border border-slate-200/80">
-              {/* Header con stats */}
-              <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4 p-6 border-b border-slate-200/60 bg-slate-50/40">
-                <div className="flex items-center gap-x-3">
-                  <div className="flex items-center justify-center w-11 h-11 rounded-card bg-primary/10 text-primary">
-                    <Lucide icon="FolderOpen" aria-hidden="true" className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="title-section">File del kit</h3>
-                    <p className="text-sm text-slate-600 mt-0.5">
-                      {totalItems} file totali
-                      {isFetching && !isLoading && (
-                        <Spinner size="sm" decorativo className="inline-block ml-2 h-3.5 w-3.5" />
-                      )}
-                    </p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full lg:w-auto lg:min-w-[520px]">
-                  <div className="p-3 rounded-lg border border-slate-200 bg-white">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Lucide icon="Files" className="w-4 h-4 text-primary" />
-                      <p className="text-xs text-slate-500">Totale file</p>
-                    </div>
-                    <p className="text-base font-semibold text-slate-800">{stats?.totalFiles ?? 0}</p>
-                  </div>
-                  <div className="p-3 rounded-lg border border-slate-200 bg-white">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Lucide icon="Clock" className="w-4 h-4 text-pending" />
-                      <p className="text-xs text-slate-500">In revisione</p>
-                    </div>
-                    <p className="text-base font-semibold text-slate-800">{stats?.inRevisionCount ?? 0}</p>
-                  </div>
-                  <div className="p-3 rounded-lg border border-slate-200 bg-white">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Lucide icon="Tag" className="w-4 h-4 text-success" />
-                      <p className="text-xs text-slate-500">Con referenza</p>
-                    </div>
-                    <p className="text-base font-semibold text-slate-800">{stats?.filesWithMetaCount ?? 0}</p>
-                  </div>
-                  <div className="p-3 rounded-lg border border-slate-200 bg-white">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Lucide icon="CheckSquare" className="w-4 h-4 text-info" />
-                      <p className="text-xs text-slate-500">Selezionati</p>
-                    </div>
-                    <p className="text-base font-semibold text-slate-800">{selectedCount}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Toolbar: ricerca, filtri, view toggle, page size */}
-              <div className="p-5 border-b border-slate-200/60 bg-slate-50/30">
-                <div className="grid grid-cols-1 lg:grid-cols-[200px_minmax(0,1fr)_auto] gap-4">
-                  <div>
-                    <label htmlFor="dettagli-kit-proprieta" className="flex items-center gap-2 text-sm font-semibold text-slate-700 mb-2">
-                      <Lucide icon="Filter" aria-hidden="true" className="w-4 h-4" />
-                      Proprieta
-                    </label>
-                    <FormSelect
-                      id="dettagli-kit-proprieta"
-                      value={searchProperty}
-                      onChange={(e) => setSearchProperty(e.target.value)}
-                      className="w-full"
-                    >
-                      <option value="">Tutte le proprieta</option>
-                      {allSearchProperties.map((prop) => (
-                        <option key={prop} value={prop}>
-                          {PROPERTY_LABELS[prop] || prop}
-                        </option>
-                      ))}
-                    </FormSelect>
-                  </div>
-
-                  <div>
-                    <label htmlFor="dettagli-kit-cerca" className="flex items-center gap-2 text-sm font-semibold text-slate-700 mb-2">
-                      <Lucide icon="Search" aria-hidden="true" className="w-4 h-4" />
-                      Cerca
-                    </label>
-                    <FormInput
-                      id="dettagli-kit-cerca"
-                      type="text"
-                      placeholder="Cerca per nome, referenza, reparto, tema..."
-                      value={searchValue}
-                      onChange={(e) => setSearchValue(e.target.value)}
-                      className="w-full"
-                    />
-                  </div>
-
-                  <div className="flex items-end gap-2 flex-wrap">
-                    <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1">
-                      <Button
-                        type="button"
-                        variant={itemDisposition === ItemDisposition.grid ? 'primary' : 'outline-secondary'}
-                        onClick={() => setItemDisposition(ItemDisposition.grid)}
-                        aria-label="Vista griglia"
-                        aria-pressed={itemDisposition === ItemDisposition.grid}
-                        title="Vista griglia"
-                        className="shadow-none"
-                      >
-                        <Lucide icon="LayoutGrid" aria-hidden="true" className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant={itemDisposition === ItemDisposition.list ? 'primary' : 'outline-secondary'}
-                        onClick={() => setItemDisposition(ItemDisposition.list)}
-                        aria-label="Vista elenco"
-                        aria-pressed={itemDisposition === ItemDisposition.list}
-                        title="Vista elenco"
-                        className="shadow-none"
-                      >
-                        <Lucide icon="List" aria-hidden="true" className="w-4 h-4" />
-                      </Button>
-                    </div>
-
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs text-slate-500 whitespace-nowrap">Per pagina:</span>
-                      <FormSelect
-                        aria-label="File per pagina"
-                        value={pageSize}
-                        onChange={(e) => setPageSize(Number(e.target.value))}
-                        className="w-[70px] !py-1.5 text-sm"
-                      >
-                        <option value={12}>12</option>
-                        <option value={24}>24</option>
-                        <option value={48}>48</option>
-                      </FormSelect>
-                    </div>
-
-                    {(searchProperty || searchValue) && (
-                      <Button
-                        variant="outline-secondary"
-                        size="sm"
-                        onClick={() => {
-                          setSearchProperty('');
-                          setSearchValue('');
-                        }}
-                      >
-                        <Lucide icon="X" className="w-4 h-4 mr-1.5" />
-                        Pulisci filtri
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* File content area */}
-              <div className="p-5 relative">
-                {isLoading ? (
-                  <div role="status" className="flex flex-col items-center justify-center py-16">
-                    <Spinner size="lg" decorativo className="mb-3" />
-                    <span className="text-sm text-slate-500">Caricamento file...</span>
-                  </div>
-                ) : filesQuery.isError && !paginatedData ? (
-                  <PageError
-                    compatta
-                    titolo="Impossibile caricare i file del kit"
-                    motivo={getErrorMessage(filesQuery.error)}
-                    onRiprova={() => filesQuery.refetch()}
-                  />
-                ) : files.length === 0 ? (
-                  <EmptyState
-                    icon="FileX"
-                    title="Nessun file trovato"
-                    description={debouncedSearch ? 'Nessun file corrisponde ai criteri di ricerca' : 'Non ci sono file disponibili per questo kit'}
-                  />
-                ) : (
-                  <>
-                    {isFetching && !isLoading && (
-                      <div role="status" className="absolute top-3 right-3 z-20 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-xs">
-                        <Spinner size="sm" decorativo className="h-3.5 w-3.5 text-current" />
-                        Aggiornamento...
-                      </div>
-                    )}
-
-                    {itemDisposition === ItemDisposition.grid ? (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                        {files.map((file) => {
-                          const meta = file.meta_olimpo_cloud || {};
-                          const status = file.log?.stato;
-                          const price = formatCurrency(meta.prezzo);
-                          const fileKey = getFileKey(file);
-                          const isSelected = !!selectedFiles[fileKey];
-
-                          return (
-                            <div
-                              key={fileKey}
-                              className={`relative flex flex-col p-4 rounded-card transition-all border group ${isSelected
-                                ? 'border-primary/40 bg-primary/[0.03] shadow-sm ring-1 ring-primary/20'
-                                : 'border-slate-200 bg-white hover:border-primary/30 hover:shadow-md'
-                                }`}
-                            >
-                              <div className="absolute top-3 left-3 z-10">
-                                <FormCheck className="bg-white/90 rounded-md px-1">
-                                  <FormCheck.Input
-                                    type="checkbox"
-                                    className="!rounded-md"
-                                    aria-label={`Seleziona ${formatFileName(file.nome)}`}
-                                    checked={isSelected}
-                                    onChange={() => toggleFileSelection(file)}
-                                  />
-                                </FormCheck>
-                              </div>
-                              <button
-                                type="button"
-                                aria-label={`Anteprima ${file.nome}`}
-                                disabled={!file.url}
-                                className="w-full h-36 flex items-center justify-center rounded-control bg-slate-50 border border-slate-200 overflow-hidden mb-3 cursor-pointer hover:border-primary/50 transition-colors pt-4 disabled:cursor-default disabled:hover:border-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40"
-                                onClick={() => {
-                                  if (file.url) {
-                                    setPreviewFile({ imageUrl: file.url, pages: file.pages || 1 });
-                                  }
-                                }}
-                              >
-                                {file.url ? (
-                                  <img
-                                    src={file.url}
-                                    alt={file.nome}
-                                    className="w-full h-full object-scale-down p-2"
-                                    loading="lazy"
-                                  />
-                                ) : (
-                                  <Lucide
-                                    icon={getFileIcon(file.nome)}
-                                    aria-hidden="true"
-                                    className="w-12 h-12 stroke-[1.5] text-slate-400"
-                                  />
-                                )}
-                              </button>
-
-                              <div className="flex items-start justify-between gap-2 mb-1.5">
-                                <div className="text-sm font-semibold text-slate-800 truncate" title={formatFileName(file.nome)}>
-                                  {formatFileName(file.nome)}
-                                </div>
-                                <StatusBadge {...descriviStatoFile(status)} />
-                              </div>
-
-                              <div className="text-xs text-slate-500 truncate mb-2">
-                                {file.tipo_export_codice || 'Tipo export non definito'}
-                              </div>
-
-                              <div className="space-y-1 text-xs text-slate-600 mb-3">
-                                {meta.codice_referenza && <p>Ref: <span className="font-medium">{meta.codice_referenza}</span></p>}
-                                {meta.ean_referenza && <p>EAN: <span className="font-medium">{meta.ean_referenza}</span></p>}
-                                {meta.reparto && <p className="truncate">Reparto: <span className="font-medium">{meta.reparto}</span></p>}
-                                {meta.tema && <p>Tema: <span className="font-medium">{meta.tema}</span></p>}
-                                {price && <p>Prezzo: <span className="font-medium">{price}</span></p>}
-                                {file.pages ? <p>Pagine: <span className="font-medium">{file.pages}</span></p> : null}
-                              </div>
-
-                              <div className="mt-auto">
-                                <Button
-                                  onClick={handleDownloadSingleFile(file)}
-                                  variant="outline-secondary"
-                                  className="text-xs w-full"
-                                  size="sm"
-                                >
-                                  <Lucide icon="Download" aria-hidden="true" className="w-3.5 h-3.5 mr-1.5" />
-                                  Scarica
-                                </Button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="divide-y divide-slate-200/60">
-                        {files.map((file) => {
-                          const meta = file.meta_olimpo_cloud || {};
-                          const status = file.log?.stato;
-                          const fileKey = getFileKey(file);
-                          const price = formatCurrency(meta.prezzo);
-                          const isSelected = !!selectedFiles[fileKey];
-
-                          return (
-                            <div
-                              key={fileKey}
-                              className={`flex items-center py-3.5 transition-all px-3 rounded-lg ${isSelected
-                                ? 'bg-primary/[0.03] ring-1 ring-primary/20'
-                                : 'hover:bg-slate-50/80'
-                                }`}
-                            >
-                              <FormCheck className="mr-3">
-                                <FormCheck.Input
-                                  type="checkbox"
-                                  className="!rounded-md"
-                                  aria-label={`Seleziona ${formatFileName(file.nome)}`}
-                                  checked={isSelected}
-                                  onChange={() => toggleFileSelection(file)}
-                                />
-                              </FormCheck>
-                              <button
-                                type="button"
-                                aria-label={`Anteprima ${file.nome}`}
-                                disabled={!file.url}
-                                className="flex items-center justify-center w-12 h-12 mr-4 bg-white rounded-control border border-slate-200 cursor-pointer flex-shrink-0 hover:border-primary/50 transition-colors shadow-sm disabled:cursor-default disabled:hover:border-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40"
-                                onClick={() => {
-                                  if (file.url) {
-                                    setPreviewFile({ imageUrl: file.url, pages: file.pages || 1 });
-                                  }
-                                }}
-                              >
-                                {file.url ? (
-                                  <img
-                                    src={file.url}
-                                    alt={file.nome}
-                                    className="w-full h-full object-contain p-1.5"
-                                    loading="lazy"
-                                  />
-                                ) : (
-                                  <Lucide
-                                    icon={getFileIcon(file.nome)}
-                                    aria-hidden="true"
-                                    className="w-6 h-6 stroke-[1.5] text-slate-400"
-                                  />
-                                )}
-                              </button>
-
-                              <div className="flex-grow min-w-0">
-                                <div className="flex items-start justify-between gap-3">
-                                  <div className="text-sm font-semibold text-slate-800 truncate" title={formatFileName(file.nome)}>
-                                    {formatFileName(file.nome)}
-                                  </div>
-                                  <StatusBadge {...descriviStatoFile(status)} />
-                                </div>
-
-                                <div className="text-xs text-slate-500 mt-0.5">{file.tipo_export_codice || 'Tipo export non definito'}</div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-3 gap-y-1 mt-1.5 text-xs text-slate-600">
-                                  {meta.codice_referenza && <span>Ref: <span className="font-medium">{meta.codice_referenza}</span></span>}
-                                  {meta.ean_referenza && <span>EAN: <span className="font-medium">{meta.ean_referenza}</span></span>}
-                                  {meta.reparto && <span className="truncate">Reparto: <span className="font-medium">{meta.reparto}</span></span>}
-                                  {meta.tema && <span>Tema: <span className="font-medium">{meta.tema}</span></span>}
-                                  {price && <span>Prezzo: <span className="font-medium">{price}</span></span>}
-                                  <span>Ultimo update: <span className="font-medium">{formatDataOra(file.log?.data_registrazione)}</span></span>
-                                </div>
-                              </div>
-
-                              <Button
-                                onClick={handleDownloadSingleFile(file)}
-                                variant="outline-secondary"
-                                size="sm"
-                                className="ml-3 text-xs whitespace-nowrap"
-                              >
-                                <Lucide icon="Download" aria-hidden="true" className="w-4 h-4 mr-1.5" />
-                                Scarica
-                              </Button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </>
+        <Sezione
+          senzaPadding
+          titolo="File del kit"
+          descrizione={
+            <span className="inline-flex items-center gap-2">
+              {formatNumero(totalItems)} file totali
+              {isFetching && !isLoading && <Spinner size="sm" decorativo />}
+            </span>
+          }
+        >
+          <BarraFiltri
+            destra={
+              <>
+                {filtriAttivi && (
+                  <Button
+                    variant="outline-secondary"
+                    size="sm"
+                    onClick={() => {
+                      setSearchProperty('');
+                      setSearchValue('');
+                    }}
+                  >
+                    <Lucide icon="X" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                    Pulisci filtri
+                  </Button>
                 )}
+                <SceltaVista valore={itemDisposition} onChange={setItemDisposition} />
+              </>
+            }
+          >
+            <FormSelect
+              formSelectSize="sm"
+              aria-label="Proprietà"
+              value={searchProperty}
+              onChange={(e) => setSearchProperty(e.target.value)}
+              className="sm:w-52"
+            >
+              <option value="">Tutte le proprietà</option>
+              {allSearchProperties.map((prop) => (
+                <option key={prop} value={prop}>
+                  {PROPERTY_LABELS[prop] || prop}
+                </option>
+              ))}
+            </FormSelect>
+            <CampoRicerca
+              etichetta="Cerca file"
+              placeholder="Nome, referenza, reparto, tema…"
+              value={searchValue}
+              onChange={setSearchValue}
+              className="sm:w-80"
+            />
+          </BarraFiltri>
+
+          {/* File del kit */}
+          <div className="relative p-5">
+            {isLoading ? (
+              <div role="status" className="flex flex-col items-center justify-center py-16">
+                <Spinner size="lg" decorativo className="mb-3" />
+                <span className="text-sm text-slate-500">Caricamento file…</span>
               </div>
-
-              {/* Footer: selezione + paginazione */}
-              {(files.length > 0 || selectedCount > 0) && (
-                <div className="p-5 border-t border-slate-200/80 bg-slate-50/40">
-                  {/* Riga selezione */}
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
-                    <div className="flex items-center gap-3">
-                      <FormCheck className="flex items-center">
-                        <FormCheck.Input
-                          type="checkbox"
-                          className="!rounded-md"
-                          checked={allVisibleSelected}
-                          onChange={toggleSelectAllVisible}
-                        />
-                        <FormCheck.Label className="ml-2 text-sm text-slate-700">
-                          Seleziona tutti nella pagina ({files.length})
-                        </FormCheck.Label>
-                      </FormCheck>
-                    </div>
-                    <div className="sm:ml-auto flex items-center gap-2 flex-wrap">
-                      <span className="text-sm text-slate-600">
-                        {selectedCount} selezionati
-                        {selectedCount > 0 && totalPages > 1 && (
-                          <span className="text-slate-400 ml-1">(anche da altre pagine)</span>
-                        )}
-                      </span>
-                      {selectedCount > 0 && (
-                        <Button
-                          variant="outline-secondary"
-                          size="sm"
-                          onClick={() => setSelectedFiles({})}
-                        >
-                          <Lucide icon="X" className="w-3.5 h-3.5 mr-1" />
-                          Deseleziona tutti
-                        </Button>
-                      )}
-                      <Button
-                        variant="primary"
-                        disabled={selectedCount < 2 || !isPdfEqualityCheckAvailable}
-                        onClick={startMergeFlow}
-                        title={!isPdfEqualityCheckAvailable ? pdfEqualityUnavailableMessage : undefined}
-                      >
-                        <Lucide icon="Send" className="w-4 h-4 mr-2" />
-                        Controlla e unisci
-                      </Button>
-                    </div>
+            ) : filesQuery.isError && !paginatedData ? (
+              <PageError
+                compatta
+                titolo="Impossibile caricare i file del kit"
+                motivo={getErrorMessage(filesQuery.error)}
+                onRiprova={() => filesQuery.refetch()}
+              />
+            ) : files.length === 0 ? (
+              <EmptyState
+                compatta
+                icon="FileX"
+                title={debouncedSearch ? 'Nessun file trovato' : 'Nessun file nel kit'}
+                description={debouncedSearch ? 'Nessun file corrisponde ai criteri di ricerca.' : 'Non ci sono file disponibili per questo kit.'}
+              />
+            ) : (
+              <>
+                {isFetching && !isLoading && (
+                  <div role="status" className="absolute right-3 top-3 z-20 flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary">
+                    <Spinner size="sm" decorativo className="text-current" />
+                    Aggiornamento…
                   </div>
+                )}
 
-                  {/* Riga paginazione */}
-                  {totalPages > 0 && (
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pt-3 border-t border-slate-200/60">
-                      <div className="text-sm text-slate-500">
-                        {totalItems > 0 ? (
-                          <>
-                            Mostrati <span className="font-semibold text-slate-700">{showingFrom}</span>
-                            {' - '}
-                            <span className="font-semibold text-slate-700">{showingTo}</span>
-                            {' di '}
-                            <span className="font-semibold text-slate-700">{totalItems}</span> file
-                          </>
-                        ) : (
-                          'Nessun file da mostrare'
-                        )}
-                      </div>
-                      {totalPages > 1 && (
-                        <Pagination className="flex w-full justify-end sm:w-auto">
-                          <Pagination.Link
-                            aria-label="Pagina precedente"
-                            title="Pagina precedente"
-                            onClick={() => canGoPrev && setPage((prev) => Math.max(1, prev - 1))}
-                            className={!canGoPrev ? 'opacity-40 pointer-events-none' : 'cursor-pointer'}
-                          >
-                            <Lucide icon="ChevronLeft" aria-hidden="true" className="w-4 h-4" />
-                          </Pagination.Link>
-                          {paginationRange.map((item) =>
-                            typeof item === 'number' ? (
-                              <Pagination.Link
-                                key={`page-${item}`}
-                                active={item === page}
-                                onClick={() => setPage(item)}
-                                className="cursor-pointer"
-                              >
-                                {item}
-                              </Pagination.Link>
-                            ) : (
-                              <Pagination.Link
-                                key={item}
-                                className="pointer-events-none select-none text-slate-400"
-                              >
-                                ...
-                              </Pagination.Link>
-                            )
+                {itemDisposition === ItemDisposition.grid ? (
+                  <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                    {files.map((file) => {
+                      const { meta, status, price, fileKey, isSelected } = fileVisibili(file);
+
+                      return (
+                        <li
+                          key={fileKey}
+                          className={twMerge(
+                            'group relative flex flex-col rounded-card border p-4 transition-all',
+                            isSelected
+                              ? 'border-primary/40 bg-primary/5 shadow-sm ring-1 ring-primary/20'
+                              : 'border-slate-200 bg-white hover:border-primary/30 hover:shadow-md'
                           )}
-                          <Pagination.Link
-                            aria-label="Pagina successiva"
-                            title="Pagina successiva"
-                            onClick={() => canGoNext && setPage((prev) => prev + 1)}
-                            className={!canGoNext ? 'opacity-40 pointer-events-none' : 'cursor-pointer'}
+                        >
+                          <div className="absolute left-3 top-3 z-10">
+                            <FormCheck className="rounded-control bg-white/90 px-1">
+                              <FormCheck.Input
+                                type="checkbox"
+                                aria-label={`Seleziona ${formatFileName(file.nome)}`}
+                                checked={isSelected}
+                                onChange={() => toggleFileSelection(file)}
+                              />
+                            </FormCheck>
+                          </div>
+                          <button
+                            type="button"
+                            aria-label={`Anteprima ${file.nome}`}
+                            disabled={!file.url}
+                            className="mb-3 flex h-36 w-full cursor-pointer items-center justify-center overflow-hidden rounded-control border border-slate-200 bg-slate-50 pt-4 transition-colors hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40 disabled:cursor-default disabled:hover:border-slate-200"
+                            onClick={() => apriAnteprima(file)}
                           >
-                            <Lucide icon="ChevronRight" aria-hidden="true" className="w-4 h-4" />
-                          </Pagination.Link>
-                        </Pagination>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+                            {file.url ? (
+                              <img
+                                src={file.url}
+                                alt={file.nome}
+                                className="h-full w-full object-scale-down p-2"
+                                loading="lazy"
+                              />
+                            ) : (
+                              <Lucide
+                                icon={getFileIcon(file.nome)}
+                                aria-hidden="true"
+                                className="h-12 w-12 stroke-[1.5] text-slate-400"
+                              />
+                            )}
+                          </button>
+
+                          <div className="mb-1.5 flex items-start justify-between gap-2">
+                            <div className="truncate text-sm font-semibold text-slate-800" title={formatFileName(file.nome)}>
+                              {formatFileName(file.nome)}
+                            </div>
+                            <StatusBadge {...descriviStatoFile(status)} />
+                          </div>
+
+                          <div className="mb-2 truncate text-xs text-slate-500">
+                            {file.tipo_export_codice || 'Tipo export non definito'}
+                          </div>
+
+                          <div className="mb-3 space-y-1 text-xs text-slate-600">
+                            {meta.codice_referenza && <p>Ref: <span className="font-medium">{meta.codice_referenza}</span></p>}
+                            {meta.ean_referenza && <p>EAN: <span className="font-medium">{meta.ean_referenza}</span></p>}
+                            {meta.reparto && <p className="truncate">Reparto: <span className="font-medium">{meta.reparto}</span></p>}
+                            {meta.tema && <p>Tema: <span className="font-medium">{meta.tema}</span></p>}
+                            {price && <p>Prezzo: <span className="font-medium">{price}</span></p>}
+                            {file.pages ? <p>Pagine: <span className="font-medium">{file.pages}</span></p> : null}
+                          </div>
+
+                          <div className="mt-auto">
+                            <Button
+                              onClick={handleDownloadSingleFile(file)}
+                              variant="outline-secondary"
+                              size="sm"
+                              className="w-full"
+                            >
+                              <Lucide icon="Download" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                              Scarica
+                            </Button>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <ul className="divide-y divide-slate-100">
+                    {files.map((file) => {
+                      const { meta, status, price, fileKey, isSelected } = fileVisibili(file);
+
+                      return (
+                        <li
+                          key={fileKey}
+                          className={twMerge(
+                            'flex items-center rounded-control px-3 py-3.5 transition-all',
+                            isSelected ? 'bg-primary/5 ring-1 ring-primary/20' : 'hover:bg-slate-50'
+                          )}
+                        >
+                          <FormCheck className="mr-3">
+                            <FormCheck.Input
+                              type="checkbox"
+                              aria-label={`Seleziona ${formatFileName(file.nome)}`}
+                              checked={isSelected}
+                              onChange={() => toggleFileSelection(file)}
+                            />
+                          </FormCheck>
+                          <button
+                            type="button"
+                            aria-label={`Anteprima ${file.nome}`}
+                            disabled={!file.url}
+                            className="mr-4 flex h-12 w-12 flex-shrink-0 cursor-pointer items-center justify-center rounded-control border border-slate-200 bg-white shadow-sm transition-colors hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40 disabled:cursor-default disabled:hover:border-slate-200"
+                            onClick={() => apriAnteprima(file)}
+                          >
+                            {file.url ? (
+                              <img
+                                src={file.url}
+                                alt={file.nome}
+                                className="h-full w-full object-contain p-1.5"
+                                loading="lazy"
+                              />
+                            ) : (
+                              <Lucide
+                                icon={getFileIcon(file.nome)}
+                                aria-hidden="true"
+                                className="h-6 w-6 stroke-[1.5] text-slate-400"
+                              />
+                            )}
+                          </button>
+
+                          <div className="min-w-0 flex-grow">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="truncate text-sm font-semibold text-slate-800" title={formatFileName(file.nome)}>
+                                {formatFileName(file.nome)}
+                              </div>
+                              <StatusBadge {...descriviStatoFile(status)} />
+                            </div>
+
+                            <div className="mt-0.5 text-xs text-slate-500">{file.tipo_export_codice || 'Tipo export non definito'}</div>
+                            <div className="mt-1.5 grid grid-cols-1 gap-x-3 gap-y-1 text-xs text-slate-600 md:grid-cols-2 lg:grid-cols-3">
+                              {meta.codice_referenza && <span>Ref: <span className="font-medium">{meta.codice_referenza}</span></span>}
+                              {meta.ean_referenza && <span>EAN: <span className="font-medium">{meta.ean_referenza}</span></span>}
+                              {meta.reparto && <span className="truncate">Reparto: <span className="font-medium">{meta.reparto}</span></span>}
+                              {meta.tema && <span>Tema: <span className="font-medium">{meta.tema}</span></span>}
+                              {price && <span>Prezzo: <span className="font-medium">{price}</span></span>}
+                              <span>Ultimo aggiornamento: <span className="font-medium tabular-nums">{formatDataOra(file.log?.data_registrazione)}</span></span>
+                            </div>
+                          </div>
+
+                          <Button
+                            onClick={handleDownloadSingleFile(file)}
+                            variant="outline-secondary"
+                            size="sm"
+                            className="ml-3 whitespace-nowrap"
+                          >
+                            <Lucide icon="Download" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                            Scarica
+                          </Button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </>
+            )}
           </div>
-        </div>
-      </div>
+
+          {/* Selezione, anche fra pagine diverse, e unione */}
+          {(files.length > 0 || selectedCount > 0) && (
+            <div className="flex flex-col gap-3 border-t border-slate-200 px-5 py-3 sm:flex-row sm:items-center">
+              <FormCheck>
+                <FormCheck.Input
+                  id="dettagli-kit-seleziona-pagina"
+                  type="checkbox"
+                  checked={allVisibleSelected}
+                  onChange={toggleSelectAllVisible}
+                />
+                <FormCheck.Label htmlFor="dettagli-kit-seleziona-pagina" className="text-sm text-slate-700">
+                  Seleziona tutti nella pagina ({files.length})
+                </FormCheck.Label>
+              </FormCheck>
+              <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+                <span className="text-sm text-slate-600">
+                  {formatNumero(selectedCount)} selezionati
+                  {selectedCount > 0 && totalPages > 1 && (
+                    <span className="ml-1 text-slate-400">(anche da altre pagine)</span>
+                  )}
+                </span>
+                {selectedCount > 0 && (
+                  <Button variant="outline-secondary" size="sm" onClick={() => setSelectedFiles({})}>
+                    <Lucide icon="X" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                    Deseleziona tutti
+                  </Button>
+                )}
+                <Button
+                  variant="primary"
+                  size="sm"
+                  disabled={selectedCount < 2 || !isPdfEqualityCheckAvailable}
+                  onClick={startMergeFlow}
+                  title={!isPdfEqualityCheckAvailable ? pdfEqualityUnavailableMessage : undefined}
+                >
+                  <Lucide icon="Send" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                  Controlla e unisci
+                </Button>
+              </div>
+            </div>
+          )}
+
+          <PaginazioneTabella
+            className="border-t border-slate-100"
+            totale={totalItems}
+            pagina={page}
+            dimensionePagina={pageSize}
+            onCambiaPagina={setPage}
+            onCambiaDimensione={setPageSize}
+            opzioniDimensione={[12, 24, 48]}
+          />
+        </Sezione>
+      </Pagina>
 
       {/* Dialog merge */}
       <Dialog centered size="lg" open={showMergeDialog} onClose={handleCloseMergeDialog}>
-        <Dialog.Panel className="p-2">
-          <Dialog.Title>
-            <h2 className="title-section">Unione file selezionati</h2>
-          </Dialog.Title>
-          <Dialog.Description className="p-4">
+        <Dialog.Panel>
+          <Dialog.Title>Unione file selezionati</Dialog.Title>
+          <Dialog.Description>
             <div className="space-y-4">
-              <div className="text-sm text-slate-600">
-                Hai selezionato <span className="font-semibold text-slate-800">{selectedCount}</span> file.
+              <p className="text-sm text-slate-600">
+                Hai selezionato <span className="font-semibold text-slate-800">{selectedCount}</span> file.{' '}
                 {isPdfEqualityCheckAvailable
                   ? 'Il flusso esegue prima un controllo di uguaglianza e, solo dopo esito positivo, abilita l\'unione.'
                   : pdfEqualityUnavailableMessage}
-              </div>
+              </p>
 
-              <div>
-                <label className="text-sm font-medium text-slate-700">Nome file finale (opzionale)</label>
+              <FormField etichetta="Nome file finale (opzionale)">
                 <FormInput
                   value={mergedOutputName}
                   onChange={(e) => setMergedOutputName(e.target.value)}
                   placeholder={`kit-${kit.guidId?.slice(0, 8)}-merged.pdf`}
-                  className="mt-2"
-                  disabled={mergeStep === 'checking' || mergeStep === 'merging'}
+                  disabled={verificaInCorso || unioneInCorso}
                 />
-              </div>
+              </FormField>
 
-              <div className="max-h-44 overflow-auto rounded-lg border border-slate-200 bg-slate-50/50 p-3">
-                <p className="text-xs text-slate-500 mb-2">File inclusi ({selectedCount})</p>
-                <div className="space-y-1.5">
+              <div className="max-h-44 overflow-auto rounded-control border border-slate-200 bg-slate-50 p-3">
+                <p className="title-eyebrow mb-2">File inclusi ({selectedCount})</p>
+                <ul className="space-y-1.5">
                   {selectedFilesData.map((file) => (
-                    <div key={file.id || file.nome} className="text-sm text-slate-700 truncate">
+                    <li key={file.id || file.nome} className="truncate text-sm text-slate-700">
                       {formatFileName(file.nome)}
-                    </div>
+                    </li>
                   ))}
-                </div>
+                </ul>
               </div>
-
-              {mergeStep === 'checking' && (
-                <div role="status" className="flex items-center gap-2 text-sm text-primary">
-                  <Spinner size="sm" decorativo />
-                  Controllo file in corso...
-                </div>
-              )}
-
-              {mergeStep === 'merging' && (
-                <div role="status" className="flex items-center gap-2 text-sm text-primary">
-                  <Spinner size="sm" decorativo />
-                  Unione file in corso...
-                </div>
-              )}
 
               {mergeInfo && (
-                <div className="rounded-lg border border-success/30 bg-success/10 p-3 text-sm text-success">
+                <Alert variant="soft-success" icona="CircleCheck">
                   {mergeInfo}
-                </div>
+                </Alert>
               )}
 
               {mergeError && (
-                <div className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger">
+                <Alert variant="soft-danger" icona="TriangleAlert">
                   {mergeError}
-                </div>
+                </Alert>
               )}
             </div>
           </Dialog.Description>
-          <Dialog.Footer className="p-4 border-t border-slate-200/60 bg-slate-50/50 flex justify-end gap-2">
+          <Dialog.Footer>
             <Button
               variant="outline-secondary"
               onClick={handleCloseMergeDialog}
-              disabled={mergeStep === 'checking' || mergeStep === 'merging'}
+              disabled={verificaInCorso || unioneInCorso}
             >
               Chiudi
             </Button>
             <Button
-              variant="outline-primary"
+              variant="outline-secondary"
               onClick={handleCheckSelectedFiles}
-              disabled={selectedCount < 2 || mergeStep === 'checking' || mergeStep === 'merging' || !isPdfEqualityCheckAvailable}
+              disabled={selectedCount < 2 || verificaInCorso || unioneInCorso || !isPdfEqualityCheckAvailable}
+              loading={verificaInCorso}
               title={!isPdfEqualityCheckAvailable ? pdfEqualityUnavailableMessage : undefined}
             >
-              <Lucide icon="CircleCheck" className="w-4 h-4 mr-2" />
+              {!verificaInCorso && <Lucide icon="CircleCheck" aria-hidden="true" className="mr-2 h-4 w-4" />}
               Verifica file
             </Button>
             <Button
               variant="primary"
               onClick={handleMergeSelectedFiles}
               disabled={mergeStep !== 'check_ok' || !isPdfEqualityCheckAvailable}
+              loading={unioneInCorso}
               title={!isPdfEqualityCheckAvailable ? pdfEqualityUnavailableMessage : undefined}
             >
-              <Lucide icon="Send" className="w-4 h-4 mr-2" />
+              {!unioneInCorso && <Lucide icon="Send" aria-hidden="true" className="mr-2 h-4 w-4" />}
               Unisci file
             </Button>
           </Dialog.Footer>
@@ -1027,35 +878,29 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
 
       {/* Dialog risultato merge */}
       <Dialog centered open={showMergeResultDialog} onClose={() => setShowMergeResultDialog(false)}>
-        <Dialog.Panel className="p-2">
-          <Dialog.Title>
-            <h2 className="title-section px-4 pt-4">Risultato unione</h2>
-          </Dialog.Title>
-          <Dialog.Description className="p-4">
+        <Dialog.Panel>
+          <Dialog.Title>Risultato unione</Dialog.Title>
+          <Dialog.Description>
             {mergeStep === 'success' ? (
               <div className="space-y-3">
-                <div className="flex items-start gap-3 p-3 rounded-lg border border-success/30 bg-success/10">
-                  <Lucide icon="CircleCheck" className="w-5 h-5 text-success mt-0.5" />
-                  <div>
-                    <p className="text-sm font-medium text-success">Unione completata</p>
-                    <p className="text-xs text-slate-600 mt-1">{mergeInfo || 'Il server ha generato il file unito.'}</p>
-                  </div>
-                </div>
+                <Alert variant="soft-success" icona="CircleCheck" titolo="Unione completata">
+                  {mergeInfo || 'Il server ha generato il file unito.'}
+                </Alert>
                 <p className="text-sm text-slate-600">Nome file: <span className="font-medium text-slate-800">{mergedDownloadName}</span></p>
               </div>
             ) : (
-              <div className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger">
+              <Alert variant="soft-danger" icona="TriangleAlert">
                 {mergeError || 'Operazione non completata.'}
-              </div>
+              </Alert>
             )}
           </Dialog.Description>
-          <Dialog.Footer className="p-4 border-t border-slate-200/60 bg-slate-50/50 flex justify-end gap-2">
+          <Dialog.Footer>
             <Button variant="outline-secondary" onClick={() => setShowMergeResultDialog(false)}>
               Chiudi
             </Button>
             {mergeStep === 'success' && mergedDownloadUrl && (
               <Button variant="primary" onClick={handleDownloadMergedFile}>
-                <Lucide icon="Download" className="w-4 h-4 mr-2" />
+                <Lucide icon="Download" aria-hidden="true" className="mr-2 h-4 w-4" />
                 Scarica file unito
               </Button>
             )}

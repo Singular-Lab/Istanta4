@@ -30,7 +30,7 @@ vi.mock("@/query/query", () => ({
     return finti.query;
   },
   useFetchLavorazioni: () => ({ data: [] }),
-  useFetchAree: () => ({ data: [] }),
+  useFetchAree: () => ({ data: [{ id: "a1", nome: "Nord" }] }),
   useFetchCanali: () => ({ data: [] }),
   useFetchTipiExport: () => ({ data: [] }),
   useFetchFormati: () => ({ data: [] }),
@@ -41,8 +41,9 @@ import ContenutiDigitali from ".";
 
 const ultimaChiamata = () => finti.chiamate.at(-1)!;
 
+// Come il servizio: totalItems conta i file, totalPages = totalItems / pageSize
 const conPagine = (totalPages: number) => ({
-  totalItems: 1,
+  totalItems: totalPages * 10,
   totalPages,
   currentPage: 1,
   pageSize: 10,
@@ -109,5 +110,25 @@ describe("Contenuti digitali", () => {
     for (const nome of ["Prima pagina", "Pagina precedente", "Pagina successiva", "Ultima pagina"]) {
       expect(screen.getByLabelText(nome)).toBeInTheDocument();
     }
+  });
+
+  it("non mostra il menu Scarica vuoto e il contatore dei filtri conta quelli scelti", async () => {
+    render(<ContenutiDigitali />);
+
+    expect(screen.queryByRole("button", { name: /^Scarica\b(?! volantino)/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Filtra" })).not.toHaveTextContent(/X|\d/);
+
+    fireEvent.click(screen.getByRole("button", { name: "Filtra" }));
+    fireEvent.change(await screen.findByLabelText("Area"), { target: { value: "a1" } });
+
+    expect(ultimaChiamata().filters.idArea).toBe("a1");
+    expect(screen.getByRole("button", { name: /^Filtra\s*1 filtri attivi$/ })).toBeInTheDocument();
+  });
+
+  it("i contenuti si scaricano con un comando che ne dice il nome", () => {
+    render(<ContenutiDigitali />);
+
+    expect(screen.getByRole("button", { name: "Scarica volantino.pdf" })).toBeInTheDocument();
+    expect(screen.getByText("Mostrati 1–10 di 30")).toBeInTheDocument();
   });
 });

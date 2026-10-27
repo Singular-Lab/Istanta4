@@ -26,7 +26,7 @@ const Card: React.FC<CardProps> = ({ title, children, options, className }) => {
                         <i className={options.icon}></i>
                     </span>
                 )}
-                <h2 className="text-xl font-semibold">{title}</h2>
+                <h2 className="title-section">{title}</h2>
             </div>
             <div>
                 {children}

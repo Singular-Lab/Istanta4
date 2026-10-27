@@ -19,19 +19,20 @@ function Main(props: MainProps) {
           props.setActivitiesPanel(false);
         }}
       >
-        <Slideover.Panel className="w-72 rounded-[0.75rem_0_0_0.75rem/1.1rem_0_0_1.1rem]">
+        <Slideover.Panel className="w-72">
           <a
             href=""
+            aria-label="Chiudi"
             className="focus:outline-none hover:bg-white/10 bg-white/5 transition-all hover:rotate-180 absolute inset-y-0 left-0 right-auto flex items-center justify-center my-auto -ml-[60px] sm:-ml-[105px] border rounded-full text-white/90 w-8 h-8 sm:w-14 sm:h-14 border-white/90 hover:scale-105"
             onClick={(e) => {
               e.preventDefault();
               props.setActivitiesPanel(false);
             }}
           >
-            <Lucide className="w-8 h-8 stroke-[1]" icon="X" />
+            <Lucide aria-hidden="true" className="w-8 h-8" icon="X" />
           </a>
           <Slideover.Title className="px-6 py-5">
-            <h2 className="mr-auto text-base font-medium">Latest Activities</h2>
+            <h2 className="title-section mr-auto">Ultime attività</h2>
           </Slideover.Title>
           <Slideover.Description className="p-0">
             <div className="px-5 py-3 flex flex-col gap-3.5">

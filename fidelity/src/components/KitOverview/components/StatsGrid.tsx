@@ -1,12 +1,9 @@
-import dayjs from "dayjs";
-import "dayjs/locale/it";
+import StatCard, { StatCardGrid } from "@/components/Base/StatCard";
+import { formatData } from "@/utils/format";
 import { FC } from "react";
 import { STATO_LAVORAZIONE_KIT_RUNTIME } from "../../../../lib/enums";
 import { getStateConfig } from "../config/stateConfig";
 import { StatsGridProps } from "../types";
-import StatCard from "./StatCard";
-
-dayjs.locale("it");
 
 /**
  * StatsGrid - Griglia di statistiche che mostra metriche diverse in base allo stato.
@@ -43,122 +40,123 @@ const StatsGrid: FC<StatsGridProps> = ({
   // Stats per IN_REVISIONE
   if (showRevisionStats && !showErrorStats) {
     return (
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <StatCardGrid>
         <StatCard
-          icon="Files"
-          iconColor="text-theme-1"
-          iconBg="bg-theme-1/10"
-          value={filesCount}
-          label="File totali"
-          sublabel={`${totalPages} pagine`}
+          densita="compatta"
+          icona="Files"
+          tono="brand"
+          etichetta="File totali"
+          valore={filesCount}
+          sottotitolo={`${totalPages} pagine`}
         />
         <StatCard
-          icon="CircleCheck"
-          iconColor="text-success"
-          iconBg="bg-success/10"
-          value={acceptedCount}
-          label="Accettati"
-          sublabel="File approvati"
+          densita="compatta"
+          icona="CircleCheck"
+          tono="success"
+          etichetta="Accettati"
+          valore={acceptedCount}
+          sottotitolo="File approvati"
         />
         <StatCard
-          icon="CircleX"
-          iconColor="text-danger"
-          iconBg="bg-danger/10"
-          value={rejectedCount}
-          label="Rifiutati"
-          sublabel="Da correggere"
+          densita="compatta"
+          icona="CircleX"
+          tono="danger"
+          etichetta="Rifiutati"
+          valore={rejectedCount}
+          sottotitolo="Da correggere"
         />
         <StatCard
-          icon="Clock"
-          iconColor="text-warning"
-          iconBg="bg-warning/10"
-          value={pendingCount}
-          label="In attesa"
-          sublabel="Da revisionare"
+          densita="compatta"
+          icona="Clock"
+          tono="warning"
+          etichetta="In attesa"
+          valore={pendingCount}
+          sottotitolo="Da revisionare"
         />
-      </div>
+      </StatCardGrid>
     );
   }
 
   // Stats per IN_LAVORAZIONE_CON_ERRORI
   if (showErrorStats) {
     return (
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <StatCardGrid>
         <StatCard
-          icon="Files"
-          iconColor="text-theme-1"
-          iconBg="bg-theme-1/10"
-          value={filesCount}
-          label="File totali"
-          sublabel={`${totalPages} pagine`}
+          densita="compatta"
+          icona="Files"
+          tono="brand"
+          etichetta="File totali"
+          valore={filesCount}
+          sottotitolo={`${totalPages} pagine`}
         />
         <StatCard
-          icon="CircleCheck"
-          iconColor="text-success"
-          iconBg="bg-success/10"
-          value={acceptedCount}
-          label="Accettati"
-          sublabel="File approvati"
+          densita="compatta"
+          icona="CircleCheck"
+          tono="success"
+          etichetta="Accettati"
+          valore={acceptedCount}
+          sottotitolo="File approvati"
         />
         <StatCard
-          icon="CircleX"
-          iconColor="text-danger"
-          iconBg="bg-danger/10"
-          value={rejectedCount}
-          label="Rifiutati"
-          sublabel="Da correggere"
+          densita="compatta"
+          icona="CircleX"
+          tono="danger"
+          etichetta="Rifiutati"
+          valore={rejectedCount}
+          sottotitolo="Da correggere"
         />
         <StatCard
-          icon="TriangleAlert"
-          iconColor="text-danger"
-          iconBg="bg-danger/10"
-          value={`${errorPercentage.toFixed(0)}%`}
-          label="% Errori"
-          sublabel="Percentuale file errati"
+          densita="compatta"
+          icona="TriangleAlert"
+          tono="danger"
+          etichetta="% Errori"
+          valore={`${errorPercentage.toFixed(0)}%`}
+          sottotitolo="Percentuale file errati"
         />
-      </div>
+      </StatCardGrid>
     );
   }
 
   // Stats default per IN_LAVORAZIONE e PUBBLICATO
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <StatCardGrid>
       <StatCard
-        icon="Files"
-        iconColor="text-theme-1"
-        iconBg="bg-theme-1/10"
-        value={filesCount}
-        label={stato === STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO ? "File pubblicati" : "File caricati"}
-        sublabel={`${totalPages} pagine totali`}
+        densita="compatta"
+        icona="Files"
+        tono="brand"
+        etichetta={stato === STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO ? "File pubblicati" : "File caricati"}
+        valore={filesCount}
+        sottotitolo={`${totalPages} pagine totali`}
       />
       <StatCard
-        icon="Layers"
-        iconColor="text-info"
-        iconBg="bg-info/10"
-        value={exportTypesCount}
-        label="Tipi di export"
-        sublabel={exportTypesList.join(", ")}
+        densita="compatta"
+        icona="Layers"
+        tono="info"
+        etichetta="Tipi di export"
+        valore={exportTypesCount}
+        sottotitolo={exportTypesList.join(", ")}
       />
       <StatCard
-        icon="Package"
-        iconColor="text-success"
-        iconBg="bg-success/10"
-        value={referenzeCount}
-        label="Referenze"
-        sublabel={origineStorico && origineStorico.totaleFuoriListino > 0
+        densita="compatta"
+        icona="Package"
+        tono="success"
+        etichetta="Referenze"
+        valore={referenzeCount}
+        sottotitolo={origineStorico && origineStorico.totaleFuoriListino > 0
           ? `di cui ${origineStorico.totaleFuoriListino} fuori listino`
           : paginAnalizzate ? `${paginAnalizzate} pagine analizzate` : undefined}
       />
       <StatCard
-        icon="Clock"
-        iconColor={isTimerLive ? "text-theme-1" : "text-warning"}
-        iconBg={isTimerLive ? "bg-theme-1/10" : "bg-warning/10"}
-        value={productionDuration || "-"}
-        label={isTimerLive ? "Tempo (in corso)" : "Tempo produzione"}
-        sublabel={createdAt ? `Dal ${dayjs(createdAt).format("DD/MM")}` : undefined}
-        isLive={isTimerLive}
+        densita="compatta"
+        icona="Clock"
+        tono={isTimerLive ? "brand" : "warning"}
+        etichetta={isTimerLive ? "Tempo (in corso)" : "Tempo produzione"}
+        valore={productionDuration}
+        sottotitolo={createdAt ? `Dal ${formatData(createdAt)}` : undefined}
+        pulsa={isTimerLive}
+        evidenzia={isTimerLive}
       />
-    </div>
+    </StatCardGrid>
   );
 };
 

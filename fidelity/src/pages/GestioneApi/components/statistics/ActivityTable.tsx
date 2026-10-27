@@ -1,4 +1,9 @@
-import Lucide from "@/components/Base/Lucide";
+import Badge from "@/components/Base/Badge";
+import StatusBadge from "@/components/Base/StatusBadge";
+import Table from "@/components/Base/Table";
+import type { TonoStato } from "@/constants/stati";
+import EmptyState from "@/components/EmptyState";
+import { formatNumero, VALORE_ASSENTE } from "@/utils/format";
 import clsx from "clsx";
 import type { ApiStatistics } from "../../types";
 
@@ -6,112 +11,94 @@ interface ActivityTableProps {
   activities: ApiStatistics['attivita_recente'];
 }
 
+const NUMERO_COLONNE = 6;
+
+// Tono del codice HTTP: 2xx riuscita, 4xx errore del client, 5xx errore del server
+const tonoStatus = (code: number): TonoStato => {
+  if (code >= 200 && code < 300) return "success";
+  if (code >= 400 && code < 500) return "warning";
+  if (code >= 500) return "danger";
+  return "neutral";
+};
+
+const VARIANTE_METODO: Record<string, "info" | "success" | "warning" | "primary" | "error"> = {
+  GET: "info",
+  POST: "success",
+  PUT: "warning",
+  PATCH: "primary",
+  DELETE: "error",
+};
+
+const getSpeedStyle = (ms: number) => {
+  if (ms < 200) return "text-success";
+  if (ms < 1000) return "text-warning";
+  return "text-danger";
+};
+
 function ActivityTable({ activities }: ActivityTableProps) {
-  if (!activities || activities.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-12 text-center">
-        <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mb-3">
-          <Lucide icon="Activity" className="w-6 h-6 text-slate-400" />
-        </div>
-        <p className="text-sm font-medium text-slate-600">Nessuna attività recente</p>
-        <p className="text-xs text-slate-400 mt-1">Le attività verranno visualizzate qui</p>
-      </div>
-    );
-  }
-
-  const getStatusStyle = (code: number) => {
-    if (code >= 200 && code < 300) return "text-success bg-success/10";
-    if (code >= 400 && code < 500) return "text-warning bg-warning/10";
-    if (code >= 500) return "text-danger bg-danger/10";
-    return "text-slate-600 bg-slate-100";
-  };
-
-  const getMethodStyle = (method: string) => {
-    switch (method.toUpperCase()) {
-      case "GET":    return "text-blue-600 bg-blue-50";
-      case "POST":   return "text-emerald-600 bg-emerald-50";
-      case "PUT":    return "text-amber-600 bg-amber-50";
-      case "PATCH":  return "text-violet-600 bg-violet-50";
-      case "DELETE": return "text-red-600 bg-red-50";
-      default:       return "text-slate-600 bg-slate-100";
-    }
-  };
-
-  const getSpeedStyle = (ms: number) => {
-    if (ms < 200)  return "text-success";
-    if (ms < 1000) return "text-warning";
-    return "text-danger";
-  };
-
   return (
-    <div className="overflow-x-auto -mx-1">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="bg-slate-50 border-y border-slate-100">
-            <th className="text-left text-xs font-semibold text-slate-500 px-4 py-2.5 whitespace-nowrap">Timestamp</th>
-            <th className="text-left text-xs font-semibold text-slate-500 px-4 py-2.5">Endpoint</th>
-            <th className="text-left text-xs font-semibold text-slate-500 px-4 py-2.5 whitespace-nowrap">Metodo</th>
-            <th className="text-left text-xs font-semibold text-slate-500 px-4 py-2.5 whitespace-nowrap">Status</th>
-            <th className="text-left text-xs font-semibold text-slate-500 px-4 py-2.5 whitespace-nowrap">Tempo</th>
-            <th className="text-left text-xs font-semibold text-slate-500 px-4 py-2.5 whitespace-nowrap">Ruolo</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-50">
-          {activities.map((activity, index) => (
-            <tr
-              key={index}
-              className={clsx(
-                "hover:bg-slate-50/80 transition-colors duration-100",
-                index % 2 === 0 ? "bg-white" : "bg-slate-50/30"
-              )}
-            >
-              <td className="px-4 py-2.5 whitespace-nowrap">
-                <span className="text-xs text-slate-500 font-mono">
-                  {activity.data} {activity.orario}
-                </span>
-              </td>
-              <td className="px-4 py-2.5 max-w-[220px]">
-                <code
-                  className="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-mono truncate block"
-                  title={activity.endpoint}
-                >
-                  {activity.endpoint}
-                </code>
-              </td>
-              <td className="px-4 py-2.5 whitespace-nowrap">
-                <span
-                  className={clsx(
-                    "inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold font-mono",
-                    getMethodStyle(activity.metodo)
-                  )}
-                >
-                  {activity.metodo}
-                </span>
-              </td>
-              <td className="px-4 py-2.5 whitespace-nowrap">
-                <span
-                  className={clsx(
-                    "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold",
-                    getStatusStyle(activity.codice_risposta)
-                  )}
-                >
-                  {activity.codice_risposta}
-                </span>
-              </td>
-              <td className="px-4 py-2.5 whitespace-nowrap">
-                <span className={clsx("text-xs font-semibold font-mono", getSpeedStyle(activity.tempo_risposta_ms))}>
-                  {activity.tempo_risposta_ms}ms
-                </span>
-              </td>
-              <td className="px-4 py-2.5 whitespace-nowrap">
-                <span className="text-xs text-slate-500">
-                  {activity.ruolo_utente || <span className="text-slate-300">—</span>}
-                </span>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="overflow-x-auto">
+      <Table className="text-sm">
+        <Table.Thead>
+          <Table.Tr>
+            <Table.Th>Data e ora</Table.Th>
+            <Table.Th>Endpoint</Table.Th>
+            <Table.Th>Metodo</Table.Th>
+            <Table.Th>Status</Table.Th>
+            <Table.Th className="text-right">Tempo</Table.Th>
+            <Table.Th>Ruolo</Table.Th>
+          </Table.Tr>
+        </Table.Thead>
+        <Table.Tbody>
+          {!activities || activities.length === 0 ? (
+            <Table.Tr>
+              <Table.Td colSpan={NUMERO_COLONNE} className="p-0">
+                <EmptyState
+                  compatta
+                  icon="Activity"
+                  title="Nessuna attività recente"
+                  description="Le attività verranno visualizzate qui"
+                />
+              </Table.Td>
+            </Table.Tr>
+          ) : (
+            activities.map((activity, index) => (
+              <Table.Tr key={index}>
+                <Table.Td className="whitespace-nowrap">
+                  {/* Data e ora arrivano già formattate dal servizio */}
+                  <span className="font-mono text-xs tabular-nums text-slate-500">
+                    {activity.data} {activity.orario}
+                  </span>
+                </Table.Td>
+                <Table.Td className="max-w-56">
+                  <code
+                    className="block truncate rounded-control bg-slate-100 px-2 py-0.5 font-mono text-xs text-slate-700"
+                    title={activity.endpoint}
+                  >
+                    {activity.endpoint}
+                  </code>
+                </Table.Td>
+                <Table.Td className="whitespace-nowrap">
+                  <Badge variant={VARIANTE_METODO[activity.metodo.toUpperCase()] ?? "secondary"} size="sm" className="font-mono">
+                    {activity.metodo}
+                  </Badge>
+                </Table.Td>
+                <Table.Td className="whitespace-nowrap">
+                  <StatusBadge tono={tonoStatus(activity.codice_risposta)} etichetta={String(activity.codice_risposta)} />
+                </Table.Td>
+                <Table.Td className="whitespace-nowrap text-right">
+                  <span className={clsx("font-mono text-xs font-semibold tabular-nums", getSpeedStyle(activity.tempo_risposta_ms))}>
+                    {formatNumero(activity.tempo_risposta_ms)} ms
+                  </span>
+                </Table.Td>
+                <Table.Td className="whitespace-nowrap text-xs text-slate-500">
+                  {activity.ruolo_utente || <span className="text-slate-400">{VALORE_ASSENTE}</span>}
+                </Table.Td>
+              </Table.Tr>
+            ))
+          )}
+        </Table.Tbody>
+      </Table>
     </div>
   );
 }

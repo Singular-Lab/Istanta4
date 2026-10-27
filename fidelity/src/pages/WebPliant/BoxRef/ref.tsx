@@ -804,7 +804,6 @@ export function generaContenutoDinamico({
   // --------------------------------------------------
   try {
     if (!tag || typeof tag !== "string") {
-      console.log(struttura);
       console.error("Invalid or undefined tag:", tag);
       return null;
     }

@@ -1,5 +1,5 @@
 import { Loader2 } from "lucide-react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@/utils/twMerge";
 
 const MISURE = {
   sm: "h-4 w-4",

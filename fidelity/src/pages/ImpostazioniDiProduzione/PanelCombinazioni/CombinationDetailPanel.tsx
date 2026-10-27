@@ -1,10 +1,14 @@
 import Badge from '@/components/Base/Badge';
+import BarraFiltri from '@/components/Base/BarraFiltri';
 import Button from '@/components/Base/Button';
-import { FormInput } from '@/components/Base/Form';
+import CampoRicerca from '@/components/Base/CampoRicerca';
 import Lucide from '@/components/Base/Lucide';
+import PageError from '@/components/Base/PageError';
+import Skeleton from '@/components/Base/Skeleton';
 import StatusBadge from '@/components/Base/StatusBadge';
 import Table from '@/components/Base/Table';
 import EmptyState from '@/components/EmptyState';
+import { VALORE_ASSENTE } from '@/utils/format';
 import { AnimatePresence, motion } from 'framer-motion';
 import { STATO_COMBINAZIONI, TIPO_KIT_DESIGN } from '../../../../lib/enums';
 import { CombinazioneData, TemplateData } from './types';
@@ -13,6 +17,8 @@ interface CombinationDetailPanelProps {
   selectedTemplate: TemplateData;
   combinations: CombinazioneData[];
   isLoading: boolean;
+  /** Combinazioni non caricate: motivo e Riprova. */
+  errore?: { motivo: string; onRiprova: () => void } | null;
   searchQuery: string;
   onSearchChange: (query: string) => void;
   onStateChange: (guidId: string, newState: string) => void;
@@ -26,16 +32,18 @@ const rowVariants = {
   exit: { opacity: 0, y: -6 },
 };
 
+const COLONNE = 6;
+
 function renderSkeletonRows(count = 4) {
   return Array.from({ length: count }).map((_, i) => (
-    <tr key={i} className="animate-pulse">
-      <td className="px-5 py-4"><div className="h-4 rounded bg-slate-200 w-3/4" /></td>
-      <td className="px-5 py-4"><div className="h-4 rounded bg-slate-200 w-1/2" /></td>
-      <td className="px-5 py-4"><div className="h-4 rounded bg-slate-200 w-1/2" /></td>
-      <td className="px-5 py-4"><div className="h-5 rounded-full bg-slate-200 w-20" /></td>
-      <td className="px-5 py-4"><div className="h-5 rounded-full bg-slate-200 w-16" /></td>
-      <td className="px-5 py-4"><div className="h-8 rounded bg-slate-200 w-24 mx-auto" /></td>
-    </tr>
+    <Table.Tr key={i}>
+      <Table.Td><Skeleton className="h-4 w-3/4" /></Table.Td>
+      <Table.Td><Skeleton className="h-4 w-1/2" /></Table.Td>
+      <Table.Td><Skeleton className="h-4 w-1/2" /></Table.Td>
+      <Table.Td><Skeleton className="h-5 w-20 rounded-full" /></Table.Td>
+      <Table.Td><Skeleton className="h-5 w-16 rounded-full" /></Table.Td>
+      <Table.Td><Skeleton className="ml-auto h-7 w-16 rounded-control" /></Table.Td>
+    </Table.Tr>
   ));
 }
 
@@ -56,6 +64,7 @@ export default function CombinationDetailPanel({
   selectedTemplate,
   combinations,
   isLoading,
+  errore,
   searchQuery,
   onSearchChange,
   onStateChange,
@@ -68,55 +77,59 @@ export default function CombinationDetailPanel({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
       transition={{ duration: 0.25 }}
-      className="flex flex-col p-5 box box--stacked"
+      className="flex flex-col rounded-card border border-slate-200 bg-white"
     >
-      {/* Header */}
-      <div className="pb-4 mb-4 border-b border-dashed border-slate-300/70 flex justify-between items-center gap-3">
-        <div className="flex items-center gap-2 min-w-0">
-          <Lucide icon="Boxes" className="w-5 h-5 text-primary shrink-0" />
-          <h2 className="title-card truncate">
-            Combinazioni di{' '}
-            <span className="text-primary font-semibold">{selectedTemplate.titolo}</span>
-          </h2>
-          {!isLoading && (
-            <Badge variant="info" size="sm" className="px-2 py-1 shrink-0">
+      {/* Intestazione */}
+      <div className="flex items-center justify-between gap-3 p-4">
+        <div className="flex min-w-0 items-center gap-2">
+          <Lucide icon="Boxes" aria-hidden="true" className="h-5 w-5 shrink-0 text-slate-500" />
+          <h3 className="title-card truncate">
+            Combinazioni di <span className="text-primary">{selectedTemplate.titolo}</span>
+          </h3>
+          {!isLoading && !errore && (
+            <Badge variant="info" size="sm" className="shrink-0">
               {combinations.length}
             </Badge>
           )}
         </div>
-        <button
+        <Button
+          variant="outline-secondary"
+          size="sm"
           onClick={onClose}
-          className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-slate-100 transition-colors shrink-0"
           aria-label="Chiudi pannello"
+          title="Chiudi"
         >
-          <Lucide icon="X" aria-hidden="true" className="w-4 h-4 text-slate-400" />
-        </button>
+          <Lucide icon="X" aria-hidden="true" className="h-3.5 w-3.5" />
+        </Button>
       </div>
 
-      {/* Search */}
-      <div className="mb-4">
-        <FormInput
-          type="text"
-          placeholder="Cerca per titolo, area o canale..."
+      <BarraFiltri className="px-4 pb-4 pt-0">
+        <CampoRicerca
+          etichetta="Cerca combinazioni"
+          placeholder="Titolo, area o canale"
           value={searchQuery}
-          onChange={(e) => onSearchChange(e.target.value)}
+          onChange={onSearchChange}
         />
-      </div>
+      </BarraFiltri>
 
-      {/* Table */}
+      {errore ? (
+        <div className="p-4">
+          <PageError compatta titolo="Combinazioni non caricate" motivo={errore.motivo} onRiprova={errore.onRiprova} />
+        </div>
+      ) : (
       <div className="overflow-x-auto">
-        <Table bordered>
+        <Table>
           <Table.Thead>
-            <Table.Tr className="text-xs uppercase text-slate-500 bg-slate-50">
-              <Table.Th className="px-5 py-3 font-semibold text-slate-700">Titolo</Table.Th>
-              <Table.Th className="px-5 py-3 font-semibold text-slate-700">Area</Table.Th>
-              <Table.Th className="px-5 py-3 font-semibold text-slate-700">Canale</Table.Th>
-              <Table.Th className="px-5 py-3 font-semibold text-slate-700">Tipo</Table.Th>
-              <Table.Th className="px-5 py-3 font-semibold text-slate-700">Stato</Table.Th>
-              <Table.Th className="px-5 py-3 font-semibold text-slate-700 text-center">Azioni</Table.Th>
+            <Table.Tr>
+              <Table.Th>Titolo</Table.Th>
+              <Table.Th>Area</Table.Th>
+              <Table.Th>Canale</Table.Th>
+              <Table.Th>Tipo</Table.Th>
+              <Table.Th>Stato</Table.Th>
+              <Table.Th className="text-right"><span className="sr-only">Azioni</span></Table.Th>
             </Table.Tr>
           </Table.Thead>
-          <tbody>
+          <Table.Tbody>
             {isLoading ? (
               renderSkeletonRows()
             ) : combinations.length > 0 ? (
@@ -124,61 +137,59 @@ export default function CombinationDetailPanel({
                 {combinations.map((combo, index) => (
                   <motion.tr
                     key={combo.guidId}
-                    className="transition-colors hover:bg-slate-50/50"
+                    className="transition-colors hover:bg-slate-50"
                     variants={rowVariants}
                     initial="hidden"
                     animate="visible"
                     exit="exit"
                     transition={{ duration: 0.15, delay: index * 0.04 }}
                   >
-                    <Table.Td className="px-5 py-3">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                          <Lucide icon="Box" className="w-3.5 h-3.5 text-primary" />
-                        </div>
-                        <span className="font-medium text-slate-800 text-sm">{combo.titolo}</span>
-                      </div>
+                    <Table.Td>
+                      <span className="text-sm font-medium text-slate-800">{combo.titolo}</span>
                     </Table.Td>
-                    <Table.Td className="px-5 py-3 text-sm text-slate-600">
-                      {combo.nomeArea ?? <span className="text-slate-300">—</span>}
+                    <Table.Td className="text-sm text-slate-600">
+                      {combo.nomeArea ?? <span className="text-slate-400">{VALORE_ASSENTE}</span>}
                     </Table.Td>
-                    <Table.Td className="px-5 py-3 text-sm text-slate-600">
-                      {combo.nomeCanale ?? <span className="text-slate-300">—</span>}
+                    <Table.Td className="text-sm text-slate-600">
+                      {combo.nomeCanale ?? <span className="text-slate-400">{VALORE_ASSENTE}</span>}
                     </Table.Td>
-                    <Table.Td className="px-5 py-3">{tipoBadge(combo.tipo)}</Table.Td>
-                    <Table.Td className="px-5 py-3">
+                    <Table.Td>{tipoBadge(combo.tipo)}</Table.Td>
+                    <Table.Td>
                       <StatusBadge
                         tono={combo.stato === STATO_COMBINAZIONI.DISATTIVO ? 'neutral' : 'success'}
                         etichetta={combo.stato === STATO_COMBINAZIONI.DISATTIVO ? 'Disattivato' : 'Attivo'}
                       />
                     </Table.Td>
-                    <Table.Td className="px-5 py-3 text-center">
-                      <div className="flex items-center justify-center gap-1.5">
+                    <Table.Td className="text-right">
+                      <div className="flex items-center justify-end gap-2">
                         <Button
-                          variant="outline-primary"
+                          variant="outline-secondary"
                           size="sm"
                           onClick={() => onNavigateDetails(combo.guidId)}
+                          aria-label={`Dettagli della combinazione ${combo.titolo}`}
+                          title="Dettagli"
                         >
-                          <Lucide icon="FileText" className="w-3.5 h-3.5 mr-1" />
-                          Dettagli
+                          <Lucide icon="FileText" aria-hidden="true" className="h-3.5 w-3.5" />
                         </Button>
                         {combo.stato === STATO_COMBINAZIONI.DISATTIVO ? (
                           <Button
-                            variant="outline-success"
+                            variant="outline-secondary"
                             size="sm"
                             onClick={() => onStateChange(combo.guidId, STATO_COMBINAZIONI.ATTIVO)}
+                            aria-label={`Attiva la combinazione ${combo.titolo}`}
+                            title="Attiva"
                           >
-                            <Lucide icon="Power" className="w-3.5 h-3.5 mr-1" />
-                            Attiva
+                            <Lucide icon="Power" aria-hidden="true" className="h-3.5 w-3.5" />
                           </Button>
                         ) : (
                           <Button
-                            variant="outline-warning"
+                            variant="outline-secondary"
                             size="sm"
                             onClick={() => onStateChange(combo.guidId, STATO_COMBINAZIONI.DISATTIVO)}
+                            aria-label={`Disattiva la combinazione ${combo.titolo}`}
+                            title="Disattiva"
                           >
-                            <Lucide icon="PowerOff" className="w-3.5 h-3.5 mr-1" />
-                            Disattiva
+                            <Lucide icon="PowerOff" aria-hidden="true" className="h-3.5 w-3.5" />
                           </Button>
                         )}
                       </div>
@@ -188,23 +199,32 @@ export default function CombinationDetailPanel({
               </AnimatePresence>
             ) : (
               <Table.Tr>
-                <Table.Td colSpan={6}>
-                  <EmptyState
-                    icon="PackageSearch"
-                    title="Nessuna combinazione"
-                    description={
-                      searchQuery
-                        ? 'Nessuna combinazione corrisponde alla ricerca'
-                        : 'Non ci sono combinazioni per questo template'
-                    }
-                    iconColor="text-slate-300"
-                  />
+                <Table.Td colSpan={COLONNE} className="p-0">
+                  {searchQuery ? (
+                    <EmptyState
+                      compatta
+                      icon="SearchX"
+                      title="Nessun risultato"
+                      description="Nessuna combinazione corrisponde alla ricerca."
+                      buttonText="Azzera ricerca"
+                      buttonIcon="X"
+                      onButtonClick={() => onSearchChange('')}
+                    />
+                  ) : (
+                    <EmptyState
+                      compatta
+                      icon="PackageSearch"
+                      title="Nessuna combinazione"
+                      description="Non ci sono combinazioni per questo template."
+                    />
+                  )}
                 </Table.Td>
               </Table.Tr>
             )}
-          </tbody>
+          </Table.Tbody>
         </Table>
       </div>
+      )}
     </motion.div>
   );
 }

@@ -1,9 +1,21 @@
+import styleWp from "@/assets/css/webpliant/stylewp.module.scss";
+import Alert from '@/components/Base/Alert';
 import Button from '@/components/Base/Button';
+import Pagina from '@/components/Base/Pagina';
+import Sezione from '@/components/Base/Sezione';
+import Spinner from '@/components/Base/Spinner';
+import clsx from 'clsx';
 import { useFetchConfig } from '@/query/query';
 import { BarcodeDetector } from 'barcode-detector/ponyfill';
 import React, { useEffect, useRef, useState } from 'react';
 import { ServerCall } from '../../../lib/server_call';
 import BoxRef from '../WebPliant/BoxRef';
+import {
+  CaricamentoPubblico,
+  CLASSE_TITOLO_PANNELLO_PUBBLICO,
+  CLASSE_TITOLO_PUBBLICO,
+  ErrorePubblico,
+} from '../WebpliantLayout/StatiPubblici';
 
 const BarCodeReaderComponent: React.FC = () => {
   const [barcode, setBarcode] = useState<string | null>(null);
@@ -16,38 +28,6 @@ const BarCodeReaderComponent: React.FC = () => {
   const dataConfig = useFetchConfig();
 
 
-
-  const handleCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = event.currentTarget;
-    const rect = canvas.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
-    console.log('Canvas overlay clicked at:', x, y);
-  };
-
-  const handleCanvasMouseDown = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = event.currentTarget;
-    const rect = canvas.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
-    console.log('Canvas overlay mouse down at:', x, y);
-  };
-
-  const handleCanvasMouseUp = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = event.currentTarget;
-    const rect = canvas.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
-    console.log('Canvas overlay mouse up at:', x, y);
-  };
-
-  const handleCanvasMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = event.currentTarget;
-    const rect = canvas.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
-    console.log('Canvas overlay mouse move at:', x, y);
-  };
 
   useEffect(() => {
     const requestCameraPermission = async () => {
@@ -208,68 +188,92 @@ const BarCodeReaderComponent: React.FC = () => {
     }
   }, [barcode]);
 
-  return (
-    <main className="mt-20 w-full min-h-svh">
-      <section className="flex mx-9 xl:pt-12">
-        <div className="w-full">
-          <div className="flex flex-col items-center mb-4">
-            <h1 className="title-page">Lettore codici a barre</h1>
+  // Doppia rotta: dentro il layout operatore (/barcode-reader) e nella vetrina pubblica (/webpliant/barcode-reader)
+  const pubblica = window.location.pathname.startsWith('/webpliant');
+
+  const scansione = (
+    <>
+      {barcode ? (
+        <>
+          <div className="flex flex-col items-center justify-center bg-slate-900 py-5 text-white">
+            <h2 className={pubblica ? clsx(CLASSE_TITOLO_PANNELLO_PUBBLICO, styleWp["wp-mb-0"], 'text-white') : 'title-section text-white'}>
+              {barcode}
+            </h2>
+            <p className="mt-3">Codice scansionato</p>
           </div>
-          <div className="flex flex-col gap-3">
-            <div className="box box--stacked rounded-card">
-              <div className="p-5">
-                {hasPermission === null ? (
-                  <p>Richiesta del permesso per la fotocamera...</p>
-                ) : hasPermission ? (
-                  <>
-                    {barcode ? (
-                      <>
-                        <div className="flex flex-col justify-center items-center bg-slate-900 text-white py-5">
-                          <h2 className="title-section text-white">{barcode}</h2>
-                          <p className="mt-3">Barcode scannerizzato</p>
-                          <span>{barcode}</span>
-                        </div>
-                        {referenza && (
-                          <>
-                            <BoxRef
-                              referenza={referenza}
-                              config={dataConfig.data as any}
-                            />
-                          </>
-                        )}
-                        <Button variant="primary" onClick={restartScanning} className="w-full mt-3">
-                          Scannerizza un altro codice
-                        </Button>
-                      </>
-                    ) : (
-                      <div className="relative w-full">
-                        <video
-                          ref={videoRef}
-                          autoPlay
-                          playsInline
-                          muted
-                          className="w-full h-auto bg-slate-900"
-                        />
-                        <canvas
-                          ref={overlayCanvasRef}
-                          onClick={handleCanvasClick}
-                          onMouseDown={handleCanvasMouseDown}
-                          onMouseUp={handleCanvasMouseUp}
-                          onMouseMove={handleCanvasMouseMove}
-                          className="absolute top-0 left-0 w-full h-full"
-                        />
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <p>Accesso alla fotocamera negato.</p>
-                )}
-              </div>
-            </div>
-          </div>
+          {referenza && (
+            <BoxRef
+              referenza={referenza}
+              config={dataConfig.data as any}
+            />
+          )}
+          {pubblica ? (
+            <button
+              type="button"
+              onClick={restartScanning}
+              className={clsx(styleWp["wp-btn"], styleWp["wp-btn-primary"], 'mt-3 w-full')}
+            >
+              Scansiona un altro codice
+            </button>
+          ) : (
+            <Button type="button" variant="primary" onClick={restartScanning} className="mt-3 w-full">
+              Scansiona un altro codice
+            </Button>
+          )}
+        </>
+      ) : (
+        <div className="relative w-full">
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className="h-auto w-full bg-slate-900"
+          />
+          <canvas
+            ref={overlayCanvasRef}
+            aria-hidden="true"
+            className="absolute left-0 top-0 h-full w-full"
+          />
         </div>
-      </section>
-    </main>
+      )}
+    </>
+  );
+
+  if (pubblica) {
+    return (
+      <main className="mt-20 w-full min-h-svh px-4 xl:pt-12">
+        <h1 className={clsx(CLASSE_TITOLO_PUBBLICO, styleWp["wp-mb-4"])}>Lettore codici a barre</h1>
+        <div className="mx-auto max-w-3xl">
+          {hasPermission === null ? (
+            <CaricamentoPubblico testo="Richiesta del permesso per la fotocamera..." />
+          ) : hasPermission ? (
+            scansione
+          ) : (
+            <ErrorePubblico titolo="Fotocamera non disponibile" messaggio="Accesso alla fotocamera negato." />
+          )}
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <Pagina titolo="Lettore codici a barre" descrizione="Inquadra il codice a barre di un prodotto per vederne la referenza">
+      <Sezione>
+        {hasPermission === null ? (
+          <div className="flex items-center justify-center gap-3 py-8 text-slate-500">
+            <Spinner decorativo />
+            <span role="status">Richiesta del permesso per la fotocamera...</span>
+          </div>
+        ) : hasPermission ? (
+          scansione
+        ) : (
+          <Alert variant="soft-warning" icona="CameraOff" titolo="Fotocamera non disponibile">
+            Accesso alla fotocamera negato.
+          </Alert>
+        )}
+      </Sezione>
+    </Pagina>
   );
 };
 

@@ -1,6 +1,6 @@
 // src/components/Base/Skeleton.tsx
 import React from 'react';
-import { twMerge } from 'tailwind-merge';
+import { twMerge } from "@/utils/twMerge";
 
 interface SkeletonProps {
     height?: string;

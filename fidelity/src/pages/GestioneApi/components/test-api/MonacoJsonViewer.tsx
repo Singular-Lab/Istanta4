@@ -38,7 +38,7 @@ function MonacoJsonViewer({ value, searchTerm, className, height = "400px" }: Mo
   }, [searchTerm]);
 
   return (
-    <div className={clsx("min-h-[300px] max-h-[600px] rounded-lg overflow-hidden", className)}>
+    <div className={clsx("min-h-[300px] max-h-[600px] rounded-card overflow-hidden", className)}>
       <Editor
         height={height}
         language="json"

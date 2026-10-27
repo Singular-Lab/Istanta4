@@ -1,6 +1,12 @@
+import Badge from "@/components/Base/Badge";
+import BarraFiltri from "@/components/Base/BarraFiltri";
 import Button from "@/components/Base/Button";
 import FormSelect from "@/components/Base/Form/FormSelect";
 import Lucide from "@/components/Base/Lucide";
+import PageError from "@/components/Base/PageError";
+import Pagina from "@/components/Base/Pagina";
+import Segmenti from "@/components/Base/Segmenti";
+import Sezione from "@/components/Base/Sezione";
 import Skeleton from "@/components/Base/Skeleton";
 import Spinner from "@/components/Base/Spinner";
 import StatusBadge from "@/components/Base/StatusBadge";
@@ -8,11 +14,10 @@ import { PreviewImmaginePdf } from "@/components/PreviewImmaginePdf";
 import axios from "axios";
 import clsx from "clsx";
 import dayjs from "dayjs";
-import { FC, useCallback, useEffect, useMemo, useState } from "react";
+import { FC, ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLoaderData } from "react-router-dom";
 import { ServerCall } from "../../../lib/server_call";
 import { AreaResponseDTO, CanaleResponseDTO } from "../../../server/core/dto";
-import PageHeader from "../../components/Base/PageHeader";
 import EmptyState from "../../components/EmptyState";
 import { PERMISSIONS } from "../../constants/permissions";
 import { usePermission } from "../../context/PermissionContext";
@@ -126,23 +131,23 @@ const useInfiniteKitScroll = (kits: KitVolantino[], batchSize: number = BATCH_SI
 
 
 const VolantiniSkeleton: FC = () => (
-    <div className="flex flex-col gap-5">
+    <div aria-hidden="true" className="flex flex-col gap-5">
         <div className="grid grid-cols-2 gap-3">
             {[1, 2].map((i) => (
-                <div key={i} className="p-4 rounded-card bg-theme-1/[0.06]">
-                    <Skeleton height="12px" width="64px" className="mb-2" />
-                    <Skeleton height="32px" className="mt-3" />
+                <div key={i} className="rounded-card bg-slate-50 p-4">
+                    <Skeleton className="mb-2 h-3 w-16" />
+                    <Skeleton className="mt-3 h-8" />
                 </div>
             ))}
         </div>
         <div className="space-y-3">
             {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="p-4 rounded-card border border-dashed border-slate-200/70 bg-white/80 flex items-center gap-4">
-                    <Skeleton height="80px" width="64px" />
+                <div key={i} className="flex items-center gap-4 rounded-card border border-slate-200 bg-white p-4">
+                    <Skeleton className="h-20 w-16 flex-none" />
                     <div className="flex-1 space-y-3">
-                        <Skeleton height="12px" width="60%" />
-                        <Skeleton height="12px" width="40%" />
-                        <Skeleton height="12px" width="50%" />
+                        <Skeleton className="h-3 w-3/5" />
+                        <Skeleton className="h-3 w-2/5" />
+                        <Skeleton className="h-3 w-1/2" />
                     </div>
                 </div>
             ))}
@@ -184,77 +189,80 @@ const KitCard: FC<{ kit: KitVolantino; showValidita?: boolean, routeClickable?: 
 
     return (
         <>
-            <div className="relative p-4 rounded-card border border-dashed border-slate-200/70 bg-white/90 backdrop-blur-sm shadow-card">
+            <div className="relative rounded-card border border-slate-200 bg-white p-4">
                 <div className="flex gap-4">
                     <div className="relative shrink-0">
                         {hasPreview ? (
                             <button
                                 type="button"
-                                className="group/preview w-20 h-24 rounded-card overflow-hidden border border-theme-1/20 bg-slate-50 relative focus-visible:outline focus-visible:outline-theme-1/40"
+                                aria-label={`Anteprima di ${kit.titolo}`}
+                                className="group/preview relative h-24 w-20 overflow-hidden rounded-card border border-theme-1/20 bg-slate-50 focus-visible:outline focus-visible:outline-theme-1/40"
                                 onClick={() => setIsPreviewOpen(true)}
                             >
                                 <img
                                     src={previewUrl}
                                     alt={kit.titolo}
-                                    className="w-full h-full object-cover"
+                                    className="h-full w-full object-cover"
                                     loading="lazy"
                                 />
-                                <span className="absolute inset-0 bg-slate-900/30 opacity-0 group-hover/preview:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-medium">
-                                    <Lucide icon="Eye" className="w-4 h-4 mr-1" /> Anteprima
+                                <span className="absolute inset-0 flex items-center justify-center bg-slate-900/30 text-xs font-medium text-white opacity-0 transition-opacity group-hover/preview:opacity-100">
+                                    <Lucide icon="Eye" aria-hidden="true" className="mr-1 h-4 w-4" /> Anteprima
                                 </span>
                             </button>
                         ) : (
-                            <div className="w-20 h-24 rounded-card border border-dashed border-slate-300 flex items-center justify-center bg-slate-50">
-                                <Lucide icon="FileText" className="w-5 h-5 text-slate-400" />
+                            <div className="flex h-24 w-20 items-center justify-center rounded-card border border-dashed border-slate-300 bg-slate-50">
+                                <Lucide icon="FileText" aria-hidden="true" className="h-5 w-5 text-slate-400" />
                             </div>
                         )}
                     </div>
-                    <div className="flex-1 min-w-0">
+                    <div className="min-w-0 flex-1">
                         <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
-                                {routeClickable && canAccessPromo ? (
-                                    <Link
-                                        className="block text-sm font-semibold text-slate-800 truncate"
-                                        to={kit.id_promo ? `/promozioni/in-corso/dettagli/${kit.id_promo}/kits/${kit.id}` : "#"}
-                                    >
-                                        {kit.titolo}
-                                    </Link>
-                                ) : (
-                                    <p className="text-sm font-semibold text-slate-800 truncate">{kit.titolo}</p>
-                                )}
+                                <h3 className="title-card truncate">
+                                    {routeClickable && canAccessPromo ? (
+                                        <Link
+                                            className="hover:text-primary"
+                                            to={kit.id_promo ? `/promozioni/in-corso/dettagli/${kit.id_promo}/kits/${kit.id}` : "#"}
+                                        >
+                                            {kit.titolo}
+                                        </Link>
+                                    ) : (
+                                        kit.titolo
+                                    )}
+                                </h3>
                                 {canAccessPromo ? (
                                     <Link
                                         to={`/promozioni/in-corso/dettagli/${kit.id_promo}`}
-                                        className="block text-xs text-theme-1 truncate hover:underline decoration-dotted decoration-theme-1/30"
+                                        className="block truncate text-xs text-theme-1 decoration-theme-1/30 decoration-dotted hover:underline"
                                     >
                                         Promo: {kit.nome_promo}
                                     </Link>
                                 ) : (
-                                    <p className="block text-xs text-slate-500 truncate">Promo: {kit.nome_promo}</p>
+                                    <p className="block truncate text-xs text-slate-500">Promo: {kit.nome_promo}</p>
                                 )}
                                 {(kit.nome_area || kit.nome_canale) && (
-                                    <div className="flex items-center gap-2 mt-1.5">
+                                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
                                         {kit.nome_area && (
-                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-3xs font-medium rounded-full bg-slate-100 text-slate-600 border border-slate-200">
-                                                <Lucide icon="MapPin" className="w-2.5 h-2.5" />
+                                            <Badge variant="secondary" size="sm">
+                                                <Lucide icon="MapPin" aria-hidden="true" className="h-3 w-3" />
                                                 {kit.nome_area}
-                                            </span>
+                                            </Badge>
                                         )}
                                         {kit.nome_canale && (
-                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-3xs font-medium rounded-full bg-theme-1/10 text-theme-1 border border-theme-1/20">
-                                                <Lucide icon="Store" className="w-2.5 h-2.5" />
+                                            <Badge variant="primary" size="sm">
+                                                <Lucide icon="Store" aria-hidden="true" className="h-3 w-3" />
                                                 {kit.nome_canale}
-                                            </span>
+                                            </Badge>
                                         )}
                                     </div>
                                 )}
                             </div>
                             <StatusBadge dominio="kitRuntime" stato={kit.stato_lavorazione?.toUpperCase()} className="shrink-0" />
                         </div>
-                        <div className="flex flex-wrap items-center gap-3 mt-3 text-2xs text-slate-500">
+                        <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500">
                             {showValidita && (kit.validita_dal || kit.validita_al) && (
-                                <span className="inline-flex items-center gap-1 text-theme-1">
-                                    <Lucide icon="Calendar" className="w-3 h-3" />
+                                <span className="inline-flex items-center gap-1 tabular-nums text-theme-1">
+                                    <Lucide icon="Calendar" aria-hidden="true" className="h-3 w-3" />
                                     {kit.validita_dal && kit.validita_al ? (
                                         <>
                                             {formatData(kit.validita_dal)} - {formatData(kit.validita_al)}
@@ -268,52 +276,37 @@ const KitCard: FC<{ kit: KitVolantino; showValidita?: boolean, routeClickable?: 
                             )}
                             {file?.mime && (
                                 <span className="inline-flex items-center gap-1">
-                                    <Lucide icon="File" className="w-3 h-3" />
+                                    <Lucide icon="File" aria-hidden="true" className="h-3 w-3" />
                                     {file.mime}
                                 </span>
                             )}
                             {file?.pages && file.pages > 0 && (
                                 <span className="inline-flex items-center gap-1">
-                                    <Lucide icon="Book" className="w-3 h-3" />
+                                    <Lucide icon="Book" aria-hidden="true" className="h-3 w-3" />
                                     {file.pages} pp
                                 </span>
                             )}
                         </div>
-                        <div className="flex items-center justify-end mt-4">
-                            <div className="flex items-center gap-2">
-                                <button
-                                    type="button"
-                                    className={clsx(
-                                        "inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-full border",
-                                        canDownload && !isDownloading
-                                            ? "text-success border-success/30 bg-success/10 hover:bg-success/20"
-                                            : "text-slate-400 border-slate-200 cursor-not-allowed"
-                                    )}
-                                    onClick={handleDownload}
-                                    disabled={!canDownload || isDownloading}
-                                >
-                                    {isDownloading ? (
-                                        <Spinner size="sm" decorativo className="h-3.5 w-3.5 text-current" />
-                                    ) : (
-                                        <Lucide icon="Download" aria-hidden="true" className="w-3.5 h-3.5" />
-                                    )}
-                                    {isDownloading ? "Download..." : "Scarica"}
-                                </button>
-                                <button
-                                    type="button"
-                                    className={clsx(
-                                        "inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-full border",
-                                        hasPreview
-                                            ? "text-theme-1 border-theme-1/30 bg-theme-1/10 hover:bg-theme-1/20"
-                                            : "text-slate-400 border-slate-200 cursor-not-allowed"
-                                    )}
-                                    onClick={() => hasPreview && setIsPreviewOpen(true)}
-                                    disabled={!hasPreview}
-                                >
-                                    <Lucide icon="Focus" className="w-3.5 h-3.5" />
-                                    Anteprima
-                                </button>
-                            </div>
+                        <div className="mt-4 flex items-center justify-end gap-2">
+                            <Button
+                                variant="outline-secondary"
+                                size="sm"
+                                onClick={handleDownload}
+                                disabled={!canDownload || isDownloading}
+                                loading={isDownloading}
+                            >
+                                {!isDownloading && <Lucide icon="Download" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />}
+                                Scarica
+                            </Button>
+                            <Button
+                                variant="outline-secondary"
+                                size="sm"
+                                onClick={() => hasPreview && setIsPreviewOpen(true)}
+                                disabled={!hasPreview}
+                            >
+                                <Lucide icon="Focus" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                                Anteprima
+                            </Button>
                         </div>
                     </div>
                 </div>
@@ -326,6 +319,37 @@ const KitCard: FC<{ kit: KitVolantino; showValidita?: boolean, routeClickable?: 
                 />
             )}
         </>
+    );
+};
+
+const FILTRO_VUOTO: CardFilter = { id_area: "", id_canale: "" };
+
+// Elenco dei kit con caricamento progressivo, oppure lo stato vuoto
+const ElencoKit: FC<{
+    kits: KitVolantino[];
+    showValidita?: boolean;
+    vuoto: ReactNode;
+}> = ({ kits, showValidita, vuoto }) => {
+    const { items, hasMore, registerSentinel } = useInfiniteKitScroll(kits);
+
+    return (
+        <div className="min-h-[18rem] flex-1">
+            {kits.length > 0 ? (
+                <div className="max-h-[32rem] space-y-3 overflow-y-auto pb-1 pr-1">
+                    {items.map((kit) => (
+                        <KitCard key={kit.id} kit={kit} showValidita={showValidita} routeClickable />
+                    ))}
+                    <div ref={registerSentinel} />
+                    {hasMore && (
+                        <div role="status" className="flex items-center justify-center gap-2 py-4 text-xs text-slate-500">
+                            <Spinner size="sm" decorativo /> Caricamento automatico…
+                        </div>
+                    )}
+                </div>
+            ) : (
+                vuoto
+            )}
+        </div>
     );
 };
 
@@ -348,17 +372,20 @@ const VolantiniInCorsoContent: FC<VolantiniInCorsoContentProps> = ({
 }) => {
     const [quickFilter, setQuickFilter] = useState<"all" | "expiring">("all");
 
-    const filteredKits = useMemo<KitVolantino[]>(() => {
-        if (quickFilter === "expiring") {
-            return data.kit.filter((kit: KitVolantino) => kit.validita_al && dayjs(kit.validita_al).diff(dayjs(), "day") <= 7);
-        }
-        return data.kit;
-    }, [data.kit, quickFilter]);
+    const kitInScadenza = useMemo<KitVolantino[]>(
+        () => data.kit.filter((kit: KitVolantino) => kit.validita_al && dayjs(kit.validita_al).diff(dayjs(), "day") <= 7),
+        [data.kit]
+    );
+    const filteredKits = quickFilter === "expiring" ? kitInScadenza : data.kit;
+    const filtriAttivi = Boolean(cardFilter.id_area || cardFilter.id_canale) || quickFilter !== "all";
 
-    const { items, hasMore, registerSentinel } = useInfiniteKitScroll(filteredKits);
+    const azzeraFiltri = () => {
+        setQuickFilter("all");
+        if (cardFilter.id_area || cardFilter.id_canale) onFilterChange(FILTRO_VUOTO);
+    };
 
     return (
-        <div className={clsx("flex flex-col gap-5 h-full transition-opacity duration-150", isLoading && "opacity-50 pointer-events-none")}>
+        <div className={clsx("flex h-full flex-col transition-opacity duration-150", isLoading && "pointer-events-none opacity-50")}>
             <CardFilterSelect
                 aree={aree}
                 canali={canali}
@@ -366,58 +393,38 @@ const VolantiniInCorsoContent: FC<VolantiniInCorsoContentProps> = ({
                 onFilterChange={onFilterChange}
                 isLoading={isLoading}
                 cardId="in-corso"
+                filtriRapidi={
+                    <Segmenti
+                        etichetta="Filtri rapidi"
+                        valore={quickFilter}
+                        onChange={setQuickFilter}
+                        opzioni={[
+                            { valore: "all", etichetta: "Tutti", conteggio: data.kit.length },
+                            { valore: "expiring", etichetta: "In scadenza", conteggio: kitInScadenza.length },
+                        ]}
+                    />
+                }
             />
 
-            <div className="flex flex-wrap items-center gap-3 p-3 rounded-card border border-dashed border-slate-200/80 bg-white/80">
-                <div>
-                    <p className="text-2xs uppercase tracking-wide text-slate-400">Filtri rapidi</p>
-                    <p className="text-sm font-semibold text-slate-700">{quickFilter === "all" ? "Tutti i volantini" : "Solo in scadenza"}</p>
-                </div>
-                <div className="ml-auto flex items-center gap-2">
-                    <button
-                        type="button"
-                        className={clsx(
-                            "px-4 py-2 rounded-card text-xs font-semibold border transition",
-                            quickFilter === "all"
-                                ? "bg-theme-1/10 text-theme-1 border-theme-1/30 shadow-sm"
-                                : "text-slate-500 border-transparent hover:border-slate-200"
-                        )}
-                        onClick={() => setQuickFilter("all")}
-                    >
-                        Tutti
-                    </button>
-                    <button
-                        type="button"
-                        className={clsx(
-                            "px-4 py-2 rounded-card text-xs font-semibold border transition",
-                            quickFilter === "expiring"
-                                ? "bg-warning/20 text-warning border-warning/30 shadow-sm"
-                                : "text-slate-500 border-transparent hover:border-slate-200"
-                        )}
-                        onClick={() => setQuickFilter("expiring")}
-                    >
-                        In scadenza
-                    </button>
-                </div>
-            </div>
-
-            <div className="flex-1 min-h-[18rem]">
-                {filteredKits.length > 0 ? (
-                    <div className="space-y-3 pr-1 overflow-y-auto max-h-[32rem] pb-1">
-                        {items.map((kit) => (
-                            <KitCard key={kit.id} kit={kit} showValidita routeClickable />
-                        ))}
-                        <div ref={registerSentinel} />
-                        {hasMore && (
-                            <div role="status" className="flex items-center justify-center gap-2 py-4 text-xs text-slate-400">
-                                <Spinner size="sm" decorativo /> Caricamento automatico...
-                            </div>
-                        )}
-                    </div>
-                ) : (
-                    <EmptyState icon="FolderOpen" title="Nessun volantino attivo" description="Modifica i filtri per vedere altri risultati" />
-                )}
-            </div>
+            <ElencoKit
+                kits={filteredKits}
+                showValidita
+                vuoto={
+                    filtriAttivi ? (
+                        <EmptyState
+                            compatta
+                            icon="SearchX"
+                            title="Nessun volantino per questi filtri"
+                            description="Modifica i filtri per vedere altri risultati."
+                            buttonText="Azzera filtri"
+                            buttonIcon="X"
+                            onButtonClick={azzeraFiltri}
+                        />
+                    ) : (
+                        <EmptyState compatta icon="FolderOpen" title="Nessun volantino attivo" description="Non ci sono volantini in validità." />
+                    )
+                }
+            />
         </div>
     );
 };
@@ -441,33 +448,24 @@ const VolantiniInLavorazioneContent: FC<VolantiniInLavorazioneContentProps> = ({
 }) => {
     const [quickFilter, setQuickFilter] = useState<"all" | "review" | "error">("all");
 
-    const filteredKits = useMemo<KitVolantino[]>(() => {
-        switch (quickFilter) {
-            case "review":
-                return data.kit.filter((kit: KitVolantino) => kit.stato_lavorazione === "IN_REVISIONE");
-            case "error":
-                return data.kit.filter((kit: KitVolantino) => kit.stato_lavorazione?.includes("ERRORI"));
-            default:
-                return data.kit;
-        }
-    }, [data.kit, quickFilter]);
+    const kitInRevisione = useMemo<KitVolantino[]>(
+        () => data.kit.filter((kit: KitVolantino) => kit.stato_lavorazione === "IN_REVISIONE"),
+        [data.kit]
+    );
+    const kitConErrori = useMemo<KitVolantino[]>(
+        () => data.kit.filter((kit: KitVolantino) => kit.stato_lavorazione?.includes("ERRORI")),
+        [data.kit]
+    );
+    const filteredKits = quickFilter === "review" ? kitInRevisione : quickFilter === "error" ? kitConErrori : data.kit;
+    const filtriAttivi = Boolean(cardFilter.id_area || cardFilter.id_canale) || quickFilter !== "all";
 
-    const { items, hasMore, registerSentinel } = useInfiniteKitScroll(filteredKits);
-    const getFilterClasses = (value: typeof quickFilter) => {
-        if (value !== quickFilter) {
-            return "text-slate-500 border-transparent hover:border-slate-200";
-        }
-        if (value === "error") {
-            return "bg-danger/20 text-danger border-danger/30 shadow-sm";
-        }
-        if (value === "review") {
-            return "bg-info/15 text-info border-info/25 shadow-sm";
-        }
-        return "bg-theme-1/10 text-theme-1 border-theme-1/30 shadow-sm";
+    const azzeraFiltri = () => {
+        setQuickFilter("all");
+        if (cardFilter.id_area || cardFilter.id_canale) onFilterChange(FILTRO_VUOTO);
     };
 
     return (
-        <div className={clsx("flex flex-col gap-5 h-full transition-opacity duration-150", isLoading && "opacity-50 pointer-events-none")}>
+        <div className={clsx("flex h-full flex-col transition-opacity duration-150", isLoading && "pointer-events-none opacity-50")}>
             <CardFilterSelect
                 aree={aree}
                 canali={canali}
@@ -475,55 +473,38 @@ const VolantiniInLavorazioneContent: FC<VolantiniInLavorazioneContentProps> = ({
                 onFilterChange={onFilterChange}
                 isLoading={isLoading}
                 cardId="in-lavorazione"
+                filtriRapidi={
+                    <Segmenti
+                        etichetta="Stato processo"
+                        valore={quickFilter}
+                        onChange={setQuickFilter}
+                        opzioni={[
+                            { valore: "all", etichetta: "Tutti", conteggio: data.kit.length },
+                            { valore: "review", etichetta: "In revisione", conteggio: kitInRevisione.length },
+                            { valore: "error", etichetta: "Con errori", conteggio: kitConErrori.length },
+                        ]}
+                    />
+                }
             />
 
-            <div className="flex flex-wrap items-center gap-3 p-3 rounded-card border border-dashed border-slate-200/80 bg-white/80">
-                <div>
-                    <p className="text-2xs uppercase tracking-wide text-slate-400">Stato processo</p>
-                    <p className="text-sm font-semibold text-slate-700">
-                        {quickFilter === "all" && "Tutti i kit in produzione"}
-                        {quickFilter === "review" && "Solo kit in revisione"}
-                        {quickFilter === "error" && "Kit con errori"}
-                    </p>
-                </div>
-                <div className="ml-auto flex items-center gap-2">
-                    {[
-                        { value: "all", label: "Tutti" },
-                        { value: "review", label: "In revisione" },
-                        { value: "error", label: "Con errori" },
-                    ].map((option) => (
-                        <button
-                            key={option.value}
-                            type="button"
-                            className={clsx(
-                                "px-4 py-2 rounded-card text-xs font-semibold border transition",
-                                getFilterClasses(option.value as typeof quickFilter)
-                            )}
-                            onClick={() => setQuickFilter(option.value as typeof quickFilter)}
-                        >
-                            {option.label}
-                        </button>
-                    ))}
-                </div>
-            </div>
-
-            <div className="flex-1 min-h-[18rem]">
-                {filteredKits.length > 0 ? (
-                    <div className="space-y-3 pr-1 overflow-y-auto max-h-[32rem] pb-1">
-                        {items.map((kit) => (
-                            <KitCard key={kit.id} kit={kit} routeClickable />
-                        ))}
-                        <div ref={registerSentinel} />
-                        {hasMore && (
-                            <div role="status" className="flex items-center justify-center gap-2 py-4 text-xs text-slate-400">
-                                <Spinner size="sm" decorativo /> Caricamento automatico...
-                            </div>
-                        )}
-                    </div>
-                ) : (
-                    <EmptyState icon="Pencil" title="Nessun volantino disponibile" description="Modifica i filtri per vedere altri risultati" />
-                )}
-            </div>
+            <ElencoKit
+                kits={filteredKits}
+                vuoto={
+                    filtriAttivi ? (
+                        <EmptyState
+                            compatta
+                            icon="SearchX"
+                            title="Nessun volantino per questi filtri"
+                            description="Modifica i filtri per vedere altri risultati."
+                            buttonText="Azzera filtri"
+                            buttonIcon="X"
+                            onButtonClick={azzeraFiltri}
+                        />
+                    ) : (
+                        <EmptyState compatta icon="Pencil" title="Nessun volantino in lavorazione" description="Non ci sono volantini in produzione o in revisione." />
+                    )
+                }
+            />
         </div>
     );
 };
@@ -546,10 +527,10 @@ const VolantiniPubblicatiInLavorazioneContent: FC<VolantiniPubblicatiInLavorazio
     filter: cardFilter,
     onFilterChange
 }) => {
-    const { items, hasMore, registerSentinel } = useInfiniteKitScroll(data.kit);
+    const filtriAttivi = Boolean(cardFilter.id_area || cardFilter.id_canale);
 
     return (
-        <div className={clsx("flex flex-col gap-5 h-full transition-opacity duration-150", isLoading && "opacity-50 pointer-events-none")}>
+        <div className={clsx("flex h-full flex-col transition-opacity duration-150", isLoading && "pointer-events-none opacity-50")}>
             <CardFilterSelect
                 aree={aree}
                 canali={canali}
@@ -559,23 +540,24 @@ const VolantiniPubblicatiInLavorazioneContent: FC<VolantiniPubblicatiInLavorazio
                 cardId="pubblicati-in-lavorazione"
             />
 
-            <div className="flex-1 min-h-[18rem]">
-                {data.kit.length > 0 ? (
-                    <div className="space-y-3 pr-1 overflow-y-auto max-h-[32rem] pb-1">
-                        {items.map((kit) => (
-                            <KitCard key={kit.id} kit={kit} routeClickable />
-                        ))}
-                        <div ref={registerSentinel} />
-                        {hasMore && (
-                            <div role="status" className="flex items-center justify-center gap-2 py-4 text-xs text-slate-400">
-                                <Spinner size="sm" decorativo /> Caricamento automatico...
-                            </div>
-                        )}
-                    </div>
-                ) : (
-                    <EmptyState icon="CircleCheck" title="Nessun volantino in attesa" description="Tutti i volantini pubblicati sono già nelle promozioni attive" />
-                )}
-            </div>
+            <ElencoKit
+                kits={data.kit}
+                vuoto={
+                    filtriAttivi ? (
+                        <EmptyState
+                            compatta
+                            icon="SearchX"
+                            title="Nessun volantino per questi filtri"
+                            description="Modifica i filtri per vedere altri risultati."
+                            buttonText="Azzera filtri"
+                            buttonIcon="X"
+                            onButtonClick={() => onFilterChange(FILTRO_VUOTO)}
+                        />
+                    ) : (
+                        <EmptyState compatta icon="CircleCheck" title="Nessun volantino in attesa" description="Tutti i volantini pubblicati sono già nelle promozioni attive." />
+                    )
+                }
+            />
         </div>
     );
 };
@@ -597,55 +579,56 @@ const StoricoVolantiniContent: FC<StoricoVolantiniContentProps> = ({
     filter,
     onFilterChange
 }) => {
-    const { items, hasMore, registerSentinel } = useInfiniteKitScroll(data?.kit || []);
+    const filtriAttivi = Boolean(filter.id_area || filter.id_canale);
 
     return (
-        <div className={clsx("flex flex-col gap-5 h-full transition-opacity duration-150", isLoading && "opacity-50 pointer-events-none")}>
-            <CardFilterSelect
-                aree={aree}
-                canali={canali}
-                filter={filter}
-                onFilterChange={onFilterChange}
-                isLoading={isLoading}
-                cardId="storico"
-            />
+        <div className={clsx("flex h-full flex-col gap-5 transition-opacity duration-150", isLoading && "pointer-events-none opacity-50")}>
+            <div className="flex flex-1 flex-col">
+                <CardFilterSelect
+                    aree={aree}
+                    canali={canali}
+                    filter={filter}
+                    onFilterChange={onFilterChange}
+                    isLoading={isLoading}
+                    cardId="storico"
+                />
 
-            <div className="flex-1 min-h-[18rem]">
-                {data && data.kit.length > 0 ? (
-                    <div className="space-y-3 pr-1 overflow-y-auto max-h-[32rem] pb-1">
-                        {items.map((kit) => (
-                            <KitCard key={kit.id} kit={kit} showValidita routeClickable />
-                        ))}
-                        <div ref={registerSentinel} />
-                        {hasMore && (
-                            <div role="status" className="flex items-center justify-center gap-2 py-4 text-xs text-slate-400">
-                                <Spinner size="sm" decorativo /> Caricamento automatico...
-                            </div>
-                        )}
-                    </div>
-                ) : (
-                    <EmptyState icon="RotateCcwClock" title="Nessun volantino nello storico" description="Lo storico dei volantini apparirà qui" />
-                )}
+                <ElencoKit
+                    kits={data?.kit || []}
+                    showValidita
+                    vuoto={
+                        filtriAttivi ? (
+                            <EmptyState
+                                compatta
+                                icon="SearchX"
+                                title="Nessun volantino per questi filtri"
+                                description="Modifica i filtri per vedere altri risultati."
+                                buttonText="Azzera filtri"
+                                buttonIcon="X"
+                                onButtonClick={() => onFilterChange(FILTRO_VUOTO)}
+                            />
+                        ) : (
+                            <EmptyState compatta icon="RotateCcwClock" title="Nessun volantino nello storico" description="Lo storico dei volantini apparirà qui." />
+                        )
+                    }
+                />
             </div>
 
-            <div className="flex items-center justify-between rounded-card border border-dashed border-slate-200/80 bg-white/70 p-4">
+            <div className="flex flex-col gap-3 rounded-card border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                    <p className="text-sm font-semibold text-slate-700">Consulta lo storico completo</p>
+                    <h3 className="title-card">Consulta lo storico completo</h3>
                     <p className="text-xs text-slate-500">Accedi all'elenco dettagliato di tutti i volantini pubblicati.</p>
                 </div>
-                <Link
-                    to="/storico-volantini"
-                    className="inline-flex items-center gap-2 rounded-full border border-theme-1/30 bg-theme-1/10 px-4 py-2 text-xs font-semibold text-theme-1 hover:bg-theme-1/20"
-                >
+                <Button as={Link} to="/storico-volantini" variant="outline-secondary" size="sm" className="flex-none">
                     Vai al dettaglio
-                    <Lucide icon="ArrowRight" className="h-3.5 w-3.5" />
-                </Link>
+                    <Lucide icon="ArrowRight" aria-hidden="true" className="ml-1.5 h-3.5 w-3.5" />
+                </Button>
             </div>
         </div>
     );
 };
 
-// Componente filtro compatto inline per ogni card
+// Filtri area/canale di ogni card, con gli eventuali filtri rapidi accanto
 interface CardFilterSelectProps {
     aree: AreaResponseDTO[];
     canali: CanaleResponseDTO[];
@@ -653,6 +636,7 @@ interface CardFilterSelectProps {
     onFilterChange: (filter: CardFilter) => void;
     isLoading?: boolean;
     cardId: string;
+    filtriRapidi?: ReactNode;
 }
 
 const CardFilterSelect: FC<CardFilterSelectProps> = ({
@@ -661,65 +645,71 @@ const CardFilterSelect: FC<CardFilterSelectProps> = ({
     filter,
     onFilterChange,
     isLoading,
-    cardId
+    cardId,
+    filtriRapidi
 }) => {
     const hasActiveFilters = filter.id_area || filter.id_canale;
 
     return (
-        <div className="flex flex-wrap items-center gap-3 p-3 rounded-card border border-dashed border-slate-200/80 bg-white/80 mb-4">
-            <div className="flex items-center gap-2">
-                <Lucide icon="Filter" className="w-4 h-4 text-slate-400" />
-                <span className="text-xs text-slate-500">Filtra:</span>
-            </div>
-            <div className="flex-1 flex flex-wrap items-center gap-2">
-                <div className="min-w-[140px]">
-                    <FormSelect
-                        id={`filter-area-${cardId}`}
-                        value={filter.id_area}
-                        onChange={(e) => onFilterChange({ ...filter, id_area: e.target.value })}
+        <BarraFiltri
+            variante="interna"
+            destra={
+                hasActiveFilters && (
+                    <Button
+                        variant="outline-secondary"
+                        size="sm"
+                        onClick={() => onFilterChange(FILTRO_VUOTO)}
                         disabled={isLoading}
-                        className={clsx("text-xs", isLoading && "opacity-50")}
                     >
-                        <option value="">Tutte le aree</option>
-                        {aree.map((area) => (
-                            <option key={area.id} value={area.id}>
-                                {area.nome}
-                            </option>
-                        ))}
-                    </FormSelect>
-                </div>
-                <div className="min-w-[140px]">
-                    <FormSelect
-                        id={`filter-canale-${cardId}`}
-                        value={filter.id_canale}
-                        onChange={(e) => onFilterChange({ ...filter, id_canale: e.target.value })}
-                        disabled={isLoading}
-                        className={clsx("text-xs", isLoading && "opacity-50")}
-                    >
-                        <option value="">Tutti i canali</option>
-                        {canali.map((canale) => (
-                            <option key={canale.id} value={canale.id}>
-                                {canale.nome}
-                            </option>
-                        ))}
-                    </FormSelect>
-                </div>
-            </div>
-            {hasActiveFilters && (
-                <Button
-                    variant="outline-secondary"
-                    size="sm"
-                    onClick={() => onFilterChange({ id_area: "", id_canale: "" })}
-                    disabled={isLoading}
-                    className="ml-auto"
-                >
-                    <Lucide icon="X" className="w-3 h-3 mr-1" />
-                    Reset
-                </Button>
-            )}
-        </div>
+                        <Lucide icon="X" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                        Azzera filtri
+                    </Button>
+                )
+            }
+        >
+            <FormSelect
+                id={`filter-area-${cardId}`}
+                aria-label="Area"
+                formSelectSize="sm"
+                value={filter.id_area}
+                onChange={(e) => onFilterChange({ ...filter, id_area: e.target.value })}
+                disabled={isLoading}
+                className="sm:w-44"
+            >
+                <option value="">Tutte le aree</option>
+                {aree.map((area) => (
+                    <option key={area.id} value={area.id}>
+                        {area.nome}
+                    </option>
+                ))}
+            </FormSelect>
+            <FormSelect
+                id={`filter-canale-${cardId}`}
+                aria-label="Canale"
+                formSelectSize="sm"
+                value={filter.id_canale}
+                onChange={(e) => onFilterChange({ ...filter, id_canale: e.target.value })}
+                disabled={isLoading}
+                className="sm:w-44"
+            >
+                <option value="">Tutti i canali</option>
+                {canali.map((canale) => (
+                    <option key={canale.id} value={canale.id}>
+                        {canale.nome}
+                    </option>
+                ))}
+            </FormSelect>
+            {filtriRapidi}
+        </BarraFiltri>
     );
 };
+
+type IdCard = "inCorso" | "inLavorazione" | "pubblicatiInLavorazione" | "storico";
+
+const MOTIVO_ERRORE = "Il servizio non ha restituito i volantini. Riprova tra qualche istante.";
+
+const TITOLO_PAGINA = "Dashboard";
+const DESCRIZIONE_PAGINA = "Panoramica dei volantini attivi e in lavorazione.";
 
 const Dashboard3: FC<Dashboard3Props> = ({ embedded = false, loaderDataOverride }) => {
     const routeLoaderData = useLoaderData() as Dashboard3LoaderData | null;
@@ -741,6 +731,12 @@ const Dashboard3: FC<Dashboard3Props> = ({ embedded = false, loaderDataOverride 
     const [volantiniInLavorazione, setVolantiniInLavorazione] = useState<VolantiniInLavorazione | null>(null);
     const [volantiniPubblicatiInLavorazione, setVolantiniPubblicatiInLavorazione] = useState<VolantiniPubblicatiInLavorazione | null>(null);
     const [storicoVolantini, setStoricoVolantini] = useState<StoricoVolantini | null>(null);
+
+    // Card il cui ultimo caricamento è fallito: mostrano l'errore invece di dati vuoti o vecchi
+    const [errori, setErrori] = useState<Partial<Record<IdCard, boolean>>>({});
+    const segnaErrore = useCallback((id: IdCard, inErrore: boolean) => {
+        setErrori((prev) => (prev[id] === inErrore ? prev : { ...prev, [id]: inErrore }));
+    }, []);
 
     // Loading states indipendenti per ogni card
     const [loadingInCorso, setLoadingInCorso] = useState(false);
@@ -784,10 +780,16 @@ const Dashboard3: FC<Dashboard3Props> = ({ embedded = false, loaderDataOverride 
             if (areeData.status === "fulfilled") setAree(areeData.value || []);
             if (canaliData.status === "fulfilled") setCanali(canaliData.value || []);
             if (storico.status === "fulfilled") setStoricoVolantini(storico.value);
+            setErrori({
+                inCorso: inCorso.status === "rejected",
+                inLavorazione: inLavorazione.status === "rejected",
+                pubblicatiInLavorazione: pubblicatiInLavorazione.status === "rejected",
+                storico: storico.status === "rejected",
+            });
 
-            const errori = risultati.filter((r): r is PromiseRejectedResult => r.status === "rejected");
-            if (errori.length > 0) {
-                console.error("Errore durante il caricamento iniziale:", errori.map((e) => e.reason));
+            const rifiutati = risultati.filter((r): r is PromiseRejectedResult => r.status === "rejected");
+            if (rifiutati.length > 0) {
+                console.error("Errore durante il caricamento iniziale:", rifiutati.map((e) => e.reason));
                 showNotification("Alcuni dati della dashboard non sono stati caricati. Riprova più tardi.", { variant: "error" });
             }
             setInitialLoading(false);
@@ -802,48 +804,56 @@ const Dashboard3: FC<Dashboard3Props> = ({ embedded = false, loaderDataOverride 
         try {
             const data = await ServerCall.get<VolantiniInCorso>(`/dashboard/volantini-in-corso${buildQueryString(filter)}`);
             setVolantiniInCorso(data);
+            segnaErrore("inCorso", false);
         } catch (error) {
             console.error("Errore caricamento volantini in corso:", error);
+            segnaErrore("inCorso", true);
         } finally {
             setLoadingInCorso(false);
         }
-    }, [buildQueryString]);
+    }, [buildQueryString, segnaErrore]);
 
     const fetchVolantiniInLavorazione = useCallback(async (filter: CardFilter) => {
         setLoadingInLavorazione(true);
         try {
             const data = await ServerCall.get<VolantiniInLavorazione>(`/dashboard/volantini-in-lavorazione${buildQueryString(filter)}`);
             setVolantiniInLavorazione(data);
+            segnaErrore("inLavorazione", false);
         } catch (error) {
             console.error("Errore caricamento volantini in lavorazione:", error);
+            segnaErrore("inLavorazione", true);
         } finally {
             setLoadingInLavorazione(false);
         }
-    }, [buildQueryString]);
+    }, [buildQueryString, segnaErrore]);
 
     const fetchVolantiniPubblicatiInLavorazione = useCallback(async (filter: CardFilter) => {
         setLoadingPubblicatiInLavorazione(true);
         try {
             const data = await ServerCall.get<VolantiniPubblicatiInLavorazione>(`/dashboard/volantini-pubblicati-in-lavorazione${buildQueryString(filter)}`);
             setVolantiniPubblicatiInLavorazione(data);
+            segnaErrore("pubblicatiInLavorazione", false);
         } catch (error) {
             console.error("Errore caricamento volantini pubblicati in lavorazione:", error);
+            segnaErrore("pubblicatiInLavorazione", true);
         } finally {
             setLoadingPubblicatiInLavorazione(false);
         }
-    }, [buildQueryString]);
+    }, [buildQueryString, segnaErrore]);
 
     const fetchStoricoVolantini = useCallback(async (filter: CardFilter) => {
         setLoadingStorico(true);
         try {
             const data = await ServerCall.get<StoricoVolantini>(`/dashboard/storico-volantini${buildQueryString(filter, { limit: "10" })}`);
             setStoricoVolantini(data);
+            segnaErrore("storico", false);
         } catch (error) {
             console.error("Errore caricamento storico volantini:", error);
+            segnaErrore("storico", true);
         } finally {
             setLoadingStorico(false);
         }
-    }, [buildQueryString]);
+    }, [buildQueryString, segnaErrore]);
 
     // Handler per cambio filtri per ogni card
     const handleFilterInCorsoChange = useCallback((filter: CardFilter) => {
@@ -866,123 +876,133 @@ const Dashboard3: FC<Dashboard3Props> = ({ embedded = false, loaderDataOverride 
         fetchStoricoVolantini(filter);
     }, [fetchStoricoVolantini]);
 
+    // Incorporata (Superadmin) la dashboard non ha intestazione propria
+    const contenitore = (contenuto: ReactNode) =>
+        embedded ? (
+            contenuto
+        ) : (
+            <Pagina titolo={TITOLO_PAGINA} descrizione={DESCRIZIONE_PAGINA}>
+                {contenuto}
+            </Pagina>
+        );
+
+    const errore = (onRiprova: () => void, inCaricamento: boolean) => (
+        <PageError
+            compatta
+            titolo="Volantini non caricati"
+            motivo={MOTIVO_ERRORE}
+            onRiprova={inCaricamento ? undefined : onRiprova}
+        />
+    );
+
     if (initialLoading) {
-        return (
-            <>
-                {!embedded && (
-                    <PageHeader title="Dashboard" description="Panoramica dei volantini attivi e in lavorazione." />
-                )}
-                <div className="grid grid-cols-12 gap-5 mt-5">
-                    {[1, 2, 3, 4].map((i) => (
-                        <div key={i} className="flex flex-col col-span-12 sm:col-span-6 p-5 box box--stacked">
-                            <VolantiniSkeleton />
-                        </div>
-                    ))}
-                </div>
-            </>
+        return contenitore(
+            <div role="status" className="grid grid-cols-12 gap-6">
+                <span className="sr-only">Caricamento dei volantini…</span>
+                {[1, 2, 3, 4].map((i) => (
+                    <div key={i} className="col-span-12 box box--stacked p-5 xl:col-span-6">
+                        <VolantiniSkeleton />
+                    </div>
+                ))}
+            </div>
         );
     }
 
-    return (
-        <>
-            {!embedded && (
-                <PageHeader title="Dashboard" description="Panoramica dei volantini attivi e in lavorazione." />
-            )}
+    return contenitore(
+        <div className="grid grid-cols-12 gap-6">
+            <Sezione
+                className="col-span-12 xl:col-span-6"
+                icona="BookOpen"
+                titolo="Volantini in validità"
+                descrizione={
+                    <>
+                        Panoramica dei volantini pubblicati
+                        <span className="block text-xs text-slate-400">Aggiornato {formatData(new Date())}</span>
+                    </>
+                }
+            >
+                {errori.inCorso ? (
+                    errore(() => fetchVolantiniInCorso(filterInCorso), loadingInCorso)
+                ) : volantiniInCorso ? (
+                    <VolantiniInCorsoContent
+                        data={volantiniInCorso}
+                        isLoading={loadingInCorso}
+                        aree={aree}
+                        canali={canali}
+                        filter={filterInCorso}
+                        onFilterChange={handleFilterInCorsoChange}
+                    />
+                ) : (
+                    <VolantiniSkeleton />
+                )}
+            </Sezione>
 
-            <div className="grid grid-cols-12 gap-5 mt-5">
-                <div className="flex flex-col col-span-12 sm:col-span-6 p-5 box box--stacked">
-                    <div className="flex flex-col gap-1 mb-5">
-                        <div className="flex items-center gap-3">
-                            <div className="flex items-center justify-center w-12 h-12 rounded-full bg-primary/10">
-                                <Lucide icon="BookOpen" className="w-6 h-6 text-primary" />
-                            </div>
-                            <div>
-                                <h2 className="title-card">Volantini in validità</h2>
-                                <div className="text-slate-500 text-sm">Panoramica dei volantini pubblicati</div>
-                            </div>
-                        </div>
-                        <div className="text-2xs text-slate-400 pl-14">Aggiornato {formatData(new Date())}</div>
-                    </div>
-                    {volantiniInCorso ? (
-                        <VolantiniInCorsoContent
-                            data={volantiniInCorso}
-                            isLoading={loadingInCorso}
-                            aree={aree}
-                            canali={canali}
-                            filter={filterInCorso}
-                            onFilterChange={handleFilterInCorsoChange}
-                        />
-                    ) : (
-                        <VolantiniSkeleton />
-                    )}
-                </div>
+            <Sezione
+                className="col-span-12 xl:col-span-6"
+                icona="CircleCheck"
+                titolo="Prossimi volantini"
+                descrizione={
+                    <>
+                        Pubblicati ma in attesa della promo ad entrare in validità
+                        <span className="block text-xs text-slate-400">Pronti per la pubblicazione</span>
+                    </>
+                }
+            >
+                {errori.pubblicatiInLavorazione ? (
+                    errore(
+                        () => fetchVolantiniPubblicatiInLavorazione(filterPubblicatiInLavorazione),
+                        loadingPubblicatiInLavorazione
+                    )
+                ) : volantiniPubblicatiInLavorazione ? (
+                    <VolantiniPubblicatiInLavorazioneContent
+                        data={volantiniPubblicatiInLavorazione}
+                        isLoading={loadingPubblicatiInLavorazione}
+                        aree={aree}
+                        canali={canali}
+                        filter={filterPubblicatiInLavorazione}
+                        onFilterChange={handleFilterPubblicatiInLavorazioneChange}
+                    />
+                ) : (
+                    <VolantiniSkeleton />
+                )}
+            </Sezione>
 
-                <div className="flex flex-col col-span-12 sm:col-span-6 p-5 box box--stacked">
-                    <div className="flex flex-col gap-1 mb-5">
-                        <div className="flex items-center gap-3">
-                            <div className="flex items-center justify-center w-12 h-12 rounded-full bg-success/10">
-                                <Lucide icon="CircleCheck" className="w-6 h-6 text-success" />
-                            </div>
-                            <div>
-                                <h2 className="title-card">Prossimi volantini</h2>
-                                <div className="text-slate-500 text-sm">Pubblicati ma in attesa della promo ad entrare in validità</div>
-                            </div>
-                        </div>
-                        <div className="text-2xs text-slate-400 pl-14">Pronti per la pubblicazione</div>
-                    </div>
-                    {volantiniPubblicatiInLavorazione ? (
-                        <VolantiniPubblicatiInLavorazioneContent
-                            data={volantiniPubblicatiInLavorazione}
-                            isLoading={loadingPubblicatiInLavorazione}
-                            aree={aree}
-                            canali={canali}
-                            filter={filterPubblicatiInLavorazione}
-                            onFilterChange={handleFilterPubblicatiInLavorazioneChange}
-                        />
-                    ) : (
-                        <VolantiniSkeleton />
-                    )}
-                </div>
-                <div className="flex flex-col col-span-12 sm:col-span-6 p-5 box box--stacked">
-                    <div className="flex flex-col gap-1 mb-5">
-                        <div className="flex items-center gap-3">
-                            <div className="flex items-center justify-center w-12 h-12 rounded-full bg-warning/10">
-                                <Lucide icon="Pencil" className="w-6 h-6 text-warning" />
-                            </div>
-                            <div>
-                                <h2 className="title-card">Volantini in Lavorazione</h2>
-                                <div className="text-slate-500 text-sm">Volantini in produzione e revisioni aperte</div>
-                            </div>
-                        </div>
-                        <div className="text-2xs text-slate-400 pl-14">Workflow creativo in tempo reale</div>
-                    </div>
-                    {volantiniInLavorazione ? (
-                        <VolantiniInLavorazioneContent
-                            data={volantiniInLavorazione}
-                            isLoading={loadingInLavorazione}
-                            aree={aree}
-                            canali={canali}
-                            filter={filterInLavorazione}
-                            onFilterChange={handleFilterInLavorazioneChange}
-                        />
-                    ) : (
-                        <VolantiniSkeleton />
-                    )}
-                </div>
+            <Sezione
+                className="col-span-12 xl:col-span-6"
+                icona="Pencil"
+                titolo="Volantini in lavorazione"
+                descrizione={
+                    <>
+                        Volantini in produzione e revisioni aperte
+                        <span className="block text-xs text-slate-400">Workflow creativo in tempo reale</span>
+                    </>
+                }
+            >
+                {errori.inLavorazione ? (
+                    errore(() => fetchVolantiniInLavorazione(filterInLavorazione), loadingInLavorazione)
+                ) : volantiniInLavorazione ? (
+                    <VolantiniInLavorazioneContent
+                        data={volantiniInLavorazione}
+                        isLoading={loadingInLavorazione}
+                        aree={aree}
+                        canali={canali}
+                        filter={filterInLavorazione}
+                        onFilterChange={handleFilterInLavorazioneChange}
+                    />
+                ) : (
+                    <VolantiniSkeleton />
+                )}
+            </Sezione>
 
-
-                <div className="flex flex-col col-span-12 sm:col-span-6 p-5 box box--stacked">
-                    <div className="flex flex-col gap-1 mb-5">
-                        <div className="flex items-center gap-3">
-                            <div className="flex items-center justify-center w-12 h-12 rounded-full bg-info/10">
-                                <Lucide icon="History" className="w-6 h-6 text-info" />
-                            </div>
-                            <div>
-                                <h2 className="title-card">Storico volantini</h2>
-                                <div className="text-slate-500 text-sm">Ultimi 10 volantini pubblicati</div>
-                            </div>
-                        </div>
-                    </div>
+            <Sezione
+                className="col-span-12 xl:col-span-6"
+                icona="History"
+                titolo="Storico volantini"
+                descrizione="Ultimi 10 volantini pubblicati"
+            >
+                {errori.storico ? (
+                    errore(() => fetchStoricoVolantini(filterStorico), loadingStorico)
+                ) : (
                     <StoricoVolantiniContent
                         data={storicoVolantini}
                         isLoading={loadingStorico}
@@ -991,10 +1011,9 @@ const Dashboard3: FC<Dashboard3Props> = ({ embedded = false, loaderDataOverride 
                         filter={filterStorico}
                         onFilterChange={handleFilterStoricoChange}
                     />
-                </div>
-
-            </div>
-        </>
+                )}
+            </Sezione>
+        </div>
     );
 };
 

@@ -104,7 +104,7 @@ const SitemapList: React.FC<{
           sitemapItems
         ) : (
           !compactMode && (
-            <div className="text-center py-8 border-2 border-dashed rounded-lg">
+            <div className="text-center py-8 border-2 border-dashed rounded-card">
               <p className="text-slate-500">Nessuna sitemap creata.</p>
               <p className="text-sm text-slate-400">
                 Inizia aggiungendo la tua prima sitemap.

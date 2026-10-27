@@ -19,18 +19,34 @@ import {
 // getColor legge le variabili CSS del tema dal body
 beforeAll(() => {
   document.body.style.setProperty("--color-theme-1", "3 4 94");
-  document.body.style.setProperty("--color-theme-2", "8 145 178");
+  document.body.style.setProperty("--color-theme-2", "12 74 110");
   document.body.style.setProperty("--color-success", "13 148 136");
   document.body.style.setProperty("--color-warning", "245 158 11");
   document.body.style.setProperty("--color-danger", "220 38 38");
 });
 
 describe("palette dei grafici", () => {
-  it("inizia con i due colori del tema, poi la serie fissa", () => {
-    expect(paletteColore(0)).toBe("rgb(3 4 94 / 1)");
-    expect(paletteColore(1)).toBe("rgb(8 145 178 / 1)");
-    expect(paletteColore(2)).toBe("rgb(37 99 235 / 1)");
-    expect(paletteCategorica()).toHaveLength(LUNGHEZZA_PALETTE);
+  it("inizia con il primo colore del tema, poi la serie fissa, e chiude con il secondo", () => {
+    expect(paletteCategorica()).toEqual([
+      "rgb(3 4 94 / 1)",
+      "rgb(8 145 178 / 1)",
+      "rgb(217 119 6 / 1)",
+      "rgb(5 150 105 / 1)",
+      "rgb(124 58 237 / 1)",
+      "rgb(190 18 60 / 1)",
+      "rgb(37 99 235 / 1)",
+      "rgb(101 163 13 / 1)",
+      "rgb(234 88 12 / 1)",
+      "rgb(15 118 110 / 1)",
+      "rgb(147 51 234 / 1)",
+      "rgb(79 70 229 / 1)",
+      "rgb(12 74 110 / 1)",
+    ]);
+    expect(LUNGHEZZA_PALETTE).toBe(13);
+  });
+
+  it("nessun colore si ripete prima che la palette ricominci", () => {
+    expect(new Set(paletteCategorica()).size).toBe(LUNGHEZZA_PALETTE);
   });
 
   it("dopo l'ultimo colore ricomincia dal primo", () => {
@@ -41,7 +57,8 @@ describe("palette dei grafici", () => {
 
   it("applica la trasparenza richiesta", () => {
     expect(paletteColore(0, 0.2)).toBe("rgb(3 4 94 / 0.2)");
-    expect(paletteColore(2, 0.5)).toBe("rgb(37 99 235 / 0.5)");
+    expect(paletteColore(2, 0.5)).toBe("rgb(217 119 6 / 0.5)");
+    expect(paletteColore(LUNGHEZZA_PALETTE - 1, 0.5)).toBe("rgb(12 74 110 / 0.5)");
   });
 });
 

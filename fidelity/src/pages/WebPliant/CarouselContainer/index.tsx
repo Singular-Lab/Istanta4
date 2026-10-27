@@ -24,6 +24,7 @@ import { TIPO_PAGINA } from '../../../../lib/enums';
 import { Link } from 'react-router-dom';
 import dayjs from 'dayjs';
 import LoadingSpinner from '@/components/LoadingSpinner';
+import { CaricamentoPubblico } from '@/pages/WebpliantLayout/StatiPubblici';
 import EmptyState from '@/components/EmptyState';
 
 interface CarouselContainerProps {
@@ -82,7 +83,6 @@ const CarouselContainer: React.FC<CarouselContainerProps> = memo(function Carous
           isEditor
         });
         if (response) {
-          console.log("response", response);
           setFetchedReferenze(response);
         }
       } catch (error) {
@@ -328,7 +328,7 @@ const CarouselContainer: React.FC<CarouselContainerProps> = memo(function Carous
   if (isLoading) {
     return (
         <div className="w-full h-96 flex justify-center items-center">
-            <LoadingSpinner />
+            {isEditor ? <LoadingSpinner /> : <CaricamentoPubblico />}
         </div>
     )
   }
@@ -372,7 +372,8 @@ const CarouselContainer: React.FC<CarouselContainerProps> = memo(function Carous
             return (
               <div
                 className={clsx(
-                  'jost text-center text-gray-600 dark:text-gray-400 mb-4',
+                  'jost text-center mb-4',
+                  styleWp["wp-text-secondary"],
                   className
                 )}
               >
@@ -394,7 +395,6 @@ const CarouselContainer: React.FC<CarouselContainerProps> = memo(function Carous
           <TabGroup
             selectedIndex={currentIndex}
             onChange={(index) => {
-              console.log('Selected tab index:', index);
               handleChangeTab(tabs[index])
             }}
           >

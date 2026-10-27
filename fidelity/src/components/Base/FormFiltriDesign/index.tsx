@@ -71,13 +71,13 @@ const FilterForm = <T extends FieldValues>({
                     <div className="flex justify-between items-center mb-4">
                         <Tab.List
                             variant="boxed-tabs"
-                            className="flex-col sm:flex-row sm:w-auto mr-auto bg-white dark:bg-darkmode-600 box rounded-[0.6rem] border-slate-200"
+                            className="flex-col sm:flex-row sm:w-auto mr-auto bg-white dark:bg-darkmode-600 box rounded-card border-slate-200"
                         >
                             {fields.map((field, index) => (
                                 <Tab key={index}>
                                     <Tab.Button
                                         type="button"
-                                        className="w-full xl:w-40 py-2.5 text-slate-500 whitespace-nowrap rounded-[0.6rem] flex items-center justify-center text-[0.94rem]"
+                                        className="w-full xl:w-40 py-2.5 text-slate-500 whitespace-nowrap rounded-control flex items-center justify-center text-sm"
                                         as="button"
                                     >
                                         {`Filtro ${index + 1}`}

@@ -1,20 +1,24 @@
 import dayjs from "dayjs";
+import "dayjs/locale/it";
+import relativeTime from "dayjs/plugin/relativeTime";
+
+// Solo il metodo from(): la lingua resta quella globale, l'italiano si sceglie per singola data
+dayjs.extend(relativeTime);
 
 /** Testo mostrato al posto di un valore mancante, in tutte le pagine. */
 export const VALORE_ASSENTE = "N/D";
 
 type DataIngresso = string | number | Date | null | undefined;
 
-const formatta = (data: DataIngresso, formato: string) => {
+const leggiData = (data: DataIngresso) => {
   if (data === null || data === undefined || data === "") {
-    return VALORE_ASSENTE;
+    return null;
   }
   const giorno = dayjs(data);
-  if (!giorno.isValid() || traboccaData(data, giorno)) {
-    return VALORE_ASSENTE;
-  }
-  return giorno.format(formato);
+  return !giorno.isValid() || traboccaData(data, giorno) ? null : giorno;
 };
+
+const formatta = (data: DataIngresso, formato: string) => leggiData(data)?.format(formato) ?? VALORE_ASSENTE;
 
 const ISO_LOCALE = /^(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}):(\d{2}))?/;
 const FUSO_ORARIO = /(?:Z|[+-]\d{2}:?\d{2})$/i;
@@ -45,6 +49,35 @@ export const formatDataOra = (data: DataIngresso) => formatta(data, "DD/MM/YYYY 
 
 // Data e ora per testi che la introducono con "il": "03/09/2026 alle 10:30"
 export const formatDataOraEstesa = (data: DataIngresso) => formatta(data, "DD/MM/YYYY [alle] HH:mm");
+
+// Data e ora con i secondi, per log ed eventi ravvicinati
+export const formatDataOraSecondi = (data: DataIngresso) => formatta(data, "DD/MM/YYYY HH:mm:ss");
+
+/**
+ * Distanza dalla data in italiano ("3 ore fa", "tra 2 giorni"). Va affiancata alla data
+ * completa, per esempio nel title: da sola non dice quando è successo.
+ */
+export const formatRelativo = (data: DataIngresso, rispettoA: DataIngresso = new Date()) => {
+  const giorno = leggiData(data);
+  const riferimento = leggiData(rispettoA);
+  return giorno && riferimento ? giorno.locale("it").from(riferimento) : VALORE_ASSENTE;
+};
+
+/** Numero con il separatore delle migliaia italiano; `decimali` fissa le cifre dopo la virgola. */
+export const formatNumero = (valore: number | string | null | undefined, decimali?: number) => {
+  if (valore === null || valore === undefined || valore === "") {
+    return VALORE_ASSENTE;
+  }
+  const numero = Number(valore);
+  if (!Number.isFinite(numero)) {
+    return VALORE_ASSENTE;
+  }
+  // useGrouping: true raggruppa anche le migliaia ("1.234"), che l'italiano altrimenti lascia unite
+  return new Intl.NumberFormat("it-IT", {
+    useGrouping: true,
+    ...(decimali === undefined ? {} : { minimumFractionDigits: decimali, maximumFractionDigits: decimali }),
+  }).format(numero);
+};
 
 /** Il valore stesso, oppure "N/D" se manca o è una stringa vuota. */
 export const valoreOAssente = (valore: string | number | null | undefined) =>

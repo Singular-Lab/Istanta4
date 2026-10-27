@@ -1,97 +1,40 @@
-import Lucide from "@/components/Base/Lucide";
-import dayjs from "dayjs";
-import "dayjs/locale/it";
+import Sezione from "@/components/Base/Sezione";
+import { formatDataOraEstesa, formatNumero } from "@/utils/format";
 import { FC } from "react";
 import { KitInfoProps } from "../types";
-
-dayjs.locale("it");
 
 /**
  * KitInfo - Pannello con informazioni dettagliate del kit.
  * Mostra ID, codici, quantità e date.
  */
+type Riga = { etichetta: string; valore: string; titolo?: string; mono?: boolean };
+
 const KitInfo: FC<KitInfoProps> = ({ lavorazione }) => {
+  const righe = ([
+    { etichetta: "ID kit", valore: `${lavorazione.guidId.slice(0, 8)}…`, titolo: lavorazione.guidId, mono: true },
+    lavorazione.codiceArea ? { etichetta: "Codice area", valore: lavorazione.codiceArea } : null,
+    lavorazione.codiceCanale ? { etichetta: "Codice canale", valore: lavorazione.codiceCanale } : null,
+    lavorazione.quantitaCopie ? { etichetta: "Quantità copie", valore: formatNumero(lavorazione.quantitaCopie) } : null,
+    lavorazione.promo.nome ? { etichetta: "Promo", valore: lavorazione.promo.nome, titolo: lavorazione.promo.nome } : null,
+    { etichetta: "Data creazione", valore: formatDataOraEstesa(lavorazione.createdAt) },
+  ] as (Riga | null)[]).filter((riga): riga is Riga => riga !== null);
 
   return (
-    <div className="box box--stacked p-6">
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-5">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-info/10">
-          <Lucide icon="Info" className="h-5 w-5 text-info" />
-        </div>
-        <div>
-          <h3 className="text-base font-semibold text-slate-800">Informazioni Kit</h3>
-          <p className="text-xs text-slate-500">Dettagli configurazione</p>
-        </div>
-      </div>
-
-      {/* Info Rows */}
-      <div className="space-y-3">
-        {/* ID Kit */}
-        <div className="flex items-center justify-between py-2 border-b border-slate-100">
-          <span className="text-sm text-slate-500">ID Kit</span>
-          <span
-            className="text-sm font-mono text-slate-700 truncate max-w-[150px]"
-            title={lavorazione.guidId}
-          >
-            {lavorazione.guidId.slice(0, 8)}...
-          </span>
-        </div>
-
-        {/* Codice Area */}
-        {lavorazione.codiceArea && (
-          <div className="flex items-center justify-between py-2 border-b border-slate-100">
-            <span className="text-sm text-slate-500">Codice Area</span>
-            <span className="text-sm font-semibold text-slate-700">
-              {lavorazione.codiceArea}
-            </span>
-          </div>
-        )}
-
-        {/* Codice Canale */}
-        {lavorazione.codiceCanale && (
-          <div className="flex items-center justify-between py-2 border-b border-slate-100">
-            <span className="text-sm text-slate-500">Codice Canale</span>
-            <span className="text-sm font-semibold text-slate-700">
-              {lavorazione.codiceCanale}
-            </span>
-          </div>
-        )}
-
-        {/* Quantità Copie */}
-        {lavorazione.quantitaCopie && (
-          <div className="flex items-center justify-between py-2 border-b border-slate-100">
-            <span className="text-sm text-slate-500">Quantità Copie</span>
-            <span className="text-sm font-semibold text-slate-700">
-              {lavorazione.quantitaCopie.toLocaleString()}
-            </span>
-          </div>
-        )}
-
-        {/* ID Promo */}
-        {lavorazione.promo.nome && (
-          <div className="flex items-center justify-between py-2 border-b border-slate-100">
-            <span className="text-sm text-slate-500">Promo</span>
-            <span
-              className="text-sm font-mono text-slate-700 truncate max-w-[150px]"
-              title={lavorazione.promo.nome}
+    <Sezione icona="Info" titolo="Informazioni kit" descrizione="Dettagli configurazione">
+      <dl className="divide-y divide-slate-100">
+        {righe.map((riga) => (
+          <div key={riga.etichetta} className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
+            <dt className="text-sm text-slate-500">{riga.etichetta}</dt>
+            <dd
+              title={riga.titolo}
+              className={riga.mono ? "max-w-40 truncate font-mono text-sm text-slate-700" : "max-w-40 truncate text-sm font-semibold text-slate-700"}
             >
-              {lavorazione.promo.nome}
-            </span>
+              {riga.valore}
+            </dd>
           </div>
-        )}
-
-        {/* Data Creazione */}
-        <div className="flex items-center justify-between py-2">
-          <span className="text-sm text-slate-500">Data Creazione</span>
-          <span className="text-sm font-semibold text-slate-700">
-            {lavorazione.createdAt
-              ? dayjs(lavorazione.createdAt).format("DD/MM/YYYY [alle] HH:mm")
-              : "-"}
-          </span>
-        </div>
-      </div>
-    </div>
+        ))}
+      </dl>
+    </Sezione>
   );
 };
 

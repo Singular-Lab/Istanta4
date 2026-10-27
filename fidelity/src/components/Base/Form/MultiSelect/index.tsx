@@ -80,7 +80,7 @@ export default function MultiSelect({
   return (
     <div className="mx-auto w-full">
       {label && (
-        <label className="mb-1 block text-sm font-medium text-gray-700">
+        <label className="mb-1 block text-sm font-medium text-slate-700">
           {label}
         </label>
       )}
@@ -132,7 +132,7 @@ export default function MultiSelect({
           )}
         >
           {filteredOptions?.length === 0 ? (
-            <div className="relative cursor-default select-none py-2 px-3 text-sm text-gray-500">
+            <div className="relative cursor-default select-none py-2 px-3 text-sm text-slate-500">
               Nessun risultato trovato
             </div>
           ) : (

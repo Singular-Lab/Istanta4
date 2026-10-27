@@ -1,10 +1,8 @@
 import Button from "@/components/Base/Button";
-import { FormInput } from "@/components/Base/Form";
-import { Dialog } from "@/components/Base/Headless";
 import Lucide from "@/components/Base/Lucide";
-import PageError from '@/components/Base/PageError';
-import Spinner from '@/components/Base/Spinner';
-import EmptyState from '@/components/EmptyState';
+import Table from "@/components/Base/Table";
+import ConfirmDialog from "@/components/ConfirmDialog";
+import PannelloElenco from "../PannelloElenco";
 import { useNotification } from "@/context/NotificationContext";
 import { useFetchTipiExport } from '@/query/query';
 import { useMutation } from "@tanstack/react-query";
@@ -44,28 +42,14 @@ const PanelTipiExport = forwardRef<PanelTipiExportRefHandle, TipiExportProps>(({
       return response;
     },
     onSuccess: () => {
-      showNotification(
-        <div className="flex flex-row items-center">
-          <Lucide icon="CircleCheck" className="text-success w-8 h-8" />
-          <div className="ml-4 mr-4">
-            <div className="font-bold">Tipo Export eliminato con successo</div>
-          </div>
-        </div>
-      );
+      showNotification("Tipo di export eliminato con successo", { variant: "success" });
       tipiExport.refetch();
       handleChiudiModaleEliminazione();
     },
     onError: (error) => {
       showNotification(
-        <div className="flex flex-row items-center">
-          <Lucide icon="CircleX" className="text-danger w-8 h-8" />
-          <div className="ml-4 mr-4">
-            <div className="font-bold">Errore durante l'eliminazione del Tipo Export</div>
-            <div className="mt-1 text-slate-500">
-              {error instanceof Error ? error.message : "Si è verificato un errore durante l'eliminazione. Riprova più tardi."}
-            </div>
-          </div>
-        </div>
+        `Errore durante l'eliminazione del tipo di export: ${error instanceof Error ? error.message : "riprova più tardi."}`,
+        { variant: "error" }
       );
       tipiExport.refetch();
       handleChiudiModaleEliminazione();
@@ -113,218 +97,79 @@ const PanelTipiExport = forwardRef<PanelTipiExportRefHandle, TipiExportProps>(({
 
   return (
     <>
-      {/* Modale di Eliminazione */}
-      <Dialog
+      {/* Conferma di eliminazione */}
+      <ConfirmDialog
         open={isModaleEliminazioneAperto && selectedTipiExportDaEliminare != undefined}
+        title="Eliminare il tipo di export?"
+        description={<>Il tipo di export <strong>{selectedTipiExportDaEliminare?.nome}</strong> verrà eliminato. Questa operazione non può essere annullata.</>}
+        confirmLabel="Elimina"
+        loading={mutationEliminazioneTipiExport.isPending}
         onClose={handleChiudiModaleEliminazione}
+        onConfirm={handleEliminaTipoExport}
+      />
+
+      {/* La colonna Descrizione mostrava un testo fisso: il tipo di export non ha una descrizione, quindi non c'è */}
+      <PannelloElenco
+        ricerca={searchTerm}
+        onRicerca={setSearchTerm}
+        etichettaRicerca="Cerca tipi di export"
+        placeholderRicerca="Nome o codice"
+        caricamento={tipiExport.isLoading}
+        etichettaCaricamento="Caricamento tipi export…"
+        errore={tipiExport.isError ? {
+          titolo: "Tipi di export non caricati",
+          motivo: (tipiExport.error as Error)?.message || "Non è stato possibile caricare i tipi export.",
+          onRiprova: () => tipiExport.refetch(),
+        } : null}
+        totale={tipiExport.data?.length ?? 0}
+        filtrati={filteredTipiExport?.length ?? 0}
+        vuoto={{
+          icona: "FileDown",
+          titolo: "Nessun tipo export disponibile",
+          descrizione: "Non ci sono tipi di export configurati. Aggiungine uno con Nuovo tipo.",
+        }}
+        onAzzeraFiltri={handleClearFilters}
+        intestazione={
+          <>
+            <Table.Th>Tipo export</Table.Th>
+            <Table.Th>Codice InDesign</Table.Th>
+            <Table.Th className="text-right"><span className="sr-only">Azioni</span></Table.Th>
+          </>
+        }
       >
-        <Dialog.Panel className="p-1">
-          <Dialog.Title className="px-5 pt-5">
-            <h2 className="title-card mr-auto">
-              Elimina tipo export: <span className="font-semibold text-danger">{selectedTipiExportDaEliminare?.nome}</span>
-            </h2>
-          </Dialog.Title>
-          <Dialog.Description className="p-5">
-            Sei sicuro di voler eliminare questo tipo di export? Questa operazione non può essere annullata.
-          </Dialog.Description>
-          <Dialog.Footer className="px-5 py-3 text-right border-t border-slate-200/60 dark:border-darkmode-400">
-            <Button
-              type="button"
-              variant="outline-secondary"
-              onClick={handleChiudiModaleEliminazione}
-              className="w-24 mr-2"
-              disabled={mutationEliminazioneTipiExport.isPending}
-            >
-              Annulla
-            </Button>
-            <Button
-              type="button"
-              variant="danger"
-              onClick={handleEliminaTipoExport}
-              className="min-w-24"
-              loading={mutationEliminazioneTipiExport.isPending}
-            >
-              Elimina
-            </Button>
-          </Dialog.Footer>
-        </Dialog.Panel>
-      </Dialog>
-
-      {/* Contenuto principale */}
-      <div className="grid grid-cols-12 gap-y-7 gap-x-6 mt-3.5">
-        <div className="col-span-12">
-          {/* Header con titolo e statistiche */}
-          <div className="flex flex-col gap-y-7">
-            <div className="flex flex-col">
-              {/* Barra di ricerca */}
-              <div className="flex flex-col p-5 sm:items-center sm:flex-row gap-y-2">
-                <div className="flex-1">
-                  <div className="relative">
-                    <Lucide
-                      icon="Search"
-                      className="absolute inset-y-0 left-0 z-10 w-4 h-4 my-auto ml-3 stroke-[1.3] text-slate-500"
-                    />
-                    <FormInput
-                      type="text"
-                      placeholder="Cerca tipi export per nome o codice..."
-                      className="pl-9 sm:w-80 rounded-[0.5rem]"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                  </div>
-                </div>
-                {searchTerm && (
-                  <div className="flex flex-col sm:flex-row gap-x-3 gap-y-2 sm:ml-auto">
-                    <Button
-                      variant="outline-secondary"
-                      size="sm"
-                      onClick={handleClearFilters}
-                    >
-                      <Lucide icon="X" className="w-4 h-4 mr-2" />
-                      Pulisci ricerca
-                    </Button>
-                  </div>
-                )}
+        {filteredTipiExport?.map((tipo, index) => (
+          <Table.Tr key={tipo.id || index}>
+            <Table.Td className="font-medium text-slate-800">{tipo.nome}</Table.Td>
+            <Table.Td>
+              <span className="rounded-control bg-slate-100 px-2 py-1 font-mono text-sm text-slate-600">
+                {tipo.codice}
+              </span>
+            </Table.Td>
+            <Table.Td className="text-right">
+              <div className="flex items-center justify-end gap-2">
+                <Button
+                  variant="outline-secondary"
+                  size="sm"
+                  onClick={() => handleOpenModifica(tipo)}
+                  aria-label={`Modifica tipo di export ${tipo.nome ?? ""}`.trim()}
+                  title="Modifica"
+                >
+                  <Lucide icon="PenLine" aria-hidden="true" className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  variant="outline-danger"
+                  size="sm"
+                  onClick={() => handleAperturaModaleEliminazione(tipo)}
+                  aria-label={`Elimina tipo di export ${tipo.nome ?? ""}`.trim()}
+                  title="Elimina"
+                >
+                  <Lucide icon="Trash2" aria-hidden="true" className="h-3.5 w-3.5" />
+                </Button>
               </div>
-
-              {/* Stati loading, error e empty */}
-              {tipiExport.isLoading && (
-                <div className="flex justify-center items-center py-16">
-                  <div role="status" className="text-center">
-                    <Spinner size="lg" decorativo className="mx-auto mb-4" />
-                    <div className="text-slate-600 font-medium">Caricamento tipi export...</div>
-                    <div className="text-slate-500 text-sm mt-1">Attendere prego</div>
-                  </div>
-                </div>
-              )}
-
-              {tipiExport.isError && (
-                <div className="p-5">
-                  <PageError
-                    compatta
-                    titolo="Tipi di export non caricati"
-                    motivo={(tipiExport.error as Error)?.message || "Non è stato possibile caricare i tipi export."}
-                    onRiprova={() => tipiExport.refetch()}
-                  />
-                </div>
-              )}
-
-              {!tipiExport.isLoading && !tipiExport.isError && (!tipiExport.data || tipiExport.data.length === 0) && (
-                <div className="p-5">
-                  <EmptyState
-                    icon="FileDown"
-                    title="Nessun tipo export disponibile"
-                    description="Non ci sono tipi di export configurati nel sistema. Utilizza il pulsante 'Nuovo tipo export' per aggiungerne uno."
-                    buttonText="Ricarica"
-                    onButtonClick={tipiExport.refetch}
-                    iconColor="text-slate-400"
-                  />
-                </div>
-              )}
-
-              {!tipiExport.isLoading && !tipiExport.isError && tipiExport.data && tipiExport.data.length > 0 && filteredTipiExport?.length === 0 && (
-                <div className="p-5">
-                  <EmptyState
-                    icon="Search"
-                    title="Nessun risultato trovato"
-                    description="Non sono stati trovati tipi export che corrispondono ai criteri di ricerca. Prova a modificare la ricerca."
-                    buttonText="Pulisci ricerca"
-                    onButtonClick={handleClearFilters}
-                    iconColor="text-slate-400"
-                  />
-                </div>
-              )}
-
-              {/* Lista dei tipi export in formato tabella professionale */}
-              {!tipiExport.isLoading && !tipiExport.isError && filteredTipiExport && filteredTipiExport.length > 0 && (
-                <div className="p-5">
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b border-slate-200">
-                          <th className="text-left py-3 px-4 font-semibold text-slate-700 text-sm uppercase tracking-wide">
-                            Tipo Export
-                          </th>
-                          <th className="text-left py-3 px-4 font-semibold text-slate-700 text-sm uppercase tracking-wide">
-                            Codice indesign
-                          </th>
-                          <th className="text-left py-3 px-4 font-semibold text-slate-700 text-sm uppercase tracking-wide">
-                            Descrizione
-                          </th>
-                          <th className="text-center py-3 px-4 font-semibold text-slate-700 text-sm uppercase tracking-wide">
-                            Azioni
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredTipiExport.map((tipo, index) => (
-                          <tr
-                            key={tipo.id || index}
-                            className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors duration-150"
-                          >
-                            <td className="py-4 px-4">
-                              <div className="flex items-center">
-                                <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border border-emerald-500/10 mr-3">
-                                  <Lucide
-                                    icon="FileDown"
-                                    className="w-5 h-5 text-emerald-600"
-                                  />
-                                </div>
-                                <div>
-                                  <div className="font-medium text-slate-800">
-                                    {tipo.nome}
-                                  </div>
-                                  <div className="text-xs text-slate-500 mt-1">
-                                    Tipo di export
-                                  </div>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="py-4 px-4">
-                              <div className="text-sm font-mono text-slate-600 bg-slate-100 px-2 py-1 rounded">
-                                {tipo.codice}
-                              </div>
-                            </td>
-                            <td className="py-4 px-4">
-                              <div className="text-sm text-slate-600 max-w-xs">
-                                <div className="line-clamp-2">
-                                  Tipo di export configurato per l'esportazione dei dati
-                                </div>
-                              </div>
-                            </td>
-                            <td className="py-4 px-4">
-                              <div className="flex items-center justify-center gap-2">
-                                <Button
-                                  variant="outline-primary"
-                                  size="sm"
-                                  onClick={() => handleOpenModifica(tipo)}
-                                  className="hover:bg-primary/5"
-                                >
-                                  <Lucide icon="PenLine" className="w-4 h-4 mr-1.5" />
-                                  Modifica
-                                </Button>
-                                <Button
-                                  variant="outline-danger"
-                                  size="sm"
-                                  onClick={() => handleAperturaModaleEliminazione(tipo)}
-                                  className="hover:bg-danger/5"
-                                  aria-label={`Elimina tipo di export ${tipo.nome ?? ""}`.trim()}
-                                >
-                                  <Lucide icon="Trash2" aria-hidden="true" className="w-4 h-4" />
-                                </Button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
+            </Table.Td>
+          </Table.Tr>
+        ))}
+      </PannelloElenco>
     </>
   );
 });

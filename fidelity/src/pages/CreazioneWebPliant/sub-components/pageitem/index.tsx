@@ -133,7 +133,7 @@ const PageItem: React.FC<{
     return (
         <li
             ref={dropRef}
-            className="flex items-center gap-2 bg-gray-50 rounded px-2 py-1"
+            className="flex items-center gap-2 bg-slate-50 rounded px-2 py-1"
             style={{
                 opacity: isDragging ? 0.5 : 1,
             }}
@@ -141,7 +141,7 @@ const PageItem: React.FC<{
             {/* Handle / icona di spostamento */}
             <div
                 ref={dragRef}
-                className="text-gray-400 hover:text-gray-600 cursor-move flex items-center"
+                className="text-slate-400 hover:text-slate-600 cursor-move flex items-center"
             >
                 <Lucide icon="Move" className="w-4 h-4" />
             </div>

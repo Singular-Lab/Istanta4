@@ -1,7 +1,15 @@
 import iconaUtente from "@/assets/images/users/user_icon_profile.png";
+import Badge from "@/components/Base/Badge";
 import Button from "@/components/Base/Button";
 import { Slideover } from "@/components/Base/Headless";
 import Lucide from "@/components/Base/Lucide";
+import PageError from "@/components/Base/PageError";
+import Segmenti from "@/components/Base/Segmenti";
+import Spinner from "@/components/Base/Spinner";
+import StatusBadge from "@/components/Base/StatusBadge";
+import type { TonoStato } from "@/constants/stati";
+import EmptyState from "@/components/EmptyState";
+import { formatData, formatDataOra, formatRelativo } from "@/utils/format";
 import {
   AttivitaResponse,
   useFetchAttivita,
@@ -72,20 +80,6 @@ function groupByCategory(items: AttivitaResponse[]) {
   }, {});
 }
 
-function formatRelativeTime(date: Date) {
-  const diff = Date.now() - new Date(date).getTime();
-  const min = Math.floor(diff / 60000);
-  const h = Math.floor(diff / 3600000);
-  const d = Math.floor(diff / 86400000);
-
-  if (min < 1) return "Adesso";
-  if (min < 60) return `${min} min fa`;
-  if (h < 24) return `${h}h fa`;
-  if (d < 7) return `${d}g fa`;
-
-  return new Date(date).toLocaleDateString("it-IT");
-}
-
 type ViewMode = "time" | "category";
 
 /* -------------------------------------------------------------------------- */
@@ -145,18 +139,18 @@ export default function NotificationPanel({
   ];
 
   return (
-    <Slideover open={notificationsPanel} onClose={() => setNotificationsPanel(false)}>
-      <Slideover.Panel className="w-[420px] max-w-full">
+    <Slideover open={notificationsPanel} onClose={() => setNotificationsPanel(false)} size="md">
+      <Slideover.Panel>
 
         {/* HEADER */}
-        <Slideover.Title className="px-5 py-4 border-b border-slate-200/60">
-          <div className="flex items-center justify-between  w-full">
+        <Slideover.Title className="py-4">
+          <div className="flex w-full items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                <Lucide icon="Bell" className="w-5 h-5 text-primary" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+                <Lucide icon="Bell" aria-hidden="true" className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-slate-800">Notifiche</h2>
+                <h2 className="title-section">Notifiche</h2>
                 <p className="text-xs text-slate-500">
                   {totalUnread > 0 ? `${totalUnread} non lette` : "Nessuna nuova notifica"}
                 </p>
@@ -165,11 +159,13 @@ export default function NotificationPanel({
 
             {totalUnread > 0 && (
               <Button
+                type="button"
                 size="sm"
-                variant="soft-secondary"
+                variant="outline-secondary"
                 onClick={() => markAllAsRead.mutate()}
+                loading={markAllAsRead.isPending}
               >
-                <Lucide icon="CheckCheck" className="w-4 h-4 mr-1" />
+                {!markAllAsRead.isPending && <Lucide icon="CheckCheck" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />}
                 Segna tutte
               </Button>
             )}
@@ -177,49 +173,48 @@ export default function NotificationPanel({
         </Slideover.Title>
 
         {/* FILTRI */}
-        <div className="px-5 py-4 border-b border-slate-100 space-y-4">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-500">Visualizzazione</span>
-            <div className="flex bg-slate-100 rounded-lg p-0.5">
-              {(["time", "category"] as ViewMode[]).map((mode) => (
-                <button
-                  key={mode}
-                  onClick={() => setViewMode(mode)}
-                  className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${viewMode === mode
-                    ? "bg-white text-slate-800 shadow-sm"
-                    : "text-slate-500 hover:text-slate-700"
-                    }`}
-                >
-                  {mode === "time" ? "Tempo" : "Categoria"}
-                </button>
-              ))}
-            </div>
+        <div className="space-y-4 border-b border-slate-100 px-5 py-4">
+          <div className="flex items-center justify-between gap-3">
+            <span className="title-eyebrow">Visualizzazione</span>
+            <Segmenti<ViewMode>
+              etichetta="Visualizzazione"
+              valore={viewMode}
+              onChange={setViewMode}
+              opzioni={[
+                { valore: "time", etichetta: "Tempo" },
+                { valore: "category", etichetta: "Categoria" },
+              ]}
+            />
           </div>
 
           <div className="space-y-2">
-            <span className="text-xs font-medium text-slate-500">Filtra per categoria</span>
+            <span className="title-eyebrow">Filtra per categoria</span>
             <div className="flex flex-wrap gap-2 pb-1">
               <button
+                type="button"
+                aria-pressed={selectedCategoria === null}
                 onClick={() => setSelectedCategoria(null)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 ${selectedCategoria === null
+                className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ${selectedCategoria === null
                   ? "bg-primary text-white"
                   : "bg-slate-100 text-slate-600"
                   }`}
               >
-                <Lucide icon="LayoutGrid" className="w-3.5 h-3.5" />
+                <Lucide icon="LayoutGrid" aria-hidden="true" className="h-3.5 w-3.5" />
                 Tutte
               </button>
 
               {Object.entries(CATEGORIA_CONFIG).map(([key, cfg]) => (
                 <button
+                  type="button"
                   key={key}
+                  aria-pressed={selectedCategoria === key}
                   onClick={() => setSelectedCategoria(key)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 ${selectedCategoria === key
+                  className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ${selectedCategoria === key
                     ? "bg-primary text-white"
                     : `${cfg.bgColor} ${cfg.color}`
                     }`}
                 >
-                  <Lucide icon={cfg.icon as any} className="w-3.5 h-3.5" />
+                  <Lucide icon={cfg.icon} aria-hidden="true" className="h-3.5 w-3.5" />
                   {cfg.label}
                 </button>
               ))}
@@ -229,43 +224,67 @@ export default function NotificationPanel({
 
         {/* LISTA */}
         <Slideover.Description className="p-0 overflow-y-auto">
-          {attivita.isLoading && (
-            <div className="py-20 text-center text-slate-500">Caricamento…</div>
-          )}
-
-          {!attivita.isLoading &&
-            (viewMode === "time"
-              ? Object.entries(groupedByDate).map(([label, items]) => (
-                <div key={label}>
-                  <div className="px-5 py-2 text-xs font-semibold text-slate-500 bg-slate-50 sticky top-0">
-                    {label} ({items.length})
+          {attivita.isLoading ? (
+            <div className="flex justify-center py-20">
+              <Spinner etichetta="Caricamento notifiche" />
+            </div>
+          ) : attivita.isError ? (
+            <div className="p-5">
+              <PageError
+                compatta
+                titolo="Impossibile caricare le notifiche"
+                motivo={attivita.error instanceof Error ? attivita.error.message : "Errore durante il recupero delle notifiche"}
+                onRiprova={() => attivita.refetch()}
+              />
+            </div>
+          ) : !attivita.data?.length ? (
+            <EmptyState
+              compatta
+              icon="BellOff"
+              title={selectedCategoria ? "Nessuna notifica in questa categoria" : "Nessuna notifica"}
+              description={
+                selectedCategoria
+                  ? "Scegli un'altra categoria o torna a tutte le notifiche."
+                  : "Qui compariranno le attività che ti riguardano."
+              }
+              buttonText={selectedCategoria ? "Mostra tutte" : undefined}
+              buttonIcon="LayoutGrid"
+              onButtonClick={() => setSelectedCategoria(null)}
+            />
+          ) : viewMode === "time" ? (
+            Object.entries(groupedByDate).map(([label, items]) => (
+              <div key={label}>
+                <div className="title-eyebrow sticky top-0 bg-slate-50 px-5 py-2">
+                  {label} ({items.length})
+                </div>
+                {items.map((item) => (
+                  <NotificationItem
+                    key={item.id}
+                    item={item}
+                    onMarkAsRead={() => markAsRead.mutate(item.id)}
+                  />
+                ))}
+              </div>
+            ))
+          ) : (
+            categoryOrder
+              .filter((c) => groupedByCategory[c])
+              .map((cat) => (
+                <div key={cat}>
+                  <div className="title-eyebrow sticky top-0 bg-slate-50 px-5 py-2">
+                    {CATEGORIA_CONFIG[cat]?.label || "Altro"}
                   </div>
-                  {items.map((item) => (
+                  {groupedByCategory[cat].map((item) => (
                     <NotificationItem
                       key={item.id}
                       item={item}
                       onMarkAsRead={() => markAsRead.mutate(item.id)}
+                      showCategory={false}
                     />
                   ))}
                 </div>
               ))
-              : categoryOrder
-                .filter((c) => groupedByCategory[c])
-                .map((cat) => (
-                  <div key={cat}>
-                    <div className="px-5 py-2 text-xs font-semibold text-slate-500 bg-slate-50 sticky top-0">
-                      {CATEGORIA_CONFIG[cat]?.label || "Altro"}
-                    </div>
-                    {groupedByCategory[cat].map((item) => (
-                      <NotificationItem
-                        key={item.id}
-                        item={item}
-                        onMarkAsRead={() => markAsRead.mutate(item.id)}
-                        showCategory={false}
-                      />
-                    ))}
-                  </div>
-                )))}
+          )}
         </Slideover.Description>
       </Slideover.Panel>
     </Slideover>
@@ -378,17 +397,12 @@ function NotificationItem({
     return String(value);
   }
 
-  function MetaBadge({ children, variant = "default" }: { children: React.ReactNode; variant?: "default" | "success" | "warning" | "pending" }) {
-    const variantClass = {
-      default: "bg-slate-100 text-slate-600",
-      success: "bg-success/10 text-success",
-      warning: "bg-warning/10 text-warning",
-      pending: "bg-pending/10 text-pending",
-    }[variant];
+  // Etichette di dettaglio (tipo, quantità): non sono stati, quindi Badge e non StatusBadge
+  function MetaBadge({ children }: { children: React.ReactNode }) {
     return (
-      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-3xs font-medium ${variantClass}`}>
+      <Badge variant="secondary" size="sm">
         {children}
-      </span>
+      </Badge>
     );
   }
 
@@ -432,7 +446,7 @@ function NotificationItem({
             <MetaRow label="Kit" value={meta.titolo || meta.nome || "N/D"} />
             <div className="flex items-center gap-2 mt-1">
               <MetaBadge>{meta.tipo || "Automatico"}</MetaBadge>
-              {meta.quantita != null && <MetaBadge variant="pending">{meta.quantita} {meta.quantita === 1 ? "copia" : "copie"}</MetaBadge>}
+              {meta.quantita != null && <MetaBadge>{meta.quantita} {meta.quantita === 1 ? "copia" : "copie"}</MetaBadge>}
             </div>
           </div>
         );
@@ -443,7 +457,7 @@ function NotificationItem({
             <MetaRow label="Kit" value={meta.nome_kit || meta.titolo || "Kit manuale"} />
             <div className="flex items-center gap-2 mt-1">
               <MetaBadge>Manuale</MetaBadge>
-              {meta.quantita != null && <MetaBadge variant="pending">{meta.quantita} {meta.quantita === 1 ? "kit" : "kit"}</MetaBadge>}
+              {meta.quantita != null && <MetaBadge>{meta.quantita} {meta.quantita === 1 ? "kit" : "kit"}</MetaBadge>}
             </div>
           </div>
         );
@@ -454,7 +468,7 @@ function NotificationItem({
             <MetaRow label="Nome" value={meta.nome || meta.titolo || "Design kit"} />
             <div className="flex items-center gap-2 mt-1">
               {meta.tipo && <MetaBadge>{meta.tipo}</MetaBadge>}
-              {meta.quantita != null && <MetaBadge variant="pending">{meta.quantita} {meta.quantita === 1 ? "combinazione" : "combinazioni"}</MetaBadge>}
+              {meta.quantita != null && <MetaBadge>{meta.quantita} {meta.quantita === 1 ? "combinazione" : "combinazioni"}</MetaBadge>}
             </div>
           </div>
         );
@@ -499,11 +513,11 @@ function NotificationItem({
           COMPLETATO: "Completato",
           ANNULLATO: "Annullato",
         };
-        const statoBadgeVariant = (stato: string): "default" | "success" | "warning" | "pending" => {
+        const tonoStato = (stato: string): TonoStato => {
           if (stato === "COMPLETATO") return "success";
           if (stato === "ANNULLATO") return "warning";
-          if (stato === "IN_LAVORAZIONE" || stato === "IN_REVISIONE") return "pending";
-          return "default";
+          if (stato === "IN_LAVORAZIONE" || stato === "IN_REVISIONE") return "info";
+          return "neutral";
         };
 
         return (
@@ -512,13 +526,14 @@ function NotificationItem({
             {meta.numero_ordine && <MetaRow label="N°" value={meta.numero_ordine} />}
             {meta.stato_ordinistampa && (
               <div className="mt-1">
-                <MetaBadge variant={statoBadgeVariant(meta.stato_ordinistampa)}>
-                  {statoLabel[meta.stato_ordinistampa] || meta.stato_ordinistampa}
-                </MetaBadge>
+                <StatusBadge
+                  tono={tonoStato(meta.stato_ordinistampa)}
+                  etichetta={statoLabel[meta.stato_ordinistampa] || meta.stato_ordinistampa}
+                />
               </div>
             )}
             {meta.data_di_conferma_ordinistampa && (
-              <MetaRow label="Conferma" value={new Date(meta.data_di_conferma_ordinistampa).toLocaleDateString("it-IT")} />
+              <MetaRow label="Conferma" value={formatData(meta.data_di_conferma_ordinistampa)} />
             )}
           </div>
         );
@@ -528,8 +543,8 @@ function NotificationItem({
         return (
           <div className="space-y-0.5">
             <div className="flex items-center gap-2">
-              {meta.file_totali != null && <MetaBadge variant="success">{meta.file_totali} file</MetaBadge>}
-              {meta.kit_totali != null && <MetaBadge variant="pending">{meta.kit_totali} kit</MetaBadge>}
+              {meta.file_totali != null && <MetaBadge>{meta.file_totali} file</MetaBadge>}
+              {meta.kit_totali != null && <MetaBadge>{meta.kit_totali} kit</MetaBadge>}
             </div>
           </div>
         );
@@ -581,11 +596,11 @@ function NotificationItem({
             {item.nome_assegnato} {item.cognome_assegnato}
           </span>
           <span>·</span>
-          <span>{formatRelativeTime(item.data_creazione)}</span>
+          <span title={formatDataOra(item.data_creazione)}>{formatRelativo(item.data_creazione)}</span>
           {showCategory && config && (
             <>
               <span>·</span>
-              <span className={`${config.bgColor} ${config.color} px-1.5 rounded`}>
+              <span className={`${config.bgColor} ${config.color} rounded-full px-1.5`}>
                 {config.label}
               </span>
             </>

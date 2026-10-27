@@ -37,7 +37,7 @@ export default function VisibilitaPromoFields({ value, onChange, className }: Pr
   const visibilita: VisibilitaPromo = { canali: value?.canali ?? [], aree: value?.aree ?? [] };
 
   return (
-    <div className={clsx("border rounded-[0.6rem] dark:border-darkmode-400 relative border-slate-200/80", className)}>
+    <div className={clsx("border rounded-card dark:border-darkmode-400 relative border-slate-200/80", className)}>
       <div className="absolute left-0 px-3 ml-4 -mt-2 text-xs uppercase bg-white text-slate-500">
         <div className="-mt-px">Visibilità canali e aree</div>
       </div>

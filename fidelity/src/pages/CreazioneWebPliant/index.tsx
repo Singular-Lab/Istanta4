@@ -6,8 +6,8 @@ import "@/assets/css/app.css";
 import imageLogo from "@/assets/images/logo.svg";
 import Button from "@/components/Base/Button";
 import {
+  FormField,
   FormInput,
-  FormLabel,
   FormSelect
 } from "@/components/Base/Form";
 import { Dialog } from "@/components/Base/Headless";
@@ -31,7 +31,8 @@ import { FloatingPanelContainer } from "./FloatingPanelContainer";
 import { useEditorReducer } from "./hooks/useEditorReducer";
 
 // Import del componente e dei relativi enum/tipi
-import LoadingIcon from "@/components/Base/LoadingIcon";
+import Spinner from "@/components/Base/Spinner";
+import EmptyState from "@/components/EmptyState";
 import { GestioneReferenzeProvider } from "@/context/GestioneReferenzeContext";
 import { useUser } from "@/context/UserContext";
 import { TIPO_PAGINA } from "../../../lib/enums";
@@ -875,30 +876,24 @@ const CreazioneWebPliant: React.FC = () => {
           <Dialog
             open={editorState.openDialogAggiuntaPagina}
             onClose={() => editorActions.closeDialogPagina()}
-            className="relative z-50"
           >
             <Dialog.Panel>
-              <Dialog.Title className="mb-6">
+              <Dialog.Title>
                 {editorState.dialogIsEditing ? "Modifica pagina" : "Nuova pagina"}
-
               </Dialog.Title>
 
-              <Dialog.Description>
-                <div>
-                  <FormLabel className="text-sm font-semibold text-slate-700 mb-2 block">Nome della pagina</FormLabel>
+              <Dialog.Description className="space-y-4">
+                <FormField etichetta="Nome della pagina">
                   <FormInput
                     placeholder="Inserisci il nome della pagina"
-                    className="w-full px-4 py-3"
                     value={editorState.nomeDialogAggiuntaPagina}
                     onChange={(e) =>
                       editorActions.setDialogNome(e.target.value as string)
                     }
                   />
-                </div>
-                <div>
-                  <FormLabel className="text-sm font-semibold text-slate-700 mb-2 block">Tipo di pagina</FormLabel>
+                </FormField>
+                <FormField etichetta="Tipo di pagina">
                   <FormSelect
-                    className="w-full px-4 py-3"
                     value={editorState.tipoDialogAggiuntaPagina}
                     onChange={(e) =>
                       editorActions.setDialogTipo(e.target.value as string)
@@ -913,20 +908,20 @@ const CreazioneWebPliant: React.FC = () => {
                         </option>
                       ))}
                   </FormSelect>
-                </div>
+                </FormField>
               </Dialog.Description>
 
-              <Dialog.Footer className="flex justify-end gap-3 mt-8 pt-6 border-t border-slate-200">
+              <Dialog.Footer>
                 <Button
-                  variant="secondary"
-                  className="px-6 py-2.5 rounded-xl border border-slate-300 text-slate-600 hover:bg-slate-50 hover:border-slate-400 transition-all duration-200"
+                  type="button"
+                  variant="outline-secondary"
                   onClick={() => editorActions.closeDialogPagina()}
                 >
                   Annulla
                 </Button>
                 <Button
+                  type="button"
                   variant="primary"
-                  className="px-6 py-2.5 bg-gradient-to-r from-primary to-theme-2 hover:from-primary/90 hover:to-theme-2/90 text-white font-medium rounded-xl transition-all duration-300 border-0"
                   onClick={() => {
                     if (editorState.tipoDialogAggiuntaPagina && editorState.nomeDialogAggiuntaPagina) {
                       if (editorState.dialogIsEditing) {
@@ -994,7 +989,7 @@ const CreazioneWebPliant: React.FC = () => {
                   <div className="flex items-center space-x-3">
                     <div className="flex items-center space-x-2">
                       <img src={editorState.logoHeader} alt="Logo" className="h-8 w-auto object-contain" />
-                      <span className="font-semibold text-md text-slate-800 dark:text-slate-200">{editorState.nomeWorkspaceCorrente}</span>
+                      <span className="font-semibold text-base text-slate-800 dark:text-slate-200">{editorState.nomeWorkspaceCorrente}</span>
                       {/* <span className="font-bold text-lg text-slate-800 dark:text-slate-200">Webpliant builder</span> */}
                     </div>
 
@@ -1040,7 +1035,7 @@ const CreazioneWebPliant: React.FC = () => {
                   </div>
 
                   {/* Center */}
-                  <div className="flex items-center space-x-1 bg-slate-100 dark:bg-darkmode-600 p-1 rounded-lg">
+                  <div className="flex items-center space-x-1 bg-slate-100 dark:bg-darkmode-600 p-1 rounded-card">
                     <Button
                       variant={editorState.activeTool === "select" ? "primary" : "outline-secondary"}
                       className="p-2 h-8 w-8"
@@ -1103,17 +1098,16 @@ const CreazioneWebPliant: React.FC = () => {
 
                     <PermissionGate permission={PERMISSIONS.WEBPLIANT.CONFIGURA} mode="disable">
                       <Button
+                        type="button"
                         variant="primary"
                         className="h-9"
                         onClick={() => mutationCreazioneWebpliantWorkspace.mutate()}
-                        disabled={mutationCreazioneWebpliantWorkspace.isPending}
+                        loading={mutationCreazioneWebpliantWorkspace.isPending}
                       >
-                        {mutationCreazioneWebpliantWorkspace.isPending ? (
-                          <LoadingIcon icon="tail-spin" className="w-4 h-4 mr-2" />
-                        ) : (
-                          <Lucide icon="Save" className="w-4 h-4 mr-2" />
+                        {!mutationCreazioneWebpliantWorkspace.isPending && (
+                          <Lucide icon="Save" aria-hidden="true" className="w-4 h-4 mr-2" />
                         )}
-                        {mutationCreazioneWebpliantWorkspace.isPending ? "Salvataggio..." : "Salva"}
+                        Salva
                       </Button>
                     </PermissionGate>
                   </div>
@@ -1256,7 +1250,7 @@ const CreazioneWebPliant: React.FC = () => {
                               type="button"
                               key={pagina.id}
                               className={clsx(
-                                "w-full text-left flex items-center justify-between p-2.5 rounded-lg cursor-pointer transition-colors duration-150",
+                                "w-full text-left flex items-center justify-between p-2.5 rounded-card cursor-pointer transition-colors duration-150",
                                 editorState.selectedPageIndex === index
                                   ? "bg-primary/10 text-primary font-semibold"
                                   : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-darkmode-600"
@@ -1272,7 +1266,7 @@ const CreazioneWebPliant: React.FC = () => {
                                 />
                                 <span className="truncate max-w-[140px] text-sm">{pagina.nome}</span>
                               </div>
-                              <span className="text-xs font-medium px-2 py-1 bg-slate-100 dark:bg-darkmode-600 text-slate-500 dark:text-slate-400 rounded-md">
+                              <span className="text-xs font-medium px-2 py-1 bg-slate-100 dark:bg-darkmode-600 text-slate-500 dark:text-slate-400 rounded-control">
                                 {pagina.tipo}
                               </span>
                             </button>
@@ -1337,20 +1331,22 @@ const CreazioneWebPliant: React.FC = () => {
                     {selectedElement ? (
                       <>
                         <div className="flex items-center justify-between mb-4">
-                          <h3 className="text-base font-semibold text-slate-800 dark:text-slate-200">Impostazioni Elemento</h3>
+                          <h3 className="title-card">Impostazioni elemento</h3>
                           <Button
+                            type="button"
                             variant="outline-danger"
                             size="sm"
+                            aria-label="Elimina elemento"
+                            title="Elimina elemento"
                             onClick={() => handleRemove(selectedElement.id)}
                           >
-                            <span className="sr-only">Elimina Elemento</span>
-                            <Lucide icon="Trash" className="w-4 h-4" />
+                            <Lucide icon="Trash" aria-hidden="true" className="w-4 h-4" />
                           </Button>
                         </div>
                         <Suspense fallback={
-                          <div className="flex flex-col items-center justify-center h-full text-slate-500 dark:text-slate-400">
-                            <Lucide icon="Loader" className="w-6 h-6 mx-auto animate-spin text-gray-400 mb-2" />
-                            <p className="text-gray-500 text-sm">Caricamento impostazioni elemento...</p>
+                          <div className="flex flex-col items-center justify-center gap-2 h-full text-slate-500 dark:text-slate-400">
+                            <Spinner decorativo />
+                            <p role="status" className="text-sm">Caricamento impostazioni elemento...</p>
                           </div>
                         }>
                           <ElementSettings
@@ -1372,19 +1368,16 @@ const CreazioneWebPliant: React.FC = () => {
                         </Suspense>
                       </>
                     ) : (
-                      <div className="text-center flex flex-col items-center justify-center h-full text-slate-500 dark:text-slate-400">
-                        <div className="w-20 h-20 bg-slate-100 dark:bg-darkmode-600 rounded-full flex items-center justify-center mb-4">
-                          <Lucide is_color_theme icon="SquareMousePointer" className="w-8 h-8 text-slate-400 dark:text-slate-500" />
-                        </div>
-                        <h4 className="font-semibold text-lg text-slate-600 dark:text-slate-300">Nessun elemento selezionato</h4>
-                        <p className="text-sm mt-1 mb-6">Clicca su un elemento nella canvas per vederne le proprietà.</p>
-                        <Button
-                          variant="outline-primary"
-                          onClick={() => editorActions.togglePanel('isComponentsPanelOpen', true)}
-                        >
-                          <Lucide is_color_theme icon="Plus" className="w-4 h-4 mr-2" />
-                          Aggiungi Componente
-                        </Button>
+                      <div className="flex h-full items-center justify-center pr-4">
+                        <EmptyState
+                          compatta
+                          icon="SquareMousePointer"
+                          title="Nessun elemento selezionato"
+                          description="Clicca su un elemento nella canvas per vederne le proprietà."
+                          buttonText="Aggiungi componente"
+                          buttonIcon="Plus"
+                          onButtonClick={() => editorActions.togglePanel('isComponentsPanelOpen', true)}
+                        />
                       </div>
                     )}
                   </div>
@@ -1400,27 +1393,10 @@ const CreazioneWebPliant: React.FC = () => {
                     className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-sm border border-slate-300 overflow-hidden transform-gpu"
                     style={{ height: "460px" }}
                   >
-                    <div className="h-full flex flex-col items-center justify-center">
-                      {/* Spinner principale */}
-                      <div className="relative mb-6">
-                        <div className="w-12 h-12 border-4 border-slate-200 border-t-primary rounded-full animate-spin"></div>
-                        <div className="absolute inset-0 w-12 h-12 border-4 border-transparent border-r-primary/30 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }}></div>
-                      </div>
-
-                      {/* Testo principale */}
-                      <h3 className="text-lg font-semibold text-slate-800 mb-2">Caricamento Timeline</h3>
-                      <p className="text-slate-600 text-sm mb-4">Preparazione componenti e keyframes...</p>
-
-                      {/* Barra di progresso animata */}
-                      <div className="w-64 h-1 bg-slate-200 rounded-full overflow-hidden mb-4">
-                        <div className="h-full bg-gradient-to-r from-primary to-blue-500 rounded-full animate-pulse" style={{ width: '60%' }}></div>
-                      </div>
-
-                      {/* Indicatori di caricamento */}
-                      <div className="flex items-center gap-2 text-xs text-slate-500">
-                        <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
-                        <span>Inizializzazione componenti</span>
-                      </div>
+                    <div role="status" className="h-full flex flex-col items-center justify-center gap-3">
+                      <Spinner size="lg" decorativo />
+                      <p className="title-section">Caricamento timeline</p>
+                      <p className="text-slate-600 text-sm">Preparazione componenti e keyframe...</p>
                     </div>
                   </div>
                 }>
@@ -1444,7 +1420,7 @@ const CreazioneWebPliant: React.FC = () => {
 
           {/* Indicatore di resize */}
           {showResizeIndicator && isResizing && (
-            <div className="fixed top-4 right-4 bg-slate-800 text-white px-3 py-2 rounded-lg shadow-lg z-[100] text-sm font-mono">
+            <div className="fixed top-4 right-4 bg-slate-800 text-white px-3 py-2 rounded-card shadow-lg z-[100] text-sm font-mono">
               {isResizing === "right" && `Larghezza: ${editorState.rightWidth}px`}
               {isResizing === "timeline" && `Altezza: ${editorState.timelineHeight}px`}
             </div>

@@ -1,12 +1,19 @@
+import Badge from '@/components/Base/Badge';
+import BarraFiltri from '@/components/Base/BarraFiltri';
 import Button from '@/components/Base/Button';
-import { FormInput, FormSelect } from '@/components/Base/Form';
+import CampoRicerca from '@/components/Base/CampoRicerca';
+import { FormSelect } from '@/components/Base/Form';
 import FormSwitch from '@/components/Base/Form/FormSwitch';
 import { Dialog } from '@/components/Base/Headless';
 import Lucide from '@/components/Base/Lucide';
 import PageError from '@/components/Base/PageError';
+import Segmenti, { type OpzioneSegmento } from '@/components/Base/Segmenti';
+import Sezione from '@/components/Base/Sezione';
 import Spinner from '@/components/Base/Spinner';
+import StatusBadge from '@/components/Base/StatusBadge';
 import Tippy from '@/components/Base/Tippy';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import EmptyState from '@/components/EmptyState';
 import { useNotification } from '@/context/NotificationContext';
 import clsx from 'clsx';
 import { useEffect, useMemo, useState } from 'react';
@@ -29,7 +36,7 @@ import {
 } from './bozzaPermessi';
 import { ETICHETTE_TIPO, etichettaSottoRuolo, ICONE_TIPO } from './ruoli';
 
-const FILTRI: Array<{ valore: FiltroPermessi; etichetta: string }> = [
+const FILTRI: OpzioneSegmento<FiltroPermessi>[] = [
   { valore: 'tutti', etichetta: 'Tutti' },
   { valore: 'abilitati', etichetta: 'Abilitati' },
   { valore: 'disabilitati', etichetta: 'Disabilitati' },
@@ -64,18 +71,14 @@ const ElencoRuoli = ({
   return (
     <div className="box box--stacked flex flex-col lg:sticky lg:top-24">
       <div className="border-b border-dashed border-slate-300/70 p-4">
-        <div className="text-xs font-medium uppercase tracking-wider text-slate-500">Ruoli</div>
-        <div className="relative mt-3">
-          <Lucide icon="Search" className="absolute inset-y-0 left-0 z-10 my-auto ml-3 h-4 w-4 stroke-[1.3] text-slate-500" />
-          <FormInput
-            value={ricerca}
-            onChange={e => setRicerca(e.target.value)}
-            placeholder="Cerca ruolo..."
-            formInputSize="sm"
-            className="pl-9"
-            aria-label="Cerca ruolo"
-          />
-        </div>
+        <h2 className="title-eyebrow">Ruoli</h2>
+        <CampoRicerca
+          etichetta="Cerca ruolo"
+          placeholder="Cerca ruolo..."
+          value={ricerca}
+          onChange={setRicerca}
+          className="mt-3 sm:w-full"
+        />
       </div>
       {/* Sotto lg la lista diventa pillole che vanno a capo: non spinge i permessi in fondo alla pagina. */}
       <nav className="flex flex-wrap gap-1.5 px-4 py-3 lg:flex-col lg:gap-0.5" aria-label="Ruoli">
@@ -107,13 +110,15 @@ const ElencoRuoli = ({
               <span className="truncate">{v.etichetta}</span>
               {attivo && inSospeso && <span className="h-2 w-2 flex-shrink-0 rounded-full bg-warning" title="Modifiche non salvate" />}
               {/* Conteggio subito dopo il nome, come i badge del menu laterale */}
-              <span className="flex-shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-2xs tabular-nums text-slate-500 dark:bg-darkmode-600">
+              <Badge variant="secondary" size="sm" className="flex-shrink-0 tabular-nums">
                 {conteggi[chiave] ?? '–'}/{totale}
-              </span>
+              </Badge>
             </button>
           );
         })}
-        {visibili.length === 0 && <div className="p-4 text-center text-sm text-slate-400">Nessun ruolo trovato</div>}
+        {visibili.length === 0 && (
+          <EmptyState compatta icon="SearchX" title="Nessun ruolo trovato" description="" className="w-full" />
+        )}
       </nav>
     </div>
   );
@@ -195,31 +200,16 @@ const RigaPermesso = ({
           <label htmlFor={idInterruttore} className="cursor-pointer text-sm font-medium text-slate-700 dark:text-slate-200">
             {azione.nome}
           </label>
-          {accesso && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-2xs font-medium text-primary dark:text-slate-200">
-              <Lucide icon="DoorOpen" className="h-3 w-3" />
-              Accesso all'area
-            </span>
-          )}
-          {azione.pericolosa && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-danger/10 px-2 py-0.5 text-2xs font-medium text-danger">
-              <Lucide icon="TriangleAlert" className="h-3 w-3" />
-              Distruttiva
-            </span>
-          )}
+          {accesso && <StatusBadge tono="brand" icon="DoorOpen" etichetta="Accesso all'area" />}
+          {azione.pericolosa && <StatusBadge tono="danger" icon="TriangleAlert" etichetta="Distruttiva" />}
           {config.eredita && !sistema && (
             personalizzato ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-info/10 px-2 py-0.5 text-2xs font-medium text-info">
-                <Lucide icon="GitBranch" className="h-3 w-3" />
-                Personalizzato
-              </span>
+              <StatusBadge tono="info" icon="GitBranch" etichetta="Personalizzato" />
             ) : (
               <span className="text-2xs text-slate-400">Ereditato</span>
             )
           )}
-          {visto.inSospeso && (
-            <span className="rounded-full bg-warning/15 px-2 py-0.5 text-2xs font-medium text-warning">Non salvato</span>
-          )}
+          {visto.inSospeso && <StatusBadge tono="warning" etichetta="Non salvato" />}
         </div>
         <Tippy content={azione.codice} options={{ placement: 'bottom-start', delay: [600, 0] }} className="block">
           <p className="mt-0.5 text-xs text-slate-500">{azione.descrizione}</p>
@@ -230,10 +220,10 @@ const RigaPermesso = ({
           <Button
             variant="outline-secondary"
             size="sm"
-            className="flex-shrink-0 px-2 py-1 text-xs"
+            className="flex-shrink-0"
             onClick={() => onRipristina(azione.codice)}
           >
-            <Lucide icon="Undo2" className="mr-1 h-3.5 w-3.5" />
+            <Lucide icon="Undo2" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
             Ripristina
           </Button>
         </Tippy>
@@ -302,7 +292,7 @@ const CardArea = ({
           className="flex min-w-0 flex-1 items-center gap-3 text-left"
         >
           <div className={clsx('flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-control', area.sistema ? 'bg-slate-100 text-slate-500 dark:bg-darkmode-400' : 'bg-primary/10 text-primary dark:text-slate-200')}>
-            <Lucide icon={area.icona as any} className="h-[18px] w-[18px] stroke-[1.5]" />
+            <Lucide icon={area.icona as any} aria-hidden="true" className="h-5 w-5 stroke-[1.5]" />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
@@ -380,24 +370,20 @@ const RiepilogoModifiche = ({
   return (
     <Dialog open={aperto} onClose={() => !salvataggio && onChiudi()} size="lg">
       <Dialog.Panel>
-        <div className="p-6">
-          <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <Lucide icon="ListChecks" className="h-5 w-5" />
-            </div>
-            <div>
-              <h2 className="title-card dark:text-slate-100">Rivedi le modifiche</h2>
-              <p className="mt-0.5 text-sm text-slate-500">
-                {elenco.length} {elenco.length === 1 ? 'modifica' : 'modifiche'} per <span className="font-medium text-slate-700 dark:text-slate-200">{descrizioneAmbito}</span>.
-                Valgono dalla prossima richiesta degli utenti interessati.
-              </p>
-            </div>
-          </div>
+        <Dialog.Title>
+          <Lucide icon="ListChecks" aria-hidden="true" className="h-5 w-5 text-primary" />
+          Rivedi le modifiche
+        </Dialog.Title>
+        <Dialog.Description>
+          <p className="text-sm text-slate-500">
+            {elenco.length} {elenco.length === 1 ? 'modifica' : 'modifiche'} per <span className="font-medium text-slate-700 dark:text-slate-200">{descrizioneAmbito}</span>.
+            Valgono dalla prossima richiesta degli utenti interessati.
+          </p>
           <div className="mt-5 max-h-[50vh] space-y-4 overflow-y-auto pr-1">
             {gruppi.map(g => (
               <div key={g.titolo}>
-                <div className={clsx('mb-2 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider', g.colore)}>
-                  <Lucide icon={g.icona as any} className="h-3.5 w-3.5" />
+                <div className={clsx('mb-2 flex items-center gap-1.5 text-2xs font-medium uppercase tracking-wide', g.colore)}>
+                  <Lucide icon={g.icona as any} aria-hidden="true" className="h-3.5 w-3.5" />
                   {g.titolo} ({g.voci.length})
                 </div>
                 <ul className="divide-y divide-dashed divide-slate-200 rounded-card border border-slate-200 dark:divide-darkmode-400 dark:border-darkmode-400">
@@ -411,16 +397,16 @@ const RiepilogoModifiche = ({
               </div>
             ))}
           </div>
-        </div>
-        <div className="flex justify-end gap-2 border-t border-slate-200/60 px-6 py-4 dark:border-darkmode-400">
+        </Dialog.Description>
+        <Dialog.Footer>
           <Button variant="outline-secondary" onClick={onChiudi} disabled={salvataggio}>
             Torna alle modifiche
           </Button>
           <Button variant="primary" onClick={onConferma} loading={salvataggio}>
-            {!salvataggio && <Lucide icon="Save" aria-hidden="true" className="mr-1.5 h-4 w-4" />}
+            {!salvataggio && <Lucide icon="Save" aria-hidden="true" className="mr-2 h-4 w-4" />}
             Conferma e salva
           </Button>
-        </div>
+        </Dialog.Footer>
       </Dialog.Panel>
     </Dialog>
   );
@@ -561,6 +547,15 @@ const PermessiRuoli = () => {
           <div role="status" className="box box--stacked flex items-center gap-2 p-5 text-sm text-slate-500">
             <Spinner size="sm" decorativo /> Caricamento ruoli...
           </div>
+        ) : ruoli.isError ? (
+          <Sezione compatta>
+            <PageError
+              compatta
+              titolo="Ruoli non caricati"
+              motivo={(ruoli.error as any)?.message || 'Impossibile caricare i ruoli'}
+              onRiprova={() => ruoli.refetch()}
+            />
+          </Sezione>
         ) : (
           <ElencoRuoli
             voci={vociRuoli}
@@ -575,14 +570,14 @@ const PermessiRuoli = () => {
 
       <div className="flex min-w-0 flex-1 flex-col gap-5">
         {/* Intestazione del ruolo e ambito */}
-        <div className="box box--stacked p-5">
+        <Sezione as="div">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center">
             <div className="flex min-w-0 flex-1 items-center gap-3">
-              <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-b from-theme-1 to-theme-2/80 text-white">
+              <div aria-hidden="true" className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-control bg-theme-1/10 text-theme-1">
                 <Lucide icon={(ICONE_TIPO[ambito.tipo] ?? 'User') as any} className="h-5 w-5" />
               </div>
               <div className="min-w-0">
-                <div className="truncate text-base font-medium text-slate-800 dark:text-slate-100">{descrizioneAmbito}</div>
+                <h2 className="title-section truncate">{descrizioneAmbito}</h2>
                 <div className="text-xs text-slate-500">
                   {ambito.idGdo
                     ? 'Override della GDO: valgono solo per i suoi utenti e prevalgono sui permessi del ruolo.'
@@ -593,7 +588,7 @@ const PermessiRuoli = () => {
               </div>
             </div>
             <div className="flex flex-col gap-1 xl:w-72">
-              <label htmlFor="ambito-gdo" className="text-xs font-medium uppercase tracking-wider text-slate-500">Ambito</label>
+              <label htmlFor="ambito-gdo" className="title-eyebrow">Ambito</label>
               <FormSelect
                 id="ambito-gdo"
                 formSelectSize="sm"
@@ -607,67 +602,38 @@ const PermessiRuoli = () => {
               </FormSelect>
             </div>
           </div>
-          <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-dashed border-slate-300/70 pt-4 text-xs">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-success/10 px-2.5 py-1 font-medium text-success">
-              <Lucide icon="CircleCheck" className="h-3.5 w-3.5" />
-              {abilitati} abilitati su {totaleAssegnabili}
-            </span>
+          <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-dashed border-slate-200 pt-4">
+            <StatusBadge tono="success" icon="CircleCheck" etichetta={`${abilitati} abilitati su ${totaleAssegnabili}`} />
             {config?.eredita && (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-info/10 px-2.5 py-1 font-medium text-info">
-                <Lucide icon="GitBranch" className="h-3.5 w-3.5" />
-                {personalizzati} personalizzati
-              </span>
+              <StatusBadge tono="info" icon="GitBranch" etichetta={`${personalizzati} personalizzati`} />
             )}
             {inSospeso && (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-warning/15 px-2.5 py-1 font-medium text-warning">
-                <Lucide icon="PencilLine" className="h-3.5 w-3.5" />
-                {numeroModifiche} non salvate
-              </span>
+              <StatusBadge tono="warning" icon="PencilLine" etichetta={`${numeroModifiche} non salvate`} />
             )}
             {ambito.idGdo && personalizzati > 0 && (
               <Button
                 variant="outline-secondary"
                 size="sm"
-                className="ml-auto text-xs"
+                className="ml-auto"
                 onClick={() => setRipristinoOverride(true)}
                 disabled={inSospeso}
               >
-                <Lucide icon="RotateCcw" className="mr-1.5 h-3.5 w-3.5" />
+                <Lucide icon="RotateCcw" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
                 Ripristina tutti gli override
               </Button>
             )}
           </div>
-        </div>
+        </Sezione>
 
         {/* Ricerca e filtri */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="relative flex-1">
-            <Lucide icon="Search" className="absolute inset-y-0 left-0 z-10 my-auto ml-3 h-4 w-4 stroke-[1.3] text-slate-500" />
-            <FormInput
-              value={ricerca}
-              onChange={e => setRicerca(e.target.value)}
-              placeholder="Cerca un permesso o un'area..."
-              className="pl-9"
-              aria-label="Cerca un permesso"
-            />
-          </div>
-          <div className="inline-flex rounded-control border border-slate-200 bg-white p-1 dark:border-darkmode-400 dark:bg-darkmode-600" role="group" aria-label="Filtro">
-            {FILTRI.map(f => (
-              <button
-                key={f.valore}
-                type="button"
-                aria-pressed={filtro === f.valore}
-                onClick={() => setFiltro(f.valore)}
-                className={clsx(
-                  'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
-                  filtro === f.valore ? 'bg-primary text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-darkmode-400'
-                )}
-              >
-                {f.etichetta}
-              </button>
-            ))}
-          </div>
-        </div>
+        <BarraFiltri variante="libera" destra={<Segmenti etichetta="Filtro" opzioni={FILTRI} valore={filtro} onChange={setFiltro} />}>
+          <CampoRicerca
+            etichetta="Cerca un permesso"
+            placeholder="Cerca un permesso o un'area..."
+            value={ricerca}
+            onChange={setRicerca}
+          />
+        </BarraFiltri>
 
         {/* Permessi per area */}
         {configurazione.isLoading || !config ? (
@@ -701,9 +667,14 @@ const PermessiRuoli = () => {
               />
             ))}
             {AREE.every(area => ![...(area.accesso ? [area.accesso] : []), ...area.azioni].some(a => passaFiltro(config, bozza, a.codice, filtro, ricerca))) && (
-              <div className="box box--stacked p-10 text-center text-sm text-slate-500">
-                Nessun permesso corrisponde alla ricerca.
-              </div>
+              <Sezione compatta>
+                <EmptyState
+                  compatta
+                  icon="SearchX"
+                  title="Nessun permesso trovato"
+                  description="Nessun permesso corrisponde alla ricerca o al filtro."
+                />
+              </Sezione>
             )}
           </div>
         )}
@@ -714,7 +685,7 @@ const PermessiRuoli = () => {
         {/* Barra delle modifiche in sospeso */}
         {inSospeso && config && (
           <div className="sticky bottom-4 z-20">
-            <div className="box box--stacked flex flex-col gap-3 border-warning/40 bg-white/95 p-4 shadow-lg backdrop-blur-sm dark:bg-darkmode-600/95 sm:flex-row sm:items-center">
+            <div className="box box--stacked flex flex-col gap-3 border-warning/40 bg-white/95 p-4 shadow-overlay backdrop-blur-sm dark:bg-darkmode-600/95 sm:flex-row sm:items-center">
               <div className="flex flex-1 items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
                 <span className="h-2.5 w-2.5 rounded-full bg-warning" />
                 <span>
@@ -726,7 +697,7 @@ const PermessiRuoli = () => {
                   Annulla
                 </Button>
                 <Button variant="primary" size="sm" onClick={() => setRiepilogo(true)}>
-                  <Lucide icon="ListChecks" className="mr-1.5 h-4 w-4" />
+                  <Lucide icon="ListChecks" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
                   Rivedi e salva
                 </Button>
               </div>

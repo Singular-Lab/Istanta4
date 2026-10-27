@@ -113,13 +113,13 @@ function ColorPicker({
         <div className="space-y-3 p-3">
           {/* Colori predefiniti */}
           <div>
-            <h4 className="text-xs font-medium text-gray-700 mb-1">Colori comuni</h4>
+            <h4 className="text-xs font-medium text-slate-700 mb-1">Colori comuni</h4>
             <div className="grid grid-cols-8 gap-1">
               {presetColors.map((color) => (
                 <button type="button"
                   key={color}
                   onClick={() => handleColorChange(color)}
-                  className="w-5 h-5 border border-gray-300 rounded hover:scale-110 transition-transform"
+                  className="w-5 h-5 border border-slate-300 rounded hover:scale-110 transition-transform"
                   style={{
                     backgroundColor: color,
                   }}
@@ -131,19 +131,19 @@ function ColorPicker({
 
           {/* Input HEX diretto */}
           <div>
-            <h4 className="text-xs font-medium text-gray-700 mb-1">Colore personalizzato</h4>
+            <h4 className="text-xs font-medium text-slate-700 mb-1">Colore personalizzato</h4>
 
             {/* Anteprima colore e input HEX */}
             <div className="flex items-center space-x-2 mb-2">
               <div
-                className="w-8 h-8 border border-gray-300 rounded"
+                className="w-8 h-8 border border-slate-300 rounded"
                 style={{ backgroundColor: hexColor }}
               />
               <input
                 type="text"
                 value={hexColor}
                 onChange={handleHexInputChange}
-                className="flex-1 px-2 py-1 text-xs border border-gray-300 rounded"
+                className="flex-1 px-2 py-1 text-xs border border-slate-300 rounded"
                 placeholder="#000000"
               />
             </div>
@@ -261,49 +261,49 @@ function BlockFormatDropDown({
         <div className="absolute mt-2 w-48 origin-top-right bg-white shadow-lg ring-1 ring-black ring-opacity-5 z-50 rounded-md">
           <div className="py-1">
             <button type="button"
-              className="flex w-full items-center px-4 py-2 text-sm hover:bg-gray-100"
+              className="flex w-full items-center px-4 py-2 text-sm hover:bg-slate-100"
               onClick={formatParagraph}
             >
               Normal
             </button>
             <button type="button"
-              className="flex w-full items-center px-4 py-2 text-lg font-bold hover:bg-gray-100"
+              className="flex w-full items-center px-4 py-2 text-lg font-bold hover:bg-slate-100"
               onClick={() => formatHeading('h1')}
             >
               Heading 1
             </button>
             <button type="button"
-              className="flex w-full items-center px-4 py-2 text-base font-bold hover:bg-gray-100"
+              className="flex w-full items-center px-4 py-2 text-base font-bold hover:bg-slate-100"
               onClick={() => formatHeading('h2')}
             >
               Heading 2
             </button>
             <button type="button"
-              className="flex w-full items-center px-4 py-2 text-sm font-bold hover:bg-gray-100"
+              className="flex w-full items-center px-4 py-2 text-sm font-bold hover:bg-slate-100"
               onClick={() => formatHeading('h3')}
             >
               Heading 3
             </button>
             <button type="button"
-              className="flex w-full items-center px-4 py-2 text-sm font-semibold hover:bg-gray-100"
+              className="flex w-full items-center px-4 py-2 text-sm font-semibold hover:bg-slate-100"
               onClick={() => formatHeading('h4')}
             >
               Heading 4
             </button>
             <button type="button"
-              className="flex w-full items-center px-4 py-2 text-xs font-semibold hover:bg-gray-100"
+              className="flex w-full items-center px-4 py-2 text-xs font-semibold hover:bg-slate-100"
               onClick={() => formatHeading('h5')}
             >
               Heading 5
             </button>
             <button type="button"
-              className="flex w-full items-center px-4 py-2 text-xs font-medium hover:bg-gray-100"
+              className="flex w-full items-center px-4 py-2 text-xs font-medium hover:bg-slate-100"
               onClick={() => formatHeading('h6')}
             >
               Heading 6
             </button>
             <button type="button"
-              className="flex w-full items-center px-4 py-2 text-sm italic border-l-4 border-gray-300 bg-gray-50 hover:bg-gray-100"
+              className="flex w-full items-center px-4 py-2 text-sm italic border-l-4 border-slate-300 bg-slate-50 hover:bg-slate-100"
               onClick={formatQuote}
             >
               Quote
@@ -573,7 +573,7 @@ export default function ToolbarPlugin() {
     <div className={stylePluginToolbar["toolbar-container"]}>
       {/* Pulsante toggle per dispositivi mobili */}
       <button type="button"
-        className={clsx(stylePluginToolbar["toolbar-toggle"], " md:hidden flex items-center justify-center p-2 bg-gray-100 w-full")}
+        className={clsx(stylePluginToolbar["toolbar-toggle"], " md:hidden flex items-center justify-center p-2 bg-slate-100 w-full")}
         onClick={toggleToolbar}
       >
         {isToolbarVisible ? 'Nascondi formattazione' : 'Mostra formattazione'}
@@ -822,25 +822,25 @@ export default function ToolbarPlugin() {
               <div className="absolute mt-2 p-4 bg-white shadow-lg ring-1 ring-black ring-opacity-5 z-50 rounded-md">
                 <div className="space-y-2">
                   <div>
-                    <label className="block text-xs font-medium text-gray-700">Righe:</label>
+                    <label className="block text-xs font-medium text-slate-700">Righe:</label>
                     <input
                       type="number"
                       value={tableRows}
                       onChange={(e) => setTableRows(Number(e.target.value))}
                       min="1"
                       max="10"
-                      className="w-16 px-2 py-1 text-xs border border-gray-300 rounded"
+                      className="w-16 px-2 py-1 text-xs border border-slate-300 rounded"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-700">Colonne:</label>
+                    <label className="block text-xs font-medium text-slate-700">Colonne:</label>
                     <input
                       type="number"
                       value={tableCols}
                       onChange={(e) => setTableCols(Number(e.target.value))}
                       min="1"
                       max="10"
-                      className="w-16 px-2 py-1 text-xs border border-gray-300 rounded"
+                      className="w-16 px-2 py-1 text-xs border border-slate-300 rounded"
                     />
                   </div>
                   <div className="flex space-x-2">
@@ -852,7 +852,7 @@ export default function ToolbarPlugin() {
                     </button>
                     <button type="button"
                       onClick={() => setShowTableOptions(false)}
-                      className="px-3 py-1 text-xs bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+                      className="px-3 py-1 text-xs bg-slate-300 text-slate-700 rounded hover:bg-slate-400"
                     >
                       Annulla
                     </button>

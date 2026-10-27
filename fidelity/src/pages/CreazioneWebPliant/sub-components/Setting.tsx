@@ -94,7 +94,7 @@ const SettingsSection: React.FC<{
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.2 }}
-      className="bg-white dark:bg-darkmode-700 rounded-xl border border-slate-200 dark:border-darkmode-500 shadow-sm hover:shadow-md transition-all duration-200"
+      className="bg-white dark:bg-darkmode-700 rounded-card border border-slate-200 dark:border-darkmode-500 shadow-sm hover:shadow-md transition-all duration-200"
     >
       {collapsible ? (
         // Sezione comprimibile: il titolo resta un heading e contiene il pulsante
@@ -106,7 +106,7 @@ const SettingsSection: React.FC<{
             aria-expanded={isExpanded}
           >
             <span className="flex items-center space-x-3">
-              <span className="w-8 h-8 bg-gradient-to-r from-primary/10 to-theme-2/10 rounded-lg flex items-center justify-center">
+              <span className="w-8 h-8 bg-gradient-to-r from-primary/10 to-theme-2/10 rounded-card flex items-center justify-center">
                 <Lucide icon={icon} aria-hidden="true" className="w-4 h-4 text-primary" />
               </span>
               <span className="font-semibold text-slate-800 dark:text-slate-200">{title}</span>
@@ -121,7 +121,7 @@ const SettingsSection: React.FC<{
       ) : (
         <div className="flex items-center justify-between p-4 rounded-t-xl">
           <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-gradient-to-r from-primary/10 to-theme-2/10 rounded-lg flex items-center justify-center">
+            <div className="w-8 h-8 bg-gradient-to-r from-primary/10 to-theme-2/10 rounded-card flex items-center justify-center">
               <Lucide icon={icon} aria-hidden="true" className="w-4 h-4 text-primary" />
             </div>
             <h4 className="font-semibold text-slate-800 dark:text-slate-200">{title}</h4>
@@ -187,7 +187,7 @@ const FileUploadArea: React.FC<{
     <Dropzone
       options={dropzoneOptions}
       getRef={(el) => { dropzoneRef.current = el; }}
-      className="rounded-xl p-8 text-center transition-all duration-300 hover:border-primary/60 hover:bg-primary/5 dark:hover:bg-primary/10"
+      className="rounded-card p-8 text-center transition-all duration-300 hover:border-primary/60 hover:bg-primary/5 dark:hover:bg-primary/10"
     >
       <div className="relative z-10">
         <div className="w-16 h-16 bg-gradient-to-r from-primary/10 to-theme-2/10 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -216,17 +216,17 @@ const MediaPreview: React.FC<{
   <motion.div
     initial={{ opacity: 0, scale: 0.9 }}
     animate={{ opacity: 1, scale: 1 }}
-    className="relative group bg-white dark:bg-darkmode-600 border border-slate-200 dark:border-darkmode-500 rounded-xl p-3 shadow-sm hover:shadow-md transition-all duration-200"
+    className="relative group bg-white dark:bg-darkmode-600 border border-slate-200 dark:border-darkmode-500 rounded-card p-3 shadow-sm hover:shadow-md transition-all duration-200"
   >
-    <div className="relative overflow-hidden rounded-lg">
+    <div className="relative overflow-hidden rounded-card">
       {type === 'image' ? (
-        <img src={src} alt={alt} className="w-full h-auto rounded-lg" />
+        <img src={src} alt={alt} className="w-full h-auto rounded-card" />
       ) : (
-        <video controls className="w-full h-auto rounded-lg">
+        <video controls className="w-full h-auto rounded-card">
           <source src={src} type="video/mp4" />
         </video>
       )}
-      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 rounded-lg flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 rounded-card flex items-center justify-center">
         <Button
           onClick={onRemove}
           className="bg-red-500 hover:bg-red-600 text-white rounded-full p-3 shadow-lg transform scale-90 group-hover:scale-100 transition-transform duration-200"
@@ -448,7 +448,7 @@ const ElementSettings: React.FC<ElementSettingsProps> = ({
       banner: { title: "Banner", icon: "PictureInPicture" as IconName, gradient: "from-pink-500 to-pink-600" },
       ricetta_ai: { title: "Ricetta AI", icon: "BrainCircuit" as IconName, gradient: "from-violet-500 to-violet-600" },
     };
-    return configs[type as keyof typeof configs] || { title: "Elemento", icon: "Settings" as IconName, gradient: "from-gray-500 to-gray-600" };
+    return configs[type as keyof typeof configs] || { title: "Elemento", icon: "Settings" as IconName, gradient: "from-slate-500 to-slate-600" };
   };
 
   const elementConfig = getElementConfig(type || "");
@@ -736,7 +736,7 @@ const ElementSettings: React.FC<ElementSettingsProps> = ({
         return (
           <div className="space-y-6">
             <SettingsSection title="Editor HTML" icon="Code">
-              <div className="bg-slate-900 rounded-lg overflow-hidden border border-slate-300 dark:border-darkmode-500">
+              <div className="bg-slate-900 rounded-card overflow-hidden border border-slate-300 dark:border-darkmode-500">
                 <div className="flex items-center justify-between p-3 bg-slate-800 border-b border-slate-700">
                   <div className="flex items-center space-x-2">
                     <div className="w-3 h-3 bg-red-500 rounded-full"></div>
@@ -892,7 +892,7 @@ const ElementSettings: React.FC<ElementSettingsProps> = ({
                       key={index}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="flex items-center justify-between p-3 bg-slate-50 dark:bg-darkmode-600 rounded-lg border border-slate-200 dark:border-darkmode-500"
+                      className="flex items-center justify-between p-3 bg-slate-50 dark:bg-darkmode-600 rounded-card border border-slate-200 dark:border-darkmode-500"
                     >
                       <span className="font-medium text-slate-700 dark:text-slate-300">{ricetta.titolo}</span>
                       <div className="flex items-center space-x-1">
@@ -1035,7 +1035,7 @@ const ElementSettings: React.FC<ElementSettingsProps> = ({
             <div className="w-16 h-16 bg-gradient-to-r from-slate-200 to-slate-300 dark:from-darkmode-600 dark:to-darkmode-700 rounded-full flex items-center justify-center mb-4">
               <Lucide icon="Settings" className="w-8 h-8 text-slate-500" />
             </div>
-            <h3 className="text-lg font-semibold text-slate-600 dark:text-slate-300 mb-2">
+            <h3 className="title-section mb-2 dark:text-slate-300">
               Elemento in sviluppo
             </h3>
             <p className="text-sm text-slate-500 dark:text-slate-400">
@@ -1056,7 +1056,7 @@ const ElementSettings: React.FC<ElementSettingsProps> = ({
         <div className="w-24 h-24 bg-gradient-to-r from-slate-100 to-slate-200 dark:from-darkmode-600 dark:to-darkmode-700 rounded-full flex items-center justify-center mb-6">
           <Lucide icon="SquareMousePointer" className="w-10 h-10 text-slate-400" />
         </div>
-        <h3 className="text-lg font-semibold text-slate-600 dark:text-slate-300 mb-2">
+        <h3 className="title-section mb-2 dark:text-slate-300">
           Nessun elemento selezionato
         </h3>
         <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm">
@@ -1172,7 +1172,7 @@ const StyleSettings: React.FC<StyleSettingsProps> = ({ element, updateElementCon
               type="color"
               value={getStyleValue('background', 'backgroundColor', '#ffffff')}
               onChange={(e) => handleStyleChange('background', 'backgroundColor', e.target.value)}
-              className="w-16 h-10 rounded-lg border border-slate-300 dark:border-darkmode-500"
+              className="w-16 h-10 rounded-card border border-slate-300 dark:border-darkmode-500"
             />
             <DebouncedFormInput
               type="text"
@@ -1186,13 +1186,13 @@ const StyleSettings: React.FC<StyleSettingsProps> = ({ element, updateElementCon
         </FormField>
       </div>
 
-      <div className="mt-6 p-4 bg-gradient-to-r from-slate-50 to-slate-100 dark:from-darkmode-600 dark:to-darkmode-700 rounded-lg border border-slate-200 dark:border-darkmode-500">
+      <div className="mt-6 p-4 bg-gradient-to-r from-slate-50 to-slate-100 dark:from-darkmode-600 dark:to-darkmode-700 rounded-card border border-slate-200 dark:border-darkmode-500">
         <h5 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3 flex items-center">
           <Lucide icon="Eye" className="w-4 h-4 mr-2" />
           Anteprima Stile
         </h5>
         <div
-          className="w-full h-20 rounded-lg border-2 border-dashed border-slate-300 dark:border-darkmode-500 flex items-center justify-center text-sm text-slate-500 dark:text-slate-400"
+          className="w-full h-20 rounded-card border-2 border-dashed border-slate-300 dark:border-darkmode-500 flex items-center justify-center text-sm text-slate-500 dark:text-slate-400"
           style={{
             padding: getStyleValue('spacing', 'padding') || '8px',
             margin: getStyleValue('spacing', 'margin') || '0',
@@ -1235,18 +1235,15 @@ const HtmlEditorDialog: React.FC<HtmlEditorDialogProps> = ({
   };
 
   return (
-    <Dialog size="xl" open={isOpen} onClose={() => { onClose(htmlContent); }} as="div" className="relative z-50">
-      <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
-      <div className="fixed inset-0 overflow-y-auto">
-        <div className="flex min-h-full items-center justify-center p-4">
-          <Dialog.Panel className="w-full max-w-4xl bg-white rounded-2xl shadow-2xl border border-slate-200">
-            <Dialog.Title className="flex justify-between items-center px-6 py-4 border-b">
-              <h3 className="text-lg font-medium">Editor HTML</h3>
-              <Button variant="outline-secondary" onClick={() => onClose(htmlContent)} aria-label="Chiudi editor HTML">
+    <Dialog size="xl" open={isOpen} onClose={() => { onClose(htmlContent); }}>
+          <Dialog.Panel>
+            <Dialog.Title>
+              Editor HTML
+              <Button type="button" variant="outline-secondary" size="sm" className="ml-auto" onClick={() => onClose(htmlContent)} aria-label="Chiudi editor HTML">
                 <Lucide aria-hidden="true" icon="X" className="w-4 h-4" />
               </Button>
             </Dialog.Title>
-            <div className="p-6">
+            <div className="p-5">
               <div className="h-[70vh]">
                 <Editor
                   defaultLanguage="html"
@@ -1304,8 +1301,6 @@ const HtmlEditorDialog: React.FC<HtmlEditorDialogProps> = ({
               </div>
             </div>
           </Dialog.Panel>
-        </div>
-      </div>
     </Dialog>
   );
 };

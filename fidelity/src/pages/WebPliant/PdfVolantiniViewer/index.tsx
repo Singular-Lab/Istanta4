@@ -95,7 +95,6 @@ const PdfVolantiniViewer: React.FC<PdfVolantiniViewerProps> = ({
             idsKitDesign,
             idsTipiDiExport,
         });
-        console.log("RESPONSE getAllCombinazioniRuntimePDFWebPliant",response)
         setPdfVolantini(response || []);
       } catch (err) {
         console.error('Errore nel caricamento dei PDF volantini:', err);
@@ -133,7 +132,6 @@ const PdfVolantiniViewer: React.FC<PdfVolantiniViewerProps> = ({
   }
 
   if (!pdfVolantini || pdfVolantini.length === 0) {
-    console.log("CIAOOOOOOOOo")
     return null;
   }
 

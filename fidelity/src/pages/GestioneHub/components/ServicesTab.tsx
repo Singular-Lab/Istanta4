@@ -1,7 +1,15 @@
+import Badge from "@/components/Base/Badge";
+import BarraFiltri from "@/components/Base/BarraFiltri";
 import Button from "@/components/Base/Button";
-import EmptyState from "@/components/EmptyState";
-import LoadingIcon from "@/components/Base/LoadingIcon";
+import CampoRicerca from "@/components/Base/CampoRicerca";
+import { Menu } from "@/components/Base/Headless";
 import Lucide from "@/components/Base/Lucide";
+import PageError from "@/components/Base/PageError";
+import Segmenti from "@/components/Base/Segmenti";
+import Sezione from "@/components/Base/Sezione";
+import Spinner from "@/components/Base/Spinner";
+import StatusBadge from "@/components/Base/StatusBadge";
+import EmptyState from "@/components/EmptyState";
 import { useNotification } from "@/context/NotificationContext";
 import { HUB_QUERY_KEYS, useFetchAllRuoliGDO, useFetchHubServicesAdmin } from "@/query/query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -39,10 +47,18 @@ const buildNotificationContent = (icon: string, title: string, message: string, 
   </div>
 );
 
+// Stesse regole del filtro per stato, per mostrare i conteggi accanto a ogni opzione
+const corrispondeStato = (group: HubServiceGroup, stato: ServiceStatusFilter) => {
+  if (stato === "attivo") return group.variants.some((v) => v.attivo && !v.in_manutenzione);
+  if (stato === "manutenzione") return group.variants.some((v) => v.in_manutenzione);
+  if (stato === "inattivo") return group.variants.every((v) => !v.attivo);
+  return true;
+};
+
 const ServicesTab = () => {
   const queryClient = useQueryClient();
   const { showNotification } = useNotification();
-  const { data: groupedServices = {}, isLoading } = useFetchHubServicesAdmin();
+  const { data: groupedServices = {}, isLoading, isError, refetch } = useFetchHubServicesAdmin();
   const { data: gdoRoles = [] } = useFetchAllRuoliGDO();
 
   const [dialogState, setDialogState] = useState<ServiceDialogState | null>(null);
@@ -64,12 +80,7 @@ const ServicesTab = () => {
       );
     }
     if (statusFilter !== "all") {
-      result = result.filter((g) => {
-        if (statusFilter === "attivo") return g.variants.some((v) => v.attivo && !v.in_manutenzione);
-        if (statusFilter === "manutenzione") return g.variants.some((v) => v.in_manutenzione);
-        if (statusFilter === "inattivo") return g.variants.every((v) => !v.attivo);
-        return true;
-      });
+      result = result.filter((g) => corrispondeStato(g, statusFilter));
     }
     return result;
   }, [serviceGroups, searchQuery, statusFilter]);
@@ -473,344 +484,325 @@ const ServicesTab = () => {
     const colors = getServiceColorClasses(group.colore);
     if (isDataUriIcon(group.icona)) {
       return (
-        <div className={clsx("w-14 h-14 rounded-2xl flex items-center justify-center overflow-hidden shrink-0 border", colors.iconBg, "border-transparent")}>
+        <div className={clsx("w-14 h-14 rounded-card flex items-center justify-center overflow-hidden shrink-0 border", colors.iconBg, "border-transparent")}>
           <img src={group.icona} alt="" className="w-full h-full object-contain" />
         </div>
       );
     }
     return (
-      <div className={clsx("w-14 h-14 rounded-2xl flex items-center justify-center shrink-0", colors.iconBg)}>
-        <Lucide icon={group.icona || "Box"} className={clsx("w-6 h-6", colors.iconText)} />
+      <div className={clsx("w-14 h-14 rounded-card flex items-center justify-center shrink-0", colors.iconBg)}>
+        <Lucide icon={group.icona || "Box"} aria-hidden="true" className={clsx("w-6 h-6", colors.iconText)} />
       </div>
     );
   };
 
-  const activeGroupCount = serviceGroups.filter((g) => g.variants.some((v) => v.attivo)).length;
+  const azzeraFiltri = () => {
+    setSearchQuery("");
+    setStatusFilter("all");
+  };
 
-  return (
-    <>
+  const renderContent = () => {
+    if (isLoading) {
+      return (
+        <div className="flex items-center justify-center gap-3 py-8 text-slate-500">
+          <Spinner size="sm" etichetta="Caricamento servizi Hub…" />
+          <span aria-hidden="true">Caricamento servizi Hub…</span>
+        </div>
+      );
+    }
+
+    if (isError) {
+      return (
+        <PageError
+          compatta
+          titolo="Servizi non caricati"
+          motivo="Il servizio non ha restituito l'elenco dei servizi Hub."
+          onRiprova={() => refetch()}
+        />
+      );
+    }
+
+    if (serviceGroups.length === 0) {
+      return (
+        <EmptyState
+          compatta
+          icon="Blocks"
+          title="Nessun servizio configurato"
+          description="Crea il primo gruppo servizio e assegna uno o più target."
+          buttonText="Crea servizio"
+          buttonIcon="Plus"
+          onButtonClick={openCreateDialog}
+        />
+      );
+    }
+
+    if (filteredGroups.length === 0) {
+      return (
+        <EmptyState
+          compatta
+          icon="SearchX"
+          title="Nessun risultato"
+          description="Nessun servizio corrisponde ai criteri di ricerca o al filtro selezionato."
+          buttonText="Azzera filtri"
+          buttonIcon="X"
+          onButtonClick={azzeraFiltri}
+        />
+      );
+    }
+
+    return (
       <div className="flex flex-col gap-4">
-        {/* Header */}
-        <div className="box box--stacked p-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <div className="text-lg font-semibold text-slate-800">Servizi Hub</div>
-              <div className="text-sm text-slate-500 mt-0.5">
-                Gestisci gruppi servizio e varianti per target. Servizi disponibili per tutti i tipi utente tranne Guest; il Superadmin vede sempre tutti i servizi.
-              </div>
-            </div>
-            <div className="flex flex-col gap-3 lg:items-end">
-              <div className="flex items-center gap-3">
-                {serviceGroups.length > 0 && (
-                  <div className="hidden lg:flex items-center gap-4 mr-2 text-sm">
-                    <div className="text-center">
-                      <div className="text-xl font-bold text-slate-800 leading-none">{serviceGroups.length}</div>
-                      <div className="text-xs text-slate-500 mt-0.5">gruppi</div>
-                    </div>
-                    <div className="w-px h-8 bg-slate-200" />
-                    <div className="text-center">
-                      <div className="text-xl font-bold text-emerald-600 leading-none">{activeGroupCount}</div>
-                      <div className="text-xs text-slate-500 mt-0.5">attivi</div>
+        {filteredGroups.map((group) => {
+          const isExpanded = expandedCodes.includes(group.codice);
+          const colors = getServiceColorClasses(group.colore);
+          const existingTargetKeys = group.variants.map((v) =>
+            createServiceTargetKey(v.tipo_utente, v.ruolo_gdo)
+          );
+          const activeCount = group.variants.filter((v) => v.attivo).length;
+          const maintenanceCount = group.variants.filter((v) => v.in_manutenzione).length;
+          const gestito = group.variants.some((v) => v.gestito);
+
+          return (
+            <div
+              key={group.codice}
+              className={clsx("overflow-hidden rounded-card border border-l-4 border-slate-200 bg-white", colors.accentBorder)}
+            >
+              {/* Group header */}
+              <div className="p-5">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="flex items-start gap-4">
+                    {renderGroupIcon(group)}
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="title-card">{group.nome}</h3>
+                        <Badge variant="secondary" size="sm" border className="font-mono">
+                          {group.codice}
+                        </Badge>
+                      </div>
+                      <p className="mt-1 line-clamp-2 text-sm text-slate-500">
+                        {group.descrizione || "Nessuna descrizione configurata."}
+                      </p>
+                      <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                        <Badge variant="primary" size="sm">
+                          <Lucide icon="Layers" aria-hidden="true" className="h-3 w-3" />
+                          {group.variants.length} varianti
+                        </Badge>
+                        {group.documents.length > 0 && (
+                          <Badge variant="primary" size="sm">
+                            <Lucide icon="FileStack" aria-hidden="true" className="h-3 w-3" />
+                            {group.documents.length} doc
+                          </Badge>
+                        )}
+                        {group.videos.length > 0 && (
+                          <Badge variant="info" size="sm">
+                            <Lucide icon="Clapperboard" aria-hidden="true" className="h-3 w-3" />
+                            {group.videos.length} video
+                          </Badge>
+                        )}
+                        <StatusBadge tono={activeCount > 0 ? "success" : "neutral"} etichetta={`${activeCount} attivi`} />
+                        {gestito && (
+                          <StatusBadge tono="info" icon="ShieldCheck" etichetta="Gestito da Fidelity" />
+                        )}
+                        {group.variants.some((v) => v.url_non_configurato) && (
+                          <StatusBadge tono="warning" icon="TriangleAlert" etichetta="Indirizzo non configurato: non visibile agli utenti" />
+                        )}
+                        {maintenanceCount > 0 && (
+                          <StatusBadge tono="warning" icon="Wrench" etichetta={`${maintenanceCount} in manutenzione`} />
+                        )}
+                      </div>
                     </div>
                   </div>
-                )}
-                <Button variant="primary" onClick={openCreateDialog}>
-                  <Lucide icon="Plus" className="w-4 h-4 mr-2" />
-                  Nuovo servizio
-                </Button>
-              </div>
-              {serviceGroups.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button variant="outline-secondary" size="sm" onClick={expandAll}>
-                    <Lucide icon="ChevronsDown" className="w-4 h-4 mr-1.5" />
-                    Espandi tutti
-                  </Button>
-                  <Button variant="outline-secondary" size="sm" onClick={collapseAll}>
-                    <Lucide icon="ChevronsUp" className="w-4 h-4 mr-1.5" />
-                    Comprimi tutti
-                  </Button>
-                  <div className="w-px h-5 bg-slate-200 hidden sm:block" />
-                  <div className="relative">
-                    <Lucide icon="Search" className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                    <input
-                      type="text"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Cerca per nome o codice..."
-                      className="h-8 pl-8 pr-3 rounded-md border border-slate-200 bg-white text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary w-52"
-                    />
+
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    <Button
+                      variant="outline-secondary"
+                      size="sm"
+                      aria-expanded={isExpanded}
+                      onClick={() => toggleExpanded(group.codice)}
+                    >
+                      <Lucide icon={isExpanded ? "ChevronUp" : "ChevronDown"} aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                      {isExpanded ? "Nascondi" : "Varianti"}
+                    </Button>
+                    <Button variant="outline-secondary" size="sm" onClick={() => openEditGroupDialog(group)}>
+                      <Lucide icon="PencilLine" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                      Modifica
+                    </Button>
+                    {/* Istanta e Correggo li gestisce Fidelity: varianti fisse, si disattivano invece di eliminarli */}
+                    {!gestito && (
+                      <Menu className="inline-block text-left">
+                        <Menu.Button
+                          as={Button}
+                          variant="outline-secondary"
+                          size="sm"
+                          aria-label={`Altre azioni per ${group.nome}`}
+                        >
+                          <Lucide icon="EllipsisVertical" aria-hidden="true" className="h-3.5 w-3.5" />
+                        </Menu.Button>
+                        <Menu.Items className="w-52">
+                          <Menu.Item onClick={() => openAddVariantDialog(group.codice)}>
+                            <Lucide icon="Plus" aria-hidden="true" className="mr-2 h-4 w-4" />
+                            Aggiungi variante
+                          </Menu.Item>
+                          <Menu.Item className="text-danger" onClick={() => requestGroupDeletion(group.codice, group.nome)}>
+                            <Lucide icon="Trash2" aria-hidden="true" className="mr-2 h-4 w-4" />
+                            Elimina servizio
+                          </Menu.Item>
+                        </Menu.Items>
+                      </Menu>
+                    )}
                   </div>
                 </div>
-              )}
-            </div>
-          </div>
-        </div>
+              </div>
 
-        {serviceGroups.length > 0 && (
-          <div className="box box--stacked px-5 py-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide mr-1">Stato:</span>
-              {([
-                { value: "all", label: "Tutti" },
-                { value: "attivo", label: "Attivi" },
-                { value: "manutenzione", label: "In manutenzione" },
-                { value: "inattivo", label: "Inattivi" },
-              ] as const).map((pill) => (
-                <button
-                  key={pill.value}
-                  type="button"
-                  onClick={() => setStatusFilter(pill.value)}
-                  className={clsx(
-                    "inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium transition",
-                    statusFilter === pill.value
-                      ? "bg-primary border-primary text-white"
-                      : "bg-white border-slate-200 text-slate-600 hover:border-primary/40 hover:text-primary"
-                  )}
-                >
-                  {pill.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {isLoading ? (
-          <div className="box box--stacked p-10 flex items-center justify-center gap-3 text-slate-500">
-            <LoadingIcon icon="oval" className="w-5 h-5" />
-            Caricamento servizi Hub...
-          </div>
-        ) : serviceGroups.length === 0 ? (
-          <div className="box box--stacked p-6">
-            <EmptyState
-              icon="Blocks"
-              title="Nessun servizio configurato"
-              description="Crea il primo gruppo servizio e assegna uno o più target."
-              buttonText="Crea servizio"
-              onButtonClick={openCreateDialog}
-            />
-          </div>
-        ) : filteredGroups.length === 0 ? (
-          <div className="box box--stacked p-6">
-            <EmptyState
-              icon="SearchX"
-              title="Nessun risultato"
-              description="Nessun servizio corrisponde ai criteri di ricerca o al filtro selezionato."
-              buttonText="Azzera filtri"
-              onButtonClick={() => { setSearchQuery(""); setStatusFilter("all"); }}
-            />
-          </div>
-        ) : (
-          filteredGroups.map((group) => {
-            const isExpanded = expandedCodes.includes(group.codice);
-            const colors = getServiceColorClasses(group.colore);
-            const existingTargetKeys = group.variants.map((v) =>
-              createServiceTargetKey(v.tipo_utente, v.ruolo_gdo)
-            );
-            const activeCount = group.variants.filter((v) => v.attivo).length;
-            const maintenanceCount = group.variants.filter((v) => v.in_manutenzione).length;
-            const activeCountClass = activeCount > 0
-              ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-              : "bg-slate-100 border-slate-200 text-slate-500";
-            const activeDotClass = activeCount > 0 ? "bg-emerald-500" : "bg-slate-400";
-
-            return (
-              <div
-                key={group.codice}
-                className={clsx(
-                  "box box--stacked overflow-hidden border-l-4",
-                  colors.accentBorder
-                )}
-              >
-                {/* Group header */}
-                <div className="p-5">
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="flex items-start gap-4">
-                      {renderGroupIcon(group)}
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="text-base font-semibold text-slate-800">{group.nome}</h3>
-                          <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-mono text-slate-500">
-                            {group.codice}
-                          </span>
+              {/* Variants panel */}
+              {isExpanded && (
+                <div className="border-t border-slate-100 bg-slate-50 p-5">
+                  <h4 className="title-eyebrow mb-3">Varianti per target</h4>
+                  <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
+                    {group.variants.map((variant) => (
+                      <div
+                        key={variant.id}
+                        className="flex flex-col gap-3 rounded-card border border-slate-200 bg-white p-4"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-semibold text-slate-800">
+                              {getServiceTargetLabel(variant)}
+                            </div>
+                            <div className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-500">
+                              <Lucide icon="Link" aria-hidden="true" className="h-3 w-3 shrink-0" />
+                              <span className="truncate">{getTipoUrlLabel(variant.tipo_url)}</span>
+                              <span aria-hidden="true">·</span>
+                              <span>ord. {variant.ordine}</span>
+                            </div>
+                          </div>
+                          {!variant.gestito && (
+                            <Button
+                              variant="outline-danger"
+                              size="sm"
+                              className="shrink-0"
+                              onClick={() => requestVariantDeletion(variant)}
+                              aria-label={`Elimina variante ${getServiceTargetLabel(variant)}`}
+                            >
+                              <Lucide aria-hidden="true" icon="Trash2" className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
                         </div>
-                        <p className="mt-1 text-sm text-slate-500 line-clamp-2">
-                          {group.descrizione || "Nessuna descrizione configurata."}
-                        </p>
-                        <div className="mt-2.5 flex flex-wrap items-center gap-2">
-                          <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/15 bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary">
-                            <Lucide icon="Layers" className="w-3 h-3" />
-                            {group.variants.length} varianti
-                          </span>
-                          {group.documents.length > 0 && (
-                            <span className="inline-flex items-center gap-1.5 rounded-full border border-theme-1/15 bg-theme-1/[0.08] px-2.5 py-1 text-xs font-medium text-theme-1">
-                              <Lucide icon="FileStack" className="w-3 h-3" />
-                              {group.documents.length} doc
-                            </span>
+
+                        <div className="break-all text-xs leading-relaxed text-slate-500">{variant.url}</div>
+                        {variant.redirect_page && (
+                          <div className="break-all text-xs leading-relaxed text-slate-500">
+                            Redirect page: <span className="text-slate-600">{variant.redirect_page}</span>
+                          </div>
+                        )}
+                        {(variant.documents.length > 0 || variant.videos.length > 0) && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {variant.documents.length > 0 && (
+                              <Badge variant="primary" size="sm">
+                                <Lucide icon="FileText" aria-hidden="true" className="h-3 w-3" />
+                                {variant.documents.length} documenti
+                              </Badge>
+                            )}
+                            {variant.videos.length > 0 && (
+                              <Badge variant="info" size="sm">
+                                <Lucide icon="MonitorPlay" aria-hidden="true" className="h-3 w-3" />
+                                {variant.videos.length} video
+                              </Badge>
+                            )}
+                          </div>
+                        )}
+
+                        <div className="flex flex-wrap gap-1.5">
+                          <StatusBadge
+                            tono={variant.attivo ? "success" : "neutral"}
+                            etichetta={variant.attivo ? "Attivo" : "Disattivo"}
+                          />
+                          {variant.in_manutenzione && (
+                            <StatusBadge tono="warning" icon="Wrench" etichetta="Manutenzione" />
                           )}
-                          {group.videos.length > 0 && (
-                            <span className="inline-flex items-center gap-1.5 rounded-full border border-theme-2/15 bg-theme-2/[0.08] px-2.5 py-1 text-xs font-medium text-theme-2">
-                              <Lucide icon="Clapperboard" className="w-3 h-3" />
-                              {group.videos.length} video
-                            </span>
-                          )}
-                          <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${activeCountClass}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${activeDotClass}`} />
-                            {activeCount} attivi
-                          </span>
-                          {group.variants.some((v) => v.gestito) && (
-                            <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-medium text-sky-700">
-                              <Lucide icon="ShieldCheck" className="w-3 h-3" />
-                              Gestito da Fidelity
-                            </span>
-                          )}
-                          {group.variants.some((v) => v.url_non_configurato) && (
-                            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
-                              <Lucide icon="AlertTriangle" className="w-3 h-3" />
-                              Indirizzo non configurato: non visibile agli utenti
-                            </span>
-                          )}
-                          {maintenanceCount > 0 && (
-                            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
-                              <Lucide icon="Wrench" className="w-3 h-3" />
-                              {maintenanceCount} in manutenzione
-                            </span>
+                          {variant.in_evidenza && (
+                            <StatusBadge tono="brand" icon="Star" etichetta="In evidenza" />
                           )}
                         </div>
                       </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2 shrink-0">
-                      <Button variant="outline-secondary" size="sm" onClick={() => toggleExpanded(group.codice)}>
-                        <Lucide icon={isExpanded ? "ChevronUp" : "ChevronDown"} className="w-4 h-4 mr-1.5" />
-                        {isExpanded ? "Nascondi" : "Varianti"}
-                      </Button>
-                      <Button variant="soft-primary" size="sm" onClick={() => openEditGroupDialog(group)}>
-                        <Lucide icon="PencilLine" className="w-4 h-4 mr-1.5" />
-                        Modifica
-                      </Button>
-                      {/* Istanta e Correggo li gestisce Fidelity: varianti fisse, si disattivano invece di eliminarli */}
-                      {!group.variants.some((v) => v.gestito) && (
-                        <>
-                          <Button variant="soft-primary" size="sm" onClick={() => openAddVariantDialog(group.codice)}>
-                            <Lucide icon="Plus" className="w-4 h-4 mr-1.5" />
-                            Variante
-                          </Button>
-                          <Button variant="soft-danger" size="sm" onClick={() => requestGroupDeletion(group.codice, group.nome)}>
-                            <Lucide icon="Trash2" className="w-4 h-4 mr-1.5" />
-                            Elimina
-                          </Button>
-                        </>
-                      )}
-                    </div>
+                    ))}
                   </div>
                 </div>
+              )}
 
-                {/* Variants panel */}
-                {isExpanded && (
-                  <div className="border-t border-slate-100 bg-slate-50/50 p-5">
-                    <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                      Varianti per target
-                    </div>
-                    <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
-                      {group.variants.map((variant) => (
-                        <div
-                          key={variant.id}
-                          className="rounded-xl border border-slate-200 bg-white p-4 flex flex-col gap-3 transition"
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <div className="text-sm font-semibold text-slate-800 truncate">
-                                {getServiceTargetLabel(variant)}
-                              </div>
-                              <div className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-500">
-                                <Lucide icon="Link" className="w-3 h-3 shrink-0" />
-                                <span className="truncate">{getTipoUrlLabel(variant.tipo_url)}</span>
-                                <span>·</span>
-                                <span>ord. {variant.ordine}</span>
-                              </div>
-                            </div>
-                            {!variant.gestito && (
-                              <div className="flex gap-1.5 shrink-0">
-                                <Button variant="soft-danger" size="sm" onClick={() => requestVariantDeletion(variant)} aria-label="Elimina variante">
-                                  <Lucide aria-hidden="true" icon="Trash2" className="w-3.5 h-3.5" />
-                                </Button>
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="text-xs text-slate-400 break-all leading-relaxed">{variant.url}</div>
-                          {variant.redirect_page && (
-                            <div className="text-xs text-slate-400 break-all leading-relaxed">
-                              Redirect page: <span className="text-slate-500">{variant.redirect_page}</span>
-                            </div>
-                          )}
-                          {(variant.documents.length > 0 || variant.videos.length > 0) && (
-                            <div className="flex flex-wrap gap-1.5">
-                              {variant.documents.length > 0 && (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-theme-1/[0.08] px-2 py-0.5 text-xs font-medium text-theme-1">
-                                  <Lucide icon="FileText" className="w-3 h-3" />
-                                  {variant.documents.length} documenti
-                                </span>
-                              )}
-                              {variant.videos.length > 0 && (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-theme-2/[0.08] px-2 py-0.5 text-xs font-medium text-theme-2">
-                                  <Lucide icon="MonitorPlay" className="w-3 h-3" />
-                                  {variant.videos.length} video
-                                </span>
-                              )}
-                            </div>
-                          )}
-
-                          <div className="flex flex-wrap gap-1.5">
-                            {variant.attivo ? (
-                              <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium bg-emerald-50 text-emerald-700">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                Attivo
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-500">
-                                <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
-                                Disattivo
-                              </span>
-                            )}
-                            {variant.in_manutenzione && (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
-                                <Lucide icon="Wrench" className="w-3 h-3" />
-                                Manutenzione
-                              </span>
-                            )}
-                            {variant.in_evidenza && (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-700">
-                                <Lucide icon="Star" className="w-3 h-3" />
-                                In evidenza
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+              <ServiceFormDialog
+                open={Boolean(
+                  dialogState &&
+                  dialogState.group?.codice === group.codice &&
+                  dialogState.mode === "add-variant"
                 )}
-
-                <ServiceFormDialog
-                  open={Boolean(
-                    dialogState &&
-                    dialogState.group?.codice === group.codice &&
-                    dialogState.mode === "add-variant"
-                  )}
-                  mode="add-variant"
-                  group={dialogState?.group}
-                  existingTargetKeys={existingTargetKeys}
-                  gdoRoleOptions={gdoRoles}
-                  submitting={saveMutation.isPending || uploadingSharedAssets}
-                  onClose={() => setDialogState(null)}
-                  onSubmit={handleSave}
-                />
-              </div>
-            );
-          })
-        )}
+                mode="add-variant"
+                group={dialogState?.group}
+                existingTargetKeys={existingTargetKeys}
+                gdoRoleOptions={gdoRoles}
+                submitting={saveMutation.isPending || uploadingSharedAssets}
+                onClose={() => setDialogState(null)}
+                onSubmit={handleSave}
+              />
+            </div>
+          );
+        })}
       </div>
+    );
+  };
+
+  const conFiltri = !isLoading && !isError && serviceGroups.length > 0;
+
+  return (
+    <>
+      <Sezione
+        senzaPadding
+        titolo="Servizi Hub"
+        descrizione="Gestisci gruppi servizio e varianti per target. Servizi disponibili per tutti i tipi utente tranne Guest; il Superadmin vede sempre tutti i servizi."
+        azioni={
+          <Button variant="primary" size="sm" onClick={openCreateDialog}>
+            <Lucide icon="Plus" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+            Nuovo servizio
+          </Button>
+        }
+      >
+        {conFiltri && (
+          <BarraFiltri
+            destra={
+              <>
+                <Button variant="outline-secondary" size="sm" onClick={expandAll}>
+                  <Lucide icon="ChevronsDown" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                  Espandi tutti
+                </Button>
+                <Button variant="outline-secondary" size="sm" onClick={collapseAll}>
+                  <Lucide icon="ChevronsUp" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                  Comprimi tutti
+                </Button>
+              </>
+            }
+          >
+            <CampoRicerca
+              etichetta="Cerca servizi"
+              placeholder="Cerca per nome o codice…"
+              value={searchQuery}
+              onChange={setSearchQuery}
+            />
+            <Segmenti<ServiceStatusFilter>
+              etichetta="Stato dei servizi"
+              valore={statusFilter}
+              onChange={setStatusFilter}
+              opzioni={[
+                { valore: "all", etichetta: "Tutti", conteggio: serviceGroups.length },
+                { valore: "attivo", etichetta: "Attivi", conteggio: serviceGroups.filter((g) => corrispondeStato(g, "attivo")).length },
+                { valore: "manutenzione", etichetta: "In manutenzione", conteggio: serviceGroups.filter((g) => corrispondeStato(g, "manutenzione")).length },
+                { valore: "inattivo", etichetta: "Inattivi", conteggio: serviceGroups.filter((g) => corrispondeStato(g, "inattivo")).length },
+              ]}
+            />
+          </BarraFiltri>
+        )}
+        {/* Senza barra dei filtri il padding dell'intestazione basta: niente spazio doppio */}
+        <div className={conFiltri ? "p-5" : "px-5 pb-5"}>{renderContent()}</div>
+      </Sezione>
 
       <ServiceFormDialog
         open={dialogState?.mode === "create"}

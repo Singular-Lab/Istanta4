@@ -12,6 +12,7 @@ import styleWp from "@/assets/css/webpliant/stylewp\.module\.scss"
 import { Config, FotoRicetta, IngredienteRicettaLunga, IngredienteRicettaCorta, ReferenzeIstanta, Ricette as RicetteType, TIPO_RICETTA } from '../../../../lib/types';
 import '../webpliant.css';
 import { Navigation } from 'swiper/modules';
+import { CLASSE_TITOLO_PUBBLICO } from '../../WebpliantLayout/StatiPubblici';
 
 const Ricette: React.FC = () => {
     const { ricetta, config, referenzeRicetta } = useLoaderData() as {
@@ -194,10 +195,10 @@ const Ricette: React.FC = () => {
                     </div> */}
                 </section>
                 <section className={clsx(styleWp["wp-products-carousel"], styleWp["wp-container"], "mt-4 mb-5")}>
-                    <h2 className="h3 text-center text-uppercase mt-4 mb-4 pb-xl-2 mb-xl-4">
+                    <h2 className={clsx(CLASSE_TITOLO_PUBBLICO, styleWp["wp-mt-4"], styleWp["wp-mb-4"], styleWp["wp-pb-xl-2"], styleWp["wp-mb-xl-4"])}>
                         Prodotti in <strong>Volantino</strong>
                     </h2>
-                    <div id="related_products" className="wp-position-relative">
+                    <div id="related_products" className={styleWp["wp-position-relative"]}>
                         <Swiper
                             slidesPerView={4}
                             spaceBetween={30}

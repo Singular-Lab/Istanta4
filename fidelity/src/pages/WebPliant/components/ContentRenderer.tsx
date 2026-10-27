@@ -205,7 +205,7 @@ const ContentRenderer: React.FC<ContentRendererProps> = React.memo(({
       case "text":
         return (
           <div key={item.id} className="w-full p-4 flex flex-col items-center text-center">
-            <div className="text-3xl font-bold mb-2 text-gray-800 dark:text-gray-100">
+            <div className="text-3xl font-bold mb-2 text-slate-800 dark:text-slate-100">
               {parse(item?.content?.text)}
             </div>
           </div>
@@ -341,12 +341,6 @@ const ContentRenderer: React.FC<ContentRendererProps> = React.memo(({
           </section>
         );
       case "pdf_volantino":
-        console.log(item)
-        console.log("idCanale", idCanale);
-        console.log("idArea", idArea);
-        console.log("idPV", idPV);
-        console.log("idsKitDesign", item.content?.selectedKitDesign);
-        console.log("idsTipiDiExport", item.content?.selectedTipoExport);
 
         return <PdfVolantiniViewer idCanale={idCanale} idArea={idArea} idPV={idPV} idsKitDesign={item.content?.selectedKitDesign} idsTipiDiExport={item.content?.selectedTipoExport} />;
 

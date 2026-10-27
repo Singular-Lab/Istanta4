@@ -1,8 +1,13 @@
+import { Tab } from "@/components/Base/Headless";
 import Lucide from "@/components/Base/Lucide";
 import Spinner from "@/components/Base/Spinner";
+import StatCard, { StatCardGrid } from "@/components/Base/StatCard";
+import EmptyState from "@/components/EmptyState";
+import { formatNumero } from "@/utils/format";
 import { useFetchFlyerInsightsConfig } from "@/query/query";
 import { FlyerInsights as FlyerInsightsType } from "@/types/flyerInsights";
 import clsx from "clsx";
+import { icons } from "lucide-react";
 import { FC, useMemo, useState } from "react";
 import FlyerPageMap from "./FlyerPageMap";
 import RiepilogoMeccaniche from "./RiepilogoMeccaniche";
@@ -56,101 +61,66 @@ const FlyerInsights: FC<FlyerInsightsProps> = ({
   if (exportCodes !== undefined) {
     if (!exportCodes.includes(EXPORT_DI_SISTEMA.VOL)) {
       return (
-        <div className={clsx("rounded-lg border border-dashed border-slate-200 p-8 text-center", className)}>
-          <Lucide icon="FileSearch" className="mx-auto h-10 w-10 text-slate-400 mb-3" />
-          <h3 className="title-card">Per questo kit non è presente il tipo di esportazione VOL</h3>
-          <p className="text-xs text-slate-500 mt-1">
-            Le statistiche sono disponibili per i kit con esportazione VOL.
-          </p>
-        </div>
+        <EmptyState
+          compatta
+          icon="FileSearch"
+          title="Per questo kit non è presente il tipo di esportazione VOL"
+          description="Le statistiche sono disponibili per i kit con esportazione VOL."
+          className={clsx("border border-dashed border-slate-200", className)}
+        />
       );
     }
   }
 
   if (!insights || insights.totaleReferenze === 0) {
     return (
-      <div className={clsx("rounded-lg border border-dashed border-slate-200 p-8 text-center", className)}>
-        <Lucide icon="FileSearch" className="mx-auto h-10 w-10 text-slate-400 mb-3" />
-        <h3 className="title-card">Nessuna referenza trovata</h3>
-        <p className="text-xs text-slate-500 mt-1">
-          Le statistiche saranno disponibili quando le referenze avranno dati di posizione.
-        </p>
-      </div>
+      <EmptyState
+        compatta
+        icon="FileSearch"
+        title="Nessuna referenza trovata"
+        description="Le statistiche saranno disponibili quando le referenze avranno dati di posizione."
+        className={clsx("border border-dashed border-slate-200", className)}
+      />
     );
   }
 
-  return (
-    <div className={clsx("space-y-4", className)}>
-      {/* Header Stats */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
-            <Lucide icon="Package" className="h-3.5 w-3.5" />
-            Referenze
-          </div>
-          <p className="text-2xl font-bold text-slate-800">{insights.totaleReferenze}</p>
-        </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
-            <Lucide icon="BookOpen" className="h-3.5 w-3.5" />
-            Pagine
-          </div>
-          <p className="text-2xl font-bold text-slate-800">{insights.totalePagine}</p>
-        </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
-            <Lucide icon="LayoutGrid" className="h-3.5 w-3.5" />
-            Reparti
-          </div>
-          <p className="text-2xl font-bold text-slate-800">{insights.riepilogoReparti.length}</p>
-        </div>
-      </div>
+  const indiceTab = Math.max(0, tabs.findIndex(tab => tab.id === activeTab));
+  const iconaMappaVuota = (insightsConfig?.mappa?.emptyState?.icon || "MapPinOff") as keyof typeof icons;
 
-      {/* Tabs */}
-      <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
-        {tabs.map(tab => (
-          <button
-            key={tab.id}
-            type="button"
-            aria-label={tab.label}
-            aria-pressed={activeTab === tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={clsx(
-              "flex-1 flex items-center justify-center gap-2 rounded-md px-3 py-2 text-xs font-medium transition",
-              activeTab === tab.id
-                ? "bg-white text-slate-800 shadow-sm"
-                : "text-slate-600 hover:text-slate-800"
-            )}
-          >
-            <Lucide icon={tab.icon} aria-hidden="true" className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">{tab.label}</span>
-          </button>
-        ))}
-      </div>
-
-      {/* Tab Content */}
-      <div className="rounded-lg border border-slate-200 bg-white">
-        {activeTab === 'pagine' && insightsConfig && (
+  const contenuto = (id: (typeof tabs)[number]["id"]) => {
+    if (id !== 'mappa' && !insightsConfig) {
+      return (
+        <div className="flex items-center justify-center py-12">
+          <Spinner size="md" />
+        </div>
+      );
+    }
+    switch (id) {
+      case 'pagine':
+        return insightsConfig && (
           <RiepilogoPagine
             riepilogo={insights.riepilogoPagine}
             selectedPage={selectedPage}
             onSelectPage={setSelectedPage}
             config={insightsConfig.pagine}
           />
-        )}
-        {activeTab === 'reparti' && insightsConfig && (
+        );
+      case 'reparti':
+        return insightsConfig && (
           <RiepilogoReparti
             riepilogo={insights.riepilogoReparti}
             config={insightsConfig.reparti}
           />
-        )}
-        {activeTab === 'meccaniche' && insightsConfig && (
+        );
+      case 'meccaniche':
+        return insightsConfig && (
           <RiepilogoMeccaniche
             riepilogo={insights.riepilogoMeccaniche}
             config={insightsConfig.meccaniche}
           />
-        )}
-        {activeTab === 'mappa' && insights.riepilogoPagine.length > 0 && (
+        );
+      case 'mappa':
+        return insights.riepilogoPagine.length > 0 ? (
           <FlyerPageMap
             referenze={insights.referenze}
             paginaCorrente={selectedPage ?? insights.riepilogoPagine[0]?.pagina ?? 1}
@@ -159,19 +129,53 @@ const FlyerInsights: FC<FlyerInsightsProps> = ({
             config={insightsConfig?.mappa}
             repartiColorStrategy={insightsConfig?.reparti?.colorStrategy}
           />
-        )}
-        {activeTab === 'mappa' && insights.riepilogoPagine.length === 0 && (
-          <div className="p-6 text-center text-slate-500">
-            <Lucide icon={(insightsConfig?.mappa?.emptyState?.icon || "MapPinOff") as any} className="mx-auto h-8 w-8 mb-2 text-slate-400" />
-            <p className="text-sm">{insightsConfig?.mappa?.emptyState?.message || "Nessuna referenza con dati di posizione per la mappa"}</p>
-          </div>
-        )}
-        {!insightsConfig && activeTab !== 'mappa' && (
-          <div className="flex items-center justify-center py-12">
-            <Spinner size="md" />
-          </div>
-        )}
-      </div>
+        ) : (
+          <EmptyState
+            compatta
+            icon={iconaMappaVuota}
+            title="Mappa non disponibile"
+            description={insightsConfig?.mappa?.emptyState?.message || "Nessuna referenza con dati di posizione per la mappa"}
+          />
+        );
+    }
+  };
+
+  return (
+    <div className={clsx("space-y-4", className)}>
+      {/* Header Stats */}
+      <StatCardGrid className="grid-cols-3 lg:grid-cols-3">
+        <StatCard densita="compatta" etichetta="Referenze" valore={formatNumero(insights.totaleReferenze)} icona="Package" tono="neutral" />
+        <StatCard densita="compatta" etichetta="Pagine" valore={formatNumero(insights.totalePagine)} icona="BookOpen" tono="neutral" />
+        <StatCard densita="compatta" etichetta="Reparti" valore={formatNumero(insights.riepilogoReparti.length)} icona="LayoutGrid" tono="neutral" />
+      </StatCardGrid>
+
+      {/* Viste */}
+      <Tab.Group
+        className="space-y-4"
+        selectedIndex={indiceTab}
+        onChange={(indice: number) => setActiveTab(tabs[indice].id)}
+      >
+        <Tab.List variant="boxed-tabs" aria-label="Viste delle statistiche">
+          {tabs.map(tab => (
+            <Tab key={tab.id}>
+              <Tab.Button
+                as="button"
+                title={tab.label}
+                className="flex w-full items-center justify-center gap-2 whitespace-nowrap text-xs font-medium"
+              >
+                <Lucide icon={tab.icon} aria-hidden="true" className="h-3.5 w-3.5" />
+                <span className="sr-only sm:not-sr-only">{tab.label}</span>
+              </Tab.Button>
+            </Tab>
+          ))}
+        </Tab.List>
+
+        <Tab.Panels className="rounded-card border border-slate-200 bg-white">
+          {tabs.map(tab => (
+            <Tab.Panel key={tab.id}>{contenuto(tab.id)}</Tab.Panel>
+          ))}
+        </Tab.Panels>
+      </Tab.Group>
     </div>
   );
 };
