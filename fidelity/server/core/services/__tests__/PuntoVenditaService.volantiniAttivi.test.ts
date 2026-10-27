@@ -4,7 +4,7 @@ import { STATO_LAVORAZIONE_KIT_RUNTIME, STATO_PROMO } from '../../../../lib/enum
 import { NotFoundError } from '../../../../lib/errors';
 import { CombinazioneCanaleArea, FilesRuntime, RuntimeKit, TipiDiExport } from '../../models';
 import { Promo } from '../../models/promo';
-import { PuntoVenditaService } from '../PuntoVenditaService';
+import { nomePdfScaricato, PuntoVenditaService } from '../PuntoVenditaService';
 
 vi.mock('../../logger', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -56,6 +56,21 @@ describe('PuntoVenditaService.getVolantiniAttivi', () => {
     });
     expect(volantini[0].files.map(f => f.nome)).toEqual(['volantino-1.pdf', 'volantino-2.pdf']);
     expect(volantini[0].files[0].url_download).toContain('/materiali/getMaterialePDF');
+    expect(volantini[0].files.map(f => f.nome_download)).toEqual(['volantino-1.pdf', 'volantino-2.pdf']);
+  });
+
+  it('il PDF si scarica col nome del file, o della promo se il file non ha nome', async () => {
+    preparaDb(
+      [{ id: 'k1', id_promo: 'p1' }],
+      [
+        { id: 'f1', id_runtime: 'k1', nome: 'volantino-cc-toscana', id_olimpo_cloud: 'o1' },
+        { id: 'f2', id_runtime: 'k1', nome: null, id_olimpo_cloud: 'o2' },
+      ],
+    );
+
+    const [volantino] = await service().getVolantiniAttivi('pv1');
+
+    expect(volantino.files.map(f => f.nome_download)).toEqual(['volantino-cc-toscana.pdf', 'Sottocosto ottobre.pdf']);
   });
 
   it('cerca solo promo valide e kit pubblicati della stessa area e canale del PV', async () => {
@@ -88,5 +103,19 @@ describe('PuntoVenditaService.getVolantiniAttivi', () => {
 
   it('punto vendita inesistente: non trovato', async () => {
     await expect(service(null).getVolantiniAttivi('nessuno')).rejects.toThrow(NotFoundError);
+  });
+});
+
+describe('nomePdfScaricato', () => {
+  it('lascia il nome che finisce gia in .pdf, senza distinguere maiuscole', () => {
+    expect(nomePdfScaricato('Volantino.PDF', 'Promo')).toBe('Volantino.PDF');
+  });
+
+  it('toglie i caratteri non ammessi nei nomi di file', () => {
+    expect(nomePdfScaricato('cartella/volantino:"1"?.pdf', 'Promo')).toBe('cartellavolantino1.pdf');
+  });
+
+  it('senza nome del file ne della promo usa volantino.pdf', () => {
+    expect(nomePdfScaricato('  ', '')).toBe('volantino.pdf');
   });
 });

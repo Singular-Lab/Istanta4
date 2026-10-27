@@ -110,7 +110,7 @@ const VolantiniAttivi: React.FC<{ idPv: string; canaleArea: string }> = ({ idPv,
                     <img src={f.url} alt={f.nome} loading="lazy" className="h-40 w-full object-cover object-top bg-slate-50" />
                     <div className="flex items-center gap-2 p-3">
                       <span className="truncate text-sm" title={f.nome}>{f.nome}</span>
-                      <a href={f.url_download} download className="ml-auto flex flex-none items-center text-sm text-primary">
+                      <a href={f.url_download} download={f.nome_download} className="ml-auto flex flex-none items-center text-sm text-primary">
                         <Lucide icon="Download" className="w-4 h-4 mr-1 stroke-[1.3]" /> PDF
                       </a>
                     </div>
