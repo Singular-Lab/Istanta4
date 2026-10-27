@@ -2530,6 +2530,9 @@ out var mismatch);
         public async Task<IActionResult> salva(RevisioniActions acts, int idTracciato = 0, int idOperazione = 0, senderOperazione sender = senderOperazione.istanta)
         {
             BoolResult result = new BoolResult();
+            //TASK-35c2c68d: quanto dura il salvataggio e dove va il tempo, nel log.
+            var cronometroSalva = System.Diagnostics.Stopwatch.StartNew();
+            long msRecord = 0, msLibreria = 0;
             IstantaController icCtrl = new IstantaController(this._config.GetConnectionString("IstandaConnectionDb")!, this.path_external_lib, this.path_external_source, this._dbContextFactory);
 
             var session = SessionIstantaObject.GetSession(HttpContext);
@@ -2583,21 +2586,19 @@ out var mismatch);
                         if (idTracciato <= 0 && acts.idPromo > 0)
                         {
                             idPromoItem = acts.idPromo;
-                            var promo = this.ctx2.Promos.Include(f => f.PromoTracciatis).ThenInclude(f => f.PromoTracciatiRecords).Where(f => f.Id == acts.idPromo).FirstOrDefault();
-                            if (promo == null)
+                            //TASK-35c2c68d: solo i record di questo codice nei tracciati della promo. Prima si caricava
+                            //la promo intera, tutti i tracciati e tutti i loro record col dato, per ogni revisione: con
+                            //"tutti i tracciati" il salvataggio cresceva con la promo. La scelta e' la stessa di prima.
+                            var inizioRecord = cronometroSalva.ElapsedMilliseconds;
+                            if (!this.ctx2.Promos.Any(f => f.Id == acts.idPromo))
                             {
                                 //I20-1069: passa dal catch del ciclo, che dice quante revisioni erano gia' salvate.
                                 throw new ErroreIstanta("lettura della promo", $"la promo {acts.idPromo} non esiste.");
                             }
 
-                            foreach (var trac in promo.PromoTracciatis)
-                            {
-                                var item = trac.PromoTracciatiRecords.Where(f => f.Codice == act.Codice).OrderByDescending(f => f.DataRegistrazione).FirstOrDefault();
-                                if (item != null)
-                                {
-                                    promoRecordsArt.Add(item);
-                                }
-                            }
+                            promoRecordsArt = Utility.RecordsRevisioneArticolo.UltimoPerTracciato(
+                                Utility.RecordsRevisioneArticolo.DellArticoloNellaPromo(this.ctx2, acts.idPromo, act.Codice).ToList());
+                            msRecord += cronometroSalva.ElapsedMilliseconds - inizioRecord;
                         }
                         else
                         {
@@ -2678,10 +2679,12 @@ out var mismatch);
 
                             _pass["wrap"] = wrap;
                             //I20-1069: obbligatorio. Se manca nella dll lo si dice; prima diventava "elemento non trovato durante l'estrazione del garante".
+                            var inizioLibreria = cronometroSalva.ElapsedMilliseconds;
                             string resultJson = icCtrl.execLibFunctionRichiesta(
                                 $"AgenziaLib.{this._fico_conf.Value.nomeCliente}.GetMetaPerRevisioneDaGruppiMultipli",
                                 _pass
                             ) as string;
+                            msLibreria += cronometroSalva.ElapsedMilliseconds - inizioLibreria;
 
                             var resultGarante = !string.IsNullOrWhiteSpace(resultJson)
                                 ? JsonConvert.DeserializeObject<RitornoMetaPerRevisioneGarante>(resultJson)
@@ -2736,10 +2739,12 @@ out var mismatch);
                             _pass["idTracciato"] = el.IdTracciato;
                             _pass["siglaTracciato"] = tracciato?.Sigla ?? "";
 
+                            var inizioLibreria = cronometroSalva.ElapsedMilliseconds;
                             string metaResult = icCtrl.execLibFunction(
                                 $"AgenziaLib.{this._fico_conf.Value.nomeCliente}.MetaPerRevisione",
                                 _pass
                             ) as string;
+                            msLibreria += cronometroSalva.ElapsedMilliseconds - inizioLibreria;
 
                             metaRev = metaResult ?? null;
                         }
@@ -2825,6 +2830,7 @@ out var mismatch);
                         string firma_complessiva_gruppo = "";
                         List<PromoTracciatiRecord> recordsFirma = new List<PromoTracciatiRecord>();
 
+                        var inizioRecordGruppo = cronometroSalva.ElapsedMilliseconds;
                         if (idTracciato <= 0)
                         {
                             recordsFirma = GetRecordsFirmaGruppo(
@@ -2847,6 +2853,7 @@ out var mismatch);
                             result.Esito = false;
                             return Ok(result);
                         }
+                        msRecord += cronometroSalva.ElapsedMilliseconds - inizioRecordGruppo;
 
                         //I20-983: come sopra, senza record vale la firma dichiarata dal chiamante.
                         firma_complessiva_gruppo = Utility.Main.firmaDaRecordsOppureDichiarata(
@@ -2916,10 +2923,12 @@ out var mismatch);
 
                             _pass["wrap"] = wrap;
                             //I20-1069: obbligatorio. Se manca nella dll lo si dice; prima diventava "elemento non trovato durante l'estrazione del garante".
+                            var inizioLibreria = cronometroSalva.ElapsedMilliseconds;
                             string resultJson = icCtrl.execLibFunctionRichiesta(
                                 $"AgenziaLib.{this._fico_conf.Value.nomeCliente}.GetMetaPerRevisioneDaGruppiMultipli",
                                 _pass
                             ) as string;
+                            msLibreria += cronometroSalva.ElapsedMilliseconds - inizioLibreria;
 
                             var resultGarante = !string.IsNullOrWhiteSpace(resultJson)
                                 ? JsonConvert.DeserializeObject<RitornoMetaPerRevisioneGarante>(resultJson)
@@ -2971,10 +2980,12 @@ out var mismatch);
                             _pass["idTracciato"] = el.IdTracciato;
                             _pass["siglaTracciato"] = tracciato?.Sigla ?? "";
 
+                            var inizioLibreria = cronometroSalva.ElapsedMilliseconds;
                             string metaResult = icCtrl.execLibFunction(
                                 $"AgenziaLib.{this._fico_conf.Value.nomeCliente}.MetaPerRevisione",
                                 _pass
                             ) as string;
+                            msLibreria += cronometroSalva.ElapsedMilliseconds - inizioLibreria;
 
                             metaRev = metaResult ?? null;
                         }
@@ -3156,6 +3167,9 @@ out var mismatch);
                     break;
                 }
             }
+            //TASK-35c2c68d: il resto del tempo e' la scrittura delle revisioni e del registro delle operazioni.
+            _logger.LogInformation("Revisore/salva: {Salvate} revisioni salvate su {Revisioni} in {Tutto} ms (record della promo {Record} ms, libreria del cliente {Libreria} ms); tracciato {Tracciato}, promo {Promo}",
+                revisioniSalvate, acts.coda.Count, cronometroSalva.ElapsedMilliseconds, msRecord, msLibreria, idTracciato, acts.idPromo);
             if (erroreDuranteIlSalvataggio != null)
             {
                 // Prima questo errore finiva in result.error, che non veniva mai restituito:
