@@ -1595,4 +1595,26 @@ class Agenzia extends IAgenzia {
         return true;
     }
 
+    /// TASK-e9620c69: Edro21 vuole vuote le descrizioni fatte solo di spazi e a capo, quando si salva dal
+    /// revisore web o dalla pagina Archivio. Dal Plugin no: un a capo messo dalla scheda ref si perde se
+    /// l'articolo si salva poi da qui, ed e' voluto. Il testo vero parte com'e', spazi compresi;
+    /// DescrizioneIndd non si tocca. Le revisioni non si modificano: si restituiscono copie.
+    preparaRevisioniDaSalvare(revisioni) {
+        if (!Array.isArray(revisioni)) {
+            return revisioni;
+        }
+        return revisioni.map(function (revisione) {
+            if (revisione == null || typeof revisione !== "object") {
+                return revisione;
+            }
+            const preparata = Object.assign({}, revisione);
+            ["Descrizione1", "Descrizione2", "Descrizione3", "Descrizione4"].forEach(function (campo) {
+                if (typeof preparata[campo] === "string" && preparata[campo] !== "" && preparata[campo].trim() === "") {
+                    preparata[campo] = "";
+                }
+            });
+            return preparata;
+        });
+    }
+
 }

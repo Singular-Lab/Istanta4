@@ -93,8 +93,30 @@ class Archivio {
         this.salvaFunction(listAct, callback, sender);
     }
 
+    /// TASK-e9620c69: come nel revisore, prima di partire le revisioni passano dall'agenzia
+    /// (IAgenzia.preparaRevisioniDaSalvare): Edro21 svuota le descrizioni fatte solo di spazi e a capo.
+    /// L'agenzia si crea alla prima volta; in Node (tests/istanta-web) non c'e', e le revisioni partono come sono.
+    preparaRevisioniDaSalvare(listAct) {
+        if (this.agenzia === undefined) {
+            this.agenzia = typeof Agenzia !== "undefined" ? new Agenzia() : null;
+        }
+        const agenzia = this.agenzia;
+        if (agenzia == null || typeof agenzia.preparaRevisioniDaSalvare !== "function") {
+            return listAct;
+        }
+        try {
+            const preparate = agenzia.preparaRevisioniDaSalvare(listAct);
+            return Array.isArray(preparate) ? preparate : listAct;
+        }
+        catch (e) {
+            console.error("Revisioni non preparate dall'agenzia, partono come sono:", e);
+            return listAct;
+        }
+    }
+
     salvaFunction(listAct, callback, senderButton) {
         let ME = this;
+        listAct = this.preparaRevisioniDaSalvare(listAct);
         let IdTracciato = 0;
         showLoading();
         console.log("Salva function")
