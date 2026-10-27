@@ -113,7 +113,8 @@ public sealed partial class ServizioCorrezioni
     {
         var vol = await ctx.Volantinis.AsNoTracking().FirstAsync(v => v.Id == idVolantino);
         // Senza versione: l'ultima (quella che si corregge). Con versione: lo storico (j213).
-        short versione = versioneRichiesta ?? await ctx.VolantiniPagines.Where(p => p.IdVol == idVolantino)
+        // I20-1149: solo le versioni valide; le revocate sono negative e alla versione 0 non c'e' niente.
+        short versione = versioneRichiesta ?? await ctx.VolantiniPagines.Where(p => p.IdVol == idVolantino && p.Versione > 0)
                                   .MaxAsync(p => (short?)p.Versione) ?? 0;
         var pagine = await ctx.VolantiniPagines.AsNoTracking()
             .Where(p => p.IdVol == idVolantino && p.Versione == versione)
@@ -503,13 +504,22 @@ public sealed partial class ServizioCorrezioni
         return vuoto;
     }
 
+    /// <summary>I20-1149: il messaggio per un volantino alla versione 0, all'apertura e al salvataggio.</summary>
+    public static string AvvisoVersioneZero(string titolo) =>
+        $"Il volantino «{titolo}» è alla versione 0: tutte le sue versioni sono state revocate. " +
+        "Si potrà aprire quando ne arriverà una nuova da Fidelity.";
+
     private async Task<(Volantini? Vol, EsitoCorrezione? Errore)> VolantinoScrivibileAsync(Utente u, int idPagina)
     {
         var pagina = await ctx.VolantiniPagines.AsNoTracking().FirstOrDefaultAsync(p => p.Id == idPagina);
         if (pagina == null) return (null, NonTrovata("Pagina non trovata."));
         var vol = await ctx.Volantinis.AsNoTracking().FirstAsync(v => v.Id == pagina.IdVol);
 
-        short ultima = await ctx.VolantiniPagines.Where(p => p.IdVol == vol.Id).MaxAsync(p => p.Versione);
+        // I20-1149: l'ultima versione valida. Alla versione 0 (tutte revocate) non si corregge niente.
+        short ultima = await ctx.VolantiniPagines.Where(p => p.IdVol == vol.Id && p.Versione > 0)
+                                .MaxAsync(p => (short?)p.Versione) ?? 0;
+        if (ultima == 0)
+            return (vol, EsitoCorrezione.No(409, "versione_zero", AvvisoVersioneZero(vol.Titolo)));
         if (pagina.Versione != ultima)
             return (vol, EsitoCorrezione.No(409, "versione_superata",
                 "È uscita una nuova versione del volantino: ricarica la pagina."));

@@ -74,7 +74,8 @@ public sealed class ServizioPromo
                 Id = v.Id,
                 Titolo = v.Titolo,
                 Versione = ver?.Ultima ?? 0,
-                Revocabile = ver != null && ver.Quante > 1,
+                // I20-1149: anche la versione 1 si revoca, e il volantino va alla versione 0
+                Revocabile = ver != null,
                 ValiditaInizio = FinestreCategory.Locale(v.DataValiditaInizio).Date,
                 ValiditaFine = FinestreCategory.Locale(v.DataValiditaFine).Date,
                 Scadenza = FinestreCategory.Locale(v.DataScadenza).Date,
@@ -189,7 +190,9 @@ public sealed class ServizioPromo
         if (vol == null) return (null, "Volantino non trovato.");
         var versioni = await ctx.VolantiniPagines.AsNoTracking()
             .Where(p => p.IdVol == idVol && p.Versione > 0).Select(p => p.Versione).Distinct().OrderByDescending(x => x).ToListAsync();
-        if (versioni.Count < 2) return (null, "Questo volantino ha una sola versione: non c'è una versione precedente a cui tornare.");
+        // I20-1149: come nell'originale si revoca anche la versione 1, e il volantino va alla
+        // versione 0: non si apre finche' non ne arriva una nuova da fidelity.
+        if (versioni.Count == 0) return (null, "Questo volantino è già alla versione 0: non c'è nessuna versione da revocare.");
 
         // Le correzioni che l'editor mostra oggi sono proprio quelle dell'ultima versione.
         var stato = await correzioni.CaricaAsync(idVol, u);
@@ -199,7 +202,7 @@ public sealed class ServizioPromo
             Titolo = vol.Titolo,
             Classificazione = vol.Classificazione,
             Versione = versioni[0],
-            Precedente = versioni[1],
+            Precedente = versioni.Count > 1 ? versioni[1] : (short)0,
             Correzioni = stato
         }, null);
     }
