@@ -157,6 +157,12 @@ export interface ParsedOIDCUtente {
   codice_posizione?: string;
 }
 
+export interface ExternalAuthContext {
+  source: 'oidc' | 'saml' | 'service';
+  allowedEmailDomains?: readonly string[] | null;
+  allowedUserTypes?: readonly string[] | null;
+}
+
 // ── Opzioni report per cliente ────────────────────────────────────────────────
 
 export interface ReportOptionPlugin {
@@ -327,7 +333,8 @@ export interface ImportPuntiVenditaAgenzia {
 export interface IAgenziaLib {
   parseUtenteOIDC(
     email: string,
-    claims: OidcUserClaims
+    claims: OidcUserClaims,
+    context?: ExternalAuthContext
   ): Promise<ParsedOIDCUtente>;
 
   CHIAVE_CAMPO_MENABO: string;

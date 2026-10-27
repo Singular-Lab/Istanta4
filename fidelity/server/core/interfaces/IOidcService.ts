@@ -19,6 +19,7 @@ export interface OidcUserClaims {
   given_name?: string;
   family_name?: string;
   nonce?: string;
+  roles?: string[];
 }
 
 export interface OidcAuthorizeParams {
