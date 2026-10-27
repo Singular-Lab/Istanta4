@@ -1,4 +1,5 @@
 import FormCheck from "./FormCheck";
+import FormField from "./FormField";
 import FormInput from "./FormInput";
 import FormTextarea from "./FormTextarea";
 import FormHelp from "./FormHelp";
@@ -10,6 +11,7 @@ import InputGroup from "./InputGroup";
 
 export {
   FormCheck,
+  FormField,
   FormInput,
   FormTextarea,
   FormHelp,
