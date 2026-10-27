@@ -16,7 +16,9 @@ import {
     FormTextarea,
 } from '../../components/Base/Form';
 import Lucide from '../../components/Base/Lucide';
+import PageError from '../../components/Base/PageError';
 import PageHeader from '../../components/Base/PageHeader';
+import StatusBadge from '../../components/Base/StatusBadge';
 import Table from '../../components/Base/Table';
 import EmptyState from '../../components/EmptyState';
 import { useNotification } from '../../context/NotificationContext';
@@ -30,7 +32,7 @@ const Card: React.FC<{
     <div className={clsx('box box--stacked p-5 mb-5', className)}>
         {title && (
             <div className="flex items-center justify-between mb-3">
-                <h3 className="text-[0.94rem] font-medium">{title}</h3>
+                <h3 className="title-card">{title}</h3>
                 {right}
             </div>
         )}
@@ -68,13 +70,16 @@ type ButtonParamUsage = {
 };
 
 const GestionePresetsWhatsappSuperAdmin: React.FC = () => {
-    const { template, presets } = useLoaderData() as {
+    const { template, presets, errore } = useLoaderData() as {
         template: any;
         presets: GDOWhatsappPresetAttributes[];
+        errore?: string | null;
     };
     const { showNotification } = useNotification();
     const { revalidate } = useRevalidator();
-    const [isLoadingNewDefault, setIsLoadingNewDefault] = useState(false);
+    // Preset che si sta impostando come predefinito
+    const [presetDefaultInCorso, setPresetDefaultInCorso] = useState<string | null>(null);
+    const [salvataggioInCorso, setSalvataggioInCorso] = useState(false);
     const [selectedPreset, setSelectedPreset] = useState<string | undefined>(undefined);
     const [isEditing, setIsEditing] = useState(false);
     const [presetDaEliminare, setPresetDaEliminare] = useState<GDOWhatsappPresetAttributes | null>(null);
@@ -212,64 +217,69 @@ const GestionePresetsWhatsappSuperAdmin: React.FC = () => {
                     : {}),
             };
         });
-        console.log(template);
-        if (isEditing) {
-            const result = await ServerCall.put<{
-                success: boolean; error?: string
-            }>("/whatsapp/modifica_preset_template_whatsapp", {
-                id_preset: selectedPreset!,
-                nome_preset: (e.target as any).presetName.value,
-                contenuto_preset: payload,
-            });
-            if (!result.success) {
-                showNotification(
-                    <div className="flex flex-row items-center">
-                        <Lucide icon="CircleX" className="text-danger w-8 h-8" />
-                        <div className="ml-4 mr-4">
-                            <div className="font-bold">Errore nella modifica del preset</div>
-                            <div className="mt-1 text-slate-500">
-                                {result.error || 'Si è verificato un errore sconosciuto.'}
-                            </div>
-                        </div>
-                    </div>
-                );
-                return;
-            } else {
-                revalidate();
-            }
-        } else {
-            const result = await ServerCall.post<{
-                success: boolean;
-                newPresetId?: string;
-                error?: string;
-            }>("/whatsapp/crea_preset_template_whatsapp", {
-                id_template: template.id_gdowhatsapptemplate,
-                nome_preset: (e.target as any).presetName.value,
-                contenuto_preset: payload,
-            });
 
-            if (!result.success) {
-                showNotification(
-                    <div className="flex flex-row items-center">
-                        <Lucide icon="CircleX" className="text-danger w-8 h-8" />
-                        <div className="ml-4 mr-4">
-                            <div className="font-bold">Errore nella creazione del preset</div>
-                            <div className="mt-1 text-slate-500">
-                                {result.error || 'Si è verificato un errore sconosciuto.'}
+        setSalvataggioInCorso(true);
+        try {
+            if (isEditing) {
+                const result = await ServerCall.put<{
+                    success: boolean; error?: string
+                }>("/whatsapp/modifica_preset_template_whatsapp", {
+                    id_preset: selectedPreset!,
+                    nome_preset: (e.target as any).presetName.value,
+                    contenuto_preset: payload,
+                });
+                if (!result.success) {
+                    showNotification(
+                        <div className="flex flex-row items-center">
+                            <Lucide icon="CircleX" className="text-danger w-8 h-8" />
+                            <div className="ml-4 mr-4">
+                                <div className="font-bold">Errore nella modifica del preset</div>
+                                <div className="mt-1 text-slate-500">
+                                    {result.error || 'Si è verificato un errore sconosciuto.'}
+                                </div>
                             </div>
                         </div>
-                    </div>
-                );
-                return;
+                    );
+                    return;
+                } else {
+                    revalidate();
+                }
             } else {
-                revalidate();
+                const result = await ServerCall.post<{
+                    success: boolean;
+                    newPresetId?: string;
+                    error?: string;
+                }>("/whatsapp/crea_preset_template_whatsapp", {
+                    id_template: template.id_gdowhatsapptemplate,
+                    nome_preset: (e.target as any).presetName.value,
+                    contenuto_preset: payload,
+                });
+
+                if (!result.success) {
+                    showNotification(
+                        <div className="flex flex-row items-center">
+                            <Lucide icon="CircleX" className="text-danger w-8 h-8" />
+                            <div className="ml-4 mr-4">
+                                <div className="font-bold">Errore nella creazione del preset</div>
+                                <div className="mt-1 text-slate-500">
+                                    {result.error || 'Si è verificato un errore sconosciuto.'}
+                                </div>
+                            </div>
+                        </div>
+                    );
+                    return;
+                } else {
+                    revalidate();
+                }
             }
-            console.log('PAYLOAD PRESET WHATSAPP →', payload);
+        } catch (error: unknown) {
+            showNotification(error instanceof Error ? error.message : 'Errore durante il salvataggio del preset', { variant: 'error' });
+        } finally {
+            setSalvataggioInCorso(false);
         }
     };
 
     async function updateIsDefaultTemplate(id_preset: string) {
-        console.log("ID PRESET E TEMPLATE →", id_preset);
         const result = await ServerCall.put<{ success: boolean; error?: string }>(
             "/whatsapp/set_default_preset_template_whatsapp",
             { id_preset }
@@ -342,14 +352,29 @@ const GestionePresetsWhatsappSuperAdmin: React.FC = () => {
                 description={<>Il preset <strong>{presetDaEliminare?.nome_preset_gdowhatsappreset}</strong> verrà eliminato. Le campagne già inviate non cambiano.</>}
                 confirmLabel="Elimina"
                 loading={eliminazioneInCorso}
-                onClose={() => setPresetDaEliminare(null)}
+                onClose={() => !eliminazioneInCorso && setPresetDaEliminare(null)}
                 onConfirm={eliminaPreset}
             />
             <PageHeader
-                title="Gestione Presets WhatsApp Super Admin"
-                description="In questa pagina puoi gestire i presets di WhatsApp per il Super Admin."
+                title="Preset WhatsApp"
+                description={
+                    template?.nome_template_gdowhatsapptemplate
+                        ? `Preset del template ${template.nome_template_gdowhatsapptemplate}: come si compilano i suoi segnaposto.`
+                        : 'Preset del template: come si compilano i suoi segnaposto.'
+                }
+                indietro={{
+                    to: `/whatsapp/gestione-whatsapp-superadmin/templates?id=${template?.id_gdo_gdowhatsapptemplate ?? ''}`,
+                    etichetta: 'Torna ai template',
+                }}
             />
 
+            {errore || !template ? (
+                <PageError
+                    titolo="Template non caricato"
+                    motivo={errore || 'Il template indicato non esiste o non è più disponibile.'}
+                    onRiprova={revalidate}
+                />
+            ) : (
             <div className="space-y-6">
                 {/* Card 1: preset esistenti (sempre in alto, full width) */}
                 <Card title="Preset esistenti">
@@ -380,7 +405,7 @@ const GestionePresetsWhatsappSuperAdmin: React.FC = () => {
                                             </Table.Td>
                                             <Table.Td>
                                                 {preset.is_default_gdowhatsappreset && (
-                                                    <span className="badge badge-success mr-1">Default</span>
+                                                    <StatusBadge tono="success" etichetta="Predefinito" />
                                                 )}
                                             </Table.Td>
                                             <Table.Td className="text-primary">
@@ -399,18 +424,22 @@ const GestionePresetsWhatsappSuperAdmin: React.FC = () => {
                                                         <Button
                                                             size="xs"
                                                             onClick={async () => {
-                                                                setIsLoadingNewDefault(true);
-                                                                await updateIsDefaultTemplate(preset.id_gdowhatsappreset!);
-                                                                setIsLoadingNewDefault(false);
+                                                                setPresetDefaultInCorso(preset.id_gdowhatsappreset ?? null);
+                                                                try {
+                                                                    await updateIsDefaultTemplate(preset.id_gdowhatsappreset!);
+                                                                } catch (error: unknown) {
+                                                                    showNotification(error instanceof Error ? error.message : 'Errore nell\'impostare il preset come default', { variant: 'error' });
+                                                                } finally {
+                                                                    setPresetDefaultInCorso(null);
+                                                                }
                                                             }}
                                                             variant={preset.is_default_gdowhatsappreset ? 'primary' : 'outline-primary'}
-                                                            disabled={preset.is_default_gdowhatsappreset || isLoadingNewDefault}
+                                                            loading={presetDefaultInCorso === preset.id_gdowhatsappreset}
+                                                            disabled={preset.is_default_gdowhatsappreset || presetDefaultInCorso !== null}
                                                             title="Imposta come default"
                                                         >
-                                                            {isLoadingNewDefault && !preset.is_default_gdowhatsappreset ? (
-                                                                <Lucide icon="Loader" className="w-4 h-4 mr-1 animate-spin" />
-                                                            ) : (
-                                                                <Lucide icon="Star" className="w-4 h-4 mr-1" />
+                                                            {presetDefaultInCorso !== preset.id_gdowhatsappreset && (
+                                                                <Lucide icon="Star" aria-hidden="true" className="w-4 h-4 mr-1" />
                                                             )}
                                                             Default
                                                         </Button>
@@ -443,7 +472,7 @@ const GestionePresetsWhatsappSuperAdmin: React.FC = () => {
                                                             }}
 
                                                         >
-                                                            <Lucide icon="Pen" className="w-4 h-4 mr-1" />
+                                                            <Lucide icon="Pen" aria-hidden="true" className="w-4 h-4 mr-1" />
                                                             Modifica
                                                         </Button>
                                                     </PermissionGate>
@@ -454,7 +483,7 @@ const GestionePresetsWhatsappSuperAdmin: React.FC = () => {
                                                             title="Elimina"
                                                             onClick={() => setPresetDaEliminare(preset)}
                                                         >
-                                                            <Lucide icon="Trash2" className="w-4 h-4 mr-1" /> Elimina
+                                                            <Lucide icon="Trash2" aria-hidden="true" className="w-4 h-4 mr-1" /> Elimina
                                                         </Button>
                                                     </PermissionGate>
                                                 </div>
@@ -478,7 +507,7 @@ const GestionePresetsWhatsappSuperAdmin: React.FC = () => {
                                 name="presetName"
                                 placeholder="default"
                             />
-                            <p className="text-[0.75rem] mt-1 text-slate-500">
+                            <p className="text-xs mt-1 text-slate-500">
                                 Usa <strong>“default”</strong> se vuoi che sia quello di esercizio.
                             </p>
                         </div>
@@ -498,7 +527,7 @@ const GestionePresetsWhatsappSuperAdmin: React.FC = () => {
                                         return (
                                             <div
                                                 key={key}
-                                                className="p-3 rounded-md border border-slate-200 bg-slate-50"
+                                                className="p-3 rounded-control border border-slate-200 bg-slate-50"
                                             >
                                                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-1 mb-2">
                                                     <div className="text-sm font-semibold">
@@ -582,7 +611,7 @@ const GestionePresetsWhatsappSuperAdmin: React.FC = () => {
                                                     )}
                                                 </div>
 
-                                                <p className="text-[0.75rem] mt-2 text-slate-500">
+                                                <p className="text-xs mt-2 text-slate-500">
                                                     Se scegli <strong>literal</strong>, compila
                                                     anche “Value”.
                                                 </p>
@@ -596,10 +625,10 @@ const GestionePresetsWhatsappSuperAdmin: React.FC = () => {
                         {/* PULSANTI URL */}
                         {buttonParamUsages.length > 0 && (
                             <div className="border-t border-slate-200 pt-4">
-                                <h3 className="font-semibold mb-1 text-danger">
+                                <h3 className="title-card mb-1">
                                     Pulsanti URL
                                 </h3>
-                                <p className="text-[0.75rem] mb-3 text-slate-500">
+                                <p className="text-xs mb-3 text-slate-500">
                                     Inserisci solo la parte dinamica che sostituisce {' '}
                                     &#123;&#123;1&#125;&#125; (es.
                                     <span className="italic"> catalogo01.html</span>).
@@ -613,14 +642,14 @@ const GestionePresetsWhatsappSuperAdmin: React.FC = () => {
                                         return (
                                             <div
                                                 key={key}
-                                                className="p-3 rounded-md border border-slate-200 bg-slate-50"
+                                                className="p-3 rounded-control border border-slate-200 bg-slate-50"
                                             >
                                                 <div className="text-sm mb-1">
                                                     <span className="font-semibold">
                                                         Bottone #{btn.buttonIndex} - «{btn.label}»
                                                     </span>
                                                 </div>
-                                                <div className="text-[0.75rem] text-slate-500 mb-3">
+                                                <div className="text-xs text-slate-500 mb-3">
                                                     URL base:{' '}
                                                     <span className="text-pink-500 break-all">
                                                         {btn.url}
@@ -705,7 +734,7 @@ const GestionePresetsWhatsappSuperAdmin: React.FC = () => {
                                                     )}
                                                 </div>
 
-                                                <p className="text-[0.75rem] mt-2 text-slate-500">
+                                                <p className="text-xs mt-2 text-slate-500">
                                                     Se bind ≠ <strong>literal</strong>, “Value”
                                                     non serve. “Sample” serve sempre per la
                                                     preview.
@@ -732,7 +761,7 @@ const GestionePresetsWhatsappSuperAdmin: React.FC = () => {
 
                         <div className="pt-2">
                             <PermissionGate permission={PERMISSIONS.WHATSAPP.GESTISCI_PRESETS} mode="disable">
-                                <Button type="submit" variant="submit" className="w-full md:w-auto">
+                                <Button type="submit" variant="submit" className="w-full md:w-auto" loading={salvataggioInCorso}>
                                     {isEditing ? 'Aggiorna Preset' : 'Crea Preset'}
                                 </Button>
                             </PermissionGate>
@@ -740,6 +769,7 @@ const GestionePresetsWhatsappSuperAdmin: React.FC = () => {
                     </form>
                 </Card>
             </div>
+            )}
         </div>
     );
 };

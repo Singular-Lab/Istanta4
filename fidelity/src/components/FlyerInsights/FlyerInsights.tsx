@@ -1,5 +1,5 @@
 import Lucide from "@/components/Base/Lucide";
-import LoadingSpinner from "@/components/LoadingSpinner";
+import Spinner from "@/components/Base/Spinner";
 import { useFetchFlyerInsightsConfig } from "@/query/query";
 import { FlyerInsights as FlyerInsightsType } from "@/types/flyerInsights";
 import clsx from "clsx";
@@ -49,7 +49,7 @@ const FlyerInsights: FC<FlyerInsightsProps> = ({
   if (isLoading) {
     return (
       <div className={clsx("flex items-center justify-center py-12", className)}>
-        <LoadingSpinner />
+        <Spinner size="md" />
       </div>
     );
   }
@@ -58,7 +58,7 @@ const FlyerInsights: FC<FlyerInsightsProps> = ({
       return (
         <div className={clsx("rounded-lg border border-dashed border-slate-200 p-8 text-center", className)}>
           <Lucide icon="FileSearch" className="mx-auto h-10 w-10 text-slate-400 mb-3" />
-          <h3 className="text-sm font-semibold text-slate-700">Per questo kit non è presente il tipo di esportazione VOL</h3>
+          <h3 className="title-card">Per questo kit non è presente il tipo di esportazione VOL</h3>
           <p className="text-xs text-slate-500 mt-1">
             Le statistiche sono disponibili per i kit con esportazione VOL.
           </p>
@@ -71,7 +71,7 @@ const FlyerInsights: FC<FlyerInsightsProps> = ({
     return (
       <div className={clsx("rounded-lg border border-dashed border-slate-200 p-8 text-center", className)}>
         <Lucide icon="FileSearch" className="mx-auto h-10 w-10 text-slate-400 mb-3" />
-        <h3 className="text-sm font-semibold text-slate-700">Nessuna referenza trovata</h3>
+        <h3 className="title-card">Nessuna referenza trovata</h3>
         <p className="text-xs text-slate-500 mt-1">
           Le statistiche saranno disponibili quando le referenze avranno dati di posizione.
         </p>
@@ -111,6 +111,9 @@ const FlyerInsights: FC<FlyerInsightsProps> = ({
         {tabs.map(tab => (
           <button
             key={tab.id}
+            type="button"
+            aria-label={tab.label}
+            aria-pressed={activeTab === tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={clsx(
               "flex-1 flex items-center justify-center gap-2 rounded-md px-3 py-2 text-xs font-medium transition",
@@ -119,7 +122,7 @@ const FlyerInsights: FC<FlyerInsightsProps> = ({
                 : "text-slate-600 hover:text-slate-800"
             )}
           >
-            <Lucide icon={tab.icon as any} className="h-3.5 w-3.5" />
+            <Lucide icon={tab.icon} aria-hidden="true" className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">{tab.label}</span>
           </button>
         ))}
@@ -165,7 +168,7 @@ const FlyerInsights: FC<FlyerInsightsProps> = ({
         )}
         {!insightsConfig && activeTab !== 'mappa' && (
           <div className="flex items-center justify-center py-12">
-            <LoadingSpinner />
+            <Spinner size="md" />
           </div>
         )}
       </div>

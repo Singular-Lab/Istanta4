@@ -104,7 +104,7 @@ Menu.Items = ({
         <MenuItems
           as="div"
           className={twMerge([
-            "p-2 shadow-[0px_3px_10px_#00000017] bg-white border border-slate-200 rounded-lg dark:bg-darkmode-600",
+            "p-2 shadow-[0px_3px_10px_rgb(0_0_0/0.09)] bg-white border border-slate-200 rounded-lg dark:bg-darkmode-600",
             className,
           ])}
           {...props}

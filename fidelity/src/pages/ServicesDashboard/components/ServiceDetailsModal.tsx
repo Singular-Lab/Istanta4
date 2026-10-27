@@ -277,9 +277,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           <button
             type="button"
             onClick={togglePlay}
+            aria-label={isPlaying ? "Pausa" : "Riproduci"}
             className="text-white/90 hover:text-white transition-colors focus:outline-none"
           >
-            <Lucide icon={isPlaying ? "Pause" : "Play"} className="w-5 h-5" />
+            <Lucide icon={isPlaying ? "Pause" : "Play"} aria-hidden="true" className="w-5 h-5" />
           </button>
           <span className="text-white/60 text-xs font-mono tabular-nums">
             {formatTime(currentTime)} / {formatTime(duration)}
@@ -288,16 +289,18 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           <button
             type="button"
             onClick={() => setIsMuted(m => !m)}
+            aria-label={isMuted ? "Attiva audio" : "Disattiva audio"}
             className="text-white/90 hover:text-white transition-colors focus:outline-none"
           >
-            <Lucide icon={isMuted ? "VolumeX" : "Volume2"} className="w-4 h-4" />
+            <Lucide icon={isMuted ? "VolumeX" : "Volume2"} aria-hidden="true" className="w-4 h-4" />
           </button>
           <button
             type="button"
             onClick={toggleFullscreen}
+            aria-label={isFullscreen ? "Esci da schermo intero" : "Schermo intero"}
             className="text-white/90 hover:text-white transition-colors focus:outline-none"
           >
-            <Lucide icon={isFullscreen ? "Minimize2" : "Maximize2"} className="w-4 h-4" />
+            <Lucide icon={isFullscreen ? "Minimize2" : "Maximize2"} aria-hidden="true" className="w-4 h-4" />
           </button>
         </div>
       </div>
@@ -825,9 +828,10 @@ const ServiceDetailsModal = ({
                         <button
                           type="button"
                           onClick={toggleTrailerPlay}
+                          aria-label={trailerPlaying ? "Pausa" : "Riproduci"}
                           className="text-white/90 hover:text-white transition-colors focus:outline-none"
                         >
-                          <Lucide icon={trailerPlaying ? "Pause" : "Play"} className="w-4 h-4" />
+                          <Lucide icon={trailerPlaying ? "Pause" : "Play"} aria-hidden="true" className="w-4 h-4" />
                         </button>
                         <span className="text-white/60 text-xs font-mono tabular-nums">
                           {formatTime(trailerTime)} / {formatTime(trailerDuration)}
@@ -836,16 +840,19 @@ const ServiceDetailsModal = ({
                         <button
                           type="button"
                           onClick={toggleTrailerMute}
+                          aria-label={trailerMuted ? "Attiva audio" : "Disattiva audio"}
                           className="text-white/90 hover:text-white transition-colors focus:outline-none"
                         >
-                          <Lucide icon={trailerMuted ? "VolumeX" : "Volume2"} className="w-4 h-4" />
+                          <Lucide icon={trailerMuted ? "VolumeX" : "Volume2"} aria-hidden="true" className="w-4 h-4" />
                         </button>
                         <button
                           type="button"
                           onClick={toggleTrailerFullscreen}
+                          aria-label={trailerFullscreen ? "Esci da schermo intero" : "Schermo intero"}
                           className="text-white/90 hover:text-white transition-colors focus:outline-none"
                         >
                           <Lucide
+                            aria-hidden="true"
                             icon={trailerFullscreen ? "Minimize2" : "Maximize2"}
                             className="w-4 h-4"
                           />
@@ -1020,7 +1027,7 @@ const ServiceDetailsModal = ({
                             {formatBytes(doc.size)}
                           </span>
                           {doc.extension && (
-                            <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded w-10 text-center">
+                            <span className="text-3xs font-semibold uppercase tracking-wide text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded w-10 text-center">
                               {doc.extension}
                             </span>
                           )}

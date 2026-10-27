@@ -4,34 +4,18 @@ import { FormCheck, FormInput } from "@/components/Base/Form";
 import { Tab } from "@/components/Base/Headless";
 import Lucide from "@/components/Base/Lucide";
 import PageHeader from "@/components/Base/PageHeader";
+import StatusBadge from "@/components/Base/StatusBadge";
 import Table from "@/components/Base/Table";
 import EmptyState from "@/components/EmptyState";
 import withSessionCheck from "@/components/SessionChecker";
+import { formatDataOra, valoreOAssente } from "@/utils/format";
 import clsx from "clsx";
-import dayjs from "dayjs";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useLoaderData } from "react-router-dom";
-import { STATO_LAVORAZIONE_KIT_RUNTIME, STATO_PROMO, TIPO_KIT_DESIGN } from "../../../../lib/enums";
+import { Link, useLoaderData, useLocation, useParams } from "react-router-dom";
+import { STATO_PROMO, TIPO_KIT_DESIGN } from "../../../../lib/enums";
 import { DESIGN_KIT, RUNTIME_KIT, TipiDiExportAttributes } from "../../../../lib/types";
 import { PromoResponseDTO } from "../../../../server/core/dto";
 type Lavorazione = (DESIGN_KIT & { nomeCanale: string, nomeArea: string, lavorazioneStarted: boolean, isDesignKit: boolean, tipiExport: TipiDiExportAttributes[] }) | (RUNTIME_KIT & { nomeCanale: string, nomeArea: string, lavorazioneStarted: boolean, isDesignKit: boolean, tipiExport: TipiDiExportAttributes[], numero_files: number, numero_referenze: number });
-
-const getStatusInfo = (lavorazione: Lavorazione) => {
-  if (!lavorazione.lavorazioneStarted) {
-    return { text: "Non Avviato", variant: "secondary", icon: "CirclePause" };
-  }
-  console.log(lavorazione);
-  switch ((lavorazione as RUNTIME_KIT).stato_lavorazione) {
-    case STATO_LAVORAZIONE_KIT_RUNTIME.IN_LAVORAZIONE:
-      return { text: "In Lavorazione", variant: "primary", icon: "CirclePlay" };
-    case STATO_LAVORAZIONE_KIT_RUNTIME.IN_REVISIONE:
-      return { text: "In Revisione", variant: "warning", icon: "Clock" };
-    case STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO:
-      return { text: "Pubblicato", variant: "success", icon: "CircleCheck" };
-    default:
-      return { text: "Sconosciuto", variant: "secondary", icon: "CircleHelp" };
-  }
-};
 
 interface LoaderData {
   datiLavorazione: PromoResponseDTO | null;
@@ -40,6 +24,9 @@ interface LoaderData {
 function DettagliKitManualiInCorso() {
 
   const { lavorazioniManuali, datiLavorazione } = useLoaderData() as LoaderData;
+  const { idPromo } = useParams();
+  // La pagina serve sia le promo in corso sia lo storico: si torna al dettaglio della stessa sezione
+  const sezione = useLocation().pathname.startsWith("/promozioni/storico") ? "storico" : "in-corso";
   // Promo in uno stato finale (attiva o archiviata): i kit non si modificano più
   const promoChiusa = [STATO_PROMO.VALIDA, STATO_PROMO.VALIDA_CON_ERRORI, STATO_PROMO.ARCHIVIATA].includes(datiLavorazione?.stato as STATO_PROMO);
 
@@ -112,7 +99,11 @@ function DettagliKitManualiInCorso() {
           <div className=" shadow-sm ">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between">
               <div className="flex flex-col">
-                <PageHeader title={datiLavorazione?.nome || "N/D"} description="Gestione lavorazioni manuali e automatiche" />
+                <PageHeader
+                  title={valoreOAssente(datiLavorazione?.nome)}
+                  description="Gestione lavorazioni manuali e automatiche"
+                  indietro={{ to: `/promozioni/${sezione}/dettagli/${idPromo ?? datiLavorazione?.id}`, etichetta: "Torna alla promozione" }}
+                />
               </div>
             </div>
           </div>
@@ -128,6 +119,7 @@ function DettagliKitManualiInCorso() {
                     </div>
                     <FormInput
                       type="text"
+                      aria-label="Cerca lavorazioni"
                       placeholder="Cerca per titolo, canale, area..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
@@ -140,11 +132,11 @@ function DettagliKitManualiInCorso() {
                     <Tab.Group>
                       <Tab.List
                         variant="boxed-tabs"
-                        className="flex-col sm:flex-row sm:w-auto mr-auto bg-white box rounded-[0.6rem] border-slate-200"
+                        className="flex-col sm:flex-row sm:w-auto mr-auto bg-white box rounded-card border-slate-200"
                       >
-                        <Tab className="bg-slate-50 first:rounded-l-[0.6rem] last:rounded-r-[0.6rem] [&[aria-selected='true']_button]:text-current">
+                        <Tab className="bg-slate-50 first:rounded-l-card last:rounded-r-card [&[aria-selected='true']_button]:text-current">
                           <Tab.Button
-                            className="w-full xl:w-40 py-2.5 text-slate-500 whitespace-nowrap rounded-[0.6rem] flex items-center justify-center text-[0.94rem]"
+                            className="w-full xl:w-40 py-2.5 text-slate-500 whitespace-nowrap rounded-control flex items-center justify-center text-sm"
                             as="button"
                             onClick={() => setTipoAttivo('TUTTI')}
                           >
@@ -155,9 +147,9 @@ function DettagliKitManualiInCorso() {
                             </span>
                           </Tab.Button>
                         </Tab>
-                        <Tab className="bg-slate-50 first:rounded-l-[0.6rem] last:rounded-r-[0.6rem] [&[aria-selected='true']_button]:text-current">
+                        <Tab className="bg-slate-50 first:rounded-l-card last:rounded-r-card [&[aria-selected='true']_button]:text-current">
                           <Tab.Button
-                            className="w-full xl:w-40 py-2.5 text-slate-500 whitespace-nowrap rounded-[0.6rem] flex items-center justify-center text-[0.94rem]"
+                            className="w-full xl:w-40 py-2.5 text-slate-500 whitespace-nowrap rounded-control flex items-center justify-center text-sm"
                             as="button"
                             onClick={() => setTipoAttivo('MANUALI')}
                           >
@@ -168,9 +160,9 @@ function DettagliKitManualiInCorso() {
                             </span>
                           </Tab.Button>
                         </Tab>
-                        <Tab className="bg-slate-50 first:rounded-l-[0.6rem] last:rounded-r-[0.6rem] [&[aria-selected='true']_button]:text-current">
+                        <Tab className="bg-slate-50 first:rounded-l-card last:rounded-r-card [&[aria-selected='true']_button]:text-current">
                           <Tab.Button
-                            className="w-full xl:w-40 py-2.5 text-slate-500 whitespace-nowrap rounded-[0.6rem] flex items-center justify-center text-[0.94rem]"
+                            className="w-full xl:w-40 py-2.5 text-slate-500 whitespace-nowrap rounded-control flex items-center justify-center text-sm"
                             as="button"
                             onClick={() => setTipoAttivo('AUTOMATICI')}
                           >
@@ -196,6 +188,7 @@ function DettagliKitManualiInCorso() {
                 </div>
                 {searchQuery && (
                   <button
+                    type="button"
                     onClick={() => setSearchQuery('')}
                     className="text-xs text-primary hover:text-primary/80 flex items-center"
                   >
@@ -211,7 +204,7 @@ function DettagliKitManualiInCorso() {
                   <Table.Thead>
                     <Table.Tr>
                       <Table.Td className="w-5 py-4 font-medium border-t bg-slate-50 border-slate-200/60 text-slate-500">
-                        <FormCheck.Input type="checkbox" onChange={handleSelectAll} checked={selectedLavorazioni.length === lavorazioniFiltrate.length && lavorazioniFiltrate.length > 0} />
+                        <FormCheck.Input type="checkbox" aria-label="Seleziona tutte le lavorazioni" onChange={handleSelectAll} checked={selectedLavorazioni.length === lavorazioniFiltrate.length && lavorazioniFiltrate.length > 0} />
                       </Table.Td>
                       <Table.Td className="py-4 font-medium border-t bg-slate-50 border-slate-200/60 text-slate-500">Lavorazione</Table.Td>
                       <Table.Td className="py-4 font-medium text-center border-t bg-slate-50 border-slate-200/60 text-slate-500">Tipo</Table.Td>
@@ -225,11 +218,10 @@ function DettagliKitManualiInCorso() {
                   <Table.Tbody>
                     {lavorazioniFiltrate.length > 0 ? lavorazioniFiltrate.map((lavorazione) => {
                       const isManuale = lavorazione.tipo === TIPO_KIT_DESIGN.MANUALE;
-                      const statusInfo = getStatusInfo(lavorazione);
                       return (
                         <Table.Tr key={lavorazione.guidId} className={clsx("[&_td]:last:border-b-0", promoChiusa && "opacity-60 bg-slate-50")}>
                           <Table.Td className="py-4 border-dashed dark:bg-darkmode-600">
-                            <FormCheck.Input type="checkbox" checked={selectedLavorazioni.includes(lavorazione.guidId)} onChange={(e) => handleSelectOne(e, lavorazione.guidId)} disabled={promoChiusa} />
+                            <FormCheck.Input type="checkbox" aria-label={`Seleziona ${lavorazione.titolo}`} checked={selectedLavorazioni.includes(lavorazione.guidId)} onChange={(e) => handleSelectOne(e, lavorazione.guidId)} disabled={promoChiusa} />
                           </Table.Td>
                           <Table.Td className="py-4 border-dashed w-80 dark:bg-darkmode-600">
                             <div>
@@ -244,18 +236,15 @@ function DettagliKitManualiInCorso() {
                             </Badge>
                           </Table.Td>
                           <Table.Td className="py-4 border-dashed dark:bg-darkmode-600 text-center">
-                            <Badge variant="primary" className={`text-xs px-2 py-1 ${statusInfo.variant === "primary" ?
-                              "text-primary" : statusInfo.variant === "warning" ?
-                                "text-warning" : statusInfo.variant === "success" ?
-                                  "text-success" : statusInfo.variant === "error" ?
-                                    "text-error" : "text-slate-500"
-                              }`}>
-                              <Lucide icon={statusInfo.icon as any} className="w-4 h-4 mr-1" />
-                              {statusInfo.text}
-                            </Badge>
+                            {/* Un kit di design non ancora avviato non ha uno stato di lavorazione */}
+                            {lavorazione.lavorazioneStarted ? (
+                              <StatusBadge dominio="kitRuntime" stato={(lavorazione as RUNTIME_KIT).stato_lavorazione} />
+                            ) : (
+                              <StatusBadge tono="neutral" etichetta="Non avviato" />
+                            )}
                           </Table.Td>
                           <Table.Td className="py-4 border-dashed dark:bg-darkmode-600">
-                            <div className="whitespace-nowrap">{(lavorazione as any).updatedAt ? dayjs((lavorazione as any).updatedAt).format("DD/MM/YYYY HH:mm") : "N/D"}</div>
+                            <div className="whitespace-nowrap">{formatDataOra((lavorazione as any).updatedAt)}</div>
                           </Table.Td>
                           <Table.Td className="py-4 border-dashed dark:bg-darkmode-600">
                             <div className="whitespace-nowrap">{(lavorazione as any).numero_files ? (lavorazione as any).numero_files : 0}</div>
@@ -266,15 +255,20 @@ function DettagliKitManualiInCorso() {
                           <Table.Td className="relative py-4 border-dashed dark:bg-darkmode-600">
                             <div className="flex items-center justify-center">
                               {promoChiusa ? (
-                                <Button variant="secondary" size="sm" className="px-2 py-1" disabled>
-                                  <Lucide icon="Lock" className="w-4 h-4" />
+                                <Button variant="secondary" size="sm" className="px-2 py-1" disabled aria-label="Promozione chiusa: il kit non si modifica" title="Promozione chiusa: il kit non si modifica">
+                                  <Lucide icon="Lock" aria-hidden="true" className="w-4 h-4" />
                                 </Button>
                               ) : (
-                                <Link to={`/promozioni/in-corso/dettagli/${datiLavorazione?.id}/kits/${lavorazione.guidId}`}>
-                                  <Button variant="primary" size="sm" className="px-2 py-1">
-                                    <Lucide icon="ArrowRight" className="w-4 h-4" />
-                                  </Button>
-                                </Link>
+                                <Button
+                                  as={Link}
+                                  to={`/promozioni/in-corso/dettagli/${datiLavorazione?.id}/kits/${lavorazione.guidId}`}
+                                  variant="primary"
+                                  size="sm"
+                                  className="px-2 py-1"
+                                  aria-label={`Apri il kit ${lavorazione.titolo}`}
+                                >
+                                  <Lucide icon="ArrowRight" aria-hidden="true" className="w-4 h-4" />
+                                </Button>
                               )}
                             </div>
                           </Table.Td>

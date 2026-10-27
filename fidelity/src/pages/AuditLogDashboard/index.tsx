@@ -1,6 +1,8 @@
+import Button from "@/components/Base/Button";
 import Lucide from "@/components/Base/Lucide";
 import Pagination from "@/components/Base/Pagination";
-import Skeleton from "@/components/Base/Skeleton";
+import Spinner from "@/components/Base/Spinner";
+import StatCard, { StatCardGrid } from "@/components/Base/StatCard";
 import {
   useFetchAuditEventTypes,
   useFetchAuditLogs,
@@ -8,7 +10,6 @@ import {
   useFetchAuditSummary,
   type AuditLogFilters as FiltersType,
 } from "@/query/query";
-import clsx from "clsx";
 import { FC, useCallback, useEffect, useMemo, useState } from "react";
 import { ServerCall } from "../../../lib/server_call";
 import { useNotification } from "../../context/NotificationContext";
@@ -152,52 +153,49 @@ const AuditLogDashboard: FC = () => {
   return (
     <div className="flex flex-col gap-5">
       {/* ── Summary cards ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <StatCardGrid>
         {summaryLoading ? (
           <>
-            {[1, 2, 3, 4].map((i) => (
-              <div
-                key={i}
-                className="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-4 bg-white"
-              >
-                <Skeleton className="w-10 h-10 rounded-xl" />
-                <div className="flex flex-col gap-1.5">
-                  <Skeleton className="h-3 w-16" />
-                  <Skeleton className="h-6 w-12" />
-                </div>
-              </div>
+            {["Totale eventi", "Eventi oggi", "Critici", "Alti"].map((etichetta) => (
+              <StatCard key={etichetta} etichetta={etichetta} valore={null} densita="compatta" loading />
             ))}
           </>
         ) : summary ? (
           <>
-            <SummaryCard
-              label="Totale eventi"
-              value={summary.totalEvents}
-              icon="Activity"
-              tone="slate"
+            <StatCard
+              etichetta="Totale eventi"
+              valore={summary.totalEvents.toLocaleString("it-IT")}
+              icona="Activity"
+              tono="neutral"
+              densita="compatta"
             />
-            <SummaryCard
-              label="Eventi oggi"
-              value={summary.totalToday}
-              icon="CalendarDays"
-              tone="blue"
+            <StatCard
+              etichetta="Eventi oggi"
+              valore={summary.totalToday.toLocaleString("it-IT")}
+              icona="CalendarDays"
+              tono="info"
+              densita="compatta"
             />
-            <SummaryCard
-              label="Critici"
-              value={summary.criticalCount}
-              icon="OctagonAlert"
-              tone={summary.criticalCount > 0 ? "red" : "slate"}
-              pulse={summary.criticalCount > 0}
+            <StatCard
+              etichetta="Critici"
+              valore={summary.criticalCount.toLocaleString("it-IT")}
+              icona="OctagonAlert"
+              tono={summary.criticalCount > 0 ? "danger" : "neutral"}
+              evidenzia={summary.criticalCount > 0}
+              pulsa={summary.criticalCount > 0}
+              densita="compatta"
             />
-            <SummaryCard
-              label="Alti"
-              value={summary.highCount}
-              icon="TriangleAlert"
-              tone={summary.highCount > 0 ? "amber" : "slate"}
+            <StatCard
+              etichetta="Alti"
+              valore={summary.highCount.toLocaleString("it-IT")}
+              icona="TriangleAlert"
+              tono={summary.highCount > 0 ? "warning" : "neutral"}
+              evidenzia={summary.highCount > 0}
+              densita="compatta"
             />
           </>
         ) : null}
-      </div>
+      </StatCardGrid>
 
       {/* ── Filters + Export ── */}
       <div className="box box--stacked p-4">
@@ -210,42 +208,24 @@ const AuditLogDashboard: FC = () => {
             severities={severities ?? []}
           />
           <div className="flex flex-wrap items-center gap-2">
-            <button
+            <Button
               type="button"
+              variant="neutral"
               onClick={handleRefresh}
-              disabled={isRefreshing}
-              className="h-9 px-4 rounded-lg border border-slate-200 bg-white text-slate-600 text-sm font-medium hover:bg-slate-50 transition-colors flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+              loading={isRefreshing}
             >
-              {isRefreshing ? (
-                <>
-                  <div className="w-4 h-4 rounded-full border-2 border-slate-300 border-t-slate-500 animate-spin flex-none" />
-                  Aggiornamento...
-                </>
-              ) : (
-                <>
-                  <Lucide icon="RefreshCw" className="w-4 h-4" />
-                  Aggiorna
-                </>
-              )}
-            </button>
-            <button
+              {!isRefreshing && <Lucide icon="RefreshCw" aria-hidden="true" className="mr-2 h-4 w-4" />}
+              Aggiorna
+            </Button>
+            <Button
               type="button"
+              variant="soft-primary"
               onClick={handleExportCsv}
-              disabled={isExporting}
-              className="h-9 px-4 rounded-lg bg-theme-1/10 text-theme-1 text-sm font-medium hover:bg-theme-1/20 transition-colors flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+              loading={isExporting}
             >
-              {isExporting ? (
-                <>
-                  <div className="w-4 h-4 rounded-full border-2 border-theme-1/30 border-t-theme-1 animate-spin flex-none" />
-                  Esportazione...
-                </>
-              ) : (
-                <>
-                  <Lucide icon="Download" className="w-4 h-4" />
-                  Export CSV
-                </>
-              )}
-            </button>
+              {!isExporting && <Lucide icon="Download" aria-hidden="true" className="mr-2 h-4 w-4" />}
+              Export CSV
+            </Button>
           </div>
         </div>
       </div>
@@ -253,11 +233,8 @@ const AuditLogDashboard: FC = () => {
       {/* ── Table ── */}
       <div className="box box--stacked p-0 overflow-hidden">
         {logsLoading ? (
-          <div className="p-12 flex flex-col items-center gap-3">
-            <div className="relative">
-              <div className="w-10 h-10 rounded-full border-2 border-slate-200" />
-              <div className="absolute inset-0 w-10 h-10 rounded-full border-2 border-theme-1 border-t-transparent animate-spin" />
-            </div>
+          <div role="status" className="p-12 flex flex-col items-center gap-3">
+            <Spinner size="lg" decorativo />
             <p className="text-sm text-slate-500 mt-2">
               Caricamento audit log...
             </p>
@@ -291,11 +268,13 @@ const AuditLogDashboard: FC = () => {
             </span>
             <Pagination>
               <Pagination.Link
+                aria-label="Pagina precedente"
+                title="Pagina precedente"
                 onClick={() =>
                   handleFilterChange({ page: Math.max(1, currentPage - 1) })
                 }
               >
-                <Lucide icon="ChevronLeft" className="w-4 h-4" />
+                <Lucide icon="ChevronLeft" aria-hidden="true" className="w-4 h-4" />
               </Pagination.Link>
               {pageNumbers[0] > 1 && (
                 <>
@@ -335,104 +314,19 @@ const AuditLogDashboard: FC = () => {
                 </>
               )}
               <Pagination.Link
+                aria-label="Pagina successiva"
+                title="Pagina successiva"
                 onClick={() =>
                   handleFilterChange({
                     page: Math.min(totalPages, currentPage + 1),
                   })
                 }
               >
-                <Lucide icon="ChevronRight" className="w-4 h-4" />
+                <Lucide icon="ChevronRight" aria-hidden="true" className="w-4 h-4" />
               </Pagination.Link>
             </Pagination>
           </div>
         )}
-      </div>
-    </div>
-  );
-};
-
-// ── Summary card (internal) ──
-
-interface SummaryCardProps {
-  label: string;
-  value: number;
-  icon: string;
-  tone?: "slate" | "blue" | "red" | "amber" | "green";
-  pulse?: boolean;
-}
-
-const TONE_STYLES: Record<
-  string,
-  { border: string; iconBg: string; iconText: string; valueBg: string }
-> = {
-  slate: {
-    border: "border-slate-200",
-    iconBg: "bg-slate-100",
-    iconText: "text-slate-500",
-    valueBg: "",
-  },
-  blue: {
-    border: "border-blue-200",
-    iconBg: "bg-blue-50",
-    iconText: "text-blue-500",
-    valueBg: "",
-  },
-  red: {
-    border: "border-red-200",
-    iconBg: "bg-red-50",
-    iconText: "text-red-500",
-    valueBg: "text-red-600",
-  },
-  amber: {
-    border: "border-amber-200",
-    iconBg: "bg-amber-50",
-    iconText: "text-amber-500",
-    valueBg: "text-amber-600",
-  },
-  green: {
-    border: "border-emerald-200",
-    iconBg: "bg-emerald-50",
-    iconText: "text-emerald-500",
-    valueBg: "",
-  },
-};
-
-const SummaryCard: FC<SummaryCardProps> = ({
-  label,
-  value,
-  icon,
-  tone = "slate",
-  pulse = false,
-}) => {
-  const t = TONE_STYLES[tone] ?? TONE_STYLES.slate;
-  return (
-    <div
-      className={clsx(
-        "flex items-center gap-4 rounded-xl border px-5 py-4 bg-white transition-shadow hover:shadow-sm",
-        t.border
-      )}
-    >
-      <div
-        className={clsx(
-          "flex items-center justify-center w-10 h-10 rounded-xl flex-none",
-          t.iconBg,
-          pulse && "animate-pulse"
-        )}
-      >
-        <Lucide icon={icon} className={clsx("w-5 h-5", t.iconText)} />
-      </div>
-      <div className="flex flex-col leading-tight">
-        <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">
-          {label}
-        </span>
-        <span
-          className={clsx(
-            "text-2xl font-bold tabular-nums mt-0.5",
-            t.valueBg || "text-slate-800"
-          )}
-        >
-          {value.toLocaleString("it-IT")}
-        </span>
       </div>
     </div>
   );

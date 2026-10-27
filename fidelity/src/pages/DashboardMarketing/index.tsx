@@ -1,9 +1,13 @@
 import Button from "@/components/Base/Button";
 import Chart from "@/components/Base/Chart";
 import Lucide from "@/components/Base/Lucide";
+import PageError from "@/components/Base/PageError";
 import PageHeader from "@/components/Base/PageHeader";
 import Skeleton from "@/components/Base/Skeleton";
+import StatCard, { StatCardGrid } from "@/components/Base/StatCard";
 import EmptyState from "@/components/EmptyState";
+import { COLORI_ASSI, coloreScore, opzioniAssi, opzioniBase, paletteColore, tonoScore } from "@/utils/chartTheme";
+import { formatData } from "@/utils/format";
 import { useQuery } from "@tanstack/react-query";
 import type { ChartOptions, TooltipItem } from "chart.js";
 import clsx from "clsx";
@@ -60,19 +64,9 @@ type CanaleAreaRepartoSeries = {
 type SortKey = "label" | "average" | "latestScore" | "trend";
 type SortDir = "asc" | "desc";
 
-const SCORE_COLORS = [
-    "#2563eb", "#059669", "#d97706", "#dc2626", "#0891b2",
-    "#7c3aed", "#65a30d", "#be123c", "#0f766e", "#9333ea",
-    "#ea580c", "#4f46e5",
-];
-
 const DIST_BUCKET_LABELS = ["0–20", "21–40", "41–60", "61–80", "81–100"];
-const DIST_BUCKET_COLORS = ["#dc2626", "#f97316", "#d97706", "#84cc16", "#059669"];
 
 const clampScore = (value: number): number => Math.max(0, Math.min(100, Math.round(value)));
-
-const scoreBarColor = (score: number): string =>
-    score >= 70 ? "#059669" : score >= 40 ? "#d97706" : "#dc2626";
 
 const scoreColorCls = (score: number): string =>
     score >= 70 ? "text-success font-semibold" : score >= 40 ? "text-warning font-semibold" : "text-danger font-semibold";
@@ -248,38 +242,18 @@ const buildCanaleAreaRepartoSeries = (scoreboards: SavedPromoScoreboard[]): Cana
         .sort((a, b) => b.average - a.average || a.label.localeCompare(b.label));
 };
 
+const ETICHETTE_KPI = ["Promozioni", "Score medio", "Trend positivi", "Trend negativi"];
+
 const MarketingSkeleton: React.FC = () => (
     <div className="grid grid-cols-12 gap-5">
-        <div className="col-span-12 grid grid-cols-2 gap-3 md:grid-cols-4">
-            {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="box box--stacked p-5">
-                    <Skeleton height="12px" width="90px" className="mb-3" />
-                    <Skeleton height="34px" width="70px" />
-                </div>
+        <StatCardGrid className="col-span-12">
+            {ETICHETTE_KPI.map((etichetta) => (
+                <StatCard key={etichetta} etichetta={etichetta} valore={null} loading />
             ))}
-        </div>
+        </StatCardGrid>
         <div className="box box--stacked col-span-12 p-5">
             <Skeleton height="18px" width="220px" className="mb-5" />
             <Skeleton height="360px" />
-        </div>
-    </div>
-);
-
-const PulseCard: React.FC<{
-    label: string;
-    value: string;
-    icon: string;
-    accentClass: string;
-    sub?: string;
-}> = ({ label, value, icon, accentClass, sub }) => (
-    <div className="box box--stacked overflow-hidden p-5">
-        <div className={clsx("flex h-10 w-10 items-center justify-center rounded-xl", accentClass)}>
-            <Lucide icon={icon} className="h-5 w-5" />
-        </div>
-        <div className="mt-3">
-            <div className="text-3xl font-extrabold tracking-tight text-slate-800">{value}</div>
-            <div className="mt-1 text-xs font-semibold uppercase tracking-widest text-slate-400">{label}</div>
-            {sub && <div className="mt-1 text-xs text-slate-500">{sub}</div>}
         </div>
     </div>
 );
@@ -362,25 +336,22 @@ const DashboardMarketing: React.FC = () => {
         datasets: [{
             label: "Ultimo score",
             data: snapshotSeries.map((s) => s.latestScore),
-            backgroundColor: snapshotSeries.map((s) => scoreBarColor(s.latestScore ?? 0)),
+            backgroundColor: snapshotSeries.map((s) => coloreScore(s.latestScore ?? 0)),
             borderRadius: 4,
             borderSkipped: false,
         }],
     }), [snapshotSeries]);
-    const snapshotOptions = useMemo<ChartOptions<"bar">>(() => ({
+    const snapshotOptions = useMemo<ChartOptions<"bar">>(() => opzioniBase("bar", {
         indexAxis: "y" as const,
-        responsive: true,
-        maintainAspectRatio: false,
         plugins: {
             legend: { display: false },
             tooltip: {
-                backgroundColor: "#0f172a",
                 callbacks: { label: (ctx: TooltipItem<"bar">) => ` ${Math.round(ctx.parsed.x as number)}/100` },
             },
         },
         scales: {
-            x: { min: 0, max: 100, grid: { color: "rgba(148,163,184,0.1)" }, ticks: { color: "#94a3b8", font: { size: 11 } } },
-            y: { grid: { display: false }, ticks: { color: "#475569", font: { size: 11 } } },
+            x: { min: 0, max: 100 },
+            y: { grid: { display: false }, ticks: { color: COLORI_ASSI.tickForte } },
         },
     }), []);
 
@@ -394,22 +365,18 @@ const DashboardMarketing: React.FC = () => {
         datasets: [{
             label: "Promo",
             data: distBuckets,
-            backgroundColor: DIST_BUCKET_COLORS,
+            // Ogni fascia ha il colore del suo score minimo
+            backgroundColor: DIST_BUCKET_LABELS.map((_, i) => coloreScore(i * 20)),
             borderRadius: 4,
             borderSkipped: false,
         }],
     }), [distBuckets]);
-    const distOptions = useMemo<ChartOptions<"bar">>(() => ({
-        responsive: true,
-        maintainAspectRatio: false,
+    const distOptions = useMemo<ChartOptions<"bar">>(() => opzioniBase("bar", {
         plugins: {
             legend: { display: false },
-            tooltip: { backgroundColor: "#0f172a", callbacks: { label: (ctx: TooltipItem<"bar">) => ` ${ctx.parsed.y} promo` } },
+            tooltip: { callbacks: { label: (ctx: TooltipItem<"bar">) => ` ${ctx.parsed.y} promo` } },
         },
-        scales: {
-            x: { grid: { display: false }, ticks: { color: "#94a3b8", font: { size: 11 } } },
-            y: { beginAtZero: true, grid: { color: "rgba(148,163,184,0.1)" }, ticks: { color: "#94a3b8", font: { size: 11 }, stepSize: 1 } },
-        },
+        scales: opzioniAssi({ xGriglia: false, yMin: 0, stepSize: 1 }),
     }), []);
 
     const top3 = useMemo(() => [...series].sort((a, b) => b.average - a.average).slice(0, 3), [series]);
@@ -418,7 +385,7 @@ const DashboardMarketing: React.FC = () => {
     const lineChartData = useMemo(() => ({
         labels,
         datasets: (activeCanaleArea?.series ?? []).map((s, i) => {
-            const color = SCORE_COLORS[i % SCORE_COLORS.length];
+            const color = paletteColore(i);
             return {
                 label: s.reparto,
                 data: s.data,
@@ -433,20 +400,13 @@ const DashboardMarketing: React.FC = () => {
             };
         }),
     }), [activeCanaleArea, labels]);
-    const lineOptions = useMemo<ChartOptions<"line">>(() => ({
-        responsive: true,
-        maintainAspectRatio: false,
+    const lineOptions = useMemo<ChartOptions<"line">>(() => opzioniBase("line", {
         plugins: {
             legend: {
                 position: "bottom",
-                labels: { usePointStyle: true, pointStyle: "circle", boxWidth: 8, padding: 16, color: "#64748b", font: { size: 11 } },
+                labels: { usePointStyle: true, pointStyle: "circle", boxWidth: 8, padding: 16 },
             },
             tooltip: {
-                backgroundColor: "#0f172a",
-                titleColor: "#f8fafc",
-                bodyColor: "#e2e8f0",
-                padding: 10,
-                cornerRadius: 8,
                 callbacks: {
                     label: (ctx: TooltipItem<"line">) =>
                         `${ctx.dataset.label ?? ""}: ${typeof ctx.parsed.y === "number" ? Math.round(ctx.parsed.y) : 0}/100`,
@@ -454,8 +414,8 @@ const DashboardMarketing: React.FC = () => {
             },
         },
         scales: {
-            x: { grid: { color: "rgba(148,163,184,0.08)" }, ticks: { color: "#94a3b8", font: { size: 11 }, maxRotation: 35 } },
-            y: { min: 0, max: 100, grid: { color: "rgba(148,163,184,0.15)" }, ticks: { stepSize: 20, color: "#94a3b8", font: { size: 11 } } },
+            x: { ticks: { maxRotation: 35 } },
+            y: { min: 0, max: 100, ticks: { stepSize: 20 } },
         },
     }), []);
 
@@ -496,9 +456,9 @@ const DashboardMarketing: React.FC = () => {
                         type="button"
                         variant="outline-primary"
                         onClick={() => scoreboardsQuery.refetch()}
-                        disabled={scoreboardsQuery.isFetching}
+                        loading={scoreboardsQuery.isFetching}
                     >
-                        <Lucide icon="RefreshCw" className={clsx("mr-2 h-4 w-4", scoreboardsQuery.isFetching && "animate-spin")} />
+                        {!scoreboardsQuery.isFetching && <Lucide icon="RefreshCw" aria-hidden="true" className="mr-2 h-4 w-4" />}
                         Aggiorna
                     </Button>
                 )}
@@ -507,16 +467,10 @@ const DashboardMarketing: React.FC = () => {
             {isLoading ? (
                 <MarketingSkeleton />
             ) : isError ? (
-                <div className="box box--stacked p-8">
-                    <EmptyState
-                        icon="CircleAlert"
-                        iconColor="text-danger"
-                        title="Scoreboard non disponibili"
-                        description="Non riesco a caricare i dati marketing in questo momento."
-                        buttonText="Riprova"
-                        onButtonClick={() => scoreboardsQuery.refetch()}
-                    />
-                </div>
+                <PageError
+                    motivo="Impossibile caricare i dati marketing"
+                    onRiprova={() => scoreboardsQuery.refetch()}
+                />
             ) : isEmpty ? (
                 <div className="box box--stacked p-8">
                     <EmptyState
@@ -529,40 +483,35 @@ const DashboardMarketing: React.FC = () => {
                 <div className="grid grid-cols-12 gap-5">
 
                     {/* A — Score Pulse */}
-                    <div className="col-span-12 grid grid-cols-2 gap-3 lg:grid-cols-4">
-                        <PulseCard
-                            label="Promozioni"
-                            value={scoreboards.length.toLocaleString("it-IT")}
-                            icon="Megaphone"
-                            accentClass="bg-theme-1/10 text-theme-1"
-                            sub={lastComputedAt ? `Ultimo: ${dayjs(lastComputedAt.computedAt).format("DD MMM")}` : undefined}
+                    <StatCardGrid className="col-span-12">
+                        <StatCard
+                            etichetta="Promozioni"
+                            valore={scoreboards.length.toLocaleString("it-IT")}
+                            icona="Megaphone"
+                            sottotitolo={lastComputedAt ? `Ultimo: ${formatData(lastComputedAt.computedAt)}` : undefined}
                         />
-                        <PulseCard
-                            label="Score medio"
-                            value={`${averageScore}/100`}
-                            icon="Gauge"
-                            accentClass={clsx(
-                                averageScore >= 70 ? "bg-success/15 text-success" :
-                                    averageScore >= 40 ? "bg-warning/15 text-warning" :
-                                        "bg-danger/15 text-danger",
-                            )}
-                            sub={`${series.length} combinazioni area/canale`}
+                        <StatCard
+                            etichetta="Score medio"
+                            valore={`${averageScore}/100`}
+                            icona="Gauge"
+                            tono={tonoScore(averageScore)}
+                            sottotitolo={`${series.length} combinazioni area/canale`}
                         />
-                        <PulseCard
-                            label="Trend positivi"
-                            value={`↑ ${trendPositivi}`}
-                            icon="TrendingUp"
-                            accentClass="bg-success/15 text-success"
-                            sub="Ultima vs penultima promo"
+                        <StatCard
+                            etichetta="Trend positivi"
+                            valore={trendPositivi.toLocaleString("it-IT")}
+                            icona="TrendingUp"
+                            tono="success"
+                            variazione={{ valore: "Ultima vs penultima promo", direzione: "su" }}
                         />
-                        <PulseCard
-                            label="Trend negativi"
-                            value={`↓ ${trendNegativi}`}
-                            icon="TrendingDown"
-                            accentClass="bg-danger/15 text-danger"
-                            sub="Ultima vs penultima promo"
+                        <StatCard
+                            etichetta="Trend negativi"
+                            valore={trendNegativi.toLocaleString("it-IT")}
+                            icona="TrendingDown"
+                            tono="danger"
+                            variazione={{ valore: "Ultima vs penultima promo", direzione: "giu" }}
                         />
-                    </div>
+                    </StatCardGrid>
 
                     {/* B — Snapshot + Distribuzione */}
                     <div className="col-span-12 grid grid-cols-12 gap-5">
@@ -572,7 +521,7 @@ const DashboardMarketing: React.FC = () => {
                                     <Lucide icon="ChartBar" className="h-4 w-4 text-theme-1" />
                                 </div>
                                 <div>
-                                    <h2 className="text-sm font-semibold text-slate-800">Snapshot ultimo score</h2>
+                                    <h2 className="title-card">Snapshot ultimo score</h2>
                                     <p className="text-xs text-slate-500">Score più recente per ogni combinazione, ordinato decrescente</p>
                                 </div>
                             </div>
@@ -588,7 +537,7 @@ const DashboardMarketing: React.FC = () => {
                                     <Lucide icon="ChartColumn" className="h-4 w-4 text-info" />
                                 </div>
                                 <div>
-                                    <h2 className="text-sm font-semibold text-slate-800">Distribuzione score</h2>
+                                    <h2 className="title-card">Distribuzione score</h2>
                                     <p className="text-xs text-slate-500">{allScoreValues.length} punti score totali</p>
                                 </div>
                             </div>
@@ -607,7 +556,7 @@ const DashboardMarketing: React.FC = () => {
                                         <Lucide icon="Trophy" className="h-4 w-4 text-success" />
                                     </div>
                                     <div>
-                                        <h2 className="text-sm font-semibold text-slate-800">Top performer</h2>
+                                        <h2 className="title-card">Top performer</h2>
                                         <p className="text-xs text-slate-500">Score medio più alto</p>
                                     </div>
                                 </div>
@@ -621,7 +570,7 @@ const DashboardMarketing: React.FC = () => {
                                         <Lucide icon="TriangleAlert" className=" h-4 w-4 text-danger" />
                                     </div>
                                     <div>
-                                        <h2 className="text-sm font-semibold text-slate-800">Da migliorare</h2>
+                                        <h2 className="title-card">Da migliorare</h2>
                                         <p className="text-xs text-slate-500">Score medio più basso</p>
                                     </div>
                                 </div>
@@ -640,7 +589,7 @@ const DashboardMarketing: React.FC = () => {
                                     <Lucide icon="ChartLine" className="h-4 w-4 text-theme-1" />
                                 </div>
                                 <div>
-                                    <h2 className="text-sm font-semibold text-slate-800">Andamento nel tempo</h2>
+                                    <h2 className="title-section">Andamento nel tempo</h2>
                                     <p className="text-xs text-slate-500">Trend reparti per coppia canale/area con mappatura CoopFi da AgenziaLib</p>
                                 </div>
                             </div>
@@ -665,6 +614,7 @@ const DashboardMarketing: React.FC = () => {
                                             <button
                                                 key={view.key}
                                                 type="button"
+                                                aria-pressed={activeCanaleArea?.key === view.key}
                                                 onClick={() => setSelectedCanaleAreaKey(view.key)}
                                                 className={clsx(
                                                     "rounded-full border px-3 py-1 text-xs font-semibold transition",
@@ -682,7 +632,7 @@ const DashboardMarketing: React.FC = () => {
                                             {activeCanaleArea.series.map((serie) => (
                                                 <span
                                                     key={`${activeCanaleArea.key}-${serie.reparto}`}
-                                                    className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-600"
+                                                    className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-2xs font-medium text-slate-600"
                                                 >
                                                     {serie.reparto}
                                                 </span>
@@ -702,7 +652,7 @@ const DashboardMarketing: React.FC = () => {
                     {/* E — Tabella dettaglio con trend */}
                     <div className="box box--stacked col-span-12">
                         <div className="border-b border-slate-200/70 p-5">
-                            <h2 className="text-sm font-semibold text-slate-800">Dettaglio combinazioni</h2>
+                            <h2 className="title-section">Dettaglio combinazioni</h2>
                             <p className="mt-0.5 text-xs text-slate-500">
                                 Click sull'intestazione per ordinare · Δ trend = variazione rispetto alla penultima promo disponibile
                             </p>

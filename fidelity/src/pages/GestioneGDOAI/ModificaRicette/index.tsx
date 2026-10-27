@@ -4,6 +4,8 @@ import { FormTextarea } from '@/components/Base/Form';
 import { Dialog } from '@/components/Base/Headless';
 import Lucide from '@/components/Base/Lucide';
 import PageHeader from '@/components/Base/PageHeader';
+import Spinner from '@/components/Base/Spinner';
+import StatusBadge from '@/components/Base/StatusBadge';
 import Tippy from '@/components/Base/Tippy';
 import EmptyState from '@/components/EmptyState';
 import { PreviewImmaginePdf } from '@/components/PreviewImmaginePdf';
@@ -322,15 +324,9 @@ const ModificaRicette: FC<ModificaRicetteProps> = () => {
               variant="primary"
               onClick={() => mutationGeneraFoto.mutate(0)}
               disabled={mutationGeneraFoto.isPending}
+              loading={loading}
             >
-              {loading ? (
-                <>
-                  <Lucide icon="Loader" className="w-4 h-4 mr-2 animate-spin" />
-                  Generazione in corso...
-                </>
-              ) : (
-                'Genera foto'
-              )}
+              Genera foto
             </Button>
             <Button
               variant="secondary"
@@ -352,7 +348,7 @@ const ModificaRicette: FC<ModificaRicetteProps> = () => {
           <Fragment>
             <div className="box box--stacked mb-6">
               <div className="p-6">
-                <h2 className="text-xl font-bold mb-4">Galleria Foto</h2>
+                <h2 className="title-section mb-4">Galleria Foto</h2>
 
                 {/* Foto Principale */}
                 <div className="relative h-96 mb-6 rounded-sm">
@@ -368,8 +364,8 @@ const ModificaRicette: FC<ModificaRicetteProps> = () => {
                         {/* Overlay di caricamento per foto principale */}
                         {isImageLoading(0) && (
                           <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center rounded-lg">
-                            <div className="text-center text-white">
-                              <Lucide icon="Loader" className="w-8 h-8 animate-spin mx-auto mb-2" />
+                            <div role="status" className="text-center text-white">
+                              <Spinner size="lg" decorativo className="mx-auto mb-2 text-white" />
                               <p className="text-sm">Rigenerando foto...</p>
                             </div>
                           </div>
@@ -380,19 +376,21 @@ const ModificaRicette: FC<ModificaRicetteProps> = () => {
                             variant="secondary"
                             onClick={() => openImagePreview(mainImage)}
                             disabled={isImageLoading(0)}
+                            aria-label="Ingrandisci foto principale"
                           >
-                            <Lucide icon="ZoomIn" className="w-4 h-4" />
+                            <Lucide icon="ZoomIn" aria-hidden="true" className="w-4 h-4" />
                           </Button>
                           <Button
                             variant="primary"
                             className="ml-2"
                             onClick={() => setDialogGenerazioneFoto(true)}
                             disabled={isImageLoading(0)}
+                            aria-label="Rigenera foto principale"
+                            aria-busy={isImageLoading(0)}
                           >
-                            <Lucide
-                              icon={isImageLoading(0) ? 'Loader' : 'RefreshCw'}
-                              className={`w-4 h-4 ${isImageLoading(0) ? 'animate-spin' : ''}`}
-                            />
+                            {isImageLoading(0)
+                              ? <Spinner size="sm" decorativo className="text-current" />
+                              : <Lucide icon="RefreshCw" aria-hidden="true" className="w-4 h-4" />}
                           </Button>
                         </div>
                       </div>
@@ -400,8 +398,8 @@ const ModificaRicette: FC<ModificaRicetteProps> = () => {
                   ) : (
                     <div className="w-full h-full bg-gray-200 flex items-center justify-center rounded-lg">
                       {isImageLoading(0) ? (
-                        <div className="text-center">
-                          <Lucide icon="Loader" className="w-8 h-8 animate-spin mx-auto mb-2" />
+                        <div role="status" className="text-center">
+                          <Spinner size="lg" decorativo className="mx-auto mb-2" />
                           <p className="text-sm text-gray-600">Generando foto...</p>
                         </div>
                       ) : (
@@ -426,17 +424,23 @@ const ModificaRicette: FC<ModificaRicetteProps> = () => {
             <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3 my-4">
               {otherImages.map((foto, index) => (
                 <div key={index} className="relative aspect-square p-4 box box--stacked">
-                  <img
-                    src={foto.url}
-                    alt={`Foto ricetta ${index + 1}`}
-                    className="w-full h-full object-cover rounded cursor-pointer hover:opacity-80 transition-opacity"
+                  <button
+                    type="button"
+                    className="block w-full h-full"
                     onClick={() => openImagePreview(foto.url)}
-                  />
+                    aria-label={`Ingrandisci foto ${index + 1}`}
+                  >
+                    <img
+                      src={foto.url}
+                      alt={`Foto ricetta ${index + 1}`}
+                      className="w-full h-full object-cover rounded cursor-pointer hover:opacity-80 transition-opacity"
+                    />
+                  </button>
 
                   {/* Overlay di caricamento per foto secondarie */}
                   {isImageLoading(index) && (
                     <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center rounded">
-                      <Lucide icon="Loader" className="w-3 h-3 animate-spin text-white" />
+                      <Spinner size="sm" etichetta="Rigenerazione foto in corso…" className="text-white" />
                     </div>
                   )}
 
@@ -448,11 +452,11 @@ const ModificaRicette: FC<ModificaRicetteProps> = () => {
                       className="m-2"
                       onClick={() => mutationRigeneraFoto.mutate(index)}
                       disabled={isImageLoading(index)}
+                      aria-label={`Rigenera foto ${index + 1}`}
                     >
-                      <Lucide
-                        icon={isImageLoading(index) ? 'Loader' : 'RefreshCw'}
-                        className={`w-3 h-3 ${isImageLoading(index) ? 'animate-spin' : ''}`}
-                      />
+                      {isImageLoading(index)
+                        ? <Spinner size="sm" decorativo className="w-3 h-3 text-current" />
+                        : <Lucide icon="RefreshCw" aria-hidden="true" className="w-3 h-3" />}
                     </Tippy>
                     <Tippy
                       content="Imposta come principale"
@@ -461,12 +465,11 @@ const ModificaRicette: FC<ModificaRicetteProps> = () => {
                       className="m-2"
                       onClick={() => mutationUpdateMainFoto.mutate({ idFoto: foto.id })}
                       disabled={mutationUpdateMainFoto.isPending}
+                      aria-label={`Imposta foto ${index + 1} come principale`}
                     >
-                      <Lucide
-                        icon={mutationUpdateMainFoto.isPending ? 'Loader' : 'Star'}
-                        className={`w-3 h-3 ${mutationUpdateMainFoto.isPending ? 'animate-spin' : ''
-                          }`}
-                      />
+                      {mutationUpdateMainFoto.isPending
+                        ? <Spinner size="sm" decorativo className="w-3 h-3 text-current" />
+                        : <Lucide icon="Star" aria-hidden="true" className="w-3 h-3" />}
                     </Tippy>
                   </div>
                 </div>
@@ -476,16 +479,17 @@ const ModificaRicette: FC<ModificaRicetteProps> = () => {
                 <div className="text-center p-2 box box--stacked aspect-square mb-2">
                   {isImageLoading(otherImages.length) ? (
                     <div className="border-2 border-dashed border-gray-300 rounded-md flex items-center justify-center h-full w-full bg-gray-100">
-                      <Lucide icon="Loader" className="w-6 h-6 animate-spin" />
+                      <Spinner etichetta="Generazione foto in corso…" />
                     </div>
                   ) : (
-                    <div className="border-2 border-dashed border-gray-300 rounded-md flex items-center justify-center h-full w-full bg-gray-100">
-                      <Lucide
-                        icon="ImagePlus"
-                        className="w-6 h-6 cursor-pointer"
-                        onClick={() => mutationGeneraFoto.mutate(otherImages.length)}
-                      />
-                    </div>
+                    <button
+                      type="button"
+                      className="border-2 border-dashed border-gray-300 rounded-md flex items-center justify-center h-full w-full bg-gray-100"
+                      onClick={() => mutationGeneraFoto.mutate(otherImages.length)}
+                      aria-label="Genera una nuova foto"
+                    >
+                      <Lucide icon="ImagePlus" aria-hidden="true" className="w-6 h-6" />
+                    </button>
                   )}
                 </div>
               )}
@@ -505,7 +509,7 @@ const ModificaRicette: FC<ModificaRicetteProps> = () => {
         {/* Sezione Informazioni Base */}
         <div className="box box--stacked mb-6">
           <div className="p-6">
-            <h2 className="text-lg font-semibold text-slate-800 mb-4 flex items-center">
+            <h2 className="title-section mb-4 flex items-center">
               <Lucide icon="Info" className="w-5 h-5 mr-2 text-primary" />
               Informazioni Base
             </h2>
@@ -534,17 +538,9 @@ const ModificaRicette: FC<ModificaRicetteProps> = () => {
               {(() => {
                 switch (ricetta.stato) {
                   case STATO_RICETTA.PUBBLICARE:
-                    return (
-                      <Badge border variant="success">
-                        Al momento pubblicata
-                      </Badge>
-                    );
+                    return <StatusBadge tono="success" etichetta="Al momento pubblicata" />;
                   case STATO_RICETTA.REVISIONARE:
-                    return (
-                      <Badge border variant="warning">
-                        In attesa di revisione
-                      </Badge>
-                    );
+                    return <StatusBadge tono="warning" etichetta="In attesa di revisione" />;
                   default:
                     return null;
                 }
@@ -553,19 +549,10 @@ const ModificaRicette: FC<ModificaRicetteProps> = () => {
                 <Button className="ml-auto"
                   variant="primary"
                   onClick={() => mutationGeneraRicettaLunga.mutate()}
-                  disabled={mutationGeneraRicettaLunga.isPending}
+                  loading={mutationGeneraRicettaLunga.isPending}
                 >
-                  {mutationGeneraRicettaLunga.isPending ? (
-                    <>
-                      <Lucide icon="Loader" className="w-4 h-4 animate-spin mr-2" />
-                      Generazione in corso...
-                    </>
-                  ) : (
-                    <>
-                      <Lucide icon="Wand" className="w-4 h-4 mr-2" />
-                      Genera ricetta approfondita
-                    </>
-                  )}
+                  {!mutationGeneraRicettaLunga.isPending && <Lucide icon="Wand" aria-hidden="true" className="w-4 h-4 mr-2" />}
+                  Genera ricetta approfondita
                 </Button>
               )}
             </div>
@@ -575,7 +562,7 @@ const ModificaRicette: FC<ModificaRicetteProps> = () => {
         {/* Sezione Ingredienti */}
         <div className="box box--stacked mb-6">
           <div className="p-6">
-            <h2 className="text-lg font-semibold text-slate-800 mb-4 flex items-center">
+            <h2 className="title-section mb-4 flex items-center">
               <Lucide icon="ChefHat" className="w-5 h-5 mr-2 text-primary" />
               Ingredienti
             </h2>
@@ -637,7 +624,7 @@ const ModificaRicette: FC<ModificaRicetteProps> = () => {
           <div className="box box--stacked mb-6">
             <div className="p-6">
               <div className="flex justify-between items-center mb-4">
-                <h2 className="text-lg font-semibold text-slate-800 flex items-center">
+                <h2 className="title-section flex items-center">
                   <Lucide icon="ListOrdered" className="w-5 h-5 mr-2 text-primary" />
                   Procedimento
                 </h2>
@@ -646,19 +633,10 @@ const ModificaRicette: FC<ModificaRicetteProps> = () => {
                     <Button
                       variant="primary"
                       onClick={saveProcedimento}
-                      disabled={savingProcedimento}
+                      loading={savingProcedimento}
                     >
-                      {savingProcedimento ? (
-                        <>
-                          <Lucide icon="Loader" className="w-4 h-4 mr-2 animate-spin" />
-                          Salvando...
-                        </>
-                      ) : (
-                        <>
-                          <Lucide icon="Save" className="w-4 h-4 mr-2" />
-                          Salva
-                        </>
-                      )}
+                      {!savingProcedimento && <Lucide icon="Save" aria-hidden="true" className="w-4 h-4 mr-2" />}
+                      Salva
                     </Button>
                     <Button
                       variant="outline-secondary"
@@ -708,27 +686,18 @@ const ModificaRicette: FC<ModificaRicetteProps> = () => {
           <div className="box box--stacked mb-6">
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-slate-800 flex items-center">
+                <h2 className="title-section flex items-center">
                   <Lucide icon="Wine" className="w-5 h-5 mr-2 text-purple-500" />
                   Abbinamento Vino
                 </h2>
                 <Button
                   variant="outline-primary"
                   onClick={() => mutationGeneraAbbinamentoVino.mutate()}
-                  disabled={mutationGeneraAbbinamentoVino.isPending}
+                  loading={mutationGeneraAbbinamentoVino.isPending}
                   size="sm"
                 >
-                  {mutationGeneraAbbinamentoVino.isPending ? (
-                    <>
-                      <Lucide icon="Loader" className="w-4 h-4 mr-2 animate-spin" />
-                      Rigenerando...
-                    </>
-                  ) : (
-                    <>
-                      <Lucide icon="RefreshCw" className="w-4 h-4 mr-2" />
-                      Rigenera
-                    </>
-                  )}
+                  {!mutationGeneraAbbinamentoVino.isPending && <Lucide icon="RefreshCw" aria-hidden="true" className="w-4 h-4 mr-2" />}
+                  Rigenera
                 </Button>
               </div>
 
@@ -748,8 +717,10 @@ const ModificaRicette: FC<ModificaRicetteProps> = () => {
                 <div className="grid grid-cols-1 gap-3">
                   {ricetta.abbinamento_vino.vini_abbinati.map((vinoCode, index) => (
                     <div key={index} className="border border-slate-200 rounded-lg overflow-hidden mb-2">
-                      <div
-                        className="flex items-center justify-between p-3 bg-white hover:bg-slate-50 transition-colors cursor-pointer"
+                      <button
+                        type="button"
+                        aria-expanded={!!expandedVini[index]}
+                        className="flex w-full items-center justify-between p-3 text-left bg-white hover:bg-slate-50 transition-colors cursor-pointer"
                         onClick={() => {
                           // Toggle expanded state for this vino
                           const newExpandedItems = { ...expandedVini };
@@ -757,8 +728,8 @@ const ModificaRicette: FC<ModificaRicetteProps> = () => {
                           setExpandedVini(newExpandedItems);
                         }}
                       >
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                        <span className="flex items-center gap-3">
+                          <span className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
                             {typeof vinoCode !== 'string' && (
                               <img
                                 src={urlFoto(vinoCode.foto)[0]}
@@ -767,27 +738,28 @@ const ModificaRicette: FC<ModificaRicetteProps> = () => {
                               />
                             )}
                             {typeof vinoCode === 'string' && (
-                              <Lucide icon="Wine" className="w-4 h-4 text-purple-500" />
+                              <Lucide icon="Wine" aria-hidden="true" className="w-4 h-4 text-purple-500" />
                             )}
-                          </div>
-                          <div>
-                            <p className="font-medium text-slate-800">
+                          </span>
+                          <span className="block">
+                            <span className="block font-medium text-slate-800">
                               {typeof vinoCode === 'string'
                                 ? `Vino codice: ${vinoCode}`
                                 : `${vinoCode.approfondimento.nome} - ${vinoCode.approfondimento.cantina}`}
-                            </p>
-                            <p className="text-sm text-slate-500">
+                            </span>
+                            <span className="block text-sm text-slate-500">
                               {expandedVini[index] ? 'Clicca per nascondere i dettagli' : 'Clicca per visualizzare i dettagli'}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
+                            </span>
+                          </span>
+                        </span>
+                        <span className="flex items-center gap-2">
                           <Lucide
                             icon={expandedVini[index] ? "ChevronUp" : "ChevronDown"}
+                            aria-hidden="true"
                             className="w-4 h-4 text-slate-500"
                           />
-                        </div>
-                      </div>
+                        </span>
+                      </button>
 
                       {/* Contenuto espandibile */}
                       {expandedVini[index] && typeof vinoCode !== 'string' && (
@@ -904,9 +876,9 @@ const ModificaRicette: FC<ModificaRicetteProps> = () => {
           <div className="box box--stacked mb-6">
             <div className="p-6">
               {mutationGeneraAbbinamentoVino.isPending ? (
-                <div className="flex flex-col items-center justify-center py-12">
+                <div role="status" className="flex flex-col items-center justify-center py-12">
                   <div className="flex items-center mb-4">
-                    <Lucide icon="Loader" className="w-8 h-8 text-purple-500 animate-spin mr-3" />
+                    <Spinner size="lg" decorativo className="mr-3" />
                     <span className="text-lg font-medium text-slate-700">Generazione abbinamento in corso...</span>
                   </div>
                   <p className="text-sm text-slate-500 text-center max-w-md">

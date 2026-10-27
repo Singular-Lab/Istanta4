@@ -1,8 +1,16 @@
 import Chart from "@/components/Base/Chart";
 import Lucide from "@/components/Base/Lucide";
+import PageError from "@/components/Base/PageError";
 import PageHeader from "@/components/Base/PageHeader";
 import Skeleton from "@/components/Base/Skeleton";
-import EmptyState from "@/components/EmptyState";
+import Spinner from "@/components/Base/Spinner";
+import StatCard from "@/components/Base/StatCard";
+import StatusBadge from "@/components/Base/StatusBadge";
+import type { TonoStato } from "@/constants/stati";
+import { COLORI_SEMANTICI, coloreSemantico, opzioniBase, paletteColore } from "@/utils/chartTheme";
+import { getColor } from "@/utils/colors";
+import { formatData, formatDataOra } from "@/utils/format";
+import type { ChartOptions, TooltipItem } from "chart.js";
 import clsx from "clsx";
 import dayjs from "dayjs";
 import { FC, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -103,47 +111,6 @@ interface SuperadminDashboardLoaderData {
     overviewPromise: Promise<SuperadminOverviewResponse>;
 }
 
-// ─── Stat Card ──────────────────────────────────────────────────────────────
-
-interface StatCompactCardProps {
-    label: string;
-    value: number | string;
-    icon: React.ReactNode;
-    tone?: "primary" | "warning" | "info" | "danger" | "success";
-}
-
-const StatCompactCard: FC<StatCompactCardProps> = ({
-    label,
-    value,
-    icon,
-    tone = "primary",
-}) => {
-    const tones: Record<string, string> = {
-        primary: "border-theme-1/30 text-theme-1 bg-theme-1/5",
-        warning: "border-warning/30 text-warning bg-warning/10",
-        info: "border-info/30 text-info bg-info/10",
-        danger: "border-danger/30 text-danger bg-danger/10",
-        success: "border-success/30 text-success bg-success/5",
-    };
-
-    return (
-        <div
-            className={clsx(
-                "flex items-center gap-4 rounded-[0.6rem] border px-4 py-3 bg-white/80",
-                tones[tone]
-            )}
-        >
-            <div className="flex items-center justify-center w-9 h-9 rounded-full bg-current/10">
-                {icon}
-            </div>
-            <div className="flex flex-col leading-tight">
-                <span className="text-xs font-medium text-slate-500">{label}</span>
-                <span className="text-xl font-bold text-slate-800">{value}</span>
-            </div>
-        </div>
-    );
-};
-
 // ─── Skeleton ───────────────────────────────────────────────────────────────
 
 const DashboardSkeleton: FC = () => (
@@ -153,7 +120,7 @@ const DashboardSkeleton: FC = () => (
                 <div className="flex flex-col gap-5">
                     <div className="grid grid-cols-2 gap-3">
                         {[1, 2].map((j) => (
-                            <div key={j} className="flex items-center gap-3 rounded-[0.6rem] border px-4 py-3">
+                            <div key={j} className="flex items-center gap-3 rounded-control border px-4 py-3">
                                 <Skeleton className="w-9 h-9 rounded-full" />
                                 <div className="flex flex-col gap-1">
                                     <Skeleton className="h-3 w-16" />
@@ -170,25 +137,16 @@ const DashboardSkeleton: FC = () => (
 
 // ─── Severity Badge ─────────────────────────────────────────────────────────
 
-const SeverityBadge: FC<{ severity: string }> = ({ severity }) => {
-    const colors: Record<string, string> = {
-        CRITICAL: "bg-danger/10 text-danger",
-        HIGH: "bg-warning/10 text-warning",
-        MEDIUM: "bg-info/10 text-info",
-        LOW: "bg-slate-100 text-slate-500",
-    };
-
-    return (
-        <span
-            className={clsx(
-                "px-2 py-0.5 rounded text-xs font-medium",
-                colors[severity] ?? "bg-slate-100 text-slate-500"
-            )}
-        >
-            {severity}
-        </span>
-    );
+const TONO_SEVERITA: Record<string, TonoStato> = {
+    CRITICAL: "danger",
+    HIGH: "warning",
+    MEDIUM: "info",
+    LOW: "neutral",
 };
+
+const SeverityBadge: FC<{ severity: string }> = ({ severity }) => (
+    <StatusBadge tono={TONO_SEVERITA[severity] ?? "neutral"} etichetta={severity} />
+);
 
 const alertSourceLabels: Record<AlertSource, string> = {
     DATABASE: "Database",
@@ -197,10 +155,10 @@ const alertSourceLabels: Record<AlertSource, string> = {
     SESSIONI: "Sessioni",
 };
 
-const alertStatusConfig: Record<AlertStatus, string> = {
-    NUOVO: "bg-danger/10 text-danger",
-    ACK: "bg-warning/10 text-warning",
-    RISOLTO: "bg-success/10 text-success",
+const TONO_STATO_ALERT: Record<AlertStatus, TonoStato> = {
+    NUOVO: "danger",
+    ACK: "warning",
+    RISOLTO: "success",
 };
 
 const alertActionButtonClass: Record<DashboardAlertAction["variant"], string> = {
@@ -313,26 +271,24 @@ const SuperadminDashboard: FC = () => {
                     {
                         data: [used, free],
                         backgroundColor: [
-                            used >= 80 ? "rgba(239,68,68,0.8)" : "rgba(59,130,246,0.8)",
-                            "rgba(226,232,240,0.5)",
+                            used >= 80 ? COLORI_SEMANTICI.negativo : paletteColore(0),
+                            getColor("slate.200", 0.5),
                         ],
                         borderWidth: 0,
                         cutout: "75%",
                     },
                 ],
             },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
+            options: opzioniBase("doughnut", {
                 plugins: {
                     legend: { display: false },
                     tooltip: {
                         callbacks: {
-                            label: (ctx: any) => `${ctx.label}: ${ctx.raw}%`,
+                            label: (ctx: TooltipItem<"doughnut">) => `${ctx.label}: ${ctx.raw}%`,
                         },
                     },
                 },
-            },
+            }) as ChartOptions,
         };
     }, [data]);
 
@@ -340,6 +296,13 @@ const SuperadminDashboard: FC = () => {
     const connectionsBarChartData = useMemo(() => {
         if (!data) return null;
         const { metrics, averages } = data.database;
+        // Attive, idle, in attesa, totali
+        const colori = (alpha: number) => [
+            paletteColore(0, alpha),
+            coloreSemantico("positivo", alpha),
+            coloreSemantico("attenzione", alpha),
+            coloreSemantico("neutro", alpha),
+        ];
         return {
             data: {
                 labels: ["Attive", "Idle", "In attesa", "Totali"],
@@ -352,12 +315,7 @@ const SuperadminDashboard: FC = () => {
                             metrics.waitingRequests,
                             metrics.totalConnections,
                         ],
-                        backgroundColor: [
-                            "rgba(59,130,246,0.7)",
-                            "rgba(34,197,94,0.7)",
-                            "rgba(234,179,8,0.7)",
-                            "rgba(148,163,184,0.7)",
-                        ],
+                        backgroundColor: colori(0.7),
                         borderRadius: 4,
                     },
                     {
@@ -368,27 +326,20 @@ const SuperadminDashboard: FC = () => {
                             0,
                             0,
                         ],
-                        backgroundColor: [
-                            "rgba(59,130,246,0.3)",
-                            "rgba(34,197,94,0.3)",
-                            "rgba(234,179,8,0.3)",
-                            "rgba(148,163,184,0.3)",
-                        ],
+                        backgroundColor: colori(0.3),
                         borderRadius: 4,
                     },
                 ],
             },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
+            options: opzioniBase("bar", {
                 plugins: {
-                    legend: { display: true, position: "bottom" as const, labels: { boxWidth: 12, font: { size: 11 } } },
+                    legend: { display: true, position: "bottom", labels: { boxWidth: 12 } },
                 },
                 scales: {
-                    y: { beginAtZero: true, grid: { color: "rgba(226,232,240,0.5)" }, ticks: { font: { size: 11 } } },
-                    x: { grid: { display: false }, ticks: { font: { size: 11 } } },
+                    y: { beginAtZero: true },
+                    x: { grid: { display: false } },
                 },
-            },
+            }) as ChartOptions,
         };
     }, [data]);
 
@@ -404,8 +355,8 @@ const SuperadminDashboard: FC = () => {
                     {
                         label: "Connessioni attive",
                         data: history.map((m) => m.activeConnections),
-                        borderColor: "rgba(59,130,246,1)",
-                        backgroundColor: "rgba(59,130,246,0.1)",
+                        borderColor: paletteColore(0),
+                        backgroundColor: paletteColore(0, 0.1),
                         fill: true,
                         tension: 0.3,
                         pointRadius: 2,
@@ -413,26 +364,24 @@ const SuperadminDashboard: FC = () => {
                     {
                         label: "Utilizzo pool %",
                         data: history.map((m) => m.utilizationPercent),
-                        borderColor: "rgba(234,179,8,1)",
-                        backgroundColor: "rgba(234,179,8,0.1)",
+                        borderColor: COLORI_SEMANTICI.attenzione,
+                        backgroundColor: coloreSemantico("attenzione", 0.1),
                         fill: true,
                         tension: 0.3,
                         pointRadius: 2,
                     },
                 ],
             },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: { mode: "index" as const, intersect: false },
+            options: opzioniBase("line", {
+                interaction: { mode: "index", intersect: false },
                 plugins: {
-                    legend: { display: true, position: "bottom" as const, labels: { boxWidth: 12, font: { size: 11 } } },
+                    legend: { display: true, position: "bottom", labels: { boxWidth: 12 } },
                 },
                 scales: {
-                    y: { beginAtZero: true, grid: { color: "rgba(226,232,240,0.5)" }, ticks: { font: { size: 11 } } },
-                    x: { grid: { display: false }, ticks: { font: { size: 11 }, maxRotation: 45 } },
+                    y: { beginAtZero: true },
+                    x: { grid: { display: false }, ticks: { maxRotation: 45 } },
                 },
-            },
+            }) as ChartOptions,
         };
     }, [data]);
 
@@ -455,8 +404,8 @@ const SuperadminDashboard: FC = () => {
     const gdoDashboardContent = useMemo(() => {
         if (!gdoLoaderData) {
             return (
-                <div className="box box--stacked p-8 text-center mt-5">
-                    <Lucide icon="Loader" className="w-10 h-10 mx-auto text-slate-400 mb-3 animate-spin" />
+                <div role="status" className="box box--stacked p-8 text-center mt-5">
+                    <Spinner size="lg" decorativo className="mx-auto mb-3" />
                     <p className="text-slate-500">Caricamento dashboard GDO...</p>
                 </div>
             );
@@ -481,12 +430,11 @@ const SuperadminDashboard: FC = () => {
         return (
             <>
                 <PageHeader title="Dashboard Superadmin" description="Panoramica dello stato del sistema." />
-                <EmptyState
-                    icon="TriangleAlert"
-                    title="Errore caricamento dashboard"
-                    description={error ?? "Dati non disponibili."}
-                    iconColor="text-danger"
-                    className="box box--stacked mt-5"
+                <PageError
+                    titolo="Errore caricamento dashboard"
+                    motivo={error ?? "Dati non disponibili."}
+                    onRiprova={fetchOverview}
+                    className="mt-5"
                 />
             </>
         );
@@ -500,11 +448,13 @@ const SuperadminDashboard: FC = () => {
             <PageHeader title="Dashboard Superadmin" description="Panoramica dello stato del sistema." />
 
             <div className="box box--stacked p-3 mt-5">
-                <div className="flex flex-wrap items-center gap-2">
+                <div role="tablist" aria-label="Sezioni della dashboard" className="flex flex-wrap items-center gap-2">
                     {tabs.map((tab) => (
                         <button
                             key={tab.id}
                             type="button"
+                            role="tab"
+                            aria-selected={activeTab === tab.id}
                             onClick={() => handleTabChange(tab.id)}
                             className={clsx(
                                 "inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm border transition-colors",
@@ -513,7 +463,7 @@ const SuperadminDashboard: FC = () => {
                                     : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
                             )}
                         >
-                            <Lucide icon={tab.icon} className="w-4 h-4" />
+                            <Lucide icon={tab.icon} aria-hidden="true" className="w-4 h-4" />
                             {tab.label}
                         </button>
                     ))}
@@ -526,8 +476,8 @@ const SuperadminDashboard: FC = () => {
                 <div className="mt-5">
                     <Suspense
                         fallback={
-                            <div className="box box--stacked p-8 text-center">
-                                <Lucide icon="Loader" className="w-10 h-10 mx-auto text-slate-400 mb-3 animate-spin" />
+                            <div role="status" className="box box--stacked p-8 text-center">
+                                <Spinner size="lg" decorativo className="mx-auto mb-3" />
                                 <p className="text-slate-500">Caricamento registro audit...</p>
                             </div>
                         }
@@ -545,41 +495,45 @@ const SuperadminDashboard: FC = () => {
                                     <Lucide icon="Database" className="w-6 h-6 text-primary" />
                                 </div>
                                 <div>
-                                    <div className="text-base font-semibold">Stato Database</div>
+                                    <h2 className="title-card">Stato Database</h2>
                                     <div className="text-slate-500 text-sm">PostgreSQL — {health.message}</div>
                                 </div>
                             </div>
-                            <div className="text-[11px] text-slate-400 pl-14">
-                                Aggiornato {dayjs(metrics.timestamp).format("DD MMM YYYY HH:mm:ss")}
+                            <div className="text-2xs text-slate-400 pl-14">
+                                Aggiornato {formatDataOra(metrics.timestamp)}
                             </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-3 mb-4">
-                            <StatCompactCard
-                                label="Stato"
-                                value={dbStatus.label}
-                                icon={<Lucide icon="Activity" className="w-4 h-4" />}
-                                tone={dbStatus.tone}
+                            <StatCard
+                                densita="compatta"
+                                etichetta="Stato"
+                                valore={dbStatus.label}
+                                icona="Activity"
+                                tono={dbStatus.tone}
                             />
-                            <StatCompactCard
-                                label="Tempo risposta"
-                                value={`${responseTimeValue} ms`}
-                                icon={<Lucide icon="Clock" className="w-4 h-4" />}
-                                tone={responseTimeValue > 1000 ? "danger" : responseTimeValue > 500 ? "warning" : "info"}
+                            <StatCard
+                                densita="compatta"
+                                etichetta="Tempo risposta"
+                                valore={`${responseTimeValue} ms`}
+                                icona="Clock"
+                                tono={responseTimeValue > 1000 ? "danger" : responseTimeValue > 500 ? "warning" : "info"}
                             />
                         </div>
                         <div className="grid grid-cols-2 gap-3">
-                            <StatCompactCard
-                                label="Connessioni attive"
-                                value={metrics.activeConnections}
-                                icon={<Lucide icon="Zap" className="w-4 h-4" />}
-                                tone="primary"
+                            <StatCard
+                                densita="compatta"
+                                etichetta="Connessioni attive"
+                                valore={metrics.activeConnections}
+                                icona="Zap"
+                                tono="brand"
                             />
-                            <StatCompactCard
-                                label="In attesa"
-                                value={metrics.waitingRequests}
-                                icon={<Lucide icon="Hourglass" className="w-4 h-4" />}
-                                tone={metrics.waitingRequests > 0 ? "warning" : "info"}
+                            <StatCard
+                                densita="compatta"
+                                etichetta="In attesa"
+                                valore={metrics.waitingRequests}
+                                icona="Hourglass"
+                                tono={metrics.waitingRequests > 0 ? "warning" : "info"}
                             />
                         </div>
                     </div>
@@ -592,7 +546,7 @@ const SuperadminDashboard: FC = () => {
                                     <Lucide icon="ChartBar" className="w-6 h-6 text-info" />
                                 </div>
                                 <div>
-                                    <div className="text-base font-semibold">Pool Connessioni</div>
+                                    <h2 className="title-card">Pool Connessioni</h2>
                                     <div className="text-slate-500 text-sm">
                                         Utilizzo: {metrics.utilizationPercent}% — Picco: {averages.peakUtilization}%
                                     </div>
@@ -646,7 +600,7 @@ const SuperadminDashboard: FC = () => {
                                     <Lucide icon="TrendingUp" className="w-6 h-6 text-primary" />
                                 </div>
                                 <div>
-                                    <div className="text-base font-semibold">Storico connessioni</div>
+                                    <h2 className="title-card">Storico connessioni</h2>
                                     <div className="text-slate-500 text-sm">
                                         Media: {averages.avgActiveConnections} attive — Picco: {averages.peakActiveConnections}
                                     </div>
@@ -679,45 +633,49 @@ const SuperadminDashboard: FC = () => {
                                     <Lucide icon="Server" className="w-6 h-6 text-primary" />
                                 </div>
                                 <div>
-                                    <div className="text-base font-semibold">Stato sistema</div>
+                                    <h2 className="title-card">Stato sistema</h2>
                                     <div className="text-slate-500 text-sm">Sessioni e connessioni attive</div>
                                 </div>
                             </div>
-                            <div className="text-[11px] text-slate-400 pl-14">
-                                Aggiornato {dayjs().format("DD MMM YYYY")}
+                            <div className="text-2xs text-slate-400 pl-14">
+                                Aggiornato {formatData(new Date())}
                             </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-3 mb-4">
-                            <StatCompactCard
-                                label="Sessioni attive"
-                                value={data.onlineUsers.activeSessions}
-                                icon={<Lucide icon="Users" className="w-4 h-4" />}
-                                tone="primary"
+                            <StatCard
+                                densita="compatta"
+                                etichetta="Sessioni attive"
+                                valore={data.onlineUsers.activeSessions}
+                                icona="Users"
+                                tono="brand"
                             />
-                            <StatCompactCard
-                                label="WebSocket"
-                                value={data.onlineUsers.wsConnections}
-                                icon={<Lucide icon="Radio" className="w-4 h-4" />}
-                                tone="info"
+                            <StatCard
+                                densita="compatta"
+                                etichetta="WebSocket"
+                                valore={data.onlineUsers.wsConnections}
+                                icona="Radio"
+                                tono="info"
                             />
                         </div>
                         <div className="grid grid-cols-2 gap-3">
-                            <StatCompactCard
-                                label="Ultimo audit"
-                                value={
+                            <StatCard
+                                densita="compatta"
+                                etichetta="Ultimo audit"
+                                valore={
                                     data.audit.lastAuditTime
                                         ? dayjs(data.audit.lastAuditTime).format("HH:mm:ss")
-                                        : "—"
+                                        : null
                                 }
-                                icon={<Lucide icon="Clock" className="w-4 h-4" />}
-                                tone="info"
+                                icona="Clock"
+                                tono="info"
                             />
-                            <StatCompactCard
-                                label="Pool idle"
-                                value={metrics.idleConnections}
-                                icon={<Lucide icon="Pause" className="w-4 h-4" />}
-                                tone="info"
+                            <StatCard
+                                densita="compatta"
+                                etichetta="Pool idle"
+                                valore={metrics.idleConnections}
+                                icona="Pause"
+                                tono="info"
                             />
                         </div>
                     </div>
@@ -730,27 +688,29 @@ const SuperadminDashboard: FC = () => {
                                     <Lucide icon="Shield" className="w-6 h-6 text-warning" />
                                 </div>
                                 <div>
-                                    <div className="text-base font-semibold">Audit & Sicurezza</div>
+                                    <h2 className="title-card">Audit & Sicurezza</h2>
                                     <div className="text-slate-500 text-sm">Metriche di sicurezza del sistema</div>
                                 </div>
                             </div>
-                            <div className="text-[11px] text-slate-400 pl-14">
+                            <div className="text-2xs text-slate-400 pl-14">
                                 {data.audit.totalEvents} eventi totali registrati
                             </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-3 mb-4">
-                            <StatCompactCard
-                                label="Login falliti"
-                                value={data.audit.failedLogins}
-                                icon={<Lucide icon="ShieldOff" className="w-4 h-4" />}
-                                tone={data.audit.failedLogins > 0 ? "danger" : "primary"}
+                            <StatCard
+                                densita="compatta"
+                                etichetta="Login falliti"
+                                valore={data.audit.failedLogins}
+                                icona="ShieldOff"
+                                tono={data.audit.failedLogins > 0 ? "danger" : "brand"}
                             />
-                            <StatCompactCard
-                                label="Attività sospette"
-                                value={data.audit.suspiciousActivities}
-                                icon={<Lucide icon="TriangleAlert" className="w-4 h-4" />}
-                                tone={data.audit.suspiciousActivities > 0 ? "danger" : "primary"}
+                            <StatCard
+                                densita="compatta"
+                                etichetta="Attività sospette"
+                                valore={data.audit.suspiciousActivities}
+                                icona="TriangleAlert"
+                                tono={data.audit.suspiciousActivities > 0 ? "danger" : "brand"}
                             />
                         </div>
 
@@ -777,13 +737,13 @@ const SuperadminDashboard: FC = () => {
                                     <Lucide icon="BellRing" className="w-6 h-6 text-danger" />
                                 </div>
                                 <div>
-                                    <div className="text-base font-semibold">Centro alert azionabile</div>
+                                    <h2 className="title-card">Centro alert azionabile</h2>
                                     <div className="text-slate-500 text-sm">
                                         Prioritizza criticità e intervieni con azioni rapide
                                     </div>
                                 </div>
                             </div>
-                            <div className="text-[11px] text-slate-400 pl-14">
+                            <div className="text-2xs text-slate-400 pl-14">
                                 {data.alerts?.length ?? 0} alert attivi
                             </div>
                         </div>
@@ -808,14 +768,12 @@ const SuperadminDashboard: FC = () => {
                                     >
                                         <div className="flex flex-wrap items-center gap-2 mb-2">
                                             <SeverityBadge severity={alert.severity} />
-                                            <span className={clsx("px-2 py-0.5 rounded text-xs font-medium", alertStatusConfig[alert.status])}>
-                                                {alert.status}
-                                            </span>
+                                            <StatusBadge tono={TONO_STATO_ALERT[alert.status] ?? "neutral"} etichetta={alert.status} />
                                             <span className="px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600">
                                                 {alertSourceLabels[alert.source]}
                                             </span>
-                                            <span className="text-[11px] text-slate-500">
-                                                {dayjs(alert.createdAt).format("DD/MM HH:mm:ss")}
+                                            <span className="text-2xs text-slate-500">
+                                                {formatDataOra(alert.createdAt)}
                                             </span>
                                         </div>
 
@@ -824,12 +782,12 @@ const SuperadminDashboard: FC = () => {
 
                                         <div className="flex flex-wrap items-center gap-2">
                                             {typeof alert.metricValue === "number" && (
-                                                <span className="text-[11px] px-2 py-1 rounded bg-white border border-slate-200 text-slate-600">
+                                                <span className="text-2xs px-2 py-1 rounded bg-white border border-slate-200 text-slate-600">
                                                     Valore: {alert.metricValue}
                                                 </span>
                                             )}
                                             {typeof alert.threshold === "number" && (
-                                                <span className="text-[11px] px-2 py-1 rounded bg-white border border-slate-200 text-slate-600">
+                                                <span className="text-2xs px-2 py-1 rounded bg-white border border-slate-200 text-slate-600">
                                                     Soglia: {alert.threshold}
                                                 </span>
                                             )}
@@ -865,7 +823,7 @@ const SuperadminDashboard: FC = () => {
                                     <Lucide icon="OctagonAlert" className="w-6 h-6 text-danger" />
                                 </div>
                                 <div>
-                                    <div className="text-base font-semibold">Ultimi errori</div>
+                                    <h2 className="title-card">Ultimi errori</h2>
                                     <div className="text-slate-500 text-sm">
                                         Eventi CRITICAL e HIGH — ultimi 30
                                     </div>
@@ -895,7 +853,7 @@ const SuperadminDashboard: FC = () => {
                                         {data.recentErrors.map((evt, idx) => (
                                             <tr key={idx}>
                                                 <td className="whitespace-nowrap text-xs">
-                                                    {dayjs(evt.timestamp).format("DD/MM/YYYY HH:mm:ss")}
+                                                    {formatDataOra(evt.timestamp)}
                                                 </td>
                                                 <td>
                                                     <SeverityBadge severity={evt.severity} />

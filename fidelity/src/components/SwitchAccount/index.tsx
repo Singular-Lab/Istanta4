@@ -41,11 +41,12 @@ function CambiaAccount(props: MainProps) {
           </Dialog.Title>
           <Dialog.Description className="p-5">
             <div className="flex flex-col gap-3">
-              <label className="block text-sm font-medium text-slate-700 mb-1">
+              <label htmlFor="switch-account-password" className="block text-sm font-medium text-slate-700 mb-1">
                 Inserisci la tua password
               </label>
               <div className="relative">
                 <FormInput
+                  id="switch-account-password"
                   type={isPasswordVisible ? "text" : "password"}
                   placeholder="Password"
                   value={password}
@@ -54,15 +55,18 @@ function CambiaAccount(props: MainProps) {
                   }}
                   className="pr-10"
                 />
-                <div
+                <button
+                  type="button"
                   className="absolute right-0 top-0 h-full flex items-center pr-3 cursor-pointer"
                   onClick={() => setIsPasswordVisible(!isPasswordVisible)}
+                  aria-label={isPasswordVisible ? "Nascondi password" : "Mostra password"}
                 >
                   <Lucide
                     icon={isPasswordVisible ? "EyeOff" : "Eye"}
+                    aria-hidden="true"
                     className="w-5 h-5 text-slate-500 hover:text-slate-700 transition-colors"
                   />
-                </div>
+                </button>
               </div>
               <div className="flex justify-end mt-3 space-x-2">
                 <button
@@ -111,7 +115,7 @@ function CambiaAccount(props: MainProps) {
                 >
                   <div className="overflow-hidden rounded-full w-11 h-11 image-fit border-[3px] border-slate-200/70">
                     <img
-                      alt="Tailwise - Admin Dashboard Template"
+                      alt=""
                       src={faker.photo ? `data:image/png;base64,${faker.photo}` : userIcon}
                     />
                   </div>
@@ -143,14 +147,15 @@ function CambiaAccount(props: MainProps) {
           </Dialog.Description>
           <Dialog.Footer className="flex items-center justify-center text-center h-14">
             {switchAccount !== props.currentUserId ? (
-              <span
+              <button
+                type="button"
                 onClick={() => {
                   setIsPassordModalOpen(true);
                 }}
                 className="block -mt-1 text-primary hover:cursor-pointer"
               >
                 Esegui il login con questo account
-              </span>
+              </button>
             ) : (
               <span className="block -mt-1 text-slate-400">
                 Account attualmente in uso

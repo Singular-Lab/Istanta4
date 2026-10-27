@@ -1,8 +1,7 @@
 import Button from "@/components/Base/Button";
 import { Dialog } from "@/components/Base/Headless";
 import Lucide from "@/components/Base/Lucide";
-import LoadingIcon from "@/components/Base/LoadingIcon";
-import dayjs from "dayjs";
+import { formatData } from "@/utils/format";
 import React from "react";
 import { PromoResponseDTO } from "../../../../server/core/dto";
 
@@ -26,7 +25,7 @@ const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
       <Dialog.Panel>
         <Dialog.Title>
           <div className="flex items-center">
-            <Lucide icon="Printer" className="w-5 h-5 text-primary mr-2" />
+            <Lucide icon="Printer" aria-hidden="true" className="w-5 h-5 text-primary mr-2" />
             <h2 className="text-lg font-semibold text-slate-800">Richiedi ordine di stampa</h2>
           </div>
         </Dialog.Title>
@@ -40,9 +39,9 @@ const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
               {selectedPromo?.nome}
             </div>
             <div className="flex items-center justify-center gap-2 text-sm text-slate-600 mt-2">
-              <span>{selectedPromo && dayjs(selectedPromo.validita_dal).format('DD/MM/YYYY')}</span>
-              <Lucide icon="ArrowRight" className="w-4 h-4" />
-              <span>{selectedPromo && dayjs(selectedPromo.validita_al).format('DD/MM/YYYY')}</span>
+              <span>{selectedPromo && formatData(selectedPromo.validita_dal)}</span>
+              <Lucide icon="ArrowRight" aria-hidden="true" className="w-4 h-4" />
+              <span>{selectedPromo && formatData(selectedPromo.validita_al)}</span>
             </div>
           </div>
           <p className="text-sm text-slate-500">
@@ -52,23 +51,17 @@ const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
 
         <Dialog.Footer className="flex justify-end gap-4">
           <Button
+            type="button"
             variant="primary"
             onClick={onConfirm}
             disabled={isPending}
+            loading={isPending}
           >
-            {isPending ? (
-              <div className="flex items-center">
-                <LoadingIcon icon="oval" className="w-4 h-4 mr-2" />
-                Creazione...
-              </div>
-            ) : (
-              <>
-                <Lucide icon="Check" className="w-4 h-4 mr-2" />
-                Conferma
-              </>
-            )}
+            {!isPending && <Lucide icon="Check" aria-hidden="true" className="w-4 h-4 mr-2" />}
+            Conferma
           </Button>
           <Button
+            type="button"
             variant="secondary"
             onClick={onClose}
           >

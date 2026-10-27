@@ -1,101 +1,130 @@
 import React, { Fragment, useState } from 'react';
-import { useLoaderData, useNavigate, useRevalidator } from 'react-router-dom';
+import { useLoaderData, useRevalidator } from 'react-router-dom';
 import { STATO_GDO_WHATSAPP_NUMBER } from '../../../lib/enums';
 import withSessionCheck from "@/components/SessionChecker";
 import { ServerCall } from '../../../lib/server_call';
 import Button from '../../components/Base/Button';
-import { FormInput, FormLabel, FormSelect, FormTextarea, InputGroup } from '../../components/Base/Form';
-import LoadingIcon from '../../components/Base/LoadingIcon';
-import Lucide from '../../components/Base/Lucide';
+import { FormField, FormInput, FormLabel, FormSelect, InputGroup } from '../../components/Base/Form';
+import PageError from '../../components/Base/PageError';
 import PageHeader from '../../components/Base/PageHeader';
+import StatusBadge from '../../components/Base/StatusBadge';
+import { descriviStato } from '../../constants/stati';
 import { useNotification } from '../../context/NotificationContext';
+import type { DettagliGDOWhatsapp } from '../../router/loaderFunctions';
+
+const messaggioErrore = (errore: unknown, predefinito: string) =>
+    errore instanceof Error && errore.message ? errore.message : predefinito;
+
+// I token sono in sola scrittura: il server dice solo se sono configurati
+const aiutoToken = (configurato: boolean | undefined) =>
+    configurato ? 'Configurato. Lascia vuoto per mantenere quello salvato.' : 'Non configurato: obbligatorio per attivare il canale.';
 
 const GestioneSetupWhatsappSuperAdmin: React.FC = () => {
     const { showNotification } = useNotification();
-    const { dettagliGDO, templateOptions: loaderTemplateOptions } = useLoaderData<{
-        dettagliGDO: {
-            id: string;
-            nome: string;
-            id_gdo: string;
-            id_numero_whatsapp: string;
-            display_name: string;
-            stato: string;
-            provider: string;
-            whatsapp_business_account_id: string;
-            access_token?: string;
-            verify_token?: string;
-            createdat?: Date;
-            updatedat?: Date;
-        } | null;
-        templateOptions?: Array<{
-            id: string;
-            name: string;
-        }>;
-    }>();
+    const { idGDO, dettagliGDO, errore } = useLoaderData() as {
+        idGDO: string;
+        dettagliGDO: DettagliGDOWhatsapp | null;
+        errore: string | null;
+    };
 
-    const templateOptions = loaderTemplateOptions || [];
-
-    const navigate = useNavigate();
     const { revalidate } = useRevalidator();
+    const idGdo = dettagliGDO?.id_gdo || idGDO;
     const [displayName, setDisplayName] = useState(dettagliGDO?.display_name || '');
     const [wabaId, setWabaId] = useState(dettagliGDO?.whatsapp_business_account_id || '');
     const [phoneNumberId, setPhoneNumberId] = useState(dettagliGDO?.id_numero_whatsapp || '');
-    const [webhookUrl, setWebhookUrl] = useState('');
-    const [verifyToken, setVerifyToken] = useState(dettagliGDO?.verify_token || '');
-    const [stato, setStato] = useState(dettagliGDO?.stato || '');
-    const [accessToken, setAccessToken] = useState(dettagliGDO?.access_token || '');
+    const [stato, setStato] = useState(dettagliGDO?.stato || STATO_GDO_WHATSAPP_NUMBER.PENDING);
+    const [accessToken, setAccessToken] = useState('');
+    const [verifyToken, setVerifyToken] = useState('');
     const [hasCopiedWebhookUrl, setHasCopiedWebhookUrl] = useState(false);
     const [syncing, setSyncing] = useState(false);
+    const [salvataggio, setSalvataggio] = useState(false);
 
-    const [testNumberE164, setTestNumberE164] = useState('');
-    const [chooseTemplate, setChooseTemplate] = useState({
-        id: '',
-        name: ''
-    });
-    const [linguaTest, setLinguaTest] = useState('it');
-    const [parametriBodies, setParametriBodies] = useState<string[]>([]);
-
+    const webhookUrl = ServerCall.getUrl() + `/webhook/whatsapp/${dettagliGDO?.id || ''}`;
 
     const handleSyncTemplates = async () => {
-        if (!dettagliGDO?.id && !dettagliGDO?.id_gdo) {
-            showNotification("ID GDO non disponibile: impossibile sincronizzare.", { variant: 'warning' });
+        if (!dettagliGDO?.id_gdo) {
+            showNotification("Configura e salva il canale prima di sincronizzare i template.", { variant: 'warning' });
             return;
         }
+        setSyncing(true);
         try {
-            setSyncing(true);
-            const gdoId = dettagliGDO.id_gdo;
-            const result = await ServerCall.put("/whatsapp/sync_templates_from_meta", { gdoId });
-            // Ricarica la route per rifrescare i dati del loader
+            const result = await ServerCall.put<{ success: boolean; error?: string }>("/whatsapp/sync_templates_from_meta", { gdoId: dettagliGDO.id_gdo });
+            if (!result?.success) {
+                throw new Error(result?.error || 'Sincronizzazione non riuscita');
+            }
+            showNotification("Template sincronizzati da Meta", { variant: 'success' });
             revalidate();
-            setSyncing(false);
-        } catch (err: any) {
-            console.error("Sync da Meta fallito", err);
+        } catch (err) {
+            showNotification(`Errore durante la sincronizzazione: ${messaggioErrore(err, 'errore sconosciuto')}`, { variant: 'error' });
         } finally {
             setSyncing(false);
         }
     };
 
+    const salva = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setSalvataggio(true);
+        try {
+            const corpo: Record<string, string> = {
+                id_gdo: idGdo,
+                display_name: displayName,
+                id_numero_whatsapp: phoneNumberId,
+                whatsapp_business_account_id: wabaId,
+                stato,
+            };
+            // Un token si invia solo se riscritto: vuoto, il server mantiene quello salvato
+            if (accessToken.trim()) corpo.access_token = accessToken.trim();
+            if (verifyToken.trim()) corpo.verify_token = verifyToken.trim();
+            await ServerCall.put("/whatsapp/setup_gdo_whatsapp", corpo);
+            setAccessToken('');
+            setVerifyToken('');
+            showNotification("Configurazione WhatsApp salvata", { variant: 'success' });
+            revalidate();
+        } catch (err) {
+            showNotification(messaggioErrore(err, "Salvataggio della configurazione non riuscito"), { variant: 'error' });
+        } finally {
+            setSalvataggio(false);
+        }
+    };
+
+    const intestazione = (
+        <PageHeader
+            title={"Gestione Whatsapp" + (dettagliGDO?.nome ? ` per ${dettagliGDO.nome}` : "")}
+            description="Gestisci il setup per il cliente"
+            indietro={{ to: "/whatsapp/gestione-whatsapp-superadmin", etichetta: "Torna alle GDO" }}
+            badges={
+                dettagliGDO
+                    ? <StatusBadge dominio="waNumero" stato={dettagliGDO.stato} />
+                    : !errore && <StatusBadge tono="neutral" etichetta="Non configurato" />
+            }
+        />
+    );
+
+    if (errore) {
+        return (
+            <Fragment>
+                {intestazione}
+                <PageError motivo={errore} onRiprova={revalidate} />
+            </Fragment>
+        );
+    }
 
     return (
         <Fragment>
-            <PageHeader
-                title={"Gestione Whatsapp" + (dettagliGDO?.nome ? ` per ${dettagliGDO.nome}` : "")}
-                description="Gestisci il setup per il cliente"
-            />
+            {intestazione}
 
             <div className="col-span-12">
                 {/* Contenitore principale con altezza indipendente tra i box */}
                 <div className="flex flex-col lg:flex-row w-full gap-2 items-start">
 
                     {/* Colonna principale */}
-                    <div className="box box--stacked p-4 sm:p-5 mb-2 w-full lg:w-[70%] lg:flex-none">
-                        <span className="font-semibold text-lg sm:text-xl">
+                    <form noValidate onSubmit={salva} className="box box--stacked p-4 sm:p-5 mb-2 w-full lg:basis-2/3 lg:flex-none">
+                        <h2 className="title-section">
                             Dati canale WhatsApp del cliente
-                        </span>
+                        </h2>
 
                         <div className='flex flex-col sm:flex-row mt-4 gap-4'>
-                            <div className='w-full sm:w-1/2'>
-                                <FormLabel htmlFor="display_name">Display Name (WhatsApp)</FormLabel>
+                            <FormField className='w-full sm:w-1/2' etichetta="Display Name (WhatsApp)" obbligatorio>
                                 <FormInput
                                     id="display_name"
                                     type="text"
@@ -103,21 +132,24 @@ const GestioneSetupWhatsappSuperAdmin: React.FC = () => {
                                     spellCheck={false}
                                     onChange={(e) => setDisplayName(e.target.value)}
                                 />
-                            </div>
-                            <div className='w-full sm:w-1/2'>
-                                <FormLabel htmlFor="business_number">Numero Business (E.164)</FormLabel>
-                                <FormInput
-                                    id="business_number"
-                                    type="text"
-                                    spellCheck={false}
-                                    disabled
-                                />
-                            </div>
+                            </FormField>
+                            <FormField className='w-full sm:w-1/2' etichetta="Stato">
+                                <FormSelect
+                                    id="stato"
+                                    value={stato}
+                                    onChange={(e) => setStato(e.target.value)}
+                                >
+                                    {Object.values(STATO_GDO_WHATSAPP_NUMBER).map((valore) => (
+                                        <option key={valore} value={valore}>
+                                            {descriviStato('waNumero', valore).etichetta}
+                                        </option>
+                                    ))}
+                                </FormSelect>
+                            </FormField>
                         </div>
 
                         <div className='flex flex-col sm:flex-row mt-4 gap-4'>
-                            <div className='w-full sm:w-1/2'>
-                                <FormLabel htmlFor="waba_id">WABA ID (WhatsApp Business Account)</FormLabel>
+                            <FormField className='w-full sm:w-1/2' etichetta="WABA ID (WhatsApp Business Account)" obbligatorio>
                                 <FormInput
                                     id="waba_id"
                                     type="text"
@@ -125,9 +157,8 @@ const GestioneSetupWhatsappSuperAdmin: React.FC = () => {
                                     value={wabaId}
                                     onChange={(e) => setWabaId(e.target.value)}
                                 />
-                            </div>
-                            <div className='w-full sm:w-1/2'>
-                                <FormLabel htmlFor="phone_number_id">Phone Number ID</FormLabel>
+                            </FormField>
+                            <FormField className='w-full sm:w-1/2' etichetta="Phone Number ID" obbligatorio>
                                 <FormInput
                                     id="phone_number_id"
                                     type="text"
@@ -135,63 +166,55 @@ const GestioneSetupWhatsappSuperAdmin: React.FC = () => {
                                     value={phoneNumberId}
                                     onChange={(e) => setPhoneNumberId(e.target.value)}
                                 />
-                            </div>
-                        </div>
-
-                        <div className='flex flex-col sm:flex-row mt-4 gap-4'>
-                            <div className='w-full sm:w-1/2'>
-                                <FormLabel htmlFor="stato">Stato</FormLabel>
-                                <FormSelect
-                                    id="stato"
-                                    spellCheck={false}
-                                    value={stato}
-                                    onChange={(e) => setStato(e.target.value)}
-                                >
-                                    {Object.entries(STATO_GDO_WHATSAPP_NUMBER).map(([key, value]) => (
-                                        <option key={key} value={value}>
-                                            {value}
-                                        </option>
-                                    ))}
-                                </FormSelect>
-                            </div>
+                            </FormField>
                         </div>
 
                         <hr className="my-6 border-t border-gray-200" />
 
-                        <div className='w-full'>
-                            <FormLabel htmlFor="access_token">Access Token</FormLabel>
-                            <FormTextarea
+                        <FormField
+                            etichetta="Access Token"
+                            obbligatorio={!dettagliGDO?.access_token_configurato}
+                            aiuto={aiutoToken(dettagliGDO?.access_token_configurato)}
+                        >
+                            <FormInput
                                 id="access_token"
+                                type="password"
+                                autoComplete="new-password"
+                                spellCheck={false}
+                                placeholder={dettagliGDO?.access_token_configurato ? '••••••••' : ''}
                                 value={accessToken}
                                 onChange={(e) => setAccessToken(e.target.value)}
-                                rows={4}
                             />
+                        </FormField>
+
+                        <div className="mt-6 flex justify-end">
+                            <Button type="submit" variant="primary" loading={salvataggio}>
+                                Salva
+                            </Button>
                         </div>
-                    </div>
+                    </form>
 
                     {/* Colonna laterale */}
 
                     <div className='flex flex-col w-full '>
                         <div className="box box--stacked p-4 sm:p-5 mb-2 w-full lg:flex-none">
-                            <span className="font-semibold text-lg sm:text-xl">
+                            <h2 className="title-section">
                                 Webhook • Impostazioni
-                            </span>
+                            </h2>
 
-                            <div className='w-full'>
+                            <div className='w-full mt-4'>
                                 <FormLabel htmlFor="webhook_url">Webhook URL</FormLabel>
                                 <InputGroup>
                                     <FormInput
                                         id="webhook_url"
                                         type="text"
+                                        readOnly
                                         spellCheck={false}
-                                        placeholder={ServerCall.getUrl() + `/webhook/whatsapp/${dettagliGDO?.id || ''}`}
                                         value={webhookUrl}
-                                        onChange={(e) => setWebhookUrl(e.target.value)}
                                     />
                                     <InputGroup.Button
                                         onClick={() => {
-                                            const textToCopy = webhookUrl || (ServerCall.getUrl() + `/webhook/whatsapp/${dettagliGDO?.id || ''}`);
-                                            navigator.clipboard.writeText(textToCopy);
+                                            navigator.clipboard.writeText(webhookUrl);
                                             setHasCopiedWebhookUrl(true);
                                             setTimeout(() => setHasCopiedWebhookUrl(false), 4000);
                                         }}
@@ -201,124 +224,41 @@ const GestioneSetupWhatsappSuperAdmin: React.FC = () => {
                                 </InputGroup>
                             </div>
 
-                            <div className='w-full mt-4'>
-                                <FormLabel htmlFor="verify_token">Verify Token</FormLabel>
+                            <FormField
+                                className='w-full mt-4'
+                                etichetta="Verify Token"
+                                obbligatorio={!dettagliGDO?.verify_token_configurato}
+                                aiuto={aiutoToken(dettagliGDO?.verify_token_configurato)}
+                            >
                                 <FormInput
                                     id="verify_token"
-                                    type="text"
+                                    type="password"
+                                    autoComplete="new-password"
                                     spellCheck={false}
+                                    placeholder={dettagliGDO?.verify_token_configurato ? '••••••••' : ''}
                                     value={verifyToken}
                                     onChange={(e) => setVerifyToken(e.target.value)}
                                 />
-                            </div>
+                            </FormField>
+                            <p className="mt-2 text-xs text-slate-500">Il verify token si salva con il pulsante Salva dei dati del canale.</p>
                         </div>
                         <div className="box box--stacked p-4 sm:p-5 mb-2 w-full lg:flex-none">
-                            <span className="font-semibold text-lg sm:text-xl">
+                            <h2 className="title-section">
                                 Template • Sincronizza
-                                <span className="text-3xs text-gray-500 block font-normal">
-                                    Recupera i template approvati dal WABA del cliente.
-                                </span>
-                            </span>
+                            </h2>
+                            <p className="mb-3 text-xs text-slate-500">
+                                Recupera i template approvati dal WABA del cliente.
+                            </p>
 
-                            <div className='w-full'>
-                                <Button
-                                    variant="outline-primary"
-                                    className="w-full"
-                                    onClick={handleSyncTemplates}
-                                >
-                                    {syncing ? (
-                                        <LoadingIcon icon="rings" />
-                                    ) : "Sincronizza"}
-                                </Button>
-                            </div>
-                        </div>
-                        <div className="box box--stacked p-4 sm:p-5 mb-2 w-full lg:flex-none">
-                            <span className="font-semibold text-lg sm:text-xl">
-                                Invio di Test (Template)
-                            </span>
-
-                            <div className='w-full mt-4'>
-                                <FormLabel htmlFor="test_number_e164">Destinatario (E.164)</FormLabel>
-                                <FormInput
-                                    id="test_number_e164"
-                                    type="text"
-                                    spellCheck={false}
-                                    placeholder='+39...'
-                                    value={testNumberE164}
-                                    onChange={(e) => setTestNumberE164(e.target.value)}
-                                />
-                            </div>
-                            <div className='w-full mt-4'>
-                                <FormLabel htmlFor="choose_template">Scegli template</FormLabel>
-                                <FormSelect
-                                    id="choose_template"
-                                    spellCheck={false}
-                                    value={chooseTemplate.id}
-                                    onChange={(e) => setChooseTemplate({
-                                        id: e.target.value,
-                                        name: templateOptions.find(template => template.id === e.target.value)?.name || ''
-                                    })}
-                                >
-                                    <option value="">Seleziona un template</option>
-                                    {templateOptions.map((template) => (
-                                        <option key={template.id} value={template.id}>
-                                            {template.name}
-                                        </option>
-                                    ))}
-                                </FormSelect>
-                            </div>
-                            <div className='w-full mt-4'>
-                                <FormLabel htmlFor="lingua_test">Lingua</FormLabel>
-                                <FormInput
-                                    id="lingua_test"
-                                    type="text"
-                                    spellCheck={false}
-                                    placeholder='it'
-                                    value={linguaTest}
-                                    onChange={(e) => setLinguaTest(e.target.value)}
-                                />
-                            </div>
-                            <div className="w-full mt-4">
-                                <FormLabel htmlFor="parametri_body">Parametri BODY (opzionale)</FormLabel>
-                                <div className="flex flex-col gap-2">
-                                    {parametriBodies.map((parametro, index) => (
-                                        <div key={index} className="flex items-center gap-2">
-                                            <InputGroup className="w-full">
-                                                <FormInput
-                                                    id={`parametro_body_${index}`}
-                                                    type="text"
-                                                    spellCheck={false}
-                                                    placeholder={`{{${index + 1}}}`}
-                                                    value={parametro}
-                                                    onChange={(e) => {
-                                                        const newParametri = [...parametriBodies];
-                                                        newParametri[index] = e.target.value;
-                                                        setParametriBodies(newParametri);
-                                                    }}
-                                                />
-                                                <InputGroup.Button
-                                                    className='text-danger bg-danger/10 hover:bg-danger/20'
-                                                    title="Rimuovi parametro"
-                                                    aria-label="Rimuovi parametro"
-                                                    onClick={() => {
-                                                        const newParametri = parametriBodies.filter((_, i) => i !== index);
-                                                        setParametriBodies(newParametri);
-                                                    }}
-                                                >
-                                                    <Lucide icon="Trash2" className="w-4 h-4" />
-                                                </InputGroup.Button>
-                                            </InputGroup>
-                                        </div>
-                                    ))}
-                                    <Button
-                                        variant="outline-primary"
-                                        className="mt-2 self-start"
-                                        onClick={() => setParametriBodies([...parametriBodies, ''])}
-                                    >
-                                        Aggiungi parametro
-                                    </Button>
-                                </div>
-                            </div>
+                            <Button
+                                variant="outline-primary"
+                                className="w-full"
+                                loading={syncing}
+                                disabled={!dettagliGDO}
+                                onClick={handleSyncTemplates}
+                            >
+                                Sincronizza
+                            </Button>
                         </div>
                     </div>
                 </div>

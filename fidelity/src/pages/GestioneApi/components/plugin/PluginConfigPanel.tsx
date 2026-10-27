@@ -65,8 +65,9 @@ function PluginConfigPanel({ template, templates }: PluginConfigPanelProps) {
               size="sm"
               onClick={copyCode}
               className="absolute top-2 right-2"
+              aria-label="Copia snippet"
             >
-              <Lucide icon="Copy" className="w-4 h-4" />
+              <Lucide aria-hidden="true" icon="Copy" className="w-4 h-4" />
             </Button>
           </div>
         </div>

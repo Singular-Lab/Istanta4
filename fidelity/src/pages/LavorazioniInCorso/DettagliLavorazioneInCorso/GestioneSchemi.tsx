@@ -60,7 +60,7 @@ const SchemaItemRow: React.FC<SchemaItemRowProps> = ({
     onClick={selectionMode ? onSelect : undefined}
   >
     {isInPair && (
-      <span className="shrink-0 inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-emerald-100 text-emerald-700 text-[10px] font-semibold">
+      <span className="shrink-0 inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-emerald-100 text-emerald-700 text-3xs font-semibold">
         <Lucide icon="GitCompare" className="w-2.5 h-2.5" />
       </span>
     )}
@@ -69,7 +69,7 @@ const SchemaItemRow: React.FC<SchemaItemRowProps> = ({
       onClick={(e) => { e.stopPropagation(); onToggleSnapshot(); }}
       title={item.snapshot ? "Snapshot — clicca per cambiare in Normale" : "Normale — clicca per cambiare in Snapshot"}
       className={clsx(
-        "shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide transition-colors",
+        "shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-3xs font-semibold uppercase tracking-wide transition-colors",
         item.snapshot ? "bg-amber-100 text-amber-700 hover:bg-amber-200" : "bg-primary/10 text-primary hover:bg-primary/20"
       )}
     >
@@ -78,15 +78,16 @@ const SchemaItemRow: React.FC<SchemaItemRowProps> = ({
     </button>
     <span className="flex-1 text-sm text-slate-700 truncate">{item.nome}</span>
     {isSelected && (
-      <span className="shrink-0 text-[10px] text-primary font-semibold">selezionato</span>
+      <span className="shrink-0 text-3xs text-primary font-semibold">selezionato</span>
     )}
     {!selectionMode && (
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); onRemove(); }}
-        className="shrink-0 p-0.5 rounded text-slate-400 hover:text-danger hover:bg-danger/10 opacity-0 group-hover:opacity-100 transition-all"
+        aria-label={`Rimuovi ${item.nome}`}
+        className="shrink-0 p-0.5 rounded text-slate-400 hover:text-danger hover:bg-danger/10 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-all"
       >
-        <Lucide icon="X" className="w-3.5 h-3.5" />
+        <Lucide icon="X" aria-hidden="true" className="w-3.5 h-3.5" />
       </button>
     )}
   </div>
@@ -115,7 +116,7 @@ const SchemaCard: React.FC<SchemaCardProps> = ({ schema, onDelete, isDeleting })
           {tipi.map((t) => {
             const cfg = TIPI_SCHEMA.find(ts => ts.value === t);
             return cfg ? (
-              <span key={t} className={clsx("px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide", cfg.colorClass)}>
+              <span key={t} className={clsx("px-1.5 py-0.5 rounded text-3xs font-semibold uppercase tracking-wide", cfg.colorClass)}>
                 {cfg.label}
               </span>
             ) : null;
@@ -130,16 +131,17 @@ const SchemaCard: React.FC<SchemaCardProps> = ({ schema, onDelete, isDeleting })
                 className="p-1 rounded bg-danger/10 hover:bg-danger/20 text-danger transition-colors"
                 onClick={() => { onDelete(schema.id); setShowConfirmDelete(false); }}
                 disabled={isDeleting}
+                aria-label={`Conferma eliminazione dello schema ${schema.nome}`}
               >
-                <Lucide icon={isDeleting ? "Loader" : "Check"} className={clsx("w-4 h-4", isDeleting && "animate-spin")} />
+                <Lucide icon={isDeleting ? "Loader" : "Check"} aria-hidden="true" className={clsx("w-4 h-4", isDeleting && "animate-spin")} />
               </button>
-              <button type="button" className="p-1 rounded hover:bg-slate-200 text-slate-500 transition-colors" onClick={() => setShowConfirmDelete(false)}>
-                <Lucide icon="X" className="w-4 h-4" />
+              <button type="button" aria-label="Annulla eliminazione" className="p-1 rounded hover:bg-slate-200 text-slate-500 transition-colors" onClick={() => setShowConfirmDelete(false)}>
+                <Lucide icon="X" aria-hidden="true" className="w-4 h-4" />
               </button>
             </>
           ) : (
-            <button type="button" className="p-1 rounded hover:bg-danger/10 text-slate-400 hover:text-danger transition-colors" onClick={() => setShowConfirmDelete(true)}>
-              <Lucide icon="Trash2" className="w-4 h-4" />
+            <button type="button" aria-label={`Elimina lo schema ${schema.nome}`} className="p-1 rounded hover:bg-danger/10 text-slate-400 hover:text-danger transition-colors" onClick={() => setShowConfirmDelete(true)}>
+              <Lucide icon="Trash2" aria-hidden="true" className="w-4 h-4" />
             </button>
           )}
         </div>
@@ -156,7 +158,7 @@ const SchemaCard: React.FC<SchemaCardProps> = ({ schema, onDelete, isDeleting })
           schema.items.map((item, i) => (
             <div key={i} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200">
               <span className={clsx(
-                "shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide",
+                "shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-3xs font-semibold uppercase tracking-wide",
                 item.snapshot ? "bg-amber-100 text-amber-700" : "bg-primary/10 text-primary"
               )}>
                 <Lucide icon={item.snapshot ? "Camera" : "List"} className="w-3 h-3" />
@@ -171,7 +173,7 @@ const SchemaCard: React.FC<SchemaCardProps> = ({ schema, onDelete, isDeleting })
       {/* Confronti */}
       {confronti.length > 0 && (
         <div className="px-3 pb-3 pt-2 border-t border-slate-100">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-1.5">
+          <p className="text-3xs font-semibold uppercase tracking-wide text-slate-400 mb-1.5">
             Confronti
           </p>
           <div className="flex flex-col gap-1">
@@ -185,7 +187,7 @@ const SchemaCard: React.FC<SchemaCardProps> = ({ schema, onDelete, isDeleting })
                   <span className="text-slate-400 shrink-0">↔</span>
                   <span className="font-medium truncate max-w-[90px]">{itemB?.nome ?? `#${c.b}`}</span>
                   {c.terremotoDegradoMassimo != null && (
-                    <span className="shrink-0 inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-orange-100 text-orange-700 text-[10px] font-semibold" title="Degrado terremoto massimo del confronto">
+                    <span className="shrink-0 inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-orange-100 text-orange-700 text-3xs font-semibold" title="Degrado terremoto massimo del confronto">
                       <Lucide icon="Zap" className="w-2.5 h-2.5" />
                       {c.terremotoDegradoMassimo}%
                     </span>
@@ -334,7 +336,7 @@ const NuovoSchemaForm: React.FC<NuovoSchemaFormProps> = ({ onSave, onCancel, isS
             type="button"
             onClick={() => setNewItemSnapshot((v) => !v)}
             className={clsx(
-              "shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] font-semibold uppercase tracking-wide transition-colors",
+              "shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded text-3xs font-semibold uppercase tracking-wide transition-colors",
               newItemSnapshot ? "bg-amber-100 text-amber-700 hover:bg-amber-200" : "bg-primary/10 text-primary hover:bg-primary/20"
             )}
           >
@@ -353,9 +355,10 @@ const NuovoSchemaForm: React.FC<NuovoSchemaFormProps> = ({ onSave, onCancel, isS
             type="button"
             onClick={addItem}
             disabled={!newItemNome.trim()}
+            aria-label="Aggiungi momento"
             className="shrink-0 p-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-40 transition-colors"
           >
-            <Lucide icon="Plus" className="w-4 h-4" />
+            <Lucide icon="Plus" aria-hidden="true" className="w-4 h-4" />
           </button>
         </div>
 
@@ -364,7 +367,7 @@ const NuovoSchemaForm: React.FC<NuovoSchemaFormProps> = ({ onSave, onCancel, isS
           <div className="flex flex-col gap-1 mt-1">
             {selectionMode && (
               <>
-                <p className="text-[10px] text-slate-400 font-medium px-0.5">
+                <p className="text-3xs text-slate-400 font-medium px-0.5">
                   {selectedForConfronto !== null
                     ? "Seleziona il secondo momento per creare la coppia"
                     : "Clicca due momenti per definire una coppia di confronto"}
@@ -402,7 +405,7 @@ const NuovoSchemaForm: React.FC<NuovoSchemaFormProps> = ({ onSave, onCancel, isS
         {/* Coppie confronto aggiunte */}
         {confronti.length > 0 && (
           <div className="flex flex-col gap-1 mt-1 pt-1 border-t border-slate-200">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Confronti</p>
+            <p className="text-3xs font-semibold uppercase tracking-wide text-slate-400">Confronti</p>
             {confronti.map((c, idx) => {
               const itemA = items.find((it) => it.ordine === c.a);
               const itemB = items.find((it) => it.ordine === c.b);
@@ -413,7 +416,7 @@ const NuovoSchemaForm: React.FC<NuovoSchemaFormProps> = ({ onSave, onCancel, isS
                   <span className="text-emerald-400 shrink-0">↔</span>
                   <span className="font-medium truncate max-w-[70px]">{itemB?.nome ?? `#${c.b}`}</span>
                   {c.terremotoDegradoMassimo != null && (
-                    <span className="shrink-0 inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-orange-100 text-orange-700 text-[10px] font-semibold">
+                    <span className="shrink-0 inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-orange-100 text-orange-700 text-3xs font-semibold">
                       <Lucide icon="Zap" className="w-2.5 h-2.5" />
                       {c.terremotoDegradoMassimo}%
                     </span>
@@ -421,9 +424,10 @@ const NuovoSchemaForm: React.FC<NuovoSchemaFormProps> = ({ onSave, onCancel, isS
                   <button
                     type="button"
                     onClick={() => removeConfronto(idx)}
+                    aria-label="Rimuovi confronto"
                     className="ml-auto p-0.5 rounded text-emerald-500 hover:text-danger hover:bg-danger/10 transition-colors"
                   >
-                    <Lucide icon="X" className="w-3 h-3" />
+                    <Lucide icon="X" aria-hidden="true" className="w-3 h-3" />
                   </button>
                 </div>
               );
@@ -439,9 +443,10 @@ const NuovoSchemaForm: React.FC<NuovoSchemaFormProps> = ({ onSave, onCancel, isS
           size="sm"
           className="flex-1"
           onClick={() => onSave(nome.trim(), tipo, items, confronti)}
-          disabled={!nome.trim() || items.length === 0 || tipo.length === 0 || isSaving}
+          disabled={!nome.trim() || items.length === 0 || tipo.length === 0}
+          loading={isSaving}
         >
-          {isSaving ? <Lucide icon="Loader" className="w-4 h-4 animate-spin" /> : "Salva schema"}
+          Salva schema
         </Button>
         <Button variant="outline-secondary" size="sm" onClick={onCancel}>
           Annulla

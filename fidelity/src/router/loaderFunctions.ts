@@ -740,71 +740,75 @@ export const funzioneCaricamentoGestioneWhatsappSuperAdmin = async () => {
   return { gdos_lista };
 }
 
+/** Canale WhatsApp di una GDO: dei token il server dice solo se sono configurati, mai il valore. */
+export type DettagliGDOWhatsapp = {
+  id: string;
+  id_gdo: string;
+  nome: string;
+  id_numero_whatsapp: string;
+  display_name: string;
+  stato: string;
+  provider: string;
+  whatsapp_business_account_id: string;
+  access_token_configurato: boolean;
+  verify_token_configurato: boolean;
+  createdat?: string;
+  updatedat?: string;
+};
+
+const motivoErroreWhatsapp = (errore: unknown) =>
+  errore instanceof Error && errore.message ? errore.message : "Servizio WhatsApp non raggiungibile";
+
+// null senza errore = canale non ancora configurato; errore = dati non arrivati
 export const funzioneCaricamentoGestioneSetupWhatsappSuperAdmin = async ({ request }: { request: Request }) => {
   const url = new URL(request.url);
   const idGDO = url.searchParams.get("id") || "";
-  const totalSteps = 1;
-  const dettagliGDOPromise = ServerCall.get<{
-    id: string;
-    id_gdo: string;
-    nome: string;
-    id_numero_whatsapp: string;
-    display_name: string;
-    stato: string;
-    provider: string;
-    whatsapp_business_account_id: string;
-    access_token?: string;
-    verify_token?: string;
-    createdat?: Date;
-    updatedat?: Date;
-  } | null>(`/whatsapp/get_whatsapp_gdo_by_id?id=${idGDO}`);
-  const results = await Promise.allSettled([dettagliGDOPromise]);
-  const [dettagliGDO] = results.map((r) =>
-    r.status === "fulfilled" ? r.value : (console.error("Errore:", r.reason), null)
-  );
-
-  return { dettagliGDO };
+  try {
+    const dettagliGDO = await ServerCall.get<DettagliGDOWhatsapp | null>(
+      `/whatsapp/get_whatsapp_gdo_by_id?id=${encodeURIComponent(idGDO)}`
+    );
+    return { idGDO, dettagliGDO: dettagliGDO ?? null, errore: null as string | null };
+  } catch (errore) {
+    console.error("Errore:", errore);
+    return { idGDO, dettagliGDO: null, errore: motivoErroreWhatsapp(errore) as string | null };
+  }
 }
-
-
-
 
 export const funzioneCaricamentoGestioneTemplatesWhatsappAdmin = async ({ request }: { request: Request }) => {
   const url = new URL(request.url);
   const idGDO = url.searchParams.get("id") || "";
-  const totalSteps = 1;
-  const templatesWhatsappPromise = ServerCall.get<{
-    id: string;
-    nome_template: string;
-    lingua: string;
-    stato: string;
-    categoria: string;
-    contenuto: string;
-    id_gdo_whatsapp: string;
-    createdat?: Date;
-    updatedat?: Date;
-  }[]>(`/whatsapp/get_all_templates_whatsapp_by_gdo?id=${idGDO}`);
-  const dettagliGDOPromise = ServerCall.get<(GDOWhatsappTemplateAttributes & { preset_count: number })[]>(`/whatsapp/get_whatsapp_gdo_by_id?id=${idGDO}`);
-  const results = await Promise.allSettled([templatesWhatsappPromise, dettagliGDOPromise]);
-  const [templatesWhatsapp, dettagliGDO] = results.map((r) =>
-    r.status === "fulfilled" ? r.value : (console.error("Errore:", r.reason), null)
-  );
+  const [templates, dettagli] = await Promise.allSettled([
+    ServerCall.get<(GDOWhatsappTemplateAttributes & { preset_count: number })[]>(
+      `/whatsapp/get_all_templates_whatsapp_by_gdo?id=${encodeURIComponent(idGDO)}`
+    ),
+    ServerCall.get<DettagliGDOWhatsapp | null>(`/whatsapp/get_whatsapp_gdo_by_id?id=${encodeURIComponent(idGDO)}`),
+  ]);
+  const fallita = [templates, dettagli].find((r): r is PromiseRejectedResult => r.status === "rejected");
+  if (fallita) console.error("Errore:", fallita.reason);
 
-  return { templatesWhatsapp, dettagliGDO };
+  return {
+    idGDO,
+    templatesWhatsapp: templates.status === "fulfilled" ? templates.value ?? [] : [],
+    dettagliGDO: dettagli.status === "fulfilled" ? dettagli.value ?? null : null,
+    errore: fallita ? motivoErroreWhatsapp(fallita.reason) : null,
+  };
 }
 
 export const funzioneCaricamentoDettagliTemplateWhatsappAdmin = async ({ request }: { request: Request }) => {
   const url = new URL(request.url);
   const idTemplate = url.searchParams.get("id") || "";
-  const totalSteps = 1;
-  const templateWhatsappPromise = ServerCall.get<GDOWhatsappTemplateAttributes>(`/whatsapp/get_whatsapp_template_by_id?id=${idTemplate}`);
-  const presetsPromise = ServerCall.get<any[]>(`/whatsapp/get_all_presets_template_whatsapp?id_template=${idTemplate}`);
-  const results = await Promise.allSettled([templateWhatsappPromise, presetsPromise]);
-  const [template, presets] = results.map((r) =>
-    r.status === "fulfilled" ? r.value : (console.error("Errore:", r.reason), null)
-  );
+  const [template, presets] = await Promise.allSettled([
+    ServerCall.get<GDOWhatsappTemplateAttributes>(`/whatsapp/get_whatsapp_template_by_id?id=${encodeURIComponent(idTemplate)}`),
+    ServerCall.get<any[]>(`/whatsapp/get_all_presets_template_whatsapp?id_template=${encodeURIComponent(idTemplate)}`),
+  ]);
+  const fallita = [template, presets].find((r): r is PromiseRejectedResult => r.status === "rejected");
+  if (fallita) console.error("Errore:", fallita.reason);
 
-  return { template, presets };
+  return {
+    template: template.status === "fulfilled" ? template.value ?? null : null,
+    presets: presets.status === "fulfilled" ? presets.value ?? [] : [],
+    errore: fallita ? motivoErroreWhatsapp(fallita.reason) : null,
+  };
 }
 
 export const funzioneCaricamentoInvioCampagnaWhatsapp = async ({ request }: { request: Request }) => {

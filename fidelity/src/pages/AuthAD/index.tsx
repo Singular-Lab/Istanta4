@@ -39,14 +39,15 @@ const ErrorView: React.FC<{ errorCode: ISErrorCode }> = ({ errorCode }) => {
     const config = ERROR_CONFIG[errorCode] ?? ERROR_CONFIG.auth_failed;
 
     return (
-        <div className="fixed inset-0 flex items-center justify-center bg-[#03045e] bg-opacity-90 backdrop-blur-md z-[100000] transition-opacity duration-300">
+        <div className="fixed inset-0 flex items-center justify-center bg-primary/90 backdrop-blur-md z-[100000] transition-opacity duration-300">
             <AppLoaderBridge />
             <div className="text-center flex flex-col items-center">
                 <Lucide
                     icon={config.icon}
+                    aria-hidden="true"
                     className="w-20 h-20 text-warning animate-pulse"
                 />
-                <h1 className="mt-6 text-white text-2xl font-bold">
+                <h1 className="mt-6 title-page text-white">
                     {config.title}
                 </h1>
                 <p className="mt-2 text-gray-300 text-sm max-w-sm">
@@ -56,7 +57,8 @@ const ErrorView: React.FC<{ errorCode: ISErrorCode }> = ({ errorCode }) => {
                     type="button"
                     variant="primary"
                     onClick={() => { window.location.href = "/login"; }}
-                    className="mt-6 px-6 py-2 bg-white text-[#03045e] font-semibold rounded-full hover:bg-gray-100"
+                    rounded
+                    className="mt-6 px-6 py-2 bg-white text-primary font-semibold hover:bg-gray-100"
                 >
                     Torna al Login
                 </Button>

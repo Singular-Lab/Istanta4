@@ -154,8 +154,9 @@ export const PreviewImmaginePdf: React.FC<PreviewImmaginePdfProps> = ({
                             "absolute left-[-60px] rounded-full bg-black/60 p-3 text-white",
                             !hasPrev && "opacity-30 cursor-not-allowed"
                         )}
+                        aria-label="Pagina precedente"
                     >
-                        <Lucide icon="ChevronLeft" />
+                        <Lucide aria-hidden="true" icon="ChevronLeft" />
                     </button>
 
                     {/* CONTENT */}
@@ -197,8 +198,9 @@ export const PreviewImmaginePdf: React.FC<PreviewImmaginePdfProps> = ({
                         <button
                             onClick={onClose}
                             className="absolute top-2 right-2 rounded-full bg-black/60 p-2 text-white"
+                            aria-label="Chiudi anteprima"
                         >
-                            <Lucide icon="X" />
+                            <Lucide aria-hidden="true" icon="X" />
                         </button>
 
                         {/* PAGE INDICATOR */}
@@ -215,8 +217,9 @@ export const PreviewImmaginePdf: React.FC<PreviewImmaginePdfProps> = ({
                             "absolute right-[-60px] rounded-full bg-black/60 p-3 text-white",
                             !hasNext && "opacity-30 cursor-not-allowed"
                         )}
+                        aria-label="Pagina successiva"
                     >
-                        <Lucide icon="ChevronRight" />
+                        <Lucide aria-hidden="true" icon="ChevronRight" />
                     </button>
                 </div>
             </motion.div>

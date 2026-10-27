@@ -4,9 +4,9 @@ import Button from "../Button";
 type PaginationProps = React.PropsWithChildren &
   React.ComponentPropsWithoutRef<"nav">;
 
-function Pagination({ className, children }: PaginationProps) {
+function Pagination({ className, children, ...rest }: PaginationProps) {
   return (
-    <nav className={className}>
+    <nav {...rest} className={className}>
       <ul className="flex w-full mr-0 sm:w-auto sm:mr-auto">{children}</ul>
     </nav>
   );
@@ -18,16 +18,18 @@ interface LinkProps
   active?: boolean;
 }
 
-Pagination.Link = ({ className, active, children, onClick }: LinkProps) => {
+// Le altre prop (aria-label, aria-current, title...) arrivano all'elemento: servono ai pulsanti con sola icona
+Pagination.Link = ({ className, active, children, ...rest }: LinkProps) => {
   return (
     <li className="flex-1 sm:flex-initial">
       <Button
+        aria-current={active ? "page" : undefined}
+        {...rest}
         as="a"
-        onClick={onClick}
         className={twMerge([
           "min-w-0 sm:min-w-[40px] font-normal flex items-center justify-center text-slate-800 sm:mr-2 dark:text-slate-300 px-1 sm:px-3",
           active &&
-            "rounded-[0.5rem] bg-white font-medium dark:bg-darkmode-400",
+            "rounded-control bg-white font-medium dark:bg-darkmode-400",
           !active && "shadow-none border-transparent",
           className,
         ])}

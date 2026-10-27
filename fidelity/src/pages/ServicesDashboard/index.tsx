@@ -229,7 +229,7 @@ const ServicesDashboard: React.FC = () => {
           <section className="mt-10">
             <div className="flex items-center gap-2 mb-4">
               <Lucide icon="Star" className="w-4 h-4 text-slate-500" />
-              <h2 className="font-urbanist text-xl font-semibold text-slate-800">
+              <h2 className="title-section">
                 In evidenza
               </h2>
             </div>
@@ -260,7 +260,7 @@ const ServicesDashboard: React.FC = () => {
               <div>
                 <div className="flex items-center gap-2 mb-4">
                   <Lucide icon="LayoutGrid" className="w-4 h-4 text-emerald-600" />
-                  <h3 className="font-space-grotesk text-lg font-semibold text-slate-800">
+                  <h3 className="title-card">
                     Servizi attivi
                   </h3>
                 </div>
@@ -274,7 +274,7 @@ const ServicesDashboard: React.FC = () => {
               <div>
                 <div className="flex items-center gap-2 mb-4">
                   <Lucide icon="CircleOff" className="w-4 h-4 text-slate-500" />
-                  <h3 className="font-space-grotesk text-lg font-semibold text-slate-800">
+                  <h3 className="title-card">
                     Servizi non attivi
                   </h3>
                 </div>
@@ -291,7 +291,7 @@ const ServicesDashboard: React.FC = () => {
                 <div className="flex items-center gap-2 mb-4">
                   <Lucide icon="LayoutGrid" className="w-4 h-4 text-emerald-600" />
                   <div className="flex items-center gap-2">
-                    <h3 className="font-space-grotesk text-lg font-semibold text-slate-800">
+                    <h3 className="title-card">
                       Servizi attivi
                     </h3>
                     <span className="px-2 py-0.5 text-xs font-medium bg-emerald-50 text-emerald-700 rounded-full border border-emerald-100">
@@ -318,7 +318,7 @@ const ServicesDashboard: React.FC = () => {
                 <div className="flex items-center gap-2 mb-4">
                   <Lucide icon="CircleOff" className="w-4 h-4 text-slate-500" />
                   <div className="flex items-center gap-2">
-                    <h3 className="font-space-grotesk text-lg font-semibold text-slate-800">
+                    <h3 className="title-card">
                       Servizi non attivi
                     </h3>
                     <span className="px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-600 rounded-full border border-slate-200">
@@ -369,7 +369,7 @@ const ServicesDashboard: React.FC = () => {
           <section className="mt-10">
             <div className="flex items-center gap-2 mb-4">
               <Lucide icon="Newspaper" className="w-4 h-4 text-slate-500" />
-              <h2 className="font-urbanist text-xl font-semibold text-slate-800">
+              <h2 className="title-section">
                 Novità e aggiornamenti
               </h2>
             </div>
@@ -397,7 +397,7 @@ const ServicesDashboard: React.FC = () => {
             {/* Branding */}
             <div className="flex items-center gap-2">
               <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-theme-1 to-theme-2 flex items-center justify-center">
-                <span className="text-[10px] font-bold text-white leading-none">SL</span>
+                <span className="text-3xs font-bold text-white leading-none">SL</span>
               </div>
               <span className="text-sm font-medium text-slate-500">
                 Powered by <span className="text-slate-700 font-semibold">Singular Lab</span>

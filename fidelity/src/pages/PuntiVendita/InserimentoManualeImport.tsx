@@ -1,7 +1,6 @@
 import Button from "@/components/Base/Button";
 import { FormInput, FormLabel, FormSelect } from "@/components/Base/Form";
 import { Dialog } from "@/components/Base/Headless";
-import LoadingIcon from "@/components/Base/LoadingIcon";
 import Lucide from "@/components/Base/Lucide";
 import clsx from "clsx";
 import "leaflet/dist/leaflet.css";
@@ -171,8 +170,8 @@ export function InserimentoManualeImport({
     <Dialog size="xl" open onClose={onRiduci} staticBackdrop>
       <Dialog.Panel>
         <Dialog.Title>
-          <h2 className="mr-auto text-base font-medium">Inserimento manuale · riga {riga.riga}</h2>
-          <span className={clsx("px-2 py-0.5 text-[11px] font-semibold rounded-full border", BADGE_PUNTEGGIO[classePunteggio(riga.punteggio)])}>
+          <h2 className="title-card mr-auto">Inserimento manuale · riga {riga.riga}</h2>
+          <span className={clsx("px-2 py-0.5 text-2xs font-semibold rounded-full border", BADGE_PUNTEGGIO[classePunteggio(riga.punteggio)])}>
             affidabilità {riga.punteggio}/100
           </span>
         </Dialog.Title>
@@ -230,8 +229,8 @@ export function InserimentoManualeImport({
             {campo("telefono", "Telefono")}
 
             <div className="col-span-12 flex flex-wrap items-center gap-2">
-              <Button variant="outline-primary" disabled={ricercaInCorso || !dati.indirizzo.trim()} onClick={cerca}>
-                {ricercaInCorso ? <LoadingIcon icon="oval" className="w-4 h-4 mr-2" /> : <Lucide icon="Search" className="w-4 h-4 mr-2" />}
+              <Button variant="outline-primary" disabled={!dati.indirizzo.trim()} loading={ricercaInCorso} onClick={cerca}>
+                {!ricercaInCorso && <Lucide icon="Search" aria-hidden="true" className="w-4 h-4 mr-2" />}
                 Cerca indirizzo sulla mappa
               </Button>
               {indirizzoValido ? (
@@ -290,6 +289,7 @@ export function InserimentoManualeImport({
                         key={`${r.lat},${r.lon}`}
                         center={[r.lat, r.lon]}
                         radius={8}
+                        // Esadecimali voluti: opzioni di disegno di Leaflet, non classi Tailwind
                         pathOptions={{ color: "#FFFFFF", weight: 2, fillColor: scelto ? "#16a34a" : "#2563eb", fillOpacity: 0.9 }}
                         eventHandlers={{ click: () => scegli(r) }}
                       >
@@ -305,19 +305,16 @@ export function InserimentoManualeImport({
           </div>
         </Dialog.Description>
         <Dialog.Footer>
-          <Button variant="outline-secondary" className="mr-auto" disabled={occupato} onClick={onAnnullaImport}>
-            {annullamentoInCorso && <LoadingIcon icon="oval" className="w-4 h-4 mr-2" />}
+          <Button variant="outline-secondary" className="mr-auto" disabled={occupato} loading={annullamentoInCorso} onClick={onAnnullaImport}>
             Annulla import
           </Button>
           <Button variant="outline-secondary" className="mr-1" onClick={onRiduci}>
             Più tardi
           </Button>
-          <Button variant="outline-danger" className="mr-1" disabled={occupato} onClick={() => decidi("scarta")}>
-            {invioInCorso === "scarta" && <LoadingIcon icon="oval" className="w-4 h-4 mr-2" />}
+          <Button variant="outline-danger" className="mr-1" disabled={occupato} loading={invioInCorso === "scarta"} onClick={() => decidi("scarta")}>
             Scarta riga
           </Button>
-          <Button variant="primary" disabled={!pronto || occupato} onClick={() => decidi("inserisci")}>
-            {invioInCorso === "inserisci" && <LoadingIcon icon="oval" className="w-4 h-4 mr-2" />}
+          <Button variant="primary" disabled={!pronto || occupato} loading={invioInCorso === "inserisci"} onClick={() => decidi("inserisci")}>
             Salva e prosegui
           </Button>
         </Dialog.Footer>

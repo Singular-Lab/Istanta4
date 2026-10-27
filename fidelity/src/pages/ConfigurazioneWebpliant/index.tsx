@@ -366,7 +366,7 @@ const ConfigurazioneWebpliant: React.FC = () => {
 
     return (
       <section className="mt-10">
-        <h2 className="text-xl font-medium text-dark">Mapping Traduzione DataFields</h2>
+        <h2 className="title-section">Mapping Traduzione DataFields</h2>
         <p className="text-sm text-slate-500 mb-4">
           Gestisci le mappature di traduzione tra i campi originali delle referenze e i campi utilizzati nel webpliant.
           Ogni mapping specifica come tradurre un campo da input (nome originale) a output (nome tradotto).
@@ -653,7 +653,7 @@ const ConfigurazioneWebpliant: React.FC = () => {
         <div className="box box--stacked p-10 bg-white rounded-lg shadow-sm">
           {/* PARAMETRI GENERALI */}
           <section className="mb-10 bg-white p-6 rounded-lg shadow-sm">
-            <h2 className="text-2xl font-semibold mb-6 text-dark border-b pb-2">Parametri Generali</h2>
+            <h2 className="title-section mb-6 border-b pb-2">Parametri Generali</h2>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
               {/* Colore GDO */}
               <div className="flex flex-col bg-gray-50 p-4 rounded-md border border-gray-100">
@@ -706,8 +706,9 @@ const ConfigurazioneWebpliant: React.FC = () => {
                       size="xs"
                       variant="danger"
                       className="absolute top-2 right-2 p-1.5 text-xs rounded-full shadow-sm"
+                      aria-label="Rimuovi icona pagina"
                     >
-                      <Lucide icon="X" />
+                      <Lucide icon="X" aria-hidden="true" />
                     </Button>
                   )}
                 </div>
@@ -738,7 +739,7 @@ const ConfigurazioneWebpliant: React.FC = () => {
 
             </div>
             <div className='mt-6'>
-              <h2 className="text-xl font-medium text-dark mb-2">Loghi</h2>
+              <h2 className="title-section mb-2">Loghi</h2>
               <p className="text-sm text-slate-500 mb-2">
                 Aggiungi loghi in formato Base64. Puoi caricare immagini direttamente dal tuo dispositivo.
               </p>
@@ -785,8 +786,9 @@ const ConfigurazioneWebpliant: React.FC = () => {
                               variant="danger"
                               className="p-1.5 text-xs shadow-sm"
                               onClick={() => handleRemoveLogo(index)}
+                              aria-label={`Rimuovi logo ${index + 1}`}
                             >
-                              <Lucide icon="X" className="w-3 h-3" />
+                              <Lucide icon="X" aria-hidden="true" className="w-3 h-3" />
                             </Button>
                           </div>
                           <div className='absolute bottom-0 left-0 right-0 flex gap-2 justify-between p-2'>
@@ -861,7 +863,7 @@ const ConfigurazioneWebpliant: React.FC = () => {
 
           {/* CSS PERSONALIZZATO */}
           <section>
-            <h2 className="text-xl font-medium text-dark">CSS Personalizzato</h2>
+            <h2 className="title-section">CSS Personalizzato</h2>
             <p className="text-sm text-slate-500 mb-2">
               Modifica il CSS per personalizzare lo stile della pagina. Usa Ctrl+S per salvare rapidamente.
             </p>
@@ -893,7 +895,7 @@ const ConfigurazioneWebpliant: React.FC = () => {
           </section>
 
           <section className="mt-10">
-            <h2 className="text-xl font-medium text-dark">Stili JSON</h2>
+            <h2 className="title-section">Stili JSON</h2>
             <p className="text-sm text-slate-500 mb-2">
               Modifica gli stili in formato JSON. Il parsing avviene solo al momento del salvataggio.
             </p>

@@ -1,4 +1,7 @@
 import {
+  GDOWhatsappQueueJobStatus,
+  STATO_GDO_WHATSAPP_NUMBER,
+  STATO_GDO_WHATSAPP_TEMPLATE,
   STATO_LAVORAZIONE_KIT_RUNTIME,
   STATO_ORDINI_STAMPA,
   STATO_PROMO,
@@ -14,7 +17,20 @@ export interface DescrizioneStato {
   tono: TonoStato;
 }
 
-export type DominioStato = "promo" | "kitRuntime" | "ordineStampa" | "utente" | "webhook";
+export type DominioStato =
+  | "promo"
+  | "kitRuntime"
+  | "ordineStampa"
+  | "utente"
+  | "webhook"
+  | "waCampagna"
+  | "waMessaggio"
+  | "waTemplate"
+  | "waNumero";
+
+/** Stato di una campagna WhatsApp, calcolato dal server sui suoi messaggi in coda. */
+export const STATI_CAMPAGNA_WHATSAPP = ["PENDING", "RUNNING", "COMPLETED", "FAILED"] as const;
+export type StatoCampagnaWhatsapp = (typeof STATI_CAMPAGNA_WHATSAPP)[number];
 
 /** Stato che il catalogo non conosce: non va mai mascherato da uno stato valido. */
 export const STATO_SCONOSCIUTO: DescrizioneStato = { etichetta: "Stato sconosciuto", tono: "neutral" };
@@ -63,6 +79,41 @@ const STATI_WEBHOOK: Record<STATO_WEBHOOK, DescrizioneStato> = {
   [STATO_WEBHOOK.ELIMINATO]: { etichetta: "Eliminato", tono: "danger" },
 };
 
+const STATI_WA_CAMPAGNA: Record<StatoCampagnaWhatsapp, DescrizioneStato> = {
+  COMPLETED: { etichetta: "Completata", tono: "success" },
+  RUNNING: { etichetta: "In corso", tono: "info" },
+  PENDING: { etichetta: "In attesa", tono: "neutral" },
+  FAILED: { etichetta: "Fallita", tono: "danger" },
+};
+
+const STATI_WA_MESSAGGIO: Record<GDOWhatsappQueueJobStatus, DescrizioneStato> = {
+  [GDOWhatsappQueueJobStatus.SUCCESS]: { etichetta: "Inviato", tono: "success" },
+  [GDOWhatsappQueueJobStatus.PROCESSING]: { etichetta: "In invio", tono: "info" },
+  [GDOWhatsappQueueJobStatus.PENDING]: { etichetta: "In coda", tono: "neutral" },
+  [GDOWhatsappQueueJobStatus.FAILED]: { etichetta: "Fallito", tono: "danger" },
+  [GDOWhatsappQueueJobStatus.CANCELLED]: { etichetta: "Annullato", tono: "neutral" },
+};
+
+const STATI_WA_TEMPLATE: Record<STATO_GDO_WHATSAPP_TEMPLATE, DescrizioneStato> = {
+  [STATO_GDO_WHATSAPP_TEMPLATE.APPROVED]: { etichetta: "Approvato", tono: "success" },
+  [STATO_GDO_WHATSAPP_TEMPLATE.PENDING]: { etichetta: "In revisione Meta", tono: "brand" },
+  [STATO_GDO_WHATSAPP_TEMPLATE.REJECTED]: { etichetta: "Rifiutato", tono: "danger" },
+  [STATO_GDO_WHATSAPP_TEMPLATE.PAUSED]: { etichetta: "In pausa", tono: "warning" },
+  [STATO_GDO_WHATSAPP_TEMPLATE.DISABLED]: { etichetta: "Disabilitato", tono: "neutral" },
+  [STATO_GDO_WHATSAPP_TEMPLATE.DELETED]: { etichetta: "Eliminato", tono: "danger" },
+  [STATO_GDO_WHATSAPP_TEMPLATE.ARCHIVED]: { etichetta: "Archiviato", tono: "neutral" },
+  [STATO_GDO_WHATSAPP_TEMPLATE.PENDING_DELETION]: { etichetta: "In eliminazione", tono: "warning" },
+  [STATO_GDO_WHATSAPP_TEMPLATE.IN_APPEAL]: { etichetta: "In ricorso", tono: "info" },
+  [STATO_GDO_WHATSAPP_TEMPLATE.LIMIT_EXCEEDED]: { etichetta: "Limite superato", tono: "danger" },
+  [STATO_GDO_WHATSAPP_TEMPLATE.CREATED_BUT_NOT_SYNCED]: { etichetta: "Bozza locale", tono: "warning" },
+};
+
+const STATI_WA_NUMERO: Record<STATO_GDO_WHATSAPP_NUMBER, DescrizioneStato> = {
+  [STATO_GDO_WHATSAPP_NUMBER.PENDING]: { etichetta: "In attesa di verifica", tono: "warning" },
+  [STATO_GDO_WHATSAPP_NUMBER.VERIFIED]: { etichetta: "Verificato", tono: "success" },
+  [STATO_GDO_WHATSAPP_NUMBER.PAUSED]: { etichetta: "In pausa", tono: "warning" },
+};
+
 /** Unica fonte di etichetta e tono degli stati: ogni pagina mostra lo stesso stato allo stesso modo. */
 export const CATALOGO_STATI: Record<DominioStato, Record<string, DescrizioneStato>> = {
   promo: STATI_PROMO,
@@ -70,6 +121,10 @@ export const CATALOGO_STATI: Record<DominioStato, Record<string, DescrizioneStat
   ordineStampa: STATI_ORDINE_STAMPA,
   utente: STATI_UTENTE,
   webhook: STATI_WEBHOOK,
+  waCampagna: STATI_WA_CAMPAGNA,
+  waMessaggio: STATI_WA_MESSAGGIO,
+  waTemplate: STATI_WA_TEMPLATE,
+  waNumero: STATI_WA_NUMERO,
 };
 
 export const descriviStato = (dominio: DominioStato, stato: string | null | undefined): DescrizioneStato =>

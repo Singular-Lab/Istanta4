@@ -1,6 +1,8 @@
 import Button from "@/components/Base/Button";
 import Lucide from "@/components/Base/Lucide";
+import PageError from "@/components/Base/PageError";
 import PageHeader from "@/components/Base/PageHeader";
+import Spinner from "@/components/Base/Spinner";
 import EmptyState from "@/components/EmptyState";
 import withSessionCheck from "@/components/SessionChecker";
 import { useNotification } from "@/context/NotificationContext";
@@ -25,8 +27,9 @@ function OptionCard({
     <button
       onClick={onSelect}
       type="button"
+      aria-pressed={selected}
       className={clsx(
-        "group relative flex w-full flex-col gap-4 rounded-xl border-2 p-5 text-left transition-all duration-150",
+        "group relative flex w-full flex-col gap-4 rounded-card border-2 p-5 text-left transition-all duration-150",
         selected
           ? "border-primary bg-primary/[0.03] shadow-md shadow-primary/10"
           : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm"
@@ -34,6 +37,7 @@ function OptionCard({
     >
       {/* Check badge */}
       <span
+        aria-hidden="true"
         className={clsx(
           "absolute right-4 top-4 flex h-5 w-5 items-center justify-center rounded-full transition-transform duration-150",
           selected ? "scale-100 bg-primary opacity-100" : "scale-75 opacity-0"
@@ -46,12 +50,13 @@ function OptionCard({
       <div className="flex items-start gap-4">
         <div
           className={clsx(
-            "flex h-12 w-12 shrink-0 items-center justify-center rounded-xl transition-colors",
+            "flex h-12 w-12 shrink-0 items-center justify-center rounded-card transition-colors",
             selected ? "bg-primary/15" : "bg-slate-100 group-hover:bg-slate-150"
           )}
         >
           <Lucide
             icon={option.icona ?? "FileBarChart"}
+            aria-hidden="true"
             className={clsx("h-6 w-6 transition-colors", selected ? "text-primary" : "text-slate-400")}
           />
         </div>
@@ -77,11 +82,11 @@ function OptionCard({
             <span
               key={p.id}
               className={clsx(
-                "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium",
+                "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-2xs font-medium",
                 selected ? "bg-primary/10 text-primary" : "bg-slate-100 text-slate-500"
               )}
             >
-              <Lucide icon="Layers" className="h-3 w-3 shrink-0" />
+              <Lucide icon="Layers" aria-hidden="true" className="h-3 w-3 shrink-0" />
               {p.titolo}
             </span>
           ))}
@@ -150,20 +155,19 @@ function Main() {
         <div className="col-span-12 xl:col-span-8">
 
           {optionsQuery.isLoading && (
-            <div className="box box--stacked p-8 flex flex-col items-center gap-3 text-slate-400">
-              <Lucide icon="Loader" className="h-7 w-7 animate-spin" />
+            <div role="status" className="box box--stacked p-8 flex flex-col items-center gap-3 text-slate-400">
+              <Spinner decorativo />
               <span className="text-sm">Caricamento opzioni…</span>
             </div>
           )}
 
           {optionsQuery.isError && (
-            <div className="box box--stacked p-8">
-              <EmptyState
-                icon="TriangleAlert"
-                title="Impossibile caricare le opzioni"
-                description="Verifica la connessione al server e ricarica la pagina."
-              />
-            </div>
+            <PageError
+              compatta
+              titolo="Impossibile caricare le opzioni"
+              motivo={optionsQuery.error?.message || "Verifica la connessione al server e riprova."}
+              onRiprova={() => optionsQuery.refetch()}
+            />
           )}
 
           {!optionsQuery.isLoading && !optionsQuery.isError && options.length === 0 && (
@@ -196,8 +200,8 @@ function Main() {
           {/* Riepilogo */}
           <div className="box box--stacked p-5">
             <div className="flex items-center gap-2 mb-4">
-              <Lucide icon="FileSearch" className="h-4 w-4 text-primary" />
-              <h3 className="text-base font-semibold text-slate-800">Analisi selezionata</h3>
+              <Lucide icon="FileSearch" aria-hidden="true" className="h-4 w-4 text-primary" />
+              <h3 className="title-card">Analisi selezionata</h3>
             </div>
 
             {activeOption ? (
@@ -247,14 +251,15 @@ function Main() {
 
           {/* Esegui */}
           <Button
+            type="button"
             variant="primary"
             className="w-full justify-center"
             disabled={!activeOptionId || queryMutation.isPending}
             loading={queryMutation.isPending}
             onClick={handleExecute}
           >
-            {!queryMutation.isPending && <Lucide icon="Play" className="mr-2 h-4 w-4" />}
-            {queryMutation.isPending ? "Calcolo in corso…" : "Esegui analisi"}
+            {!queryMutation.isPending && <Lucide icon="Play" aria-hidden="true" className="mr-2 h-4 w-4" />}
+            Esegui analisi
           </Button>
 
           {queryMutation.isError && (

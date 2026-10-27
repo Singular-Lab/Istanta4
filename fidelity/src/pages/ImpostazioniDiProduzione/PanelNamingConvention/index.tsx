@@ -1,8 +1,8 @@
-import Alert from '@/components/Base/Alert';
 import { FormInput } from '@/components/Base/Form';
 import { Dialog } from "@/components/Base/Headless";
-import LoadingIcon from '@/components/Base/LoadingIcon';
 import Lucide from '@/components/Base/Lucide';
+import PageError from '@/components/Base/PageError';
+import Spinner from '@/components/Base/Spinner';
 import EmptyState from '@/components/EmptyState';
 import { useNotification } from '@/context/NotificationContext';
 import { useFetchDatiNamingConventionFromIstanta, useFetchNamingConventions } from '@/query/query';
@@ -210,7 +210,7 @@ const NamingConventionPanel = forwardRef((props: { onEditNamingConvention?: (con
       >
         <Dialog.Panel className="p-1">
           <Dialog.Title className="px-5 pt-5">
-            <h2 className="mr-auto text-base font-medium">
+            <h2 className="title-card mr-auto">
               Elimina naming convention: <span className="font-semibold text-danger">{selectedNamingConventionDaEliminare?.nome}</span>
             </h2>
           </Dialog.Title>
@@ -233,15 +233,10 @@ const NamingConventionPanel = forwardRef((props: { onEditNamingConvention?: (con
               onClick={() => {
                 handleEliminaNamingConvention();
               }}
-              className="w-24"
-              disabled={mutationEliminazioneNamingConvention.isPending}
+              className="min-w-24"
+              loading={mutationEliminazioneNamingConvention.isPending}
             >
-              {mutationEliminazioneNamingConvention.isPending ? (
-                <div className="flex items-center justify-center">
-                  <LoadingIcon icon="oval" className="w-4 h-4 mr-2" />
-                  Elimino...
-                </div>
-              ) : "Elimina"}
+              Elimina
             </Button>
           </Dialog.Footer>
         </Dialog.Panel>
@@ -287,8 +282,8 @@ const NamingConventionPanel = forwardRef((props: { onEditNamingConvention?: (con
               {/* Stati loading, error e empty */}
               {dataNamingConventions.isLoading && (
                 <div className="flex justify-center items-center py-16">
-                  <div className="text-center">
-                    <LoadingIcon icon="tail-spin" className="w-8 h-8 mx-auto mb-4" />
+                  <div role="status" className="text-center">
+                    <Spinner size="lg" decorativo className="mx-auto mb-4" />
                     <div className="text-slate-600 font-medium">Caricamento naming conventions...</div>
                     <div className="text-slate-500 text-sm mt-1">Attendere prego</div>
                   </div>
@@ -297,13 +292,12 @@ const NamingConventionPanel = forwardRef((props: { onEditNamingConvention?: (con
 
               {dataNamingConventions.isError && (
                 <div className="p-5">
-                  <Alert variant="danger" className="flex items-center">
-                    <Lucide icon="TriangleAlert" className="w-6 h-6 mr-3" />
-                    <div>
-                      <div className="font-medium">Errore durante il caricamento</div>
-                      <div className="mt-1">Non è stato possibile caricare le naming conventions. Riprova più tardi.</div>
-                    </div>
-                  </Alert>
+                  <PageError
+                    compatta
+                    titolo="Naming convention non caricate"
+                    motivo={(dataNamingConventions.error as Error)?.message || "Non è stato possibile caricare le naming conventions."}
+                    onRiprova={() => dataNamingConventions.refetch()}
+                  />
                 </div>
               )}
 
@@ -443,8 +437,9 @@ const NamingConventionPanel = forwardRef((props: { onEditNamingConvention?: (con
                                   size="sm"
                                   onClick={() => handleAperturaModaleEliminazione(convention)}
                                   className="hover:bg-danger/5"
+                                  aria-label={`Elimina naming convention ${convention.nome ?? ""}`.trim()}
                                 >
-                                  <Lucide icon="Trash2" className="w-4 h-4" />
+                                  <Lucide icon="Trash2" aria-hidden="true" className="w-4 h-4" />
                                 </Button>
                               </div>
                             </td>

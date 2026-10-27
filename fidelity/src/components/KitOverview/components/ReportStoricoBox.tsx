@@ -18,13 +18,13 @@ const testoReferenza = (referenza: ReferenzaStorico) =>
 const ReferenzaCard: FC<{ referenza: ReferenzaStorico }> = ({ referenza }) => (
   <div className="flex flex-col gap-2 p-3 rounded-lg border border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm transition-all">
     <p className="text-sm font-medium text-slate-800 line-clamp-3">{referenza.descrizione || "N/D"}</p>
-    <p className="text-[10px] text-slate-500 font-mono">{referenza.codice || "senza codice"}</p>
+    <p className="text-3xs text-slate-500 font-mono">{referenza.codice || "senza codice"}</p>
     {referenza.campi.length > 0 && (
       <div className="mt-auto flex flex-wrap gap-1.5">
         {referenza.campi.map((campo) => (
           <span
             key={campo.label}
-            className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] bg-slate-100 text-slate-600"
+            className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-3xs bg-slate-100 text-slate-600"
           >
             <span className="text-slate-400">{campo.label}</span>
             <span className="font-semibold text-slate-700">{campo.valore}</span>
@@ -40,14 +40,14 @@ const BoxFuoriListinoCard: FC<{ box: BoxFuoriListino }> = ({ box }) => (
   <div className="border border-slate-200 rounded-xl overflow-hidden">
     <div className="px-4 py-3 border-b border-slate-200 bg-slate-50 flex flex-wrap items-center gap-2">
       {box.pag != null && (
-        <span className="inline-flex items-center rounded px-2 py-1 text-[10px] font-bold bg-slate-200/70 text-slate-700">
+        <span className="inline-flex items-center rounded px-2 py-1 text-3xs font-bold bg-slate-200/70 text-slate-700">
           Pag. {box.pag}
         </span>
       )}
       <span className="text-sm font-semibold text-slate-800 font-mono">Box {box.codiceBox || "senza codice"}</span>
       <span
         className={clsx(
-          "ml-auto inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold",
+          "ml-auto inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-2xs font-semibold",
           box.ignorato ? "bg-slate-100 text-slate-600 border-slate-200" : "bg-warning/10 text-warning border-warning/20"
         )}
       >
@@ -60,7 +60,7 @@ const BoxFuoriListinoCard: FC<{ box: BoxFuoriListino }> = ({ box }) => (
     <div className="p-4 space-y-3">
       {box.testoBox.length > 0 && (
         <div>
-          <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-slate-400">Testo nel volantino</p>
+          <p className="mb-1 text-2xs font-medium uppercase tracking-wide text-slate-400">Testo nel volantino</p>
           <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 whitespace-pre-line">
             {box.testoBox.join("\n")}
           </p>
@@ -194,7 +194,7 @@ const ReportStoricoBox: FC<{ origineStorico: OrigineStorico }> = ({ origineStori
           >
             <Lucide icon={voce.icon} className="h-3.5 w-3.5" />
             <span>{voce.label}</span>
-            <span className="rounded-full bg-slate-200/70 px-1.5 text-[10px] font-semibold text-slate-600">{voce.count}</span>
+            <span className="rounded-full bg-slate-200/70 px-1.5 text-3xs font-semibold text-slate-600">{voce.count}</span>
           </button>
         ))}
       </div>

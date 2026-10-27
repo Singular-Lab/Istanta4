@@ -1,11 +1,11 @@
 import Chart from "@/components/Base/Chart";
 import Lucide from "@/components/Base/Lucide";
 import { RiepilogoMeccanica, RiepilogoSectionConfig } from "@/types/flyerInsights";
-import { getColor } from "@/utils/colors";
+import { COLORI_ASSI, COLORI_SEMANTICI, opzioniBase } from "@/utils/chartTheme";
 import { resolveColor, formatTooltip } from "@/utils/flyerInsightsHelpers";
 import { selectDarkMode } from "@/stores/darkModeSlice";
 import { useAppSelector } from "@/stores/hooks";
-import { ChartData, ChartOptions } from "chart.js/auto";
+import { ChartData, ChartOptions, ChartType } from "chart.js/auto";
 import { FC, useMemo } from "react";
 
 interface Props {
@@ -18,7 +18,7 @@ const RiepilogoMeccaniche: FC<Props> = ({ riepilogo, config }) => {
   const { chart, colorStrategy, fields, display, emptyState } = config;
 
   const getChartColor = (value: string) => {
-    return colorStrategy ? resolveColor(value, colorStrategy).hex : '#64748b';
+    return colorStrategy ? resolveColor(value, colorStrategy).hex : COLORI_SEMANTICI.neutro;
   };
 
   const getColorClass = (value: string) => {
@@ -38,7 +38,8 @@ const RiepilogoMeccaniche: FC<Props> = ({ riepilogo, config }) => {
         {
           data,
           backgroundColor: colors,
-          hoverBackgroundColor: colors.map(c => c + 'dd'),
+          // Il suffisso alfa vale solo per i colori esadecimali della strategia
+          hoverBackgroundColor: colors.map(c => (c.startsWith('#') ? `${c}dd` : c)),
           borderRadius: chart.borderRadius ?? 4,
           barThickness: chart.barThickness,
         },
@@ -47,9 +48,8 @@ const RiepilogoMeccaniche: FC<Props> = ({ riepilogo, config }) => {
   }, [riepilogo, config]);
 
   const chartOptions: ChartOptions = useMemo(() => {
-    return {
+    return opzioniBase(chart.type as ChartType, {
       indexAxis: (chart.indexAxis ?? 'x') as 'x' | 'y',
-      maintainAspectRatio: false,
       plugins: {
         legend: {
           display: display.showLegend,
@@ -71,21 +71,16 @@ const RiepilogoMeccaniche: FC<Props> = ({ riepilogo, config }) => {
         x: {
           grid: { display: false },
           border: { display: false },
-          ticks: {
-            font: { size: 11 },
-            color: getColor("slate.500", 0.8),
-          },
         },
         y: {
           grid: { display: false },
           border: { display: false },
           ticks: {
-            font: { size: 11 },
-            color: getColor("slate.600"),
+            color: COLORI_ASSI.tickForte,
           },
         },
       },
-    };
+    });
   }, [riepilogo, darkMode, config]);
 
   if (riepilogo.length === 0) {
@@ -104,7 +99,7 @@ const RiepilogoMeccaniche: FC<Props> = ({ riepilogo, config }) => {
 
   return (
     <div className="p-4">
-      <h4 className="text-sm font-semibold text-slate-800 mb-4">{config.title}</h4>
+      <h4 className="title-card mb-4">{config.title}</h4>
 
       <div className="grid grid-cols-2 gap-6">
         {/* Horizontal Bar Chart */}
@@ -138,7 +133,7 @@ const RiepilogoMeccaniche: FC<Props> = ({ riepilogo, config }) => {
                     className="h-3 w-3 rounded-sm"
                     style={{ backgroundColor: chartColor }}
                   />
-                  <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${colorClass}`}>
+                  <span className={`rounded-full border px-2 py-0.5 text-3xs font-semibold ${colorClass}`}>
                     {label}
                   </span>
                 </div>
@@ -153,7 +148,7 @@ const RiepilogoMeccaniche: FC<Props> = ({ riepilogo, config }) => {
                       }}
                     />
                   </div>
-                  <span className="text-[10px] text-slate-500 w-10 text-right">{mec.percentuale.toFixed(1)}%</span>
+                  <span className="text-3xs text-slate-500 w-10 text-right">{mec.percentuale.toFixed(1)}%</span>
                 </div>
               </div>
             );

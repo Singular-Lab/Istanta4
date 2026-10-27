@@ -2,18 +2,52 @@ import Button from "@/components/Base/Button";
 import { FormInline, FormInput, FormLabel, FormSelect } from "@/components/Base/Form";
 import { Menu } from "@/components/Base/Headless";
 import Lucide from "@/components/Base/Lucide";
+import PageError from "@/components/Base/PageError";
 import PageHeader from "@/components/Base/PageHeader";
 import Pagination from "@/components/Base/Pagination";
+import Spinner from "@/components/Base/Spinner";
+import StatusBadge from "@/components/Base/StatusBadge";
 import Table from "@/components/Base/Table";
 import withSessionCheck from "@/components/SessionChecker";
+import { descriviStato } from "@/constants/stati";
 import { useFetchStoricoLavorazioni } from "@/query/query";
+import { formatData } from "@/utils/format";
 import dayjs from "dayjs";
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import * as xlsx from "xlsx";
-import { STATO_PROMO } from "../../../lib/enums";
 import { PromoResponseDTO } from "../../../server/core/dto";
 import EmptyState from "../../components/EmptyState";
+
+type SortField = 'nome' | 'data_scadenza' | 'validita_dal' | 'validita_al' | 'stato' | 'offset_visibilita';
+type SortDirection = 'asc' | 'desc';
+
+const ARIA_SORT: Record<SortDirection, "ascending" | "descending"> = { asc: "ascending", desc: "descending" };
+
+// Fuori da Main: un componente ridefinito a ogni render perderebbe il focus dopo il click
+const SortableHeader = ({ direzione, onClick, children }: { direzione?: SortDirection; onClick: () => void; children: React.ReactNode }) => (
+  <button
+    type="button"
+    className="flex w-full items-center gap-2 cursor-pointer hover:text-slate-900 select-none group rounded-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40"
+    onClick={onClick}
+  >
+    {children}
+    <span aria-hidden="true" className="flex flex-col">
+      <Lucide
+        icon="ChevronUp"
+        className={`w-3 h-3 -mb-1 transition-colors ${
+          direzione === 'asc' ? 'text-slate-800' : 'text-slate-400 group-hover:text-slate-600'
+        }`}
+      />
+      <Lucide
+        icon="ChevronDown"
+        className={`w-3 h-3 -mt-1 transition-colors ${
+          direzione === 'desc' ? 'text-slate-800' : 'text-slate-400 group-hover:text-slate-600'
+        }`}
+      />
+    </span>
+  </button>
+);
 
 function Main() {
   const navigate = useNavigate();
@@ -30,8 +64,6 @@ function Main() {
   const [pageSize, setPageSize] = useState(10);
 
   // Stato per l'ordinamento
-  type SortField = 'nome' | 'data_scadenza' | 'validita_dal' | 'validita_al' | 'stato' | 'offset_visibilita';
-  type SortDirection = 'asc' | 'desc';
   const [sortField, setSortField] = useState<SortField>('data_scadenza');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
@@ -110,37 +142,21 @@ function Main() {
     }
   };
 
-  const SortableHeader = ({ field, children }: { field: SortField; children: React.ReactNode }) => (
-    <div
-      className="flex items-center gap-2 cursor-pointer hover:text-slate-900 select-none group"
-      onClick={() => handleSort(field)}
-    >
-      {children}
-      <div className="flex flex-col">
-        <Lucide
-          icon="ChevronUp"
-          className={`w-3 h-3 -mb-1 transition-colors ${
-            sortField === field && sortDirection === 'asc' ? 'text-slate-800' : 'text-slate-400 group-hover:text-slate-600'
-          }`}
-        />
-        <Lucide
-          icon="ChevronDown"
-          className={`w-3 h-3 -mt-1 transition-colors ${
-            sortField === field && sortDirection === 'desc' ? 'text-slate-800' : 'text-slate-400 group-hover:text-slate-600'
-          }`}
-        />
-      </div>
-    </div>
-  );
+  // aria-sort va sul th; direzione e click sul pulsante dentro il th
+  const ariaSort = (field: SortField) => (sortField === field ? ARIA_SORT[sortDirection] : undefined);
+  const ordinamento = (field: SortField) => ({
+    direzione: sortField === field ? sortDirection : undefined,
+    onClick: () => handleSort(field),
+  });
 
   // Funzioni per l'export
   const onExportCsv = () => {
     const csvData = filteredData.map((promo) => ({
       "Nome Lavorazione": promo.nome,
-      "Data di scadenza": dayjs(promo.data_scadenza).format("DD/MM/YYYY"),
-      "Valida dal": dayjs(promo.validita_dal).format("DD/MM/YYYY"),
-      "Valida al": dayjs(promo.validita_al).format("DD/MM/YYYY"),
-      "Stato": promo.stato.replace("_", " ").toLocaleLowerCase().at(0)?.toLocaleUpperCase(),
+      "Data di scadenza": formatData(promo.data_scadenza),
+      "Valida dal": formatData(promo.validita_dal),
+      "Valida al": formatData(promo.validita_al),
+      "Stato": descriviStato("promo", promo.stato).etichetta,
       "Offset visibilità": `${promo.offset_visibilita} giorni`,
     }));
 
@@ -170,10 +186,10 @@ function Main() {
   const onExportXlsx = () => {
     const wsData = filteredData.map((promo) => ({
       "Nome Lavorazione": promo.nome,
-      "Data di scadenza": dayjs(promo.data_scadenza).format("DD/MM/YYYY"),
-      "Valida dal": dayjs(promo.validita_dal).format("DD/MM/YYYY"),
-      "Valida al": dayjs(promo.validita_al).format("DD/MM/YYYY"),
-      "Stato": promo.stato.replace("_", " ").toLocaleLowerCase().at(0)?.toLocaleUpperCase(),
+      "Data di scadenza": formatData(promo.data_scadenza),
+      "Valida dal": formatData(promo.validita_dal),
+      "Valida al": formatData(promo.validita_al),
+      "Stato": descriviStato("promo", promo.stato).etichetta,
       "Offset visibilità": `${promo.offset_visibilita} giorni`,
     }));
 
@@ -215,10 +231,10 @@ function Main() {
               ${filteredData.map((promo) => `
                 <tr>
                   <td>${promo.nome}</td>
-                  <td>${dayjs(promo.data_scadenza).format("DD/MM/YYYY")}</td>
-                  <td>${dayjs(promo.validita_dal).format("DD/MM/YYYY")}</td>
-                  <td>${dayjs(promo.validita_al).format("DD/MM/YYYY")}</td>
-                  <td>${promo.stato.replace("_", " ").toLocaleLowerCase().at(0)?.toLocaleUpperCase()}</td>
+                  <td>${formatData(promo.data_scadenza)}</td>
+                  <td>${formatData(promo.validita_dal)}</td>
+                  <td>${formatData(promo.validita_al)}</td>
+                  <td>${descriviStato("promo", promo.stato).etichetta}</td>
                   <td>${promo.offset_visibilita} giorni</td>
                 </tr>
               `).join("")}
@@ -274,10 +290,10 @@ function Main() {
               ${filteredData.map((promo) => `
                 <tr>
                   <td>${promo.nome}</td>
-                  <td>${dayjs(promo.data_scadenza).format("DD/MM/YYYY")}</td>
-                  <td>${dayjs(promo.validita_dal).format("DD/MM/YYYY")}</td>
-                  <td>${dayjs(promo.validita_al).format("DD/MM/YYYY")}</td>
-                  <td>${promo.stato.replace("_", " ").toLocaleLowerCase().at(0)?.toLocaleUpperCase()}</td>
+                  <td>${formatData(promo.data_scadenza)}</td>
+                  <td>${formatData(promo.validita_dal)}</td>
+                  <td>${formatData(promo.validita_al)}</td>
+                  <td>${descriviStato("promo", promo.stato).etichetta}</td>
                   <td>${promo.offset_visibilita} giorni</td>
                 </tr>
               `).join("")}
@@ -296,84 +312,6 @@ function Main() {
     printWindow.document.write(html);
     printWindow.document.close();
   };
-  const renderStatoBadge = (stato: STATO_PROMO) => {
-    const baseClasses =
-      "inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-slate-100 dark:bg-darkmode-700 border border-slate-200 dark:border-darkmode-400";
-    const textClasses = "text-xs font-medium text-slate-700 dark:text-slate-300 whitespace-nowrap";
-
-    switch (stato) {
-      case STATO_PROMO.PIANIFICATA:
-        return (
-          <div className={baseClasses}>
-            <div className="w-1.5 h-1.5 rounded-full bg-info" />
-            <span className={textClasses}>Pianificata</span>
-          </div>
-        );
-      case STATO_PROMO.IN_LAVORAZIONE:
-        return (
-          <div className={baseClasses}>
-            <div className="w-1.5 h-1.5 rounded-full bg-warning" />
-            <span className={textClasses}>In lavorazione</span>
-          </div>
-        );
-      case STATO_PROMO.IN_SCADENZA:
-        return (
-          <div className={baseClasses}>
-            <div className="w-1.5 h-1.5 rounded-full bg-orange-500" />
-            <span className={textClasses}>In scadenza</span>
-          </div>
-        );
-      case STATO_PROMO.IN_ATTESA_DI_VALIDITA:
-        return (
-          <div className={baseClasses}>
-            <div className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
-            <span className={textClasses}>In attesa di validità</span>
-          </div>
-        );
-      case STATO_PROMO.IN_RITARDO:
-        return (
-          <div className={baseClasses}>
-            <div className="w-1.5 h-1.5 rounded-full bg-amber-700" />
-            <span className={textClasses}>In ritardo</span>
-          </div>
-        );
-      case STATO_PROMO.VALIDA:
-        return (
-          <div className={baseClasses}>
-            <div className="w-1.5 h-1.5 rounded-full bg-success" />
-            <span className={textClasses}>In validità</span>
-          </div>
-        );
-      case STATO_PROMO.VALIDA_CON_ERRORI:
-        return (
-          <div className={baseClasses}>
-            <div className="w-1.5 h-1.5 rounded-full bg-yellow-600" />
-            <span className={textClasses}>In validità con errori</span>
-          </div>
-        );
-      case STATO_PROMO.ARCHIVIATA:
-        return (
-          <div className={baseClasses}>
-            <div className="w-1.5 h-1.5 rounded-full bg-slate-500" />
-            <span className={textClasses}>Archiviata</span>
-          </div>
-        );
-      case STATO_PROMO.ELIMINATA:
-        return (
-          <div className={baseClasses}>
-            <div className="w-1.5 h-1.5 rounded-full bg-danger" />
-            <span className={textClasses}>Eliminata</span>
-          </div>
-        );
-      default:
-        return (
-          <div className={baseClasses}>
-            <div className="w-1.5 h-1.5 rounded-full bg-slate-400" />
-            <span className={textClasses}>Sconosciuta</span>
-          </div>
-        );
-    }
-  };
 
   return (
     <>
@@ -388,7 +326,7 @@ function Main() {
               <div className="flex flex-col p-5 xl:items-center xl:flex-row gap-y-2">
                 <form
                   id="storico-tabulator-html-filter-form"
-                  className="flex xl:flex-row flex-col border-dashed gap-x-5 gap-y-2 border border-slate-300/80 xl:border-0 rounded-[0.6rem] p-4 sm:p-5 xl:p-0"
+                  className="flex xl:flex-row flex-col border-dashed gap-x-5 gap-y-2 border border-slate-300/80 xl:border-0 rounded-control p-4 sm:p-5 xl:p-0"
                   onSubmit={(e) => {
                     e.preventDefault();
                     onFilter();
@@ -482,18 +420,16 @@ function Main() {
               <div className="overflow-x-auto">
                 {data.isLoading ? (
                   <div className="flex flex-col items-center justify-center py-10 px-5">
-                    <Lucide icon="Loader" className="w-10 h-10 text-primary animate-spin" />
+                    <Spinner size="lg" etichetta="Caricamento dello storico" />
                     <div className="mt-3 text-slate-500">Caricamento in corso...</div>
                   </div>
                 ) : data.isError ? (
-                  <EmptyState
-                    icon="CircleX"
-                    iconColor="text-danger"
-                    title="Storico non caricato"
-                    description={data.error?.message || "Impossibile caricare lo storico delle lavorazioni."}
-                    buttonText="Riprova"
-                    onButtonClick={() => data.refetch()}
-                    className="py-10 px-5"
+                  <PageError
+                    compatta
+                    className="m-5"
+                    titolo="Storico non caricato"
+                    motivo={data.error?.message || "Impossibile caricare lo storico delle lavorazioni."}
+                    onRiprova={() => data.refetch()}
                   />
                 ) : filteredData.length === 0 ? (
                   <EmptyState
@@ -508,38 +444,38 @@ function Main() {
                       <Table>
                         <Table.Thead variant="light">
                           <Table.Tr>
-                            <Table.Th className="whitespace-nowrap font-semibold text-slate-700 dark:text-slate-200">
-                              <SortableHeader field="nome">
+                            <Table.Th className="whitespace-nowrap font-semibold text-slate-700 dark:text-slate-200" aria-sort={ariaSort("nome")}>
+                              <SortableHeader {...ordinamento("nome")}>
                                 <Lucide icon="FileText" className="w-4 h-4" />
                                 Nome Lavorazione
                               </SortableHeader>
                             </Table.Th>
-                            <Table.Th className="whitespace-nowrap text-center font-semibold text-slate-700 dark:text-slate-200">
-                              <SortableHeader field="data_scadenza">
+                            <Table.Th className="whitespace-nowrap text-center font-semibold text-slate-700 dark:text-slate-200" aria-sort={ariaSort("data_scadenza")}>
+                              <SortableHeader {...ordinamento("data_scadenza")}>
                                 <Lucide icon="CalendarClock" className="w-4 h-4" />
                                 Scadenza
                               </SortableHeader>
                             </Table.Th>
-                            <Table.Th className="whitespace-nowrap text-center font-semibold text-slate-700 dark:text-slate-200">
-                              <SortableHeader field="validita_dal">
+                            <Table.Th className="whitespace-nowrap text-center font-semibold text-slate-700 dark:text-slate-200" aria-sort={ariaSort("validita_dal")}>
+                              <SortableHeader {...ordinamento("validita_dal")}>
                                 <Lucide icon="CalendarCheck" className="w-4 h-4" />
                                 Valida dal
                               </SortableHeader>
                             </Table.Th>
-                            <Table.Th className="whitespace-nowrap text-center font-semibold text-slate-700 dark:text-slate-200">
-                              <SortableHeader field="validita_al">
+                            <Table.Th className="whitespace-nowrap text-center font-semibold text-slate-700 dark:text-slate-200" aria-sort={ariaSort("validita_al")}>
+                              <SortableHeader {...ordinamento("validita_al")}>
                                 <Lucide icon="CalendarX" className="w-4 h-4" />
                                 Valida al
                               </SortableHeader>
                             </Table.Th>
-                            <Table.Th className="whitespace-nowrap text-center font-semibold text-slate-700 dark:text-slate-200">
-                              <SortableHeader field="stato">
+                            <Table.Th className="whitespace-nowrap text-center font-semibold text-slate-700 dark:text-slate-200" aria-sort={ariaSort("stato")}>
+                              <SortableHeader {...ordinamento("stato")}>
                                 <Lucide icon="Activity" className="w-4 h-4" />
                                 Stato
                               </SortableHeader>
                             </Table.Th>
-                            <Table.Th className="whitespace-nowrap text-center font-semibold text-slate-700 dark:text-slate-200">
-                              <SortableHeader field="offset_visibilita">
+                            <Table.Th className="whitespace-nowrap text-center font-semibold text-slate-700 dark:text-slate-200" aria-sort={ariaSort("offset_visibilita")}>
+                              <SortableHeader {...ordinamento("offset_visibilita")}>
                                 <Lucide icon="Eye" className="w-4 h-4" />
                                 Visibilità
                               </SortableHeader>
@@ -574,7 +510,7 @@ function Main() {
                                 <div className="flex items-center justify-center gap-2">
                                   <Lucide icon="Calendar" className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
                                   <div className="text-sm text-slate-700 dark:text-slate-300 whitespace-nowrap">
-                                    {dayjs(promo.data_scadenza).format("DD/MM/YYYY")}
+                                    {formatData(promo.data_scadenza)}
                                   </div>
                                 </div>
                               </Table.Td>
@@ -582,7 +518,7 @@ function Main() {
                                 <div className="flex items-center justify-center gap-2">
                                   <Lucide icon="Calendar" className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
                                   <div className="text-sm text-slate-700 dark:text-slate-300 whitespace-nowrap">
-                                    {dayjs(promo.validita_dal).format("DD/MM/YYYY")}
+                                    {formatData(promo.validita_dal)}
                                   </div>
                                 </div>
                               </Table.Td>
@@ -590,13 +526,13 @@ function Main() {
                                 <div className="flex items-center justify-center gap-2">
                                   <Lucide icon="Calendar" className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
                                   <div className="text-sm text-slate-700 dark:text-slate-300 whitespace-nowrap">
-                                    {dayjs(promo.validita_al).format("DD/MM/YYYY")}
+                                    {formatData(promo.validita_al)}
                                   </div>
                                 </div>
                               </Table.Td>
                               <Table.Td>
                                 <div className="flex justify-center">
-                                  {renderStatoBadge(promo.stato)}
+                                  <StatusBadge dominio="promo" stato={promo.stato} />
                                 </div>
                               </Table.Td>
                               <Table.Td>
@@ -647,7 +583,7 @@ function Main() {
                               </div>
                             </div>
                             <div className="flex-shrink-0">
-                              {renderStatoBadge(promo.stato)}
+                              <StatusBadge dominio="promo" stato={promo.stato} />
                             </div>
                           </div>
 
@@ -659,7 +595,7 @@ function Main() {
                                 <span>Scadenza</span>
                               </div>
                               <div className="text-sm text-slate-700 dark:text-slate-300">
-                                {dayjs(promo.data_scadenza).format("DD/MM/YYYY")}
+                                {formatData(promo.data_scadenza)}
                               </div>
                             </div>
                             <div className="flex flex-col gap-1">
@@ -677,7 +613,7 @@ function Main() {
                                 <span>Valida dal</span>
                               </div>
                               <div className="text-sm text-slate-700 dark:text-slate-300">
-                                {dayjs(promo.validita_dal).format("DD/MM/YYYY")}
+                                {formatData(promo.validita_dal)}
                               </div>
                             </div>
                             <div className="flex flex-col gap-1">
@@ -686,7 +622,7 @@ function Main() {
                                 <span>Valida al</span>
                               </div>
                               <div className="text-sm text-slate-700 dark:text-slate-300">
-                                {dayjs(promo.validita_al).format("DD/MM/YYYY")}
+                                {formatData(promo.validita_al)}
                               </div>
                             </div>
                           </div>
@@ -736,18 +672,20 @@ function Main() {
                         </span>
                       </div>
 
-                      <Pagination>
+                      <Pagination aria-label="Paginazione">
                         <Pagination.Link
                           onClick={() => setCurrentPage(1)}
                           active={false}
+                          aria-label="Prima pagina"
                         >
-                          <Lucide icon="ChevronsLeft" className="w-4 h-4" />
+                          <Lucide icon="ChevronsLeft" aria-hidden="true" className="w-4 h-4" />
                         </Pagination.Link>
                         <Pagination.Link
                           onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                           active={false}
+                          aria-label="Pagina precedente"
                         >
-                          <Lucide icon="ChevronLeft" className="w-4 h-4" />
+                          <Lucide icon="ChevronLeft" aria-hidden="true" className="w-4 h-4" />
                         </Pagination.Link>
 
                         {/* Page numbers */}
@@ -777,14 +715,16 @@ function Main() {
                         <Pagination.Link
                           onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                           active={false}
+                          aria-label="Pagina successiva"
                         >
-                          <Lucide icon="ChevronRight" className="w-4 h-4" />
+                          <Lucide icon="ChevronRight" aria-hidden="true" className="w-4 h-4" />
                         </Pagination.Link>
                         <Pagination.Link
                           onClick={() => setCurrentPage(totalPages)}
                           active={false}
+                          aria-label="Ultima pagina"
                         >
-                          <Lucide icon="ChevronsRight" className="w-4 h-4" />
+                          <Lucide icon="ChevronsRight" aria-hidden="true" className="w-4 h-4" />
                         </Pagination.Link>
                       </Pagination>
                     </div>

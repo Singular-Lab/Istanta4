@@ -362,8 +362,9 @@ export default function TryItPanel({
                           size="sm"
                           onClick={() => removeFilter(groupIndex, filterIndex)}
                           className="p-1"
+                          aria-label="Rimuovi filtro"
                         >
-                          <Lucide icon="X" className="w-3 h-3" />
+                          <Lucide aria-hidden="true" icon="X" className="w-3 h-3" />
                         </Button>
                       </div>
                     ))}

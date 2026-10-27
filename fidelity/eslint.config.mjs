@@ -99,6 +99,27 @@ export default [
       
       // TypeScript specifico per React
       "@typescript-eslint/no-explicit-any": "warn",
+
+      // Stile unificato: niente misure di testo arbitrarie né colori esadecimali nelle classi
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "JSXAttribute[name.name='className'] Literal[value=/(^|[\\s:])text-\\[\\d+(\\.\\d+)?px\\]/]",
+          message: "Usa text-3xs, text-2xs, text-xs, text-sm… invece di text-[Npx].",
+        },
+        {
+          selector: "JSXAttribute[name.name='className'] TemplateElement[value.raw=/(^|[\\s:])text-\\[\\d+(\\.\\d+)?px\\]/]",
+          message: "Usa text-3xs, text-2xs, text-xs, text-sm… invece di text-[Npx].",
+        },
+        {
+          selector: "JSXAttribute[name.name='className'] Literal[value=/#[0-9a-fA-F]{3,8}\\b/]",
+          message: "Niente colori esadecimali in className: usa i token del tema (primary, slate-*, …).",
+        },
+        {
+          selector: "JSXAttribute[name.name='className'] TemplateElement[value.raw=/#[0-9a-fA-F]{3,8}\\b/]",
+          message: "Niente colori esadecimali in className: usa i token del tema (primary, slate-*, …).",
+        },
+      ],
     }
   }
 ];

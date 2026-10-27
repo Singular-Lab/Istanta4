@@ -386,7 +386,7 @@ function NotificationItem({
       pending: "bg-pending/10 text-pending",
     }[variant];
     return (
-      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${variantClass}`}>
+      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-3xs font-medium ${variantClass}`}>
         {children}
       </span>
     );
@@ -558,14 +558,14 @@ function NotificationItem({
   }
 
 
-  return (
-    <div
-      onClick={() => !item.is_read && onMarkAsRead()}
-      className={`flex px-5 py-4 gap-3 border-b cursor-pointer ${!item.is_read ? "bg-primary/5" : ""
-        }`}
-    >
+  const daLeggere = !item.is_read;
+  const classi = `w-full text-left flex px-5 py-4 gap-3 border-b ${daLeggere ? "bg-primary/5 cursor-pointer" : ""}`;
+
+  const contenuto = (
+    <>
       <img
         src={item.photo ? `data:image/png;base64,${item.photo}` : iconaUtente}
+        alt=""
         className="w-11 h-11 rounded-full border"
       />
 
@@ -592,6 +592,15 @@ function NotificationItem({
           )}
         </div>
       </div>
-    </div>
+    </>
+  );
+
+  // Solo una notifica da leggere è interattiva: il click la segna come letta
+  return daLeggere ? (
+    <button type="button" onClick={() => onMarkAsRead()} title="Segna come letta" className={classi}>
+      {contenuto}
+    </button>
+  ) : (
+    <div className={classi}>{contenuto}</div>
   );
 }

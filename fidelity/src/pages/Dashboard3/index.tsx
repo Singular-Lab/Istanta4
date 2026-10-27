@@ -2,6 +2,8 @@ import Button from "@/components/Base/Button";
 import FormSelect from "@/components/Base/Form/FormSelect";
 import Lucide from "@/components/Base/Lucide";
 import Skeleton from "@/components/Base/Skeleton";
+import Spinner from "@/components/Base/Spinner";
+import StatusBadge from "@/components/Base/StatusBadge";
 import { PreviewImmaginePdf } from "@/components/PreviewImmaginePdf";
 import axios from "axios";
 import clsx from "clsx";
@@ -15,6 +17,7 @@ import EmptyState from "../../components/EmptyState";
 import { PERMISSIONS } from "../../constants/permissions";
 import { usePermission } from "../../context/PermissionContext";
 import { useNotification } from "@/context/NotificationContext";
+import { formatData } from "@/utils/format";
 
 interface FileAnteprima {
     id: string;
@@ -85,93 +88,11 @@ interface CardFilter {
 const BATCH_SIZE = 12;
 
 
-interface StatCompactCardProps {
-    label: string;
-    value: number;
-    icon: React.ReactNode;
-    tone?: "primary" | "warning" | "info" | "danger";
-}
-
-const StatCompactCard: FC<StatCompactCardProps> = ({
-    label,
-    value,
-    icon,
-    tone = "primary",
-}) => {
-    const tones: Record<string, string> = {
-        primary: "border-theme-1/30 text-theme-1 bg-theme-1/5",
-        warning: "border-warning/30 text-warning bg-warning/10",
-        info: "border-info/30 text-info bg-info/10",
-        danger: "border-danger/30 text-danger bg-danger/10",
-    };
-
-    return (
-        <div
-            className={clsx(
-                "flex items-center gap-4 rounded-[0.6rem] border px-4 py-3 bg-white/80",
-                tones[tone]
-            )}
-        >
-            <div className="flex items-center justify-center w-9 h-9 rounded-full bg-current/10">
-                {icon}
-            </div>
-
-            <div className="flex flex-col leading-tight">
-                <span className="text-xs font-medium text-slate-500">
-                    {label}
-                </span>
-                <span className="text-xl font-bold text-slate-800">
-                    {value}
-                </span>
-            </div>
-        </div>
-    );
-};
-
-
-const useInfiniteKitScroll = (kits: KitVolantino[], batchSize: number = BATCH_SIZE) => {
-    const [visibleCount, setVisibleCount] = useState(batchSize);
-    const [sentinel, setSentinel] = useState<HTMLDivElement | null>(null);
-
-    useEffect(() => {
-        setVisibleCount(batchSize);
-    }, [kits, batchSize]);
-
-    useEffect(() => {
-        if (!sentinel) return;
-
-        const observer = new IntersectionObserver(
-            ([entry]) => {
-                if (entry.isIntersecting) {
-                    setVisibleCount((prev) => {
-                        if (prev >= kits.length) return prev;
-                        return Math.min(prev + batchSize, kits.length);
-                    });
-                }
-            },
-            { threshold: 0.25, rootMargin: "200px 0px 0px" }
-        );
-
-        observer.observe(sentinel);
-        return () => observer.disconnect();
-    }, [sentinel, kits.length, batchSize]);
-
-    const items = useMemo(() => kits.slice(0, visibleCount), [kits, visibleCount]);
-
-    return {
-        items,
-        hasMore: visibleCount < kits.length,
-        registerSentinel: setSentinel,
-    };
-};
-
-
-
 const VolantiniSkeleton: FC = () => (
     <div className="flex flex-col gap-5">
         <div className="grid grid-cols-2 gap-3">
             {[1, 2].map((i) => (
-                <div key={i} className="p-4 rounded-[0.6rem] bg-theme-1/[0.06]">
+                <div key={i} className="p-4 rounded-card bg-theme-1/[0.06]">
                     <Skeleton height="12px" width="64px" className="mb-2" />
                     <Skeleton height="32px" className="mt-3" />
                 </div>
@@ -179,7 +100,7 @@ const VolantiniSkeleton: FC = () => (
         </div>
         <div className="space-y-3">
             {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="p-4 rounded-[0.6rem] border border-dashed border-slate-200/70 bg-white/80 flex items-center gap-4">
+                <div key={i} className="p-4 rounded-card border border-dashed border-slate-200/70 bg-white/80 flex items-center gap-4">
                     <Skeleton height="80px" width="64px" />
                     <div className="flex-1 space-y-3">
                         <Skeleton height="12px" width="60%" />
@@ -224,32 +145,15 @@ const KitCard: FC<{ kit: KitVolantino; showValidita?: boolean, routeClickable?: 
         }
     }, [file, isDownloading]);
 
-    const BADGE_STYLES: Record<string, string> = {
-        PUBBLICATO: "bg-success/10 text-success border-success/20",
-        IN_LAVORAZIONE: "bg-info/10 text-info border-info/20",
-        IN_LAVORAZIONE_CON_ERRORI: "bg-danger/10 text-danger border-danger/20",
-        IN_REVISIONE: "bg-warning/10 text-warning border-warning/20",
-    };
-
-    const renderStatoBadge = (stato: string) => {
-        const normalized = stato?.toUpperCase();
-        const badgeClasses = BADGE_STYLES[normalized] ?? "bg-slate-100 text-slate-600 border-slate-200";
-        return (
-            <span className={clsx("px-2.5 py-0.5 text-[11px] font-semibold rounded-full border", badgeClasses)}>
-                {normalized?.replace(/_/g, " ")}
-            </span>
-        );
-    };
-
     return (
         <>
-            <div className="relative p-4 rounded-[0.6rem] border border-dashed border-slate-200/70 bg-white/90 backdrop-blur-sm shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
+            <div className="relative p-4 rounded-card border border-dashed border-slate-200/70 bg-white/90 backdrop-blur-sm shadow-card">
                 <div className="flex gap-4">
                     <div className="relative shrink-0">
                         {hasPreview ? (
                             <button
                                 type="button"
-                                className="group/preview w-20 h-24 rounded-[0.6rem] overflow-hidden border border-theme-1/20 bg-slate-50 relative focus-visible:outline focus-visible:outline-theme-1/40"
+                                className="group/preview w-20 h-24 rounded-card overflow-hidden border border-theme-1/20 bg-slate-50 relative focus-visible:outline focus-visible:outline-theme-1/40"
                                 onClick={() => setIsPreviewOpen(true)}
                             >
                                 <img
@@ -263,7 +167,7 @@ const KitCard: FC<{ kit: KitVolantino; showValidita?: boolean, routeClickable?: 
                                 </span>
                             </button>
                         ) : (
-                            <div className="w-20 h-24 rounded-[0.6rem] border border-dashed border-slate-300 flex items-center justify-center bg-slate-50">
+                            <div className="w-20 h-24 rounded-card border border-dashed border-slate-300 flex items-center justify-center bg-slate-50">
                                 <Lucide icon="FileText" className="w-5 h-5 text-slate-400" />
                             </div>
                         )}
@@ -294,13 +198,13 @@ const KitCard: FC<{ kit: KitVolantino; showValidita?: boolean, routeClickable?: 
                                 {(kit.nome_area || kit.nome_canale) && (
                                     <div className="flex items-center gap-2 mt-1.5">
                                         {kit.nome_area && (
-                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-3xs font-medium rounded-full bg-slate-100 text-slate-600 border border-slate-200">
                                                 <Lucide icon="MapPin" className="w-2.5 h-2.5" />
                                                 {kit.nome_area}
                                             </span>
                                         )}
                                         {kit.nome_canale && (
-                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded-full bg-theme-1/10 text-theme-1 border border-theme-1/20">
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-3xs font-medium rounded-full bg-theme-1/10 text-theme-1 border border-theme-1/20">
                                                 <Lucide icon="Store" className="w-2.5 h-2.5" />
                                                 {kit.nome_canale}
                                             </span>
@@ -308,20 +212,20 @@ const KitCard: FC<{ kit: KitVolantino; showValidita?: boolean, routeClickable?: 
                                     </div>
                                 )}
                             </div>
-                            {renderStatoBadge(kit.stato_lavorazione)}
+                            <StatusBadge dominio="kitRuntime" stato={kit.stato_lavorazione?.toUpperCase()} className="shrink-0" />
                         </div>
-                        <div className="flex flex-wrap items-center gap-3 mt-3 text-[11px] text-slate-500">
+                        <div className="flex flex-wrap items-center gap-3 mt-3 text-2xs text-slate-500">
                             {showValidita && (kit.validita_dal || kit.validita_al) && (
                                 <span className="inline-flex items-center gap-1 text-theme-1">
                                     <Lucide icon="Calendar" className="w-3 h-3" />
                                     {kit.validita_dal && kit.validita_al ? (
                                         <>
-                                            {dayjs(kit.validita_dal).locale("it").format("D MMM")} - {dayjs(kit.validita_al).locale("it").format("D MMM YYYY")}
+                                            {formatData(kit.validita_dal)} - {formatData(kit.validita_al)}
                                         </>
                                     ) : kit.validita_al ? (
-                                        <>fino al {dayjs(kit.validita_al).locale("it").format("D MMM YYYY")}</>
+                                        <>fino al {formatData(kit.validita_al)}</>
                                     ) : kit.validita_dal ? (
-                                        <>dal {dayjs(kit.validita_dal).locale("it").format("D MMM YYYY")}</>
+                                        <>dal {formatData(kit.validita_dal)}</>
                                     ) : null}
                                 </span>
                             )}
@@ -351,7 +255,11 @@ const KitCard: FC<{ kit: KitVolantino; showValidita?: boolean, routeClickable?: 
                                     onClick={handleDownload}
                                     disabled={!canDownload || isDownloading}
                                 >
-                                    <Lucide icon={isDownloading ? "Loader" : "Download"} className={clsx("w-3.5 h-3.5", isDownloading && "animate-spin")} />
+                                    {isDownloading ? (
+                                        <Spinner size="sm" decorativo className="h-3.5 w-3.5 text-current" />
+                                    ) : (
+                                        <Lucide icon="Download" aria-hidden="true" className="w-3.5 h-3.5" />
+                                    )}
                                     {isDownloading ? "Download..." : "Scarica"}
                                 </button>
                                 <button
@@ -423,16 +331,16 @@ const VolantiniInCorsoContent: FC<VolantiniInCorsoContentProps> = ({
                 cardId="in-corso"
             />
 
-            <div className="flex flex-wrap items-center gap-3 p-3 rounded-[0.6rem] border border-dashed border-slate-200/80 bg-white/80">
+            <div className="flex flex-wrap items-center gap-3 p-3 rounded-card border border-dashed border-slate-200/80 bg-white/80">
                 <div>
-                    <p className="text-[11px] uppercase tracking-wide text-slate-400">Filtri rapidi</p>
+                    <p className="text-2xs uppercase tracking-wide text-slate-400">Filtri rapidi</p>
                     <p className="text-sm font-semibold text-slate-700">{quickFilter === "all" ? "Tutti i volantini" : "Solo in scadenza"}</p>
                 </div>
                 <div className="ml-auto flex items-center gap-2">
                     <button
                         type="button"
                         className={clsx(
-                            "px-4 py-2 rounded-[0.6rem] text-xs font-semibold border transition",
+                            "px-4 py-2 rounded-card text-xs font-semibold border transition",
                             quickFilter === "all"
                                 ? "bg-theme-1/10 text-theme-1 border-theme-1/30 shadow-sm"
                                 : "text-slate-500 border-transparent hover:border-slate-200"
@@ -444,7 +352,7 @@ const VolantiniInCorsoContent: FC<VolantiniInCorsoContentProps> = ({
                     <button
                         type="button"
                         className={clsx(
-                            "px-4 py-2 rounded-[0.6rem] text-xs font-semibold border transition",
+                            "px-4 py-2 rounded-card text-xs font-semibold border transition",
                             quickFilter === "expiring"
                                 ? "bg-warning/20 text-warning border-warning/30 shadow-sm"
                                 : "text-slate-500 border-transparent hover:border-slate-200"
@@ -464,8 +372,8 @@ const VolantiniInCorsoContent: FC<VolantiniInCorsoContentProps> = ({
                         ))}
                         <div ref={registerSentinel} />
                         {hasMore && (
-                            <div className="flex items-center justify-center gap-2 py-4 text-xs text-slate-400">
-                                <Lucide icon="Loader" className="w-4 h-4 animate-spin" /> Caricamento automatico...
+                            <div role="status" className="flex items-center justify-center gap-2 py-4 text-xs text-slate-400">
+                                <Spinner size="sm" decorativo /> Caricamento automatico...
                             </div>
                         )}
                     </div>
@@ -532,9 +440,9 @@ const VolantiniInLavorazioneContent: FC<VolantiniInLavorazioneContentProps> = ({
                 cardId="in-lavorazione"
             />
 
-            <div className="flex flex-wrap items-center gap-3 p-3 rounded-[0.6rem] border border-dashed border-slate-200/80 bg-white/80">
+            <div className="flex flex-wrap items-center gap-3 p-3 rounded-card border border-dashed border-slate-200/80 bg-white/80">
                 <div>
-                    <p className="text-[11px] uppercase tracking-wide text-slate-400">Stato processo</p>
+                    <p className="text-2xs uppercase tracking-wide text-slate-400">Stato processo</p>
                     <p className="text-sm font-semibold text-slate-700">
                         {quickFilter === "all" && "Tutti i kit in produzione"}
                         {quickFilter === "review" && "Solo kit in revisione"}
@@ -551,7 +459,7 @@ const VolantiniInLavorazioneContent: FC<VolantiniInLavorazioneContentProps> = ({
                             key={option.value}
                             type="button"
                             className={clsx(
-                                "px-4 py-2 rounded-[0.6rem] text-xs font-semibold border transition",
+                                "px-4 py-2 rounded-card text-xs font-semibold border transition",
                                 getFilterClasses(option.value as typeof quickFilter)
                             )}
                             onClick={() => setQuickFilter(option.value as typeof quickFilter)}
@@ -570,8 +478,8 @@ const VolantiniInLavorazioneContent: FC<VolantiniInLavorazioneContentProps> = ({
                         ))}
                         <div ref={registerSentinel} />
                         {hasMore && (
-                            <div className="flex items-center justify-center gap-2 py-4 text-xs text-slate-400">
-                                <Lucide icon="Loader" className="w-4 h-4 animate-spin" /> Caricamento automatico...
+                            <div role="status" className="flex items-center justify-center gap-2 py-4 text-xs text-slate-400">
+                                <Spinner size="sm" decorativo /> Caricamento automatico...
                             </div>
                         )}
                     </div>
@@ -622,8 +530,8 @@ const VolantiniPubblicatiInLavorazioneContent: FC<VolantiniPubblicatiInLavorazio
                         ))}
                         <div ref={registerSentinel} />
                         {hasMore && (
-                            <div className="flex items-center justify-center gap-2 py-4 text-xs text-slate-400">
-                                <Lucide icon="Loader" className="w-4 h-4 animate-spin" /> Caricamento automatico...
+                            <div role="status" className="flex items-center justify-center gap-2 py-4 text-xs text-slate-400">
+                                <Spinner size="sm" decorativo /> Caricamento automatico...
                             </div>
                         )}
                     </div>
@@ -673,8 +581,8 @@ const StoricoVolantiniContent: FC<StoricoVolantiniContentProps> = ({
                         ))}
                         <div ref={registerSentinel} />
                         {hasMore && (
-                            <div className="flex items-center justify-center gap-2 py-4 text-xs text-slate-400">
-                                <Lucide icon="Loader" className="w-4 h-4 animate-spin" /> Caricamento automatico...
+                            <div role="status" className="flex items-center justify-center gap-2 py-4 text-xs text-slate-400">
+                                <Spinner size="sm" decorativo /> Caricamento automatico...
                             </div>
                         )}
                     </div>
@@ -683,7 +591,7 @@ const StoricoVolantiniContent: FC<StoricoVolantiniContentProps> = ({
                 )}
             </div>
 
-            <div className="flex items-center justify-between rounded-[0.6rem] border border-dashed border-slate-200/80 bg-white/70 p-4">
+            <div className="flex items-center justify-between rounded-card border border-dashed border-slate-200/80 bg-white/70 p-4">
                 <div>
                     <p className="text-sm font-semibold text-slate-700">Consulta lo storico completo</p>
                     <p className="text-xs text-slate-500">Accedi all'elenco dettagliato di tutti i volantini pubblicati.</p>
@@ -721,7 +629,7 @@ const CardFilterSelect: FC<CardFilterSelectProps> = ({
     const hasActiveFilters = filter.id_area || filter.id_canale;
 
     return (
-        <div className="flex flex-wrap items-center gap-3 p-3 rounded-[0.6rem] border border-dashed border-slate-200/80 bg-white/80 mb-4">
+        <div className="flex flex-wrap items-center gap-3 p-3 rounded-card border border-dashed border-slate-200/80 bg-white/80 mb-4">
             <div className="flex items-center gap-2">
                 <Lucide icon="Filter" className="w-4 h-4 text-slate-400" />
                 <span className="text-xs text-slate-500">Filtra:</span>
@@ -952,11 +860,11 @@ const Dashboard3: FC<Dashboard3Props> = ({ embedded = false, loaderDataOverride 
                                 <Lucide icon="BookOpen" className="w-6 h-6 text-primary" />
                             </div>
                             <div>
-                                <div className="text-base font-semibold">Volantini in validità</div>
+                                <h2 className="title-card">Volantini in validità</h2>
                                 <div className="text-slate-500 text-sm">Panoramica dei volantini pubblicati</div>
                             </div>
                         </div>
-                        <div className="text-[11px] text-slate-400 pl-14">Aggiornato {dayjs().format("DD MMM YYYY")}</div>
+                        <div className="text-2xs text-slate-400 pl-14">Aggiornato {formatData(new Date())}</div>
                     </div>
                     {volantiniInCorso ? (
                         <VolantiniInCorsoContent
@@ -979,11 +887,11 @@ const Dashboard3: FC<Dashboard3Props> = ({ embedded = false, loaderDataOverride 
                                 <Lucide icon="CircleCheck" className="w-6 h-6 text-success" />
                             </div>
                             <div>
-                                <div className="text-base font-semibold">Prossimi volantini</div>
+                                <h2 className="title-card">Prossimi volantini</h2>
                                 <div className="text-slate-500 text-sm">Pubblicati ma in attesa della promo ad entrare in validità</div>
                             </div>
                         </div>
-                        <div className="text-[11px] text-slate-400 pl-14">Pronti per la pubblicazione</div>
+                        <div className="text-2xs text-slate-400 pl-14">Pronti per la pubblicazione</div>
                     </div>
                     {volantiniPubblicatiInLavorazione ? (
                         <VolantiniPubblicatiInLavorazioneContent
@@ -1005,11 +913,11 @@ const Dashboard3: FC<Dashboard3Props> = ({ embedded = false, loaderDataOverride 
                                 <Lucide icon="Pencil" className="w-6 h-6 text-warning" />
                             </div>
                             <div>
-                                <div className="text-base font-semibold">Volantini in Lavorazione</div>
+                                <h2 className="title-card">Volantini in Lavorazione</h2>
                                 <div className="text-slate-500 text-sm">Volantini in produzione e revisioni aperte</div>
                             </div>
                         </div>
-                        <div className="text-[11px] text-slate-400 pl-14">Workflow creativo in tempo reale</div>
+                        <div className="text-2xs text-slate-400 pl-14">Workflow creativo in tempo reale</div>
                     </div>
                     {volantiniInLavorazione ? (
                         <VolantiniInLavorazioneContent
@@ -1033,7 +941,7 @@ const Dashboard3: FC<Dashboard3Props> = ({ embedded = false, loaderDataOverride 
                                 <Lucide icon="History" className="w-6 h-6 text-info" />
                             </div>
                             <div>
-                                <div className="text-base font-semibold">Storico volantini</div>
+                                <h2 className="title-card">Storico volantini</h2>
                                 <div className="text-slate-500 text-sm">Ultimi 10 volantini pubblicati</div>
                             </div>
                         </div>

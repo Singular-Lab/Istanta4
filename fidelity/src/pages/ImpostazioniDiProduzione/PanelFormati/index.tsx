@@ -1,9 +1,9 @@
-import Alert from '@/components/Base/Alert';
 import Button from '@/components/Base/Button';
 import { FormInput, FormLabel, FormSelect, FormTextarea } from '@/components/Base/Form';
 import { Dialog, Popover } from "@/components/Base/Headless";
-import LoadingIcon from '@/components/Base/LoadingIcon';
 import Lucide from '@/components/Base/Lucide';
+import PageError from '@/components/Base/PageError';
+import Spinner from '@/components/Base/Spinner';
 import EmptyState from '@/components/EmptyState';
 import { useNotification } from '@/context/NotificationContext';
 import { useFetchFormati } from '@/query/query';
@@ -65,6 +65,7 @@ const PanelFormati = forwardRef<PanelFormatiRefHandle>((props, ref) => {
     data: formati,
     isLoading,
     isError,
+    error,
     refetch
   } = useFetchFormati();
 
@@ -225,7 +226,7 @@ const PanelFormati = forwardRef<PanelFormatiRefHandle>((props, ref) => {
       >
         <Dialog.Panel className="p-1">
           <Dialog.Title className="px-5 pt-5">
-            <h2 className="mr-auto text-base font-medium">
+            <h2 className="title-card mr-auto">
               Elimina formato: <span className="font-semibold text-danger">{selectedFormato?.nome}</span>
             </h2>
           </Dialog.Title>
@@ -246,15 +247,10 @@ const PanelFormati = forwardRef<PanelFormatiRefHandle>((props, ref) => {
               type="button"
               variant="danger"
               onClick={handleEliminaFormato}
-              className="w-24"
-              disabled={mutationEliminazioneFormato.isPending}
+              className="min-w-24"
+              loading={mutationEliminazioneFormato.isPending}
             >
-              {mutationEliminazioneFormato.isPending ? (
-                <div className="flex items-center justify-center">
-                  <LoadingIcon icon="oval" className="w-4 h-4 mr-2" />
-                  Elimino...
-                </div>
-              ) : "Elimina"}
+              Elimina
             </Button>
           </Dialog.Footer>
         </Dialog.Panel>
@@ -269,7 +265,7 @@ const PanelFormati = forwardRef<PanelFormatiRefHandle>((props, ref) => {
         <Dialog.Panel className="p-1">
           <form onSubmit={handleSubmitModifica(handleModificaFormatoSubmit)}>
             <Dialog.Title className="px-5 pt-5">
-              <h2 className="mr-auto text-base font-medium">
+              <h2 className="title-card mr-auto">
                 Modifica Formato: <span className="font-semibold text-primary">{selectedFormato?.nome}</span>
               </h2>
             </Dialog.Title>
@@ -316,15 +312,10 @@ const PanelFormati = forwardRef<PanelFormatiRefHandle>((props, ref) => {
               <Button
                 type="submit"
                 variant="primary"
-                className="w-36"
-                disabled={mutationAggiornamentoFormato.isPending}
+                className="min-w-36"
+                loading={mutationAggiornamentoFormato.isPending}
               >
-                {mutationAggiornamentoFormato.isPending ? (
-                  <div className="flex items-center justify-center">
-                    <LoadingIcon icon="oval" className="w-4 h-4 mr-2" />
-                    Salvo...
-                  </div>
-                ) : "Salva Modifiche"}
+                Salva Modifiche
               </Button>
             </Dialog.Footer>
           </form>
@@ -424,8 +415,8 @@ const PanelFormati = forwardRef<PanelFormatiRefHandle>((props, ref) => {
               {/* Stati loading, error e empty */}
               {isLoading && (
                 <div className="flex justify-center items-center py-16">
-                  <div className="text-center">
-                    <LoadingIcon icon="tail-spin" className="w-8 h-8 mx-auto mb-4" />
+                  <div role="status" className="text-center">
+                    <Spinner size="lg" decorativo className="mx-auto mb-4" />
                     <div className="text-slate-600 font-medium">Caricamento formati...</div>
                     <div className="text-slate-500 text-sm mt-1">Attendere prego</div>
                   </div>
@@ -434,13 +425,12 @@ const PanelFormati = forwardRef<PanelFormatiRefHandle>((props, ref) => {
 
               {isError && (
                 <div className="p-5">
-                  <Alert variant="danger" className="flex items-center">
-                    <Lucide icon="TriangleAlert" className="w-6 h-6 mr-3" />
-                    <div>
-                      <div className="font-medium">Errore durante il caricamento</div>
-                      <div className="mt-1">Non è stato possibile caricare i formati. Riprova più tardi.</div>
-                    </div>
-                  </Alert>
+                  <PageError
+                    compatta
+                    titolo="Formati non caricati"
+                    motivo={(error as Error)?.message || "Non è stato possibile caricare i formati."}
+                    onRiprova={() => refetch()}
+                  />
                 </div>
               )}
 
@@ -548,8 +538,9 @@ const PanelFormati = forwardRef<PanelFormatiRefHandle>((props, ref) => {
                                   size="sm"
                                   onClick={() => handleAperturaModaleEliminazione(formato)}
                                   className="hover:bg-danger/5"
+                                  aria-label={`Elimina formato ${formato.nome}`}
                                 >
-                                  <Lucide icon="Trash2" className="w-4 h-4" />
+                                  <Lucide icon="Trash2" aria-hidden="true" className="w-4 h-4" />
                                 </Button>
                               </div>
                             </td>

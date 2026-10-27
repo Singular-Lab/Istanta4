@@ -40,11 +40,11 @@ const AccessoNegato = ({ aSchermoIntero }: { aSchermoIntero?: boolean }) => {
       )}
     >
       <div className={clsx("w-full max-w-lg text-center space-y-6", intero && "box box--stacked p-10")}>
-        <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl bg-warning/10 text-warning">
-          <Lucide icon="ShieldX" className="w-10 h-10" />
+        <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-card bg-warning/10 text-warning">
+          <Lucide icon="ShieldX" aria-hidden="true" className="w-10 h-10" />
         </div>
         <div className="space-y-2">
-          <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100 tracking-tight">
+          <h1 className="title-page text-slate-900 dark:text-slate-100">
             Accesso negato
           </h1>
           <p className="text-slate-500 leading-relaxed">
@@ -56,9 +56,10 @@ const AccessoNegato = ({ aSchermoIntero }: { aSchermoIntero?: boolean }) => {
           type="button"
           variant="primary"
           onClick={() => navigate(startPage || "/", { replace: true })}
-          className="px-5 py-2.5 rounded-full"
+          rounded
+          className="px-5 py-2.5"
         >
-          <Lucide icon="House" className="w-4 h-4 mr-2" />
+          <Lucide icon="House" aria-hidden="true" className="w-4 h-4 mr-2" />
           Torna alla pagina iniziale
         </Button>
       </div>

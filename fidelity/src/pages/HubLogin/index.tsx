@@ -1,9 +1,11 @@
 import IstantaLogo from "@/assets/images/logo_ext.png";
 import userIcon from "@/assets/images/users/user_icon_profile.png";
+import Alert from "@/components/Base/Alert";
 import Button from "@/components/Base/Button";
-import { FormInput, FormLabel } from "@/components/Base/Form";
+import { FormField, FormInput } from "@/components/Base/Form";
 import Dialog from "@/components/Base/Headless/Dialog";
 import Lucide from "@/components/Base/Lucide";
+import Spinner from "@/components/Base/Spinner";
 import { yupResolver } from "@hookform/resolvers/yup";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
@@ -15,6 +17,7 @@ import { TIPO_UTENTI } from "../../../lib/enums";
 import { ServerCall } from "../../../lib/server_call";
 import type { AuthProviderDTO, UtenteAttributes } from "../../../lib/types";
 import type { UtenteResponseDTO } from "../../../server/core/dto";
+import CampoPassword from "./components/CampoPassword";
 import HubBackground from "./components/HubBackground";
 import ProviderCard from "./components/ProviderCard";
 import SessionExpiredBanner from "./components/SessionExpiredBanner";
@@ -50,7 +53,6 @@ const HubLogin: React.FC = () => {
   const [generalError, setGeneralError] = useState<string | null>(null);
   const [multipleUsers, setMultipleUsers] = useState<(UtenteResponseDTO & { page_to_land?: string })[]>();
   const [showUserSelection, setShowUserSelection] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
   const [expandedProvider, setExpandedProvider] = useState<string | null>(null);
 
   const [reason, setReason] = useState<string | null>(() => queryParams.get("reason"));
@@ -243,14 +245,14 @@ const HubLogin: React.FC = () => {
 
       <div className="relative min-h-screen flex items-center justify-center px-4 py-10 sm:px-6">
         <div className="w-full max-w-[460px]">
-          {/* Card glassmorphism */}
-          <div className="backdrop-blur-xl bg-white/75 border border-white/30 rounded-3xl shadow-2xl p-8 sm:p-10">
+          {/* Card glassmorphism: sullo sfondo a gradiente l'ombra standard della card non la stacca */}
+          <div className="backdrop-blur-xl bg-white/75 border border-white/30 rounded-card shadow-2xl p-8 sm:p-10">
             {/* Logo */}
             <div className="flex justify-center mb-6">
               <img src={IstantaLogo} alt="Istanta 2 GDO Suite" className="h-12 sm:h-14" />
             </div>
 
-            <h1 className="text-center font-urbanist text-xl sm:text-2xl font-semibold text-slate-800 mb-1">
+            <h1 className="title-page text-center text-slate-800 mb-1">
               Accedi alla piattaforma
             </h1>
             <p className="text-center text-sm text-slate-500 mb-6">
@@ -271,16 +273,16 @@ const HubLogin: React.FC = () => {
             />
 
             {generalError && (
-              <div className="flex items-center px-4 py-3 mb-5 bg-red-100/80 border border-red-400/50 text-red-700 rounded-xl backdrop-blur-sm">
-                <Lucide icon="CircleAlert" className="w-5 h-5 mr-2 shrink-0" />
+              <Alert variant="soft-danger" className="flex items-center gap-2 px-4 py-3 mb-5">
+                <Lucide icon="CircleAlert" aria-hidden="true" className="w-5 h-5 shrink-0" />
                 <span className="text-sm">
                   <span className="font-medium mr-1">Errore:</span>
                   {generalError}
                 </span>
-                <button onClick={() => startTransition(() => setGeneralError(null))} className="ml-auto shrink-0" aria-label="Chiudi">
-                  <Lucide icon="X" className="w-4 h-4" />
+                <button type="button" onClick={() => startTransition(() => setGeneralError(null))} className="ml-auto shrink-0" aria-label="Chiudi">
+                  <Lucide icon="X" aria-hidden="true" className="w-4 h-4" />
                 </button>
-              </div>
+              </Alert>
             )}
 
             {/* Provider list */}
@@ -288,7 +290,7 @@ const HubLogin: React.FC = () => {
               <div className="space-y-3">
                 {loadingProviders ? (
                   <div className="flex items-center justify-center py-8">
-                    <Lucide icon="Loader" className="w-6 h-6 animate-spin text-theme-1" />
+                    <Spinner size="md" etichetta="Caricamento metodi di accesso" />
                   </div>
                 ) : (
                   providers.map((provider, index) => (
@@ -311,51 +313,32 @@ const HubLogin: React.FC = () => {
                             )}
                             className="space-y-4"
                           >
-                            <div>
-                              <FormLabel htmlFor="email">Email</FormLabel>
+                            <FormField etichetta="Email" errore={errors.email?.message}>
                               <FormInput
                                 id="email"
                                 {...register("email")}
                                 type="email"
                                 className={clsx(
-                                  "block px-4 py-3 rounded-xl border-slate-300/80 w-full",
+                                  "block px-4 py-3 rounded-control border-slate-300/80 w-full",
                                   errors.email && "border-danger"
                                 )}
                                 placeholder="inserisci la tua email"
                                 autoComplete="email"
                               />
-                              {errors.email && (
-                                <p className="text-danger mt-1.5 text-xs">{errors.email.message}</p>
-                              )}
-                            </div>
+                            </FormField>
 
-                            <div>
-                              <FormLabel htmlFor="password">Password</FormLabel>
-                              <div className="relative">
-                                <FormInput
-                                  id="password"
-                                  {...register("password")}
-                                  type={showPassword ? "text" : "password"}
-                                  className={clsx(
-                                    "block px-4 py-3 rounded-xl border-slate-300/80 w-full pr-12",
-                                    errors.password && "border-danger"
-                                  )}
-                                  placeholder="inserisci la tua password"
-                                  autoComplete="current-password"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => startTransition(() => setShowPassword((prev) => !prev))}
-                                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600"
-                                  aria-label={showPassword ? "Nascondi password" : "Mostra password"}
-                                >
-                                  <Lucide icon={showPassword ? "EyeOff" : "Eye"} className="w-5 h-5" />
-                                </button>
-                              </div>
-                              {errors.password && (
-                                <p className="text-danger mt-1.5 text-xs">{errors.password.message}</p>
-                              )}
-                            </div>
+                            <FormField etichetta="Password" errore={errors.password?.message}>
+                              <CampoPassword
+                                id="password"
+                                {...register("password")}
+                                className={clsx(
+                                  "block px-4 py-3 rounded-control border-slate-300/80 w-full",
+                                  errors.password && "border-danger"
+                                )}
+                                placeholder="inserisci la tua password"
+                                autoComplete="current-password"
+                              />
+                            </FormField>
 
                             <div className="flex items-center text-xs text-slate-500">
                               <a href="/recupero-password" className="text-theme-1 hover:underline ml-auto">
@@ -367,20 +350,10 @@ const HubLogin: React.FC = () => {
                               variant="primary"
                               rounded
                               type="submit"
-                              disabled={isLoading}
-                              className={clsx(
-                                "bg-gradient-to-r from-theme-1/90 to-theme-2/90 w-full py-3",
-                                isLoading && "opacity-70 cursor-not-allowed"
-                              )}
+                              loading={isLoading}
+                              className="bg-gradient-to-r from-theme-1/90 to-theme-2/90 w-full py-3"
                             >
-                              {isLoading ? (
-                                <div className="flex items-center justify-center">
-                                  <Lucide icon="Loader" className="w-5 h-5 mr-2 animate-spin" />
-                                  Accesso in corso...
-                                </div>
-                              ) : (
-                                "Entra"
-                              )}
+                              Entra
                             </Button>
                           </form>
                         </div>
@@ -407,8 +380,8 @@ const HubLogin: React.FC = () => {
         centered
       >
         <Dialog.Panel>
-          <Dialog.Title className="font-medium">
-            <h2 className="text-xl">Seleziona Account</h2>
+          <Dialog.Title>
+            <h2 className="title-section">Seleziona Account</h2>
           </Dialog.Title>
           <Dialog.Description>
             <p className="mb-4 text-sm text-slate-600">
@@ -416,25 +389,26 @@ const HubLogin: React.FC = () => {
             </p>
             <div className="space-y-2">
               {multipleUsers?.map((user) => (
-                <div
+                <button
+                  type="button"
                   key={`${user.id}-${user.tipo}`}
-                  className="p-3 border rounded-lg cursor-pointer hover:bg-slate-50 transition-colors"
+                  className="w-full text-left p-3 border rounded-control cursor-pointer hover:bg-slate-50 transition-colors"
                   onClick={() => handleUserSelection(user)}
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="overflow-hidden rounded-full w-11 h-11 border-[3px] border-slate-200/70 shrink-0">
+                  <span className="flex items-center gap-3">
+                    <span className="overflow-hidden rounded-full w-11 h-11 border-[3px] border-slate-200/70 shrink-0">
                       <img
-                        alt="Avatar utente"
+                        alt=""
                         src={user?.meta?.photo ? `data:image/png;base64,${user.meta.photo}` : userIcon}
                         className="w-full h-full object-cover"
                       />
-                    </div>
-                    <div>
-                      <div className="font-medium">{user.nome_completo}</div>
-                      <div className="text-sm text-slate-500">{getUserTypeLabel(user.tipo)}</div>
-                    </div>
-                  </div>
-                </div>
+                    </span>
+                    <span>
+                      <span className="block font-medium">{user.nome_completo}</span>
+                      <span className="block text-sm text-slate-500">{getUserTypeLabel(user.tipo)}</span>
+                    </span>
+                  </span>
+                </button>
               ))}
             </div>
           </Dialog.Description>

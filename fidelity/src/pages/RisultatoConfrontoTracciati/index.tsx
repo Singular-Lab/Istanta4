@@ -1,9 +1,11 @@
 ﻿import Chart from "@/components/Base/Chart";
 import Lucide from "@/components/Base/Lucide";
 import PageHeader from "@/components/Base/PageHeader";
+import Spinner from "@/components/Base/Spinner";
 import Table from "@/components/Base/Table";
 import withSessionCheck from "@/components/SessionChecker";
 import { useNotification } from "@/context/NotificationContext";
+import { formatDataOra, VALORE_ASSENTE } from "@/utils/format";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
 import dayjs from "dayjs";
@@ -112,7 +114,7 @@ function WidgetHeader({
         )}
       </div>
       {badge && (
-        <span className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+        <span className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-3xs font-semibold uppercase tracking-[0.14em] text-slate-500">
           {badge}
         </span>
       )}
@@ -149,7 +151,7 @@ function KpiGridWidget({ widget }: { widget: TracciatoWidgetKpiGrid }) {
                 <Lucide icon={iconName} className={clsx("h-5 w-5", tone.iconText)} />
               </div>
               <div className="flex min-w-0 flex-col leading-tight">
-                <span className="truncate text-[11px] font-medium uppercase tracking-wider text-slate-400">
+                <span className="truncate text-2xs font-medium uppercase tracking-wider text-slate-400">
                   {item.label}
                 </span>
                 <span className={clsx("mt-0.5 text-2xl font-bold tabular-nums", tone.valueText)}>
@@ -159,7 +161,7 @@ function KpiGridWidget({ widget }: { widget: TracciatoWidgetKpiGrid }) {
                   )}
                 </span>
                 {totalValue > 0 && (
-                  <span className="mt-0.5 text-[10px] text-slate-400">
+                  <span className="mt-0.5 text-3xs text-slate-400">
                     {Math.round((item.value / totalValue) * 100)}% del totale
                   </span>
                 )}
@@ -436,7 +438,7 @@ function TableWidget({ widget }: { widget: TracciatoWidgetTable }) {
                 <Table.Td
                   key={index}
                   className={clsx(
-                    "whitespace-nowrap border-t border-slate-200/80 bg-slate-50/80 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500",
+                    "whitespace-nowrap border-t border-slate-200/80 bg-slate-50/80 px-4 py-3 text-2xs font-semibold uppercase tracking-[0.14em] text-slate-500",
                     numericKeys.has(column.key) && "text-right tabular-nums"
                   )}
                 >
@@ -557,7 +559,7 @@ function CalloutWidget({ widget }: { widget: TracciatoWidgetCallout }) {
 
         {/* Badge opzionale */}
         {widget.badge && (
-          <span className="shrink-0 self-start rounded-full border border-current/20 bg-white/70 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] opacity-80">
+          <span className="shrink-0 self-start rounded-full border border-current/20 bg-white/70 px-2.5 py-0.5 text-3xs font-semibold uppercase tracking-[0.14em] opacity-80">
             {widget.badge}
           </span>
         )}
@@ -609,7 +611,7 @@ function ReferenzeSplitTableWidget({ widget }: { widget: TracciatoWidgetReferenz
             {tab.label}
             <span
               className={clsx(
-                "rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums",
+                "rounded-full px-1.5 py-0.5 text-3xs font-bold tabular-nums",
                 tab.color === "blue" && "bg-blue-100 text-blue-700",
                 tab.color === "violet" && "bg-violet-100 text-violet-700"
               )}
@@ -648,7 +650,7 @@ function ReferenzeSplitTableWidget({ widget }: { widget: TracciatoWidgetReferenz
                     <Table.Td
                       key={i}
                       className={clsx(
-                        "sticky top-0 z-10 whitespace-nowrap border-t border-slate-200/80 bg-slate-50/80 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500 backdrop-blur-sm",
+                        "sticky top-0 z-10 whitespace-nowrap border-t border-slate-200/80 bg-slate-50/80 px-4 py-3 text-2xs font-semibold uppercase tracking-[0.14em] text-slate-500 backdrop-blur-sm",
                         numericKeys.has(col.key) && "text-right tabular-nums"
                       )}
                     >
@@ -685,7 +687,7 @@ function ReferenzeSplitTableWidget({ widget }: { widget: TracciatoWidgetReferenz
                             {isType ? (
                               <span
                                 className={clsx(
-                                  "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                                  "inline-flex items-center rounded-full px-2 py-0.5 text-2xs font-semibold",
                                   TIPO_BADGE[tipoKey]?.bg ?? "bg-slate-100",
                                   TIPO_BADGE[tipoKey]?.text ?? "text-slate-600"
                                 )}
@@ -786,7 +788,7 @@ function DualPieChartWidget({ widget }: { widget: TracciatoWidgetDualPieChart })
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
               Prima
             </span>
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600 tabular-nums">
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-3xs font-bold text-slate-600 tabular-nums">
               {widget.labelA}
             </span>
           </div>
@@ -811,7 +813,7 @@ function DualPieChartWidget({ widget }: { widget: TracciatoWidgetDualPieChart })
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
               Dopo
             </span>
-            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-600 tabular-nums">
+            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-3xs font-bold text-blue-600 tabular-nums">
               {widget.labelB}
             </span>
           </div>
@@ -837,7 +839,7 @@ function FieldChangeBadgeDelta({ change }: { change: TracciatoFieldChange }) {
   return (
     <span
       className={clsx(
-        "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums",
+        "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-3xs font-bold tabular-nums",
         isPos && "bg-red-50 text-red-600",
         isNeg && "bg-emerald-50 text-emerald-600",
         !isPos && !isNeg && "bg-slate-100 text-slate-500",
@@ -869,10 +871,12 @@ function CopyButton({ text, title = "Copia" }: { text: string; title?: string })
       type="button"
       onClick={handleCopy}
       title={title}
-      className="opacity-0 group-hover/copy:opacity-100 transition-opacity p-0.5 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+      aria-label={title}
+      className="opacity-0 group-hover/copy:opacity-100 focus-visible:opacity-100 transition-opacity p-0.5 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40"
     >
       <Lucide
         icon={copied ? "Check" : "Copy"}
+        aria-hidden="true"
         className={clsx("h-3 w-3 transition-colors", copied && "text-emerald-500")}
       />
     </button>
@@ -996,22 +1000,26 @@ function PriceDiffWidget({ widget }: { widget: TracciatoWidgetPriceDiff }) {
           <div className="relative w-full max-w-xs">
             <Lucide
               icon="Search"
+              aria-hidden="true"
               className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400"
             />
             <input
               value={searchCodice}
               onChange={(e) => setSearchCodice(e.target.value)}
               placeholder="Cerca per codice referenza..."
+              aria-label="Cerca per codice referenza"
               className="w-full rounded-lg border border-slate-200 bg-white py-1.5 pl-8 pr-2 text-xs text-slate-700 outline-none transition-colors focus:border-blue-300"
             />
           </div>
           <button
+            type="button"
             onClick={toggleAll}
             disabled={filteredRows.length === 0}
             className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700"
           >
             <Lucide
               icon={allExpanded ? "ChevronsUp" : "ChevronsDown"}
+              aria-hidden="true"
               className="h-3.5 w-3.5"
             />
             {allExpanded ? "Comprimi tutto" : "Espandi tutto"}
@@ -1027,7 +1035,7 @@ function PriceDiffWidget({ widget }: { widget: TracciatoWidgetPriceDiff }) {
                 (label, i) => (
                   <Table.Td
                     key={i}
-                    className="sticky top-0 z-10 whitespace-nowrap border-t border-slate-200/80 bg-slate-50/95 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500 backdrop-blur-sm"
+                    className="sticky top-0 z-10 whitespace-nowrap border-t border-slate-200/80 bg-slate-50/95 px-4 py-3 text-2xs font-semibold uppercase tracking-[0.14em] text-slate-500 backdrop-blur-sm"
                   >
                     {label}
                   </Table.Td>
@@ -1065,10 +1073,23 @@ function PriceDiffWidget({ widget }: { widget: TracciatoWidgetPriceDiff }) {
                       className="cursor-pointer border-b border-dashed border-slate-200/70 last:border-b-0 hover:bg-slate-50/60"
                     >
                       <td className="w-8 px-3 py-2.5 text-slate-400">
-                        <Lucide
-                          icon={isExpanded ? "ChevronDown" : "ChevronRight"}
-                          className="h-4 w-4 transition-transform"
-                        />
+                        {/* La riga resta cliccabile col mouse; da tastiera si espande dal pulsante */}
+                        <button
+                          type="button"
+                          aria-expanded={isExpanded}
+                          aria-label={`${isExpanded ? "Comprimi" : "Espandi"} ${row.codice}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleRow(index);
+                          }}
+                          className="flex rounded-control p-0.5 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40"
+                        >
+                          <Lucide
+                            icon={isExpanded ? "ChevronDown" : "ChevronRight"}
+                            aria-hidden="true"
+                            className="h-4 w-4 transition-transform"
+                          />
+                        </button>
                       </td>
                       <td className="px-4 py-2.5 text-sm font-medium text-slate-800">
                         <div className="flex items-center gap-1.5 group/copy">
@@ -1083,7 +1104,7 @@ function PriceDiffWidget({ widget }: { widget: TracciatoWidgetPriceDiff }) {
                       </td>
                       <td className="px-4 py-2.5">
                         <span
-                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${row.tipo === "singolo" ? TIPO_SINGOLO_CLS : TIPO_GRUPPO_CLS}`}
+                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-2xs font-semibold ${row.tipo === "singolo" ? TIPO_SINGOLO_CLS : TIPO_GRUPPO_CLS}`}
                         >
                           {row.tipo === "singolo" ? "Singolo" : "Gruppo"}
                         </span>
@@ -1109,7 +1130,7 @@ function PriceDiffWidget({ widget }: { widget: TracciatoWidgetPriceDiff }) {
                           {row.changes.map((c) => (
                             <span
                               key={c.campo}
-                              className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700"
+                              className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-3xs font-medium text-amber-700"
                             >
                               {c.label}
                             </span>
@@ -1134,7 +1155,7 @@ function PriceDiffWidget({ widget }: { widget: TracciatoWidgetPriceDiff }) {
                                       <th
                                         key={hi}
                                         className={clsx(
-                                          "px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500",
+                                          "px-3 py-1.5 text-3xs font-semibold uppercase tracking-wide text-slate-500",
                                           hi >= 1 ? "text-right" : "text-left",
                                         )}
                                       >
@@ -1295,13 +1316,13 @@ function ScoreAuditItem({
       <p className="min-w-0 flex-1 text-xs leading-relaxed text-slate-700">{audit.message}</p>
       <div className="flex shrink-0 items-center gap-1.5">
         {source && (
-          <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[9px] text-slate-500">
+          <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-3xs text-slate-500">
             {source}
           </span>
         )}
         <span
           className={clsx(
-            "rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide",
+            "rounded px-1.5 py-0.5 text-3xs font-bold uppercase tracking-wide",
             tone.badgeBg,
             tone.badgeText,
           )}
@@ -1327,7 +1348,7 @@ function SeverityDots({ audits }: { audits: Pick<TracciatoWidgetScoreAudit, "typ
         counts[t] > 0 ? (
           <span key={t} className="flex items-center gap-1">
             <span className={clsx("h-1.5 w-1.5 rounded-full", AUDIT_TYPE_TONE[t].dot)} />
-            <span className={clsx("text-[10px] font-semibold tabular-nums", AUDIT_TYPE_TONE[t].text)}>
+            <span className={clsx("text-3xs font-semibold tabular-nums", AUDIT_TYPE_TONE[t].text)}>
               {counts[t]}
             </span>
           </span>
@@ -1409,7 +1430,7 @@ function ScoreboardAuditPanel({
 
       {/* Summary bar */}
       <div className="flex items-center gap-4 border-b border-slate-100 bg-white/60 px-5 py-2">
-        <span className="shrink-0 text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+        <span className="shrink-0 text-3xs font-semibold uppercase tracking-widest text-slate-400">
           Diagnostica
         </span>
         <div className="flex flex-wrap items-center gap-4">
@@ -1417,10 +1438,10 @@ function ScoreboardAuditPanel({
             typeCounts[t] > 0 ? (
               <span key={t} className="flex items-center gap-1.5">
                 <span className={clsx("h-2 w-2 rounded-full", AUDIT_TYPE_TONE[t].dot)} />
-                <span className={clsx("text-[11px] font-bold tabular-nums", AUDIT_TYPE_TONE[t].text)}>
+                <span className={clsx("text-2xs font-bold tabular-nums", AUDIT_TYPE_TONE[t].text)}>
                   {typeCounts[t]}
                 </span>
-                <span className="text-[11px] text-slate-400">{AUDIT_TYPE_TONE[t].label}</span>
+                <span className="text-2xs text-slate-400">{AUDIT_TYPE_TONE[t].label}</span>
               </span>
             ) : null,
           )}
@@ -1440,7 +1461,7 @@ function ScoreboardAuditPanel({
               type="button"
               onClick={() => onFilterChange(key)}
               className={clsx(
-                "flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold transition-all",
+                "flex items-center gap-1.5 rounded-full border px-3 py-1 text-2xs font-semibold transition-all",
                 isActive
                   ? tone ? tone.pillActive : "border-slate-300 bg-slate-200 text-slate-700"
                   : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:bg-slate-50",
@@ -1455,7 +1476,7 @@ function ScoreboardAuditPanel({
               {label}
               <span
                 className={clsx(
-                  "min-w-[14px] rounded-full px-1.5 text-center text-[9px] tabular-nums",
+                  "min-w-[14px] rounded-full px-1.5 text-center text-3xs tabular-nums",
                   isActive && tone ? `${tone.badgeBg} ${tone.badgeText}` : "bg-slate-100 text-slate-500",
                 )}
               >
@@ -1481,11 +1502,12 @@ function ScoreboardAuditPanel({
               <div key={reparto}>
                 <button
                   type="button"
+                  aria-expanded={!isClosed}
                   onClick={() => toggleReparto(reparto)}
                   className="flex w-full items-center gap-3 px-5 py-2.5 text-left transition-colors hover:bg-white/70"
                 >
                   <Lucide icon={worst.icon} className={clsx("h-3.5 w-3.5 shrink-0", worst.text)} />
-                  <span className="flex-1 text-[11px] font-semibold uppercase tracking-wider text-slate-600">
+                  <span className="flex-1 text-2xs font-semibold uppercase tracking-wider text-slate-600">
                     {reparto}
                   </span>
                   <SeverityDots audits={audits} />
@@ -1529,22 +1551,22 @@ function ScoreChips({ row }: { row: Pick<TracciatoWidgetScoreboardCodiceRow, 'in
   return (
     <div className="hidden sm:flex items-center gap-1.5 shrink-0">
       {row.inalterati > 0 && (
-        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-600">
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-3xs font-semibold bg-slate-100 text-slate-600">
           <Lucide icon="Minus" className="w-2.5 h-2.5" />{row.inalterati}
         </span>
       )}
       {row.modificati > 0 && (
-        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700">
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-3xs font-semibold bg-amber-100 text-amber-700">
           <Lucide icon="Pencil" className="w-2.5 h-2.5" />{row.modificati}
         </span>
       )}
       {row.entranti > 0 && (
-        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-700">
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-3xs font-semibold bg-emerald-100 text-emerald-700">
           <Lucide icon="TrendingUp" className="w-2.5 h-2.5" />{row.entranti}
         </span>
       )}
       {row.uscenti > 0 && (
-        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-100 text-red-700">
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-3xs font-semibold bg-red-100 text-red-700">
           <Lucide icon="TrendingDown" className="w-2.5 h-2.5" />{row.uscenti}
         </span>
       )}
@@ -1589,6 +1611,7 @@ function ScoreboardWidget({ widget }: { widget: TracciatoWidgetScoreboard }) {
             return (
               <button
                 type="button"
+                aria-expanded={auditOpen}
                 onClick={() => setAuditOpen((o) => !o)}
                 className={clsx(
                   "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all",
@@ -1601,7 +1624,7 @@ function ScoreboardWidget({ widget }: { widget: TracciatoWidgetScoreboard }) {
                 Audit
                 <span
                   className={clsx(
-                    "rounded-full px-1.5 py-0.5 text-[10px] tabular-nums",
+                    "rounded-full px-1.5 py-0.5 text-3xs tabular-nums",
                     auditOpen ? clsx(tone.badgeBg, tone.badgeText) : "bg-slate-100 text-slate-500",
                   )}
                 >
@@ -1612,7 +1635,7 @@ function ScoreboardWidget({ widget }: { widget: TracciatoWidgetScoreboard }) {
             );
           })()}
           {widget.badge && (
-            <span className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+            <span className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-3xs font-semibold uppercase tracking-[0.14em] text-slate-500">
               {widget.badge}
             </span>
           )}
@@ -1668,15 +1691,27 @@ function ScoreboardWidget({ widget }: { widget: TracciatoWidgetScoreboard }) {
                     title={row.reparto}
                   >
                     {hasChildren && (
-                      <Lucide
-                        icon={isOpen ? "ChevronDown" : "ChevronRight"}
-                        className="w-3.5 h-3.5 shrink-0 text-slate-400"
-                      />
+                      <button
+                        type="button"
+                        aria-expanded={isOpen}
+                        aria-label={`${isOpen ? "Comprimi" : "Espandi"} ${row.reparto}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggle(row.reparto);
+                        }}
+                        className="flex shrink-0 rounded text-slate-400 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-theme-1/60"
+                      >
+                        <Lucide
+                          icon={isOpen ? "ChevronDown" : "ChevronRight"}
+                          aria-hidden="true"
+                          className="w-3.5 h-3.5"
+                        />
+                      </button>
                     )}
                     {row.reparto}
                   </span>
                   {rowAudits.length > 0 && (
-                    <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 shrink-0">
+                    <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-3xs font-semibold text-amber-700 shrink-0">
                       <Lucide icon="AlertTriangle" className="h-2.5 w-2.5" />
                       {rowAudits.length}
                     </span>
@@ -1732,7 +1767,7 @@ function ScoreboardWidget({ widget }: { widget: TracciatoWidgetScoreboard }) {
                               {codice.codice}
                             </span>
                             {codiceAudits.length > 0 && (
-                              <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 shrink-0">
+                              <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-3xs font-semibold text-amber-700 shrink-0">
                                 <Lucide icon="AlertTriangle" className="h-2.5 w-2.5" />
                                 {codiceAudits.length}
                               </span>
@@ -1750,7 +1785,7 @@ function ScoreboardWidget({ widget }: { widget: TracciatoWidgetScoreboard }) {
                             </div>
                             <span
                               className={clsx(
-                                "w-10 text-right text-[11px] font-bold shrink-0",
+                                "w-10 text-right text-2xs font-bold shrink-0",
                                 cColors.text
                               )}
                             >
@@ -1824,10 +1859,22 @@ const GroupedTableRow = memo(function GroupedTableRow({
         {/* Expand chevron — only for gruppo */}
         <span className="w-4 mt-0.5 shrink-0 flex justify-center">
           {hasSubCodici ? (
-            <Lucide
-              icon={isGruppoOpen ? "ChevronDown" : "ChevronRight"}
-              className="w-3.5 h-3.5 text-slate-400"
-            />
+            <button
+              type="button"
+              aria-expanded={isGruppoOpen}
+              aria-label={`${isGruppoOpen ? "Comprimi" : "Espandi"} ${row.codice}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleToggle();
+              }}
+              className="flex rounded text-slate-400 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40"
+            >
+              <Lucide
+                icon={isGruppoOpen ? "ChevronDown" : "ChevronRight"}
+                aria-hidden="true"
+                className="w-3.5 h-3.5"
+              />
+            </button>
           ) : (
             <span className="w-3.5" />
           )}
@@ -1839,7 +1886,7 @@ const GroupedTableRow = memo(function GroupedTableRow({
             <span className="font-mono font-semibold text-slate-700 max-w-[10rem] truncate" title={row.codice}>{row.codice}</span>
             <span
               className={clsx(
-                "px-1.5 py-0.5 rounded text-[9px] font-bold uppercase",
+                "px-1.5 py-0.5 rounded text-3xs font-bold uppercase",
                 row.tipo === "gruppo"
                   ? "bg-violet-100 text-violet-700"
                   : "bg-slate-100 text-slate-500"
@@ -1910,11 +1957,11 @@ const GroupedTableGroupSection = memo(function GroupedTableGroupSection({
       {/* Reparto header — static, always visible */}
       <div className="px-5 py-2 flex items-center gap-2 bg-slate-50 border-y border-slate-100">
         <span className="text-xs font-bold uppercase tracking-wider text-slate-500">{group.reparto}</span>
-        <span className="text-[10px] text-slate-400">({group.rows.length})</span>
+        <span className="text-3xs text-slate-400">({group.rows.length})</span>
       </div>
 
       {/* Column header */}
-      <div className={`px-5 py-1.5 ${GROUPED_TABLE_GRID_CLASS} text-[10px] font-semibold uppercase tracking-wide text-slate-400 border-b border-slate-100/60 bg-white`}>
+      <div className={`px-5 py-1.5 ${GROUPED_TABLE_GRID_CLASS} text-3xs font-semibold uppercase tracking-wide text-slate-400 border-b border-slate-100/60 bg-white`}>
         <span className="w-4" />
         <span>Codice / Descrizione</span>
         <span>Tema</span>
@@ -2111,16 +2158,12 @@ function MultiReportView({ queryResult }: { queryResult: TracciatoQueryResult })
     <div className="flex flex-col gap-5">
       <PageHeader
         title={isTrend ? "Trend temporale" : "Report per promo"}
-        description={`${reports.length} promo analizzate · calcolato il ${dayjs(queryResult.computedAt).format("DD/MM/YYYY HH:mm")}`}
+        description={`${reports.length} promo analizzate · calcolato il ${formatDataOra(queryResult.computedAt)}`}
         actions={
-          <button
-            type="button"
-            onClick={() => navigate("/report/tracciati")}
-            className="flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50"
-          >
-            <Lucide icon="ArrowLeft" className="h-4 w-4" />
+          <Button type="button" variant="outline-secondary" onClick={() => navigate("/report/tracciati")}>
+            <Lucide icon="ArrowLeft" aria-hidden="true" className="mr-2 h-4 w-4" />
             Nuova query
-          </button>
+          </Button>
         }
       />
 
@@ -2319,8 +2362,8 @@ function Main() {
   if (!report) {
     if (confrontoQuery.isLoading || scoreboardQuery.isLoading) {
       return (
-        <div className="box box--stacked p-8 flex flex-col items-center gap-3 text-slate-400">
-          <Lucide icon="Loader" className="h-7 w-7 animate-spin" />
+        <div role="status" className="box box--stacked p-8 flex flex-col items-center gap-3 text-slate-400">
+          <Spinner decorativo />
           <span className="text-sm">Caricamento confronto…</span>
         </div>
       );
@@ -2328,13 +2371,11 @@ function Main() {
     return null;
   }
 
-  const formattedDate = dayjs(report.generatedAt).isValid()
-    ? dayjs(report.generatedAt).format("DD/MM/YYYY HH:mm")
-    : "";
+  const formattedDate = formatDataOra(report.generatedAt);
 
   const description = [
     report.subtitle,
-    formattedDate ? `Generato il ${formattedDate}` : "",
+    formattedDate !== VALORE_ASSENTE ? `Generato il ${formattedDate}` : "",
   ]
     .filter(Boolean)
     .join(" · ");
@@ -2346,32 +2387,19 @@ function Main() {
         description={description || undefined}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => navigate(fallbackPath)}
-              className="flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50"
-            >
-              <Lucide icon="ArrowLeft" className="h-4 w-4" />
+            <Button type="button" variant="outline-secondary" onClick={() => navigate(fallbackPath)}>
+              <Lucide icon="ArrowLeft" aria-hidden="true" className="mr-2 h-4 w-4" />
               Nuovo confronto
-            </button>
+            </Button>
             <Button
               type="button"
               onClick={() => pdfMutation.mutate()}
               disabled={pdfMutation.isPending}
+              loading={pdfMutation.isPending}
               variant="primary"
-              className="flex h-9 items-center gap-2 rounded-lg  px-4 text-sm font-medium  "
             >
-              {pdfMutation.isPending ? (
-                <>
-                  <div className="h-4 w-4 flex-none animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
-                  Creazione PDF...
-                </>
-              ) : (
-                <>
-                  <Lucide icon="FileDown" className="h-4 w-4" />
-                  Esporta PDF
-                </>
-              )}
+              {!pdfMutation.isPending && <Lucide icon="FileDown" aria-hidden="true" className="mr-2 h-4 w-4" />}
+              Esporta PDF
             </Button>
           </div>
         }

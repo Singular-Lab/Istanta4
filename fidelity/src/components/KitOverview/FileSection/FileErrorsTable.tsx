@@ -99,7 +99,7 @@ const FileRow: FC<FileRowProps> = ({
               <div className="font-medium text-slate-800 flex items-center gap-2">
                 <span className="truncate">{file.nome}</span>
                 {isStaged && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-warning/10 text-warning border border-warning/20 shrink-0">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-3xs font-medium bg-warning/10 text-warning border border-warning/20 shrink-0">
                     In Staging
                   </span>
                 )}
@@ -122,8 +122,8 @@ const FileRow: FC<FileRowProps> = ({
         <Table.Td className="text-center">
           <div className="flex justify-center gap-2">
             {file.url && (
-              <Button variant="outline-secondary" size="sm" onClick={() => handleFilePreview(file)}>
-                <Lucide icon="Eye" className="w-4 h-4" />
+              <Button variant="outline-secondary" size="sm" onClick={() => handleFilePreview(file)} aria-label="Anteprima" title="Anteprima">
+                <Lucide icon="Eye" aria-hidden="true" className="w-4 h-4" />
               </Button>
             )}
             {isStaged && onRemoveStagedFile && stagedFile && (
@@ -132,8 +132,9 @@ const FileRow: FC<FileRowProps> = ({
                 size="sm"
                 onClick={() => onRemoveStagedFile(stagedFile.id)}
                 title="Rimuovi dallo staging"
+                aria-label="Rimuovi dallo staging"
               >
-                <Lucide icon="X" className="w-4 h-4" />
+                <Lucide icon="X" aria-hidden="true" className="w-4 h-4" />
               </Button>
             )}
           </div>
@@ -156,23 +157,23 @@ const FileRow: FC<FileRowProps> = ({
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="bg-white p-4 rounded-xl border border-info/20">
-                  <div className="text-[10px] uppercase font-semibold text-info mb-1.5">Nuovo file</div>
+                  <div className="text-3xs uppercase font-semibold text-info mb-1.5">Nuovo file</div>
                   <div className="text-sm font-semibold text-slate-800">{stagedFile.newFile.name}</div>
                   <div className="text-xs text-slate-500 mt-1">
                     {formatFileSize(stagedFile.newFile.size)} • {stagedFile.newFile.name.split(".").pop()?.toUpperCase()}
                   </div>
-                  <div className="text-[10px] text-slate-400 mt-1.5">
+                  <div className="text-3xs text-slate-400 mt-1.5">
                     Caricato: {new Date(stagedFile.newFile.lastModified).toLocaleString("it-IT")}
                   </div>
                 </div>
 
                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                  <div className="text-[10px] uppercase font-semibold text-slate-500 mb-1.5">Sostituisce</div>
+                  <div className="text-3xs uppercase font-semibold text-slate-500 mb-1.5">Sostituisce</div>
                   <div className="text-sm text-slate-700">{stagedFile.originalFile.nome}</div>
                   <div className="text-xs text-slate-500 mt-1">
                     File originale rifiutato
                   </div>
-                  <div className="text-[10px] text-slate-400 mt-1.5 font-mono">
+                  <div className="text-3xs text-slate-400 mt-1.5 font-mono">
                     ID: {stagedFile.originalFile.id.slice(0, 8)}...
                   </div>
                 </div>
@@ -237,7 +238,7 @@ const FileRow: FC<FileRowProps> = ({
                             <span className="text-sm text-slate-600 ml-1">— "{logEntry.messaggio}"</span>
                           )}
                         </div>
-                        <div className="text-[10px] text-slate-400 shrink-0">
+                        <div className="text-3xs text-slate-400 shrink-0">
                           {logEntry.data_notifica instanceof Date
                             ? logEntry.data_notifica.toLocaleString("it-IT")
                             : new Date(logEntry.data_notifica).toLocaleString("it-IT")
@@ -490,8 +491,9 @@ const FileErrorsTable: FC<FileErrorsTableProps> = ({
             size="sm"
             onClick={() => onChange(Math.max(0, currentPage - 1))}
             disabled={currentPage === 0}
+            aria-label="Pagina precedente"
           >
-            <Lucide icon="ChevronLeft" className="w-4 h-4" />
+            <Lucide icon="ChevronLeft" aria-hidden="true" className="w-4 h-4" />
           </Button>
           <span className="px-3 py-1.5 text-sm bg-slate-100 rounded-lg font-medium text-slate-600">
             {currentPage + 1} / {totalPages}
@@ -501,8 +503,9 @@ const FileErrorsTable: FC<FileErrorsTableProps> = ({
             size="sm"
             onClick={() => onChange(Math.min(totalPages - 1, currentPage + 1))}
             disabled={currentPage >= totalPages - 1}
+            aria-label="Pagina successiva"
           >
-            <Lucide icon="ChevronRight" className="w-4 h-4" />
+            <Lucide icon="ChevronRight" aria-hidden="true" className="w-4 h-4" />
           </Button>
         </div>
       </div>

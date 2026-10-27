@@ -11,7 +11,11 @@ import Button from "../../components/Base/Button";
 import { FormInput, FormLabel, FormSelect, FormTextarea } from "../../components/Base/Form";
 import { Dialog } from "../../components/Base/Headless";
 import Lucide from "../../components/Base/Lucide";
+import PageError from "../../components/Base/PageError";
 import PageHeader from "../../components/Base/PageHeader";
+import StatusBadge from "../../components/Base/StatusBadge";
+import { descriviStato } from "../../constants/stati";
+import { useNotification } from "../../context/NotificationContext";
 
 /**
  * Tipologia allineata alla definizione proposta per json_meta_gdowhatsapptemplate
@@ -163,7 +167,7 @@ const Card: React.FC<{ title?: string; right?: React.ReactNode; children: React.
     <div className="box box--stacked p-5 mb-5">
         {(title || right) && (
             <div className="flex items-center justify-between mb-3 gap-3">
-                {title && <h3 className="text-[0.94rem] font-medium text-slate-800">{title}</h3>}
+                {title && <h3 className="title-card">{title}</h3>}
                 {right}
             </div>
         )}
@@ -180,7 +184,8 @@ const NuovaVersioneTemplatesWhatsappSuperAdmin: React.FC = () => {
     const [isDialogApprovazioneOpen, setIsDialogApprovazioneOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState("");
-    const [submitSuccess, setSubmitSuccess] = useState(false);
+    // Stato restituito da Meta dopo l'invio: l'esito reale, anche un rifiuto immediato
+    const [submitSuccess, setSubmitSuccess] = useState("");
 
     const [isSavedInLocale, setIsSavedInLocale] = useState(false);
     const [isLoadingSave, setIsLoadingSave] = useState(false);
@@ -188,20 +193,11 @@ const NuovaVersioneTemplatesWhatsappSuperAdmin: React.FC = () => {
     const bodyPlaceholders = useMemo(() => extractPlaceholders(form.bodyText), [form.bodyText]);
     const needBodyExamples = bodyPlaceholders.length > 0;
 
-    const { template } = useLoaderData() as { template?: GDOWhatsappTemplateAttributes };
+    const { template, errore } = useLoaderData() as { template?: GDOWhatsappTemplateAttributes | null; errore?: string | null };
     const { revalidate } = useRevalidator();
+    const { showNotification } = useNotification();
 
     const [isJsonModified, setIsJsonModified] = useState(false);
-    const [isInApproval, setIsInApproval] = useState(false);
-
-    // mappo stato di approvazione dal template originale
-    useEffect(() => {
-        if (!template) {
-            setIsInApproval(false);
-            return;
-        }
-        setIsInApproval(template.stato_meta_gdowhatsapptemplate === STATO_GDO_WHATSAPP_TEMPLATE.PENDING);
-    }, [template]);
 
     // Parser da json esistente (json_meta_gdowhatsapptemplate) verso lo stato del form
     useEffect(() => {
@@ -488,55 +484,73 @@ const NuovaVersioneTemplatesWhatsappSuperAdmin: React.FC = () => {
         } catch (error) {
             setIsLoadingSave(false);
             setIsSavedInLocale(false);
+            showNotification(
+                error instanceof Error && error.message ? error.message : "Salvataggio del template non riuscito",
+                { variant: "error" }
+            );
         }
     }
 
-    async function sincronizzaTemplateConMeta() {
+    // L'esito (o il motivo del rifiuto di Meta) arriva a chi la chiama: la dialog lo mostra
+    async function sincronizzaTemplateConMeta(): Promise<string | undefined> {
+        setIsLoadingSave(true);
         try {
-            setIsLoadingSave(true);
-            await ServerCall.put("/whatsapp/send_modified_template_to_meta", {
+            const res = await ServerCall.put<{ success: boolean; stato?: string; error?: string }>("/whatsapp/send_modified_template_to_meta", {
                 id_template: template?.id_gdowhatsapptemplate,
             });
-            setIsLoadingSave(false);
+            if (!res?.success) {
+                throw new Error(res?.error || "Invio a Meta non riuscito");
+            }
             setIsSavedInLocale(true);
             revalidate();
-        } catch (error) {
-            console.log(error);
+            return res.stato;
+        } finally {
             setIsLoadingSave(false);
-            setIsSavedInLocale(false);
         }
+    }
+
+    const intestazione = (
+        <PageHeader
+            title="Nuova versione Template WhatsApp"
+            description="Configura una nuova versione del template, pronta per l’approvazione Meta."
+            indietro={{
+                to: `/whatsapp/gestione-whatsapp-superadmin/templates?id=${template?.id_gdo_gdowhatsapptemplate ?? ""}`,
+                etichetta: "Torna ai template",
+            }}
+            badges={
+                (template || isSavedInLocale) && (
+                    <>
+                        {template && <StatusBadge dominio="waTemplate" stato={template.stato_meta_gdowhatsapptemplate} />}
+                        {isSavedInLocale && <StatusBadge tono="success" etichetta="Salvato in locale" />}
+                    </>
+                )
+            }
+        />
+    );
+
+    // I preset non servono qui: blocca solo il template mancante
+    if (!template) {
+        return (
+            <div className="space-y-6">
+                {intestazione}
+                <PageError
+                    titolo="Template non caricato"
+                    motivo={errore || "Il template indicato non esiste o non è più disponibile."}
+                    onRiprova={revalidate}
+                />
+            </div>
+        );
     }
 
     return (
         <div className="space-y-6">
-            {/* HEADER + STATO */}
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div className="flex-1">
-                    <PageHeader
-                        title="Nuova versione Template WhatsApp"
-                        description="Configura una nuova versione del template, pronta per l’approvazione Meta."
-                    />
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-                    {isSavedInLocale && (
-                        <Badge size="sm" variant="success" border>
-                            Salvato in locale
-                        </Badge>
-                    )}
-                    {isInApproval && (
-                        <Badge size="sm" variant="warning" border>
-                            In revisione Meta
-                        </Badge>
-                    )}
-                </div>
-            </div>
+            {intestazione}
 
             {/* DIALOG INVIO META */}
             <Dialog open={isDialogApprovazioneOpen} onClose={() => setIsDialogApprovazioneOpen(false)} size="md">
                 <Dialog.Panel>
                     <Dialog.Title>
-                        <h3 className="text-lg font-medium">Invia per approvazione</h3>
+                        <h3 className="title-section">Invia per approvazione</h3>
                     </Dialog.Title>
                     <Dialog.Description>
                         Sei sicuro di voler inviare questo template a Meta per l’approvazione?
@@ -557,8 +571,8 @@ const NuovaVersioneTemplatesWhatsappSuperAdmin: React.FC = () => {
                             </Alert>
                         )}
                         {submitSuccess && (
-                            <Alert className="mt-2" variant="success">
-                                Template inviato con successo!
+                            <Alert className="mt-2" variant={submitSuccess === STATO_GDO_WHATSAPP_TEMPLATE.REJECTED ? "danger" : "success"}>
+                                Template inviato a Meta: {descriviStato("waTemplate", submitSuccess).etichetta}
                             </Alert>
                         )}
                     </Dialog.Description>
@@ -572,10 +586,11 @@ const NuovaVersioneTemplatesWhatsappSuperAdmin: React.FC = () => {
                         </Button>
                         <Button
                             variant="primary"
+                            loading={isSubmitting}
                             disabled={isSubmitting || (errors && Object.keys(errors).length > 0)}
                             onClick={async () => {
                                 setSubmitError("");
-                                setSubmitSuccess(false);
+                                setSubmitSuccess("");
                                 setIsSubmitting(true);
                                 setErrors(validation);
                                 if (Object.keys(validation).length) {
@@ -583,20 +598,21 @@ const NuovaVersioneTemplatesWhatsappSuperAdmin: React.FC = () => {
                                     return;
                                 }
                                 try {
-                                    await sincronizzaTemplateConMeta();
-                                    setSubmitSuccess(true);
+                                    const stato = await sincronizzaTemplateConMeta();
+                                    setSubmitSuccess(stato || "SCONOSCIUTO");
                                     setTimeout(() => {
                                         setIsDialogApprovazioneOpen(false);
-                                        setSubmitSuccess(false);
+                                        setSubmitSuccess("");
                                     }, 1500);
-                                } catch (err: any) {
-                                    setSubmitError("Errore durante l'invio. Riprova.");
+                                } catch (err: unknown) {
+                                    // Il motivo reale, compreso quello di Meta
+                                    setSubmitError(err instanceof Error && err.message ? err.message : "Errore durante l'invio. Riprova.");
                                 } finally {
                                     setIsSubmitting(false);
                                 }
                             }}
                         >
-                            {isSubmitting ? "Invio..." : "Invia"}
+                            Invia
                         </Button>
                     </Dialog.Footer>
                 </Dialog.Panel>
@@ -1043,7 +1059,7 @@ const NuovaVersioneTemplatesWhatsappSuperAdmin: React.FC = () => {
                                 <Button
                                     type="button"
                                     variant="primary"
-                                    disabled={isLoadingSave}
+                                    loading={isLoadingSave}
                                     onClick={() => {
                                         const payload = buildPayload();
                                         salvaInLocale(payload);
@@ -1064,6 +1080,7 @@ const NuovaVersioneTemplatesWhatsappSuperAdmin: React.FC = () => {
                                 <Button
                                     type="button"
                                     variant="secondary"
+                                    disabled={isLoadingSave}
                                     onClick={() => {
                                         setErrors(validation);
                                         if (Object.keys(validation).length === 0) {

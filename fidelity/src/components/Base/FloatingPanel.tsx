@@ -82,8 +82,9 @@ export const FloatingPanel = ({
         <button 
           onClick={onClose}
           className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 p-1 rounded-full hover:bg-slate-100 dark:hover:bg-darkmode-500 transition-colors"
+          aria-label="Chiudi pannello"
         >
-          <Lucide icon="X" className="w-4 h-4" />
+          <Lucide aria-hidden="true" icon="X" className="w-4 h-4" />
         </button>
       </div>
       <div className="max-h-[60vh] overflow-auto p-2 scrollbar">

@@ -695,8 +695,9 @@ const Dropzone: React.FC<DropzoneProps> = ({
                                 }
                                 variant="soft-danger"
                                 size='sm'
+                                aria-label="Rimuovi regola"
                               >
-                                <Lucide icon='X' />
+                                <Lucide icon='X' aria-hidden="true" />
                               </Button>
                             </FormInline>
                           </li>

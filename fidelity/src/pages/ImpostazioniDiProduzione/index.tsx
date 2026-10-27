@@ -484,7 +484,7 @@ function Main() {
       <Dialog size="md" open={showDialogCreazioneFormati} onClose={handleCloseDialogCreazioneFormati}>
         <Dialog.Panel>
           <Dialog.Title >
-            <h2 className="mr-auto text-base font-medium">
+            <h2 className="title-card mr-auto">
               Crea Formato
             </h2>
           </Dialog.Title>
@@ -533,7 +533,7 @@ function Main() {
       <Dialog size="xl" open={showDialogCreazioneTipiExport} onClose={handleCloseDialogCreazioneTipiExport}>
         <Dialog.Panel>
           <Dialog.Title>
-            <h2 className="mr-auto text-base font-medium">
+            <h2 className="title-card mr-auto">
               Crea Tipo di Export
             </h2>
           </Dialog.Title>
@@ -604,7 +604,7 @@ function Main() {
       }}>
         <Dialog.Panel>
           <Dialog.Title>
-            <h2 className="mr-auto text-base font-medium">
+            <h2 className="title-card mr-auto">
               {isModificaNamingConvention ? 'Modifica Naming Convention' : 'Crea Naming Convention'}
             </h2>
           </Dialog.Title>
@@ -668,62 +668,67 @@ function Main() {
           </Popover.Button>
           <Popover.Panel className="w-60 mt-1">
             <PermissionGate permission={PERMISSIONS.IMPOSTAZIONI.GESTISCI_FORMATI} mode="disable">
-              <div
-                className="cursor-pointer p-3 hover:bg-slate-100 flex items-center rounded-lg"
+              <button
+                type="button"
+                className="w-full text-left cursor-pointer p-3 hover:bg-slate-100 flex items-center rounded-control"
                 onClick={() => { setShowDialogCreazioneFormati(true); }}
               >
-                <Lucide icon="LayoutTemplate" className="w-5 h-5 mr-3" />
+                <Lucide aria-hidden="true" icon="LayoutTemplate" className="w-5 h-5 mr-3" />
                 <div>
                   <div className="font-medium">Formato</div>
                   <div className="text-xs text-slate-500">Crea nuovo formato</div>
                 </div>
-              </div>
+              </button>
             </PermissionGate>
             <PermissionGate permission={PERMISSIONS.IMPOSTAZIONI.GESTISCI_TIPO_EXPORT} mode="disable">
-              <div
-                className="cursor-pointer p-3 hover:bg-slate-100 flex items-center rounded-lg"
+              <button
+                type="button"
+                className="w-full text-left cursor-pointer p-3 hover:bg-slate-100 flex items-center rounded-control"
                 onClick={() => { setShowDialogCreazioneTipiExport(true); }}
               >
-                <Lucide icon="FileOutput" className="w-5 h-5 mr-3" />
+                <Lucide aria-hidden="true" icon="FileOutput" className="w-5 h-5 mr-3" />
                 <div>
                   <div className="font-medium">Tipo di Export</div>
                   <div className="text-xs text-slate-500">Crea tipo di export</div>
                 </div>
-              </div>
+              </button>
             </PermissionGate>
             <PermissionGate permission={PERMISSIONS.IMPOSTAZIONI.GESTISCI_NAMING_CONVENTION} mode="disable">
-              <div
-                className="cursor-pointer p-3 hover:bg-slate-100 flex items-center rounded-lg"
+              <button
+                type="button"
+                className="w-full text-left cursor-pointer p-3 hover:bg-slate-100 flex items-center rounded-control"
                 onClick={() => { setShowDialogCreazioneNamingConvention(true); }}
               >
-                <Lucide icon="FileText" className="w-5 h-5 mr-3" />
+                <Lucide aria-hidden="true" icon="FileText" className="w-5 h-5 mr-3" />
                 <div>
                   <div className="font-medium">Naming Convention</div>
                   <div className="text-xs text-slate-500">Crea naming convention</div>
                 </div>
-              </div>
+              </button>
             </PermissionGate>
             <hr className="my-2" />
-            <div
-              className="cursor-pointer p-3 hover:bg-slate-100 flex items-center rounded-lg"
+            <button
+              type="button"
+              className="w-full text-left cursor-pointer p-3 hover:bg-slate-100 flex items-center rounded-control"
               onClick={() => { navigate('/impostazioni-di-produzione/creazione-kit-automatico'); }}
             >
-              <Lucide icon="Cog" className="w-5 h-5 mr-3" />
+              <Lucide aria-hidden="true" icon="Cog" className="w-5 h-5 mr-3" />
               <div>
                 <div className="font-medium">Kit Automatico</div>
                 <div className="text-xs text-slate-500">Crea kit automatico</div>
               </div>
-            </div>
-            <div
-              className="cursor-pointer p-3 hover:bg-slate-100 flex items-center rounded-lg"
+            </button>
+            <button
+              type="button"
+              className="w-full text-left cursor-pointer p-3 hover:bg-slate-100 flex items-center rounded-control"
               onClick={() => { navigate('/impostazioni-di-produzione/creazione-kit-manuale'); }}
             >
-              <Lucide icon="Package" className="w-5 h-5 mr-3" />
+              <Lucide aria-hidden="true" icon="Package" className="w-5 h-5 mr-3" />
               <div>
                 <div className="font-medium">Kit Manuale</div>
                 <div className="text-xs text-slate-500">Crea kit manuale</div>
               </div>
-            </div>
+            </button>
           </Popover.Panel>
         </Popover>
       </div>
@@ -734,7 +739,7 @@ function Main() {
           <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-200/80">
             <div className="flex items-center gap-3">
               <Lucide icon="Layers" className="w-5 h-5 text-primary" />
-              <h2 className="text-lg font-semibold text-slate-800">Combinazioni</h2>
+              <h2 className="title-section">Combinazioni</h2>
             </div>
             <Button size="sm" onClick={() => navigate('/impostazioni-di-produzione/creazione-kit-automatico')} variant='outline-primary'>
               <Lucide icon="Plus" className="w-4 h-4 mr-2" /> Nuovo Kit
@@ -748,7 +753,7 @@ function Main() {
           <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-200/80">
             <div className="flex items-center gap-3">
               <Lucide icon="LayoutTemplate" className="w-5 h-5 text-primary" />
-              <h2 className="text-lg font-semibold text-slate-800">Formati</h2>
+              <h2 className="title-section">Formati</h2>
             </div>
             <Button size="sm" onClick={() => setShowDialogCreazioneFormati(true)} variant='outline-primary'>
               <Lucide icon="Plus" className="w-4 h-4 mr-2" /> Nuovo Formato
@@ -762,7 +767,7 @@ function Main() {
           <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-200/80">
             <div className="flex items-center gap-3">
               <Lucide icon="FileOutput" className="w-5 h-5 text-primary" />
-              <h2 className="text-lg font-semibold text-slate-800">Tipi di Export</h2>
+              <h2 className="title-section">Tipi di Export</h2>
             </div>
             <Button size="sm" onClick={() => setShowDialogCreazioneTipiExport(true)} variant='outline-primary'>
               <Lucide icon="Plus" className="w-4 h-4 mr-2" /> Nuovo Tipo
@@ -782,7 +787,7 @@ function Main() {
           <Dialog size="xl" open={showDialogModificaTipiExport} onClose={handleCloseDialogModificaTipiExport}>
             <Dialog.Panel>
               <Dialog.Title>
-                <h2 className="mr-auto text-base font-medium">
+                <h2 className="title-card mr-auto">
                   Modifica Tipo di Export
                 </h2>
               </Dialog.Title>
@@ -846,7 +851,7 @@ function Main() {
           <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-200/80">
             <div className="flex items-center gap-3">
               <Lucide icon="FileText" className="w-5 h-5 text-primary" />
-              <h2 className="text-lg font-semibold text-slate-800">Naming Convention</h2>
+              <h2 className="title-section">Naming Convention</h2>
             </div>
             <Button size="sm" onClick={() => setShowDialogCreazioneNamingConvention(true)} variant='outline-primary'>
               <Lucide icon="Plus" className="w-4 h-4 mr-2" /> Nuova Convention
@@ -860,7 +865,7 @@ function Main() {
           <div className="flex items-center pb-4 mb-4 border-b border-slate-200/80">
             <div className="flex items-center gap-3">
               <Lucide icon="GitCompare" className="w-5 h-5 text-primary" />
-              <h2 className="text-lg font-semibold text-slate-800">Schemi di Momenti</h2>
+              <h2 className="title-section">Schemi di Momenti</h2>
             </div>
           </div>
           <GestioneSchemi />
@@ -870,7 +875,7 @@ function Main() {
         <div className="col-span-1 lg:col-span-2 p-5 box box--stacked">
           <div className="flex items-center gap-3 pb-4 mb-4 border-b border-slate-200/80">
             <Lucide icon="ToggleRight" className="w-5 h-5 text-primary" />
-            <h2 className="text-lg font-semibold text-slate-800">Funzionalità</h2>
+            <h2 className="title-section">Funzionalità</h2>
           </div>
           <PanelFunzionalita />
         </div>
@@ -879,7 +884,7 @@ function Main() {
         <div className="col-span-1 lg:col-span-2 p-5 box box--stacked">
           <div className="flex items-center gap-3 pb-4 mb-4 border-b border-slate-200/80">
             <Lucide icon="LayoutList" className="w-5 h-5 text-primary" />
-            <h2 className="text-lg font-semibold text-slate-800">Menabò</h2>
+            <h2 className="title-section">Menabò</h2>
           </div>
           <PanelMenabo />
         </div>

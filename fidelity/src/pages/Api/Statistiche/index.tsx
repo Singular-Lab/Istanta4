@@ -7,16 +7,19 @@ import windowsSVG from "@/assets/images/icons/windows.svg";
 import Button from "@/components/Base/Button";
 import Chart from "@/components/Base/Chart";
 import Lucide from "@/components/Base/Lucide";
+import PageError from "@/components/Base/PageError";
 import PageHeader from "@/components/Base/PageHeader";
+import StatCard from "@/components/Base/StatCard";
+import StatusBadge from "@/components/Base/StatusBadge";
 import withSessionCheck from "@/components/SessionChecker";
+import { valoreOAssente } from "@/utils/format";
 import clsx from "clsx";
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import ActivityTable from "../../GestioneApi/components/statistics/ActivityTable";
 import ExportButton from "../../GestioneApi/components/statistics/ExportButton";
-import StatCard from "../../GestioneApi/components/statistics/StatCard";
 import { useStatistics } from "../../GestioneApi/hooks/useStatistics";
 import type { ApiStatistics } from "../../GestioneApi/types";
-import { chartOptions, createEndpointChartData, createSuccessRateChartData, createTemporalChartData } from "../../GestioneApi/utils/chartHelpers";
+import { createChartOptions, createEndpointChartData, createSuccessRateChartData, createTemporalChartData } from "../../GestioneApi/utils/chartHelpers";
 
 const numberFormatter = new Intl.NumberFormat("it-IT");
 
@@ -52,37 +55,24 @@ function StatistichePage() {
           title="Statistiche API"
           description="Monitora le performance e l'utilizzo delle API esterne"
           className="mb-4"
+          badges={stats && (
+            <StatusBadge
+              tono={stats.crescita_settimanale_percentuale >= 0 ? "success" : "danger"}
+              icon={stats.crescita_settimanale_percentuale >= 0 ? "TrendingUp" : "TrendingDown"}
+              etichetta={`${stats.crescita_settimanale_percentuale >= 0 ? "+" : ""}${formatPercent(stats.crescita_settimanale_percentuale)} settimana`}
+            />
+          )}
           actions={
             <div className="flex flex-wrap items-center justify-end gap-2 lg:gap-3">
-              {stats && (
-                <span
-                  className={clsx(
-                    "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold border",
-                    stats.crescita_settimanale_percentuale >= 0
-                      ? "text-success border-success/20 bg-success/10"
-                      : "text-danger border-danger/20 bg-danger/10"
-                  )}
-                >
-                  <Lucide
-                    icon={stats.crescita_settimanale_percentuale >= 0 ? "TrendingUp" : "TrendingDown"}
-                    className="w-3.5 h-3.5 mr-1.5"
-                  />
-                  {stats.crescita_settimanale_percentuale >= 0 ? "+" : ""}
-                  {formatPercent(stats.crescita_settimanale_percentuale)} settimana
-                </span>
-              )}
               {stats && stats.attivita_recente && (
                 <ExportButton aggregate={stats} details={stats.attivita_recente} />
               )}
               <Button
                 onClick={() => { void refetchStats(); }}
                 size="sm"
-                disabled={statsLoading}
+                loading={statsLoading}
               >
-                <Lucide
-                  icon="RefreshCw"
-                  className={clsx("w-4 h-4 mr-2", { "animate-spin": statsLoading })}
-                />
+                {!statsLoading && <Lucide icon="RefreshCw" aria-hidden="true" className="w-4 h-4 mr-2" />}
                 Aggiorna
               </Button>
             </div>
@@ -93,7 +83,11 @@ function StatistichePage() {
           {statsLoading ? (
             <LoadingSkeleton />
           ) : statsError ? (
-            <ErrorState onRetry={() => { void refetchStats(); }} />
+            <PageError
+              titolo="Errore nel caricamento"
+              motivo="Non è stato possibile caricare le statistiche API"
+              onRiprova={() => { void refetchStats(); }}
+            />
           ) : stats ? (
             <StatsContent stats={stats} />
           ) : (
@@ -154,24 +148,6 @@ function LoadingSkeleton() {
   );
 }
 
-function ErrorState({ onRetry }: { onRetry: () => void }) {
-  return (
-    <div className="box p-8 sm:p-10">
-      <div className="flex flex-col items-center justify-center text-center">
-        <div className="w-14 h-14 rounded-full bg-danger/10 flex items-center justify-center mb-4">
-          <Lucide icon="CircleAlert" className="w-7 h-7 text-danger" />
-        </div>
-        <h3 className="text-base font-semibold text-slate-900 mb-1">Errore nel caricamento</h3>
-        <p className="text-sm text-slate-500 mb-5">Non è stato possibile caricare le statistiche API</p>
-        <Button onClick={onRetry} variant="primary" size="sm">
-          <Lucide icon="RefreshCw" className="w-4 h-4 mr-2" />
-          Riprova
-        </Button>
-      </div>
-    </div>
-  );
-}
-
 function EmptyState() {
   return (
     <div className="box p-8 sm:p-10">
@@ -192,10 +168,10 @@ function SectionTitle({ icon, label, sub, right }: { icon: string; label: string
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
           <div className="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
-            <Lucide icon={icon} className="w-4.5 h-4.5" />
+            <Lucide icon={icon} aria-hidden="true" className="w-4.5 h-4.5" />
           </div>
           <div>
-            <h3 className="font-semibold text-slate-900 text-sm">{label}</h3>
+            <h3 className="title-card">{label}</h3>
             {sub && <p className="text-xs text-slate-500 mt-0.5">{sub}</p>}
           </div>
         </div>
@@ -205,45 +181,12 @@ function SectionTitle({ icon, label, sub, right }: { icon: string; label: string
   );
 }
 
-function HeroMetric({
-  icon,
-  label,
-  value,
-  tone,
-  className
-}: {
-  icon: string;
-  label: string;
-  value: string;
-  tone: "primary" | "success" | "warning";
-  className?: string;
-}) {
-  const toneMap: Record<"primary" | "success" | "warning", { iconWrap: string; icon: string }> = {
-    primary: { iconWrap: "bg-primary/10", icon: "text-primary" },
-    success: { iconWrap: "bg-success/10", icon: "text-success" },
-    warning: { iconWrap: "bg-warning/10", icon: "text-warning" }
-  };
-
-  return (
-    <div className={clsx("box border-slate-200 p-3.5 hover:border-slate-300 transition-colors", className)}>
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold">{label}</p>
-          <p className="mt-1 text-xl font-semibold text-slate-900 leading-none">{value}</p>
-        </div>
-        <div className={clsx("w-8 h-8 rounded-md flex items-center justify-center", toneMap[tone].iconWrap)}>
-          <Lucide icon={icon} className={clsx("w-4 h-4", toneMap[tone].icon)} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function StatsContent({ stats }: { stats: ApiStatistics }) {
+  const chartOptions = useMemo(() => createChartOptions(), []);
   const successRate = safeRate(stats.richieste_riuscite, stats.totale_richieste);
   const failureRate = safeRate(stats.richieste_fallite, stats.totale_richieste);
   const activityCount = (stats.attivita_recente || []).length;
-  const endpointTop = stats.endpoint_piu_utilizzati?.[0];
+  const endpointLeader = valoreOAssente(stats.endpoint_piu_utilizzati?.[0]?.endpoint);
   const trendPositive = stats.crescita_settimanale_percentuale >= 0;
   const osList = stats.dispositivi?.sistemi_operativi || [];
   const responseHint =
@@ -257,7 +200,7 @@ function StatsContent({ stats }: { stats: ApiStatistics }) {
     <div className="space-y-5 lg:space-y-6 animate-fade-in-up">
       <div className="grid grid-cols-12 gap-5">
         <div className="col-span-12 xl:col-span-8 box p-6 bg-gradient-to-r from-primary/10 via-white to-success/5 border-primary/20">
-          <div className="text-[11px] uppercase tracking-[0.18em] text-primary/80 font-semibold mb-2">
+          <div className="text-2xs uppercase tracking-[0.18em] text-primary/80 font-semibold mb-2">
             API Health Snapshot
           </div>
           <div className="flex flex-wrap items-center gap-3 mb-3">
@@ -270,7 +213,7 @@ function StatsContent({ stats }: { stats: ApiStatistics }) {
                 trendPositive ? "text-success bg-success/10 border-success/20" : "text-danger bg-danger/10 border-danger/20"
               )}
             >
-              <Lucide icon={trendPositive ? "ArrowUpRight" : "ArrowDownRight"} className="w-3.5 h-3.5 mr-1" />
+              <Lucide icon={trendPositive ? "ArrowUpRight" : "ArrowDownRight"} aria-hidden="true" className="w-3.5 h-3.5 mr-1" />
               {trendPositive ? "+" : ""}
               {formatPercent(stats.crescita_settimanale_percentuale)} su base settimanale
             </span>
@@ -280,45 +223,55 @@ function StatsContent({ stats }: { stats: ApiStatistics }) {
             con focus operativo su errori e latenza.
           </p>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <div className="rounded-lg border border-slate-200/90 bg-white/80 px-3 py-2.5">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Richieste totali</p>
-              <p className="mt-1 text-lg font-semibold text-slate-900">{formatNumber(stats.totale_richieste)}</p>
-            </div>
-            <div className="rounded-lg border border-slate-200/90 bg-white/80 px-3 py-2.5">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Errori</p>
-              <p className="mt-1 text-lg font-semibold text-danger">{formatNumber(stats.richieste_fallite)}</p>
-            </div>
-            <div className="rounded-lg border border-slate-200/90 bg-white/80 px-3 py-2.5">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Tempo medio</p>
-              <p className="mt-1 text-lg font-semibold text-slate-900">{formatMs(stats.tempo_medio_risposta_ms)}</p>
-            </div>
-            <div className="rounded-lg border border-slate-200/90 bg-white/80 px-3 py-2.5">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Endpoint leader</p>
-              <p className="mt-1 text-sm font-semibold text-slate-800 truncate" title={endpointTop?.endpoint || "N/A"}>
-                {endpointTop?.endpoint || "N/A"}
-              </p>
-            </div>
+            <StatCard
+              densita="compatta"
+              tono="neutral"
+              etichetta="Richieste totali"
+              valore={formatNumber(stats.totale_richieste)}
+            />
+            <StatCard
+              densita="compatta"
+              tono="danger"
+              evidenzia
+              etichetta="Errori"
+              valore={formatNumber(stats.richieste_fallite)}
+            />
+            <StatCard
+              densita="compatta"
+              tono="neutral"
+              etichetta="Tempo medio"
+              valore={formatMs(stats.tempo_medio_risposta_ms)}
+            />
+            <StatCard
+              densita="compatta"
+              tono="neutral"
+              etichetta="Endpoint leader"
+              valore={<span title={endpointLeader} className="text-sm">{endpointLeader}</span>}
+            />
           </div>
         </div>
 
         <div className="col-span-12 xl:col-span-4 grid grid-cols-2 gap-3 auto-rows-fr">
-          <HeroMetric
-            icon="Calendar"
-            label="Richieste oggi"
-            value={formatNumber(stats.richieste_oggi)}
-            tone="primary"
+          <StatCard
+            densita="compatta"
+            icona="Calendar"
+            etichetta="Richieste oggi"
+            valore={formatNumber(stats.richieste_oggi)}
+            tono="brand"
           />
-          <HeroMetric
-            icon="ShieldCheck"
-            label="Failure rate"
-            value={formatPercent(failureRate)}
-            tone="success"
+          <StatCard
+            densita="compatta"
+            icona="ShieldCheck"
+            etichetta="Failure rate"
+            valore={formatPercent(failureRate)}
+            tono="success"
           />
-          <HeroMetric
-            icon="Gauge"
-            label="Stato latenza"
-            value={responseHint}
-            tone="warning"
+          <StatCard
+            densita="compatta"
+            icona="Gauge"
+            etichetta="Stato latenza"
+            valore={responseHint}
+            tono="warning"
             className="col-span-2"
           />
         </div>
@@ -327,38 +280,44 @@ function StatsContent({ stats }: { stats: ApiStatistics }) {
       <div className="grid grid-cols-12 gap-4">
         <div className="col-span-12 sm:col-span-6 xl:col-span-4">
           <StatCard
-            title="Richieste Totali"
-            value={formatNumber(stats.totale_richieste)}
-            icon="Activity"
-            variant="blue"
+            etichetta="Richieste Totali"
+            valore={formatNumber(stats.totale_richieste)}
+            icona="Activity"
+            tono="brand"
+            className="h-full"
           />
         </div>
         <div className="col-span-12 sm:col-span-6 xl:col-span-3">
           <StatCard
-            title="Tasso di Successo"
-            value={formatPercent(successRate)}
-            icon="CircleCheck"
-            variant="green"
-            trend={trendPositive ? "up" : "down"}
-            trendValue={`${formatNumber(stats.richieste_riuscite)} riuscite`}
+            etichetta="Tasso di Successo"
+            valore={formatPercent(successRate)}
+            icona="CircleCheck"
+            tono="success"
+            variazione={{
+              valore: `${formatNumber(stats.richieste_riuscite)} riuscite`,
+              direzione: trendPositive ? "su" : "giu",
+            }}
+            className="h-full"
           />
         </div>
         <div className="col-span-12 sm:col-span-6 xl:col-span-2">
           <StatCard
-            title="Tempo Medio"
-            value={formatMs(stats.tempo_medio_risposta_ms)}
-            icon="Clock"
-            variant="amber"
-            subtitle={responseHint}
+            etichetta="Tempo Medio"
+            valore={formatMs(stats.tempo_medio_risposta_ms)}
+            icona="Clock"
+            tono="warning"
+            sottotitolo={responseHint}
+            className="h-full"
           />
         </div>
         <div className="col-span-12 sm:col-span-6 xl:col-span-3">
           <StatCard
-            title="Richieste Oggi"
-            value={formatNumber(stats.richieste_oggi)}
-            icon="Calendar"
-            variant="slate"
-            subtitle={`${formatNumber(stats.statistiche_temporali.ultimo_giorno.richieste_totali)} nell'ultimo giorno`}
+            etichetta="Richieste Oggi"
+            valore={formatNumber(stats.richieste_oggi)}
+            icona="Calendar"
+            tono="neutral"
+            sottotitolo={`${formatNumber(stats.statistiche_temporali.ultimo_giorno.richieste_totali)} nell'ultimo giorno`}
+            className="h-full"
           />
         </div>
       </div>
@@ -392,7 +351,7 @@ function StatsContent({ stats }: { stats: ApiStatistics }) {
             label="Tasso di Successo"
             sub="Distribuzione chiamate riuscite e fallite"
             right={
-              <div className="hidden sm:flex items-center gap-2 text-[11px] text-slate-500">
+              <div className="hidden sm:flex items-center gap-2 text-2xs text-slate-500">
                 <span className="inline-flex items-center gap-1">
                   <span className="w-2.5 h-2.5 rounded-full bg-success" />
                   OK
@@ -463,7 +422,7 @@ function StatsContent({ stats }: { stats: ApiStatistics }) {
           label="Attività Recente"
           sub={`${activityCount} ${activityCount === 1 ? "richiesta" : "richieste"} registrate`}
           right={
-            <div className="hidden sm:flex items-center gap-2 text-[11px] text-slate-500">
+            <div className="hidden sm:flex items-center gap-2 text-2xs text-slate-500">
               <span className="inline-flex items-center px-2 py-1 rounded-full border border-slate-200 bg-slate-50">
                 {formatNumber(stats.richieste_riuscite)} ok
               </span>
@@ -516,9 +475,9 @@ function OsStatRow({ os, totale, riuscite, tempoMedio }: OsStatRowProps) {
           <div className="flex items-center justify-between mb-1.5 gap-3">
             <span className="text-xs font-semibold text-slate-700 truncate">{os}</span>
             <div className="flex items-center gap-2 ml-2 flex-shrink-0">
-              <span className="text-[11px] text-slate-500">{formatNumber(totale)} req</span>
-              <span className="text-[11px] text-slate-300">·</span>
-              <span className="text-[11px] font-mono text-slate-500">{formatMs(tempoMedio)}</span>
+              <span className="text-2xs text-slate-500">{formatNumber(totale)} req</span>
+              <span className="text-2xs text-slate-300">·</span>
+              <span className="text-2xs font-mono text-slate-500">{formatMs(tempoMedio)}</span>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -531,7 +490,7 @@ function OsStatRow({ os, totale, riuscite, tempoMedio }: OsStatRowProps) {
                 style={{ width: `${Math.min(successRate, 100)}%` }}
               />
             </div>
-            <span className={clsx("text-[11px] px-2 py-0.5 rounded-full border font-semibold", statusStyle)}>
+            <span className={clsx("text-2xs px-2 py-0.5 rounded-full border font-semibold", statusStyle)}>
               {formatPercent(successRate)}
             </span>
           </div>

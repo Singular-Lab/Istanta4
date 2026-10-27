@@ -1,3 +1,4 @@
+import { applicaDefaultChart } from "@/utils/chartTheme";
 import ChartJs, { ChartConfiguration } from "chart.js/auto";
 import { createRef, useEffect, useRef } from "react";
 
@@ -16,6 +17,7 @@ export interface ChartProps
 const init = (el: ChartElement, props: ChartProps) => {
   const canvas = el?.getContext("2d");
   if (canvas) {
+    applicaDefaultChart(ChartJs);
     const chart = new ChartJs(canvas, {
       type: props.type,
       data: props.data,

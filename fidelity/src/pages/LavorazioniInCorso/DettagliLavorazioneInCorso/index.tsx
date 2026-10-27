@@ -3,8 +3,11 @@ import Button from "@/components/Base/Button";
 import Dropzone from "@/components/Base/Dropzone";
 import { FormCheck, FormInput, FormLabel, FormSelect } from "@/components/Base/Form";
 import Lucide from "@/components/Base/Lucide";
+import PageError from "@/components/Base/PageError";
 import PageHeader from "@/components/Base/PageHeader";
 import Skeleton from "@/components/Base/Skeleton";
+import Spinner from "@/components/Base/Spinner";
+import StatusBadge from "@/components/Base/StatusBadge";
 import ContestoLavorazioneFields from "@/components/ContestoLavorazioneFields";
 import VisibilitaPromoFields from "@/components/VisibilitaPromoFields";
 import EmptyState from "@/components/EmptyState";
@@ -45,7 +48,7 @@ import { useUser } from "../../../context/UserContext";
 import { useContestoPerNuovaLavorazione, useFetchFunzionalita } from "../../../query/query";
 import GestioneMomenti from "./GestioneMomenti";
 import TracciatoCard from "./TracciatoCard";
-import { formattaData, formattaDataOra } from "@/utils/dataPromo";
+import { formatData, formatDataOraEstesa } from "@/utils/format";
 dayjs.extend(localizedFormat);
 dayjs.extend(relativeTime);
 dayjs.extend(customParseFormat);
@@ -153,14 +156,6 @@ interface VolantinoKit {
   files?: FileItemKit[];
 }
 
-// Stili per badge stato
-const BADGE_STYLES: Record<string, string> = {
-  PUBBLICATO: "bg-success/10 text-success border-success/20",
-  IN_LAVORAZIONE: "bg-info/10 text-info border-info/20",
-  IN_LAVORAZIONE_CON_ERRORI: "bg-danger/10 text-danger border-danger/20",
-  IN_REVISIONE: "bg-warning/10 text-warning border-warning/20",
-};
-
 // Componente card per visualizzare un file volantino (stile Dashboard3)
 const VolantinoFileCard: React.FC<{
   kit: VolantinoKit;
@@ -200,26 +195,16 @@ const VolantinoFileCard: React.FC<{
     }
   };
 
-  const renderStatoBadge = (stato: string) => {
-    const normalized = stato?.toUpperCase();
-    const badgeClasses = BADGE_STYLES[normalized] ?? "bg-slate-100 text-slate-600 border-slate-200";
-    return (
-      <span className={clsx("px-2.5 py-0.5 text-[11px] font-semibold rounded-full border", badgeClasses)}>
-        {normalized?.replace(/_/g, " ")}
-      </span>
-    );
-  };
-
   return (
     <>
-      <div className="relative p-4 rounded-[0.6rem] border border-dashed border-slate-200/70 bg-white/90 backdrop-blur-sm shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
+      <div className="relative p-4 rounded-card border border-dashed border-slate-200/70 bg-white/90 backdrop-blur-sm shadow-card">
         <div className="flex gap-4">
           {/* Thumbnail Preview */}
           <div className="relative shrink-0">
             {hasPreview ? (
               <button
                 type="button"
-                className="group/preview w-20 h-24 rounded-[0.6rem] overflow-hidden border border-theme-1/20 bg-slate-50 relative focus-visible:outline focus-visible:outline-theme-1/40"
+                className="group/preview w-20 h-24 rounded-card overflow-hidden border border-theme-1/20 bg-slate-50 relative focus-visible:outline focus-visible:outline-theme-1/40"
                 onClick={() => setIsPreviewOpen(true)}
               >
                 <img
@@ -233,7 +218,7 @@ const VolantinoFileCard: React.FC<{
                 </span>
               </button>
             ) : (
-              <div className="w-20 h-24 rounded-[0.6rem] border border-dashed border-slate-300 flex items-center justify-center bg-slate-50">
+              <div className="w-20 h-24 rounded-card border border-dashed border-slate-300 flex items-center justify-center bg-slate-50">
                 <Lucide icon="FileText" className="w-5 h-5 text-slate-400" />
               </div>
             )}
@@ -253,13 +238,13 @@ const VolantinoFileCard: React.FC<{
                 {(kit.nomeArea || kit.nomeCanale) && (
                   <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                     {kit.nomeArea && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-3xs font-medium rounded-full bg-slate-100 text-slate-600 border border-slate-200">
                         <Lucide icon="MapPin" className="w-2.5 h-2.5" />
                         {kit.nomeArea}
                       </span>
                     )}
                     {kit.nomeCanale && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded-full bg-theme-1/10 text-theme-1 border border-theme-1/20">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-3xs font-medium rounded-full bg-theme-1/10 text-theme-1 border border-theme-1/20">
                         <Lucide icon="Store" className="w-2.5 h-2.5" />
                         {kit.nomeCanale}
                       </span>
@@ -267,11 +252,11 @@ const VolantinoFileCard: React.FC<{
                   </div>
                 )}
               </div>
-              {renderStatoBadge(kit.stato_lavorazione)}
+              <StatusBadge dominio="kitRuntime" stato={kit.stato_lavorazione} />
             </div>
 
             {/* File info */}
-            <div className="flex flex-wrap items-center gap-3 mt-3 text-[11px] text-slate-500">
+            <div className="flex flex-wrap items-center gap-3 mt-3 text-2xs text-slate-500">
               {(validitaDal || validitaAl) && (
                 <span className="inline-flex items-center gap-1 text-theme-1">
                   <Lucide icon="Calendar" className="w-3 h-3" />
@@ -319,8 +304,13 @@ const VolantinoFileCard: React.FC<{
                   )}
                   onClick={handleDownload}
                   disabled={!canDownload || isDownloading}
+                  aria-busy={isDownloading || undefined}
                 >
-                  <Lucide icon={isDownloading ? "Loader" : "Download"} className={clsx("w-3.5 h-3.5", isDownloading && "animate-spin")} />
+                  {isDownloading ? (
+                    <Spinner decorativo size="sm" className="w-3.5 h-3.5 text-current" />
+                  ) : (
+                    <Lucide icon="Download" aria-hidden="true" className="w-3.5 h-3.5" />
+                  )}
                   {isDownloading ? "Download..." : "Scarica"}
                 </button>
                 <button
@@ -361,7 +351,7 @@ const VolantiniSkeleton: React.FC = () => (
     {[1, 2, 3].map((i) => (
       <div
         key={i}
-        className="p-4 rounded-[0.6rem] border border-dashed border-slate-200/70 bg-white/80 flex items-center gap-4"
+        className="p-4 rounded-card border border-dashed border-slate-200/70 bg-white/80 flex items-center gap-4"
       >
         <Skeleton height="96px" width="80px" borderRadius="0.6rem" className="flex-shrink-0" />
         <div className="flex-1 space-y-3">
@@ -1470,32 +1460,7 @@ function Main() {
   const erroreCampo = (field: string) =>
     editFieldErrors[field] ? <p className="text-xs text-danger">{editFieldErrors[field]}</p> : null;
 
-  const getStatusBadgeProps = (stato: STATO_PROMO) => {
-    switch (stato) {
-      case STATO_PROMO.PIANIFICATA:
-        return { variant: "info" as const, text: "Pianificata", icon: "Calendar" };
-      case STATO_PROMO.IN_LAVORAZIONE:
-        return { variant: "warning" as const, text: "In Lavorazione", icon: "Clock" };
-      case STATO_PROMO.IN_SCADENZA:
-        return { variant: "warning" as const, text: "In Scadenza", icon: "Activity" };
-      case STATO_PROMO.IN_ATTESA_DI_VALIDITA:
-        return { variant: "info" as const, text: "In Attesa di Validità", icon: "PauseCircle" };
-      case STATO_PROMO.IN_RITARDO:
-        return { variant: "error" as const, text: "In Ritardo", icon: "AlertTriangle" };
-      case STATO_PROMO.VALIDA:
-        return { variant: "success" as const, text: "Attiva", icon: "CircleCheck" };
-      case STATO_PROMO.VALIDA_CON_ERRORI:
-        return { variant: "warning" as const, text: "Attiva con Errori", icon: "AlertTriangle" };
-      case STATO_PROMO.ARCHIVIATA:
-        return { variant: "info" as const, text: "Archiviata", icon: "Archive" };
-      case STATO_PROMO.ELIMINATA:
-        return { variant: "error" as const, text: "Eliminata", icon: "CircleX" };
-      default:
-        return { variant: "info" as const, text: "Valore non leggibile", icon: "Info" };
-    }
-  };
-
-  const formatDate = formattaDataOra;
+  const formatDate = formatDataOraEstesa;
 
   const isEndDateNear = (endDate: string | Date | undefined) => {
     if (!endDate) return false;
@@ -1547,7 +1512,7 @@ function Main() {
                   <div className="flex flex-col p-4 h-full">
                     <div className="flex-1 flex flex-col items-center justify-center space-y-3 text-center py-6">
                       <Lucide icon="CircleAlert" className="w-6 h-6 text-danger" />
-                      <h4 className="font-medium text-slate-700 mb-2">
+                      <h4 className="title-card mb-2">
                         Si è verificato un errore
                       </h4>
                       <p className="text-sm text-slate-500 mb-4">
@@ -1578,7 +1543,7 @@ function Main() {
                     <div className="flex flex-col p-4 h-full">
                       <div className="flex-1 flex flex-col items-center justify-center space-y-3 text-center py-6">
                         <Lucide icon="Package" className="w-6 h-6 text-primary" />
-                        <h4 className="font-medium text-slate-700 mb-2">
+                        <h4 className="title-card mb-2">
                           Gestione Kit
                         </h4>
                         <p className="text-sm text-slate-500 mb-4">
@@ -1617,10 +1582,10 @@ function Main() {
           <div className="border border-danger/20 rounded-lg p-4 bg-danger/5 mb-4">
             <div className="flex items-center mb-3">
               <Lucide icon="Info" className="w-4 h-4 text-danger mr-2" />
-              <h4 className="font-medium text-danger">Lavorazione Scaduta</h4>
+              <h4 className="title-card text-danger">Lavorazione Scaduta</h4>
             </div>
             <p className="text-sm text-slate-600">
-              Questa lavorazione è scaduta il {formattaData(currentPromoData?.data_scadenza)}. Non è più possibile caricare nuovi tracciati.
+              Questa lavorazione è scaduta il {formatData(currentPromoData?.data_scadenza)}. Non è più possibile caricare nuovi tracciati.
             </p>
           </div>
         );
@@ -1630,7 +1595,7 @@ function Main() {
         <div className="border border-primary/20 rounded-lg p-4 bg-primary/5 mb-4">
           <div className="flex items-center mb-3">
             <Lucide icon="Upload" className="w-4 h-4 text-primary mr-2" />
-            <h4 className="font-medium text-primary">Carica Nuovo Tracciato</h4>
+            <h4 className="title-card text-primary">Carica Nuovo Tracciato</h4>
           </div>
 
           <div className="space-y-3">
@@ -1713,14 +1678,15 @@ function Main() {
                         onClick={() => handleRemoveSingleFile(idx)}
                         className="text-danger hover:text-danger/80"
                         title="Rimuovi questo file"
+                        aria-label={`Rimuovi ${f.name}`}
                       >
-                        <Lucide icon="Trash2" className="w-3 h-3" />
+                        <Lucide icon="Trash2" aria-hidden="true" className="w-3 h-3" />
                       </button>
                     </div>
                   ))}
 
                   <div className="flex justify-between items-center mt-2">
-                    <span className="text-[11px] text-slate-400">
+                    <span className="text-2xs text-slate-400">
                       {files.length} file selezionat
                       {files.length !== 1 ? "i" : "o"}.
                     </span>
@@ -1739,7 +1705,7 @@ function Main() {
                 {isUploading ? (
                   <div className="text-center py-4">
                     <div className="flex justify-center mb-2">
-                      <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                      <Spinner size="md" etichetta="Caricamento dei tracciati" />
                     </div>
                     <p className="text-sm font-medium">Caricamento...</p>
                   </div>
@@ -1759,10 +1725,11 @@ function Main() {
                           </div>
                         </div>
                       ) : contextLavorazioneQuery.isError ? (
-                        <EmptyState
-                          title="Errore caricamento contesto"
-                          description={contextLavorazioneQuery.error?.message || "Si è verificato un errore durante il caricamento del contesto"}
-                          icon="CircleAlert"
+                        <PageError
+                          compatta
+                          titolo="Contesto di lavorazione non caricato"
+                          motivo={contextLavorazioneQuery.error?.message || "Si è verificato un errore durante il caricamento del contesto"}
+                          onRiprova={() => contextLavorazioneQuery.refetch()}
                         />
                       ) : (useSharedContext
                         ? contextLavorazione?.length > 0
@@ -2264,27 +2231,12 @@ function Main() {
         }
       >
         {tracciatiQuery.isError ? (
-          <div className="text-center py-8">
-            <div className="flex justify-center mb-3">
-              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
-                <Lucide icon="CircleAlert" className="w-6 h-6 text-red-500" />
-              </div>
-            </div>
-            <h3 className="text-lg font-semibold text-red-700 mb-2">
-              Errore nel caricamento
-            </h3>
-            <p className="text-red-600 mb-3">
-              Si è verificato un errore durante il recupero dei tracciati
-            </p>
-            <Button
-              variant="outline-danger"
-              size="sm"
-              onClick={() => refreshContent()}
-            >
-              <Lucide icon="RefreshCw" className="w-4 h-4 mr-2" />
-              Riprova
-            </Button>
-          </div>
+          <PageError
+            compatta
+            titolo="Tracciati non caricati"
+            motivo={tracciatiQuery.error?.message || "Si è verificato un errore durante il recupero dei tracciati"}
+            onRiprova={refreshContent}
+          />
         ) : (
           (() => {
             const tracciati = tracciatiQuery.data ?? [];
@@ -2352,10 +2304,8 @@ function Main() {
       return renderEditForm();
     }
 
-    const statusProps = getStatusBadgeProps(currentPromoData.stato);
-
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         <div className="space-y-2">
           <div className="flex items-center text-sm text-slate-500 justify-center">
             <Lucide icon="Tag" className="w-4 h-4 mr-1" />
@@ -2382,7 +2332,7 @@ function Main() {
             Data Inizio
           </div>
           <div className="text-lg font-semibold text-slate-800 text-center">
-            {dayjs(currentPromoData.validita_dal).format("DD/MM/YYYY")}
+            {formatData(currentPromoData.validita_dal)}
           </div>
         </div>
 
@@ -2392,7 +2342,7 @@ function Main() {
             Data Fine
           </div>
           <div className="text-lg font-semibold text-slate-800 text-center">
-            {dayjs(currentPromoData.validita_al).format("DD/MM/YYYY")}
+            {formatData(currentPromoData.validita_al)}
           </div>
         </div>
 
@@ -2402,20 +2352,7 @@ function Main() {
             Data Scadenza
           </div>
           <div className="text-lg font-semibold text-slate-800 text-center">
-            {dayjs(currentPromoData.data_scadenza).format("DD/MM/YYYY")}
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <div className="flex items-center text-sm text-slate-500 justify-center">
-            <Lucide icon={statusProps.icon as any} className="w-4 h-4 mr-1" />
-            Stato
-          </div>
-          <div className="inline-flex items-center justify-center w-full">
-            <Badge size="sm" border variant={statusProps.variant}>
-              <Lucide icon={statusProps.icon as any} className="w-3 h-3 mr-1" />
-              {statusProps.text}
-            </Badge>
+            {formatData(currentPromoData.data_scadenza)}
           </div>
         </div>
       </div>
@@ -2561,7 +2498,7 @@ function Main() {
 
         {/* Sezione contesto modificabile */}
         {isLoadingContestoPerNuovaLavorazione ? (
-          <div className="border rounded-[0.6rem] dark:border-darkmode-400 relative mt-2 border-slate-200/80">
+          <div className="border rounded-card dark:border-darkmode-400 relative mt-2 border-slate-200/80">
             <div className="absolute left-0 px-3 ml-4 -mt-2 text-xs uppercase bg-white text-slate-500">
               <div className="-mt-px">Specifiche di lavorazione</div>
             </div>
@@ -2572,7 +2509,7 @@ function Main() {
             </div>
           </div>
         ) : editContextLavorazione.length > 0 ? (
-          <div className="border rounded-[0.6rem] dark:border-darkmode-400 relative mt-2 border-slate-200/80">
+          <div className="border rounded-card dark:border-darkmode-400 relative mt-2 border-slate-200/80">
             <div className="absolute left-0 px-3 ml-4 -mt-2 text-xs uppercase bg-white text-slate-500">
               <div className="-mt-px">Specifiche di lavorazione</div>
             </div>
@@ -2612,19 +2549,10 @@ function Main() {
               variant="primary"
               size="sm"
               onClick={handleEditSave}
-              disabled={updatePromoMutation.isPending}
+              loading={updatePromoMutation.isPending}
             >
-              {updatePromoMutation.isPending ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                  Salvataggio...
-                </>
-              ) : (
-                <>
-                  <Lucide icon="Save" className="w-4 h-4 mr-2" />
-                  Salva Modifiche
-                </>
-              )}
+              {!updatePromoMutation.isPending && <Lucide icon="Save" aria-hidden="true" className="w-4 h-4 mr-2" />}
+              Salva Modifiche
             </Button>
           </PermissionGate>
         </div>
@@ -2640,6 +2568,13 @@ function Main() {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <PageHeader
           title="Dettagli Promozione"
+          indietro={{
+            // Prima che la promo arrivi decide l'indirizzo: la pagina serve sia le promo in corso sia lo storico
+            to: (currentPromoData ? isPromoFinalState(currentPromoData.stato) : location.pathname.startsWith("/promozioni/storico"))
+              ? "/promozioni/storico"
+              : "/promozioni/in-corso",
+          }}
+          badges={currentPromoData && <StatusBadge dominio="promo" stato={currentPromoData.stato} />}
           description={
             <div className="flex items-center gap-2">
               <span className="text-sm">
@@ -2677,7 +2612,7 @@ function Main() {
                 <p className="text-sm text-orange-700 mt-1">
                   La lavorazione scadrà il{" "}
                   <strong>
-                    {formattaData(currentPromoData.validita_al)}
+                    {formatData(currentPromoData.validita_al)}
                   </strong>
                   . Assicurati di completare tutte le attività prima della
                   scadenza.
@@ -2697,7 +2632,7 @@ function Main() {
                     <Lucide icon="Info" className="w-4 h-4 text-primary" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold">
+                    <h3 className="title-section">
                       Informazioni Promozione
                     </h3>
                     <p className="text-sm text-slate-500">
@@ -2878,7 +2813,7 @@ function Main() {
                     <Lucide icon="ChartPie" className="w-4 h-4 text-primary" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold">Stato Lavorazioni</h3>
+                    <h3 className="title-section">Stato Lavorazioni</h3>
                     <p className="text-sm text-slate-500">
                       Panoramica dello stato delle lavorazioni
                     </p>
@@ -3035,7 +2970,7 @@ function Main() {
                     <Lucide icon="Files" className="w-4 h-4 text-primary" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold">Tracciati Caricati</h3>
+                    <h3 className="title-section">Tracciati Caricati</h3>
                     <p className="text-sm text-slate-500">
                       {(() => {
                         const count = tracciatiQuery.data?.length || 0;
@@ -3079,7 +3014,7 @@ function Main() {
                       <Lucide icon="Timer" className="w-4 h-4 text-primary" />
                     </div>
                     <div>
-                      <h3 className="text-lg font-semibold">Gestione momenti</h3>
+                      <h3 className="title-section">Gestione momenti</h3>
                       <p className="text-sm text-slate-500">
                         Gestisci i momenti in cui sono state importate le liste per l'analisi successiva dei dati.
                       </p>

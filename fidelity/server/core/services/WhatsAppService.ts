@@ -1,11 +1,13 @@
 import fetch from 'node-fetch';
 import crypto from 'node:crypto';
-import { Op, QueryTypes } from 'sequelize';
+import { Op, QueryTypes, UniqueConstraintError } from 'sequelize';
 import { v4 as uuidv4 } from 'uuid';
 import { log } from '../logger';
 import {
     CATEGORIA_TEMPLATE_WHATSAPP,
     GDOWhatsappQueueJobStatus,
+    PROVIDER_WHATSAPP,
+    STATO_GDO_WHATSAPP_NUMBER,
     STATO_GDO_WHATSAPP_TEMPLATE,
     STATO_UTENTI,
     TIPO_UTENTI
@@ -23,13 +25,14 @@ import { Colorize } from '../../../lib/Colorize';
 import { ErrorCodes } from '../../../lib/errors/ErrorCodes';
 import {
     UtentiCanaliInterazioneAttributes,
+    type GDOWhatsappNumbersAttributes,
     type GDOWhatsappTemplateAttributes,
     type WhatsAppTemplate
 } from '../../../lib/types';
 import { sequelize } from '../db';
 import type { GDOResponseDTO } from '../dto';
 import type { IUserService } from '../interfaces/IUserService';
-import { IWhatsAppService } from '../interfaces/IWhatsAppService';
+import type { ConfigurazioneGDOWhatsapp, DatiSetupGDOWhatsapp, IWhatsAppService } from '../interfaces/IWhatsAppService';
 import { GDO, Utente, UtentiGDO } from '../models';
 import { GDOWhatsappCampagne } from '../models/whatsapp/gdo_whatsapp_campagne';
 import { GDOWhatsappQueueJob } from '../models/whatsapp/gdo_whatsapp_message_queue';
@@ -74,6 +77,21 @@ type FiltroArea = {
 // e un cellulare italiano senza prefisso (10 cifre che iniziano con 3) prende "39", cosi' con e senza prefisso e' lo stesso numero
 const CIFRE_TELEFONO_SQL = `regexp_replace(regexp_replace(u.telefono_utenti, '[^0-9]', '', 'g'), '^00', '')`;
 const TELEFONO_NORMALIZZATO_SQL = `(CASE WHEN ${CIFRE_TELEFONO_SQL} ~ '^3[0-9]{9}$' THEN '39' || ${CIFRE_TELEFONO_SQL} ELSE ${CIFRE_TELEFONO_SQL} END)`;
+// Regola dei nomi dei modelli Meta: minuscole, cifre e underscore
+export const NOME_TEMPLATE_VALIDO = /^[a-z0-9_]{1,512}$/;
+
+// Campo del setup -> colonna di gdo_whatsapp_numbers
+const COLONNE_SETUP: Record<keyof Omit<DatiSetupGDOWhatsapp, 'id_gdo'>, keyof GDOWhatsappNumbersAttributes> = {
+    display_name: 'display_name_gdowhatsappnumbers',
+    id_numero_whatsapp: 'id_numero_whatsapp_gdowhatsappnumbers',
+    whatsapp_business_account_id: 'whatsapp_business_account_id_gdowhatsappnumbers',
+    stato: 'stato_gdowhatsappnumbers',
+    access_token: 'access_token_gdowhatsappnumbers',
+    verify_token: 'verify_token_gdowhatsappnumbers'
+};
+
+const testo = (valore: unknown) => (typeof valore === 'string' ? valore.trim() : '');
+
 export const normalizzaTelefono = (telefono: unknown) => {
     const cifre = String(telefono ?? '').replace(/[^0-9]/g, '').replace(/^00/, '');
     return /^3[0-9]{9}$/.test(cifre) ? `39${cifre}` : cifre;
@@ -794,11 +812,15 @@ export class WhatsAppService implements IWhatsAppService {
         );
 
         if (!response.ok) {
-            const error = (await response.json()) as any;
+            const error = (await response.json().catch(() => ({}))) as any;
+            // error_user_msg è la spiegazione di Meta per l'operatore, message il codice tecnico
+            const motivo = [error?.error?.message ?? response.statusText, error?.error?.error_user_msg]
+                .filter(Boolean)
+                .join(' – ');
             throw new ExternalApiError({
                 service: 'Meta WhatsApp API',
                 statusCode: response.status,
-                message: `Errore API Meta: ${error.error?.message}`,
+                message: `Errore API Meta: ${motivo}`,
                 details: error
             });
         }
@@ -815,7 +837,8 @@ export class WhatsAppService implements IWhatsAppService {
             json_meta_gdowhatsapptemplate: newJSONWithId
         });
 
-        return { success: true };
+        // Lo stato restituito da Meta è l'esito reale: PENDING in revisione, REJECTED rifiutato subito
+        return { success: true, stato: data.status as STATO_GDO_WHATSAPP_TEMPLATE };
     }
 
     async getAllGDOWhatsapp(): Promise<
@@ -874,22 +897,8 @@ export class WhatsAppService implements IWhatsAppService {
         }
     }
 
-    async getGDOWhatsappById(
-        gdoId: string
-    ): Promise<{
-        id: string;
-        id_gdo: string;
-        id_numero_whatsapp: string;
-        display_name: string;
-        stato: string;
-        provider: string;
-        whatsapp_business_account_id: string;
-        access_token?: string;
-        verify_token?: string;
-        nome: string;
-        createdat?: Date;
-        updatedat?: Date;
-    } | null> {
+    // I token non lasciano mai il server: il browser sa solo se sono configurati
+    async getGDOWhatsappById(gdoId: string): Promise<ConfigurazioneGDOWhatsapp | null> {
         try {
             const gdoWhatsappNumber = await GDOWhatsappNumbers.findOne({
                 where: { id_gdo_gdowhatsappnumbers: gdoId }
@@ -913,8 +922,8 @@ export class WhatsAppService implements IWhatsAppService {
                 whatsapp_business_account_id:
                     gdoWhatsappNumber.whatsapp_business_account_id_gdowhatsappnumbers ??
                     '',
-                access_token: gdoWhatsappNumber.access_token_gdowhatsappnumbers,
-                verify_token: gdoWhatsappNumber.verify_token_gdowhatsappnumbers,
+                access_token_configurato: !!gdoWhatsappNumber.access_token_gdowhatsappnumbers,
+                verify_token_configurato: !!gdoWhatsappNumber.verify_token_gdowhatsappnumbers,
                 createdat: gdoWhatsappNumber.createdat,
                 nome: gdo ? gdo.nome_gdo : '',
                 updatedat: gdoWhatsappNumber.updatedat
@@ -926,6 +935,86 @@ export class WhatsAppService implements IWhatsAppService {
                 message: `Errore nella ricerca del numero WhatsApp per GDO con id ${gdoId}`
             });
         }
+    }
+
+    /**
+     * Salva il canale WhatsApp di una GDO. I token sono in sola scrittura: vuoti lasciano quelli salvati,
+     * per un canale nuovo sono obbligatori. Restituisce i nomi dei campi cambiati, mai i valori.
+     */
+    async salvaSetupGDOWhatsapp(
+        dati: DatiSetupGDOWhatsapp
+    ): Promise<{ success: boolean; creato: boolean; campiModificati: string[] }> {
+        const nuovi: Partial<Record<keyof typeof COLONNE_SETUP, string>> = {
+            display_name: testo(dati.display_name),
+            id_numero_whatsapp: testo(dati.id_numero_whatsapp),
+            whatsapp_business_account_id: testo(dati.whatsapp_business_account_id),
+            stato: testo(dati.stato)
+        };
+        if (!nuovi.display_name) {
+            throw new ValidationError({ message: 'Il nome visualizzato è obbligatorio', field: 'display_name' });
+        }
+        if (!nuovi.id_numero_whatsapp) {
+            throw new ValidationError({ message: "L'ID del numero WhatsApp è obbligatorio", field: 'id_numero_whatsapp' });
+        }
+        if (!nuovi.whatsapp_business_account_id) {
+            throw new ValidationError({ message: "L'ID del WhatsApp Business Account è obbligatorio", field: 'whatsapp_business_account_id' });
+        }
+        if (!(Object.values(STATO_GDO_WHATSAPP_NUMBER) as string[]).includes(nuovi.stato ?? '')) {
+            throw new ValidationError({ message: 'Stato del numero non valido', field: 'stato', value: dati.stato });
+        }
+        if (testo(dati.access_token)) nuovi.access_token = testo(dati.access_token);
+        if (testo(dati.verify_token)) nuovi.verify_token = testo(dati.verify_token);
+
+        const gdo = testo(dati.id_gdo) ? await GDO.findByPk(dati.id_gdo) : null;
+        if (!gdo) {
+            throw new NotFoundError({ message: 'GDO non trovata', entityType: 'GDO', entityId: dati.id_gdo });
+        }
+
+        const esistente = await GDOWhatsappNumbers.findOne({
+            where: { id_gdo_gdowhatsappnumbers: gdo.id_gdo }
+        });
+        if (!esistente && (!nuovi.access_token || !nuovi.verify_token)) {
+            throw new ValidationError({
+                message: 'Per configurare il canale servono access token e verify token',
+                field: !nuovi.access_token ? 'access_token' : 'verify_token'
+            });
+        }
+
+        const colonne: Record<string, string> = {};
+        const campiModificati: string[] = [];
+        for (const [campo, valore] of Object.entries(nuovi) as [keyof typeof COLONNE_SETUP, string][]) {
+            const colonna = COLONNE_SETUP[campo];
+            colonne[colonna] = valore;
+            if (!esistente || esistente[colonna] !== valore) campiModificati.push(campo);
+        }
+        const valori = colonne as unknown as Partial<GDOWhatsappNumbersAttributes>;
+
+        try {
+            if (esistente) {
+                await esistente.update(valori);
+            } else {
+                await GDOWhatsappNumbers.create({
+                    ...(valori as GDOWhatsappNumbersAttributes),
+                    id_gdo_gdowhatsappnumbers: gdo.id_gdo,
+                    provider_gdowhatsappnumbers: PROVIDER_WHATSAPP.META
+                });
+            }
+        } catch (error) {
+            // Numero, WABA e token sono univoci: appartengono già a un'altra GDO
+            if (error instanceof UniqueConstraintError) {
+                throw new BusinessError({
+                    message: "Numero, WhatsApp Business Account o token sono già usati da un'altra GDO",
+                    rule: 'Un canale WhatsApp appartiene a una sola GDO'
+                });
+            }
+            throw wrapDatabaseError(error, {
+                operation: esistente ? 'update' : 'create',
+                entity: 'GDOWhatsappNumbers',
+                message: 'Errore nel salvataggio del canale WhatsApp della GDO'
+            });
+        }
+
+        return { success: true, creato: !esistente, campiModificati };
     }
 
     async getAllTemplatesWhatsappByGdo(
@@ -1196,6 +1285,90 @@ export class WhatsAppService implements IWhatsAppService {
                 operation: 'create',
                 entity: 'GDOWhatsappTemplate',
                 message: `Errore nella creazione di una nuova versione locale per il template WhatsApp con id ${id_template}`
+            });
+        }
+    }
+
+    /**
+     * Crea un modello nuovo come bozza locale (CREATED_BUT_NOT_SYNCED): l'invio a Meta è un passo separato.
+     * Rifiuta un nome che Meta non accetta e un nome già usato dalla GDO per la stessa lingua.
+     */
+    async creaTemplateLocale(
+        id_gdo: string,
+        json_meta: unknown
+    ): Promise<{ success: boolean; newTemplateId: string }> {
+        const meta = (json_meta ?? {}) as {
+            name?: unknown;
+            language?: { code?: unknown; policy?: string } | string;
+            category?: unknown;
+            components?: unknown;
+        };
+        const nome = testo(meta.name);
+        const lingua = testo(typeof meta.language === 'string' ? meta.language : meta.language?.code);
+        const categoria = meta.category as CATEGORIA_TEMPLATE_WHATSAPP;
+        const corpo = Array.isArray(meta.components)
+            ? (meta.components as { type?: string; text?: unknown }[]).find((c) => c?.type === 'BODY')
+            : undefined;
+
+        if (!NOME_TEMPLATE_VALIDO.test(nome)) {
+            throw new ValidationError({
+                message: 'Nome non valido: usa solo lettere minuscole, numeri e underscore',
+                field: 'name',
+                value: nome
+            });
+        }
+        if (!lingua) {
+            throw new ValidationError({ message: 'La lingua del template è obbligatoria', field: 'language' });
+        }
+        if (!Object.values(CATEGORIA_TEMPLATE_WHATSAPP).includes(categoria)) {
+            throw new ValidationError({ message: 'Categoria del template non valida', field: 'category', value: meta.category });
+        }
+        if (!testo(corpo?.text)) {
+            throw new ValidationError({ message: 'Il corpo del messaggio è obbligatorio', field: 'components' });
+        }
+
+        const gdo = testo(id_gdo) ? await GDO.findByPk(id_gdo) : null;
+        if (!gdo) {
+            throw new NotFoundError({ message: 'GDO non trovata', entityType: 'GDO', entityId: id_gdo });
+        }
+
+        // Un modello eliminato non occupa più il nome: se Meta non lo accetta ancora, lo dirà all'invio
+        const doppione = await GDOWhatsappTemplate.findOne({
+            where: {
+                id_gdo_gdowhatsapptemplate: gdo.id_gdo,
+                nome_template_gdowhatsapptemplate: nome,
+                lingua_template_gdowhatsapptemplate: lingua,
+                stato_meta_gdowhatsapptemplate: { [Op.ne]: STATO_GDO_WHATSAPP_TEMPLATE.DELETED }
+            }
+        });
+        if (doppione) {
+            throw new BusinessError({
+                message: `Esiste già un template "${nome}" in questa lingua (${lingua})`,
+                rule: 'Nome e lingua di un template sono unici nella GDO'
+            });
+        }
+
+        try {
+            const nuovo = await GDOWhatsappTemplate.create({
+                id_gdo_gdowhatsapptemplate: gdo.id_gdo,
+                nome_template_gdowhatsapptemplate: nome,
+                lingua_template_gdowhatsapptemplate: lingua,
+                categoria_template_gdowhatsapptemplate: categoria,
+                stato_meta_gdowhatsapptemplate: STATO_GDO_WHATSAPP_TEMPLATE.CREATED_BUT_NOT_SYNCED,
+                // Solo i campi del modello: un id di Meta qui lo farebbe sembrare già inviato
+                json_meta_gdowhatsapptemplate: {
+                    name: nome,
+                    language: { ...(typeof meta.language === 'object' ? meta.language : {}), code: lingua },
+                    category: categoria,
+                    components: meta.components
+                } as unknown as WhatsAppTemplate
+            });
+            return { success: true, newTemplateId: nuovo.id_gdowhatsapptemplate ?? '' };
+        } catch (error) {
+            throw wrapDatabaseError(error, {
+                operation: 'create',
+                entity: 'GDOWhatsappTemplate',
+                message: `Errore nella creazione del template WhatsApp ${nome}`
             });
         }
     }

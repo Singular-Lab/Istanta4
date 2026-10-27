@@ -1,3 +1,4 @@
+import Button from "@/components/Base/Button";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useDispatch, useSelector } from "react-redux";
@@ -21,14 +22,14 @@ export default function NotFoundPage() {
             <div className="w-full max-w-lg text-center space-y-8">
 
                 {/* Badge 404 */}
-                <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-3xl
+                <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-card
                         bg-primary/10 text-primary text-4xl font-bold shadow-inner">
                     404
                 </div>
 
                 {/* Testo */}
                 <div className="space-y-3">
-                    <h1 className="text-2xl font-semibold text-slate-900 tracking-tight">
+                    <h1 className="title-page text-slate-900">
                         {t("errors.not_found_title", {
                             defaultValue: "Pagina non trovata",
                         })}
@@ -47,26 +48,25 @@ export default function NotFoundPage() {
 
                 {/* Azioni */}
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-                    <button
+                    <Button
                         type="button"
+                        variant="outline-secondary"
+                        rounded
                         onClick={() => window.history.back()}
-                        className="w-full sm:w-auto px-5 py-2.5 rounded-full
-                       border border-slate-200 text-slate-600
-                       hover:bg-slate-50 hover:border-slate-300
-                       transition focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        className="w-full sm:w-auto px-5 py-2.5"
                     >
                         {t("actions.go_back", { defaultValue: "Torna indietro" })}
-                    </button>
+                    </Button>
 
-                    <Link
+                    <Button
+                        as={Link}
                         to={startPage || "/"}
-                        className="w-full sm:w-auto px-5 py-2.5 rounded-full
-                       bg-primary text-white font-semibold
-                       shadow-sm hover:bg-primary/90
-                       transition focus:outline-none focus:ring-2 focus:ring-primary/40"
+                        variant="primary"
+                        rounded
+                        className="w-full sm:w-auto px-5 py-2.5"
                     >
                         {t("actions.go_first_page")}
-                    </Link>
+                    </Button>
                 </div>
 
                 {/* Hint contestuale */}

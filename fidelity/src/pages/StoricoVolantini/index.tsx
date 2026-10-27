@@ -1,11 +1,13 @@
 import Button from "@/components/Base/Button";
 import { FormSelect } from "@/components/Base/Form";
 import Lucide from "@/components/Base/Lucide";
+import PageError from "@/components/Base/PageError";
 import PageHeader from "@/components/Base/PageHeader";
 import Pagination from "@/components/Base/Pagination";
+import Spinner from "@/components/Base/Spinner";
+import StatusBadge from "@/components/Base/StatusBadge";
 import TomSelect from "@/components/Base/TomSelect";
 import EmptyState from "@/components/EmptyState";
-import LoadingSpinner from "@/components/LoadingSpinner";
 import { PreviewImmaginePdf } from "@/components/PreviewImmaginePdf";
 import withSessionCheck from "@/components/SessionChecker";
 import axios from "axios";
@@ -55,14 +57,6 @@ interface CardFilter {
     id_canale: string;
 }
 
-// Badge classes per stati kit
-const BADGE_STYLES: Record<string, string> = {
-    PUBBLICATO: "bg-success/10 text-success border-success/20",
-    IN_LAVORAZIONE: "bg-info/10 text-info border-info/20",
-    IN_LAVORAZIONE_CON_ERRORI: "bg-danger/10 text-danger border-danger/20",
-    IN_REVISIONE: "bg-warning/10 text-warning border-warning/20",
-};
-
 // Componente stat card compatta
 interface StatCompactCardProps {
     label: string;
@@ -87,7 +81,7 @@ const StatCompactCard: FC<StatCompactCardProps> = ({
     return (
         <div
             className={clsx(
-                "flex items-center gap-4 rounded-[0.6rem] border px-4 py-3 bg-white/80",
+                "flex items-center gap-4 rounded-card border px-4 py-3 bg-white/80",
                 tones[tone]
             )}
         >
@@ -139,25 +133,15 @@ const KitCard: FC<{ kit: KitVolantino; showValidita?: boolean }> = ({ kit, showV
         }
     }, [file, isDownloading]);
 
-    const renderStatoBadge = (stato: string) => {
-        const normalized = stato?.toUpperCase();
-        const badgeClasses = BADGE_STYLES[normalized] ?? "bg-slate-100 text-slate-600 border-slate-200";
-        return (
-            <span className={clsx("px-2.5 py-0.5 text-[11px] font-semibold rounded-full border", badgeClasses)}>
-                {normalized?.replace(/_/g, " ")}
-            </span>
-        );
-    };
-
     return (
         <>
-            <div className="relative p-4 rounded-[0.6rem] border border-dashed border-slate-200/70 bg-white/90 backdrop-blur-sm shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
+            <div className="relative p-4 rounded-card border border-dashed border-slate-200/70 bg-white/90 backdrop-blur-sm shadow-card">
                 <div className="flex gap-4">
                     <div className="relative shrink-0">
                         {hasPreview ? (
                             <button
                                 type="button"
-                                className="group/preview w-20 h-24 rounded-[0.6rem] overflow-hidden border border-theme-1/20 bg-slate-50 relative focus-visible:outline focus-visible:outline-theme-1/40"
+                                className="group/preview w-20 h-24 rounded-card overflow-hidden border border-theme-1/20 bg-slate-50 relative focus-visible:outline focus-visible:outline-theme-1/40"
                                 onClick={() => setIsPreviewOpen(true)}
                             >
                                 <img
@@ -171,7 +155,7 @@ const KitCard: FC<{ kit: KitVolantino; showValidita?: boolean }> = ({ kit, showV
                                 </span>
                             </button>
                         ) : (
-                            <div className="w-20 h-24 rounded-[0.6rem] border border-dashed border-slate-300 flex items-center justify-center bg-slate-50">
+                            <div className="w-20 h-24 rounded-card border border-dashed border-slate-300 flex items-center justify-center bg-slate-50">
                                 <Lucide icon="FileText" className="w-5 h-5 text-slate-400" />
                             </div>
                         )}
@@ -202,13 +186,13 @@ const KitCard: FC<{ kit: KitVolantino; showValidita?: boolean }> = ({ kit, showV
                                 {(kit.nome_area || kit.nome_canale) && (
                                     <div className="flex items-center gap-2 mt-1.5">
                                         {kit.nome_area && (
-                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-3xs font-medium rounded-full bg-slate-100 text-slate-600 border border-slate-200">
                                                 <Lucide icon="MapPin" className="w-2.5 h-2.5" />
                                                 {kit.nome_area}
                                             </span>
                                         )}
                                         {kit.nome_canale && (
-                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded-full bg-theme-1/10 text-theme-1 border border-theme-1/20">
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-3xs font-medium rounded-full bg-theme-1/10 text-theme-1 border border-theme-1/20">
                                                 <Lucide icon="Store" className="w-2.5 h-2.5" />
                                                 {kit.nome_canale}
                                             </span>
@@ -216,9 +200,9 @@ const KitCard: FC<{ kit: KitVolantino; showValidita?: boolean }> = ({ kit, showV
                                     </div>
                                 )}
                             </div>
-                            {renderStatoBadge(kit.stato_lavorazione)}
+                            <StatusBadge dominio="kitRuntime" stato={kit.stato_lavorazione} />
                         </div>
-                        <div className="flex flex-wrap items-center gap-3 mt-3 text-[11px] text-slate-500">
+                        <div className="flex flex-wrap items-center gap-3 mt-3 text-2xs text-slate-500">
                             {showValidita && (kit.validita_dal || kit.validita_al) && (
                                 <span className="inline-flex items-center gap-1 text-theme-1">
                                     <Lucide icon="Calendar" className="w-3 h-3" />
@@ -264,8 +248,13 @@ const KitCard: FC<{ kit: KitVolantino; showValidita?: boolean }> = ({ kit, showV
                                     )}
                                     onClick={handleDownload}
                                     disabled={!canDownload || isDownloading}
+                                    aria-busy={isDownloading || undefined}
                                 >
-                                    <Lucide icon={isDownloading ? "Loader" : "Download"} className={clsx("w-3.5 h-3.5", isDownloading && "animate-spin")} />
+                                    {isDownloading ? (
+                                        <Spinner decorativo size="sm" className="w-3.5 h-3.5 text-current" />
+                                    ) : (
+                                        <Lucide icon="Download" aria-hidden="true" className="w-3.5 h-3.5" />
+                                    )}
                                     {isDownloading ? "Download..." : "Scarica"}
                                 </button>
                                 <button
@@ -302,8 +291,8 @@ const KitCard: FC<{ kit: KitVolantino; showValidita?: boolean }> = ({ kit, showV
 const VolantiniSkeleton: FC = () => (
     <div className="space-y-3 animate-pulse">
         {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="p-4 rounded-[0.6rem] border border-dashed border-slate-200/70 bg-white/80 flex items-center gap-4">
-                <div className="w-20 h-24 rounded-[0.6rem] bg-slate-200/60" />
+            <div key={i} className="p-4 rounded-card border border-dashed border-slate-200/70 bg-white/80 flex items-center gap-4">
+                <div className="w-20 h-24 rounded-card bg-slate-200/60" />
                 <div className="flex-1 space-y-3">
                     <div className="h-3 bg-slate-200/70 rounded w-3/5" />
                     <div className="h-3 bg-slate-200/70 rounded w-2/5" />
@@ -319,7 +308,8 @@ const StoricoVolantiniPage = () => {
     // Stato per i dati
     const [data, setData] = useState<StoricoVolantiniResponse | null>(null);
     const [isLoading, setIsLoading] = useState(true);
-    const [isError, setIsError] = useState(false);
+    // Motivo dell'ultimo caricamento fallito, null se è andato a buon fine
+    const [errore, setErrore] = useState<string | null>(null);
 
     // Stato per aree e canali
     const [aree, setAree] = useState<AreaResponseDTO[]>([]);
@@ -350,10 +340,10 @@ const StoricoVolantiniPage = () => {
                 `/dashboard/storico-volantini${buildQueryString(currentFilter)}`
             );
             setData(response);
-            setIsError(false);
+            setErrore(null);
         } catch (error) {
             console.error("Errore caricamento storico volantini:", error);
-            setIsError(true);
+            setErrore((error as Error)?.message || "Si è verificato un errore durante il caricamento dello storico.");
         } finally {
             setIsFiltering(false);
             setIsLoading(false);
@@ -444,30 +434,20 @@ const StoricoVolantiniPage = () => {
             <div className="p-6">
                 <PageHeader title="Storico volantini" description="Consulta tutti i volantini pubblicati con i relativi file." />
                 <div className="mt-16 flex justify-center">
-                    <LoadingSpinner />
+                    <Spinner size="lg" etichetta="Caricamento dello storico volantini" />
                 </div>
             </div>
         );
     }
 
-    if (isError) {
+    if (errore) {
         return (
             <div className="space-y-6 p-6">
                 <PageHeader
                     title="Storico volantini"
                     description="Consulta tutti i volantini pubblicati con i relativi file."
-                    actions={
-                        <Button variant="outline-secondary" onClick={refetch}>
-                            <Lucide icon="RefreshCcw" className="h-4 w-4 mr-2" />
-                            Riprova
-                        </Button>
-                    }
                 />
-                <EmptyState
-                    icon="TriangleAlert"
-                    title="Impossibile recuperare i dati"
-                    description="Si è verificato un errore. Riprova a caricare lo storico."
-                />
+                <PageError motivo={errore} onRiprova={refetch} />
             </div>
         );
     }
@@ -504,7 +484,7 @@ const StoricoVolantiniPage = () => {
                     </div>
 
                     {/* Filtri */}
-                    <div className="flex flex-wrap items-center gap-3 p-3 rounded-[0.6rem] border border-dashed border-slate-200/80 bg-white/80">
+                    <div className="flex flex-wrap items-center gap-3 p-3 rounded-card border border-dashed border-slate-200/80 bg-white/80">
                         <div className="flex items-center gap-2">
                             <Lucide icon="Filter" className="w-4 h-4 text-slate-400" />
                             <span className="text-xs text-slate-500">Filtra:</span>
@@ -610,12 +590,13 @@ const StoricoVolantiniPage = () => {
                         </div>
 
                         {/* Pagination controls */}
-                        <Pagination className="rounded-lg bg-slate-100 p-1">
+                        <Pagination aria-label="Paginazione" className="rounded-lg bg-slate-100 p-1">
                             <Pagination.Link
                                 onClick={() => goToPage(currentPage - 1)}
                                 className={clsx(currentPage === 1 && "opacity-50 pointer-events-none")}
+                                aria-label="Pagina precedente"
                             >
-                                <Lucide icon="ChevronLeft" className="h-4 w-4" />
+                                <Lucide icon="ChevronLeft" aria-hidden="true" className="h-4 w-4" />
                             </Pagination.Link>
 
                             {getPageNumbers().map((page, idx) =>
@@ -637,8 +618,9 @@ const StoricoVolantiniPage = () => {
                             <Pagination.Link
                                 onClick={() => goToPage(currentPage + 1)}
                                 className={clsx(currentPage === totalPages && "opacity-50 pointer-events-none")}
+                                aria-label="Pagina successiva"
                             >
-                                <Lucide icon="ChevronRight" className="h-4 w-4" />
+                                <Lucide icon="ChevronRight" aria-hidden="true" className="h-4 w-4" />
                             </Pagination.Link>
                         </Pagination>
                     </div>

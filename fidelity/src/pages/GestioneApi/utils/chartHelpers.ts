@@ -1,4 +1,6 @@
+import { opzioniBase } from "@/utils/chartTheme";
 import { getColor } from "@/utils/colors";
+import type { ChartOptions } from "chart.js";
 import type { ApiStatistics } from "../types";
 
 /**
@@ -111,44 +113,31 @@ export function createTemporalChartData(stats: ApiStatistics) {
 }
 
 /**
- * Opzioni comuni per i grafici
+ * Opzioni dei grafici delle statistiche, sopra le opzioni comuni di Fidelity.
+ * Va chiamata al render: il tema dei grafici legge i colori correnti.
  */
-export const chartOptions = {
-  pie: {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        position: 'bottom' as const,
-      }
-    }
-  },
-  bar: {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        display: false
-      }
-    },
-    scales: {
-      y: {
-        beginAtZero: true
-      }
-    }
-  },
-  line: {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        display: false
-      }
-    },
-    scales: {
-      y: {
-        beginAtZero: true
-      }
-    }
-  }
-};
+export function createChartOptions() {
+  return {
+    pie: opzioniBase("doughnut", {
+      plugins: {
+        legend: { position: "bottom" },
+      },
+    }) as ChartOptions,
+    bar: opzioniBase("bar", {
+      plugins: {
+        legend: { display: false },
+      },
+      scales: {
+        y: { beginAtZero: true },
+      },
+    }) as ChartOptions,
+    line: opzioniBase("line", {
+      plugins: {
+        legend: { display: false },
+      },
+      scales: {
+        y: { beginAtZero: true },
+      },
+    }) as ChartOptions,
+  };
+}

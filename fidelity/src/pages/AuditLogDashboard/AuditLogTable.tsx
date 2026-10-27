@@ -318,7 +318,7 @@ const UserAgentDisplay: FC<{ raw: string }> = ({ raw }) => {
               {parsed.browser}
             </span>
             {parsed.browserVersion && (
-              <span className="text-[10px] text-slate-400 font-mono">
+              <span className="text-3xs text-slate-400 font-mono">
                 v{parsed.browserVersion}
               </span>
             )}
@@ -333,7 +333,7 @@ const UserAgentDisplay: FC<{ raw: string }> = ({ raw }) => {
               {parsed.os}
             </span>
             {parsed.osVersion && (
-              <span className="text-[10px] text-slate-400 font-mono">
+              <span className="text-3xs text-slate-400 font-mono">
                 {parsed.osVersion}
               </span>
             )}
@@ -355,10 +355,10 @@ const UserAgentDisplay: FC<{ raw: string }> = ({ raw }) => {
 
       {/* Raw UA collapsed */}
       <details className="group/ua">
-        <summary className="text-[10px] text-slate-400 cursor-pointer hover:text-slate-500 transition-colors select-none w-fit">
+        <summary className="text-3xs text-slate-400 cursor-pointer hover:text-slate-500 transition-colors select-none w-fit">
           Mostra stringa completa
         </summary>
-        <div className="mt-1.5 px-2.5 py-2 rounded-md bg-slate-900 text-slate-300 text-[11px] font-mono break-all leading-relaxed max-w-lg">
+        <div className="mt-1.5 px-2.5 py-2 rounded-md bg-slate-900 text-slate-300 text-2xs font-mono break-all leading-relaxed max-w-lg">
           {raw}
         </div>
       </details>
@@ -434,7 +434,7 @@ const DetailValue: FC<{ value: unknown }> = ({ value }) => {
     return (
       <span
         className={clsx(
-          "px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase",
+          "px-1.5 py-0.5 rounded text-3xs font-semibold uppercase",
           value ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-600"
         )}
       >
@@ -445,7 +445,7 @@ const DetailValue: FC<{ value: unknown }> = ({ value }) => {
     return <span className="font-mono text-slate-700">{value}</span>;
   if (typeof value === "object")
     return (
-      <pre className="mt-1 p-2.5 rounded-md bg-slate-900 text-slate-200 text-[11px] font-mono overflow-x-auto max-h-40 leading-relaxed">
+      <pre className="mt-1 p-2.5 rounded-md bg-slate-900 text-slate-200 text-2xs font-mono overflow-x-auto max-h-40 leading-relaxed">
         {JSON.stringify(value, null, 2)}
       </pre>
     );
@@ -488,7 +488,7 @@ const AuditLogTable: FC<AuditLogTableProps> = ({
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead className="sticky top-0 z-10">
-          <tr className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 bg-slate-50/90 backdrop-blur-sm border-b border-slate-200">
+          <tr className="text-2xs font-semibold uppercase tracking-wider text-slate-400 bg-slate-50/90 backdrop-blur-sm border-b border-slate-200">
             <SortHeader
               label="Quando"
               field="createdat"
@@ -594,7 +594,7 @@ const AuditLogTable: FC<AuditLogTableProps> = ({
                       <span className="text-xs font-semibold text-slate-700">
                         {relative}
                       </span>
-                      <span className="text-[11px] text-slate-400 mt-0.5 tabular-nums">
+                      <span className="text-2xs text-slate-400 mt-0.5 tabular-nums">
                         {ts.format("DD MMM YYYY · HH:mm:ss")}
                       </span>
                     </div>
@@ -622,7 +622,7 @@ const AuditLogTable: FC<AuditLogTableProps> = ({
                         </span>
                         <span
                           className={clsx(
-                            "text-[10px] font-medium mt-0.5",
+                            "text-3xs font-medium mt-0.5",
                             catStyle.text
                           )}
                         >
@@ -648,7 +648,7 @@ const AuditLogTable: FC<AuditLogTableProps> = ({
                       />
                       <span
                         className={clsx(
-                          "text-[11px] font-bold uppercase tracking-wide",
+                          "text-2xs font-bold uppercase tracking-wide",
                           sevStyle.text
                         )}
                       >
@@ -672,7 +672,7 @@ const AuditLogTable: FC<AuditLogTableProps> = ({
                         {roleStyle && row.user_type && (
                           <span
                             className={clsx(
-                              "text-[10px] font-semibold px-1.5 py-0.5 rounded w-fit",
+                              "text-3xs font-semibold px-1.5 py-0.5 rounded w-fit",
                               roleStyle.bg,
                               roleStyle.text
                             )}
@@ -726,7 +726,7 @@ const AuditLogTable: FC<AuditLogTableProps> = ({
                       )}
                     >
                       <Lucide icon={resultCfg.icon} className="w-3 h-3" />
-                      <span className="text-[11px] font-bold uppercase tracking-wide">
+                      <span className="text-2xs font-bold uppercase tracking-wide">
                         {resultCfg.label}
                       </span>
                     </div>
@@ -748,8 +748,10 @@ const AuditLogTable: FC<AuditLogTableProps> = ({
                             : "text-slate-400 hover:bg-slate-100 hover:text-slate-600"
                         )}
                         title="Dettagli"
+                        aria-label={isExpanded ? "Nascondi dettagli" : "Mostra dettagli"}
+                        aria-expanded={isExpanded}
                       >
-                        <Lucide icon="ChevronDown" className="w-4 h-4 transition-transform" />
+                        <Lucide icon="ChevronDown" aria-hidden="true" className="w-4 h-4 transition-transform" />
                       </button>
                     )}
                   </td>
@@ -776,7 +778,7 @@ const AuditLogTable: FC<AuditLogTableProps> = ({
                                     className="w-4 h-4 text-slate-400 flex-none"
                                   />
                                   <div className="flex flex-col">
-                                    <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                                    <span className="text-3xs font-semibold uppercase tracking-wider text-slate-400">
                                       Entità target
                                     </span>
                                     <span className="text-xs font-mono text-slate-700">
@@ -800,7 +802,7 @@ const AuditLogTable: FC<AuditLogTableProps> = ({
                                     className="w-4 h-4 text-slate-400 flex-none mt-1"
                                   />
                                   <div className="flex flex-col min-w-0 gap-0.5">
-                                    <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                                    <span className="text-3xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
                                       Dispositivo
                                     </span>
                                     <UserAgentDisplay raw={row.user_agent} />
@@ -845,7 +847,7 @@ const AuditLogTable: FC<AuditLogTableProps> = ({
                                         >
                                           <div
                                             className={clsx(
-                                              "text-[10px] font-bold uppercase tracking-wider mb-1.5",
+                                              "text-3xs font-bold uppercase tracking-wider mb-1.5",
                                               isError
                                                 ? "text-red-400"
                                                 : "text-slate-400"

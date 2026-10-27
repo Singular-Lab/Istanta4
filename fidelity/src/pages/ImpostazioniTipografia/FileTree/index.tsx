@@ -149,8 +149,13 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onChange, onDelete, canali, a
             {/* Header con toggle collapse e pulsante di eliminazione */}
             <div className="flex items-center justify-between bg-slate-50 dark:bg-darkmode-400/20 p-2 rounded-md">
                 <div className="flex items-center space-x-3">
-                    <button onClick={() => setIsCollapsed(!isCollapsed)} className="focus:outline-none text-slate-600 dark:text-slate-300">
-                        {isCollapsed ? <Lucide icon="ChevronRight" className="w-5 h-5" /> : <Lucide icon="ChevronDown" className="w-5 h-5" />}
+                    <button
+                        onClick={() => setIsCollapsed(!isCollapsed)}
+                        className="focus:outline-none text-slate-600 dark:text-slate-300"
+                        aria-expanded={!isCollapsed}
+                        aria-label={`${isCollapsed ? "Espandi" : "Comprimi"} nodo ${localNode.priority || 0}`}
+                    >
+                        {isCollapsed ? <Lucide icon="ChevronRight" aria-hidden="true" className="w-5 h-5" /> : <Lucide icon="ChevronDown" aria-hidden="true" className="w-5 h-5" />}
                     </button>
                     <Lucide icon="Folder" className="text-amber-500 dark:text-amber-400 w-5 h-5" />
                     <strong className="text-slate-700 dark:text-slate-300">Nodo {localNode.priority || 0}</strong>
@@ -159,8 +164,9 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onChange, onDelete, canali, a
                     <button
                         onClick={onDelete}
                         className="text-danger hover:bg-danger/10 p-1 rounded-full transition-colors"
+                        aria-label={`Elimina nodo ${localNode.priority || 0}`}
                     >
-                        <Lucide icon="Trash2" className="w-4 h-4" />
+                        <Lucide icon="Trash2" aria-hidden="true" className="w-4 h-4" />
                     </button>
                 )}
             </div>
@@ -261,8 +267,9 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onChange, onDelete, canali, a
                                             variant="soft-danger"
                                             size="sm"
                                             className="rounded-full"
+                                            aria-label="Rimuovi condizione"
                                         >
-                                            <Lucide icon="X" className="w-4 h-4" />
+                                            <Lucide icon="X" aria-hidden="true" className="w-4 h-4" />
                                         </Button>
                                     </div>
                                 ))}

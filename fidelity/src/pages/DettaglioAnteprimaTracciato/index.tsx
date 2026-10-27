@@ -7,6 +7,8 @@ import { TracciatiResponseDTO } from "../../../server/core/dto";
 import Button from "../../components/Base/Button";
 import { FormInput } from "../../components/Base/Form";
 import Lucide from "../../components/Base/Lucide";
+import PageError from "../../components/Base/PageError";
+import Spinner from "../../components/Base/Spinner";
 import withSessionCheck from "../../components/SessionChecker";
 import { getColor } from "../../utils/colors";
 import type { TemaFoglio } from "./disegnaFoglio";
@@ -546,13 +548,13 @@ const DettaglioAnteprimaTracciato: React.FC = () => {
             {/* Barra superiore */}
             <div className="flex items-center gap-3 px-4 py-2.5 border-b border-slate-200/80 bg-slate-50/60 flex-shrink-0 dark:border-darkmode-400 dark:bg-darkmode-700/40">
                 <Button size="sm" variant="outline-secondary" onClick={tornaAllaPromo} className="flex-shrink-0">
-                    <Lucide icon="ArrowLeft" className="w-4 h-4 mr-1.5" />
+                    <Lucide icon="ArrowLeft" aria-hidden="true" className="w-4 h-4 mr-1.5" />
                     Torna alla promo
                 </Button>
                 <div className="h-6 w-px bg-slate-200 dark:bg-darkmode-400" />
                 <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-gradient-to-b from-theme-1 to-theme-2/80">
-                        <Lucide icon="FileSpreadsheet" className="w-4 h-4 text-white" />
+                    <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-control bg-gradient-to-b from-theme-1 to-theme-2/80">
+                        <Lucide icon="FileSpreadsheet" aria-hidden="true" className="w-4 h-4 text-white" />
                     </div>
                     <div className="min-w-0">
                         <div className="text-sm font-medium truncate text-slate-700 dark:text-slate-200" title={nomeTracciato}>
@@ -574,6 +576,7 @@ const DettaglioAnteprimaTracciato: React.FC = () => {
                     <div className="relative w-72">
                         <Lucide
                             icon="Search"
+                            aria-hidden="true"
                             className="absolute inset-y-0 left-0 z-10 w-4 h-4 my-auto ml-3 stroke-[1.3] text-slate-500"
                         />
                         <FormInput
@@ -590,6 +593,7 @@ const DettaglioAnteprimaTracciato: React.FC = () => {
                                 }
                             }}
                             placeholder="Cerca nel tracciato (Ctrl+F)"
+                            aria-label="Cerca nel tracciato"
                             disabled={stato !== "pronto"}
                             className="pl-9 pr-9"
                         />
@@ -599,8 +603,9 @@ const DettaglioAnteprimaTracciato: React.FC = () => {
                                 onClick={() => setTermine("")}
                                 className="absolute inset-y-0 right-0 z-10 my-auto mr-3 text-slate-400 hover:text-slate-600 transition-colors"
                                 title="Cancella ricerca"
+                                aria-label="Cancella ricerca"
                             >
-                                <Lucide icon="X" className="w-4 h-4" />
+                                <Lucide icon="X" aria-hidden="true" className="w-4 h-4" />
                             </button>
                         )}
                     </div>
@@ -616,7 +621,7 @@ const DettaglioAnteprimaTracciato: React.FC = () => {
                     {info.indirizzo}
                 </div>
                 <div className="w-10 flex items-center justify-center border-r border-slate-200/80 text-slate-400 dark:border-darkmode-400">
-                    <Lucide icon="SquareFunction" className="w-4 h-4" />
+                    <Lucide icon="SquareFunction" aria-hidden="true" className="w-4 h-4" />
                 </div>
                 <input
                     readOnly
@@ -647,31 +652,25 @@ const DettaglioAnteprimaTracciato: React.FC = () => {
                 </div>
 
                 {stato === "caricamento" && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-white/80 dark:bg-darkmode-600/80">
-                        <Lucide icon="Loader" className="w-10 h-10 text-primary animate-spin" />
+                    <div role="status" className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-white/80 dark:bg-darkmode-600/80">
+                        <Spinner size="lg" decorativo />
                         <p className="text-slate-600 font-medium">Analisi dati in corso...</p>
                     </div>
                 )}
 
                 {stato === "errore" && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-white dark:bg-darkmode-600">
-                        <div className="rounded-full bg-danger/10 p-4">
-                            <Lucide icon="CircleAlert" className="w-8 h-8 text-danger" />
-                        </div>
-                        <p className="text-danger font-semibold">Impossibile caricare il tracciato</p>
-                        {errore && <p className="text-sm text-slate-500 max-w-lg text-center">{errore}</p>}
-                        <div className="flex gap-2 mt-2">
-                            {offscreenSupportato() && (
-                                <Button size="sm" variant="primary" onClick={carica}>
-                                    <Lucide icon="RefreshCw" className="w-4 h-4 mr-1.5" />
-                                    Riprova
-                                </Button>
-                            )}
-                            <Button size="sm" variant="outline-secondary" onClick={tornaAllaPromo}>
-                                <Lucide icon="ArrowLeft" className="w-4 h-4 mr-1.5" />
-                                Torna alla promo
-                            </Button>
-                        </div>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 overflow-auto bg-white p-4 dark:bg-darkmode-600">
+                        {/* Senza OffscreenCanvas riprovare non serve: resta solo il ritorno alla promo */}
+                        <PageError
+                            titolo="Impossibile caricare il tracciato"
+                            motivo={errore || "Il tracciato non è disponibile."}
+                            onRiprova={offscreenSupportato() ? carica : undefined}
+                            className="min-h-0 w-full max-w-xl py-10"
+                        />
+                        <Button size="sm" variant="outline-secondary" onClick={tornaAllaPromo}>
+                            <Lucide icon="ArrowLeft" aria-hidden="true" className="w-4 h-4 mr-1.5" />
+                            Torna alla promo
+                        </Button>
                     </div>
                 )}
 

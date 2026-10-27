@@ -40,20 +40,31 @@ const DirectoryNode: React.FC<{
               e.stopPropagation();
               setExpanded(!expanded);
             }}
+            aria-expanded={expanded}
+            aria-label={`${expanded ? 'Comprimi' : 'Espandi'} ${dir.name}`}
           >
             <Lucide
               icon={expanded ? 'ChevronDown' : 'ChevronRight'}
+              aria-hidden="true"
               className="w-3.5 h-3.5 text-slate-400"
             />
           </button>
         ) : (
           <span className="w-3.5" />
         )}
-        <Lucide
-          icon={expanded && hasChildren ? 'FolderOpen' : 'Folder'}
-          className={`w-4 h-4 flex-shrink-0 ${isSelected ? 'text-primary' : 'text-amber-500'}`}
-        />
-        <span className="truncate">{dir.name}</span>
+        {/* Raggiungibile da tastiera: il click risale alla riga, che seleziona la cartella */}
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+          aria-current={isSelected ? 'true' : undefined}
+        >
+          <Lucide
+            icon={expanded && hasChildren ? 'FolderOpen' : 'Folder'}
+            aria-hidden="true"
+            className={`w-4 h-4 flex-shrink-0 ${isSelected ? 'text-primary' : 'text-amber-500'}`}
+          />
+          <span className="truncate">{dir.name}</span>
+        </button>
       </div>
       {expanded && hasChildren && (
         <div>
@@ -182,7 +193,7 @@ const DirectoryPicker: React.FC<DirectoryPickerProps> = ({
         <>
           {value && (
             <div className="px-3 py-2 border-b border-slate-100 flex items-center justify-between">
-              <span className="text-[11px] text-slate-500 truncate">{value}</span>
+              <span className="text-2xs text-slate-500 truncate">{value}</span>
               <button
                 type="button"
                 className="text-xs text-slate-400 hover:text-danger transition-colors"
@@ -232,7 +243,7 @@ const DirectoryPicker: React.FC<DirectoryPickerProps> = ({
           <>
             <Lucide icon="Folder" className="w-4 h-4 text-amber-500 flex-shrink-0" />
             <span className="truncate text-slate-700">{selectedName}</span>
-            <span className="text-[10px] text-slate-400 truncate ml-auto hidden sm:block">{value}</span>
+            <span className="text-3xs text-slate-400 truncate ml-auto hidden sm:block">{value}</span>
           </>
         ) : (
           <>

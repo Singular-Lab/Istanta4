@@ -2,7 +2,9 @@
 import Button from "@/components/Base/Button";
 import { FormInput, FormSelect } from "@/components/Base/Form";
 import Lucide from "@/components/Base/Lucide";
+import PageError from "@/components/Base/PageError";
 import PageHeader from "@/components/Base/PageHeader";
+import StatusBadge from "@/components/Base/StatusBadge";
 import EmptyState from "@/components/EmptyState";
 import { PreviewImmaginePdf } from "@/components/PreviewImmaginePdf";
 import {
@@ -24,6 +26,7 @@ import { FileItemKit } from "../../../lib/types";
 import Skeleton from "../../components/Base/Skeleton";
 import withSessionCheck from "../../components/SessionChecker";
 import { usePromoName } from "@/hooks/usePromoName";
+import { formatData } from "@/utils/format";
 
 export interface MaterialiDocumentaleLoaderData {
   title: string;
@@ -459,28 +462,12 @@ const MaterialiDocumentale: React.FC = () => {
   return (
     <div className="grid grid-cols-12 gap-y-10 gap-x-6">
       <div className="col-span-12">
-        {/* Header: mostra PageHeader con back button se promo preselezionata */}
-        {isPromoPreselected ? (
-          <div className="flex items-center gap-4 mb-4">
-            <Button
-              variant="outline-secondary"
-              size="sm"
-              onClick={handleBackToPromo}
-              className="shrink-0"
-            >
-              <Lucide icon="ArrowLeft" className="w-4 h-4" />
-            </Button>
-            <PageHeader
-              title={selectedPromoName ? `Materiali: ${selectedPromoName}` : loaderData.title}
-              description={loaderData.description}
-            />
-          </div>
-        ) : (
-          <PageHeader
-            title={loaderData.title}
-            description={loaderData.description}
-          />
-        )}
+        {/* Con la promo preselezionata il titolo la nomina e l'indietro riporta alla promo */}
+        <PageHeader
+          title={isPromoPreselected && selectedPromoName ? `Materiali: ${selectedPromoName}` : loaderData.title}
+          description={loaderData.description}
+          indietro={isPromoPreselected ? { onClick: handleBackToPromo, etichetta: "Torna alla promo" } : undefined}
+        />
 
         <div className="mt-3.5">
           <div className="flex flex-col box box--stacked">
@@ -496,6 +483,7 @@ const MaterialiDocumentale: React.FC = () => {
 
                 <div className="flex gap-2">
                   <Button
+                    type="button"
                     variant="outline-secondary"
                     onClick={() => {
                       setFilters({
@@ -506,21 +494,29 @@ const MaterialiDocumentale: React.FC = () => {
                       setSelectedMetadataValue('');
                     }}
                   >
-                    <Lucide icon="RotateCcw" className="w-4 h-4 mr-2" />
+                    <Lucide icon="RotateCcw" aria-hidden="true" className="w-4 h-4 mr-2" />
                     Reset Filtri
                   </Button>
 
                   <Button
+                    type="button"
                     variant={itemDisposition === ItemDisposition.grid ? "primary" : "outline-secondary"}
                     onClick={() => setItemDisposition(ItemDisposition.grid)}
+                    aria-label="Vista griglia"
+                    aria-pressed={itemDisposition === ItemDisposition.grid}
+                    title="Vista griglia"
                   >
-                    <Lucide icon="LayoutGrid" className="w-4 h-4" />
+                    <Lucide icon="LayoutGrid" aria-hidden="true" className="w-4 h-4" />
                   </Button>
                   <Button
+                    type="button"
                     variant={itemDisposition === ItemDisposition.list ? "primary" : "outline-secondary"}
                     onClick={() => setItemDisposition(ItemDisposition.list)}
+                    aria-label="Vista elenco"
+                    aria-pressed={itemDisposition === ItemDisposition.list}
+                    title="Vista elenco"
                   >
-                    <Lucide icon="List" className="w-4 h-4" />
+                    <Lucide icon="List" aria-hidden="true" className="w-4 h-4" />
                   </Button>
                 </div>
               </div>
@@ -533,8 +529,8 @@ const MaterialiDocumentale: React.FC = () => {
                 {!isPromoPreselected && (
                   <div>
                     <div className="flex items-center gap-2 mb-2">
-                      <div className="w-1 h-5 bg-primary rounded-full"></div>
-                      <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                      <div aria-hidden="true" className="w-1 h-5 bg-primary rounded-full"></div>
+                      <h3 className="title-card">
                         Promozione
                       </h3>
                     </div>
@@ -619,8 +615,8 @@ const MaterialiDocumentale: React.FC = () => {
                 {/* File Filters */}
                 <div>
                   <div className="flex items-center gap-2 mb-2">
-                    <div className="w-1 h-5 bg-primary rounded-full"></div>
-                    <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                    <div aria-hidden="true" className="w-1 h-5 bg-primary rounded-full"></div>
+                    <h3 className="title-card">
                       File
                     </h3>
                   </div>
@@ -748,6 +744,15 @@ const MaterialiDocumentale: React.FC = () => {
                   ))}
                 </div>
               </div>
+            ) : filesQuery.isError && !filesQuery.data ? (
+              <div className="p-5">
+                <PageError
+                  compatta
+                  titolo="Impossibile caricare i file"
+                  motivo={filesQuery.error?.message || "Il servizio non ha restituito i file."}
+                  onRiprova={() => filesQuery.refetch()}
+                />
+              </div>
             ) : !filesQuery.data || !filesQuery.data.promos || filesQuery.data.promos.length === 0 ? (
               <div className="p-5">
                 <EmptyState
@@ -791,44 +796,32 @@ const MaterialiDocumentale: React.FC = () => {
                         <div className="mb-4 pb-3 border-b border-slate-200">
                           <div className="flex items-center justify-between">
                             <div>
-                              <h3 className="text-lg font-semibold text-slate-800">
+                              <h3 className="title-section">
                                 {promo.nome}
                               </h3>
                               <div className="flex items-center gap-3 mt-1 text-sm text-slate-600">
                                 <span className="flex items-center">
-                                  <Lucide icon="Calendar" className="w-4 h-4 mr-1" />
-                                  {new Date(promo.validita_dal).toLocaleDateString('it-IT')}
+                                  <Lucide icon="Calendar" aria-hidden="true" className="w-4 h-4 mr-1" />
+                                  {formatData(promo.validita_dal)}
                                   {' - '}
-                                  {new Date(promo.validita_al).toLocaleDateString('it-IT')}
+                                  {formatData(promo.validita_al)}
                                 </span>
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
-                                  {promo.stato
-                                    ? promo.stato
-                                      .toLowerCase()
-                                      .replace(/_/g, " ")
-                                      .replace(/^\w/, (char) => char.toUpperCase())
-                                    : ""}
-                                </span>
+                                <StatusBadge dominio="promo" stato={promo.stato} />
                               </div>
                             </div>
                             {hasFiles && (
                               <Button
+                                type="button"
                                 variant="primary"
                                 size="sm"
                                 onClick={handleDownloadPromoZip(promo.id, promo.nome)}
                                 disabled={downloadingPromoId === promo.id}
+                                loading={downloadingPromoId === promo.id}
                               >
-                                {downloadingPromoId === promo.id ? (
-                                  <>
-                                    <Lucide icon="Loader" className="w-4 h-4 mr-2 animate-spin" />
-                                    Download in corso...
-                                  </>
-                                ) : (
-                                  <>
-                                    <Lucide icon="Download" className="w-4 h-4 mr-2" />
-                                    Scarica tutti i file come ZIP
-                                  </>
+                                {downloadingPromoId !== promo.id && (
+                                  <Lucide icon="Download" aria-hidden="true" className="w-4 h-4 mr-2" />
                                 )}
+                                Scarica tutti i file come ZIP
                               </Button>
                             )}
                           </div>
@@ -837,7 +830,7 @@ const MaterialiDocumentale: React.FC = () => {
                         {!hasFiles ? (
                           <div className="p-4 bg-slate-50 rounded-md border border-slate-200">
                             <p className="text-sm text-slate-600 text-center">
-                              <Lucide icon="FileX" className="w-5 h-5 inline-block mr-2" />
+                              <Lucide icon="FileX" aria-hidden="true" className="w-5 h-5 inline-block mr-2" />
                               Nessun file disponibile per questa promozione
                             </p>
                           </div>
@@ -848,8 +841,8 @@ const MaterialiDocumentale: React.FC = () => {
                             return (
                               <div key={kit.id} className="mb-4 last:mb-0 rounded-lg border border-slate-200 overflow-hidden">
                                 <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 border-b border-slate-200">
-                                  <Lucide icon="Package" className="w-4 h-4 text-primary shrink-0" />
-                                  <h4 className="text-sm font-semibold text-slate-700 truncate">
+                                  <Lucide icon="Package" aria-hidden="true" className="w-4 h-4 text-primary shrink-0" />
+                                  <h4 className="title-card truncate">
                                     {kit.nome}
                                   </h4>
                                   <span className="ml-auto text-xs text-slate-400 shrink-0">
@@ -865,8 +858,11 @@ const MaterialiDocumentale: React.FC = () => {
                                           key={idx}
                                           className="flex flex-col p-3 bg-slate-50 rounded-md hover:bg-slate-100 transition-colors border border-slate-200"
                                         >
-                                          <div
-                                            className="w-full h-32 flex items-center justify-center rounded bg-white border border-slate-200 overflow-hidden mb-2 cursor-pointer"
+                                          <button
+                                            type="button"
+                                            aria-label={`Anteprima ${file.nome}`}
+                                            disabled={!file.url}
+                                            className="w-full h-32 flex items-center justify-center rounded bg-white border border-slate-200 overflow-hidden mb-2 cursor-pointer disabled:cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40"
                                             onClick={() => {
                                               if (file.url) {
                                                 setLightboxImage(file.url);
@@ -884,10 +880,11 @@ const MaterialiDocumentale: React.FC = () => {
                                             ) : (
                                               <Lucide
                                                 icon={getFileIcon(file.nome)}
+                                                aria-hidden="true"
                                                 className="w-10 h-10 stroke-[1.5] text-slate-400"
                                               />
                                             )}
-                                          </div>
+                                          </button>
                                           <div className="text-xs font-medium text-slate-700 truncate mb-1">
                                             {file.nome.split(' (Lavorazione:')[0]}
                                           </div>
@@ -928,8 +925,11 @@ const MaterialiDocumentale: React.FC = () => {
                                           key={idx}
                                           className="flex items-center py-3 hover:bg-slate-50 transition-colors px-2 rounded-md"
                                         >
-                                          <div
-                                            className="flex items-center justify-center w-10 h-10 mr-3 bg-white rounded border border-slate-200 cursor-pointer flex-shrink-0"
+                                          <button
+                                            type="button"
+                                            aria-label={`Anteprima ${file.nome}`}
+                                            disabled={!file.url}
+                                            className="flex items-center justify-center w-10 h-10 mr-3 bg-white rounded border border-slate-200 cursor-pointer flex-shrink-0 disabled:cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40"
                                             onClick={() => {
                                               if (file.url) {
                                                 setLightboxImage(file.url);
@@ -947,10 +947,11 @@ const MaterialiDocumentale: React.FC = () => {
                                             ) : (
                                               <Lucide
                                                 icon={getFileIcon(file.nome)}
+                                                aria-hidden="true"
                                                 className="w-5 h-5 stroke-[1.5]"
                                               />
                                             )}
-                                          </div>
+                                          </button>
                                           <div className="flex-grow min-w-0">
                                             <div className="text-sm font-medium text-slate-700 truncate">
                                               {file.nome.split(' (Lavorazione:')[0]}

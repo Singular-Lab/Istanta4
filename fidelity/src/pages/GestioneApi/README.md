@@ -27,7 +27,6 @@ src/pages/GestioneApi/
 ├── components/
 │   ├── statistics/             # Tab Statistiche
 │   │   ├── StatisticsTab.tsx
-│   │   ├── StatCard.tsx
 │   │   ├── ActivityTable.tsx
 │   │   └── ExportButton.tsx
 │   │
@@ -124,7 +123,7 @@ const { exportToCSV, exportToExcel, exportToPDF } = useStatisticsExport();
 - `createSuccessRateChartData()` - Dati grafico a torta
 - `createEndpointChartData()` - Dati grafico a barre
 - `createTemporalChartData()` - Dati grafico lineare
-- `chartOptions` - Configurazioni Chart.js
+- `createChartOptions()` - Configurazioni Chart.js basate sul tema comune (`@/utils/chartTheme`), da chiamare al render
 
 ### filterHelpers.ts
 - `validateFilterCondition()` - Valida singola condizione

@@ -185,7 +185,7 @@ const ReferenzeInVolantinoBox: React.FC<ReferenzeInVolantinoBoxProps> = ({
                                 <div className="flex items-center gap-2">
                                     <div
                                         className={clsx(
-                                            "inline-flex items-center justify-center rounded px-2 py-1 text-[10px] font-bold",
+                                            "inline-flex items-center justify-center rounded px-2 py-1 text-3xs font-bold",
                                             colorClass
                                         )}
                                     >
@@ -271,7 +271,7 @@ const ReferenzeInVolantinoBox: React.FC<ReferenzeInVolantinoBoxProps> = ({
                                         >
                                             {/* Nel volantino c'era, a listino no: l'ha compilata una persona. */}
                                             {fuoriListino && (
-                                                <div className="mb-2 inline-flex items-center gap-1 self-start rounded-md border border-warning/30 bg-warning/10 px-2 py-0.5 text-[10px] font-medium text-warning">
+                                                <div className="mb-2 inline-flex items-center gap-1 self-start rounded-md border border-warning/30 bg-warning/10 px-2 py-0.5 text-3xs font-medium text-warning">
                                                     <Lucide icon="TriangleAlert" className="h-3 w-3" />
                                                     Fuori listino
                                                 </div>
@@ -306,7 +306,7 @@ const ReferenzeInVolantinoBox: React.FC<ReferenzeInVolantinoBoxProps> = ({
                                                 </p>
 
                                                 {ref.codiceReferenza && (
-                                                    <p className="text-[10px] text-slate-500 mt-1 font-mono">
+                                                    <p className="text-3xs text-slate-500 mt-1 font-mono">
                                                         {ref.codiceReferenza}
                                                     </p>
                                                 )}
@@ -333,7 +333,7 @@ const ReferenzeInVolantinoBox: React.FC<ReferenzeInVolantinoBoxProps> = ({
                                                         className="h-3.5 w-3.5 mr-1.5"
                                                     />
                                                     Competitor Analyzer
-                                                    <span className="ml-1.5 inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold tracking-wide bg-warning/20 text-warning border border-warning/40 leading-none">
+                                                    <span className="ml-1.5 inline-flex items-center px-1 py-0.5 rounded text-3xs font-bold tracking-wide bg-warning/20 text-warning border border-warning/40 leading-none">
                                                         BETA
                                                     </span>
                                                 </Button>

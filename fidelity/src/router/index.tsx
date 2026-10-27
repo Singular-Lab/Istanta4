@@ -484,16 +484,10 @@ const routes: RouteObject[] = [
         },
       },
       {
+        // La pubblicazione si gestisce nel dettaglio del kit: il vecchio indirizzo porta lì
         path: "promozioni/in-corso/dettagli/:idPromo/kits/:idKit/dettagli-pubblicazione",
-        lazy: async () => {
-          const { default: DettaglioPubblicazioneKit } = await import(
-            "@/pages/DettaglioPubblicazioneKit"
-          );
-          return {
-            Component: DettaglioPubblicazioneKit,
-            loader: funzioneDettagliKit,
-          };
-        },
+        loader: ({ params }: LoaderFunctionArgs) =>
+          redirect(`/promozioni/in-corso/dettagli/${params.idPromo}/kits/${params.idKit}`),
       },
       {
         path: "promozioni/storico",

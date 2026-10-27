@@ -3,6 +3,7 @@ import { FormCheck, FormInput, FormSelect } from "@/components/Base/Form";
 import { Dialog, Popover } from "@/components/Base/Headless";
 import Lucide from "@/components/Base/Lucide";
 import PageHeader from "@/components/Base/PageHeader";
+import Spinner from "@/components/Base/Spinner";
 import { PermissionGate } from "@/components/PermissionGate";
 import withSessionCheck from "@/components/SessionChecker";
 import { PERMISSIONS } from "@/constants/permissions";
@@ -139,7 +140,7 @@ function GestioneApprofondimentoVini() {
     onError: () => {
       showNotification(<>
         <div className="flex items-center gap-2">
-          <Lucide icon="CircleAlert" className="w-4 h-4 text-red-500" />
+          <Lucide icon="CircleAlert" className="w-4 h-4 text-danger" />
           <span>Errore durante la generazione degli approfondimenti</span>
         </div>
       </>, {
@@ -181,7 +182,7 @@ function GestioneApprofondimentoVini() {
     onError: () => {
       showNotification(<>
         <div className="flex items-center gap-2">
-          <Lucide icon="CircleAlert" className="w-4 h-4 text-red-500" />
+          <Lucide icon="CircleAlert" className="w-4 h-4 text-danger" />
           <span>Errore durante l'eliminazione degli approfondimenti</span>
         </div>
       </>, {
@@ -330,12 +331,13 @@ function GestioneApprofondimentoVini() {
       >
         <Dialog.Panel>
           <Dialog.Title className="font-medium">
-            <h2 className="text-xl flex items-center">
+            <h2 className="title-card flex items-center">
               <Lucide
                 icon={confirmAction === 'generate' ? "TriangleAlert" : "CircleAlert"}
+                aria-hidden="true"
                 className={clsx(
                   "w-6 h-6 mr-2",
-                  confirmAction === 'generate' ? "text-blue-500" : "text-red-500"
+                  confirmAction === 'generate' ? "text-primary" : "text-danger"
                 )}
               />
               Conferma {confirmAction === 'generate' ? 'Generazione' : 'Eliminazione'}
@@ -458,8 +460,9 @@ function GestioneApprofondimentoVini() {
                     setSelectAll(false);
                   }}
                   className="shadow-sm"
+                  aria-label="Annulla selezione"
                 >
-                  <Lucide icon="X" className="stroke-[1.3] w-4 h-4" />
+                  <Lucide icon="X" aria-hidden="true" className="stroke-[1.3] w-4 h-4" />
                 </Button>
               </div>
             </div>
@@ -502,8 +505,7 @@ function GestioneApprofondimentoVini() {
                 <Table.Tr>
                   <Table.Td colSpan={7} className="text-center py-8">
                     <div className="flex items-center justify-center">
-                      <Lucide icon="Loader" className="w-5 h-5 mr-2 animate-spin" />
-                      Caricamento vini...
+                      <Spinner etichetta="Caricamento vini…" />
                     </div>
                   </Table.Td>
                 </Table.Tr>
@@ -583,9 +585,13 @@ function GestioneApprofondimentoVini() {
                     <Table.Td>
                       <div className="flex items-center justify-center">
                         <Popover className="h-5">
-                          <Popover.Button className="w-5 h-5 text-slate-500 hover:text-slate-700">
+                          <Popover.Button
+                            aria-label={`Azioni vino ${vino.dataFields.codice_referenza}`}
+                            className="w-5 h-5 text-slate-500 hover:text-slate-700"
+                          >
                             <Lucide
                               icon="EllipsisVertical"
+                              aria-hidden="true"
                               className="w-5 h-5 stroke-slate-400/70 fill-slate-400/70"
                             />
                           </Popover.Button>

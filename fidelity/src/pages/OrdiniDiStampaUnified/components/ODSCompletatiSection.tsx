@@ -1,10 +1,10 @@
 import Button from "@/components/Base/Button";
 import Lucide from "@/components/Base/Lucide";
 import Table from "@/components/Base/Table";
+import StatusBadge from "@/components/Base/StatusBadge";
 import EmptyState from "@/components/EmptyState";
-import dayjs from "dayjs";
+import { formatDataOra, VALORE_ASSENTE } from "@/utils/format";
 import React, { useMemo } from "react";
-import { STATO_ORDINI_STAMPA } from "../../../../lib/enums";
 import { OrdiniDiStampaResponseDTO } from "../../../../server/core/dto";
 
 interface ODSCompletatiSectionProps {
@@ -23,44 +23,16 @@ const ODSCompletatiSection: React.FC<ODSCompletatiSectionProps> = ({ ordini, sea
     );
   }, [ordini, searchQuery]);
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case STATO_ORDINI_STAMPA.FINITO:
-        return 'text-success bg-success/10';
-      case STATO_ORDINI_STAMPA.IN_REVISIONE:
-        return 'text-pending bg-pending/10';
-      case 'annullato':
-        return 'text-danger bg-danger/10';
-      case STATO_ORDINI_STAMPA.REVISIONATO:
-        return 'text-warning bg-warning/10';
-      default:
-        return 'text-info bg-info/10';
-    }
-  };
-
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case STATO_ORDINI_STAMPA.IN_REVISIONE:
-        return 'In revisione';
-      case STATO_ORDINI_STAMPA.FINITO:
-        return 'Completato';
-      case STATO_ORDINI_STAMPA.REVISIONATO:
-        return 'Revisionato';
-      default:
-        return status;
-    }
-  };
-
   return (
     <div>
       <div className="flex flex-col box box--stacked shadow-sm">
         {/* Enhanced Header with gradient background */}
         <div className="relative flex items-center gap-x-3 p-6 border-b border-slate-200/60 bg-gradient-to-r from-success/5 to-success/10">
-          <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-white shadow-sm">
-            <Lucide icon="CircleCheck" className="w-6 h-6 text-success" />
+          <div className="flex items-center justify-center w-12 h-12 rounded-card bg-white shadow-sm">
+            <Lucide icon="CircleCheck" aria-hidden="true" className="w-6 h-6 text-success" />
           </div>
           <div className="flex-1">
-            <h3 className="text-lg font-semibold text-slate-800">Ordini completati</h3>
+            <h3 className="title-section">Ordini completati</h3>
             <p className="text-sm text-slate-600 mt-0.5">Ordini di stampa inviati alla tipografia</p>
           </div>
           <div className="flex items-center gap-2">
@@ -123,22 +95,19 @@ const ODSCompletatiSection: React.FC<ODSCompletatiSectionProps> = ({ ordini, sea
                       <div className="font-medium text-slate-700">{ordine.nomePromo}</div>
                     </Table.Td>
                     <Table.Td className="py-4 border-dashed dark:bg-darkmode-600">
-                      <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold rounded-lg border border-success/20 ${getStatusColor(ordine.stato)}`}>
-                        <Lucide icon="Check" className="w-4 h-4" />
-                        {getStatusLabel(ordine.stato)}
-                      </div>
+                      <StatusBadge dominio="ordineStampa" stato={ordine.stato} icon="Check" />
                     </Table.Td>
                     <Table.Td className="py-4 border-dashed dark:bg-darkmode-600">
                       <div className="flex items-center gap-2">
                         {ordine.data_di_conferma ? (
                           <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 rounded-lg text-slate-700">
-                            <Lucide icon="Calendar" className="w-3.5 h-3.5 text-slate-500" />
+                            <Lucide icon="Calendar" aria-hidden="true" className="w-3.5 h-3.5 text-slate-500" />
                             <span className="text-sm font-medium">
-                              {dayjs(ordine.data_di_conferma).format("DD/MM/YYYY HH:mm")}
+                              {formatDataOra(ordine.data_di_conferma)}
                             </span>
                           </div>
                         ) : (
-                          <span className="text-sm text-slate-500 italic">Data non disponibile</span>
+                          <span className="text-sm text-slate-500">{VALORE_ASSENTE}</span>
                         )}
                       </div>
                     </Table.Td>
@@ -149,7 +118,7 @@ const ODSCompletatiSection: React.FC<ODSCompletatiSectionProps> = ({ ordini, sea
                         onClick={() => onViewDetails(ordine.id)}
                         className="shadow-sm hover:shadow-md transition-shadow"
                       >
-                        <Lucide icon="Eye" className="w-4 h-4 mr-2" />
+                        <Lucide icon="Eye" aria-hidden="true" className="w-4 h-4 mr-2" />
                         Visualizza
                       </Button>
                     </Table.Td>

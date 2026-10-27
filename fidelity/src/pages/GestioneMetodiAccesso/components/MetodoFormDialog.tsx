@@ -1,5 +1,5 @@
 import Button from "@/components/Base/Button";
-import { FormCheck, FormInput, FormLabel, FormSelect, FormSwitch, FormTextarea } from "@/components/Base/Form";
+import { FormCheck, FormField, FormInput, FormLabel, FormSelect, FormSwitch, FormTextarea } from "@/components/Base/Form";
 import { Dialog } from "@/components/Base/Headless";
 import Lucide from "@/components/Base/Lucide";
 import Tippy from "@/components/Base/Tippy";
@@ -175,19 +175,34 @@ const MetodoFormDialog = ({ open, provider, submitting = false, onClose, onSubmi
   const campoTesto = (mappa: "client" | "server", nome: string, extra?: ReactNode) => {
     const info = ETICHETTE[nome] ?? { label: nome };
     const id = `metodo-${mappa}-${nome}`;
-    return (
-      <div key={nome}>
-        <FormLabel htmlFor={id}>{info.label}</FormLabel>
-        <div className="mt-2 flex gap-2">
+    if (!extra) {
+      return (
+        <FormField key={nome} etichetta={info.label} aiuto={info.aiuto}>
           <FormInput
             id={id}
             value={valori[mappa][nome] ?? ""}
             placeholder={info.placeholder}
             onChange={(e) => aggiornaMappa(mappa, nome, e.target.value)}
           />
+        </FormField>
+      );
+    }
+    // Con un pulsante accanto il campo non è più l'unico figlio: etichetta e aiuto si collegano qui
+    const idAiuto = info.aiuto ? `${id}-aiuto` : undefined;
+    return (
+      <div key={nome}>
+        <FormLabel htmlFor={id}>{info.label}</FormLabel>
+        <div className="flex gap-2">
+          <FormInput
+            id={id}
+            aria-describedby={idAiuto}
+            value={valori[mappa][nome] ?? ""}
+            placeholder={info.placeholder}
+            onChange={(e) => aggiornaMappa(mappa, nome, e.target.value)}
+          />
           {extra}
         </div>
-        {info.aiuto && <div className="mt-1 text-xs text-slate-500">{info.aiuto}</div>}
+        {info.aiuto && <p id={idAiuto} className="mt-1.5 text-xs text-slate-500">{info.aiuto}</p>}
       </div>
     );
   };
@@ -224,35 +239,40 @@ const MetodoFormDialog = ({ open, provider, submitting = false, onClose, onSubmi
     const stato = provider?.segreti[nome] ?? "assente";
     const daRimuovere = valori.segreti_da_rimuovere.includes(nome);
     const id = `metodo-segreto-${nome}`;
+    const idStato = `${id}-stato`;
     return (
-      <div key={nome}>
-        <div className="flex items-center justify-between gap-2">
-          <FormLabel htmlFor={id} className="mb-0">{ETICHETTE_SEGRETI[nome] ?? nome}</FormLabel>
-          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${STATO_SEGRETO[daRimuovere ? "assente" : stato].classe}`}>
-            {daRimuovere ? "Verrà rimosso" : STATO_SEGRETO[stato].testo}
-          </span>
-        </div>
-        {nome === "sp_private_key" ? (
-          <FormTextarea
-            id={id}
-            rows={4}
-            className="mt-2 font-mono text-xs"
-            autoComplete="off"
-            value={valori.segreti[nome] ?? ""}
-            placeholder={stato === "assente" ? "-----BEGIN PRIVATE KEY-----" : "Lascia vuoto per mantenere la chiave salvata"}
-            onChange={(e) => aggiornaMappa("segreti", nome, e.target.value)}
-          />
-        ) : (
-          <FormInput
-            className="mt-2"
-            id={id}
-            type="password"
-            autoComplete="new-password"
-            value={valori.segreti[nome] ?? ""}
-            placeholder={stato === "assente" ? "" : "Lascia vuoto per mantenere il valore salvato"}
-            onChange={(e) => aggiornaMappa("segreti", nome, e.target.value)}
-          />
-        )}
+      <div key={nome} className="relative">
+        {/* Lo stato del segreto sta sulla riga dell'etichetta e descrive il campo */}
+        <span
+          id={idStato}
+          className={`absolute right-0 top-0 inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${STATO_SEGRETO[daRimuovere ? "assente" : stato].classe}`}
+        >
+          {daRimuovere ? "Verrà rimosso" : STATO_SEGRETO[stato].testo}
+        </span>
+        <FormField etichetta={ETICHETTE_SEGRETI[nome] ?? nome}>
+          {nome === "sp_private_key" ? (
+            <FormTextarea
+              id={id}
+              aria-describedby={idStato}
+              rows={4}
+              className="font-mono text-xs"
+              autoComplete="off"
+              value={valori.segreti[nome] ?? ""}
+              placeholder={stato === "assente" ? "-----BEGIN PRIVATE KEY-----" : "Lascia vuoto per mantenere la chiave salvata"}
+              onChange={(e) => aggiornaMappa("segreti", nome, e.target.value)}
+            />
+          ) : (
+            <FormInput
+              id={id}
+              aria-describedby={idStato}
+              type="password"
+              autoComplete="new-password"
+              value={valori.segreti[nome] ?? ""}
+              placeholder={stato === "assente" ? "" : "Lascia vuoto per mantenere il valore salvato"}
+              onChange={(e) => aggiornaMappa("segreti", nome, e.target.value)}
+            />
+          )}
+        </FormField>
         {facoltativo && stato !== "assente" && (
           <div className="mt-1 flex justify-end text-xs">
             <button
@@ -324,7 +344,7 @@ const MetodoFormDialog = ({ open, provider, submitting = false, onClose, onSubmi
           <Dialog.Description className="min-h-0 flex-1 overflow-y-auto p-0">
             <div className="space-y-5 bg-slate-50/50 px-5 py-5">
               {errore && (
-                <div role="alert" className="rounded-xl border border-danger/20 bg-danger/5 px-4 py-3 text-sm text-danger flex items-start gap-2">
+                <div role="alert" className="rounded-control border border-danger/20 bg-danger/5 px-4 py-3 text-sm text-danger flex items-start gap-2">
                   <Lucide icon="AlertTriangle" className="w-4 h-4 shrink-0 mt-0.5" />
                   <span>{errore}</span>
                 </div>
@@ -344,7 +364,7 @@ const MetodoFormDialog = ({ open, provider, submitting = false, onClose, onSubmi
                               role="radio"
                               aria-checked={scelto}
                               onClick={() => cambiaTipo(t.value)}
-                              className={`flex items-start gap-3 rounded-xl border px-3 py-3 text-left transition ${scelto ? "border-primary/40 bg-primary/5" : "border-slate-200 bg-white hover:border-primary/30"}`}
+                              className={`flex items-start gap-3 rounded-card border px-3 py-3 text-left transition ${scelto ? "border-primary/40 bg-primary/5" : "border-slate-200 bg-white hover:border-primary/30"}`}
                             >
                               <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${scelto ? "bg-primary text-white" : "bg-slate-100 text-slate-500"}`}>
                                 <Lucide icon={t.icona} className="w-4 h-4" />
@@ -362,27 +382,22 @@ const MetodoFormDialog = ({ open, provider, submitting = false, onClose, onSubmi
 
                   <Sezione titolo="Dati del metodo" descrizione="Come il metodo compare nella pagina di login.">
                     <div className="grid gap-4 sm:grid-cols-2">
-                      <div>
-                        <FormLabel htmlFor="metodo-codice">Codice</FormLabel>
+                      <FormField etichetta="Codice" aiuto="Fa parte degli indirizzi di ritorno: non si cambia dopo la creazione.">
                         <FormInput
-                          className="mt-2"
                           id="metodo-codice"
                           value={valori.codice}
                           readOnly={modifica}
                           placeholder="entra_id"
                           onChange={(e) => aggiorna("codice", e.target.value.toLowerCase())}
                         />
-                        <div className="mt-1 text-xs text-slate-500">Fa parte degli indirizzi di ritorno: non si cambia dopo la creazione.</div>
-                      </div>
-                      <div>
-                        <FormLabel htmlFor="metodo-nome">Nome</FormLabel>
-                        <FormInput className="mt-2" id="metodo-nome" value={valori.nome} maxLength={100} onChange={(e) => aggiorna("nome", e.target.value)} />
-                      </div>
+                      </FormField>
+                      <FormField etichetta="Nome">
+                        <FormInput id="metodo-nome" value={valori.nome} maxLength={100} onChange={(e) => aggiorna("nome", e.target.value)} />
+                      </FormField>
                     </div>
-                    <div>
-                      <FormLabel htmlFor="metodo-descrizione">Descrizione</FormLabel>
-                      <FormInput className="mt-2" id="metodo-descrizione" value={valori.descrizione} onChange={(e) => aggiorna("descrizione", e.target.value)} />
-                    </div>
+                    <FormField etichetta="Descrizione">
+                      <FormInput id="metodo-descrizione" value={valori.descrizione} onChange={(e) => aggiorna("descrizione", e.target.value)} />
+                    </FormField>
                     <IconInput
                       label="Icona"
                       name="metodo-icona"
@@ -391,7 +406,7 @@ const MetodoFormDialog = ({ open, provider, submitting = false, onClose, onSubmi
                       helperText="Nome di un'icona Lucide oppure un'immagine."
                       onChange={(v) => aggiorna("icona", v)}
                     />
-                    <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/80 p-4">
+                    <div className="rounded-card border border-dashed border-slate-200 bg-slate-50/80 p-4">
                       <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Anteprima nella pagina di login</div>
                       <div className="mt-3 max-w-sm">
                         <ProviderCard provider={anteprima} isExpanded={false} onClick={() => undefined} index={0} />
@@ -419,18 +434,16 @@ const MetodoFormDialog = ({ open, provider, submitting = false, onClose, onSubmi
                       titolo="Restrizioni"
                       descrizione="Applicate dopo che il fornitore ha riconosciuto l'utente. Senza restrizioni entra chiunque sia registrato in Fidelity."
                     >
-                      <div>
-                        <FormLabel htmlFor="metodo-domini">Domini email ammessi</FormLabel>
+                      <FormField etichetta="Domini email ammessi">
                         <FormInput
-                          className="mt-2"
                           id="metodo-domini"
                           value={valori.domini_ammessi}
                           placeholder="esempio.it, gruppo.esempio.it"
                           onChange={(e) => aggiorna("domini_ammessi", e.target.value)}
                         />
-                      </div>
+                      </FormField>
                       <div>
-                        <div className="flex items-center justify-between rounded-xl border border-slate-200/80 bg-white px-4 py-3">
+                        <div className="flex items-center justify-between rounded-card border border-slate-200/80 bg-white px-4 py-3">
                           <div className="text-xs text-slate-500">
                             <span className="font-semibold text-slate-700">Tipi utente ammessi</span>
                             {" · "}
@@ -450,7 +463,7 @@ const MetodoFormDialog = ({ open, provider, submitting = false, onClose, onSubmi
                             return (
                               <FormCheck
                                 key={ruolo}
-                                className={`items-start gap-3 rounded-xl border px-3 py-3 transition ${scelto ? "border-primary/40 bg-primary/5" : "border-slate-200 bg-white"}`}
+                                className={`items-start gap-3 rounded-card border px-3 py-3 transition ${scelto ? "border-primary/40 bg-primary/5" : "border-slate-200 bg-white"}`}
                               >
                                 <FormCheck.Input
                                   id={`metodo-ruolo-${ruolo}`}
@@ -501,8 +514,9 @@ const MetodoFormDialog = ({ open, provider, submitting = false, onClose, onSubmi
                       <Sezione titolo="Identity provider" descrizione="Importa i metadati dell'IdP oppure compila i campi a mano.">
                         {campoTesto("server", "metadata_url", pulsanteImporta("metadata-url", !!valori.server.metadata_url))}
                         <div>
-                          <FormLabel htmlFor="metodo-xml">Oppure incolla i metadati XML</FormLabel>
-                          <FormTextarea id="metodo-xml" rows={3} className="mt-2 font-mono text-xs" value={xmlMetadati} onChange={(e) => setXmlMetadati(e.target.value)} />
+                          <FormField etichetta="Oppure incolla i metadati XML">
+                            <FormTextarea id="metodo-xml" rows={3} className="font-mono text-xs" value={xmlMetadati} onChange={(e) => setXmlMetadati(e.target.value)} />
+                          </FormField>
                           <div className="mt-2 flex justify-end">
                             <Button
                               type="button"
@@ -519,18 +533,19 @@ const MetodoFormDialog = ({ open, provider, submitting = false, onClose, onSubmi
                         </div>
                         {campoTesto("server", "entry_point")}
                         {campoTesto("server", "idp_issuer")}
-                        <div>
-                          <FormLabel htmlFor="metodo-idp-certs">Certificati di firma dell'IdP</FormLabel>
+                        <FormField
+                          etichetta="Certificati di firma dell'IdP"
+                          aiuto="Più certificati, uno dopo l'altro, durante il rinnovo del certificato dell'IdP."
+                        >
                           <FormTextarea
                             id="metodo-idp-certs"
                             rows={5}
-                            className="mt-2 font-mono text-xs"
+                            className="font-mono text-xs"
                             value={valori.idp_certs}
                             placeholder="-----BEGIN CERTIFICATE-----"
                             onChange={(e) => aggiorna("idp_certs", e.target.value)}
                           />
-                          <div className="mt-1 text-xs text-slate-500">Più certificati, uno dopo l'altro, durante il rinnovo del certificato dell'IdP.</div>
-                        </div>
+                        </FormField>
                       </Sezione>
 
                       <Sezione titolo="Service provider (Fidelity)" descrizione={`Come Fidelity si presenta all'IdP e come legge la risposta. ${NOTA_SEGRETI}`}>
@@ -545,10 +560,8 @@ const MetodoFormDialog = ({ open, provider, submitting = false, onClose, onSubmi
                           </Avviso>
                         )}
                         <div className="grid gap-4 sm:grid-cols-2">
-                          <div>
-                            <FormLabel htmlFor="metodo-server-signature_algorithm">{ETICHETTE.signature_algorithm.label}</FormLabel>
+                          <FormField etichetta={ETICHETTE.signature_algorithm.label}>
                             <FormSelect
-                              className="mt-2"
                               id="metodo-server-signature_algorithm"
                               value={valori.server.signature_algorithm || "sha256"}
                               onChange={(e) => aggiornaMappa("server", "signature_algorithm", e.target.value)}
@@ -557,7 +570,7 @@ const MetodoFormDialog = ({ open, provider, submitting = false, onClose, onSubmi
                               <option value="sha512">SHA-512</option>
                               <option value="sha1">SHA-1 (sconsigliato)</option>
                             </FormSelect>
-                          </div>
+                          </FormField>
                           {campoTesto("server", "clock_skew_ms")}
                         </div>
                         {campoTesto("server", "identifier_format")}
@@ -570,17 +583,18 @@ const MetodoFormDialog = ({ open, provider, submitting = false, onClose, onSubmi
                           {CAMPI_SERVER_BOOLEANI.saml.map(({ nome }) => flag(nome))}
                         </div>
                         {campoSegreto("sp_private_key", true)}
-                        <div>
-                          <FormLabel htmlFor="metodo-sp-cert">Certificato del service provider</FormLabel>
+                        <FormField
+                          etichetta="Certificato del service provider"
+                          aiuto="Facoltativi, insieme alla chiave: firmano le richieste e compaiono nei metadati."
+                        >
                           <FormTextarea
                             id="metodo-sp-cert"
                             rows={3}
-                            className="mt-2 font-mono text-xs"
+                            className="font-mono text-xs"
                             value={valori.sp_certificate}
                             onChange={(e) => aggiorna("sp_certificate", e.target.value)}
                           />
-                          <div className="mt-1 text-xs text-slate-500">Facoltativi, insieme alla chiave: firmano le richieste e compaiono nei metadati.</div>
-                        </div>
+                        </FormField>
                       </Sezione>
                     </>
                   )}

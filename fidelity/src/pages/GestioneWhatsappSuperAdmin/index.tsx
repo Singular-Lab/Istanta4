@@ -2,12 +2,15 @@ import React, { useState } from "react";
 import { Await, useLoaderData, useNavigate } from "react-router-dom";
 import { Fragment } from "react/jsx-runtime";
 import { STATO_GDO_WHATSAPP_NUMBER } from "../../../lib/enums";
-import Badge from "../../components/Base/Badge";
 import Button from "../../components/Base/Button";
+import { FormInput, FormSelect } from "../../components/Base/Form";
 import Lucide from "../../components/Base/Lucide";
 import PageHeader from "../../components/Base/PageHeader";
+import Spinner from "../../components/Base/Spinner";
+import StatusBadge from "../../components/Base/StatusBadge";
 import Table from "../../components/Base/Table";
 import withSessionCheck from "../../components/SessionChecker";
+import { descriviStato } from "../../constants/stati";
 
 
 const GestioneWhatsappSuperAdmin: React.FC = () => {
@@ -20,32 +23,6 @@ const GestioneWhatsappSuperAdmin: React.FC = () => {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStato, setFilterStato] = useState<string>("all");
-
-  const renderBadgeStatoWhatsapp = (stato: STATO_GDO_WHATSAPP_NUMBER) => {
-    switch (stato) {
-      case STATO_GDO_WHATSAPP_NUMBER.PENDING:
-        return <Badge border size="sm" variant="warning">In attesa di verifica</Badge>;
-      case STATO_GDO_WHATSAPP_NUMBER.VERIFIED:
-        return <Badge border size="sm" variant="success">Verificato</Badge>;
-      case STATO_GDO_WHATSAPP_NUMBER.PAUSED:
-        return <Badge border size="sm" variant="error">In pausa</Badge>;
-      default:
-        return <Badge border size="sm" variant="secondary">Sconosciuto</Badge>;
-    }
-  };
-
-  const getStatoIcon = (stato: STATO_GDO_WHATSAPP_NUMBER) => {
-    switch (stato) {
-      case STATO_GDO_WHATSAPP_NUMBER.VERIFIED:
-        return <Lucide icon="CircleCheck" className="w-4 h-4 text-success mr-1" />;
-      case STATO_GDO_WHATSAPP_NUMBER.PENDING:
-        return <Lucide icon="Clock" className="w-4 h-4 text-warning mr-1" />;
-      case STATO_GDO_WHATSAPP_NUMBER.PAUSED:
-        return <Lucide icon="CirclePause" className="w-4 h-4 text-error mr-1" />;
-      default:
-        return <Lucide icon="CircleHelp" className="w-4 h-4 text-slate-500 mr-1" />;
-    }
-  };
 
   const filterGdos = (gdos: any[]) => {
     return gdos.filter((gdo) => {
@@ -60,7 +37,6 @@ const GestioneWhatsappSuperAdmin: React.FC = () => {
       return matchesSearch && matchesStato;
     });
   };
-  document.getElementById
   return (
     <Fragment>
       <PageHeader
@@ -74,27 +50,29 @@ const GestioneWhatsappSuperAdmin: React.FC = () => {
             <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
               <div className="flex-1 w-full lg:w-auto">
                 <div className="relative">
-                  <Lucide icon="Search" className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                  <input
-                    type="text"
+                  <Lucide icon="Search" aria-hidden="true" className="absolute left-3 top-1/2 z-20 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <FormInput
+                    type="search"
+                    aria-label="Cerca GDO"
                     placeholder="Cerca per nome GDO, ragione sociale, email o numero..."
-                    className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                    className="pl-10"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
                 </div>
               </div>
               <div className="flex gap-2 items-center">
-                <select
-                  className="px-4 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-white"
+                <FormSelect
+                  aria-label="Filtra per stato"
+                  className="w-auto"
                   value={filterStato}
                   onChange={(e) => setFilterStato(e.target.value)}
                 >
                   <option value="all">Tutti gli stati</option>
-                  <option value={STATO_GDO_WHATSAPP_NUMBER.VERIFIED}>Verificato</option>
-                  <option value={STATO_GDO_WHATSAPP_NUMBER.PENDING}>In attesa</option>
-                  <option value={STATO_GDO_WHATSAPP_NUMBER.PAUSED}>In pausa</option>
-                </select>
+                  {Object.values(STATO_GDO_WHATSAPP_NUMBER).map((stato) => (
+                    <option key={stato} value={stato}>{descriviStato("waNumero", stato).etichetta}</option>
+                  ))}
+                </FormSelect>
               </div>
             </div>
           </div>
@@ -104,8 +82,8 @@ const GestioneWhatsappSuperAdmin: React.FC = () => {
             <React.Suspense fallback={
               <div className="flex items-center justify-center p-12">
                 <div className="flex flex-col items-center gap-3">
-                  <Lucide icon="Loader" className="w-8 h-8 animate-spin text-primary" />
-                  <p className="text-slate-500">Caricamento dati...</p>
+                  <Spinner size="lg" decorativo />
+                  <p role="status" className="text-slate-500">Caricamento dati...</p>
                 </div>
               </div>
             }>
@@ -218,8 +196,9 @@ const GestioneWhatsappSuperAdmin: React.FC = () => {
                               {/* Colonna Stato */}
                               <Table.Td className="py-4">
                                 <div className="flex items-center">
-                                  {getStatoIcon(gdo?.stato as STATO_GDO_WHATSAPP_NUMBER)}
-                                  {renderBadgeStatoWhatsapp(gdo?.stato as STATO_GDO_WHATSAPP_NUMBER)}
+                                  {gdo?.stato
+                                    ? <StatusBadge dominio="waNumero" stato={gdo.stato} />
+                                    : <StatusBadge tono="neutral" etichetta="Non configurato" />}
                                 </div>
                               </Table.Td>
 

@@ -96,12 +96,14 @@ export default function MaintenanceBanner() {
       </div>
       {isSuperadmin && (
         <button
+          type="button"
           onClick={() => deleteMutation.mutate()}
           disabled={deleteMutation.isPending}
           className="flex-shrink-0 p-1 rounded hover:bg-amber-600 transition-colors disabled:opacity-50"
           title="Rimuovi avviso"
+          aria-label="Rimuovi avviso"
         >
-          <Lucide icon="X" className="w-4 h-4" />
+          <Lucide icon="X" aria-hidden="true" className="w-4 h-4" />
         </button>
       )}
     </div>

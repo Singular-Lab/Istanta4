@@ -434,6 +434,7 @@ export class FileManagementService implements IFileManagementService {
     nome?: string;
   }, metadataFilter?: { field: string; value: string }): Promise<any> {
     try {
+      // Il nome non restringe i kit: con il titolo del kit in AND i file cercati per nome non si trovavano
       let allKit = await this.kitRuntimeService.getAllCombinazioniRuntimeFilters({
         idArea: filters.idArea,
         idCanale: filters.idCanale,
@@ -442,7 +443,6 @@ export class FileManagementService implements IFileManagementService {
         idPv: filters.idPuntoVendita,
         idLavorazione: filters.idLavorazione,
         idCombinazione: filters.idCombinazione,
-        nome: filters.nome
       });
       const correggoTipoExport = (await this.tipoExportService.getAllTipiExport()).find((t) => t.codice === EXPORT_DI_SISTEMA.CORREGGO);
       allKit = allKit.filter((kit) => kit.tipo === TIPO_KIT_DESIGN.MANUALE);
@@ -497,15 +497,19 @@ export class FileManagementService implements IFileManagementService {
           });
         }
 
-        // Filtro nome
+        // Filtro nome: il file corrisponde per nome, per i campi meta configurati o per il titolo del suo kit
         if (filters.nome) {
           const searchTerm = filters.nome.toLowerCase();
-          mappedFiles = mappedFiles.filter((file) =>
-            file.nome.toLowerCase().includes(searchTerm) ||
-            (data_fields_files?.some((field: string) =>
-              (file.meta_olimpo_cloud?.[field]?.toLowerCase() || '').includes(searchTerm)
-            ) ?? false)
-          );
+          const contiene = (valore: unknown) => {
+            const testo = typeof valore === 'string' ? valore : (valore as { content?: unknown } | null | undefined)?.content;
+            return typeof testo === 'string' && testo.toLowerCase().includes(searchTerm);
+          };
+          if (!contiene(kit.titolo)) {
+            mappedFiles = mappedFiles.filter((file) =>
+              contiene(file.nome) ||
+              (data_fields_files?.some((field: string) => contiene(file.meta_olimpo_cloud?.[field])) ?? false)
+            );
+          }
         }
 
         if (mappedFiles.length === 0) continue;

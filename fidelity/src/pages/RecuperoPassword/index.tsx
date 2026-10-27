@@ -1,7 +1,9 @@
 import IstantaLogo from "@/assets/images/logo_ext.png";
+import Alert from "@/components/Base/Alert";
 import Button from "@/components/Base/Button";
-import { FormInput, FormLabel } from "@/components/Base/Form";
+import { FormField, FormInput } from "@/components/Base/Form";
 import Lucide from "@/components/Base/Lucide";
+import Spinner from "@/components/Base/Spinner";
 import { yupResolver } from "@hookform/resolvers/yup";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
@@ -98,14 +100,14 @@ const RecuperoPassword: React.FC = () => {
 
       <div className="relative min-h-screen flex items-center justify-center px-4 py-10 sm:px-6">
         <div className="w-full max-w-[460px]">
-          {/* Card glassmorphism */}
-          <div className="backdrop-blur-xl bg-white/75 border border-white/30 rounded-3xl shadow-2xl p-8 sm:p-10">
+          {/* Card glassmorphism: sullo sfondo a gradiente l'ombra standard della card non la stacca */}
+          <div className="backdrop-blur-xl bg-white/75 border border-white/30 rounded-card shadow-2xl p-8 sm:p-10">
             {/* Logo */}
             <div className="flex justify-center mb-6">
               <img src={IstantaLogo} alt="Istanta 2 GDO Suite" className="h-12 sm:h-14" />
             </div>
 
-            <h1 className="text-center font-urbanist text-xl sm:text-2xl font-semibold text-slate-800 mb-1">
+            <h1 className="title-page text-center text-slate-800 mb-1">
               Recupero Password
             </h1>
             <p className="text-center text-sm text-slate-500 mb-6">
@@ -118,33 +120,33 @@ const RecuperoPassword: React.FC = () => {
             {/* Loading */}
             {loadingProviders && (
               <div className="flex items-center justify-center py-8">
-                <Lucide icon="Loader" className="w-6 h-6 animate-spin text-theme-1" />
+                <Spinner size="md" etichetta="Caricamento metodi di accesso" />
               </div>
             )}
 
             {/* Errore */}
             {generalError && (
-              <div className="flex items-center px-4 py-3 mb-5 bg-red-100/80 border border-red-400/50 text-red-700 rounded-xl backdrop-blur-sm">
-                <Lucide icon="CircleAlert" className="w-5 h-5 mr-2 shrink-0" />
+              <Alert variant="soft-danger" className="flex items-center gap-2 px-4 py-3 mb-5">
+                <Lucide icon="CircleAlert" aria-hidden="true" className="w-5 h-5 shrink-0" />
                 <span className="text-sm">
                   <span className="font-medium mr-1">Errore:</span>
                   {generalError}
                 </span>
-                <button onClick={() => setGeneralError(null)} className="ml-auto shrink-0" aria-label="Chiudi">
-                  <Lucide icon="X" className="w-4 h-4" />
+                <button type="button" onClick={() => setGeneralError(null)} className="ml-auto shrink-0" aria-label="Chiudi">
+                  <Lucide icon="X" aria-hidden="true" className="w-4 h-4" />
                 </button>
-              </div>
+              </Alert>
             )}
 
             {/* Successo */}
             {successMessage && (
-              <div className="flex items-start px-4 py-3 mb-5 bg-emerald-100/80 border border-emerald-400/50 text-emerald-700 rounded-xl backdrop-blur-sm">
-                <Lucide icon="CircleCheck" className="w-5 h-5 mr-2 shrink-0 mt-0.5" />
+              <Alert variant="soft-success" className="flex items-start gap-2 px-4 py-3 mb-5">
+                <Lucide icon="CircleCheck" aria-hidden="true" className="w-5 h-5 shrink-0 mt-0.5" />
                 <span className="text-sm">{successMessage}</span>
-                <button onClick={() => setSuccessMessage(null)} className="ml-auto shrink-0" aria-label="Chiudi">
-                  <Lucide icon="X" className="w-4 h-4" />
+                <button type="button" onClick={() => setSuccessMessage(null)} className="ml-auto shrink-0" aria-label="Chiudi">
+                  <Lucide icon="X" aria-hidden="true" className="w-4 h-4" />
                 </button>
-              </div>
+              </Alert>
             )}
 
             {!loadingProviders && (
@@ -155,41 +157,28 @@ const RecuperoPassword: React.FC = () => {
                     onSubmit={handleSubmit(onSubmit, onFormError)}
                     className="space-y-4 animate-fade-in-up"
                   >
-                    <div>
-                      <FormLabel htmlFor="email">Email</FormLabel>
+                    <FormField etichetta="Email" errore={errors.email?.message}>
                       <FormInput
                         id="email"
                         {...register("email")}
                         type="email"
                         className={clsx(
-                          "block px-4 py-3 rounded-xl border-slate-300/80 w-full",
+                          "block px-4 py-3 rounded-control border-slate-300/80 w-full",
                           errors.email && "border-danger"
                         )}
                         placeholder="inserisci la tua email"
                         autoComplete="email"
                       />
-                      {errors.email && (
-                        <p className="text-danger mt-1.5 text-xs">{errors.email.message}</p>
-                      )}
-                    </div>
+                    </FormField>
 
                     <Button
                       variant="primary"
                       rounded
                       type="submit"
-                      disabled={isSubmitting || recuperoMutation.isPending}
-                      className={clsx(
-                        "bg-gradient-to-r from-theme-1/90 to-theme-2/90 w-full py-3",
-                        (isSubmitting || recuperoMutation.isPending) && "opacity-70 cursor-not-allowed"
-                      )}
+                      loading={isSubmitting || recuperoMutation.isPending}
+                      className="bg-gradient-to-r from-theme-1/90 to-theme-2/90 w-full py-3"
                     >
-                      {isSubmitting || recuperoMutation.isPending ? (
-                        <div className="flex items-center justify-center">
-                          <Lucide icon="Loader" className="w-5 h-5 mr-2 animate-spin" /> Invio in corso...
-                        </div>
-                      ) : (
-                        "Invia Istruzioni"
-                      )}
+                      Invia Istruzioni
                     </Button>
                   </form>
                 )}
@@ -206,13 +195,13 @@ const RecuperoPassword: React.FC = () => {
                     )}
 
                     {!hasInternalProvider && (
-                      <div className="flex items-start px-4 py-3 mb-4 bg-amber-50/80 border border-amber-300/50 text-amber-700 rounded-xl backdrop-blur-sm">
-                        <Lucide icon="Info" className="w-5 h-5 mr-2 shrink-0 mt-0.5" />
+                      <Alert variant="soft-warning" className="flex items-start gap-2 px-4 py-3 mb-4">
+                        <Lucide icon="Info" aria-hidden="true" className="w-5 h-5 shrink-0 mt-0.5" />
                         <span className="text-sm">
                           Il recupero password è gestito dal tuo provider di autenticazione.
                           Seleziona il servizio per procedere.
                         </span>
-                      </div>
+                      </Alert>
                     )}
 
                     <div className="space-y-2">
@@ -223,7 +212,7 @@ const RecuperoPassword: React.FC = () => {
                           onClick={() => handleExternalReset(provider)}
                           disabled={!provider.config_client?.password_reset_url}
                           className={clsx(
-                            "w-full flex items-center gap-4 p-4 rounded-xl transition-all duration-300 text-left",
+                            "w-full flex items-center gap-4 p-4 rounded-control transition-all duration-300 text-left",
                             "border border-slate-200/50",
                             provider.config_client?.password_reset_url
                               ? "hover:border-theme-1/30 hover:bg-theme-1/5 hover:shadow-lg hover:-translate-y-0.5 cursor-pointer"
@@ -261,12 +250,12 @@ const RecuperoPassword: React.FC = () => {
 
                 {/* Nessun provider configurato */}
                 {providers.length === 0 && !loadingProviders && (
-                  <div className="flex items-start px-4 py-3 bg-slate-100/80 border border-slate-300/50 text-slate-600 rounded-xl">
-                    <Lucide icon="AlertTriangle" className="w-5 h-5 mr-2 shrink-0 mt-0.5" />
+                  <Alert variant="soft-secondary" className="flex items-start gap-2 px-4 py-3">
+                    <Lucide icon="AlertTriangle" aria-hidden="true" className="w-5 h-5 shrink-0 mt-0.5" />
                     <span className="text-sm">
                       Nessun provider di autenticazione configurato. Contatta l'amministratore del sistema.
                     </span>
-                  </div>
+                  </Alert>
                 )}
               </div>
             )}

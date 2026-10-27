@@ -2,6 +2,7 @@ import Badge from '@/components/Base/Badge';
 import Button from '@/components/Base/Button';
 import { FormInput } from '@/components/Base/Form';
 import Lucide from '@/components/Base/Lucide';
+import StatusBadge from '@/components/Base/StatusBadge';
 import Table from '@/components/Base/Table';
 import EmptyState from '@/components/EmptyState';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -73,10 +74,10 @@ export default function CombinationDetailPanel({
       <div className="pb-4 mb-4 border-b border-dashed border-slate-300/70 flex justify-between items-center gap-3">
         <div className="flex items-center gap-2 min-w-0">
           <Lucide icon="Boxes" className="w-5 h-5 text-primary shrink-0" />
-          <span className="font-medium text-[0.94rem] truncate">
+          <h2 className="title-card truncate">
             Combinazioni di{' '}
             <span className="text-primary font-semibold">{selectedTemplate.titolo}</span>
-          </span>
+          </h2>
           {!isLoading && (
             <Badge variant="info" size="sm" className="px-2 py-1 shrink-0">
               {combinations.length}
@@ -88,7 +89,7 @@ export default function CombinationDetailPanel({
           className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-slate-100 transition-colors shrink-0"
           aria-label="Chiudi pannello"
         >
-          <Lucide icon="X" className="w-4 h-4 text-slate-400" />
+          <Lucide icon="X" aria-hidden="true" className="w-4 h-4 text-slate-400" />
         </button>
       </div>
 
@@ -146,9 +147,10 @@ export default function CombinationDetailPanel({
                     </Table.Td>
                     <Table.Td className="px-5 py-3">{tipoBadge(combo.tipo)}</Table.Td>
                     <Table.Td className="px-5 py-3">
-                      <Badge variant={combo.stato === STATO_COMBINAZIONI.DISATTIVO ? 'warning' : 'success'} size="sm">
-                        {combo.stato === STATO_COMBINAZIONI.DISATTIVO ? 'Disattivato' : 'Attivo'}
-                      </Badge>
+                      <StatusBadge
+                        tono={combo.stato === STATO_COMBINAZIONI.DISATTIVO ? 'neutral' : 'success'}
+                        etichetta={combo.stato === STATO_COMBINAZIONI.DISATTIVO ? 'Disattivato' : 'Attivo'}
+                      />
                     </Table.Td>
                     <Table.Td className="px-5 py-3 text-center">
                       <div className="flex items-center justify-center gap-1.5">

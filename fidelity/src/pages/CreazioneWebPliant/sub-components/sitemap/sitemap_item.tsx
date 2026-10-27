@@ -196,50 +196,56 @@ const SitemapItem: React.FC<{
                     )}
                 </div>
                 <Popover className="relative">
-                    <Popover.Button as={Button} variant="outline-secondary" size="sm" className="!p-2">
-                        <Lucide icon="Ellipsis" className="w-5 h-5"/>
+                    <Popover.Button as={Button} variant="outline-secondary" size="sm" className="!p-2" aria-label="Azioni sitemap">
+                        <Lucide icon="Ellipsis" aria-hidden="true" className="w-5 h-5"/>
                     </Popover.Button>
                     <Popover.Panel className="w-56 z-50">
                         <div className="p-1">
-                            <div
+                            <button
+                                type="button"
                                 onClick={toggleEdit}
-                                className="flex items-center p-2 transition duration-300 ease-in-out rounded-md cursor-pointer hover:bg-slate-100 dark:hover:bg-darkmode-400"
+                                className="w-full text-left flex items-center p-2 transition duration-300 ease-in-out rounded-md cursor-pointer hover:bg-slate-100 dark:hover:bg-darkmode-400"
                                 >
-                                <Lucide icon="Pen" className="w-4 h-4 mr-2" />
+                                <Lucide icon="Pen" aria-hidden="true" className="w-4 h-4 mr-2" />
                                 {isEditing ? "Salva" : "Rinomina"}
-                            </div>
-                            <div
+                            </button>
+                            <button
+                                type="button"
                                 onClick={() => !hasExternalLink && addPage()}
+                                disabled={hasExternalLink}
                                 className={clsx(
-                                    "flex items-center p-2 transition duration-300 ease-in-out rounded-md",
+                                    "w-full text-left flex items-center p-2 transition duration-300 ease-in-out rounded-md",
                                     hasExternalLink ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-slate-100 dark:hover:bg-darkmode-400"
                                 )}
                                 >
-                                <Lucide icon="Plus" className="w-4 h-4 mr-2" />
+                                <Lucide icon="Plus" aria-hidden="true" className="w-4 h-4 mr-2" />
                                 Aggiungi Pagina
-                            </div>
-                            <div
+                            </button>
+                            <button
+                                type="button"
                                 onClick={toggleExternalLink}
-                                className="flex items-center p-2 transition duration-300 ease-in-out rounded-md cursor-pointer hover:bg-slate-100 dark:hover:bg-darkmode-400"
+                                className="w-full text-left flex items-center p-2 transition duration-300 ease-in-out rounded-md cursor-pointer hover:bg-slate-100 dark:hover:bg-darkmode-400"
                                 >
-                                <Lucide icon="Link" className="w-4 h-4 mr-2" />
+                                <Lucide icon="Link" aria-hidden="true" className="w-4 h-4 mr-2" />
                                 {hasExternalLink ? "Rimuovi Link Esterno" : "Aggiungi Link Esterno"}
-                            </div>
-                            <div
+                            </button>
+                            <button
+                                type="button"
                                 onClick={toggleAdvancedSettings}
-                                className="flex items-center p-2 transition duration-300 ease-in-out rounded-md cursor-pointer hover:bg-slate-100 dark:hover:bg-darkmode-400"
+                                className="w-full text-left flex items-center p-2 transition duration-300 ease-in-out rounded-md cursor-pointer hover:bg-slate-100 dark:hover:bg-darkmode-400"
                                 >
-                                <Lucide icon="Settings" className="w-4 h-4 mr-2" />
+                                <Lucide icon="Settings" aria-hidden="true" className="w-4 h-4 mr-2" />
                                 Impostazioni
-                            </div>
+                            </button>
                             <div className="h-px my-1 -mx-1 bg-slate-200/60 dark:bg-darkmode-400"></div>
-                            <div
+                            <button
+                                type="button"
                                 onClick={deleteSitemap}
-                                className="flex items-center p-2 transition duration-300 ease-in-out rounded-md cursor-pointer text-danger hover:bg-danger/10"
+                                className="w-full text-left flex items-center p-2 transition duration-300 ease-in-out rounded-md cursor-pointer text-danger hover:bg-danger/10"
                                 >
-                                <Lucide icon="Trash2" className="w-4 h-4 mr-2" />
+                                <Lucide icon="Trash2" aria-hidden="true" className="w-4 h-4 mr-2" />
                                 Elimina
-                            </div>
+                            </button>
                         </div>
                     </Popover.Panel>
                 </Popover>

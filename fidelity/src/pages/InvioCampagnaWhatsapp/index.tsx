@@ -5,7 +5,6 @@ import L from 'leaflet';
 import type { LatLngExpression, Map as LeafletMap } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
-import { icons } from 'lucide-react';
 import {
     Fragment,
     Suspense,
@@ -39,7 +38,9 @@ import { FormCheck, FormInput, FormLabel, FormSelect } from '../../components/Ba
 import { Dialog } from '../../components/Base/Headless';
 import Litepicker from '../../components/Base/Litepicker';
 import Lucide from '../../components/Base/Lucide';
+import PageError from '../../components/Base/PageError';
 import PageHeader from '../../components/Base/PageHeader';
+import StatusBadge from '../../components/Base/StatusBadge';
 import Table from '../../components/Base/Table';
 import EmptyState from '../../components/EmptyState';
 import { PermissionGate } from '@/components/PermissionGate';
@@ -158,43 +159,6 @@ const normalizeDateRangeValue = (value: any): string => {
 };
 
 // Helpers UI puri (fuori dal componente per poterli riusare ovunque)
-const getStatusConfig = (
-    status?: string,
-): {
-    label: string;
-    className: string;
-    icon: keyof typeof icons;
-} => {
-    switch (status) {
-        case 'APPROVED':
-            return { label: 'Approvato', className: 'bg-success/10 text-success', icon: 'CircleCheck' };
-        case 'PENDING':
-            return { label: 'In revisione', className: 'bg-pending/10 text-pending', icon: 'Clock' };
-        case 'REJECTED':
-            return { label: 'Rifiutato', className: 'bg-danger/10 text-danger', icon: 'CircleX' };
-        case 'PAUSED':
-            return { label: 'In pausa', className: 'bg-warning/10 text-warning', icon: 'Pause' };
-        case 'DISABLED':
-            return {
-                label: 'Disabilitato',
-                className: 'bg-slate-100 text-slate-500 dark:bg-darkmode-400/40 dark:text-slate-300',
-                icon: 'Ban',
-            };
-        case 'ARCHIVED':
-            return {
-                label: 'Archiviato',
-                className: 'bg-slate-100 text-slate-500 dark:bg-darkmode-400/40 dark:text-slate-300',
-                icon: 'Archive',
-            };
-        default:
-            return {
-                label: status ?? 'Sconosciuto',
-                className: 'bg-slate-100 text-slate-500 dark:bg-darkmode-400/40 dark:text-slate-300',
-                icon: 'CircleQuestionMark',
-            };
-    }
-};
-
 const getCategoryConfig = (category?: string) => {
     switch (category) {
         case 'MARKETING':
@@ -502,11 +466,15 @@ const InvioCampagnaWhatsapp: FC = () => {
         positions: { lat: number; lng: number }[];
     } | null>(null);
     const [isLoadingUtentiGuest, setIsLoadingUtentiGuest] = useState(false);
+    // Il conteggio non arrivato si mostra con il motivo, non come "nessun destinatario"
+    const [erroreUtentiGuest, setErroreUtentiGuest] = useState<string | null>(null);
+    const [tentativoUtentiGuest, setTentativoUtentiGuest] = useState(0);
 
     // Fetch utenti guest data con filtri via POST
     useEffect(() => {
         const fetchUtentiGuest = async () => {
             setIsLoadingUtentiGuest(true);
+            setErroreUtentiGuest(null);
             try {
                 const payload: any = {
                     sesso: sessoUtenteGuest || null,
@@ -542,6 +510,7 @@ const InvioCampagnaWhatsapp: FC = () => {
             } catch (error) {
                 console.error('Errore nel caricamento utenti guest:', error);
                 setUtentiGuestData(null);
+                setErroreUtentiGuest(error instanceof Error && error.message ? error.message : 'Conteggio dei destinatari non disponibile');
             } finally {
                 setIsLoadingUtentiGuest(false);
             }
@@ -549,6 +518,7 @@ const InvioCampagnaWhatsapp: FC = () => {
 
         fetchUtentiGuest();
     }, [
+        tentativoUtentiGuest,
         sessoUtenteGuest,
         dateRange,
         callFilterEnabled,
@@ -892,6 +862,7 @@ const InvioCampagnaWhatsapp: FC = () => {
                         <PermissionGate permission={PERMISSIONS.WHATSAPP.INVIA_CAMPAGNA} mode="disable">
                         <Button
                             variant="primary"
+                            loading={isStartingCampaign}
                             disabled={!titoloCampagna.trim() || isStartingCampaign}
                             onClick={async () => {
                                 setIsStartingCampaign(true);
@@ -910,14 +881,7 @@ const InvioCampagnaWhatsapp: FC = () => {
                                 }
                             }}
                         >
-                            {isStartingCampaign ? (
-                                <>
-                                    <Lucide icon="Loader" className="w-4 h-4 mr-2 animate-spin" />
-                                    Avvio in corso...
-                                </>
-                            ) : (
-                                'Conferma e avvia'
-                            )}
+                            Conferma e avvia
                         </Button>
                         </PermissionGate>
                     </Dialog.Footer>
@@ -994,9 +958,6 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                             <Table.Tbody>
                                                                 {/* Template con preset */}
                                                                 {templatesWithPreset.map((template) => {
-                                                                    const statusMeta = getStatusConfig(
-                                                                        template.stato_meta_gdowhatsapptemplate,
-                                                                    );
                                                                     const categoryMeta = getCategoryConfig(
                                                                         template.categoria_template_gdowhatsapptemplate,
                                                                     );
@@ -1042,14 +1003,14 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                                                     <div className="flex-1 min-w-0">
                                                                                         <div className="flex items-start justify-between gap-3 mb-2">
                                                                                             <div className="flex-1">
-                                                                                                <h3 className="font-semibold text-slate-800 dark:text-slate-100 mb-1.5">
+                                                                                                <h3 className="title-card dark:text-slate-100 mb-1.5">
                                                                                                     {
                                                                                                         template.nome_template_gdowhatsapptemplate
                                                                                                     }
                                                                                                 </h3>
                                                                                                 <div className="flex flex-wrap items-center gap-2">
                                                                                                     {langCode && (
-                                                                                                        <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-[10px] font-medium uppercase tracking-wider dark:bg-darkmode-400/40">
+                                                                                                        <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-3xs font-medium uppercase tracking-wider dark:bg-darkmode-400/40">
                                                                                                             <Lucide
                                                                                                                 icon="Globe"
                                                                                                                 className="w-3 h-3"
@@ -1059,7 +1020,7 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                                                                     )}
                                                                                                     <span
                                                                                                         className={clsx(
-                                                                                                            'inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium',
+                                                                                                            'inline-flex items-center gap-1 rounded-md px-2 py-1 text-3xs font-medium',
                                                                                                             categoryMeta.className,
                                                                                                         )}
                                                                                                     >
@@ -1069,18 +1030,10 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                                                                         />
                                                                                                         {categoryMeta.label}
                                                                                                     </span>
-                                                                                                    <span
-                                                                                                        className={clsx(
-                                                                                                            'inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-semibold',
-                                                                                                            statusMeta.className,
-                                                                                                        )}
-                                                                                                    >
-                                                                                                        <Lucide
-                                                                                                            icon={statusMeta.icon}
-                                                                                                            className="w-3 h-3"
-                                                                                                        />
-                                                                                                        {statusMeta.label}
-                                                                                                    </span>
+                                                                                                    <StatusBadge
+                                                                                                        dominio="waTemplate"
+                                                                                                        stato={template.stato_meta_gdowhatsapptemplate}
+                                                                                                    />
                                                                                                 </div>
                                                                                             </div>
                                                                                         </div>
@@ -1098,9 +1051,6 @@ const InvioCampagnaWhatsapp: FC = () => {
 
                                                                 {/* Template senza preset - disabilitati */}
                                                                 {templatesWithoutPreset.map((template) => {
-                                                                    const statusMeta = getStatusConfig(
-                                                                        template.stato_meta_gdowhatsapptemplate,
-                                                                    );
                                                                     const categoryMeta = getCategoryConfig(
                                                                         template.categoria_template_gdowhatsapptemplate,
                                                                     );
@@ -1128,12 +1078,12 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                                                         <div className="flex items-start justify-between gap-3 mb-2">
                                                                                             <div className="flex-1">
                                                                                                 <div className="flex items-center gap-2 mb-1.5">
-                                                                                                    <h3 className="font-semibold text-slate-600 dark:text-slate-400">
+                                                                                                    <h3 className="title-card text-slate-600 dark:text-slate-400">
                                                                                                         {
                                                                                                             template.nome_template_gdowhatsapptemplate
                                                                                                         }
                                                                                                     </h3>
-                                                                                                    <span className="inline-flex items-center gap-1 rounded-md bg-warning/10 text-warning px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider">
+                                                                                                    <span className="inline-flex items-center gap-1 rounded-md bg-warning/10 text-warning px-2 py-0.5 text-3xs font-semibold uppercase tracking-wider">
                                                                                                         <Lucide
                                                                                                             icon="CircleAlert"
                                                                                                             className="w-3 h-3"
@@ -1143,7 +1093,7 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                                                                 </div>
                                                                                                 <div className="flex flex-wrap items-center gap-2">
                                                                                                     {langCode && (
-                                                                                                        <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-[10px] font-medium uppercase tracking-wider dark:bg-darkmode-400/40">
+                                                                                                        <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-3xs font-medium uppercase tracking-wider dark:bg-darkmode-400/40">
                                                                                                             <Lucide
                                                                                                                 icon="Globe"
                                                                                                                 className="w-3 h-3"
@@ -1153,7 +1103,7 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                                                                     )}
                                                                                                     <span
                                                                                                         className={clsx(
-                                                                                                            'inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium',
+                                                                                                            'inline-flex items-center gap-1 rounded-md px-2 py-1 text-3xs font-medium',
                                                                                                             categoryMeta.className,
                                                                                                         )}
                                                                                                     >
@@ -1163,18 +1113,10 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                                                                         />
                                                                                                         {categoryMeta.label}
                                                                                                     </span>
-                                                                                                    <span
-                                                                                                        className={clsx(
-                                                                                                            'inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-semibold',
-                                                                                                            statusMeta.className,
-                                                                                                        )}
-                                                                                                    >
-                                                                                                        <Lucide
-                                                                                                            icon={statusMeta.icon}
-                                                                                                            className="w-3 h-3"
-                                                                                                        />
-                                                                                                        {statusMeta.label}
-                                                                                                    </span>
+                                                                                                    <StatusBadge
+                                                                                                        dominio="waTemplate"
+                                                                                                        stato={template.stato_meta_gdowhatsapptemplate}
+                                                                                                    />
                                                                                                 </div>
                                                                                             </div>
                                                                                         </div>
@@ -1216,7 +1158,7 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                             icon="MessageSquare"
                                                             className="w-16 h-16 mx-auto mb-4 text-slate-300"
                                                         />
-                                                        <h3 className="font-semibold text-lg mb-2">
+                                                        <h3 className="title-section mb-2">
                                                             Seleziona un Template
                                                         </h3>
                                                         <p className="text-sm text-slate-500">
@@ -1230,7 +1172,7 @@ const InvioCampagnaWhatsapp: FC = () => {
                                             return (
                                                 <div className="flex flex-col box box--stacked">
                                                     <div className="p-5 border-b border-dashed">
-                                                        <h3 className="font-semibold text-lg mb-1">Anteprima Template</h3>
+                                                        <h3 className="title-section mb-1">Anteprima Template</h3>
                                                         <p className="text-xs text-slate-500">
                                                             Verifica rapidamente il contenuto del messaggio.
                                                         </p>
@@ -1382,7 +1324,7 @@ const InvioCampagnaWhatsapp: FC = () => {
                             <div className="flex flex-col box box--stacked">
                                 <div className="p-5 border-b border-dashed flex items-center justify-between">
                                     <div>
-                                        <h3 className="font-semibold text-lg mb-1">Riepilogo campagna</h3>
+                                        <h3 className="title-section mb-1">Riepilogo campagna</h3>
                                         <p className="text-xs text-slate-500">
                                             Controlla i destinatari prima di avviare l'invio.
                                         </p>
@@ -1423,7 +1365,7 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                                 icon="TriangleAlert"
                                                                 className="w-16 h-16 mx-auto mb-4 text-warning"
                                                             />
-                                                            <h3 className="font-semibold text-lg mb-2">
+                                                            <h3 className="title-section mb-2">
                                                                 Template senza preset configurato
                                                             </h3>
                                                             <p className="text-sm text-slate-500">
@@ -1448,9 +1390,6 @@ const InvioCampagnaWhatsapp: FC = () => {
                                             const categoryMeta = getCategoryConfig(
                                                 selectedTemplateData.categoria_template_gdowhatsapptemplate,
                                             );
-                                            const statusMeta = getStatusConfig(
-                                                selectedTemplateData.stato_meta_gdowhatsapptemplate,
-                                            );
                                             const langCode =
                                                 selectedTemplateData.json_meta_gdowhatsapptemplate.language?.code ??
                                                 selectedTemplateData.lingua_template_gdowhatsapptemplate;
@@ -1469,18 +1408,10 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                             <p className="text-xs text-slate-500 mb-3">
                                                                 {categoryMeta.label} • {langCode}
                                                             </p>
-                                                            <span
-                                                                className={clsx(
-                                                                    'inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold',
-                                                                    statusMeta.className,
-                                                                )}
-                                                            >
-                                                                <Lucide
-                                                                    icon={statusMeta.icon}
-                                                                    className="w-3.5 h-3.5"
-                                                                />
-                                                                {statusMeta.label}
-                                                            </span>
+                                                            <StatusBadge
+                                                                dominio="waTemplate"
+                                                                stato={selectedTemplateData.stato_meta_gdowhatsapptemplate}
+                                                            />
                                                         </div>
 
                                                         {/* Box numeri destinatari */}
@@ -1496,7 +1427,7 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                                         <p className="text-2xl font-semibold text-slate-800 dark:text-slate-100">
                                                                             {utentiGuestData.count.toLocaleString('it-IT')}
                                                                         </p>
-                                                                        <p className="text-[11px] uppercase tracking-wide text-emerald-600 dark:text-emerald-400 font-semibold">
+                                                                        <p className="text-2xs uppercase tracking-wide text-emerald-600 dark:text-emerald-400 font-semibold">
                                                                             verranno raggiunti
                                                                         </p>
                                                                     </div>
@@ -1505,18 +1436,25 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                                         <p className="text-lg font-semibold text-slate-600 dark:text-slate-300">
                                                                             {utentiGuestData.missing}
                                                                         </p>
-                                                                        <p className="text-[11px] uppercase tracking-wide text-slate-500">
+                                                                        <p className="text-2xs uppercase tracking-wide text-slate-500">
                                                                             esclusi dal target
                                                                         </p>
                                                                     </div>
                                                                 </div>
-                                                                <p className="text-[11px] text-slate-500">
+                                                                <p className="text-2xs text-slate-500">
                                                                     Totale contatti nel segmento:{' '}
                                                                     <span className="font-semibold text-slate-700 dark:text-slate-200">
                                                                         {utentiGuestData.total.toLocaleString('it-IT')}
                                                                     </span>
                                                                 </p>
                                                             </div>
+                                                        ) : erroreUtentiGuest ? (
+                                                            <PageError
+                                                                compatta
+                                                                titolo="Destinatari non calcolati"
+                                                                motivo={erroreUtentiGuest}
+                                                                onRiprova={() => setTentativoUtentiGuest((t) => t + 1)}
+                                                            />
                                                         ) : null}
                                                     </div>
 
@@ -1527,24 +1465,24 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                                 <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                                                                     Filtro per campi utente
                                                                 </h4>
-                                                                <p className="text-[11px] text-slate-500">
+                                                                <p className="text-2xs text-slate-500">
                                                                     Escludi contatti in base a dei filtri specifici.
                                                                 </p>
                                                             </div>
 
                                                             {(sessoUtenteGuest || dateRange) && (
                                                                 <div className="inline-flex flex-wrap items-center gap-1 rounded-full bg-slate-50 px-2 py-[2px] border border-slate-200">
-                                                                    <span className="text-[10px] font-medium text-slate-600">
+                                                                    <span className="text-3xs font-medium text-slate-600">
                                                                         Filtri attivi:
                                                                     </span>
                                                                     {sessoUtenteGuest && (
-                                                                        <span className="text-[10px] font-semibold text-sky-600">
+                                                                        <span className="text-3xs font-semibold text-sky-600">
                                                                             sesso:{' '}
                                                                             {Object.entries(UTENTE_GENERE).find(([_, v]) => v === sessoUtenteGuest)?.[1]?.toLocaleLowerCase('it-IT') ?? sessoUtenteGuest}
                                                                         </span>
                                                                     )}
                                                                     {dateRange && (
-                                                                        <span className="text-[10px] font-semibold text-emerald-600">
+                                                                        <span className="text-3xs font-semibold text-emerald-600">
                                                                             date: {dateRange}
                                                                         </span>
                                                                     )}
@@ -1556,7 +1494,7 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                             <div>
                                                                 <FormLabel
                                                                     htmlFor="sessoUtenteGuest"
-                                                                    className="text-[11px] font-medium uppercase tracking-wide text-slate-500 mb-1"
+                                                                    className="text-2xs font-medium uppercase tracking-wide text-slate-500 mb-1"
                                                                 >
                                                                     Sesso utente
                                                                 </FormLabel>
@@ -1574,7 +1512,7 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                                         </option>
                                                                     ))}
                                                                 </FormSelect>
-                                                                <p className="mt-1 text-[11px] text-slate-500">
+                                                                <p className="mt-1 text-2xs text-slate-500">
                                                                     Se selezioni un valore, verranno considerati solo gli utenti che
                                                                     corrispondono al sesso indicato. Gli altri saranno esclusi dalla
                                                                     campagna.
@@ -1584,7 +1522,7 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                             <div>
                                                                 <FormLabel
                                                                     htmlFor="rangeDateUtenteGuest"
-                                                                    className="text-[11px] font-medium uppercase tracking-wide text-slate-500 mb-1"
+                                                                    className="text-2xs font-medium uppercase tracking-wide text-slate-500 mb-1"
                                                                 >
                                                                     Intervallo date
                                                                 </FormLabel>
@@ -1600,7 +1538,7 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                                         }}
                                                                     />
                                                                 </div>
-                                                                <p className="mt-1 text-[11px] text-slate-500">
+                                                                <p className="mt-1 text-2xs text-slate-500">
                                                                     Seleziona un intervallo di date: verranno considerati solo gli
                                                                     utenti la cui data di riferimento ricade all’interno del range
                                                                     selezionato.
@@ -1616,7 +1554,7 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                                 <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                                                                     Filtro zona chiamate
                                                                 </h4>
-                                                                <p className="text-[11px] text-slate-500">
+                                                                <p className="text-2xs text-slate-500">
                                                                     Limita la campagna ai soli contatti della zona selezionata.
                                                                 </p>
                                                             </div>
@@ -1630,7 +1568,7 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                         </div>
 
                                                         {/* Toggle modalità */}
-                                                        <div className="mb-3 flex items-center gap-2 text-[11px]">
+                                                        <div className="mb-3 flex items-center gap-2 text-2xs">
                                                             <span className="text-slate-500">Modalità:</span>
                                                             <div className="inline-flex rounded-full bg-slate-100 p-1 dark:bg-darkmode-700">
                                                                 <button
@@ -1673,7 +1611,7 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                         </div>
 
                                                         {comuniError && callFilterMode !== 'circle' && (
-                                                            <p className="mb-2 text-[11px] text-danger">{comuniError}</p>
+                                                            <p className="mb-2 text-2xs text-danger">{comuniError}</p>
                                                         )}
 
                                                         <div
@@ -1797,7 +1735,7 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                                 <div>
                                                                     {callFilterMode === 'circle' ? (
                                                                         <>
-                                                                            <label className="block text-[11px] font-medium uppercase tracking-wide text-slate-500 mb-1">
+                                                                            <label className="block text-2xs font-medium uppercase tracking-wide text-slate-500 mb-1">
                                                                                 Raggio zona (km)
                                                                             </label>
                                                                             <FormInput
@@ -1809,13 +1747,13 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                                                     setCallAreaRadiusKm(Number(e.target.value) || 1)
                                                                                 }
                                                                             />
-                                                                            <p className="mt-1 text-[11px] text-slate-500">
+                                                                            <p className="mt-1 text-2xs text-slate-500">
                                                                                 Clicca sulla mappa per spostare il centro della zona.
                                                                             </p>
                                                                         </>
                                                                     ) : (
                                                                         <>
-                                                                            <label className="block text-[11px] font-medium uppercase tracking-wide text-slate-500 mb-1">
+                                                                            <label className="block text-2xs font-medium uppercase tracking-wide text-slate-500 mb-1">
                                                                                 {callFilterMode === 'regioni' ? 'Regione' : 'Comune'}
                                                                             </label>
                                                                             <div className="flex gap-2 mb-2">
@@ -1831,8 +1769,10 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                                                     variant="outline-secondary"
                                                                                     onClick={handleSearchComune}
                                                                                     disabled={isSearchingComuni || !comuneSearch.trim()}
+                                                                                    aria-label={callFilterMode === 'regioni' ? 'Cerca regione' : 'Cerca comune'}
+                                                                                    title={callFilterMode === 'regioni' ? 'Cerca regione' : 'Cerca comune'}
                                                                                 >
-                                                                                    <Lucide icon="Search" className="w-4 h-4" />
+                                                                                    <Lucide icon="Search" aria-hidden="true" className="w-4 h-4" />
                                                                                 </Button>
                                                                             </div>
                                                                             <select
@@ -1848,7 +1788,7 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                                                     </option>
                                                                                 ))}
                                                                             </select>
-                                                                            <p className="mt-1 text-[11px] text-slate-500">
+                                                                            <p className="mt-1 text-2xs text-slate-500">
                                                                                 La campagna raggiungerà solo i contatti {callFilterMode === 'regioni' ? 'della regione selezionata' : 'del comune selezionato'}.
                                                                             </p>
                                                                         </>
@@ -1857,7 +1797,7 @@ const InvioCampagnaWhatsapp: FC = () => {
 
                                                                 <div className="space-y-2">
                                                                     {callFilterMode !== 'circle' && (
-                                                                        <div className="text-[11px] text-slate-500 mt-4">
+                                                                        <div className="text-2xs text-slate-500 mt-4">
                                                                             {callFilterMode === 'regioni' ? 'Regione selezionata' : 'Comune selezionato'}:{' '}
                                                                             <span className="font-semibold">
                                                                                 {selectedComuneId
@@ -1871,7 +1811,7 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                                 </div>
                                                             </div>
 
-                                                            <p className="text-[11px] text-slate-500">
+                                                            <p className="text-2xs text-slate-500">
                                                                 Quando il filtro è attivo, la campagna WhatsApp raggiungerà{' '}
                                                                 <span className="font-semibold">solo</span> i contatti{' '}
                                                                 {callFilterMode === 'circle'
@@ -1903,7 +1843,7 @@ const InvioCampagnaWhatsapp: FC = () => {
                                             <div className="flex flex-col box box--stacked">
                                                 {/* Mockup WhatsApp riepilogo */}
                                                 <div className="p-5 border-b border-dashed">
-                                                    <h3 className="font-semibold text-lg mb-1">Anteprima messaggio</h3>
+                                                    <h3 className="title-section mb-1">Anteprima messaggio</h3>
                                                     <p className="text-xs text-slate-500">
                                                         Così apparirà al cliente su WhatsApp.
                                                     </p>
@@ -2043,6 +1983,7 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                                         <div className="mt-2 flex flex-col sm:flex-row gap-2">
                                                                             <FormSelect
                                                                                 formSelectSize="sm"
+                                                                                aria-label="Numero per il messaggio di test"
                                                                                 value={idUtente}
                                                                                 onChange={(e) => setIdUtente(e.target.value)}
                                                                             >
@@ -2052,14 +1993,15 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                                             <Button
                                                                                 type="button"
                                                                                 variant="outline-primary"
+                                                                                loading={isSendingTest}
                                                                                 disabled={!idUtente || isSendingTest || !selectedTemplateData || selectedTemplateData.has_preset == false}
                                                                                 onClick={() => handleSendTest(selectedTemplateData)}
                                                                             >
-                                                                                <Lucide icon="Send" className="w-4 h-4 mr-2" />
-                                                                                {isSendingTest ? 'Invio in corso...' : 'Invia'}
+                                                                                {!isSendingTest && <Lucide icon="Send" aria-hidden="true" className="w-4 h-4 mr-2" />}
+                                                                                Invia
                                                                             </Button>
                                                                         </div>
-                                                                        <p className="mt-1 text-[11px] text-slate-500">
+                                                                        <p className="mt-1 text-2xs text-slate-500">
                                                                             Il test verrà inviato solo a questo numero e non sarà conteggiato
                                                                             nella campagna principale.
                                                                         </p>

@@ -1,4 +1,5 @@
-import { FormInput } from "@/components/Base/Form";
+import Button from "@/components/Base/Button";
+import { FormField, FormInput } from "@/components/Base/Form";
 import { Dialog } from "@/components/Base/Headless";
 import Lucide from "@/components/Base/Lucide";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -57,36 +58,40 @@ export default function MaintenanceModal({ open, onClose, avvisoAttivo }: Mainte
       : giorno !== "" && oraInizio !== "" && oraFine !== "" && oraInizio < oraFine;
 
   return (
-    <Dialog open={open} onClose={onClose}>
-      <Dialog.Panel className="p-0 w-[480px]">
+    <Dialog open={open} onClose={onClose} size="md">
+      <Dialog.Panel className="p-0">
         <Dialog.Title className="flex items-center gap-2 h-14 px-5 border-b border-slate-200/60">
-          <Lucide icon="Wrench" className="w-5 h-5 text-amber-500" />
-          <h2 className="text-base font-semibold">Avviso Manutenzione Sistema</h2>
+          <Lucide icon="Wrench" aria-hidden="true" className="w-5 h-5 text-amber-500" />
+          <h2 className="title-section">Avviso Manutenzione Sistema</h2>
         </Dialog.Title>
 
         <Dialog.Description className="p-5 space-y-5">
           {/* Modalità selector */}
           <div className="flex gap-2">
             <button
+              type="button"
               onClick={() => setModalita("orario")}
-              className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium border transition-colors ${
+              aria-pressed={modalita === "orario"}
+              className={`flex-1 py-2 px-3 rounded-control text-sm font-medium border transition-colors ${
                 modalita === "orario"
                   ? "bg-amber-500 text-white border-amber-500"
                   : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50"
               }`}
             >
-              <Lucide icon="Calendar" className="inline w-4 h-4 mr-1.5 -mt-0.5" />
+              <Lucide icon="Calendar" aria-hidden="true" className="inline w-4 h-4 mr-1.5 -mt-0.5" />
               Orario programmato
             </button>
             <button
+              type="button"
               onClick={() => setModalita("countdown")}
-              className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium border transition-colors ${
+              aria-pressed={modalita === "countdown"}
+              className={`flex-1 py-2 px-3 rounded-control text-sm font-medium border transition-colors ${
                 modalita === "countdown"
                   ? "bg-amber-500 text-white border-amber-500"
                   : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50"
               }`}
             >
-              <Lucide icon="Timer" className="inline w-4 h-4 mr-1.5 -mt-0.5" />
+              <Lucide icon="Timer" aria-hidden="true" className="inline w-4 h-4 mr-1.5 -mt-0.5" />
               Tra X minuti
             </button>
           </div>
@@ -94,63 +99,52 @@ export default function MaintenanceModal({ open, onClose, avvisoAttivo }: Mainte
           {/* Campi per modalità orario */}
           {modalita === "orario" && (
             <div className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Giorno</label>
+              <FormField etichetta="Giorno">
                 <FormInput
                   type="date"
                   value={giorno}
                   min={todayISO()}
                   onChange={(e) => setGiorno(e.target.value)}
                 />
-              </div>
+              </FormField>
               <div className="flex gap-3">
-                <div className="flex-1">
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Ora inizio</label>
+                <FormField etichetta="Ora inizio" className="flex-1">
                   <FormInput
                     type="time"
                     value={oraInizio}
                     onChange={(e) => setOraInizio(e.target.value)}
                   />
-                </div>
-                <div className="flex-1">
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Ora fine</label>
+                </FormField>
+                <FormField etichetta="Ora fine" className="flex-1">
                   <FormInput
                     type="time"
                     value={oraFine}
                     onChange={(e) => setOraFine(e.target.value)}
                   />
-                </div>
+                </FormField>
               </div>
             </div>
           )}
 
           {/* Campi per modalità countdown */}
           {modalita === "countdown" && (
-            <div className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Il sistema andrà offline tra
-                </label>
-                <div className="flex items-center gap-2">
-                  <FormInput
-                    type="number"
-                    min={1}
-                    max={480}
-                    value={minuti}
-                    onChange={(e) => setMinuti(Math.max(1, parseInt(e.target.value) || 1))}
-                    className="w-28"
-                  />
-                  <span className="text-sm text-slate-600">minuti</span>
-                </div>
-              </div>
+            <div className="flex items-end gap-2">
+              <FormField etichetta="Il sistema andrà offline tra">
+                <FormInput
+                  type="number"
+                  min={1}
+                  max={480}
+                  value={minuti}
+                  onChange={(e) => setMinuti(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="w-28"
+                />
+              </FormField>
+              <span className="pb-2.5 text-sm text-slate-600">minuti</span>
             </div>
           )}
 
           {/* Messaggio extra opzionale */}
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Nota aggiuntiva <span className="text-slate-400 font-normal">(opzionale)</span>
-            </label>
+          <FormField etichetta={<>Nota aggiuntiva <span className="text-slate-400 font-normal">(opzionale)</span></>}>
             <FormInput
               type="text"
               placeholder="es. Aggiornamento server, backup dati..."
@@ -158,11 +152,11 @@ export default function MaintenanceModal({ open, onClose, avvisoAttivo }: Mainte
               maxLength={120}
               onChange={(e) => setMessaggioExtra(e.target.value)}
             />
-          </div>
+          </FormField>
 
           {/* Anteprima */}
-          <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 flex items-start gap-2">
-            <Lucide icon="AlertTriangle" className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+          <div className="bg-amber-50 border border-amber-200 rounded-control px-3 py-2.5 flex items-start gap-2">
+            <Lucide icon="AlertTriangle" aria-hidden="true" className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
             <p className="text-sm text-amber-800">
               {modalita === "countdown" ? (
                 <>
@@ -192,31 +186,26 @@ export default function MaintenanceModal({ open, onClose, avvisoAttivo }: Mainte
 
           {avvisoAttivo?.attivo && (
             <p className="text-xs text-slate-500 flex items-center gap-1">
-              <Lucide icon="Info" className="w-3.5 h-3.5" />
+              <Lucide icon="Info" aria-hidden="true" className="w-3.5 h-3.5" />
               È già presente un avviso attivo. Salvando verrà sostituito.
             </p>
           )}
         </Dialog.Description>
 
         <div className="flex justify-end gap-2 px-5 py-4 border-t border-slate-200/60">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
-          >
+          <Button type="button" variant="outline-secondary" onClick={onClose}>
             Annulla
-          </button>
-          <button
+          </Button>
+          <Button
+            type="button"
+            variant="warning"
             onClick={handleSave}
-            disabled={!isValid || saveMutation.isPending}
-            className="px-4 py-2 text-sm font-medium text-white bg-amber-500 rounded-lg hover:bg-amber-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+            disabled={!isValid}
+            loading={saveMutation.isPending}
           >
-            {saveMutation.isPending ? (
-              <Lucide icon="Loader" className="w-4 h-4 animate-spin" />
-            ) : (
-              <Lucide icon="BellRing" className="w-4 h-4" />
-            )}
+            {!saveMutation.isPending && <Lucide icon="BellRing" aria-hidden="true" className="w-4 h-4 mr-1.5" />}
             Attiva avviso
-          </button>
+          </Button>
         </div>
       </Dialog.Panel>
     </Dialog>

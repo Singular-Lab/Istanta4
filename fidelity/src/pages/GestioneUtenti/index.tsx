@@ -1,4 +1,4 @@
-import { FormCheck, FormInput, FormSelect } from "@/components/Base/Form";
+import { FormCheck, FormField, FormInput, FormSelect } from "@/components/Base/Form";
 import { Dialog, Menu, Popover } from "@/components/Base/Headless";
 import Lucide from "@/components/Base/Lucide";
 import Pagination from "@/components/Base/Pagination";
@@ -11,7 +11,10 @@ import Button from "@/components/Base/Button";
 import Table from "@/components/Base/Table";
 import clsx from "clsx";
 // import { useLoaderData } from "react-router-dom";
+import PageError from "@/components/Base/PageError";
 import PageHeader from "@/components/Base/PageHeader";
+import Spinner from "@/components/Base/Spinner";
+import StatusBadge from "@/components/Base/StatusBadge";
 import EmptyState from "@/components/EmptyState";
 import { useFetchAllGDO, useFetchAllRuoliGDO, useFetchAllUtentiPaginated, useFetchPuntiVenditaFromIdGDO } from "@/query/query";
 import { yupResolver } from "@hookform/resolvers/yup";
@@ -28,7 +31,6 @@ import { CanaliInterazioneAttributes } from "../../../lib/types";
 import { GDOResponseDTO, PuntoVenditaResponseDTO, RuoloUtenteGDOResponseDTO, UtenteResponseDTO } from "../../../server/core/dto";
 import { useUser } from "../../context/UserContext";
 import { useNotification } from "../../context/NotificationContext";
-import { statoUtente } from "./statoUtente";
 dayjs.extend(duration);
 const filterSchema = yup.object().shape({
   canaleInterazione: yup.string().required(),
@@ -542,7 +544,7 @@ const GestioneUtenti: React.FC = () => {
               <div className="flex-shrink-0">
                 <Lucide icon="Timer" className="w-6 h-6 text-warning" />
               </div>
-              <h2 className="text-lg font-semibold text-slate-800">
+              <h2 className="title-card">
                 Limite di richieste superato
               </h2>
             </div>
@@ -581,20 +583,11 @@ const GestioneUtenti: React.FC = () => {
             <Button
               variant="primary"
               onClick={handleRateLimitDialogClose}
-              disabled={rateLimitDialogLoading}
+              loading={rateLimitDialogLoading}
               className="px-4"
             >
-              {rateLimitDialogLoading ? (
-                <>
-                  <Lucide icon="Loader" className="w-4 h-4 mr-2 animate-spin" />
-                  Elaborazione...
-                </>
-              ) : (
-                <>
-                  <Lucide icon="Check" className="w-4 h-4 mr-2" />
-                  Ho capito
-                </>
-              )}
+              {!rateLimitDialogLoading && <Lucide icon="Check" aria-hidden="true" className="w-4 h-4 mr-2" />}
+              Ho capito
             </Button>
           </Dialog.Footer>
         </Dialog.Panel>
@@ -610,7 +603,7 @@ const GestioneUtenti: React.FC = () => {
               <div className="flex-shrink-0">
                 <Lucide icon="UserMinus" className="w-6 h-6 text-danger" />
               </div>
-              <h2 className="text-lg font-semibold text-slate-800">
+              <h2 className="title-card">
                 Elimina utente
               </h2>
             </div>
@@ -659,20 +652,11 @@ const GestioneUtenti: React.FC = () => {
               onClick={() => {
                 eliminaUtenteMutation.mutate({ id: selectedUtente.id, tipoUtente: selectedUtente.tipo });
               }}
-              disabled={eliminaUtenteMutation.isPending}
+              loading={eliminaUtenteMutation.isPending}
               className="px-4"
             >
-              {eliminaUtenteMutation.isPending ? (
-                <>
-                  <Lucide icon="Loader" className="w-4 h-4 mr-2 animate-spin" />
-                  Eliminazione...
-                </>
-              ) : (
-                <>
-                  <Lucide icon="Trash2" className="w-4 h-4 mr-2" />
-                  Elimina
-                </>
-              )}
+              {!eliminaUtenteMutation.isPending && <Lucide icon="Trash2" aria-hidden="true" className="w-4 h-4 mr-2" />}
+              Elimina
             </Button>
           </Dialog.Footer>
         </Dialog.Panel>
@@ -691,7 +675,7 @@ const GestioneUtenti: React.FC = () => {
               <div className="flex-shrink-0">
                 <Lucide icon="User" className="w-6 h-6 text-primary" />
               </div>
-              <h2 className="text-lg font-semibold text-slate-800">
+              <h2 className="title-card">
                 Modifica utente
               </h2>
             </div>
@@ -699,83 +683,68 @@ const GestioneUtenti: React.FC = () => {
           <Dialog.Description>
             <form onSubmit={handleSubmitEdit(onSubmitEditForm)}>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Nome</label>
+                <FormField etichetta="Nome" obbligatorio errore={errorsEdit.nome?.message}>
                   <FormInput
                     {...registerEdit("nome")}
                     type="text"
                     placeholder="Inserisci il nome"
-                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm ${errorsEdit.nome ? 'border-red-500' : ''}`}
+                    className={clsx(errorsEdit.nome && "border-danger")}
                   />
-                  {errorsEdit.nome && <p className="text-red-500 text-xs mt-1">{errorsEdit.nome.message}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Cognome</label>
+                </FormField>
+                <FormField etichetta="Cognome" obbligatorio errore={errorsEdit.cognome?.message}>
                   <FormInput
                     {...registerEdit("cognome")}
                     type="text"
                     placeholder="Inserisci il cognome"
-                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm ${errorsEdit.cognome ? 'border-red-500' : ''}`}
+                    className={clsx(errorsEdit.cognome && "border-danger")}
                   />
-                  {errorsEdit.cognome && <p className="text-red-500 text-xs mt-1">{errorsEdit.cognome.message}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Email</label>
+                </FormField>
+                <FormField etichetta="Email" obbligatorio errore={errorsEdit.email?.message}>
                   <FormInput
                     {...registerEdit("email")}
                     type="email"
                     autoComplete="email webauthn"
                     placeholder="Inserisci l'email"
-                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm ${errorsEdit.email ? 'border-red-500' : ''}`}
+                    className={clsx(errorsEdit.email && "border-danger")}
                   />
-                  {errorsEdit.email && <p className="text-red-500 text-xs mt-1">{errorsEdit.email.message}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Telefono</label>
+                </FormField>
+                <FormField etichetta="Telefono" errore={errorsEdit.telefono?.message}>
                   <FormInput
                     {...registerEdit("telefono")}
                     type="tel"
                     placeholder="Inserisci il telefono"
-                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm ${errorsEdit.telefono ? 'border-red-500' : ''}`}
+                    className={clsx(errorsEdit.telefono && "border-danger")}
                   />
-                  {errorsEdit.telefono && <p className="text-red-500 text-xs mt-1">{errorsEdit.telefono.message}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Data di Nascita</label>
+                </FormField>
+                <FormField etichetta="Data di Nascita" obbligatorio errore={errorsEdit.dataDiNascita?.message}>
                   <FormInput
                     {...registerEdit("dataDiNascita")}
                     type="date"
-                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm ${errorsEdit.dataDiNascita ? 'border-red-500' : ''}`}
+                    className={clsx(errorsEdit.dataDiNascita && "border-danger")}
                   />
-                  {errorsEdit.dataDiNascita && <p className="text-red-500 text-xs mt-1">Data di nascita non valida</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Residenza</label>
+                </FormField>
+                <FormField etichetta="Residenza" obbligatorio errore={errorsEdit.residenza?.message}>
                   <FormInput
                     {...registerEdit("residenza")}
                     type="text"
                     placeholder="Inserisci la residenza"
-                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm ${errorsEdit.residenza ? 'border-red-500' : ''}`}
+                    className={clsx(errorsEdit.residenza && "border-danger")}
                   />
-                  {errorsEdit.residenza && <p className="text-red-500 text-xs mt-1">{errorsEdit.residenza.message}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Sesso</label>
+                </FormField>
+                <FormField etichetta="Sesso" errore={errorsEdit.sesso?.message}>
                   <FormSelect
                     {...registerEdit("sesso")}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
                   >
                     <option value="">Non specificato</option>
                     {Object.entries(UTENTE_GENERE).map(([key, value]) => (
                       <option key={key} value={value}>{value}</option>
                     ))}
                   </FormSelect>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Stato Utente</label>
+                </FormField>
+                <FormField etichetta="Stato Utente" obbligatorio errore={errorsEdit.statoUtente?.message}>
                   <FormSelect
                     {...registerEdit("statoUtente")}
-                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm ${errorsEdit.statoUtente ? 'border-red-500' : ''}`}
+                    className={clsx(errorsEdit.statoUtente && "border-danger")}
                   >
                     {Object.keys(STATO_UTENTI).map((key) => (
                       <option key={key} value={STATO_UTENTI[key as keyof typeof STATO_UTENTI]}>
@@ -783,13 +752,11 @@ const GestioneUtenti: React.FC = () => {
                       </option>
                     ))}
                   </FormSelect>
-                  {errorsEdit.statoUtente && <p className="text-red-500 text-xs mt-1">{errorsEdit.statoUtente.message}</p>}
-                </div>
-                <div className="col-span-1 sm:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700">Tipo Utente</label>
+                </FormField>
+                <FormField className="col-span-1 sm:col-span-2" etichetta="Tipo Utente" obbligatorio errore={errorsEdit.tipoUtente?.message}>
                   <FormSelect
                     {...registerEdit("tipoUtente")}
-                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm ${errorsEdit.tipoUtente ? 'border-red-500' : ''}`}
+                    className={clsx(errorsEdit.tipoUtente && "border-danger")}
                   >
                     {(() => {
                       let allowedTypes: string[] = [];
@@ -811,16 +778,14 @@ const GestioneUtenti: React.FC = () => {
                       ));
                     })()}
                   </FormSelect>
-                  {errorsEdit.tipoUtente && <p className="text-red-500 text-xs mt-1">{errorsEdit.tipoUtente.message}</p>}
-                </div>
+                </FormField>
 
                 {/* Campo GDO - mostrato per tutti tranne SUPERADMIN */}
                 {watchEdit("tipoUtente") && watchEdit("tipoUtente") !== TIPO_UTENTI.SUPERADMIN && (
-                  <div className="col-span-1 sm:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700">GDO da associare</label>
+                  <FormField className="col-span-1 sm:col-span-2" etichetta="GDO da associare" obbligatorio errore={errorsEdit.gdoScelta?.message}>
                     <FormSelect
                       {...registerEdit("gdoScelta")}
-                      className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm ${errorsEdit.gdoScelta ? 'border-red-500' : ''}`}
+                      className={clsx(errorsEdit.gdoScelta && "border-danger")}
                     >
                       <option value="">Seleziona una GDO</option>
                       {allGDO?.map((gdo: GDOResponseDTO) => (
@@ -829,17 +794,15 @@ const GestioneUtenti: React.FC = () => {
                         </option>
                       ))}
                     </FormSelect>
-                    {errorsEdit.gdoScelta && <p className="text-red-500 text-xs mt-1">{errorsEdit.gdoScelta.message}</p>}
-                  </div>
+                  </FormField>
                 )}
 
                 {/* Campo Ruolo - mostrato per tutti tranne SUPERADMIN */}
                 {watchEdit("tipoUtente") && watchEdit("tipoUtente") !== TIPO_UTENTI.SUPERADMIN && (
-                  <div className="col-span-1 sm:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700">Ruolo (opzionale)</label>
+                  <FormField className="col-span-1 sm:col-span-2" etichetta="Ruolo (opzionale)" errore={errorsEdit.ruolo_gdo?.message}>
                     <FormSelect
                       {...registerEdit("ruolo_gdo")}
-                      className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm ${errorsEdit.ruolo_gdo ? 'border-red-500' : ''}`}
+                      className={clsx(errorsEdit.ruolo_gdo && "border-danger")}
                     >
                       {allRuoliGDO?.map((ruolo: RuoloUtenteGDOResponseDTO) => (
                         <option key={ruolo.id} value={ruolo.id}>
@@ -847,17 +810,15 @@ const GestioneUtenti: React.FC = () => {
                         </option>
                       ))}
                     </FormSelect>
-                    {errorsEdit.ruolo_gdo && <p className="text-red-500 text-xs mt-1">{errorsEdit.ruolo_gdo.message}</p>}
-                  </div>
+                  </FormField>
                 )}
 
                 {/* Campo Punto Vendita - mostrato solo se il tipo utente è PUNTOVENDITA */}
                 {watchEdit("tipoUtente") === TIPO_UTENTI.PUNTOVENDITA && (
-                  <div className="col-span-1 sm:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700">Punto Vendita da collegare</label>
+                  <FormField className="col-span-1 sm:col-span-2" etichetta="Punto Vendita da collegare" obbligatorio errore={errorsEdit.idPuntoVendita?.message}>
                     <FormSelect
                       {...registerEdit("idPuntoVendita")}
-                      className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm ${errorsEdit.idPuntoVendita ? 'border-red-500' : ''}`}
+                      className={clsx(errorsEdit.idPuntoVendita && "border-danger")}
                     >
                       <option value="">Seleziona un punto vendita</option>
                       {puntiVendita?.data?.map((punto: PuntoVenditaResponseDTO) => (
@@ -866,8 +827,7 @@ const GestioneUtenti: React.FC = () => {
                         </option>
                       ))}
                     </FormSelect>
-                    {errorsEdit.idPuntoVendita && <p className="text-red-500 text-xs mt-1">{errorsEdit.idPuntoVendita.message}</p>}
-                  </div>
+                  </FormField>
                 )}
               </div>
             </form>
@@ -889,20 +849,11 @@ const GestioneUtenti: React.FC = () => {
             <Button
               variant="primary"
               onClick={handleSubmitEdit(onSubmitEditForm)}
-              disabled={updateUtenteMutation.isPending}
+              loading={updateUtenteMutation.isPending}
               className="px-4"
             >
-              {updateUtenteMutation.isPending ? (
-                <>
-                  <Lucide icon="Loader" className="w-4 h-4 mr-2 animate-spin" />
-                  Aggiornamento...
-                </>
-              ) : (
-                <>
-                  <Lucide icon="Save" className="w-4 h-4 mr-2" />
-                  Salva modifiche
-                </>
-              )}
+              {!updateUtenteMutation.isPending && <Lucide icon="Save" aria-hidden="true" className="w-4 h-4 mr-2" />}
+              Salva modifiche
             </Button>
           </Dialog.Footer>
         </Dialog.Panel>
@@ -913,77 +864,64 @@ const GestioneUtenti: React.FC = () => {
       }}>
         <Dialog.Panel className="">
           <Dialog.Title>
-            <h2 className="mr-auto text-base font-medium">
+            <h2 className="title-card mr-auto">
               Crea nuovo utente
             </h2></Dialog.Title>
           <Dialog.Description>
             <form onSubmit={handleSubmit(onSubmitUserForm)}>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Nome</label>
+                <FormField etichetta="Nome" obbligatorio errore={errors.nome?.message}>
                   <FormInput
                     {...register("nome")}
                     type="text"
                     placeholder="Inserisci il nome"
-                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm ${errors.nome ? 'border-red-500' : ''}`}
+                    className={clsx(errors.nome && "border-danger")}
                   />
-                  {errors.nome && <p className="text-red-500 text-xs mt-1">{errors.nome.message}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Cognome</label>
+                </FormField>
+                <FormField etichetta="Cognome" obbligatorio errore={errors.cognome?.message}>
                   <FormInput
                     {...register("cognome")}
                     type="text"
                     placeholder="Inserisci il cognome"
-                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm ${errors.cognome ? 'border-red-500' : ''}`}
+                    className={clsx(errors.cognome && "border-danger")}
                   />
-                  {errors.cognome && <p className="text-red-500 text-xs mt-1">{errors.cognome.message}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Email</label>
+                </FormField>
+                <FormField etichetta="Email" obbligatorio errore={errors.email?.message}>
                   <FormInput
                     {...register("email")}
                     type="email"
                     autoComplete="email webauthn"
                     placeholder="Inserisci l'email"
-                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm ${errors.email ? 'border-red-500' : ''}`}
+                    className={clsx(errors.email && "border-danger")}
                   />
-                  {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email.message}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Password</label>
+                </FormField>
+                <FormField etichetta="Password" obbligatorio errore={errors.password?.message}>
                   <FormInput
                     {...register("password")}
                     type="password"
                     placeholder="Inserisci la password"
-                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm ${errors.password ? 'border-red-500' : ''}`}
+                    className={clsx(errors.password && "border-danger")}
                   />
-                  {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password.message}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Data di Nascita</label>
+                </FormField>
+                <FormField etichetta="Data di Nascita" obbligatorio errore={errors.dataDiNascita?.message}>
                   <FormInput
                     {...register("dataDiNascita")}
                     type="date"
-                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm ${errors.dataDiNascita ? 'border-red-500' : ''}`}
+                    className={clsx(errors.dataDiNascita && "border-danger")}
                   />
-                  {errors.dataDiNascita && <p className="text-red-500 text-xs mt-1">Data di nascita non valida</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Residenza</label>
+                </FormField>
+                <FormField etichetta="Residenza" obbligatorio errore={errors.residenza?.message}>
                   <FormInput
                     {...register("residenza")}
                     type="text"
                     placeholder="Inserisci la residenza"
-                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm ${errors.residenza ? 'border-red-500' : ''}`}
+                    className={clsx(errors.residenza && "border-danger")}
                   />
-                  {errors.residenza && <p className="text-red-500 text-xs mt-1">{errors.residenza.message}</p>}
-                </div>
-                <div className="col-span-1 sm:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700">Tipo Utente</label>
+                </FormField>
+                <FormField className="col-span-1 sm:col-span-2" etichetta="Tipo Utente" obbligatorio errore={errors.tipoUtente?.message}>
                   <FormSelect
                     {...register("tipoUtente")}
-                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm ${errors.tipoUtente ? 'border-red-500' : ''}`}
+                    className={clsx(errors.tipoUtente && "border-danger")}
                   >
                     {(() => {
                       // Precalcola le opzioni disponibili in base al tipo utente loggato
@@ -1008,17 +946,15 @@ const GestioneUtenti: React.FC = () => {
                       ));
                     })()}
                   </FormSelect>
-                  {errors.tipoUtente && <p className="text-red-500 text-xs mt-1">{errors.tipoUtente.message}</p>}
-                </div>
+                </FormField>
 
                 {/* Campo Ruolo - mostrato per tutti tranne SUPERADMIN */}
 
                 {watch("tipoUtente") === TIPO_UTENTI.PUNTOVENDITA && (
-                  <div className="col-span-1 sm:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700">Punto Vendita da collegare</label>
+                  <FormField className="col-span-1 sm:col-span-2" etichetta="Punto Vendita da collegare" obbligatorio errore={errors.idPuntoVendita?.message}>
                     <FormSelect
                       {...register("idPuntoVendita")}
-                      className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm ${errors.idPuntoVendita ? 'border-red-500' : ''}`}
+                      className={clsx(errors.idPuntoVendita && "border-danger")}
                     >
                       <option value="">Seleziona un punto vendita</option>
                       {puntiVendita?.data?.map((punto: PuntoVenditaResponseDTO) => (
@@ -1027,15 +963,13 @@ const GestioneUtenti: React.FC = () => {
                         </option>
                       ))}
                     </FormSelect>
-                    {errors.idPuntoVendita && <p className="text-red-500 text-xs mt-1">{errors.idPuntoVendita.message}</p>}
-                  </div>
+                  </FormField>
                 )}
                 {watch("tipoUtente") && watch("tipoUtente") !== TIPO_UTENTI.SUPERADMIN && (
-                  <div className="col-span-1 sm:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700">GDO da associare</label>
+                  <FormField className="col-span-1 sm:col-span-2" etichetta="GDO da associare" obbligatorio errore={errors.gdoScelta?.message}>
                     <FormSelect
                       {...register("gdoScelta")}
-                      className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm ${errors.gdoScelta ? 'border-red-500' : ''}`}
+                      className={clsx(errors.gdoScelta && "border-danger")}
                     >
                       <option value="">Seleziona una GDO</option>
                       {allGDO?.map((gdo: GDOResponseDTO) => (
@@ -1044,15 +978,13 @@ const GestioneUtenti: React.FC = () => {
                         </option>
                       ))}
                     </FormSelect>
-                    {errors.gdoScelta && <p className="text-red-500 text-xs mt-1">{errors.gdoScelta.message}</p>}
-                  </div>
+                  </FormField>
                 )}
                 {watch("tipoUtente") && watch("tipoUtente") !== TIPO_UTENTI.SUPERADMIN && (
-                  <div className="col-span-1 sm:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700">Ruolo (opzionale)</label>
+                  <FormField className="col-span-1 sm:col-span-2" etichetta="Ruolo (opzionale)" errore={errors.ruolo_gdo?.message}>
                     <FormSelect
                       {...register("ruolo_gdo")}
-                      className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm ${errors.ruolo_gdo ? 'border-red-500' : ''}`}
+                      className={clsx(errors.ruolo_gdo && "border-danger")}
                     >
                       <option value="">Seleziona un ruolo (opzionale)</option>
                       {allRuoliGDO?.map((ruolo: RuoloUtenteGDOResponseDTO) => (
@@ -1061,26 +993,22 @@ const GestioneUtenti: React.FC = () => {
                         </option>
                       ))}
                     </FormSelect>
-                    {errors.ruolo_gdo && <p className="text-red-500 text-xs mt-1">{errors.ruolo_gdo.message}</p>}
-                  </div>
+                  </FormField>
                 )}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Sesso</label>
+                <FormField etichetta="Sesso" errore={errors.sesso?.message}>
                   <FormSelect
                     {...register("sesso")}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
                   >
                     <option value="">Non specificato</option>
                     {Object.entries(UTENTE_GENERE).map(([key, value]) => (
                       <option key={key} value={value}>{value}</option>
                     ))}
                   </FormSelect>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Stato Utente</label>
+                </FormField>
+                <FormField etichetta="Stato Utente" obbligatorio errore={errors.statoUtente?.message}>
                   <FormSelect
                     {...register("statoUtente")}
-                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm ${errors.statoUtente ? 'border-red-500' : ''}`}
+                    className={clsx(errors.statoUtente && "border-danger")}
                   >
                     {Object.keys(STATO_UTENTI).map((key) => (
                       <option key={key} value={STATO_UTENTI[key as keyof typeof STATO_UTENTI]}>
@@ -1088,18 +1016,15 @@ const GestioneUtenti: React.FC = () => {
                       </option>
                     ))}
                   </FormSelect>
-                  {errors.statoUtente && <p className="text-red-500 text-xs mt-1">{errors.statoUtente.message}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Telefono</label>
+                </FormField>
+                <FormField etichetta="Telefono" errore={errors.telefono?.message}>
                   <FormInput
                     {...register("telefono")}
                     type="text"
                     placeholder="Inserisci il numero di telefono"
-                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm ${errors.telefono ? 'border-red-500' : ''}`}
+                    className={clsx(errors.telefono && "border-danger")}
                   />
-                  {errors.telefono && <p className="text-red-500 text-xs mt-1">{errors.telefono.message}</p>}
-                </div>
+                </FormField>
               </div>
               <Dialog.Footer className="flex flex-col sm:flex-row gap-2 justify-end mt-6">
                 <Button
@@ -1352,9 +1277,20 @@ const GestioneUtenti: React.FC = () => {
                       <Table.Tr>
                         <Table.Td colSpan={8} className="py-8 text-center text-slate-500">
                           <div className="flex items-center justify-center">
-                            <Lucide icon="Loader" className="w-6 h-6 animate-spin mr-2" />
-                            Caricamento utenti...
+                            <Spinner etichetta="Caricamento utenti…" />
                           </div>
+                        </Table.Td>
+                      </Table.Tr>
+                    )}
+                    {dataUtentiPaginated?.isError && (
+                      <Table.Tr>
+                        <Table.Td colSpan={8} className="py-4">
+                          <PageError
+                            compatta
+                            titolo="Utenti non caricati"
+                            motivo={(dataUtentiPaginated.error as Error)?.message || "Errore durante il recupero degli utenti"}
+                            onRiprova={() => dataUtentiPaginated.refetch()}
+                          />
                         </Table.Td>
                       </Table.Tr>
                     )}
@@ -1382,7 +1318,7 @@ const GestioneUtenti: React.FC = () => {
                           <div className="flex items-center">
                             <div className="w-9 h-9 image-fit zoom-in">
                               <Tippy
-                                className="rounded-full shadow-[0px_0px_0px_2px_#fff,_1px_1px_5px_rgba(0,0,0,0.32)] dark:shadow-[0px_0px_0px_2px_#3f4865,_1px_1px_5px_rgba(0,0,0,0.32)]"
+                                className="rounded-full shadow-[0px_0px_0px_2px_white,_1px_1px_5px_rgba(0,0,0,0.32)] dark:shadow-[0px_0px_0px_2px_rgb(63_72_101),_1px_1px_5px_rgba(0,0,0,0.32)]"
                                 content={`${utente.nome_completo}`}
                               />
                             </div>
@@ -1463,16 +1399,8 @@ const GestioneUtenti: React.FC = () => {
                           </p>
                         </Table.Td>
                         <Table.Td className="py-4 border-dashed dark:bg-darkmode-600">
-                          <div
-                            className={clsx(["flex items-center justify-center", statoUtente(utente.stato).colore])}
-                          >
-                            <Lucide
-                              icon={statoUtente(utente.stato).icona}
-                              className="w-3.5 h-3.5 stroke-[1.7]"
-                            />
-                            <div className="ml-1.5 whitespace-nowrap">
-                              {statoUtente(utente.stato).etichetta}
-                            </div>
+                          <div className="flex items-center justify-center">
+                            <StatusBadge dominio="utente" stato={utente.stato} />
                           </div>
                         </Table.Td>
                         <Table.Td className="py-4 border-dashed dark:bg-darkmode-600">
@@ -1532,9 +1460,13 @@ const GestioneUtenti: React.FC = () => {
                         <Table.Td className="relative py-4 border-dashed dark:bg-darkmode-600">
                           <div className="flex items-center justify-center">
                             <Popover className="h-5">
-                              <Popover.Button className=" flex items-center justify-center w-5 h-5 text-slate-500 hover:bg-slate-100 rounded-full transition duration-300">
+                              <Popover.Button
+                                aria-label={`Azioni utente ${utente.nome_completo ?? ""}`.trim()}
+                                className=" flex items-center justify-center w-5 h-5 text-slate-500 hover:bg-slate-100 rounded-full transition duration-300"
+                              >
                                 <Lucide
                                   icon="EllipsisVertical"
+                                  aria-hidden="true"
                                   className="w-5 h-5"
                                 />
                               </Popover.Button>
@@ -1582,9 +1514,16 @@ const GestioneUtenti: React.FC = () => {
               <div className="lg:hidden space-y-4 p-4">
                 {dataUtentiPaginated?.isLoading && (
                   <div className="flex items-center justify-center py-8 text-slate-500">
-                    <Lucide icon="Loader" className="w-6 h-6 animate-spin mr-2" />
-                    Caricamento utenti...
+                    <Spinner etichetta="Caricamento utenti…" />
                   </div>
+                )}
+                {dataUtentiPaginated?.isError && (
+                  <PageError
+                    compatta
+                    titolo="Utenti non caricati"
+                    motivo={(dataUtentiPaginated.error as Error)?.message || "Errore durante il recupero degli utenti"}
+                    onRiprova={() => dataUtentiPaginated.refetch()}
+                  />
                 )}
 
                 {!dataUtentiPaginated?.isLoading && dataUtentiPaginated?.data?.utenti?.length === 0 && (
@@ -1614,8 +1553,11 @@ const GestioneUtenti: React.FC = () => {
                         </div>
                       </div>
                       <Menu className="h-5">
-                        <Menu.Button className="flex items-center justify-center w-8 h-8 text-slate-500 hover:bg-slate-100 rounded-full transition duration-300">
-                          <Lucide icon="EllipsisVertical" className="w-5 h-5" />
+                        <Menu.Button
+                          aria-label={`Azioni utente ${utente.nome_completo ?? ""}`.trim()}
+                          className="flex items-center justify-center w-8 h-8 text-slate-500 hover:bg-slate-100 rounded-full transition duration-300"
+                        >
+                          <Lucide icon="EllipsisVertical" aria-hidden="true" className="w-5 h-5" />
                         </Menu.Button>
                         <Menu.Items className="w-40">
                           <Menu.Item onClick={() => {
@@ -1640,12 +1582,8 @@ const GestioneUtenti: React.FC = () => {
                     <div className="grid grid-cols-2 gap-3 text-sm">
                       <div>
                         <span className="text-slate-500">Stato:</span>
-                        <div className={clsx(["flex items-center mt-1", statoUtente(utente.stato).colore])}>
-                          <Lucide
-                            icon={statoUtente(utente.stato).icona}
-                            className="w-3.5 h-3.5 stroke-[1.7] mr-1"
-                          />
-                          {statoUtente(utente.stato).etichetta}
+                        <div className="mt-1">
+                          <StatusBadge dominio="utente" stato={utente.stato} />
                         </div>
                       </div>
 

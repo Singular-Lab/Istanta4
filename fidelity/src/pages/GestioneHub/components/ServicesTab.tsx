@@ -731,8 +731,8 @@ const ServicesTab = () => {
                             </div>
                             {!variant.gestito && (
                               <div className="flex gap-1.5 shrink-0">
-                                <Button variant="soft-danger" size="sm" onClick={() => requestVariantDeletion(variant)}>
-                                  <Lucide icon="Trash2" className="w-3.5 h-3.5" />
+                                <Button variant="soft-danger" size="sm" onClick={() => requestVariantDeletion(variant)} aria-label="Elimina variante">
+                                  <Lucide aria-hidden="true" icon="Trash2" className="w-3.5 h-3.5" />
                                 </Button>
                               </div>
                             )}

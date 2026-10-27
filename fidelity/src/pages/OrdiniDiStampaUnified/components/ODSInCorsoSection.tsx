@@ -1,10 +1,12 @@
 import Button from "@/components/Base/Button";
 import Lucide from "@/components/Base/Lucide";
+import StatusBadge from "@/components/Base/StatusBadge";
 import Table from "@/components/Base/Table";
 import EmptyState from "@/components/EmptyState";
+import { descriviStato } from "@/constants/stati";
+import { formatData } from "@/utils/format";
 import dayjs from "dayjs";
 import React, { useMemo, useState } from "react";
-import { STATO_ORDINI_STAMPA } from "../../../../lib/enums";
 import { OrdiniDiStampaResponseDTO } from "../../../../server/core/dto";
 
 interface ODSInCorsoSectionProps {
@@ -15,6 +17,45 @@ interface ODSInCorsoSectionProps {
 
 type SortField = 'data' | 'promozione' | 'anzianita' | 'stato';
 type SortDirection = 'asc' | 'desc';
+
+const etichettaStato = (stato: string) => descriviStato("ordineStampa", stato).etichetta;
+
+// aria-sort solo sulla colonna che ordina, come chiede ARIA
+const ariaSort = (field: SortField, sortField: SortField, sortDirection: SortDirection): React.AriaAttributes['aria-sort'] =>
+  sortField !== field ? undefined : sortDirection === 'asc' ? 'ascending' : 'descending';
+
+interface SortableHeaderProps {
+  field: SortField;
+  sortField: SortField;
+  sortDirection: SortDirection;
+  onSort: (field: SortField) => void;
+  children: React.ReactNode;
+}
+
+// Fuori dal componente: ridefinito a ogni render, il pulsante perderebbe il focus dopo l'ordinamento
+const SortableHeader = ({ field, sortField, sortDirection, onSort, children }: SortableHeaderProps) => (
+  <button
+    type="button"
+    onClick={() => onSort(field)}
+    className="flex items-center gap-2 font-medium cursor-pointer hover:text-slate-900 select-none group rounded-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40"
+  >
+    {children}
+    <span aria-hidden="true" className="flex flex-col">
+      <Lucide
+        icon="ChevronUp"
+        className={`w-3 h-3 -mb-1 transition-colors ${
+          sortField === field && sortDirection === 'asc' ? 'text-slate-800' : 'text-slate-400 group-hover:text-slate-600'
+        }`}
+      />
+      <Lucide
+        icon="ChevronDown"
+        className={`w-3 h-3 -mt-1 transition-colors ${
+          sortField === field && sortDirection === 'desc' ? 'text-slate-800' : 'text-slate-400 group-hover:text-slate-600'
+        }`}
+      />
+    </span>
+  </button>
+);
 
 const ODSInCorsoSection: React.FC<ODSInCorsoSectionProps> = ({ ordini, searchQuery, onRevisioneClick }) => {
   const [sortField, setSortField] = useState<SortField>('anzianita');
@@ -101,49 +142,6 @@ const ODSInCorsoSection: React.FC<ODSInCorsoSectionProps> = ({ ordini, searchQue
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case STATO_ORDINI_STAMPA.FINITO:
-        return 'text-success bg-success/10 border-success/20';
-      case STATO_ORDINI_STAMPA.IN_REVISIONE:
-        return 'text-pending bg-pending/10 border-pending/20';
-      case 'annullato':
-        return 'text-danger bg-danger/10 border-danger/20';
-      case STATO_ORDINI_STAMPA.REVISIONATO:
-        return 'text-warning bg-warning/10 border-warning/20';
-      default:
-        return 'text-info bg-info/10 border-info/20';
-    }
-  };
-
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case STATO_ORDINI_STAMPA.IN_REVISIONE:
-        return 'In Revisione';
-      case STATO_ORDINI_STAMPA.IN_INVIO:
-        return 'In invio';
-      case STATO_ORDINI_STAMPA.FINITO:
-        return 'Completato';
-      case STATO_ORDINI_STAMPA.REVISIONATO:
-        return 'Revisionato';
-      default:
-        return status;
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case STATO_ORDINI_STAMPA.FINITO:
-        return 'CircleCheck';
-      case STATO_ORDINI_STAMPA.IN_REVISIONE:
-        return 'Clock';
-      case STATO_ORDINI_STAMPA.REVISIONATO:
-        return 'Eye';
-      default:
-        return 'Circle';
-    }
-  };
-
   const getUrgencyBadge = (daysInWaiting: number) => {
     if (daysInWaiting > 180) {
       return { text: `Da ${Math.floor(daysInWaiting / 30)} mesi`, icon: 'TriangleAlert' };
@@ -153,29 +151,6 @@ const ODSInCorsoSection: React.FC<ODSInCorsoSectionProps> = ({ ordini, searchQue
     return null;
   };
 
-  const SortableHeader = ({ field, children }: { field: SortField; children: React.ReactNode }) => (
-    <div
-      className="flex items-center gap-2 cursor-pointer hover:text-slate-900 select-none group"
-      onClick={() => handleSort(field)}
-    >
-      {children}
-      <div className="flex flex-col">
-        <Lucide
-          icon="ChevronUp"
-          className={`w-3 h-3 -mb-1 transition-colors ${
-            sortField === field && sortDirection === 'asc' ? 'text-slate-800' : 'text-slate-400 group-hover:text-slate-600'
-          }`}
-        />
-        <Lucide
-          icon="ChevronDown"
-          className={`w-3 h-3 -mt-1 transition-colors ${
-            sortField === field && sortDirection === 'desc' ? 'text-slate-800' : 'text-slate-400 group-hover:text-slate-600'
-          }`}
-        />
-      </div>
-    </div>
-  );
-
   return (
     <div>
       <div className="flex flex-col box box--stacked shadow-sm">
@@ -183,7 +158,7 @@ const ODSInCorsoSection: React.FC<ODSInCorsoSectionProps> = ({ ordini, searchQue
         <div className="p-6 border-b border-slate-200/60 bg-slate-50/30">
           <div className="flex items-start justify-between mb-4">
             <div>
-              <h3 className="text-lg font-semibold text-slate-800 mb-1">Ordini in corso</h3>
+              <h3 className="title-section mb-1">Ordini in corso</h3>
               <p className="text-sm text-slate-600">Monitoraggio ordini di stampa in lavorazione</p>
             </div>
           </div>
@@ -242,6 +217,8 @@ const ODSInCorsoSection: React.FC<ODSInCorsoSectionProps> = ({ ordini, searchQue
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm font-medium text-slate-700 mr-2">Filtra per stato:</span>
               <button
+                type="button"
+                aria-pressed={statoFilter === 'all'}
                 onClick={() => setStatoFilter('all')}
                 className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
                   statoFilter === 'all'
@@ -256,6 +233,8 @@ const ODSInCorsoSection: React.FC<ODSInCorsoSectionProps> = ({ ordini, searchQue
                 return (
                   <button
                     key={stato}
+                    type="button"
+                    aria-pressed={statoFilter === stato}
                     onClick={() => setStatoFilter(stato)}
                     className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
                       statoFilter === stato
@@ -263,7 +242,7 @@ const ODSInCorsoSection: React.FC<ODSInCorsoSectionProps> = ({ ordini, searchQue
                         : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50'
                     }`}
                   >
-                    {getStatusLabel(stato)} ({count})
+                    {etichettaStato(stato)} ({count})
                   </button>
                 );
               })}
@@ -275,33 +254,33 @@ const ODSInCorsoSection: React.FC<ODSInCorsoSectionProps> = ({ ordini, searchQue
           <Table>
             <Table.Thead>
               <Table.Tr>
-                <Table.Td className="py-4 font-medium border-t bg-slate-50/80 border-slate-200/60 text-slate-700">
-                  <SortableHeader field="promozione">
-                    <Lucide icon="Tag" className="w-4 h-4" />
+                <Table.Th aria-sort={ariaSort('promozione', sortField, sortDirection)} className="py-4 font-medium border-t border-b bg-slate-50/80 border-slate-200/60 text-slate-700">
+                  <SortableHeader field="promozione" sortField={sortField} sortDirection={sortDirection} onSort={handleSort}>
+                    <Lucide icon="Tag" aria-hidden="true" className="w-4 h-4" />
                     Promozione
                   </SortableHeader>
-                </Table.Td>
-                <Table.Td className="py-4 font-medium border-t bg-slate-50/80 border-slate-200/60 text-slate-700">
-                  <SortableHeader field="stato">
-                    <Lucide icon="Activity" className="w-4 h-4" />
+                </Table.Th>
+                <Table.Th aria-sort={ariaSort('stato', sortField, sortDirection)} className="py-4 font-medium border-t border-b bg-slate-50/80 border-slate-200/60 text-slate-700">
+                  <SortableHeader field="stato" sortField={sortField} sortDirection={sortDirection} onSort={handleSort}>
+                    <Lucide icon="Activity" aria-hidden="true" className="w-4 h-4" />
                     Stato
                   </SortableHeader>
-                </Table.Td>
-                <Table.Td className="py-4 font-medium border-t bg-slate-50/80 border-slate-200/60 text-slate-700">
-                  <SortableHeader field="data">
-                    <Lucide icon="Calendar" className="w-4 h-4" />
+                </Table.Th>
+                <Table.Th aria-sort={ariaSort('data', sortField, sortDirection)} className="py-4 font-medium border-t border-b bg-slate-50/80 border-slate-200/60 text-slate-700">
+                  <SortableHeader field="data" sortField={sortField} sortDirection={sortDirection} onSort={handleSort}>
+                    <Lucide icon="Calendar" aria-hidden="true" className="w-4 h-4" />
                     Data Conferma
                   </SortableHeader>
-                </Table.Td>
-                <Table.Td className="py-4 font-medium border-t bg-slate-50/80 border-slate-200/60 text-slate-700">
-                  <SortableHeader field="anzianita">
-                    <Lucide icon="Timer" className="w-4 h-4" />
+                </Table.Th>
+                <Table.Th aria-sort={ariaSort('anzianita', sortField, sortDirection)} className="py-4 font-medium border-t border-b bg-slate-50/80 border-slate-200/60 text-slate-700">
+                  <SortableHeader field="anzianita" sortField={sortField} sortDirection={sortDirection} onSort={handleSort}>
+                    <Lucide icon="Timer" aria-hidden="true" className="w-4 h-4" />
                     Giorni Attesa
                   </SortableHeader>
-                </Table.Td>
-                <Table.Td className="py-4 font-medium text-center border-t bg-slate-50/80 border-slate-200/60 text-slate-700">
+                </Table.Th>
+                <Table.Th className="py-4 font-medium text-center border-t border-b bg-slate-50/80 border-slate-200/60 text-slate-700">
                   Azioni
-                </Table.Td>
+                </Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
@@ -320,15 +299,12 @@ const ODSInCorsoSection: React.FC<ODSInCorsoSectionProps> = ({ ordini, searchQue
                         <div className="font-medium text-slate-800">{ordine.nomePromo}</div>
                       </Table.Td>
                       <Table.Td className="py-3.5 border-dashed dark:bg-darkmode-600">
-                        <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md border ${getStatusColor(ordine.stato)}`}>
-                          <Lucide icon={getStatusIcon(ordine.stato)} className="w-3.5 h-3.5" />
-                          {getStatusLabel(ordine.stato)}
-                        </div>
+                        <StatusBadge dominio="ordineStampa" stato={ordine.stato} />
                       </Table.Td>
                       <Table.Td className="py-3.5 border-dashed dark:bg-darkmode-600">
                         {ordine.data_di_conferma ? (
                           <div className="text-sm text-slate-700">
-                            {dayjs(ordine.data_di_conferma).format("DD/MM/YYYY")}
+                            {formatData(ordine.data_di_conferma)}
                           </div>
                         ) : (
                           <span className="text-sm text-slate-500 italic">In attesa</span>
@@ -340,7 +316,7 @@ const ODSInCorsoSection: React.FC<ODSInCorsoSectionProps> = ({ ordini, searchQue
                           <span className="text-sm text-slate-600">giorni</span>
                           {urgencyBadge && (
                             <div className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-danger bg-danger/10 rounded border border-danger/20">
-                              <Lucide icon={urgencyBadge.icon as any} className="w-3 h-3" />
+                              <Lucide icon={urgencyBadge.icon as any} aria-hidden="true" className="w-3 h-3" />
                               {urgencyBadge.text}
                             </div>
                           )}
@@ -352,7 +328,7 @@ const ODSInCorsoSection: React.FC<ODSInCorsoSectionProps> = ({ ordini, searchQue
                           size="sm"
                           onClick={() => onRevisioneClick(ordine.id)}
                         >
-                          <Lucide icon="Eye" className="w-4 h-4 mr-2" />
+                          <Lucide icon="Eye" aria-hidden="true" className="w-4 h-4 mr-2" />
                           Revisiona
                         </Button>
                       </Table.Td>
@@ -369,7 +345,7 @@ const ODSInCorsoSection: React.FC<ODSInCorsoSectionProps> = ({ ordini, searchQue
                         searchQuery
                           ? `Nessun ordine trovato per "${searchQuery}"`
                           : statoFilter !== 'all'
-                          ? `Nessun ordine con stato "${getStatusLabel(statoFilter)}"`
+                          ? `Nessun ordine con stato "${etichettaStato(statoFilter)}"`
                           : "Gli ordini di stampa appariranno qui una volta avviati."
                       }
                     />

@@ -2,20 +2,25 @@ import Button from '@/components/Base/Button';
 import { FormCheck, FormInput, FormSelect } from '@/components/Base/Form';
 import { Dialog } from '@/components/Base/Headless';
 import Lucide from '@/components/Base/Lucide';
+import PageError from '@/components/Base/PageError';
 import PageHeader from '@/components/Base/PageHeader';
 import Pagination from '@/components/Base/Pagination';
+import Spinner from '@/components/Base/Spinner';
+import StatusBadge from '@/components/Base/StatusBadge';
 import withSessionCheck from "@/components/SessionChecker";
 import Progress from '@/components/Base/Progress';
 import EmptyState from '@/components/EmptyState';
 import { PreviewImmaginePdf } from '@/components/PreviewImmaginePdf';
+import type { TonoStato } from '@/constants/stati';
 import { useFetchKitRuntimeFilesPaginated } from '@/query/query';
+import { formatDataOra, VALORE_ASSENTE } from '@/utils/format';
 import { useMutation } from '@tanstack/react-query';
 import axios from 'axios';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useLoaderData } from 'react-router-dom';
+import { useLoaderData, useNavigate } from 'react-router-dom';
 import type { Socket } from 'socket.io-client';
 import io from 'socket.io-client';
-import { ItemDisposition } from '../../../lib/enums';
+import { ItemDisposition, STATO_LOG_FILE } from '../../../lib/enums';
 import { ServerCall } from '../../../lib/server_call';
 import { FileItemKit, RUNTIME_KIT } from '../../../lib/types';
 
@@ -44,6 +49,27 @@ type MergeApiResponse = {
   fileName?: string;
 };
 
+// Stati del log dei file: non fanno parte del catalogo condiviso, tono ed etichetta restano locali
+const STATI_FILE: Record<string, { tono: TonoStato; etichetta: string }> = {
+  [STATO_LOG_FILE.IN_ATTESA]: { tono: 'neutral', etichetta: 'In attesa' },
+  [STATO_LOG_FILE.IN_REVISIONE]: { tono: 'brand', etichetta: 'In revisione' },
+  [STATO_LOG_FILE.ACCETTATO]: { tono: 'success', etichetta: 'Accettato' },
+  [STATO_LOG_FILE.PUBBLICATO]: { tono: 'success', etichetta: 'Pubblicato' },
+  [STATO_LOG_FILE.ERRORE]: { tono: 'danger', etichetta: 'Errore' },
+  [STATO_LOG_FILE.IN_ATTESA_DI_CORREGGO]: { tono: 'info', etichetta: 'In attesa di Correggo' },
+  [STATO_LOG_FILE.CORREGGO_PUBBLICATO]: { tono: 'success', etichetta: 'Correggo pubblicato' },
+  [STATO_LOG_FILE.CORREGGO_ERRORE]: { tono: 'danger', etichetta: 'Errore Correggo' },
+  RIFIUTATO: { tono: 'danger', etichetta: 'Rifiutato' },
+  IN_LAVORAZIONE: { tono: 'info', etichetta: 'In lavorazione' },
+};
+
+const descriviStatoFile = (stato?: string): { tono: TonoStato; etichetta: string } => {
+  if (!stato) return { tono: 'neutral', etichetta: VALORE_ASSENTE };
+  return Object.prototype.hasOwnProperty.call(STATI_FILE, stato)
+    ? STATI_FILE[stato]
+    : { tono: 'neutral', etichetta: stato.replace(/_/g, ' ') };
+};
+
 type SelectedFileEntry = {
   selected: boolean;
   data: Pick<FileItemKit, 'id' | 'nome' | 'id_olimpo_cloud' | 'url_download'>;
@@ -59,6 +85,7 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
     };
     idKit: string;
   };
+  const navigate = useNavigate();
 
   // View & search state
   const [itemDisposition, setItemDisposition] = useState<ItemDisposition>(ItemDisposition.grid);
@@ -177,44 +204,12 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
 
   const formatFileName = (fileName: string) => fileName.split(' (Lavorazione:')[0];
 
-  const formatDate = (dateString?: string | Date) => {
-    if (!dateString) return 'N/D';
-    const date = new Date(dateString);
-    if (Number.isNaN(date.getTime())) return 'N/D';
-    return date.toLocaleString('it-IT', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
   const formatCurrency = (value?: number) => {
     if (typeof value !== 'number') return null;
     return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(value);
   };
 
   const getFileKey = (file: FileItemKit) => file.id || `${file.nome}-${file.id_runtime}`;
-
-  const getStatusStyles = (status?: string) => {
-    if (!status) {
-      return 'bg-slate-100 text-slate-600 border-slate-200';
-    }
-    switch (status) {
-      case 'IN_REVISIONE':
-        return 'bg-pending/10 text-pending border-pending/20';
-      case 'IN_LAVORAZIONE':
-        return 'bg-info/10 text-info border-info/20';
-      case 'PUBBLICATO':
-      case 'ACCETTATO':
-        return 'bg-success/10 text-success border-success/20';
-      case 'RIFIUTATO':
-        return 'bg-danger/10 text-danger border-danger/20';
-      default:
-        return 'bg-info/10 text-info border-info/20';
-    }
-  };
 
   const allSearchProperties = useMemo(() => {
     const systemProperties = [
@@ -468,22 +463,23 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
           <PageHeader
             title={kit?.titolo || 'Dettaglio Kit'}
             description={`Visualizza i file associati al kit`}
+            indietro={{ onClick: () => navigate(-1) }}
           />
 
           <div className="mt-3.5">
-            <div className="flex flex-col box box--stacked shadow-sm rounded-xl border border-slate-200/80">
+            <div className="flex flex-col box box--stacked shadow-sm rounded-card border border-slate-200/80">
               {/* Header con stats */}
               <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4 p-6 border-b border-slate-200/60 bg-slate-50/40">
                 <div className="flex items-center gap-x-3">
-                  <div className="flex items-center justify-center w-11 h-11 rounded-xl bg-primary/10 text-primary">
-                    <Lucide icon="FolderOpen" className="w-5 h-5" />
+                  <div className="flex items-center justify-center w-11 h-11 rounded-card bg-primary/10 text-primary">
+                    <Lucide icon="FolderOpen" aria-hidden="true" className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-slate-800">File del kit</h3>
+                    <h3 className="title-section">File del kit</h3>
                     <p className="text-sm text-slate-600 mt-0.5">
                       {totalItems} file totali
                       {isFetching && !isLoading && (
-                        <Lucide icon="Loader" className="w-3.5 h-3.5 animate-spin inline-block ml-2" />
+                        <Spinner size="sm" decorativo className="inline-block ml-2 h-3.5 w-3.5" />
                       )}
                     </p>
                   </div>
@@ -524,11 +520,12 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
               <div className="p-5 border-b border-slate-200/60 bg-slate-50/30">
                 <div className="grid grid-cols-1 lg:grid-cols-[200px_minmax(0,1fr)_auto] gap-4">
                   <div>
-                    <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 mb-2">
-                      <Lucide icon="Filter" className="w-4 h-4" />
+                    <label htmlFor="dettagli-kit-proprieta" className="flex items-center gap-2 text-sm font-semibold text-slate-700 mb-2">
+                      <Lucide icon="Filter" aria-hidden="true" className="w-4 h-4" />
                       Proprieta
                     </label>
                     <FormSelect
+                      id="dettagli-kit-proprieta"
                       value={searchProperty}
                       onChange={(e) => setSearchProperty(e.target.value)}
                       className="w-full"
@@ -543,11 +540,12 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 mb-2">
-                      <Lucide icon="Search" className="w-4 h-4" />
+                    <label htmlFor="dettagli-kit-cerca" className="flex items-center gap-2 text-sm font-semibold text-slate-700 mb-2">
+                      <Lucide icon="Search" aria-hidden="true" className="w-4 h-4" />
                       Cerca
                     </label>
                     <FormInput
+                      id="dettagli-kit-cerca"
                       type="text"
                       placeholder="Cerca per nome, referenza, reparto, tema..."
                       value={searchValue}
@@ -559,24 +557,33 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
                   <div className="flex items-end gap-2 flex-wrap">
                     <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1">
                       <Button
+                        type="button"
                         variant={itemDisposition === ItemDisposition.grid ? 'primary' : 'outline-secondary'}
                         onClick={() => setItemDisposition(ItemDisposition.grid)}
+                        aria-label="Vista griglia"
+                        aria-pressed={itemDisposition === ItemDisposition.grid}
+                        title="Vista griglia"
                         className="shadow-none"
                       >
-                        <Lucide icon="LayoutGrid" className="w-4 h-4" />
+                        <Lucide icon="LayoutGrid" aria-hidden="true" className="w-4 h-4" />
                       </Button>
                       <Button
+                        type="button"
                         variant={itemDisposition === ItemDisposition.list ? 'primary' : 'outline-secondary'}
                         onClick={() => setItemDisposition(ItemDisposition.list)}
+                        aria-label="Vista elenco"
+                        aria-pressed={itemDisposition === ItemDisposition.list}
+                        title="Vista elenco"
                         className="shadow-none"
                       >
-                        <Lucide icon="List" className="w-4 h-4" />
+                        <Lucide icon="List" aria-hidden="true" className="w-4 h-4" />
                       </Button>
                     </div>
 
                     <div className="flex items-center gap-1.5">
                       <span className="text-xs text-slate-500 whitespace-nowrap">Per pagina:</span>
                       <FormSelect
+                        aria-label="File per pagina"
                         value={pageSize}
                         onChange={(e) => setPageSize(Number(e.target.value))}
                         className="w-[70px] !py-1.5 text-sm"
@@ -607,10 +614,17 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
               {/* File content area */}
               <div className="p-5 relative">
                 {isLoading ? (
-                  <div className="flex flex-col items-center justify-center py-16">
-                    <Lucide icon="Loader" className="w-8 h-8 animate-spin text-primary mb-3" />
+                  <div role="status" className="flex flex-col items-center justify-center py-16">
+                    <Spinner size="lg" decorativo className="mb-3" />
                     <span className="text-sm text-slate-500">Caricamento file...</span>
                   </div>
+                ) : filesQuery.isError && !paginatedData ? (
+                  <PageError
+                    compatta
+                    titolo="Impossibile caricare i file del kit"
+                    motivo={getErrorMessage(filesQuery.error)}
+                    onRiprova={() => filesQuery.refetch()}
+                  />
                 ) : files.length === 0 ? (
                   <EmptyState
                     icon="FileX"
@@ -620,8 +634,8 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
                 ) : (
                   <>
                     {isFetching && !isLoading && (
-                      <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-xs">
-                        <Lucide icon="Loader" className="w-3.5 h-3.5 animate-spin" />
+                      <div role="status" className="absolute top-3 right-3 z-20 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-xs">
+                        <Spinner size="sm" decorativo className="h-3.5 w-3.5 text-current" />
                         Aggiornamento...
                       </div>
                     )}
@@ -638,7 +652,7 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
                           return (
                             <div
                               key={fileKey}
-                              className={`relative flex flex-col p-4 rounded-xl transition-all border group ${isSelected
+                              className={`relative flex flex-col p-4 rounded-card transition-all border group ${isSelected
                                 ? 'border-primary/40 bg-primary/[0.03] shadow-sm ring-1 ring-primary/20'
                                 : 'border-slate-200 bg-white hover:border-primary/30 hover:shadow-md'
                                 }`}
@@ -648,13 +662,17 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
                                   <FormCheck.Input
                                     type="checkbox"
                                     className="!rounded-md"
+                                    aria-label={`Seleziona ${formatFileName(file.nome)}`}
                                     checked={isSelected}
                                     onChange={() => toggleFileSelection(file)}
                                   />
                                 </FormCheck>
                               </div>
-                              <div
-                                className="w-full h-36 flex items-center justify-center rounded-lg bg-slate-50 border border-slate-200 overflow-hidden mb-3 cursor-pointer hover:border-primary/50 transition-colors pt-4"
+                              <button
+                                type="button"
+                                aria-label={`Anteprima ${file.nome}`}
+                                disabled={!file.url}
+                                className="w-full h-36 flex items-center justify-center rounded-control bg-slate-50 border border-slate-200 overflow-hidden mb-3 cursor-pointer hover:border-primary/50 transition-colors pt-4 disabled:cursor-default disabled:hover:border-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40"
                                 onClick={() => {
                                   if (file.url) {
                                     setPreviewFile({ imageUrl: file.url, pages: file.pages || 1 });
@@ -671,18 +689,17 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
                                 ) : (
                                   <Lucide
                                     icon={getFileIcon(file.nome)}
+                                    aria-hidden="true"
                                     className="w-12 h-12 stroke-[1.5] text-slate-400"
                                   />
                                 )}
-                              </div>
+                              </button>
 
                               <div className="flex items-start justify-between gap-2 mb-1.5">
                                 <div className="text-sm font-semibold text-slate-800 truncate" title={formatFileName(file.nome)}>
                                   {formatFileName(file.nome)}
                                 </div>
-                                <span className={`px-2 py-0.5 rounded-md border text-[11px] font-medium whitespace-nowrap ${getStatusStyles(status)}`}>
-                                  {(status || 'N/D').replace(/_/g, ' ')}
-                                </span>
+                                <StatusBadge {...descriviStatoFile(status)} />
                               </div>
 
                               <div className="text-xs text-slate-500 truncate mb-2">
@@ -705,7 +722,7 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
                                   className="text-xs w-full"
                                   size="sm"
                                 >
-                                  <Lucide icon="Download" className="w-3.5 h-3.5 mr-1.5" />
+                                  <Lucide icon="Download" aria-hidden="true" className="w-3.5 h-3.5 mr-1.5" />
                                   Scarica
                                 </Button>
                               </div>
@@ -734,12 +751,16 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
                                 <FormCheck.Input
                                   type="checkbox"
                                   className="!rounded-md"
+                                  aria-label={`Seleziona ${formatFileName(file.nome)}`}
                                   checked={isSelected}
                                   onChange={() => toggleFileSelection(file)}
                                 />
                               </FormCheck>
-                              <div
-                                className="flex items-center justify-center w-12 h-12 mr-4 bg-white rounded-lg border border-slate-200 cursor-pointer flex-shrink-0 hover:border-primary/50 transition-colors shadow-sm"
+                              <button
+                                type="button"
+                                aria-label={`Anteprima ${file.nome}`}
+                                disabled={!file.url}
+                                className="flex items-center justify-center w-12 h-12 mr-4 bg-white rounded-control border border-slate-200 cursor-pointer flex-shrink-0 hover:border-primary/50 transition-colors shadow-sm disabled:cursor-default disabled:hover:border-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40"
                                 onClick={() => {
                                   if (file.url) {
                                     setPreviewFile({ imageUrl: file.url, pages: file.pages || 1 });
@@ -756,19 +777,18 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
                                 ) : (
                                   <Lucide
                                     icon={getFileIcon(file.nome)}
+                                    aria-hidden="true"
                                     className="w-6 h-6 stroke-[1.5] text-slate-400"
                                   />
                                 )}
-                              </div>
+                              </button>
 
                               <div className="flex-grow min-w-0">
                                 <div className="flex items-start justify-between gap-3">
                                   <div className="text-sm font-semibold text-slate-800 truncate" title={formatFileName(file.nome)}>
                                     {formatFileName(file.nome)}
                                   </div>
-                                  <span className={`px-2 py-0.5 rounded-md border text-[11px] font-medium whitespace-nowrap ${getStatusStyles(status)}`}>
-                                    {(status || 'N/D').replace(/_/g, ' ')}
-                                  </span>
+                                  <StatusBadge {...descriviStatoFile(status)} />
                                 </div>
 
                                 <div className="text-xs text-slate-500 mt-0.5">{file.tipo_export_codice || 'Tipo export non definito'}</div>
@@ -778,7 +798,7 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
                                   {meta.reparto && <span className="truncate">Reparto: <span className="font-medium">{meta.reparto}</span></span>}
                                   {meta.tema && <span>Tema: <span className="font-medium">{meta.tema}</span></span>}
                                   {price && <span>Prezzo: <span className="font-medium">{price}</span></span>}
-                                  <span>Ultimo update: <span className="font-medium">{formatDate(file.log?.data_registrazione)}</span></span>
+                                  <span>Ultimo update: <span className="font-medium">{formatDataOra(file.log?.data_registrazione)}</span></span>
                                 </div>
                               </div>
 
@@ -788,7 +808,7 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
                                 size="sm"
                                 className="ml-3 text-xs whitespace-nowrap"
                               >
-                                <Lucide icon="Download" className="w-4 h-4 mr-1.5" />
+                                <Lucide icon="Download" aria-hidden="true" className="w-4 h-4 mr-1.5" />
                                 Scarica
                               </Button>
                             </div>
@@ -866,10 +886,12 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
                       {totalPages > 1 && (
                         <Pagination className="flex w-full justify-end sm:w-auto">
                           <Pagination.Link
+                            aria-label="Pagina precedente"
+                            title="Pagina precedente"
                             onClick={() => canGoPrev && setPage((prev) => Math.max(1, prev - 1))}
                             className={!canGoPrev ? 'opacity-40 pointer-events-none' : 'cursor-pointer'}
                           >
-                            <Lucide icon="ChevronLeft" className="w-4 h-4" />
+                            <Lucide icon="ChevronLeft" aria-hidden="true" className="w-4 h-4" />
                           </Pagination.Link>
                           {paginationRange.map((item) =>
                             typeof item === 'number' ? (
@@ -891,10 +913,12 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
                             )
                           )}
                           <Pagination.Link
+                            aria-label="Pagina successiva"
+                            title="Pagina successiva"
                             onClick={() => canGoNext && setPage((prev) => prev + 1)}
                             className={!canGoNext ? 'opacity-40 pointer-events-none' : 'cursor-pointer'}
                           >
-                            <Lucide icon="ChevronRight" className="w-4 h-4" />
+                            <Lucide icon="ChevronRight" aria-hidden="true" className="w-4 h-4" />
                           </Pagination.Link>
                         </Pagination>
                       )}
@@ -911,7 +935,7 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
       <Dialog centered size="lg" open={showMergeDialog} onClose={handleCloseMergeDialog}>
         <Dialog.Panel className="p-2">
           <Dialog.Title>
-            <h2 className="text-lg font-semibold ">Unione file selezionati</h2>
+            <h2 className="title-section">Unione file selezionati</h2>
           </Dialog.Title>
           <Dialog.Description className="p-4">
             <div className="space-y-4">
@@ -945,15 +969,15 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
               </div>
 
               {mergeStep === 'checking' && (
-                <div className="flex items-center gap-2 text-sm text-primary">
-                  <Lucide icon="Loader" className="w-4 h-4 animate-spin" />
+                <div role="status" className="flex items-center gap-2 text-sm text-primary">
+                  <Spinner size="sm" decorativo />
                   Controllo file in corso...
                 </div>
               )}
 
               {mergeStep === 'merging' && (
-                <div className="flex items-center gap-2 text-sm text-primary">
-                  <Lucide icon="Loader" className="w-4 h-4 animate-spin" />
+                <div role="status" className="flex items-center gap-2 text-sm text-primary">
+                  <Spinner size="sm" decorativo />
                   Unione file in corso...
                 </div>
               )}
@@ -1005,7 +1029,7 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
       <Dialog centered open={showMergeResultDialog} onClose={() => setShowMergeResultDialog(false)}>
         <Dialog.Panel className="p-2">
           <Dialog.Title>
-            <h2 className="text-lg font-semibold px-4 pt-4">Risultato unione</h2>
+            <h2 className="title-section px-4 pt-4">Risultato unione</h2>
           </Dialog.Title>
           <Dialog.Description className="p-4">
             {mergeStep === 'success' ? (

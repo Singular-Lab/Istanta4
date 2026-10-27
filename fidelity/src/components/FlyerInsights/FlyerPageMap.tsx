@@ -182,7 +182,7 @@ const PageMap: FC<PageMapProps> = memo(({ pageNumber, referenze, hoveredRefId, o
     >
       {/* Numero pagina */}
       <div className={clsx(
-        "absolute top-1 z-30 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-600",
+        "absolute top-1 z-30 px-1.5 py-0.5 rounded text-3xs font-semibold bg-slate-100 text-slate-600",
         pageNumPosition
       )}>
         {pageNumber}
@@ -191,7 +191,7 @@ const PageMap: FC<PageMapProps> = memo(({ pageNumber, referenze, hoveredRefId, o
       {/* Label sinistra/destra - non mostrato per single */}
       {position !== 'single' && (
         <div className={clsx(
-          "absolute bottom-1 z-30 px-1.5 py-0.5 rounded text-[9px] font-medium",
+          "absolute bottom-1 z-30 px-1.5 py-0.5 rounded text-3xs font-medium",
           labelPosition,
           labelStyle
         )}>
@@ -217,7 +217,7 @@ const PageMap: FC<PageMapProps> = memo(({ pageNumber, referenze, hoveredRefId, o
         <div className="absolute inset-0 flex items-center justify-center text-slate-300 pointer-events-none">
           <div className="text-center">
             <Lucide icon="FileX" className="mx-auto h-6 w-6 mb-1" />
-            <p className="text-[10px]">Nessuna ref.</p>
+            <p className="text-3xs">Nessuna ref.</p>
           </div>
         </div>
       )}
@@ -239,7 +239,7 @@ const RefInfoPanel: FC<RefInfoPanelProps> = memo(({ ref_data, getColorFn, config
     return (
       <div className="rounded-lg min-h-[14rem] border border-dashed border-slate-200 bg-slate-50/50 p-3 text-center">
         <Lucide icon="MousePointer2" className="mx-auto h-5 w-5 text-slate-400 mb-1" />
-        <p className="text-[11px] text-slate-500">
+        <p className="text-2xs text-slate-500">
           Passa sopra una referenza per vedere i dettagli
         </p>
       </div>
@@ -255,7 +255,7 @@ const RefInfoPanel: FC<RefInfoPanelProps> = memo(({ ref_data, getColorFn, config
       <p className="text-xs font-semibold text-slate-800 mb-2 line-clamp-2">
         {ref_data.descrizione || 'Senza descrizione'}
       </p>
-      <div className="space-y-1.5 text-[11px] text-slate-600">
+      <div className="space-y-1.5 text-2xs text-slate-600">
         <div className="flex items-center gap-1.5">
           <Lucide icon="Barcode" className="h-3 w-3" />
           <span>{ref_data.codiceReferenza || 'N/D'}</span>
@@ -417,28 +417,34 @@ const FlyerPageMap: FC<Props> = ({ referenze, paginaCorrente, onChangePage, tota
     <div className="p-4">
       {/* Navigation */}
       <div className="flex items-center justify-between mb-4">
-        <h4 className="text-sm font-semibold text-slate-800">
+        <h4 className="title-card">
           {config?.title ?? 'Mappa Volantino'} - {spreadLabel}
         </h4>
         <div className="flex items-center gap-2">
           <Button
+            type="button"
             variant="outline-secondary"
             size="sm"
+            aria-label="Spread precedente"
+            title="Spread precedente"
             disabled={currentSpread <= 0}
             onClick={goToPrevSpread}
           >
-            <Lucide icon="ChevronLeft" className="h-4 w-4" />
+            <Lucide icon="ChevronLeft" aria-hidden="true" className="h-4 w-4" />
           </Button>
           <span className="text-xs text-slate-600 px-2 min-w-[80px] text-center">
             {currentSpread + 1} / {totalSpreads}
           </span>
           <Button
+            type="button"
             variant="outline-secondary"
             size="sm"
+            aria-label="Spread successivo"
+            title="Spread successivo"
             disabled={currentSpread >= totalSpreads - 1}
             onClick={goToNextSpread}
           >
-            <Lucide icon="ChevronRight" className="h-4 w-4" />
+            <Lucide icon="ChevronRight" aria-hidden="true" className="h-4 w-4" />
           </Button>
         </div>
       </div>
@@ -499,14 +505,17 @@ const FlyerPageMap: FC<Props> = ({ referenze, paginaCorrente, onChangePage, tota
           {/* Mini navigation */}
           {config?.display?.showMiniNavigation !== false && (
             <div className="mt-3 p-2 bg-slate-50 rounded-lg border border-slate-100">
-              <p className="text-[10px] text-slate-500 mb-2 font-medium">Vai a spread:</p>
+              <p className="text-3xs text-slate-500 mb-2 font-medium">Vai a spread:</p>
               <div className="flex flex-wrap gap-1">
                 {Array.from({ length: totalSpreads }, (_, i) => (
                   <button
                     key={i}
+                    type="button"
+                    aria-label={`Vai allo spread ${i + 1}`}
+                    aria-current={i === currentSpread ? "true" : undefined}
                     onClick={() => handleSpreadClick(i)}
                     className={clsx(
-                      "w-6 h-6 rounded text-[10px] font-semibold transition-colors",
+                      "w-6 h-6 rounded text-3xs font-semibold transition-colors",
                       i === currentSpread
                         ? "bg-primary text-white"
                         : "bg-white border border-slate-200 text-slate-600 hover:border-primary hover:text-primary"
@@ -525,7 +534,7 @@ const FlyerPageMap: FC<Props> = ({ referenze, paginaCorrente, onChangePage, tota
       {config?.display?.showLegend !== false && (
         <div className="mt-4 flex flex-wrap gap-2 justify-center">
           {colorMap.map(({ sigla, hex, label }) => (
-            <div key={sigla} className="flex items-center gap-1 text-[10px] text-slate-600">
+            <div key={sigla} className="flex items-center gap-1 text-3xs text-slate-600">
               <div className="h-3 w-3 rounded" style={{ backgroundColor: hex }} />
               {label}
             </div>
@@ -535,7 +544,7 @@ const FlyerPageMap: FC<Props> = ({ referenze, paginaCorrente, onChangePage, tota
 
       {/* Info totali */}
       {config?.display?.showTotalInfo !== false && (
-        <div className="mt-3 text-center text-[11px] text-slate-500">
+        <div className="mt-3 text-center text-2xs text-slate-500">
           Totale: {totalePagine} pagine ({totalSpreads} spread)
         </div>
       )}

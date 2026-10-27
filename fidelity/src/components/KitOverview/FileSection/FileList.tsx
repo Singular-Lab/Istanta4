@@ -145,8 +145,9 @@ const FileList: FC<FileListProps> = ({
                             className="px-2"
                             onClick={() => openPreview(file.url!, file.pages!, 1)}
                             title="Anteprima"
+                            aria-label="Anteprima"
                           >
-                            <Lucide icon="Eye" className="h-3.5 w-3.5" />
+                            <Lucide icon="Eye" aria-hidden="true" className="h-3.5 w-3.5" />
                           </Button>
                         )}
                         {/* Download button - prioritize url_download, fallback to url or onDownload */}
@@ -157,6 +158,7 @@ const FileList: FC<FileListProps> = ({
                               size="sm"
                               className="px-2"
                               title="Scarica file"
+                              aria-label="Scarica file"
                               onClick={() => {
                                 if (file.url_download) {
                                   window.open(file.url_download, "_blank");
@@ -168,7 +170,7 @@ const FileList: FC<FileListProps> = ({
                                 }
                               }}
                             >
-                              <Lucide icon="Download" className="h-3.5 w-3.5" />
+                              <Lucide icon="Download" aria-hidden="true" className="h-3.5 w-3.5" />
                             </Button>
                           </PermissionGate>
                         )}
@@ -180,9 +182,10 @@ const FileList: FC<FileListProps> = ({
                               size="sm"
                               className="px-2"
                               title="Elimina file"
+                              aria-label="Elimina file"
                               onClick={() => onDelete(file.id!)}
                             >
-                              <Lucide icon="Trash" className="h-3.5 w-3.5" />
+                              <Lucide icon="Trash" aria-hidden="true" className="h-3.5 w-3.5" />
                             </Button>
                           </PermissionGate>
                         )}

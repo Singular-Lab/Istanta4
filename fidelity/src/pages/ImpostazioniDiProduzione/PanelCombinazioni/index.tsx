@@ -1,4 +1,3 @@
-import LoadingIcon from '@/components/Base/LoadingIcon';
 import Button from '@/components/Base/Button';
 import { Dialog } from '@/components/Base/Headless';
 import Lucide from '@/components/Base/Lucide';
@@ -184,24 +183,15 @@ const PanelCombinazioni = forwardRef<unknown, PanelCombinazioniProps>((_props, r
             <Button
               className="mx-1"
               variant="danger"
-              disabled={mutationEliminazioneKit.isPending}
+              loading={mutationEliminazioneKit.isPending}
               onClick={() => {
                 if (state.selectedTemplate?.guidId) {
                   mutationEliminazioneKit.mutate(state.selectedTemplate.guidId);
                 }
               }}
             >
-              {mutationEliminazioneKit.isPending ? (
-                <div className="flex items-center">
-                  <LoadingIcon icon="oval" className="w-4 h-4 mr-2" />
-                  Eliminazione...
-                </div>
-              ) : (
-                <>
-                  <Lucide icon="Trash2" className="w-4 h-4 mr-2" />
-                  Elimina
-                </>
-              )}
+              {!mutationEliminazioneKit.isPending && <Lucide icon="Trash2" aria-hidden="true" className="w-4 h-4 mr-2" />}
+              Elimina
             </Button>
           </Dialog.Footer>
         </Dialog.Panel>

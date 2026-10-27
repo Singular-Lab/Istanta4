@@ -2,7 +2,7 @@ import Button from "@/components/Base/Button";
 import Lucide from "@/components/Base/Lucide";
 import Table from "@/components/Base/Table";
 import EmptyState from "@/components/EmptyState";
-import dayjs from "dayjs";
+import { formatData } from "@/utils/format";
 import React, { useMemo } from "react";
 import { PromoResponseDTO } from "../../../../server/core/dto";
 
@@ -26,11 +26,11 @@ const NuovoODSSection: React.FC<NuovoODSSectionProps> = ({ promo, searchQuery, o
       <div className="flex flex-col box box--stacked shadow-sm">
         {/* Enhanced Header with gradient background */}
         <div className="relative flex items-center gap-x-3 p-6 border-b border-slate-200/60 bg-gradient-to-r from-primary/5 to-primary/10">
-          <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-white shadow-sm">
-            <Lucide icon="PackagePlus" className="w-6 h-6 text-primary" />
+          <div className="flex items-center justify-center w-12 h-12 rounded-card bg-white shadow-sm">
+            <Lucide icon="PackagePlus" aria-hidden="true" className="w-6 h-6 text-primary" />
           </div>
           <div className="flex-1">
-            <h3 className="text-lg font-semibold text-slate-800">Promozioni disponibili</h3>
+            <h3 className="title-section">Promozioni disponibili</h3>
             <p className="text-sm text-slate-600 mt-0.5">Seleziona una promozione per avviare un nuovo ordine di stampa</p>
           </div>
           <div className="flex items-center gap-2">
@@ -82,14 +82,14 @@ const NuovoODSSection: React.FC<NuovoODSSectionProps> = ({ promo, searchQuery, o
                         <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 rounded-lg text-slate-700">
                           <Lucide icon="CalendarClock" className="w-3.5 h-3.5 text-slate-500" />
                           <span className="text-sm font-medium">
-                            {dayjs(promoItem.validita_dal).format('DD/MM/YYYY')}
+                            {formatData(promoItem.validita_dal)}
                           </span>
                         </div>
                         <Lucide icon="ArrowRight" className="w-4 h-4 text-slate-400" />
                         <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 rounded-lg text-slate-700">
                           <Lucide icon="Calendar" className="w-3.5 h-3.5 text-slate-500" />
                           <span className="text-sm font-medium">
-                            {dayjs(promoItem.validita_al).format('DD/MM/YYYY')}
+                            {formatData(promoItem.validita_al)}
                           </span>
                         </div>
                       </div>
@@ -101,7 +101,7 @@ const NuovoODSSection: React.FC<NuovoODSSectionProps> = ({ promo, searchQuery, o
                         onClick={() => onCreateOrder(promoItem)}
                         className="shadow-sm hover:shadow-md transition-shadow"
                       >
-                        <Lucide icon="Printer" className="w-4 h-4 mr-2" />
+                        <Lucide icon="Printer" aria-hidden="true" className="w-4 h-4 mr-2" />
                         Avvia Ordine
                       </Button>
                     </Table.Td>

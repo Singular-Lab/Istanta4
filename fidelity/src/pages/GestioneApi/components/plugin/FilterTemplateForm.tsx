@@ -605,8 +605,9 @@ function FilterTemplateForm({
                           variant="outline-secondary"
                           size="sm"
                           onClick={() => addFilterToGroup(groupIndex)}
+                          aria-label="Aggiungi filtro al gruppo"
                         >
-                          <Lucide icon="Plus" className="w-3 h-3" />
+                          <Lucide aria-hidden="true" icon="Plus" className="w-3 h-3" />
                         </Button>
                         {filterGroups.length > 1 && (
                           <Button
@@ -614,8 +615,9 @@ function FilterTemplateForm({
                             variant="outline-danger"
                             size="sm"
                             onClick={() => removeFilterGroup(groupIndex)}
+                            aria-label="Rimuovi gruppo"
                           >
-                            <Lucide icon="Trash2" className="w-3 h-3" />
+                            <Lucide aria-hidden="true" icon="Trash2" className="w-3 h-3" />
                           </Button>
                         )}
                       </div>
@@ -664,8 +666,9 @@ function FilterTemplateForm({
                               variant="outline-danger"
                               size="sm"
                               onClick={() => removeFilterFromGroup(groupIndex, filterIndex)}
+                              aria-label="Rimuovi filtro"
                             >
-                              <Lucide icon="X" className="w-3 h-3" />
+                              <Lucide aria-hidden="true" icon="X" className="w-3 h-3" />
                             </Button>
                           </div>
                           {filterIndex < group.length - 1 && (

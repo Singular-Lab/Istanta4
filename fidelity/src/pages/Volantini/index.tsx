@@ -5,7 +5,7 @@ import Pagination from "@/components/Base/Pagination";
 import { FormInput, FormSelect } from "@/components/Base/Form";
 import Tippy from "@/components/Base/Tippy";
 import Button from "@/components/Base/Button";
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useCallback } from "react";
 import _ from "lodash";
 import Litepicker from "@/components/Base/Litepicker";
 import { Link, useLoaderData, useRevalidator } from "react-router-dom";
@@ -39,7 +39,6 @@ const Volantini: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const r = useRevalidator();
   const renderFiles = useCallback(() => {
-    console.log(files);
     if (!files || files.length === 0) {
       return (
         <EmptyState
@@ -108,10 +107,6 @@ const Volantini: React.FC = () => {
     ));
   }, [files]);
 
-  useEffect(() => {
-    console.log(files);
-  }, [files]);
-
   return (
     <div className="grid grid-cols-12 gap-y-10 gap-x-6">
       <div className="col-span-12">
@@ -135,7 +130,7 @@ const Volantini: React.FC = () => {
                   <FormInput
                     type="text"
                     placeholder="Cerca promozione..."
-                    className="pl-9 sm:w-64 rounded-[0.5rem]"
+                    className="pl-9 sm:w-64 rounded-control"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
@@ -261,25 +256,25 @@ const Volantini: React.FC = () => {
             {files && files.length > 0 && (
               <div className="flex flex-col-reverse flex-wrap items-center p-5 flex-reverse gap-y-2 sm:flex-row">
                 <Pagination className="flex-1 w-full mr-auto sm:w-auto">
-                  <Pagination.Link>
-                    <Lucide icon="ChevronsLeft" className="w-4 h-4" />
+                  <Pagination.Link aria-label="Prima pagina">
+                    <Lucide icon="ChevronsLeft" aria-hidden="true" className="w-4 h-4" />
                   </Pagination.Link>
-                  <Pagination.Link>
-                    <Lucide icon="ChevronLeft" className="w-4 h-4" />
+                  <Pagination.Link aria-label="Pagina precedente">
+                    <Lucide icon="ChevronLeft" aria-hidden="true" className="w-4 h-4" />
                   </Pagination.Link>
                   <Pagination.Link>...</Pagination.Link>
                   <Pagination.Link>1</Pagination.Link>
                   <Pagination.Link active>2</Pagination.Link>
                   <Pagination.Link>3</Pagination.Link>
                   <Pagination.Link>...</Pagination.Link>
-                  <Pagination.Link>
-                    <Lucide icon="ChevronRight" className="w-4 h-4" />
+                  <Pagination.Link aria-label="Pagina successiva">
+                    <Lucide icon="ChevronRight" aria-hidden="true" className="w-4 h-4" />
                   </Pagination.Link>
-                  <Pagination.Link>
-                    <Lucide icon="ChevronsRight" className="w-4 h-4" />
+                  <Pagination.Link aria-label="Ultima pagina">
+                    <Lucide icon="ChevronsRight" aria-hidden="true" className="w-4 h-4" />
                   </Pagination.Link>
                 </Pagination>
-                <FormSelect className="sm:w-20 rounded-[0.5rem]">
+                <FormSelect className="sm:w-20 rounded-control">
                   <option>10</option>
                   <option>25</option>
                   <option>35</option>

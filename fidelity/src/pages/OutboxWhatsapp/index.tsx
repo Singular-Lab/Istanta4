@@ -7,12 +7,13 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { ServerCall } from '../../../lib/server_call';
-import Badge from '../../components/Base/Badge';
 import Button from '../../components/Base/Button';
 import { Dialog } from '../../components/Base/Headless';
-import LoadingIcon from '../../components/Base/LoadingIcon';
 import Lucide from '../../components/Base/Lucide';
+import PageError from '../../components/Base/PageError';
 import PageHeader from '../../components/Base/PageHeader';
+import Spinner from '../../components/Base/Spinner';
+import StatusBadge from '../../components/Base/StatusBadge';
 import Table from '../../components/Base/Table';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import EmptyState from '../../components/EmptyState';
@@ -55,86 +56,19 @@ interface JobStatus {
 }
 
 // ============= HELPERS =============
-const getStatusConfig = (status: BulkStatus['status']) => {
-    switch (status) {
-        case 'COMPLETED':
-            return {
-                label: 'Completata',
-                color: 'success',
-                icon: 'CircleCheck' as const,
-                bgClass: 'bg-success/10 text-success',
-            };
-        case 'RUNNING':
-            return {
-                label: 'In corso',
-                color: 'primary',
-                icon: 'Loader' as const,
-                bgClass: 'bg-primary/10 text-primary',
-            };
-        case 'PENDING':
-            return {
-                label: 'In attesa',
-                color: 'warning',
-                icon: 'Clock' as const,
-                bgClass: 'bg-warning/10 text-warning',
-            };
-        case 'FAILED':
-            return {
-                label: 'Fallita',
-                color: 'error',
-                icon: 'CircleX' as const,
-                bgClass: 'bg-danger/10 text-danger',
-            };
-        default:
-            return {
-                label: 'Sconosciuto',
-                color: 'secondary',
-                icon: 'CircleHelp' as const,
-                bgClass: 'bg-secondary/10 text-secondary',
-            };
-    }
+// Etichetta e tono vengono dal catalogo degli stati; qui solo l'icona del riquadro
+type IconaCampagna = { icon: 'CircleCheck' | 'Clock' | 'CircleX' | 'CircleHelp'; bgClass: string };
+const ICONA_STATO_SCONOSCIUTO: IconaCampagna = { icon: 'CircleHelp', bgClass: 'bg-slate-100 text-slate-500' };
+// null = in corso, mostra lo spinner
+const ICONE_CAMPAGNA: Record<BulkStatus['status'], IconaCampagna | null> = {
+    COMPLETED: { icon: 'CircleCheck', bgClass: 'bg-success/10 text-success' },
+    RUNNING: null,
+    PENDING: { icon: 'Clock', bgClass: 'bg-warning/10 text-warning' },
+    FAILED: { icon: 'CircleX', bgClass: 'bg-danger/10 text-danger' },
 };
 
-const getJobStatusConfig = (status: JobStatus['status']) => {
-    switch (status) {
-        case 'SUCCESS':
-            return {
-                label: 'Inviato',
-                color: 'success',
-                icon: 'CircleCheck' as const,
-            };
-        case 'PROCESSING':
-            return {
-                label: 'In invio',
-                color: 'primary',
-                icon: 'Loader' as const,
-            };
-        case 'PENDING':
-            return {
-                label: 'In coda',
-                color: 'warning',
-                icon: 'Clock' as const,
-            };
-        case 'FAILED':
-            return {
-                label: 'Fallito',
-                color: 'error',
-                icon: 'CircleX' as const,
-            };
-        case 'CANCELLED':
-            return {
-                label: 'Annullato',
-                color: 'secondary',
-                icon: 'Ban' as const,
-            };
-        default:
-            return {
-                label: status,
-                color: 'secondary',
-                icon: 'CircleHelp' as const,
-            };
-    }
-};
+const messaggioErrore = (errore: unknown, predefinito: string) =>
+    errore instanceof Error && errore.message ? errore.message : predefinito;
 
 const parseSocketPayload = (data: any) => {
     if (data instanceof ArrayBuffer) {
@@ -224,8 +158,10 @@ const CampaignCard: React.FC<{
     onViewDetails: () => void;
     onCancel: () => void;
     onRetry: () => void;
-}> = ({ bulk, onViewDetails, onCancel, onRetry }) => {
-    const statusConfig = getStatusConfig(bulk.status);
+    /** Un'altra azione su una campagna è in corso. */
+    disabilitato?: boolean;
+}> = ({ bulk, onViewDetails, onCancel, onRetry, disabilitato = false }) => {
+    const icona = bulk.status in ICONE_CAMPAGNA ? ICONE_CAMPAGNA[bulk.status] : ICONA_STATO_SCONOSCIUTO;
     const isActive = bulk.status === 'RUNNING' || bulk.status === 'PENDING';
 
     const cancelled = bulk.cancelled ?? 0;
@@ -250,27 +186,22 @@ const CampaignCard: React.FC<{
                 <div className="flex items-start gap-3">
                     <div
                         className={clsx(
-                            'flex items-center justify-center w-10 h-10 rounded-lg shrink-0',
-                            statusConfig.bgClass
+                            'flex items-center justify-center w-10 h-10 rounded-control shrink-0',
+                            icona ? icona.bgClass : 'bg-sky-100 text-sky-800'
                         )}
                     >
-                        {statusConfig.icon === 'Loader' ? (
-                            <LoadingIcon icon="spinning-circles" className="w-5 h-5" />
+                        {icona ? (
+                            <Lucide icon={icona.icon} aria-hidden="true" className="w-5 h-5" />
                         ) : (
-                            <Lucide
-                                icon={statusConfig.icon}
-                                className={clsx('w-5 h-5', isActive && 'animate-spin')}
-                            />
+                            <Spinner decorativo size="sm" className="h-5 w-5 text-current" />
                         )}
                     </div>
                     <div className="space-y-1">
                         <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="font-medium text-base text-slate-800 dark:text-slate-100">
+                            <h3 className="title-card dark:text-slate-100">
                                 {bulk.titolo || `Campagna #${bulk.bulkId.substring(0, 8)}`}
                             </h3>
-                            <Badge variant={statusConfig.color as any} size="sm">
-                                {statusConfig.label}
-                            </Badge>
+                            <StatusBadge dominio="waCampagna" stato={bulk.status} />
                         </div>
                         <p className="text-xs text-slate-500">{subtitle}</p>
 
@@ -290,14 +221,14 @@ const CampaignCard: React.FC<{
                         Dettagli
                     </Button>
                     {isActive && (
-                        <Button variant="outline-danger" size="sm" onClick={onCancel}>
-                            <Lucide icon="CircleStop" className="w-4 h-4 mr-1" />
+                        <Button variant="outline-danger" size="sm" onClick={onCancel} disabled={disabilitato}>
+                            <Lucide icon="CircleStop" aria-hidden="true" className="w-4 h-4 mr-1" />
                             Annulla
                         </Button>
                     )}
                     {bulk.status === 'COMPLETED' && bulk.failed > 0 && (
-                        <Button variant="outline-primary" size="sm" onClick={onRetry}>
-                            <Lucide icon="RotateCw" className="w-4 h-4 mr-1" />
+                        <Button variant="outline-primary" size="sm" onClick={onRetry} disabled={disabilitato}>
+                            <Lucide icon="RotateCw" aria-hidden="true" className="w-4 h-4 mr-1" />
                             Riprova falliti
                         </Button>
                     )}
@@ -343,6 +274,9 @@ const JobDetailsModal: React.FC<{
 }> = ({ isOpen, onClose, bulkId }) => {
     const [jobs, setJobs] = useState<JobStatus[]>([]);
     const [loading, setLoading] = useState(false);
+    const [errore, setErrore] = useState<string | null>(null);
+    // Incrementato da "Riprova" per ricaricare i messaggi
+    const [tentativo, setTentativo] = useState(0);
     const socket = useSocket();
 
     useEffect(() => {
@@ -350,20 +284,23 @@ const JobDetailsModal: React.FC<{
 
         const fetchJobs = async () => {
             setLoading(true);
+            setErrore(null);
             try {
                 const response: any = await ServerCall.get(`/whatsapp/campaigns/${bulkId}/jobs`);
-                if (response?.success && response?.data) {
-                    setJobs(response.data);
+                if (!response?.success) {
+                    throw new Error(response?.message || 'Risposta non valida dal server');
                 }
+                setJobs(response.data ?? []);
             } catch (error) {
                 console.error('Errore caricamento job:', error);
+                setErrore(messaggioErrore(error, 'Impossibile caricare i messaggi della campagna'));
             } finally {
                 setLoading(false);
             }
         };
 
         fetchJobs();
-    }, [isOpen, bulkId]);
+    }, [isOpen, bulkId, tentativo]);
 
     useEffect(() => {
         if (!socket || !isOpen || !bulkId) return;
@@ -396,8 +333,8 @@ const JobDetailsModal: React.FC<{
             <Dialog.Panel>
                 <Dialog.Title>
                     <div className="flex items-center gap-2">
-                        <Lucide icon="List" className="w-5 h-5" />
-                        <h2 className="text-base font-medium">Dettagli campagna</h2>
+                        <Lucide icon="List" aria-hidden="true" className="w-5 h-5" />
+                        <h2 className="title-section">Dettagli campagna</h2>
                     </div>
                 </Dialog.Title>
 
@@ -405,8 +342,15 @@ const JobDetailsModal: React.FC<{
                     <div className="mt-5">
                         {loading ? (
                             <div className="flex items-center justify-center py-10">
-                                <Lucide icon="Loader" className="w-8 h-8 animate-spin text-primary" />
+                                <Spinner size="lg" etichetta="Caricamento dei messaggi…" />
                             </div>
+                        ) : errore ? (
+                            <PageError
+                                compatta
+                                titolo="Messaggi non caricati"
+                                motivo={errore}
+                                onRiprova={() => setTentativo((t) => t + 1)}
+                            />
                         ) : jobs.length === 0 ? (
                             <EmptyState
                                 icon="Inbox"
@@ -430,27 +374,12 @@ const JobDetailsModal: React.FC<{
                                             .slice()
                                             .sort((a, b) => a.index - b.index)
                                             .map(job => {
-                                                const statusConfig = getJobStatusConfig(job.status);
                                                 return (
                                                     <Table.Tr key={job.jobId}>
                                                         <Table.Td>{job.index + 1}</Table.Td>
                                                         <Table.Td className="font-mono">{job.telefono}</Table.Td>
                                                         <Table.Td>
-                                                            <div className="flex items-center gap-2">
-                                                                <Lucide
-                                                                    icon={statusConfig.icon}
-                                                                    className={clsx(
-                                                                        'w-4 h-4',
-                                                                        statusConfig.color === 'success' && 'text-success',
-                                                                        statusConfig.color === 'primary' &&
-                                                                        'text-primary animate-spin',
-                                                                        statusConfig.color === 'warning' && 'text-warning',
-                                                                        statusConfig.color === 'error' && 'text-danger',
-                                                                        statusConfig.color === 'secondary' && 'text-slate-500'
-                                                                    )}
-                                                                />
-                                                                <span className="text-xs">{statusConfig.label}</span>
-                                                            </div>
+                                                            <StatusBadge dominio="waMessaggio" stato={job.status} />
                                                         </Table.Td>
                                                         <Table.Td>{job.attempts}</Table.Td>
                                                         <Table.Td>
@@ -488,6 +417,7 @@ const OutboxWhatsapp: React.FC = () => {
     const socket = useSocket();
     const [campaigns, setCampaigns] = useState<BulkStatus[]>([]);
     const [loading, setLoading] = useState(true);
+    const [errore, setErrore] = useState<string | null>(null);
     const [selectedBulkId, setSelectedBulkId] = useState<string | null>(null);
     const { showNotification } = useNotification();
     // Campagna in attesa di conferma per annullamento o reinvio
@@ -495,15 +425,19 @@ const OutboxWhatsapp: React.FC = () => {
     const [azioneInCorso, setAzioneInCorso] = useState(false);
 
     // Fetch initial campaigns
+    // Un errore non va confuso con "nessuna campagna": si mostra con il suo motivo
     const fetchCampaigns = async () => {
         setLoading(true);
+        setErrore(null);
         try {
             const response: any = await ServerCall.get('/whatsapp/campaigns');
-            if (response?.success && response?.data) {
-                setCampaigns(response.data);
+            if (!response?.success) {
+                throw new Error(response?.message || 'Risposta non valida dal server');
             }
+            setCampaigns(response.data ?? []);
         } catch (error) {
             console.error('Errore caricamento campagne:', error);
+            setErrore(messaggioErrore(error, 'Impossibile caricare le campagne'));
         } finally {
             setLoading(false);
         }
@@ -623,9 +557,10 @@ const OutboxWhatsapp: React.FC = () => {
                         <Button
                             variant="secondary"
                             size="sm"
+                            loading={loading}
                             onClick={fetchCampaigns}
                         >
-                            <Lucide icon="RefreshCw" className="w-4 h-4 mr-1" />
+                            {!loading && <Lucide icon="RefreshCw" aria-hidden="true" className="w-4 h-4 mr-1" />}
                             Aggiorna
                         </Button>
                         <Button
@@ -633,7 +568,7 @@ const OutboxWhatsapp: React.FC = () => {
                             size="sm"
                             onClick={() => navigate('/whatsapp/invio-campagna-whatsapp?step=1')}
                         >
-                            <Lucide icon="Send" className="w-4 h-4 mr-1" />
+                            <Lucide icon="Send" aria-hidden="true" className="w-4 h-4 mr-1" />
                             Nuova campagna
                         </Button>
                     </div>
@@ -688,8 +623,10 @@ const OutboxWhatsapp: React.FC = () => {
             <div className="mt-6">
                 {loading ? (
                     <div className="box box--stacked flex items-center justify-center py-16">
-                        <Lucide icon="Loader" className="w-8 h-8 animate-spin text-primary" />
+                        <Spinner size="lg" etichetta="Caricamento delle campagne…" />
                     </div>
+                ) : errore ? (
+                    <PageError titolo="Campagne non caricate" motivo={errore} onRiprova={fetchCampaigns} />
                 ) : campaigns.length === 0 ? (
                     <EmptyState
                         icon="Send"
@@ -709,6 +646,7 @@ const OutboxWhatsapp: React.FC = () => {
                                     onViewDetails={() => setSelectedBulkId(campaign.bulkId)}
                                     onCancel={() => setAzioneCampagna({ tipo: 'cancel', bulk: campaign })}
                                     onRetry={() => setAzioneCampagna({ tipo: 'retry', bulk: campaign })}
+                                    disabilitato={azioneInCorso}
                                 />
                             ))}
                         </AnimatePresence>

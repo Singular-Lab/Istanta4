@@ -1,9 +1,11 @@
 import Button from "@/components/Base/Button";
-import { FormInput, FormLabel, FormSelect } from "@/components/Base/Form";
+import { FormField, FormInput, FormSelect } from "@/components/Base/Form";
 import { Dialog, Popover } from "@/components/Base/Headless";
-import LoadingIcon from "@/components/Base/LoadingIcon";
 import Lucide from "@/components/Base/Lucide";
+import PageError from "@/components/Base/PageError";
 import PageHeader from "@/components/Base/PageHeader";
+import Spinner from "@/components/Base/Spinner";
+import StatusBadge from "@/components/Base/StatusBadge";
 import { PermissionGate } from "@/components/PermissionGate";
 import Table from "@/components/Base/Table";
 import withSessionChecked from "@/components/SessionChecker";
@@ -55,7 +57,13 @@ function Main() {
   const [showDialogEliminazioneCombinazioni, setShowDialogEliminazioneCombinazioni] = useState(false);
   const { showNotification } = useNotification();
 
-  const { data: dataAreeCanaliECombinazioni } = useFetchAreeCanaliECombinazioni();
+  const {
+    data: dataAreeCanaliECombinazioni,
+    isLoading: caricamentoAreeCanali,
+    isError: erroreAreeCanali,
+    error: dettaglioErroreAreeCanali,
+    refetch: ricaricaAreeCanali,
+  } = useFetchAreeCanaliECombinazioni();
 
   useEffect(() => {
     if (dataAreeCanaliECombinazioni !== null && dataAreeCanaliECombinazioni !== undefined && dataAreeCanaliECombinazioni.aree.length > 0) {
@@ -395,7 +403,7 @@ function Main() {
       }}>
         <Dialog.Panel>
           <Dialog.Title>
-            <h2 className="mr-auto text-base font-medium">
+            <h2 className="title-card mr-auto">
               Elimina Area
             </h2>
           </Dialog.Title>
@@ -424,7 +432,7 @@ function Main() {
       }}>
         <Dialog.Panel>
           <Dialog.Title>
-            <h2 className="mr-auto text-base font-medium">
+            <h2 className="title-card mr-auto">
               Elimina Canale
             </h2>
           </Dialog.Title>
@@ -453,7 +461,7 @@ function Main() {
       }}>
         <Dialog.Panel>
           <Dialog.Title>
-            <h2 className="mr-auto text-base font-medium">
+            <h2 className="title-card mr-auto">
               Elimina Combinazione
             </h2>
           </Dialog.Title>
@@ -480,23 +488,17 @@ function Main() {
       <Dialog open={isAreaDialogOpen} onClose={closeAreaDialog}>
         <Dialog.Panel>
           <Dialog.Title>
-            <h2 className="mr-auto text-base font-medium">
+            <h2 className="title-card mr-auto">
               {isEditingArea ? 'Modifica Area' : 'Crea Area'}
             </h2>
           </Dialog.Title>
           <Dialog.Description className="grid grid-cols-12 gap-4 gap-y-3">
-            <div className="col-span-12 sm:col-span-6">
-              <FormLabel htmlFor="modal-form-1">
-                Nome
-              </FormLabel>
-              <FormInput id="modal-form-1" type="text" value={nomeArea} onChange={(e) => { setNomeArea(e.target.value) }} />
-            </div>
-            <div className="col-span-12 sm:col-span-6">
-              <FormLabel htmlFor="modal-form-2">
-                Sigla
-              </FormLabel>
-              <FormInput id="modal-form-2" type="text" value={siglaArea} onChange={(e) => { setSiglaArea(e.target.value) }} />
-            </div>
+            <FormField className="col-span-12 sm:col-span-6" etichetta="Nome" obbligatorio>
+              <FormInput type="text" value={nomeArea} onChange={(e) => { setNomeArea(e.target.value) }} />
+            </FormField>
+            <FormField className="col-span-12 sm:col-span-6" etichetta="Sigla" obbligatorio>
+              <FormInput type="text" value={siglaArea} onChange={(e) => { setSiglaArea(e.target.value) }} />
+            </FormField>
           </Dialog.Description>
           <Dialog.Footer>
             <Button type="button" variant="outline-danger" onClick={closeAreaDialog}
@@ -507,9 +509,9 @@ function Main() {
             <Button
               variant="primary"
               type="button"
-              className="w-20"
-              disabled={saveAreaMutation.isPending || !nomeArea.trim() || !siglaArea.trim()}
-              aria-busy={saveAreaMutation.isPending}
+              className="min-w-20"
+              disabled={!nomeArea.trim() || !siglaArea.trim()}
+              loading={saveAreaMutation.isPending}
               onClick={() =>
                 saveAreaMutation.mutate({
                   nome: nomeArea,
@@ -518,9 +520,6 @@ function Main() {
               }
             >
               {isEditingArea ? 'Modifica' : 'Crea'}
-              {saveAreaMutation.isPending && (
-                <LoadingIcon icon="oval" color="white" className="w-4 h-4 ml-2 animate-spin" />
-              )}
             </Button>
           </Dialog.Footer>
         </Dialog.Panel>
@@ -529,23 +528,17 @@ function Main() {
       <Dialog open={isCanaleDialogOpen} onClose={closeCanaleDialog}>
         <Dialog.Panel>
           <Dialog.Title>
-            <h2 className="mr-auto text-base font-medium">
+            <h2 className="title-card mr-auto">
               {isEditingCanale ? 'Modifica Canale' : 'Crea Canale'}
             </h2>
           </Dialog.Title>
           <Dialog.Description className="grid grid-cols-12 gap-4 gap-y-3">
-            <div className="col-span-12 sm:col-span-6">
-              <FormLabel htmlFor="modal-form-1">
-                Nome
-              </FormLabel>
-              <FormInput id="modal-form-1" type="text" value={nomeCanale} onChange={(e) => { setNomeCanale(e.target.value) }} />
-            </div>
-            <div className="col-span-12 sm:col-span-6">
-              <FormLabel htmlFor="modal-form-2">
-                Sigla
-              </FormLabel>
-              <FormInput id="modal-form-2" type="text" value={siglaCanale} onChange={(e) => { setSiglaCanale(e.target.value) }} />
-            </div>
+            <FormField className="col-span-12 sm:col-span-6" etichetta="Nome" obbligatorio>
+              <FormInput type="text" value={nomeCanale} onChange={(e) => { setNomeCanale(e.target.value) }} />
+            </FormField>
+            <FormField className="col-span-12 sm:col-span-6" etichetta="Sigla" obbligatorio>
+              <FormInput type="text" value={siglaCanale} onChange={(e) => { setSiglaCanale(e.target.value) }} />
+            </FormField>
           </Dialog.Description>
           <Dialog.Footer>
             <Button type="button" variant="outline-danger" onClick={closeCanaleDialog}
@@ -556,15 +549,12 @@ function Main() {
             <Button
               variant="primary"
               type="button"
-              className="w-20"
-              disabled={saveCanaleMutation.isPending || !nomeCanale.trim() || !siglaCanale.trim()}
-              aria-busy={saveCanaleMutation.isPending}
+              className="min-w-20"
+              disabled={!nomeCanale.trim() || !siglaCanale.trim()}
+              loading={saveCanaleMutation.isPending}
               onClick={() => saveCanaleMutation.mutate({ nome: nomeCanale, sigla: siglaCanale, id: isEditingCanale ? editingCanaleId : undefined })}
             >
               {isEditingCanale ? 'Modifica' : 'Crea'}
-              {saveCanaleMutation.isPending && (
-                <LoadingIcon icon="oval" color="white" className="w-4 h-4 ml-2 animate-spin" />
-              )}
             </Button>
           </Dialog.Footer>
         </Dialog.Panel>
@@ -572,44 +562,35 @@ function Main() {
       <Dialog open={isCombinazioneDialogOpen} onClose={closeCombinazioneDialog}>
         <Dialog.Panel>
           <Dialog.Title>
-            <h2 className="mr-auto text-base font-medium">
+            <h2 className="title-card mr-auto">
               {isEditingCombinazione ? 'Modifica Combinazione' : 'Crea Combinazione'}
             </h2>
           </Dialog.Title>
           <Dialog.Description className="grid grid-cols-12 gap-4 gap-y-3">
-            <div className="col-span-12 sm:col-span-6">
-              <FormLabel htmlFor="modal-form-1">
-                Area
-              </FormLabel>
-              <FormSelect id="modal-form-1" className="w-full" value={idAreaSelezionata} onChange={(e) => { setIdAreaSelezionata(e.target.value) }}>
+            <FormField className="col-span-12 sm:col-span-6" etichetta="Area">
+              <FormSelect className="w-full" value={idAreaSelezionata} onChange={(e) => { setIdAreaSelezionata(e.target.value) }}>
                 {listaAree.map((area) => (
                   <option key={area.id} value={area.id}>
                     {area.nome}
                   </option>
                 ))}
               </FormSelect>
-            </div>
-            <div className="col-span-12 sm:col-span-6">
-              <FormLabel htmlFor="modal-form-2">
-                Canale
-              </FormLabel>
-              <FormSelect id="modal-form-2" className="w-full" value={idCanaleSelezionato} onChange={(e) => { setIdCanaleSelezionato(e.target.value) }}>
+            </FormField>
+            <FormField className="col-span-12 sm:col-span-6" etichetta="Canale">
+              <FormSelect className="w-full" value={idCanaleSelezionato} onChange={(e) => { setIdCanaleSelezionato(e.target.value) }}>
                 {listaCanali.map((canale) => (
                   <option key={canale.id} value={canale.id}>
                     {canale.nome}
                   </option>
                 ))}
               </FormSelect>
-            </div>
-            <div className="col-span-12 sm:col-span-12">
-              <FormLabel htmlFor="modal-form-2">
-                Stato
-              </FormLabel>
-              <FormSelect id="modal-form-2" className="w-full" value={enabledCombinazione} onChange={(e) => { setEnabledCombinazione(e.target.value) }}>
+            </FormField>
+            <FormField className="col-span-12" etichetta="Stato">
+              <FormSelect className="w-full" value={enabledCombinazione} onChange={(e) => { setEnabledCombinazione(e.target.value) }}>
                 <option value="true">Attivo</option>
                 <option value="false">Disattivo</option>
               </FormSelect>
-            </div>
+            </FormField>
           </Dialog.Description>
           <Dialog.Footer>
             <Button type="button" variant="outline-danger" onClick={() => { setIdAreaSelezionata(""); setIdCanaleSelezionato(""); closeCombinazioneDialog() }}
@@ -620,15 +601,11 @@ function Main() {
             <Button
               variant="primary"
               type="button"
-              className="w-20"
-              disabled={saveCombinazioneMutation.isPending}
-              aria-busy={saveCombinazioneMutation.isPending}
+              className="min-w-20"
+              loading={saveCombinazioneMutation.isPending}
               onClick={() => saveCombinazioneMutation.mutate({ guidID: isEditingCombinazione ? editingCombinazioneId : "", guidIDCanale: idCanaleSelezionato, guidIDArea: idAreaSelezionata, enabled: enabledCombinazione })}
             >
               {isEditingCombinazione ? 'Modifica' : 'Crea'}
-              {saveCombinazioneMutation.isPending && (
-                <LoadingIcon icon="oval" color="white" className="w-4 h-4 ml-2 animate-spin" />
-              )}
             </Button>
           </Dialog.Footer>
         </Dialog.Panel>
@@ -651,7 +628,7 @@ function Main() {
                     <FormInput
                       type="text"
                       placeholder="Cerca promozione..."
-                      className="pl-9 sm:w-64 rounded-[0.5rem]"
+                      className="pl-9 sm:w-64 rounded-control"
                     />
                   </div>
                 </div>
@@ -679,36 +656,39 @@ function Main() {
                         </Popover.Button>
                         <Popover.Panel className="w-60">
                           <div className="p-2">
-                            <div
-                              className="flex items-center p-2 transition-colors duration-200 rounded-md cursor-pointer hover:bg-slate-100 dark:hover:bg-darkmode-600"
+                            <button
+                              type="button"
+                              className="flex w-full items-center p-2 text-left transition-colors duration-200 rounded-md cursor-pointer hover:bg-slate-100 dark:hover:bg-darkmode-600"
                               onClick={() => {
                                 handleCreateClick("area");
                                 close();
                               }}
                             >
-                              <Lucide icon="MapPin" className="w-4 h-4 mr-2" />
+                              <Lucide icon="MapPin" aria-hidden="true" className="w-4 h-4 mr-2" />
                               Crea Area
-                            </div>
-                            <div
-                              className="flex items-center p-2 transition-colors duration-200 rounded-md cursor-pointer hover:bg-slate-100 dark:hover:bg-darkmode-600"
+                            </button>
+                            <button
+                              type="button"
+                              className="flex w-full items-center p-2 text-left transition-colors duration-200 rounded-md cursor-pointer hover:bg-slate-100 dark:hover:bg-darkmode-600"
                               onClick={() => {
                                 handleCreateClick("canale");
                                 close();
                               }}
                             >
-                              <Lucide icon="Radio" className="w-4 h-4 mr-2" />
+                              <Lucide icon="Radio" aria-hidden="true" className="w-4 h-4 mr-2" />
                               Crea Canale
-                            </div>
-                            <div
-                              className="flex items-center p-2 transition-colors duration-200 rounded-md cursor-pointer hover:bg-slate-100 dark:hover:bg-darkmode-600"
+                            </button>
+                            <button
+                              type="button"
+                              className="flex w-full items-center p-2 text-left transition-colors duration-200 rounded-md cursor-pointer hover:bg-slate-100 dark:hover:bg-darkmode-600"
                               onClick={() => {
                                 handleCreateClick("combinazione");
                                 close();
                               }}
                             >
-                              <Lucide icon="Box" className="w-4 h-4 mr-2" />
+                              <Lucide icon="Box" aria-hidden="true" className="w-4 h-4 mr-2" />
                               Crea Combinazione
-                            </div>
+                            </button>
                           </div>
                         </Popover.Panel>
                       </>
@@ -718,10 +698,24 @@ function Main() {
                 </div>
               </div>
 
+              {caricamentoAreeCanali ? (
+                <div className="flex justify-center py-10 border-t border-dashed">
+                  <Spinner etichetta="Caricamento aree e canali…" />
+                </div>
+              ) : erroreAreeCanali ? (
+                <div className="px-5 pb-5">
+                  <PageError
+                    compatta
+                    titolo="Aree e canali non caricati"
+                    motivo={(dettaglioErroreAreeCanali as Error)?.message || "Errore durante il recupero di aree e canali"}
+                    onRiprova={() => ricaricaAreeCanali()}
+                  />
+                </div>
+              ) : (
               <div className="overflow-hidden">
                 <div className="grid grid-cols-12 gap-6 px-5 -mx-5 border-dashed border-y">
                   <div className="overflow-x-auto lg:col-span-6 sm:col-span-12 xs:col-span-12 px-5">
-                    <div className="px-5 border rounded-[0.6rem] dark:border-darkmode-400 relative mt-7 mb-4 border-slate-200/80">
+                    <div className="px-5 border rounded-card dark:border-darkmode-400 relative mt-7 mb-4 border-slate-200/80">
                       <div className="absolute left-0 px-3 ml-4 -mt-2 text-xs uppercase bg-white dark:bg-darkmode-600 text-slate-500 dark:text-slate-400">
                         <div className="-mt-px">Aree</div>
                       </div>
@@ -749,19 +743,23 @@ function Main() {
                                   <Table.Td className="whitespace-nowrap">
                                     <div className="flex gap-2">
                                       <button
+                                        type="button"
                                         className="text-primary hover:text-primary/80 transition-colors"
                                         onClick={() => handleEditArea(area)}
                                         title="Modifica area"
+                                        aria-label={`Modifica area ${area.nome}`}
                                       >
-                                        <Lucide icon="Pencil" className="w-4 h-4" />
+                                        <Lucide icon="Pencil" aria-hidden="true" className="w-4 h-4" />
                                       </button>
                                       <PermissionGate permission={PERMISSIONS.GDO.GESTISCI_AREE_CANALI}>
                                         <button
+                                          type="button"
                                           className="text-danger hover:text-danger/80 transition-colors"
                                           onClick={() => handleDeleteArea(area.id as string)}
                                           title="Elimina area"
+                                          aria-label={`Elimina area ${area.nome}`}
                                         >
-                                          <Lucide icon="Trash2" className="w-4 h-4" />
+                                          <Lucide icon="Trash2" aria-hidden="true" className="w-4 h-4" />
                                         </button>
                                       </PermissionGate>
                                     </div>
@@ -775,7 +773,7 @@ function Main() {
                     </div>
                   </div>
                   <div className="overflow-x-auto lg:col-span-6 sm:col-span-12 xs:col-span-12 px-5">
-                    <div className="px-5 border rounded-[0.6rem] dark:border-darkmode-400 relative mt-7 mb-4 border-slate-200/80">
+                    <div className="px-5 border rounded-card dark:border-darkmode-400 relative mt-7 mb-4 border-slate-200/80">
                       <div className="absolute left-0 px-3 ml-4 -mt-2 text-xs uppercase bg-white dark:bg-darkmode-600 text-slate-500 dark:text-slate-400">
                         <div className="-mt-px">Canali</div>
                       </div>
@@ -803,19 +801,23 @@ function Main() {
                                   <Table.Td className="whitespace-nowrap">
                                     <div className="flex gap-2">
                                       <button
+                                        type="button"
                                         className="text-primary hover:text-primary/80 transition-colors"
                                         onClick={() => handleEditCanale(canale)}
                                         title="Modifica canale"
+                                        aria-label={`Modifica canale ${canale.nome}`}
                                       >
-                                        <Lucide icon="Pencil" className="w-4 h-4" />
+                                        <Lucide icon="Pencil" aria-hidden="true" className="w-4 h-4" />
                                       </button>
                                       <PermissionGate permission={PERMISSIONS.GDO.GESTISCI_AREE_CANALI}>
                                         <button
+                                          type="button"
                                           className="text-danger hover:text-danger/80 transition-colors"
                                           onClick={() => handleDeleteCanale(canale.id as string)}
                                           title="Elimina canale"
+                                          aria-label={`Elimina canale ${canale.nome}`}
                                         >
-                                          <Lucide icon="Trash2" className="w-4 h-4" />
+                                          <Lucide icon="Trash2" aria-hidden="true" className="w-4 h-4" />
                                         </button>
                                       </PermissionGate>
                                     </div>
@@ -830,7 +832,7 @@ function Main() {
                   </div>
                 </div>
                 <div className="overflow-x-auto px-5">
-                  <div className="px-5 border rounded-[0.6rem] dark:border-darkmode-400 relative mt-7 mb-4 border-slate-200/80">
+                  <div className="px-5 border rounded-card dark:border-darkmode-400 relative mt-7 mb-4 border-slate-200/80">
                     <div className="absolute left-0 px-3 ml-4 -mt-2 text-xs uppercase bg-white dark:bg-darkmode-600 text-slate-500 dark:text-slate-400">
                       <div className="-mt-px">Combinazioni</div>
                     </div>
@@ -855,29 +857,31 @@ function Main() {
                                 <Table.Td className="whitespace-nowrap">{index + 1}</Table.Td>
                                 <Table.Td className="whitespace-nowrap">{combinazione.sigla}</Table.Td>
                                 <Table.Td className="whitespace-nowrap">
-                                  <span className={`inline-flex items-center px-2.5 py-0.5 text-[11px] font-semibold rounded-full border ${combinazione.stato === "ATTIVO"
-                                      ? "bg-success/10 text-success border-success/20"
-                                      : "bg-slate-100 text-slate-600 border-slate-200 dark:bg-darkmode-400 dark:text-slate-300 dark:border-darkmode-300"
-                                    }`}>
-                                    {combinazione.stato}
-                                  </span>
+                                  <StatusBadge
+                                    tono={combinazione.stato === "ATTIVO" ? "success" : "neutral"}
+                                    etichetta={combinazione.stato === "ATTIVO" ? "Attivo" : "Disattivo"}
+                                  />
                                 </Table.Td>
                                 <Table.Td className="whitespace-nowrap">
                                   <div className="flex gap-2">
                                     <button
+                                      type="button"
                                       className="text-primary hover:text-primary/80 transition-colors"
                                       onClick={() => handleEditCombinazione(combinazione)}
                                       title="Modifica combinazione"
+                                      aria-label={`Modifica combinazione ${combinazione.sigla}`}
                                     >
-                                      <Lucide icon="Pencil" className="w-4 h-4" />
+                                      <Lucide icon="Pencil" aria-hidden="true" className="w-4 h-4" />
                                     </button>
                                     <PermissionGate permission={PERMISSIONS.GDO.GESTISCI_AREE_CANALI}>
                                       <button
+                                        type="button"
                                         className="text-danger hover:text-danger/80 transition-colors"
                                         onClick={() => handleDeleteCombinazione(combinazione.id as string)}
                                         title="Elimina combinazione"
+                                        aria-label={`Elimina combinazione ${combinazione.sigla}`}
                                       >
-                                        <Lucide icon="Trash2" className="w-4 h-4" />
+                                        <Lucide icon="Trash2" aria-hidden="true" className="w-4 h-4" />
                                       </button>
                                     </PermissionGate>
                                   </div>
@@ -891,6 +895,7 @@ function Main() {
                   </div>
                 </div>
               </div>
+              )}
               <div className="flex flex-col-reverse flex-wrap items-center p-5 flex-reverse gap-y-2 sm:flex-row">
               </div>
             </div>

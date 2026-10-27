@@ -47,8 +47,9 @@ const ProprietaForm = <T extends FieldValues>({ control: controlForm, register, 
                             variant="outline-danger"
                             className="absolute top-2 right-2"
                             onClick={() => remove(index)}
+                            aria-label="Rimuovi proprietà"
                         >
-                            <Lucide icon="X" className="w-4 h-4" />
+                            <Lucide aria-hidden="true" icon="X" className="w-4 h-4" />
                         </Button>
                         <div className="flex flex-col gap-y-3 mt-4">
                             <Controller

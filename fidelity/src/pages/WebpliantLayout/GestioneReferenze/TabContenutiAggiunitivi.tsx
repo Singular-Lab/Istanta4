@@ -168,8 +168,9 @@ const TabContenutiAggiuntivi: FC<TabContenutiAggiuntiviProps> = ({ referenza }) 
                                     }}
                                     variant="soft-danger"
                                     size='sm'
+                                    aria-label="Rimuovi contenuto aggiuntivo"
                                 >
-                                    <Lucide icon='X' />
+                                    <Lucide aria-hidden="true" icon='X' />
                                 </Button>
                             </Fragment>}>
                             Regola {index + 1}
@@ -266,8 +267,9 @@ const TabContenutiAggiuntivi: FC<TabContenutiAggiuntiviProps> = ({ referenza }) 
                                                                     }
                                                                     variant="soft-danger"
                                                                     size='sm'
+                                                                    aria-label="Rimuovi regola"
                                                                 >
-                                                                    <Lucide icon='X' />
+                                                                    <Lucide aria-hidden="true" icon='X' />
                                                                 </Button>
                                                             </FormInline>
                                                         </li>

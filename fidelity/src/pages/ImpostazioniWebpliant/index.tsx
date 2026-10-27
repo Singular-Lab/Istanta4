@@ -246,9 +246,9 @@ function Main() {
           <Dialog.Title>Clona un workspace</Dialog.Title>
           <Dialog.Description>
             <div>
-              <FormLabel htmlFor='workspace-name'>Nome del workspace</FormLabel>
+              <FormLabel htmlFor='clona-workspace-name'>Nome del workspace</FormLabel>
               <FormInput
-                id='workspace-name'
+                id='clona-workspace-name'
                 type="text"
                 className="w-full mt-2"
                 onChange={(e) => {
@@ -259,8 +259,8 @@ function Main() {
             </div>
             <div className='grid grid-cols-12 gap-x-4'>
               <div className="mt-4 col-span-6">
-                <FormLabel htmlFor='workspace-area'>Area del workspace</FormLabel>
-                <FormSelect value={idAreaSelezionata} onChange={(e) => { setIdAreaSelezionata(e.target.value) }} id='workspace-area' className="w-full mt-2">
+                <FormLabel htmlFor='clona-workspace-area'>Area del workspace</FormLabel>
+                <FormSelect value={idAreaSelezionata} onChange={(e) => { setIdAreaSelezionata(e.target.value) }} id='clona-workspace-area' className="w-full mt-2">
                   <option value={""}>Scegli una area</option>
                   {aree?.map((area) => (
                     <option key={area.id} value={area.id}>{area.nome}</option>
@@ -268,8 +268,8 @@ function Main() {
                 </FormSelect>
               </div>
               <div className="mt-4 col-span-6">
-                <FormLabel htmlFor='workspace-canale'>Canali del workspace</FormLabel>
-                <FormSelect value={idCanaleSelezionato} onChange={(e) => { setIdCanaleSelezionato(e.target.value) }} id='workspace-canale' className="w-full mt-2">
+                <FormLabel htmlFor='clona-workspace-canale'>Canali del workspace</FormLabel>
+                <FormSelect value={idCanaleSelezionato} onChange={(e) => { setIdCanaleSelezionato(e.target.value) }} id='clona-workspace-canale' className="w-full mt-2">
                   <option value={""}>Scegli una canale</option>
                   {canali?.map((canale) => (
                     <option key={canale.id} value={canale.id}>{canale.nome}</option>
@@ -382,7 +382,7 @@ function Main() {
                   <FormInput
                     type="text"
                     placeholder="Ricerca Workspace"
-                    className="pl-9 sm:w-64 rounded-[0.5rem]"
+                    className="pl-9 sm:w-64 rounded-control"
                     value={ricercaWorkspace}
                     onChange={(e) => setRicercaWorkspace(e.target.value)}
                   />
@@ -393,7 +393,7 @@ function Main() {
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 p-6">
                 {/* Workspace Card */}
                 {workspacesVisibili.map((value, index) => (
-                  <Link preventScrollReset target="_blank" rel="noopener noreferrer" to={`/webliant/impostazioni-webpliant/workspace?id=${value.idWorkspace}`} key={index} className="relative px-3 pt-8 pb-5 rounded-[0.6rem] border border-slate-200/80 hover:bg-slate-50 cursor-pointer transition shadow-sm">
+                  <Link preventScrollReset target="_blank" rel="noopener noreferrer" to={`/webliant/impostazioni-webpliant/workspace?id=${value.idWorkspace}`} key={index} className="relative px-3 pt-8 pb-5 rounded-card border border-slate-200/80 hover:bg-slate-50 cursor-pointer transition shadow-sm">
                     <FileIcon
                       className="w-2/4 mx-auto"
                       variant="directory"
@@ -424,15 +424,20 @@ function Main() {
                       }
                     </div>
                     <Menu className="absolute top-0 right-0 mt-3 mr-2">
+                      {/* Resta un div: la card è un link e non può contenere un button */}
                       <Menu.Button
                         as="div"
+                        role="button"
+                        tabIndex={0}
                         className="block w-5 h-5"
+                        aria-label={`Azioni workspace ${value.nomeWorkspace}`}
                         onClick={(e: React.MouseEvent) => {
                           e.stopPropagation();
                         }}
                       >
                         <Lucide
                           icon="EllipsisVertical"
+                          aria-hidden="true"
                           className="w-5 h-5 stroke-[1] stroke-slate-400/70 fill-slate-400/70"
                         />
                       </Menu.Button>

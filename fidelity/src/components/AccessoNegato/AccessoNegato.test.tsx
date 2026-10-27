@@ -31,6 +31,14 @@ describe("AccessoNegato", () => {
     expect(localStorage.getItem("logout")).toBeNull();
   });
 
+  it("ha il titolo di pagina e l'azione è un pulsante con nome", () => {
+    const router = createMemoryRouter([{ path: "/", element: <AccessoNegato /> }]);
+    render(<RouterProvider router={router} />);
+
+    expect(screen.getByRole("heading", { level: 1, name: "Accesso negato" })).toHaveClass("title-page");
+    expect(screen.getByRole("button", { name: "Torna alla pagina iniziale" })).toHaveClass("rounded-full");
+  });
+
   it("dentro il layout occupa solo l'area della pagina", () => {
     const router = createMemoryRouter([
       {

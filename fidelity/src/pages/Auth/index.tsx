@@ -62,8 +62,8 @@ const Auth: React.FC = () => {
         return (
             <div className="min-h-screen bg-white flex flex-col items-center justify-center text-center p-4">
                 <AppLoaderBridge />
-                <Lucide icon="CircleAlert" className="w-16 h-16 text-danger" />
-                <h1 className="mt-4 text-xl font-bold">Autenticazione fallita</h1>
+                <Lucide icon="CircleAlert" aria-hidden="true" className="w-16 h-16 text-danger" />
+                <h1 className="mt-4 title-page">Autenticazione fallita</h1>
                 <p className="mt-2 text-sm text-slate-500 max-w-md">
                     {errore || "Si è verificato un errore durante l'autenticazione."}
                 </p>

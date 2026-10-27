@@ -1,6 +1,7 @@
 import Button from "@/components/Base/Button";
 import { FormInput, FormLabel, FormSelect } from "@/components/Base/Form";
 import Lucide from "@/components/Base/Lucide";
+import Spinner from "@/components/Base/Spinner";
 import { useNotification } from "@/context/NotificationContext";
 import {
   useDeleteRegoleMenabo,
@@ -106,8 +107,9 @@ function PaginaRow({
         variant="outline-danger"
         onClick={onRemove}
         disabled={!canRemove}
+        aria-label={`Rimuovi pagina ${index + 1}`}
       >
-        <Lucide icon="Trash2" className="w-3.5 h-3.5" />
+        <Lucide icon="Trash2" aria-hidden="true" className="w-3.5 h-3.5" />
       </Button>
     </div>
   );
@@ -274,9 +276,8 @@ export default function PanelMenabo() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-8 text-slate-400">
-        <Lucide icon="Loader" className="w-5 h-5 animate-spin mr-2" />
-        Caricamento…
+      <div className="flex items-center justify-center py-8">
+        <Spinner etichetta="Caricamento menabò…" />
       </div>
     );
   }
@@ -329,9 +330,10 @@ export default function PanelMenabo() {
           variant="outline-secondary"
           size="sm"
           onClick={handleReset}
-          disabled={isDeleting || isSaving}
+          disabled={isSaving}
+          loading={isDeleting}
         >
-          <Lucide icon="RotateCcw" className="w-4 h-4 mr-1" />
+          {!isDeleting && <Lucide icon="RotateCcw" aria-hidden="true" className="w-4 h-4 mr-1" />}
           Ripristina default
         </Button>
         <Button
@@ -339,19 +341,11 @@ export default function PanelMenabo() {
           variant="primary"
           size="sm"
           onClick={handleSave}
-          disabled={!isDirty || isSaving}
+          disabled={!isDirty}
+          loading={isSaving}
         >
-          {isSaving ? (
-            <>
-              <Lucide icon="Loader" className="w-4 h-4 mr-1 animate-spin" />
-              Salvataggio…
-            </>
-          ) : (
-            <>
-              <Lucide icon="Save" className="w-4 h-4 mr-1" />
-              Salva
-            </>
-          )}
+          {!isSaving && <Lucide icon="Save" aria-hidden="true" className="w-4 h-4 mr-1" />}
+          Salva
         </Button>
       </div>
     </div>
