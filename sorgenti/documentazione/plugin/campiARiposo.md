@@ -74,6 +74,10 @@ destra nel campo vero, misurati sugli screenshot).
 - **A riposo** il campo resta nella pagina, con `visibility: hidden` e `position: absolute`, e il
   riquadro sta subito prima di lui. Non si usa `display`: chi nasconde o mostra il campo con
   `display` (jQuery `hide`/`show`) non si scontra con il riposo, e il riquadro lo segue.
+  **Un campo in percentuale va messo in un contenitore posizionato** (`position: relative`): a riposo,
+  in `absolute`, la sua percentuale si misura sul primo antenato posizionato, e senza quel contenitore
+  è il pannello. Il campo invisibile sporge e il pannello scorre in orizzontale (TASK-059dd745: le
+  caselle della descrizione della scheda ref, 524 px invece di 252).
 - **Il mouse entra nel riquadro** (o, se l'entrata non arriva, si preme il tasto): il riquadro
   sparisce e al suo posto c'è il campo vero, **senza** stato attivo dato da codice. Il clic
   dell'operatore cade sul campo: cursore dove ha cliccato, e chi ascolta il clic del campo lo riceve
