@@ -92,7 +92,7 @@ function PluginPage() {
                 <div>
                   <div className="flex items-center gap-3 mb-6">
                     <Lucide icon={formMode === 'create' ? "Plus" : "Pencil"} className="w-6 h-6 text-primary" />
-                    <h2 className="text-2xl font-bold text-slate-900">
+                    <h2 className="title-section">
                       {formMode === 'create' ? 'Configurazione Nuovo Template' : `Modifica Template: ${selectedTemplate?.nome}`}
                     </h2>
                   </div>
@@ -133,7 +133,7 @@ function PluginPage() {
               <div className="mb-8">
                 <div className="flex items-center gap-3 mb-6">
                   <Lucide icon="Filter" className="w-6 h-6 text-primary" />
-                  <h2 className="text-2xl font-bold text-slate-900">Filter Templates</h2>
+                  <h2 className="title-section">Filter Templates</h2>
                 </div>
 
                 <div className="box p-6">
@@ -158,7 +158,7 @@ function PluginPage() {
                 <div>
                   <div className="flex items-center gap-3 mb-6">
                     <Lucide icon="Settings" className="w-6 h-6 text-success" />
-                    <h2 className="text-2xl font-bold text-slate-900">Configurazione Plugin</h2>
+                    <h2 className="title-section">Configurazione Plugin</h2>
                   </div>
 
                   <PluginConfigPanel
@@ -173,7 +173,7 @@ function PluginPage() {
                 <div>
                   <div className="flex items-center gap-3 mb-6">
                     <Lucide icon="Info" className="w-6 h-6 text-info" />
-                    <h2 className="text-2xl font-bold text-slate-900">Inizia</h2>
+                    <h2 className="title-section">Inizia</h2>
                   </div>
 
                   <div className="box p-8 text-center">
@@ -191,7 +191,7 @@ function PluginPage() {
                 <div>
                   <div className="flex items-center gap-3 mb-6">
                     <Lucide icon="CircleAlert" className="w-6 h-6 text-warning" />
-                    <h2 className="text-2xl font-bold text-slate-900">Nessun Template</h2>
+                    <h2 className="title-section">Nessun Template</h2>
                   </div>
 
                   <div className="box p-8 text-center">

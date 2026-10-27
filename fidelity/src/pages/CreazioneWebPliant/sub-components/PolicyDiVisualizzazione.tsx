@@ -411,8 +411,9 @@ const PolicyDiVisualizzazione: React.FC<PolicyDiVisualizzazioneProps> = ({
                     type="button"
                     onClick={() => handleRemoveRegola("visualizzazione", i)}
                     className="absolute top-2 right-2 text-gray-400 hover:text-red-600"
+                    aria-label="Rimuovi regola di visualizzazione"
                   >
-                    <Lucide icon="Trash2" className="w-4 h-4" />
+                    <Lucide aria-hidden="true" icon="Trash2" className="w-4 h-4" />
                   </button>
                   <p className="font-medium text-sm text-gray-700 mb-2">
                     Regola n. {i + 1}
@@ -473,8 +474,9 @@ const PolicyDiVisualizzazione: React.FC<PolicyDiVisualizzazioneProps> = ({
                                 handleRemoveItem("visualizzazione", i, "inclusione", idx)
                               }
                               className="text-red-500 hover:text-red-700 ml-2"
+                              aria-label="Rimuovi inclusione"
                             >
-                              <Lucide icon="Trash2" className="w-4 h-4" />
+                              <Lucide aria-hidden="true" icon="Trash2" className="w-4 h-4" />
                             </button>
                           </li>
                         ))}
@@ -537,8 +539,9 @@ const PolicyDiVisualizzazione: React.FC<PolicyDiVisualizzazioneProps> = ({
                                 handleRemoveItem("visualizzazione", i, "esclusione", idx)
                               }
                               className="text-red-500 hover:text-red-700 ml-2"
+                              aria-label="Rimuovi esclusione"
                             >
-                              <Lucide icon="Trash2" className="w-4 h-4" />
+                              <Lucide aria-hidden="true" icon="Trash2" className="w-4 h-4" />
                             </button>
                           </li>
                         ))}
@@ -571,8 +574,9 @@ const PolicyDiVisualizzazione: React.FC<PolicyDiVisualizzazioneProps> = ({
                   <button
                     onClick={() => handleRemoveRegola("filtri_contenuto", i)}
                     className="absolute top-2 right-2 text-gray-400 hover:text-red-600"
+                    aria-label="Rimuovi regola di filtro"
                   >
-                    <Lucide icon="Trash2" className="w-4 h-4" />
+                    <Lucide aria-hidden="true" icon="Trash2" className="w-4 h-4" />
                   </button>
                   <p className="font-medium text-sm text-gray-700 mb-2">Filtro n. {i + 1}</p>
 
@@ -631,8 +635,9 @@ const PolicyDiVisualizzazione: React.FC<PolicyDiVisualizzazioneProps> = ({
                                 handleRemoveItem("filtri_contenuto", i, "inclusione", idx)
                               }
                               className="text-red-500 hover:text-red-700 ml-2"
+                              aria-label="Rimuovi inclusione"
                             >
-                              <Lucide icon="Trash2" className="w-4 h-4" />
+                              <Lucide aria-hidden="true" icon="Trash2" className="w-4 h-4" />
                             </button>
                           </li>
                         ))}
@@ -695,8 +700,9 @@ const PolicyDiVisualizzazione: React.FC<PolicyDiVisualizzazioneProps> = ({
                                 handleRemoveItem("filtri_contenuto", i, "esclusione", idx)
                               }
                               className="text-red-500 hover:text-red-700 ml-2"
+                              aria-label="Rimuovi esclusione"
                             >
-                              <Lucide icon="Trash2" className="w-4 h-4" />
+                              <Lucide aria-hidden="true" icon="Trash2" className="w-4 h-4" />
                             </button>
                           </li>
                         ))}

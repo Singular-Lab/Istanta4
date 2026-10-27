@@ -60,7 +60,7 @@ function ApiKeysPage() {
         >
           <Dialog.Panel>
             <Dialog.Title>
-              <h2 className="mr-auto text-base font-medium">
+              <h2 className="title-card mr-auto">
                 Generazione nuova API Key
               </h2>
             </Dialog.Title>
@@ -104,19 +104,10 @@ function ApiKeysPage() {
                   await generateKey();
                   setDialogOpen(false);
                 }}
-                disabled={isGenerating}
+                loading={isGenerating}
               >
-                {isGenerating ? (
-                  <>
-                    <Lucide icon="Loader" className="w-4 h-4 mr-2 animate-spin" />
-                    Generazione in corso...
-                  </>
-                ) : (
-                  <>
-                    <Lucide icon="KeyRound" className="w-4 h-4 mr-2" />
-                    Conferma
-                  </>
-                )}
+                {!isGenerating && <Lucide icon="KeyRound" aria-hidden="true" className="w-4 h-4 mr-2" />}
+                Conferma
               </Button>
             </Dialog.Footer>
           </Dialog.Panel>
@@ -130,7 +121,7 @@ function ApiKeysPage() {
               <div className="mb-8">
                 <div className="flex items-center gap-3 mb-6">
                   <Lucide icon="Key" className="w-6 h-6 text-primary" />
-                  <h2 className="text-2xl font-bold text-slate-900">Gestione API Key</h2>
+                  <h2 className="title-section">Gestione API Key</h2>
                 </div>
 
                 <div className="box p-6 space-y-4">
@@ -199,7 +190,7 @@ function ApiKeysPage() {
               <div className="mb-8">
                 <div className="flex items-center gap-3 mb-6">
                   <Lucide icon="Code" className="w-6 h-6 text-success" />
-                  <h2 className="text-2xl font-bold text-slate-900">Come Usare l'API Key</h2>
+                  <h2 className="title-section">Come Usare l'API Key</h2>
                 </div>
 
                 <div className="box p-6">
@@ -211,7 +202,7 @@ function ApiKeysPage() {
                     {/* Esempio cURL */}
                     <div>
                       <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-semibold text-slate-900">Esempio cURL</h4>
+                        <h4 className="title-card">Esempio cURL</h4>
                         <Button
                           variant="outline-secondary"
                           size="sm"
@@ -240,7 +231,7 @@ function ApiKeysPage() {
                     {/* Esempio JavaScript */}
                     <div>
                       <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-semibold text-slate-900">Esempio JavaScript</h4>
+                        <h4 className="title-card">Esempio JavaScript</h4>
                         <Button
                           variant="outline-secondary"
                           size="sm"
@@ -273,7 +264,7 @@ function ApiKeysPage() {
               <div>
                 <div className="flex items-center gap-3 mb-6">
                   <Lucide icon="Shield" className="w-6 h-6 text-warning" />
-                  <h2 className="text-2xl font-bold text-slate-900">Best Practice di Sicurezza</h2>
+                  <h2 className="title-section">Best Practice di Sicurezza</h2>
                 </div>
 
                 <div className="box p-6">

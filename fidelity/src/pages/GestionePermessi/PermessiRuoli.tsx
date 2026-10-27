@@ -3,6 +3,8 @@ import { FormInput, FormSelect } from '@/components/Base/Form';
 import FormSwitch from '@/components/Base/Form/FormSwitch';
 import { Dialog } from '@/components/Base/Headless';
 import Lucide from '@/components/Base/Lucide';
+import PageError from '@/components/Base/PageError';
+import Spinner from '@/components/Base/Spinner';
 import Tippy from '@/components/Base/Tippy';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { useNotification } from '@/context/NotificationContext';
@@ -87,7 +89,7 @@ const ElencoRuoli = ({
               onClick={() => onSeleziona(v.tipo, v.idRuoloGdo)}
               aria-current={attivo ? 'true' : undefined}
               className={clsx(
-                'flex items-center gap-2.5 rounded-lg border border-slate-200/80 py-1.5 pl-2.5 pr-2.5 text-left text-sm transition-colors dark:border-darkmode-400 lg:w-full lg:border-transparent',
+                'flex items-center gap-2.5 rounded-control border border-slate-200/80 py-1.5 pl-2.5 pr-2.5 text-left text-sm transition-colors dark:border-darkmode-400 lg:w-full lg:border-transparent',
                 // Sotto-ruolo: rientro di un'icona; il trattino occupa lo slot dell'icona, cosi' le etichette restano allineate
                 v.figlio && 'lg:pl-[26px]',
                 attivo
@@ -105,7 +107,7 @@ const ElencoRuoli = ({
               <span className="truncate">{v.etichetta}</span>
               {attivo && inSospeso && <span className="h-2 w-2 flex-shrink-0 rounded-full bg-warning" title="Modifiche non salvate" />}
               {/* Conteggio subito dopo il nome, come i badge del menu laterale */}
-              <span className="flex-shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] tabular-nums text-slate-500 dark:bg-darkmode-600">
+              <span className="flex-shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-2xs tabular-nums text-slate-500 dark:bg-darkmode-600">
                 {conteggi[chiave] ?? '–'}/{totale}
               </span>
             </button>
@@ -194,29 +196,29 @@ const RigaPermesso = ({
             {azione.nome}
           </label>
           {accesso && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary dark:text-slate-200">
+            <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-2xs font-medium text-primary dark:text-slate-200">
               <Lucide icon="DoorOpen" className="h-3 w-3" />
               Accesso all'area
             </span>
           )}
           {azione.pericolosa && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-danger/10 px-2 py-0.5 text-[11px] font-medium text-danger">
+            <span className="inline-flex items-center gap-1 rounded-full bg-danger/10 px-2 py-0.5 text-2xs font-medium text-danger">
               <Lucide icon="TriangleAlert" className="h-3 w-3" />
               Distruttiva
             </span>
           )}
           {config.eredita && !sistema && (
             personalizzato ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-info/10 px-2 py-0.5 text-[11px] font-medium text-info">
+              <span className="inline-flex items-center gap-1 rounded-full bg-info/10 px-2 py-0.5 text-2xs font-medium text-info">
                 <Lucide icon="GitBranch" className="h-3 w-3" />
                 Personalizzato
               </span>
             ) : (
-              <span className="text-[11px] text-slate-400">Ereditato</span>
+              <span className="text-2xs text-slate-400">Ereditato</span>
             )
           )}
           {visto.inSospeso && (
-            <span className="rounded-full bg-warning/15 px-2 py-0.5 text-[11px] font-medium text-warning">Non salvato</span>
+            <span className="rounded-full bg-warning/15 px-2 py-0.5 text-2xs font-medium text-warning">Non salvato</span>
           )}
         </div>
         <Tippy content={azione.codice} options={{ placement: 'bottom-start', delay: [600, 0] }} className="block">
@@ -299,7 +301,7 @@ const CardArea = ({
           aria-expanded={mostra}
           className="flex min-w-0 flex-1 items-center gap-3 text-left"
         >
-          <div className={clsx('flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg', area.sistema ? 'bg-slate-100 text-slate-500 dark:bg-darkmode-400' : 'bg-primary/10 text-primary dark:text-slate-200')}>
+          <div className={clsx('flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-control', area.sistema ? 'bg-slate-100 text-slate-500 dark:bg-darkmode-400' : 'bg-primary/10 text-primary dark:text-slate-200')}>
             <Lucide icon={area.icona as any} className="h-[18px] w-[18px] stroke-[1.5]" />
           </div>
           <div className="min-w-0 flex-1">
@@ -384,7 +386,7 @@ const RiepilogoModifiche = ({
               <Lucide icon="ListChecks" className="h-5 w-5" />
             </div>
             <div>
-              <h2 className="text-base font-medium text-slate-800 dark:text-slate-100">Rivedi le modifiche</h2>
+              <h2 className="title-card dark:text-slate-100">Rivedi le modifiche</h2>
               <p className="mt-0.5 text-sm text-slate-500">
                 {elenco.length} {elenco.length === 1 ? 'modifica' : 'modifiche'} per <span className="font-medium text-slate-700 dark:text-slate-200">{descrizioneAmbito}</span>.
                 Valgono dalla prossima richiesta degli utenti interessati.
@@ -398,7 +400,7 @@ const RiepilogoModifiche = ({
                   <Lucide icon={g.icona as any} className="h-3.5 w-3.5" />
                   {g.titolo} ({g.voci.length})
                 </div>
-                <ul className="divide-y divide-dashed divide-slate-200 rounded-lg border border-slate-200 dark:divide-darkmode-400 dark:border-darkmode-400">
+                <ul className="divide-y divide-dashed divide-slate-200 rounded-card border border-slate-200 dark:divide-darkmode-400 dark:border-darkmode-400">
                   {g.voci.map(v => (
                     <li key={v.codice} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
                       <span className="text-slate-700 dark:text-slate-200">{v.nome}</span>
@@ -414,9 +416,9 @@ const RiepilogoModifiche = ({
           <Button variant="outline-secondary" onClick={onChiudi} disabled={salvataggio}>
             Torna alle modifiche
           </Button>
-          <Button variant="primary" onClick={onConferma} disabled={salvataggio}>
-            <Lucide icon="Save" className="mr-1.5 h-4 w-4" />
-            {salvataggio ? 'Salvataggio...' : 'Conferma e salva'}
+          <Button variant="primary" onClick={onConferma} loading={salvataggio}>
+            {!salvataggio && <Lucide icon="Save" aria-hidden="true" className="mr-1.5 h-4 w-4" />}
+            Conferma e salva
           </Button>
         </div>
       </Dialog.Panel>
@@ -556,8 +558,8 @@ const PermessiRuoli = () => {
     <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
       <div className="w-full flex-shrink-0 lg:w-72 xl:w-80">
         {ruoli.isLoading ? (
-          <div className="box box--stacked flex items-center gap-2 p-5 text-sm text-slate-500">
-            <Lucide icon="Loader" className="h-4 w-4 animate-spin" /> Caricamento ruoli...
+          <div role="status" className="box box--stacked flex items-center gap-2 p-5 text-sm text-slate-500">
+            <Spinner size="sm" decorativo /> Caricamento ruoli...
           </div>
         ) : (
           <ElencoRuoli
@@ -649,7 +651,7 @@ const PermessiRuoli = () => {
               aria-label="Cerca un permesso"
             />
           </div>
-          <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1 dark:border-darkmode-400 dark:bg-darkmode-600" role="group" aria-label="Filtro">
+          <div className="inline-flex rounded-control border border-slate-200 bg-white p-1 dark:border-darkmode-400 dark:bg-darkmode-600" role="group" aria-label="Filtro">
             {FILTRI.map(f => (
               <button
                 key={f.valore}
@@ -670,14 +672,15 @@ const PermessiRuoli = () => {
         {/* Permessi per area */}
         {configurazione.isLoading || !config ? (
           configurazione.isError ? (
-            <div className="box box--stacked flex flex-col items-center gap-3 p-10 text-center">
-              <Lucide icon="TriangleAlert" className="h-8 w-8 text-danger" />
-              <div className="text-sm text-slate-600">{(configurazione.error as any)?.message || 'Impossibile caricare i permessi'}</div>
-              <Button variant="outline-secondary" size="sm" onClick={() => configurazione.refetch()}>Riprova</Button>
-            </div>
+            <PageError
+              compatta
+              titolo="Permessi non caricati"
+              motivo={(configurazione.error as any)?.message || 'Impossibile caricare i permessi'}
+              onRiprova={() => configurazione.refetch()}
+            />
           ) : (
-            <div className="box box--stacked flex items-center gap-2 p-5 text-sm text-slate-500">
-              <Lucide icon="Loader" className="h-4 w-4 animate-spin" /> Caricamento permessi...
+            <div role="status" className="box box--stacked flex items-center gap-2 p-5 text-sm text-slate-500">
+              <Spinner size="sm" decorativo /> Caricamento permessi...
             </div>
           )
         ) : (

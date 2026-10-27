@@ -368,7 +368,7 @@ const MomentoCard: React.FC<MomentoCardProps> = ({
             </span>
           )}
           <span className={clsx(
-            "shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide",
+            "shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-3xs font-semibold uppercase tracking-wide",
             isSnapshot
               ? "bg-amber-100 text-amber-700"
               : "bg-primary/10 text-primary"
@@ -381,39 +381,43 @@ const MomentoCard: React.FC<MomentoCardProps> = ({
           <button
             type="button"
             title="Rinomina"
+            aria-label={`Rinomina ${momento.nome}`}
             className="p-1 rounded hover:bg-slate-200 text-slate-500 hover:text-slate-700 transition-colors"
             onClick={() => { setDraftName(momento.nome); setIsEditing(true); }}
           >
-            <Lucide icon="Pencil" className="w-4 h-4" />
+            <Lucide icon="Pencil" aria-hidden="true" className="w-4 h-4" />
           </button>
           {showConfirmDelete ? (
             <div className="flex items-center gap-1">
               <button
                 type="button"
                 title="Conferma eliminazione"
+                aria-label={`Conferma eliminazione di ${momento.nome}`}
                 className="p-1 rounded bg-danger/10 hover:bg-danger/20 text-danger transition-colors"
                 onClick={() => { onDelete(momento.id); setShowConfirmDelete(false); }}
                 disabled={isDeleting}
               >
-                <Lucide icon={isDeleting ? "Loader" : "Check"} className={clsx("w-4 h-4", isDeleting && "animate-spin")} />
+                <Lucide icon={isDeleting ? "Loader" : "Check"} aria-hidden="true" className={clsx("w-4 h-4", isDeleting && "animate-spin")} />
               </button>
               <button
                 type="button"
                 title="Annulla"
+                aria-label="Annulla eliminazione"
                 className="p-1 rounded hover:bg-slate-200 text-slate-500 transition-colors"
                 onClick={() => setShowConfirmDelete(false)}
               >
-                <Lucide icon="X" className="w-4 h-4" />
+                <Lucide icon="X" aria-hidden="true" className="w-4 h-4" />
               </button>
             </div>
           ) : (
             <button
               type="button"
               title="Elimina momento"
+              aria-label={`Elimina ${momento.nome}`}
               className="p-1 rounded hover:bg-danger/10 text-slate-400 hover:text-danger transition-colors"
               onClick={() => setShowConfirmDelete(true)}
             >
-              <Lucide icon="Trash2" className="w-4 h-4" />
+              <Lucide icon="Trash2" aria-hidden="true" className="w-4 h-4" />
             </button>
           )}
         </div>
@@ -449,11 +453,12 @@ const MomentoCard: React.FC<MomentoCardProps> = ({
                   <button
                     type="button"
                     title="Rimuovi dal momento"
-                    className="shrink-0 p-0.5 rounded hover:bg-danger/10 text-slate-400 hover:text-danger opacity-0 group-hover:opacity-100 transition-all"
+                    aria-label={`Rimuovi ${t.nome} dal momento`}
+                    className="shrink-0 p-0.5 rounded hover:bg-danger/10 text-slate-400 hover:text-danger opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-all"
                     onClick={() => handleRemove(t.id)}
                     disabled={isUpdating}
                   >
-                    <Lucide icon="X" className="w-3.5 h-3.5" />
+                    <Lucide icon="X" aria-hidden="true" className="w-3.5 h-3.5" />
                   </button>
                 </div>
               ))
@@ -524,7 +529,7 @@ const MomentoCard: React.FC<MomentoCardProps> = ({
               style={collegaDropdownStyle}
               className="bg-white rounded-lg border border-slate-200 shadow-lg overflow-hidden overflow-y-auto"
             >
-              <p className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 border-b border-slate-100">
+              <p className="px-3 pt-2 pb-1 text-3xs font-semibold uppercase tracking-wide text-slate-400 border-b border-slate-100">
                 Collega con...
               </p>
               {momentiCollegabili.map((other) => (
@@ -722,7 +727,7 @@ const MomentoConnector: React.FC<MomentoConnectorProps> = ({
             ref={menuRef}
             className="absolute z-30 bottom-full left-1/2 -translate-x-1/2 mb-2 bg-white rounded-xl border border-slate-200 shadow-lg overflow-hidden min-w-[160px]"
           >
-            <div className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 border-b border-slate-100">
+            <div className="px-3 pt-2 pb-1 text-3xs font-semibold uppercase tracking-wide text-slate-400 border-b border-slate-100">
               Report confronto
             </div>
             <button
@@ -784,7 +789,7 @@ const MomentoConnector: React.FC<MomentoConnectorProps> = ({
       </svg>
     </div>
 
-    <label className="flex items-center gap-1 h-7 text-[10px] text-slate-400" title="Degrado terremoto massimo del collegamento lineare">
+    <label className="flex items-center gap-1 h-7 text-3xs text-slate-400" title="Degrado terremoto massimo del collegamento lineare">
       <Lucide icon={isUpdatingMeta ? "Loader" : "Zap"} className={clsx("w-3 h-3 text-orange-400", isUpdatingMeta && "animate-spin")} />
       <input
         type="number"
@@ -1603,7 +1608,7 @@ const GestioneMomenti: React.FC<GestioneMomentiProps> = ({ idPromo, tracciati })
         {isCreating ? (
           <div className="flex items-center gap-2">
             <span className={clsx(
-              "inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide shrink-0",
+              "inline-flex items-center gap-1 px-2 py-0.5 rounded text-3xs font-semibold uppercase tracking-wide shrink-0",
               newIsSnapshot ? "bg-amber-100 text-amber-700" : "bg-primary/10 text-primary"
             )}>
               <Lucide icon={newIsSnapshot ? "Camera" : "List"} className="w-3 h-3" />
@@ -1672,7 +1677,7 @@ const GestioneMomenti: React.FC<GestioneMomentiProps> = ({ idPromo, tracciati })
 
               {showSchemaDropdown && schemi.length > 0 && (
                 <div className="absolute right-0 top-full mt-1 z-30 bg-white rounded-lg border border-slate-200 shadow-lg overflow-hidden min-w-[200px]">
-                  <p className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                  <p className="px-3 pt-2 pb-1 text-3xs font-semibold uppercase tracking-wide text-slate-400">
                     Seleziona schema
                   </p>
                   {schemi.map((s) => {
@@ -1692,7 +1697,7 @@ const GestioneMomenti: React.FC<GestioneMomentiProps> = ({ idPromo, tracciati })
                               <span
                                 key={t}
                                 className={clsx(
-                                  "shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide",
+                                  "shrink-0 px-1.5 py-0.5 rounded text-3xs font-semibold uppercase tracking-wide",
                                   t === 'BUSINESS' ? "bg-blue-100 text-blue-700" : "bg-violet-100 text-violet-700"
                                 )}
                               >
@@ -1700,7 +1705,7 @@ const GestioneMomenti: React.FC<GestioneMomentiProps> = ({ idPromo, tracciati })
                               </span>
                             ))}
                           </div>
-                          <p className="text-[11px] text-slate-400">{s.items.length} moment{s.items.length === 1 ? "o" : "i"}</p>
+                          <p className="text-2xs text-slate-400">{s.items.length} moment{s.items.length === 1 ? "o" : "i"}</p>
                         </div>
                       </button>
                     );
@@ -1765,8 +1770,10 @@ const GestioneMomenti: React.FC<GestioneMomentiProps> = ({ idPromo, tracciati })
                   disabled={completedConfrontiKeys.size === 0 || isScoreboarding}
                   onClick={handlePromoScoreboard}
                   title="Ricalcola lo scoreboard con i dati attuali"
+                  aria-label="Ricalcola lo scoreboard con i dati attuali"
                 >
                   <Lucide
+                    aria-hidden="true"
                     icon={isScoreboarding ? "Loader" : "RefreshCw"}
                     className={clsx("w-4 h-4", isScoreboarding && "animate-spin")}
                   />
@@ -1950,7 +1957,7 @@ const GestioneMomenti: React.FC<GestioneMomentiProps> = ({ idPromo, tracciati })
                       ref={menuRef}
                       className="absolute z-30 bottom-full left-1/2 -translate-x-1/2 mb-2 bg-white rounded-xl border border-slate-200 shadow-lg overflow-hidden min-w-[160px]"
                     >
-                      <div className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 border-b border-slate-100">
+                      <div className="px-3 pt-2 pb-1 text-3xs font-semibold uppercase tracking-wide text-slate-400 border-b border-slate-100">
                         Report confronto
                       </div>
                       <button

@@ -21,8 +21,9 @@ const ActionButtons: React.FC<{
       className="rounded-md"
       variant="danger"
       size="sm"
+      aria-label="Rimuovi elemento"
     >
-      <Lucide icon="Trash2" className="w-4 h-4" />
+      <Lucide icon="Trash2" aria-hidden="true" className="w-4 h-4" />
     </Button>
 
 
@@ -35,9 +36,12 @@ const ActionButtons: React.FC<{
         className="rounded-md"
         variant={policyAttiva ? "soft-primary" : "secondary"}
         size="sm"
+        aria-label="Policy di visualizzazione"
+        aria-pressed={!!policyAttiva}
       >
         <Lucide
           icon={policyAttiva ? "Shield" : "ShieldOff"}
+          aria-hidden="true"
           className="w-4 h-4"
         />
       </Button>
@@ -51,9 +55,11 @@ const ActionButtons: React.FC<{
         className="rounded-md"
         variant={locked ? "dark" : "soft-dark"}
         size="sm"
+        aria-label={locked ? "Sblocca elemento" : "Blocca elemento"}
       >
         <Lucide
           icon={locked ? "LockKeyhole" : "LockKeyholeOpen"}
+          aria-hidden="true"
           className="w-4 h-4"
         />
       </Button>

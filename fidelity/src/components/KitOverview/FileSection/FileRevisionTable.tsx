@@ -420,8 +420,10 @@ const FileRevisionTable: FC<FileRevisionTableProps> = ({
                                 variant="outline-secondary"
                                 size="sm"
                                 onClick={() => handlePreview(file)}
+                                aria-label="Anteprima"
+                                title="Anteprima"
                               >
-                                <Lucide icon="Eye" className="w-4 h-4" />
+                                <Lucide icon="Eye" aria-hidden="true" className="w-4 h-4" />
                               </Button>
                             )}
                             {!isAcc && !isRej && (
@@ -527,8 +529,9 @@ const FileRevisionTable: FC<FileRevisionTableProps> = ({
                 size="sm"
                 onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
                 disabled={currentPage === 0}
+                aria-label="Pagina precedente"
               >
-                <Lucide icon="ChevronLeft" className="w-4 h-4" />
+                <Lucide icon="ChevronLeft" aria-hidden="true" className="w-4 h-4" />
               </Button>
               <span className="px-3 py-1.5 text-sm bg-slate-100 rounded-lg font-medium text-slate-600">
                 {currentPage + 1} / {totalPages}
@@ -538,8 +541,9 @@ const FileRevisionTable: FC<FileRevisionTableProps> = ({
                 size="sm"
                 onClick={() => setCurrentPage(Math.min(totalPages - 1, currentPage + 1))}
                 disabled={currentPage === totalPages - 1}
+                aria-label="Pagina successiva"
               >
-                <Lucide icon="ChevronRight" className="w-4 h-4" />
+                <Lucide icon="ChevronRight" aria-hidden="true" className="w-4 h-4" />
               </Button>
             </div>
           </div>

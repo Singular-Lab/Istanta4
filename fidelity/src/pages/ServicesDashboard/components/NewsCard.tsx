@@ -91,7 +91,7 @@ const NewsCard: React.FC<NewsCardProps> = ({ news, index }) => {
       <div className="flex items-center justify-between gap-2 mb-3">
         <span className={clsx(
           "inline-flex items-center gap-1 px-2 py-0.5",
-          "text-[10px] font-semibold uppercase tracking-wide rounded-full border",
+          "text-3xs font-semibold uppercase tracking-wide rounded-full border",
           config.badge
         )}>
           <Lucide icon={config.icon as any} className="w-2.5 h-2.5" />
@@ -99,7 +99,7 @@ const NewsCard: React.FC<NewsCardProps> = ({ news, index }) => {
         </span>
 
         {news.in_evidenza && (
-          <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide bg-amber-50 text-amber-700 rounded-full border border-amber-200">
+          <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 text-3xs font-semibold uppercase tracking-wide bg-amber-50 text-amber-700 rounded-full border border-amber-200">
             <Lucide icon="Star" className="w-2.5 h-2.5" />
             In evidenza
           </span>
@@ -127,12 +127,12 @@ const NewsCard: React.FC<NewsCardProps> = ({ news, index }) => {
       {/* Footer */}
       <div className="flex items-end justify-between gap-2 pt-1 border-t border-slate-100">
         <div className="flex flex-col gap-0.5">
-          <span className="text-[11px] text-slate-400">
+          <span className="text-2xs text-slate-400">
             {formatDate(news.data_pubblicazione)}
             {news.autore_nome && ` · ${news.autore_nome}`}
           </span>
           {news.data_scadenza && (
-            <span className="inline-flex items-center gap-1 text-[10px] text-amber-600/90">
+            <span className="inline-flex items-center gap-1 text-3xs text-amber-600/90">
               <Lucide icon="Clock" className="w-2.5 h-2.5" />
               Scade il {formatDate(news.data_scadenza)}
             </span>

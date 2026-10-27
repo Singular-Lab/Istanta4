@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { QueryTypes } from 'sequelize';
 import { HttpStatusCode, TIPO_UTENTI } from '../../../lib/enums';
+import { ForbiddenError, NotFoundError } from '../../../lib/errors';
 import "../../global.d.ts";
 import { BaseController } from '../base/BaseController';
 import { sequelize } from '../db/SequelizeConnector';
@@ -33,9 +34,11 @@ export class WhatsAppController extends BaseController {
         // Templates
         this.router.get('/get_all_gdo_whatsapp', authMiddleware, permissionGuard('whatsapp.gestisci_templates'), this.getAllGDOWhatsapp.bind(this));
         this.router.get("/get_whatsapp_gdo_by_id", authMiddleware, permissionGuard('whatsapp.gestisci_templates'), this.getGDOWhatsappById.bind(this));
-        this.router.use("/get_all_templates_whatsapp_by_gdo", authMiddleware, permissionGuard('whatsapp.gestisci_templates'), this.getAllTemplatesWhatsappByGdo.bind(this));
-        this.router.use("/get_whatsapp_template_by_id", authMiddleware, permissionGuard('whatsapp.gestisci_templates'), this.getWhatsappTemplateById.bind(this));
+        this.router.put("/setup_gdo_whatsapp", authMiddleware, permissionGuard('sistema.gestisci_whatsapp'), this.salvaSetupGDOWhatsapp.bind(this));
+        this.router.get("/get_all_templates_whatsapp_by_gdo", authMiddleware, permissionGuard('whatsapp.gestisci_templates'), this.getAllTemplatesWhatsappByGdo.bind(this));
+        this.router.get("/get_whatsapp_template_by_id", authMiddleware, permissionGuard('whatsapp.gestisci_templates'), this.getWhatsappTemplateById.bind(this));
         this.router.put("/sync_templates_from_meta", authMiddleware, permissionGuard('whatsapp.gestisci_templates'), this.syncTemplatesFromMeta.bind(this));
+        this.router.post("/crea_template_whatsapp", authMiddleware, permissionGuard('whatsapp.gestisci_templates'), this.creaTemplateWhatsapp.bind(this));
         this.router.put("/nuova_versione_locale_template_whatsapp", authMiddleware, permissionGuard('whatsapp.gestisci_templates'), this.salvaInLocaleTemplateWhatsappSuperAdminPayload.bind(this));
         this.router.put("/send_modified_template_to_meta", authMiddleware, permissionGuard('whatsapp.gestisci_templates'), this.sendModifiedTemplateToMeta.bind(this));
         this.router.delete("/template/:id", authMiddleware, permissionGuard('whatsapp.gestisci_templates'), this.eliminaTemplateWhatsapp.bind(this));
@@ -123,15 +126,49 @@ export class WhatsAppController extends BaseController {
     private async getGDOWhatsappById(req: Request, res: Response): Promise<void> {
         try {
             const id = req.query.id as string;
+            await this.verificaGdoAmmessa(req, id);
             const result = await this.whatsAppService.getGDOWhatsappById(id);
             this.sendResponse(res, HttpStatusCode.OK, result);
         } catch (error: any) {
             this.handleError(res, error);
         }
     }
+
+    // Il canale di una GDO (numero, WABA, token) lo configura solo il Superadmin
+    private async salvaSetupGDOWhatsapp(req: Request, res: Response): Promise<void> {
+        try {
+            if (req.session.tipo_utente !== TIPO_UTENTI.SUPERADMIN) {
+                throw new ForbiddenError({
+                    message: 'Solo il Superadmin configura il canale WhatsApp di una GDO',
+                    resource: 'whatsapp_numero',
+                    action: 'setup'
+                });
+            }
+            const { id_gdo, display_name, id_numero_whatsapp, whatsapp_business_account_id, stato, access_token, verify_token } = req.body ?? {};
+            const result = await this.whatsAppService.salvaSetupGDOWhatsapp({
+                id_gdo,
+                display_name,
+                id_numero_whatsapp,
+                whatsapp_business_account_id,
+                stato,
+                access_token,
+                verify_token
+            });
+            // Nel registro i nomi dei campi cambiati, mai i valori dei token
+            AuditLogService.getInstance().configurationChanged(req, 'whatsapp_numero', result.creato ? 'create' : 'update', {
+                id_gdo,
+                campi: result.campiModificati
+            });
+            this.sendResponse(res, HttpStatusCode.OK, { success: true, creato: result.creato });
+        } catch (error: any) {
+            this.handleError(res, error);
+        }
+    }
+
     private async getAllTemplatesWhatsappByGdo(req: Request, res: Response): Promise<void> {
         try {
             const idGdo = req.query.id as string;
+            await this.verificaGdoAmmessa(req, idGdo);
             const result = await this.whatsAppService.getAllTemplatesWhatsappByGdo(idGdo);
             this.sendResponse(res, HttpStatusCode.OK, result);
         } catch (error: any) {
@@ -141,8 +178,7 @@ export class WhatsAppController extends BaseController {
     }
     private async getWhatsappTemplateById(req: Request, res: Response): Promise<void> {
         try {
-            const id = req.query.id as string;
-            const result = await this.whatsAppService.getWhatsappTemplateById(id);
+            const result = await this.templateAmmesso(req, req.query.id as string);
             this.sendResponse(res, HttpStatusCode.OK, result);
         } catch (error: any) {
             this.handleError(res, error);
@@ -151,6 +187,7 @@ export class WhatsAppController extends BaseController {
     private async syncTemplatesFromMeta(req: Request, res: Response): Promise<void> {
         try {
             const { gdoId } = req.body;
+            await this.verificaGdoAmmessa(req, gdoId);
             const result = await this.whatsAppService.syncTemplatesFromMeta(gdoId);
             AuditLogService.getInstance().configurationChanged(req, 'whatsapp_template', 'sync');
             this.sendResponse(res, HttpStatusCode.OK, result);
@@ -158,9 +195,26 @@ export class WhatsAppController extends BaseController {
             this.handleError(res, error);
         }
     }
+    // Nuovo modello come bozza locale: l'invio a Meta passa da send_modified_template_to_meta
+    private async creaTemplateWhatsapp(req: Request, res: Response): Promise<void> {
+        try {
+            const { id_gdo, json_meta } = req.body ?? {};
+            await this.verificaGdoAmmessa(req, id_gdo);
+            const result = await this.whatsAppService.creaTemplateLocale(id_gdo, json_meta);
+            AuditLogService.getInstance().configurationChanged(req, 'whatsapp_template', 'create', {
+                id_gdo,
+                id_template: result.newTemplateId
+            });
+            this.sendResponse(res, HttpStatusCode.OK, result);
+        } catch (error: any) {
+            this.handleError(res, error);
+        }
+    }
+
     private async salvaInLocaleTemplateWhatsappSuperAdminPayload(req: Request, res: Response): Promise<void> {
         try {
             const { id_template, json_meta } = req.body;
+            await this.templateAmmesso(req, id_template);
             const result = await this.whatsAppService.salvaInLocaleTemplateWhatsappSuperAdminPayload(id_template, json_meta);
             this.sendResponse(res, HttpStatusCode.OK, result);
         } catch (error: any) {
@@ -171,6 +225,7 @@ export class WhatsAppController extends BaseController {
     private async sendModifiedTemplateToMeta(req: Request, res: Response): Promise<void> {
         try {
             const { id_template } = req.body;
+            await this.templateAmmesso(req, id_template);
             const result = await this.whatsAppService.sendModifiedTemplateToMeta(id_template);
             this.sendResponse(res, HttpStatusCode.OK, result);
         } catch (error: any) {
@@ -209,6 +264,29 @@ export class WhatsAppController extends BaseController {
         if (req.session.tipo_utente === TIPO_UTENTI.SUPERADMIN) return null;
         const gdo = await this.whatsAppService.getCurrentGDOWhatsappForCampaign(req.session.id_utente as string);
         return gdo?.id ?? '';
+    }
+
+    // Una GDO diversa da quella dell'utente risulta inesistente, come le campagne
+    private async verificaGdoAmmessa(req: Request, idGdo: unknown): Promise<void> {
+        const ammessa = await this.gdoAmmessa(req);
+        if (ammessa !== null && (typeof idGdo !== 'string' || idGdo !== ammessa)) {
+            throw new NotFoundError({ message: 'GDO non trovata', entityType: 'GDO', entityId: typeof idGdo === 'string' ? idGdo : undefined });
+        }
+    }
+
+    private async templateAmmesso(req: Request, idTemplate: unknown) {
+        const template = typeof idTemplate === 'string' && idTemplate
+            ? await this.whatsAppService.getWhatsappTemplateById(idTemplate)
+            : null;
+        const ammessa = await this.gdoAmmessa(req);
+        if (!template || (ammessa !== null && template.id_gdo_gdowhatsapptemplate !== ammessa)) {
+            throw new NotFoundError({
+                message: 'Template non trovato',
+                entityType: 'GDOWhatsappTemplate',
+                entityId: typeof idTemplate === 'string' ? idTemplate : undefined
+            });
+        }
+        return template;
     }
 
     private async eliminaPresetTemplateWhatsapp(req: Request<{ id: string }>, res: Response): Promise<void> {

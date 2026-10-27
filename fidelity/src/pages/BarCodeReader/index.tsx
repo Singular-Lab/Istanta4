@@ -209,23 +209,23 @@ const BarCodeReaderComponent: React.FC = () => {
   }, [barcode]);
 
   return (
-    <main className="mt-20 w-full min-h-svh shop-main">
-      <section className="shop-main d-flex mr-1 pt-xl-5" style={{ marginRight: "2.25rem", marginLeft: "2.55rem" }}>
-        <div className="col-12">
-          <div className="d-flex flex-column align-items-center mb-4">
-            <h1>Lettore codici a barre</h1>
+    <main className="mt-20 w-full min-h-svh">
+      <section className="flex mx-9 xl:pt-12">
+        <div className="w-full">
+          <div className="flex flex-col items-center mb-4">
+            <h1 className="title-page">Lettore codici a barre</h1>
           </div>
-          <div className="d-flex flex-column gap-3">
-            <div className="card">
-              <div className="card-body">
+          <div className="flex flex-col gap-3">
+            <div className="box box--stacked rounded-card">
+              <div className="p-5">
                 {hasPermission === null ? (
                   <p>Richiesta del permesso per la fotocamera...</p>
                 ) : hasPermission ? (
                   <>
                     {barcode ? (
                       <>
-                        <div className="d-flex flex-column justify-content-center align-items-center bg-dark text-white py-5">
-                          <h2>{barcode}</h2>
+                        <div className="flex flex-col justify-center items-center bg-slate-900 text-white py-5">
+                          <h2 className="title-section text-white">{barcode}</h2>
                           <p className="mt-3">Barcode scannerizzato</p>
                           <span>{barcode}</span>
                         </div>
@@ -237,18 +237,18 @@ const BarCodeReaderComponent: React.FC = () => {
                             />
                           </>
                         )}
-                        <Button onClick={restartScanning} className="btn btn-primary w-100 mt-3">
+                        <Button variant="primary" onClick={restartScanning} className="w-full mt-3">
                           Scannerizza un altro codice
                         </Button>
                       </>
                     ) : (
-                      <div className="position-relative w-100">
+                      <div className="relative w-full">
                         <video
                           ref={videoRef}
                           autoPlay
                           playsInline
                           muted
-                          className="w-100 h-auto bg-dark"
+                          className="w-full h-auto bg-slate-900"
                         />
                         <canvas
                           ref={overlayCanvasRef}
@@ -256,7 +256,7 @@ const BarCodeReaderComponent: React.FC = () => {
                           onMouseDown={handleCanvasMouseDown}
                           onMouseUp={handleCanvasMouseUp}
                           onMouseMove={handleCanvasMouseMove}
-                          className="position-absolute top-0 start-0 w-100 h-100"
+                          className="absolute top-0 left-0 w-full h-full"
                         />
                       </div>
                     )}

@@ -1,15 +1,13 @@
 import Button from "@/components/Base/Button";
 import Lucide from "@/components/Base/Lucide";
+import StatusBadge from "@/components/Base/StatusBadge";
+import { formatDataOraEstesa } from "@/utils/format";
 import clsx from "clsx";
-import dayjs from "dayjs";
-import "dayjs/locale/it";
 import { FC } from "react";
 import { Link } from "react-router-dom";
 import { STATO_PROMO } from "../../../../lib/enums";
 import { getStateConfig } from "../config/stateConfig";
 import { HeroBannerProps } from "../types";
-
-dayjs.locale("it");
 
 /**
  * HeroBanner - Banner principale del kit che cambia colore in base allo stato.
@@ -60,16 +58,17 @@ const HeroBanner: FC<HeroBannerProps> = ({
               <Lucide icon={hero.icon} className="h-10 w-10 text-white" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-white mb-1">
+              <h2 className="title-page text-white mb-1">
                 {lavorazione.titolo}
               </h2>
               <p className="text-white/80 text-sm">
                 {hero.subtitle}
               </p>
               <div className="flex items-center gap-2 mt-2 flex-wrap">
+                <StatusBadge dominio="kitRuntime" stato={stato} />
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/20 text-white text-xs font-medium">
-                  <Lucide icon="Calendar" className="h-3 w-3" />
-                  {dayjs(lavorazione.updatedAt || lavorazione.createdAt).format("DD MMMM YYYY, HH:mm")}
+                  <Lucide icon="Calendar" aria-hidden="true" className="h-3 w-3" />
+                  {formatDataOraEstesa(lavorazione.updatedAt || lavorazione.createdAt)}
                 </span>
                 {productionDuration && (
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/20 text-white text-xs font-medium">
@@ -91,15 +90,15 @@ const HeroBanner: FC<HeroBannerProps> = ({
           <div className="flex items-center gap-3 flex-wrap">
             {/* Link to Promozione */}
             {lavorazione.idPromo && (
-              <Link to={`/${isPromoFinalState(lavorazione.promo?.stato) ? 'promozioni/storico' : 'promozioni/in-corso'}/dettagli/${lavorazione.idPromo}`}>
-                <Button
-                  variant="outline-secondary"
-                  className="bg-white/10 border-white/30 text-white hover:bg-white/20"
-                >
-                  <Lucide icon="ArrowLeft" className="h-4 w-4 mr-2" />
-                  Vai alla Promozione
-                </Button>
-              </Link>
+              <Button
+                as={Link}
+                to={`/${isPromoFinalState(lavorazione.promo?.stato) ? 'promozioni/storico' : 'promozioni/in-corso'}/dettagli/${lavorazione.idPromo}`}
+                variant="outline-secondary"
+                className="bg-white/10 border-white/30 text-white hover:bg-white/20"
+              >
+                <Lucide icon="ArrowLeft" aria-hidden="true" className="h-4 w-4 mr-2" />
+                Vai alla Promozione
+              </Button>
             )}
 
             {/* Secondary Actions */}
@@ -111,13 +110,10 @@ const HeroBanner: FC<HeroBannerProps> = ({
                   action.variant !== "danger" && "bg-white/10 border-white/30 text-white hover:bg-white/20"
                 )}
                 onClick={action.onClick}
-                disabled={action.disabled || action.loading}
+                disabled={action.disabled}
+                loading={action.loading}
               >
-                {action.loading ? (
-                  <Lucide icon="Loader" className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Lucide icon={action.icon as any} className="h-4 w-4 mr-2" />
-                )}
+                {!action.loading && <Lucide icon={action.icon as any} aria-hidden="true" className="h-4 w-4 mr-2" />}
                 {action.label}
               </Button>
             ))}
@@ -128,13 +124,10 @@ const HeroBanner: FC<HeroBannerProps> = ({
                 variant="primary"
                 className="bg-white text-slate-800 hover:bg-white/90 shadow-lg"
                 onClick={primaryAction.onClick}
-                disabled={primaryAction.disabled || primaryAction.loading}
+                disabled={primaryAction.disabled}
+                loading={primaryAction.loading}
               >
-                {primaryAction.loading ? (
-                  <Lucide icon="Loader" className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Lucide icon={primaryAction.icon as any} className="h-4 w-4 mr-2" />
-                )}
+                {!primaryAction.loading && <Lucide icon={primaryAction.icon as any} aria-hidden="true" className="h-4 w-4 mr-2" />}
                 {primaryAction.label}
               </Button>
             )}

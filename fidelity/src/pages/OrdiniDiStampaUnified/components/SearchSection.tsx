@@ -15,12 +15,14 @@ const SearchSection: React.FC<SearchSectionProps> = ({ searchQuery, setSearchQue
           <div className="relative">
             <Lucide
               icon="Search"
+              aria-hidden="true"
               className="absolute inset-y-0 left-0 z-10 w-4 h-4 my-auto ml-3 stroke-[1.3] text-slate-500"
             />
             <FormInput
               type="text"
               placeholder="Cerca per nome promo o ID ordine..."
-              className="pl-9 sm:w-64 rounded-[0.5rem]"
+              aria-label="Cerca per nome promo o ID ordine"
+              className="pl-9 sm:w-64 rounded-control"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />

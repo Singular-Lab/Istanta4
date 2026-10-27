@@ -1,6 +1,7 @@
 import { Tab } from "@/components/Base/Headless";
 import Lucide from "@/components/Base/Lucide";
 import PageHeader from "@/components/Base/PageHeader";
+import Spinner from "@/components/Base/Spinner";
 import withSessionCheck from "@/components/SessionChecker";
 import { PERMISSIONS } from "@/constants/permissions";
 import { usePermissionContext } from "@/context/PermissionContext";
@@ -12,7 +13,7 @@ import UnauthorizedState from "./components/UnauthorizedState";
 import { groupHubServices } from "./utils";
 
 const tabClassName =
-  "first:rounded-l-[0.6rem] last:rounded-r-[0.6rem] [&[aria-selected='true']_button]:text-current [&[aria-selected='true']_button]:text-primary [&[aria-selected='true']_button]:font-semibold [&[aria-selected='true']_button]:shadow-sm [&[aria-selected='true']_button]:bg-primary/[0.05] [&[aria-selected='true']_button]:border-primary/[0.2]";
+  "first:rounded-l-card last:rounded-r-card [&[aria-selected='true']_button]:text-current [&[aria-selected='true']_button]:text-primary [&[aria-selected='true']_button]:font-semibold [&[aria-selected='true']_button]:shadow-sm [&[aria-selected='true']_button]:bg-primary/[0.05] [&[aria-selected='true']_button]:border-primary/[0.2]";
 
 function GestioneHub() {
   const { hasPermission, loading } = usePermissionContext();
@@ -34,8 +35,8 @@ function GestioneHub() {
 
       {loading ? (
         <div className="box box--stacked mt-6 p-8 flex items-center gap-3 text-slate-500">
-          <Lucide icon="Loader2" className="w-5 h-5 animate-spin" />
-          Verifica permessi in corso...
+          <Spinner size="sm" etichetta="Verifica permessi in corso..." />
+          <span aria-hidden="true">Verifica permessi in corso...</span>
         </div>
       ) : !canAccess ? (
         <UnauthorizedState />
@@ -46,10 +47,10 @@ function GestioneHub() {
               <Tab.List variant="boxed-tabs" className="bg-transparent border-transparent">
                 <Tab className={tabClassName}>
                   <Tab.Button
-                    className="w-full text-slate-500 whitespace-nowrap rounded-[0.6rem] py-3 flex items-center gap-2.5 justify-center"
+                    className="w-full text-slate-500 whitespace-nowrap rounded-card py-3 flex items-center gap-2.5 justify-center"
                     as="button"
                   >
-                    <Lucide icon="Blocks" className="w-4 h-4 stroke-[1.4]" />
+                    <Lucide icon="Blocks" aria-hidden="true" className="w-4 h-4 stroke-[1.4]" />
                     Servizi
                     {serviceCount > 0 && (
                       <span className="inline-flex items-center justify-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 min-w-[1.4rem]">
@@ -60,10 +61,10 @@ function GestioneHub() {
                 </Tab>
                 <Tab className={tabClassName}>
                   <Tab.Button
-                    className="w-full text-slate-500 whitespace-nowrap rounded-[0.6rem] py-3 flex items-center gap-2.5 justify-center"
+                    className="w-full text-slate-500 whitespace-nowrap rounded-card py-3 flex items-center gap-2.5 justify-center"
                     as="button"
                   >
-                    <Lucide icon="Newspaper" className="w-4 h-4 stroke-[1.4]" />
+                    <Lucide icon="Newspaper" aria-hidden="true" className="w-4 h-4 stroke-[1.4]" />
                     News
                     {newsCount > 0 && (
                       <span className="inline-flex items-center justify-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 min-w-[1.4rem]">

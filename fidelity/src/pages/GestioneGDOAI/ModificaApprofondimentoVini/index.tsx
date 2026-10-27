@@ -1,8 +1,9 @@
 import Button from '@/components/Base/Button';
-import { FormInput, FormLabel } from '@/components/Base/Form';
+import { FormField, FormInput, FormLabel } from '@/components/Base/Form';
 import Lucide from '@/components/Base/Lucide';
 import PageHeader from '@/components/Base/PageHeader';
 import Skeleton from '@/components/Base/Skeleton';
+import StatusBadge from '@/components/Base/StatusBadge';
 import { useNotification } from '@/context/NotificationContext';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import React, { useEffect, useState } from 'react';
@@ -67,7 +68,7 @@ const ModificaApprofondimentoVini: React.FC = () => {
     onError: () => {
       showNotification(<>
         <div className="flex items-center gap-2">
-          <Lucide icon="CircleAlert" className="w-4 h-4 text-red-500" />
+          <Lucide icon="CircleAlert" className="w-4 h-4 text-danger" />
           <span>Errore durante la generazione dell'approfondimento</span>
         </div>
       </>, {
@@ -100,7 +101,7 @@ const ModificaApprofondimentoVini: React.FC = () => {
     onError: () => {
       showNotification(<>
         <div className="flex items-center gap-2">
-          <Lucide icon="CircleAlert" className="w-4 h-4 text-red-500" />
+          <Lucide icon="CircleAlert" className="w-4 h-4 text-danger" />
           <span>Errore durante l'aggiornamento</span>
         </div>
       </>, {
@@ -139,7 +140,7 @@ const ModificaApprofondimentoVini: React.FC = () => {
     if (error) {
       showNotification(<>
         <div className="flex items-center gap-2">
-          <Lucide icon="CircleAlert" className="w-4 h-4 text-red-500" />
+          <Lucide icon="CircleAlert" className="w-4 h-4 text-danger" />
           <span>Errore nel caricamento dei dati</span>
         </div>
       </>, {
@@ -164,7 +165,7 @@ const ModificaApprofondimentoVini: React.FC = () => {
     if (!formValues.nome || !formValues.cantina || !formValues.anno) {
       showNotification(<>
         <div className="flex items-center gap-2">
-          <Lucide icon="CircleAlert" className="w-4 h-4 text-red-500" />
+          <Lucide icon="CircleAlert" className="w-4 h-4 text-danger" />
           <span>Tutti i campi sono obbligatori</span>
         </div>
       </>, {
@@ -178,7 +179,7 @@ const ModificaApprofondimentoVini: React.FC = () => {
     if (formValues.anno < 1800 || formValues.anno > new Date().getFullYear() + 10) {
       showNotification(<>
         <div className="flex items-center gap-2">
-          <Lucide icon="CircleAlert" className="w-4 h-4 text-red-500" />
+          <Lucide icon="CircleAlert" className="w-4 h-4 text-danger" />
           <span>L'anno deve essere valido</span>
         </div>
       </>, {
@@ -310,20 +311,14 @@ const ModificaApprofondimentoVini: React.FC = () => {
       <div className="box box--stacked mb-6">
         <div className="p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-slate-800 flex items-center">
-              <Lucide icon="Wine" className="w-5 h-5 mr-2 text-primary" />
+            <h2 className="title-section flex items-center">
+              <Lucide icon="Wine" aria-hidden="true" className="w-5 h-5 mr-2 text-primary" />
               Foto Prodotto
             </h2>
             {approfondimento?.id ? (
-              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
-                <Lucide icon="CircleCheck" className="w-4 h-4 mr-1.5" />
-                Generato
-              </span>
+              <StatusBadge tono="success" etichetta="Generato" icon="CircleCheck" />
             ) : (
-              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-amber-100 text-amber-800">
-                <Lucide icon="Sparkles" className="w-4 h-4 mr-1.5" />
-                Da generare
-              </span>
+              <StatusBadge tono="warning" etichetta="Da generare" icon="Sparkles" />
             )}
           </div>
           <div className="flex items-center gap-4">
@@ -350,13 +345,12 @@ const ModificaApprofondimentoVini: React.FC = () => {
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Dati Editabili */}
           <div>
-            <h3 className="text-lg font-medium text-slate-800 mb-4 flex items-center">
-              <Lucide icon="PenTool" className="w-5 h-5 mr-2 text-primary" />
+            <h3 className="title-card mb-4 flex items-center">
+              <Lucide icon="PenTool" aria-hidden="true" className="w-5 h-5 mr-2 text-primary" />
               Dati Modificabili
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-              <div>
-                <FormLabel>Anno *</FormLabel>
+              <FormField etichetta="Anno" obbligatorio aiuto="Anno di produzione del vino">
                 <FormInput
                   name="anno"
                   type="number"
@@ -366,11 +360,9 @@ const ModificaApprofondimentoVini: React.FC = () => {
                   max={new Date().getFullYear() + 10}
                   className={!formValues.anno ? 'border-amber-300' : ''}
                 />
-                <p className="text-xs text-slate-500 mt-1">Anno di produzione del vino</p>
-              </div>
+              </FormField>
 
-              <div>
-                <FormLabel>Nome Vino *</FormLabel>
+              <FormField etichetta="Nome Vino" obbligatorio aiuto="Nome completo della denominazione">
                 <FormInput
                   name="nome"
                   type="text"
@@ -379,11 +371,9 @@ const ModificaApprofondimentoVini: React.FC = () => {
                   placeholder="Es. Barolo, Chianti Classico..."
                   className={!formValues.nome ? 'border-amber-300' : ''}
                 />
-                <p className="text-xs text-slate-500 mt-1">Nome completo della denominazione</p>
-              </div>
+              </FormField>
 
-              <div>
-                <FormLabel>Cantina *</FormLabel>
+              <FormField etichetta="Cantina" obbligatorio aiuto="Nome del produttore">
                 <FormInput
                   name="cantina"
                   type="text"
@@ -392,16 +382,15 @@ const ModificaApprofondimentoVini: React.FC = () => {
                   placeholder="Es. Antinori, Gaja..."
                   className={!formValues.cantina ? 'border-amber-300' : ''}
                 />
-                <p className="text-xs text-slate-500 mt-1">Nome del produttore</p>
-              </div>
+              </FormField>
             </div>
           </div>
 
           {/* Dati Read-Only (solo se esistono) */}
           {approfondimento && (
             <div className="pt-6 border-t border-slate-200">
-              <h3 className="text-lg font-medium text-slate-800 mb-4 flex items-center">
-                <Lucide icon="Lock" className="w-5 h-5 mr-2 text-slate-400" />
+              <h3 className="title-card mb-4 flex items-center">
+                <Lucide icon="Lock" aria-hidden="true" className="w-5 h-5 mr-2 text-slate-400" />
                 Informazioni Generate dall'AI
                 <span className="ml-2 text-xs font-normal text-slate-500">(sola lettura)</span>
               </h3>
@@ -500,20 +489,10 @@ const ModificaApprofondimentoVini: React.FC = () => {
             <Button
               type="submit"
               variant="primary"
-              disabled={isSaving}
               loading={isSaving}
             >
-              {isSaving ? (
-                <>
-                  <div className="animate-spin mr-2 w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
-                  {isNewWine ? 'Generando...' : 'Salvando...'}
-                </>
-              ) : (
-                <>
-                  <Lucide icon="Sparkles" className="w-4 h-4 mr-2" />
-                  {isNewWine ? 'Genera' : 'Rigenera'}
-                </>
-              )}
+              {!isSaving && <Lucide icon="Sparkles" aria-hidden="true" className="w-4 h-4 mr-2" />}
+              {isNewWine ? 'Genera' : 'Rigenera'}
             </Button>
           </div>
         </form>

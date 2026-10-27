@@ -1,6 +1,7 @@
 import { FormInput, FormSelect } from '@/components/Base/Form';
 import FormSwitch from '@/components/Base/Form/FormSwitch';
 import Lucide from '@/components/Base/Lucide';
+import Spinner from '@/components/Base/Spinner';
 import Tippy from '@/components/Base/Tippy';
 import clsx from 'clsx';
 import { Fragment, useMemo, useState } from 'react';
@@ -78,8 +79,8 @@ const ConfrontoRuoli = () => {
 
       <div className="box box--stacked overflow-hidden">
         {confronto.isLoading ? (
-          <div className="flex items-center gap-2 p-5 text-sm text-slate-500">
-            <Lucide icon="Loader" className="h-4 w-4 animate-spin" /> Caricamento confronto...
+          <div role="status" className="flex items-center gap-2 p-5 text-sm text-slate-500">
+            <Spinner size="sm" decorativo /> Caricamento confronto...
           </div>
         ) : righePerArea.length === 0 ? (
           <div className="p-10 text-center text-sm text-slate-500">Nessun permesso da mostrare.</div>
@@ -100,7 +101,7 @@ const ConfrontoRuoli = () => {
                         c.idRuoloGdo && 'font-normal text-slate-500'
                       )}
                     >
-                      {c.idRuoloGdo && <span className="block text-[10px] font-normal uppercase tracking-wider text-slate-400">{ETICHETTE_TIPO[c.tipo] ?? c.tipo}</span>}
+                      {c.idRuoloGdo && <span className="block text-3xs font-normal uppercase tracking-wider text-slate-400">{ETICHETTE_TIPO[c.tipo] ?? c.tipo}</span>}
                       {c.etichetta}
                     </th>
                   ))}
@@ -128,7 +129,7 @@ const ConfrontoRuoli = () => {
                             <span className="text-slate-700 dark:text-slate-200">{azione.nome}</span>
                           </Tippy>
                           {area.accesso?.codice === azione.codice && (
-                            <span className="ml-2 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary dark:text-slate-200">accesso</span>
+                            <span className="ml-2 rounded-full bg-primary/10 px-1.5 py-0.5 text-3xs font-medium text-primary dark:text-slate-200">accesso</span>
                           )}
                         </td>
                         {colonne.map(c => {

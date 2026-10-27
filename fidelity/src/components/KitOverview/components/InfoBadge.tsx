@@ -22,7 +22,7 @@ const InfoBadge: FC<InfoBadgeProps> = ({
     )}>
       <Lucide icon={icon as any} className="h-4 w-4 opacity-70" />
       <div>
-        <p className="text-[10px] uppercase tracking-wider opacity-60">{label}</p>
+        <p className="text-3xs uppercase tracking-wider opacity-60">{label}</p>
         <p className="text-sm font-semibold">{value}</p>
       </div>
     </div>

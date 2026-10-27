@@ -192,8 +192,9 @@ const CondizioniAddestramentiForm = ({
                   variant="outline-danger"
                   size='sm'
                   onClick={() => remove(condizioneIndex)}
+                  aria-label="Rimuovi condizione"
                 >
-                  <Lucide icon="Trash2" className="w-4 h-4" />
+                  <Lucide aria-hidden="true" icon="Trash2" className="w-4 h-4" />
                 </Button>
               </Table.Td>
             </Table.Tr>

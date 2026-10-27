@@ -1,10 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { ServerCall } from "../../../lib/server_call";
 import Badge from "../../components/Base/Badge";
 import Button from "../../components/Base/Button";
-import { FormInput, FormLabel, FormSelect, FormTextarea } from "../../components/Base/Form";
+import { FormField, FormInput, FormSelect, FormTextarea } from "../../components/Base/Form";
+import PageError from "../../components/Base/PageError";
 import PageHeader from "../../components/Base/PageHeader";
 import withSessionCheck from "../../components/SessionChecker";
+import { descriviStato } from "../../constants/stati";
 import { useNotification } from "../../context/NotificationContext";
 
 /**
@@ -88,6 +92,8 @@ const MAX_BODY = 1024;
 const MAX_HEADER_TEXT = 60;
 const MAX_FOOTER_TEXT = 60;
 
+const PERCORSO_TEMPLATES = "/whatsapp/gestione-whatsapp-superadmin/templates";
+
 const langOptions = [
     { code: "it", label: "Italiano (it)" },
     { code: "it_IT", label: "Italiano (it_IT)" },
@@ -135,9 +141,8 @@ function isDynamicUrlValid(url?: string) {
     }
 }
 
-const HelperLabel: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-    <div className="text-xs text-slate-500 mt-1">{children}</div>
-);
+const messaggioErrore = (errore: unknown, predefinito: string) =>
+    errore instanceof Error && errore.message ? errore.message : predefinito;
 
 const Counter: React.FC<{ value: string; max: number }> = ({ value, max }) => (
     <Badge variant="secondary" size="sm">
@@ -145,33 +150,31 @@ const Counter: React.FC<{ value: string; max: number }> = ({ value, max }) => (
     </Badge>
 );
 
-const ErrorMsg: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-    <div className="text-danger text-xs mt-1">{children}</div>
-);
-
 const Card: React.FC<{ title: string; right?: React.ReactNode; children: React.ReactNode }> = ({ title, right, children }) => (
-    <div className="box box--stacked p-5 mb-5">
+    <section className="box box--stacked rounded-card p-5 mb-5">
         <div className="flex items-center justify-between mb-3">
-            <span className="font-semibold text-slate-800">{title}</span>
+            <h2 className="title-card">{title}</h2>
             {right}
         </div>
         {children}
-    </div>
+    </section>
 );
 
 /** ------------------ Pagina principale ------------------ */
 
-const CreaTemplatesWhatsappSuperAdmin: React.FC<{ onSubmit?: (payload: json_meta_gdowhatsapptemplate) => Promise<void> | void }> = ({ onSubmit }) => {
+const CreaTemplatesWhatsappSuperAdmin: React.FC = () => {
     const [form, setForm] = useState<FormState>(initial);
     const [errors, setErrors] = useState<Record<string, string>>({});
+    // Quale salvataggio è in corso: l'altro pulsante resta disattivato finché non finisce
+    const [azione, setAzione] = useState<"bozza" | "invio" | null>(null);
+    const [erroreServer, setErroreServer] = useState<string | null>(null);
     const { showNotification } = useNotification();
+    const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const idGdo = searchParams.get("id");
 
     const bodyPlaceholders = useMemo(() => extractPlaceholders(form.bodyText), [form.bodyText]);
     const needBodyExamples = bodyPlaceholders.length > 0;
-
-
-    // Parser da json esistente (json_meta_gdowhatsapptemplate) verso lo stato del form
-
 
     const validation = useMemo(() => {
         const e: Record<string, string> = {};
@@ -199,7 +202,7 @@ const CreaTemplatesWhatsappSuperAdmin: React.FC<{ onSubmit?: (payload: json_meta
         }
 
         if (needBodyExamples) {
-            if (form.bodyExamples.length !== placeholders.length || form.bodyExamples.some((s) => !s.trim())) {
+            if (form.bodyExamples.length !== placeholders.length || form.bodyExamples.some((s) => !s?.trim())) {
                 e.bodyExamples = `Fornisci ${placeholders.length} esempio/i (uno per ciascun {{n}}).`;
             }
         }
@@ -235,20 +238,6 @@ const CreaTemplatesWhatsappSuperAdmin: React.FC<{ onSubmit?: (payload: json_meta
 
         return e;
     }, [form, bodyPlaceholders, needBodyExamples]);
-
-    const previewButtons = useMemo(() => {
-        if (form.buttonKind === "QUICK_REPLY") {
-            return form.quickReplies.map((q) => ({ kind: "quick" as const, label: q.text }));
-        }
-        if (form.buttonKind === "CTA") {
-            return form.ctas.map((c) => ({
-                kind: c.type === "URL" ? ("url" as const) : ("phone" as const),
-                label: c.text,
-                target: c.type === "URL" ? c.url : c.phone_number,
-            }));
-        }
-        return [] as const;
-    }, [form]);
 
     function update<K extends keyof FormState>(key: K, value: FormState[K]) {
         setForm((f) => ({ ...f, [key]: value }));
@@ -302,36 +291,84 @@ const CreaTemplatesWhatsappSuperAdmin: React.FC<{ onSubmit?: (payload: json_meta
         return payload;
     }
 
-    async function handleSubmit(e: React.FormEvent) {
-        e.preventDefault();
+    /** Salva la bozza; con `inviaAMeta` la invia subito a Meta e mostra lo stato restituito. */
+    async function salva(inviaAMeta: boolean) {
         setErrors(validation);
-        if (Object.keys(validation).length) return;
-        const payload = buildPayload();
+        if (Object.keys(validation).length || azione) return;
+        setAzione(inviaAMeta ? "invio" : "bozza");
+        setErroreServer(null);
+        let idTemplate: string | null = null;
         try {
-            await onSubmit?.(payload);
-            showNotification("Template pronto per l'invio a Meta.", { variant: "success" });
-        } catch (err: any) {
-            showNotification("Errore durante il salvataggio/submit del template.", { variant: "error" });
-            console.error(err);
+            const creato = await ServerCall.post<{ success: boolean; newTemplateId: string }>("/whatsapp/crea_template_whatsapp", {
+                id_gdo: idGdo,
+                json_meta: buildPayload(),
+            });
+            idTemplate = creato.newTemplateId;
+            if (!inviaAMeta) {
+                showNotification("Bozza salvata: puoi inviarla a Meta quando è pronta.", { variant: "success" });
+                navigate(`${PERCORSO_TEMPLATES}/nuova-versione?id=${idTemplate}`);
+                return;
+            }
+            const inviato = await ServerCall.put<{ success: boolean; stato?: string; error?: string }>(
+                "/whatsapp/send_modified_template_to_meta",
+                { id_template: idTemplate }
+            );
+            if (!inviato.success) {
+                throw new Error(inviato.error || "Invio a Meta non riuscito");
+            }
+            const rifiutato = inviato.stato === "REJECTED";
+            showNotification(`Template inviato a Meta: ${descriviStato("waTemplate", inviato.stato).etichetta}`, {
+                variant: rifiutato ? "error" : "success",
+            });
+            navigate(`${PERCORSO_TEMPLATES}?id=${idGdo}`);
+        } catch (errore) {
+            const motivo = messaggioErrore(errore, "Salvataggio non riuscito");
+            if (idTemplate) {
+                // La bozza esiste già: si corregge e si reinvia da lì, senza crearne un doppione
+                showNotification(`Bozza salvata, ma Meta non l'ha accettata: ${motivo}`, { variant: "error" });
+                navigate(`${PERCORSO_TEMPLATES}/nuova-versione?id=${idTemplate}`);
+            } else {
+                setErroreServer(motivo);
+            }
+        } finally {
+            setAzione(null);
         }
+    }
+
+    if (!idGdo) {
+        return (
+            <div>
+                <PageHeader title="Crea Template WhatsApp" indietro={{ to: "/whatsapp/gestione-whatsapp-superadmin", etichetta: "Torna alle GDO" }} />
+                <PageError
+                    titolo="GDO non indicata"
+                    motivo="Apri la creazione del template dalla pagina dei template della GDO."
+                />
+            </div>
+        );
     }
 
     return (
         <div>
-            <PageHeader title="Crea Template WhatsApp" description="Configura un template conforme alle linee guida Meta e pronto per l’approvazione." />
+            <PageHeader
+                title="Crea Template WhatsApp"
+                description="Configura un template conforme alle linee guida Meta e pronto per l’approvazione."
+                indietro={{ to: `${PERCORSO_TEMPLATES}?id=${idGdo}`, etichetta: "Torna ai template" }}
+            />
 
-            <form onSubmit={handleSubmit}>
+            <form
+                noValidate
+                onSubmit={(e) => {
+                    e.preventDefault();
+                    salva(false);
+                }}
+            >
                 <Card title="Informazioni generali">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
-                            <FormLabel>Nome template</FormLabel>
+                        <FormField etichetta="Nome template" obbligatorio aiuto="Minuscole/underscore, niente spazi." errore={errors.name}>
                             <FormInput placeholder="es. promo_fidelity_settembre" value={form.name} onChange={(e) => update("name", e.target.value.trim())} />
-                            <HelperLabel>Minuscole/underscore, niente spazi.</HelperLabel>
-                            {errors.name && <ErrorMsg>{errors.name}</ErrorMsg>}
-                        </div>
+                        </FormField>
 
-                        <div>
-                            <FormLabel>Categoria</FormLabel>
+                        <FormField etichetta="Categoria" errore={errors.category}>
                             <FormSelect value={form.category} onChange={(e) => update("category", e.target.value as TemplateCategory)}>
                                 <option value="MARKETING">Marketing</option>
                                 <option value="UTILITY">Utility</option>
@@ -339,11 +376,9 @@ const CreaTemplatesWhatsappSuperAdmin: React.FC<{ onSubmit?: (payload: json_meta
                                 <option value="TRANSACTIONAL">Transactional</option>
                                 <option value="SERVICE">Service</option>
                             </FormSelect>
-                            {errors.category && <ErrorMsg>{errors.category}</ErrorMsg>}
-                        </div>
+                        </FormField>
 
-                        <div>
-                            <FormLabel>Lingua</FormLabel>
+                        <FormField etichetta="Lingua" errore={errors.language}>
                             <FormSelect value={form.language} onChange={(e) => update("language", e.target.value)}>
                                 {langOptions.map((l) => (
                                     <option key={l.code} value={l.code}>
@@ -351,15 +386,13 @@ const CreaTemplatesWhatsappSuperAdmin: React.FC<{ onSubmit?: (payload: json_meta
                                     </option>
                                 ))}
                             </FormSelect>
-                            {errors.language && <ErrorMsg>{errors.language}</ErrorMsg>}
-                        </div>
+                        </FormField>
                     </div>
                 </Card>
 
                 <Card title="Header">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
-                            <FormLabel>Formato</FormLabel>
+                        <FormField etichetta="Formato">
                             <FormSelect value={form.headerFormat} onChange={(e) => update("headerFormat", e.target.value as HeaderFormat)}>
                                 <option value="NONE">Nessuno</option>
                                 <option value="TEXT">Testo</option>
@@ -367,77 +400,81 @@ const CreaTemplatesWhatsappSuperAdmin: React.FC<{ onSubmit?: (payload: json_meta
                                 <option value="DOCUMENT">Documento</option>
                                 <option value="VIDEO">Video</option>
                             </FormSelect>
-                        </div>
+                        </FormField>
 
                         {form.headerFormat === "TEXT" && (
-                            <div className="md:col-span-2">
-                                <FormLabel className="flex items-center">
-                                    Testo header <span className="ml-auto"><Counter value={form.headerText} max={MAX_HEADER_TEXT} /></span>
-                                </FormLabel>
+                            <FormField
+                                className="md:col-span-2"
+                                etichetta="Testo header"
+                                obbligatorio
+                                aiuto={<Counter value={form.headerText} max={MAX_HEADER_TEXT} />}
+                                errore={errors.headerText}
+                            >
                                 <FormInput placeholder="Es. Istanta 2 GDO Suite" value={form.headerText} onChange={(e) => update("headerText", e.target.value)} />
-                                {errors.headerText && <ErrorMsg>{errors.headerText}</ErrorMsg>}
-                            </div>
+                            </FormField>
                         )}
 
                         {["IMAGE", "DOCUMENT", "VIDEO"].includes(form.headerFormat) && (
-                            <div className="md:col-span-2">
-                                <FormLabel>Esempio media (URL/handle)</FormLabel>
+                            <FormField
+                                className="md:col-span-2"
+                                etichetta="Esempio media (URL/handle)"
+                                obbligatorio
+                                aiuto="Per i media header, Meta richiede un esempio per la review."
+                                errore={errors.headerSampleMediaUrl}
+                            >
                                 <FormInput placeholder="https://… (consigliato per approvazione)" value={form.headerSampleMediaUrl || ""} onChange={(e) => update("headerSampleMediaUrl", e.target.value)} />
-                                <HelperLabel>Per i media header, Meta richiede un esempio per la review.</HelperLabel>
-                                {errors.headerSampleMediaUrl && <ErrorMsg>{errors.headerSampleMediaUrl}</ErrorMsg>}
-                            </div>
+                            </FormField>
                         )}
                     </div>
                 </Card>
 
                 <Card title="Body" right={<Counter value={form.bodyText} max={MAX_BODY} />}>
-                    <FormTextarea rows={6} placeholder={`Es. Ciao {{1}}, la tua fidelity è attiva! Sconto del {{2}}% su volantini web.\nValido fino al {{3}}.`} value={form.bodyText} onChange={(e) => update("bodyText", e.target.value)} />
-                    <HelperLabel>
-                        Usa segnaposto sequenziali: <code>{`{{1}}`}</code>, <code>{`{{2}}`}</code>…; niente salti.
-                    </HelperLabel>
-                    {errors.bodyText && <ErrorMsg>{errors.bodyText}</ErrorMsg>}
+                    <FormField
+                        etichetta="Corpo del messaggio"
+                        obbligatorio
+                        aiuto={<>Usa segnaposto sequenziali: <code>{`{{1}}`}</code>, <code>{`{{2}}`}</code>…; niente salti.</>}
+                        errore={errors.bodyText}
+                    >
+                        <FormTextarea rows={6} placeholder={`Es. Ciao {{1}}, la tua fidelity è attiva! Sconto del {{2}}% su volantini web.\nValido fino al {{3}}.`} value={form.bodyText} onChange={(e) => update("bodyText", e.target.value)} />
+                    </FormField>
 
                     {needBodyExamples && (
                         <div className="mt-3">
-                            <FormLabel>Esempi (uno per placeholder)</FormLabel>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                                 {bodyPlaceholders.map((n, idx) => (
-                                    <FormInput
-                                        key={n}
-                                        placeholder={`Esempio per {{${n}}}`}
-                                        value={form.bodyExamples[idx] || ""}
-                                        onChange={(e) => {
-                                            const copy = [...form.bodyExamples];
-                                            copy[idx] = e.target.value;
-                                            update("bodyExamples", copy);
-                                        }}
-                                    />
+                                    <FormField key={n} etichetta={`Esempio per {{${n}}}`} obbligatorio>
+                                        <FormInput
+                                            placeholder={`Esempio per {{${n}}}`}
+                                            value={form.bodyExamples[idx] || ""}
+                                            onChange={(e) => {
+                                                const copy = [...form.bodyExamples];
+                                                copy[idx] = e.target.value;
+                                                update("bodyExamples", copy);
+                                            }}
+                                        />
+                                    </FormField>
                                 ))}
                             </div>
-                            {errors.bodyExamples && <ErrorMsg>{errors.bodyExamples}</ErrorMsg>}
+                            {errors.bodyExamples && <p className="mt-1.5 text-xs text-danger">{errors.bodyExamples}</p>}
                         </div>
                     )}
-
                 </Card>
 
                 <Card title="Footer" right={<Counter value={form.footerText} max={MAX_FOOTER_TEXT} />}>
-                    <FormInput placeholder="Es. Servizio clienti 9-18" value={form.footerText} onChange={(e) => update("footerText", e.target.value)} />
-                    {errors.footerText && <ErrorMsg>{errors.footerText}</ErrorMsg>}
+                    <FormField etichetta="Testo footer" errore={errors.footerText}>
+                        <FormInput placeholder="Es. Servizio clienti 9-18" value={form.footerText} onChange={(e) => update("footerText", e.target.value)} />
+                    </FormField>
                 </Card>
 
                 <Card title="Bottoni">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
-                            <FormLabel>Tipo bottoni</FormLabel>
+                        <FormField etichetta="Tipo bottoni" aiuto={<>Quick Reply <b>oppure</b> CTA (non insieme).</>}>
                             <FormSelect value={form.buttonKind} onChange={(e) => update("buttonKind", e.target.value as ButtonKind)}>
                                 <option value="NONE">Nessuno</option>
                                 <option value="QUICK_REPLY">Quick Reply (max 3)</option>
                                 <option value="CTA">Call-To-Action (max 2)</option>
                             </FormSelect>
-                            <HelperLabel>
-                                Quick Reply <b>oppure</b> CTA (non insieme).
-                            </HelperLabel>
-                        </div>
+                        </FormField>
 
                         {form.buttonKind === "QUICK_REPLY" && (
                             <div className="md:col-span-2">
@@ -451,6 +488,7 @@ const CreaTemplatesWhatsappSuperAdmin: React.FC<{ onSubmit?: (payload: json_meta
                                     {form.quickReplies.map((q, i) => (
                                         <FormInput
                                             key={i}
+                                            aria-label={`Quick reply ${i + 1}`}
                                             placeholder="Es. Vedi offerte"
                                             value={q.text}
                                             onChange={(e) => {
@@ -461,7 +499,7 @@ const CreaTemplatesWhatsappSuperAdmin: React.FC<{ onSubmit?: (payload: json_meta
                                         />
                                     ))}
                                 </div>
-                                {errors.quickReplies && <ErrorMsg>{errors.quickReplies}</ErrorMsg>}
+                                {errors.quickReplies && <p className="mt-1.5 text-xs text-danger">{errors.quickReplies}</p>}
                             </div>
                         )}
 
@@ -478,58 +516,62 @@ const CreaTemplatesWhatsappSuperAdmin: React.FC<{ onSubmit?: (payload: json_meta
 
                                 {form.ctas.map((c, i) => (
                                     <div key={i} className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                        <FormInput
-                                            placeholder="Label bottone"
-                                            value={c.text}
-                                            onChange={(e) => {
-                                                const copy = [...form.ctas];
-                                                copy[i] = { ...copy[i], text: e.target.value } as Cta;
-                                                update("ctas", copy);
-                                            }}
-                                        />
+                                        <FormField etichetta={`Etichetta CTA ${i + 1}`} obbligatorio errore={errors[`cta_${i}`]}>
+                                            <FormInput
+                                                placeholder="Label bottone"
+                                                value={c.text}
+                                                onChange={(e) => {
+                                                    const copy = [...form.ctas];
+                                                    copy[i] = { ...copy[i], text: e.target.value } as Cta;
+                                                    update("ctas", copy);
+                                                }}
+                                            />
+                                        </FormField>
 
-                                        <FormSelect
-                                            value={c.type}
-                                            onChange={(e) => {
-                                                const t = e.target.value as CtaType;
-                                                const copy = [...form.ctas];
-                                                copy[i] = t === "URL" ? ({ type: "URL", text: c.text, url: "" } as Cta) : ({ type: "PHONE_NUMBER", text: c.text, phone_number: "" } as Cta);
-                                                update("ctas", copy);
-                                            }}
-                                        >
-                                            <option value="URL">URL</option>
-                                            <option value="PHONE_NUMBER">Phone</option>
-                                        </FormSelect>
+                                        <FormField etichetta={`Tipo CTA ${i + 1}`}>
+                                            <FormSelect
+                                                value={c.type}
+                                                onChange={(e) => {
+                                                    const t = e.target.value as CtaType;
+                                                    const copy = [...form.ctas];
+                                                    copy[i] = t === "URL" ? ({ type: "URL", text: c.text, url: "" } as Cta) : ({ type: "PHONE_NUMBER", text: c.text, phone_number: "" } as Cta);
+                                                    update("ctas", copy);
+                                                }}
+                                            >
+                                                <option value="URL">URL</option>
+                                                <option value="PHONE_NUMBER">Phone</option>
+                                            </FormSelect>
+                                        </FormField>
 
                                         {c.type === "URL" ? (
-                                            <FormInput
-                                                placeholder="https://example.com/{{1}}"
-                                                value={(c as Extract<Cta, { type: "URL" }>).url || ""}
-                                                onChange={(e) => {
-                                                    const copy = [...form.ctas];
-                                                    copy[i] = { ...(copy[i] as Extract<Cta, { type: "URL" }>), url: e.target.value } as Cta;
-                                                    update("ctas", copy);
-                                                }}
-                                            />
+                                            <FormField etichetta={`URL CTA ${i + 1}`} obbligatorio errore={errors[`cta_${i}_url`]}>
+                                                <FormInput
+                                                    placeholder="https://example.com/{{1}}"
+                                                    value={(c as Extract<Cta, { type: "URL" }>).url || ""}
+                                                    onChange={(e) => {
+                                                        const copy = [...form.ctas];
+                                                        copy[i] = { ...(copy[i] as Extract<Cta, { type: "URL" }>), url: e.target.value } as Cta;
+                                                        update("ctas", copy);
+                                                    }}
+                                                />
+                                            </FormField>
                                         ) : (
-                                            <FormInput
-                                                placeholder="+39055…"
-                                                value={(c as Extract<Cta, { type: "PHONE_NUMBER" }>).phone_number || ""}
-                                                onChange={(e) => {
-                                                    const copy = [...form.ctas];
-                                                    copy[i] = { ...(copy[i] as Extract<Cta, { type: "PHONE_NUMBER" }>), phone_number: e.target.value } as Cta;
-                                                    update("ctas", copy);
-                                                }}
-                                            />
+                                            <FormField etichetta={`Telefono CTA ${i + 1}`} obbligatorio errore={errors[`cta_${i}_phone`]}>
+                                                <FormInput
+                                                    placeholder="+39055…"
+                                                    value={(c as Extract<Cta, { type: "PHONE_NUMBER" }>).phone_number || ""}
+                                                    onChange={(e) => {
+                                                        const copy = [...form.ctas];
+                                                        copy[i] = { ...(copy[i] as Extract<Cta, { type: "PHONE_NUMBER" }>), phone_number: e.target.value } as Cta;
+                                                        update("ctas", copy);
+                                                    }}
+                                                />
+                                            </FormField>
                                         )}
-
-                                        {errors[`cta_${i}`] && <ErrorMsg>{errors[`cta_${i}`]}</ErrorMsg>}
-                                        {errors[`cta_${i}_url`] && <ErrorMsg>{errors[`cta_${i}_url`]}</ErrorMsg>}
-                                        {errors[`cta_${i}_phone`] && <ErrorMsg>{errors[`cta_${i}_phone`]}</ErrorMsg>}
                                     </div>
                                 ))}
 
-                                {errors.ctas && <ErrorMsg>{errors.ctas}</ErrorMsg>}
+                                {errors.ctas && <p className="mt-1.5 text-xs text-danger">{errors.ctas}</p>}
                             </div>
                         )}
                     </div>
@@ -554,20 +596,20 @@ const CreaTemplatesWhatsappSuperAdmin: React.FC<{ onSubmit?: (payload: json_meta
                     />
                 </Card>
 
-                {/* <div className="flex items-center gap-3">
-                    <Button type="submit" variant="primary">
-                        Genera payload
+                {erroreServer && (
+                    <p role="alert" className="mb-4 rounded-control border border-danger/20 bg-danger/5 px-4 py-3 text-sm text-danger">
+                        {erroreServer}
+                    </p>
+                )}
+
+                <div className="flex flex-wrap items-center justify-end gap-3">
+                    <Button type="submit" variant="outline-primary" loading={azione === "bozza"} disabled={azione !== null}>
+                        Salva bozza
                     </Button>
-                    <Button
-                        type="button"
-                        variant="secondary"
-                        onClick={() => {
-                            console.log("payload", buildPayload());
-                        }}
-                    >
-                        Debug payload
+                    <Button type="button" variant="primary" loading={azione === "invio"} disabled={azione !== null} onClick={() => salva(true)}>
+                        Salva e invia a Meta
                     </Button>
-                </div> */}
+                </div>
             </form>
         </div>
     );

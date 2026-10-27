@@ -1,9 +1,9 @@
-import Alert from '@/components/Base/Alert';
 import Button from "@/components/Base/Button";
 import { FormInput } from "@/components/Base/Form";
 import { Dialog } from "@/components/Base/Headless";
-import LoadingIcon from '@/components/Base/LoadingIcon';
 import Lucide from "@/components/Base/Lucide";
+import PageError from '@/components/Base/PageError';
+import Spinner from '@/components/Base/Spinner';
 import EmptyState from '@/components/EmptyState';
 import { useNotification } from "@/context/NotificationContext";
 import { useFetchTipiExport } from '@/query/query';
@@ -120,7 +120,7 @@ const PanelTipiExport = forwardRef<PanelTipiExportRefHandle, TipiExportProps>(({
       >
         <Dialog.Panel className="p-1">
           <Dialog.Title className="px-5 pt-5">
-            <h2 className="mr-auto text-base font-medium">
+            <h2 className="title-card mr-auto">
               Elimina tipo export: <span className="font-semibold text-danger">{selectedTipiExportDaEliminare?.nome}</span>
             </h2>
           </Dialog.Title>
@@ -141,15 +141,10 @@ const PanelTipiExport = forwardRef<PanelTipiExportRefHandle, TipiExportProps>(({
               type="button"
               variant="danger"
               onClick={handleEliminaTipoExport}
-              className="w-24"
-              disabled={mutationEliminazioneTipiExport.isPending}
+              className="min-w-24"
+              loading={mutationEliminazioneTipiExport.isPending}
             >
-              {mutationEliminazioneTipiExport.isPending ? (
-                <div className="flex items-center justify-center">
-                  <LoadingIcon icon="oval" className="w-4 h-4 mr-2" />
-                  Elimino...
-                </div>
-              ) : "Elimina"}
+              Elimina
             </Button>
           </Dialog.Footer>
         </Dialog.Panel>
@@ -195,8 +190,8 @@ const PanelTipiExport = forwardRef<PanelTipiExportRefHandle, TipiExportProps>(({
               {/* Stati loading, error e empty */}
               {tipiExport.isLoading && (
                 <div className="flex justify-center items-center py-16">
-                  <div className="text-center">
-                    <LoadingIcon icon="tail-spin" className="w-8 h-8 mx-auto mb-4" />
+                  <div role="status" className="text-center">
+                    <Spinner size="lg" decorativo className="mx-auto mb-4" />
                     <div className="text-slate-600 font-medium">Caricamento tipi export...</div>
                     <div className="text-slate-500 text-sm mt-1">Attendere prego</div>
                   </div>
@@ -205,13 +200,12 @@ const PanelTipiExport = forwardRef<PanelTipiExportRefHandle, TipiExportProps>(({
 
               {tipiExport.isError && (
                 <div className="p-5">
-                  <Alert variant="danger" className="flex items-center">
-                    <Lucide icon="TriangleAlert" className="w-6 h-6 mr-3" />
-                    <div>
-                      <div className="font-medium">Errore durante il caricamento</div>
-                      <div className="mt-1">Non è stato possibile caricare i tipi export. Riprova più tardi.</div>
-                    </div>
-                  </Alert>
+                  <PageError
+                    compatta
+                    titolo="Tipi di export non caricati"
+                    motivo={(tipiExport.error as Error)?.message || "Non è stato possibile caricare i tipi export."}
+                    onRiprova={() => tipiExport.refetch()}
+                  />
                 </div>
               )}
 
@@ -314,8 +308,9 @@ const PanelTipiExport = forwardRef<PanelTipiExportRefHandle, TipiExportProps>(({
                                   size="sm"
                                   onClick={() => handleAperturaModaleEliminazione(tipo)}
                                   className="hover:bg-danger/5"
+                                  aria-label={`Elimina tipo di export ${tipo.nome ?? ""}`.trim()}
                                 >
-                                  <Lucide icon="Trash2" className="w-4 h-4" />
+                                  <Lucide icon="Trash2" aria-hidden="true" className="w-4 h-4" />
                                 </Button>
                               </div>
                             </td>

@@ -1,6 +1,8 @@
 import Button from "@/components/Base/Button";
 import { FormSwitch } from "@/components/Base/Form";
 import Lucide from "@/components/Base/Lucide";
+import PageError from "@/components/Base/PageError";
+import Spinner from "@/components/Base/Spinner";
 import { useNotification } from "@/context/NotificationContext";
 import { usePermissionContext } from "@/context/PermissionContext";
 import { useFetchFunzionalita, useSaveFunzionalita } from "@/query/query";
@@ -26,7 +28,7 @@ export default function PanelFunzionalita() {
   const { hasPermission } = usePermissionContext();
   const puoModificare = hasPermission("impostazioni.modifica_generali");
 
-  const { data, isLoading, isError } = useFetchFunzionalita();
+  const { data, isLoading, isError, error, refetch } = useFetchFunzionalita();
   const { mutate: salva, isPending: isSaving } = useSaveFunzionalita();
 
   const [valori, setValori] = useState<Funzionalita>({ momenti: false, menabo: false });
@@ -54,19 +56,20 @@ export default function PanelFunzionalita() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-8 text-slate-400">
-        <Lucide icon="Loader" className="w-5 h-5 animate-spin mr-2" />
-        Caricamento…
+      <div className="flex items-center justify-center py-8">
+        <Spinner etichetta="Caricamento funzionalità…" />
       </div>
     );
   }
 
   if (isError) {
     return (
-      <div className="flex items-center gap-2 py-4 text-danger">
-        <Lucide icon="AlertTriangle" className="w-4 h-4" />
-        Impossibile caricare le funzionalità della GDO.
-      </div>
+      <PageError
+        compatta
+        titolo="Funzionalità non caricate"
+        motivo={(error as Error)?.message || "Impossibile caricare le funzionalità della GDO."}
+        onRiprova={() => refetch()}
+      />
     );
   }
 
@@ -92,18 +95,9 @@ export default function PanelFunzionalita() {
 
       {puoModificare && (
         <div className="flex justify-end pt-2 border-t border-slate-200/80">
-          <Button type="button" variant="primary" size="sm" onClick={handleSave} disabled={!isDirty || isSaving}>
-            {isSaving ? (
-              <>
-                <Lucide icon="Loader" className="w-4 h-4 mr-1 animate-spin" />
-                Salvataggio…
-              </>
-            ) : (
-              <>
-                <Lucide icon="Save" className="w-4 h-4 mr-1" />
-                Salva
-              </>
-            )}
+          <Button type="button" variant="primary" size="sm" onClick={handleSave} disabled={!isDirty} loading={isSaving}>
+            {!isSaving && <Lucide icon="Save" aria-hidden="true" className="w-4 h-4 mr-1" />}
+            Salva
           </Button>
         </div>
       )}

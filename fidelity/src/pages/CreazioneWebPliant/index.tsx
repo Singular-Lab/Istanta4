@@ -1066,29 +1066,36 @@ const CreazioneWebPliant: React.FC = () => {
                         variant="outline-secondary"
                         className="p-2 h-9 w-9"
                         onClick={() => editorActions.setCanvasScale(Math.max(0.25, editorState.canvasScale - 0.1))}
+                        aria-label="Riduci zoom"
                       >
-                        <Lucide is_color_theme icon="Minus" className="w-4 h-4" />
+                        <Lucide is_color_theme icon="Minus" aria-hidden="true" className="w-4 h-4" />
                       </Button>
-                      <div className="text-sm text-slate-500 w-12 text-center" onClick={() => editorActions.setCanvasScale(1)}>
+                      <button
+                        type="button"
+                        className="text-sm text-slate-500 w-12 text-center"
+                        onClick={() => editorActions.setCanvasScale(1)}
+                        aria-label={`Zoom ${Math.round(editorState.canvasScale * 100)}%: ripristina al 100%`}
+                      >
                         {Math.round(editorState.canvasScale * 100)}%
-                      </div>
+                      </button>
                       <Button
                         variant="outline-secondary"
                         className="p-2 h-9 w-9"
                         onClick={() => editorActions.setCanvasScale(Math.min(2, editorState.canvasScale + 0.1))}
+                        aria-label="Aumenta zoom"
                       >
-                        <Lucide is_color_theme icon="Plus" className="w-4 h-4" />
+                        <Lucide is_color_theme icon="Plus" aria-hidden="true" className="w-4 h-4" />
                       </Button>
                     </div>
 
                     <div className="h-6 w-px bg-slate-200 dark:bg-darkmode-600"></div>
 
                     <div className="flex items-center space-x-1">
-                      <Button ref={undoButtonRef} variant="outline-secondary" className="p-2 h-9 w-9" onClick={undo} disabled={!canUndo}>
-                        <Lucide is_color_theme icon="Undo2" className="w-4 h-4" />
+                      <Button ref={undoButtonRef} variant="outline-secondary" className="p-2 h-9 w-9" onClick={undo} disabled={!canUndo} aria-label="Annulla">
+                        <Lucide is_color_theme icon="Undo2" aria-hidden="true" className="w-4 h-4" />
                       </Button>
-                      <Button ref={redoButtonRef} variant="outline-secondary" className="p-2 h-9 w-9" onClick={redo} disabled={!canRedo}>
-                        <Lucide is_color_theme icon="Redo2" className="w-4 h-4" />
+                      <Button ref={redoButtonRef} variant="outline-secondary" className="p-2 h-9 w-9" onClick={redo} disabled={!canRedo} aria-label="Ripeti">
+                        <Lucide is_color_theme icon="Redo2" aria-hidden="true" className="w-4 h-4" />
                       </Button>
                     </div>
 
@@ -1245,19 +1252,22 @@ const CreazioneWebPliant: React.FC = () => {
                       <div className="p-4">
                         <div className="space-y-1.5">
                           {dataWorkspace?.webpliant?.map((pagina, index) => (
-                            <div
+                            <button
+                              type="button"
                               key={pagina.id}
                               className={clsx(
-                                "flex items-center justify-between p-2.5 rounded-lg cursor-pointer transition-colors duration-150",
+                                "w-full text-left flex items-center justify-between p-2.5 rounded-lg cursor-pointer transition-colors duration-150",
                                 editorState.selectedPageIndex === index
                                   ? "bg-primary/10 text-primary font-semibold"
                                   : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-darkmode-600"
                               )}
                               onClick={() => editorActions.selectPage(index)}
+                              aria-current={editorState.selectedPageIndex === index ? "page" : undefined}
                             >
                               <div className="flex items-center space-x-2.5">
                                 <Lucide
                                   icon={pagina.tipo === TIPO_PAGINA.HOMEPAGE ? "LayoutDashboard" : "FileText"}
+                                  aria-hidden="true"
                                   className="w-4 h-4"
                                 />
                                 <span className="truncate max-w-[140px] text-sm">{pagina.nome}</span>
@@ -1265,7 +1275,7 @@ const CreazioneWebPliant: React.FC = () => {
                               <span className="text-xs font-medium px-2 py-1 bg-slate-100 dark:bg-darkmode-600 text-slate-500 dark:text-slate-400 rounded-md">
                                 {pagina.tipo}
                               </span>
-                            </div>
+                            </button>
                           ))}
                         </div>
 

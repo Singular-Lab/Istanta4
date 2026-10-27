@@ -29,7 +29,10 @@ type AppColorKey =
   | "slate.300"
   | "slate.400"
   | "slate.500"
-  | "slate.600";
+  | "slate.600"
+  | "slate.700"
+  | "slate.800"
+  | "slate.900";
 
 const CSS_COLOR_VARIABLES: Partial<Record<AppColorKey, string>> = {
   "theme.1": "--color-theme-1",
@@ -64,6 +67,9 @@ const STATIC_COLORS: Partial<Record<AppColorKey, string>> = {
   "slate.400": "#94a3b8",
   "slate.500": "#64748b",
   "slate.600": "#475569",
+  "slate.700": "#334155",
+  "slate.800": "#1e293b",
+  "slate.900": "#0f172a",
 };
 
 const getColor = (colorKey: AppColorKey, opacity: number = 1) => {

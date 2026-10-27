@@ -1370,16 +1370,18 @@ export default function MenaboCanvas({
                         disabled={!canUndo}
                         className="flex h-8 w-8 items-center justify-center text-slate-500 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-30 active:scale-[0.98] dark:text-slate-300 dark:hover:bg-darkmode-500"
                         title="Annulla (Ctrl+Z)"
+                        aria-label="Annulla (Ctrl+Z)"
                     >
-                        <Lucide icon="Undo2" className="h-3.5 w-3.5" />
+                        <Lucide aria-hidden="true" icon="Undo2" className="h-3.5 w-3.5" />
                     </button>
                     <button
                         onClick={redo}
                         disabled={!canRedo}
                         className="flex h-8 w-8 items-center justify-center border-l border-slate-200 text-slate-500 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-30 active:scale-[0.98] dark:border-darkmode-400 dark:text-slate-300 dark:hover:bg-darkmode-500"
                         title="Ripristina (Ctrl+Y)"
+                        aria-label="Ripristina (Ctrl+Y)"
                     >
-                        <Lucide icon="Redo2" className="h-3.5 w-3.5" />
+                        <Lucide aria-hidden="true" icon="Redo2" className="h-3.5 w-3.5" />
                     </button>
                 </div>
 
@@ -1443,8 +1445,9 @@ export default function MenaboCanvas({
                         onClick={() => changeZoom(-0.1)}
                         className="flex h-8 w-8 items-center justify-center text-slate-500 transition-colors hover:bg-slate-50 active:scale-[0.98] dark:text-slate-300 dark:hover:bg-darkmode-500"
                         title="Riduci zoom (Ctrl+-)"
+                        aria-label="Riduci zoom (Ctrl+-)"
                     >
-                        <Lucide icon="Minus" className="h-3.5 w-3.5" />
+                        <Lucide aria-hidden="true" icon="Minus" className="h-3.5 w-3.5" />
                     </button>
                     <button
                         onClick={resetZoom}
@@ -1457,8 +1460,9 @@ export default function MenaboCanvas({
                         onClick={() => changeZoom(0.1)}
                         className="flex h-8 w-8 items-center justify-center text-slate-500 transition-colors hover:bg-slate-50 active:scale-[0.98] dark:text-slate-300 dark:hover:bg-darkmode-500"
                         title="Aumenta zoom (Ctrl++)"
+                        aria-label="Aumenta zoom (Ctrl++)"
                     >
-                        <Lucide icon="Plus" className="h-3.5 w-3.5" />
+                        <Lucide aria-hidden="true" icon="Plus" className="h-3.5 w-3.5" />
                     </button>
                 </div>
 
@@ -1469,8 +1473,9 @@ export default function MenaboCanvas({
                         onClick={decreasePageCount}
                         className="flex h-6 w-6 items-center justify-center rounded text-slate-500 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-30 dark:text-slate-300 dark:hover:bg-darkmode-500"
                         title="Rimuovi ultima pagina"
+                        aria-label="Rimuovi ultima pagina"
                     >
-                        <Lucide icon="ChevronLeft" className="h-3.5 w-3.5" />
+                        <Lucide aria-hidden="true" icon="ChevronLeft" className="h-3.5 w-3.5" />
                     </button>
                     <span className="min-w-[58px] text-center text-xs font-medium text-slate-600 dark:text-slate-300">
                         {effectivePageCount} {effectivePageCount === 1 ? "pagina" : "pagine"}
@@ -1483,8 +1488,9 @@ export default function MenaboCanvas({
                         }}
                         className="flex h-6 w-6 items-center justify-center rounded text-slate-500 transition-colors hover:bg-slate-50 active:scale-[0.98] dark:text-slate-300 dark:hover:bg-darkmode-500"
                         title="Aggiungi pagina"
+                        aria-label="Aggiungi pagina"
                     >
-                        <Lucide icon="ChevronRight" className="h-3.5 w-3.5" />
+                        <Lucide aria-hidden="true" icon="ChevronRight" className="h-3.5 w-3.5" />
                     </button>
                 </div>
 
@@ -1516,8 +1522,9 @@ export default function MenaboCanvas({
                             : "border-slate-200 bg-white text-slate-400 dark:border-darkmode-400 dark:bg-darkmode-600",
                     )}
                     title="Elimina selezionato (Canc)"
+                    aria-label="Elimina selezionato (Canc)"
                 >
-                    <Lucide icon="Trash2" className="h-3.5 w-3.5" />
+                    <Lucide aria-hidden="true" icon="Trash2" className="h-3.5 w-3.5" />
                 </button>
 
             </div>
@@ -1612,10 +1619,11 @@ export default function MenaboCanvas({
                                                                 type="button"
                                                                 onClick={() => removePageLabel(pageIdx)}
                                                                 title="Rimuovi etichetta e sblocca pagina"
+                                                                aria-label="Rimuovi etichetta e sblocca pagina"
                                                                 className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded transition-colors hover:bg-slate-100 dark:hover:bg-darkmode-500"
                                                                 style={{ color: pageLabelColor }}
                                                             >
-                                                                <Lucide icon="X" className="h-2.5 w-2.5" />
+                                                                <Lucide aria-hidden="true" icon="X" className="h-2.5 w-2.5" />
                                                             </button>
                                                         </>
                                                     )}
@@ -1633,9 +1641,10 @@ export default function MenaboCanvas({
                                                                     }
                                                                 }}
                                                                 title="Elimina questa pagina"
+                                                                aria-label="Elimina questa pagina"
                                                                 className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded text-slate-400 transition-colors hover:bg-danger/10 hover:text-danger dark:hover:bg-danger/20"
                                                             >
-                                                                <Lucide icon="Trash2" className="h-2.5 w-2.5" />
+                                                                <Lucide aria-hidden="true" icon="Trash2" className="h-2.5 w-2.5" />
                                                             </button>
                                                         </>
                                                     )}
@@ -1648,9 +1657,10 @@ export default function MenaboCanvas({
                                                         type="button"
                                                         onClick={e => { e.stopPropagation(); insertPageAt(pageIdx); }}
                                                         title="Inserisci pagina a sinistra"
+                                                        aria-label="Inserisci pagina a sinistra"
                                                         className="absolute -left-5 z-20 flex h-9 w-9 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-400 shadow-md opacity-0 transition-all duration-150 hover:border-primary hover:text-primary hover:scale-110 hover:shadow-lg group-hover/page:opacity-100 dark:border-darkmode-400 dark:bg-darkmode-600 dark:text-slate-400 dark:hover:border-primary dark:hover:text-primary"
                                                     >
-                                                        <Lucide icon="Plus" className="h-4 w-4" />
+                                                        <Lucide aria-hidden="true" icon="Plus" className="h-4 w-4" />
                                                     </button>
 
                                                 <div
@@ -1839,6 +1849,7 @@ export default function MenaboCanvas({
                                                                                                 removePlacedLabel(item.id);
                                                                                             }}
                                                                                             title="Rimuovi"
+                                                                                            aria-label="Rimuovi"
                                                                                             style={{
                                                                                                 display: "flex",
                                                                                                 alignItems: "center",
@@ -1854,7 +1865,7 @@ export default function MenaboCanvas({
                                                                                                 padding: 0,
                                                                                             }}
                                                                                         >
-                                                                                            <Lucide icon="X" className="h-3 w-3" />
+                                                                                            <Lucide aria-hidden="true" icon="X" className="h-3 w-3" />
                                                                                         </button>
                                                                                     )}
                                                                                 </div>
@@ -1957,6 +1968,8 @@ export default function MenaboCanvas({
                                                             onClick={e => { e.stopPropagation(); if (isNotesOpen) closeNotesPanel(pageIdx); else setOpenNotesPage(pageIdx); }}
                                                             onPointerDown={e => e.stopPropagation()}
                                                             title={isNotesOpen ? "Chiudi note" : `${notes.length} ${notes.length === 1 ? "nota" : "note"} — clicca per aprire`}
+                                                            aria-label={isNotesOpen ? "Chiudi note" : `Apri ${notes.length} ${notes.length === 1 ? "nota" : "note"} della pagina`}
+                                                            aria-expanded={isNotesOpen}
                                                             className={clsx(
                                                                 "absolute z-40 flex items-center gap-1.5 rounded-t-xl border border-b-0 px-2.5 py-1 shadow-[0_-10px_22px_-16px_rgba(180,83,9,0.85)] transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70",
                                                                 isNotesOpen
@@ -1966,7 +1979,7 @@ export default function MenaboCanvas({
                                                             style={{ right: 12, top: 0, transform: "translateY(-100%)" }}
                                                         >
                                                             <Lucide icon="StickyNote" className="h-3.5 w-3.5" />
-                                                            <span className="text-[11px] font-bold leading-none tabular-nums">
+                                                            <span className="text-2xs font-bold leading-none tabular-nums">
                                                                 {notes.length}
                                                             </span>
                                                         </button>
@@ -1994,12 +2007,12 @@ export default function MenaboCanvas({
                                                                                 Note pagina {pageIdx + 1}
                                                                             </span>
                                                                             {notes.length > 0 && (
-                                                                                <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold leading-none text-amber-700 ring-1 ring-amber-200/70 dark:bg-amber-500/15 dark:text-amber-200 dark:ring-amber-400/25">
+                                                                                <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-3xs font-bold leading-none text-amber-700 ring-1 ring-amber-200/70 dark:bg-amber-500/15 dark:text-amber-200 dark:ring-amber-400/25">
                                                                                     {notes.length}
                                                                                 </span>
                                                                             )}
                                                                         </div>
-                                                                        <p className="mt-0.5 text-[10px] leading-snug text-slate-400 dark:text-slate-500">
+                                                                        <p className="mt-0.5 text-3xs leading-snug text-slate-400 dark:text-slate-500">
                                                                             Promemoria interni, esclusi dagli export.
                                                                         </p>
                                                                     </div>
@@ -2008,19 +2021,20 @@ export default function MenaboCanvas({
                                                                     type="button"
                                                                     onClick={() => closeNotesPanel(pageIdx)}
                                                                     title="Chiudi"
+                                                                    aria-label="Chiudi"
                                                                     className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-white/80 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 dark:text-slate-500 dark:hover:bg-darkmode-600 dark:hover:text-slate-200"
                                                                 >
-                                                                    <Lucide icon="X" className="h-3.5 w-3.5" />
+                                                                    <Lucide aria-hidden="true" icon="X" className="h-3.5 w-3.5" />
                                                                 </button>
                                                             </div>
                                                             <div className="flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top_left,rgba(251,191,36,0.10),transparent_42%)] p-3">
                                                                 {notes.length === 0 ? (
                                                                     <div className="rounded-xl border border-dashed border-amber-200 bg-amber-50/60 px-3 py-5 text-center dark:border-amber-500/25 dark:bg-amber-500/10">
                                                                         <Lucide icon="PencilLine" className="mx-auto mb-2 h-4 w-4 text-amber-500 dark:text-amber-300" />
-                                                                        <p className="text-[11px] font-medium text-slate-500 dark:text-slate-300">
+                                                                        <p className="text-2xs font-medium text-slate-500 dark:text-slate-300">
                                                                             Nessuna nota per questa pagina.
                                                                         </p>
-                                                                        <p className="mt-0.5 text-[10px] text-slate-400 dark:text-slate-500">
+                                                                        <p className="mt-0.5 text-3xs text-slate-400 dark:text-slate-500">
                                                                             Aggiungi un promemoria operativo.
                                                                         </p>
                                                                     </div>
@@ -2030,7 +2044,7 @@ export default function MenaboCanvas({
                                                                             <div key={note.id} className="group/note relative overflow-hidden rounded-xl border border-amber-100 bg-white p-2.5 shadow-[0_10px_28px_-22px_rgba(146,64,14,0.65)] transition-all duration-200 hover:-translate-y-0.5 hover:border-amber-200 hover:shadow-[0_16px_34px_-24px_rgba(146,64,14,0.75)] dark:border-amber-500/15 dark:bg-darkmode-600">
                                                                                 <span className="absolute inset-y-3 left-0 w-1 rounded-r-full bg-amber-300/80 dark:bg-amber-300/50" />
                                                                                 <div className="mb-2 flex items-center justify-between gap-2 pl-1">
-                                                                                    <span className="flex items-center gap-1.5 text-[10px] font-semibold tracking-wide text-slate-500 dark:text-slate-300">
+                                                                                    <span className="flex items-center gap-1.5 text-3xs font-semibold tracking-wide text-slate-500 dark:text-slate-300">
                                                                                         <span className="h-1.5 w-1.5 rounded-full bg-amber-400 dark:bg-amber-300" />
                                                                                         Nota {noteIdx + 1}
                                                                                     </span>
@@ -2038,9 +2052,10 @@ export default function MenaboCanvas({
                                                                                         type="button"
                                                                                         onClick={() => removePageNote(pageIdx, note.id)}
                                                                                         title="Elimina nota"
+                                                                                        aria-label="Elimina nota"
                                                                                         className="flex h-6 w-6 items-center justify-center rounded-lg text-slate-300 opacity-70 transition-all hover:bg-red-50 hover:text-red-500 hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-200 dark:text-slate-500 dark:hover:bg-red-500/10 dark:hover:text-red-300"
                                                                                     >
-                                                                                        <Lucide icon="Trash2" className="h-3.5 w-3.5" />
+                                                                                        <Lucide aria-hidden="true" icon="Trash2" className="h-3.5 w-3.5" />
                                                                                     </button>
                                                                                 </div>
                                                                                 <FormTextarea
@@ -2076,9 +2091,10 @@ export default function MenaboCanvas({
                                                         type="button"
                                                         onClick={e => { e.stopPropagation(); insertPageAt(pageIdx + 1); }}
                                                         title="Inserisci pagina a destra"
+                                                        aria-label="Inserisci pagina a destra"
                                                         className="absolute -right-5 z-20 flex h-9 w-9 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-400 shadow-md opacity-0 transition-all duration-150 hover:border-primary hover:text-primary hover:scale-110 hover:shadow-lg group-hover/page:opacity-100 dark:border-darkmode-400 dark:bg-darkmode-600 dark:text-slate-400 dark:hover:border-primary dark:hover:text-primary"
                                                     >
-                                                        <Lucide icon="Plus" className="h-4 w-4" />
+                                                        <Lucide aria-hidden="true" icon="Plus" className="h-4 w-4" />
                                                     </button>
                                                 </div>
 
@@ -2121,8 +2137,10 @@ export default function MenaboCanvas({
                                         onClick={handleCopiaCodici}
                                         disabled={selectedPreviewItems.every(item => !item.codice || item.codice === "—")}
                                         title={codiciCopiati ? "Codici copiati" : "Copia tutti i codici"}
+                                        aria-label={codiciCopiati ? "Codici copiati" : "Copia tutti i codici"}
                                     >
                                         <Lucide
+                                            aria-hidden="true"
                                             icon={codiciCopiati ? "Check" : "Copy"}
                                             className={clsx("h-3.5 w-3.5", codiciCopiati && "text-green-500")}
                                         />
@@ -2132,8 +2150,9 @@ export default function MenaboCanvas({
                                         onClick={() => setIsPreviewPanelOpen(false)}
                                         className="flex h-7 w-7 items-center justify-center rounded text-slate-400 transition-colors hover:bg-white hover:text-slate-600 active:scale-[0.98] dark:hover:bg-darkmode-600 dark:hover:text-slate-200"
                                         title="Nascondi anteprima"
+                                        aria-label="Nascondi anteprima"
                                     >
-                                        <Lucide icon="PanelRightClose" className="h-3.5 w-3.5" />
+                                        <Lucide aria-hidden="true" icon="PanelRightClose" className="h-3.5 w-3.5" />
                                     </button>
                                 </div>
                             </div>
@@ -2212,7 +2231,7 @@ export default function MenaboCanvas({
                                                                 return (
                                                                     <span
                                                                         key={campo.nome_campo}
-                                                                        className="inline-flex max-w-full items-center gap-1 rounded border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-500 dark:border-darkmode-400 dark:bg-darkmode-600 dark:text-slate-300"
+                                                                        className="inline-flex max-w-full items-center gap-1 rounded border border-slate-200 bg-white px-2 py-1 text-2xs font-medium text-slate-500 dark:border-darkmode-400 dark:bg-darkmode-600 dark:text-slate-300"
                                                                         title={`${campo.label}: ${valore}`}
                                                                     >
                                                                         <span className="text-slate-400">{campo.label}</span>
@@ -2236,8 +2255,9 @@ export default function MenaboCanvas({
                                 onClick={() => setIsPreviewPanelOpen(true)}
                                 className="flex h-7 w-7 items-center justify-center rounded text-slate-400 transition-colors hover:bg-white hover:text-slate-600 active:scale-[0.98] dark:hover:bg-darkmode-600 dark:hover:text-slate-200"
                                 title="Mostra anteprima"
+                                aria-label="Mostra anteprima"
                             >
-                                <Lucide icon="PanelRightOpen" className="h-3.5 w-3.5" />
+                                <Lucide aria-hidden="true" icon="PanelRightOpen" className="h-3.5 w-3.5" />
                             </button>
                             <div
                                 className="mt-3 h-8 w-1 rounded-full"

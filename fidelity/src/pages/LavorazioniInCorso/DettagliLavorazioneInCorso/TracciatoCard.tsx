@@ -6,8 +6,8 @@ import type { TracciatiResponseDTO } from "../../../../server/core/dto";
 import Button from "../../../components/Base/Button";
 import { FormInput } from "../../../components/Base/Form";
 import { Dialog } from "../../../components/Base/Headless";
-import LoadingIcon from "../../../components/Base/LoadingIcon";
 import Lucide from "../../../components/Base/Lucide";
+import Spinner from "../../../components/Base/Spinner";
 import { usePermissionContext } from "../../../context/PermissionContext";
 import { PERMISSIONS } from "../../../constants/permissions";
 
@@ -230,8 +230,9 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
                                 <div className="flex flex-col items-end gap-1">
                                     <div className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-white/70">
                                         {isLoadingState ? (
-                                            <LoadingIcon
-                                                icon="spinning-circles"
+                                            <Spinner
+                                                decorativo
+                                                size="sm"
                                                 className={`w-3 h-3 ${statusStyle.textColor}`}
                                             />
                                         ) : (
@@ -241,7 +242,7 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
                                             />
                                         )}
                                         <span
-                                            className={`text-[11px] font-medium ${statusStyle.textColor}`}
+                                            className={`text-2xs font-medium ${statusStyle.textColor}`}
                                         >
                                             {getStatusLabel(statusData.stato)}
                                         </span>
@@ -309,7 +310,7 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
 
                                     return (
                                         <div className="space-y-1">
-                                            <pre className="whitespace-pre-wrap break-words font-mono text-[11px] bg-danger/5 border border-danger/20 rounded p-2">
+                                            <pre className="whitespace-pre-wrap break-words font-mono text-2xs bg-danger/5 border border-danger/20 rounded p-2">
                                                 {isExpanded ? fullError : shortError}
                                             </pre>
                                             {isLong && (
@@ -320,7 +321,7 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
                                                             isExpanded ? null : tracciato.id
                                                         )
                                                     }
-                                                    className="text-[11px] font-medium text-danger underline underline-offset-2"
+                                                    className="text-2xs font-medium text-danger underline underline-offset-2"
                                                 >
                                                     {isExpanded ? "Mostra meno" : "Mostra tutto"}
                                                 </button>
@@ -334,6 +335,7 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
 
                     <div className="flex flex-col items-end gap-2">
                         <button
+                            type="button"
                             onClick={() => {
                                 if (promoStorico) {
                                     navigate(
@@ -347,19 +349,23 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
                             }}
                             className="flex-shrink-0 w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-800 transition-all duration-200 flex items-center justify-center group-hover:scale-105"
                             title="Anteprima tracciato"
+                            aria-label="Anteprima tracciato"
                         >
-                            <Lucide icon="Eye" className="w-4 h-4" />
+                            <Lucide icon="Eye" aria-hidden="true" className="w-4 h-4" />
                         </button>
 
                         <button
+                            type="button"
                             onClick={() => handleDownload(tracciato)}
                             className="flex-shrink-0 w-9 h-9 rounded-full bg-primary/10 hover:bg-primary text-primary hover:text-white transition-all duration-200 flex items-center justify-center group-hover:scale-110"
                             title="Scarica file"
+                            aria-label="Scarica file"
                         >
-                            <Lucide icon="Download" className="w-4 h-4" />
+                            <Lucide icon="Download" aria-hidden="true" className="w-4 h-4" />
                         </button>
                         {!promoStorico && (
                             <button
+                                type="button"
                                 onClick={() => {
                                     setNuovoNome(tracciato.nome);
                                     rinominaMutation.reset();
@@ -367,19 +373,22 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
                                 }}
                                 className="flex-shrink-0 w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-800 transition-all duration-200 flex items-center justify-center group-hover:scale-105"
                                 title="Rinomina tracciato"
+                                aria-label="Rinomina tracciato"
                             >
-                                <Lucide icon="Pencil" className="w-4 h-4" />
+                                <Lucide icon="Pencil" aria-hidden="true" className="w-4 h-4" />
                             </button>
                         )}
                         {(canDeleteTracciato && !promoStorico) && (
                             <button
+                                type="button"
                                 onClick={() => {
                                     setShowDialogEliminazioneDefinitiva(true);
                                 }}
                                 className="flex-shrink-0 w-9 h-9 rounded-full bg-danger/10 hover:bg-danger text-danger hover:text-white transition-all duration-200 flex items-center justify-center group-hover:scale-110"
                                 title="Elimina tracciato"
+                                aria-label="Elimina tracciato"
                             >
-                                <Lucide icon="Trash2" className="w-4 h-4" />
+                                <Lucide icon="Trash2" aria-hidden="true" className="w-4 h-4" />
                             </button>
                         )}
                     </div>
@@ -397,7 +406,7 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
                     <Dialog.Title>
                         <div className="flex items-center gap-2">
                             <Lucide icon="Trash2" className="w-5 h-5 text-danger" />
-                            <h2 className="text-base font-medium">Elimina tracciato</h2>
+                            <h2 className="title-section">Elimina tracciato</h2>
                         </div>
                     </Dialog.Title>
                     <Dialog.Description>
@@ -430,19 +439,10 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
                                 setShowDialogEliminazioneDefinitiva(false);
                                 onDeleteTracciato(tracciato);
                             }}
-                            disabled={isDeletingTracciato}
+                            loading={isDeletingTracciato}
                         >
-                            {isDeletingTracciato ? (
-                                <>
-                                    <Lucide icon="Loader" className="w-4 h-4 animate-spin mr-2" />
-                                    Eliminazione...
-                                </>
-                            ) : (
-                                <>
-                                    <Lucide icon="Trash2" className="w-4 h-4 mr-2" />
-                                    Elimina
-                                </>
-                            )}
+                            {!isDeletingTracciato && <Lucide icon="Trash2" aria-hidden="true" className="w-4 h-4 mr-2" />}
+                            Elimina
                         </Button>
                     </Dialog.Footer>
                 </Dialog.Panel>
@@ -465,13 +465,14 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
                         <Dialog.Title>
                             <div className="flex items-center gap-2">
                                 <Lucide icon="Pencil" className="w-5 h-5 text-primary" />
-                                <h2 className="text-base font-medium">Rinomina tracciato</h2>
+                                <h2 className="title-section">Rinomina tracciato</h2>
                             </div>
                         </Dialog.Title>
                         <Dialog.Description>
                             <div className="py-2 text-sm text-slate-600 space-y-2">
                                 <FormInput
                                     type="text"
+                                    aria-label="Nuovo nome del tracciato"
                                     value={nuovoNome}
                                     maxLength={255}
                                     autoFocus
@@ -500,6 +501,7 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
                                 variant="primary"
                                 className="w-24"
                                 disabled={rinominaMutation.isPending || !nuovoNome.trim()}
+                                loading={rinominaMutation.isPending}
                             >
                                 Salva
                             </Button>

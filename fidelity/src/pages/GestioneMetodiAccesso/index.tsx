@@ -1,7 +1,8 @@
 import Button from "@/components/Base/Button";
-import LoadingIcon from "@/components/Base/LoadingIcon";
 import Lucide from "@/components/Base/Lucide";
+import PageError from "@/components/Base/PageError";
 import PageHeader from "@/components/Base/PageHeader";
+import Spinner from "@/components/Base/Spinner";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import EmptyState from "@/components/EmptyState";
 import withSessionCheck from "@/components/SessionChecker";
@@ -160,8 +161,8 @@ function GestioneMetodiAccesso() {
       />
 
       {loading ? (
-        <div className="box box--stacked mt-6 p-8 flex items-center gap-3 text-slate-500">
-          <Lucide icon="Loader2" className="w-5 h-5 animate-spin" />
+        <div role="status" className="box box--stacked mt-6 p-8 flex items-center gap-3 text-slate-500">
+          <Spinner decorativo />
           Verifica permessi in corso...
         </div>
       ) : !canAccess ? (
@@ -268,16 +269,17 @@ function GestioneMetodiAccesso() {
           )}
 
           {isLoading ? (
-            <div className="box box--stacked p-10 flex items-center justify-center gap-3 text-slate-500">
-              <LoadingIcon icon="oval" className="w-5 h-5" />
+            <div role="status" className="box box--stacked p-10 flex items-center justify-center gap-3 text-slate-500">
+              <Spinner decorativo />
               Caricamento metodi di accesso...
             </div>
           ) : isError ? (
-            <div className="box box--stacked flex flex-col items-center gap-3 p-10 text-center">
-              <Lucide icon="TriangleAlert" className="h-8 w-8 text-danger" />
-              <div className="text-sm text-slate-600">{messaggioErrore(error, "Impossibile caricare i metodi di accesso")}</div>
-              <Button variant="outline-secondary" size="sm" onClick={() => refetch()}>Riprova</Button>
-            </div>
+            <PageError
+              compatta
+              titolo="Metodi di accesso non caricati"
+              motivo={messaggioErrore(error, "Impossibile caricare i metodi di accesso")}
+              onRiprova={() => refetch()}
+            />
           ) : providers.length === 0 ? (
             <div className="box box--stacked p-6">
               <EmptyState

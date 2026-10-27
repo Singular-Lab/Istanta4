@@ -292,7 +292,7 @@ const NewsTab = () => {
                   {pill.count > 0 && (
                     <span
                       className={clsx(
-                        "inline-flex items-center justify-center rounded-full w-4 h-4 text-[10px] font-semibold",
+                        "inline-flex items-center justify-center rounded-full w-4 h-4 text-3xs font-semibold",
                         newsStatusFilter === pill.value
                           ? "bg-white/20 text-white"
                           : "bg-slate-100 text-slate-500"
@@ -380,11 +380,11 @@ const NewsTab = () => {
                         </div>
                       </div>
                       <div className="flex gap-1.5 shrink-0">
-                        <Button variant="outline-secondary" size="sm" onClick={() => setDialogState({ mode: "edit", news })}>
-                          <Lucide icon="PencilLine" className="w-3.5 h-3.5" />
+                        <Button variant="outline-secondary" size="sm" onClick={() => setDialogState({ mode: "edit", news })} aria-label="Modifica news">
+                          <Lucide aria-hidden="true" icon="PencilLine" className="w-3.5 h-3.5" />
                         </Button>
-                        <Button variant="soft-danger" size="sm" onClick={() => requestDeletion(news)}>
-                          <Lucide icon="Trash2" className="w-3.5 h-3.5" />
+                        <Button variant="soft-danger" size="sm" onClick={() => requestDeletion(news)} aria-label="Elimina news">
+                          <Lucide aria-hidden="true" icon="Trash2" className="w-3.5 h-3.5" />
                         </Button>
                       </div>
                     </div>

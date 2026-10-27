@@ -29,7 +29,7 @@ const TimelineItem: FC<TimelineItemProps> = ({
     <div className={clsx("pb-4", isLast && "pb-0")}>
       <p className="text-sm font-semibold text-slate-800">{title}</p>
       {description && <p className="text-xs text-slate-500 mt-0.5">{description}</p>}
-      <p className="text-[10px] text-slate-400 mt-1">
+      <p className="text-3xs text-slate-400 mt-1">
         {dayjs(timestamp).format("DD MMM YYYY, HH:mm")}
       </p>
     </div>

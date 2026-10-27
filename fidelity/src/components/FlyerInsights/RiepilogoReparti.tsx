@@ -1,6 +1,7 @@
 import Chart from "@/components/Base/Chart";
 import Lucide from "@/components/Base/Lucide";
 import { RiepilogoReparto, RiepilogoSectionConfig } from "@/types/flyerInsights";
+import { COLORI_SEMANTICI } from "@/utils/chartTheme";
 import { getColor } from "@/utils/colors";
 import { resolveColor, formatTooltip } from "@/utils/flyerInsightsHelpers";
 import { selectDarkMode } from "@/stores/darkModeSlice";
@@ -18,7 +19,7 @@ const RiepilogoReparti: FC<Props> = ({ riepilogo, config }) => {
   const { chart, colorStrategy, fields, display, emptyState } = config;
 
   const getChartColor = (sigla: string) => {
-    return colorStrategy ? resolveColor(sigla, colorStrategy).hex : '#64748b';
+    return colorStrategy ? resolveColor(sigla, colorStrategy).hex : COLORI_SEMANTICI.neutro;
   };
 
   const getColorClass = (sigla: string) => {
@@ -89,7 +90,7 @@ const RiepilogoReparti: FC<Props> = ({ riepilogo, config }) => {
 
   return (
     <div className="p-4">
-      <h4 className="text-sm font-semibold text-slate-800 mb-4">{config.title}</h4>
+      <h4 className="title-card mb-4">{config.title}</h4>
 
       <div className="flex gap-6">
         {/* Donut Chart */}
@@ -104,7 +105,7 @@ const RiepilogoReparti: FC<Props> = ({ riepilogo, config }) => {
           {display.centerLabel && (
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
               <span className="text-2xl font-bold text-slate-800">{totaleReferenze}</span>
-              <span className="text-[10px] text-slate-500">{display.centerLabel.label}</span>
+              <span className="text-3xs text-slate-500">{display.centerLabel.label}</span>
             </div>
           )}
         </div>
@@ -131,7 +132,7 @@ const RiepilogoReparti: FC<Props> = ({ riepilogo, config }) => {
                     style={{ backgroundColor: getChartColor(colorKey) }}
                   />
                   {fields.badgeField && (
-                    <div className={`flex h-7 w-7 items-center justify-center rounded text-[10px] font-bold ${getColorClass(colorKey)}`}>
+                    <div className={`flex h-7 w-7 items-center justify-center rounded text-3xs font-bold ${getColorClass(colorKey)}`}>
                       {badgeValue.substring(0, fields.badgeMaxChars ?? 3)}
                     </div>
                   )}

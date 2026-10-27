@@ -1,9 +1,10 @@
+import PageError from "@/components/Base/PageError";
 import Skeleton from "@/components/Base/Skeleton";
 import { KitOverviewLayout, KitPreStartView } from "@/components/KitOverview";
 import withSessionCheck from "@/components/SessionChecker";
 import { useQuery } from "@tanstack/react-query";
 import React, { useEffect, useMemo, useState } from "react";
-import { useLoaderData, useParams } from "react-router-dom";
+import { useLoaderData, useParams, useRevalidator } from "react-router-dom";
 import { EXPORT_DI_SISTEMA, STATO_LAVORAZIONE_KIT_RUNTIME, TIPO_KIT_DESIGN, TIPO_LAVORAZIONE } from "../../../lib/enums";
 import { ServerCall } from "../../../lib/server_call";
 import { FileItemKit, RUNTIME_KIT } from "../../../lib/types";
@@ -271,19 +272,21 @@ const DettaglioKitContent: React.FC<{
  * usando il nuovo KitOverviewLayout.
  */
 const DettaglioKit: React.FC = () => {
-  const { kit } = useLoaderData() as { kit: KitType };
+  // Il loader restituisce kit null se il servizio non risponde o il kit non esiste
+  const { kit } = useLoaderData() as { kit: KitType | null };
+  const revalidator = useRevalidator();
   const [abortController, setAbortController] = useState<AbortController | null>(null);
 
   // Fetch files (only for runtime kits - when lavorazione has started)
   const { data: filesData, isLoading: isLoadingFiles } = useQuery({
-    queryKey: ["getFilesPerGestioneLavorazione", kit.guidId],
+    queryKey: ["getFilesPerGestioneLavorazione", kit?.guidId],
     queryFn: async () => {
       const response = await ServerCall.get<FileItemKit[]>(
-        `/getFilesPerGestioneLavorazione/${kit.guidId}`
+        `/getFilesPerGestioneLavorazione/${kit?.guidId}`
       );
       return response;
     },
-    enabled: !!kit.guidId && kit.lavorazioneStarted === true,
+    enabled: !!kit?.guidId && kit?.lavorazioneStarted === true,
     staleTime: 0,
   });
 
@@ -313,6 +316,10 @@ const DettaglioKit: React.FC = () => {
     if (!filesData || !correggoExport) return filesData || [];
     return filesData.filter(file => file.tipo_export !== correggoExport);
   }, [filesData, correggoExport]);
+
+  if (!kit) {
+    return <PageError motivo="Kit non trovato o non caricato" onRiprova={() => revalidator.revalidate()} />;
+  }
 
   if (!abortController) {
     return (

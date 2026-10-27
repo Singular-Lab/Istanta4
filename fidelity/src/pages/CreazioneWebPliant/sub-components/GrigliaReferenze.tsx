@@ -143,8 +143,9 @@ const GrigliaReferenze: React.FC<GrigliaReferenzeProps> = ({
                                 variant="danger"
                                 size="xs"
                                 disabled={locked}
+                                aria-label="Rimuovi filtro"
                             >
-                                <Lucide icon="Trash2" className="w-5 h-5" />
+                                <Lucide aria-hidden="true" icon="Trash2" className="w-5 h-5" />
                             </Button>
                         </div>
                     ))}
@@ -236,8 +237,9 @@ const GrigliaReferenze: React.FC<GrigliaReferenzeProps> = ({
                                                         }}
                                                         variant="danger"
                                                         size="xs"
+                                                        aria-label="Rimuovi filtro"
                                                     >
-                                                        <Lucide icon="Trash2" className="w-5 h-5" />
+                                                        <Lucide aria-hidden="true" icon="Trash2" className="w-5 h-5" />
                                                     </Button>
                                                 </FormInline>
                                                 {filterIndex < filterGroup.length - 1 && (
@@ -349,8 +351,9 @@ const GrigliaReferenze: React.FC<GrigliaReferenzeProps> = ({
                                 variant="danger"
                                 size="xs"
                                 disabled={locked}
+                                aria-label="Rimuovi filtro di contesto"
                             >
-                                <Lucide icon="Trash2" className="w-5 h-5" />
+                                <Lucide aria-hidden="true" icon="Trash2" className="w-5 h-5" />
                             </Button>
                         </div>
                     ))}

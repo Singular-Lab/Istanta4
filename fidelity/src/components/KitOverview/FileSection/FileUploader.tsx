@@ -220,8 +220,8 @@ const FileUploadCard: FC<FileUploadCardProps> = ({
               <span className="text-sm text-slate-500 ml-2">({formatFileSize(stagedFile.file.size)})</span>
             </div>
           </div>
-          <Button variant="soft-danger" size="sm" className="p-1.5" onClick={onRemove}>
-            <Lucide icon="X" className="w-4 h-4" />
+          <Button variant="soft-danger" size="sm" className="p-1.5" onClick={onRemove} aria-label="Rimuovi il file selezionato">
+            <Lucide icon="X" aria-hidden="true" className="w-4 h-4" />
           </Button>
         </div>
       )}

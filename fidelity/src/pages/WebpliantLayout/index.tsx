@@ -916,11 +916,11 @@ const WebpliantLayout: FC<WebpliantLayoutProps> = () => {
               oggettoHeaderWebpliant.showPuntiVendita && (
                 <button
                   onClick={() => setIsMenuVenditaOpen(!isMenuVenditaOpen)}
-                  aria-label=""
+                  aria-label="Scegli il punto vendita"
                   className={clsx(stylesWP["wp-header-tools__item"], stylesWP["wp-header-tools__cart"], stylesWP["wp-js-open-aside"])}
                   data-aside="cartDrawer"
                 >
-                  <Lucide icon="Store" />
+                  <Lucide icon="Store" aria-hidden="true" />
                 </button>
               )
             }
@@ -928,21 +928,21 @@ const WebpliantLayout: FC<WebpliantLayoutProps> = () => {
               oggettoHeaderWebpliant.showWishlist && (
                 <button
                   onClick={() => setIsMenuLista(!isMenuLista)}
-                  aria-label=""
+                  aria-label="Lista dei desideri"
                   className={clsx(stylesWP["wp-header-tools__item"], stylesWP["wp-header-tools__cart"], stylesWP["wp-js-open-aside"])}
-                  data-aside="cartDrawer"
+                  data-aside="wishlistDrawer"
                 >
-                  <Lucide icon="Heart" />
+                  <Lucide icon="Heart" aria-hidden="true" />
                 </button>
               )
             }
             <button
               onClick={() => setIsSearchOpen(!isSearchOpen)}
-              aria-label=""
+              aria-label="Cerca i prodotti in promozione"
               className={clsx(stylesWP["wp-header-tools__item"], stylesWP["wp-header-tools__cart"], stylesWP["wp-js-open-aside"])}
               data-aside="cartDrawer"
             >
-              <Lucide icon="Search" />
+              <Lucide icon="Search" aria-hidden="true" />
             </button>
             {isSearchOpen && (
               <div className="fixed inset-0 bg-white flex flex-col items-center justify-start z-50 pt-20">
@@ -951,8 +951,9 @@ const WebpliantLayout: FC<WebpliantLayoutProps> = () => {
                     <button
                       onClick={() => setIsSearchOpen(false)}
                       className="mr-4 text-gray-500 hover:text-gray-700"
+                      aria-label="Chiudi la ricerca"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                       </svg>
                     </button>
@@ -1189,11 +1190,11 @@ const WebpliantLayout: FC<WebpliantLayoutProps> = () => {
                     </div>
                     <button
                       onClick={() => setIsMenuVenditaOpen(!isMenuVenditaOpen)}
-                      aria-label=""
+                      aria-label="Scegli il punto vendita"
                       className={clsx(stylesWP["wp-header-tools__item"], stylesWP["wp-header-tools__cart"], stylesWP["wp-js-open-aside"])}
                       data-aside="cartDrawer"
                     >
-                      <Lucide icon="Store" />
+                      <Lucide icon="Store" aria-hidden="true" />
                     </button>
                   </>
                 )
@@ -1202,21 +1203,21 @@ const WebpliantLayout: FC<WebpliantLayoutProps> = () => {
                 oggettoHeaderWebpliant.showWishlist && (
                   <button
                     onClick={() => setIsMenuLista(!isMenuLista)}
-                    aria-label=""
+                    aria-label="Lista dei desideri"
                     className={clsx(stylesWP["wp-header-tools__item"], stylesWP["wp-header-tools__cart"], stylesWP["wp-js-open-aside"])}
-                    data-aside="cartDrawer"
+                    data-aside="wishlistDrawer"
                   >
-                    <Lucide icon="Heart" />
+                    <Lucide icon="Heart" aria-hidden="true" />
                   </button>
                 )
               }
               <button
                 onClick={() => setIsSearchOpen(!isSearchOpen)}
-                aria-label=""
+                aria-label="Cerca i prodotti in promozione"
                 className={clsx(stylesWP["wp-header-tools__item"], stylesWP["wp-header-tools__cart"], stylesWP["wp-js-open-aside"])}
                 data-aside="cartDrawer"
               >
-                <Lucide icon="Search" />
+                <Lucide icon="Search" aria-hidden="true" />
               </button>
               <input
                 type="text"
@@ -1367,7 +1368,7 @@ const WebpliantLayout: FC<WebpliantLayoutProps> = () => {
           className={clsx(stylesWP["wp-aside"], stylesWP["wp-aside_right"], stylesWP["wp-overflow-hidden"], stylesWP["wp-cart-drawer"], {
             [stylesWP["wp-aside_visible"]]: isMenuLista
           })}
-          id="cartDrawer"
+          id="wishlistDrawer"
         >
           <div className={clsx(stylesWP["wp-aside-header"], stylesWP["wp-d-flex"], stylesWP["wp-align-items-center"])}>
             <h3 className={clsx(stylesWP["wp-text-uppercase"], stylesWP["wp-fs-6"], stylesWP["wp-mb-0"])}>

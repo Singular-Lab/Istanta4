@@ -3,7 +3,12 @@ import Button from "@/components/Base/Button";
 import withSessionCheck from "@/components/SessionChecker";
 import { FormCheck, FormInput, FormLabel, FormSelect } from "@/components/Base/Form";
 import Lucide from "@/components/Base/Lucide";
+import PageError from "@/components/Base/PageError";
+import PageHeader from "@/components/Base/PageHeader";
+import Spinner from "@/components/Base/Spinner";
+import StatusBadge from "@/components/Base/StatusBadge";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import type { TonoStato } from "@/constants/stati";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
 import type { Map as LeafletMap } from "leaflet";
@@ -63,6 +68,13 @@ const ContextFilterValueInput: React.FC<ContextFilterValueInputProps> = ({
   );
 };
 
+/** Stato di connessione del dispositivo: offline è un'assenza di segnale, non un errore. */
+const STATO_DISPOSITIVO: Record<"online" | "offline" | "warning", { tono: TonoStato; etichetta: string }> = {
+  online: { tono: "success", etichetta: "Online" },
+  warning: { tono: "warning", etichetta: "Warning" },
+  offline: { tono: "neutral", etichetta: "Offline" },
+};
+
 const formattaData = (data: Date | string) =>
   new Date(data).toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Europe/Rome" });
 
@@ -73,22 +85,20 @@ const VolantiniAttivi: React.FC<{ idPv: string; canaleArea: string }> = ({ idPv,
   return (
     <div className="flex flex-col p-5 box box--stacked">
       <div className="flex items-center gap-3 pb-5 mb-5 border-b border-dashed border-slate-300/70">
-        <h2>Volantini attivi</h2>
+        <h2 className="title-card">Volantini attivi</h2>
         <span className="ml-auto text-xs text-slate-500">{canaleArea}</span>
       </div>
       {isLoading ? (
-        <div className="flex items-center gap-2 text-sm text-slate-500">
-          <Lucide icon="Loader" className="w-4 h-4 animate-spin" /> Caricamento volantini...
+        <div role="status" className="flex items-center gap-2 text-sm text-slate-500">
+          <Spinner size="sm" decorativo /> Caricamento volantini...
         </div>
       ) : isError ? (
-        <div className="flex flex-col items-start gap-2 text-sm">
-          <span className="text-danger">
-            Volantini non caricati: {(error as Error)?.message || "errore durante il recupero"}
-          </span>
-          <Button variant="outline-secondary" size="sm" onClick={() => refetch()}>
-            Riprova
-          </Button>
-        </div>
+        <PageError
+          compatta
+          titolo="Volantini non caricati"
+          motivo={(error as Error)?.message || "Errore durante il recupero dei volantini"}
+          onRiprova={() => refetch()}
+        />
       ) : volantini.length === 0 ? (
         <div className="flex flex-col items-center gap-2 py-6 text-center text-slate-500">
           <Lucide icon="FileSearch" className="w-8 h-8 text-slate-400" />
@@ -251,35 +261,8 @@ const GestionePuntoVendita: React.FC = () => {
   }, [deviceQuery, statusFilter, dispositivi]);
 
   const statusBadge = (status: DeviceStatus, isRealtimeConnected: boolean = false) => {
-    if (status === "online") {
-      return (
-        <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium bg-success/10 border border-success/20 text-success">
-          {isRealtimeConnected ? (
-            <span className="relative flex h-1.5 w-1.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-success"></span>
-            </span>
-          ) : (
-            <span className="h-1.5 w-1.5 rounded-full bg-success" />
-          )}
-          {isRealtimeConnected ? "Live" : "Online"}
-        </span>
-      );
-    }
-    if (status === "warning") {
-      return (
-        <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium bg-warning/10 border border-warning/20 text-warning">
-          <span className="h-1.5 w-1.5 rounded-full bg-warning" />
-          Warning
-        </span>
-      );
-    }
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium bg-danger/10 border border-danger/20 text-danger">
-        <span className="h-1.5 w-1.5 rounded-full bg-danger" />
-        Offline
-      </span>
-    );
+    const { tono, etichetta } = STATO_DISPOSITIVO[status];
+    return <StatusBadge tono={tono} etichetta={status === "online" && isRealtimeConnected ? "Live" : etichetta} />;
   };
 
   const statusCardRing = (status: DeviceStatus) => {
@@ -565,9 +548,13 @@ const GestionePuntoVendita: React.FC = () => {
   return (
     <div className="grid grid-cols-12 gap-y-10 gap-x-6">
       <div className="col-span-12">
+        <PageHeader
+          title={displayName}
+          indietro={{ to: "/gestione-interna/punti-vendita", etichetta: "Torna ai punti vendita" }}
+        />
         {/* HEADER + AVATAR PUNTO VENDITA */}
         <div className="p-1.5 box flex flex-col box--stacked">
-          <div className="h-48 relative w-full rounded-[0.6rem] bg-gradient-to-b from-theme-1/95 to-theme-2/95">
+          <div className="h-48 relative w-full rounded-card bg-gradient-to-b from-theme-1/95 to-theme-2/95">
             <div
               className={clsx([
                 "w-full h-full relative overflow-hidden",
@@ -579,12 +566,11 @@ const GestionePuntoVendita: React.FC = () => {
               <div className="w-full h-full overflow-hidden border-[6px] box border-white rounded-full image-fit">
                 <img alt={displayName} src={userIcon} />
               </div>
-              <div className="absolute bottom-0 right-0 w-5 h-5 mb-2.5 mr-2.5 border-2 border-white rounded-full bg-success box"></div>
             </div>
           </div>
 
           {/* INFO PRINCIPALI PUNTO VENDITA */}
-          <div className="rounded-[0.6rem] bg-slate-50 pt-12 pb-6">
+          <div className="rounded-card bg-slate-50 pt-12 pb-6">
             <div className="flex items-center justify-center text-xl font-medium">
               {displayName}
               <Lucide
@@ -597,7 +583,7 @@ const GestionePuntoVendita: React.FC = () => {
               {/* Ragione sociale / GDO / tipo */}
               <div className="flex items-center text-slate-500">
                 <Lucide icon="Briefcase" className="w-3.5 h-3.5 mr-1.5 stroke-[1.3]" />
-                <span className="text-[0.85rem]">{ragionesociale || "Punto vendita"}</span>
+                <span className="text-sm">{ragionesociale || "Punto vendita"}</span>
               </div>
 
               {/* Regione / Località */}
@@ -606,7 +592,7 @@ const GestionePuntoVendita: React.FC = () => {
                   icon="MountainSnow"
                   className="w-3.5 h-3.5 mr-1.5 stroke-[1.3]"
                 />
-                <span className="text-[0.85rem]">
+                <span className="text-sm">
                   {displayLocationShort || "Località non impostata"}
                 </span>
               </div>
@@ -614,14 +600,14 @@ const GestionePuntoVendita: React.FC = () => {
               {/* Canale e area */}
               <div className="flex items-center text-slate-500">
                 <Lucide icon="Signal" className="w-3.5 h-3.5 mr-1.5 stroke-[1.3]" />
-                <span className="text-[0.85rem]">{displayCanaleArea}</span>
+                <span className="text-sm">{displayCanaleArea}</span>
               </div>
 
               {/* Codici del sistema della GDO (es. id ANACAN) */}
               {codici.map(c => (
                 <div key={c.etichetta} className="flex items-center text-slate-500">
                   <Lucide icon="Hash" className="w-3.5 h-3.5 mr-1.5 stroke-[1.3]" />
-                  <span className="text-[0.85rem]">
+                  <span className="text-sm">
                     {c.etichetta}: {c.valore}
                   </span>
                 </div>
@@ -646,7 +632,7 @@ const GestionePuntoVendita: React.FC = () => {
               {/* Activity Feed */}
               <div className="flex flex-col h-full p-5 box box--stacked">
                 <div className="pb-5 mb-5 border-b border-dashed border-slate-300/70">
-                  <h2>Gestione dispositivi</h2>
+                  <h2 className="title-card">Gestione dispositivi</h2>
                 </div>
 
                 {/* ============================================================
@@ -768,8 +754,8 @@ const GestionePuntoVendita: React.FC = () => {
 
                   {/* LOADING STATE */}
                   {isLoadingDevices ? (
-                    <div className="p-8 text-center">
-                      <div className="text-sm text-slate-500">Caricamento dispositivi...</div>
+                    <div className="flex justify-center p-8">
+                      <Spinner etichetta="Caricamento dispositivi…" />
                     </div>
                   ) : (
                     /* DEVICE GRID */
@@ -823,8 +809,9 @@ const GestionePuntoVendita: React.FC = () => {
                                     as={Button}
                                     variant="secondary"
                                     className="rounded-[0.7rem] bg-white py-2 px-2"
+                                    aria-label={`Azioni dispositivo ${d.nome}`}
                                   >
-                                    <Lucide icon="EllipsisVertical" className="w-4 h-4" />
+                                    <Lucide icon="EllipsisVertical" aria-hidden="true" className="w-4 h-4" />
                                   </Menu.Button>
                                   <Menu.Items className="w-56">
                                     {d.display_url ? (
@@ -983,7 +970,7 @@ const GestionePuntoVendita: React.FC = () => {
                                         </div>
 
                                         {!isRealtimeConnected && (
-                                          <div className="mt-1 text-[0.7rem] text-right text-slate-400">
+                                          <div className="mt-1 text-2xs text-right text-slate-400">
                                             Ultimo segnale: {lastSeenLabel}
                                           </div>
                                         )}
@@ -1087,7 +1074,7 @@ const GestionePuntoVendita: React.FC = () => {
                   ============================================================ */}
               <div className="flex flex-col h-full p-5 box box--stacked">
                 <div className="pb-5 mb-5 border-b border-dashed border-slate-300/70 flex items-center justify-between">
-                  <h2>Display Contexts</h2>
+                  <h2 className="title-card">Display Contexts</h2>
                   <Button
                     variant="primary"
                     className="rounded-[0.7rem]"
@@ -1099,8 +1086,8 @@ const GestionePuntoVendita: React.FC = () => {
                 </div>
 
                 {isLoadingContexts ? (
-                  <div className="p-8 text-center">
-                    <div className="text-sm text-slate-500">Caricamento contesti...</div>
+                  <div className="flex justify-center p-8">
+                    <Spinner etichetta="Caricamento contesti…" />
                   </div>
                 ) : displayContexts.length === 0 ? (
                   <div className="p-8 rounded-[0.9rem] border border-dashed border-slate-300/70 bg-slate-50 text-center">
@@ -1123,20 +1110,23 @@ const GestionePuntoVendita: React.FC = () => {
                             <div className="min-w-0">
                               <div className="flex items-center gap-2">
                                 <div className="font-medium text-slate-900 truncate">{ctx.nome}</div>
-                                <span className={clsx(
-                                  "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
-                                  ctx.is_active ? "bg-success/10 text-success border border-success/20" : "bg-slate-100 text-slate-500 border border-slate-200"
-                                )}>
-                                  {ctx.is_active ? "Attivo" : "Inattivo"}
-                                </span>
+                                <StatusBadge
+                                  tono={ctx.is_active ? "success" : "neutral"}
+                                  etichetta={ctx.is_active ? "Attivo" : "Inattivo"}
+                                />
                               </div>
                               {ctx.descrizione && (
                                 <div className="mt-1 text-xs text-slate-500 truncate">{ctx.descrizione}</div>
                               )}
                             </div>
                             <Menu>
-                              <Menu.Button as={Button} variant="secondary" className="rounded-[0.7rem] bg-white py-2 px-2">
-                                <Lucide icon="EllipsisVertical" className="w-4 h-4" />
+                              <Menu.Button
+                                as={Button}
+                                variant="secondary"
+                                className="rounded-[0.7rem] bg-white py-2 px-2"
+                                aria-label={`Azioni contesto ${ctx.nome}`}
+                              >
+                                <Lucide icon="EllipsisVertical" aria-hidden="true" className="w-4 h-4" />
                               </Menu.Button>
                               <Menu.Items className="w-48">
                                 <Menu.Item onClick={() => openEditContext(ctx)}>
@@ -1198,7 +1188,7 @@ const GestionePuntoVendita: React.FC = () => {
             <div className="relative col-span-12 row-start-1 xl:col-start-9 xl:col-span-4">
               <div className="sticky top-[6.2rem] flex flex-col gap-y-7">
                 <div className="flex flex-col p-5 box box--stacked">
-                  <h2 className="pb-5 mb-5 font-medium border-b border-dashed border-slate-300/70 text-[0.94rem]">
+                  <h2 className="title-card pb-5 mb-5 border-b border-dashed border-slate-300/70">
                     Dati punto vendita
                   </h2>
 
@@ -1240,7 +1230,7 @@ const GestionePuntoVendita: React.FC = () => {
                           icon="Briefcase"
                           className="w-4 h-4 mr-2 stroke-[1.3] text-slate-500"
                         />
-                        <span className="text-[0.9rem]">
+                        <span className="text-sm">
                           Ragione Sociale:
                           <span className="ml-1 font-medium">
                             {ragionesociale || "Non specificata"}
@@ -1253,7 +1243,7 @@ const GestionePuntoVendita: React.FC = () => {
                           icon="MapPin"
                           className="w-4 h-4 mr-2 stroke-[1.3] text-slate-500"
                         />
-                        <span className="text-[0.9rem]">
+                        <span className="text-sm">
                           Indirizzo:
                           <span className="ml-1 font-medium">
                             {displayIndirizzoCompleto || "Indirizzo non disponibile"}
@@ -1266,7 +1256,7 @@ const GestionePuntoVendita: React.FC = () => {
                           icon="Signal"
                           className="w-4 h-4 mr-2 stroke-[1.3] text-slate-500"
                         />
-                        <span className="text-[0.9rem]">
+                        <span className="text-sm">
                           Canale / Area:
                           <span className="ml-1 font-medium">{displayCanaleArea}</span>
                         </span>
@@ -1284,7 +1274,7 @@ const GestionePuntoVendita: React.FC = () => {
                                 icon="Hash"
                                 className="w-4 h-4 mr-2 stroke-[1.3] text-slate-500"
                               />
-                              <span className="text-[0.9rem]">
+                              <span className="text-sm">
                                 {c.etichetta}:
                                 <span className="ml-1 font-medium">{c.valore}</span>
                               </span>
@@ -1304,7 +1294,7 @@ const GestionePuntoVendita: React.FC = () => {
                             icon="Phone"
                             className="w-4 h-4 mr-2 stroke-[1.3] text-slate-500"
                           />
-                          <span className="text-[0.9rem]">
+                          <span className="text-sm">
                             Recapito Telefonico:
                             {telefono ? (
                               <a
@@ -1328,7 +1318,7 @@ const GestionePuntoVendita: React.FC = () => {
                           icon="Users"
                           className="w-4 h-4 mr-2 stroke-[1.3] text-slate-500"
                         />
-                        <span className="text-[0.9rem] mr-1">Dipendenti collegati:</span>
+                        <span className="text-sm mr-1">Dipendenti collegati:</span>
                         <span className="text-xs font-medium rounded-md px-1.5 py-px bg-success/10 border border-success/10 text-success">
                           {numero_utenti_collegati} dipendenti
                         </span>
@@ -1348,7 +1338,7 @@ const GestionePuntoVendita: React.FC = () => {
       <Dialog open={isCreateDeviceOpen} onClose={closeCreateDialog}>
         <Dialog.Panel>
           <Dialog.Title>
-            <h2 className="mr-auto text-base font-medium">Nuovo dispositivo</h2>
+            <h2 className="title-card mr-auto">Nuovo dispositivo</h2>
           </Dialog.Title>
           <Dialog.Description className="grid grid-cols-12 gap-4 gap-y-3">
             <div className="col-span-12">
@@ -1384,8 +1374,9 @@ const GestionePuntoVendita: React.FC = () => {
             <Button
               variant="primary"
               type="button"
-              className="w-20"
-              disabled={createDeviceMutation.isPending || !newDeviceName.trim()}
+              className="min-w-20"
+              disabled={!newDeviceName.trim()}
+              loading={createDeviceMutation.isPending}
               onClick={() => createDeviceMutation.mutate()}
             >
               Crea
@@ -1398,7 +1389,7 @@ const GestionePuntoVendita: React.FC = () => {
       <Dialog open={!!createdDevice} onClose={closeSuccessDialog}>
         <Dialog.Panel>
           <Dialog.Title>
-            <h2 className="mr-auto text-base font-medium">Dispositivo creato</h2>
+            <h2 className="title-card mr-auto">Dispositivo creato</h2>
           </Dialog.Title>
           <Dialog.Description className="flex flex-col gap-4">
             <div className="p-4 rounded-[0.8rem] bg-success/5 border border-success/20">
@@ -1461,7 +1452,7 @@ const GestionePuntoVendita: React.FC = () => {
       <Dialog open={isCreateContextOpen} onClose={closeContextDialog} size="xl">
         <Dialog.Panel>
           <Dialog.Title>
-            <h2 className="mr-auto text-base font-medium">
+            <h2 className="title-card mr-auto">
               {editingContext ? "Modifica contesto" : "Nuovo display context"}
             </h2>
           </Dialog.Title>
@@ -1601,8 +1592,9 @@ const GestionePuntoVendita: React.FC = () => {
                             variant="secondary"
                             className="rounded text-xs py-1 px-2 text-danger"
                             onClick={() => removeFilterGroup(gi)}
+                            aria-label={`Rimuovi gruppo ${gi + 1}`}
                           >
-                            <Lucide icon="Trash2" className="w-3 h-3" />
+                            <Lucide icon="Trash2" aria-hidden="true" className="w-3 h-3" />
                           </Button>
                         )}
                       </div>
@@ -1649,8 +1641,9 @@ const GestionePuntoVendita: React.FC = () => {
                               type="button"
                               className="text-danger hover:text-danger/80"
                               onClick={() => removeFilterFromGroup(gi, fi)}
+                              aria-label="Rimuovi condizione"
                             >
-                              <Lucide icon="X" className="w-4 h-4" />
+                              <Lucide icon="X" aria-hidden="true" className="w-4 h-4" />
                             </button>
                           </div>
                         </div>
@@ -1673,11 +1666,8 @@ const GestionePuntoVendita: React.FC = () => {
             <Button
               variant="primary"
               type="button"
-              disabled={
-                !ctxNome.trim() ||
-                createContextMutation.isPending ||
-                updateContextMutation.isPending
-              }
+              disabled={!ctxNome.trim()}
+              loading={createContextMutation.isPending || updateContextMutation.isPending}
               onClick={handleSaveContext}
             >
               {editingContext ? "Salva modifiche" : "Crea contesto"}
@@ -1690,7 +1680,7 @@ const GestionePuntoVendita: React.FC = () => {
       <Dialog open={!!assignDeviceId} onClose={() => { setAssignDeviceId(null); setSelectedContextId(""); }}>
         <Dialog.Panel>
           <Dialog.Title>
-            <h2 className="mr-auto text-base font-medium">Assegna display context</h2>
+            <h2 className="title-card mr-auto">Assegna display context</h2>
           </Dialog.Title>
           <Dialog.Description className="flex flex-col gap-4">
             <div>
@@ -1737,7 +1727,7 @@ const GestionePuntoVendita: React.FC = () => {
             <Button
               variant="primary"
               type="button"
-              disabled={assignContextMutation.isPending}
+              loading={assignContextMutation.isPending}
               onClick={() => assignContextMutation.mutate()}
             >
               Assegna

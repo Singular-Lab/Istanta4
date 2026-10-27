@@ -1,7 +1,7 @@
 import Button from "@/components/Base/Button";
 import { Dialog } from "@/components/Base/Headless";
-import LoadingIcon from "@/components/Base/LoadingIcon";
 import Lucide from "@/components/Base/Lucide";
+import Spinner from "@/components/Base/Spinner";
 import type { AuthProviderAdminDTO, EsitoVerificaProvider } from "../../../../lib/types";
 import { riepilogoVerifica } from "../utils";
 
@@ -38,8 +38,8 @@ const VerificaDialog = ({ provider, esiti, onRipeti, onClose }: VerificaDialogPr
 
         <Dialog.Description className="space-y-4 bg-slate-50/50">
           {!esiti || !riepilogo ? (
-            <div className="p-10 flex items-center justify-center gap-3 text-slate-500">
-              <LoadingIcon icon="oval" className="w-5 h-5" />
+            <div role="status" className="p-10 flex items-center justify-center gap-3 text-slate-500">
+              <Spinner decorativo />
               Verifica in corso...
             </div>
           ) : (

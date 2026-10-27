@@ -1,6 +1,7 @@
 import Button from "@/components/Base/Button";
 import { FormSwitch } from "@/components/Base/Form";
 import Lucide from "@/components/Base/Lucide";
+import StatusBadge from "@/components/Base/StatusBadge";
 import Tippy from "@/components/Base/Tippy";
 import clsx from "clsx";
 import type { AuthProviderAdminDTO, StatoSegretoProvider } from "../../../../lib/types";
@@ -90,7 +91,7 @@ const MetodoCard = ({
             </div>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-base font-semibold text-slate-800">{provider.nome}</h3>
+                <h3 className="title-card">{provider.nome}</h3>
                 <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-mono text-slate-500">
                   {provider.codice}
                 </span>
@@ -103,14 +104,10 @@ const MetodoCard = ({
                   <Lucide icon={iconaTipo} className="w-3 h-3" />
                   {etichettaTipo(provider.tipo)}
                 </span>
-                <span
-                  className={`${PILLOLA} ${provider.attivo
-                    ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-                    : "bg-slate-100 border-slate-200 text-slate-500"}`}
-                >
-                  <span className={`w-1.5 h-1.5 rounded-full ${provider.attivo ? "bg-emerald-500" : "bg-slate-400"}`} />
-                  {provider.attivo ? "Attivo" : "Disattivo"}
-                </span>
+                <StatusBadge
+                  tono={provider.attivo ? "success" : "neutral"}
+                  etichetta={provider.attivo ? "Attivo" : "Disattivo"}
+                />
                 {Object.entries(provider.segreti ?? {}).map(([nome, stato]) => (
                   <span key={nome} className={`${PILLOLA} ${CLASSI_SEGRETO[stato].classe}`}>
                     <Lucide icon={CLASSI_SEGRETO[stato].icona} className="w-3 h-3" />

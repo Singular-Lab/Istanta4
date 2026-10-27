@@ -1,22 +1,24 @@
 import Button from '@/components/Base/Button';
 import { FormCheck, FormInput } from '@/components/Base/Form';
 import { Dialog } from '@/components/Base/Headless';
-import LoadingIcon from '@/components/Base/LoadingIcon';
 import Lucide from '@/components/Base/Lucide';
+import StatusBadge from '@/components/Base/StatusBadge';
 import EmptyState from '@/components/EmptyState';
+import type { TonoStato } from '@/constants/stati';
 import { useNotification } from '@/context/NotificationContext';
 import { useMutation } from '@tanstack/react-query';
 import axios from 'axios';
 import { AnimatePresence, motion } from 'framer-motion';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLoaderData, useNavigate, useRevalidator } from 'react-router-dom';
-import { STATO_LAVORAZIONE_KIT_RUNTIME, STATO_ORDINI_STAMPA } from '../../../lib/enums';
+import { STATO_ORDINI_STAMPA } from '../../../lib/enums';
 import { ServerCall } from '../../../lib/server_call';
 import { FileItemKit, MergedGroupFile, OrdiniDiStampaAttributes, OrdiniDiStampaInviiAttributes, RUNTIME_KIT, VirtualDirectory } from '../../../lib/types';
 // Importa il client Socket.IO
 import docThumbnailFallback from '@/assets/images/icons/icon_doc_locandinaA4.png';
 import PageHeader from '@/components/Base/PageHeader';
 import Progress from '@/components/Base/Progress';
+import { formatDataOra, formatDataOraEstesa } from '@/utils/format';
 import dayjs from 'dayjs';
 import type { Socket } from 'socket.io-client';
 import io from 'socket.io-client';
@@ -73,6 +75,13 @@ type GroupingRawPayload = {
   nonPdfCount?: unknown;
   groups?: unknown;
   message?: unknown;
+};
+
+const STATO_RAGGRUPPAMENTO: Record<GroupingStatusResponse['status'], { tono: TonoStato; etichetta: string }> = {
+  idle: { tono: 'neutral', etichetta: 'In attesa' },
+  running: { tono: 'info', etichetta: 'In corso' },
+  completed: { tono: 'success', etichetta: 'Completato' },
+  failed: { tono: 'danger', etichetta: 'Errore' },
 };
 
 const isObjectRecord = (value: unknown): value is Record<string, unknown> =>
@@ -1137,13 +1146,11 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
               <div>
                 <div className="font-medium text-success">
                   Ordine di invio #{gruppo.invio.id_ordinistampainvii?.slice(0, 8)}
-                  <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700 border border-green-200">
-                    Inviato
-                  </span>
+                  <StatusBadge tono="success" etichetta="Inviato" className="ml-2" />
                 </div>
                 <div className="text-xs text-slate-700 mt-1">
-                  <Lucide icon="Calendar" className="w-3 h-3 inline-block mr-1" />
-                  Inviato il {dayjs(gruppo.invio?.createdat).format("DD/MM/YYYY")} alle {dayjs(gruppo.invio?.createdat).format("HH:mm:ss")}
+                  <Lucide icon="Calendar" aria-hidden="true" className="w-3 h-3 inline-block mr-1" />
+                  Inviato il {formatDataOraEstesa(gruppo.invio?.createdat)}
                 </div>
               </div>
             </div>
@@ -1234,20 +1241,14 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
     return (
       <div className="grid grid-cols-12 gap-y-10 gap-x-6">
         <div className="col-span-12">
-          <div className="flex flex-col md:h-10 gap-y-3 md:items-center md:flex-row">
-            <PageHeader
-              title="Dettaglio ordine completato"
-              description={`Promo: ${promo.nome}`}
-            />
-            <div className="flex gap-2 md:ml-auto">
-              <Button onClick={() => navigate(-1)} variant="outline-secondary">
-                <Lucide icon="ArrowLeft" className="w-4 h-4 mr-2" />
-                Torna indietro
-              </Button>
-            </div>
-          </div>
+          <PageHeader
+            title="Dettaglio ordine completato"
+            description={`Promo: ${promo.nome}`}
+            indietro={{ onClick: () => navigate(-1), etichetta: 'Torna indietro' }}
+            badges={<StatusBadge dominio="ordineStampa" stato={ordine.stato_ordinistampa} />}
+          />
 
-          <div className="mt-5">
+          <div>
             {/* Info Card */}
             <div className="box box--stacked p-5 mb-5">
               <div className="flex items-start gap-3">
@@ -1255,7 +1256,7 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
                   <Lucide icon="CircleCheck" className="w-5 h-5 text-success" />
                 </div>
                 <div>
-                  <h3 className="text-base font-semibold text-slate-900">Ordine completato</h3>
+                  <h3 className="title-section">Ordine completato</h3>
                   <p className="text-sm text-slate-600 mt-1">
                     Questo ordine è stato completato e inviato alla tipografia. Di seguito puoi visualizzare i report degli invii effettuati.
                   </p>
@@ -1268,6 +1269,7 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
               <FormInput
                 type="text"
                 placeholder="Cerca nei kit inviati..."
+                aria-label="Cerca nei kit inviati"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full"
@@ -1278,8 +1280,8 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
             {gruppInvii && gruppInvii.length > 0 ? (
               <div className="box box--stacked">
                 <div className="flex items-center gap-3 p-5 border-b border-slate-200/60">
-                  <Lucide icon="Package" className="w-5 h-5 text-slate-600" />
-                  <h2 className="text-base font-semibold text-slate-800">
+                  <Lucide icon="Package" aria-hidden="true" className="w-5 h-5 text-slate-600" />
+                  <h2 className="title-section">
                     Invii effettuati ({gruppInvii.length})
                   </h2>
                 </div>
@@ -1314,45 +1316,43 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
                 <FormCheck.Input
                   type="checkbox"
                   className='!rounded-md'
+                  aria-label={`Seleziona ${kit.titolo}`}
                   checked={!!selectedKits[kit.guidId]}
                   onChange={(e) => e.stopPropagation()}
                   onClick={(e) => toggleKitSelection(e, kit.guidId)}
                 />
               </FormCheck>
-              <div className="flex items-center gap-x-4 cursor-pointer flex-1" onClick={() => toggleKitExpansion(kit.guidId)}>
-                <div className="flex items-center justify-center w-11 h-11 rounded-full bg-primary/10 text-primary">
-                  <Lucide icon="Package" className="w-6 h-6 stroke-[1.5]" />
-                </div>
-                <div className="flex-1">
-                  <div className="text-base font-semibold text-slate-800">{kit.titolo}</div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-1 text-xs text-slate-500 mt-1">
+              {/* La checkbox resta fuori dal pulsante: selezionare un kit non lo espande */}
+              <button
+                type="button"
+                aria-expanded={!!expandedKits[kit.guidId]}
+                onClick={() => toggleKitExpansion(kit.guidId)}
+                className="flex items-center gap-x-4 cursor-pointer flex-1 min-w-0 text-left rounded-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40"
+              >
+                <span className="flex flex-none items-center justify-center w-11 h-11 rounded-full bg-primary/10 text-primary">
+                  <Lucide icon="Package" aria-hidden="true" className="w-6 h-6 stroke-[1.5]" />
+                </span>
+                <span className="block flex-1 min-w-0">
+                  <span className="block text-base font-semibold text-slate-800">{kit.titolo}</span>
+                  <span className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-1 text-xs text-slate-500 mt-1">
                     <span>Area: <span className="font-medium text-slate-600">{kit.nomeArea || kit.guidArea}</span></span>
                     <span>Canale: <span className="font-medium text-slate-600">{kit.nomeCanale || kit.guidCanale}</span></span>
                     <span>Copie: <span className="font-medium text-slate-600">{kit.quantitaCopie}</span></span>
-                  </div>
-                </div>
-              </div>
+                  </span>
+                </span>
+              </button>
             </div>
             <div className="flex items-center gap-x-4 mt-4 sm:mt-0 sm:ml-auto">
-              <div
-                className={`px-3 py-1 text-xs rounded-full border font-medium ${kit.stato_lavorazione === STATO_LAVORAZIONE_KIT_RUNTIME.IN_LAVORAZIONE
-                  ? 'bg-blue-100/80 text-blue-800 border-blue-200/80'
-                  : kit.stato_lavorazione === STATO_LAVORAZIONE_KIT_RUNTIME.IN_LAVORAZIONE_CON_ERRORI
-                  ? 'bg-red-100/80 text-red-800 border-red-200/80'
-                  : kit.stato_lavorazione === STATO_LAVORAZIONE_KIT_RUNTIME.IN_REVISIONE
-                    ? 'bg-yellow-100/80 text-yellow-800 border-yellow-200/80'
-                    : kit.stato_lavorazione === STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO
-                      ? 'bg-green-100/80 text-green-800 border-green-200/80'
-                      : 'bg-gray-100/80 text-gray-800 border-gray-200/80'
-                  }`}
+              <StatusBadge dominio="kitRuntime" stato={kit.stato_lavorazione} />
+              <button
+                type="button"
+                aria-label={expandedKits[kit.guidId] ? 'Comprimi kit' : 'Espandi kit'}
+                aria-expanded={!!expandedKits[kit.guidId]}
+                onClick={() => toggleKitExpansion(kit.guidId)}
+                className="cursor-pointer p-1.5 rounded-md hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40"
               >
-                {kit.stato_lavorazione
-                  ? kit.stato_lavorazione.charAt(0) + kit.stato_lavorazione.slice(1).replace(/_/g, ' ').toLowerCase()
-                  : ''}
-              </div>
-              <div className="cursor-pointer p-1.5 rounded-md hover:bg-slate-100" onClick={() => toggleKitExpansion(kit.guidId)}>
-                <Lucide icon={expandedKits[kit.guidId] ? 'ChevronUp' : 'ChevronDown'} className="w-5 h-5 stroke-[1.5] text-slate-500" />
-              </div>
+                <Lucide icon={expandedKits[kit.guidId] ? 'ChevronUp' : 'ChevronDown'} aria-hidden="true" className="w-5 h-5 stroke-[1.5] text-slate-500" />
+              </button>
             </div>
           </div>
           <AnimatePresence>
@@ -1366,7 +1366,7 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
               >
                 <div className="p-4 border-t border-slate-200/80">
                   <div className='flex justify-between items-center'>
-                    <h3 className="text-sm font-medium text-slate-700 mb-1">Dettaglio files</h3>
+                    <h3 className="title-card mb-1">Dettaglio files</h3>
                     <div className="text-xs text-slate-500">
                       {kit.files?.length || 0} file totali
                       {kit.files && numeroFileProblematici > 0 && numeroFileProblematici < 50 && (
@@ -1405,12 +1405,12 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
       <Dialog centered size='md' open={showDialogInvioFTP} onClose={() => setShowDialogInvioFTP(false)}>
         <Dialog.Panel className="p-2">
           <Dialog.Title>
-            <h2 className="text-lg font-semibold">Conferma invio alla tipografia</h2>
+            <h2 className="title-section">Conferma invio alla tipografia</h2>
           </Dialog.Title>
           <Dialog.Description className="p-4">
             <div className="text-sm text-slate-600 space-y-3">
               <div className="flex items-start p-3.5 rounded-lg bg-amber-50/80 border border-amber-200/60">
-                <Lucide icon="TriangleAlert" className="w-5 h-5 mr-3 text-amber-500 flex-shrink-0 mt-0.5" />
+                <Lucide icon="TriangleAlert" aria-hidden="true" className="w-5 h-5 mr-3 text-amber-500 flex-shrink-0 mt-0.5" />
                 <span>Stai per inviare <strong>{selectedKitsCount}</strong> kit selezionati alla tipografia. Questa operazione è irreversibile e modificherà lo stato dell'ordine.</span>
               </div>
               {numeroFileProblematici > 0 && (
@@ -1445,18 +1445,12 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
           </Dialog.Footer>
         </Dialog.Panel>
       </Dialog>
-      <div className="flex flex-col md:h-10 gap-y-3 md:items-center md:flex-row mb-6">
-        <PageHeader title="Revisione ordine di stampa" description={`Promo: ${promo.nome}`} />
-        <div className="flex gap-2 md:ml-auto">
-          <Button
-            variant="secondary"
-            onClick={() => navigate('/ods-in-corso')}
-          >
-            <Lucide icon="ArrowLeft" className="w-4 h-4 mr-2" />
-            Torna agli ordini
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Revisione ordine di stampa"
+        description={`Promo: ${promo.nome}`}
+        indietro={{ to: '/ods-in-corso', etichetta: 'Torna agli ordini' }}
+        badges={<StatusBadge dominio="ordineStampa" stato={ordine.stato_ordinistampa} />}
+      />
       <div className="grid grid-cols-12 gap-y-6 gap-x-6">
 
         <div className="col-span-12">
@@ -1468,7 +1462,7 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
                 <Lucide icon="FileText" className="w-5 h-5 text-slate-600" />
               </div>
               <div>
-                <h3 className="text-base font-semibold text-slate-900">Dettagli ordine</h3>
+                <h3 className="title-section">Dettagli ordine</h3>
                 <p className="text-sm text-slate-500">Informazioni generali sull'ordine di stampa</p>
               </div>
             </div>
@@ -1485,10 +1479,7 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
                 <div>
                   <div className="text-xs text-slate-500">Data Conferma</div>
                   <div className="font-medium">
-                    {ordine.data_di_conferma_ordinistampa
-                      ? dayjs(ordine.data_di_conferma_ordinistampa).format('DD/MM/YYYY HH:mm')
-                      : 'Non disponibile'
-                    }
+                    {formatDataOra(ordine.data_di_conferma_ordinistampa)}
                   </div>
                 </div>
               </div>
@@ -1540,33 +1531,28 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
                   <Lucide icon="Copy" className="w-5 h-5 text-indigo-600" />
                 </div>
                 <div>
-                  <h3 className="text-base font-semibold text-slate-900">Raggruppamento file uguali</h3>
+                  <h3 className="title-section">Raggruppamento file uguali</h3>
                   <p className="text-sm text-slate-500">Identifica file PDF con contenuto identico tra i kit disponibili</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 {groupingStatus !== 'idle' && groupingStatus !== 'running' && (
-                  <Button variant="outline-secondary" size="sm" onClick={resetGroupingState}>
-                    <Lucide icon="RotateCcw" className="w-4 h-4 mr-1" />
+                  <Button type="button" variant="outline-secondary" size="sm" onClick={resetGroupingState}>
+                    <Lucide icon="RotateCcw" aria-hidden="true" className="w-4 h-4 mr-1" />
                     Reset
                   </Button>
                 )}
                 <Button
+                  type="button"
                   variant="primary"
                   onClick={() => mutationGrouping.mutate()}
                   disabled={groupingStatus === 'running' || mutationGrouping.isPending || kitDisponibili.length === 0}
+                  loading={groupingStatus === 'running' || mutationGrouping.isPending}
                 >
-                  {groupingStatus === 'running' || mutationGrouping.isPending ? (
-                    <>
-                      <Lucide icon="Loader" className="w-4 h-4 mr-2 animate-spin" />
-                      Analisi in corso...
-                    </>
-                  ) : (
-                    <>
-                      <Lucide icon="ScanSearch" className="w-4 h-4 mr-2" />
-                      Avvia raggruppamento
-                    </>
+                  {groupingStatus !== 'running' && !mutationGrouping.isPending && (
+                    <Lucide icon="ScanSearch" aria-hidden="true" className="w-4 h-4 mr-2" />
                   )}
+                  Avvia raggruppamento
                 </Button>
               </div>
             </div>
@@ -1585,16 +1571,11 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
               </div>
               <div className="p-3 rounded-lg border border-slate-200 bg-slate-50/50">
                 <div className="text-xs text-slate-500">Stato</div>
-                <div className={`text-sm font-medium ${groupingStatus === 'idle' ? 'text-slate-600' :
-                  groupingStatus === 'running' ? 'text-primary' :
-                    groupingStatus === 'completed' ? 'text-success' :
-                      'text-danger'
-                  }`}>
-                  {groupingStatus === 'idle' ? 'In attesa' :
-                    groupingStatus === 'running' ? 'In corso' :
-                      groupingStatus === 'completed' ? 'Completato' :
-                        'Errore'}
-                </div>
+                <StatusBadge
+                  tono={STATO_RAGGRUPPAMENTO[groupingStatus].tono}
+                  etichetta={STATO_RAGGRUPPAMENTO[groupingStatus].etichetta}
+                  className="mt-1"
+                />
               </div>
               <div className="p-3 rounded-lg border border-slate-200 bg-slate-50/50">
                 <div className="text-xs text-slate-500">Gruppi trovati</div>
@@ -1657,8 +1638,10 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
                                   key={`${file.id_olimpo_cloud}-${i}`}
                                   className="rounded-md border border-slate-200 bg-white overflow-hidden shadow-sm text-xs"
                                 >
-                                  <div
-                                    className="relative w-full aspect-square border-b border-slate-200 bg-slate-50 overflow-hidden flex items-center justify-center cursor-pointer group/thumb"
+                                  <button
+                                    type="button"
+                                    aria-label={`Anteprima ${file.nome}`}
+                                    className="relative w-full aspect-square border-b border-slate-200 bg-slate-50 overflow-hidden flex items-center justify-center cursor-pointer group/thumb focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-theme-1/40"
                                     onClick={() => {
                                       const baseUrl = file.id_olimpo_cloud ? buildGroupingPreviewBaseUrl(file.id_olimpo_cloud) : '';
                                       if (baseUrl) {
@@ -1678,13 +1661,13 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
                                         }
                                       }}
                                     />
-                                    <div className="absolute inset-0 bg-black/0 group-hover/thumb:bg-black/10 transition-colors flex items-center justify-center">
-                                      <Lucide icon="ZoomIn" className="w-5 h-5 text-white opacity-0 group-hover/thumb:opacity-100 transition-opacity drop-shadow-md" />
-                                    </div>
-                                  </div>
+                                    <span className="absolute inset-0 bg-black/0 group-hover/thumb:bg-black/10 transition-colors flex items-center justify-center">
+                                      <Lucide icon="ZoomIn" aria-hidden="true" className="w-5 h-5 text-white opacity-0 group-hover/thumb:opacity-100 transition-opacity drop-shadow-md" />
+                                    </span>
+                                  </button>
                                   <div className="p-1.5">
                                     <div className="font-medium text-slate-700 truncate" title={file.nome}>{file.nome}</div>
-                                    <div className="text-[10px] text-slate-500 truncate">
+                                    <div className="text-3xs text-slate-500 truncate">
                                       {file.nome_kit || file.id_runtime}
                                       {file.pages ? ` \u2022 ${file.pages}p` : ''}
                                     </div>
@@ -1719,17 +1702,15 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
                                     </span>
                                   </div>
                                   <Button
+                                    type="button"
                                     variant="outline-danger"
                                     size="sm"
                                     className="text-xs whitespace-nowrap flex-shrink-0"
                                     disabled={isMerging}
+                                    loading={isMerging}
                                     onClick={() => handleDeleteMerge(group.groupId)}
                                   >
-                                    {isMerging ? (
-                                      <LoadingIcon icon="oval" color="red" className="w-3.5 h-3.5 mr-1" />
-                                    ) : (
-                                      <Lucide icon="Undo2" className="w-3.5 h-3.5 mr-1" />
-                                    )}
+                                    {!isMerging && <Lucide icon="Undo2" aria-hidden="true" className="w-3.5 h-3.5 mr-1" />}
                                     Annulla unione
                                   </Button>
                                 </div>
@@ -1764,23 +1745,16 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
                                     />
                                   </div>
                                   <Button
+                                    type="button"
                                     variant="primary"
                                     size="sm"
                                     className="whitespace-nowrap"
                                     disabled={isMerging || nameCollision}
+                                    loading={isMerging}
                                     onClick={() => handleMergeGroup(group)}
                                   >
-                                    {isMerging ? (
-                                      <>
-                                        <LoadingIcon icon="oval" color="white" className="w-4 h-4 mr-1.5" />
-                                        Unione...
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Lucide icon="Merge" className="w-4 h-4 mr-1.5" />
-                                        Unisci gruppo
-                                      </>
-                                    )}
+                                    {!isMerging && <Lucide icon="Merge" aria-hidden="true" className="w-4 h-4 mr-1.5" />}
+                                    Unisci gruppo
                                   </Button>
                                 </div>
                               )}
@@ -1835,7 +1809,7 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
                         )}
                       </div>
                       <div>
-                        <h3 className="text-base font-semibold text-slate-900">
+                        <h3 className="title-section">
                           {transferComplete ? 'Trasferimento completato' : ftpErrorMessage && !isTransferring ? 'Errore di trasferimento' : 'Trasferimento in corso'}
                         </h3>
                         <p className="text-sm text-slate-500">
@@ -1852,8 +1826,11 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
                     </div>
                     {(transferComplete || (ftpErrorMessage && !isTransferring)) && (
                       <Button
+                        type="button"
                         variant="outline-secondary"
                         size="sm"
+                        aria-label="Chiudi riepilogo trasferimento"
+                        title="Chiudi riepilogo trasferimento"
                         onClick={() => {
                           setTransferComplete(false);
                           setFtpProgressMessage('');
@@ -1864,7 +1841,7 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
                           setFtpTransferDetail({ fase: '', kit: '', fileName: '', currentFile: 0, totalFiles: 0, totalKits: 0, message: '' });
                         }}
                       >
-                        <Lucide icon="X" className="w-4 h-4" />
+                        <Lucide icon="X" aria-hidden="true" className="w-4 h-4" />
                       </Button>
                     )}
                   </div>
@@ -1874,7 +1851,7 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
                       {ftpTransferDetail.fase && (
                         <div className="p-2.5 rounded-lg border border-slate-200 bg-slate-50/50">
-                          <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Fase</div>
+                          <div className="text-3xs uppercase tracking-wider text-slate-400 font-medium">Fase</div>
                           <div className="text-sm font-medium text-slate-700 truncate">
                             {ftpTransferDetail.fase === 'caricamento_dati' ? 'Caricamento dati'
                               : ftpTransferDetail.fase === 'creazione_cartelle' ? 'Creazione cartelle'
@@ -1885,7 +1862,7 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
                       )}
                       {ftpTransferDetail.kit && (
                         <div className="p-2.5 rounded-lg border border-slate-200 bg-slate-50/50">
-                          <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Kit</div>
+                          <div className="text-3xs uppercase tracking-wider text-slate-400 font-medium">Kit</div>
                           <div className="text-sm font-medium text-slate-700 truncate" title={ftpTransferDetail.kit}>
                             {ftpTransferDetail.kit}
                           </div>
@@ -1893,7 +1870,7 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
                       )}
                       {ftpTransferDetail.totalFiles > 0 && (
                         <div className="p-2.5 rounded-lg border border-slate-200 bg-slate-50/50">
-                          <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">File</div>
+                          <div className="text-3xs uppercase tracking-wider text-slate-400 font-medium">File</div>
                           <div className="text-sm font-medium text-slate-700">
                             {ftpTransferDetail.currentFile > 0 ? `${ftpTransferDetail.currentFile} / ${ftpTransferDetail.totalFiles}` : `${ftpTransferDetail.totalFiles} totali`}
                           </div>
@@ -1901,7 +1878,7 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
                       )}
                       {ftpTransferDetail.totalKits > 0 && (
                         <div className="p-2.5 rounded-lg border border-slate-200 bg-slate-50/50">
-                          <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Kit totali</div>
+                          <div className="text-3xs uppercase tracking-wider text-slate-400 font-medium">Kit totali</div>
                           <div className="text-sm font-medium text-slate-700">{ftpTransferDetail.totalKits}</div>
                         </div>
                       )}
@@ -1912,7 +1889,7 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
                   {(isTransferring || ((progress > 0 || globalProgress > 0) && !transferComplete && !ftpErrorMessage)) && (
                     <div className="space-y-3 mb-4">
                       <div>
-                        <div className="flex items-center justify-between text-[11px] text-slate-500 mb-1">
+                        <div className="flex items-center justify-between text-2xs text-slate-500 mb-1">
                           <span>Avanzamento globale</span>
                           <span>{Math.round(globalProgress * 100)}%</span>
                         </div>
@@ -1923,7 +1900,7 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
                         />
                       </div>
                       <div>
-                        <div className="flex items-center justify-between text-[11px] text-slate-500 mb-1">
+                        <div className="flex items-center justify-between text-2xs text-slate-500 mb-1">
                           <span>Avanzamento kit corrente</span>
                           <span>{Math.round(progress * 100)}%</span>
                         </div>
@@ -1979,23 +1956,24 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
           </AnimatePresence>
 
           <div>
-            <div className="flex flex-col box box--stacked rounded-xl shadow-sm border border-slate-200/80">
-              <div className="flex flex-col p-6 gap-y-4 rounded-t-xl border-b border-slate-200/80">
+            <div className="flex flex-col box box--stacked rounded-card shadow-sm border border-slate-200/80">
+              <div className="flex flex-col p-6 gap-y-4 rounded-t-card border-b border-slate-200/80">
                 <div className="flex items-center gap-x-3">
                   <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-blue-50">
                     <Lucide icon="Package" className="w-5 h-5 text-blue-600" />
                   </div>
                   <div>
-                    <h3 className="text-base font-semibold text-slate-900">Kit dell'ordine</h3>
+                    <h3 className="title-section">Kit dell'ordine</h3>
                     <p className="text-sm text-slate-500">{kitInviati.length} inviati, {kitDisponibili.length} disponibili</p>
                   </div>
                 </div>
                 <div className="relative">
-                  <Lucide icon="Search" className="absolute inset-y-0 left-0 z-10 w-4 h-4 my-auto ml-3 stroke-[1.3] text-slate-500" />
+                  <Lucide icon="Search" aria-hidden="true" className="absolute inset-y-0 left-0 z-10 w-4 h-4 my-auto ml-3 stroke-[1.3] text-slate-500" />
                   <FormInput
                     type="text"
                     placeholder="Cerca per titolo, area, canale..."
-                    className="pl-9 sm:w-72 rounded-lg"
+                    aria-label="Cerca per titolo, area, canale"
+                    className="pl-9 sm:w-72 rounded-control"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
@@ -2029,7 +2007,7 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
                             <Lucide icon="CheckCheck" className="w-4 h-4" />
                           </div>
                           <div>
-                            <h3 className="text-sm font-semibold text-slate-700">Kit già inviati alla tipografia</h3>
+                            <h3 className="title-card">Kit già inviati alla tipografia</h3>
                             <p className="text-xs text-slate-500">
                               {gruppInvii.length} invio{gruppInvii.length !== 1 ? 'i' : ''} completat{gruppInvii.length !== 1 ? 'i' : 'o'}
                               {searchTerm && (
@@ -2054,7 +2032,7 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
                             <Lucide icon="Package" className="w-4 h-4" />
                           </div>
                           <div>
-                            <h3 className="text-sm font-semibold text-slate-700">Kit disponibili per l'invio</h3>
+                            <h3 className="title-card">Kit disponibili per l'invio</h3>
                             <p className="text-xs text-slate-500">{filteredKitDisponibili.length} kit pronti</p>
                           </div>
                         </div>
@@ -2100,22 +2078,15 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
                     )}
                   </div>
                   <Button
+                    type="button"
                     onClick={() => setShowDialogInvioFTP(true)}
                     disabled={selectedKitsCount === 0 || isTransferring}
+                    loading={isTransferring}
                     variant="primary"
                     className="text-sm min-w-48"
                   >
-                    {isTransferring ? (
-                      <>
-                        <LoadingIcon icon="oval" color="white" className="w-4 h-4 mr-2" />
-                        Trasferimento in corso...
-                      </>
-                    ) : (
-                      <>
-                        Manda file alla tipografia
-                        <Lucide icon="Send" className="w-4 h-4 ml-2 stroke-[1.5]" />
-                      </>
-                    )}
+                    Manda file alla tipografia
+                    {!isTransferring && <Lucide icon="Send" aria-hidden="true" className="w-4 h-4 ml-2 stroke-[1.5]" />}
                   </Button>
                 </div>
               )}

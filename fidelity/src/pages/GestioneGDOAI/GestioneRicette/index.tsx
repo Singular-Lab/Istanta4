@@ -6,6 +6,7 @@ import PageHeader from "@/components/Base/PageHeader";
 import Pagination from "@/components/Base/Pagination";
 import { PermissionGate } from "@/components/PermissionGate";
 import ProgressBar from "@/components/Base/Progress";
+import Spinner from "@/components/Base/Spinner";
 import withSessionCheck from "@/components/SessionChecker";
 import { PERMISSIONS } from "@/constants/permissions";
 import Table from "@/components/Base/Table";
@@ -157,9 +158,7 @@ const GestioneRicette: React.FC = () => {
       </Table.Td>
       <Table.Td className="py-4 border-dashed w-80 dark:bg-darkmode-600">
         <div className="flex items-center gap-3">
-          <div className="animate-spin">
-            <Lucide icon="Loader" className="w-4 h-4 text-primary" />
-          </div>
+          <Spinner size="sm" decorativo />
           <span className="font-medium text-slate-500">Generazione in corso...</span>
         </div>
       </Table.Td>
@@ -204,8 +203,8 @@ const GestioneRicette: React.FC = () => {
       </Table.Td>
       <Table.Td className="relative py-4 border-dashed dark:bg-darkmode-600">
         <div className="flex items-center justify-center">
-          <Button variant="secondary" size="sm" className="px-2 py-1 opacity-50" disabled>
-            <Lucide icon="EllipsisVertical" className="w-4 h-4" />
+          <Button variant="secondary" size="sm" className="px-2 py-1 opacity-50" disabled aria-label="Azioni non disponibili durante la generazione">
+            <Lucide icon="EllipsisVertical" aria-hidden="true" className="w-4 h-4" />
           </Button>
         </div>
       </Table.Td>
@@ -339,16 +338,10 @@ const GestioneRicette: React.FC = () => {
                   messaggio: messaggio ?? ""
                 })
               }}
-              disabled={generaRicetteConQuantita.isPending || !quantita || quantita <= 0}
+              disabled={!quantita || quantita <= 0}
+              loading={generaRicetteConQuantita.isPending}
             >
-              {generaRicetteConQuantita.isPending ? (
-                <>
-                  <Lucide icon="Loader" className="w-4 h-4 mr-2 animate-spin" />
-                  Generando...
-                </>
-              ) : (
-                "Genera"
-              )}
+              Genera
             </Button>
           </Dialog.Footer>
         </Dialog.Panel>
@@ -366,8 +359,8 @@ const GestioneRicette: React.FC = () => {
             <Button variant="primary" onClick={() => {
               setOpenDialogEliminazioneRicetta(false);
               eliminaRicetta.mutate(ricettaDaEliminare?.guid_id ?? "");
-            }} disabled={eliminaRicetta.isPending}>
-              {eliminaRicetta.isPending ? "Eliminazione in corso..." : "Elimina"}
+            }} loading={eliminaRicetta.isPending}>
+              Elimina
             </Button>
           </Dialog.Footer>
         </Dialog.Panel>
@@ -535,10 +528,8 @@ const GestioneRicette: React.FC = () => {
               {isLoadingRicette ? (
                 <Table.Tr className="[&_td]:last:border-b-0">
                   <Table.Td colSpan={9} className="py-8 border-dashed dark:bg-darkmode-600 text-center">
-                    <div className="flex flex-col items-center gap-2">
-                      <div className="animate-spin">
-                        <Lucide icon="Loader" className="w-8 h-8 text-primary" />
-                      </div>
+                    <div role="status" className="flex flex-col items-center gap-2">
+                      <Spinner size="lg" decorativo />
                       <span className="text-sm text-slate-500">Caricamento ricette...</span>
                     </div>
                   </Table.Td>
@@ -670,9 +661,13 @@ const GestioneRicette: React.FC = () => {
                     <Table.Td className="relative py-4 border-dashed dark:bg-darkmode-600">
                       <div className="flex items-center justify-center">
                         <Popover className="h-5">
-                          <Popover.Button className="w-5 h-5 text-slate-500">
+                          <Popover.Button
+                            aria-label={`Azioni ricetta ${ricetta.titolo ?? ""}`.trim()}
+                            className="w-5 h-5 text-slate-500"
+                          >
                             <Lucide
                               icon="EllipsisVertical"
+                              aria-hidden="true"
                               className="w-5 h-5 stroke-slate-400/70 fill-slate-400/70"
                             />
                           </Popover.Button>

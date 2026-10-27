@@ -37,7 +37,7 @@ const StatCard: FC<StatCardProps> = ({
           </span>
         )}
       </p>
-      {sublabel && <p className="text-[10px] text-slate-400 mt-0.5">{sublabel}</p>}
+      {sublabel && <p className="text-3xs text-slate-400 mt-0.5">{sublabel}</p>}
     </div>
   </div>
 );

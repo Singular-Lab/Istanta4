@@ -181,7 +181,7 @@ export default function FilterTemplateVersionHistory({
                                                 {badges.map((badge) => (
                                                     <span
                                                         key={badge.key}
-                                                        className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${badgeStyles[badge.key]}`}
+                                                        className={`rounded-full px-2 py-0.5 text-2xs font-semibold ${badgeStyles[badge.key]}`}
                                                     >
                                                         {badge.label}
                                                     </span>

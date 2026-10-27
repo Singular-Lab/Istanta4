@@ -1,6 +1,7 @@
 import { FormLabel, FormSelect } from "@/components/Base/Form";
 import Dialog from "@/components/Base/Headless/Dialog";
 import Lucide from "@/components/Base/Lucide";
+import PageError from "@/components/Base/PageError";
 import withSessionCheck from "@/components/SessionChecker";
 import { useNotification } from "@/context/NotificationContext";
 import { useUser } from "@/context/UserContext";
@@ -103,7 +104,7 @@ function MenaboPromoPage() {
     const queryClient = useQueryClient();
     const { showNotification } = useNotification();
     const { user } = useUser();
-    const { data, isLoading, isError } = useFetchDatoPerMenabo(idPromo);
+    const { data, isLoading, isError, error, refetch } = useFetchDatoPerMenabo(idPromo);
     const { data: regoleMenabo } = useFetchRegoleMenabo();
     const { data: menaboLayout } = useFetchMenaboLayout(idPromo);
     const { mutateAsync: saveMenaboLayout, isPending: isSavingMenaboLayout } = useSaveMenaboLayout(idPromo);
@@ -511,6 +512,7 @@ function MenaboPromoPage() {
                                 hasSubgroups ? toggleGroup(sourceKey) : setSelectedItem(sourceKey);
                             }}
                             disabled={!hasAvailableRecords}
+                            aria-expanded={hasSubgroups ? isExpanded : undefined}
                             className={clsx([
                                 "group flex items-center py-2.5",
                                 "text-left w-full rounded px-1.5 transition-colors",
@@ -524,6 +526,7 @@ function MenaboPromoPage() {
                             {hasSubgroups ? (
                                 <Lucide
                                     icon={isExpanded ? "ChevronDown" : "ChevronRight"}
+                                    aria-hidden="true"
                                     className="w-3 h-3 mr-1 flex-shrink-0 text-slate-400"
                                 />
                             ) : (
@@ -629,18 +632,22 @@ function MenaboPromoPage() {
             {!isSidebarOpen && (
                 <div className="w-8 flex-shrink-0 border-r border-slate-200/80 bg-slate-50/60 dark:border-darkmode-400 dark:bg-darkmode-700/40 flex flex-col items-center pt-3 gap-1">
                     <button
+                        type="button"
                         onClick={() => setIsSidebarOpen(true)}
                         className="flex h-7 w-7 items-center justify-center rounded text-slate-400 hover:bg-white hover:text-slate-600 dark:hover:bg-darkmode-600"
                         title="Mostra pannello"
+                        aria-label="Mostra pannello"
                     >
-                        <Lucide icon="PanelLeftOpen" className="h-3.5 w-3.5" />
+                        <Lucide icon="PanelLeftOpen" aria-hidden="true" className="h-3.5 w-3.5" />
                     </button>
                     <button
+                        type="button"
                         onClick={handleBackToPromo}
                         className="flex h-7 w-7 items-center justify-center rounded text-slate-400 hover:bg-white hover:text-slate-600 dark:hover:bg-darkmode-600"
                         title="Torna alla promozione"
+                        aria-label="Torna alla promozione"
                     >
-                        <Lucide icon="ChevronLeft" className="h-3.5 w-3.5" />
+                        <Lucide icon="ChevronLeft" aria-hidden="true" className="h-3.5 w-3.5" />
                     </button>
                 </div>
             )}
@@ -655,18 +662,22 @@ function MenaboPromoPage() {
                         </div>
                         <div className="flex items-center gap-1">
                             <button
+                                type="button"
                                 onClick={handleBackToPromo}
                                 className="flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-500 dark:hover:bg-darkmode-500"
                                 title="Torna alla promozione"
+                                aria-label="Torna alla promozione"
                             >
-                                <Lucide icon="ChevronLeft" className="h-3.5 w-3.5" />
+                                <Lucide icon="ChevronLeft" aria-hidden="true" className="h-3.5 w-3.5" />
                             </button>
                             <button
+                                type="button"
                                 onClick={() => setIsSidebarOpen(false)}
                                 className="flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-500 dark:hover:bg-darkmode-500"
                                 title="Comprimi pannello"
+                                aria-label="Comprimi pannello"
                             >
-                                <Lucide icon="PanelLeftClose" className="h-3.5 w-3.5" />
+                                <Lucide icon="PanelLeftClose" aria-hidden="true" className="h-3.5 w-3.5" />
                             </button>
                         </div>
                     </div>
@@ -695,7 +706,7 @@ function MenaboPromoPage() {
                             {/* Riepilogo visivo: canali/aree occupati da altri (cliccabili per entrarci) */}
                             {divisioniOccupate.length > 0 && (
                                 <div className="flex flex-col gap-1 rounded border border-slate-200 bg-slate-50/60 p-2 dark:border-darkmode-400 dark:bg-darkmode-700/40">
-                                    <div className="px-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                                    <div className="px-0.5 text-2xs font-semibold uppercase tracking-wide text-slate-400">
                                         {etichettaDivisione} in uso
                                     </div>
                                     {divisioniOccupate.map(({ r, editors }) => (
@@ -707,10 +718,11 @@ function MenaboPromoPage() {
                                                 type="button"
                                                 onClick={() => handleCanaleChange(r.id)}
                                                 title={`Occupata da ${editors.map(e => e.userName).join(", ")}`}
+                                                aria-label={`${r.label}, occupata da ${editors.map(e => e.userName).join(", ")}`}
                                                 className="flex min-w-0 flex-1 items-center justify-between gap-2 text-left"
                                             >
                                                 <span className="flex min-w-0 items-center gap-1.5">
-                                                    <Lucide icon="Lock" className="h-3 w-3 flex-shrink-0 text-amber-500" />
+                                                    <Lucide icon="Lock" aria-hidden="true" className="h-3 w-3 flex-shrink-0 text-amber-500" />
                                                     <span className="truncate text-xs font-medium text-slate-600 dark:text-slate-200">{r.label}</span>
                                                 </span>
                                                 <span className="flex flex-shrink-0 items-center -space-x-1.5">
@@ -718,7 +730,7 @@ function MenaboPromoPage() {
                                                         <span
                                                             key={e.socketId}
                                                             title={e.userName}
-                                                            className="flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-bold text-white ring-2 ring-white dark:ring-darkmode-600"
+                                                            className="flex h-5 w-5 items-center justify-center rounded-full text-3xs font-bold text-white ring-2 ring-white dark:ring-darkmode-600"
                                                             style={{ backgroundColor: colorForUser(e.userId) }}
                                                         >
                                                             {getInitials(e.userName)}
@@ -733,7 +745,7 @@ function MenaboPromoPage() {
                                                         setPendingPresenceCanaleId(r.id);
                                                         setIsPresenceDialogOpen(true);
                                                     }}
-                                                    className="flex-shrink-0 rounded border border-red-200 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-600 transition-colors hover:bg-red-100 dark:border-red-800/50 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40"
+                                                    className="flex-shrink-0 rounded border border-red-200 bg-red-50 px-2 py-1 text-2xs font-semibold text-red-600 transition-colors hover:bg-red-100 dark:border-red-800/50 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40"
                                                     title={`Rimuovi gli utenti da ${r.label}`}
                                                 >
                                                     Rimuovi
@@ -752,8 +764,9 @@ function MenaboPromoPage() {
                                 >
                                     <div className="flex items-center gap-1.5 min-w-0">
                                         <span
+                                            aria-hidden="true"
                                             title={editor.userName}
-                                            className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white"
+                                            className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-3xs font-bold text-white"
                                             style={{ backgroundColor: colorForUser(editor.userId) }}
                                         >
                                             {getInitials(editor.userName)}
@@ -836,7 +849,7 @@ function MenaboPromoPage() {
                                     </span>
                                     <span className="flex min-w-0 flex-col">
                                         <span className="truncate">Promemoria pagina</span>
-                                        <span className="truncate text-[10px] font-medium text-slate-400 dark:text-slate-500">visibile solo nel menabò</span>
+                                        <span className="truncate text-3xs font-medium text-slate-400 dark:text-slate-500">visibile solo nel menabò</span>
                                     </span>
                                 </span>
                                 <Lucide
@@ -844,7 +857,7 @@ function MenaboPromoPage() {
                                     className="ml-2 h-3.5 w-3.5 flex-shrink-0 text-amber-500/70 opacity-60 transition-opacity group-hover:opacity-100"
                                 />
                             </div>
-                            <p className="text-[11px] leading-snug text-slate-400">
+                            <p className="text-2xs leading-snug text-slate-400">
                                 Annotazione visibile nel menabò: non finisce negli export.
                             </p>
                         </div>
@@ -860,33 +873,25 @@ function MenaboPromoPage() {
             {/* Area canvas */}
             <div className="flex-1 min-w-0 flex flex-col">
                 {!isLoading && isError ? (
-                    <div className="flex-1 flex items-center justify-center bg-slate-100/80 dark:bg-darkmode-700/40">
-                        <div className="flex flex-col items-center gap-5 max-w-sm text-center px-8">
-                            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white shadow-sm dark:bg-darkmode-600">
-                                <Lucide icon="FileX" className="h-7 w-7 text-slate-400 dark:text-slate-300" />
-                            </div>
-                            <div className="flex flex-col gap-2">
-                                <h3 className="text-base font-semibold text-slate-700 dark:text-slate-100">
-                                    Analisi del momento non disponibile
-                                </h3>
-                                <p className="text-sm text-slate-400 leading-relaxed">
-                                    Per utilizzare il Menabò è necessario che la promozione abbia almeno un'analisi del momento configurata.
-                                    Configura il primo momento dalla pagina della promozione e riprova.
-                                </p>
-                            </div>
-                            <div className="flex items-center gap-1.5 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-400">
-                                <Lucide icon="AlertTriangle" className="h-3.5 w-3.5 flex-shrink-0" />
-                                Operazione non disponibile senza l'analisi del primo momento.
-                            </div>
-                            <button
-                                type="button"
-                                onClick={handleBackToPromo}
-                                className="inline-flex items-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-800 dark:border-darkmode-400 dark:bg-darkmode-600 dark:text-slate-200 dark:hover:bg-darkmode-500"
-                            >
-                                <Lucide icon="ChevronLeft" className="mr-2 h-4 w-4" />
-                                Torna alla promozione
-                            </button>
-                        </div>
+                    // Il servizio non distingue "nessuna analisi del momento" dagli altri errori: si mostra il motivo ricevuto
+                    <div className="flex-1 flex flex-col items-center justify-center gap-4 overflow-y-auto bg-slate-100/80 p-6 dark:bg-darkmode-700/40">
+                        <PageError
+                            className="w-full max-w-xl min-h-0 py-10"
+                            titolo="Menabò non disponibile"
+                            motivo={error?.message || "Impossibile caricare i dati del menabò."}
+                            onRiprova={() => refetch()}
+                        />
+                        <p className="max-w-xl text-center text-sm leading-relaxed text-slate-500">
+                            Il Menabò richiede che la promozione abbia almeno un'analisi del momento: se manca, configurala dalla pagina della promozione.
+                        </p>
+                        <button
+                            type="button"
+                            onClick={handleBackToPromo}
+                            className="inline-flex items-center rounded-control border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-800 dark:border-darkmode-400 dark:bg-darkmode-600 dark:text-slate-200 dark:hover:bg-darkmode-500"
+                        >
+                            <Lucide icon="ChevronLeft" aria-hidden="true" className="mr-2 h-4 w-4" />
+                            Torna alla promozione
+                        </button>
                     </div>
                 ) : (
                     <MenaboCanvas
@@ -913,7 +918,7 @@ function MenaboPromoPage() {
             >
                 <Dialog.Panel>
                     <Dialog.Title>
-                        <h2 className="mr-auto text-base font-medium text-slate-700 dark:text-slate-100">
+                        <h2 className="mr-auto title-card dark:text-slate-100">
                             Modifiche non salvate
                         </h2>
                     </Dialog.Title>
@@ -967,7 +972,7 @@ function MenaboPromoPage() {
                     >
                         <Dialog.Panel>
                             <Dialog.Title>
-                                <h2 className="mr-auto text-base font-medium text-slate-700 dark:text-slate-100">
+                                <h2 className="mr-auto title-card dark:text-slate-100">
                                     {etichettaDivisione} in uso
                                 </h2>
                             </Dialog.Title>

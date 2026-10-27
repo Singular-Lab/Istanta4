@@ -112,8 +112,9 @@ const FileManagement: React.FC<FileManagementProps> = ({ files, setFiles, setNam
                                             variant="outline-danger"
                                             size="sm"
                                             onClick={() => handleDeleteFile(index)}
+                                            aria-label="Rimuovi file"
                                         >
-                                            <Lucide icon="Trash2" className="w-4 h-4" />
+                                            <Lucide aria-hidden="true" icon="Trash2" className="w-4 h-4" />
                                         </Button>
                                 </Table.Td>
                             </Table.Tr>

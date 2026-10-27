@@ -168,9 +168,12 @@ const TimeLinePromo: React.FC<TimelineProps> = ({
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
           className="mr-3 p-2 hover:bg-white/60 rounded-lg text-slate-700 transition-all duration-200 hover:shadow-sm group"
+          aria-expanded={!isCollapsed}
+          aria-label={isCollapsed ? "Espandi timeline" : "Comprimi timeline"}
         >
           <Lucide 
             icon={isCollapsed ? "ChevronUp" : "ChevronDown"} 
+            aria-hidden="true"
             className="w-4 h-4 transition-transform duration-200 group-hover:scale-110" 
           />
         </button>
@@ -196,15 +199,16 @@ const TimeLinePromo: React.FC<TimelineProps> = ({
           >
             <Lucide icon="CalendarDays" className="w-4 h-4 group-hover:scale-110 transition-transform duration-200" />
           </button>
-          <button className="p-2 hover:bg-white/60 rounded-lg text-slate-600 transition-all duration-200 hover:shadow-sm hover:text-primary group">
-            <Lucide icon="ZoomIn" className="w-4 h-4 group-hover:scale-110 transition-transform duration-200" />
+          <button className="p-2 hover:bg-white/60 rounded-lg text-slate-600 transition-all duration-200 hover:shadow-sm hover:text-primary group" aria-label="Aumenta zoom">
+            <Lucide icon="ZoomIn" aria-hidden="true" className="w-4 h-4 group-hover:scale-110 transition-transform duration-200" />
           </button>
           <div className="w-px h-4 bg-slate-300 mx-1"></div>
           <button 
             className="p-2 hover:bg-red-50 rounded-lg text-slate-600 hover:text-red-600 transition-all duration-200 hover:shadow-sm group" 
             onClick={onClose}
+            aria-label="Chiudi timeline"
           >
-            <Lucide icon="X" className="w-4 h-4 group-hover:scale-110 transition-transform duration-200" />
+            <Lucide icon="X" aria-hidden="true" className="w-4 h-4 group-hover:scale-110 transition-transform duration-200" />
           </button>
         </div>
       </div>
@@ -276,7 +280,7 @@ const TimeLinePromo: React.FC<TimelineProps> = ({
                           {date.format("DD")}
                         </span>
                         <span className={clsx(
-                          "text-[10px] leading-none font-medium",
+                          "text-3xs leading-none font-medium",
                           isSelected ? "text-primary/70" :
                           isToday ? "text-emerald-600" :
                           isWeekend ? "text-slate-400" : "text-slate-500"
@@ -345,13 +349,13 @@ const TimeLinePromo: React.FC<TimelineProps> = ({
                         
                         <div className="flex items-center gap-1.5 mt-0.5">
                           {hasError && errorInfo && (
-                            <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-medium">
+                            <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-3xs font-medium">
                               <Lucide icon="TriangleAlert" className="w-2.5 h-2.5" />
                               {errorInfo.numeroRefPromo}
                             </div>
                           )}
                           
-                          <div className="flex items-center gap-1 text-[10px] text-slate-500">
+                          <div className="flex items-center gap-1 text-3xs text-slate-500">
                             <span>{dayjs(task.startDate, 'DD/MM/YYYY').format("DD/MM")}</span>
                             <Lucide icon="ArrowRight" className="w-2.5 h-2.5" />
                             <span>{dayjs(task.endDate, 'DD/MM/YYYY').format("DD/MM")}</span>
@@ -443,7 +447,7 @@ const TimeLinePromo: React.FC<TimelineProps> = ({
                       content={
                         <div className="p-3 rounded-lg bg-white border border-slate-200/60 shadow-xl backdrop-blur-sm max-w-xs">
                           <div className="font-semibold text-slate-800 mb-1 text-xs">{task.name}</div>
-                          <div className="flex items-center gap-1.5 text-[10px] text-slate-600 mb-1">
+                          <div className="flex items-center gap-1.5 text-3xs text-slate-600 mb-1">
                             <div className="flex items-center gap-1">
                               <Lucide icon="Calendar" className="w-2.5 h-2.5" />
                               <span>{dayjs(task.startDate, 'DD/MM/YYYY').format("DD MMM")}</span>
@@ -452,7 +456,7 @@ const TimeLinePromo: React.FC<TimelineProps> = ({
                             <span>{dayjs(task.endDate, 'DD/MM/YYYY').format("DD MMM")}</span>
                           </div>
                           {hasError && (
-                            <div className="flex items-center gap-1.5 px-2 py-1 bg-red-50 rounded text-[10px] text-red-700 border border-red-200/60">
+                            <div className="flex items-center gap-1.5 px-2 py-1 bg-red-50 rounded text-3xs text-red-700 border border-red-200/60">
                               <Lucide icon="TriangleAlert" className="w-3 h-3" />
                               <span className="font-medium">{errorCount} referenze mancanti</span>
                             </div>
@@ -483,7 +487,7 @@ const TimeLinePromo: React.FC<TimelineProps> = ({
                           {/* Etichetta */}
                           {width > 60 && (
                             <div className="absolute left-0 right-0 top-0 bottom-0 flex items-center px-2">
-                              <span className="text-white text-[10px] font-medium truncate drop-shadow-sm">{task.name}</span>
+                              <span className="text-white text-3xs font-medium truncate drop-shadow-sm">{task.name}</span>
                             </div>
                           )}
                           

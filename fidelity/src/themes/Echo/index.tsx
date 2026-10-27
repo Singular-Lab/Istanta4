@@ -354,7 +354,7 @@ function Layout() {
             </div>
             <div
               className={clsx([
-                "h-full bg-white rounded-none z-20 relative w-[275px] border-r border-[#e3e6eb] overflow-hidden flex flex-col transition-[width,box-shadow] duration-200 ease-out",
+                "h-full bg-white rounded-none z-20 relative w-[275px] border-r border-slate-200 overflow-hidden flex flex-col transition-[width,box-shadow] duration-200 ease-out",
                 { "xl:w-[76px]": menuRidotto },
                 { "xl:shadow-[8px_0_24px_-12px_rgba(15,23,42,0.25)]": menuCompresso && menuSorvolato },
               ])}
@@ -362,7 +362,7 @@ function Layout() {
               <nav aria-label="Menu principale" className="contents">
               <div
                 className={clsx([
-                  "flex-none hidden xl:flex items-center z-10 px-[22px] h-[65px] w-[275px] overflow-hidden relative border-b border-[#e3e6eb]",
+                  "flex-none hidden xl:flex items-center z-10 px-[22px] h-[65px] w-[275px] overflow-hidden relative border-b border-slate-200",
                 ])}
               >
                 <Link
@@ -378,15 +378,15 @@ function Layout() {
                       { "xl:opacity-0": menuRidotto },
                     ])}
                   >
-                    <div className="text-[14px] font-medium text-[#03045e]">Istanta 2</div>
-                    <div className="text-[11px] text-[#6b7280]">Web Platform</div>
+                    <div className="text-sm font-medium text-primary">Istanta 2</div>
+                    <div className="text-2xs text-slate-500">Web Platform</div>
                   </div>
                 </Link>
                 {logoGDO && (
                   <div
                     title="Logo GDO"
                     className={clsx([
-                      "flex-none flex items-center justify-center w-8 h-8 ml-2 p-0.5 bg-white border border-[#e3e6eb] rounded-md transition-opacity duration-200",
+                      "flex-none flex items-center justify-center w-8 h-8 ml-2 p-0.5 bg-white border border-slate-200 rounded-md transition-opacity duration-200",
                       { "xl:opacity-0": menuRidotto },
                     ])}
                   >

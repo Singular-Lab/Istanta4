@@ -3,9 +3,11 @@ import { FormInput, FormSelect } from "@/components/Base/Form";
 import { Menu, Popover } from "@/components/Base/Headless";
 import Lucide from "@/components/Base/Lucide";
 import withSessionCheck from "@/components/SessionChecker";
+import PageError from "@/components/Base/PageError";
 import PageHeader from "@/components/Base/PageHeader";
 import Pagination from "@/components/Base/Pagination";
 import EmptyState from "@/components/EmptyState";
+import { useDebounce } from "@/hooks/useDebounce";
 import { useFetchAllContenutiDigitali, useFetchAree, useFetchCanali, useFetchFormati, useFetchLavorazioni, useFetchTipiExport } from "@/query/query";
 import axios from "axios";
 import React, { useMemo, useState } from "react";
@@ -38,6 +40,12 @@ const ContenutiDigitali: React.FC = () => {
     idCombinazione: '',
     idDeclinazione: ''
   });
+  const [testoRicerca, setTestoRicerca] = useState("");
+  // La ricerca per nome parte 300 ms dopo l'ultima battuta e riparte dalla prima pagina
+  const applicaRicerca = useDebounce((testo: string) => {
+    setFilters((precedenti) => ({ ...precedenti, nome: testo.trim() }));
+    setPage(1);
+  }, 300);
   const filesQuery = useFetchAllContenutiDigitali(page, pageSize, filters);
   // Compatibilità: appiattisci struttura gerarchica promos → file piatto
   const files = useMemo(() => ({
@@ -183,12 +191,19 @@ const ContenutiDigitali: React.FC = () => {
                 <div className="relative">
                   <Lucide
                     icon="Search"
+                    aria-hidden="true"
                     className="absolute inset-y-0 left-0 z-10 w-4 h-4 my-auto ml-3 stroke-[1.3] text-slate-500"
                   />
                   <FormInput
                     type="text"
+                    value={testoRicerca}
+                    onChange={(e) => {
+                      setTestoRicerca(e.target.value);
+                      applicaRicerca(e.target.value);
+                    }}
                     placeholder="Ricerca contenuti..."
-                    className="pl-9 sm:w-64 rounded-[0.5rem]"
+                    aria-label="Cerca contenuti"
+                    className="pl-9 sm:w-64 rounded-control"
                   />
                 </div>
               </div>
@@ -324,6 +339,7 @@ const ContenutiDigitali: React.FC = () => {
                               Chiudi
                             </Button>
                             <Button onClick={() => {
+                              setTestoRicerca("");
                               setFilters({
                                 idArea: '',
                                 idCanale: '',
@@ -334,12 +350,13 @@ const ContenutiDigitali: React.FC = () => {
                                 idLavorazione: '',
                                 idCombinazione: '',
                                 idDeclinazione: ''
-                              })
+                              });
+                              setPage(1);
                             }}
                               variant="primary"
                               className="w-32 ml-2">
                               Reset
-                              <Lucide icon="RefreshCcw" className="w-4 h-4 stroke-[1.5]" />
+                              <Lucide icon="RefreshCcw" aria-hidden="true" className="w-4 h-4 stroke-[1.5]" />
                             </Button>
                             <Button onClick={() => {
                               files.refetch()
@@ -356,6 +373,15 @@ const ContenutiDigitali: React.FC = () => {
               </div>
             </div>
 
+            {filesQuery.isError && (
+              <PageError
+                compatta
+                className="mx-5 mb-5"
+                titolo="Contenuti non caricati"
+                motivo={filesQuery.error?.message || "Si è verificato un errore durante il recupero dei contenuti digitali."}
+                onRiprova={() => filesQuery.refetch()}
+              />
+            )}
             {Array.isArray(files?.data?.files) && files?.data?.files.length === 0 && (
               <EmptyState
                 icon="FileX"
@@ -485,18 +511,12 @@ const ContenutiDigitali: React.FC = () => {
             )}
             {/* Se invece ci sono file, mostriamo la visualizzazione grid/list */}
             <div className="flex flex-col-reverse flex-wrap items-center p-5 flex-reverse gap-y-2 sm:flex-row">
-              <Pagination className="flex-1 w-full mr-auto sm:w-auto">
-                <Pagination.Link onClick={() => {
-                  console.log('Navigating to first page');
-                  setPage(1);
-                }}>
-                  <Lucide icon="ChevronsLeft" className="w-4 h-4" />
+              <Pagination aria-label="Paginazione" className="flex-1 w-full mr-auto sm:w-auto">
+                <Pagination.Link aria-label="Prima pagina" onClick={() => setPage(1)}>
+                  <Lucide icon="ChevronsLeft" aria-hidden="true" className="w-4 h-4" />
                 </Pagination.Link>
-                <Pagination.Link onClick={() => {
-                  console.log('Navigating to previous page');
-                  setPage((prev) => Math.max(prev - 1, 1));
-                }}>
-                  <Lucide icon="ChevronLeft" className="w-4 h-4" />
+                <Pagination.Link aria-label="Pagina precedente" onClick={() => setPage((prev) => Math.max(prev - 1, 1))}>
+                  <Lucide icon="ChevronLeft" aria-hidden="true" className="w-4 h-4" />
                 </Pagination.Link>
                 <Pagination.Link>...</Pagination.Link>
                 {files?.data?.totalPages && Array.from({ length: files.data.totalPages }, (_, i) => i + 1).map((pageNumber) => {
@@ -508,10 +528,7 @@ const ContenutiDigitali: React.FC = () => {
                       <Pagination.Link
                         key={pageNumber}
                         active={isCurrentPage}
-                        onClick={() => {
-                          console.log(`Navigating to page ${pageNumber}`);
-                          setPage(pageNumber);
-                        }}
+                        onClick={() => setPage(pageNumber)}
                       >
                         {pageNumber}
                       </Pagination.Link>
@@ -521,24 +538,16 @@ const ContenutiDigitali: React.FC = () => {
                   return null;
                 })}
                 <Pagination.Link>...</Pagination.Link>
-                <Pagination.Link onClick={() => {
-                  console.log('Navigating to next page');
-                  setPage((prev) => Math.min(prev + 1, files?.data?.totalPages || 1));
-                }}>
-                  <Lucide icon="ChevronRight" className="w-4 h-4" />
+                <Pagination.Link aria-label="Pagina successiva" onClick={() => setPage((prev) => Math.min(prev + 1, files?.data?.totalPages || 1))}>
+                  <Lucide icon="ChevronRight" aria-hidden="true" className="w-4 h-4" />
                 </Pagination.Link>
-                <Pagination.Link onClick={() => {
-                  console.log('Navigating to last page');
-                  setPage(files?.data?.totalPages || 1);
-                }}>
-                  <Lucide icon="ChevronsRight" className="w-4 h-4" />
+                <Pagination.Link aria-label="Ultima pagina" onClick={() => setPage(files?.data?.totalPages || 1)}>
+                  <Lucide icon="ChevronsRight" aria-hidden="true" className="w-4 h-4" />
                 </Pagination.Link>
               </Pagination>
-              <FormSelect onChange={(e) => {
-                const newSize = parseInt(e.target.value);
-                console.log(`Changing page size to ${newSize}`);
-                setPageSize(newSize);
-              }} className="sm:w-20 rounded-[0.5rem]">
+              <FormSelect aria-label="Contenuti per pagina" onChange={(e) => {
+                setPageSize(parseInt(e.target.value));
+              }} className="sm:w-20 rounded-control">
                 <option value={10}>10</option>
                 <option value={25}>25</option>
                 <option value={35}>35</option>

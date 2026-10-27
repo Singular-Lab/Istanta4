@@ -138,8 +138,9 @@ const NamingConvention = forwardRef<NamingConventionRef | undefined, NamingConve
             handleRemoveOption(index);
           }}
           className="ml-1"
+          aria-label={`Rimuovi ${option.nome}`}
         >
-          <Lucide icon="Trash2" className="w-3 h-3" />
+          <Lucide aria-hidden="true" icon="Trash2" className="w-3 h-3" />
         </Button>
       </div>
     );

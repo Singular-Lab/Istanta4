@@ -54,7 +54,7 @@ const AuditLogFilters: FC<AuditLogFiltersProps> = ({
     <div className="flex flex-wrap items-end gap-3">
       {/* Ricerca */}
       <div className="flex flex-col gap-1">
-        <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
+        <label className="text-2xs font-medium text-slate-500 uppercase tracking-wider">
           Ricerca
         </label>
         <div className="relative">
@@ -74,7 +74,7 @@ const AuditLogFilters: FC<AuditLogFiltersProps> = ({
 
       {/* Tipo evento */}
       <div className="flex flex-col gap-1">
-        <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
+        <label className="text-2xs font-medium text-slate-500 uppercase tracking-wider">
           Tipo evento
         </label>
         <select
@@ -95,7 +95,7 @@ const AuditLogFilters: FC<AuditLogFiltersProps> = ({
 
       {/* Severita */}
       <div className="flex flex-col gap-1">
-        <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
+        <label className="text-2xs font-medium text-slate-500 uppercase tracking-wider">
           Severita
         </label>
         <select
@@ -116,7 +116,7 @@ const AuditLogFilters: FC<AuditLogFiltersProps> = ({
 
       {/* Risultato */}
       <div className="flex flex-col gap-1">
-        <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
+        <label className="text-2xs font-medium text-slate-500 uppercase tracking-wider">
           Risultato
         </label>
         <select
@@ -135,7 +135,7 @@ const AuditLogFilters: FC<AuditLogFiltersProps> = ({
 
       {/* Date range */}
       <div className="flex flex-col gap-1">
-        <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
+        <label className="text-2xs font-medium text-slate-500 uppercase tracking-wider">
           Da
         </label>
         <input
@@ -149,7 +149,7 @@ const AuditLogFilters: FC<AuditLogFiltersProps> = ({
       </div>
 
       <div className="flex flex-col gap-1">
-        <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
+        <label className="text-2xs font-medium text-slate-500 uppercase tracking-wider">
           A
         </label>
         <input

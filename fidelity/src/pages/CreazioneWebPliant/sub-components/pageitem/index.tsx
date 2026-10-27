@@ -153,8 +153,9 @@ const PageItem: React.FC<{
                         size="xs"
                         variant="soft-danger"
                         onClick={removePage}
+                        aria-label="Rimuovi pagina"
                     >
-                        <Lucide icon="Trash2" className="w-3 h-3" />
+                        <Lucide aria-hidden="true" icon="Trash2" className="w-3 h-3" />
                     </Button>
                 </>
             ) : (
@@ -178,15 +179,17 @@ const PageItem: React.FC<{
                         size="xs"
                         variant="soft-success"
                         onClick={confirmSelection}
+                        aria-label="Conferma pagina"
                     >
-                        <Lucide icon="Check" className="w-3 h-3" />
+                        <Lucide aria-hidden="true" icon="Check" className="w-3 h-3" />
                     </Button>
                     <Button
                         size="xs"
                         variant="soft-danger"
                         onClick={removePage}
+                        aria-label="Annulla selezione pagina"
                     >
-                        <Lucide icon="X" className="w-3 h-3" />
+                        <Lucide aria-hidden="true" icon="X" className="w-3 h-3" />
                     </Button>
                 </>
             )}

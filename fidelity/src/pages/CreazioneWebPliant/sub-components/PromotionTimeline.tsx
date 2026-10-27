@@ -1111,8 +1111,8 @@ const PromotionTimeline: React.FC<PromotionTimelineProps> = ({
               >
                 <Lucide icon="TestTube" className="w-4 h-4" />
               </Button>
-              <Button variant="outline-secondary" size="sm" onClick={onToggle}>
-                <Lucide icon="X" className="w-4 h-4" />
+              <Button variant="outline-secondary" size="sm" onClick={onToggle} aria-label="Chiudi timeline">
+                <Lucide aria-hidden="true" icon="X" className="w-4 h-4" />
               </Button>
             </div>
           </div>
@@ -1223,9 +1223,10 @@ const PromotionTimeline: React.FC<PromotionTimelineProps> = ({
                                   autoFocus
                                 />
                               ) : (
-                                <span
+                                <button
+                                  type="button"
                                   className={clsx(
-                                    "text-xs font-medium truncate cursor-pointer px-1 py-0.5 rounded transition-colors",
+                                    "text-left text-xs font-medium truncate cursor-pointer px-1 py-0.5 rounded transition-colors",
                                     selectedComponent?.id === item.id ? "text-primary" : "text-slate-700",
                                     isHybrid ? "hover:bg-pink-50" : "hover:bg-blue-50"
                                   )}
@@ -1236,14 +1237,14 @@ const PromotionTimeline: React.FC<PromotionTimelineProps> = ({
                                   }}
                                 >
                                   {laneLabelComponent(item.id)}
-                                </span>
+                                </button>
                               )}
                             </div>
 
                             {/* Indicatori keyframe */}
                             {kCount > 0 && (
                               <div className="flex items-center gap-1">
-                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
+                                <span className="text-3xs px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
                                   {activeCount}/{kCount}
                                 </span>
                               </div>
@@ -1598,7 +1599,7 @@ const PromotionTimeline: React.FC<PromotionTimelineProps> = ({
                                     {keyframe.name && (
                                       <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 max-w-[120px]">
                                         <span className={clsx(
-                                          "text-[10px] px-1.5 border border-slate-400 py-0.5 rounded shadow-sm truncate block text-center",
+                                          "text-3xs px-1.5 border border-slate-400 py-0.5 rounded shadow-sm truncate block text-center",
                                           isKeyframeActive ? "text-slate-700 bg-white" : "text-slate-600 bg-slate-100"
                                         )}>
                                           {keyframe.name}
@@ -1705,8 +1706,9 @@ const PromotionTimeline: React.FC<PromotionTimelineProps> = ({
                       dispatch({ type: "SET_INSPECTOR_OPEN", payload: false });
                       dispatch({ type: "SET_SELECTED_KEYFRAME", payload: null });
                     }}
+                    aria-label="Chiudi editor keyframe"
                   >
-                    <Lucide icon="X" className="w-3 h-3" />
+                    <Lucide aria-hidden="true" icon="X" className="w-3 h-3" />
                   </Button>
                 </div>
 

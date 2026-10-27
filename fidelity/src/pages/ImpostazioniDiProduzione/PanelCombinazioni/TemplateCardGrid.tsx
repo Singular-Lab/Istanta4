@@ -34,16 +34,16 @@ export default function TemplateCardGrid({
   return (
     <div className="flex flex-col p-5 box box--stacked">
       {/* Panel header */}
-      <div className="pb-5 mb-5 font-medium border-b border-dashed border-slate-300/70 text-[0.94rem] flex justify-between items-center">
-        <span className="flex items-center gap-2">
-          <Lucide icon="LayoutGrid" className="w-5 h-5 text-primary" />
+      <div className="pb-5 mb-5 border-b border-dashed border-slate-300/70 flex justify-between items-center">
+        <h2 className="title-card flex items-center gap-2">
+          <Lucide icon="LayoutGrid" aria-hidden="true" className="w-5 h-5 text-primary" />
           Template combinazioni
           {templates && (
             <Badge variant="info" size="sm" className="px-2 py-1 ml-1">
               {templates.length}
             </Badge>
           )}
-        </span>
+        </h2>
       </div>
 
       {/* Search */}

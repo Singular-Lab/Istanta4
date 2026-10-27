@@ -41,23 +41,38 @@ const SettingsSection: React.FC<{
       transition={{ duration: 0.2 }}
       className="bg-white dark:bg-darkmode-700 rounded-xl border border-slate-200 dark:border-darkmode-500 shadow-sm hover:shadow-md transition-all duration-200"
     >
-      <div
-        className={`flex items-center justify-between p-4 ${collapsible ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-darkmode-600' : ''} rounded-t-xl`}
-        onClick={() => collapsible && setIsExpanded(!isExpanded)}
-      >
-        <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 bg-gradient-to-r from-primary/10 to-theme-2/10 rounded-lg flex items-center justify-center">
-            <Lucide icon={icon} className="w-4 h-4 text-primary" />
+      {collapsible ? (
+        // Sezione comprimibile: il titolo resta un heading e contiene il pulsante
+        <h4>
+          <button
+            type="button"
+            className="w-full text-left flex items-center justify-between p-4 cursor-pointer hover:bg-slate-50 dark:hover:bg-darkmode-600 rounded-t-xl"
+            onClick={() => setIsExpanded(!isExpanded)}
+            aria-expanded={isExpanded}
+          >
+            <span className="flex items-center space-x-3">
+              <span className="w-8 h-8 bg-gradient-to-r from-primary/10 to-theme-2/10 rounded-lg flex items-center justify-center">
+                <Lucide icon={icon} aria-hidden="true" className="w-4 h-4 text-primary" />
+              </span>
+              <span className="font-semibold text-slate-800 dark:text-slate-200">{title}</span>
+            </span>
+            <Lucide
+              icon={isExpanded ? "ChevronUp" : "ChevronDown"}
+              aria-hidden="true"
+              className="w-4 h-4 text-slate-500 transition-transform duration-200"
+            />
+          </button>
+        </h4>
+      ) : (
+        <div className="flex items-center justify-between p-4 rounded-t-xl">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 bg-gradient-to-r from-primary/10 to-theme-2/10 rounded-lg flex items-center justify-center">
+              <Lucide icon={icon} aria-hidden="true" className="w-4 h-4 text-primary" />
+            </div>
+            <h4 className="font-semibold text-slate-800 dark:text-slate-200">{title}</h4>
           </div>
-          <h4 className="font-semibold text-slate-800 dark:text-slate-200">{title}</h4>
         </div>
-        {collapsible && (
-          <Lucide
-            icon={isExpanded ? "ChevronUp" : "ChevronDown"}
-            className="w-4 h-4 text-slate-500 transition-transform duration-200"
-          />
-        )}
-      </div>
+      )}
       <AnimatePresence>
         {isExpanded && (
           <motion.div
@@ -869,8 +884,9 @@ const CarouselContent: React.FC<CarouselContentProps> = ({
                             }}
                             variant="danger"
                             size="xs"
+                            aria-label="Rimuovi filtro"
                           >
-                            <Lucide icon="Trash2" className="w-5 h-5" />
+                            <Lucide icon="Trash2" aria-hidden="true" className="w-5 h-5" />
                           </Button>
                         </FormInline>
                         {filterIndex < filterGroup.length - 1 && (
@@ -969,8 +985,9 @@ const CarouselContent: React.FC<CarouselContentProps> = ({
               className=""
               variant="danger"
               size="xs"
+              aria-label="Rimuovi filtro di contesto"
             >
-              <Lucide icon="Trash2" className="w-5 h-5" />
+              <Lucide icon="Trash2" aria-hidden="true" className="w-5 h-5" />
             </Button>
           </div>
         ))}
@@ -1033,8 +1050,9 @@ const CarouselContent: React.FC<CarouselContentProps> = ({
                   className="absolute top-2 right-2 rounded-md"
                   variant="danger"
                   size="xs"
+                  aria-label="Rimuovi immagine di sfondo"
                 >
-                  <Lucide icon="Trash2" className="w-4 h-4" />
+                  <Lucide icon="Trash2" aria-hidden="true" className="w-4 h-4" />
                 </Button>
               </div>
             )}
@@ -1072,8 +1090,9 @@ const CarouselContent: React.FC<CarouselContentProps> = ({
               className="absolute top-2 right-2 rounded-md"
               variant="danger"
               size="xs"
+              aria-label="Rimuovi logo"
             >
-              <Lucide icon="Trash2" className="w-4 h-4" />
+              <Lucide icon="Trash2" aria-hidden="true" className="w-4 h-4" />
             </Button>
           </div>
         )}
@@ -1185,8 +1204,9 @@ const CarouselContent: React.FC<CarouselContentProps> = ({
                         }}
                         variant="danger"
                         size="xs"
+                        aria-label="Rimuovi campo"
                       >
-                        <Lucide icon="Trash2" className="w-4 h-4" />
+                        <Lucide icon="Trash2" aria-hidden="true" className="w-4 h-4" />
                       </Button>
                     </InputGroup>
                   </div>
@@ -1200,77 +1220,77 @@ const CarouselContent: React.FC<CarouselContentProps> = ({
                   Reset Stili
                 </Button>
                 <div className="flex flex-col">
-                  <FormLabel formLabelSize="sm" htmlFor="backgroundColor">Colore di sfondo</FormLabel>
+                  <FormLabel formLabelSize="sm" htmlFor={`forced-backgroundColor-${index}`}>Colore di sfondo</FormLabel>
                   <FormInput
                     formInputSize="sm"
-                    id="backgroundColor"
+                    id={`forced-backgroundColor-${index}`}
                     type="color"
                     value={localContent?.options?.forcedStyles?.[index]?.backgroundColor || "#ffffff"}
                     onChange={(e) => updateForcedStyles("backgroundColor", e.target.value, index)} />
                 </div>
 
                 <div>
-                  <FormLabel formLabelSize="sm" htmlFor="margin">Margine (px)</FormLabel>
+                  <FormLabel formLabelSize="sm" htmlFor={`forced-margin-${index}`}>Margine (px)</FormLabel>
                   <FormInput
                     formInputSize="sm"
-                    id="margin"
+                    id={`forced-margin-${index}`}
                     type="number"
                     value={localContent?.options?.forcedStyles?.[index]?.margin?.replace("px", "") || ""}
                     onChange={(e) => updateForcedStyles("margin", `${e.target.value}px`, index)} />
                 </div>
                 <div>
-                  <FormLabel formLabelSize="sm" htmlFor="padding">Padding (px)</FormLabel>
+                  <FormLabel formLabelSize="sm" htmlFor={`forced-padding-${index}`}>Padding (px)</FormLabel>
                   <FormInput
                     formInputSize="sm"
-                    id="padding"
+                    id={`forced-padding-${index}`}
                     type="number"
                     value={localContent?.options?.forcedStyles?.[index]?.padding?.replace("px", "") || ""}
                     onChange={(e) => updateForcedStyles("padding", `${e.target.value}px`, index)} />
                 </div>
 
                 <div>
-                  <FormLabel formLabelSize="sm" htmlFor="border">Bordo (px)</FormLabel>
+                  <FormLabel formLabelSize="sm" htmlFor={`forced-border-${index}`}>Bordo (px)</FormLabel>
                   <FormInput
                     formInputSize="sm"
-                    id="border"
+                    id={`forced-border-${index}`}
                     type="number"
                     value={localContent?.options?.forcedStyles?.[index]?.border?.replace("px", "") || ""}
                     onChange={(e) => updateForcedStyles("border", `${e.target.value}px`, index)} />
                 </div>
 
                 <div>
-                  <FormLabel formLabelSize="sm" htmlFor="borderRadius">Raggio bordo (px)</FormLabel>
+                  <FormLabel formLabelSize="sm" htmlFor={`forced-borderRadius-${index}`}>Raggio bordo (px)</FormLabel>
                   <FormInput
                     formInputSize="sm"
-                    id="borderRadius"
+                    id={`forced-borderRadius-${index}`}
                     type="number"
                     value={localContent?.options?.forcedStyles?.[index]?.borderRadius?.replace("px", "") || ""}
                     onChange={(e) => updateForcedStyles("borderRadius", `${e.target.value}px`, index)} />
                 </div>
 
                 <div>
-                  <FormLabel formLabelSize="sm" htmlFor="width">Larghezza (%)</FormLabel>
+                  <FormLabel formLabelSize="sm" htmlFor={`forced-width-${index}`}>Larghezza (%)</FormLabel>
                   <FormInput
                     formInputSize="sm"
-                    id="width"
+                    id={`forced-width-${index}`}
                     type="number"
                     value={localContent?.options?.forcedStyles?.[index]?.width?.replace("%", "") || ""}
                     onChange={(e) => updateForcedStyles("width", `${e.target.value}%`, index)} />
                 </div>
                 <div>
-                  <FormLabel formLabelSize="sm" htmlFor="height">Altezza (%)</FormLabel>
+                  <FormLabel formLabelSize="sm" htmlFor={`forced-height-${index}`}>Altezza (%)</FormLabel>
                   <FormInput
                     formInputSize="sm"
-                    id="height"
+                    id={`forced-height-${index}`}
                     type="number"
                     value={localContent?.options?.forcedStyles?.[index]?.height?.replace("%", "") || ""}
                     onChange={(e) => updateForcedStyles("height", `${e.target.value}%`, index)} />
                 </div>
                 <div>
-                  <FormLabel formLabelSize="sm" htmlFor="textAlign">Allineamento testo</FormLabel>
+                  <FormLabel formLabelSize="sm" htmlFor={`forced-textAlign-${index}`}>Allineamento testo</FormLabel>
                   <FormSelect
                     formSelectSize="sm"
-                    id="textAlign"
+                    id={`forced-textAlign-${index}`}
                     value={localContent?.options?.forcedStyles?.[index]?.textAlign || ""}
                     onChange={(e) => updateForcedStyles("textAlign", e.target.value, index)}
                   >
@@ -1281,9 +1301,9 @@ const CarouselContent: React.FC<CarouselContentProps> = ({
                   </FormSelect>
                 </div>
                 <div className="flex flex-col">
-                  <FormLabel htmlFor="color">Colore testo</FormLabel>
+                  <FormLabel htmlFor={`forced-color-${index}`}>Colore testo</FormLabel>
                   <FormInput
-                    id="color"
+                    id={`forced-color-${index}`}
                     type="color"
                     value={localContent?.options?.forcedStyles?.[index]?.color || "#000000"}
                     onChange={(e) => updateForcedStyles("color", e.target.value, index)} />

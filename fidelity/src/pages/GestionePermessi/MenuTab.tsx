@@ -3,6 +3,7 @@ import { FormInput, FormSelect } from '@/components/Base/Form';
 import FormSwitch from '@/components/Base/Form/FormSwitch';
 import { Dialog } from '@/components/Base/Headless';
 import Lucide from '@/components/Base/Lucide';
+import Spinner from '@/components/Base/Spinner';
 import { useNotification } from '@/context/NotificationContext';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
@@ -45,7 +46,7 @@ const PermessoDellaPagina = ({ pathname, piccolo }: { pathname?: string | null; 
   return (
     <span
       title={pagina?.permesso ?? undefined}
-      className={`inline-flex max-w-full items-center gap-1 truncate rounded-md px-2 py-1 ${piccolo ? 'text-[11px]' : 'text-xs'} ${pathname && !pagina ? 'bg-warning/10 text-warning' : 'bg-slate-100 text-slate-600 dark:bg-darkmode-400 dark:text-slate-300'}`}
+      className={`inline-flex max-w-full items-center gap-1 truncate rounded-md px-2 py-1 ${piccolo ? 'text-2xs' : 'text-xs'} ${pathname && !pagina ? 'bg-warning/10 text-warning' : 'bg-slate-100 text-slate-600 dark:bg-darkmode-400 dark:text-slate-300'}`}
     >
       <Lucide icon={pagina?.permesso ? 'Lock' : 'LockOpen'} className="h-3 w-3 flex-shrink-0" />
       <span className="truncate">{testo}</span>
@@ -160,18 +161,22 @@ const MenuItemRow = memo(function MenuItemRow({
         <div className="flex items-center gap-3 px-4 py-3 bg-slate-50 dark:bg-darkmode-700">
           <div className="flex items-center gap-1">
             <button
+              type="button"
+              aria-label="Sposta su"
               onClick={() => onMove(index, -1)}
               disabled={index === 0}
               className="p-1 text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-default"
             >
-              <Lucide icon="ChevronUp" className="w-4 h-4" />
+              <Lucide aria-hidden="true" icon="ChevronUp" className="w-4 h-4" />
             </button>
             <button
+              type="button"
+              aria-label="Sposta giù"
               onClick={() => onMove(index, 1)}
               disabled={isLast}
               className="p-1 text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-default"
             >
-              <Lucide icon="ChevronDown" className="w-4 h-4" />
+              <Lucide aria-hidden="true" icon="ChevronDown" className="w-4 h-4" />
             </button>
           </div>
           <div className="flex items-center gap-2 flex-1">
@@ -187,10 +192,12 @@ const MenuItemRow = memo(function MenuItemRow({
             />
           </div>
           <button
+            type="button"
+            aria-label="Elimina separatore"
             onClick={() => onRemove(index)}
             className="p-1.5 text-slate-400 hover:text-danger transition-colors"
           >
-            <Lucide icon="Trash2" className="w-4 h-4" />
+            <Lucide aria-hidden="true" icon="Trash2" className="w-4 h-4" />
           </button>
         </div>
       ) : (
@@ -200,18 +207,22 @@ const MenuItemRow = memo(function MenuItemRow({
             {/* Move buttons */}
             <div className="flex flex-col items-center gap-0.5">
               <button
+                type="button"
+                aria-label="Sposta su"
                 onClick={() => onMove(index, -1)}
                 disabled={index === 0}
                 className="p-1 text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-default"
               >
-                <Lucide icon="ChevronUp" className="w-4 h-4" />
+                <Lucide aria-hidden="true" icon="ChevronUp" className="w-4 h-4" />
               </button>
               <button
+                type="button"
+                aria-label="Sposta giù"
                 onClick={() => onMove(index, 1)}
                 disabled={isLast}
                 className="p-1 text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-default"
               >
-                <Lucide icon="ChevronDown" className="w-4 h-4" />
+                <Lucide aria-hidden="true" icon="ChevronDown" className="w-4 h-4" />
               </button>
             </div>
 
@@ -289,45 +300,52 @@ const MenuItemRow = memo(function MenuItemRow({
             {/* Actions */}
             <div className="flex items-center gap-1">
               <button
+                type="button"
+                aria-label="Aggiungi sotto-voce"
                 onClick={() => onAddSubItem(index)}
                 className="p-1.5 text-slate-400 hover:text-primary transition-colors"
                 title="Aggiungi sotto-voce"
               >
-                <Lucide icon="ListPlus" className="w-4 h-4" />
+                <Lucide aria-hidden="true" icon="ListPlus" className="w-4 h-4" />
               </button>
               {item.subMenu && item.subMenu.length > 0 && (
                 <button
+                  type="button"
+                  aria-label={isExpanded ? "Chiudi sotto-menu" : "Apri sotto-menu"}
                   onClick={() => onToggleExpand(index)}
                   className="p-1.5 text-slate-400 hover:text-slate-600 transition-colors"
                   title={isExpanded ? 'Chiudi sotto-menu' : 'Apri sotto-menu'}
                 >
                   <Lucide
                     icon={isExpanded ? 'ChevronUp' : 'ChevronDown'}
+                    aria-hidden="true"
                     className="w-4 h-4"
                   />
-                  <span className="sr-only">{item.subMenu.length}</span>
                 </button>
               )}
               <button
+                type="button"
+                aria-label="Elimina voce"
                 onClick={() => onRemove(index)}
                 className="p-1.5 text-slate-400 hover:text-danger transition-colors"
               >
-                <Lucide icon="Trash2" className="w-4 h-4" />
+                <Lucide aria-hidden="true" icon="Trash2" className="w-4 h-4" />
               </button>
             </div>
           </div>
 
           {/* SubMenu count badge */}
           {item.subMenu && item.subMenu.length > 0 && !isExpanded && (
-            <div
-              className="px-4 pb-2 cursor-pointer"
+            <button
+              type="button"
+              className="block px-4 pb-2 text-left cursor-pointer"
               onClick={() => onToggleExpand(index)}
             >
               <span className="inline-flex items-center gap-1 text-xs text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                <Lucide icon="CornerDownRight" className="w-3 h-3" />
+                <Lucide icon="CornerDownRight" aria-hidden="true" className="w-3 h-3" />
                 {item.subMenu.length} sotto-voc{item.subMenu.length === 1 ? 'e' : 'i'}
               </span>
-            </div>
+            </button>
           )}
 
           {/* SubMenu items */}
@@ -341,18 +359,22 @@ const MenuItemRow = memo(function MenuItemRow({
                   {/* Move sub-item */}
                   <div className="flex flex-col items-center gap-0.5">
                     <button
+                      type="button"
+                      aria-label="Sposta sotto-voce su"
                       onClick={() => onMoveSubItem(index, subIdx, -1)}
                       disabled={subIdx === 0}
                       className="p-0.5 text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-default"
                     >
-                      <Lucide icon="ChevronUp" className="w-3.5 h-3.5" />
+                      <Lucide aria-hidden="true" icon="ChevronUp" className="w-3.5 h-3.5" />
                     </button>
                     <button
+                      type="button"
+                      aria-label="Sposta sotto-voce giù"
                       onClick={() => onMoveSubItem(index, subIdx, 1)}
                       disabled={subIdx === (item.subMenu?.length ?? 0) - 1}
                       className="p-0.5 text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-default"
                     >
-                      <Lucide icon="ChevronDown" className="w-3.5 h-3.5" />
+                      <Lucide aria-hidden="true" icon="ChevronDown" className="w-3.5 h-3.5" />
                     </button>
                   </div>
 
@@ -410,10 +432,12 @@ const MenuItemRow = memo(function MenuItemRow({
                   </div>
 
                   <button
+                    type="button"
+                    aria-label="Elimina sotto-voce"
                     onClick={() => onRemoveSubItem(index, subIdx)}
                     className="p-1 text-slate-400 hover:text-danger transition-colors"
                   >
-                    <Lucide icon="Trash2" className="w-3.5 h-3.5" />
+                    <Lucide aria-hidden="true" icon="Trash2" className="w-3.5 h-3.5" />
                   </button>
                 </div>
               ))}
@@ -674,8 +698,8 @@ export default function MenuTab() {
 
       {/* Menu items editor */}
       {isLoading ? (
-        <div className="box box--stacked p-16 flex flex-col items-center justify-center gap-3">
-          <Lucide icon="Loader2" className="w-8 h-8 text-primary animate-spin" />
+        <div role="status" className="box box--stacked p-16 flex flex-col items-center justify-center gap-3">
+          <Spinner size="lg" decorativo />
           <span className="text-sm text-slate-500">Caricamento menu...</span>
         </div>
       ) : (
@@ -713,7 +737,7 @@ export default function MenuTab() {
                 >
                   <Lucide icon="ClipboardPaste" className="w-4 h-4 mr-1.5" />
                   Incolla da: {clipboard.label}
-                  <span className="ml-1.5 text-[10px] bg-violet-100 dark:bg-violet-800/40 text-violet-600 dark:text-violet-300 px-1.5 py-0.5 rounded-full font-medium">
+                  <span className="ml-1.5 text-3xs bg-violet-100 dark:bg-violet-800/40 text-violet-600 dark:text-violet-300 px-1.5 py-0.5 rounded-full font-medium">
                     {clipboard.items.length}
                   </span>
                 </Button>
@@ -748,7 +772,7 @@ export default function MenuTab() {
                 <Lucide icon="LayoutList" className="w-7 h-7 text-slate-400" />
               </div>
               <div className="text-center">
-                <h3 className="text-base font-medium text-slate-700 dark:text-slate-200">Nessuna voce di menu</h3>
+                <h3 className="title-card dark:text-slate-200">Nessuna voce di menu</h3>
                 <p className="text-sm text-slate-500 mt-1">Aggiungi voci di menu o importa la configurazione da JSON.</p>
               </div>
             </div>
@@ -821,7 +845,7 @@ export default function MenuTab() {
       >
         <Dialog.Panel>
           <Dialog.Title>
-            <h2 className="mr-auto text-base font-medium">Ripristina menu predefiniti</h2>
+            <h2 className="title-card mr-auto">Ripristina menu predefiniti</h2>
           </Dialog.Title>
           <Dialog.Description className="space-y-4">
             <div className="p-4 border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800/30 rounded-lg">
@@ -868,7 +892,7 @@ export default function MenuTab() {
       >
         <Dialog.Panel>
           <Dialog.Title>
-            <h2 className="mr-auto text-base font-medium">Incolla menu</h2>
+            <h2 className="title-card mr-auto">Incolla menu</h2>
           </Dialog.Title>
           <Dialog.Description className="space-y-4">
             <div className="p-4 border border-violet-200 bg-violet-50 dark:bg-violet-900/20 dark:border-violet-800/30 rounded-lg">

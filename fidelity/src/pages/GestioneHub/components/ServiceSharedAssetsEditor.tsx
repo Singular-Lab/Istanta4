@@ -168,7 +168,7 @@ const ServiceSharedAssetsEditor = ({
 
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            <div className="text-2xs font-semibold uppercase tracking-wide text-slate-500">
               Documentazioni
             </div>
             <div className="mt-1 text-xl font-semibold text-slate-800">{documents.length}</div>
@@ -179,7 +179,7 @@ const ServiceSharedAssetsEditor = ({
             </div>
           </div>
           <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            <div className="text-2xs font-semibold uppercase tracking-wide text-slate-500">
               Video
             </div>
             <div className="mt-1 text-xl font-semibold text-slate-800">{videos.length}</div>
@@ -190,7 +190,7 @@ const ServiceSharedAssetsEditor = ({
             </div>
           </div>
           <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            <div className="text-2xs font-semibold uppercase tracking-wide text-slate-500">
               Totale contenuti
             </div>
             <div className="mt-1 text-xl font-semibold text-slate-800">{totalAssets}</div>
@@ -210,11 +210,11 @@ const ServiceSharedAssetsEditor = ({
               <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-800">
                 <Lucide icon="FileStack" className="h-4 w-4 shrink-0 text-primary" />
                 <span>Documentazioni</span>
-                <span className="inline-flex items-center rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                <span className="inline-flex items-center rounded-md border border-slate-200 bg-white px-2 py-0.5 text-2xs font-medium text-slate-600">
                   {documents.length}
                 </span>
                 {pendingDocumentsCount > 0 && (
-                  <span className="inline-flex items-center rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                  <span className="inline-flex items-center rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-2xs font-medium text-amber-700">
                     {pendingDocumentsCount} da caricare
                   </span>
                 )}
@@ -282,7 +282,7 @@ const ServiceSharedAssetsEditor = ({
                             </div>
                             <span
                               className={clsx(
-                                "inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-medium",
+                                "inline-flex items-center rounded-md border px-2 py-0.5 text-2xs font-medium",
                                 pendingUpload
                                   ? "border-amber-200 bg-amber-50 text-amber-700"
                                   : "border-emerald-200 bg-emerald-50 text-emerald-700"
@@ -319,8 +319,9 @@ const ServiceSharedAssetsEditor = ({
                               rel="noreferrer"
                               variant="outline-secondary"
                               size="sm"
+                              aria-label="Apri documento in una nuova scheda"
                             >
-                              <Lucide icon="ExternalLink" className="h-3.5 w-3.5" />
+                              <Lucide aria-hidden="true" icon="ExternalLink" className="h-3.5 w-3.5" />
                             </Button>
                           )}
                           {editable && (
@@ -329,8 +330,9 @@ const ServiceSharedAssetsEditor = ({
                               variant="soft-danger"
                               size="sm"
                               onClick={() => removeDocument(document.id)}
+                              aria-label="Rimuovi documento"
                             >
-                              <Lucide icon="Trash2" className="h-3.5 w-3.5" />
+                              <Lucide aria-hidden="true" icon="Trash2" className="h-3.5 w-3.5" />
                             </Button>
                           )}
                         </div>
@@ -365,11 +367,11 @@ const ServiceSharedAssetsEditor = ({
               <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-800">
                 <Lucide icon="Clapperboard" className="h-4 w-4 shrink-0 text-theme-2" />
                 <span>Video</span>
-                <span className="inline-flex items-center rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                <span className="inline-flex items-center rounded-md border border-slate-200 bg-white px-2 py-0.5 text-2xs font-medium text-slate-600">
                   {videos.length}
                 </span>
                 {pendingVideosCount > 0 && (
-                  <span className="inline-flex items-center rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                  <span className="inline-flex items-center rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-2xs font-medium text-amber-700">
                     {pendingVideosCount} da caricare
                   </span>
                 )}
@@ -435,7 +437,7 @@ const ServiceSharedAssetsEditor = ({
                             </div>
                             <span
                               className={clsx(
-                                "inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-medium",
+                                "inline-flex items-center rounded-md border px-2 py-0.5 text-2xs font-medium",
                                 pendingUpload
                                   ? "border-amber-200 bg-amber-50 text-amber-700"
                                   : "border-emerald-200 bg-emerald-50 text-emerald-700"
@@ -462,8 +464,9 @@ const ServiceSharedAssetsEditor = ({
                               rel="noreferrer"
                               variant="outline-secondary"
                               size="sm"
+                              aria-label="Apri video in una nuova scheda"
                             >
-                              <Lucide icon="ExternalLink" className="h-3.5 w-3.5" />
+                              <Lucide aria-hidden="true" icon="ExternalLink" className="h-3.5 w-3.5" />
                             </Button>
                           )}
                           {editable && (
@@ -472,8 +475,9 @@ const ServiceSharedAssetsEditor = ({
                               variant="soft-danger"
                               size="sm"
                               onClick={() => removeVideo(video.id)}
+                              aria-label="Rimuovi video"
                             >
-                              <Lucide icon="Trash2" className="h-3.5 w-3.5" />
+                              <Lucide aria-hidden="true" icon="Trash2" className="h-3.5 w-3.5" />
                             </Button>
                           )}
                         </div>

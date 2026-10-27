@@ -88,8 +88,9 @@ const DeclinazioniSection = <T extends FieldValues>({
                             type="button"
                             variant="outline-danger"
                             onClick={() => handleRemoveDeclinazione(index)}
+                            aria-label="Rimuovi declinazione"
                         >
-                            <Lucide icon="Trash2" className="w-4 h-4" />
+                            <Lucide aria-hidden="true" icon="Trash2" className="w-4 h-4" />
                         </Button>
                     </div>
 

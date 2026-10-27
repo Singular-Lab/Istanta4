@@ -90,9 +90,10 @@ const SitemapList: React.FC<{
               size="xs"
               variant="soft-success"
               onClick={addNewSitemap}
+              aria-label="Aggiungi sitemap"
             >
 
-              <Lucide icon="Plus" className="w-4 h-4" />
+              <Lucide aria-hidden="true" icon="Plus" className="w-4 h-4" />
             </Button>
       </div>
 

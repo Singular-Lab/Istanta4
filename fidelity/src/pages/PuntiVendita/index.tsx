@@ -1,10 +1,12 @@
 import Button from "@/components/Base/Button";
 import { FormInput, FormLabel, FormSelect } from "@/components/Base/Form";
 import { Dialog } from "@/components/Base/Headless";
-import LoadingIcon from "@/components/Base/LoadingIcon";
 import Lucide from "@/components/Base/Lucide";
+import PageError from "@/components/Base/PageError";
 import PageHeader from "@/components/Base/PageHeader";
 import Pagination from "@/components/Base/Pagination";
+import Spinner from "@/components/Base/Spinner";
+import StatusBadge from "@/components/Base/StatusBadge";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { PermissionGate } from "@/components/PermissionGate";
 import Table from "@/components/Base/Table";
@@ -27,7 +29,7 @@ import { useNavigate } from "react-router-dom";
 import * as yup from "yup";
 import { ServerCall } from "../../../lib/server_call";
 import { EsitoRigaImportPuntoVenditaDTO, PuntoVenditaResponseDTO, StatoImportPuntiVenditaDTO } from "../../../server/core/dto";
-import { BADGE_PUNTEGGIO, classePunteggio, percentualeImport, riepilogoAnteprima, testoRiepilogoImport } from "../../utils/importPuntiVendita";
+import { classePunteggio, percentualeImport, riepilogoAnteprima, testoRiepilogoImport } from "../../utils/importPuntiVendita";
 import { canaleArea, codiciGdo, contaPer, filtraPuntiVendita, indirizzoCompleto, valoriFormPuntoVendita } from "../../utils/puntoVendita";
 import { InserimentoManualeImport } from "./InserimentoManualeImport";
 import { useImportPuntiVendita } from "./useImportPuntiVendita";
@@ -81,7 +83,8 @@ const hasValidCoordinates = (pv: PuntoVenditaResponseDTO) =>
   Number.isFinite(pv.coordinate.lat) &&
   Number.isFinite(pv.coordinate.lon);
 
-// Un colore per canale, stabile anche filtrando (Tableau 10 senza il grigio)
+// Un colore per canale, stabile anche filtrando (Tableau 10 senza il grigio).
+// Esadecimali voluti: Leaflet li riceve come opzioni di disegno, non come classi Tailwind.
 const PALETTE_CANALI = ["#4E79A7", "#F28E2B", "#E15759", "#76B7B2", "#59A14F", "#EDC948", "#B07AA1", "#FF9DA7", "#9C755F"];
 const COLORE_SENZA_CANALE = "#94A3B8";
 
@@ -593,7 +596,7 @@ function Main() {
       >
         <Dialog.Panel>
           <Dialog.Title>
-            <h2 className="mr-auto text-base font-medium">
+            <h2 className="title-card mr-auto">
               {isEditMode ? "Modifica Punto Vendita" : "Crea Punto Vendita"}
             </h2>
           </Dialog.Title>
@@ -772,18 +775,9 @@ function Main() {
               onClick={handleSubmit(onSubmit)}
               form="punto-vendita-form"
               className="w-20"
-              disabled={mutationCreate.isPending || mutationUpdate.isPending}
+              loading={mutationCreate.isPending || mutationUpdate.isPending}
             >
-              {mutationCreate.isPending || mutationUpdate.isPending ? (
-                <div className="flex items-center">
-                  <Lucide icon="Loader" className="w-4 h-4 mr-2 animate-spin" />
-                  {isEditMode ? "Modifica" : "Crea"}
-                </div>
-              ) : isEditMode ? (
-                "Modifica"
-              ) : (
-                "Crea"
-              )}
+              {isEditMode ? "Modifica" : "Crea"}
             </Button>
           </Dialog.Footer>
         </Dialog.Panel>
@@ -811,7 +805,7 @@ function Main() {
       >
         <Dialog.Panel>
           <Dialog.Title>
-            <h2 className="mr-auto text-base font-medium">
+            <h2 className="title-card mr-auto">
               Importa Punti Vendita da Excel
             </h2>
           </Dialog.Title>
@@ -829,13 +823,13 @@ function Main() {
                   variant="outline-secondary"
                   className="w-full"
                   onClick={openFileSelector}
-                  disabled={mutationAnteprimaImport.isPending || importJob.inCorso || importJob.avvioInCorso}
+                  disabled={importJob.inCorso || importJob.avvioInCorso}
+                  loading={mutationAnteprimaImport.isPending}
                 >
-                  {mutationAnteprimaImport.isPending ? (
-                    <LoadingIcon icon="oval" className="w-4 h-4 mr-2" />
-                  ) : (
+                  {!mutationAnteprimaImport.isPending && (
                     <Lucide
                       icon="Upload"
+                      aria-hidden="true"
                       className="stroke-[1.3] w-4 h-4 mr-2"
                     />
                   )}
@@ -930,7 +924,7 @@ function Main() {
 
               {!statoImport && anteprimaImport.length > 0 && (
                 <div className="col-span-12 mt-4">
-                  <h3 className="text-sm font-medium mb-2">
+                  <h3 className="title-card mb-2">
                     Anteprima ({anteprimaImport.length} righe)
                   </h3>
                   <div className="max-h-64 overflow-y-auto border rounded">
@@ -971,16 +965,9 @@ function Main() {
                                 "-"
                               ) : (
                                 <div>
-                                  <span
-                                    className={clsx(
-                                      "px-2 py-0.5 text-[11px] font-semibold rounded-full border",
-                                      BADGE_PUNTEGGIO[classePunteggio(r.punteggio)]
-                                    )}
-                                  >
-                                    {r.punteggio}
-                                  </span>
+                                  <StatusBadge tono={classePunteggio(r.punteggio)} etichetta={String(r.punteggio)} />
                                   {r.motivi.length > 0 && (
-                                    <div className="text-[11px] mt-1 text-slate-500">{r.motivi.join(" · ")}</div>
+                                    <div className="text-2xs mt-1 text-slate-500">{r.motivi.join(" · ")}</div>
                                   )}
                                 </div>
                               )}
@@ -988,30 +975,19 @@ function Main() {
                             <Table.Td>
                               {r.azione === "scarta" ? (
                                 <div>
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 text-[11px] font-semibold rounded-full bg-danger/10 text-danger border border-danger/20">
-                                    <Lucide
-                                      icon="CircleAlert"
-                                      className="w-3.5 h-3.5"
-                                    />
-                                    Scartata
-                                  </span>
+                                  <StatusBadge tono="danger" etichetta="Scartata" icon="CircleAlert" />
                                   <div className="text-xs mt-1 text-danger">
                                     {r.errore}
                                   </div>
                                 </div>
                               ) : r.azione === "revisiona" ? (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 text-[11px] font-semibold rounded-full bg-warning/10 text-warning border border-warning/20">
-                                  <Lucide icon="ClipboardCheck" className="w-3.5 h-3.5" />
-                                  Da inserire a mano
-                                </span>
+                                <StatusBadge tono="warning" etichetta="Da inserire a mano" icon="ClipboardCheck" />
                               ) : (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 text-[11px] font-semibold rounded-full bg-success/10 text-success border border-success/20">
-                                  <Lucide
-                                    icon="CircleCheck"
-                                    className="w-3.5 h-3.5"
-                                  />
-                                  {r.azione === "crea" ? "Nuovo" : "Aggiorna"}
-                                </span>
+                                <StatusBadge
+                                  tono="success"
+                                  etichetta={r.azione === "crea" ? "Nuovo" : "Aggiorna"}
+                                  icon="CircleCheck"
+                                />
                               )}
                             </Table.Td>
                           </Table.Tr>
@@ -1036,9 +1012,8 @@ function Main() {
                 <Button
                   variant="danger"
                   onClick={annullaImport}
-                  disabled={importJob.annullamentoInCorso}
+                  loading={importJob.annullamentoInCorso}
                 >
-                  {importJob.annullamentoInCorso && <LoadingIcon icon="oval" className="w-4 h-4 mr-2" />}
                   Annulla importazione
                 </Button>
               </>
@@ -1056,11 +1031,9 @@ function Main() {
                     variant="primary"
                     className="w-auto"
                     onClick={avviaImport}
-                    disabled={!fileImport || righeDaElaborare === 0 || importJob.avvioInCorso}
+                    disabled={!fileImport || righeDaElaborare === 0}
+                    loading={importJob.avvioInCorso}
                   >
-                    {importJob.avvioInCorso && (
-                      <LoadingIcon icon="oval" className="w-4 h-4 mr-2" />
-                    )}
                     Importa {righeDaElaborare} righe
                   </Button>
                 )}
@@ -1082,8 +1055,8 @@ function Main() {
               <div className="relative h-[440px] w-full p-4">
                 <div className="relative h-full w-full overflow-hidden rounded-2xl border border-slate-200/80 bg-white dark:border-darkmode-500 dark:bg-darkmode-600">
                   {isLoading && (
-                    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 px-6 text-center bg-white/80 dark:bg-darkmode-600/80 backdrop-blur-sm">
-                      <LoadingIcon icon="tail-spin" color="#1d4ed8" className="w-10 h-10" />
+                    <div role="status" className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 px-6 text-center bg-white/80 dark:bg-darkmode-600/80 backdrop-blur-sm">
+                      <Spinner size="lg" decorativo />
                       <div className="text-sm font-medium text-slate-700 dark:text-slate-200">
                         Caricamento punti vendita
                       </div>
@@ -1094,17 +1067,14 @@ function Main() {
                   )}
 
                   {puntiVenditaQuery.isError && (
-                    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 px-6 text-center">
-                      <Lucide icon="TriangleAlert" className="w-8 h-8 text-danger" />
-                      <p className="text-sm font-medium text-slate-600 dark:text-slate-200">
-                        Punti vendita non caricati
-                      </p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
-                        {(puntiVenditaQuery.error as Error)?.message || "Errore durante il recupero dei punti vendita"}
-                      </p>
-                      <Button variant="outline-secondary" size="sm" onClick={() => puntiVenditaQuery.refetch()}>
-                        Riprova
-                      </Button>
+                    <div className="absolute inset-0 z-10 flex items-center justify-center px-6">
+                      <PageError
+                        compatta
+                        titolo="Punti vendita non caricati"
+                        motivo={(puntiVenditaQuery.error as Error)?.message || "Errore durante il recupero dei punti vendita"}
+                        onRiprova={() => puntiVenditaQuery.refetch()}
+                        className="w-full max-w-lg bg-white"
+                      />
                     </div>
                   )}
 
@@ -1172,13 +1142,12 @@ function Main() {
                       value={searchTerm}
                       onChange={e => setSearchTerm(e.target.value)}
                       placeholder="Cerca punto vendita"
-                      className="pl-9 pr-9 rounded-[0.5rem]"
+                      className="pl-9 pr-9 rounded-control"
                     />
                     {isTableFetching ? (
-                      <Lucide
-                        icon="Loader"
-                        className="absolute inset-y-0 right-0 my-auto mr-3 w-4 h-4 animate-spin text-primary"
-                      />
+                      <span className="absolute inset-y-0 right-0 mr-3 flex items-center">
+                        <Spinner size="sm" etichetta="Ricerca in corso…" />
+                      </span>
                     ) : (
                       searchTerm && (
                         <button
@@ -1187,7 +1156,7 @@ function Main() {
                           className="absolute inset-y-0 right-0 my-auto mr-3 text-slate-400 hover:text-slate-600"
                           aria-label="Pulisci ricerca"
                         >
-                          <Lucide icon="X" className="w-4 h-4" />
+                          <Lucide icon="X" aria-hidden="true" className="w-4 h-4" />
                         </button>
                       )
                     )}
@@ -1197,7 +1166,7 @@ function Main() {
                     <FormSelect
                       value={pageSize.toString()}
                       onChange={e => setPageSize(Number(e.target.value))}
-                      className="sm:w-36 rounded-[0.5rem]"
+                      className="sm:w-36 rounded-control"
                     >
                       {pageSizeOptions.map(size => (
                         <option key={size} value={size}>
@@ -1236,7 +1205,7 @@ function Main() {
               <div className="overflow-hidden">
                 <div className="grid grid-cols-12 gap-6 px-5 -mx-5 border-dashed border-y">
                   <div className="overflow-x-auto col-span-12 px-5">
-                    <div className="px-5 border rounded-[0.6rem] dark:border-darkmode-400 relative mt-7 mb-4 border-slate-200/80">
+                    <div className="px-5 border rounded-card dark:border-darkmode-400 relative mt-7 mb-4 border-slate-200/80">
                       <div className="absolute left-0 px-3 ml-4 -mt-2 text-xs uppercase bg-white text-slate-500">
                         <div className="-mt-px">Punti Vendita</div>
                       </div>
@@ -1257,8 +1226,8 @@ function Main() {
                             {isLoading ? (
                               <Table.Tr>
                                 <Table.Td colSpan={12}>
-                                  <div className="flex flex-col items-center justify-center py-10 text-center">
-                                    <LoadingIcon icon="tail-spin" color="#1d4ed8" className="w-8 h-8" />
+                                  <div role="status" className="flex flex-col items-center justify-center py-10 text-center">
+                                    <Spinner size="lg" decorativo />
                                     <div className="mt-3 text-sm font-medium text-slate-600 dark:text-slate-200">
                                       Caricamento punti vendita...
                                     </div>
@@ -1270,8 +1239,13 @@ function Main() {
                               </Table.Tr>
                             ) : puntiVenditaQuery.isError ? (
                               <Table.Tr>
-                                <Table.Td colSpan={12} className="text-center text-danger">
-                                  Punti vendita non caricati: {(puntiVenditaQuery.error as Error)?.message || "errore durante il recupero"}
+                                <Table.Td colSpan={12}>
+                                  <PageError
+                                    compatta
+                                    titolo="Punti vendita non caricati"
+                                    motivo={(puntiVenditaQuery.error as Error)?.message || "Errore durante il recupero dei punti vendita"}
+                                    onRiprova={() => puntiVenditaQuery.refetch()}
+                                  />
                                 </Table.Td>
                               </Table.Tr>
                             ) : puntiVendita.length === 0 ? (
@@ -1378,8 +1352,9 @@ function Main() {
                     <Pagination.Link
                       onClick={() => canGoPrev && setPage(prev => Math.max(1, prev - 1))}
                       className={!canGoPrev ? "opacity-40 pointer-events-none" : ""}
+                      aria-label="Pagina precedente"
                     >
-                      <Lucide icon="ChevronLeft" className="w-4 h-4" />
+                      <Lucide icon="ChevronLeft" aria-hidden="true" className="w-4 h-4" />
                     </Pagination.Link>
                     {paginationRange.map(item =>
                       typeof item === "number" ? (
@@ -1402,8 +1377,9 @@ function Main() {
                     <Pagination.Link
                       onClick={() => canGoNext && setPage(prev => prev + 1)}
                       className={!canGoNext ? "opacity-40 pointer-events-none" : ""}
+                      aria-label="Pagina successiva"
                     >
-                      <Lucide icon="ChevronRight" className="w-4 h-4" />
+                      <Lucide icon="ChevronRight" aria-hidden="true" className="w-4 h-4" />
                     </Pagination.Link>
                   </Pagination>
                 )}

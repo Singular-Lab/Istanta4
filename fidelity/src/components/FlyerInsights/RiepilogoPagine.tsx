@@ -1,10 +1,11 @@
 import Chart from "@/components/Base/Chart";
 import Lucide from "@/components/Base/Lucide";
 import { RiepilogoPagina, RiepilogoSectionConfig } from "@/types/flyerInsights";
+import { opzioniBase } from "@/utils/chartTheme";
 import { getColor } from "@/utils/colors";
 import { selectDarkMode } from "@/stores/darkModeSlice";
 import { useAppSelector } from "@/stores/hooks";
-import { ChartData, ChartOptions } from "chart.js/auto";
+import { ChartData, ChartOptions, ChartType } from "chart.js/auto";
 import clsx from "clsx";
 import { FC, useMemo } from "react";
 
@@ -62,10 +63,32 @@ const RiepilogoPagine: FC<Props> = ({ riepilogo, selectedPage, onSelectPage, con
   }, [riepilogo, selectedPage, config]);
 
   const chartOptions: ChartOptions = useMemo(() => {
-    const opts: ChartOptions = {
-      maintainAspectRatio: false,
+    const scalaSecondaria = fields.secondaryValueField
+      ? {
+        y1: {
+          type: 'linear' as const,
+          display: true,
+          position: 'right' as const,
+          title: {
+            display: true,
+            text: fields.secondaryValueLabel ?? 'Ingombro %',
+            font: { size: 10 },
+            color: getColor("slate.500"),
+          },
+          grid: { display: false },
+          border: { display: false },
+          ticks: {
+            callback: (value: string | number) => `${value}%`,
+          },
+          min: 0,
+          max: 100,
+        },
+      }
+      : {};
+
+    return opzioniBase(chart.type as ChartType, {
       interaction: {
-        mode: 'index' as const,
+        mode: 'index',
         intersect: false,
       },
       onClick: (_event, elements) => {
@@ -81,12 +104,11 @@ const RiepilogoPagine: FC<Props> = ({ riepilogo, selectedPage, onSelectPage, con
         legend: {
           display: display.showLegend,
           position: (display.legendPosition ?? 'top') as any,
-          align: 'end' as const,
+          align: 'end',
           labels: {
             boxWidth: 12,
             boxHeight: 12,
             padding: 15,
-            font: { size: 11 },
             color: getColor("slate.600"),
           },
         },
@@ -106,15 +128,11 @@ const RiepilogoPagine: FC<Props> = ({ riepilogo, selectedPage, onSelectPage, con
         x: {
           grid: { display: false },
           border: { display: false },
-          ticks: {
-            font: { size: 11 },
-            color: getColor("slate.500", 0.8),
-          },
         },
         y: {
-          type: 'linear' as const,
+          type: 'linear',
           display: true,
-          position: 'left' as const,
+          position: 'left',
           title: {
             display: true,
             text: fields.valueLabel ?? 'Referenze',
@@ -125,38 +143,10 @@ const RiepilogoPagine: FC<Props> = ({ riepilogo, selectedPage, onSelectPage, con
             color: darkMode ? getColor("slate.500", 0.2) : getColor("slate.200"),
           },
           border: { display: false },
-          ticks: {
-            font: { size: 10 },
-            color: getColor("slate.500", 0.8),
-          },
         },
+        ...scalaSecondaria,
       },
-    };
-
-    if (fields.secondaryValueField) {
-      (opts.scales as any).y1 = {
-        type: 'linear' as const,
-        display: true,
-        position: 'right' as const,
-        title: {
-          display: true,
-          text: fields.secondaryValueLabel ?? 'Ingombro %',
-          font: { size: 10 },
-          color: getColor("slate.500"),
-        },
-        grid: { display: false },
-        border: { display: false },
-        ticks: {
-          font: { size: 10 },
-          color: getColor("slate.500", 0.8),
-          callback: (value: any) => `${value}%`,
-        },
-        min: 0,
-        max: 100,
-      };
-    }
-
-    return opts;
+    });
   }, [riepilogo, selectedPage, darkMode, onSelectPage, config]);
 
   if (riepilogo.length === 0) {
@@ -173,13 +163,14 @@ const RiepilogoPagine: FC<Props> = ({ riepilogo, selectedPage, onSelectPage, con
   return (
     <div className="p-4">
       <div className="mb-4 flex items-center justify-between">
-        <h4 className="text-sm font-semibold text-slate-800">{config.title}</h4>
+        <h4 className="title-card">{config.title}</h4>
         {selectedPage !== null && (
           <button
+            type="button"
             onClick={() => onSelectPage(null)}
             className="text-xs text-primary hover:underline flex items-center gap-1"
           >
-            <Lucide icon="X" className="h-3 w-3" />
+            <Lucide icon="X" aria-hidden="true" className="h-3 w-3" />
             Deseleziona pagina {selectedPage}
           </button>
         )}
@@ -204,6 +195,8 @@ const RiepilogoPagine: FC<Props> = ({ riepilogo, selectedPage, onSelectPage, con
         {riepilogo.map(pag => (
           <button
             key={pag.pagina}
+            type="button"
+            aria-pressed={selectedPage === pag.pagina}
             onClick={() => onSelectPage(pag.pagina === selectedPage ? null : pag.pagina)}
             className={clsx(
               "flex items-center gap-2 rounded-lg border p-2 text-left transition",
@@ -222,7 +215,7 @@ const RiepilogoPagine: FC<Props> = ({ riepilogo, selectedPage, onSelectPage, con
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-xs font-medium text-slate-800">{pag.numeroReferenze} ref.</p>
-              <p className="text-[10px] text-slate-500">{pag.ingombroTotalePerc.toFixed(0)}% ing.</p>
+              <p className="text-3xs text-slate-500">{pag.ingombroTotalePerc.toFixed(0)}% ing.</p>
             </div>
           </button>
         ))}

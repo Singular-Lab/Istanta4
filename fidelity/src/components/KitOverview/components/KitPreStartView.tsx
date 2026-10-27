@@ -1,6 +1,6 @@
 import Button from "@/components/Base/Button";
 import Lucide from "@/components/Base/Lucide";
-import LoadingIcon from "@/components/Base/LoadingIcon";
+import { formatData, formatDataOraEstesa } from "@/utils/format";
 import clsx from "clsx";
 import dayjs from "dayjs";
 import "dayjs/locale/it";
@@ -60,7 +60,7 @@ const KitPreStartView: FC<KitPreStartViewProps> = ({
                 <Lucide icon="Play" className="h-10 w-10 text-white" />
               </div>
               <div>
-                <h2 className="text-2xl font-bold text-white mb-1">
+                <h2 className="title-page text-white mb-1">
                   {lavorazione.titolo}
                 </h2>
                 <p className="text-white/80 text-sm">
@@ -68,12 +68,8 @@ const KitPreStartView: FC<KitPreStartViewProps> = ({
                 </p>
                 <div className="flex items-center gap-2 mt-2 flex-wrap">
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/20 text-white text-xs font-medium">
-                    <Lucide icon="Calendar" className="h-3 w-3" />
-                    {lavorazione.createdAt
-                      ? dayjs(lavorazione.createdAt).format(
-                          "DD MMMM YYYY, HH:mm"
-                        )
-                      : "-"}
+                    <Lucide icon="Calendar" aria-hidden="true" className="h-3 w-3" />
+                    {formatDataOraEstesa(lavorazione.createdAt)}
                   </span>
                 </div>
               </div>
@@ -82,39 +78,28 @@ const KitPreStartView: FC<KitPreStartViewProps> = ({
             {/* Right Side - Actions */}
             <div className="flex items-center gap-3 flex-wrap">
               {lavorazione.idPromo && (
-                <Link
+                <Button
+                  as={Link}
                   to={`/${
                     isPromoFinalState
                       ? "promozioni/storico"
                       : "promozioni/in-corso"
                   }/dettagli/${lavorazione.idPromo}`}
+                  variant="outline-secondary"
+                  className="bg-white/10 border-white/30 text-white hover:bg-white/20"
                 >
-                  <Button
-                    variant="outline-secondary"
-                    className="bg-white/10 border-white/30 text-white hover:bg-white/20"
-                  >
-                    <Lucide icon="ArrowLeft" className="h-4 w-4 mr-2" />
-                    Vai alla Promozione
-                  </Button>
-                </Link>
+                  <Lucide icon="ArrowLeft" aria-hidden="true" className="h-4 w-4 mr-2" />
+                  Vai alla Promozione
+                </Button>
               )}
               <Button
                 variant="primary"
                 className="bg-white text-slate-800 hover:bg-white/90 shadow-lg"
                 onClick={onStartLavorazione}
-                disabled={isStarting}
+                loading={isStarting}
               >
-                {isStarting ? (
-                  <>
-                    <LoadingIcon icon="oval" className="w-4 h-4 mr-2" />
-                    Avvio in corso...
-                  </>
-                ) : (
-                  <>
-                    <Lucide icon="Zap" className="h-4 w-4 mr-2" />
-                    Avvia Lavorazione
-                  </>
-                )}
+                {!isStarting && <Lucide icon="Zap" aria-hidden="true" className="h-4 w-4 mr-2" />}
+                {isStarting ? "Avvio in corso..." : "Avvia Lavorazione"}
               </Button>
             </div>
           </div>
@@ -149,11 +134,7 @@ const KitPreStartView: FC<KitPreStartViewProps> = ({
           icon="Calendar"
           iconColor="text-warning"
           iconBg="bg-warning/10"
-          value={
-            lavorazione.createdAt
-              ? dayjs(lavorazione.createdAt).format("DD/MM/YYYY")
-              : "-"
-          }
+          value={formatData(lavorazione.createdAt)}
           label="Creato il"
           sublabel={
             lavorazione.createdAt
@@ -183,7 +164,7 @@ const KitPreStartView: FC<KitPreStartViewProps> = ({
                   <Lucide icon="Layers" className="h-5 w-5 text-info" />
                 </div>
                 <div>
-                  <h3 className="text-base font-semibold text-slate-800">
+                  <h3 className="title-card">
                     Tipi di Export
                   </h3>
                   <p className="text-xs text-slate-500">
@@ -219,7 +200,7 @@ const KitPreStartView: FC<KitPreStartViewProps> = ({
                   />
                 </div>
                 <div>
-                  <h3 className="text-base font-semibold text-slate-800">
+                  <h3 className="title-card">
                     File attesi dal template
                   </h3>
                   <p className="text-xs text-slate-500">
@@ -305,7 +286,7 @@ const KitPreStartView: FC<KitPreStartViewProps> = ({
                     <Lucide icon="Zap" className="h-5 w-5 text-theme-1" />
                   </div>
                   <div>
-                    <h3 className="text-base font-semibold text-slate-800">
+                    <h3 className="title-card">
                       Avvia Lavorazione
                     </h3>
                     <p className="text-xs text-slate-500">
@@ -324,19 +305,10 @@ const KitPreStartView: FC<KitPreStartViewProps> = ({
                   variant="primary"
                   className="w-full"
                   onClick={onStartLavorazione}
-                  disabled={isStarting}
+                  loading={isStarting}
                 >
-                  {isStarting ? (
-                    <>
-                      <LoadingIcon icon="oval" className="w-5 h-5 mr-2" />
-                      Avvio in corso...
-                    </>
-                  ) : (
-                    <>
-                      <Lucide icon="Zap" className="w-5 h-5 mr-2" />
-                      Avvia Lavorazione
-                    </>
-                  )}
+                  {!isStarting && <Lucide icon="Zap" aria-hidden="true" className="w-5 h-5 mr-2" />}
+                  {isStarting ? "Avvio in corso..." : "Avvia Lavorazione"}
                 </Button>
                 <p className="text-xs text-slate-400 text-center">
                   Questa azione non puo' essere annullata una volta confermata.

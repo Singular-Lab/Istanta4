@@ -267,8 +267,8 @@ const DeveloperConsole = forwardRef<
             <h1 className={styles.title}>
               Problemi rilevati <span className={styles.errorCount}>{errorCounts.all}</span>
             </h1>
-            <button onClick={toggleErrorConsole} className={styles.closeButton}>
-              <Lucide icon="X" />
+            <button onClick={toggleErrorConsole} className={styles.closeButton} aria-label="Chiudi console errori">
+              <Lucide aria-hidden="true" icon="X" />
             </button>
           </div>
 

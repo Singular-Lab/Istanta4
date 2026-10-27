@@ -343,8 +343,9 @@ const DatiBaseForm: React.FC<DatiBaseFormProps> = ({
                                             onClick={() => {
                                                 setValueDatiKit("tipiDiExportInKit", getValuesDatiKit('tipiDiExportInKit').filter((_: any, i: number) => i !== index));
                                             }}
+                                            aria-label="Rimuovi filtro per tipo di export"
                                         >
-                                            <Lucide icon="X" className="w-4 h-4" />
+                                            <Lucide aria-hidden="true" icon="X" className="w-4 h-4" />
                                         </Button>
                                     </div>
                                     <FilterBaseForm

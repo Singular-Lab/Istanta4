@@ -78,73 +78,76 @@ function TemplateFilterCard({
     return (
         <div
             className={clsx(
-                "w-full rounded-xl border transition-all cursor-pointer relative overflow-hidden",
+                "w-full rounded-xl border transition-all relative overflow-hidden",
                 "bg-white dark:bg-darkmode-700",
                 selected
                     ? "border-primary/40 ring-1 ring-primary/20"
                     : "border-slate-200 dark:border-slate-600 hover:border-primary/30",
                 !template.is_active && "opacity-90"
             )}
-            onClick={() => {
-                onSelect()
-            }}
         >
             {/* =======================
-          BODY
+          BODY: seleziona il template
       ======================= */}
-            <div
+            <button
+                type="button"
+                onClick={() => {
+                    onSelect()
+                }}
+                aria-pressed={selected}
                 className={clsx(
-                    "p-5 flex flex-col gap-4 transition-opacity ",
+                    "w-full text-left cursor-pointer p-5 flex flex-col gap-4 transition-opacity ",
                     !template.is_active && "text-slate-400 dark:text-slate-400"
 
                 )}
             >
 
                 {/* HEADER */}
-                <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0 flex-1 flex flex-col gap-1">
-                        <div className="flex items-center gap-2">
-                            <h4 className="text-base font-semibold text-slate-900 dark:text-slate-100 truncate">
+                <span className="flex items-start justify-between gap-4">
+                    <span className="min-w-0 flex-1 flex flex-col gap-1">
+                        <span className="flex items-center gap-2">
+                            <span className="text-base font-semibold text-slate-900 dark:text-slate-100 truncate">
                                 {template.nome}
-                            </h4>
+                            </span>
 
                             {!template.is_active && (
-                                <span className="px-2 py-0.5 text-[11px] font-semibold rounded-full
+                                <span className="px-2 py-0.5 text-2xs font-semibold rounded-full
                    bg-slate-200 text-slate-600
                    dark:bg-darkmode-500 dark:text-slate-300">
                                     Inattivo
                                 </span>
                             )}
 
-                        </div>
+                        </span>
 
-                        <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                            <Lucide icon="Hash" className="w-3.5 h-3.5 text-slate-400" />
+                        <span className="flex items-center gap-1.5 text-xs text-slate-500">
+                            <Lucide icon="Hash" aria-hidden="true" className="w-3.5 h-3.5 text-slate-400" />
                             <code className="font-mono bg-slate-100 dark:bg-darkmode-500 px-1.5 py-0.5 rounded">
                                 {template.slug}
                             </code>
-                        </div>
-                    </div>
+                        </span>
+                    </span>
 
                     {selected && (
                         <span className="px-2 py-1 text-xs font-medium rounded-md bg-primary text-white">
                             Selezionato
                         </span>
                     )}
-                </div>
+                </span>
 
                 {/* DESCRIZIONE */}
                 {template.descrizione && (
-                    <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed line-clamp-2">
+                    <span className="block text-sm text-slate-600 dark:text-slate-300 leading-relaxed line-clamp-2">
                         {template.descrizione}
-                    </p>
+                    </span>
                 )}
 
                 {/* BADGES */}
-                <div className="flex flex-wrap gap-2 pt-1">
+                <span className="flex flex-wrap gap-2 pt-1">
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-light text-dark">
                         <Lucide
                             icon={getEndpointIcon(template.endpoint_type)}
+                            aria-hidden="true"
                             className="w-3.5 h-3.5"
                         />
                         {getEndpointLabel(template.endpoint_type)}
@@ -159,36 +162,37 @@ function TemplateFilterCard({
                                         ? "List"
                                         : "ArrowLeftRight"
                             }
+                            aria-hidden="true"
                             className="w-3.5 h-3.5"
                         />
                         {template.render_type === "grid" ? "Griglia" : template.render_type === "list" ? "Lista" : "Carousel"}
                     </span>
-                </div>
+                </span>
 
                 {/* STATS */}
-                <div className="pt-3 mt-2 border-t border-slate-100 dark:border-darkmode-600 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-500">
+                <span className="pt-3 mt-2 border-t border-slate-100 dark:border-darkmode-600 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-500">
                     {template.template_ids.length > 0 && (
-                        <div className="flex items-center gap-1.5">
-                            <Lucide icon="Layers" className="w-4 h-4 text-slate-400" />
+                        <span className="flex items-center gap-1.5">
+                            <Lucide icon="Layers" aria-hidden="true" className="w-4 h-4 text-slate-400" />
                             {template.template_ids.length} template
-                        </div>
+                        </span>
                     )}
 
                     {template.export_codes?.length > 0 && (
-                        <div className="flex items-center gap-1.5">
-                            <Lucide icon="FileType" className="w-4 h-4 text-slate-400" />
+                        <span className="flex items-center gap-1.5">
+                            <Lucide icon="FileType" aria-hidden="true" className="w-4 h-4 text-slate-400" />
                             {template.export_codes.length} export
-                        </div>
+                        </span>
                     )}
 
                     {template.filters.length > 0 && (
-                        <div className="flex items-center gap-1.5">
-                            <Lucide icon="Filter" className="w-4 h-4 text-slate-400" />
+                        <span className="flex items-center gap-1.5">
+                            <Lucide icon="Filter" aria-hidden="true" className="w-4 h-4 text-slate-400" />
                             {template.filters.length} filtri
-                        </div>
+                        </span>
                     )}
-                </div>
-            </div>
+                </span>
+            </button>
 
             {/* =======================
           FOOTER

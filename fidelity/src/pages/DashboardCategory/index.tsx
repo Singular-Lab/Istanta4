@@ -1,10 +1,15 @@
 import Button from "@/components/Base/Button";
 import Chart from "@/components/Base/Chart";
-import { FormInput } from "@/components/Base/Form";
+import { FormField, FormInput } from "@/components/Base/Form";
 import Lucide from "@/components/Base/Lucide";
+import PageError from "@/components/Base/PageError";
 import PageHeader from "@/components/Base/PageHeader";
 import Skeleton from "@/components/Base/Skeleton";
+import StatCard from "@/components/Base/StatCard";
+import StatusBadge from "@/components/Base/StatusBadge";
 import EmptyState from "@/components/EmptyState";
+import { opzioniBase, paletteColore } from "@/utils/chartTheme";
+import { formatData, VALORE_ASSENTE } from "@/utils/format";
 import { useQuery } from "@tanstack/react-query";
 import type { ChartOptions, TooltipItem } from "chart.js";
 import clsx from "clsx";
@@ -35,16 +40,6 @@ type VolantiniInCorso = {
     inScadenza: number;
     kit: KitVolantino[];
 };
-
-const REPARTO_COLORS = [
-    "#2563eb", "#059669", "#d97706", "#dc2626",
-    "#0891b2", "#7c3aed", "#65a30d", "#be123c",
-    "#0f766e", "#9333ea", "#ea580c", "#4f46e5",
-];
-const CANALE_AREA_COLORS = [
-    "#0ea5e9", "#22c55e", "#f59e0b", "#ef4444",
-    "#6366f1", "#06b6d4", "#84cc16", "#f97316",
-];
 
 const clampScore = (v: number) => Math.max(0, Math.min(100, Math.round(v)));
 
@@ -107,41 +102,13 @@ function promoOverlapsRange(
     return true;
 }
 
-const StatCard: React.FC<{
-    label: string;
-    value: string;
-    icon: string;
-    tone?: "primary" | "success" | "warning" | "info";
-}> = ({ label, value, icon, tone = "primary" }) => {
-    const tones = {
-        primary: "bg-theme-1/10 text-theme-1",
-        success: "bg-success/10 text-success",
-        warning: "bg-warning/10 text-warning",
-        info: "bg-info/10 text-info",
-    };
-    return (
-        <div className="box box--stacked p-5">
-            <div className="flex items-center gap-4">
-                <div className={clsx("flex h-11 w-11 shrink-0 items-center justify-center rounded-full", tones[tone])}>
-                    <Lucide icon={icon} className="h-5 w-5" />
-                </div>
-                <div className="min-w-0">
-                    <div className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</div>
-                    <div className="mt-1 truncate text-2xl font-bold text-slate-800">{value}</div>
-                </div>
-            </div>
-        </div>
-    );
-};
+const ETICHETTE_KPI = ["Score medio reparti", "Promozioni", "Reparti monitorati"];
 
 const CategorySkeleton: React.FC = () => (
     <div className="grid grid-cols-12 gap-5">
-        <div className="col-span-12 grid grid-cols-1 gap-3 md:grid-cols-4">
-            {[1, 2, 3, 4].map(i => (
-                <div key={i} className="box box--stacked p-5">
-                    <Skeleton height="12px" width="90px" className="mb-3" />
-                    <Skeleton height="34px" width="70px" />
-                </div>
+        <div className="col-span-12 grid grid-cols-1 gap-3 md:grid-cols-3">
+            {ETICHETTE_KPI.map(etichetta => (
+                <StatCard key={etichetta} etichetta={etichetta} valore={null} loading />
             ))}
         </div>
         <div className="col-span-12 grid grid-cols-1 gap-5 lg:grid-cols-2">
@@ -355,7 +322,7 @@ const DashboardCategory: React.FC = () => {
         return {
             labels: groupedChartLabels,
             datasets: activeCanaleArea.series.map((s, idx) => {
-                const color = CANALE_AREA_COLORS[idx % CANALE_AREA_COLORS.length];
+                const color = paletteColore(idx);
                 const data = groupedByDate.map(({ indices }) => {
                     const scores = indices
                         .map(i => s.data[i])
@@ -368,7 +335,7 @@ const DashboardCategory: React.FC = () => {
                     label: s.reparto,
                     data,
                     borderColor: color,
-                    backgroundColor: `${color}33`,
+                    backgroundColor: paletteColore(idx, 0.2),
                     borderWidth: 2,
                     pointRadius: 3,
                     pointHoverRadius: 6,
@@ -406,56 +373,7 @@ const DashboardCategory: React.FC = () => {
         return sortedRows;
     }, [activeCanaleAreaRows]);
 
-    const chartOptions = useMemo<ChartOptions<"line">>(() => ({
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: {
-                position: "bottom",
-                labels: {
-                    usePointStyle: true,
-                    pointStyle: "circle",
-                    boxWidth: 8,
-                    padding: 14,
-                    color: "#64748b",
-                    font: { size: 11 },
-                },
-            },
-            tooltip: {
-                backgroundColor: "#0f172a",
-                titleColor: "#f8fafc",
-                bodyColor: "#e2e8f0",
-                padding: 10,
-                cornerRadius: 8,
-                callbacks: {
-                    label(context: TooltipItem<"line">) {
-                        const v = typeof context.parsed.y === "number" ? Math.round(context.parsed.y) : 0;
-                        return `${context.dataset.label}: ${v}/100`;
-                    },
-                },
-            },
-        },
-        scales: {
-            x: {
-                grid: { color: "rgba(148,163,184,0.08)" },
-                ticks: { color: "#94a3b8", font: { size: 11 }, maxRotation: 35 },
-            },
-            y: {
-                min: 0,
-                max: 100,
-                grid: { color: "rgba(148,163,184,0.15)" },
-                ticks: {
-                    stepSize: 20,
-                    color: "#94a3b8",
-                    font: { size: 11 },
-                    callback: (v: number | string) => `${v}`,
-                },
-            },
-        },
-    }), []);
-    const canaleAreaChartOptions = useMemo<ChartOptions<"line">>(() => ({
-        responsive: true,
-        maintainAspectRatio: false,
+    const canaleAreaChartOptions = useMemo<ChartOptions<"line">>(() => opzioniBase("line", {
         interaction: { mode: "index", intersect: false },
         plugins: {
             legend: {
@@ -465,16 +383,9 @@ const DashboardCategory: React.FC = () => {
                     pointStyle: "circle",
                     boxWidth: 8,
                     padding: 12,
-                    color: "#64748b",
-                    font: { size: 11 },
                 },
             },
             tooltip: {
-                backgroundColor: "#0f172a",
-                titleColor: "#f8fafc",
-                bodyColor: "#e2e8f0",
-                cornerRadius: 8,
-                padding: 10,
                 callbacks: {
                     label(context: TooltipItem<"line">) {
                         const v = typeof context.parsed.y === "number" ? Math.round(context.parsed.y) : 0;
@@ -484,18 +395,12 @@ const DashboardCategory: React.FC = () => {
             },
         },
         scales: {
-            x: {
-                grid: { color: "rgba(148,163,184,0.08)" },
-                ticks: { color: "#94a3b8", font: { size: 11 }, maxRotation: 35 },
-            },
+            x: { ticks: { maxRotation: 35 } },
             y: {
                 min: 0,
                 max: 100,
-                grid: { color: "rgba(148,163,184,0.15)" },
                 ticks: {
                     stepSize: 20,
-                    color: "#94a3b8",
-                    font: { size: 11 },
                     callback: (v: number | string) => `${v}`,
                 },
             },
@@ -514,19 +419,15 @@ const DashboardCategory: React.FC = () => {
         return (
             <>
                 <PageHeader title="Dashboard Category" description="" />
-                <div className="box box--stacked p-8">
-                    <EmptyState
-                        icon="CircleAlert"
-                        iconColor="text-danger"
-                        title="Dati non disponibili"
-                        description="Impossibile caricare i filtri utente."
-                        buttonText="Riprova"
-                        onButtonClick={() => {
-                            filtersQuery.refetch();
-                            categoryTimelineQuery.refetch();
-                        }}
-                    />
-                </div>
+                <PageError
+                    motivo={filtersQuery.isError || !filters
+                        ? "Impossibile caricare i filtri utente."
+                        : "Impossibile caricare l'andamento dei reparti."}
+                    onRiprova={() => {
+                        filtersQuery.refetch();
+                        categoryTimelineQuery.refetch();
+                    }}
+                />
             </>
         );
     }
@@ -562,9 +463,9 @@ const DashboardCategory: React.FC = () => {
                             volantiniQuery.refetch();
                             promoQuery.refetch();
                         }}
-                        disabled={categoryTimelineQuery.isFetching}
+                        loading={categoryTimelineQuery.isFetching}
                     >
-                        <Lucide icon="RefreshCw" className={clsx("mr-2 h-4 w-4", categoryTimelineQuery.isFetching && "animate-spin")} />
+                        {!categoryTimelineQuery.isFetching && <Lucide icon="RefreshCw" aria-hidden="true" className="mr-2 h-4 w-4" />}
                         Aggiorna
                     </Button>
                 }
@@ -589,28 +490,26 @@ const DashboardCategory: React.FC = () => {
 
             <div className="mb-5 rounded-xl border border-slate-200 bg-white px-4 py-3">
                 <div className="flex flex-wrap items-end gap-3">
-                    <div className="flex min-w-[180px] flex-col gap-1">
-                        <label htmlFor="category-date-from" className="text-xs font-semibold uppercase tracking-wide text-slate-500">Da</label>
+                    <FormField etichetta="Da" className="min-w-[180px]">
                         <FormInput
                             id="category-date-from"
                             type="date"
                             value={dateFrom}
                             onChange={(e) => handleDateFromChange(e.target.value)}
                         />
-                    </div>
-                    <div className="flex min-w-[180px] flex-col gap-1">
-                        <label htmlFor="category-date-to" className="text-xs font-semibold uppercase tracking-wide text-slate-500">A</label>
+                    </FormField>
+                    <FormField etichetta="A" className="min-w-[180px]">
                         <FormInput
                             id="category-date-to"
                             type="date"
                             value={dateTo}
                             onChange={(e) => handleDateToChange(e.target.value)}
                         />
-                    </div>
+                    </FormField>
                     <div className="flex flex-wrap items-center gap-2">
-                        <Button type="button" variant="outline-secondary" onClick={() => applyPresetDays(7)}>7g</Button>
-                        <Button type="button" variant="outline-secondary" onClick={() => applyPresetDays(30)}>30g</Button>
-                        <Button type="button" variant="outline-secondary" onClick={() => applyPresetDays(90)}>90g</Button>
+                        <Button type="button" variant="outline-secondary" aria-label="Ultimi 7 giorni" title="Ultimi 7 giorni" onClick={() => applyPresetDays(7)}>7g</Button>
+                        <Button type="button" variant="outline-secondary" aria-label="Ultimi 30 giorni" title="Ultimi 30 giorni" onClick={() => applyPresetDays(30)}>30g</Button>
+                        <Button type="button" variant="outline-secondary" aria-label="Ultimi 90 giorni" title="Ultimi 90 giorni" onClick={() => applyPresetDays(90)}>90g</Button>
                         <Button type="button" variant="outline-secondary" onClick={clearDateRange} disabled={!isDateRangeActive}>
                             Reset
                         </Button>
@@ -627,21 +526,21 @@ const DashboardCategory: React.FC = () => {
                 {/* KPI */}
                 <div className="col-span-12 grid grid-cols-1 gap-3 md:grid-cols-3">
                     <StatCard
-                        label="Score medio reparti"
-                        value={timelinePromos.length ? `${averageScore}/100` : "—"}
-                        icon="Gauge"
-                        tone={averageScore >= 70 ? "success" : averageScore >= 40 ? "warning" : "primary"}
+                        etichetta="Score medio reparti"
+                        valore={timelinePromos.length ? `${averageScore}/100` : null}
+                        icona="Gauge"
+                        tono={averageScore >= 70 ? "success" : averageScore >= 40 ? "warning" : "brand"}
                     />
                     <StatCard
-                        label="Promozioni"
-                        value={timelinePromos.length.toLocaleString("it-IT")}
-                        icon="Megaphone"
+                        etichetta="Promozioni"
+                        valore={timelinePromos.length.toLocaleString("it-IT")}
+                        icona="Megaphone"
                     />
                     <StatCard
-                        label="Reparti monitorati"
-                        value={settoriNomi.length.toLocaleString("it-IT")}
-                        icon="Package"
-                        tone="info"
+                        etichetta="Reparti monitorati"
+                        valore={settoriNomi.length.toLocaleString("it-IT")}
+                        icona="Package"
+                        tono="info"
                     />
 
                 </div>
@@ -654,7 +553,7 @@ const DashboardCategory: React.FC = () => {
                                 <Lucide icon="FileText" className="h-4 w-4 text-info" />
                             </div>
                             <div>
-                                <h2 className="text-sm font-semibold text-slate-800">Volantini in corso</h2>
+                                <h2 className="title-card">Volantini in corso</h2>
                                 <p className="text-xs text-slate-500">Pubblicazioni attive nel sistema</p>
                             </div>
                             {volantiniQuery.data != null && (
@@ -677,12 +576,7 @@ const DashboardCategory: React.FC = () => {
                                                 <div className="truncate text-xs font-medium text-slate-700">{kit.titolo || kit.nome_promo}</div>
                                                 <div className="text-xs text-slate-400">{[kit.nome_area, kit.nome_canale].filter(Boolean).join(" / ")}</div>
                                             </div>
-                                            <span className={clsx(
-                                                "shrink-0 rounded-full px-2 py-0.5 text-xs font-medium",
-                                                kit.stato_lavorazione === "completata" ? "bg-success/10 text-success" : "bg-warning/10 text-warning",
-                                            )}>
-                                                {kit.stato_lavorazione}
-                                            </span>
+                                            <StatusBadge dominio="kitRuntime" stato={kit.stato_lavorazione} className="shrink-0" />
                                         </div>
                                     ))}
                                     {filteredVolantini.length > 10 && (
@@ -702,7 +596,7 @@ const DashboardCategory: React.FC = () => {
                                 <Lucide icon="Megaphone" className="h-4 w-4 text-theme-1" />
                             </div>
                             <div>
-                                <h2 className="text-sm font-semibold text-slate-800">Promozioni in corso</h2>
+                                <h2 className="title-card">Promozioni in corso</h2>
                                 <p className="text-xs text-slate-500">Campagne attive non archiviate</p>
                             </div>
                             {promoQuery.data && (
@@ -723,10 +617,10 @@ const DashboardCategory: React.FC = () => {
                                             <Lucide icon="CalendarRange" className="h-4 w-4 shrink-0 text-slate-400" />
                                             <div className="min-w-0 flex-1">
                                                 <div className="truncate text-xs font-medium text-slate-700">
-                                                    {promo.nome || "—"}
+                                                    {promo.nome || VALORE_ASSENTE}
                                                 </div>
                                                 <div className="text-xs text-slate-400">
-                                                    {dayjs(promo.validita_dal).format("DD MMM YYYY")} — {dayjs(promo.validita_al).format("DD MMM YYYY")}
+                                                    {formatData(promo.validita_dal)} — {formatData(promo.validita_al)}
                                                 </div>
                                             </div>
                                         </div>
@@ -762,7 +656,7 @@ const DashboardCategory: React.FC = () => {
                                             <Lucide icon="Network" className="h-4 w-4 text-info" />
                                         </div>
                                         <div className="flex-1">
-                                            <h2 className="text-base font-semibold text-slate-800">Focus per canale / area</h2>
+                                            <h2 className="title-section">Focus per canale / area</h2>
                                             <p className="text-sm text-slate-500">Seleziona una coppia canale-area per vedere il trend dei tuoi reparti.</p>
                                         </div>
                                         {activeCanaleArea && (
@@ -776,6 +670,7 @@ const DashboardCategory: React.FC = () => {
                                             <button
                                                 key={ca.key}
                                                 type="button"
+                                                aria-pressed={activeCanaleArea?.key === ca.key}
                                                 onClick={() => setSelectedCanaleAreaKey(ca.key)}
                                                 className={clsx(
                                                     "rounded-full border px-3 py-1 text-xs font-semibold transition",
@@ -814,8 +709,8 @@ const DashboardCategory: React.FC = () => {
                                                                 </div>
                                                             </td>
                                                             <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-400">
-                                                                {promo.validaDal ? dayjs(promo.validaDal).format("DD MMM YYYY") : "—"}
-                                                                {promo.validaAl ? ` — ${dayjs(promo.validaAl).format("DD MMM YYYY")}` : ""}
+                                                                {formatData(promo.validaDal)}
+                                                                {promo.validaAl ? ` — ${formatData(promo.validaAl)}` : ""}
                                                             </td>
                                                             {settoriNomi.map(reparto => {
                                                                 const raw = scoreByReparto.get(reparto);
@@ -828,7 +723,7 @@ const DashboardCategory: React.FC = () => {
                                                                                 {score}/100
                                                                             </span>
                                                                         ) : (
-                                                                            <span className="text-xs text-slate-300">—</span>
+                                                                            <span className="text-xs text-slate-400">{VALORE_ASSENTE}</span>
                                                                         )}
                                                                     </td>
                                                                 );
@@ -846,7 +741,7 @@ const DashboardCategory: React.FC = () => {
                         {/* Promo × Reparto table */}
                         <div className="box box--stacked col-span-12">
                             <div className="border-b border-slate-200/70 p-5">
-                                <h2 className="text-base font-semibold text-slate-800">Score per promo per reparto</h2>
+                                <h2 className="title-section">Score per promo per reparto</h2>
                                 <p className="mt-1 text-sm text-slate-500">Ogni riga è una promozione; le colonne mostrano lo score per ciascun reparto assegnato.</p>
                             </div>
                             <div className="overflow-x-auto">
@@ -870,8 +765,8 @@ const DashboardCategory: React.FC = () => {
                                                         </div>
                                                     </td>
                                                     <td className="whitespace-nowrap px-5 py-3 text-xs text-slate-400">
-                                                        {promo.validaDal ? dayjs(promo.validaDal).format("DD MMM YYYY") : "—"}
-                                                        {promo.validaAl ? ` — ${dayjs(promo.validaAl).format("DD MMM YYYY")}` : ""}
+                                                        {formatData(promo.validaDal)}
+                                                        {promo.validaAl ? ` — ${formatData(promo.validaAl)}` : ""}
                                                     </td>
                                                     {settoriNomi.map(nome => {
                                                         const raw = scoreByReparto.get(nome);
@@ -884,7 +779,7 @@ const DashboardCategory: React.FC = () => {
                                                                         {s}/100
                                                                     </span>
                                                                 ) : (
-                                                                    <span className="text-xs text-slate-300">—</span>
+                                                                    <span className="text-xs text-slate-400">{VALORE_ASSENTE}</span>
                                                                 )}
                                                             </td>
                                                         );

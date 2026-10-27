@@ -96,23 +96,38 @@ const SettingsSection: React.FC<{
       transition={{ duration: 0.2 }}
       className="bg-white dark:bg-darkmode-700 rounded-xl border border-slate-200 dark:border-darkmode-500 shadow-sm hover:shadow-md transition-all duration-200"
     >
-      <div
-        className={`flex items-center justify-between p-4 ${collapsible ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-darkmode-600' : ''} rounded-t-xl`}
-        onClick={() => collapsible && setIsExpanded(!isExpanded)}
-      >
-        <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 bg-gradient-to-r from-primary/10 to-theme-2/10 rounded-lg flex items-center justify-center">
-            <Lucide icon={icon} className="w-4 h-4 text-primary" />
+      {collapsible ? (
+        // Sezione comprimibile: il titolo resta un heading e contiene il pulsante
+        <h4>
+          <button
+            type="button"
+            className="w-full text-left flex items-center justify-between p-4 cursor-pointer hover:bg-slate-50 dark:hover:bg-darkmode-600 rounded-t-xl"
+            onClick={() => setIsExpanded(!isExpanded)}
+            aria-expanded={isExpanded}
+          >
+            <span className="flex items-center space-x-3">
+              <span className="w-8 h-8 bg-gradient-to-r from-primary/10 to-theme-2/10 rounded-lg flex items-center justify-center">
+                <Lucide icon={icon} aria-hidden="true" className="w-4 h-4 text-primary" />
+              </span>
+              <span className="font-semibold text-slate-800 dark:text-slate-200">{title}</span>
+            </span>
+            <Lucide
+              icon={isExpanded ? "ChevronUp" : "ChevronDown"}
+              aria-hidden="true"
+              className="w-4 h-4 text-slate-500 transition-transform duration-200"
+            />
+          </button>
+        </h4>
+      ) : (
+        <div className="flex items-center justify-between p-4 rounded-t-xl">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 bg-gradient-to-r from-primary/10 to-theme-2/10 rounded-lg flex items-center justify-center">
+              <Lucide icon={icon} aria-hidden="true" className="w-4 h-4 text-primary" />
+            </div>
+            <h4 className="font-semibold text-slate-800 dark:text-slate-200">{title}</h4>
           </div>
-          <h4 className="font-semibold text-slate-800 dark:text-slate-200">{title}</h4>
         </div>
-        {collapsible && (
-          <Lucide
-            icon={isExpanded ? "ChevronUp" : "ChevronDown"}
-            className="w-4 h-4 text-slate-500 transition-transform duration-200"
-          />
-        )}
-      </div>
+      )}
       <AnimatePresence>
         {isExpanded && (
           <motion.div
@@ -216,8 +231,9 @@ const MediaPreview: React.FC<{
           onClick={onRemove}
           className="bg-red-500 hover:bg-red-600 text-white rounded-full p-3 shadow-lg transform scale-90 group-hover:scale-100 transition-transform duration-200"
           variant="danger"
+          aria-label="Rimuovi file"
         >
-          <Lucide icon="Trash2" className="w-5 h-5" />
+          <Lucide aria-hidden="true" icon="Trash2" className="w-5 h-5" />
         </Button>
       </div>
     </div>
@@ -859,8 +875,9 @@ const ElementSettings: React.FC<ElementSettingsProps> = ({
                       }}
                       variant="primary"
                       className="px-4"
+                      aria-label="Aggiungi ricetta"
                     >
-                      <Lucide icon="Plus" className="w-4 h-4" />
+                      <Lucide aria-hidden="true" icon="Plus" className="w-4 h-4" />
                     </Button>
                   </div>
                 </FormField>
@@ -890,8 +907,9 @@ const ElementSettings: React.FC<ElementSettingsProps> = ({
                           size="sm"
                           disabled={index === 0}
                           className="p-2"
+                          aria-label="Sposta su"
                         >
-                          <Lucide icon="ArrowUp" className="w-3 h-3" />
+                          <Lucide aria-hidden="true" icon="ArrowUp" className="w-3 h-3" />
                         </Button>
                         <Button
                           onClick={() => {
@@ -904,8 +922,9 @@ const ElementSettings: React.FC<ElementSettingsProps> = ({
                           size="sm"
                           disabled={index === effectiveContent?.ricettaAI.length - 1}
                           className="p-2"
+                          aria-label="Sposta giù"
                         >
-                          <Lucide icon="ArrowDown" className="w-3 h-3" />
+                          <Lucide aria-hidden="true" icon="ArrowDown" className="w-3 h-3" />
                         </Button>
                         <Button
                           onClick={() => {
@@ -916,8 +935,9 @@ const ElementSettings: React.FC<ElementSettingsProps> = ({
                           variant="outline-danger"
                           size="sm"
                           className="p-2"
+                          aria-label="Rimuovi ricetta"
                         >
-                          <Lucide icon="Trash2" className="w-3 h-3" />
+                          <Lucide aria-hidden="true" icon="Trash2" className="w-3 h-3" />
                         </Button>
                       </div>
                     </motion.div>
@@ -1222,8 +1242,8 @@ const HtmlEditorDialog: React.FC<HtmlEditorDialogProps> = ({
           <Dialog.Panel className="w-full max-w-4xl bg-white rounded-2xl shadow-2xl border border-slate-200">
             <Dialog.Title className="flex justify-between items-center px-6 py-4 border-b">
               <h3 className="text-lg font-medium">Editor HTML</h3>
-              <Button variant="outline-secondary" onClick={() => onClose(htmlContent)}>
-                <Lucide icon="X" className="w-4 h-4" />
+              <Button variant="outline-secondary" onClick={() => onClose(htmlContent)} aria-label="Chiudi editor HTML">
+                <Lucide aria-hidden="true" icon="X" className="w-4 h-4" />
               </Button>
             </Dialog.Title>
             <div className="p-6">
