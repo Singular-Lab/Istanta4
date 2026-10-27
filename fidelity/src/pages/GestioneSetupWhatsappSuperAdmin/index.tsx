@@ -215,7 +215,7 @@ const GestioneSetupWhatsappSuperAdmin: React.FC = () => {
                         <div className="box box--stacked p-4 sm:p-5 mb-2 w-full lg:flex-none">
                             <span className="font-semibold text-lg sm:text-xl">
                                 Template • Sincronizza
-                                <span className="text-xxs text-gray-500 block font-normal">
+                                <span className="text-3xs text-gray-500 block font-normal">
                                     Recupera i template approvati dal WABA del cliente.
                                 </span>
                             </span>
