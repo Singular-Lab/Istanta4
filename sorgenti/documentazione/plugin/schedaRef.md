@@ -70,10 +70,31 @@ sta lavorando l'operatore» guarda lì. Con lei: `multiSelection`, `schedeRefDat
   server che nel box manca, l'ordine, lo stile di paragrafo) va in righe gialle sotto i campi
   (`mostraGialloDescrizione`). Una differenza di soli spazi o a capo non accende niente. Un campo
   descrizione vuoto si riempie prima di decidere (`riempiDescrizioneVuota`).
+- `schemaDellaDescrizione`, `stileNelloSchema`, `postoNelloSchema`, `regoleDelloSchemaValide` →
+  (TASK-5d3fea89) lo schema delle descrizioni dell'agenzia (`schemiDescrizioni`) applicato nella
+  schermata di modifica: vale il primo le cui regole valgono (blocchi `{ regole }` valutati con
+  `pluginMiddleware.valutaBloccoRegole`; prima non si valutavano e vinceva sempre il primo) e che
+  contiene in ordine gli stili del box che gli schemi conoscono. Gli stili che nessuno schema prevede,
+  come il campo offerta dei boxetti di Edro21, non lo impediscono più e restano caselle loro. Un tratto
+  nascosto dall'esportazione (`_$Hidden`) compare in sola lettura al posto della casella vuota del suo
+  elemento (`casellaDelTrattoNascosto`) e, riscrivendo il box dopo un salvataggio, resta nascosto.
+  Le caselle degli elementi dello schema che il box non ha vanno prima dei blocchi in coda che nessuno
+  schema prevede (`ultimoTrattoDelloSchema`, `completaLoSchema`). Le etichette mostrano il nome senza
+  cartella e, per le caselle in sola lettura, il perché accanto su una riga sola
+  (`etichettaDellaCasella`, `indicazioneSolaLettura`: "alterato da logiche agenzia", "nascosta da
+  logiche agenzia" o "sola lettura"); quelle caselle hanno sfondo e bordo propri
+  (`segnaCasellaDisattivata`), che il riquadro a riposo ricopia, a differenza dell'opacità. Sotto i
+  campi la nota di una descrizione alterata non si ripete se ha una casella (`noteSottoICampi`);
+  quelle dell'agenzia restano. L'etichetta troncata si legge intera al passaggio del mouse: il testo
+  sta nel `title`, che disegna il [Tooltip](tooltip/README.md) del Plugin. Le caselle seguono la larghezza del
+  pannello: ogni colonna è larga la sua parte di riga (`stileDellaColonna`) e la casella è al 100%;
+  dalla configurazione dell'agenzia (`grandezzeBox`) contano solo caselle per riga, altezza e spazio
+  (`misureDelleCaselle`), non più la larghezza in pixel. Gli avvisi sotto le caselle hanno il bordo
+  sinistro del loro colore (`stileDellAvviso`) e la sezione «Azioni sul box» è separata da una linea.
 - `descrizioniAlterateDaEsportazione`, `archivioDescrizioneDelPrimario`, `testiCompostiDelPrimario`
   → (I20-1143) le fondamentali che l'export ha alterato rispetto all'archivio della scheda vanno in
   sola lettura come quelle dell'agenzia (I20-1132), con la nota "DescrizioneN (Alterato da
-  esportazione)" anche quando nel box non hanno casella, e partono non toccate. Col meta della
+  logiche agenzia)" sotto i campi quando non hanno casella, e partono non toccate. Col meta della
   descrizione non si giudica. I testi composti vanno al controller, perché il Salva veda anche uno
   spazio o un a capo cambiato. Girano mentre si costruisce la schermata: se non riescono la scheda
   si apre come prima, con l'avviso `SRF-133` (un'eccezione lì lasciava la scheda in caricamento).

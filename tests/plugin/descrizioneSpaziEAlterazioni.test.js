@@ -11,7 +11,7 @@
  *   sembrerebbe cambiato;
  * - una descrizione fondamentale che l'esportazione ha alterato - testo cambiato, nascosto o
  *   tolto, non solo spazi - non si segnala, resta in sola lettura con "(Alterato da
- *   esportazione)" e parte non toccata.
+ *   logiche agenzia)" (TASK-5d3fea89; prima "da esportazione") e parte non toccata.
  *
  * I casi vengono da schede vere (Coop, Edro21) e dall'allegato di I20-1143 (PROFITEROLES).
  *
@@ -350,7 +350,7 @@ test("nella scheda una descrizione alterata ha la sua nota, e col meta non si gi
         scheda.statoMetaDescrizione = () => null;
         //Il <br> dell'archivio e' l'a capo del composto: alterata e' solo la grammatura tolta.
         assert.deepStrictEqual(scheda.descrizioniAlterateDaEsportazione(records, ["Parmigiano<br>DOP", "", "", "500 g"]),
-            [{ fondamentale: "descrizione4", nota: "Descrizione4 (Alterato da esportazione)" }]);
+            [{ fondamentale: "descrizione4", nota: "Descrizione4 (Alterato da logiche agenzia)" }]);
 
         scheda.statoMetaDescrizione = () => ({ label: "descrizione", allineato: false });
         assert.deepStrictEqual(scheda.descrizioniAlterateDaEsportazione(records, ["Parmigiano<br>DOP", "", "", "500 g"]), []);

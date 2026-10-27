@@ -123,7 +123,7 @@ test("la schermata di modifica chiede le descrizioni in sola lettura una volta e
     //La nota non sta nella colonna: la casella si attenua e la nota va nella riga sotto i campi.
     assert.strictEqual((sorgente.match(/me\.segnaCasellaInSolaLettura\(textarea, notaSolaLettura\);/g) || []).length, 3);
     assert.ok(!/column\.append\(me\.elementoNotaSolaLettura/.test(sorgente), "la nota non deve stare nella colonna");
-    assert.match(sorgente, /\$\("#editReferenza"\)\.append\(row\);\s*\}\s*\/\/[^\n]*\n\s*me\.mostraNoteSolaLettura\(\);\s*var button = \$\('<sp-action-button id="salvaButton"/);
+    assert.match(sorgente, /\$\("#editReferenza"\)\.append\(row\);\s*\}\s*\/\/[^\n]*\n\s*me\.mostraNoteSolaLettura\(descrizioniAlterate\);\s*var button = \$\('<sp-action-button id="salvaButton"/);
     assert.match(sorgente, /me\.noteSolaLetturaDaMostrare = \[\];/);
     assert.match(sorgente, /me\.editRefFieldController = new InputEditController\([^\n]*compiledFields, descrizioniInSolaLettura\.map\(function \(d\) \{ return d\.fondamentale; \}\)(, me\.testiCompostiDelPrimario\(me\.schedeRefDati\))?\);/);
     //La casella nasce readonly quando isEditable e' falso, com'era.
