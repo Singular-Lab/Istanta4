@@ -92,6 +92,8 @@ export default /** @type {import('tailwindcss').Config} */({
 
             /* -----------------------  COLORI  -------------------- */
             colors: {
+                // Neutro dell'interfaccia: alias di slate, da usare al posto di gray-*
+                neutral: colors.slate,
                 'sb-track': '#ffffff',
                 'sb-thumb': "#626b96",
                 theme: {
@@ -125,8 +127,6 @@ export default /** @type {import('tailwindcss').Config} */({
             fontFamily: {
                 'urbanist': ['Urbanist', 'system-ui', '-apple-system', 'sans-serif'],
                 'space-grotesk': ['Space Grotesk', 'sans-serif'],
-                'dm-sans': ['DM Sans', 'sans-serif'],
-                'poppins': ['Poppins', 'sans-serif'],
                 'allura': ['Allura', 'cursive'],
             },
             fontWeight: {
@@ -144,8 +144,23 @@ export default /** @type {import('tailwindcss').Config} */({
                 "chevron-black":
                     "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2300000095' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E\")",
             },
+            /* -----------------------  TIPOGRAFIA  ---------------- */
+            // Scala: 3xs 10 · 2xs 11 · xs 12 · sm 14 · base 16 · lg 18 · xl 20 · 2xl 24 · 3xl 30.
+            // Da usare al posto di text-[10px], text-[11px] e simili.
             fontSize: {
-                xxs: '0.625rem', // 10px
+                '3xs': ['0.625rem', { lineHeight: '0.875rem' }], // 10px
+                '2xs': ['0.6875rem', { lineHeight: '1rem' }], // 11px
+            },
+
+            /* -----------------  RAGGI E OMBRE  ------------------- */
+            // Nomi propri, per non alterare rounded-*/shadow-* di Tailwind gia in uso
+            borderRadius: {
+                control: '0.5rem', // campi, pulsanti, voci di menu
+                card: '0.6rem', // .box e card
+            },
+            boxShadow: {
+                card: '0 3px 5px #0000000b', // .box
+                overlay: '0 10px 38px -10px rgb(15 23 42 / 0.35), 0 10px 20px -15px rgb(15 23 42 / 0.2)', // menu, popover, finestre
             },
 
             /* -------------------  CONTAINER  --------------------- */

@@ -54,18 +54,49 @@ html {
         font-family: theme("fontFamily.allura");
     }
 
-    h1 {
+    /* Dimensioni imposte ai titoli che non usano ancora le classi .title-*:
+       le pagine passano alle classi lotto per lotto, poi questa regola sparisce */
+    h1:not([class*="title-"]) {
         font-size: 1.875rem !important;
         line-height: 2.25rem !important;
     }
 
-    h2 {
+    h2:not([class*="title-"]) {
         font-size: 1.5rem !important;
         line-height: 2rem !important;
     }
 
-    h3 {
+    h3:not([class*="title-"]) {
         font-size: 1.25rem !important;
         line-height: 1.75rem !important;
+    }
+}
+
+/* Titoli: titolo di pagina, di sezione, di card o finestra */
+@layer components {
+    .title-page {
+        font-family: theme("fontFamily.space-grotesk");
+        font-size: theme("fontSize.3xl");
+        line-height: 2.25rem;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+    }
+
+    .title-section {
+        font-family: theme("fontFamily.space-grotesk");
+        font-size: theme("fontSize.lg");
+        line-height: 1.75rem;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        color: theme("colors.slate.800");
+    }
+
+    .title-card {
+        font-family: theme("fontFamily.urbanist");
+        font-size: theme("fontSize.sm");
+        line-height: 1.25rem;
+        font-weight: 600;
+        letter-spacing: 0;
+        color: theme("colors.slate.800");
     }
 }
