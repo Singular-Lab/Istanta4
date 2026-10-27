@@ -11,9 +11,16 @@ public sealed record PaginaEstratta(byte Numero, string NomeFile, int LarghezzaP
 ///
 /// UNICA DEVIAZIONE VOLUTA: l'originale legge e scrive in CMYK
 /// (settings.ColorSpace = ColorSpace.CMYK). I JPEG CMYK sono resi male o non
-/// resi affatto dalla maggior parte dei browser. Qui rasterizziamo con gli
-/// stessi parametri ma consegniamo sRGB, perche' queste immagini devono
-/// comparire in una pagina web.
+/// resi affatto dalla maggior parte dei browser. Qui consegniamo sRGB, perche'
+/// queste immagini devono comparire in una pagina web.
+///
+/// I20-1144: da CMYK a sRGB si passa con i profili colore, Coated FOGRA39 (lo
+/// standard europeo di stampa) verso sRGB. Prima bastava img.ColorSpace, senza
+/// profili: una formula che rende i colori di stampa come quelli puri dello
+/// schermo (il rosso Coop 0/100/100/0 usciva (255,0,0) invece di (227,6,20)), e
+/// le pagine in Correggo erano molto piu' sature del PDF.
+/// La lettura resta in CMYK: ImageMagick legge in CMYK comunque i PDF che
+/// dichiarano /DeviceCMYK, come quelli di InDesign, qualunque cosa si chieda.
 /// </summary>
 public sealed class EstrattorePagine
 {
@@ -63,6 +70,9 @@ public sealed class EstrattorePagine
             byte numero = i < numeriPagina.Count ? numeriPagina[i] : (byte)(i + 1);
 
             var img = immagini[i];
+            // I20-1144: i colori di stampa diventano quelli dello schermo con i profili.
+            img.TransformColorSpace(ColorProfiles.CoatedFOGRA39, ColorProfiles.SRGB);
+            // Una pagina che non e' arrivata in CMYK (ColorType.Optimize) passa comunque a sRGB.
             img.ColorSpace = ColorSpace.sRGB;
             img.Quality = 75;
 
