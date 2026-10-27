@@ -203,7 +203,18 @@ if verifica_directory POSTGRES_INIT_DIR "lo script che crea database e ruolo di 
     verifica_file "*.sh" "01-init-databases.sh"
 fi
 if verifica_directory PROXY_TEMPLATE_DIR "la configurazione di nginx"; then
-    verifica_file "*.template" "default.conf.template"
+    # Il proxy rende solo la sottocartella del servizio scelto: un valore che non
+    # corrisponde a una cartella lo farebbe partire senza il sito sulla 443.
+    upstream=$(leggi release.env PROXY_UPSTREAM)
+    upstream="${upstream:-fidelity}"
+    case "$upstream" in
+        fidelity|olimpo)
+            verifica_file "$upstream/*.template" "default.conf.template del servizio $upstream" ;;
+        *)
+            rosso "  invalida  PROXY_UPSTREAM = $upstream"
+            rosso "            Valori ammessi: fidelity oppure olimpo."
+            errori=$((errori + 1)) ;;
+    esac
 fi
 
 echo

@@ -13,7 +13,7 @@ riscrivendo le sole variabili immagine in `release.env`.
 | `fidelity.env.example` | Ambiente iniettato nel container Fidelity: credenziali e segreti. |
 | `olimpo.env.example` | Ambiente iniettato nel container Olimpo: credenziali e segreti. |
 | `postgres-init/` | Script eseguito al primo avvio di PostgreSQL: estensioni e database di Olimpo. |
-| `proxy-templates/` | Configurazione di nginx, l'unica origine con cui parla il browser. |
+| `proxy-templates/` | Configurazione di nginx, una sottocartella per servizio (`fidelity/`, `olimpo/`): termina il TLS davanti a quello scelto con `PROXY_UPSTREAM`. |
 
 Cosa non c'è, di proposito:
 
@@ -235,6 +235,73 @@ servizio:
 ```bash
 sudo docker --config /opt/company-ai/runner/docker-config compose --env-file release.env -f compose.production.yaml up -d proxy
 ```
+
+Il proxy non dipende da nessun servizio: nginx risolve il nome del servizio a
+ogni richiesta, quindi parte anche se l'applicazione non è ancora su (risponde
+502 finché non arriva) e non avvia nient'altro.
+
+### Il servizio dietro il proxy: `PROXY_UPSTREAM`
+
+`PROXY_UPSTREAM` in `release.env` sceglie davanti a quale servizio il proxy
+termina il TLS, e quindi quale template usa:
+
+| Valore | Template | Instrada verso |
+| --- | --- | --- |
+| `fidelity` (predefinito) | `proxy-templates/fidelity/default.conf.template` | `fidelity`, porta HTTP e `/socket.io/` sulla porta WebSocket |
+| `olimpo` | `proxy-templates/olimpo/default.conf.template` | `olimpo:3000`, WebSocket compreso, upload senza limite di dimensione |
+
+Serve quando Fidelity e Olimpo stanno su **server distinti**, ciascuno con il
+proprio nome, per esempio `https://dominio.it` e `https://olimpo.dominio.it`: su
+ogni server il proxy sta davanti al suo servizio. Lo stesso certificato può
+servire entrambi i server se copre entrambi i nomi (wildcard o SAN). Con
+`PROXY_HTTPS_PORT=443` l'indirizzo non ha bisogno della porta.
+
+Olimpo non gestisce TLS da sé: pubblicarlo direttamente sulla 443 con
+`OLIMPO_HTTP_PORT` lo esporrebbe in chiaro, e un indirizzo `https://` non
+funzionerebbe. Per l'https serve il proxy.
+
+Un solo proxy instrada verso un solo servizio: Fidelity e Olimpo sulla stessa
+macchina dietro la stessa porta 443, separati per nome, non sono previsti da
+questi template.
+
+**Installazioni esistenti.** Fino a questa versione il template stava nella
+radice di `proxy-templates/`. Prima di ricreare il proxy va copiata la nuova
+cartella del bundle:
+
+```bash
+cd /opt/company-ai/projects/istanta4
+sudo cp -r /percorso/bundle/proxy-templates/. proxy-templates/
+```
+
+Il vecchio `proxy-templates/default.conf.template` nella radice viene ignorato e
+si può cancellare. Il proxy già avviato continua a funzionare con la
+configurazione che ha: il cambio ha effetto solo quando lo si ricrea.
+
+### Solo Olimpo su un server
+
+Sul server che ospita solo Olimpo si usa lo stesso bundle, con queste
+differenze:
+
+- in `release.env`: `PROXY_UPSTREAM=olimpo` e, per un dominio senza porta,
+  `PROXY_HTTPS_PORT=443`;
+- compose legge l'intero file anche quando si avviano solo alcuni servizi,
+  quindi le voci obbligatorie di Fidelity devono esserci lo stesso, anche se
+  Fidelity non parte: `FIDELITY_DB_PASSWORD` (la usa anche PostgreSQL),
+  `FIDELITY_CONFIG_DIR`, `FIDELITY_IMAGE` (basta un valore qualsiasi, l'immagine
+  non viene scaricata) e il file `fidelity.env`, che può restare vuoto;
+- si avviano solo Olimpo, con il suo PostgreSQL, e il proxy:
+
+  ```bash
+  sudo docker --config /opt/company-ai/runner/docker-config compose --env-file release.env -f compose.production.yaml up -d olimpo proxy
+  ```
+
+- nel Runner il progetto di quel server dichiara solo il componente `olimpo`
+  (sezione 3), altrimenti il deployment selettivo avvierebbe anche Fidelity;
+- sul server di Fidelity, `OLYMPUS_IP_ADDRESS`, `VITE_OLYMPUS_IP_ADDRESS` e le
+  relative `_CORS` in `fidelity.env` puntano all'indirizzo https di Olimpo, per
+  esempio `https://olimpo.dominio.it`. Con un certificato autofirmato Node, in
+  Fidelity, rifiuterebbe la connessione: per questo scenario serve un
+  certificato emesso da una CA riconosciuta.
 
 ### Inizializzazione automatica all'avvio
 

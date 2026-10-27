@@ -246,12 +246,19 @@ services:
         max-file: "3"
 
   proxy:
-    # Unica origine per il browser davanti a Fidelity: termina il TLS e instrada
-    # la SPA e le API sulla porta HTTP, /socket.io/ su quella WebSocket. Gli
-    # header di sicurezza dell'applicazione passano intatti. Vedi
-    # proxy-templates/default.conf.template.
+    # Termina il TLS davanti al servizio scelto con PROXY_UPSTREAM in
+    # release.env, cosi' Fidelity e Olimpo possono stare anche su server
+    # distinti, ciascuno con il proprio proxy:
+    #   - fidelity (predefinito): unica origine per il browser, instrada la SPA
+    #     e le API sulla porta HTTP, /socket.io/ su quella WebSocket. Gli header
+    #     di sicurezza dell'applicazione passano intatti;
+    #   - olimpo: tutto sulla porta 3000, WebSocket compreso.
+    # Il template e' proxy-templates/<PROXY_UPSTREAM>/default.conf.template:
+    # nginx rende solo la cartella indicata da NGINX_ENVSUBST_TEMPLATE_DIR.
     #
-    # Non e' una dipendenza di Fidelity ma il contrario, quindi il deployment
+    # Non dipende da nessun servizio: il template risolve il nome a ogni
+    # richiesta, quindi nginx parte anche prima del servizio a valle, e su un
+    # server con solo Olimpo `up -d proxy` non avvia Fidelity. Il deployment
     # selettivo del Runner (`up -d --wait fidelity olimpo`) non lo avvia: si
     # avvia una volta a mano con `docker compose up -d proxy` e resta su.
     image: nginx:1.27-alpine
@@ -261,6 +268,7 @@ services:
     environment:
       FIDELITY_HTTP_PORT: ${FIDELITY_HTTP_PORT:-3010}
       FIDELITY_WS_PORT: ${FIDELITY_WS_PORT:-3400}
+      NGINX_ENVSUBST_TEMPLATE_DIR: /etc/nginx/templates/${PROXY_UPSTREAM:-fidelity}
       # Limita la sostituzione alle nostre variabili: senza filtro envsubst
       # potrebbe intaccare le variabili di nginx presenti nel template.
       NGINX_ENVSUBST_FILTER: "^FIDELITY_"
@@ -271,9 +279,6 @@ services:
       - ${PROXY_CERT_DIR:?Impostare PROXY_CERT_DIR in release.env, percorso assoluto sull'host}:/etc/nginx/certs:ro
     ports:
       - "${PROXY_HTTPS_PORT:-8081}:443"
-    depends_on:
-      fidelity:
-        condition: service_started
     logging:
       driver: json-file
       options:
