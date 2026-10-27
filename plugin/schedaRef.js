@@ -423,7 +423,8 @@ const schedaRef = {
 
     /// I20-1143: le descrizioni fondamentali alterate dall'esportazione per il primario della
     /// scheda, come { fondamentale, nota } da trattare come quelle in sola lettura dell'agenzia:
-    /// casella in sola lettura, nota sotto le caselle, salvate come non toccate. archivio e' quello
+    /// casella in sola lettura con l'indicazione accanto al nome, nota sotto le caselle solo se non
+    /// ne hanno nessuna (noteSottoICampi), salvate come non toccate. archivio e' quello
     /// della scheda (archivioDescrizioneDelPrimario). Con la descrizione nei meta non si giudica:
     /// il contenuto del server e' il meta, e le caselle sono gia' in sola lettura.
     ///
@@ -445,7 +446,7 @@ const schedaRef = {
                 .map(function (fondamentale) {
                     return {
                         fondamentale: fondamentale,
-                        nota: fondamentale.charAt(0).toUpperCase() + fondamentale.substring(1) + " (Alterato da esportazione)"
+                        nota: fondamentale.charAt(0).toUpperCase() + fondamentale.substring(1) + " (Alterato da logiche agenzia)"
                     };
                 });
         }
@@ -1517,7 +1518,7 @@ const schedaRef = {
         //record, con la nota: la casella nasce readonly e il salvataggio non le manda.
         var descrizioniInSolaLettura = pluginMiddleware.getDescrizioniInSolaLettura != null ? (pluginMiddleware.getDescrizioniInSolaLettura(primario.recordInTracciato) || []) : [];
         //I20-1143: e quelle che l'esportazione ha alterato rispetto all'archivio, con la nota
-        //"(Alterato da esportazione)": stessa casella in sola lettura, stesso salvataggio da non
+        //"(Alterato da logiche agenzia)": stessa casella in sola lettura, stesso salvataggio da non
         //toccate, e il pannello del mismatch non le conta. Se l'agenzia la dichiara gia' in sola
         //lettura vale la sua nota, che dice di piu'.
         var archivioDescrizione = this.archivioDescrizioneDelPrimario(primario, dna);
@@ -1525,8 +1526,10 @@ const schedaRef = {
             .filter(alterata => !descrizioniInSolaLettura.some(d => d != null && d.fondamentale === alterata.fondamentale));
         descrizioniInSolaLettura = descrizioniInSolaLettura.concat(descrizioniAlterate);
         me.noteSolaLetturaDaMostrare = [];
-        //La nota di una descrizione alterata si mostra anche se nel box non ha nessuna casella:
-        //l'esportazione puo' averla tolta del tutto.
+        me.fondamentaliConCasellaInSolaLettura = [];
+        //La nota di una descrizione alterata si raccoglie anche se nel box non ha nessuna casella:
+        //l'esportazione puo' averla tolta del tutto. Sotto i campi resta solo in quel caso, perche'
+        //una casella ha gia' l'indicazione accanto al nome (TASK-5d3fea89, noteSottoICampi).
         descrizioniAlterate.forEach(function (alterata) {
             me.segnaCasellaInSolaLettura(null, alterata);
         });
@@ -2064,159 +2067,89 @@ const schedaRef = {
                             listaStili.push(nomeStile);
                         });
 
-                        //adesso scrorriamo ogni lista di schemi presente e la confrontiamo con la lista di stili, se tutti gli stili presenti in lista stili sono presenti in uno schema e con lo stesso ordine, allora abbiamo trovato lo schema corrispondente
-                        for (var $j = 0; $j < schemi.length; $j++) {
-                            var schema = schemi[$j].schema;
-                            //cicliamo la lista di stili e cerchiamo se lo stile è presente in schema, se lòo è ci salviamo da parte l'indice trovato in schema
-                            var indice = 0;
-                            var found = true;
-                            for (var $k = 0; $k < listaStili.length; $k++) {
-                                var stile = listaStili[$k];
-                                stile = stile.split(".").length > 1 ? stile.split(".")[1] : stile;
-                                var trovato = false;
-                                for (var $l = indice; $l < schema.length; $l++) {
-                                    var regolaSchema = schema[$l].split("$");
-                                    if (regolaSchema.length == 1) {
-                                        regolaSchema.insert(0, "");
-                                    }
-                                    if (regolaSchema[1].split(".").length > 1) {
-                                        regolaSchema[1] = regolaSchema[1].split(".")[1];
-                                    }
+                        //TASK-5d3fea89: lo schema lo sceglie schemaDellaDescrizione. Gli stili che nessuno schema
+                        //prevede (il campo offerta dei boxetti di Edro21) non fanno piu' fallire tutti gli schemi, e
+                        //le regole degli schemi si valutano davvero: prima vinceva sempre il primo.
+                        schemaTrovato = me.schemaDellaDescrizione(listaStili, schemi, primario.recordInTracciato, function (record, blocco) {
+                            return pluginMiddleware.valutaBloccoRegole != null ? pluginMiddleware.valutaBloccoRegole(record, blocco) : true;
+                        });
+                    }
+                    //TASK-5d3fea89: i tratti che l'esportazione ha nascosto (_$Hidden). Dove lo schema li prevede
+                    //compaiono in sola lettura al posto della casella vuota (casellaDelTrattoNascosto); gli altri
+                    //restano nella riga nascosta, come prima.
+                    var nascostiDellaDescrizione = contentObjParsedStiles
+                        .filter(o => o != null && typeof o.stile === "string" && o.stile.indexOf("_$Hidden") >= 0)
+                        .map(o => ({ stileServer: o.stile, stile: o.stile.replace("_$Hidden", ""), contenuto: o.content, mostrato: false }));
+                    var currentCharacterStyle = "";
+                    var row = $('<div class="row"></div>');
+                    //TASK-5d3fea89: caselle per riga, altezza e spazio fra le caselle, dalla configurazione dell'agenzia.
+                    //Le caselle sono larghe quanto la loro parte di riga e seguono il pannello (stileDellaColonna).
+                    var misureCaselle = me.misureDelleCaselle(grandezzeBox);
+                    //TASK-5d3fea89: le caselle degli elementi dello schema che il box non ha mostrato: vuote, o il
+                    //tratto nascosto dall'esportazione. Vanno prima dei blocchi in coda che nessuno schema prevede (il
+                    //campo offerta dei boxetti di Edro21): prima finivano dopo di loro, e l'ordine cambiava da una
+                    //referenza all'altra secondo quali descrizioni il box aveva.
+                    var ultimoTrattoDelloSchema = schemaTrovato != null ? me.ultimoTrattoDelloSchema(trattiDelCampo.map(t => t.nome), schemaTrovato) : -1;
+                    var completaLoSchema = function () {
+                        if (schemaTrovato != null) {
+                            for (var $k = lastStileSchemaInserito; $k < schemaTrovato.length; $k++) {
+                                var elSchema = schemaTrovato[$k].split("$");
+                                if (elSchema.length == 1) {
+                                    //TASK-5d3fea89: era insert(0, ""), che sugli array non esiste.
+                                    elSchema.unshift("");
+                                }
+                                lastStileSchemaInserito++;
 
-                                    if (regolaSchema[0] == "") {
-                                        if (regolaSchema[1] == stile) {
-                                            trovato = true;
-                                            indice = $l;
-                                            break;
-                                        }
+                                //TASK-5d3fea89: al posto della casella vuota, il tratto nascosto dall'esportazione.
+                                var nascostoInCoda = me.trattoNascostoDelloSchema(nascostiDellaDescrizione, schemaTrovato[$k]);
+                                if (nascostoInCoda != null) {
+                                    var notaDelNascosto = me.notaDescrizioneInSolaLettura(descrizioniInSolaLettura, nascostoInCoda.stile);
+                                row.append(me.casellaDelTrattoNascosto(nascostoInCoda, grandezzeBox, notaDelNascosto,
+                                    notaDelNascosto != null ? me.indicazioneSolaLettura(notaDelNascosto, false, descrizioniAlterate) : "nascosta da logiche agenzia"));
+                                    if (row.children().length == misureCaselle.perRiga) {
+                                        $("#editReferenza").append(row);
+                                        row = $('<div class="row"></div>');
                                     }
-                                    else if (regolaSchema[0] == "IN") {
-                                        if (stile.includes(regolaSchema[1])) {
-                                            trovato = true;
-                                            indice = $l;
-                                            break;
-                                        }
-                                    }
-                                    else if (regolaSchema[0] == "!IN") {
-                                        if (!stile.includes(regolaSchema[1])) {
-                                            trovato = true;
-                                            indice = $l;
-                                            break;
-                                        }
-                                    }
-                                    else if (regolaSchema[0] == "START") {
-                                        if (stile.startsWith(regolaSchema[1])) {
-                                            trovato = true;
-                                            indice = $l;
-                                            break;
-                                        }
-                                    }
-                                    else if (regolaSchema[0] == "END") {
-                                        if (stile.endsWith(regolaSchema[1])) {
-                                            trovato = true;
-                                            indice = $l;
-                                            break;
-                                        }
-                                    }
+                                    continue;
                                 }
-                                if (!trovato) {
-                                    found = false;
-                                    break;
+
+                                let nome_schema = schemaTrovato[$k];
+                                if (nome_schema.indexOf("$") >= 0) {
+                                    nome_schema = nome_schema.substring(nome_schema.indexOf("$") + 1);
                                 }
-                            }
-                            if (found) {
-                                //valutiamo se le regole dello schema sono rispettate controllando il primo oggetto di objResult
-                                var setRegole = schemi[$j].setRegole;
-                                var regoleRispettate = true;
-                                if (setRegole != null && setRegole.length > 0) {
-                                    for (var $k = 0; $k < setRegole.length; $k++) {
-                                        //controlliamo ogni oggetto nel set
-                                        var set = setRegole[$k];
-                                        regoleRispettate = true;
-                                        for (var $l = 0; $l < set.length; $l++) {
-                                            var regola = set[$l];
-                                            var campo = regola.campo;
-                                            var operatore = regola.operatore;
-                                            var valore = regola.valore;
-                                            if (primario.recordInTracciato[campo] != null) {
-                                                //usiamo uno switch per gli operatori, gli operatori sono ==, !=, <, >, <=, >=, IN, !IN, startswith, endswith
-                                                switch (operatore) {
-                                                    case "==":
-                                                        if (primario.recordInTracciato[campo].toString().toLowerCase() != valore.toString().toLowerCase()) {
-                                                            regoleRispettate = false;
-                                                        }
-                                                        break;
-                                                    case "!=":
-                                                        if (primario.recordInTracciato[campo].toString().toLowerCase() == valore.toString().toLowerCase()) {
-                                                            regoleRispettate = false;
-                                                        }
-                                                        break;
-                                                    case "<":
-                                                        if (typeof primario.recordInTracciato[campo] === 'number' && typeof valore === 'number' && primario.recordInTracciato[campo] >= valore) {
-                                                            regoleRispettate = false;
-                                                        }
-                                                        break;
-                                                    case ">":
-                                                        if (typeof primario.recordInTracciato[campo] === 'number' && typeof valore === 'number' && primario.recordInTracciato[campo] <= valore) {
-                                                            regoleRispettate = false;
-                                                        }
-                                                        break;
-                                                    case "<=":
-                                                        if (typeof primario.recordInTracciato[campo] === 'number' && typeof valore === 'number' && primario.recordInTracciato[campo] > valore) {
-                                                            regoleRispettate = false;
-                                                        }
-                                                        break;
-                                                    case ">=":
-                                                        if (typeof primario.recordInTracciato[campo] === 'number' && typeof valore === 'number' && primario.recordInTracciato[campo] < valore) {
-                                                            regoleRispettate = false;
-                                                        }
-                                                        break;
-                                                    case "IN":
-                                                        if (primario.recordInTracciato[campo].toString().toLowerCase().indexOf(valore.toString().toLowerCase()) < 0) {
-                                                            regoleRispettate = false;
-                                                        }
-                                                        break;
-                                                    case "!IN":
-                                                        if (primario.recordInTracciato[campo].toString().toLowerCase().indexOf(valore.toString().toLowerCase()) >= 0) {
-                                                            regoleRispettate = false;
-                                                        }
-                                                        break;
-                                                    case "startswith":
-                                                        if (!primario.recordInTracciato[campo].toString().toLowerCase().startsWith(valore.toString().toLowerCase())) {
-                                                            regoleRispettate = false;
-                                                        }
-                                                        break;
-                                                    case "endswith":
-                                                        if (!primario.recordInTracciato[campo].toString().toLowerCase().endsWith(valore.toString().toLowerCase())) {
-                                                            regoleRispettate = false;
-                                                        }
-                                                        break;
-                                                    default:
-                                                        break;
-                                                }
-                                            }
-                                            else {
-                                                regoleRispettate = false;
-                                                break;
-                                            }
-                                            if (!regoleRispettate) {
-                                                break;
-                                            }
-                                        }
-                                    }
+
+
+                                var column = $('<div class="column" style="' + me.stileDellaColonna(grandezzeBox) + '"></div>');
+                                var label = '<label style="margin-top: 10px;color:white;">' + elSchema[1] + '</label><br>';
+
+                                var isEditable = true;
+                                if (pluginMiddleware.isSchemaEditable != null) {
+                                    isEditable = pluginMiddleware.isSchemaEditable(elSchema[1]);
                                 }
-                                if (regoleRispettate) {
-                                    schemaTrovato = schema;
-                                    break;
+                                //I20-1132: fondamentale in sola lettura per regola dell'agenzia.
+                                var notaSolaLettura = me.notaDescrizioneInSolaLettura(descrizioniInSolaLettura, elSchema[1]);
+                                if (notaSolaLettura != null) {
+                                    isEditable = false;
                                 }
-                                else {
-                                    found = false;
+
+                                //I20-1123: il primo class resta, vuoto (era "hideble"): dei due class della casella vale il primo,
+                                //e il secondo non e' mai valso. Toglierlo del tutto avrebbe acceso il secondo, e cambiato il salvataggio.
+                                var textarea = $('<textarea ' + (isEditable && refEditabile ? '' : 'readonly') + ' class="" labelCorrispondente="descrizione" currentCharacterStyle="' + nome_schema + '" class="textArea nonCancellareSeVuoto" name="myTextarea" style="height: ' + misureCaselle.altezza + 'px; width: 100%; margin: 0; background-color:white; color:black;"></textarea><br>');
+                                //TASK-5d3fea89: il nome senza cartella e, in sola lettura, il perche' accanto (intero al passaggio del mouse); sfondo e bordo propri.
+                                label = me.etichettaDellaCasella(elSchema[1], null, me.indicazioneSolaLettura(notaSolaLettura, isEditable, descrizioniAlterate));
+                                column.append(label).append(textarea);
+                                me.segnaCasellaInSolaLettura(textarea, notaSolaLettura);
+                                if (!(isEditable && refEditabile)) {
+                                    me.segnaCasellaDisattivata(textarea);
+                                }
+                                row.append(column);
+                                if (row.children().length == misureCaselle.perRiga) {
+                                    $("#editReferenza").append(row);
+                                    row = $('<div class="row"></div>');
                                 }
                             }
                         }
-                    }
-                    var currentCharacterStyle = "";
-                    var row = $('<div class="row"></div>');
+                    };
                     //I20-995: un giro per tratto di stile invece che per carattere. Il ramo che
                     //allungava la textarea un carattere alla volta non serve piu': il testo del
                     //tratto si scrive tutto insieme, in fondo al blocco.
@@ -2234,41 +2167,34 @@ const schedaRef = {
                             //del server assenti dal box: giallo senza pulsante, e pulsante senza giallo.
                             var stileInMismatch = gialloDescrizione.stili.indexOf(characterName) >= 0;
 
-                            if (row.children().length == (grandezzeBox != null && grandezzeBox.bigBoxPerRow != null && grandezzeBox.bigBoxPerRow != "auto" ? grandezzeBox.bigBoxPerRow : 2)) {
+                            if (row.children().length == misureCaselle.perRiga) {
                                 $("#editReferenza").append(row);
                                 row = $('<div class="row"></div>');
                             }
+                            //TASK-5d3fea89: un blocco in coda che lo schema non prevede viene dopo le caselle dello
+                            //schema che mancano: prima si completano quelle.
+                            if (schemaTrovato != null && $j > ultimoTrattoDelloSchema) {
+                                completaLoSchema();
+                            }
                             //se lo schema non è null si scorre lo schema fino a trovare lo stile corrispondente e inserendo nel frattempo i box vuoti di ogni stile trovato prima di quello attuale, poi ci si salva l'indice a cui si è arrivati
-                            if (schemaTrovato != null) {
-                                for (var $k = lastStileSchemaInserito; $k < schemaTrovato.length; $k++) {
-                                    var elSchema = schemaTrovato[$k].split("$");
-                                    if (elSchema.length == 1) {
-                                        elSchema.insert(0, "");
-                                    }
-                                    var characterName = tratto.nome;
-                                    var schemaSplitted = elSchema[1].split(".");
-                                    if (schemaSplitted.length > 1) {
-                                        schemaSplitted = schemaSplitted[1];
-                                    }
-                                    else {
-                                        schemaSplitted = schemaSplitted[0];
-                                    }
+                            //TASK-5d3fea89: solo uno stile che lo schema prevede fa nascere le caselle vuote degli
+                            //elementi che lo precedono. Prima uno stile fuori dallo schema (il campo offerta dei boxetti
+                            //di Edro21) faceva scorrere lo schema fino in fondo, una casella vuota per elemento, a ogni
+                            //tratto. Al posto della casella vuota di un elemento nascosto dall'esportazione, il tratto.
+                            var postoNelloSchema = schemaTrovato != null ? me.postoNelloSchema(characterName, schemaTrovato, lastStileSchemaInserito) : -1;
+                            if (postoNelloSchema >= 0) {
+                                for (var $k = lastStileSchemaInserito; $k < postoNelloSchema; $k++) {
+                                    var schemaSplitted = me.elementoDelloSchema(schemaTrovato[$k]).nome;
 
-                                    if (elSchema[0] == "" && schemaSplitted == characterName) {
-                                        lastStileSchemaInserito = $k + 1;
-                                        break;
-                                    }
-                                    else if (elSchema[0] == "IN" && characterName.includes(schemaSplitted)) {
-                                        lastStileSchemaInserito = $k + 1;
-                                        break;
-                                    }
-                                    else if (elSchema[0] == "!IN" && !characterName.includes(schemaSplitted)) {
-                                        lastStileSchemaInserito = $k + 1;
-                                        break;
-                                    }
-                                    else if (elSchema[0] == "START" && characterName.startsWith(schemaSplitted)) {
-                                        lastStileSchemaInserito = $k + 1;
-                                        break;
+                                    var nascostoDelloSchema = me.trattoNascostoDelloSchema(nascostiDellaDescrizione, schemaTrovato[$k]);
+                                    if (nascostoDelloSchema != null) {
+                                        var notaDelNascosto = me.notaDescrizioneInSolaLettura(descrizioniInSolaLettura, nascostoDelloSchema.stile);
+                                        row.append(me.casellaDelTrattoNascosto(nascostoDelloSchema, grandezzeBox, notaDelNascosto,
+                                            notaDelNascosto != null ? me.indicazioneSolaLettura(notaDelNascosto, false, descrizioniAlterate) : "nascosta da logiche agenzia"));
+                                        if (row.children().length == misureCaselle.perRiga) {
+                                            $("#editReferenza").append(row);
+                                            row = $('<div class="row"></div>');
+                                        }
                                     }
                                     else {
 
@@ -2277,7 +2203,7 @@ const schedaRef = {
                                             nome_schema = nome_schema.substring(nome_schema.indexOf("$") + 1);
                                         }
 
-                                        var column = $('<div class="column" style="margin-right:' + (grandezzeBox != null && grandezzeBox.marginBetweenBigBox != null && grandezzeBox.marginBetweenBigBox != "auto" ? grandezzeBox.marginBetweenBigBox : "10px") + 'px;"></div>');
+                                        var column = $('<div class="column" style="' + me.stileDellaColonna(grandezzeBox) + '"></div>');
                                         var label = '<label style="margin-top: 10px;color:white;">' + nome_schema + '</label><br>';
 
                                         //mandiamo all'agenzia una riciesta per il controllo del nome schema se è editabile, se la risposta è false la textarea sarà readonly
@@ -2293,16 +2219,22 @@ const schedaRef = {
 
                                         //I20-1123: il primo class resta, vuoto (era "hideble"): dei due class della casella vale il primo,
                                         //e il secondo non e' mai valso. Toglierlo del tutto avrebbe acceso il secondo, e cambiato il salvataggio.
-                                        var textarea = $('<textarea ' + (isEditable  && refEditabile ? '' : 'readonly') + ' class="" labelCorrispondente="descrizione" currentCharacterStyle="' + nome_schema + '" class="textArea nonCancellareSeVuoto" name="myTextarea" style="height:' + (grandezzeBox != null && grandezzeBox.bigBoxHeight != null && grandezzeBox.bigBoxHeight != "auto" ? grandezzeBox.bigBoxHeight : '50') + 'px; width:' + (grandezzeBox != null && grandezzeBox.bigBoxWidth != null && grandezzeBox.bigBoxWidth != "auto" ? grandezzeBox.bigBoxWidth : '100') + 'px; background-color:white; color:black;"></textarea><br>');
+                                        var textarea = $('<textarea ' + (isEditable  && refEditabile ? '' : 'readonly') + ' class="" labelCorrispondente="descrizione" currentCharacterStyle="' + nome_schema + '" class="textArea nonCancellareSeVuoto" name="myTextarea" style="height: ' + misureCaselle.altezza + 'px; width: 100%; margin: 0; background-color:white; color:black;"></textarea><br>');
+                                        //TASK-5d3fea89: il nome senza cartella e, in sola lettura, il perche' accanto (intero al passaggio del mouse); sfondo e bordo propri.
+                                        label = me.etichettaDellaCasella(nome_schema, null, me.indicazioneSolaLettura(notaSolaLettura, isEditable, descrizioniAlterate));
                                         column.append(label).append(textarea);
                                         me.segnaCasellaInSolaLettura(textarea, notaSolaLettura);
+                                        if (!(isEditable && refEditabile)) {
+                                            me.segnaCasellaDisattivata(textarea);
+                                        }
                                         row.append(column);
-                                        if (row.children().length == (grandezzeBox != null && grandezzeBox.bigBoxPerRow != null && grandezzeBox.bigBoxPerRow != "auto" ? grandezzeBox.bigBoxPerRow : 2)) {
+                                        if (row.children().length == misureCaselle.perRiga) {
                                             $("#editReferenza").append(row);
                                             row = $('<div class="row"></div>');
                                         }
                                     }
                                 }
+                                lastStileSchemaInserito = postoNelloSchema + 1;
                             }
                             //Il nome completo, gruppo compreso, lo porta gia' il tratto.
                             currentCharacterStyle = tratto.nomeCompleto;
@@ -2319,9 +2251,14 @@ const schedaRef = {
 
                             //I20-1123: il primo class resta, vuoto (era "hideble"): dei due class della casella vale il primo,
                             //e il secondo non e' mai valso. Toglierlo del tutto avrebbe acceso il secondo, e cambiato il salvataggio.
-                            var textarea = $('<textarea ' + (isEditable && refEditabile ? '' : 'readonly') + ' class="" labelCorrispondente="descrizione" currentCharacterStyle="' + currentCharacterStyle + '" class="textArea nonCancellareSeVuoto' + (stileInMismatch ? ' mismatchInImpaginato' : '') + '" name="myTextarea" style="height: ' + (grandezzeBox != null && grandezzeBox.bigBoxHeight != null && grandezzeBox.bigBoxHeight != "auto" ? grandezzeBox.bigBoxHeight : '50') + 'px; width:' + (grandezzeBox != null && grandezzeBox.bigBoxWidth != null && grandezzeBox.bigBoxWidth != "auto" ? grandezzeBox.bigBoxWidth : '100') + 'px; background-color:white; color:black;' + (stileInMismatch ? ' border: 2px solid gold;' : '') + '"></textarea><br>');
-                            var column = $('<div class="column" style="margin-right:' + (grandezzeBox != null && grandezzeBox.marginBetweenBigBox != null && grandezzeBox.marginBetweenBigBox != "auto" ? grandezzeBox.marginBetweenBigBox : "10px") + 'px;"></div>').append(label).append(textarea);
+                            var textarea = $('<textarea ' + (isEditable && refEditabile ? '' : 'readonly') + ' class="" labelCorrispondente="descrizione" currentCharacterStyle="' + currentCharacterStyle + '" class="textArea nonCancellareSeVuoto' + (stileInMismatch ? ' mismatchInImpaginato' : '') + '" name="myTextarea" style="height: ' + misureCaselle.altezza + 'px; width: 100%; margin: 0; background-color:white; color:black;' + (stileInMismatch ? ' border: 2px solid gold;' : '') + '"></textarea><br>');
+                            //TASK-5d3fea89: il nome senza cartella e, in sola lettura, il perche' accanto (intero al passaggio del mouse); sfondo e bordo propri.
+                            label = me.etichettaDellaCasella(currentCharacterStyle, stileInMismatch ? 'gold' : null, me.indicazioneSolaLettura(notaSolaLettura, isEditable, descrizioniAlterate));
+                            var column = $('<div class="column" style="' + me.stileDellaColonna(grandezzeBox) + '"></div>').append(label).append(textarea);
                             me.segnaCasellaInSolaLettura(textarea, notaSolaLettura);
+                            if (!(isEditable && refEditabile)) {
+                                me.segnaCasellaDisattivata(textarea, stileInMismatch);
+                            }
                             row.append(column);
 
                             //Il testo del tratto, quello che si vede nella textarea. La normalizzazione
@@ -2334,50 +2271,12 @@ const schedaRef = {
                     }
 
 
-                    if (row.children().length == (grandezzeBox != null && grandezzeBox.bigBoxPerRow != null && grandezzeBox.bigBoxPerRow != "auto" ? grandezzeBox.bigBoxPerRow : 2)) {
+                    if (row.children().length == misureCaselle.perRiga) {
                         $("#editReferenza").append(row);
                         row = $('<div class="row"></div>');
                     }
 
-                    if (schemaTrovato != null) {
-                        for (var $k = lastStileSchemaInserito; $k < schemaTrovato.length; $k++) {
-                            var elSchema = schemaTrovato[$k].split("$");
-                            if (elSchema.length == 1) {
-                                elSchema.insert(0, "");
-                            }
-                            lastStileSchemaInserito++;
-
-                            let nome_schema = schemaTrovato[$k];
-                            if (nome_schema.indexOf("$") >= 0) {
-                                nome_schema = nome_schema.substring(nome_schema.indexOf("$") + 1);
-                            }
-
-
-                            var column = $('<div class="column" style="margin-right:' + (grandezzeBox != null && grandezzeBox.marginBetweenBigBox != null && grandezzeBox.marginBetweenBigBox != "auto" ? grandezzeBox.marginBetweenBigBox : "10px") + 'px;"></div>');
-                            var label = '<label style="margin-top: 10px;color:white;">' + elSchema[1] + '</label><br>';
-
-                            var isEditable = true;
-                            if (pluginMiddleware.isSchemaEditable != null) {
-                                isEditable = pluginMiddleware.isSchemaEditable(elSchema[1]);
-                            }
-                            //I20-1132: fondamentale in sola lettura per regola dell'agenzia.
-                            var notaSolaLettura = me.notaDescrizioneInSolaLettura(descrizioniInSolaLettura, elSchema[1]);
-                            if (notaSolaLettura != null) {
-                                isEditable = false;
-                            }
-
-                            //I20-1123: il primo class resta, vuoto (era "hideble"): dei due class della casella vale il primo,
-                            //e il secondo non e' mai valso. Toglierlo del tutto avrebbe acceso il secondo, e cambiato il salvataggio.
-                            var textarea = $('<textarea ' + (isEditable && refEditabile ? '' : 'readonly') + ' class="" labelCorrispondente="descrizione" currentCharacterStyle="' + nome_schema + '" class="textArea nonCancellareSeVuoto" name="myTextarea" style="height: ' + (grandezzeBox != null && grandezzeBox.bigBoxHeight != null && grandezzeBox.bigBoxHeight != "auto" ? grandezzeBox.bigBoxHeight : '50') + 'px; width:' + (grandezzeBox != null && grandezzeBox.bigBoxWidth != null && grandezzeBox.bigBoxWidth != "auto" ? grandezzeBox.bigBoxWidth : '100') + 'px; background-color:white; color:black;"></textarea><br>');
-                            column.append(label).append(textarea);
-                            me.segnaCasellaInSolaLettura(textarea, notaSolaLettura);
-                            row.append(column);
-                            if (row.children().length == (grandezzeBox != null && grandezzeBox.bigBoxPerRow != null && grandezzeBox.bigBoxPerRow != "auto" ? grandezzeBox.bigBoxPerRow : 2)) {
-                                $("#editReferenza").append(row);
-                                row = $('<div class="row"></div>');
-                            }
-                        }
-                    }
+                    completaLoSchema();
 
                     // Aggiungi l'ultima riga a #editReferenza, anche se ha solo una colonna                               
                     if (row.children().length > 0) {
@@ -2389,6 +2288,10 @@ const schedaRef = {
                     for (let $j = 0; $j < contentObjParsedStiles.length; $j++) {
                         let stile = contentObjParsedStiles[$j].stile;
                         let content = contentObjParsedStiles[$j].content;
+                        //TASK-5d3fea89: quelli gia' mostrati al loro posto nello schema non si ripetono qui.
+                        if (nascostiDellaDescrizione.some(n => n.mostrato && n.stileServer === stile)) {
+                            continue;
+                        }
                         if (stile.indexOf("_$Hidden") >= 0) {
                             let nome_stile = stile.replace("_$Hidden", "");
                             let label = '<label style="margin-top: 10px;color:white;">' + nome_stile + '</label><br>';
@@ -2401,8 +2304,8 @@ const schedaRef = {
                     if (row.children().length > 0) {
                         $("#editReferenza").append(row);
                     }
-                    //I20-1132: le note delle caselle in sola lettura, su una riga sotto i campi.
-                    me.mostraNoteSolaLettura();
+                    //I20-1132: le note delle caselle in sola lettura, su una riga sotto i campi; non quelle gia' accanto a una casella.
+                    me.mostraNoteSolaLettura(descrizioniAlterate);
                     var button = $('<sp-action-button id="salvaButton" style="color:lightgreen; margin-right:10px;">Salva modifiche</sp-action-button>');
                     button.on('click', function () {
                         me.salvaModifiche(schedaRef, codice, box, meccanica, page);
@@ -2451,7 +2354,8 @@ const schedaRef = {
                     //Scansiono groupIndd per capire quali labels ci sono
                     let labInBox = Utility.getAllFieldsInGroup(box);
 
-                    let divCampiOfferta = $('<div id="edit_campi_offerta"></div>');
+                    //TASK-5d3fea89: una linea sottile la separa dalla descrizione.
+                    let divCampiOfferta = $('<div id="edit_campi_offerta" style="margin-top: 14px; padding-top: 2px; border-top: 1px solid #5f5f5f;"></div>');
 
                     divCampiOfferta.append('<h3 style="color:white;">Azioni sul box</h3>');
 
@@ -2507,7 +2411,7 @@ const schedaRef = {
                         //$("#cmbActCambioStrutturale").val("0");
                         Menu.setPickerValue($("#cmbActCambioStrutturale"), "0", false);
 
-                        let template_panelAzione = '<div id="az_$id" class="panel" style="width: 90%;margin: 0px auto;border: 2px solid #d6d0d0;border-radius: 10px;padding: 10px;margin-bottom: 10px;">'+
+                        let template_panelAzione = '<div id="az_$id" class="panel" style="width: 90%;margin: 0px auto;border: 1px solid #6e6e6e;border-radius: 6px;padding: 10px;margin-bottom: 10px;">'+
                                                 '<div class="row" style="margin-bottom: 10px;">'+
                                                 '<div class="col" style="font-size: 13px;width:90%;">$tit</div>' +
                                                 '<div class="delAzButton" class="col" style="width: 10%;text-align: center;margin-top: -10px;background-color: white;color: black;border-radius: 5px;margin-right: -5px;height: 20px; cursor:pointer;"><div style="margin-top: 3px;">X</div></div>'
@@ -4361,6 +4265,11 @@ const schedaRef = {
                             let campoDesc = $(campiDescrizione[cd]);
                             let stile = campoDesc.attr("currentCharacterStyle");
                             let testo = campoDesc.val();
+                            //TASK-5d3fea89: un tratto nascosto dall'esportazione resta nascosto anche nel box:
+                            //scritto col suo stile e basta diventava testo visibile.
+                            if (campoDesc.attr("trattonascosto") == "1") {
+                                stile = stile + "_$Hidden";
+                            }
 
                             //Applichiamo lo stile
                             descr += "<" + stile + ">" + testo + "</" + stile + ">";
@@ -4605,6 +4514,254 @@ const schedaRef = {
         return schedaRef.descrizioneInSolaLettura(descrizioni, universale != null ? universale.fondamentale : null);
     },
 
+    /// TASK-5d3fea89: le due parti di un elemento dello schema delle descrizioni del plugin di
+    /// agenzia: la regola ("", "IN", "!IN", "START", "END") e il nome dello stile senza gruppo.
+    /// "START$A.DES_descr_nome" diventa { regola: "START", nome: "DES_descr_nome" }; senza "$" la
+    /// regola e' vuota, cioe' il nome esatto. Pura.
+    elementoDelloSchema(elemento) {
+        var testo = elemento == null ? "" : String(elemento);
+        var dollaro = testo.indexOf("$");
+        var nome = dollaro >= 0 ? testo.substring(dollaro + 1) : testo;
+        var parti = nome.split(".");
+        return { regola: dollaro >= 0 ? testo.substring(0, dollaro) : "", nome: parti.length > 1 ? parti[1] : nome };
+    },
+
+    /// TASK-5d3fea89: se lo stile di un tratto, con o senza gruppo, corrisponde a un elemento dello
+    /// schema, con le regole che la scheda ha sempre usato. Pura.
+    stileNelloSchema(stile, elemento) {
+        var parti = String(stile == null ? "" : stile).split(".");
+        var nomeStile = parti.length > 1 ? parti[1] : parti[0];
+        var voce = schedaRef.elementoDelloSchema(elemento);
+        switch (voce.regola) {
+            case "": return nomeStile === voce.nome;
+            case "IN": return nomeStile.includes(voce.nome);
+            case "!IN": return !nomeStile.includes(voce.nome);
+            case "START": return nomeStile.startsWith(voce.nome);
+            case "END": return nomeStile.endsWith(voce.nome);
+            default: return false;
+        }
+    },
+
+    /// TASK-5d3fea89: il primo elemento dello schema, da "da" in poi, a cui lo stile corrisponde; -1
+    /// se non ce n'e'. Pura.
+    postoNelloSchema(stile, schema, da) {
+        var lista = Array.isArray(schema) ? schema : [];
+        for (var k = Math.max(0, da || 0); k < lista.length; k++) {
+            if (schedaRef.stileNelloSchema(stile, lista[k])) {
+                return k;
+            }
+        }
+        return -1;
+    },
+
+    /// TASK-5d3fea89: se le regole di uno schema valgono per il record. Arrivano come gli altri blocchi
+    /// del plugin di agenzia, { regole: [{ campo, operatore, value }], regoleAnnidate }, e si valutano
+    /// con valutaBlocco (nel Plugin pluginMiddleware.valutaBloccoRegole); prima il codice si aspettava
+    /// liste di { campo, operatore: "==", valore } e, non trovandole, le dava tutte per valide. Quella
+    /// forma resta (regoleVecchieDelloSchemaValide). Devono valere tutti i blocchi. Pura.
+    regoleDelloSchemaValide(setRegole, record, valutaBlocco) {
+        if (!Array.isArray(setRegole) || setRegole.length === 0) {
+            return true;
+        }
+        return setRegole.every(function (blocco) {
+            if (Array.isArray(blocco)) {
+                return schedaRef.regoleVecchieDelloSchemaValide(blocco, record);
+            }
+            if (blocco == null || typeof blocco !== "object" || typeof valutaBlocco !== "function") {
+                return true;
+            }
+            return valutaBlocco(record, blocco) !== false;
+        });
+    },
+
+    /// La forma vecchia delle regole di uno schema: [{ campo, operatore, valore }], con gli operatori
+    /// ==, !=, <, >, <=, >=, IN, !IN, startswith, endswith. Un campo che il record non ha non vale. Pura.
+    regoleVecchieDelloSchemaValide(regole, record) {
+        return (regole || []).every(function (regola) {
+            if (regola == null) {
+                return true;
+            }
+            var attuale = record != null ? record[regola.campo] : null;
+            if (attuale == null) {
+                return false;
+            }
+            var valore = regola.valore;
+            var testo = attuale.toString().toLowerCase();
+            var atteso = valore == null ? "" : valore.toString().toLowerCase();
+            var numeri = typeof attuale === "number" && typeof valore === "number";
+            switch (regola.operatore) {
+                case "==": return testo === atteso;
+                case "!=": return testo !== atteso;
+                case "<": return !numeri || attuale < valore;
+                case ">": return !numeri || attuale > valore;
+                case "<=": return !numeri || attuale <= valore;
+                case ">=": return !numeri || attuale >= valore;
+                case "IN": return testo.indexOf(atteso) >= 0;
+                case "!IN": return testo.indexOf(atteso) < 0;
+                case "startswith": return testo.startsWith(atteso);
+                case "endswith": return testo.endsWith(atteso);
+                default: return true;
+            }
+        });
+    },
+
+    /// TASK-5d3fea89: lo schema delle descrizioni da applicare alla scheda, o null. Vale il primo le
+    /// cui regole valgono per il record e i cui elementi contengono, nell'ordine, gli stili del box
+    /// che gli schemi conoscono. Uno stile che nessuno schema nomina non decide niente: in Edro21 il
+    /// campo offerta accodato alla descrizione dei boxetti (CPREZ_CampoOfferta_Descr2_boxetto, con
+    /// l'euro in EURO piccolo_Descr2_boxetto) faceva fallire tutti gli schemi. Pura.
+    schemaDellaDescrizione(stiliDelBox, schemi, record, valutaBlocco) {
+        if (!Array.isArray(schemi) || schemi.length === 0) {
+            return null;
+        }
+        var conosciuti = (stiliDelBox || []).filter(function (stile) {
+            return schemi.some(s => s != null && Array.isArray(s.schema) && schedaRef.postoNelloSchema(stile, s.schema, 0) >= 0);
+        });
+
+        for (var i = 0; i < schemi.length; i++) {
+            var schema = schemi[i] != null ? schemi[i].schema : null;
+            if (!Array.isArray(schema)) {
+                continue;
+            }
+            var indice = 0;
+            var tuttiAlPosto = true;
+            for (var k = 0; k < conosciuti.length; k++) {
+                var posto = schedaRef.postoNelloSchema(conosciuti[k], schema, indice);
+                if (posto < 0) {
+                    tuttiAlPosto = false;
+                    break;
+                }
+                indice = posto;
+            }
+            if (tuttiAlPosto && schedaRef.regoleDelloSchemaValide(schemi[i].setRegole, record, valutaBlocco)) {
+                return schema;
+            }
+        }
+        return null;
+    },
+
+    /// TASK-5d3fea89: l'indice dell'ultimo tratto del box che lo schema colloca, seguendo lo schema
+    /// come fa la schermata; -1 se nessuno. I tratti dopo di lui che lo schema non prevede (il campo
+    /// offerta dei boxetti di Edro21) sono blocchi in coda: le caselle dello schema che mancano vanno
+    /// prima di loro. Pura.
+    ultimoTrattoDelloSchema(stili, schema) {
+        var ultimo = -1;
+        var da = 0;
+        (stili || []).forEach(function (stile, indice) {
+            var posto = schedaRef.postoNelloSchema(stile, schema, da);
+            if (posto >= 0) {
+                ultimo = indice;
+                da = posto + 1;
+            }
+        });
+        return ultimo;
+    },
+
+    /// TASK-5d3fea89: il nome di uno stile come lo legge l'operatore, senza la cartella in cui sta:
+    /// "A.DES_descr_tipo" diventa "DES_descr_tipo". Pura.
+    nomeSenzaCartella(nome) {
+        var parti = String(nome == null ? "" : nome).split(".");
+        return parti[parti.length - 1];
+    },
+
+    /// TASK-5d3fea89: le misure delle caselle della descrizione dalla configurazione dell'agenzia
+    /// (grandezzeBox): quante per riga, l'altezza e lo spazio fra l'una e l'altra, in pixel. La larghezza
+    /// in pixel (bigBoxWidth) non conta piu': la casella prende la sua parte di riga. Senza configurazione,
+    /// o con "auto", i valori di prima: 2, 50 e 10. Pura.
+    misureDelleCaselle(grandezzeBox) {
+        var valore = function (chiave, predefinito, ancheZero) {
+            var dato = grandezzeBox != null ? grandezzeBox[chiave] : null;
+            var numero = dato != null && dato !== "auto" ? parseFloat(dato) : NaN;
+            return isFinite(numero) && (numero > 0 || (ancheZero && numero === 0)) ? numero : predefinito;
+        };
+        return {
+            perRiga: Math.max(1, Math.round(valore("bigBoxPerRow", 2, false))),
+            altezza: valore("bigBoxHeight", 50, false),
+            spazio: valore("marginBetweenBigBox", 10, true)
+        };
+    },
+
+    /// TASK-5d3fea89: lo stile della colonna di una casella della descrizione. Ogni colonna e' larga la
+    /// sua parte di riga (50% con due per riga) e la casella dentro e' al 100%: allargando o stringendo il
+    /// pannello le caselle lo seguono, tutte uguali anche nell'ultima riga incompleta. Lo spazio fra le
+    /// caselle sta a destra di ogni colonna, cosi' la prima casella e' allineata alle linguette; sotto,
+    /// lo spazio fra le righe. Il margine sostituisce quello di .row > *. Pura.
+    stileDellaColonna(grandezzeBox) {
+        var misure = schedaRef.misureDelleCaselle(grandezzeBox);
+        var parte = Math.floor(10000 / misure.perRiga) / 100;
+        return "flex: 0 0 auto; width: " + parte + "%; box-sizing: border-box; margin: 0 0 6px 0; padding: 0 " + misure.spazio + "px 0 0;";
+    },
+
+    /// TASK-5d3fea89: l'etichetta di una casella della descrizione: il nome dello stile senza cartella e,
+    /// per una casella in sola lettura, un'indicazione breve accanto. Sta su una riga sola, larga quanto
+    /// la colonna, e se non ci sta finisce con "…": andando a capo si alzava e la riga di caselle si
+    /// disallineava. Il testo intero sta nel title, che il Tooltip del Plugin mostra al passaggio del
+    /// mouse. Vicina alla sua casella, lontana da quella sopra. colore: null il grigio chiaro di
+    /// sempre, 'gold' per una differenza col server. Pura: restituisce l'HTML.
+    etichettaDellaCasella(nomeStile, colore, indicazione) {
+        var proteggi = function (testo) {
+            return String(testo == null ? "" : testo).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+        };
+        var nome = proteggi(schedaRef.nomeSenzaCartella(nomeStile));
+        var conIndicazione = indicazione != null && indicazione !== "";
+        var accanto = conIndicazione
+            ? ' <span class="indicazioneSolaLettura" style="font-size: 10px; color: #a8a8a8;">&middot; ' + proteggi(indicazione) + '</span>'
+            : '';
+        var intero = nome + (conIndicazione ? ' &middot; ' + proteggi(indicazione) : '');
+        return '<label title="' + intero + '" style="display: block; margin: 8px 0 4px 0; font-size: 11px; color:' + (colore || "#e0e0e0")
+            + '; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">' + nome + accanto + '</label>';
+    },
+
+    /// TASK-5d3fea89: perche' una casella della descrizione e' in sola lettura, in breve, per accanto al
+    /// nome; null se e' modificabile o se a bloccarla e' solo la referenza disattivata, che blocca tutto.
+    /// voce come da notaDescrizioneInSolaLettura; alterate le fondamentali alterate dall'esportazione.
+    indicazioneSolaLettura(voce, modificabile, alterate) {
+        if (voce != null) {
+            return (alterate || []).some(a => a != null && a.fondamentale === voce.fondamentale) ? "alterato da logiche agenzia" : "sola lettura";
+        }
+        return modificabile ? null : "sola lettura";
+    },
+
+    /// TASK-5d3fea89: una casella in sola lettura si riconosce da sfondo grigio, bordo tratteggiato e testo
+    /// spento. Si segna nello stile della casella, che il riquadro a riposo (CampiARiposo) ricopia; l'opacita'
+    /// no, e a riposo non si vedeva. Il bordo giallo di una differenza col server resta.
+    segnaCasellaDisattivata(textarea, conBordoGiallo = false) {
+        if (textarea == null || typeof textarea.css !== "function") {
+            return false;
+        }
+        textarea.css("background-color", "#d9d9d9");
+        textarea.css("color", "#4a4a4a");
+        if (!conBordoGiallo) {
+            textarea.css("border", "1px dashed #7a7a7a");
+        }
+        return true;
+    },
+
+    /// TASK-5d3fea89: il tratto nascosto dall'esportazione (_$Hidden) che corrisponde a un elemento
+    /// dello schema e non e' ancora stato mostrato, o null. nascosti come { stile, contenuto, mostrato }.
+    trattoNascostoDelloSchema(nascosti, elemento) {
+        return (nascosti || []).find(n => n != null && !n.mostrato && schedaRef.stileNelloSchema(n.stile, elemento)) || null;
+    },
+
+    /// TASK-5d3fea89: la casella di un tratto nascosto dall'esportazione, al posto di quella vuota del
+    /// suo elemento dello schema: si vede, col suo testo, in sola lettura e attenuata come le altre in
+    /// sola lettura. Resta un tratto nascosto (trattonascosto="1"): il salvataggio la tratta come
+    /// prima, e riscrivendo il box non diventa testo visibile.
+    casellaDelTrattoNascosto(nascosto, grandezzeBox, notaSolaLettura, indicazione = "nascosta da logiche agenzia") {
+        var misure = schedaRef.misureDelleCaselle(grandezzeBox);
+
+        var column = $('<div class="column" style="' + schedaRef.stileDellaColonna(grandezzeBox) + '"></div>');
+        var label = $(schedaRef.etichettaDellaCasella(nascosto.stile, null, indicazione));
+        var textarea = $('<textarea readonly class="" labelCorrispondente="descrizione" trattonascosto="1" name="myTextarea" style="height: ' + misure.altezza + 'px; width: 100%; margin: 0; background-color:white; color:black;"></textarea>');
+        textarea.attr("currentCharacterStyle", nascosto.stile);
+        textarea.val(nascosto.contenuto == null ? "" : nascosto.contenuto);
+        column.append(label).append(textarea).append($('<br>'));
+        this.segnaCasellaInSolaLettura(textarea, notaSolaLettura);
+        this.segnaCasellaDisattivata(textarea);
+        nascosto.mostrato = true;
+        return column;
+    },
+
     /// La voce di sola lettura di una fondamentale, { fondamentale, nota }, o null se non c'e'. Pura.
     descrizioneInSolaLettura(descrizioni, fondamentale) {
         if (!Array.isArray(descrizioni) || typeof fondamentale !== "string" || fondamentale === "") {
@@ -4621,12 +4778,22 @@ const schedaRef = {
     /// quelle con il meta della descrizione, e la sua nota va da parte per la riga sotto i campi
     /// (mostraNoteSolaLettura). Dentro la colonna la nota la faceva piu' alta delle altre e la riga,
     /// allineata in basso, si sfalsava. Una nota per fondamentale. Senza voce non fa niente.
+    /// TASK-5d3fea89: con la casella, la fondamentale si ricorda fra quelle che ne hanno una
+    /// (fondamentaliConCasellaInSolaLettura), per noteSottoICampi.
     segnaCasellaInSolaLettura(textarea, voce) {
         if (voce == null) {
             return false;
         }
         if (textarea != null && typeof textarea.css === "function") {
             textarea.css("opacity", "0.6");
+        }
+        if (textarea != null) {
+            if (!Array.isArray(this.fondamentaliConCasellaInSolaLettura)) {
+                this.fondamentaliConCasellaInSolaLettura = [];
+            }
+            if (!this.fondamentaliConCasellaInSolaLettura.includes(voce.fondamentale)) {
+                this.fondamentaliConCasellaInSolaLettura.push(voce.fondamentale);
+            }
         }
         if (!Array.isArray(this.noteSolaLetturaDaMostrare)) {
             this.noteSolaLetturaDaMostrare = [];
@@ -4637,15 +4804,29 @@ const schedaRef = {
         return true;
     },
 
+    /// TASK-5d3fea89: le note da mostrare sotto i campi della descrizione. Quella di una descrizione
+    /// alterata solo se nessuna casella la mostra: la casella ha gia' accanto al nome "alterato da
+    /// logiche agenzia". Quelle dell'agenzia restano tutte, perche' dicono di piu' di "sola lettura".
+    /// note come noteSolaLetturaDaMostrare, alterate come descrizioniAlterateDaEsportazione,
+    /// conCasella le fondamentali che hanno una casella. Pura.
+    noteSottoICampi(note, alterate, conCasella) {
+        var casellate = Array.isArray(conCasella) ? conCasella : [];
+        var giaAccanto = (Array.isArray(alterate) ? alterate : [])
+            .filter(a => a != null && casellate.includes(a.fondamentale))
+            .map(a => a.fondamentale);
+        return (Array.isArray(note) ? note : []).filter(n => n != null && !giaAccanto.includes(n.fondamentale));
+    },
+
     /// La riga delle note sotto i campi della descrizione, con il margine laterale delle colonne.
-    /// Niente se non ci sono note. Si ridisegna a ogni apertura della schermata.
-    mostraNoteSolaLettura() {
-        var note = Array.isArray(this.noteSolaLetturaDaMostrare) ? this.noteSolaLetturaDaMostrare : [];
+    /// Niente se non ci sono note. Si ridisegna a ogni apertura della schermata. alterate: le
+    /// descrizioni alterate, la cui nota non si ripete se hanno una casella (noteSottoICampi).
+    mostraNoteSolaLettura(alterate) {
+        var note = schedaRef.noteSottoICampi(this.noteSolaLetturaDaMostrare, alterate, this.fondamentaliConCasellaInSolaLettura);
         $("#noteDescrizioniSolaLettura").remove();
         if (note.length === 0) {
             return false;
         }
-        var contenitore = $('<div id="noteDescrizioniSolaLettura" style="margin: 2px 8px 6px 8px;"></div>');
+        var contenitore = $('<div id="noteDescrizioniSolaLettura" style="margin: 4px 10px 6px 0;"></div>');
         note.forEach(function (voce) {
             contenitore.append(schedaRef.elementoNotaSolaLettura(voce));
         });
@@ -4662,9 +4843,9 @@ const schedaRef = {
         if (elenco.length === 0) {
             return false;
         }
-        var contenitore = $('<div id="gialloDescrizione" style="margin: 2px 8px 6px 8px;"></div>');
+        var contenitore = $('<div id="gialloDescrizione" style="margin: 4px 10px 6px 0;"></div>');
         elenco.forEach(function (riga) {
-            var testo = $('<div class="rigaGialloDescrizione" style="font-size: 11px; color: gold; margin-top: 2px;"></div>');
+            var testo = $('<div class="rigaGialloDescrizione" style="font-size: 11px; color: gold; margin-top: 4px; ' + schedaRef.stileDellAvviso("gold", "#57523a") + '"></div>');
             testo.text(riga);
             contenitore.append(testo);
         });
@@ -4672,10 +4853,19 @@ const schedaRef = {
         return true;
     },
 
-    /// Una riga di nota, piccola e grigia. Senza testo, un elemento vuoto che non si vede.
+    /// TASK-5d3fea89: lo stile di un avviso sotto le caselle della descrizione: un riquadro appena piu'
+    /// chiaro del pannello, col bordo sinistro del colore dell'avviso (giallo per le differenze col
+    /// server, grigio per le note), perche' non si confonda con le etichette. Pura.
+    stileDellAvviso(bordo, sfondo) {
+        return "padding: 4px 8px; background-color: " + sfondo + "; border-left: 3px solid " + bordo + "; border-radius: 2px;";
+    },
+
+    /// Una riga di nota, piccola e grigia, nel riquadro degli avvisi. Senza testo, un elemento vuoto
+    /// che non si vede.
     elementoNotaSolaLettura(voce) {
-        var nota = $('<div class="notaSolaLettura" style="font-size: 11px; color: #c8c8c8; margin-top: 2px;"></div>');
-        if (voce != null && voce.nota !== "") {
+        var conTesto = voce != null && voce.nota !== "";
+        var nota = $('<div class="notaSolaLettura" style="font-size: 11px; color: #d0d0d0; margin-top: 4px;' + (conTesto ? ' ' + schedaRef.stileDellAvviso("#8a8a8a", "#555555") : '') + '"></div>');
+        if (conTesto) {
             nota.text(voce.nota);
         }
         return nota;
