@@ -77,7 +77,7 @@ export interface VolantinoAttivoDTO {
   id_kit: string;
   titolo_kit?: string;
   promo: { id: string; nome: string; validita_dal: Date; validita_al: Date };
-  files: { id: string; nome: string; url: string; url_download: string }[];
+  files: { id: string; nome: string; url: string; url_download: string; nome_download: string }[];
 }
 
 /**

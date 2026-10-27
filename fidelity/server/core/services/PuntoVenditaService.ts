@@ -434,6 +434,7 @@ export class PuntoVenditaService implements IPuntoVenditaService {
             nome: f.nome ?? '',
             url: urlOlimpo('/materiali/getThumbnailMaterialePdfs', { id: f.id_olimpo_cloud }),
             url_download: urlOlimpo('/materiali/getMaterialePDF', { id: f.id_olimpo_cloud }),
+            nome_download: nomePdfScaricato(f.nome, promo.nome_promo),
           })),
         }];
       });
@@ -961,6 +962,19 @@ export class PuntoVenditaService implements IPuntoVenditaService {
     }
   }
 }
+
+/**
+ * Nome con cui il browser salva il PDF del volantino: senza, prende l'ultimo segmento
+ * dell'URL del proxy Olimpo (getMaterialePDF.pdf). Nome del file, o della promo se manca,
+ * senza i caratteri non ammessi nei nomi di file e sempre con estensione .pdf.
+ */
+export function nomePdfScaricato(nomeFile: string | null | undefined, nomePromo: string): string {
+  const pulisci = (nome: string | null | undefined) =>
+    (nome ?? '').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '').trim();
+  const nome = pulisci(nomeFile) || pulisci(nomePromo) || 'volantino';
+  return /\.pdf$/i.test(nome) ? nome : `${nome}.pdf`;
+}
+
 function toNumberOrNull(value: unknown): number | null {
   if (typeof value === 'number' && !Number.isNaN(value)) {
     return value;
