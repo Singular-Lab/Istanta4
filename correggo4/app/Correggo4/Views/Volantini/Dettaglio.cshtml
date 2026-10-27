@@ -509,7 +509,12 @@
     .modale .etichetta { margin-bottom: 4px; }
     .intestazione_sez { margin: 14px 0 4px; }
 
-    .ritaglio { width: 100%; aspect-ratio: 3/4; overflow: hidden; position: relative;
+    /* I20-1150: il ritaglio e' orizzontale 4:3 come nel vecchio (screenshot dell'operatore del
+       27/10), non piu' verticale 3:4: era alto 1,33 volte la colonna e sugli schermi larghi
+       schiacciava in fondo l'elenco Loghi/Bolli. Va in senso opposto alla nota j246 qui sopra,
+       per scelta dell'operatore. ritaglia() legge la misura del riquadro: il prodotto resta
+       centrato e intero. */
+    .ritaglio { width: 100%; aspect-ratio: 4/3; overflow: hidden; position: relative;
                 border: 2px solid red; background: #fff; }
     .ritaglio img { position: absolute; max-width: none; }
 
