@@ -98,4 +98,37 @@ const linkTo = (menu: FormattedMenu, navigate: NavigateFunction) => {
   }
 };
 
-export { linkTo, nestedMenu };
+/**
+ * Chiavi dei gruppi che contengono la pagina corrente: sono quelli da tenere
+ * aperti. La chiave di un gruppo e la posizione nel menu ("2", "2.0", ...).
+ */
+const gruppiAttivi = (
+  menu: Array<FormattedMenu | string>,
+  prefisso = ""
+): string[] => {
+  const chiavi: string[] = [];
+  menu.forEach((item, indice) => {
+    if (typeof item === "string" || !item.subMenu || item.subMenu.length === 0) {
+      return;
+    }
+    const chiave = prefisso + indice;
+    if (item.activeDropdown) {
+      chiavi.push(chiave);
+    }
+    chiavi.push(...gruppiAttivi(item.subMenu, `${chiave}.`));
+  });
+  return chiavi;
+};
+
+/** Apre il gruppo se e chiuso, lo chiude se e aperto; gli altri restano come sono. */
+const toggleGruppo = (aperti: ReadonlySet<string>, chiave: string): Set<string> => {
+  const prossimi = new Set(aperti);
+  if (prossimi.has(chiave)) {
+    prossimi.delete(chiave);
+  } else {
+    prossimi.add(chiave);
+  }
+  return prossimi;
+};
+
+export { gruppiAttivi, linkTo, nestedMenu, toggleGruppo };

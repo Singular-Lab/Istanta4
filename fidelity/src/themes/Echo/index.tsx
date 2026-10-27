@@ -2,7 +2,7 @@ import "@/assets/css/themes/echo.css";
 import { usePermissionContext } from "@/context/PermissionContext";
 import { PERMISSIONS } from "@/constants/permissions";
 import "@/assets/css/vendors/simplebar.css";
-import logoSVG from "@/assets/images/logo.svg";
+import logoI2 from "@/assets/images/logo-i2.svg";
 import Button from "@/components/Base/Button";
 import Lucide from "@/components/Base/Lucide";
 import { useAppDispatch, useAppSelector } from "@/stores/hooks";
@@ -11,6 +11,7 @@ import clsx from "clsx";
 import { createRef, Fragment, startTransition, useContext, useEffect, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { FormattedMenu, nestedMenu } from "./side-menu";
+import SideMenu from "./SideMenu";
 //@ts-ignore
 // import logo from "@/assets/images/logo.svg";
 import userIcon from "@/assets/images/users/user_icon_profile.png";
@@ -66,6 +67,8 @@ const findStartPageItem = (
   return firstNavigableItem;
 };
 
+const CHIAVE_MENU_COMPRESSO = "fidelity.menu-compresso";
+
 function Layout() {
   const accessoConsentito = useContext(AccessoPaginaContext);
   const { hasPermission } = usePermissionContext();
@@ -77,6 +80,16 @@ function Layout() {
   const [notificationsPanel, setNotificationsPanel] = useState(false);
   const [activitiesPanel, setActivitiesPanel] = useState(false);
   const [activeMobileMenu, setActiveMobileMenu] = useState(false);
+  const [menuCompresso, setMenuCompresso] = useState(() => {
+    try {
+      return localStorage.getItem(CHIAVE_MENU_COMPRESSO) === "1";
+    } catch {
+      return false;
+    }
+  });
+  // Il menu compresso si riapre al passaggio del mouse, sopra al contenuto
+  const [menuSorvolato, setMenuSorvolato] = useState(false);
+  const menuRidotto = menuCompresso && !menuSorvolato;
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [maintenanceModal, setMaintenanceModal] = useState(false);
   const location = useLocation();
@@ -137,6 +150,14 @@ function Layout() {
   useEffect(() => {
     setStartPage(findStartPageItem(formattedMenu));
   }, [formattedMenu]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(CHIAVE_MENU_COMPRESSO, menuCompresso ? "1" : "0");
+    } catch {
+      // senza storage la scelta vale solo per la sessione
+    }
+  }, [menuCompresso]);
 
   const handleMenuToggle = (event: React.MouseEvent) => {
     event.preventDefault();
@@ -308,7 +329,11 @@ function Layout() {
               "after:content-[''] after:fixed after:inset-0 after:bg-black/80 after:xl:hidden ",
               { "ml-0 after:block": activeMobileMenu },
               { "-ml-[275px] after:hidden": !activeMobileMenu },
+              { "side-menu--collapsed": menuCompresso },
+              { "side-menu--on-hover": menuCompresso && menuSorvolato },
             ])}
+            onMouseEnter={() => setMenuSorvolato(true)}
+            onMouseLeave={() => setMenuSorvolato(false)}
 
           >
             <div
@@ -329,179 +354,79 @@ function Layout() {
             </div>
             <div
               className={clsx([
-                "h-full bg-white/[0.97] rounded-none z-20 relative w-[275px] border-r border-slate-200/80 shadow-[2px_0_8px_-2px_rgba(0,0,0,0.06)] overflow-hidden flex flex-col",
+                "h-full bg-white rounded-none z-20 relative w-[275px] border-r border-[#e3e6eb] overflow-hidden flex flex-col transition-[width,box-shadow] duration-200 ease-out",
+                { "xl:w-[76px]": menuRidotto },
+                { "xl:shadow-[8px_0_24px_-12px_rgba(15,23,42,0.25)]": menuCompresso && menuSorvolato },
               ])}
             >
+              <nav aria-label="Menu principale" className="contents">
               <div
                 className={clsx([
-                  "flex-none hidden xl:flex items-center z-10 px-5 h-[65px] w-[275px] overflow-hidden relative border-b border-slate-100",
+                  "flex-none hidden xl:flex items-center z-10 px-[22px] h-[65px] w-[275px] overflow-hidden relative border-b border-[#e3e6eb]",
                 ])}
               >
                 <Link
                   to={startPage?.pathname ?? ""}
                   prefetch="intent"
-                  className="flex items-center"
+                  aria-label="Istanta 2 – pagina iniziale"
+                  className="flex items-center min-w-0 flex-1 -ml-1.5 p-1.5 rounded-lg transition-colors duration-150 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-theme-1/50"
                 >
-                  {/*
-                <div className="flex items-center justify-center w-[34px] rounded-lg h-[34px] bg-gradient-to-b from-theme-1 to-theme-2/80 transition-transform ease-in-out group-[.side-menu--collapsed.side-menu--on-hover]:xl:-rotate-180">
-                  <div className="w-[16px] h-[16px] relative -rotate-45 [&_div]:bg-white">
-                    <div className="absolute w-[21%] left-0 inset-y-0 my-auto rounded-full opacity-50 h-[75%]"></div>
-                    <div className="absolute w-[21%] inset-0 m-auto h-[120%] rounded-full"></div>
-                    <div className="absolute w-[21%] right-0 inset-y-0 my-auto rounded-full opacity-50 h-[75%]"></div>
-                  </div>
-                </div>
-                */}
-                  <div className="flex items-center justify-center">
-                    <div>
-                      <img className="w-14 h-14 object-contain" src={logoGDO ?? logoSVG} />
-                    </div>
-                  </div>
-
-                  <div className="ml-3.5 font-medium">
-                    Istanta 2 Web Platform
+                  <img className="flex-none w-8 h-8 rounded-[7px]" src={logoI2} alt="Istanta 2" />
+                  <div
+                    className={clsx([
+                      "ml-2.5 min-w-0 leading-tight whitespace-nowrap transition-opacity duration-200",
+                      { "xl:opacity-0": menuRidotto },
+                    ])}
+                  >
+                    <div className="text-[14px] font-medium text-[#03045e]">Istanta 2</div>
+                    <div className="text-[11px] text-[#6b7280]">Web Platform</div>
                   </div>
                 </Link>
+                {logoGDO && (
+                  <div
+                    title="Logo GDO"
+                    className={clsx([
+                      "flex-none flex items-center justify-center w-8 h-8 ml-2 p-0.5 bg-white border border-[#e3e6eb] rounded-md transition-opacity duration-200",
+                      { "xl:opacity-0": menuRidotto },
+                    ])}
+                  >
+                    <img className="max-w-full max-h-full object-contain" src={logoGDO} alt="Logo GDO" />
+                  </div>
+                )}
               </div>
               <div
                 ref={scrollableRefMenu}
                 className={clsx([
-                  "w-full h-full z-20 px-5 overflow-y-auto overflow-x-hidden pb-3 [-webkit-mask-image:-webkit-linear-gradient(top,rgba(0,0,0,0),black_30px)] [&:-webkit-scrollbar]:w-0 [&:-webkit-scrollbar]:bg-transparent",
+                  "w-full h-full z-20 px-3 pt-3 overflow-y-auto overflow-x-hidden pb-3 [&:-webkit-scrollbar]:w-0 [&:-webkit-scrollbar]:bg-transparent",
                   "[&_.simplebar-content]:p-0 [&_.simplebar-track.simplebar-vertical]:w-[10px] [&_.simplebar-track.simplebar-vertical]:mr-0.5 [&_.simplebar-track.simplebar-vertical_.simplebar-scrollbar]:before:bg-slate-400/30",
                 ])}
               >
-                <ul className="scrollable">
-                  {/* Dentro la <ul>: SimpleBar sposta i figli del contenitore e React non potrebbe inserirvi nodi */}
-                  {sideMenuError && (
-                    <li role="alert" className="flex flex-col items-center gap-2 mt-5 text-sm text-center text-slate-500">
-                      Impossibile caricare il menu
-                      <Button variant="outline-primary" size="sm" onClick={() => dispatch(fetchSideMenu())}>
-                        Riprova
-                      </Button>
-                    </li>
-                  )}
-                  {formattedMenu.map((menu, menuKey) =>
-                    typeof menu === "string" ? (
-                      <li className="side-menu__divider" key={menuKey}>
-                        {menu}
-                      </li>
-                    ) : (
-                      <li key={menuKey}>
-                        {menu.redirect ? (
-                          <a
-                            href={menu.redirect}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className={clsx([
-                              "side-menu__link",
-                              { "side-menu__link--disabled": menu.disabled },
-                            ])}
-                          >
-                            <Lucide icon={menu.icon} className="side-menu__link__icon" />
-                            <div className="side-menu__link__title">{menu.title}</div>
-                          </a>
-                        ) : (
-                          <Link
-                            to={menu.pathname ?? "#"}
-                            prefetch="intent"
-
-                            className={clsx([
-                              "side-menu__link",
-                              { "side-menu__link--disabled": menu.disabled },
-                              { "side-menu__link--active": menu.active && !menu.disabled },
-                              { "side-menu__link--active-dropdown": menu.activeDropdown },
-                            ])}
-                            onClick={(event) => {
-                              if (menu.disabled || !menu.pathname) {
-                                event.preventDefault();
-                                return;
-                              }
-
-                              if (event.button === 1 || event.metaKey || event.ctrlKey) {
-                                return;
-                              }
-
-                              setFormattedMenu([...formattedMenu]);
-                            }}
-                          >
-                            <Lucide icon={menu.icon} className="side-menu__link__icon" />
-                            <div className="side-menu__link__title">{menu.title}</div>
-
-                            {menu.badge && (
-                              <div
-                                className={clsx("side-menu__link__badge", {
-                                  "side-menu__link__badge--info": menu.badge.variant === "info",
-                                  "side-menu__link__badge--danger": menu.badge.variant === "danger",
-                                  "side-menu__link__badge--warning": menu.badge.variant === "warning",
-                                  "side-menu__link__badge--success": menu.badge.variant === "success",
-                                  "side-menu__link__badge--primary": menu.badge.variant === "primary",
-                                })}
-                              >
-                                {menu.badge.count}
-                              </div>
-                            )}
-
-                            {menu.subMenu && menu.subMenu.length > 0 && (
-                              <Lucide icon="ChevronDown" className="side-menu__link__chevron" />
-                            )}
-                          </Link>
-                        )}
-
-                        {menu.subMenu && menu.subMenu.length > 0 && (
-                          <ul
-                            data-open={menu.activeDropdown}
-                            className="side-menu__submenu transition-all duration-300 ease-in-out overflow-hidden data-[open=true]:opacity-100 data-[open=true]:max-h-96 data-[open=true]:translate-y-0 data-[open=false]:opacity-0 data-[open=false]:max-h-0 data-[open=false]:-translate-y-2 data-[open=false]:!p-0 data-[open=false]:!mb-0"
-                          >
-                            {menu.subMenu.map((subMenu, subMenuKey) => (
-                              <li key={subMenuKey}>
-                                {subMenu.redirect ? (
-                                  <a
-                                    href={subMenu.redirect}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="side-menu__link"
-                                  >
-                                    <Lucide icon={subMenu.icon} className="side-menu__link__icon" />
-                                    <div className="side-menu__link__title">{subMenu.title}</div>
-                                  </a>
-                                ) : (
-                                  <Link
-                                    prefetch="intent"
-
-                                    to={subMenu.pathname ?? "#"}
-                                    className={clsx([
-                                      "side-menu__link",
-                                      { "side-menu__link--disabled": subMenu.disabled },
-                                      { "side-menu__link--active": subMenu.active },
-                                      { "side-menu__link--active-dropdown": subMenu.activeDropdown },
-                                    ])}
-                                    onClick={(event) => {
-                                      if (subMenu.disabled) {
-                                        event.preventDefault();
-                                        return;
-                                      }
-
-                                      if (event.button === 1 || event.metaKey || event.ctrlKey) {
-                                        return;
-                                      }
-
-                                      setFormattedMenu([...formattedMenu]);
-                                    }}
-                                  >
-                                    <Lucide icon={subMenu.icon} className="side-menu__link__icon" />
-                                    <div className="side-menu__link__title">{subMenu.title}</div>
-                                  </Link>
-                                )}
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </li>
-                    )
-                  )}
-                </ul>
+                <SideMenu
+                  menu={formattedMenu}
+                  compresso={menuRidotto}
+                  errore={!!sideMenuError}
+                  onRiprova={() => dispatch(fetchSideMenu())}
+                  onNavigate={() => setActiveMobileMenu(false)}
+                />
               </div>
+              <div className="flex-none hidden xl:block px-3 py-2.5 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setMenuCompresso(!menuCompresso)}
+                  aria-label={menuCompresso ? "Espandi menu" : "Comprimi menu"}
+                  title={menuCompresso ? "Espandi menu" : "Comprimi menu"}
+                  className="side-menu__link side-menu__toggle"
+                >
+                  <Lucide
+                    icon={menuCompresso ? "PanelLeftOpen" : "PanelLeftClose"}
+                    className="side-menu__link__icon"
+                  />
+                  <span className="side-menu__link__title">Comprimi menu</span>
+                </button>
+              </div>
+              </nav>
             </div>
-            <div style={{ top: bannerActive ? BANNER_H : 0 }} className="fixed h-[65px] xl:ml-[275px] mt-3.5 inset-x-0 top-0">
+            <div style={{ top: bannerActive ? BANNER_H : 0 }} className={clsx("fixed h-[65px] mt-3.5 inset-x-0 top-0 transition-[margin] duration-200", menuCompresso ? "xl:ml-[76px]" : "xl:ml-[275px]")}>
               <div
                 className={clsx([
                   "top-bar absolute left-0 xl:left-3.5 right-0 h-full mx-5 group",
@@ -736,7 +661,8 @@ function Layout() {
           </div>
           <div
             className={clsx([
-              "xl:ml-[275px] h-full duration-100 xl:pl-3.5 pt-[54px] pb-16 relative z-10 group mode",
+              "h-full transition-[margin] duration-200 xl:pl-3.5 pt-[54px] pb-16 relative z-10 group mode",
+              menuCompresso ? "xl:ml-[76px]" : "xl:ml-[275px]",
               { "mode--light": !topBarActive },
             ])}
           >
