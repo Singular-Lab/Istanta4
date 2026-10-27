@@ -513,7 +513,8 @@
                 border: 2px solid red; background: #fff; }
     .ritaglio img { position: absolute; max-width: none; }
 
-    .fascia { padding: 5px 8px; border-radius: 10px; margin-bottom: 7px; }
+    /* I20-1151: pre-line perche' l'a capo forzato di InDesign si veda come un invio nella fascia */
+    .fascia { padding: 5px 8px; border-radius: 10px; margin-bottom: 7px; white-space: pre-line; }
     .DESCRIZIONE_TITOLO { background-color: rgba(255,255,0,0.5); font-weight: bold; }
     .DESCRIZIONE_BRAND { background-color: rgba(255,0,255,0.5); }
     .DESCRIZIONE_GRAMMATURA { background-color: rgba(220,89,255,0.5); }
@@ -2292,12 +2293,19 @@
         for (var i = 0; i < FASCE_EDITABILI.length; i++) if (tag.indexOf(FASCE_EDITABILI[i]) === 0) return FASCE_EDITABILI[i];
         return '';
     }
+    // I20-1151: l'a capo forzato di InDesign (Maiusc+Invio) arriva nella descrizione con il suo nome.
+    // Si mostra come un a capo dentro la stessa pillola (che e' white-space: pre-wrap) e alla
+    // ricomposizione torna com'era.
+    var ACAPO_FORZATO = 'FORCED_LINE_BREAK';
     function componiDescrizione() {
         var blocchi = {}, ordine = [];
         document.querySelectorAll('#mDescrizione p[data-blocco]').forEach(function (p) {
             var k = p.dataset.blocco;
             if (!blocchi[k]) { blocchi[k] = { tag: p.dataset.tag, righe: [], dopo: decodeURIComponent(p.dataset.dopo || '') }; ordine.push(k); }
-            blocchi[k].righe.push(p.textContent.replace(/[<>\r\n]/g, ''));
+            // I20-1151: un a capo dentro la riga e' l'a capo forzato di InDesign (disegnaDescrizione):
+            // dall'editor non se ne puo' inserire (Invio bloccato, incolla senza a capo), quindi
+            // torna FORCED_LINE_BREAK com'era.
+            blocchi[k].righe.push(p.textContent.replace(/[<>\r]/g, '').replace(/\n/g, ACAPO_FORZATO));
         });
         return ordine.map(function (k) {
             var bl = blocchi[k], t = bl.righe.join('\n');
@@ -2330,7 +2338,8 @@
             return f.righe.map(function (r) {
                 return '<p class="' + (classe || 'senza') + '" data-blocco="' + f.blocco + '" data-tag="' + escA(f.tag) +
                        '" data-dopo="' + escA(encodeURIComponent(f.dopo)) + '" contenteditable="' + (editabile ? 'true' : 'false') +
-                       '"' + (f.tag && !classe ? ' title="Questa fascia non si corregge da qui"' : '') + '>' + esc(r) + '</p>';
+                       '"' + (f.tag && !classe ? ' title="Questa fascia non si corregge da qui"' : '') + '>' +
+                       esc(r.split(ACAPO_FORZATO).join('\n')) + '</p>';
             }).join('');
         }).join('');
         cont.querySelectorAll('p[contenteditable=true]').forEach(function (p) {

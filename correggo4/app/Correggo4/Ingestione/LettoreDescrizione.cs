@@ -18,7 +18,21 @@ public static partial class LettoreDescrizione
     private static readonly string[] TipiBase =
         { "DESCRIZIONE_TITOLO", "DESCRIZIONE_BRAND", "DESCRIZIONE_GRAMMATURA", "DESCRIZIONE_TIPO" };
 
+    /// <summary>
+    /// I20-1151: l'a capo forzato di InDesign (Maiusc+Invio) arriva con il suo nome. Si mostra come un
+    /// a capo nella sua fascia, anche all'inizio (la grammatura che va a capo): durante la lettura
+    /// lo si tiene in un segnaposto che Trim() non tocca, e alla fine diventa un a capo vero.
+    /// </summary>
+    public const string ACapoForzato = "FORCED_LINE_BREAK";
+    private const string Segnaposto = "\uE000";
+
     public static List<PezzoDescrizione> Leggi(string? grezza)
+    {
+        var pezzi = LeggiPezzi(grezza?.Replace(ACapoForzato, Segnaposto));
+        return pezzi.Select(p => p with { Testo = p.Testo.Replace(Segnaposto, "\n") }).ToList();
+    }
+
+    private static List<PezzoDescrizione> LeggiPezzi(string? grezza)
     {
         var pezzi = new List<PezzoDescrizione>();
         if (string.IsNullOrWhiteSpace(grezza)) return pezzi;
