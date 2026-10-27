@@ -420,12 +420,17 @@ catalogo, e il ControlPlane la aggiunge da sé agli artifact assegnati al target
 ## 5. Avviare e verificare
 
 Il primo deployment si lancia dal ControlPlane. Il proxy invece si avvia una
-volta a mano: dipende dalle applicazioni, non viceversa, quindi il deployment
-selettivo del Runner non lo tocca.
+volta a mano, perché il deployment selettivo del Runner non lo tocca.
+
+Il proxy non dipende dalle applicazioni: avviarlo non avvia né Istanta né
+Correggo4. nginx risolve i nomi a ogni richiesta, quindi parte anche se una
+delle due non c'è e su quella porta risponde 502 finché non arriva. Per questo
+si avvia anche su un target dove Correggo4 non è distribuito: la 444 resta
+pubblicata e risponde 502.
 
 ```bash
 cd /opt/company-ai/projects/istanta-correggo
-sudo docker --config /opt/company-ai/runner/docker-config compose --env-file release.env -f compose.production.yaml up -d prox
+sudo docker --config /opt/company-ai/runner/docker-config compose --env-file release.env -f compose.production.yaml up -d proxy
 ```
 
 Le verifiche che contano:
