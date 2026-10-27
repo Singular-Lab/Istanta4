@@ -96,7 +96,12 @@ Le costanti del reflow stanno dentro la funzione: `MIN_POINT_SIZE` 3, `MAX_MAIN_
 - `fixOverflowFromBox(boxInGrigliaBounds, box, mappa)` → chi esce rientra. **Su una casella di testo
   prova prima a stringerla**, e solo se andrebbe in overflow la sposta. Dal I20-1026 **salta gli
   elementi invisibili**, per esempio quelli in noRender: non si segnalano (CSF-009) e
-  non si rimpiccioliscono. Vedi [sovrastrutture](sovrastrutture.md).
+  non si rimpiccioliscono. Vedi [sovrastrutture](sovrastrutture.md). Uno spostamento oltre 1 mm
+  non si segnala subito: si annota, e `controllaSpostamentiGrigliaPendenti` manda CSF-008 a fine box
+  solo per chi ha ancora i bounds della correzione (I20-1042). Dal TASK-b4b2614f una regola di
+  allineamento che posiziona l'elemento su quell'asse toglie l'annotazione
+  (`scartaSpostamentiRicollocati`), anche se lo rimette nello stesso punto: nel BOX6 di Edro21
+  `rect_etto` e `sy_etto`, rientrati sul bordo, erano ancorati proprio lì e si segnalavano lo stesso.
 - `isTextFrame(item)` → il controllo di tipo usato lì.
 - `fixCollisioneTracciaBase(box, gruppoElementi, impostazioni)` e
   `fixCollisioneTracciaBaseSingolo(...)` → allontanano dalla traccia del bordo della base, di uno

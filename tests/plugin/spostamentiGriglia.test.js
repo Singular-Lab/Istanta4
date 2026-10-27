@@ -592,3 +592,108 @@ test("fixOverflowFromBox non manda piu' CSF-008 da se'", () => {
     assert.doesNotMatch(sorgente.substring(inizio, fine), /CSF-008/);
     assert.strictEqual((sorgente.match(/Code CSF-008/g) || []).length, 1);
 });
+
+/* ---- TASK-b4b2614f: chi una regola di allineamento riposiziona non si segnala ----
+ * Il controllo di fine box segnala chi ha ancora i bounds della correzione. Nel BOX6 di Edro21
+ * rect_etto e sy_etto, allargati dal ridimensionamento, rientravano sul bordo destro e basso e le
+ * regole Rect_etto_All e sy_etto_All li ancoravano proprio li': stessi bounds, e tre CSF-008 su
+ * elementi al loro posto. Ora una regola che posiziona un elemento su un asse toglie la sua
+ * annotazione su quell'asse; se lo rimette fuori, il rientro che la segue lo annota di nuovo.
+ */
+
+//L'ancora di Rect_etto_All e sy_etto_All: bordo destro e bordo basso del box, a 0%.
+const ANCORA_AL_BORDO = [{
+    xAnchor: { distance: "0%", applyToSingleLevels: false, allineaAlLato: 1, allineaLato: 1 },
+    yAnchor: { distance: "0%", applyToSingleLevels: false, allineaAlLato: 1, allineaLato: 1 },
+    listSetCondizioni: null
+}];
+
+test("un elemento rientrato e poi ancorato dalla sua regola allo stesso bordo non si segnala", () => {
+    azzera();
+    //rect_etto allargato esce a destra; rientra sul bordo destro, gia' sul bordo basso.
+    const rect = elemento("rect_etto", [85, 70, 100, 110]);
+    const b = box("BOX6", [rect]);
+    b.geometricBounds = [...GRIGLIA];
+
+    CssFramework.fixOverflowFromBox(GRIGLIA, b);
+    assert.deepStrictEqual(rect.geometricBounds, [85, 60, 100, 100]);
+
+    //La regola lo ancora al bordo destro e basso: resta esattamente dov'e'.
+    const assi = CssFramework.followStaticAnchor(b, [{ elementi: [{ item: rect }], livelloEliminato: false }], ANCORA_AL_BORDO, {}, {}, { x: false, y: false });
+    assert.deepStrictEqual(assi, { x: true, y: true });
+    assert.deepStrictEqual(rect.geometricBounds, [85, 60, 100, 100], "stessi bounds della correzione: e' il caso che segnalava");
+
+    CssFramework.scartaSpostamentiRicollocati([{ item: rect }], assi, "Rect_etto_All");
+    CssFramework.controllaSpostamentiGrigliaPendenti(b);
+    assert.deepStrictEqual(messaggi, []);
+    assert.deepStrictEqual(segnalazioni, []);
+});
+
+test("se la regola allinea solo l'altro asse lo spostamento resta da segnalare", () => {
+    azzera();
+    //sy_etto esce in basso e rientra verso l'alto; una regola lo allinea solo in orizzontale.
+    const sy = elemento("sy_etto", [90, 40, 108, 60]);
+    const b = box("BOX6", [sy]);
+
+    CssFramework.fixOverflowFromBox(GRIGLIA, b);
+    CssFramework.scartaSpostamentiRicollocati([{ item: sy }], { x: true, y: false }, "Solo_X");
+    CssFramework.controllaSpostamentiGrigliaPendenti(b);
+
+    assert.strictEqual(segnalazioni.length, 1);
+    assert.match(segnalazioni[0].testo, /^Code CSF-008: Elemento sy_etto nel box BOX6 spostato verso l'alto/);
+});
+
+test("se la regola rimette fuori l'elemento, il rientro successivo si segnala", () => {
+    azzera();
+    const rect = elemento("rect_etto", [85, 70, 100, 110]);
+    const b = box("BOX6", [rect]);
+
+    CssFramework.fixOverflowFromBox(GRIGLIA, b);
+    CssFramework.scartaSpostamentiRicollocati([{ item: rect }], { x: true, y: true }, "Rect_etto_All");
+    //la regola lo porta di nuovo fuori, e il rientro che la segue lo riporta dentro
+    rect.move(undefined, [15, 0]);
+    CssFramework.fixOverflowFromBox(GRIGLIA, b);
+    CssFramework.controllaSpostamentiGrigliaPendenti(b);
+
+    assert.strictEqual(segnalazioni.length, 1);
+    assert.match(segnalazioni[0].testo, /^Code CSF-008: Elemento rect_etto nel box BOX6 spostato verso sinistra/);
+});
+
+test("la regola toglie solo le annotazioni dei suoi elementi", () => {
+    azzera();
+    const rect = elemento("rect_etto", [85, 70, 100, 110]);
+    const foto = elemento("immagine$1", [10, 80, 40, 115]);
+    const b = box("BOX6", [rect, foto]);
+
+    CssFramework.fixOverflowFromBox(GRIGLIA, b);
+    CssFramework.scartaSpostamentiRicollocati([{ item: rect }], { x: true, y: true }, "Rect_etto_All");
+    CssFramework.controllaSpostamentiGrigliaPendenti(b);
+
+    assert.strictEqual(segnalazioni.length, 1);
+    assert.match(segnalazioni[0].testo, /Elemento immagine nel box BOX6/);
+    //Assi non dati, o nessuno allineato: niente da togliere.
+    azzera();
+    CssFramework.fixOverflowFromBox(GRIGLIA, box("BOX6", [elemento("rect_etto", [85, 70, 100, 110])]));
+    CssFramework.scartaSpostamentiRicollocati([], { x: true, y: true });
+    CssFramework.scartaSpostamentiRicollocati(null, true);
+    assert.strictEqual(CssFramework.spostamentiGrigliaPendenti.spostamenti.length, 1);
+});
+
+test("allineamenti toglie le annotazioni dopo le ancore e prima del rientro della regola", () => {
+    const sorgente = leggiFileDelPlugin("CssFramework.js").replace(/\r\n/g, "\n");
+    const inizio = sorgente.indexOf("\n    allineamenti(");
+    const corpo = sorgente.substring(inizio, sorgente.indexOf("\n    },\n", inizio));
+
+    //Ramo a livelli: dopo l'ancora statica, prima del fixOverflowFromBox della regola.
+    const ancora = corpo.indexOf("allineamentiRiusciti = this.followStaticAnchor(");
+    const scarto = corpo.indexOf("this.scartaSpostamentiRicollocati(gruppoElementi, allineamentiRiusciti, allineamentoSingolo.nomeGruppo);");
+    const rientro = corpo.lastIndexOf("box = this.fixOverflowFromBox(boundsBoxImpaginato, box, mappaBoxOriginale, [allineamentoSingolo]);");
+    assert.ok(ancora > 0 && scarto > ancora && rientro > scarto);
+
+    //Ramo a slot: lo fa allineaASlot quando ha piazzato gli elementi, su tutti e due gli assi, e il
+    //ciclo chiama il rientro della regola dopo di lei.
+    const inizioSlot = sorgente.indexOf("\n    allineaASlot(");
+    const slot = sorgente.substring(inizioSlot, sorgente.indexOf("\n    },\n", inizioSlot));
+    assert.match(slot, /this\.scartaSpostamentiRicollocati\(gruppoElementi, \{ x: true, y: true \}, allineamento\.nomeGruppo\);\s*return true;\s*$/);
+    assert.ok(corpo.indexOf("this.allineaASlot(") < corpo.indexOf("box = this.fixOverflowFromBox(boundsBoxImpaginato, box, mappaBoxOriginale, [allineamentoSingolo]);"));
+});

@@ -65,7 +65,9 @@ configurazione lo perderebbe. L'editor web del framework non lo mostra ancora.
 - `followGroup(gruppoSeguito, gruppoAllineamento, anchor, direction, useTextBounds, isItemLinkGruppo)`
   → lo spostamento vero su un asse.
 - `followStaticAnchor(...)` → come sopra, ma il bersaglio è un punto fisso del box invece di un
-  altro gruppo.
+  altro gruppo. Dal TASK-b4b2614f restituisce gli assi su cui la regola ha posizionato i suoi
+  elementi (`{ x, y }`, aggancio compreso): `allineamenti` li usa per togliere le annotazioni CSF-008
+  di quegli elementi prima del rientro in griglia della regola.
 
 **La struttura di un'ancora**, documentata nel codice e per asse:
 
