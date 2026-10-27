@@ -83,11 +83,11 @@ describe("opzioniBase", () => {
     expect(opzioni.plugins?.tooltip?.backgroundColor).toBe(TOOLTIP.backgroundColor);
     expect(opzioni.plugins?.tooltip?.padding).toBe(10);
     expect(typeof opzioni.plugins?.tooltip?.callbacks?.label).toBe("function");
-    expect(opzioni.scales.x.min).toBe(0);
-    expect(opzioni.scales.x.max).toBe(100);
-    expect(opzioni.scales.x.grid.color).toBeTruthy();
-    expect(opzioni.scales.x.ticks.font).toMatchObject({ family: FONT_GRAFICO.family, size: FONT_GRAFICO.size });
-    expect(opzioni.scales.y.ticks.font).toMatchObject({ family: FONT_GRAFICO.family });
+    expect(opzioni.scales?.x?.min).toBe(0);
+    expect(opzioni.scales?.x?.max).toBe(100);
+    expect(opzioni.scales?.x?.grid?.color).toBeTruthy();
+    expect(opzioni.scales?.x?.ticks?.font).toMatchObject({ family: FONT_GRAFICO.family, size: FONT_GRAFICO.size });
+    expect(opzioni.scales?.y?.ticks?.font).toMatchObject({ family: FONT_GRAFICO.family });
   });
 
   it("le opzioni del grafico prevalgono su quelle comuni", () => {

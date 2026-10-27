@@ -88,6 +88,43 @@ interface CardFilter {
 const BATCH_SIZE = 12;
 
 
+const useInfiniteKitScroll = (kits: KitVolantino[], batchSize: number = BATCH_SIZE) => {
+    const [visibleCount, setVisibleCount] = useState(batchSize);
+    const [sentinel, setSentinel] = useState<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+        setVisibleCount(batchSize);
+    }, [kits, batchSize]);
+
+    useEffect(() => {
+        if (!sentinel) return;
+
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                if (entry.isIntersecting) {
+                    setVisibleCount((prev) => {
+                        if (prev >= kits.length) return prev;
+                        return Math.min(prev + batchSize, kits.length);
+                    });
+                }
+            },
+            { threshold: 0.25, rootMargin: "200px 0px 0px" }
+        );
+
+        observer.observe(sentinel);
+        return () => observer.disconnect();
+    }, [sentinel, kits.length, batchSize]);
+
+    const items = useMemo(() => kits.slice(0, visibleCount), [kits, visibleCount]);
+
+    return {
+        items,
+        hasMore: visibleCount < kits.length,
+        registerSentinel: setSentinel,
+    };
+};
+
+
 const VolantiniSkeleton: FC = () => (
     <div className="flex flex-col gap-5">
         <div className="grid grid-cols-2 gap-3">
