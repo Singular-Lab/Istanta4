@@ -234,9 +234,12 @@ services:
     # porte distinte: niente prefissi di percorso, che richiederebbero alle
     # applicazioni di conoscere il proprio path base.
     #
-    # Non e' una dipendenza delle applicazioni ma il contrario, quindi il
-    # deployment selettivo del Runner non lo avvia: si avvia una volta a mano
-    # con `docker compose up -d proxy` e resta su anche fra una release e
+    # Non dipende dalle applicazioni: il template risolve i nomi a ogni
+    # richiesta, quindi nginx parte anche se Istanta o Correggo4 non ci sono
+    # (risponde 502 finche' non arrivano). Su un target dove Correggo4 non e'
+    # distribuito, `up -d proxy` non prova a scaricarne l'immagine segnaposto.
+    # Il deployment selettivo del Runner non lo avvia: si avvia una volta a
+    # mano con `docker compose up -d proxy` e resta su anche fra una release e
     # l'altra, perche' instrada per nome di servizio.
     image: nginx:1.27-alpine
     restart: unless-stopped
@@ -254,11 +257,6 @@ services:
     ports:
       - "${ISTANTA_HTTPS_PORT:-8443}:443"
       - "${CORREGGO_HTTPS_PORT:-8444}:444"
-    depends_on:
-      istanta:
-        condition: service_started
-      correggo4:
-        condition: service_started
     logging:
       driver: json-file
       options:
