@@ -1,4 +1,4 @@
-import { createRemoteJWKSet, jwtVerify, decodeProtectedHeader } from 'jose';
+import { createRemoteJWKSet, jwtVerify, decodeProtectedHeader, type JWTPayload } from 'jose';
 import { randomBytes, randomUUID, createHash } from 'crypto';
 import { BadRequestError } from '../../../lib/errors/application/BadRequestError';
 import { UnauthorizedError } from '../../../lib/errors/application/UnauthorizedError';
@@ -10,6 +10,36 @@ import { log } from '../logger';
 import { configServerInChiaro } from './authProviders/configurazioneProvider';
 
 type JWKSFunction = ReturnType<typeof createRemoteJWKSet>;
+
+/**
+ * Riduce il payload gia' verificato ai soli claim usati dall'applicazione.
+ * `roles` resta fail-closed: Entra App Roles deve essere un array composto
+ * esclusivamente da stringhe, altrimenti il claim viene considerato assente.
+ */
+export function mapOidcUserClaims(payload: JWTPayload): OidcUserClaims {
+  const oidFromShortClaim = typeof payload.oid === 'string' ? payload.oid : undefined;
+  const oidFromUriClaim = typeof payload['http://schemas.microsoft.com/identity/claims/objectidentifier'] === 'string'
+    ? payload['http://schemas.microsoft.com/identity/claims/objectidentifier']
+    : undefined;
+  const roles = Array.isArray(payload.roles) && payload.roles.every((role) => typeof role === 'string')
+    ? payload.roles
+    : undefined;
+
+  return {
+    sub: payload.sub as string,
+    oid: oidFromShortClaim || oidFromUriClaim,
+    tid: typeof payload.tid === 'string' ? payload.tid : undefined,
+    email: typeof payload.email === 'string'
+      ? payload.email
+      : typeof payload.preferred_username === 'string' ? payload.preferred_username : undefined,
+    preferred_username: typeof payload.preferred_username === 'string' ? payload.preferred_username : undefined,
+    name: typeof payload.name === 'string' ? payload.name : undefined,
+    given_name: typeof payload.given_name === 'string' ? payload.given_name : undefined,
+    family_name: typeof payload.family_name === 'string' ? payload.family_name : undefined,
+    nonce: typeof payload.nonce === 'string' ? payload.nonce : undefined,
+    roles,
+  };
+}
 
 /**
  * Servizio OIDC per gestire il flusso Authorization Code con PKCE.
@@ -166,23 +196,7 @@ export class OidcService implements IOidcService {
       });
     }
 
-    // Microsoft Entra ID può emettere l'Object ID sia come claim corto "oid"
-    // sia come URI completa "http://schemas.microsoft.com/identity/claims/objectidentifier"
-    // (token legacy, multi-tenant o con policy di trasformazione claims).
-    const oidFromShortClaim = payload.oid as string | undefined;
-    const oidFromUriClaim = payload['http://schemas.microsoft.com/identity/claims/objectidentifier'] as string | undefined;
-
-    const claims: OidcUserClaims = {
-      sub: payload.sub as string,
-      oid: oidFromShortClaim || oidFromUriClaim,
-      tid: payload.tid as string | undefined,
-      email: (payload.email as string) || (payload.preferred_username as string),
-      preferred_username: payload.preferred_username as string | undefined,
-      name: payload.name as string | undefined,
-      given_name: payload.given_name as string | undefined,
-      family_name: payload.family_name as string | undefined,
-      nonce: payload.nonce as string | undefined,
-    };
+    const claims = mapOidcUserClaims(payload);
 
     log.info(`[OidcService] id_token validato per: ${claims.email || claims.preferred_username}`);
     return claims;

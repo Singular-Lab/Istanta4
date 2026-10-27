@@ -50,14 +50,14 @@ function createApp(provider: Record<string, unknown>, utente: { email: string; t
     {} as any, {} as any, {} as any, undefined, userService as any, oidcService as any, repository as any, agenziaLib as any
   ).registerRoutes(app);
 
-  return { app, session };
+  return { app, session, agenziaLib };
 }
 
 const callback = (app: express.Express) => request(app).get('/api/auth/oidc/callback?code=c1&state=stato-1');
 
 describe('HubController - restrizioni del metodo OIDC', () => {
   it('apre la sessione per un utente ammesso', async () => {
-    const { app, session } = createApp(
+    const { app, session, agenziaLib } = createApp(
       { config_server: { domini_ammessi: ['esempio.it'] }, ruoli_ammessi: ['GDO'] },
       { email: 'mario@esempio.it', tipo_utente: TIPO_UTENTI.GDO },
     );
@@ -67,6 +67,15 @@ describe('HubController - restrizioni del metodo OIDC', () => {
     expect(res.headers.location).toBe('/hub');
     expect(session.id_utente).toBe('u1');
     expect(session.oidc_state).toBeUndefined();
+    expect(agenziaLib.parseUtenteOIDC).toHaveBeenCalledWith(
+      'mario@esempio.it',
+      expect.objectContaining({ email: 'mario@esempio.it' }),
+      {
+        source: 'oidc',
+        allowedEmailDomains: ['esempio.it'],
+        allowedUserTypes: ['GDO'],
+      },
+    );
   });
 
   it('rifiuta un dominio email non ammesso', async () => {

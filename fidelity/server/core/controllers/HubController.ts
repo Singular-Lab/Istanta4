@@ -266,7 +266,12 @@ export class HubController extends BaseController {
         return;
       }
 
-      const parsed = await this.agenziaLib.parseUtenteOIDC(email, claims);
+      const dominiAmmessi = provider.config_server?.domini_ammessi;
+      const parsed = await this.agenziaLib.parseUtenteOIDC(email, claims, {
+        source: 'oidc',
+        allowedEmailDomains: Array.isArray(dominiAmmessi) ? dominiAmmessi : null,
+        allowedUserTypes: provider.ruoli_ammessi,
+      });
       // Domini e tipi utente ammessi dal metodo di accesso
       const rifiuto = motivoRifiutoAccesso(provider, email, parsed.tipo_utente);
       if (rifiuto) throw new ForbiddenError({ message: rifiuto });
