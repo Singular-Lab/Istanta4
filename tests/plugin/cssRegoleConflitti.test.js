@@ -258,3 +258,63 @@ test('il rettangolo della riga non usa il corpo del carattere', () => {
     assert.ok(!blocco.includes('pointSize'),
         'il corpo del carattere non entra nell\'altezza della riga');
 });
+
+/* ---- TASK-652c4a82: in BOX7 di Edro21 conta la descrizione, non il gruppo col BIS ----
+ * '*descrizione*' prendeva anche gruppo_descrizione_BIS: un gruppo non ha righe di testo, e il
+ * controllo lo misurava col riquadro intero, BIS compreso, segnalando CSF-013 anche col testo
+ * della descrizione libero. Il motivo era stato allargato per l'etichetta col DNA
+ * (descrizione$DNA$...), ma il controllo la riduce gia' a "descrizione" con parseLabel prima di
+ * confrontarla: basta il nome esatto.
+ */
+
+//Un membro di un oggetto del Plugin, isolato contando le graffe, dal file che sotto Node non si carica.
+function membroDalSorgente(percorso, intestazione) {
+    const testo = sorgente(percorso);
+    const inizio = testo.indexOf(intestazione);
+    assert.notStrictEqual(inizio, -1, intestazione + ' non trovata in ' + percorso + ': il test va aggiornato');
+    let livello = 0;
+    for (let i = inizio; i < testo.length; i++) {
+        if (testo[i] === '{') { livello++; }
+        else if (testo[i] === '}') { livello--; if (livello === 0) { return testo.substring(inizio, i + 1); } }
+    }
+    assert.fail(intestazione + ' non delimitata');
+}
+
+//makeRegexFromGroupName di CssFramework e parseLabel di utility.js, come sono scritte davvero.
+//Il CssFramework ne ha anche una copia commentata piu' in alto: si prende la definizione, a inizio riga.
+const motivoDelCss = new Function('return ({' + membroDalSorgente('plugin/CssFramework.js', '\n    makeRegexFromGroupName(groupName) {') + '});')();
+const parseLabelVera = new Function('pluginMiddleware', 'return ({' + membroDalSorgente('plugin/utility.js', 'parseLabel(label){') + '});')({ getCampo: () => null });
+
+//Le etichette che una regola prende, come in getElementiSegnalazioniConflitti: label passata da parseLabel.
+function prende(lato, etichetta) {
+    const label = parseLabelVera.parseLabel(etichetta);
+    return lato.some(motivo => motivoDelCss.makeRegexFromGroupName(motivo).test(label));
+}
+
+test('Edro21: la regola coi loghi prende la descrizione, anche col DNA, e non il gruppo del BIS', () => {
+    const config = JSON.parse(sorgente('Istanta/wwwroot/external_source/Edro21/SourceFrameworkCss.json'));
+    const regole = [];
+    (function cerca(nodo) {
+        if (Array.isArray(nodo)) { nodo.forEach(cerca); return; }
+        if (nodo && typeof nodo === 'object') {
+            if (Array.isArray(nodo.segnalazioniConflitti)) {
+                regole.push(...cssRegoleConflitti.getListaRegole(nodo.segnalazioniConflitti));
+            }
+            Object.values(nodo).forEach(cerca);
+        }
+    })(config);
+
+    const coiLoghi = regole.filter(r => r.latoB.includes('*foto_extra*'));
+    //Una per kit: SC e SS/CN/CY.
+    assert.strictEqual(coiLoghi.length, 2);
+    coiLoghi.forEach(function (regola) {
+        assert.strictEqual(regola.useTextBounds, true);
+        assert.ok(prende(regola.latoA, 'descrizione'));
+        //Il campo che porta il DNA del box.
+        assert.ok(prende(regola.latoA, 'descrizione$DNA$BOX7$4960868$4960839,4960868$382329'));
+        assert.ok(!prende(regola.latoA, 'gruppo_descrizione_BIS'), 'il gruppo del BIS si misurerebbe col riquadro intero');
+        assert.ok(!prende(regola.latoA, 'BIS'));
+        //I loghi restano presi: le foto extra tengono l'etichetta intera.
+        assert.ok(prende(regola.latoB, 'foto_extra$Logo_SDB$tipo_1'));
+    });
+});
