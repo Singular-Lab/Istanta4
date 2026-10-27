@@ -31,6 +31,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Volantini &middot; Correggo4</title>
+<script src="~/js/ingrandimento.js" asp-append-version="true"></script>
 <style>
 /* ============================================================
    Correggo4 — Home (hub correzioni) · Views/Volantini/Index.cshtml
@@ -146,7 +147,9 @@ svg.i{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-widt
 /* ---------- Layout principale ---------- */
 .main{
   display:grid;grid-template-columns:300px 1fr;gap:0;
-  max-width:1480px;margin-inline:auto;padding:28px 28px 110px;
+  /* I20-1147: niente piu' max-width:1480px: sugli schermi grandi la home ingrandita
+     (js/ingrandimento.js) riempie la larghezza invece di lasciare margini vuoti ai lati */
+  margin-inline:auto;padding:28px 28px 110px;
 }
 .side{padding-right:28px;border-right:1px solid var(--line)}
 .content{padding-left:28px;min-width:0}
@@ -254,7 +257,8 @@ h2.sec small{font-size:12.5px;font-weight:500;color:var(--ink-3)}
 .sel:focus{outline:0;border-color:var(--teal);box-shadow:0 0 0 3px rgba(96,203,187,.25)}
 
 /* ---------- Card volantino ---------- */
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(330px,100%),1fr));gap:18px}
+/* I20-1147: al massimo due card per riga, come sul MacBook: con piu' spazio si allargano */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(max(min(330px,100%),calc((100% - 18px) / 2)),1fr));gap:18px}
 .vcard{
   background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);
   padding:14px 14px 0;display:flex;flex-direction:column;transition:box-shadow .15s,transform .15s;
