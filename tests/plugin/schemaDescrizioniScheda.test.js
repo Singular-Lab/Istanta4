@@ -167,7 +167,7 @@ test("la casella del tratto nascosto si vede, in sola lettura, col suo testo, e 
         assert.strictEqual(textarea.css["background-color"], "#d9d9d9");
         assert.strictEqual(textarea.css.border, "1px dashed #7a7a7a");
         //Larga quanto la sua parte di riga, come le altre caselle: senza configurazione due per riga, alta 50.
-        assert.match(colonna.html, /style="flex: 0 0 auto; width: 50%; box-sizing: border-box; margin: 0 0 6px 0; padding: 0 10px 0 0;"/);
+        assert.match(colonna.html, /style="position: relative; flex: 0 0 auto; width: 50%; box-sizing: border-box; margin: 0 0 6px 0; padding: 0 10px 0 0;"/);
         assert.match(textarea.html, /style="height: 50px; width: 100%; margin: 0; background-color:white; color:black;"/);
     }
     finally {
@@ -263,9 +263,27 @@ test("le misure delle caselle vengono dalla configurazione dell'agenzia, e senza
 
 test("la colonna di una casella e' larga la sua parte di riga, con lo spazio a destra e sotto", () => {
     assert.strictEqual(schedaRef.stileDellaColonna(pluginEdro.grandezzeBox),
-        "flex: 0 0 auto; width: 50%; box-sizing: border-box; margin: 0 0 6px 0; padding: 0 10px 0 0;");
+        "position: relative; flex: 0 0 auto; width: 50%; box-sizing: border-box; margin: 0 0 6px 0; padding: 0 10px 0 0;");
     assert.match(schedaRef.stileDellaColonna({ bigBoxPerRow: 3, marginBetweenBigBox: 6 }), /width: 33\.33%;[^"]*padding: 0 6px 0 0;$/);
     assert.match(schedaRef.stileDellaColonna({ bigBoxPerRow: 1 }), /width: 100%;/);
+});
+
+test("la colonna e' posizionata: a riposo la casella al 100% resta larga quanto la colonna e la schermata non scorre in orizzontale", () => {
+    //TASK-059dd745: CampiARiposo mette la casella a riposo in position absolute (_spegniCampo), e il suo 100% si
+    //misura sul primo antenato posizionato. Senza la colonna posizionata era il pannello: in console 524 px invece
+    //di 252, la seconda colonna sporgeva di mezzo pannello e la rotella faceva scorrere la schermata in orizzontale.
+    const CampiARiposo = require("../../plugin/campiARiposo.js");
+    const spento = { style: {}, setAttribute() {} };
+    CampiARiposo._spegniCampo(spento);
+    assert.strictEqual(spento.style.position, "absolute");
+
+    for (const grandezze of [pluginEdro.grandezzeBox, null, { bigBoxPerRow: 3 }]) {
+        assert.match(schedaRef.stileDellaColonna(grandezze), /^position: relative;/);
+    }
+    //Tutte le colonne delle caselle della descrizione nascono con quello stile, anche quella del tratto nascosto.
+    const sorgente = leggiFileDelPlugin("schedaRef.js").replace(/\r/g, "");
+    assert.ok(!/class="column" style="margin-right:/.test(sorgente), "una colonna della descrizione senza stileDellaColonna");
+    assert.match(sorgente, /var column = \$\('<div class="column" style="' \+ schedaRef\.stileDellaColonna\(grandezzeBox\) \+ '"><\/div>'\);/);
 });
 
 test("gli avvisi sotto le caselle hanno il bordo sinistro del loro colore", () => {

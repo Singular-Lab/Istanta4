@@ -4686,10 +4686,14 @@ const schedaRef = {
     /// pannello le caselle lo seguono, tutte uguali anche nell'ultima riga incompleta. Lo spazio fra le
     /// caselle sta a destra di ogni colonna, cosi' la prima casella e' allineata alle linguette; sotto,
     /// lo spazio fra le righe. Il margine sostituisce quello di .row > *. Pura.
+    /// TASK-059dd745: la colonna e' posizionata (relative). A riposo CampiARiposo mette la casella vera,
+    /// invisibile, in position absolute, e il suo 100% si misurava sul primo antenato posizionato, il
+    /// pannello: la casella della seconda colonna sporgeva di mezzo pannello e la schermata scorreva in
+    /// orizzontale con la rotella (in console: 524 px invece di 252).
     stileDellaColonna(grandezzeBox) {
         var misure = schedaRef.misureDelleCaselle(grandezzeBox);
         var parte = Math.floor(10000 / misure.perRiga) / 100;
-        return "flex: 0 0 auto; width: " + parte + "%; box-sizing: border-box; margin: 0 0 6px 0; padding: 0 " + misure.spazio + "px 0 0;";
+        return "position: relative; flex: 0 0 auto; width: " + parte + "%; box-sizing: border-box; margin: 0 0 6px 0; padding: 0 " + misure.spazio + "px 0 0;";
     },
 
     /// TASK-5d3fea89: l'etichetta di una casella della descrizione: il nome dello stile senza cartella e,

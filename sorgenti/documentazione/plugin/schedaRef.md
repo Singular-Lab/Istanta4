@@ -88,6 +88,8 @@ sta lavorando l'operatore» guarda lì. Con lei: `multiSelection`, `schedeRefDat
   quelle dell'agenzia restano. L'etichetta troncata si legge intera al passaggio del mouse: il testo
   sta nel `title`, che disegna il [Tooltip](tooltip/README.md) del Plugin. Le caselle seguono la larghezza del
   pannello: ogni colonna è larga la sua parte di riga (`stileDellaColonna`) e la casella è al 100%;
+  la colonna è `position: relative`, perché la casella a riposo (in `absolute`, vedi
+  [campiARiposo](campiARiposo.md)) misuri il suo 100% sulla colonna e non sul pannello (TASK-059dd745);
   dalla configurazione dell'agenzia (`grandezzeBox`) contano solo caselle per riga, altezza e spazio
   (`misureDelleCaselle`), non più la larghezza in pixel. Gli avvisi sotto le caselle hanno il bordo
   sinistro del loro colore (`stileDellAvviso`) e la sezione «Azioni sul box» è separata da una linea.
