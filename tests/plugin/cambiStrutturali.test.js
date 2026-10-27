@@ -290,3 +290,30 @@ test('le due azioni scrivono sconto_linea_forzato, per tutto il gruppo', () => {
     assert.deepStrictEqual(forza.opzioniValide, ['tutto']);
     assert.deepStrictEqual(rimuovi.opzioniValide, ['tutto']);
 });
+
+/* ---- TASK-5cd1711e (IS2): Forza format B&F solo per il richiamo B&F ---- */
+
+const ISTITUZIONALE = 'Forza format B&F "ISTITUZIONALE"';
+const NEL_CORPO = 'Forza format B&F "Nel corpo del volantino"';
+
+test('Forza format B&F ISTITUZIONALE si offre al richiamo B&F non ancora istituzionale', () => {
+    assert.strictEqual(offerta(ISTITUZIONALE, { ruolo: 'RICHIAMO B&F', allEtichette: [] }), true);
+    assert.strictEqual(offerta(NEL_CORPO, { ruolo: 'RICHIAMO B&F', allEtichette: [] }), false);
+    //Il ruolo si legge come contiene, senza badare alle maiuscole.
+    assert.strictEqual(offerta(ISTITUZIONALE, { ruolo: 'richiamo b&f volantino', allEtichette: ['IS BASSI E FISSI'] }), true);
+});
+
+test('Forza format B&F Nel corpo del volantino si offre al richiamo B&F gia\' istituzionale', () => {
+    assert.strictEqual(offerta(NEL_CORPO, { ruolo: 'RICHIAMO B&F', allEtichette: ['ISTITUZIONALE'] }), true);
+    assert.strictEqual(offerta(ISTITUZIONALE, { ruolo: 'RICHIAMO B&F', allEtichette: ['ISTITUZIONALE'] }), false);
+});
+
+test('senza RICHIAMO B&F nel ruolo nessuna delle due azioni B&F si offre', () => {
+    for (const ruolo of ['B&F', 'STAR', 'BASSI E FISSI', '', undefined]) {
+        for (const etichette of [[], ['ISTITUZIONALE']]) {
+            const record = ruolo === undefined ? { allEtichette: etichette } : { ruolo: ruolo, allEtichette: etichette };
+            assert.strictEqual(offerta(ISTITUZIONALE, record), false, String(ruolo) + ' ' + etichette);
+            assert.strictEqual(offerta(NEL_CORPO, record), false, String(ruolo) + ' ' + etichette);
+        }
+    }
+});
