@@ -12,8 +12,8 @@ describe("date della promo", () => {
     expect(formattaData(new Date(2026, 8, 3))).toBe("03/09/2026");
   });
 
-  it("senza data restituisce N/A", () => {
-    expect(formattaDataOra(undefined)).toBe("N/A");
-    expect(formattaData(undefined)).toBe("N/A");
+  it("senza data restituisce N/D", () => {
+    expect(formattaDataOra(undefined)).toBe("N/D");
+    expect(formattaData(undefined)).toBe("N/D");
   });
 });
