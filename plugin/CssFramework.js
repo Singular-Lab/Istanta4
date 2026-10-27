@@ -2176,6 +2176,53 @@ const CssFramework =
         }
     },
 
+    /// TASK-b4b2614f: gli elementi che una regola di allineamento ha appena posizionato non sono piu'
+    /// nella posizione forzata dal rientro in griglia, anche se la regola li rimette nello stesso
+    /// punto: nel BOX6 di Edro21 rect_etto e sy_etto, allargati dal ridimensionamento, rientravano
+    /// sul bordo destro e basso e Rect_etto_All e sy_etto_All li ancoravano proprio li'. I bounds
+    /// coincidevano e controllaSpostamentiGrigliaPendenti li segnalava. Si tolgono le loro
+    /// annotazioni sugli assi allineati; se la regola li rimette fuori, il fixOverflowFromBox che la
+    /// segue li annota di nuovo. elementi come le voci della mappa del box ({ item }) o gli item;
+    /// assi { x, y } come li restituiscono l'aggancio e l'ancora statica.
+    scartaSpostamentiRicollocati(elementi, assi, nomeRegola = "") {
+        try {
+            var pendente = this.spostamentiGrigliaPendenti;
+            if (!pendente || !Array.isArray(pendente.spostamenti) || pendente.spostamenti.length == 0) {
+                return;
+            }
+            if (assi == null || typeof assi !== "object" || (assi.x !== true && assi.y !== true)) {
+                return;
+            }
+
+            var chiavi = [];
+            var lista = Array.isArray(elementi) ? elementi : [];
+            for (var i = 0; i < lista.length; i++) {
+                var item = lista[i] != null && lista[i].item != null ? lista[i].item : lista[i];
+                if (item != null && item.isValid !== false) {
+                    chiavi.push(this.getItemKeySegnalazioniConflitti(item, Utility.parseLabel(item.label)));
+                }
+            }
+
+            var me = this;
+            pendente.spostamenti = pendente.spostamenti.filter(function (spostamento) {
+                if (chiavi.indexOf(spostamento.itemKey) < 0) {
+                    return true;
+                }
+                var lato = me.latiGriglia.find(l => l.direzione == spostamento.direzione);
+                var asse = lato != null && lato.verticale ? "y" : "x";
+                if (assi[asse] !== true) {
+                    return true;
+                }
+                console.log("CSF-008 scartato: " + spostamento.label + " spostato " + spostamento.direzione + " e poi riallineato dalla regola " + nomeRegola + ".");
+                return false;
+            });
+        }
+        catch (error) {
+            console.error("Errore nello scarto degli spostamenti in griglia riallineati");
+            console.error(error);
+        }
+    },
+
     /// Due bounds uguali a meno della tolleranza, lato per lato.
     stessiBounds(a, b, tolleranza) {
         if (!a || !b || a.length != 4 || b.length != 4) {
@@ -4741,6 +4788,11 @@ const CssFramework =
                 allineamentiRiusciti = this.followStaticAnchor(box, listGruppoAllineamento, allineamentoSingolo.staticAnchor, mappaBoxOriginale, itemRef, allineamentiRiusciti, isItemLinkGruppo);
             }
 
+            //TASK-b4b2614f: chi la regola ha appena posizionato non e' piu' nella posizione forzata dal
+            //rientro in griglia, anche se ci torna; se la regola lo rimette fuori, il fixOverflowFromBox
+            //qui sotto lo annota di nuovo.
+            this.scartaSpostamentiRicollocati(gruppoElementi, allineamentiRiusciti, allineamentoSingolo.nomeGruppo);
+
             if (allineamentoSingolo.finalFit && allineamentoSingolo.finalFit.length > 0) {
                 this.finalFit(mappaBoxOriginale, allineamentoSingolo.finalFit);
             }
@@ -4845,6 +4897,9 @@ const CssFramework =
             }
         });
         this.updateMap(mappaBoxOriginale);
+        //TASK-b4b2614f: gli slot posizionano i loro elementi su tutti e due gli assi: non sono piu'
+        //nella posizione forzata dal rientro in griglia, e il rientro che segue la regola li riannota.
+        this.scartaSpostamentiRicollocati(gruppoElementi, { x: true, y: true }, allineamento.nomeGruppo);
         return true;
     },
 
@@ -7517,6 +7572,8 @@ const CssFramework =
         }
 
         var spostamentoDaApplicare = [0, 0];
+        //TASK-b4b2614f: gli assi su cui l'ancora posiziona gli elementi, per restituirli.
+        var assiDellAncora = { x: false, y: false };
 
         for (var i = 0; i < anchor.length; i++) {
 
@@ -7534,6 +7591,7 @@ const CssFramework =
 
             // ----------- X -----------
             if (singleAnchor.xAnchor && !allineamentiRiusciti.x) {
+                assiDellAncora.x = true;
                 var distanzaX = singleAnchor.xAnchor.distance;
                 if (singleAnchor.xAnchor.distance && typeof singleAnchor.xAnchor.distance == "string") {
                     var isPercentual = singleAnchor.xAnchor.distance.indexOf("%") > -1;
@@ -7677,6 +7735,7 @@ const CssFramework =
 
             // ----------- Y -----------
             if (singleAnchor.yAnchor && !allineamentiRiusciti.y) {
+                assiDellAncora.y = true;
                 var distanzaY = singleAnchor.yAnchor.distance;
                 if (singleAnchor.yAnchor.distance && typeof singleAnchor.yAnchor.distance == "string") {
                     var isPercentualY = singleAnchor.yAnchor.distance.indexOf("%") > -1;
@@ -7846,6 +7905,12 @@ const CssFramework =
             break;
         }
 
+        //TASK-b4b2614f: gli assi su cui la regola ha posizionato i suoi elementi, con l'aggancio che
+        //l'ha preceduta (allineamentiRiusciti) e con quest'ancora. Prima non restituiva niente.
+        return {
+            x: (allineamentiRiusciti != null && allineamentiRiusciti.x === true) || assiDellAncora.x,
+            y: (allineamentiRiusciti != null && allineamentiRiusciti.y === true) || assiDellAncora.y
+        };
     },
 
 
