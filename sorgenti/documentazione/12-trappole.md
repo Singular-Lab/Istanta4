@@ -68,6 +68,15 @@ Se quei numeri puntano alla riga **vuota prima** della dichiarazione, l'unico «
 per ogni metodo è la dichiarazione stessa, e il risultato sembra un elenco di metodi vivi. Riancora
 sulla dichiarazione vera con una regex, e **stampa a quale riga ti sei agganciato**.
 
+### `Contains` di EF su PostgreSQL distingue maiuscole e minuscole
+
+`a.Codice.Contains(testo)` con Npgsql diventa un confronto che **distingue maiuscole e minuscole**:
+su SQL Server, con la collation abituale, non le distingueva, e il codice scritto per quel motore
+sembra giusto. Nella pagina Archivio «salame» non trovava «SALAME UNGHERESE» (TASK-6e4320b7). Per una
+ricerca dell'operatore si usa `EF.Functions.ILike` con il testo protetto da
+`RicercaArchivio.ModelloContiene`, così `%` e `_` restano caratteri e non jolly; ILIKE usa gli stessi
+indici a trigrammi di LIKE.
+
 ---
 
 ## Trappole dell'analisi statica

@@ -202,57 +202,10 @@ namespace Istanta.Controllers
 
             ViewBag.totaleArchivio = await ctx.Articolis.CountAsync();
 
-            if (!string.IsNullOrEmpty(search_codice))
-            {
-                query = query.Where(a => a.Codice.Contains(search_codice));
-            }
-
-            if (!string.IsNullOrEmpty(search_generic))
-            {
-                // RISCRITTA 7/9/2026 come unione di due insiemi di id, invece che come OR
-                // fra una colonna di 'articoli' e una sottoquery su 'articoli_descrizioni'.
-                // Con l'OR il motore non puo usare gli indici: deve valutare la sottoquery
-                // riga per riga, 200.051 volte. Misurato su 200.000 articoli:
-                //     forma con OR       1,03 s
-                //     forma con unione   0,15 s
-                // Il risultato e lo stesso insieme di articoli: cambia solo come lo si chiede.
-                // Perche l'unione sia veloce servono gli indici a trigrammi (pg_trgm) su
-                // articoli.codice e su articoli_descrizioni.descrizione_1..4.
-                var idPerCodice = ctx.Articolis
-                    .Where(a => a.Codice!.Contains(search_generic))
-                    .Select(a => (Int64?)a.Id);
-            
-                var idPerDescrizione = ctx.ArticoliDescrizionis
-                    .Where(d => d.Descrizione1!.Contains(search_generic) ||
-                                d.Descrizione2!.Contains(search_generic) ||
-                                d.Descrizione3!.Contains(search_generic) ||
-                                d.Descrizione4!.Contains(search_generic))
-                    .Select(d => (Int64?)d.IdArticolo);
-            
-                var idTrovati = idPerCodice.Union(idPerDescrizione);
-            
-                query = query.Where(a => idTrovati.Contains((Int64?)a.Id));
-            }
-
-            if (!string.IsNullOrEmpty(search_nome))
-            {
-                query = query.Where(a => a.ArticoliDescrizionis.Any(d => d.Descrizione1.Contains(search_nome)));
-            }
-
-            if (!string.IsNullOrEmpty(search_brand))
-            {
-                query = query.Where(a => a.ArticoliDescrizionis.Any(d => d.Descrizione2.Contains(search_brand)));
-            }
-
-            if (!string.IsNullOrEmpty(search_tipogusto))
-            {
-                query = query.Where(a => a.ArticoliDescrizionis.Any(d => d.Descrizione3.Contains(search_tipogusto)));
-            }
-
-            if (!string.IsNullOrEmpty(search_gramm))
-            {
-                query = query.Where(a => a.ArticoliDescrizionis.Any(d => d.Descrizione4.Contains(search_gramm)));
-            }
+            // TASK-6e4320b7: i filtri di testo non distinguono maiuscole e minuscole: ILIKE invece di
+            // Contains, che su PostgreSQL le distingueva. Stanno in RicercaArchivio, che i test provano.
+            query = Utility.RicercaArchivio.FiltraPerTesto(ctx, query, search_codice, search_generic,
+                                                           search_nome, search_brand, search_tipogusto, search_gramm);
 
             if (search_foto == "con")
             {
