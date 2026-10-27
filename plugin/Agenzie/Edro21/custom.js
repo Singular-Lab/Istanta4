@@ -1226,6 +1226,19 @@ const customAgenzia={
         return false;
     },
 
+    /// TASK-5370a489: il gruppo che nel box tiene insieme la descrizione e la scritta che la accompagna, e
+    /// che il fix foto custom sposta al posto della sola descrizione: gruppo_descrizione_BIS nel BOX7,
+    /// gruppo_descrizione_sottocosto nel BOX4 dei canali SS, CN e CY. null se il box non ne prevede uno o
+    /// non ce l'ha, come il BOX4 del canale SC. etichette: quelle degli elementi del box, normalizzate. Pura.
+    gruppoDellaDescrizione(etichettaBox, etichette) {
+        var gruppi = { "BOX7": "gruppo_descrizione_BIS", "BOX4": "gruppo_descrizione_sottocosto" };
+        var gruppo = gruppi[etichettaBox];
+        if (gruppo == null) {
+            return null;
+        }
+        return Array.isArray(etichette) && etichette.indexOf(gruppo) >= 0 ? gruppo : null;
+    },
+
     setCustomFixFoto(box){
 
         if(ficoProcess.getTipoLavorazioneCorrente() != 1){
@@ -1260,15 +1273,24 @@ const customAgenzia={
         var descrizione = null;
         var piedeTitolari = null;
         var logoUsoAntibiotici = null;
+        //TASK-5370a489: nel BOX7 (BIS) e nel BOX4 di SS, CN e CY (sottocosto) la descrizione sta in un gruppo con
+        //la scritta che la accompagna, e si sposta il gruppo intero. Nel BOX4 senza gruppo (SC) resta la descrizione.
+        var etichetteDelBox = [];
+        for (var e = 0; e < items.length; e++) {
+            etichetteDelBox.push(Utility.parseLabel(items[e].label));
+        }
+        var gruppoDescrizione = this.gruppoDellaDescrizione(box.label, etichetteDelBox);
         for (var i = 0; i < items.length; i++) {
             var item = items[i];
             var etichetta = Utility.parseLabel(item.label);
 
-            if (etichetta == "descrizione" && box.label != "BOX7") {
-                descrizione = item;
-                continue;
+            if (gruppoDescrizione != null) {
+                if (etichetta == gruppoDescrizione) {
+                    descrizione = item;
+                    continue;
+                }
             }
-            else if (etichetta == "gruppo_descrizione_BIS" && box.label == "BOX7") {
+            else if (etichetta == "descrizione" && box.label != "BOX7") {
                 descrizione = item;
                 continue;
             }
@@ -1367,11 +1389,13 @@ const customAgenzia={
 
             if (descrizioneFuoriBox) {
                 var descrizioneDaRidurre = descrizione;
-                if (box.label == "BOX7" && descrizione.allPageItems != null) {
+                //TASK-5370a489: spostato il gruppo, si stringe la descrizione che c'e' dentro. L'etichetta e' sempre
+                //"descrizione" minuscola: nel BOX7 si cercava "Descrizione", non si trovava mai e si stringeva il gruppo.
+                if (gruppoDescrizione != null && descrizione.allPageItems != null) {
                     for (var d = 0; d < descrizione.allPageItems.length; d++) {
-                        var itemDescrizioneBox7 = descrizione.allPageItems[d];
-                        if (Utility.parseLabel(itemDescrizioneBox7.label) == "Descrizione") {
-                            descrizioneDaRidurre = itemDescrizioneBox7;
+                        var itemDescrizioneNelGruppo = descrizione.allPageItems[d];
+                        if (Utility.parseLabel(itemDescrizioneNelGruppo.label) == "descrizione") {
+                            descrizioneDaRidurre = itemDescrizioneNelGruppo;
                             break;
                         }
                     }
