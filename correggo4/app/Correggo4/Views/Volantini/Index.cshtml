@@ -288,6 +288,18 @@ h2.sec small{font-size:12.5px;font-weight:500;color:var(--ink-3)}
 .act .badge{margin-left:auto;font-size:11.5px;font-weight:700;color:var(--ink-3);background:var(--bg);padding:1px 7px;border-radius:9px}
 .act.primary svg.i{color:var(--teal-700)}
 .act[disabled]{color:#b3bec3;cursor:default;background:none}
+/* I20-1146: il lucchetto dell'Agenzia, sulla card ("Blocca"/"Sblocca") e nel riquadro della promo */
+.act.lock svg.i{color:var(--lock)}
+.camp-lock{
+  position:absolute;top:10px;right:10px;z-index:2;width:30px;height:30px;border-radius:8px;
+  border:1px solid var(--line);background:var(--card);color:var(--ink-3);cursor:pointer;
+  display:grid;place-items:center;
+}
+.camp-lock:hover{color:var(--lock);border-color:var(--lock)}
+.camp-lock.on{background:var(--lock);border-color:var(--lock);color:#fff}
+.camp-lock svg.i{width:15px;height:15px;stroke-width:2.2}
+.camp.con-lucchetto .camp-top{padding-right:30px}
+.camp-lock[disabled],.act.lock[disabled]{opacity:.5;cursor:wait}
 .v-foot{
   display:flex;align-items:baseline;justify-content:space-between;gap:10px;
   border-top:1px solid #edf1f2;margin:14px -14px 0;padding:11px 14px 12px;
@@ -733,7 +745,8 @@ function renderCamps(list){
     const qInCamp = !q || k.toLowerCase().includes(q);
     const pdfVis = c.volantini.filter(v => qInCamp || v.titolo.toLowerCase().includes(q));
     const open = S.aperta===k || (!!q && !qInCamp);
-    return `<div class="camp" aria-current="${k===S.sel}" style="--st:${col}">
+    return `<div class="camp ${PUO_BLOCCARE?"con-lucchetto":""}" aria-current="${k===S.sel}" style="--st:${col}">
+      ${lucchettoPromo(c)}
       <button class="camp-head" type="button" data-k="${esc(k)}">
         <div class="camp-top"><span class="camp-name">${esc(k)}</span></div>
         <div class="camp-meta">
@@ -824,6 +837,7 @@ function cardVol(v){
           <a class="act primary" href="${C4_BASE}Volantini/Dettaglio/${v.id}">${ico(editIco)} ${editLabel}</a>
           <button class="act" type="button" data-commenti="${v.id}" data-titolo="${esc(v.titolo)}"
                   title="Appunti su questo volantino">${ico("chat")} Commenti <span class="badge cbadge cbadge-${v.id}" hidden></span></button>
+          ${lucchettoVol(v)}
         </div>
       </div>
     </div>
@@ -833,6 +847,74 @@ function cardVol(v){
     </div>
   </article>`;
 }
+
+/* ---------- I20-1146: il lucchetto ----------
+   Il blocco di un'ora di Gestisci promo, anche da qui: sulla card per il volantino e nel riquadro
+   della promo per tutti i suoi volantini. Solo l'Agenzia (DATI.puoBloccare), e con la conferma a
+   ogni blocco e sblocco (scelta dell'operatore). Il server risponde in JSON e la pagina si
+   ridisegna senza ricaricarsi. */
+const PUO_BLOCCARE = !!DATI.puoBloccare;
+const nVol = n => n === 1 ? "1 volantino" : `${n} volantini`;
+
+function lucchettoVol(v){
+  if(!PUO_BLOCCARE) return "";
+  const b = v.stato==="bloccato";
+  return `<button class="act lock" type="button" data-blocca-vol="${v.id}"
+            title="${b ? "Sblocca il volantino: le correzioni si possono di nuovo salvare" : "Blocca il volantino per un'ora: nessuno potrà salvare correzioni"}">${ico("lock")} ${b ? "Sblocca" : "Blocca (1 ora)"}</button>`;
+}
+
+function lucchettoPromo(c){
+  if(!PUO_BLOCCARE || !c.volantini.length) return "";
+  const tutti = c.volantini.every(v => v.stato==="bloccato");
+  return `<button class="camp-lock ${tutti?"on":""}" type="button" data-blocca-promo="${esc(c.classificazione)}"
+            title="${tutti ? `Sblocca i ${nVol(c.volantini.length)} della promo` : `Blocca per un'ora i ${nVol(c.volantini.length)} della promo`}"
+            aria-label="${tutti ? "Sblocca" : "Blocca"} tutti i volantini di ${esc(c.classificazione)}">${ico("lock")}</button>`;
+}
+
+document.addEventListener("click", e => {
+  const bv = e.target.closest ? e.target.closest("[data-blocca-vol]") : null;
+  const bp = !bv && e.target.closest ? e.target.closest("[data-blocca-promo]") : null;
+  if(!bv && !bp) return;
+  e.preventDefault(); e.stopPropagation();
+
+  let c, vols, domanda, campi;
+  if(bv){
+    const id = Number(bv.dataset.bloccaVol);
+    c = CAMPAGNE.find(x => x.volantini.some(v => v.id === id));
+    const v = c && c.volantini.find(x => x.id === id);
+    if(!v) return;
+    vols = [v];
+    const blocca = v.stato !== "bloccato";
+    domanda = blocca ? `Bloccare per un'ora il volantino ${v.titolo}?\nFinché è bloccato nessuno può salvare correzioni.`
+                     : `Sbloccare il volantino ${v.titolo}?`;
+    campi = { promo: c.classificazione, idVol: String(id), blocca: String(blocca), tutta: "false" };
+  } else {
+    c = CAMPAGNE.find(x => x.classificazione === bp.dataset.bloccaPromo);
+    if(!c) return;
+    vols = c.volantini;
+    const blocca = !vols.every(v => v.stato==="bloccato");
+    domanda = blocca ? `Bloccare per un'ora i ${nVol(vols.length)} di ${c.classificazione}?\nFinché sono bloccati nessuno può salvare correzioni.`
+                     : `Sbloccare i ${nVol(vols.length)} di ${c.classificazione}?`;
+    campi = { promo: c.classificazione, blocca: String(blocca), tutta: "true" };
+  }
+  if(!confirm(domanda)) return;
+
+  const bottone = bv || bp;
+  bottone.disabled = true;
+  const i = document.querySelector('input[name="__RequestVerificationToken"]');
+  fetch(C4_BASE + "Promo/Blocco/Hub", {
+    method: "POST", credentials: "same-origin",
+    headers: { "Content-Type": "application/x-www-form-urlencoded", "RequestVerificationToken": i ? i.value : "" },
+    body: new URLSearchParams(campi)
+  }).then(r => r.json()).then(j => {
+    if(!j.ok){ bottone.disabled = false; alert(j.messaggio || "Non si è potuto cambiare il blocco."); return; }
+    vols.forEach(v => {
+      v.stato = j.dati.bloccato ? "bloccato" : "lavorazione";
+      v.bloccoMin = j.dati.minuti;
+    });
+    render();
+  }).catch(() => { bottone.disabled = false; alert("Server non raggiungibile: il blocco non è cambiato."); });
+}, true);
 
 function fillSelect(el, label, values, cur){
   el.innerHTML = `<option value="">${label}</option>` + values.map(x => `<option ${x===cur?"selected":""}>${esc(x)}</option>`).join("");

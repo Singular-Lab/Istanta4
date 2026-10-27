@@ -188,6 +188,7 @@ public class VolantiniController : Controller
         {
             NomeUtente = User.Identity?.Name ?? "",
             PuoCorreggere = User.IsInRole(Ruoli.Gdo),
+            PuoBloccare = User.IsInRole(Ruoli.Agenzia),
             NotificheNonLette = await ctx.Notifiches.CountAsync(n => n.IdUtente == IdUtente && n.DataLettura == null),
             // j243: stato iniziale dell'interruttore delle email. Nessuna riga = attive.
             EmailNotifiche = await ctx.Impostazioni.AsNoTracking()

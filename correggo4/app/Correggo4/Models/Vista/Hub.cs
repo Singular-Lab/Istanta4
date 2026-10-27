@@ -9,6 +9,13 @@ public sealed class HubVolantini
 {
     public string NomeUtente { get; set; } = "";
     public bool PuoCorreggere { get; set; }
+
+    /// <summary>
+    /// I20-1146: il lucchetto sulle card e sui riquadri delle promo. Solo l'Agenzia, come in
+    /// Gestisci promo; gli altri vedono il blocco ma non lo comandano.
+    /// </summary>
+    public bool PuoBloccare { get; set; }
+
     public int NotificheNonLette { get; set; }
 
     /// <summary>

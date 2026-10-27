@@ -82,6 +82,29 @@ public sealed class PromoController : Controller
         Esegui(promo, u => this.promo.BloccoAsync(u, tutta ? null : idVol, tutta ? promo : null, blocca),
                blocca ? $"Bloccato per {ServizioPromo.MinutiBlocco} minuti." : "Sbloccato.");
 
+    /// <summary>
+    /// I20-1146: il lucchetto della schermata delle promo attive (la card del volantino e il
+    /// riquadro della promo). Stessa regola di Blocco, ma risponde in JSON, cosi' la pagina si
+    /// ridisegna senza ricaricarsi. Con tutta=true BloccoAsync tocca i volantini in esercizio
+    /// della promo, gli stessi che la schermata mostra.
+    /// </summary>
+    [HttpPost("Blocco/Hub")]
+    public async Task<IActionResult> BloccoHub(string? promo, int? idVol, bool blocca, bool tutta = false)
+    {
+        var u = await Utente();
+        if (u == null)
+            return StatusCode(401, new { ok = false, messaggio = "Sessione scaduta: rientra." });
+        string? errore = await this.promo.BloccoAsync(u, tutta ? null : idVol, tutta ? promo : null, blocca);
+        if (errore != null)
+            return Json(new { ok = false, messaggio = errore });
+        return Json(new
+        {
+            ok = true,
+            messaggio = blocca ? $"Bloccato per {ServizioPromo.MinutiBlocco} minuti." : "Sbloccato.",
+            dati = new { bloccato = blocca, minuti = blocca ? ServizioPromo.MinutiBlocco : (int?)null }
+        });
+    }
+
     [HttpGet("Revoca/{idVol:int}")]
     public async Task<IActionResult> Revoca(int idVol)
     {
