@@ -72,6 +72,7 @@ class InddEvents {
     EVENT_NEW_REF_SELECTED = "newRefSelected";//Nuova ref selezionata
     EVENT_NEW_VERSIONE_PRECEDENTE_SELECTED = "newVersionePrecedenteSelected";//I20-1124: selezionata la versione precedente di un box
     EVENT_NEW_MULTIREF_SELECTED = "newMultiRefSelected";//Nuova ref selezionata
+    EVENT_NEW_MULTIREF_VERSIONI_MISTE_SELECTED = "newMultiRefVersioniMisteSelected";//I20-1063: versioni precedenti e box in pagina selezionati insieme
     EVENT_NEW_ARTWORK_MULTIREF_POTENTIAL_SELECTED = "newArtworkMultiRefSelected";//Nuovo possibile artwork
     EVENT_NEW_ARTWORK_SELECTED = "newArtworkSelected";//Nuova artwork selezionata
     EVENT_NEW_GRIGLIA_SELECTED = "newGrigliaSelected";//Nuova griglia selezionata
@@ -492,13 +493,20 @@ class InddEvents {
                                                     {
                                                         let pagNumber = potentialRef.parentPage == null ? -1 : parseInt(potentialRef.parentPage.name);
     
+                                                        //I20-1063: come per un box solo, anche idRec e misure: la scheda
+                                                        //della selezione multipla scarica il record del box, non il primo
+                                                        //del codice gruppo.
                                                         me.lastSelectionDetails.push({
                                                             pag: pagNumber,
                                                             pagRef: potentialRef.parentPage,
                                                             item: potentialRef,
+                                                            boxOriginalBounds: potentialRef.geometricBounds,
                                                             codice: dna.codice,
                                                             codiceGruppo: dna.codice_gruppo,
-                                                            meccanica: dna.box
+                                                            idRec: dna.idRec,
+                                                            meccanica: dna.box,
+                                                            //Sul livello cloneVecchioImpaginato, come per un box solo.
+                                                            versionePrecedente: VersionePrecedente.eVersionePrecedente(potentialRef)
                                                         });
                                                     }
                                                 }
@@ -511,8 +519,22 @@ class InddEvents {
                                                 me.lastValidRefsSelection.dataSelezione = Date.now();
                                                 me.lastValidRefsSelection.refs = me.lastSelectionDetails;
 
-                                                me.fireEvent(me.EVENT_NEW_MULTIREF_SELECTED, me.lastSelectionDetails);
-                                                me.previousSelectionEventTriggered = me.EVENT_NEW_MULTIREF_SELECTED;
+                                                //I20-1063: le versioni precedenti non aprono la scheda nemmeno insieme.
+                                                //Tutte versioni precedenti: "Riporta in pagina" per tutte, come per una;
+                                                //insieme a box in pagina: la scheda non si apre e si avvisa.
+                                                let versioniPrecedenti = me.lastSelectionDetails.filter(d => d.versionePrecedente === true).length;
+                                                if (versioniPrecedenti === me.lastSelectionDetails.length) {
+                                                    me.fireEvent(me.EVENT_NEW_VERSIONE_PRECEDENTE_SELECTED, me.lastSelectionDetails);
+                                                    me.previousSelectionEventTriggered = me.EVENT_NEW_VERSIONE_PRECEDENTE_SELECTED;
+                                                }
+                                                else if (versioniPrecedenti > 0) {
+                                                    me.fireEvent(me.EVENT_NEW_MULTIREF_VERSIONI_MISTE_SELECTED, me.lastSelectionDetails);
+                                                    me.previousSelectionEventTriggered = me.EVENT_NEW_MULTIREF_VERSIONI_MISTE_SELECTED;
+                                                }
+                                                else {
+                                                    me.fireEvent(me.EVENT_NEW_MULTIREF_SELECTED, me.lastSelectionDetails);
+                                                    me.previousSelectionEventTriggered = me.EVENT_NEW_MULTIREF_SELECTED;
+                                                }
                                             }
                                             else if(refInvalidCounted == 1){
                                                 me.fireEvent(me.EVENT_NEW_ARTWORK_MULTIREF_POTENTIAL_SELECTED, [me.lastSelectionDetails, potentialArtwork]);

@@ -397,13 +397,16 @@
           <div class="subTab5" defaultTab="Tab5" style="display: none; margin-left: 0px; margin-top: 0px; padding-top: 0px; margin-bottom: 0px; padding-bottom: 0px;">
             <img src="images/SubMenu_Edit_active.png" tab="Tab5" style="cursor:pointer;"
               onclick="jsIndexControls.openTab(event, 'Tab5'), jsIndexControls.changeImage($(this)), selectSchedaRef(1)">
-            <img src="images/SubMenu_Primariasecondaria.png" tab="Tab6" style="cursor:pointer;"
+            <!-- I20-1063: data-selezione-multipla="nascosta" segna le voci che la selezione di piu' box non
+                 offre (schedaRef.impostaVociSelezioneMultipla): nel sottomenu' le voci, nel piede i contenitori
+                 delle icone, cosi' le icone che restano si avvicinano invece di lasciare il posto vuoto. -->
+            <img src="images/SubMenu_Primariasecondaria.png" tab="Tab6" style="cursor:pointer;" data-selezione-multipla="nascosta"
               onclick="jsIndexControls.openTab(event, 'Tab6'), jsIndexControls.changeImage($(this)), selectSchedaRef(2)">
-            <img src="images/SubMenu_Fotoextra.png" tab="Tab7" style="cursor:pointer;"
+            <img src="images/SubMenu_Fotoextra.png" tab="Tab7" style="cursor:pointer;" data-selezione-multipla="nascosta"
               onclick="jsIndexControls.openTab(event, 'Tab7'), jsIndexControls.changeImage($(this)), selectSchedaRef(3)">
-            <img id="sgruppa" src="images/SubMenu_Sgruppa.png" tab="Tab8" style="cursor:pointer;"
+            <img id="sgruppa" src="images/SubMenu_Sgruppa.png" tab="Tab8" style="cursor:pointer;" data-selezione-multipla="nascosta"
               onclick="jsIndexControls.openTab(event, 'Tab8'), jsIndexControls.changeImage($(this)), selectSchedaRef(4)">
-            <img src="images/SubMenu_CambioStrutturale.png" tab="Tab13" style="cursor:pointer;"
+            <img src="images/SubMenu_CambioStrutturale.png" tab="Tab13" style="cursor:pointer;" data-selezione-multipla="nascosta"
               onclick="jsIndexControls.openTab(event, 'Tab13'), jsIndexControls.changeImage($(this)), selectSchedaRef(5)">
           </div>
           <div class="subTab9" defaultTab="Tab9" style="display: none; margin-left: 0px; margin-top: 0px; padding-top: 0px;">
@@ -661,18 +664,18 @@
               <img src="images/icon_small_cestino.png" title="Rimuovi box" style="height: 30px; cursor:pointer;"
                 onclick="rimuoviRefImpaginata()">
             </div>
-            <div style="width: 8%; display: flex; justify-content: center; align-items: center;">
+            <div style="width: 8%; display: flex; justify-content: center; align-items: center;" data-selezione-multipla="nascosta">
               <img src="images/fix.png" title="Fix referenza" style="height: 30px; cursor:pointer;" onclick="fixRefImpaginata()">
             </div>
             <div style="width: 8%; display: flex; justify-content: center; align-items: center;">
               <img src="images/reimpaginaFix.png" title="Reimpagina box" style="height: 30px; cursor:pointer;" onclick="schedaRef.applicaReimpaginazione()">
             </div>
-            <div style="width: 8%; display: flex; justify-content: center; align-items: center;">
+            <div style="width: 8%; display: flex; justify-content: center; align-items: center;" data-selezione-multipla="nascosta">
                 <img id="infoRefImg" src="images/info.png" style="height: 24px; cursor: pointer;"
                   data-bs-toggle="tooltip" data-bs-html="true" data-bs-placement="bottom" title="Informazioni referenza"
                   onclick="schedaRef.apriModalInfoReferenza()">
             </div>
-            <div style="width: 8%; display: flex; justify-content: center; align-items: center;">
+            <div style="width: 8%; display: flex; justify-content: center; align-items: center;" data-selezione-multipla="nascosta">
                 <img id="noRenderRefImg" src="images/noRender.png" style="height: 24px; cursor: pointer;"
                   data-bs-toggle="tooltip" data-bs-html="true" data-bs-placement="bottom" title="Elementi non renderizzati"
                   onclick="schedaRef.apriModalNoRender()">
@@ -680,7 +683,9 @@
             <div style="width: 30%; display: block; justify-items: start;">
               
             </div>
-            <div id="pulsantiExtra" style="width: 38%; justify-self: right; align-items: center; display: flex; justify-content: end;">
+            <!-- I20-1063: margin-left auto lo tiene contro il bordo destro anche quando le icone nascoste
+                 dalla selezione multipla lasciano spazio libero. -->
+            <div id="pulsantiExtra" style="width: 38%; justify-self: right; align-items: center; display: flex; justify-content: end; margin-left: auto;">
               
             </div>
           </div>

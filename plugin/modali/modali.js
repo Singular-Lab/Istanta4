@@ -115,6 +115,62 @@ const Modali = {
         }
     },
 
+    /// I20-1063: l'elenco dei box di una selezione multipla, uno per riga: il codice e, in piccolo
+    /// sotto, la descrizione. Lo usano la scheda della selezione multipla (scuro, sullo sfondo del
+    /// pannello) e le conferme di Elimina e Reimpagina (sullo sfondo bianco). voci: [{ codice,
+    /// descrizione }]. L'elenco non si allarga mai oltre il suo contenitore: un codice di gruppo o
+    /// una descrizione troppo lunghi restano su una riga e si tagliano coi puntini, e il testo
+    /// intero sta nel suggerimento. Mandarli a capo non bastava: in UXP word-break non spezzava il
+    /// codice, e la finestra scorreva in orizzontale.
+    elencoBox(voci, scuro = false) {
+        const coloreCodice = scuro ? "white" : "black";
+        const coloreDescrizione = scuro ? "#bbbbbb" : "#555555";
+        const elenco = $('<div class="elencoBoxSelezione"></div>');
+        elenco.css(Modali.STILE_RIGA_TAGLIATA);
+        elenco.css({ "display": "block", "margin": "6px 0", "white-space": "normal" });
+
+        const testoTagliato = function (testo, stile, colore) {
+            const el = $('<div></div>').attr("style", stile).css(Modali.STILE_RIGA_TAGLIATA).css("color", colore).text(testo);
+            el.attr("title", testo);
+            return el;
+        };
+
+        (Array.isArray(voci) ? voci : []).forEach(function (voce) {
+            const riga = $('<div></div>');
+            riga.css(Modali.STILE_RIGA_TAGLIATA);
+            riga.css({ "display": "block", "margin-bottom": "6px", "white-space": "normal" });
+            riga.append(testoTagliato(voce != null && voce.codice != null ? String(voce.codice) : "", "font-size: 12px; font-weight: bold;", coloreCodice));
+            if (voce != null && voce.descrizione) {
+                riga.append(testoTagliato(String(voce.descrizione), "font-size: 10px;", coloreDescrizione));
+            }
+            elenco.append(riga);
+        });
+
+        return elenco;
+    },
+
+    /// I20-1063: una riga che non si allarga oltre il contenitore e, se il testo non ci sta, lo
+    /// taglia coi puntini.
+    STILE_RIGA_TAGLIATA: {
+        "width": "100%",
+        "max-width": "100%",
+        "min-width": "0",
+        "box-sizing": "border-box",
+        "overflow": "hidden",
+        "white-space": "nowrap",
+        "text-overflow": "ellipsis"
+    },
+
+    /// I20-1063: la conferma di un'operazione su piu' box, con il titolo e sotto l'elenco dei box.
+    /// Come confirm: true solo con Conferma.
+    async confermaSuPiuBox(titolo, voci) {
+        //Il contenuto e' largo quanto la finestra e non scorre in orizzontale.
+        const contenuto = $('<div style="display: block; width: 100%; min-width: 0; overflow-x: hidden;"></div>');
+        contenuto.append($('<h3 style="margin-top: 0;"></h3>').text(titolo));
+        contenuto.append(Modali.elencoBox(voci, false));
+        return await Modali.confirm(contenuto);
+    },
+
     /// Chiude tutto quello che puo' essere aperto: il popup, il confirm e la modale principale.
     closeAllModal(){
         $("#popup").remove();

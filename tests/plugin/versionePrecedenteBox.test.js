@@ -332,7 +332,9 @@ test("azione sul box e Reimpagina box mettono da parte il vecchio allo stesso mo
     assert.match(confronti, /mappaturaVersioniPrecedenti\(nomiPagine = null\) \{/);
 
     const scheda = sorgente("schedaRef.js");
-    const reimpagina = corpoMembro(scheda, "    async applicaReimpaginazione(){");
+    //I20-1063: Reimpagina box rifa' il box in rifaiBox, come il Reimpagina della selezione multipla.
+    assert.match(corpoMembro(scheda, "    async applicaReimpaginazione(){"), /await this\.rifaiBox\(schedaRef, this\.refSelected\.item\)/);
+    const reimpagina = corpoMembro(scheda, "    async rifaiBox(schedaRef, boxPrecedente) {");
     assert.match(reimpagina, /var bounds = boxPrecedente\.geometricBounds;/);
     assert.doesNotMatch(reimpagina, /bounds\[0\] - 10/);
     const daParte = reimpagina.indexOf("VersionePrecedente.mettiDaParte(boxPrecedente, docInLavorazione)");

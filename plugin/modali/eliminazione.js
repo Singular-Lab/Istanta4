@@ -16,19 +16,18 @@ const Eliminazione = {
     /// La conferma della rimozione di una o piu' referenze impaginate. Restituisce
     /// { confermato, eliminaDaTracciato, codici }. Con la spunta dell'eliminazione dal tracciato
     /// alzata si passa dalla seconda conferma, quella con la parola (I20-1013).
-    async confirmRimozioneRef(codiciGruppo) {
+    ///
+    /// I20-1063: voci, se c'e', e' l'elenco dei box della selezione multipla ({ codice, descrizione }),
+    /// mostrato sotto la domanda. I codici da eliminare dal tracciato sono quelli di tutti i codici
+    /// gruppo: prima si leggeva solo il primo, perche' se ne rimuoveva sempre uno.
+    async confirmRimozioneRef(codiciGruppo, voci = null) {
         try {
             CampiARiposo.tuttiARiposo();
 
             var result = null;
 
-            var codici = [];
-            if (codiciGruppo != null && codiciGruppo.length > 0 && codiciGruppo[0] != null) {
-                codici = codiciGruppo[0]
-                    .split(",")
-                    .map(x => x.trim())
-                    .filter(x => x !== "");
-            }
+            var codici = modali().codiciDaEliminare(codiciGruppo);
+            var piuBox = Array.isArray(voci) && voci.length > 1;
 
             var modal = $(`
             <div id="confirmModal" style="
@@ -64,11 +63,14 @@ const Eliminazione = {
             <div style="
                 height: 75%;
                 overflow: auto;
+                overflow-x: hidden;
+                min-width: 0;
                 display: flex;
                 flex-direction: column;
                 gap: 10px;
             ">
-                <h3>Sei sicuro di voler rimuovere la ref impaginata?</h3>
+                <h3 id="domandaRimozioneRef">Sei sicuro di voler rimuovere la ref impaginata?</h3>
+                <div id="elencoBoxRimozioneRef"></div>
 
                 <label style="
                     display:flex;
@@ -132,6 +134,11 @@ const Eliminazione = {
             messaggio.find("#listaCodiciDaEliminare").html(
                 codici.map(c => `<div>${c}</div>`).join("")
             );
+
+            if (piuBox) {
+                messaggio.find("#domandaRimozioneRef").text("Sei sicuro di voler rimuovere questi " + voci.length + " box impaginati?");
+                messaggio.find("#elencoBoxRimozioneRef").append(modali().elencoBox(voci, false));
+            }
 
             messaggio.find("#chkEliminaDaTracciato").on("change", function () {
                 if ($(this).prop("checked")) {
@@ -212,6 +219,23 @@ const Eliminazione = {
                 codici: []
             };
         }
+    },
+
+    /// I20-1063: i codici che l'eliminazione dal tracciato cancella: quelli di tutti i codici gruppo,
+    /// separati dove sono gruppi, senza spazi e senza ripetizioni.
+    codiciDaEliminare(codiciGruppo) {
+        var codici = [];
+        (Array.isArray(codiciGruppo) ? codiciGruppo : []).forEach(function (codiceGruppo) {
+            if (codiceGruppo == null) {
+                return;
+            }
+            String(codiceGruppo).split(",").map(x => x.trim()).filter(x => x !== "").forEach(function (c) {
+                if (!codici.includes(c)) {
+                    codici.push(c);
+                }
+            });
+        });
+        return codici;
     },
 
     //I20-1013: la parola da scrivere per eliminare dal tracciato. Esatta e in maiuscolo: la fatica
