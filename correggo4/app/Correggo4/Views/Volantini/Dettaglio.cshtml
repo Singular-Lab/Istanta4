@@ -979,6 +979,7 @@
             });
     var jsonBox = System.Text.Json.JsonSerializer.Serialize(mappaBox);
     var jsonUrlFoto = System.Text.Json.JsonSerializer.Serialize(Model.UrlFoto);
+    var jsonTestaProdotto = System.Text.Json.JsonSerializer.Serialize(Model.TestaProdotto);
 }
 <script id="datiBox" type="application/json">@Html.Raw(jsonBox)</script>
 @{
@@ -1027,6 +1028,7 @@
 (function () {
     var dati = JSON.parse(document.getElementById('datiBox').textContent);
     var urlFoto = @Html.Raw(jsonUrlFoto);
+    var testaProdotto = @Html.Raw(jsonTestaProdotto);   // I20-1156: "promo – canale/area" del volantino
 
     function esc(s) {
         return (s === null || s === undefined) ? '' : String(s)
@@ -1319,8 +1321,8 @@
         var zona = document.querySelector('.zona[data-box="' + id + '"]');
         if (zona) zona.classList.add('aperta');
 
-        document.getElementById('mTitolo').textContent =
-            (b.nomeBox || '(box)') + ' – ' + (b.basecode || '');
+        // I20-1156: promo e canale/area del volantino al posto della meccanica del box (b.nomeBox)
+        document.getElementById('mTitolo').textContent = testaProdotto + ' – ' + (b.basecode || '');
 
         boxInModale = { id: id, x: (clickX !== undefined ? clickX : b.px), y: (clickY !== undefined ? clickY : b.py) };
 
