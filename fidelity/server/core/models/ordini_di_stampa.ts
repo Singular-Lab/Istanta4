@@ -11,6 +11,7 @@ class OrdiniDiStampa extends Model<OrdiniDiStampaAttributes, OrdiniDiStampaCreat
   declare id_promo_ordinistampa: string;
   declare stato_ordinistampa: STATO_ORDINI_STAMPA;
   declare data_di_conferma_ordinistampa: string;
+  declare datadiconferma_ordinistampa?: Date | null;
   declare createdat?: Date;
   declare updatedat?: Date;
 }
@@ -38,13 +39,23 @@ const OrdiniDiStampaDefine = sequelize.define<OrdiniDiStampa>("ordini_stampa", {
     type: DataTypes.DATE,
     allowNull: false
   },
-  createdat: {
-    type: DataTypes.DATE,
+  // Colonna storica delle installazioni esistenti, non usata dal codice: si conserva col suo
+  // tipo (TIMESTAMP senza fuso) e 0009 la aggiunge dove manca, cosi' lo schema e' uguale ovunque
+  datadiconferma_ordinistampa: {
+    type: 'TIMESTAMP',
     allowNull: true
   },
+  // Obbligatorie (0005_obbligatorieta): le valorizza l'applicazione, che le crea senza indicarle
+  createdat: {
+    type: DataTypes.DATE,
+    allowNull: false,
+    defaultValue: DataTypes.NOW
+  },
+  // L'invio FTP la usa come blocco (OrdiniStampaService.prenotaInvio)
   updatedat: {
     type: DataTypes.DATE,
-    allowNull: true
+    allowNull: false,
+    defaultValue: DataTypes.NOW
   }
 }, {
   timestamps: false,

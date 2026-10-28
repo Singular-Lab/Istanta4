@@ -47,11 +47,13 @@ export const migraConfig = async (opzioni: OpzioniMigrazioneConfig = {}): Promis
 
     const idGdo = await idGdoCliente(clientId);
     let collegate = 0;
+    // validate:false: il validatore di modello di Config controlla webpliant, che in un update di
+    // sole due colonne non c'e', e faceva fallire sempre questa migrazione
     if (idGdo) {
-      [collegate] = await ConfigModel.update({ id_gdo_config: idGdo } as any, { where: { id_gdo_config: null } as any, transaction });
+      [collegate] = await ConfigModel.update({ id_gdo_config: idGdo } as any, { where: { id_gdo_config: null } as any, transaction, validate: false });
     }
 
-    const [conFunzionalita] = await ConfigModel.update({ funzionalita } as any, { where: { funzionalita: null } as any, transaction });
+    const [conFunzionalita] = await ConfigModel.update({ funzionalita } as any, { where: { funzionalita: null } as any, transaction, validate: false });
 
     return { idGdo, collegate, conFunzionalita, funzionalita };
   });

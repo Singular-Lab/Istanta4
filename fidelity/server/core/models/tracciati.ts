@@ -65,7 +65,11 @@ const Tracciati = sequelize.define<TracciatiClass>("tracciati", {
 }, {
   timestamps: false,
   tableName: "tracciati",
-  freezeTableName: true
+  freezeTableName: true,
+  indexes: [
+    // I tracciati si leggono per promo; serve anche al ON DELETE CASCADE da promo (0008_indici)
+    { name: 'tracciati_id_promo_tracciati', fields: ['id_promo_tracciati'] },
+  ]
 });
 
 export { Tracciati as Tracciati };

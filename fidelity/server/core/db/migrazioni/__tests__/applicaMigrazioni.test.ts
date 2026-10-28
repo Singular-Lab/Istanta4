@@ -302,17 +302,20 @@ describe('applicaMigrazioni: adozione di un database esistente', () => {
     expect(mocks.allinea).toHaveBeenCalledTimes(1);
   });
 
-  it('con modelli diversi dalla baseline: nessun allineamento, baseline adottata e avviso', async () => {
+  // Aggiornamento "a salto" (da prima delle migrazioni a una versione con modelli piu' nuovi):
+  // senza l'ultimo allineamento mancherebbero tabelle e colonne nate dopo l'ultimo avvio
+  it('con modelli piu\' nuovi della baseline: ultimo allineamento comunque, poi baseline adottata e le altre', async () => {
     preparaDatabase({ storico: false, gdo: true });
     const vecchiaBaseline = migrazione('0000_baseline', "SELECT 'baseline';", { hash: ALTRO_HASH });
 
     const esito = await applicaMigrazioni({ migrazioni: [vecchiaBaseline, UNO, DUE] });
 
-    expect(esito.adozione).toBe('senza-allineamento');
-    expect(mocks.allinea).not.toHaveBeenCalled();
+    expect(esito.adozione).toBe('con-allineamento');
+    expect(mocks.allinea).toHaveBeenCalledTimes(1);
+    expect(eventi.indexOf('allinea:tutti')).toBeLessThan(eventi.indexOf('registra:0000_baseline:adottata'));
     expect(eseguite()).toEqual(["SELECT 'uno';", "SELECT 'due';"]);
     expect(db.righe[0]).toMatchObject({ nome: '0000_baseline', modo: 'adottata' });
-    expect(mocks.log.warn).toHaveBeenCalledWith(expect.stringContaining('yarn migrazioni:verifica'));
+    expect(mocks.log.info).toHaveBeenCalledWith(expect.stringContaining('aggiornamento a salto'));
   });
 
   it('i modelli che l\'allineamento non riesce ad allineare ci riprovano dopo le migrazioni', async () => {

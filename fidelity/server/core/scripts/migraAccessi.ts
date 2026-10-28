@@ -4,6 +4,7 @@ import { program } from 'commander';
 import { Colorize } from '../../../lib/Colorize';
 import { calcolaPianoMigrazione, descriviPiano, preparaAccessiAllAvvio } from '../accessi/migrazioneAccessi';
 import { initializeDatabase, sequelize } from '../db';
+import { eseguiScriptDati, SCRIPT_DATI } from '../db/migrazioni/scriptDati';
 
 program
   .name('migra-accessi')
@@ -16,19 +17,20 @@ program
   .action(async (options) => {
     try {
       await initializeDatabase(false);
-      if (options.dryRun) {
-        console.log(Colorize.bgYellow('[DRY RUN] Nessuna modifica verra applicata'));
-        // Nessuna scrittura: il piano si legge in una transazione annullata.
-        const transaction = await sequelize.transaction();
-        try {
+      const dryRun = !!options.dryRun;
+      // Ripetibile: preparaAccessiAllAvvio migra solo uno schema degli accessi vecchio, altrimenti
+      // allinea il catalogo. Il registro annota le esecuzioni da riga di comando, non quelle all'avvio
+      await eseguiScriptDati({ ...SCRIPT_DATI.accessi, dryRun }, async (transaction) => {
+        if (dryRun) {
+          console.log(Colorize.bgYellow('[DRY RUN] Nessuna modifica verra applicata'));
+          // Nessuna scrittura: il piano si legge nella transazione del registro, annullata in dry-run.
           console.log(descriviPiano(await calcolaPianoMigrazione(transaction)));
-        } finally {
-          await transaction.rollback();
+          return { dryRun };
         }
-      } else {
         await preparaAccessiAllAvvio();
         console.log(Colorize.bgGreen('Accessi preparati'));
-      }
+        return { accessiPreparati: true };
+      });
       await sequelize.close();
       process.exit(0);
     } catch (error) {

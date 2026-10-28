@@ -1,4 +1,4 @@
-import { DataTypes, Model, Optional } from 'sequelize';
+import { DataTypes, Model, Op, Optional } from 'sequelize';
 import { CATEGORIA_ATTIVITA, PRIORITA_ATTIVITA, TIPO_ATTIVITA } from '../../../lib/enums';
 import { AttivitaAttributes } from '../../../lib/types';
 import { sequelize } from '../db/SequelizeConnector';
@@ -87,8 +87,10 @@ const Attivita = sequelize.define<AttivitaModel>("attivita", {
     type: DataTypes.UUID,
     allowNull: true
   },
+  // Obbligatorio: categoria, priorita' e scadenza si ricavano dal tipo (0005_obbligatorieta)
   tipo_attivita: {
-    type: DataTypes.ENUM(...Object.values(TIPO_ATTIVITA))
+    type: DataTypes.ENUM(...Object.values(TIPO_ATTIVITA)),
+    allowNull: false
   },
   meta_attivita: {
     type: DataTypes.JSONB,
@@ -119,6 +121,14 @@ const Attivita = sequelize.define<AttivitaModel>("attivita", {
   timestamps: false,
   tableName: "attivita",
   freezeTableName: true,
+  indexes: [
+    // Indici parziali creati da 0001 (prima v_attivita.sql): stessi nomi e condizioni
+    { name: 'idx_attivita_expires_at', fields: ['expires_at'], where: { expires_at: { [Op.ne]: null } } },
+    { name: 'idx_attivita_categoria', fields: ['categoria_attivita'], where: { categoria_attivita: { [Op.ne]: null } } },
+    { name: 'idx_attivita_priorita', fields: ['priorita_attivita'], where: { priorita_attivita: { [Op.ne]: null } } },
+    // Pannello notifiche: attivita' di un utente, piu' recenti prima (0008_indici)
+    { name: 'attivita_idutente_attivita_createdat', fields: ['idutente_attivita', { name: 'createdat', order: 'DESC' }] },
+  ],
   hooks: {
     beforeCreate: (attivita: AttivitaModel) => {
       // Auto-assegna categoria e priorità se non specificate

@@ -646,7 +646,7 @@
           "autoIncremento": false,
           "chiavePrimaria": false,
           "default": null,
-          "nullable": true,
+          "nullable": false,
           "riferimento": null,
           "tipo": "enum_attivita_tipo_attivita",
           "unico": false
@@ -661,7 +661,45 @@
           "unico": false
         }
       },
-      "indici": [],
+      "indici": [
+        {
+          "colonne": [
+            "idutente_attivita",
+            "createdat DESC"
+          ],
+          "condizione": null,
+          "metodo": "btree",
+          "nome": "attivita_idutente_attivita_createdat",
+          "unico": false
+        },
+        {
+          "colonne": [
+            "categoria_attivita"
+          ],
+          "condizione": "WHERE \"categoria_attivita\" IS NOT NULL",
+          "metodo": "btree",
+          "nome": "idx_attivita_categoria",
+          "unico": false
+        },
+        {
+          "colonne": [
+            "expires_at"
+          ],
+          "condizione": "WHERE \"expires_at\" IS NOT NULL",
+          "metodo": "btree",
+          "nome": "idx_attivita_expires_at",
+          "unico": false
+        },
+        {
+          "colonne": [
+            "priorita_attivita"
+          ],
+          "condizione": "WHERE \"priorita_attivita\" IS NOT NULL",
+          "metodo": "btree",
+          "nome": "idx_attivita_priorita",
+          "unico": false
+        }
+      ],
       "vincoliUnici": []
     },
     "attivita_utente": {
@@ -3472,6 +3510,17 @@
         },
         {
           "colonne": [
+            "id_kit_runtime",
+            "nome_file",
+            "versione DESC"
+          ],
+          "condizione": null,
+          "metodo": "btree",
+          "nome": "files_runtime_log_kit_file_versione",
+          "unico": false
+        },
+        {
+          "colonne": [
             "nome_file"
           ],
           "condizione": null,
@@ -5716,7 +5765,7 @@
           "autoIncremento": false,
           "chiavePrimaria": false,
           "default": null,
-          "nullable": true,
+          "nullable": false,
           "riferimento": null,
           "tipo": "timestamp with time zone",
           "unico": false
@@ -5728,6 +5777,15 @@
           "nullable": false,
           "riferimento": null,
           "tipo": "timestamp with time zone",
+          "unico": false
+        },
+        "datadiconferma_ordinistampa": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": true,
+          "riferimento": null,
+          "tipo": "timestamp without time zone",
           "unico": false
         },
         "id_ordinistampa": {
@@ -5780,7 +5838,7 @@
           "autoIncremento": false,
           "chiavePrimaria": false,
           "default": null,
-          "nullable": true,
+          "nullable": false,
           "riferimento": null,
           "tipo": "timestamp with time zone",
           "unico": false
@@ -6514,7 +6572,28 @@
           "unico": false
         }
       },
-      "indici": [],
+      "indici": [
+        {
+          "colonne": [
+            "gdo",
+            "stato"
+          ],
+          "condizione": null,
+          "metodo": "btree",
+          "nome": "promo_gdo_stato",
+          "unico": false
+        },
+        {
+          "colonne": [
+            "validita_dal",
+            "validita_al"
+          ],
+          "condizione": null,
+          "metodo": "btree",
+          "nome": "promo_validita_dal_validita_al",
+          "unico": false
+        }
+      ],
       "vincoliUnici": []
     },
     "promo_scoreboard": {
@@ -8547,7 +8626,17 @@
           "unico": false
         }
       },
-      "indici": [],
+      "indici": [
+        {
+          "colonne": [
+            "id_promo_tracciati"
+          ],
+          "condizione": null,
+          "metodo": "btree",
+          "nome": "tracciati_id_promo_tracciati",
+          "unico": false
+        }
+      ],
       "vincoliUnici": []
     },
     "tracciati_momento": {
@@ -9069,7 +9158,7 @@
             "meta_utenti"
           ],
           "condizione": null,
-          "metodo": "btree",
+          "metodo": "gin",
           "nome": "utenti_meta_utenti",
           "unico": false
         },
