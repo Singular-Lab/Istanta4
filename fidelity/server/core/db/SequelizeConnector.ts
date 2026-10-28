@@ -37,12 +37,13 @@ export const sequelize = new Sequelize({
   }
 });
 
-// Initialize database connection WITH auto-sync
-const DEFAULT_AUTO_SYNC = process.env.DB_AUTO_SYNC
-  ? process.env.DB_AUTO_SYNC === 'true'
-  : config.NODE_ENV === 'development';
-
-export const initializeDatabase = async (autoSync: boolean = DEFAULT_AUTO_SYNC) => {
+/**
+ * Apre la connessione e configura le associazioni fra i modelli. Lo schema non si tocca piu' qui:
+ * cambia solo con le migrazioni (db/migrazioni, applicate all'avvio del server o con
+ * `yarn migrazioni:applica`). Il parametro resta per compatibilita' con i chiamanti ed e' ignorato,
+ * come DB_AUTO_SYNC.
+ */
+export const initializeDatabase = async (_autoSync?: boolean) => {
   try {
     await sequelize.authenticate();
     log.info(Colorize.bgGreen("PostgreSQL connection established successfully"));
@@ -54,7 +55,11 @@ export const initializeDatabase = async (autoSync: boolean = DEFAULT_AUTO_SYNC) 
       evictMs: DB_POOL_EVICT_MS
     });
 
-    // Configura sempre le associazioni tra modelli, indipendentemente dall'auto-sync
+    if ((process.env.DB_AUTO_SYNC ?? '') !== '') {
+      log.warn("DB_AUTO_SYNC e' ignorata: lo schema cambia solo con le migrazioni (server/core/db/migrazioni)");
+    }
+
+    // Configura sempre le associazioni tra modelli
     try {
       const relazioniModule = await import('../models/relazioni');
       const configuraRelazioni =
@@ -70,57 +75,10 @@ export const initializeDatabase = async (autoSync: boolean = DEFAULT_AUTO_SYNC) 
       log.warn(Colorize.yellow('⚠️ Errore configurazione relazioni:', errore));
     }
 
-    if (autoSync) {
-      // Importa e usa il modelliManager per la sincronizzazione automatica
-      const { modelliManager } = await import('../models');
-
-      log.info(Colorize.bgBlue("🔄 Avvio sincronizzazione automatica modelli..."));
-      const risultati = await modelliManager.sincronizzaTuttiIModelli({
-        alter: true,
-        force: false,
-        logging: false
-      });
-
-      const successi = risultati.filter(r => r.successo).length;
-      const errori = risultati.filter(r => !r.successo).length;
-
-      if (errori === 0) {
-        log.info(Colorize.bgGreen(`✅ Tutti i ${successi} modelli sincronizzati automaticamente`));
-      } else {
-        log.warn(Colorize.bgYellow(`⚠️  ${successi} modelli sincronizzati, ${errori} errori`));
-      }
-    }
-
     return true;
   } catch (error) {
     log.error("Unable to connect to PostgreSQL", { error });
     throw error;
-  }
-};
-
-/**
- * Allinea lo schema del DB ai modelli all'avvio del server, come `yarn models:sync`: con PM2
- * nessun altro lo esegue e colonne o valori di enum nuovi mancherebbero. Va chiamata una sola
- * volta, prima di avviare i worker. DB_SYNC_ON_START=false la disattiva.
- * Un DB irraggiungibile blocca l'avvio; il fallimento di singoli modelli no, ma resta nei log.
- */
-export const sincronizzaSchemaAllAvvio = async (): Promise<void> => {
-  if (process.env.DB_SYNC_ON_START === 'false') {
-    log.info("Sync dello schema all'avvio disattivato (DB_SYNC_ON_START=false)");
-    return;
-  }
-
-  await sequelize.authenticate();
-  const { modelliManager } = await import('../models');
-  const risultati = await modelliManager.sincronizzaTuttiIModelli({ alter: true, force: false, logging: false });
-
-  const falliti = risultati.filter((r) => !r.successo);
-  if (falliti.length > 0) {
-    log.error(`Schema del DB non allineato: sync fallito per ${falliti.length} modelli`, null, {
-      modelli: falliti.map((r) => `${r.modello}: ${r.errore ?? 'errore sconosciuto'}`)
-    });
-  } else {
-    log.info(`Schema del DB allineato ai modelli (${risultati.length} modelli)`);
   }
 };
 

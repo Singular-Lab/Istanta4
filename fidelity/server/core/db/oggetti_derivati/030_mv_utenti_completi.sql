@@ -2,9 +2,9 @@
 -- SCRIPT COMPLETO PER MATERIALIZED VIEW UTENTI COMPLETI
 -- Include: MV, Indici, Funzioni di filtro e di Refresh
 --
--- Eseguito da Fidelity a ogni avvio, dopo la sincronizzazione dei modelli.
--- Prima della sincronizzazione prima_della_sincronizzazione/rimuovi_oggetti_derivati.sql
--- l'ha gia' eliminata: qui si ricrea sempre da zero, con i dati presenti.
+-- Oggetto derivato: lo ricrea migrazioni/oggettiDerivati.ts quando questo
+-- file cambia o la view manca. Deve restare autosufficiente e rieseguibile:
+-- elimina e ricrea, con i dati presenti.
 -- L'applicazione la aggiorna da se' (UserService) dopo ogni modifica agli utenti.
 -- =====================================================
 

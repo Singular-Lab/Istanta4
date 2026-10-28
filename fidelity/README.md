@@ -59,7 +59,7 @@ yarn install
 # Configura variabili d'ambiente: crea .env con le variabili
 # validate in server/core/config/index.ts
 
-# Sincronizza database PostgreSQL
+# Crea o aggiorna lo schema PostgreSQL (migrazioni; lo fa anche l'avvio del server)
 yarn models:sync
 
 # Avvia in development
@@ -189,6 +189,39 @@ Sistema gerarchico con ruoli:
 - Webhook & API log
 - Audit log & Statistiche
 
+### Migrazioni dello schema
+
+Lo schema cambia solo con migrazioni versionate, in `server/core/db/migrazioni/sql`
+(`NNNN_nome.sql`, numerazione contigua). Si applicano all'avvio del server, una volta sola e
+prima dei worker, sotto un advisory lock: container, PM2 e server che partono insieme si mettono
+in fila. Lo storico sta nella tabella `migrazioni_schema` (nome, checksum, data, durata, modo,
+versione dell'applicazione).
+
+- **Database vuoto**: si esegue `0000_baseline.sql` (estensioni, enum, tabelle e indici dei
+  modelli), poi le migrazioni successive.
+- **Database esistente senza storico** (creato dalla vecchia sincronizzazione): la baseline si
+  *adotta*, cioe' si registra senza eseguirla. Se i modelli sono quelli della baseline gira prima,
+  un'ultima volta, l'ALTER di Sequelize; altrimenti (aggiornamento a salto) si salta e un avviso
+  chiede di controllare con `yarn migrazioni:verifica`. Poi si applicano le successive.
+- Ogni migrazione gira in una sua transazione con `lock_timeout` di 30 secondi; con
+  `-- senza-transazione` in testa gira fuori (solo per `CREATE INDEX CONCURRENTLY` e simili: una
+  sola istruzione, rieseguibile). View e materialized view (`db/oggetti_derivati`) si tolgono
+  prima e si ricreano dopo.
+- **Errore**: la migrazione si annulla e l'avvio si ferma. Si ferma anche se un file gia'
+  applicato e' stato modificato (checksum) o se i modelli non corrispondono all'ultima migrazione.
+  Dopo le migrazioni una verifica dello schema scrive solo un avviso.
+
+Per cambiare lo schema: modificare il modello, poi `yarn migrazioni:nuova <nome>`. Il comando crea
+il file successivo con l'intestazione `-- schema-dopo: <hash dei modelli>`, aggiorna `schema.json`,
+e nel file si scrive l'SQL. Una migrazione applicata non si modifica: la correzione va in una nuova.
+La CI controlla che modelli, `schema.json` e intestazione dell'ultima migrazione coincidano.
+
+| Variabile | Effetto |
+| --- | --- |
+| `MIGRAZIONI_APPLICA_ALL_AVVIO=false` | non applica le migrazioni all'avvio (avviso nel log); si applicano con `yarn migrazioni:applica` |
+| `DB_SYNC_ON_START=false` | alias deprecato della precedente |
+| `DB_AUTO_SYNC` | ignorata, con avviso |
+
 ## Sicurezza
 
 - **Session-based authentication** con cookie HTTP-only
@@ -288,12 +321,16 @@ yarn clean            # Rimuovi dist folder
 
 ### Database
 ```bash
-yarn models:sync              # Sync schema database
-yarn models:sync:force        # Force sync (DROP tables - DISTRUTTIVO)
-yarn models:status            # Check status modelli
-yarn models:check             # Verifica connessione DB
-yarn models:sync-model        # Sync singolo modello
-yarn models:sync-db-objects   # Sync oggetti DB custom (views, enum)
+yarn migrazioni:nuova <nome>  # Nuova migrazione con l'hash dei modelli, aggiorna schema.json
+yarn migrazioni:stato         # Migrazioni applicate e da applicare
+yarn migrazioni:verifica      # Confronto in sola lettura fra database e modelli
+yarn migrazioni:applica       # Applica le migrazioni pendenti
+yarn migrazioni:baseline      # Rigenera la baseline (congelata: solo con --sovrascrivi)
+yarn models:sync              # Come migrazioni:applica, ma rispetta MIGRAZIONI_APPLICA_ALL_AVVIO
+yarn models:sync:force        # Solo NODE_ENV=development: elimina tabelle e storico (DISTRUTTIVO)
+yarn models:status            # Come migrazioni:stato
+yarn models:check             # Come migrazioni:verifica
+yarn models:sync-db-objects   # Ricrea view e materialized view
 ```
 
 ### Testing & Quality

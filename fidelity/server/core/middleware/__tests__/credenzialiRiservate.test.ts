@@ -76,7 +76,7 @@ describe('chiave API delle integrazioni esterne', () => {
           ? { id_ruolo_utente_gdo: 'r1', ruolo_ruolo_utente_gdo: 'Integrazione' }
           : null) as any);
 
-    // Prima della conversione (script hash_api_key_ruoli.sql) la colonna ha la chiave in chiaro
+    // Prima della conversione (migrazione 0001) la colonna ha la chiave in chiaro
     ruoloConChiave(chiave);
     await request(appConChiave()).get('/api/external/test').set('x-api-key', chiave).expect(401);
 

@@ -4,15 +4,11 @@ import { MODELLI_SEQUELIZE, modelliManager } from '../index';
 import { RuoloUtenteGDO } from '../ruolo_gdo';
 
 /**
- * Il seed dei ruoli GDO girava dentro il ciclo dei mixin, prima che le tabelle
- * esistessero, e dentro un forEach con callback async: le promesse venivano
- * scartate, il try/catch non poteva intercettarle e il rigetto finiva a
- * process.on('unhandledRejection'), che spegne il processo.
- *
- * Questi test coprono le due condizioni osservabili: l'ordine e il fatto che un
- * errore del seed resti contenuto.
+ * L'ALTER di Sequelize resta solo per l'adozione della baseline su un database creato dalla
+ * vecchia sincronizzazione (db/migrazioni/applicaMigrazioni.ts). Script SQL, view e seed dei ruoli
+ * GDO non sono piu' affar suo: li gestisce il runner delle migrazioni.
  */
-describe('sincronizzaTuttiIModelli', () => {
+describe('allineamentoLegacyPerAdozione', () => {
   let ordineChiamate: string[];
 
   beforeEach(() => {
@@ -26,56 +22,33 @@ describe('sincronizzaTuttiIModelli', () => {
       });
     }
 
-    // Gli script SQL vengono letti davvero dal repository, ma non eseguiti.
     vi.spyOn(sequelize, 'query').mockImplementation(async () => {
       ordineChiamate.push('query:sql');
       return [[], {}] as never;
     });
-
     vi.spyOn(RuoloUtenteGDO, 'findAll').mockImplementation(async () => {
       ordineChiamate.push('seed:findAll');
       return [] as never;
     });
-
-    vi.spyOn(RuoloUtenteGDO, 'bulkCreate').mockImplementation(async () => {
-      ordineChiamate.push('seed:bulkCreate');
-      return [] as never;
-    });
   });
 
-  it('esegue il seed dei ruoli GDO dopo aver sincronizzato tutti i modelli', async () => {
-    await modelliManager.sincronizzaTuttiIModelli();
+  it('allinea con alter, senza force', async () => {
+    await modelliManager.allineamentoLegacyPerAdozione();
 
-    const indiceSeed = ordineChiamate.indexOf('seed:findAll');
-    const indiceUltimaSync = ordineChiamate.lastIndexOf(
-      ordineChiamate.filter(voce => voce.startsWith('sync:')).at(-1)!
-    );
-
-    expect(indiceSeed).toBeGreaterThan(-1);
-    expect(indiceUltimaSync).toBeGreaterThan(-1);
-    //Il seed deve venire dopo l'ultima sync: e' cio' che garantisce che la
-    //tabella ruolo_utente_gdo esista quando viene interrogata.
-    expect(indiceSeed).toBeGreaterThan(indiceUltimaSync);
+    const sync = vi.mocked(MODELLI_SEQUELIZE.GDO.model.sync);
+    expect(sync).toHaveBeenCalledWith(expect.objectContaining({ alter: true, force: false }));
   });
 
-  it('inserisce solo i ruoli mancanti e non chiama bulkCreate quando non ne manca nessuno', async () => {
-    const tuttiPresenti = Object.values(
-      await import('../../../../lib/enums').then(m => m.RUOLO_UTENTE_GDO)
-    ).map(ruolo => ({ ruolo_ruolo_utente_gdo: ruolo }));
+  it('non esegue script SQL ne\' il seed dei ruoli GDO', async () => {
+    // Gli script di db/scripts non esistono piu': view e correzioni stanno nelle migrazioni
+    await modelliManager.allineamentoLegacyPerAdozione();
 
-    vi.spyOn(RuoloUtenteGDO, 'findAll').mockImplementation(async () => {
-      ordineChiamate.push('seed:findAll');
-      return tuttiPresenti as never;
-    });
-
-    await modelliManager.sincronizzaTuttiIModelli();
-
-    expect(ordineChiamate).toContain('seed:findAll');
-    expect(ordineChiamate).not.toContain('seed:bulkCreate');
+    expect(ordineChiamate).not.toContain('query:sql');
+    expect(ordineChiamate).not.toContain('seed:findAll');
   });
 
   it('sincronizza gdo prima di aree, che ha una chiave esterna verso gdo', async () => {
-    const risultati = await modelliManager.sincronizzaTuttiIModelli();
+    const risultati = await modelliManager.allineamentoLegacyPerAdozione();
 
     const indiceGdo = ordineChiamate.indexOf('sync:GDO');
     const indiceAree = ordineChiamate.indexOf('sync:Area');
@@ -90,7 +63,7 @@ describe('sincronizzaTuttiIModelli', () => {
   });
 
   it('copre tutti i modelli del registro, una volta ciascuno', async () => {
-    const risultati = await modelliManager.sincronizzaTuttiIModelli();
+    const risultati = await modelliManager.allineamentoLegacyPerAdozione();
 
     const attesi = Object.values(MODELLI_SEQUELIZE).map(c => c.nome).sort();
     const ottenuti = risultati.map(r => r.modello).sort();
@@ -104,55 +77,26 @@ describe('sincronizzaTuttiIModelli', () => {
   it('con dipendenze cicliche ripiega sull ordine di dichiarazione senza perdere modelli', async () => {
     vi.spyOn(sequelize.modelManager, 'getModelsTopoSortedByForeignKey').mockReturnValue(null);
 
-    const risultati = await modelliManager.sincronizzaTuttiIModelli();
+    const risultati = await modelliManager.allineamentoLegacyPerAdozione();
 
     const attesi = Object.values(MODELLI_SEQUELIZE).map(c => c.nome).sort();
     expect(risultati.map(r => r.modello).sort()).toEqual(attesi);
   });
 
-  it('toglie view e materialized view prima della sync e le ricrea dopo', async () => {
-    // Una view che legge una colonna ne impedisce l'ALTER: al riavvio la sync di
-    // GDO, Area, Utente, Attivita, Canale e CombinazioneCanaleArea falliva.
-    const script: Array<[string, string]> = [
-      ['rimozione', '-- Rimozione degli oggetti derivati'],
-      ['mv_aree_canali', 'CREATE MATERIALIZED VIEW mv_aree_ottimizzata'],
-      ['mv_utenti', 'CREATE MATERIALIZED VIEW IF NOT EXISTS public.mv_utenti_completi'],
-      ['indici_permessi', 'permessi_ruolo_tipo_utente_id_permesso_id_ruolo_utente_gdo'],
-      ['v_attivita', 'DROP VIEW IF EXISTS public.v_attivita CASCADE;'],
-    ];
-    vi.spyOn(sequelize, 'query').mockImplementation(async (sql: unknown) => {
-      const voce = script.find(([, segno]) => String(sql).includes(segno));
-      ordineChiamate.push(`query:${voce?.[0] ?? 'altro'}`);
-      return [[], {}] as never;
-    });
+  it('con soloModelli allinea solo quelli, nell\'ordine delle dipendenze', async () => {
+    // Il secondo passaggio dell'adozione, dopo le correzioni delle migrazioni
+    const risultati = await modelliManager.allineamentoLegacyPerAdozione({ soloModelli: ['Area', 'GDO'] });
 
-    await modelliManager.sincronizzaTuttiIModelli();
-
-    const primaSync = ordineChiamate.findIndex(voce => voce.startsWith('sync:'));
-    const ultimaSync = ordineChiamate.lastIndexOf(
-      ordineChiamate.filter(voce => voce.startsWith('sync:')).at(-1)!
-    );
-    const indice = (nome: string) => ordineChiamate.indexOf(`query:${nome}`);
-
-    expect(indice('rimozione')).toBeGreaterThan(-1);
-    expect(indice('rimozione')).toBeLessThan(primaSync);
-    //Dopo la sync, in ordine alfabetico dei file.
-    const dopo = ['mv_aree_canali', 'mv_utenti', 'indici_permessi', 'v_attivita'].map(indice);
-    expect(dopo.every(i => i > ultimaSync)).toBe(true);
-    expect(dopo).toEqual([...dopo].sort((a, b) => a - b));
-    //Ogni script una sola volta: la rimozione non viene ripetuta dopo la sync.
-    expect(ordineChiamate.filter(voce => voce === 'query:rimozione')).toHaveLength(1);
+    expect(risultati.map(r => r.modello)).toEqual(['GDO', 'Area']);
+    expect(ordineChiamate).toEqual(['sync:GDO', 'sync:Area']);
   });
 
-  it('non propaga un errore del seed: il rigetto resta catturato', async () => {
-    vi.spyOn(RuoloUtenteGDO, 'findAll').mockImplementation(async () => {
-      ordineChiamate.push('seed:findAll');
-      throw new Error('relation "ruolo_utente_gdo" does not exist');
-    });
+  it('un modello che fallisce resta nel risultato e non ferma gli altri', async () => {
+    vi.spyOn(MODELLI_SEQUELIZE.Tracciati.model, 'sync').mockRejectedValue(new Error('violates foreign key constraint'));
 
-    //E' la regressione che spegneva il container: se il rigetto sfugge al
-    //catch, arriva a process.on('unhandledRejection') e il processo termina.
-    await expect(modelliManager.sincronizzaTuttiIModelli()).resolves.toBeDefined();
-    expect(ordineChiamate).toContain('seed:findAll');
+    const risultati = await modelliManager.allineamentoLegacyPerAdozione();
+
+    expect(risultati.find(r => r.modello === 'Tracciati')).toMatchObject({ successo: false, errore: 'violates foreign key constraint' });
+    expect(risultati.filter(r => r.successo)).toHaveLength(Object.keys(MODELLI_SEQUELIZE).length - 1);
   });
 });

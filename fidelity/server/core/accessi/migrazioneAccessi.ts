@@ -228,16 +228,14 @@ export const applicaPiano = async (
   await repository.rimuoviCodici(piano.codiciObsoleti, transaction);
 };
 
-/** Da chiamare all'avvio, dopo il sync dello schema. Errori: bloccano l'avvio come il sync del DB. */
+/**
+ * Da chiamare all'avvio, dopo le migrazioni dello schema. Errori: bloccano l'avvio come le migrazioni.
+ * La colonna menu_items.id_ruolo_utente_gdo e i vincoli univoci dei permessi li porta la migrazione 0001.
+ */
 export const preparaAccessiAllAvvio = async (repository = new PermessiRepository()): Promise<void> => {
   await creaTabellaStatoAccessi();
-  // Anche con DB_SYNC_ON_START=false la colonna serve alla migrazione e al menu.
-  await sequelize.query(`ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS id_ruolo_utente_gdo UUID`);
   // Prima del piano di migrazione, che legge i percorsi del menu nel catalogo delle pagine.
   await migraPercorsiSpostati();
-  // Vincoli univoci storici delle tabelle dei permessi (idempotente).
-  await repository.migrateLegacyConstraint();
-  await repository.migrateLegacyGdoConstraint();
 
   await sequelize.transaction(async (transaction) => {
     await sequelize.query(`SELECT pg_advisory_xact_lock(hashtext('preparazione_accessi'))`, { transaction });

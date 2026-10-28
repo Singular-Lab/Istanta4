@@ -3,6 +3,12 @@
 -- Include: Filtri automatici basati sui permessi utente
 -- Include: Cutoff temporale per nuovi utenti
 -- Include: Categoria e priorità attività
+--
+-- Oggetto derivato: lo ricrea migrazioni/oggettiDerivati.ts quando questo
+-- file cambia o la view manca. Deve restare autosufficiente e rieseguibile:
+-- elimina e ricrea view e funzioni. Le colonne categoria_attivita,
+-- priorita_attivita ed expires_at e i loro indici sono nello schema
+-- (migrazione 0001), non qui.
 -- =====================================================
 
 -- Rimozione view e funzioni esistenti
@@ -13,43 +19,6 @@ DROP FUNCTION IF EXISTS public.get_attivita_for_user(UUID, TEXT, INTEGER, INTEGE
 DROP FUNCTION IF EXISTS public.get_attivita_for_user(UUID, TEXT, INTEGER, INTEGER, TEXT, BOOLEAN) CASCADE;
 DROP FUNCTION IF EXISTS public.count_unread_attivita_for_user(UUID, TEXT) CASCADE;
 DROP FUNCTION IF EXISTS public.cleanup_expired_attivita() CASCADE;
-
--- Creazione ENUM per categoria e priorità (se non esistono)
-DO $$ BEGIN
-    CREATE TYPE categoria_attivita_enum AS ENUM ('ACCOUNT', 'PRODUZIONE', 'PUBBLICAZIONE', 'STAMPA', 'INTEGRAZIONI');
-EXCEPTION
-    WHEN duplicate_object THEN null;
-END $$;
-
-DO $$ BEGIN
-    CREATE TYPE priorita_attivita_enum AS ENUM ('ALTA', 'MEDIA', 'BASSA');
-EXCEPTION
-    WHEN duplicate_object THEN null;
-END $$;
-
--- Aggiungi colonne alla tabella attivita se non esistono
-DO $$ BEGIN
-    ALTER TABLE attivita ADD COLUMN categoria_attivita VARCHAR(50);
-EXCEPTION
-    WHEN duplicate_column THEN null;
-END $$;
-
-DO $$ BEGIN
-    ALTER TABLE attivita ADD COLUMN priorita_attivita VARCHAR(20) DEFAULT 'MEDIA';
-EXCEPTION
-    WHEN duplicate_column THEN null;
-END $$;
-
-DO $$ BEGIN
-    ALTER TABLE attivita ADD COLUMN expires_at TIMESTAMP;
-EXCEPTION
-    WHEN duplicate_column THEN null;
-END $$;
-
--- Creazione indice per expires_at per ottimizzare cleanup
-CREATE INDEX IF NOT EXISTS idx_attivita_expires_at ON attivita(expires_at) WHERE expires_at IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_attivita_categoria ON attivita(categoria_attivita) WHERE categoria_attivita IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_attivita_priorita ON attivita(priorita_attivita) WHERE priorita_attivita IS NOT NULL;
 
 -- Creazione view base per le attività (include nuovi campi)
 CREATE OR REPLACE VIEW public.v_attivita AS
@@ -454,79 +423,3 @@ COMMENT ON FUNCTION public.count_unread_attivita_for_user(UUID, TEXT) IS
 
 COMMENT ON FUNCTION public.cleanup_expired_attivita() IS
 'Elimina le attività scadute (expires_at < NOW()). Restituisce il numero di record eliminati.';
--- =====================================================
--- ONE-SHOT: Assegnazione categoria_attivita
--- ENUM-safe (usa enum_attivita_categoria_attivita)
--- Nessuna funzione, nessun trigger, nessuna tabella
--- =====================================================
-
-UPDATE attivita
-SET categoria_attivita =
-    CASE
-        -- =====================
-        -- ACCOUNT
-        -- =====================
-        WHEN tipo_attivita = 'CREAZIONE_UTENTE'
-            THEN 'ACCOUNT'::enum_attivita_categoria_attivita
-
-        WHEN tipo_attivita = 'ELIMINAZIONE_UTENTE'
-            THEN 'ACCOUNT'::enum_attivita_categoria_attivita
-
-        WHEN tipo_attivita = 'MODIFICA_WORKSPACE_WEBPLIANT'
-            THEN 'ACCOUNT'::enum_attivita_categoria_attivita
-
-        -- =====================
-        -- PRODUZIONE
-        -- =====================
-        WHEN tipo_attivita = 'CREAZIONE_RUNTIME_KIT_AUTOMATICO'
-            THEN 'PRODUZIONE'::enum_attivita_categoria_attivita
-
-        WHEN tipo_attivita = 'CREAZIONE_RUNTIME_KIT_MANUALE'
-            THEN 'PRODUZIONE'::enum_attivita_categoria_attivita
-
-        WHEN tipo_attivita = 'CREAZIONE_DESIGN_KIT'
-            THEN 'PRODUZIONE'::enum_attivita_categoria_attivita
-
-        WHEN tipo_attivita = 'CREAZIONE_LAVORAZIONE'
-            THEN 'PRODUZIONE'::enum_attivita_categoria_attivita
-
-        WHEN tipo_attivita = 'UPLOAD_FILE_MANUALE'
-            THEN 'PRODUZIONE'::enum_attivita_categoria_attivita
-
-        WHEN tipo_attivita = 'IMPORT_TRACCIATO'
-            THEN 'PRODUZIONE'::enum_attivita_categoria_attivita
-
-        -- =====================
-        -- PUBBLICAZIONE
-        -- =====================
-        WHEN tipo_attivita = 'PUBBLICAZIONE_WEBPLIANT'
-            THEN 'PUBBLICAZIONE'::enum_attivita_categoria_attivita
-
-        WHEN tipo_attivita = 'INVIO_FILES_FTP'
-            THEN 'PUBBLICAZIONE'::enum_attivita_categoria_attivita
-
-        WHEN tipo_attivita = 'INVIO_FILE_CORREGGO'
-            THEN 'PUBBLICAZIONE'::enum_attivita_categoria_attivita
-
-        WHEN tipo_attivita = 'PUBBLICAZIONE_FILE_CORREGGO'
-            THEN 'PUBBLICAZIONE'::enum_attivita_categoria_attivita
-
-        -- =====================
-        -- STAMPA
-        -- =====================
-        WHEN tipo_attivita = 'CREAZIONE_ORDINE_DI_STAMPA'
-            THEN 'STAMPA'::enum_attivita_categoria_attivita
-
-        -- =====================
-        -- INTEGRAZIONI
-        -- =====================
-        WHEN tipo_attivita = 'RICHIESTA_WEBPLIANT'
-            THEN 'INTEGRAZIONI'::enum_attivita_categoria_attivita
-
-        -- =====================
-        -- FALLBACK DI SICUREZZA
-        -- =====================
-        ELSE 'INTEGRAZIONI'::enum_attivita_categoria_attivita
-    END
-WHERE
-    categoria_attivita IS NULL;

@@ -34,3 +34,22 @@ describe('avvio del server: preparazione della configurazione', () => {
     expect(chiamate(worker, 'preparaConfigAllAvvio')).toBe(0);
   });
 });
+
+describe('avvio del server: migrazioni dello schema', () => {
+  it.each(rami)('il ramo %s applica le migrazioni una volta sola, prima degli accessi', (_nome, ramo) => {
+    expect(ramo).not.toBe('');
+    expect(chiamate(ramo, 'applicaMigrazioniAllAvvio')).toBe(1);
+    expect(ramo.indexOf('await applicaMigrazioniAllAvvio();')).toBeLessThan(ramo.indexOf('await preparaAccessiAllAvvio();'));
+  });
+
+  it('i worker non applicano le migrazioni: le ha gia applicate il processo primario', () => {
+    const worker = tra('Worker ${process.pid}: avvio server HTTP', 'Worker ${process.pid}: server HTTP pronto');
+
+    expect(worker).not.toBe('');
+    expect(chiamate(worker, 'applicaMigrazioniAllAvvio')).toBe(0);
+  });
+
+  it('la vecchia sincronizzazione dei modelli non si usa piu', () => {
+    expect(sorgente).not.toContain('sincronizzaSchemaAllAvvio');
+  });
+});

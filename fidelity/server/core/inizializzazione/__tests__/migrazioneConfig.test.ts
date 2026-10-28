@@ -64,12 +64,11 @@ describe('migraConfig', () => {
     expect(esito.collegate).toBe(0);
   });
 
-  it('aggiunge le colonne anche con la sincronia dello schema spenta', async () => {
+  it('non modifica lo schema: le colonne id_gdo_config e funzionalita le porta la migrazione 0001', async () => {
     await migraConfig({ ambiente: {} });
 
     const sql = db.query.mock.calls.map((c: any[]) => String(c[0]));
-    expect(sql).toContain('ALTER TABLE IF EXISTS config ADD COLUMN IF NOT EXISTS id_gdo_config UUID');
-    expect(sql).toContain('ALTER TABLE IF EXISTS config ADD COLUMN IF NOT EXISTS funzionalita JSONB');
+    expect(sql.filter(istruzione => /\b(ALTER|CREATE|DROP)\b/i.test(istruzione))).toEqual([]);
   });
 });
 

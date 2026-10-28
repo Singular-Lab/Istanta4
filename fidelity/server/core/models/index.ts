@@ -60,10 +60,6 @@ import { EphemeralAuditLog } from './ephemeral/ephemeral_audit_log';
 import { EphemeralChallenge } from './ephemeral/ephemeral_challenge';
 import { EphemeralOriginsWhitelist } from './ephemeral/ephemeral_origins_whitelist';
 import { EphemeralToken } from './ephemeral/ephemeral_token';
-// Import delle nuove funzionalità
-import { readdir, readFile } from 'fs/promises';
-import path from 'path';
-import { RUOLO_UTENTE_GDO } from '../../../lib/enums';
 import { AttivitaUtente } from './attivita_utente';
 import { FilterTemplate } from './filter_template';
 import { applyMixins } from './mixins';
@@ -184,13 +180,6 @@ export const MODELLI_SEQUELIZE = {
   LavoroInBackground: { model: LavoroInBackground, nome: 'LavoroInBackground', tabella: 'lavori_in_background' },
 };
 
-export interface ModelSyncOptions {
-  force?: boolean;
-  alter?: boolean;
-  drop?: boolean;
-  logging?: boolean;
-}
-
 export interface ModelSyncResult {
   modello: string;
   tabella: string;
@@ -198,42 +187,14 @@ export interface ModelSyncResult {
   tempo_ms: number;
   errore?: string;
 }
-const ERRORI_IGNORABILI = [
-  '42P07',  // PostgreSQL: relation already exists
-  '42710',  // PostgreSQL: duplicate object
-  '2BP01',  // PostgreSQL: dependent objects still exist (cannot drop)
-  '42P01',  // PostgreSQL: table does not exist (utile per DROP IF NOT EXISTS mancante)
-  '42703',  // PostgreSQL: column does not exist,
-  '42883'
-];
 
-const CARTELLA_SCRIPT = path.join(process.cwd(), '/server/core/db/scripts');
-
-/**
- * Esegue i file .sql di una cartella (non le sottocartelle), in ordine
- * alfabetico. Un errore viene registrato e non ferma gli script successivi.
- */
-async function eseguiScriptSql(cartella: string): Promise<void> {
-  const files = (await readdir(cartella)).filter(file => file.endsWith('.sql')).sort();
-  for (const file of files) {
-    const sql = await readFile(path.join(cartella, file), 'utf-8');
-    try {
-      await sequelize.query(sql);
-    } catch (error: any) {
-      const codice = error.original?.code;
-      if (ERRORI_IGNORABILI.includes(codice)) {
-        log.warn(Colorize.yellow(`⚠️ ${file}: ignorato (${codice})`));
-      } else {
-        log.error(Colorize.red(`❌ Errore script ${file}: [${codice}] ${error.message}`));
-      }
-    }
-  }
+export interface OpzioniAllineamentoLegacy {
+  /** Solo questi modelli (per nome), per il secondo passaggio dopo le migrazioni. */
+  soloModelli?: string[];
 }
 
 export class ModelliManager {
   private static instance: ModelliManager;
-  private _modelliSincronizzati: Set<string> = new Set();
-  private _ultimaSincronizzazione?: Date;
 
   private constructor() { }
 
@@ -245,23 +206,18 @@ export class ModelliManager {
   }
 
   /**
-   * Sincronizza tutti i modelli con il database
+   * L'ALTER di Sequelize (sync con alter) su tutti i modelli del registro. Lo schema ormai cambia
+   * solo con le migrazioni (db/migrazioni): questo resta per l'adozione della baseline su un
+   * database creato dalla vecchia sincronizzazione, che va portato ai modelli un'ultima volta.
+   * Non esegue script SQL ne' seed: view, correzioni e ruoli GDO li gestisce il runner delle
+   * migrazioni. Un modello che fallisce finisce nel risultato e nel log, non ferma gli altri.
    */
-  public async sincronizzaTuttiIModelli(options: ModelSyncOptions = {}): Promise<ModelSyncResult[]> {
+  public async allineamentoLegacyPerAdozione(opzioni: OpzioniAllineamentoLegacy = {}): Promise<ModelSyncResult[]> {
     const startTime = Date.now();
     const risultati: ModelSyncResult[] = [];
+    const syncOptions = { force: false, alter: true, logging: false };
 
-    log.info(Colorize.bgBlue(`🔄 Inizio sincronizzazione di ${Object.keys(MODELLI_SEQUELIZE).length} modelli Sequelize`));
-
-    // Configurazioni di default
-    const syncOptions = {
-      force: false,
-      alter: true,
-      logging: options.logging ?? false,
-      ...options
-    };
-
-    // Configura relazioni tra modelli
+    // Configura relazioni tra modelli: senza, mancano le chiavi esterne e l'ordine qui sotto
     try {
       const relazioniModule = await import('./relazioni');
       const configuraRelazioni =
@@ -274,21 +230,15 @@ export class ModelliManager {
 
       // Configura le relazioni (il flag interno evita doppia registrazione)
       configuraRelazioni();
-      log.info(Colorize.blue('🔗 Configurazione relazioni tra modelli completata'));
     } catch (errore) {
       log.warn(Colorize.yellow('⚠️ Errore configurazione relazioni:', errore));
     }
 
-    // Applica mixins ai modelli (se disponibile)
-    // Il ciclo e' sincrono: con forEach e callback async le promesse venivano
-    // scartate e il catch qui sotto non poteva intercettarle. Il seed dei ruoli
-    // GDO, che era annidato qui dentro, e' stato spostato dopo la creazione
-    // delle tabelle.
+    // Il ciclo e' sincrono: con forEach e callback async le promesse venivano scartate
     try {
       for (const { model } of Object.values(MODELLI_SEQUELIZE)) {
         applyMixins(model, ['fullTextSearch', 'validation', 'statistics']);
       }
-      //log.info(Colorize.blue('🔧 Applicazione mixins ai modelli...'));
     } catch (errore) {
       log.warn(Colorize.yellow('⚠️ Errore applicazione mixins:', errore));
     }
@@ -337,206 +287,48 @@ export class ModelliManager {
         .filter((voce): voce is VoceRegistro => voce != null);
     }
 
-    // Le view che leggono una colonna ne impediscono l'ALTER: si tolgono prima
-    // della sincronizzazione e si ricreano dopo.
-    await eseguiScriptSql(path.join(CARTELLA_SCRIPT, 'prima_della_sincronizzazione'));
+    if (opzioni.soloModelli) {
+      const richiesti = new Set(opzioni.soloModelli);
+      daSincronizzare = daSincronizzare.filter(({ config }) => richiesti.has(config.nome));
+    }
 
-    for (const { chiave, config } of daSincronizzare) {
+    log.info(Colorize.bgBlue(`🔄 Allineamento legacy di ${daSincronizzare.length} modelli Sequelize`));
+
+    for (const { config } of daSincronizzare) {
       const modelStartTime = Date.now();
 
       try {
-        //log.info(`📦 Sincronizzazione modello: ${config.nome} -> ${config.tabella}`);
-
-        // Sincronizza il modello
         await config.model.sync(syncOptions);
-
-        const tempo_ms = Date.now() - modelStartTime;
 
         risultati.push({
           modello: config.nome,
           tabella: config.tabella,
           successo: true,
-          tempo_ms
+          tempo_ms: Date.now() - modelStartTime
         });
-
-        this._modelliSincronizzati.add(chiave);
-
-        //log.info(Colorize.green(`✅ ${config.nome} sincronizzato (${tempo_ms}ms)`));
-
       } catch (error) {
-        const tempo_ms = Date.now() - modelStartTime;
         const messaggioErrore = error instanceof Error ? error.message : String(error);
 
         risultati.push({
           modello: config.nome,
           tabella: config.tabella,
           successo: false,
-          tempo_ms,
+          tempo_ms: Date.now() - modelStartTime,
           errore: messaggioErrore
         });
 
-        log.error(Colorize.red(`❌ Errore sincronizzazione ${config.nome}: ${messaggioErrore}`));
+        log.error(Colorize.red(`❌ Errore allineamento ${config.nome}: ${messaggioErrore}`));
       }
     }
-    // View e materialized view si ricreano qui, dopo la sincronizzazione, con i
-    // dati presenti.
-    await eseguiScriptSql(CARTELLA_SCRIPT);
 
-    // Seed dei ruoli GDO: qui le tabelle esistono, sia quelle create dai modelli
-    // sia quelle toccate dagli script SQL. Girava prima della sincronizzazione,
-    // quindi su un database incompleto interrogava una tabella inesistente; e
-    // non essendo atteso, il rigetto arrivava a process.on('unhandledRejection')
-    // e spegneva il processo prima che il server si alzasse.
-    try {
-      const allRuoliGDO = await RuoloUtenteGDO.findAll();
-      const mancanti = Object.values(RUOLO_UTENTE_GDO)
-        .filter(ruolo => !allRuoliGDO.some(r => r.ruolo_ruolo_utente_gdo === ruolo))
-        .map(ruolo => ({
-          createdat: new Date(),
-          updatedat: new Date(),
-          ruolo_ruolo_utente_gdo: ruolo
-        }));
-
-      if (mancanti.length > 0) {
-        await RuoloUtenteGDO.bulkCreate(mancanti, { ignoreDuplicates: false });
-      }
-    } catch (errore) {
-      log.warn(Colorize.yellow('⚠️ Errore seed ruoli GDO:', errore));
-    }
-
-    this._ultimaSincronizzazione = new Date();
-    const tempoTotale = Date.now() - startTime;
-
-    // Statistiche finali
-    const modelli_successo = risultati.filter(r => r.successo).length;
     const modelli_errore = risultati.filter(r => !r.successo).length;
-
-    log.info(Colorize.bgGreen(`🎉 Sincronizzazione completata in ${tempoTotale}ms`));
-    log.info(Colorize.green(`   ✅ Successi: ${modelli_successo}`));
-
+    log.info(Colorize.bgGreen(`Allineamento legacy completato in ${Date.now() - startTime}ms`));
+    log.info(Colorize.green(`   ✅ Successi: ${risultati.length - modelli_errore}`));
     if (modelli_errore > 0) {
       log.warn(Colorize.yellow(`   ⚠️  Errori: ${modelli_errore}`));
     }
 
     return risultati;
-  }
-
-  /**
-   * Sincronizza un singolo modello
-   */
-  public async sincronizzaModello(nomeModello: string, options: ModelSyncOptions = {}): Promise<ModelSyncResult> {
-    const config = MODELLI_SEQUELIZE[nomeModello as keyof typeof MODELLI_SEQUELIZE];
-
-    if (!config) {
-      throw new Error(`Modello '${nomeModello}' non trovato`);
-    }
-    const startTime = Date.now();
-
-    try {
-      //log.info(`📦 Sincronizzazione modello: ${config.nome}`);
-
-      await config.model.sync({
-        force: false,
-        alter: true,
-        logging: false,
-        ...options
-      });
-
-      //Seed dopo la sync, non prima: la tabella potrebbe non esistere ancora.
-      if (nomeModello == 'RuoloUtenteGDO') {
-        const ruoliGDO = Object.values(RUOLO_UTENTE_GDO).map(ruolo => ({
-          ruolo_ruolo_utente_gdo: ruolo
-        }));
-        await RuoloUtenteGDO.bulkCreate(ruoliGDO, {
-          updateOnDuplicate: ['ruolo_ruolo_utente_gdo']
-        });
-      }
-
-      const tempo_ms = Date.now() - startTime;
-      this._modelliSincronizzati.add(nomeModello);
-
-      log.info(Colorize.green(`✅ ${config.nome} sincronizzato (${tempo_ms}ms)`));
-
-      return {
-        modello: config.nome,
-        tabella: config.tabella,
-        successo: true,
-        tempo_ms
-      };
-
-    } catch (error) {
-      const tempo_ms = Date.now() - startTime;
-      const messaggioErrore = error instanceof Error ? error.message : String(error);
-
-      log.error(Colorize.red(`❌ Errore sincronizzazione ${config.nome}: ${messaggioErrore}`));
-
-      return {
-        modello: config.nome,
-        tabella: config.tabella,
-        successo: false,
-        tempo_ms,
-        errore: messaggioErrore
-      };
-    }
-  }
-
-  /**
-   * Verifica lo stato di sincronizzazione
-   */
-  public getStatoSincronizzazione() {
-    return {
-      modelli_totali: Object.keys(MODELLI_SEQUELIZE).length,
-      modelli_sincronizzati: this._modelliSincronizzati.size,
-      ultima_sincronizzazione: this._ultimaSincronizzazione,
-      modelli: Object.entries(MODELLI_SEQUELIZE).map(([chiave, config]) => ({
-        chiave,
-        nome: config.nome,
-        tabella: config.tabella,
-        sincronizzato: this._modelliSincronizzati.has(chiave)
-      }))
-    };
-  }
-
-  /**
-   * Reimposta lo stato di sincronizzazione
-   */
-  public reset() {
-    this._modelliSincronizzati.clear();
-    this._ultimaSincronizzazione = undefined;
-    log.info('🔄 Stato sincronizzazione modelli reimpostato');
-  }
-
-  /**
-   * Verifica la connessione al database
-   */
-  public async verificaConnessione(): Promise<boolean> {
-    try {
-      await sequelize.authenticate();
-      log.info(Colorize.green('✅ Connessione database verificata'));
-      return true;
-    } catch (error) {
-      log.error(Colorize.red('❌ Errore connessione database:'), error);
-      return false;
-    }
-  }
-
-  /**
-   * Crea tutte le tabelle da zero (ATTENZIONE: cancella i dati esistenti!)
-   */
-  public async creaTabelleForce(): Promise<ModelSyncResult[]> {
-    log.warn(Colorize.bgYellow('⚠️  ATTENZIONE: Creazione tabelle con FORCE - I dati esistenti verranno persi!'));
-
-    return await this.sincronizzaTuttiIModelli({
-      force: true,
-      logging: true
-    });
-  }
-
-  /**
-   * Ottieni tutti i modelli registrati
-   */
-  public getModelli() {
-    return MODELLI_SEQUELIZE;
   }
 }
 

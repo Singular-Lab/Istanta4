@@ -39,9 +39,7 @@ export const migraConfig = async (opzioni: OpzioniMigrazioneConfig = {}): Promis
   const clientId = opzioni.clientId ?? config.CLIENT_ID;
   const funzionalita = funzionalitaDaAmbiente(opzioni.ambiente ?? process.env);
 
-  // Anche con la sincronia dello schema spenta (FIDELITY_SYNC_MODELS=no) le colonne servono
-  await sequelize.query(`ALTER TABLE IF EXISTS config ADD COLUMN IF NOT EXISTS id_gdo_config UUID`);
-  await sequelize.query(`ALTER TABLE IF EXISTS config ADD COLUMN IF NOT EXISTS funzionalita JSONB`);
+  // Le colonne id_gdo_config e funzionalita le porta la migrazione 0001: qui niente DDL
 
   return sequelize.transaction(async (transaction) => {
     // Un solo processo alla volta, anche con piu' container sullo stesso database
