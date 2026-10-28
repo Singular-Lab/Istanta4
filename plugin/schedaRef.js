@@ -545,6 +545,7 @@ const schedaRef = {
             this.svuotaRef();
             //I20-1063: un box solo: se il pannello mostrava la selezione multipla, se ne esce.
             this.esciDaSelezioneMultipla();
+            this.riapriFotoExtraPiuBox = false;
             this.setInvalidated(false);
             me.refSelected = ref;
 
@@ -887,6 +888,7 @@ const schedaRef = {
         this.boxSelezioneMultipla = [];
         this.azioniSelezioneMultipla = [];
         this.azioniDiGruppoSelezioneMultipla = false;
+        this.noRenderPiuBox = null;
     },
 
     /// La scheda della selezione multipla. Con tutti i box impaginati offre le azioni sul box
@@ -900,6 +902,9 @@ const schedaRef = {
             const schede = me.boxSelezioneMultipla || [];
             const stati = me.STATI_SELEZIONE_MULTIPLA;
             const stato = me.statoDellaSelezioneMultipla(schede);
+            //Vale per questa rilettura soltanto.
+            const riapriFotoExtra = me.riapriFotoExtraPiuBox === true;
+            me.riapriFotoExtraPiuBox = false;
 
             me.resetInitSchedaRef();
 
@@ -949,6 +954,14 @@ const schedaRef = {
             $("#refImage").show();
             jsIndexControls.changeSubMenu($("#refImage").attr("subTab"));
             jsIndexControls.changeImage($("#refImage"));
+            //I20-1063, lotto 3: dopo un'operazione di Foto extra la selezione si rilegge e la scheda
+            //torna su Foto extra, non su Edit.
+            if (riapriFotoExtra && stato === stati.impaginati) {
+                const voceFotoExtra = $(".subTab5").find('img[tab="Tab7"]');
+                jsIndexControls.openTab(null, "Tab7");
+                jsIndexControls.changeImage(voceFotoExtra);
+                await me.FotoExtraPanelPiuBox();
+            }
             onresizeWindow();
         }
         catch (e) {
@@ -1514,6 +1527,11 @@ const schedaRef = {
         //writeDebugMessageForCrash("SELECT SCHEDA REF " + enumSchede);
 
         let me = this;
+        //I20-1063, lotto 3: con piu' box selezionati Foto extra vale per tutti.
+        if (enumSchede == 3 && this.inSelezioneMultipla) {
+            await me.FotoExtraPanelPiuBox();
+            return;
+        }
         if (enumSchede != 6) {
             //in questo caso la scheda ref non c'è ed è normale perchè dobbiamo ricollegarla
             if (this.refSelected == null || this.schedeRefDati.length == 0) {
@@ -6421,18 +6439,20 @@ const schedaRef = {
 
     /// Manda al server una decisione, da registrare o da togliere. Torna true se il server
     /// l'ha registrata; gli errori si dicono qui.
-    salvaExtraLavorazione(richiesta) {
+    /// I20-1063: destinazione ({ codiceGruppo, idRec }), se c'e', e' un box della selezione
+    /// multipla; senza, il box della scheda come prima.
+    salvaExtraLavorazione(richiesta, destinazione = null) {
         var me = this;
         return new Promise(function (resolve) {
             var schedaRef = me.schedeRefDati;
-            if (schedaRef == null || schedaRef.length < 1 || richiesta == null) {
+            if ((destinazione == null && (schedaRef == null || schedaRef.length < 1)) || richiesta == null) {
                 resolve(false);
                 return;
             }
             var formData = new FormData();
             formData.append("idLavorazione", idKitLavorazione);
-            formData.append("CodiceGruppo", schedaRef[0].recordInTracciato["Scatto.CodiceGruppo"]);
-            formData.append("idRec", me.idRecDelBoxAperto());
+            formData.append("CodiceGruppo", destinazione != null ? destinazione.codiceGruppo : schedaRef[0].recordInTracciato["Scatto.CodiceGruppo"]);
+            formData.append("idRec", destinazione != null ? destinazione.idRec : me.idRecDelBoxAperto());
             formData.append("richiesta", JSON.stringify(richiesta));
 
             var xhr = new XMLHttpRequestClient();
@@ -8548,6 +8568,11 @@ const schedaRef = {
     /// rendering. Sostituisce la checkbox NR che stava nella scheda primarie/secondarie.
     apriModalNoRender() {
         let me = this;
+        //I20-1063: con piu' box selezionati la schermata vale per tutti.
+        if (this.inSelezioneMultipla) {
+            this.apriModalNoRenderPiuBox();
+            return;
+        }
         var schedaRef = this.schedeRefDati;
         if (schedaRef == null || schedaRef.length < 1 || this.refSelected == null) {
             messaggioUtente("Code SRF-50 Nessun box selezionato per l'opzione di rendering", "error");
@@ -8662,6 +8687,10 @@ const schedaRef = {
 
     disegnaListaNoRender() {
         let me = this;
+        if (this.inSelezioneMultipla) {
+            this.disegnaListaNoRenderPiuBox();
+            return;
+        }
         var lista = this.elementiNoRenderDelBox || [];
         $("#bodyNoRender").empty();
 
@@ -8791,7 +8820,10 @@ const schedaRef = {
     /// I20-1105: l'avviso della X della schermata noRender, oppure null se non c'e' niente da
     /// perdere. Un elemento cambiato e poi rimesso com'era non conta.
     avvisoModificheNoRender() {
-        var diverse = NoRenderElementi.modificheNonSalvate(this.elementiNoRenderDelBox, this.statoNoRenderSalvato);
+        //I20-1063: con piu' box si contano le modifiche di tutti.
+        var diverse = this.inSelezioneMultipla
+            ? (this.noRenderPiuBox || []).reduce((somma, b) => somma + NoRenderElementi.modificheNonSalvate(b.lista, b.statoSalvato), 0)
+            : NoRenderElementi.modificheNonSalvate(this.elementiNoRenderDelBox, this.statoNoRenderSalvato);
         if (diverse === 0) {
             return null;
         }
@@ -8802,6 +8834,10 @@ const schedaRef = {
     /// Salva l'opzione di rendering del box. Gli elementi viaggiano sul nuovo endpoint, le foto
     /// primarie/secondarie restano sul canale P/S di I20-965: sono due dati distinti.
     salvaNoRender() {
+        if (this.inSelezioneMultipla) {
+            this.salvaNoRenderPiuBox();
+            return;
+        }
         var schedaRef = this.schedeRefDati;
         if (schedaRef == null || schedaRef.length < 1) {
             return;
@@ -8834,18 +8870,20 @@ const schedaRef = {
     /// I20-1073: manda al server la lista noRender del box, che la sostituisce per intero. La usano
     /// la schermata noRender e la finestra delle differenze. Torna true se il server l'ha
     /// registrata; gli errori si dicono qui.
-    inviaNoRender(elementi) {
+    /// I20-1063: destinazione ({ codiceGruppo, idRec }), se c'e', e' il box della selezione
+    /// multipla a cui va la lista; senza, e' il box della scheda come prima.
+    inviaNoRender(elementi, destinazione = null) {
         var me = this;
         return new Promise(function (resolve) {
             var schedaRef = me.schedeRefDati;
-            if (schedaRef == null || schedaRef.length < 1) {
+            if (destinazione == null && (schedaRef == null || schedaRef.length < 1)) {
                 resolve(false);
                 return;
             }
             var formData = new FormData();
             formData.append("idLavorazione", idKitLavorazione);
-            formData.append("CodiceGruppo", schedaRef[0].recordInTracciato["Scatto.CodiceGruppo"]);
-            formData.append("idRec", me.idRecDelBoxAperto());
+            formData.append("CodiceGruppo", destinazione != null ? destinazione.codiceGruppo : schedaRef[0].recordInTracciato["Scatto.CodiceGruppo"]);
+            formData.append("idRec", destinazione != null ? destinazione.idRec : me.idRecDelBoxAperto());
             formData.append("elementi", JSON.stringify(elementi || []));
 
             var xhr = new XMLHttpRequestClient();
@@ -8892,8 +8930,9 @@ const schedaRef = {
         }
     },
 
-    aggiornaNoRenderNeiRecord(elementi) {
-        var schedaRef = this.schedeRefDati || [];
+    /// I20-1063: records, se c'e', e' la scheda di un box della selezione multipla.
+    aggiornaNoRenderNeiRecord(elementi, records = null) {
+        var schedaRef = records || this.schedeRefDati || [];
 
         for (var i = 0; i < schedaRef.length; i++) {
             var record = schedaRef[i].recordInTracciato;
@@ -8917,9 +8956,10 @@ const schedaRef = {
     },
 
     /// Riflette subito nel documento quanto scelto nel modal, senza attendere una reimpaginazione.
-    applicaNoRenderAlDocumento() {
-        var box = this.refSelected != null ? this.refSelected.item : null;
-        var lista = this.elementiNoRenderDelBox || [];
+    /// I20-1063: box e lista, se ci sono, sono quelli di un box della selezione multipla.
+    applicaNoRenderAlDocumento(boxDellaSelezione = null, listaDelBox = null) {
+        var box = boxDellaSelezione != null ? boxDellaSelezione : (this.refSelected != null ? this.refSelected.item : null);
+        var lista = listaDelBox != null ? listaDelBox : (this.elementiNoRenderDelBox || []);
         if (box == null) {
             return;
         }
@@ -8944,6 +8984,152 @@ const schedaRef = {
             console.error("Impossibile applicare l'opzione di rendering agli elementi del box", e);
         }
     },
+    /* ---- I20-1063: la schermata noRender per piu' box ---- */
+
+    /// Per ogni box della selezione: { box, lista, codicePrimario, statoSalvato }. La lista e'
+    /// quella della schermata di un box solo, letta dal box e dai meta del suo primario.
+    noRenderPiuBox: null,
+
+    /// Apre la schermata noRender per tutti i box selezionati: una riga per elemento, prima quelli
+    /// presenti in tutti i box (NoRenderElementi.righePerPiuBox).
+    apriModalNoRenderPiuBox() {
+        let me = this;
+        try {
+            me.noRenderPiuBox = (me.boxSelezioneMultipla || []).map(b => {
+                const primario = me.primarioDeiRecords(b.records);
+                const lista = primario != null ? me.leggiElementiDelBox(b.dettaglio.item, primario) : [];
+                return {
+                    box: b,
+                    lista: lista,
+                    codicePrimario: primario != null ? primario.recordInTracciato["Referenza.Codice"] : "",
+                    statoSalvato: NoRenderElementi.statoDiRendering(lista)
+                };
+            });
+            Modali.apriModal('dialogNoRender', 'Elementi non renderizzati (' + me.noRenderPiuBox.length + ' box)', true, [], true);
+            Modali.impostaControlloPrimaDiChiudere(function () {
+                return me.avvisoModificheNoRender();
+            });
+            me.disegnaListaNoRenderPiuBox();
+            me.fissaAltezzaListaNoRender();
+        }
+        catch (e) {
+            console.error("Errore nell'apertura del modal noRender per piu' box", e);
+            messaggioUtente("Code SRF-143 noRender: impossibile leggere gli elementi dei box: " + e, "error");
+        }
+    },
+
+    /// Disegna le righe per piu' box: come per un box solo, con in piu' in quanti box c'e'
+    /// l'elemento e, per una riga mista, i due pulsanti.
+    disegnaListaNoRenderPiuBox() {
+        let me = this;
+        const righe = NoRenderElementi.righePerPiuBox(me.noRenderPiuBox || []);
+        $("#bodyNoRender").empty();
+
+        const anteprima = $('<div class="norender-anteprima" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); background:#fff; border:1px solid #999; padding:10px; z-index:99999; box-shadow:0 2px 10px rgba(0,0,0,0.35); pointer-events:none;"><img src="" style="max-width:300px; max-height:300px; display:block;"></div>');
+        $("#bodyNoRender").append(anteprima);
+
+        if (righe.length == 0) {
+            $("#bodyNoRender").append($('<span style="font-size:12px;">Nessun elemento nei box.</span>'));
+            return;
+        }
+
+        $("#bodyNoRender").append(
+            $('<div style="font-size:12px; font-weight:600; margin-bottom:10px;"></div>').text(NoRenderElementi.riepilogoPiuBox(righe, (me.noRenderPiuBox || []).length)));
+
+        const indirizzoOlimpo = typeof olimpoIp !== "undefined" ? olimpoIp : "";
+        righe.forEach(riga => {
+            const dati = NoRenderElementi.datiRigaPiuBox(riga, indirizzoOlimpo);
+            const row = $('<div class="row align-items-center" style="margin-bottom:8px; display:flex; align-items:center; padding:4px 6px; border-radius:4px; min-width:0;"></div>');
+            if (dati.stato === NoRenderElementi.STATO_RIGA.nascosto) {
+                row.css({ "background-color": "#ececec", "border-left": "3px solid #b00" });
+            }
+            else if (dati.stato === NoRenderElementi.STATO_RIGA.misto) {
+                row.css({ "background-color": "#fff6e5", "border-left": "3px solid #d98200" });
+            }
+
+            dati.pulsanti.forEach(p => {
+                const bottone = $('<button class="norender-toggle" style="min-width:74px; height:26px; margin-right:8px; border:1px solid #999; border-radius:4px; cursor:pointer; font-size:11px; flex:0 0 auto;"></button>');
+                bottone.text(p.testo);
+                bottone.css("background-color", p.noRender ? "#f2f2f2" : "#d8d8d8");
+                bottone.on('click', function () {
+                    NoRenderElementi.applicaAPiuBox(me.noRenderPiuBox, riga.chiaveFraBox, p.noRender);
+                    me.disegnaListaNoRenderPiuBox();
+                });
+                row.append(bottone);
+            });
+
+            if (dati.urlMiniatura !== "") {
+                const miniatura = $('<img src="' + dati.urlMiniatura + '" urlIngrandita="' + dati.urlIngrandita + '" style="width:32px; height:32px; object-fit:contain; margin-right:8px; border:1px solid #ddd; background-color:#fafafa; cursor:zoom-in; flex:0 0 auto;">');
+                miniatura.css("opacity", dati.stato === NoRenderElementi.STATO_RIGA.nascosto ? "0.4" : "1");
+                miniatura.on('mouseenter', function () {
+                    anteprima.find("img").attr("src", $(this).attr("urlIngrandita"));
+                    anteprima.css("display", "block");
+                });
+                miniatura.on('mouseleave', function () {
+                    anteprima.css("display", "none");
+                    anteprima.find("img").attr("src", "");
+                });
+                row.append(miniatura);
+            }
+            else {
+                row.append($('<span style="display:inline-block; width:32px; margin-right:8px; flex:0 0 auto;"></span>'));
+            }
+
+            const testo = $('<span style="font-size:12px; min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;"></span>').text(dati.descrizione);
+            testo.attr("title", dati.descrizione);
+            if (dati.barrato) {
+                testo.css({ "text-decoration": "line-through", "color": "#666" });
+            }
+            row.append(testo);
+
+            if (dati.etichettaStato !== "") {
+                const colore = dati.stato === NoRenderElementi.STATO_RIGA.misto ? "#d98200" : "#b00";
+                row.append($('<span style="font-size:10px; font-weight:600; margin-left:8px; border-radius:3px; padding:1px 4px; flex:0 0 auto;"></span>')
+                    .css({ "color": colore, "border": "1px solid " + colore })
+                    .text(dati.etichettaStato));
+            }
+            if (dati.presenza !== "") {
+                row.append($('<span style="font-size:11px; color:#777; margin-left:6px; flex:0 0 auto;"></span>').text("(" + dati.presenza + ")"));
+            }
+
+            $("#bodyNoRender").append(row);
+        });
+    },
+
+    /// Salva il noRender box per box, solo per i box cambiati, ciascuno con la sua lista intera
+    /// come per un box solo. Un box che non si salva non ferma gli altri e resta da salvare;
+    /// alla fine il riepilogo. Il documento si aggiorna per i box salvati.
+    async salvaNoRenderPiuBox() {
+        let me = this;
+        const daSalvare = (me.noRenderPiuBox || []).filter(b => NoRenderElementi.modificheNonSalvate(b.lista, b.statoSalvato) > 0);
+        if (daSalvare.length === 0) {
+            messaggioUtente("noRender: nessuna modifica da salvare", "success", false, 3);
+            return;
+        }
+
+        const esiti = [];
+        for (const voceBox of daSalvare) {
+            const b = voceBox.box;
+            const voce = me.voceDellaSelezioneMultipla(b.dettaglio, b.records);
+            const elementi = NoRenderElementi.elementiDaSalvare(voceBox.lista);
+            const statoInviato = NoRenderElementi.statoDiRendering(voceBox.lista);
+            const idRec = (me.getCodiciConIdFromMultiSelection([b.dettaglio])[0] || {}).idRec || 0;
+            const registrato = await me.inviaNoRender(elementi, { codiceGruppo: b.records[0].recordInTracciato["Scatto.CodiceGruppo"], idRec: idRec });
+            if (registrato) {
+                voceBox.statoSalvato = statoInviato;
+                me.aggiornaNoRenderNeiRecord(elementi, b.records);
+                me.applicaNoRenderAlDocumento(b.dettaglio.item, voceBox.lista);
+                esiti.push({ voce: voce, ok: true });
+            }
+            else {
+                esiti.push({ voce: voce, ok: false, motivo: "salvataggio non riuscito" });
+            }
+        }
+
+        const riepilogo = me.riepilogoSelezioneMultipla("noRender salvato", esiti);
+        messaggioUtente("Code SRF-144 " + riepilogo.testo, riepilogo.tipo, false, 6);
+    },
+
     apriModalInfoReferenza() {
         var schedaRef = this.schedeRefDati;
         if (schedaRef != null && schedaRef.length > 0) {
@@ -9097,6 +9283,8 @@ const schedaRef = {
 //I20-1015: la parte foto della scheda sta in reperimentoFoto/schedaFoto.js, ma e' lo stesso
 //oggetto: si mescola qui, e ogni this di quei membri e' schedaRef.
 Object.assign(schedaRef, require('./reperimentoFoto/schedaFoto'));
+//I20-1063, lotto 3: la schermata Foto extra della selezione multipla, allo stesso modo.
+Object.assign(schedaRef, require('./reperimentoFoto/fotoExtraPiuBox'));
 //I20-1089: i meta del box e la loro finestra, allo stesso modo.
 Object.assign(schedaRef, require('./metaDelBox'));
 

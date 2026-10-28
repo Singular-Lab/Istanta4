@@ -236,20 +236,21 @@ test("nel markup sono segnate le voci che la selezione multipla non offre, e sol
     const html = leggi('index.html');
 
     const voci = (html.match(/<img[^>]*data-selezione-multipla="nascosta"[^>]*>/g) || []).map(t => (/tab="(\w+)"/.exec(t) || [])[1]);
-    assert.deepStrictEqual(voci, ["Tab6", "Tab7", "Tab8", "Tab13"]);
+    //Foto extra (Tab7) resta: dal lotto 3 vale per piu' box.
+    assert.deepStrictEqual(voci, ["Tab6", "Tab8", "Tab13"]);
 
-    //Nel piede si nascondono i contenitori di Fix, Info e No render, cosi' Elimina e Reimpagina
-    //restano vicini.
+    //Nel piede si nascondono i contenitori di Fix e Info, cosi' le icone che restano stanno vicine.
+    //No render resta: dal lotto 2 vale per piu' box.
     const contenitori = [];
     const re = /<div[^>]*data-selezione-multipla="nascosta"[^>]*>\s*<img([^>]*)>/g;
     let m;
     while ((m = re.exec(html)) !== null) {
         contenitori.push(m[1]);
     }
-    assert.strictEqual(contenitori.length, 3);
+    assert.strictEqual(contenitori.length, 2);
     assert.ok(contenitori.some(t => t.includes("fixRefImpaginata()")));
     assert.ok(contenitori.some(t => t.includes('id="infoRefImg"')));
-    assert.ok(contenitori.some(t => t.includes('id="noRenderRefImg"')));
+    assert.ok(!contenitori.some(t => t.includes('id="noRenderRefImg"')));
 
     //Edit, Elimina e Reimpagina restano.
     assert.ok(!/SubMenu_Edit_active\.png"[^>]*data-selezione-multipla/.test(html));
@@ -419,4 +420,83 @@ test("versioni precedenti e box in pagina insieme: niente scheda, niente Raggrup
     assert.match(ascolto, /\$\("#refImage"\)\.hide\(\);\n\s*\$\("#raggruppaImage"\)\.hide\(\);/);
     assert.match(ascolto, /Code IDX-197 /);
     assert.doesNotMatch(ascolto, /initSchedaRef|initMultiSchedaRef/);
+});
+
+/* ---- lotto 2: No render su piu' box ---- */
+
+test("con piu' box selezionati la schermata noRender, il suo disegno e il Salva valgono per tutti", () => {
+    const sorgente = leggi('schedaRef.js');
+    assert.match(sorgente, /apriModalNoRender\(\) \{\n\s*let me = this;\n\s*\/\/I20-1063[^\n]*\n\s*if \(this\.inSelezioneMultipla\) \{\n\s*this\.apriModalNoRenderPiuBox\(\);/);
+    assert.match(sorgente, /disegnaListaNoRender\(\) \{\n\s*let me = this;\n\s*if \(this\.inSelezioneMultipla\) \{\n\s*this\.disegnaListaNoRenderPiuBox\(\);/);
+    assert.match(sorgente, /salvaNoRender\(\) \{\n\s*if \(this\.inSelezioneMultipla\) \{\n\s*this\.salvaNoRenderPiuBox\(\);/);
+});
+
+test("l'avviso alla X conta le modifiche non salvate di tutti i box", () => {
+    const NoRenderElementi = require('../../plugin/noRenderElementi');
+    const lista = (noRender) => [{ tipo: 1, chiave: "prezzo", nome: "", guidId: "", presente: true, noRender: noRender }];
+    const a = lista(false);
+    const b = lista(false);
+    const piuBox = [
+        { lista: a, statoSalvato: NoRenderElementi.statoDiRendering(a) },
+        { lista: b, statoSalvato: NoRenderElementi.statoDiRendering(b) }
+    ];
+    a[0].noRender = true;
+    b[0].noRender = true;
+
+    const prima = { inSelezioneMultipla: schedaRef.inSelezioneMultipla, noRenderPiuBox: schedaRef.noRenderPiuBox };
+    schedaRef.inSelezioneMultipla = true;
+    schedaRef.noRenderPiuBox = piuBox;
+    try {
+        assert.match(schedaRef.avvisoModificheNoRender(), /\(2 elementi\)/);
+    }
+    finally {
+        schedaRef.inSelezioneMultipla = prima.inSelezioneMultipla;
+        schedaRef.noRenderPiuBox = prima.noRenderPiuBox;
+    }
+});
+
+test("il Salva del noRender su piu' box manda a ogni box cambiato la sua lista e aggiorna solo i box salvati", async () => {
+    const NoRenderElementi = require('../../plugin/noRenderElementi');
+    const elemento = (chiave, noRender) => ({ tipo: 1, chiave: chiave, nome: "", guidId: "", presente: true, noRender: noRender });
+    const box = (codice, idRec) => ({ dettaglio: { codiceGruppo: codice, idRec: String(idRec), item: { nome: "box" + codice } }, records: [record(codice, codice, {}, true, idRec)] });
+    const voce = (b, lista) => ({ box: b, lista: lista, codicePrimario: b.dettaglio.codiceGruppo, statoSalvato: NoRenderElementi.statoDiRendering(lista) });
+
+    const listaA = [elemento("prezzo", false)];
+    const listaB = [elemento("prezzo", false)];
+    const listaC = [elemento("prezzo", false)];
+    const piuBox = [voce(box("A", 11), listaA), voce(box("B", 22), listaB), voce(box("C", 33), listaC)];
+    //Si nasconde prezzo in A e B; C resta com'era e non si manda.
+    listaA[0].noRender = true;
+    listaB[0].noRender = true;
+
+    const inviati = [];
+    const aggiornati = [];
+    const applicati = [];
+    const messaggi = [];
+    const sostituiti = {
+        noRenderPiuBox: piuBox,
+        inviaNoRender: async (elementi, destinazione) => { inviati.push({ elementi, destinazione }); return destinazione.codiceGruppo !== "B"; },
+        aggiornaNoRenderNeiRecord: (elementi, records) => aggiornati.push(records[0].recordInTracciato["Scatto.CodiceGruppo"]),
+        applicaNoRenderAlDocumento: (b) => applicati.push(b.nome)
+    };
+    const originali = {};
+    Object.keys(sostituiti).forEach(k => { originali[k] = schedaRef[k]; schedaRef[k] = sostituiti[k]; });
+    const messaggioPrima = global.messaggioUtente;
+    global.messaggioUtente = (testo, tipo) => messaggi.push([testo, tipo]);
+    try {
+        await schedaRef.salvaNoRenderPiuBox();
+    }
+    finally {
+        Object.keys(originali).forEach(k => { schedaRef[k] = originali[k]; });
+        global.messaggioUtente = messaggioPrima;
+    }
+
+    assert.deepStrictEqual(inviati.map(i => i.destinazione), [{ codiceGruppo: "A", idRec: 11 }, { codiceGruppo: "B", idRec: 22 }]);
+    assert.deepStrictEqual(inviati[0].elementi, [{ tipo: 1, chiave: "prezzo", nome: "" }]);
+    //B non e' stato registrato: niente record, niente documento, e resta da salvare.
+    assert.deepStrictEqual(aggiornati, ["A"]);
+    assert.deepStrictEqual(applicati, ["boxA"]);
+    assert.strictEqual(NoRenderElementi.modificheNonSalvate(listaA, piuBox[0].statoSalvato), 0);
+    assert.strictEqual(NoRenderElementi.modificheNonSalvate(listaB, piuBox[1].statoSalvato), 1);
+    assert.deepStrictEqual(messaggi, [["Code SRF-144 noRender salvato: 1 box su 2. Non riusciti: B (salvataggio non riuscito)", "warning"]]);
 });
