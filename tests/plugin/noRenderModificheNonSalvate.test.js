@@ -113,7 +113,7 @@ test("la schermata noRender registra il controllo dopo averla aperta, e la fotog
 
 test("il salvato si aggiorna solo quando Istanta registra il salvataggio", () => {
     const scheda = sorgente("schedaRef.js");
-    const salva = scheda.substring(scheda.indexOf("    salvaNoRender() {"), scheda.indexOf("    inviaNoRender(elementi) {"));
+    const salva = scheda.substring(scheda.indexOf("    salvaNoRender() {"), scheda.indexOf("    inviaNoRender(elementi, destinazione = null) {"));
     assert.match(salva, /var statoInviato = NoRenderElementi\.statoDiRendering\(lista\);/);
     assert.match(salva, /if \(registrato\) \{\s*me\.statoNoRenderSalvato = statoInviato;/);
 });

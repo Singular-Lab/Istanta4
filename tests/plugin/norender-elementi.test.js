@@ -771,3 +771,75 @@ test("senza fotografia un elemento conta solo se e' nascosto, come si salverebbe
     assert.strictEqual(NoRenderElementi.modificheNonSalvate(lista, null), 1);
     assert.strictEqual(NoRenderElementi.modificheNonSalvate(null, null), 0);
 });
+
+/* ---- I20-1063: la schermata noRender per piu' box ---- */
+
+const T = NoRenderElementi.TIPO;
+function el(tipo, chiave, noRender, nome = "", guidId = "") {
+    return { tipo, chiave, nome, guidId, presente: true, noRender };
+}
+
+test("fra piu' box un campo o un logo si riconosce per tipo e chiave, una foto per ruolo", () => {
+    assert.strictEqual(NoRenderElementi.chiaveFraBox(el(T.campo, "prezzo", false), "100"), T.campo + ":prezzo");
+    assert.strictEqual(NoRenderElementi.chiaveFraBox(el(T.logo, "BIO", false), "100"), T.logo + ":BIO");
+    //La primaria ha per chiave il codice del primario del box, le altre sono secondarie.
+    assert.strictEqual(NoRenderElementi.chiaveFraBox(el(T.foto, "100", false), "100"), T.foto + ":primaria");
+    assert.strictEqual(NoRenderElementi.chiaveFraBox(el(T.foto, "101", false), "100"), T.foto + ":secondarie");
+    assert.strictEqual(NoRenderElementi.chiaveFraBox(el(T.foto, "200", false), "200"), NoRenderElementi.chiaveFraBox(el(T.foto, "100", false), "100"));
+});
+
+test("prima gli elementi in tutti i box, poi per numero di box; lo stato e' visibile, nascosto o misto", () => {
+    const boxes = [
+        { codicePrimario: "100", lista: [el(T.logo, "BIO", false), el(T.campo, "prezzo", true), el(T.foto, "100", false), el(T.campo, "bis", true)] },
+        { codicePrimario: "200", lista: [el(T.campo, "prezzo", true), el(T.foto, "200", true), el(T.campo, "bis", false), el(T.foto, "201", false)] },
+        { codicePrimario: "300", lista: [el(T.campo, "prezzo", true), el(T.foto, "300", false), el(T.campo, "bis", true)] }
+    ];
+    const righe = NoRenderElementi.righePerPiuBox(boxes);
+
+    assert.deepStrictEqual(righe.map(r => [r.chiaveFraBox, r.box.length, r.stato]), [
+        [T.campo + ":prezzo", 3, "nascosto"],
+        [T.foto + ":primaria", 3, "misto"],
+        [T.campo + ":bis", 3, "misto"],
+        [T.logo + ":BIO", 1, "visibile"],
+        [T.foto + ":secondarie", 1, "visibile"]
+    ]);
+    assert.deepStrictEqual(righe.map(r => r.inTuttiIBox), [true, true, true, false, false]);
+    assert.strictEqual(righe[1].nome, "Foto primaria");
+    assert.strictEqual(righe[4].nome, "Foto secondarie");
+    //Una foto per ruolo non ha una miniatura sola.
+    assert.strictEqual(righe[1].guidId, "");
+});
+
+test("una scelta vale solo per i box che hanno l'elemento, e per tutte le foto di quel ruolo", () => {
+    const boxes = [
+        { codicePrimario: "100", lista: [el(T.campo, "prezzo", false), el(T.foto, "100", false), el(T.foto, "101", false), el(T.foto, "102", true)] },
+        { codicePrimario: "200", lista: [el(T.foto, "200", false), el(T.campo, "bis", false)] }
+    ];
+
+    NoRenderElementi.applicaAPiuBox(boxes, T.foto + ":secondarie", true);
+    assert.deepStrictEqual(boxes[0].lista.map(e => e.noRender), [false, false, true, true]);
+    assert.deepStrictEqual(boxes[1].lista.map(e => e.noRender), [false, false]);
+
+    NoRenderElementi.applicaAPiuBox(boxes, T.campo + ":prezzo", true);
+    assert.strictEqual(boxes[0].lista[0].noRender, true);
+    assert.strictEqual(boxes[1].lista[1].noRender, false);
+});
+
+test("una riga mista offre nascondi e ripristina in tutti; le altre un pulsante solo", () => {
+    const [nascosta, mista, parziale] = NoRenderElementi.righePerPiuBox([
+        { codicePrimario: "1", lista: [el(T.campo, "a", true), el(T.campo, "b", true), el(T.campo, "c", false)] },
+        { codicePrimario: "2", lista: [el(T.campo, "a", true), el(T.campo, "b", false)] }
+    ]);
+
+    assert.deepStrictEqual(NoRenderElementi.datiRigaPiuBox(mista, "").pulsanti,
+        [{ testo: "Nascondi in tutti", noRender: true }, { testo: "Ripristina in tutti", noRender: false }]);
+    assert.strictEqual(NoRenderElementi.datiRigaPiuBox(mista, "").etichettaStato, "MISTO");
+    assert.deepStrictEqual(NoRenderElementi.datiRigaPiuBox(nascosta, "").pulsanti, [{ testo: "Ripristina", noRender: false }]);
+    assert.strictEqual(NoRenderElementi.datiRigaPiuBox(nascosta, "").barrato, true);
+    const datiParziale = NoRenderElementi.datiRigaPiuBox(parziale, "");
+    assert.deepStrictEqual(datiParziale.pulsanti, [{ testo: "Nascondi", noRender: true }]);
+    assert.strictEqual(datiParziale.presenza, "in 1 box su 2");
+    assert.strictEqual(NoRenderElementi.datiRigaPiuBox(nascosta, "").presenza, "");
+
+    assert.strictEqual(NoRenderElementi.riepilogoPiuBox([nascosta, mista, parziale], 2), "2 box, 3 elementi: 1 non renderizzato, 1 misto.");
+});

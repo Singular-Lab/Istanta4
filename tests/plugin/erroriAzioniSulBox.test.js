@@ -75,7 +75,7 @@ test("Edit P/S senza risposta lo dice", () => {
 /* ---- noRender, ricollegamento, cambio strutturale ---- */
 
 test("il noRender rifiutato dice il motivo, e senza risposta lo dice", () => {
-    const invia = tratto(sorgente("schedaRef.js"), "    inviaNoRender(elementi) {", "xhr.send(\"Menabo/modificaNoRender/0\"");
+    const invia = tratto(sorgente("schedaRef.js"), "    inviaNoRender(elementi, destinazione = null) {", "xhr.send(\"Menabo/modificaNoRender/0\"");
     assert.match(invia, /messaggioUtente\("Code SRF-53 noRender: il server ha rifiutato il salvataggio" \+ \(objResult\.error \? ": " \+ objResult\.error : ""\), "error"\);/);
     assert.match(invia, DETTAGLIO);
     assert.match(invia, /xhr\.onerror = function \(motivo\) \{\s*messaggioUtente\("Code SRF-125 noRender: richiesta non riuscita: " \+ XMLHttpRequestClient\.testoErrore\(motivo\), "error"\);\s*resolve\(false\);/);

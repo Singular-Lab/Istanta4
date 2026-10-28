@@ -2714,8 +2714,14 @@ const schedaFoto = {
             var newItems = oldItems.concat(nuovoElImpaginato);
             var masterGroup = myPage.groups.add(newItems);
             masterGroup.label = oldLabel;
-            app.selection = [masterGroup];
             nuovoElImpaginato.bringToFront();
+            //I20-1063: nella selezione multipla il box rifatto lo tiene chi chiama
+            //(fotoExtraPiuBox.impaginaExtraNelBox), che alla fine riseleziona tutti i box: qui non
+            //c'e' una scheda di un box da ripuntare ne' da ridisegnare.
+            if (this.inSelezioneMultipla) {
+                return masterGroup;
+            }
+            app.selection = [masterGroup];
             this.refSelected.item = masterGroup;
     
             this.FotoExtraPanel(masterGroup);

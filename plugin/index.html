@@ -402,7 +402,7 @@
                  delle icone, cosi' le icone che restano si avvicinano invece di lasciare il posto vuoto. -->
             <img src="images/SubMenu_Primariasecondaria.png" tab="Tab6" style="cursor:pointer;" data-selezione-multipla="nascosta"
               onclick="jsIndexControls.openTab(event, 'Tab6'), jsIndexControls.changeImage($(this)), selectSchedaRef(2)">
-            <img src="images/SubMenu_Fotoextra.png" tab="Tab7" style="cursor:pointer;" data-selezione-multipla="nascosta"
+            <img src="images/SubMenu_Fotoextra.png" tab="Tab7" style="cursor:pointer;"
               onclick="jsIndexControls.openTab(event, 'Tab7'), jsIndexControls.changeImage($(this)), selectSchedaRef(3)">
             <img id="sgruppa" src="images/SubMenu_Sgruppa.png" tab="Tab8" style="cursor:pointer;" data-selezione-multipla="nascosta"
               onclick="jsIndexControls.openTab(event, 'Tab8'), jsIndexControls.changeImage($(this)), selectSchedaRef(4)">
@@ -675,7 +675,8 @@
                   data-bs-toggle="tooltip" data-bs-html="true" data-bs-placement="bottom" title="Informazioni referenza"
                   onclick="schedaRef.apriModalInfoReferenza()">
             </div>
-            <div style="width: 8%; display: flex; justify-content: center; align-items: center;" data-selezione-multipla="nascosta">
+            <!-- I20-1063, lotto 2: No render vale anche per piu' box (schedaRef.apriModalNoRenderPiuBox). -->
+            <div style="width: 8%; display: flex; justify-content: center; align-items: center;">
                 <img id="noRenderRefImg" src="images/noRender.png" style="height: 24px; cursor: pointer;"
                   data-bs-toggle="tooltip" data-bs-html="true" data-bs-placement="bottom" title="Elementi non renderizzati"
                   onclick="schedaRef.apriModalNoRender()">

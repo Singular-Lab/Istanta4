@@ -515,9 +515,135 @@ var NoRenderElementi = (function () {
         return contenitore;
     }
 
+    /* ---- I20-1063: la schermata noRender per piu' box selezionati ---- */
+
+    var RUOLO_FOTO = { primaria: "primaria", secondarie: "secondarie" };
+    var STATO_RIGA = { visibile: "visibile", nascosto: "nascosto", misto: "misto" };
+
+    /// La chiave con cui lo stesso elemento si riconosce in piu' box. Campi, etichette, loghi e
+    /// foto extra per tipo e chiave (nome del campo o sigla, cioe' l'etichetta senza la parte dopo
+    /// il $). Le foto hanno per chiave il codice referenza, che cambia da box a box: si riconoscono
+    /// per ruolo. La primaria e' quella col codice del primario del box (la sua label e'
+    /// nomeFotoPrimaria$<codice del primario>), le altre sono secondarie.
+    function chiaveFraBox(elemento, codicePrimario) {
+        if (elemento == null) {
+            return "";
+        }
+        if (elemento.tipo === TIPO_FOTO) {
+            var ruolo = pulisci(elemento.chiave) === pulisci(codicePrimario) ? RUOLO_FOTO.primaria : RUOLO_FOTO.secondarie;
+            return TIPO_FOTO + ":" + ruolo;
+        }
+        return elemento.tipo + ":" + pulisci(elemento.chiave);
+    }
+
+    /// Le righe della schermata per piu' box. listePerBox ha, per ogni box nell'ordine della
+    /// selezione, { lista, codicePrimario }: la lista come la compone componiLista. Una riga per
+    /// chiave fra box, con i box che hanno l'elemento e quelli in cui e' nascosto o visibile, e lo
+    /// stato: visibile, nascosto, o misto se e' nascosto in alcuni box e visibile in altri (per le
+    /// foto secondarie anche dentro lo stesso box). Prima le righe presenti in tutti i box, poi per
+    /// numero di box decrescente; a parita' nell'ordine in cui compaiono.
+    function righePerPiuBox(listePerBox) {
+        var boxes = listePerBox || [];
+        var righe = [];
+        var aggiungi = function (elenco, indice) {
+            if (elenco.indexOf(indice) < 0) {
+                elenco.push(indice);
+            }
+        };
+
+        boxes.forEach(function (b, indiceBox) {
+            ((b && b.lista) || []).forEach(function (elemento) {
+                if (elemento == null) {
+                    return;
+                }
+                var chiave = chiaveFraBox(elemento, b.codicePrimario);
+                var riga = righe.find(function (r) { return r.chiaveFraBox === chiave; });
+                if (riga == null) {
+                    var foto = elemento.tipo === TIPO_FOTO;
+                    riga = {
+                        chiaveFraBox: chiave,
+                        tipo: elemento.tipo,
+                        chiave: foto ? "" : pulisci(elemento.chiave),
+                        nome: foto ? (chiave === TIPO_FOTO + ":" + RUOLO_FOTO.primaria ? "Foto primaria" : "Foto secondarie") : pulisci(elemento.nome),
+                        //Una foto per ruolo non ha una miniatura sola: ogni box ha la sua.
+                        guidId: foto ? "" : pulisci(elemento.guidId),
+                        box: [],
+                        nascostoIn: [],
+                        visibileIn: [],
+                        ordine: righe.length
+                    };
+                    righe.push(riga);
+                }
+                if (riga.guidId === "" && riga.tipo !== TIPO_FOTO && pulisci(elemento.guidId) !== "") {
+                    riga.guidId = pulisci(elemento.guidId);
+                }
+                aggiungi(riga.box, indiceBox);
+                aggiungi(elemento.noRender === true ? riga.nascostoIn : riga.visibileIn, indiceBox);
+            });
+        });
+
+        righe.forEach(function (r) {
+            r.totaleBox = boxes.length;
+            r.inTuttiIBox = r.box.length === boxes.length;
+            r.stato = r.nascostoIn.length === 0 ? STATO_RIGA.visibile : (r.visibileIn.length === 0 ? STATO_RIGA.nascosto : STATO_RIGA.misto);
+        });
+
+        return righe.sort(function (a, b) {
+            return (b.box.length - a.box.length) || (a.ordine - b.ordine);
+        });
+    }
+
+    /// Applica una scelta a tutti i box che hanno l'elemento della riga: per le foto a tutte le foto
+    /// di quel ruolo. Gli altri box non cambiano.
+    function applicaAPiuBox(listePerBox, chiave, noRender) {
+        (listePerBox || []).forEach(function (b) {
+            ((b && b.lista) || []).forEach(function (elemento) {
+                if (elemento != null && chiaveFraBox(elemento, b.codicePrimario) === chiave) {
+                    elemento.noRender = noRender === true;
+                }
+            });
+        });
+    }
+
+    /// Dati di una riga per piu' box: descrizione, in quanti box c'e' se non in tutti, lo stato e
+    /// i pulsanti. Una riga mista ha i due pulsanti, per nascondere o ripristinare in tutti.
+    function datiRigaPiuBox(riga, indirizzoBase) {
+        var stato = riga != null ? riga.stato : STATO_RIGA.visibile;
+        var pulsanti = stato === STATO_RIGA.visibile ? [{ testo: "Nascondi", noRender: true }]
+            : stato === STATO_RIGA.nascosto ? [{ testo: "Ripristina", noRender: false }]
+                : [{ testo: "Nascondi in tutti", noRender: true }, { testo: "Ripristina in tutti", noRender: false }];
+
+        return {
+            descrizione: descriviElemento(riga),
+            presenza: riga != null && !riga.inTuttiIBox ? "in " + riga.box.length + " box su " + riga.totaleBox : "",
+            urlMiniatura: urlMiniatura(riga, indirizzoBase, 50),
+            urlIngrandita: urlMiniatura(riga, indirizzoBase, 300),
+            stato: stato,
+            barrato: stato === STATO_RIGA.nascosto,
+            etichettaStato: stato === STATO_RIGA.nascosto ? "NON RENDERIZZATO" : (stato === STATO_RIGA.misto ? "MISTO" : ""),
+            pulsanti: pulsanti
+        };
+    }
+
+    /// Il riepilogo in testa all'elenco per piu' box.
+    function riepilogoPiuBox(righe, quantiBox) {
+        var elenco = righe || [];
+        var nascoste = elenco.filter(function (r) { return r.stato === STATO_RIGA.nascosto; }).length;
+        var miste = elenco.filter(function (r) { return r.stato === STATO_RIGA.misto; }).length;
+        return quantiBox + " box, " + elenco.length + " element" + (elenco.length === 1 ? "o" : "i") +
+            ": " + nascoste + " non renderizzat" + (nascoste === 1 ? "o" : "i") + ", " + miste + " mist" + (miste === 1 ? "o" : "i") + ".";
+    }
+
     return {
         TIPO: TIPO,
         TIPO_FOTO: TIPO_FOTO,
+        RUOLO_FOTO: RUOLO_FOTO,
+        STATO_RIGA: STATO_RIGA,
+        chiaveFraBox: chiaveFraBox,
+        righePerPiuBox: righePerPiuBox,
+        applicaAPiuBox: applicaAPiuBox,
+        datiRigaPiuBox: datiRigaPiuBox,
+        riepilogoPiuBox: riepilogoPiuBox,
         classificaLabel: classificaLabel,
         tipoFotoDellaLabel: tipoFotoDellaLabel,
         descriviElemento: descriviElemento,
