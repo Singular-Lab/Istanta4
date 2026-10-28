@@ -234,9 +234,11 @@ function useKitLogic({ kit }: UseKitLogicProps) {
     mutationKey: ["downloadKitZip", kit.guidId],
     mutationFn: async (data) => {
       const url = `${ServerCall.getUrl()}/downloadKitZip`;
+      // Fuori da ServerCall: il token CSRF va aggiunto a mano, senza il server risponde 403
       const response = await axios.post(url, data, {
         responseType: 'blob',
-        withCredentials: true
+        withCredentials: true,
+        headers: { 'x-csrf-token': (await ServerCall.ensureCSRFToken()) ?? '' }
       });
       return { data: response.data, fileCount: data.files.length };
     },
@@ -296,7 +298,8 @@ function useKitLogic({ kit }: UseKitLogicProps) {
       const response = await axios.post(url, formData, {
         withCredentials: true,
         headers: {
-          'Content-Type': 'multipart/form-data'
+          'Content-Type': 'multipart/form-data',
+          'x-csrf-token': (await ServerCall.ensureCSRFToken()) ?? ''
         }
       });
       return response.data;

@@ -136,7 +136,10 @@ const DeveloperConsole = forwardRef<
         formData.append('sigla', logo.sigla);
         formData.append('tipo', logo.tipo.toString());
         const apiUrl = `${ServerCall.getUrl()}/uploadForzatoImmaginiOlimpo`;
-        await axios.post(apiUrl, formData, { withCredentials: true });
+        await axios.post(apiUrl, formData, {
+          withCredentials: true,
+          headers: { 'x-csrf-token': (await ServerCall.ensureCSRFToken()) ?? '' },
+        });
       } catch (error) {
         console.error('Error uploading logo:', error);
       }

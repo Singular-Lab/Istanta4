@@ -583,7 +583,8 @@ export class UserController extends BaseController {
 
   private async registerUser(req: Request, res: Response): Promise<void> {
     try {
-      console.log('registerUser - Start', { body: req.body, sessionUser: req.session.id_utente });
+      // Mai il body nei log: contiene la password
+      log.info('registerUser - Start', { tipo: req.body?.tipo, sessionUser: req.session.id_utente });
 
       let { email, nome, cognome, password, tipo, stato, residenza, dataDiNascita, gdoScelta, idPuntoVendita, ruoloGDO, telefono, sesso } = req.body as {
         email: string,

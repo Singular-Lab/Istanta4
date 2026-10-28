@@ -74,10 +74,8 @@ export function applyMiddlewares(app: Express) {
       return next();
     }
 
-    if (req.path.startsWith('/api/external')) {
-      return next();
-    }
-
+    // /api/external non e' esente: le sue route a sessione (chiavi API, statistiche, template)
+    // seguono la regola comune; plugin e integrazioni passano dai controlli sugli header sotto.
     if (req.path.startsWith(PREFISSO_ACS_SAML)) {
       return next();
     }

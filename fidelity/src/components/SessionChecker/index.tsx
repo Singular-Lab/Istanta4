@@ -140,6 +140,9 @@ const SessionCheckWrapper: React.FC<SessionCheckWrapperProps> = ({ WrappedCompon
   // COORDINAMENTO CON ServerCall per gestione 401
   // ============================================================
   const unauthorizedCallbackRef = useRef<((istantaRequired?: boolean) => void) | null>(null);
+  // Callback registrata in ServerCall e quella che c'era prima (di solito del layout)
+  const registrataRef = useRef<((istantaRequired?: boolean) => void) | null>(null);
+  const precedenteRef = useRef<((istantaRequired?: boolean) => void) | null>(null);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -162,20 +165,27 @@ const SessionCheckWrapper: React.FC<SessionCheckWrapperProps> = ({ WrappedCompon
         };
 
         // Registra callback in ServerCall
-        ServerCall.setOnUnauthorizedCallback((istantaRequired?: boolean) => {
+        registrataRef.current = (istantaRequired?: boolean) => {
           if (unauthorizedCallbackRef.current) {
             unauthorizedCallbackRef.current(istantaRequired);
           }
-        });
+        };
+        precedenteRef.current = ServerCall.setOnUnauthorizedCallback(registrataRef.current);
 
         console.log('[SessionChecker] Callback 401 registrata');
       }
     }
 
-    // CLEANUP: rimuovi callback al unmount
+    // CLEANUP: al unmount torna la callback precedente, cosi' una pagina protetta che si
+    // smonta non lascia senza gestione del 401 il layout e le pagine senza HOC.
+    // Senza callback precedente ne resta una vuota (vedi ServerCall.handleUnauthorized).
     return () => {
       if (unauthorizedCallbackRef.current) {
-        ServerCall.setOnUnauthorizedCallback(() => { });
+        if (registrataRef.current) {
+          ServerCall.removeOnUnauthorizedCallback(registrataRef.current, precedenteRef.current ?? (() => { }));
+        }
+        registrataRef.current = null;
+        precedenteRef.current = null;
         unauthorizedCallbackRef.current = null;
         console.log('[SessionChecker] Callback 401 rimossa');
       }

@@ -104,3 +104,25 @@ describe('limite del body JSON', () => {
     expect(webPliantService.creaWebPliantWorkspace).toHaveBeenCalledTimes(1);
   });
 });
+
+// Spec referenze-webpliant, "Visibilita temporale": la data di consultazione la sceglie solo chi configura WebPliant
+describe('data di consultazione del volantino WebPliant', () => {
+  const futura = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const giorno = (data: Date) => data.toISOString().slice(0, 10);
+
+  it('una richiesta anonima con una data futura vede il volantino di oggi', async () => {
+    const { app, webPliantService } = createApp();
+
+    await request(app).get(`/api/getReferenzeWebPliant?id=w1&date=${futura}`).expect(200);
+
+    expect(giorno(webPliantService.getReferenzeWebPliant.mock.calls[0][1])).not.toBe(futura);
+  });
+
+  it('chi configura WebPliant consulta alla data scelta', async () => {
+    const { app, webPliantService } = createApp({ id_utente: 'u1', permessi: ['webpliant.configura'] });
+
+    await request(app).get(`/api/getReferenzeWebPliant?id=w1&date=${futura}`).expect(200);
+
+    expect(giorno(webPliantService.getReferenzeWebPliant.mock.calls[0][1])).toBe(futura);
+  });
+});

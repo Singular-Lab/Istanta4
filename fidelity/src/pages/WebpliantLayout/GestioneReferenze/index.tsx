@@ -616,6 +616,7 @@ const GestioneReferenze = forwardRef<GestioneReferenzeHandle, {}>((props, ref) =
       const uploadedFile = await axios.post(`${urlAPI}/updateImmagineReferenza`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
+          'x-csrf-token': (await ServerCall.ensureCSRFToken()) ?? '',
         },
       });
       if (uploadedFile.status === 200) {
@@ -639,6 +640,7 @@ const GestioneReferenze = forwardRef<GestioneReferenzeHandle, {}>((props, ref) =
       const uploadedFile = await axios.post(`${urlAPI}/updateImmagineGruppoReferenza`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
+          'x-csrf-token': (await ServerCall.ensureCSRFToken()) ?? '',
         },
       });
       if (uploadedFile.status === 200) {

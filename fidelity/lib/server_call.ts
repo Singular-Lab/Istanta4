@@ -529,7 +529,23 @@ class ServerCall {
    * Tipicamente chiamato dall'HOC withSessionCheck al mount
    */
   public static setOnUnauthorizedCallback(cb: (istantaRequired?: boolean) => void) {
+    const precedente = this.onUnauthorizedCallback;
     this.onUnauthorizedCallback = cb;
+    return precedente;
+  }
+
+  /**
+   * Toglie la callback registrata da un HOC e rimette quella che c'era prima (per esempio
+   * quella del layout, quando si smonta una pagina protetta a sua volta). Se nel frattempo
+   * un altro HOC ha registrato la propria, resta quella.
+   */
+  public static removeOnUnauthorizedCallback(
+    cb: (istantaRequired?: boolean) => void,
+    precedente: ((istantaRequired?: boolean) => void) | null
+  ) {
+    if (this.onUnauthorizedCallback === cb) {
+      this.onUnauthorizedCallback = precedente;
+    }
   }
 
   /**

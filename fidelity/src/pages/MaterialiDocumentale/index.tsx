@@ -392,6 +392,7 @@ const MaterialiDocumentale: React.FC = () => {
       headers.append('Content-Type', 'application/json');
       headers.append('Accept', 'application/json');
       headers.append('X-Requested-With', 'XMLHttpRequest');
+      headers.append('x-csrf-token', (await ServerCall.ensureCSRFToken()) ?? '');
 
       const response = await fetch(`${ServerCall.getUrl()}/downloadPromoZip`, {
         method: 'POST',
