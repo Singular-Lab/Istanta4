@@ -2470,17 +2470,19 @@
             }
             html += '</div>';
         });
+        /* I20-1154: senza correzioni la colonna non resta vuota. Come nel vecchio elenca i volantini
+           aperti dove compare lo stesso prodotto, senza spunta perche' non c'e' niente da propagare.
+           I gemelli sono gli stessi per prezzi e descrizione: si chiedono con la parte "offerta". */
         if (quante === 0)
-            html = '<div class="vuoto">' + (stato.puoScrivere
-                ? 'Salva una correzione: poi qui scegli su quali volantini gemelli portarla.'
-                : 'nessuna propagazione') + '</div>';
+            html = '<div class="ea_prop"><div class="ea_prop_vuoto" data-gemelli="offerta" data-solo-elenco="1">' +
+                   'Cerco i volantini del prodotto…</div></div>';
         cont.innerHTML = html;
         cont.querySelectorAll('[data-gemelli]').forEach(function (d) {
-            caricaGemelliEdit(id, d.dataset.gemelli, d.parentNode);
+            caricaGemelliEdit(id, d.dataset.gemelli, d.parentNode, d.dataset.soloElenco === '1');
         });
     }
 
-    function caricaGemelliEdit(id, parte, cassetta) {
+    function caricaGemelliEdit(id, parte, cassetta, soloElenco) {
         apiGet(C4_BASE + 'Correzioni/Edit/' + id + '/Gemelli/' + parte).then(function (j) {
             if (!document.body.contains(cassetta)) return;
             if (!j.ok) {
@@ -2488,8 +2490,22 @@
                 if (v) v.textContent = j.messaggio || 'Gemelli non disponibili.';
                 return;
             }
-            disegnaGemelliEdit(id, parte, cassetta, j.dati || []);
+            if (soloElenco) disegnaVolantiniProdotto(cassetta, j.dati || []);
+            else disegnaGemelliEdit(id, parte, cassetta, j.dati || []);
         });
+    }
+
+    // I20-1154: i volantini del prodotto senza correzioni: la «i» col suggerimento e il nome, niente spunta.
+    function disegnaVolantiniProdotto(cassetta, lista) {
+        cassetta.innerHTML = lista.length === 0
+            ? '<div class="ea_prop_vuoto">Questo prodotto non compare su altri volantini aperti.</div>'
+            : lista.map(function (g) {
+                  var dettagli = g.promo + ' · ' + g.volantino + ' · pag. ' + g.pagina +
+                                 ' · vers. ' + g.versione + '\n' + g.etichetta;
+                  return '<div class="ea_pill ferma" title="' + escA(dettagli) + '">' +
+                         '<img class="i" src="' + escA(IMG + 'infoButton.png') + '" alt="">' +
+                         '<span class="nome">' + esc(g.volantino) + '</span></div>';
+              }).join('');
     }
 
     function disegnaGemelliEdit(id, parte, cassetta, lista) {
