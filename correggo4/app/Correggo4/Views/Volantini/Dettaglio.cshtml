@@ -485,13 +485,19 @@
     .modale .testa {
         display: flex; justify-content: space-between; align-items: center;
         padding: 4px 8px; font-size: 11px; font-weight: bold;
-        background: #d3d3d3; border-bottom: 1px solid #9a9a9a;
+        background: #d3d3d3; border-bottom: 1px solid #9a9a9a; position: relative;
     }
     .modale .testa .chiudi {
         font-weight: normal; border: 1px solid #888; background: #efefef;
         padding: 1px 8px; cursor: pointer; font-size: 11px;
     }
-    .modale .reset_valori { text-align: center; padding: 4px 0; }
+    /* I20-1155: RESET VALORI come nel vecchio (screenshot dell'operatore del 28/10): a cavallo della
+       linea sotto la testata, centrato sopra la colonna dei prezzi (.c3: dal 50% della finestra, largo
+       il 26%), non piu' in una riga sua. Sta nella testata, quindi non scorre con la colonna; la
+       colonna dei prezzi lascia in alto lo spazio per la meta' che scende. */
+    .modale .reset_valori { position: absolute; left: 50%; width: 26%; bottom: 0; transform: translateY(50%);
+                            text-align: center; z-index: 2; font-weight: normal; }
+    .modale .colonna.c3 { padding-top: 18px; }
     .modale .colonne { display: flex; flex: 1; overflow: hidden; }
     .modale .colonna { padding: 10px 12px; overflow-y: auto; }
     /* Le due macro-aree del manuale: descrizione prodotto | prezzi e meccaniche */
@@ -885,8 +891,8 @@
     <div class="testa">
         <span id="mTitolo"></span>
         <span class="chiudi" id="mChiudi">CHIUDI</span>
+        <div class="reset_valori"><button class="bottone" type="button" id="mReset">RESET VALORI</button></div>
     </div>
-    <div class="reset_valori"><button class="bottone" type="button" id="mReset">RESET VALORI</button></div>
     <div class="colonne">
         <div class="colonna c1">
             <div class="ritaglio" id="mRitaglio"><img id="mRitaglioImg" src="" alt=""></div>
