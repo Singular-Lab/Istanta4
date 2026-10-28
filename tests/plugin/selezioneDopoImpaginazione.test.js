@@ -84,7 +84,10 @@ test("confrontoBox dice quale box resta, in tutti e tre i rami, e l'impaginazion
 test("Reimpagina box attende l'impaginazione e seleziona il box nuovo; il cambio di primarie la attende", () => {
     const scheda = sorgente("schedaRef.js");
     const reimpagina = corpoMembro(scheda, "    async applicaReimpaginazione(){");
-    assert.match(reimpagina, /var esito = await impaginazioneSingoloIndd\(schedaRef, pagina, false, null, false, bounds, false, false\);/);
+    //I20-1063: il box si rifa' in rifaiBox, che usa anche il Reimpagina della selezione multipla.
+    assert.match(reimpagina, /esito = await this\.rifaiBox\(schedaRef, this\.refSelected\.item\);/);
+    const rifai = corpoMembro(scheda, "    async rifaiBox(schedaRef, boxPrecedente) {");
+    assert.match(rifai, /var esito = await impaginazioneSingoloIndd\(schedaRef, pagina, false, null, false, bounds, false, false\);/);
     assert.match(reimpagina, /Utility\.selezionaBox\(esito != null \? \(esito\.boxFinale \|\| esito\.boxAggiunto\) : null\);/);
 
     const allinea = corpoMembro(scheda, "    async allineaBoxDopoSalvataggioPS(box, codiceBoxPrecedente) {");

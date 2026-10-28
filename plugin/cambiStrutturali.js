@@ -317,6 +317,48 @@ const cambiStrutturali = {
             azioni.every(a => (Array.isArray(a?.opzioniValide) ? a.opzioniValide : this.OPZIONI_GRUPPO).includes(o)));
     },
 
+    /// Se l'azione si puo' fare in un box che ha queste etichette, gia' passate da
+    /// Utility.parseLabel. Un'azione che dichiara i campi InDesign coinvolti vuole almeno uno di
+    /// quei campi nel box; una che non ne dichiara si puo' fare sempre.
+    azioneConCampiNelBox(azione, etichetteDelBox) {
+        const campi = azione?.campiInddCoinvolti;
+        if (!Array.isArray(campi) || campi.length === 0) {
+            return true;
+        }
+        const etichette = Array.isArray(etichetteDelBox) ? etichetteDelBox : [];
+        return campi.some(c => etichette.includes(Utility.parseLabel(c.label)));
+    },
+
+    /// I20-1063: le azioni sul box di una selezione multipla.
+    ///
+    /// azioniPerBox ha, per ogni box selezionato nell'ordine della selezione, le azioni che quel box
+    /// ammette. La stessa azione si riconosce dal titolo: l'id e' solo la posizione nell'elenco di
+    /// un box, e i valori delle istruzioni possono dipendere dal record. Per ogni titolo, nell'ordine
+    /// in cui compare la prima volta, si restituisce l'azione di ciascun box (null dove manca),
+    /// comune se tutti i box la ammettono, e le opzioni gruppo/primario valide per tutti i box che
+    /// la hanno.
+    azioniDellaSelezione(azioniPerBox) {
+        const elenco = Array.isArray(azioniPerBox) ? azioniPerBox : [];
+        const titoli = [];
+
+        elenco.forEach(azioni => (Array.isArray(azioni) ? azioni : []).forEach(a => {
+            if (a != null && a.titolo != null && !titoli.includes(a.titolo)) {
+                titoli.push(a.titolo);
+            }
+        }));
+
+        return titoli.map(titolo => {
+            const perBox = elenco.map(azioni => (Array.isArray(azioni) ? azioni : []).find(a => a != null && a.titolo === titolo) || null);
+            const presenti = perBox.filter(a => a != null);
+            return {
+                titolo: titolo,
+                azioniPerBox: perBox,
+                comune: elenco.length > 0 && presenti.length === elenco.length,
+                opzioniValide: this.opzioniComuni(presenti)
+            };
+        });
+    },
+
     /// Il valore di un'istruzione secondo la sua operazione: 0 Set scrive il valore,
     /// 1 AppendText lo accoda a quello che c'e', 2 RemoveText lo toglie e ripulisce i bordi.
     _resolveIstruzioneValue(istruzione, record) {

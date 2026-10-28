@@ -568,7 +568,8 @@ test("ogni casella dei cambi strutturali della scheda ref resta nativa", () => {
     const scheda = leggiFileDelPlugin("schedaRef.js").replace(/\r/g, "");
     const caselle = scheda.match(/<input[^>]*fieldCambioStrutturale[^>]*>/g) || [];
 
-    assert.strictEqual(caselle.length, 4, "riga dell'azione e finestra, per il valore libero e per quello forzato");
+    //I20-1063: la quinta e' il valore libero di un'azione nella scheda della selezione multipla.
+    assert.strictEqual(caselle.length, 5, "riga dell'azione e finestra, per il valore libero e per quello forzato, e il valore libero della selezione multipla");
     caselle.forEach(casella => assert.ok(casella.includes("data-sempre-nativo"), casella.substring(0, 120)));
 });
 

@@ -543,6 +543,8 @@ const schedaRef = {
             this.addestramentoCampi = null;
 
             this.svuotaRef();
+            //I20-1063: un box solo: se il pannello mostrava la selezione multipla, se ne esce.
+            this.esciDaSelezioneMultipla();
             this.setInvalidated(false);
             me.refSelected = ref;
 
@@ -564,6 +566,13 @@ const schedaRef = {
 
                 console.log("Scheda ref RESULT Returned");
                 console.log(error);
+                //I20-1063: nel frattempo e' arrivata un'altra selezione (anche multipla): questa
+                //scheda non e' piu' quella da mostrare.
+                if (me.refSelected !== ref) {
+                    console.warn("Scheda ref di una selezione non piu' attuale");
+                    me.setBusy(false);
+                    return;
+                }
                 if (me.isInvalidated) {
                     //writeDebugMessageForCrash("La scheda 1 ref non è più valida");
                     console.warn("La scheda ref non è più valida");
@@ -664,12 +673,20 @@ const schedaRef = {
         }
     },
 
+    /// I20-1063: piu' box selezionati insieme. Si scaricano le schede di tutti, poi si apre la
+    /// scheda della selezione multipla (mostraSchedaMultipla). Prima si apriva solo Raggruppa e
+    /// restava in piedi la scheda del box selezionato prima: Fix ed Elimina agivano sul primo box
+    /// della selezione, le altre voci su nessuno.
     async initMultiSchedaRef(refs) {
         showLoading("Caricamento scheda...");
+        let me = this;
         try {
-            let me = this;
             me.multiSelection = refs;
             me.multiSchedeRef = [];
+            me.boxSelezioneMultipla = [];
+            //Raggruppa lo rimostra mostraSchedaMultipla, e solo se i box sono tutti impaginati: non
+            //deve restare quello della selezione di prima mentre arrivano le schede.
+            $("#raggruppaImage").hide();
             indesignEvents.setBusy(true);
             var listaCodiciGruppo = [];
             var listaIdRec = [];
@@ -689,6 +706,11 @@ const schedaRef = {
             }
 
             await getSchedeRefsMassivo(listaCodiciGruppo, listaIdRec, function (error, schedeRefs) {
+                //Nel frattempo la selezione e' cambiata: queste schede non servono piu'.
+                if (me.multiSelection !== refs) {
+                    return;
+                }
+
                 if (error) {
                     console.error("Errore durante la richiesta:", error);
                     messaggioUtente("Code SRF-03 Errore generico durante la richiesta: " + error.message, "error");
@@ -697,17 +719,19 @@ const schedaRef = {
                 }
 
                 console.log("Risultato ottenuto:", schedeRefs);
-                // Puoi ora usare `schedaRef` qui
 
+                //Le schede arrivano nell'ordine dei codici chiesti, cioe' della selezione.
+                var schede = Array.isArray(schedeRefs) ? schedeRefs : [];
                 me.multiSchedeRef = [];
-                schedeRefs.forEach(schedaRef => {
-                    me.multiSchedeRef.push(schedaRef.records);
-                });
+                me.boxSelezioneMultipla = [];
+                for (let i = 0; i < refs.length; i++) {
+                    var scheda = schede[i] || {};
+                    var records = Array.isArray(scheda.records) ? scheda.records : [];
+                    me.multiSchedeRef.push(records);
+                    me.boxSelezioneMultipla.push({ dettaglio: refs[i], records: records, errorCode: scheda.errorCode, error: scheda.error });
+                }
 
-                $("#raggruppaImage").show();
-                var listaCodiciConId = me.getCodiciConIdFromMultiSelection(me.multiSelection);
-                $("#raggruppa").attr("codiciConId", encodeURIComponent(JSON.stringify(listaCodiciConId)));
-                me.SchermataRaggruppamento();
+                me.mostraSchedaMultipla();
             });
         }
         catch (error) {
@@ -719,6 +743,712 @@ const schedaRef = {
         }
         finally {
             indesignEvents.setBusy(false);
+        }
+    },
+
+    /* ---- I20-1063: la scheda della selezione multipla ---- */
+
+    /// Vero mentre il pannello mostra la scheda della selezione multipla.
+    inSelezioneMultipla: false,
+
+    /// I box della selezione multipla nell'ordine della selezione: { dettaglio, records,
+    /// errorCode, error }. dettaglio e' quello di events.js (item, codiceGruppo, idRec, pagRef...),
+    /// records la sua scheda, vuota per un box da ricollegare.
+    boxSelezioneMultipla: [],
+
+    /// Le azioni sul box della selezione multipla, come le restituisce
+    /// cambiStrutturali.azioniDellaSelezione, e se fra i box c'e' un gruppo.
+    azioniSelezioneMultipla: [],
+    azioniDiGruppoSelezioneMultipla: false,
+
+    STATI_SELEZIONE_MULTIPLA: {
+        impaginati: "impaginati",
+        daRicollegare: "daRicollegare",
+        misti: "misti",
+        nonLeggibili: "nonLeggibili"
+    },
+
+    /// Come stanno i box selezionati, dalle loro schede. Il codice 8 (CodArticoloNonTrovato) vuol
+    /// dire box da ricollegare, come per un box solo; una scheda senza record e senza quel codice
+    /// non si e' potuta leggere, e allora la selezione non si apre.
+    statoDellaSelezioneMultipla(schede) {
+        const elenco = Array.isArray(schede) ? schede : [];
+        const stati = this.STATI_SELEZIONE_MULTIPLA;
+
+        if (elenco.length === 0) {
+            return stati.nonLeggibili;
+        }
+
+        const daRicollegare = elenco.filter(s => s != null && s.errorCode == 8).length;
+        const leggibili = elenco.filter(s => s != null && s.errorCode != 8 && Array.isArray(s.records) && s.records.length > 0).length;
+
+        if (daRicollegare + leggibili < elenco.length) {
+            return stati.nonLeggibili;
+        }
+        if (daRicollegare === 0) {
+            return stati.impaginati;
+        }
+        if (leggibili === 0) {
+            return stati.daRicollegare;
+        }
+        return stati.misti;
+    },
+
+    /// Il primario fra i record di una scheda, o null.
+    primarioDeiRecords(records) {
+        return (Array.isArray(records) ? records : []).find(
+            r => r != null && r.recordInTracciato != null && r.recordInTracciato.StatoSelezione == 1) || null;
+    },
+
+    /// Codice e descrizione di un box selezionato, per l'elenco della scheda e delle conferme. La
+    /// descrizione e' quella del primario, o quella di gruppo se il gruppo ne ha una, come nella
+    /// lista dei filtri; senza scheda resta vuota.
+    voceDellaSelezioneMultipla(dettaglio, records) {
+        const lista = (Array.isArray(records) ? records : []).filter(r => r != null && r.recordInTracciato != null);
+        const primario = this.primarioDeiRecords(lista) || lista[0] || null;
+
+        let codice = dettaglio != null && dettaglio.codiceGruppo != null ? String(dettaglio.codiceGruppo) : "";
+        let descrizione = "";
+
+        if (primario != null) {
+            const rec = primario.recordInTracciato;
+            if (codice === "" && rec["Scatto.CodiceGruppo"] != null) {
+                codice = String(rec["Scatto.CodiceGruppo"]);
+            }
+            const diGruppo = rec["Referenza.Codice"] != rec["Scatto.CodiceGruppo"];
+            const fonte = diGruppo && rec.descrizione_gruppo != null ? rec.descrizione_gruppo : rec;
+            descrizione = [fonte["Descrizioni.Descrizione1"], fonte["Descrizioni.Descrizione2"]]
+                .filter(d => d != null && String(d).trim() !== "")
+                .map(d => String(d).trim())
+                .join(" ");
+        }
+
+        return { codice: codice, descrizione: descrizione };
+    },
+
+    /// Le voci di tutti i box della selezione multipla, nell'ordine della selezione.
+    vociSelezioneMultipla() {
+        return (this.boxSelezioneMultipla || []).map(b => this.voceDellaSelezioneMultipla(b.dettaglio, b.records));
+    },
+
+    /// Il riepilogo di un'operazione fatta box per box. esiti: [{ voce, ok, motivo }]. Restituisce
+    /// { tipo, testo }: success se sono riusciti tutti, error se nessuno, warning altrimenti, con
+    /// i box non riusciti e il loro motivo.
+    riepilogoSelezioneMultipla(operazione, esiti) {
+        const elenco = Array.isArray(esiti) ? esiti : [];
+        const riusciti = elenco.filter(e => e != null && e.ok === true).length;
+        const falliti = elenco.filter(e => e == null || e.ok !== true);
+
+        let testo = operazione + ": " + riusciti + " box su " + elenco.length;
+        if (falliti.length === 0) {
+            return { tipo: "success", testo: testo };
+        }
+
+        testo += ". Non riusciti: " + falliti.map(e => {
+            const codice = e != null && e.voce != null && e.voce.codice ? e.voce.codice : "?";
+            const motivo = e != null && e.motivo != null && String(e.motivo) !== "" ? String(e.motivo) : "motivo sconosciuto";
+            return codice + " (" + motivo + ")";
+        }).join("; ");
+
+        return { tipo: riusciti === 0 ? "error" : "warning", testo: testo };
+    },
+
+    /// Nasconde o rimostra le voci che la selezione multipla non offre, segnate nel markup con
+    /// data-selezione-multipla="nascosta": le voci del sottomenu' e, nel piede, i contenitori delle
+    /// icone, cosi' le icone che restano si avvicinano. Ogni voce torna com'era prima (il display
+    /// in linea si tiene da parte, perche' i contenitori del piede sono flex). Sgruppa non torna
+    /// da qui: lo mostra la scheda di un box solo, e solo per un gruppo.
+    impostaVociSelezioneMultipla(attiva) {
+        this.inSelezioneMultipla = attiva === true;
+
+        $('[data-selezione-multipla="nascosta"]').each(function () {
+            const voce = $(this);
+            if (attiva) {
+                if (voce.attr("data-display-prima") == null) {
+                    voce.attr("data-display-prima", this.style.display || "");
+                }
+                this.style.display = "none";
+            }
+            else {
+                const prima = voce.attr("data-display-prima");
+                voce.removeAttr("data-display-prima");
+                if (prima != null && voce.attr("id") !== "sgruppa") {
+                    this.style.display = prima;
+                }
+            }
+        });
+    },
+
+    /// Esce dalla selezione multipla, se c'era: le voci tornano e i box si dimenticano.
+    esciDaSelezioneMultipla() {
+        if (this.inSelezioneMultipla) {
+            this.impostaVociSelezioneMultipla(false);
+        }
+        this.boxSelezioneMultipla = [];
+        this.azioniSelezioneMultipla = [];
+        this.azioniDiGruppoSelezioneMultipla = false;
+    },
+
+    /// La scheda della selezione multipla. Con tutti i box impaginati offre le azioni sul box
+    /// comuni, Elimina, Reimpagina e Raggruppa; con tutti i box da ricollegare il solo Ricollega; con
+    /// box dell'uno e dell'altro tipo, o con schede non leggibili, non si apre ne' la scheda ne'
+    /// Raggruppa, e lo dice. Il titolo dice quanti
+    /// box sono, e sotto c'e' l'elenco dei box.
+    async mostraSchedaMultipla() {
+        let me = this;
+        try {
+            const schede = me.boxSelezioneMultipla || [];
+            const stati = me.STATI_SELEZIONE_MULTIPLA;
+            const stato = me.statoDellaSelezioneMultipla(schede);
+
+            me.resetInitSchedaRef();
+
+            if (stato === stati.misti || stato === stati.nonLeggibili) {
+                me.impostaVociSelezioneMultipla(false);
+                $("#refImage").hide();
+                $("#raggruppaImage").hide();
+                if (stato === stati.misti) {
+                    messaggioUtente("Code SRF-134 Fra i box selezionati ci sono sia box da ricollegare sia box impaginati: la selezione multipla non si apre. Selezionare solo box da ricollegare o solo box impaginati", "warning", false, 8);
+                }
+                else {
+                    const nonLetti = schede
+                        .filter(s => s == null || (s.errorCode != 8 && !(Array.isArray(s.records) && s.records.length > 0)))
+                        .map(s => me.voceDellaSelezioneMultipla(s ? s.dettaglio : null, null).codice + (s && s.error ? " (" + s.error + ")" : ""));
+                    messaggioUtente("Code SRF-135 La selezione multipla non si apre: scheda non leggibile per " + nonLetti.join("; "), "error", false, 8);
+                }
+                //Ne' scheda ne' Raggruppa: il pannello torna come senza selezione.
+                jsIndexControls.changeSubMenu($("#homeImage").attr("subTab"));
+                jsIndexControls.changeImage($("#homeImage"));
+                return;
+            }
+
+            //Raggruppa solo con tutti i box impaginati: un box da ricollegare non si raggruppa.
+            if (stato === stati.impaginati) {
+                $("#raggruppaImage").show();
+                $("#raggruppa").attr("codiciConId", encodeURIComponent(JSON.stringify(me.getCodiciConIdFromMultiSelection(me.multiSelection))));
+                me.SchermataRaggruppamento();
+            }
+            else {
+                $("#raggruppaImage").hide();
+            }
+
+            me.impostaVociSelezioneMultipla(true);
+
+            const voci = me.vociSelezioneMultipla();
+            me.componiTitoloSelezioneMultipla(voci.length);
+            $("#editReferenza").empty();
+            $("#editReferenza").append(Modali.elencoBox(voci, true));
+
+            if (stato === stati.daRicollegare) {
+                me.interfacciaRicollegaSelezioneMultipla(voci.length);
+            }
+            else {
+                await me.azioniSulBoxSelezioneMultipla();
+            }
+
+            $("#refImage").show();
+            jsIndexControls.changeSubMenu($("#refImage").attr("subTab"));
+            jsIndexControls.changeImage($("#refImage"));
+            onresizeWindow();
+        }
+        catch (e) {
+            console.error(e);
+            messaggioUtente("Code SRF-136 La scheda della selezione multipla non si e' aperta: " + (e && e.message ? e.message : e), "error");
+        }
+        finally {
+            hideLoading();
+        }
+    },
+
+    /// Il titolo della scheda al posto del codice e del suo pulsante di copia.
+    componiTitoloSelezioneMultipla(quanti) {
+        $("#codiceRef").empty();
+        $("#codiceRef").css({ "display": "flex", "align-items": "center", "flex": "1 1 auto", "min-width": "0", "overflow": "hidden" });
+        const titolo = $('<span id="testoCodiceTitolo"></span>').text("Selezione multipla (" + quanti + " box)");
+        titolo.css({ "flex": "1 1 auto", "min-width": "0", "overflow": "hidden", "white-space": "nowrap", "text-overflow": "ellipsis", "margin-left": "10px" });
+        $("#codiceRef").append(titolo);
+    },
+
+    /// Le azioni sul box della selezione multipla: nella tendina quelle che valgono per tutti i box,
+    /// e disattivate, col numero dei box che le ammettono, quelle che valgono solo per alcuni. I
+    /// pannelli delle azioni scelte e la scelta gruppo/primario sono come nella scheda di un box.
+    async azioniSulBoxSelezioneMultipla() {
+        let me = this;
+        me.azioniSelezioneMultipla = [];
+        me.azioniDiGruppoSelezioneMultipla = false;
+
+        if (cambiStrutturaliJs.getCambioStrutturalePath == null || !me.mostraAzioniStrutturaliInEdit()) {
+            return;
+        }
+
+        const areaLav = ficoProcess.getAreaLavorazioneCorrente();
+        const siglaArea = areaLav ? areaLav.sigla : null;
+        const azioniPerBox = [];
+        for (const b of me.boxSelezioneMultipla) {
+            const box = b.dettaglio.item;
+            let azioni = await cambiStrutturaliJs.getCambioStrutturalePath(me.primarioDeiRecords(b.records), box, siglaArea);
+            const etichette = Utility.getAllFieldsInGroup(box).map(c => Utility.parseLabel(c.label));
+            azioniPerBox.push((azioni || []).filter(a => cambiStrutturaliJs.azioneConCampiNelBox(a, etichette)));
+        }
+
+        const voci = cambiStrutturaliJs.azioniDellaSelezione(azioniPerBox);
+        me.azioniSelezioneMultipla = voci;
+        me.azioniDiGruppoSelezioneMultipla = me.boxSelezioneMultipla.some(b => {
+            const primario = me.primarioDeiRecords(b.records);
+            return primario != null && primario.recordInTracciato["Referenza.Codice"] != primario.recordInTracciato["Scatto.CodiceGruppo"];
+        });
+
+        if (voci.length === 0) {
+            return;
+        }
+
+        const quantiBox = me.boxSelezioneMultipla.length;
+        const divAzioni = $('<div id="edit_campi_offerta" style="margin-top: 14px; padding-top: 2px; border-top: 1px solid #5f5f5f;"></div>');
+        divAzioni.append('<h3 style="color:white;">Azioni sul box</h3>');
+
+        const spPicker = $("<sp-picker id=\"cmbActCambioStrutturaleMultipla\"></sp-picker>");
+        const spMenu = $('<sp-menu slot="options"></sp-menu>');
+        spMenu.append($('<sp-menu-item selected></sp-menu-item>').text("Seleziona un'azione").val("-1"));
+        voci.forEach((voce, indice) => {
+            if (voce.comune) {
+                spMenu.append($('<sp-menu-item></sp-menu-item>').text(voce.titolo).val(String(indice)));
+            }
+            else {
+                const quanti = voce.azioniPerBox.filter(a => a != null).length;
+                spMenu.append($('<sp-menu-item disabled></sp-menu-item>').text(voce.titolo + " (" + quanti + " box su " + quantiBox + ")").val(String(indice)));
+            }
+        });
+        spPicker.append(spMenu);
+
+        spPicker.on("change", function () {
+            const val = $(this).val();
+            Menu.setPickerValue($("#cmbActCambioStrutturaleMultipla"), "-1", false);
+            if (val == null || val === "" || val == "-1") {
+                return;
+            }
+            me.aggiungiAzioneSelezioneMultipla(parseInt(val));
+        });
+
+        const testata = $("<div style=\"display:flex;\"></div>");
+        const testataSinistra = $("<div style=\"width:50%;display:flex;\"></div>");
+        const testataDestra = $("<div style=\"width:50%;text-align:right;display:flex;\"></div>");
+        testataSinistra.append(spPicker);
+
+        if (me.azioniDiGruppoSelezioneMultipla) {
+            //Nasce nascosta, come nella scheda di un box: la mostra aggiornaTendinaOpzioniMultipla.
+            const cmbModo = $("<sp-picker id=\"cmbTipoSalvataggioStrutturaleMultipla\" style=\"display:none;\">");
+            cmbModo.on('change', function (e) {
+                let val = e.target.selectedOptions[0]._properties.values().next().value;
+                $(this).val(val);
+            }).append(
+                $("<sp-menu slot=\"options\"></sp-menu>")
+                    .append("<sp-menu-item selected value=\"tutto\">Per tutto il gruppo</sp-menu-item>")
+                    .append("<sp-menu-item value=\"primario\">Solo il primario</sp-menu-item>")
+            );
+            testataDestra.append(cmbModo);
+        }
+
+        const btnReset = $("<sp-action-buttom style=\"background-color: #f58ab2;border: 1px solid black;width: 100px;text-align: center;padding-top: 8px;cursor:pointer;margin-left:15px;\">RESET</sp-action-buttom>")
+            .on('click', function () {
+                $("#azioni_strutturali_multiple").empty();
+                me.aggiornaTendinaOpzioniMultipla();
+            });
+        testataDestra.append(btnReset);
+
+        testata.append(testataSinistra);
+        testata.append(testataDestra);
+        divAzioni.append(testata);
+        divAzioni.append('<div id="azioni_strutturali_multiple" style="color:white;margin-top:15px;"></div>');
+        $("#editReferenza").append(divAzioni);
+
+        const salva = $('<sp-action-button id="salvaButton" style="color:lightgreen; margin-right:10px;">Applica ai box</sp-action-button>');
+        salva.on('click', function () {
+            me.applicaAzioniSelezioneMultipla();
+        });
+        $("#pulsantiExtra").empty();
+        $("#pulsantiExtra").append(salva);
+    },
+
+    /// Il valore di un campo nei primari dei box selezionati, se e' lo stesso per tutti; "" se
+    /// cambia da box a box o non c'e'.
+    valoreComuneSelezioneMultipla(campo) {
+        const chiave = Utility.replaceAll(campo, "$", ".");
+        const valori = (this.boxSelezioneMultipla || []).map(b => {
+            const primario = this.primarioDeiRecords(b.records);
+            const v = primario != null ? primario.recordInTracciato[chiave] : null;
+            return v == null ? "" : String(v);
+        });
+        return valori.length > 0 && valori.every(v => v === valori[0]) ? valori[0] : "";
+    },
+
+    /// Aggiunge il pannello di un'azione comune, con le sue istruzioni. Un valore da scrivere
+    /// parte da quello dei box se e' lo stesso per tutti; un valore fisso che cambia da box a box
+    /// si dice, e a ogni box va il suo.
+    aggiungiAzioneSelezioneMultipla(indice) {
+        let me = this;
+        const voce = me.azioniSelezioneMultipla[indice];
+        if (voce == null || !voce.comune) {
+            return;
+        }
+        if ($("#azioni_strutturali_multiple").find('[data-azione="' + indice + '"]').length > 0) {
+            return;
+        }
+        //Come nella scheda di un box (I20-1049): l'opzione gruppo/primario e' una sola per tutte le azioni.
+        if (me.azioniDiGruppoSelezioneMultipla && cambiStrutturaliJs.opzioniComuni(me.azioniSelezioneMultiplaAggiunte().map(a => a.voce).concat([voce])).length == 0) {
+            messaggioUtente("Code SRF-137 L'azione \"" + voce.titolo + "\" non si può applicare insieme a quelle già scelte: valgono per parti diverse del gruppo", "warning", false, 5);
+            return;
+        }
+
+        const pannello = $('<div class="panel" style="width: 90%;margin: 0px auto;border: 1px solid #6e6e6e;border-radius: 6px;padding: 10px;margin-bottom: 10px;"></div>');
+        pannello.attr("data-azione", String(indice));
+        const intestazione = $('<div class="row" style="margin-bottom: 10px;"></div>');
+        intestazione.append($('<div class="col" style="font-size: 13px;width:90%;"></div>').text(voce.titolo));
+        const chiudi = $('<div class="col" style="width: 10%;text-align: center;margin-top: -10px;background-color: white;color: black;border-radius: 5px;margin-right: -5px;height: 20px; cursor:pointer;"><div style="margin-top: 3px;">X</div></div>');
+        chiudi.on('click', function () {
+            pannello.remove();
+            me.aggiornaTendinaOpzioniMultipla();
+        });
+        intestazione.append(chiudi);
+        pannello.append(intestazione);
+
+        const azioniDeiBox = voce.azioniPerBox.filter(a => a != null);
+        (azioniDeiBox[0].istruzioni || []).forEach((istruzione, i) => {
+            const riga = $('<div class="row" style="display:block;"><div class="col" style="display:block;"></div></div>');
+            const colonna = riga.find(".col");
+            colonna.append($('<div style="color: white;width:100%;"></div>').text(istruzione.field));
+
+            if (istruzione.valore == null) {
+                const campo = $('<input type="text" class="fieldCambioStrutturaleMultipla singular-inputTextfield" data-sempre-nativo style="width: 90%; color: black; background-color:white;">');
+                campo.attr("data-field", istruzione.field);
+                campo.val(me.valoreComuneSelezioneMultipla(istruzione.field));
+                colonna.append($('<div style="width:100%"></div>').append(campo));
+            }
+            else if (typeof istruzione.valore === "object") {
+                const tendina = $("<sp-picker style=\"vertical-align:middle;\" class=\"fieldCambioStrutturaleMultipla\"></sp-picker>");
+                tendina.attr("data-field", istruzione.field);
+                const menuTendina = $('<sp-menu slot="options"></sp-menu>');
+                istruzione.valore.forEach((v, n) => {
+                    menuTendina.append($('<sp-menu-item' + (n === 0 ? " selected" : "") + '></sp-menu-item>').text(v).val(v));
+                });
+                tendina.append(menuTendina);
+                tendina.val(istruzione.valore[0]);
+                tendina.on('change', function (e) {
+                    let val = e.target.selectedOptions[0]._properties.values().next().value;
+                    $(this).val(val);
+                });
+                colonna.append(tendina);
+            }
+            else {
+                const valori = azioniDeiBox.map(a => a.istruzioni && a.istruzioni[i] ? String(a.istruzioni[i].valore) : "");
+                const uguali = valori.every(v => v === valori[0]);
+                const fisso = $('<input type="text" class="singular-inputTextfield" data-sempre-nativo readonly style="width: 90%; color: black; background:#dcdc82;">');
+                fisso.val(uguali ? valori[0] : "Diverso per ogni box");
+                colonna.append($('<div style="width:100%"></div>').append(fisso));
+            }
+
+            pannello.append(riga);
+        });
+
+        $("#azioni_strutturali_multiple").append(pannello);
+        me.aggiornaTendinaOpzioniMultipla();
+        setTimeout(() => $("#Tab5").scrollTop($("#Tab5")[0].scrollHeight - $("#Tab5")[0].clientHeight), 50);
+    },
+
+    /// Le azioni aggiunte, nell'ordine dei pannelli: [{ indice, voce }].
+    azioniSelezioneMultiplaAggiunte() {
+        const voci = this.azioniSelezioneMultipla || [];
+        return $("#azioni_strutturali_multiple").children(".panel").toArray()
+            .map(el => {
+                const indice = parseInt($(el).attr("data-azione"));
+                return { indice: indice, voce: voci[indice] };
+            })
+            .filter(a => a.voce != null);
+    },
+
+    /// Come aggiornaTendinaOpzioniStrutturali: la scelta gruppo/primario si vede solo se fra i box
+    /// c'e' un gruppo, con almeno un'azione aggiunta e piu' di un'opzione valida.
+    aggiornaTendinaOpzioniMultipla() {
+        const opzioni = cambiStrutturaliJs.opzioniComuni(this.azioniSelezioneMultiplaAggiunte().map(a => a.voce));
+        $("#cmbTipoSalvataggioStrutturaleMultipla").css("display", this.azioniDiGruppoSelezioneMultipla && opzioni.length > 1 ? "" : "none");
+    },
+
+    /// L'opzione con cui applicare le azioni, come opzioneAzioniStrutturali.
+    opzioneSelezioneMultipla() {
+        if (!this.azioniDiGruppoSelezioneMultipla) {
+            return null;
+        }
+        const opzioni = cambiStrutturaliJs.opzioniComuni(this.azioniSelezioneMultiplaAggiunte().map(a => a.voce));
+        if (opzioni.length == 1) {
+            return opzioni[0];
+        }
+        return $("#cmbTipoSalvataggioStrutturaleMultipla").val() || "tutto";
+    },
+
+    /// I parametri di Menabo/setCambioStrutturale per un box, come li compone
+    /// preparaCambioStrutturale nella scheda di un box. azioniDelBox sono le azioni scelte nella
+    /// forma di quel box; valori i valori scritti o scelti dall'operatore, per campo, che valgono
+    /// per tutti i box. Un valore fisso resta quello del box. L'opzione "primario" vale solo per
+    /// un gruppo.
+    parametriAzioniDelBox(records, azioniDelBox, valori, opzione) {
+        const enc = encodeURIComponent;
+        const primo = records[0];
+        const primario = this.primarioDeiRecords(records);
+        const diGruppo = primario != null && primario.recordInTracciato["Referenza.Codice"] != primario.recordInTracciato["Scatto.CodiceGruppo"];
+        const kAz = "azioni[0]";
+
+        let params = "codiceGruppo=" + enc(primo.recordInTracciato["Scatto.CodiceGruppo"]);
+        params += "&idRec=" + enc(primo.idRec);
+        if (diGruppo && opzione == "primario") {
+            params += "&" + kAz + ".codice=" + enc(primo.recordInTracciato["Referenza.Codice"]);
+        }
+
+        (azioniDelBox || []).forEach(azione => (azione && azione.istruzioni || []).forEach(istruzione => {
+            const daOperatore = istruzione.valore == null || typeof istruzione.valore === "object";
+            const valore = daOperatore ? (valori != null && valori[istruzione.field] != null ? valori[istruzione.field] : "") : istruzione.valore;
+            params += "&" + kAz + ".attributi." + enc(istruzione.field) + "=" + enc(valore);
+        }));
+
+        return params;
+    },
+
+    /// Applica le azioni scelte a tutti i box, uno dopo l'altro, e rifa' ogni box come la scheda di
+    /// un box. Un box che non riesce non ferma gli altri: alla fine il riepilogo dice quali non
+    /// sono riusciti e perche', e restano selezionati i box in pagina.
+    async applicaAzioniSelezioneMultipla() {
+        let me = this;
+        const aggiunte = me.azioniSelezioneMultiplaAggiunte();
+        if (aggiunte.length === 0) {
+            messaggioUtente("Code SRF-138 Scegliere almeno un'azione da applicare ai box", "warning", false, 4);
+            return;
+        }
+
+        const valori = {};
+        $("#azioni_strutturali_multiple").find(".fieldCambioStrutturaleMultipla").each(function () {
+            valori[$(this).attr("data-field")] = $(this).val();
+        });
+        const opzione = me.opzioneSelezioneMultipla();
+        const boxes = (me.boxSelezioneMultipla || []).slice();
+        const esiti = [];
+        const finali = [];
+
+        try {
+            for (let i = 0; i < boxes.length; i++) {
+                const b = boxes[i];
+                const voce = me.voceDellaSelezioneMultipla(b.dettaglio, b.records);
+                indesignEvents.setBusy(true);
+                showLoading("Azioni sul box " + (i + 1) + " di " + boxes.length);
+                try {
+                    const params = me.parametriAzioniDelBox(b.records, aggiunte.map(a => a.voce.azioniPerBox[i]), valori, opzione);
+                    const esito = await me.cambioStrutturaleSulBox(params, b.dettaglio);
+                    if (esito.box != null) {
+                        finali.push(esito.box);
+                    }
+                    esiti.push({ voce: voce, ok: true });
+                }
+                catch (e) {
+                    console.error("Azioni sul box " + voce.codice + ":", e);
+                    esiti.push({ voce: voce, ok: false, motivo: e && e.message ? e.message : e });
+                    finali.push(b.dettaglio.item);
+                }
+            }
+        }
+        finally {
+            indesignEvents.setBusy(false);
+            hideLoading();
+        }
+
+        const riepilogo = me.riepilogoSelezioneMultipla("Azioni sul box applicate", esiti);
+        messaggioUtente("Code SRF-139 " + riepilogo.testo, riepilogo.tipo, false, 8);
+        me.selezionaBoxDellaSelezioneMultipla(finali);
+    },
+
+    /// Un cambio strutturale su un box della selezione: lo manda a Istanta e rifa' il box, come
+    /// salvaCambioStrutturaleDo per il box della scheda. Si risolve con { box } (il box che resta
+    /// in pagina, null se la referenza non va piu' impaginata) e fallisce col motivo.
+    cambioStrutturaleSulBox(params, dettaglio) {
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequestClient();
+
+            xhr.onload = async (objResult, parsed) => {
+                try {
+                    if (!parsed) {
+                        objResult = JSON.parse(objResult);
+                    }
+
+                    if (!objResult.esito) {
+                        if (objResult.dettaglio) {
+                            console.error("Dettaglio dell'errore del server:", objResult.dettaglio);
+                        }
+                        reject(new Error(objResult.error || "salvataggio non riuscito"));
+                        return;
+                    }
+
+                    const boxPrecedente = dettaglio.item;
+                    const itemRef = objResult.item;
+                    if (itemRef == null) {
+                        //Come per un box solo: la referenza non va piu' impaginata.
+                        if (boxPrecedente != null && boxPrecedente.isValid) {
+                            boxPrecedente.remove();
+                        }
+                        resolve({ box: null });
+                        return;
+                    }
+
+                    if (boxPrecedente == null || !boxPrecedente.isValid) {
+                        throw new Error("il box non c'e' piu' in pagina");
+                    }
+                    const bounds = boxPrecedente.geometricBounds;
+                    const pagina = dettaglio.pagRef != null ? dettaglio.pagRef : boxPrecedente.parentPage;
+                    if (pagina == null) {
+                        throw new Error("impossibile trovare la pagina del box");
+                    }
+
+                    const meccanica = itemRef["codiceBox"].toString() != "" ? itemRef["codiceBox"].toString() : itemRef["combinazioneAssegnata"].toString();
+                    CssFramework.richiediDiScaricareFramework();
+                    const rifatto = await impaginaBox(meccanica, pagina, bounds, itemRef, pathLavorazione, [], 1);
+
+                    let finale = rifatto != null ? rifatto.boxAggiunto : null;
+                    if (finale == null) {
+                        throw new Error("il box non e' stato reimpaginato");
+                    }
+                    if (boxPrecedente.isValid) {
+                        const esitoConfronto = await confronti.confrontoBox(boxPrecedente, finale);
+                        if (esitoConfronto != null && esitoConfronto.boxFinale != null) {
+                            finale = esitoConfronto.boxFinale;
+                        }
+                    }
+                    resolve({ box: finale });
+                }
+                catch (e) {
+                    reject(e);
+                }
+            };
+
+            xhr.onerror = function (motivo) {
+                reject(new Error("richiesta non riuscita: " + XMLHttpRequestClient.testoErrore(motivo)));
+            };
+
+            xhr.send("Menabo/setCambioStrutturale/" + idKitLavorazione + "/0", params, "PUT", "application/x-www-form-urlencoded");
+        });
+    },
+
+    /// Reimpagina tutti i box della selezione, dopo una conferma con il loro elenco. Un box che non
+    /// riesce non ferma gli altri; alla fine il riepilogo, e restano selezionati i box rifatti.
+    async reimpaginaSelezioneMultipla() {
+        let me = this;
+        const boxes = (me.boxSelezioneMultipla || []).slice();
+        if (boxes.length === 0) {
+            return;
+        }
+        if (me.statoDellaSelezioneMultipla(boxes) !== me.STATI_SELEZIONE_MULTIPLA.impaginati) {
+            messaggioUtente("Code SRF-140 Reimpagina: i box selezionati non risultano impaginati, vanno prima ricollegati", "warning", false, 5);
+            return;
+        }
+
+        const voci = boxes.map(b => me.voceDellaSelezioneMultipla(b.dettaglio, b.records));
+        if (!(await Modali.confermaSuPiuBox("Reimpaginare questi " + boxes.length + " box?", voci))) {
+            return;
+        }
+
+        const esiti = [];
+        const finali = [];
+        try {
+            for (let i = 0; i < boxes.length; i++) {
+                indesignEvents.setBusy(true);
+                showLoading("Reimpaginazione del box " + (i + 1) + " di " + boxes.length);
+                try {
+                    const esito = await me.rifaiBox(boxes[i].records, boxes[i].dettaglio.item);
+                    const nuovo = esito != null ? (esito.boxFinale || esito.boxAggiunto) : null;
+                    if (nuovo == null) {
+                        throw new Error("il box non e' stato reimpaginato");
+                    }
+                    finali.push(nuovo);
+                    esiti.push({ voce: voci[i], ok: true });
+                }
+                catch (e) {
+                    console.error("Reimpagina " + voci[i].codice + ":", e);
+                    esiti.push({ voce: voci[i], ok: false, motivo: e && e.message ? e.message : e });
+                }
+            }
+        }
+        finally {
+            indesignEvents.setBusy(false);
+            hideLoading();
+        }
+
+        const riepilogo = me.riepilogoSelezioneMultipla("Box reimpaginati", esiti);
+        messaggioUtente("Code SRF-141 " + riepilogo.testo, riepilogo.tipo, false, 8);
+        me.selezionaBoxDellaSelezioneMultipla(finali);
+    },
+
+    /// Il Ricollega della selezione multipla, quando tutti i box sono da ricollegare.
+    interfacciaRicollegaSelezioneMultipla(quanti) {
+        let me = this;
+        const bottone = $('<sp-action-button id="ricollegaButton" style="color:lightgreen; margin-top:10px;"></sp-action-button>').text("Ricollega " + quanti + " box");
+        $("#editReferenza").append('<div style="color:white; margin-top:10px;">I box selezionati non risultano al momento impaginati, tentare il ricollegamento?</div>');
+        $("#editReferenza").append(bottone);
+        bottone.on("click", function () {
+            me.ricollegaSelezioneMultipla();
+        });
+    },
+
+    /// Ricollega i box uno dopo l'altro, come il Report Integrita' (ricollegaBoxImpaginatoAttendendo),
+    /// scrivendo nel box il record scelto dal server. Una referenza che chiede la clonazione si
+    /// ricollega dalla scheda del suo box: qui risulta non riuscita, col motivo.
+    async ricollegaSelezioneMultipla() {
+        let me = this;
+        const boxes = (me.boxSelezioneMultipla || []).slice();
+        const esiti = [];
+        const finali = [];
+
+        try {
+            for (let i = 0; i < boxes.length; i++) {
+                const item = boxes[i].dettaglio.item;
+                const voce = me.voceDellaSelezioneMultipla(boxes[i].dettaglio, boxes[i].records);
+                indesignEvents.setBusy(true);
+                showLoading("Ricollegamento del box " + (i + 1) + " di " + boxes.length);
+
+                const esito = await me.ricollegaBoxImpaginatoAttendendo(item);
+                (esito.messaggi || []).forEach(avviso => {
+                    if (avviso != null && avviso.testo) {
+                        messaggioUtente(avviso.testo, avviso.tipo, false, 5);
+                    }
+                });
+
+                if (esito.esito === "ricollegato") {
+                    if (item != null && item.isValid) {
+                        me.scriviIdRecNelDna(Utility.getDnaOfBox(item), esito.idRecSelezionato);
+                    }
+                    esiti.push({ voce: voce, ok: true });
+                }
+                else {
+                    esiti.push({ voce: voce, ok: false, motivo: esito.messaggio });
+                }
+                if (item != null && item.isValid) {
+                    finali.push(item);
+                }
+            }
+        }
+        finally {
+            indesignEvents.setBusy(false);
+            hideLoading();
+        }
+
+        const riepilogo = me.riepilogoSelezioneMultipla("Box ricollegati", esiti);
+        messaggioUtente("Code SRF-142 " + riepilogo.testo, riepilogo.tipo, false, 8);
+        me.selezionaBoxDellaSelezioneMultipla(finali);
+    },
+
+    /// Rimette la selezione di InDesign sui box, che si rileggono come una selezione nuova: la
+    /// scheda si riapre con i dati di adesso.
+    selezionaBoxDellaSelezioneMultipla(boxes) {
+        try {
+            const validi = (boxes || []).filter(b => b != null && b.isValid);
+            indesignEvents.resetLastSelection();
+            app.selection = validi.length > 0 ? validi : [];
+        }
+        catch (e) {
+            console.error("Selezione dei box non ripristinata:", e);
         }
     },
 
@@ -943,25 +1673,8 @@ const schedaRef = {
 
                             if(element.stato == 1 || element.stato == 2 || element.stato == 3){
                                 if (!externalCall && box != null && box.isValid) {
-                                    var idRec = dna.idRec;
-                                    if (objResult.idRecSelezionato != null && objResult.idRecSelezionato != 0 && objResult.idRecSelezionato != idRec) {
-                                        dna.idRec = objResult.idRecSelezionato.toString();
+                                    if (this.scriviIdRecNelDna(dna, objResult.idRecSelezionato)) {
                                         this.refSelected.idRec = objResult.idRecSelezionato;
-                                        if (dna.item != null) {
-                                            let labelParts = dna.item.label.split("$");
-                                            if (dna.oldBoxFormat) {
-                                                if (labelParts.length > 4) {
-                                                    labelParts[4] = objResult.idRecSelezionato.toString();
-                                                    dna.item.label = labelParts.join("$");
-                                                }
-                                            }
-                                            else {
-                                                if (labelParts.length > 5) {
-                                                    labelParts[5] = objResult.idRecSelezionato.toString();
-                                                    dna.item.label = labelParts.join("$");
-                                                }
-                                            }
-                                        }
                                     }
 
                                     this.initSchedaRef(this.refSelected);
@@ -1064,6 +1777,33 @@ const schedaRef = {
 
         formData.append("stringRequest", JSON.stringify(request));
         return { formData: formData, request: request };
+    },
+
+    /// Dopo un ricollegamento il server puo' aver scelto un altro record: il suo idRec va nel dna
+    /// del box, e nella label che lo porta. Restituisce true se l'ha cambiato. I20-1063: la usano
+    /// il ricollegamento della scheda e quello della selezione multipla.
+    scriviIdRecNelDna(dna, idRecSelezionato) {
+        if (dna == null || idRecSelezionato == null || idRecSelezionato == 0 || idRecSelezionato == dna.idRec) {
+            return false;
+        }
+
+        dna.idRec = idRecSelezionato.toString();
+        if (dna.item != null) {
+            let labelParts = dna.item.label.split("$");
+            if (dna.oldBoxFormat) {
+                if (labelParts.length > 4) {
+                    labelParts[4] = idRecSelezionato.toString();
+                    dna.item.label = labelParts.join("$");
+                }
+            }
+            else {
+                if (labelParts.length > 5) {
+                    labelParts[5] = idRecSelezionato.toString();
+                    dna.item.label = labelParts.join("$");
+                }
+            }
+        }
+        return true;
     },
 
     /// I20-1124: il ricollegamento come lo attende il Report Integrita' quando riporta in pagina
@@ -2372,23 +3112,13 @@ const schedaRef = {
                     let spMenu = spPicker.find("sp-menu");
 
 
+                    //I20-1063: lo stesso controllo serve alla selezione multipla, e sta in cambiStrutturali.
+                    let etichetteNelBox = labInBox.map(c => Utility.parseLabel(c.label));
                     for (let cs = 0; cs < cambiStrutturali.length; cs++) {
                         let obj = cambiStrutturali[cs];
 
-                        let canDo = false;
-                        if (obj.campiInddCoinvolti != null && obj.campiInddCoinvolti.length > 0) {
-                            //Richiesto filtro campi, condizione di esistenza.
-                            //Basta che almeno uno ci sia e si puo fare
-                            for (let cs2 = 0; cs2 < obj.campiInddCoinvolti.length; cs2++) {
-                                if (labInBox.find(c => Utility.parseLabel(c.label) == Utility.parseLabel(obj.campiInddCoinvolti[cs2].label)) != null) {
-                                    canDo = true;
-                                    break;
-                                }
-                            }
-                        }
-                        else {
-                            canDo = true;
-                        }
+                        //Richiesto filtro campi, condizione di esistenza: basta che almeno uno ci sia.
+                        let canDo = cambiStrutturaliJs.azioneConCampiNelBox(obj, etichetteNelBox);
 
                         if (canDo) {
                             spMenu.append(
@@ -2768,6 +3498,10 @@ const schedaRef = {
     async applicaReimpaginazione(){
         //I20-1140: il box rifatto, per chi deve seguirlo dopo (il Salva della scheda).
         this.boxReimpaginato = null;
+        //I20-1063: con piu' box selezionati si rifanno tutti.
+        if (this.inSelezioneMultipla) {
+            return await this.reimpaginaSelezioneMultipla();
+        }
         var schedaRef = this.schedeRefDati;
         if (schedaRef == null || schedaRef.length == 0) {
             messaggioUtente("Code SRF-1 Scheda ref non trovata", "error");
@@ -2775,7 +3509,26 @@ const schedaRef = {
             return;
         }
 
-        var boxPrecedente = this.refSelected.item;
+        var esito;
+        try {
+            esito = await this.rifaiBox(schedaRef, this.refSelected.item);
+        }
+        catch (e) {
+            var motivo = e && e.message ? e.message : String(e);
+            messaggioUtente(motivo, "error");
+            console.error(motivo);
+            return;
+        }
+        //Il box nuovo resta selezionato: e' quello su cui l'operatore sta lavorando.
+        Utility.selezionaBox(esito != null ? (esito.boxFinale || esito.boxAggiunto) : null);
+        this.boxReimpaginato = esito != null ? (esito.boxFinale || esito.boxAggiunto || null) : null;
+        return esito;
+    },
+
+    /// Rifa' un box dalla sua scheda, nella posizione del box di prima, e restituisce l'esito di
+    /// impaginazioneSingoloIndd. Senza la pagina del box lancia l'errore SRF-22. I20-1063: la usano
+    /// il Reimpagina della scheda e quello della selezione multipla.
+    async rifaiBox(schedaRef, boxPrecedente) {
         //I20-1124: il box nuovo esce nella posizione del box di prima; e' il box di prima che va da
         //parte, scostato di dieci punti, al 60%, sul livello cloneVecchioImpaginato. Prima era il
         //contrario: il nuovo usciva scostato e il vecchio restava al suo posto su InPagina, dove
@@ -2788,9 +3541,7 @@ const schedaRef = {
         } catch { }
 
         if (pagina == null || pagina === "") {
-            messaggioUtente("Code SRF-22 Impossibile recuperare la pagina di destinazione.", "error");
-            console.error("Code SRF-22 Impossibile recuperare la pagina di destinazione.");
-            return;
+            throw new Error("Code SRF-22 Impossibile recuperare la pagina di destinazione.");
         }
 
         try {
@@ -2803,9 +3554,6 @@ const schedaRef = {
 
         //I20-1056: rifare un box non apre la schermata delle segnalazioni: restano nel suo bollino.
         var esito = await impaginazioneSingoloIndd(schedaRef, pagina, false, null, false, bounds, false, false);
-        //Il box nuovo resta selezionato: e' quello su cui l'operatore sta lavorando.
-        Utility.selezionaBox(esito != null ? (esito.boxFinale || esito.boxAggiunto) : null);
-        this.boxReimpaginato = esito != null ? (esito.boxFinale || esito.boxAggiunto || null) : null;
         return esito;
     },
 
@@ -7139,6 +7887,8 @@ const schedaRef = {
     // },    
 
     resetRefInterface() {
+        //I20-1063: niente di selezionato, o una versione precedente: la selezione multipla finisce.
+        this.esciDaSelezioneMultipla();
         this.resetInitSchedaRef();
         this.resetFotoPS();
         this.resetFotoExtra();
@@ -7586,7 +8336,8 @@ const schedaRef = {
             listaCodiciGruppo.push(multiSelection[i].codiceGruppo);
             var codiceGruppo = multiSelection[i].codiceGruppo;
             //scarichiamo le schedeRefDati per ogni codiceGruppo
-            var gruppo = multiSchedeRef.find(f => f[0].recordInTracciato["Scatto.CodiceGruppo"] == codiceGruppo);
+            //I20-1063: un box da ricollegare non ha scheda, e la riga resta senza miniatura.
+            var gruppo = multiSchedeRef.find(f => Array.isArray(f) && f.length > 0 && f[0].recordInTracciato["Scatto.CodiceGruppo"] == codiceGruppo) || [];
             var primario = gruppo.find(f => f.recordInTracciato.StatoSelezione == 1);
             // Puoi ora usare `schedaRef` qui
             //compiliamo la riga con il codiceGruppo e l'immagine
@@ -7594,7 +8345,7 @@ const schedaRef = {
             var text = $('<span>(' + codiceGruppo + ')</span>'); // Crea il testo
             text.css({ "font-size": "12px", "color": "white" });
             //creiamo l'immagine
-            var imgSrc = primario.recordInTracciato["Foto.Nome"] != "" ? olimpoIp + "getThumbNailOnDemand?width=50&guidId=" + primario.recordInTracciato["Foto.guidid"] : 'images/immagineNonPresente.png';
+            var imgSrc = primario != null && primario.recordInTracciato["Foto.Nome"] != "" ? olimpoIp + "getThumbNailOnDemand?width=50&guidId=" + primario.recordInTracciato["Foto.guidid"] : 'images/immagineNonPresente.png';
             var img = $('<img>', { src: imgSrc, style: "width:50px; cursor:pointer", 'data-codice': codiceGruppo });
             row.append(img, text); // Aggiunge il testo alla riga
             $("#gruppiSelezionati").append(row); // Aggiunge la riga a #raggruppaImage

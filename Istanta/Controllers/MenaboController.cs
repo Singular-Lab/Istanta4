@@ -9410,47 +9410,7 @@ double.TryParse(percorso.ToString(), out double valore16))
                         mode
                     );
 
-                    ArticoloInRevisioneKitResult gruppoResult = new ArticoloInRevisioneKitResult();
-
-                    if (res is OkObjectResult okResult &&
-                        okResult.Value is ArticoloInRevisioneKitResult schedaResult)
-                    {
-                        gruppoResult = schedaResult;
-
-                        if (gruppoResult == null || !gruppoResult.esito)
-                        {
-                            resultList.Add(new ArticoloInRevisioneKitResult()
-                            {
-                                records = new List<ArticoloInKit>(),
-                                error = gruppoResult?.error ?? "",
-                                warn = "Gruppo " + cod + " non trovato da LeggiTracciatiRecord",
-                                esito = false,
-                            });
-                        }
-                        else
-                        {
-                            resultList.Add(gruppoResult);
-                        }
-                    }
-                    else if (res is OkObjectResult okStringResult &&
-                             okStringResult.Value is string errorString)
-                    {
-                        resultList.Add(new ArticoloInRevisioneKitResult()
-                        {
-                            records = new List<ArticoloInKit>(),
-                            error = errorString,
-                            esito = false,
-                        });
-                    }
-                    else
-                    {
-                        resultList.Add(new ArticoloInRevisioneKitResult()
-                        {
-                            records = new List<ArticoloInKit>(),
-                            error = "Errore nel tentativo di leggere il risultato di LeggiTracciatiRecord",
-                            esito = false,
-                        });
-                    }
+                    resultList.Add(RisultatoDellaSchedaNelMassivo(cod, res));
                 }
 
                 return Ok(resultList);
@@ -9459,6 +9419,54 @@ double.TryParse(percorso.ToString(), out double valore16))
             {
                 return Ok(new List<ArticoloInRevisioneKitResult>());
             }
+        }
+
+        /// <summary>
+        /// La scheda di un gruppo, come la mette in lista getSchedeRefs.
+        ///
+        /// I20-1063: una scheda non riuscita teneva il messaggio ma perdeva errorCode. Il Plugin
+        /// riconosce un box da ricollegare proprio da errorCode (CodArticoloNonTrovato, 8): con
+        /// piu' box selezionati non poteva sapere quali fossero scollegati. Ora il codice resta,
+        /// insieme al dettaglio dell'errore.
+        /// </summary>
+        public static ArticoloInRevisioneKitResult RisultatoDellaSchedaNelMassivo(string cod, IActionResult res)
+        {
+            if (res is OkObjectResult okResult &&
+                okResult.Value is ArticoloInRevisioneKitResult gruppoResult)
+            {
+                if (gruppoResult.esito)
+                {
+                    return gruppoResult;
+                }
+
+                return new ArticoloInRevisioneKitResult()
+                {
+                    records = new List<ArticoloInKit>(),
+                    error = gruppoResult.error ?? "",
+                    dettaglio = gruppoResult.dettaglio,
+                    errorCode = gruppoResult.errorCode,
+                    warn = "Gruppo " + cod + " non trovato da LeggiTracciatiRecord",
+                    esito = false,
+                };
+            }
+
+            if (res is OkObjectResult okStringResult &&
+                okStringResult.Value is string errorString)
+            {
+                return new ArticoloInRevisioneKitResult()
+                {
+                    records = new List<ArticoloInKit>(),
+                    error = errorString,
+                    esito = false,
+                };
+            }
+
+            return new ArticoloInRevisioneKitResult()
+            {
+                records = new List<ArticoloInKit>(),
+                error = "Errore nel tentativo di leggere il risultato di LeggiTracciatiRecord",
+                esito = false,
+            };
         }
 
 

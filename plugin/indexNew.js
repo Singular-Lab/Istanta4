@@ -728,6 +728,16 @@ indesignEvents.addEventListener(indesignEvents.EVENT_NEW_VERSIONE_PRECEDENTE_SEL
     $("#raggruppaImage").hide();
     $("#grigliaTab").hide();
 
+    //I20-1063: piu' versioni precedenti selezionate insieme si riportano in pagina tutte.
+    if (args.length > 1) {
+        var boxVersioni = args.map(a => a.item);
+        setNarrow("Versioni precedenti di " + args.length + " box", [{
+            buttonText: "Riporta in pagina",
+            buttonCallback: function () { riportaVersioniPrecedentiInPagina(boxVersioni); }
+        }]);
+        return;
+    }
+
     var versione = args[0];
     setNarrow("Versione precedente del box " + versione.codiceGruppo, [{
         buttonText: "Riporta in pagina",
@@ -759,6 +769,45 @@ function riportaVersionePrecedenteInPagina(box) {
     }
 }
 
+/// I20-1063: "Riporta in pagina" per piu' versioni precedenti selezionate insieme: si riportano
+/// tutte, come riportaVersionePrecedenteInPagina fa per una, e restano selezionate, cosi' si apre
+/// la loro scheda. Un box che non c'e' piu' o non si sposta non ferma gli altri e si conta.
+function riportaVersioniPrecedentiInPagina(boxes) {
+    var riportati = [];
+    var nonRiportati = 0;
+    for (var i = 0; i < boxes.length; i++) {
+        var box = boxes[i];
+        try {
+            if (box == null || !box.isValid) {
+                nonRiportati++;
+                continue;
+            }
+            VersionePrecedente.riportaInPagina(box, docInLavorazione);
+            riportati.push(box);
+        }
+        catch (e) {
+            console.error("Code IDX-192 Riporta in pagina non riuscito: " + e);
+            nonRiportati++;
+        }
+    }
+
+    clearNarrow();
+    if (riportati.length > 0) {
+        indesignEvents.resetLastSelection();
+        app.selection = riportati;
+    }
+
+    if (nonRiportati === 0) {
+        messaggioUtente("Box riportati in pagina: " + riportati.length, "success", false, 3);
+    }
+    else {
+        messaggioUtente("Code IDX-198 Box riportati in pagina: " + riportati.length + " su " + boxes.length + "; gli altri non ci sono piu' o non si sono potuti spostare", riportati.length > 0 ? "warning" : "error", false, 6);
+    }
+}
+
+//I20-1063: piu' box di referenza selezionati. svuotaRef dimentica la scheda del box di prima, e
+//una sua scheda ancora in arrivo viene scartata (initSchedaRef guarda refSelected); la scheda
+//della selezione multipla la apre initMultiSchedaRef quando ha le schede di tutti i box.
 indesignEvents.addEventListener(indesignEvents.EVENT_NEW_MULTIREF_SELECTED, async function(args){    
     Modali.closeAllModal();
 
@@ -770,6 +819,23 @@ indesignEvents.addEventListener(indesignEvents.EVENT_NEW_MULTIREF_SELECTED, asyn
     $("#grigliaTab").hide();
 
     clearNarrow();
+});
+
+//I20-1063: versioni precedenti e box in pagina selezionati insieme: ne' scheda ne' Raggruppa. Il
+//pannello torna come senza selezione, e l'avviso dice come selezionare.
+indesignEvents.addEventListener(indesignEvents.EVENT_NEW_MULTIREF_VERSIONI_MISTE_SELECTED, async function (args) {
+    Modali.closeAllModal();
+    schedaRef.setInvalidated(true);
+    schedaRef.svuotaRef();
+    schedaRef.resetRefInterface();
+    $("#refImage").hide();
+    $("#raggruppaImage").hide();
+    $("#grigliaTab").hide();
+    clearNarrow();
+
+    jsIndexControls.changeSubMenu($("#homeImage").attr("subTab"));
+    jsIndexControls.changeImage($("#homeImage"));
+    messaggioUtente("Code IDX-197 Fra i box selezionati ci sono versioni precedenti e box in pagina: la scheda non si apre. Selezionare solo versioni precedenti o solo box in pagina", "warning", false, 8);
 });
 
 indesignEvents.addEventListener(indesignEvents.EVENT_NEW_ARTWORK_MULTIREF_POTENTIAL_SELECTED, async function(args){    
@@ -6488,6 +6554,18 @@ lastPannelloDimension = 0;
 /// specifica andrebbe aggiornata.
 /// I20-1013: annullare la seconda conferma, o sbagliare la parola, annulla TUTTO: non si rimuove
 /// nemmeno dall'impaginato.
+/// L'elemento da togliere dalla pagina per un box: si risale dal box fino a quello che sta
+/// direttamente nello spread.
+function boxDaRimuovere(item) {
+    var itemToRemove = item;
+    var securityCounter = 0;
+    while (itemToRemove.parent.constructor.name != "Spread" && securityCounter < 1000) {
+        itemToRemove = itemToRemove.parent;
+        securityCounter++;
+    }
+    return itemToRemove;
+}
+
 async function rimuoviRefImpaginata(listaCodiciConId = [], mantieniBusyEsterno = false) {
     //scorriamo tutte le selezioni, cerchiamo le loro basi e ci salviamo in una lista i loro codici gruppo
 
@@ -6507,7 +6585,30 @@ async function rimuoviRefImpaginata(listaCodiciConId = [], mantieniBusyEsterno =
         var codiciGruppo = [];
         var listaCodiciConIdDaInviare = [];
         var itemsDaRimuovere = [];
-        if (listaCodiciConId.length > 0) {
+        //I20-1063: con piu' box selezionati si rimuovono tutti, e la conferma li elenca.
+        var vociSelezioneMultipla = null;
+        if (listaCodiciConId.length == 0 && schedaRef.inSelezioneMultipla) {
+            var boxSelezionati = schedaRef.boxSelezioneMultipla || [];
+            vociSelezioneMultipla = [];
+            for (var b = 0; b < boxSelezionati.length; b++) {
+                var boxSelezionato = boxSelezionati[b].dettaglio.item;
+                var dnaSelezionato = boxSelezionato != null && boxSelezionato.isValid ? Utility.getDnaOfBox(boxSelezionato) : null;
+                if (dnaSelezionato == null) {
+                    messaggioUtente("Code IDX-63 campo con DNA non trovato nel box selezionato " + (boxSelezionati[b].dettaglio.codiceGruppo || ""), "error");
+                    return;
+                }
+                var idRecSelezionato = dnaSelezionato.idRec != null && dnaSelezionato.idRec !== "" && !isNaN(parseInt(dnaSelezionato.idRec)) ? parseInt(dnaSelezionato.idRec) : 0;
+                itemsDaRimuovere.push(boxDaRimuovere(boxSelezionato));
+                codiciGruppo.push(dnaSelezionato.codice_gruppo);
+                listaCodiciConIdDaInviare.push({ codice: dnaSelezionato.codice_gruppo, idRec: idRecSelezionato });
+                vociSelezioneMultipla.push(schedaRef.voceDellaSelezioneMultipla(boxSelezionati[b].dettaglio, boxSelezionati[b].records));
+            }
+            if (codiciGruppo.length == 0) {
+                messaggioUtente("Code IDX-64 Nessuna referenza selezionata", "error");
+                return;
+            }
+        }
+        else if (listaCodiciConId.length > 0) {
             //questa parte della funzione non si occupa di rimuovere la ref dalla pagina perchè quando chiamata non abbiamo il riferimento della ref
             //in ogni caso per ora non serve perchè viene chiamata solo per rimuovere elementi che hanno fallito l'impaginazione (in poche parole serve a ripulire le dissicronie tra server e impaginato)
             for (var c = 0; c < listaCodiciConId.length; c++) {
@@ -6556,12 +6657,7 @@ async function rimuoviRefImpaginata(listaCodiciConId = [], mantieniBusyEsterno =
             var codiceGruppo = dna.codice_gruppo;
 
             //torniamo dalla base a monte fino a che il parent non è la pagina
-            var itemToRemove = app.selection[0];
-            var securityCounter = 0;
-            while (itemToRemove.parent.constructor.name != "Spread" && securityCounter < 1000) {
-                itemToRemove = itemToRemove.parent;
-                securityCounter++;
-            }
+            var itemToRemove = boxDaRimuovere(app.selection[0]);
 
             var idRec = 0;
             if (dna != null && dna.idRec != null && dna.idRec !== "" && !isNaN(parseInt(dna.idRec))) {
@@ -6585,7 +6681,7 @@ async function rimuoviRefImpaginata(listaCodiciConId = [], mantieniBusyEsterno =
         if (askConfirm) {
 
             if (ruoloUtenteLoggato == RuoloUtente.superAdmin){
-                var resConfirm = await Modali.confirmRimozioneRef(codiciGruppo);
+                var resConfirm = await Modali.confirmRimozioneRef(codiciGruppo, vociSelezioneMultipla);
     
                 if (!resConfirm.confermato) {
                     return;
@@ -6594,6 +6690,11 @@ async function rimuoviRefImpaginata(listaCodiciConId = [], mantieniBusyEsterno =
                 if (resConfirm.eliminaDaTracciato) {
                     console.log("Da eliminare dal tracciato:", resConfirm.codici);
                     eliminaDaTracciato = true;
+                }
+            }
+            else if (vociSelezioneMultipla != null && vociSelezioneMultipla.length > 1) {
+                if (!(await Modali.confermaSuPiuBox("Procedere alla rimozione dall'impaginato di questi " + vociSelezioneMultipla.length + " box?", vociSelezioneMultipla))) {
+                    return;
                 }
             }
             else {
@@ -9204,11 +9305,16 @@ async function getSchedeRefsMassivo(codiciGruppi, idRecs, callback) {
     // Esegui la richiesta GET
     var formData = new FormData();
     formData.append("codiciGruppo", codiciGruppi.join("-"));
+    //I20-1063: un idRec che manca va come 0, non vuoto: il server scarta le voci vuote e gli idRec
+    //dopo finirebbero accanto al codice sbagliato.
     if (Array.isArray(idRecs) && idRecs.length > 0) {
-        formData.append("idsRec", idRecs.map(id => id == null ? "" : parseInt(id)).join("-"));
+        formData.append("idsRec", idRecs.map(id => id == null || isNaN(parseInt(id)) ? 0 : parseInt(id)).join("-"));
     }
 
-    xhr.send("Menabo/getSchedeRefs/" + idKitLavorazione + "/" + true, formData, "PUT");
+    //I20-1063: false come la scheda di un box solo (getSchedaRef). Con true il server saltava il
+    //controllo sui record della lavorazione, e un box da ricollegare tornava con i suoi record,
+    //senza il codice 8 che lo fa riconoscere.
+    xhr.send("Menabo/getSchedeRefs/" + idKitLavorazione + "/" + false, formData, "PUT");
 }
 
 /// Quando si sceglie un tracciato dalla tendina della clonazione, mostra i campi di quel
