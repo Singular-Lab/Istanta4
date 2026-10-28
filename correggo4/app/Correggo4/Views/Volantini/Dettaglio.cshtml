@@ -548,6 +548,16 @@
                   width: 100%; font-family: inherit; font-size: 12px; background: #fff; }
     .conLucchetto { display: flex; align-items: center; gap: 5px; }
     .lockiconCampo { flex: 0 0 auto; }
+    /* I20-1153: i prezzi come nel vecchio (screenshot dell'operatore del 28/10): etichetta piu'
+       grande, sotto il lucchetto e un campo bianco arrotondato largo un terzo della colonna, non
+       tutta. Il bordo rosso/verde della correzione resta quello di .borderFix/.borderFixed. */
+    #mCampi .rigaEl { margin-bottom: 9px; }
+    #mCampi .nome_campo { font-size: 13px; margin-bottom: 3px; }
+    #mCampi .conLucchetto { gap: 7px; }
+    #mCampi .elInputVal { width: 135px; height: 24px; padding: 2px 7px; border: 2px solid #d9d9d9;
+                          border-radius: 7px; }
+    .titolo_altre_azioni { font-weight: bold; font-size: 13px; margin-bottom: 8px; }
+    #mAzioni { width: 264px; max-width: 100%; height: 35px; padding: 0 10px; border-radius: 0; }
 
     .card_prop { background: #cbcbcb; border: 1px solid #9a9a9a; border-radius: 8px;
                  padding: 5px 9px; font-weight: bold; margin-bottom: 6px; color: #1c4e78; }
@@ -564,17 +574,19 @@
     .bottone.grande { padding: 6px 20px; font-size: 12px; background: #fff; border-color: #6a6a6a;
                       letter-spacing: .3px; }
     /* j246: le propagazioni come nel vecchio: una pastiglia per volantino gemello, con la i.
-       I dettagli (promo, pagina, versione, prodotto, stato) stanno nel suggerimento del mouse. */
-    .ea_pill { display: flex; align-items: center; gap: 6px; border: 1px solid #9a9a9a;
-               border-radius: 6px; background: #e9e9e9; padding: 4px 7px; margin-bottom: 5px;
-               cursor: pointer; font-size: 11px; }
-    .ea_pill.on { background: #cfe3cf; border-color: #6f9a6f; }
+       I dettagli (promo, pagina, versione, prodotto, stato) stanno nel suggerimento del mouse.
+       I20-1153: pastiglia grande col bordo grigio, sfondo della finestra, «i» blu del vecchio
+       (infoButton.png) e nome in grassetto. Spuntata o no ha lo stesso aspetto, come nel vecchio:
+       lo sfondo verde della spunta (.ea_pill.on) non c'e' piu'. */
+    .ea_pill { display: flex; align-items: center; gap: 7px; border: 2px solid #8a8a8a;
+               border-radius: 12px; background: transparent; padding: 0 12px; min-height: 38px;
+               max-width: 260px; margin-bottom: 2px; cursor: pointer; font-size: 13px;
+               font-weight: bold; color: #1a1a1a; letter-spacing: .3px; }
     .ea_pill.ferma { cursor: default; }
     .ea_pill input { margin: 0; flex: 0 0 auto; }
-    .ea_pill .i { flex: 0 0 auto; width: 15px; height: 15px; border-radius: 50%; background: #1c4e78;
-                  color: #fff; font-size: 10px; line-height: 15px; text-align: center;
-                  font-style: italic; font-weight: bold; }
+    .ea_pill .i { flex: 0 0 auto; width: 15px; height: 15px; }
     .ea_pill .nome { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .titolo_prop { font-size: 13px; }
     .bottone.primario { background: #1c1c1c; color: #fff; border-color: #1c1c1c; }
     .vuoto { color: #555; font-style: italic; }
 
@@ -609,7 +621,9 @@
     .ea_errore { color: #c62828; font-weight: bold; margin-top: 6px; font-size: 11px; text-align: left; }
     /* elenco "Propagazioni" dentro la finestra dell'Edit avanzato (j227), come l'originale */
     .ea_prop { margin-top: 8px; text-align: left; font-size: 11px; }
-    .ea_prop_tit { font-weight: bold; background: #8fa7a7; color: #fff; padding: 3px 6px; }
+    /* I20-1153: il nome dei due elenchi (prezzi, descrizione) e' una scritta semplice, non piu'
+       la barra azzurra: nel vecchio l'elenco era uno solo e senza titolo. */
+    .ea_prop_tit { color: #333; margin-bottom: 4px; }
     .ea_prop_riga { display: flex; align-items: flex-start; gap: 6px; border: 1px solid #c9c9c9;
                     border-top: none; padding: 4px 6px; background: #fff; }
     .ea_prop_riga.fatta { background: #eaf6ea; }
@@ -617,7 +631,7 @@
     .ea_prop_riga input { margin-top: 2px; }
     .ea_prop_riga .promo { font-weight: bold; }
     .ea_prop_riga .st { color: #555; }
-    .ea_prop_vuoto { border: 1px solid #c9c9c9; border-top: none; padding: 6px; background: #fff; color: #555; }
+    .ea_prop_vuoto { border: 1px solid #c9c9c9; padding: 6px; background: #fff; color: #555; }
     .ea_prop_da { background: #cfd8d8; border: 2px solid #9a4f5c; padding: 4px 6px; margin-top: 8px;
                   text-align: left; font-size: 11px; }
     .ea_bottoni { display: flex; justify-content: center; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
@@ -895,9 +909,9 @@
         <div class="colonna c3 meta_destra">
             <div id="mCampi"></div>
             <div style="text-align:center; margin-top:26px;">
-                <div style="font-weight:bold; margin-bottom:6px;">Altre azioni</div>
+                <div class="titolo_altre_azioni">Altre azioni</div>
                 <div id="mAzioniScelte"></div>
-                <select id="mAzioni" class="elInputVal" style="width:auto;">
+                <select id="mAzioni" class="elInputVal">
                     <option>Seleziona un'azione</option>
                 </select>
                 <div style="margin-top:24px;" id="eaOffertaPiede"></div>
@@ -905,7 +919,7 @@
         </div>
 
         <div class="colonna c4">
-            <div class="etichetta">Propagazioni</div>
+            <div class="etichetta titolo_prop">Propagazioni</div>
             <div id="mPropagazioni"></div>
 
             <div class="intestazione_sez" style="margin-top:26px;">Note:</div>
@@ -2497,7 +2511,8 @@
                        '" title="' + escA(dettagli) + '">' +
                        '<input type="checkbox" data-gem="' + g.idBox + '"' + (g.propagato ? ' checked' : '') +
                        (bloccato ? ' disabled' : '') + '>' +
-                       '<span class="i">i</span><span class="nome">' + esc(g.volantino) + '</span></label>';
+                       '<img class="i" src="' + escA(IMG + 'infoButton.png') + '" alt="">' +
+                       '<span class="nome">' + esc(g.volantino) + '</span></label>';
             }).join('');
         }
         cassetta.innerHTML = html;
