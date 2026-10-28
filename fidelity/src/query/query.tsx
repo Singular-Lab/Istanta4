@@ -106,12 +106,13 @@ export const useFetchFieldOptions = () => {
 
 export const useGetCampiDaRaggruppamento = (campo_scelto: string, idWorkspace: string) => {
   return useQuery({
-    queryKey: ['campiDaRaggruppamento', campo_scelto],
+    // I valori dipendono dal workspace: senza id_workspace nella chiave un altro workspace riceverebbe i suoi
+    queryKey: ['campiDaRaggruppamento', idWorkspace, campo_scelto],
     queryFn: () => ServerCall.put<string[]>(`/getCampiDaRaggruppamento`, {
       campoScelto: campo_scelto,
       id: idWorkspace
     }),
-    enabled: !!campo_scelto,
+    enabled: !!campo_scelto && !!idWorkspace,
   });
 }
 
@@ -159,7 +160,8 @@ export const useFetchDatiPerCreazioneKitsDesign = () => {
 
 export const useFetchCombinazioneById = (idCombinazione: string) => {
   return useQuery({
-    queryKey: ['combinazione', idCombinazione],
+    // Chiave distinta da useFetchCombinazioneDesignById: stesso id, risposte di forma diversa
+    queryKey: ['raccoglitoreKit', idCombinazione],
     queryFn: () => ServerCall.get<RaccoglitoreKit>(`/getRaccoglitoreKitById/${idCombinazione}`),
     enabled: !!idCombinazione,
   });
@@ -405,7 +407,8 @@ export const useFetchTipiExport = () => {
 };
 export const useFetchTipiExportPOP = () => {
   return useQuery({
-    queryKey: ["tipiExport"],
+    // Sotto-chiave di ["tipiExport"]: endpoint diverso, ma invalidare ["tipiExport"] aggiorna entrambi
+    queryKey: ["tipiExport", "POP"],
     queryFn: () => ServerCall.get<TipiDiExportResponseDTO[]>("/get_all_tipi_export_POP"),
   });
 };
@@ -573,7 +576,7 @@ export const useFetchKitRuntimeFilesPaginated = (params: {
 
 export const useFetchCombinazioneDesignById = (id: string) => {
   return useQuery({
-    queryKey: ['combinazione', id],
+    queryKey: ['combinazioneDesign', id],
     queryFn: async () => {
       const result = await ServerCall.get<DESIGN_KIT>(
         `/getCombinazioneDesignById/${id}`
@@ -618,7 +621,8 @@ export const useFetchVolantiniAttiviPuntoVendita = (idPv: string) => {
 
 export const useFetchPromoPerTimeline = (idArea: string, idCanale: string) => {
   return useQuery({
-    queryKey: ['promoPerTimeline'],
+    // Area e canale nella chiave: cambiandoli la timeline si ricarica invece di mostrare la precedente
+    queryKey: ['promoPerTimeline', idArea, idCanale],
     queryFn: () => ServerCall.get<TimelinePromoItem[]>(`/getAllPromoForTimeline?idArea=${idArea}&idCanale=${idCanale}`),
     enabled: !!idArea && !!idCanale,
   });

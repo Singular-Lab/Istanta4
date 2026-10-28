@@ -32,16 +32,17 @@ interface RestoreFilterTemplatePayload {
   version: number;
 }
 
-export function useFilterTemplates(apiKey?: string | null) {
+// Rotte della sessione: niente x-api-key (il server non restituisce più la chiave)
+// e il token CSRF lo aggiunge ServerCall.
+export function useFilterTemplates() {
   const queryClient = useQueryClient();
   const { showNotification } = useNotification();
   const { revalidate } = useRevalidator();
-  const authHeaders = apiKey ? { 'x-api-key': apiKey } : undefined;
 
   // Create mutation
   const createMutation = useMutation({
     mutationFn: async (payload: CreateFilterTemplatePayload) => {
-      return ServerCall.post('/external/filter-templates', payload, false, authHeaders);
+      return ServerCall.post('/external/filter-templates', payload, false);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['filter-templates'] });
@@ -72,7 +73,7 @@ export function useFilterTemplates(apiKey?: string | null) {
   // Update mutation
   const updateMutation = useMutation({
     mutationFn: async ({ id, ...payload }: UpdateFilterTemplatePayload) => {
-      return ServerCall.put(`/external/filter-templates/${id}`, payload, authHeaders);
+      return ServerCall.put(`/external/filter-templates/${id}`, payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['filter-templates'] });
@@ -103,7 +104,7 @@ export function useFilterTemplates(apiKey?: string | null) {
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      return ServerCall.delete(`/external/filter-templates/${id}`, undefined, authHeaders);
+      return ServerCall.delete(`/external/filter-templates/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['filter-templates'] });
@@ -136,7 +137,7 @@ export function useFilterTemplates(apiKey?: string | null) {
     mutationFn: async ({ slug, version }: RestoreFilterTemplatePayload) => {
       return ServerCall.post(`/external/filter-templates/slug/${slug}/restore`, {
         target_version: version
-      }, false, authHeaders);
+      }, false);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['filter-templates'] });

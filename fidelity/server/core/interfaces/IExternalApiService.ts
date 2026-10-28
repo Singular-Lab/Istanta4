@@ -23,6 +23,16 @@ export interface GetCssResponseDTO {
   timestamp: string;
 }
 
+/**
+ * Stato della chiave API del ruolo. La chiave in chiaro esiste solo nella risposta
+ * della generazione: a riposo resta il suo hash, quindi qui non puo' comparire.
+ */
+export interface StatoApiKeyDTO {
+  configurata: boolean;
+  /** Data della generazione (ISO), null se non nota o se la chiave non c'e' */
+  generataIl: string | null;
+}
+
 export interface IExternalApiService {
 
   /**
@@ -64,7 +74,7 @@ export interface IExternalApiService {
   getRefsFieldValues(field: string, templateId?: string[]): Promise<any[]>;
   getFilesFieldValues(field: string): Promise<any[]>;
   generateApiKey(id_utente: string): Promise<any>;
-  getApiKey(idUtente: string): Promise<string>;
+  getStatoApiKey(idUtente: string): Promise<StatoApiKeyDTO>;
   generatePluginTemplate(params: FilterTemplateAttributes): Promise<any>;
   getAllTemplateFiltersForGDO(idgdo: string): Promise<any[]>;
   getTemplateFromSlug(slug: string): Promise<Partial<FilterTemplateDTO> | null>;

@@ -3,20 +3,26 @@ import { ServerCall } from "../../../../lib/server_call";
 import { useNotification } from "../../../context/NotificationContext";
 import { useUser } from "../../../context/UserContext";
 import Lucide from "../../../components/Base/Lucide";
+import type { StatoApiKey } from "../types";
 
-export function useApiKeyManagement(initialApiKey: string = "") {
-  const [apiKey, setApiKey] = useState(initialApiKey);
+const NESSUNA_CHIAVE: StatoApiKey = { configurata: false, generataIl: null };
+
+export function useApiKeyManagement(statoIniziale?: StatoApiKey | null) {
+  const [stato, setStato] = useState<StatoApiKey>(statoIniziale ?? NESSUNA_CHIAVE);
+  // La chiave in chiaro esiste solo qui, subito dopo la generazione: il server ne
+  // conserva l'hash e non la restituisce più. Non va salvata altrove nel browser.
+  const [chiaveGenerata, setChiaveGenerata] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const { showNotification } = useNotification();
   const { user } = useUser();
 
-  // Sincronizza con l'API key iniziale quando cambia
+  // Sincronizza con lo stato del loader quando cambia (es. dopo una revalidate)
   useEffect(() => {
-    if (initialApiKey) {
-      setApiKey(initialApiKey);
+    if (statoIniziale) {
+      setStato(statoIniziale);
     }
-  }, [initialApiKey]);
+  }, [statoIniziale]);
 
   // Reset automatico del flag 'copied' dopo 2 secondi
   useEffect(() => {
@@ -46,15 +52,15 @@ export function useApiKeyManagement(initialApiKey: string = "") {
       // Il server rigenera sempre la chiave del ruolo dell'utente della sessione
       const result = await ServerCall.post<any>('/external/generate-api-key', {}, false);
 
-      if (result.success && result.apiKey) {
-        setApiKey(result.apiKey.apiKey);
-        setCopied(true);
+      if (result.success && result.apiKey?.apiKey) {
+        setChiaveGenerata(result.apiKey.apiKey);
+        setStato({ configurata: true, generataIl: result.apiKey.generated_at ?? new Date().toISOString() });
         showNotification(
           <div className="flex items-center">
             <Lucide icon="CircleCheck" className="text-success w-6 h-6" />
             <div className="ml-3">
               <div className="font-semibold">API Key generata con successo!</div>
-              <div className="text-xs text-slate-500">La chiave è stata copiata negli appunti</div>
+              <div className="text-xs text-slate-500">Copiala ora: non sarà più mostrata</div>
             </div>
           </div>
         );
@@ -79,13 +85,13 @@ export function useApiKeyManagement(initialApiKey: string = "") {
     }
   }, [user, showNotification]);
 
-  // Copia la API key negli appunti
+  // Copia negli appunti la chiave appena generata (l'unica disponibile in chiaro)
   const copyToClipboard = useCallback(() => {
-    if (!apiKey) {
+    if (!chiaveGenerata) {
       return;
     }
 
-    navigator.clipboard.writeText(apiKey);
+    navigator.clipboard.writeText(chiaveGenerata);
     setCopied(true);
     showNotification(
       <div className="flex items-center">
@@ -96,14 +102,14 @@ export function useApiKeyManagement(initialApiKey: string = "") {
         </div>
       </div>
     );
-  }, [apiKey, showNotification]);
+  }, [chiaveGenerata, showNotification]);
 
   return {
-    apiKey,
+    stato,
+    chiaveGenerata,
     copied,
     isGenerating,
     generateKey,
-    copyToClipboard,
-    setApiKey
+    copyToClipboard
   };
 }

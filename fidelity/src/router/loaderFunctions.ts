@@ -718,16 +718,18 @@ export const funzioneCaricamentoStoricoLavorazioni = async () => {
 
 export const funzioneCaricamentoGestioneApi = async () => {
   const totalSteps = 1;
-  const apiKeyPromise = ServerCall.get<string>("/external/get_api_key");
+  // Solo lo stato della chiave (StatoApiKey in pages/GestioneApi/types): il server
+  // non restituisce più la chiave salvata
+  const statoApiKeyPromise = ServerCall.get<{ configurata: boolean; generataIl: string | null }>("/external/get_api_key");
   const templatePromise = ServerCall.get<string[]>("/get_all_template_combinazioni_design");
   const filterTemplatePromise = ServerCall.get("/external/filter-templates?includeInactive=true")
-  const results = await Promise.allSettled([apiKeyPromise, templatePromise, filterTemplatePromise]);
-  const [apiKey, template, template_filters] = results.map((r) =>
+  const results = await Promise.allSettled([statoApiKeyPromise, templatePromise, filterTemplatePromise]);
+  const [statoApiKey, template, template_filters] = results.map((r) =>
     r.status === "fulfilled" ? r.value : (console.error("Errore:", r.reason), null)
   );
   console.log(template_filters)
 
-  return { apiKey, template, template_filters };
+  return { statoApiKey, template, template_filters };
 }
 export const funzioneCaricamentoGestioneWhatsappSuperAdmin = async () => {
   const totalSteps = 1;

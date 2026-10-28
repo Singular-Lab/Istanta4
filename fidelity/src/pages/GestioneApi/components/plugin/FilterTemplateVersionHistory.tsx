@@ -22,7 +22,6 @@ interface FilterTemplateVersionHistoryProps {
     onClose: () => void;
     onRestore: (version: number) => Promise<void>;
     isRestoring: boolean;
-    apiKey?: string | null;
 }
 
 interface HistoryResponse {
@@ -46,25 +45,22 @@ export default function FilterTemplateVersionHistory({
     isOpen,
     onClose,
     onRestore,
-    isRestoring,
-    apiKey
+    isRestoring
 }: FilterTemplateVersionHistoryProps) {
     const [selectedVersion, setSelectedVersion] = useState<number | null>(null);
     const [previewData, setPreviewData] = useState<FilterTemplateDTO | null>(null);
     const [isPreviewLoading, setIsPreviewLoading] = useState(false);
     const [previewError, setPreviewError] = useState<string | null>(null);
 
-    const authHeaders = useMemo(() => (apiKey ? { 'x-api-key': apiKey } : undefined), [apiKey]);
-    const queryKey = useMemo(() => ["filter-template-history", slug, apiKey], [slug, apiKey]);
+    // Solo rotte della sessione: la chiave API non è più disponibile nel browser
+    const queryKey = useMemo(() => ["filter-template-history", slug], [slug]);
 
     const { data, isLoading, isError, isFetching, refetch } = useQuery({
         queryKey,
         enabled: isOpen && Boolean(slug),
         queryFn: async (): Promise<FilterTemplateVersionHistoryDTO> => {
             const response = await ServerCall.get<HistoryResponse>(
-                `/external/filter-templates/slug/${slug}/versions`,
-                undefined,
-                authHeaders
+                `/external/filter-templates/slug/${slug}/versions`
             );
             return response.data;
         }
@@ -78,16 +74,16 @@ export default function FilterTemplateVersionHistory({
         }
     }, [isOpen]);
 
-    const handleViewVersion = async (version: number) => {
-        setSelectedVersion(version);
+    const handleViewVersion = async (versione: FilterTemplateVersionDTO) => {
+        setSelectedVersion(versione.version);
         setIsPreviewLoading(true);
         setPreviewError(null);
 
         try {
+            // Ogni versione è una riga a sé: la si legge per id con la sessione. La rotta
+            // per slug è quella pubblica del plugin (token effimero o API key).
             const response = await ServerCall.get<TemplateResponse>(
-                `/external/filter-templates/slug/${slug}?version=${version}`,
-                undefined,
-                authHeaders
+                `/external/filter-templates/${versione.id_filter_template}`
             );
             setPreviewData(response.data);
         } catch (error: any) {
@@ -202,7 +198,7 @@ export default function FilterTemplateVersionHistory({
                                                 type="button"
                                                 size="sm"
                                                 variant={isSelected ? "primary" : "outline-secondary"}
-                                                onClick={() => handleViewVersion(version.version)}
+                                                onClick={() => handleViewVersion(version)}
                                             >
                                                 <Lucide icon="Eye" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" /> Visualizza
                                             </Button>

@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { IAgenziaLib } from '../../agenzia_lib/types';
 import config from '../../config';
 import type { ContestoImportPuntiVendita } from '../../services/importPuntiVendita';
+import { RegistroLavoriInMemoria } from '../../../__tests__/registroLavoriInMemoria';
 import { GestoreImportPuntiVendita } from '../../services/ImportPuntiVenditaJob';
 import { ServerUtils } from '../../utils/ServerUtils';
 import { PuntoVenditaController } from '../PuntoVenditaController';
@@ -33,7 +34,8 @@ const contesto: ContestoImportPuntiVendita = {
 const OK = { data: { esito: true, errorCode: 0, error: '' }, status: 200 };
 const RIFIUTO = { data: { esito: false, errorCode: 0, error: 'Combinazione sconosciuta' }, status: 400 };
 
-function createApp(risposteIstanta: Array<typeof OK>, agenziaLib: Partial<IAgenziaLib> = {}) {
+/** Un worker del cluster; piu worker condividono il registro dei lavori (il DB). */
+function createApp(risposteIstanta: Array<typeof OK>, agenziaLib: Partial<IAgenziaLib> = {}, registro = new RegistroLavoriInMemoria()) {
   const puntoVenditaService = {
     getContestoImport: vi.fn(async () => contesto),
     createPuntoVendita: vi.fn(async (data: any) => data),
@@ -44,7 +46,7 @@ function createApp(risposteIstanta: Array<typeof OK>, agenziaLib: Partial<IAgenz
   const cerca = vi.fn(async (_q: string) => [
     { etichetta: 'Via Grayson 20, Mantova', lat: 45.15, lon: 10.79, indirizzo: 'Via Grayson 20', cap: '46100', citta: 'Mantova', provincia: 'MN', regione: 'Lombardia' },
   ]);
-  const gestore = new GestoreImportPuntiVendita();
+  const gestore = new GestoreImportPuntiVendita(registro, { intervalloAttesaMs: 5 });
   const avvia = vi.spyOn(gestore, 'avvia');
   const emetti = vi.fn();
   const istanta = vi.spyOn(ServerUtils, 'sendToFICOApi');
@@ -57,7 +59,7 @@ function createApp(risposteIstanta: Array<typeof OK>, agenziaLib: Partial<IAgenz
     puntoVenditaService as any, gdoService as any, agenziaLib as IAgenziaLib, gestore, emetti, aggiornaVista, cerca
   ).registerRoutes(app);
   /** Attende la fine dell'import avviato in background. */
-  const fineImport = () => avvia.mock.results[0].value.fine;
+  const fineImport = async () => (await avvia.mock.results[0].value).fine;
   return { app, puntoVenditaService, istanta, aggiornaVista, cerca, gestore, emetti, fineImport };
 }
 
@@ -259,7 +261,7 @@ async function importInPausa(risposteIstanta: Array<typeof OK>) {
   const istanza = createApp(risposteIstanta, libreriaConRigaAmbigua);
   const avvio = await request(istanza.app).post('/api/ACPV/importaPV').attach('file', fileAmbiguo, 'pv.xlsx');
   const jobId = avvio.body.jobId as string;
-  await vi.waitFor(() => expect(istanza.gestore.stato(jobId, 'u1')?.stato).toBe('in_attesa'));
+  await vi.waitFor(async () => expect((await istanza.gestore.stato(jobId, 'u1'))?.stato).toBe('in_attesa'));
   return { ...istanza, jobId };
 }
 
@@ -296,7 +298,7 @@ describe('riga ambigua: inserimento manuale', () => {
     expect(senzaCombinazione.status).toBe(400);
     expect(capErrato.status).toBe(400);
     expect(istanta).not.toHaveBeenCalled();
-    expect(gestore.stato(jobId, 'u1')?.stato).toBe('in_attesa');
+    expect((await gestore.stato(jobId, 'u1'))?.stato).toBe('in_attesa');
   });
 
   it('se Istanta rifiuta, risponde con l\'errore e la riga resta in attesa', async () => {
@@ -306,7 +308,7 @@ describe('riga ambigua: inserimento manuale', () => {
 
     expect(res.status).toBe(502);
     expect(puntoVenditaService.createPuntoVendita).not.toHaveBeenCalled();
-    expect(gestore.stato(jobId, 'u1')).toMatchObject({ stato: 'in_attesa', rigaInAttesa: { riga: 2 } });
+    expect(await gestore.stato(jobId, 'u1')).toMatchObject({ stato: 'in_attesa', rigaInAttesa: { riga: 2 } });
   });
 
   it('scarta la riga e l\'import finisce senza scrivere', async () => {
@@ -334,6 +336,81 @@ describe('riga ambigua: inserimento manuale', () => {
     await request(app).post(`/api/ACPV/importaPV/${jobId}/annulla`);
 
     expect(await fineImport()).toMatchObject({ stato: 'annullato', nonElaborate: 1 });
+  });
+});
+
+// In produzione il server gira con piu worker senza sticky session: le richieste dello stesso
+// import arrivano a processi diversi, che condividono solo il DB (qui il registro in memoria)
+async function importInPausaSuDueWorker(risposteIstanta: Array<typeof OK>) {
+  const registro = new RegistroLavoriInMemoria();
+  const workerA = createApp(risposteIstanta, libreriaConRigaAmbigua, registro);
+  const workerB = createApp([], libreriaConRigaAmbigua, registro);
+  const avvio = await request(workerA.app).post('/api/ACPV/importaPV').attach('file', fileAmbiguo, 'pv.xlsx');
+  const jobId = avvio.body.jobId as string;
+  await vi.waitFor(async () => expect((await workerB.gestore.stato(jobId, 'u1'))?.stato).toBe('in_attesa'));
+  return { workerA, workerB, jobId };
+}
+
+describe('import con piu worker: le richieste arrivano a un worker qualsiasi', () => {
+  it('lo stato su un altro worker ritrova l\'import in pausa, anche senza jobId dopo aver ricaricato la pagina', async () => {
+    const { workerB, jobId } = await importInPausaSuDueWorker([]);
+
+    const conJobId = await request(workerB.app).get(`/api/ACPV/importaPV/stato?jobId=${jobId}`);
+    const senzaJobId = await request(workerB.app).get('/api/ACPV/importaPV/stato');
+
+    expect(conJobId.body.stato).toMatchObject({ jobId, stato: 'in_attesa', rigaInAttesa: { riga: 2 } });
+    expect(senzaJobId.body.stato).toMatchObject({ jobId, stato: 'in_attesa', rigaInAttesa: { riga: 2 } });
+  });
+
+  it('la decisione su un altro worker risponde 200: scrive la riga quel worker e l\'import finisce', async () => {
+    const { workerA, workerB, jobId } = await importInPausaSuDueWorker([OK]);
+
+    const res = await request(workerB.app).post(`/api/ACPV/importaPV/${jobId}/decisione`).send(CONFERMATO);
+
+    expect(res.status).toBe(200);
+    expect(res.body.stato).toMatchObject({ jobId, stato: 'in_corso', creati: 1, inseritiAMano: 1 });
+    expect(workerB.puntoVenditaService.createPuntoVendita).toHaveBeenCalledWith(expect.objectContaining({
+      id_combinazione_canale_area: 'comb1', meta: { id_muro: '87907', id_anacan: '8139' },
+    }));
+    expect(workerA.puntoVenditaService.createPuntoVendita).not.toHaveBeenCalled();
+    expect(await workerA.fineImport()).toMatchObject({ stato: 'completato', creati: 1, inseritiAMano: 1 });
+  });
+
+  it('se Istanta rifiuta la decisione presa su un altro worker, risponde con l\'errore e la riga resta in attesa', async () => {
+    const { workerA, workerB, jobId } = await importInPausaSuDueWorker([RIFIUTO]);
+
+    const res = await request(workerB.app).post(`/api/ACPV/importaPV/${jobId}/decisione`).send(CONFERMATO);
+
+    expect(res.status).toBe(502);
+    expect(workerB.puntoVenditaService.createPuntoVendita).not.toHaveBeenCalled();
+    expect(await workerA.gestore.stato(jobId, 'u1')).toMatchObject({ stato: 'in_attesa', rigaInAttesa: { riga: 2 } });
+  });
+
+  it('scartare su un altro worker risponde 200 e l\'import finisce senza scrivere', async () => {
+    const { workerA, workerB, jobId } = await importInPausaSuDueWorker([]);
+
+    const res = await request(workerB.app).post(`/api/ACPV/importaPV/${jobId}/decisione`).send({ azione: 'scarta' });
+
+    expect(res.status).toBe(200);
+    expect(await workerA.fineImport()).toMatchObject({ stato: 'completato', creati: 0, scartati: 1 });
+  });
+
+  it('annullare su un altro worker risponde 200 e chiude l\'import', async () => {
+    const { workerA, workerB, jobId } = await importInPausaSuDueWorker([]);
+
+    const res = await request(workerB.app).post(`/api/ACPV/importaPV/${jobId}/annulla`);
+
+    expect(res.status).toBe(200);
+    expect(await workerA.fineImport()).toMatchObject({ stato: 'annullato', nonElaborate: 1 });
+  });
+
+  it('un secondo import sulla stessa GDO da un altro worker risponde 409 con lo stato del primo', async () => {
+    const { workerB, jobId } = await importInPausaSuDueWorker([]);
+
+    const secondo = await request(workerB.app).post('/api/ACPV/importaPV').attach('file', fileAmbiguo, 'pv.xlsx');
+
+    expect(secondo.status).toBe(409);
+    expect(secondo.body.stato).toMatchObject({ jobId, stato: 'in_attesa' });
   });
 });
 

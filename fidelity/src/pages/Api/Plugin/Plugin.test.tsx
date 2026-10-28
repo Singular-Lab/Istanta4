@@ -28,7 +28,7 @@ const apri = () =>
 
 describe("Plugin", () => {
   it("senza Filter Template mostra un solo stato vuoto, con il comando per crearne uno", () => {
-    finti.loader = { apiKey: "chiave", template: [], template_filters: { success: true, data: [], timestamp: new Date() } };
+    finti.loader = { statoApiKey: { configurata: true, generataIl: null }, template: [], template_filters: { success: true, data: [], timestamp: new Date() } };
     apri();
 
     expect(screen.getByRole("heading", { level: 1, name: "Plugin" })).toBeInTheDocument();
@@ -39,7 +39,7 @@ describe("Plugin", () => {
 
   it("con dei template e nessuno selezionato invita a sceglierne uno", () => {
     finti.loader = {
-      apiKey: "chiave",
+      statoApiKey: { configurata: true, generataIl: null },
       template: [],
       template_filters: {
         success: true,

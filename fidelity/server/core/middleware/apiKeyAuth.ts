@@ -48,10 +48,11 @@ export const apiKeyAuthMiddleware = async (req: Request, res: Response, next: Ne
       });
     }
 
-    // Cerca il ruolo associato all'API key
+    // Cerca il ruolo associato all'API key: a riposo c'e' solo l'hash, una copia
+    // del database non basta per chiamare le API
     const ruoloGDO = await RuoloUtenteGDO.findOne({
       where: {
-        api_key_ruolo_utente_gdo: apiKey
+        api_key_ruolo_utente_gdo: hashApiKey(apiKey)
       }
     });
 
@@ -159,6 +160,17 @@ export function verifyApiKey(apiKey: string): boolean {
     // Se la decifratura fallisce, la chiave non è valida
     return false;
   }
+}
+
+/**
+ * Impronta della chiave API salvata in ruolo_utente_gdo al posto della chiave.
+ * Deve restare identica alla conversione dello script
+ * db/scripts/prima_della_sincronizzazione/hash_api_key_ruoli.sql
+ * (sha256 dei byte UTF-8, esadecimale minuscolo), altrimenti le chiavi migrate
+ * non verrebbero piu' riconosciute.
+ */
+export function hashApiKey(apiKey: string): string {
+  return crypto.createHash('sha256').update(apiKey, 'utf8').digest('hex');
 }
 
 /**

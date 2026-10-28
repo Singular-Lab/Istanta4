@@ -7,7 +7,7 @@ import { EVENTI_WEBHOOK, EXPORT_DI_SISTEMA, STATO_COMBINAZIONI, STATO_LAVORAZION
 import { BusinessError, DatabaseError, ExternalApiError, ForbiddenError, isAppError, NotFoundError, ServiceUnavailableError, wrapDatabaseError, wrapNotFoundError } from '../../../lib/errors';
 import { DESIGN_KIT, FileItemKit, FileItemKitLog, ImportStorico, OggettoTipiDiExport, PaylodKitPubblicato, RUNTIME_KIT, TipiDiExportAttributes } from '../../../lib/types';
 import config from '../config';
-import { urlOlimpo, urlOlimpoPubblico } from '../utils/urlOlimpo';
+import { inUrlOlimpoRelativo, urlOlimpo, urlOlimpoPubblico } from '../utils/urlOlimpo';
 import { sequelize } from '../db';
 import { IIstantaService } from '../interfaces/IIstantaService';
 import { IKitRuntimeService } from '../interfaces/IKitRuntimeService';
@@ -75,6 +75,35 @@ function normalizeDesignKitFromPg(raw: any): any {
     quantitaCopie: raw.quantitaCopie ?? raw.quantita_copie,
     filtroContesto: raw.filtroContesto ?? raw.filtro_contesto ?? [],
   };
+}
+
+/**
+ * Campi di un file runtime calcolati alla lettura, che non vanno salvati in files_runtime:
+ * gli URL si ricostruiscono da id_olimpo_cloud (salvati, congelerebbero un id che cambia
+ * alla sostituzione del file) e il log sta in files_runtime_log.
+ */
+const CAMPI_CALCOLATI_FILE_RUNTIME = ['url', 'url_download', 'log'] as const;
+
+/** Il file runtime senza i campi calcolati alla lettura, pronto per insert e update. */
+export function colonneFileRuntime(data: FileItemKit): Record<string, unknown> {
+  const colonne: Record<string, unknown> = { ...data };
+  for (const campo of CAMPI_CALCOLATI_FILE_RUNTIME) delete colonne[campo];
+  return colonne;
+}
+
+/**
+ * URL assoluto pubblico del PDF di un file runtime, per chi sta fuori da Fidelity (webhook):
+ * passa dal proxy di Fidelity e non espone l'indirizzo interno di Olimpo. Si ricostruisce
+ * dall'id Olimpo; le righe legacy senza id riportano l'URL salvato alla forma pubblica, e un
+ * URL che non e' di Olimpo resta com'e'.
+ */
+export function urlPdfPubblicoFileRuntime(file: { id_olimpo_cloud?: string | null; url?: string | null }): string {
+  if (file.id_olimpo_cloud) {
+    return urlOlimpoPubblico(config.CLIENT_URL, '/materiali/getMaterialePDF', { id: file.id_olimpo_cloud });
+  }
+  if (!file.url) return '';
+  const relativo = inUrlOlimpoRelativo(file.url);
+  return relativo === null ? file.url : `${config.CLIENT_URL.replace(/\/+$/, '')}${relativo}`;
 }
 
 /** Converts FileItemKit[] (from raccoglitore_kit.files) to files_data format for runtime_kit */
@@ -1760,7 +1789,7 @@ export class KitRuntimeService implements IKitRuntimeService {
           files: files.map((f: any) => ({
             id: f.id,
             nome: f.nome,
-            url: f.url || '',
+            url: urlPdfPubblicoFileRuntime(f),
             tipo_export: f.tipo_export || ''
           })),
           filtri: result.filtro || [],
@@ -1907,6 +1936,7 @@ export class KitRuntimeService implements IKitRuntimeService {
       }
 
       // Enrich files with logs and OLYMPUS URLs
+      // Li legge il browser: URL relativi al proxy di Fidelity, ricostruiti dall'id Olimpo
       const files = dedupedFiles.map(file => {
         const logEntry = logsByNomeFile.get(file.nome) || null;
         return {
@@ -1914,10 +1944,10 @@ export class KitRuntimeService implements IKitRuntimeService {
           isOptional: file.isOptional ?? file.is_optional ?? false,
           log: logEntry,
           url: (file.id_olimpo_cloud && file.id_olimpo_cloud !== '')
-            ? urlOlimpoPubblico(config.CLIENT_URL, '/materiali/getThumbnailMaterialePdfs', { id: file.id_olimpo_cloud })
+            ? urlOlimpo('/materiali/getThumbnailMaterialePdfs', { id: file.id_olimpo_cloud })
             : file.url,
           url_download: (file.id_olimpo_cloud && file.id_olimpo_cloud !== '')
-            ? urlOlimpoPubblico(config.CLIENT_URL, '/materiali/getMaterialePDF', { id: file.id_olimpo_cloud })
+            ? urlOlimpo('/materiali/getMaterialePDF', { id: file.id_olimpo_cloud })
             : file.url,
         };
       });
@@ -2166,7 +2196,7 @@ export class KitRuntimeService implements IKitRuntimeService {
   async insertNewFileRuntime(data: FileItemKit): Promise<any> {
     try {
       const resultCreazioneCombinazioneDesign = await FilesRuntime.create({
-        ...data,
+        ...colonneFileRuntime(data),
         is_optional: data.isOptional ?? (data as any).is_optional ?? false,
       } as any);
       return resultCreazioneCombinazioneDesign;
@@ -2183,9 +2213,10 @@ export class KitRuntimeService implements IKitRuntimeService {
 
   async updateSingleFileRuntime(data: FileItemKit) {
     try {
+      // I chiamanti passano spesso un file letto con gli URL calcolati: si salvano solo le colonne
       const resultCreazioneCombinazioneDesign = await FilesRuntime.update(
         {
-          ...data,
+          ...colonneFileRuntime(data),
           is_optional: data.isOptional ?? (data as any).is_optional ?? false,
         } as any,
         { where: { id: data.id } }

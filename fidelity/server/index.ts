@@ -22,7 +22,6 @@ async function main() {
         await sincronizzaSchemaAllAvvio();
         // Catalogo permessi e migrazione degli accessi: una volta sola, prima dei worker
         await preparaAccessiAllAvvio();
-      await preparaConfigAllAvvio();
         // Configurazione collegata alla GDO del cliente e funzionalita' iniziali, prima dei worker
         await preparaConfigAllAvvio();
         log.info('Master process: avvio WebSocket server...');
@@ -41,6 +40,8 @@ async function main() {
       log.info('Modalità development: avvio single-process...');
       await sincronizzaSchemaAllAvvio();
       await preparaAccessiAllAvvio();
+      // Anche in sviluppo: senza, la configurazione non si collega alla GDO e le funzionalita' restano spente
+      await preparaConfigAllAvvio();
       await startWSServer();
       await createActualServer();
     }

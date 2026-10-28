@@ -5,7 +5,7 @@ import ConfirmDialog from "@/components/ConfirmDialog";
 import PannelloElenco from "../PannelloElenco";
 import { useNotification } from "@/context/NotificationContext";
 import { useFetchTipiExport } from '@/query/query';
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { forwardRef, useImperativeHandle, useState } from "react";
 import { ServerCall } from "../../../../lib/server_call";
 import { TipiDiExportResponseDTO } from "../../../../server/core/dto";
@@ -24,9 +24,15 @@ const PanelTipiExport = forwardRef<PanelTipiExportRefHandle, TipiExportProps>(({
   const [isModaleEliminazioneAperto, setIsModaleEliminazioneAperto] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const tipiExport = useFetchTipiExport();
+  const queryClient = useQueryClient();
+
+  // Invalida per prefisso: aggiorna anche l'elenco POP (["tipiExport", "POP"]) usato dalle API
+  const aggiornaTipiExport = () => {
+    void queryClient.invalidateQueries({ queryKey: ["tipiExport"] });
+  };
 
   useImperativeHandle(ref, () => ({
-    refetchTipiExport: tipiExport.refetch
+    refetchTipiExport: aggiornaTipiExport
   }));
 
   // Filtri per la ricerca
@@ -43,7 +49,7 @@ const PanelTipiExport = forwardRef<PanelTipiExportRefHandle, TipiExportProps>(({
     },
     onSuccess: () => {
       showNotification("Tipo di export eliminato con successo", { variant: "success" });
-      tipiExport.refetch();
+      aggiornaTipiExport();
       handleChiudiModaleEliminazione();
     },
     onError: (error) => {
@@ -51,7 +57,7 @@ const PanelTipiExport = forwardRef<PanelTipiExportRefHandle, TipiExportProps>(({
         `Errore durante l'eliminazione del tipo di export: ${error instanceof Error ? error.message : "riprova più tardi."}`,
         { variant: "error" }
       );
-      tipiExport.refetch();
+      aggiornaTipiExport();
       handleChiudiModaleEliminazione();
     }
   });

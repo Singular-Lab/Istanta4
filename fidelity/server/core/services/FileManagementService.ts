@@ -10,13 +10,12 @@ import stream, { Readable } from 'stream';
 import unzipper from 'unzipper';
 import { log } from '../logger';
 import { v4 as uuidv4 } from 'uuid';
-import { CATEGORIA_ATTIVITA, EVENTI_WEBHOOK, EXPORT_DI_SISTEMA, STATO_LAVORAZIONE_KIT_RUNTIME, STATO_LOG_FILE, TIPO_ATTIVITA, TIPO_KIT_DESIGN } from '../../../lib/enums';
+import { CATEGORIA_ATTIVITA, EVENTI_WEBHOOK, EXPORT_DI_SISTEMA, STATO_LAVORAZIONE_KIT_RUNTIME, STATO_LOG_FILE, STATO_PROMO, TIPO_ATTIVITA, TIPO_KIT_DESIGN } from '../../../lib/enums';
 import { AppError, BadRequestError, DatabaseError, ExternalApiError, NotFoundError, wrapApiError, wrapAppError, wrapDatabaseError, wrapExternalError, wrapNotFoundError } from '../../../lib/errors';
 import {
   FileItemKit,
   FileItemKitLog,
   FotoGruppoReferenze,
-  RUNTIME_KIT,
   ReferenzeIstanta
 } from '../../../lib/types';
 import config from '../config';
@@ -30,11 +29,15 @@ import type { IKitRuntimeService } from '../interfaces/IKitRuntimeService';
 import type { ITipoExportService } from '../interfaces/ITipoExportService';
 import type { IWebhookService } from '../interfaces/IWebhookService';
 import { trovaConfigInstallazione } from './configPerGdo';
+import { Area } from '../models/aree';
+import { Canale } from '../models/canali';
 import { FilesRuntime } from '../models/files_runtime';
 import { FilesRuntimeLog, type FilesRuntimeLogAttributes } from '../models/files_runtime_log';
+import { Promo } from '../models/promo';
 import { Referenze } from '../models/referenze';
 import { ReferenzeGruppo } from '../models/referenze_gruppo';
-import { RuntimeKit } from '../models/runtime_kit';
+import { RuntimeKit, type RuntimeKitAttributes } from '../models/runtime_kit';
+import { TipiDiExport } from '../models/tipi_di_export';
 import type { IPromoRepository } from '../repositories/PromoRepository';
 import { normalizePromoModel } from '../utils/PromoModelUtils';
 import { ServerUtils } from '../utils/ServerUtils';
@@ -46,6 +49,24 @@ import { sostituisciReferenzeKit } from './ReferenzeService';
 const MAX_ENTRY_ZIP = 500;
 const MAX_BYTE_ENTRY_ZIP = 50 * 1024 * 1024;
 const MAX_BYTE_TOTALI_ZIP = 200 * 1024 * 1024;
+
+/** Volantino della pagina Volantini e del visualizzatore WebPliant: un kit con i suoi PDF. */
+interface VolantinoPdfKit {
+  idCanale: string;
+  idKit: string;
+  idArea: string;
+  nomeCanale: string;
+  nomeArea: string;
+  files_field: Array<{
+    nome_file: string;
+    id_olimpo_cloud: string;
+    tipo_export: string;
+    codice_tipiexport: string;
+    idPromo: string;
+    url: string;
+    url_download: string;
+  }>;
+}
 
 interface MatchedFile {
   originalFile: FileItemKit;
@@ -590,75 +611,15 @@ export class FileManagementService implements IFileManagementService {
     }
   }
 
-  async getAllCombinazioniRuntimePDF(codice?: string): Promise<any[]> {
+  async getAllCombinazioniRuntimePDF(codice?: string): Promise<VolantinoPdfKit[]> {
     try {
-      if (!codice) {
-        codice = EXPORT_DI_SISTEMA.VOL;
-      }
-      const combinazioni = await RuntimeKit.findAll({ raw: true }) as unknown as RUNTIME_KIT[];
-      if (!combinazioni) {
-        return [];
-      }
-
-      let files: {
-        idCanale: string;
-        idKit: string;
-        idArea: string;
-        nomeCanale: string;
-        nomeArea: string;
-        files_field: Array<{
-          nome_file: string;
-          id_olimpo_cloud: any;
-          tipo_export: string;
-          codice_tipiexport: string;
-          idPromo: string;
-          url: string;
-          url_download: string;
-        }>
-      }[] = [];
-
-      await Promise.all(combinazioni.map(async (combinazione) => {
-        const area = await this.areeService.getAreaById(combinazione.guidArea);
-        const canale = await this.canaliService.getCanaleById(combinazione.guidCanale);
-        if (!canale) {
-          throw wrapNotFoundError(new Error("Canale non trovato"), {
-            message: "Canale non trovato",
-            entityType: "Canale",
-            entityId: combinazione.guidCanale
-          });
-        }
-        const nomeCanale = canale.nome;
-        const fileEntry = {
-          idCanale: combinazione.guidCanale,
-          idKit: combinazione.guidId,
-          idArea: combinazione.guidArea,
-          nomeCanale: nomeCanale,
-          nomeArea: area?.nome ?? '',
-          files_field: []
-        } as any;
-
-        const runtimeFiles = await FilesRuntime.findAll({
-          where: { id_runtime: combinazione.guidId },
-          raw: true
-        }) as unknown as FileItemKit[];
-        await Promise.all(runtimeFiles.map(async (file: FileItemKit) => {
-          const exportType = await this.tipoExportService.getTipoExportById(file.tipo_export);
-          if (exportType && exportType.codice === codice) {
-            fileEntry.files_field.push({
-              nome_file: file.nome,
-              id_olimpo_cloud: file.id_olimpo_cloud,
-              tipo_export: file.tipo_export,
-              codice_tipiexport: exportType.codice,
-              idPromo: combinazione.idPromo,
-              url: urlOlimpo('/materiali/getThumbnailMaterialePdfs', { id: file.id_olimpo_cloud }),
-              url_download: urlOlimpo('/materiali/getMaterialePDF', { id: file.id_olimpo_cloud })
-            });
-            files.push(fileEntry);
-          }
-        }));
-      }));
-
-      return files;
+      const codiceExport = codice || EXPORT_DI_SISTEMA.VOL;
+      // Solo kit pubblicati: un kit in lavorazione, in revisione o eliminato non e' un volantino da consultare
+      const [kits, tipiExport] = await Promise.all([
+        RuntimeKit.findAll({ where: { stato_lavorazione: STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO }, raw: true }),
+        TipiDiExport.findAll({ where: { codice_tipiexport: codiceExport }, raw: true }),
+      ]);
+      return await this.componiVolantiniPdf(kits, tipiExport);
     } catch (error) {
       throw wrapDatabaseError(new Error("Errore durante il recupero delle combinazioni runtime PDF"), {
         message: "Errore durante il recupero delle combinazioni runtime PDF",
@@ -669,91 +630,33 @@ export class FileManagementService implements IFileManagementService {
     }
   }
 
-  async getAllCombinazioniRuntimePDFWebPliant(idArea: string, idCanale: string, idsKitDesign: string[], idsTipiDiExport: string[]): Promise<any[]> {
+  async getAllCombinazioniRuntimePDFWebPliant(idArea: string, idCanale: string, idsKitDesign: string[], idsTipiDiExport: string[]): Promise<VolantinoPdfKit[]> {
     try {
+      if (!idsTipiDiExport || idsTipiDiExport.length === 0) {
+        return [];
+      }
       const whereClause: any = {
         id_area: idArea,
         id_canale: idCanale,
+        // Il visualizzatore WebPliant mostra solo volantini pubblicati, come la pagina Volantini
+        stato_lavorazione: STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO,
       };
 
       if (idsKitDesign && idsKitDesign.length > 0) {
         whereClause.id_design = { [Op.in]: idsKitDesign };
       }
 
-      const combinazioni = await RuntimeKit.findAll({
-        where: whereClause,
-        raw: true
-      }) as unknown as RUNTIME_KIT[];
+      const [combinazioni, tipiExport] = await Promise.all([
+        RuntimeKit.findAll({ where: whereClause, raw: true }),
+        TipiDiExport.findAll({ where: { id_tipiexport: { [Op.in]: idsTipiDiExport } }, raw: true }),
+      ]);
 
-      if (combinazioni.length === 0) {
-        return [];
-      }
+      // Solo i kit che prevedono almeno uno dei tipi di export richiesti
+      const filteredCombinazioni = combinazioni.filter((c) =>
+        (c.tipi_di_export_in_kit || []).some((tipo) => idsTipiDiExport.includes(tipo.tipo_di_export_guid_id))
+      );
 
-      // Filter in memory for tipiDiExportInKit matching
-      const filteredCombinazioni = combinazioni.filter((c: any) => {
-        const tipi = c.tipi_di_export_in_kit || [];
-        return tipi.some((tipo: any) => idsTipiDiExport.includes(tipo.tipo_di_export_guid_id));
-      });
-
-      let files: {
-        idCanale: string;
-        idKit: string;
-        idArea: string;
-        nomeCanale: string;
-        nomeArea: string;
-        files_field: Array<{
-          nome_file: string;
-          id_olimpo_cloud: any;
-          tipo_export: string;
-          codice_tipiexport: string;
-          idPromo: string;
-          url: string;
-          url_download: string;
-        }>
-      }[] = [];
-
-      await Promise.all(filteredCombinazioni.map(async (combinazione) => {
-        const area = await this.areeService.getAreaById(combinazione.guidArea);
-        const canale = await this.canaliService.getCanaleById(combinazione.guidCanale);
-        if (!canale) {
-          throw new NotFoundError({
-            message: "Canale non trovato",
-            entityType: "Canale",
-            entityId: combinazione.guidCanale
-          });
-        }
-        const nomeCanale = canale.nome;
-        const fileEntry = {
-          idCanale: combinazione.guidCanale,
-          idKit: combinazione.guidId,
-          idArea: combinazione.guidArea,
-          nomeCanale: nomeCanale,
-          nomeArea: area?.nome ?? '',
-          files_field: []
-        } as any;
-
-        const runtimeFiles = await FilesRuntime.findAll({
-          where: { id_runtime: combinazione.guidId },
-          raw: true
-        }) as unknown as FileItemKit[];
-        await Promise.all(runtimeFiles.map(async (file: FileItemKit) => {
-          const exportType = await this.tipoExportService.getTipoExportById(file.tipo_export);
-          if (exportType && idsTipiDiExport.includes(file.tipo_export)) {
-            fileEntry.files_field.push({
-              nome_file: file.nome,
-              id_olimpo_cloud: file.id_olimpo_cloud,
-              tipo_export: file.tipo_export,
-              codice_tipiexport: exportType.codice,
-              idPromo: combinazione.idPromo,
-              url: urlOlimpo('/materiali/getThumbnailMaterialePdfs', { id: file.id_olimpo_cloud }),
-              url_download: urlOlimpo('/materiali/getMaterialePDF', { id: file.id_olimpo_cloud })
-            });
-            files.push(fileEntry);
-          }
-        }));
-      }));
-
-      return files;
+      return await this.componiVolantiniPdf(filteredCombinazioni, tipiExport);
     } catch (error) {
       throw new DatabaseError({
         message: "Errore durante il recupero delle combinazioni runtime PDF per WebPliant",
@@ -762,6 +665,86 @@ export class FileManagementService implements IFileManagementService {
         cause: error instanceof Error ? error : undefined
       });
     }
+  }
+
+  /**
+   * Un elemento per kit, con i suoi file dei tipi di export indicati. Esclude i kit di promo
+   * eliminate e quelli senza file; promo, file, aree e canali si leggono in blocco, non per kit.
+   */
+  private async componiVolantiniPdf(
+    kits: Array<Pick<RuntimeKitAttributes, 'id' | 'id_area' | 'id_canale' | 'id_promo'>>,
+    tipiExport: Array<{ id_tipiexport: string; codice_tipiexport: string }>
+  ): Promise<VolantinoPdfKit[]> {
+    if (kits.length === 0 || tipiExport.length === 0) {
+      return [];
+    }
+
+    // Una promo eliminata (o cancellata del tutto) non ha piu' volantini da mostrare
+    const idsPromo = [...new Set(kits.map(k => k.id_promo).filter(Boolean))];
+    if (idsPromo.length === 0) {
+      return [];
+    }
+    const promoAttive = await Promo.findAll({
+      where: { id_promo: { [Op.in]: idsPromo }, stato: { [Op.ne]: STATO_PROMO.ELIMINATA } },
+      attributes: ['id_promo'],
+      raw: true
+    });
+    const idsPromoAttive = new Set(promoAttive.map(p => p.id_promo));
+    const kitVisibili = kits.filter(k => idsPromoAttive.has(k.id_promo));
+    if (kitVisibili.length === 0) {
+      return [];
+    }
+
+    const codicePerTipo = new Map(tipiExport.map(t => [t.id_tipiexport, t.codice_tipiexport]));
+    const [files, aree, canali] = await Promise.all([
+      FilesRuntime.findAll({
+        where: {
+          id_runtime: { [Op.in]: kitVisibili.map(k => k.id) },
+          tipo_export: { [Op.in]: [...codicePerTipo.keys()] }
+        },
+        raw: true
+      }),
+      Area.findAll({ where: { id_aree: { [Op.in]: [...new Set(kitVisibili.map(k => k.id_area))] } }, raw: true }),
+      Canale.findAll({ where: { id_canali: { [Op.in]: [...new Set(kitVisibili.map(k => k.id_canale))] } }, raw: true }),
+    ]);
+
+    const nomePerArea = new Map(aree.map(a => [a.id_aree, a.nome_aree]));
+    const nomePerCanale = new Map(canali.map(c => [c.id_canali, c.nome_canali]));
+    const filesPerKit = new Map<string, typeof files>();
+    for (const file of files) {
+      // Senza id Olimpo non c'e' un PDF da mostrare
+      if (!file.id_runtime || !file.id_olimpo_cloud) continue;
+      filesPerKit.set(file.id_runtime, [...(filesPerKit.get(file.id_runtime) ?? []), file]);
+    }
+
+    return kitVisibili.flatMap((kit): VolantinoPdfKit[] => {
+      const filesKit = filesPerKit.get(kit.id) ?? [];
+      if (filesKit.length === 0) {
+        return [];
+      }
+      const nomeCanale = nomePerCanale.get(kit.id_canale);
+      if (nomeCanale === undefined) {
+        // Un canale cancellato esclude solo il suo kit, non svuota tutto l'elenco
+        log.warn('Volantini PDF: canale del kit non trovato, kit escluso', { idKit: kit.id, idCanale: kit.id_canale });
+        return [];
+      }
+      return [{
+        idCanale: kit.id_canale,
+        idKit: kit.id,
+        idArea: kit.id_area,
+        nomeCanale,
+        nomeArea: nomePerArea.get(kit.id_area) ?? '',
+        files_field: filesKit.map(file => ({
+          nome_file: file.nome,
+          id_olimpo_cloud: file.id_olimpo_cloud,
+          tipo_export: file.tipo_export,
+          codice_tipiexport: codicePerTipo.get(file.tipo_export) ?? '',
+          idPromo: kit.id_promo,
+          url: urlOlimpo('/materiali/getThumbnailMaterialePdfs', { id: file.id_olimpo_cloud }),
+          url_download: urlOlimpo('/materiali/getMaterialePDF', { id: file.id_olimpo_cloud })
+        }))
+      }];
+    });
   }
 
   async getContenutoDigitali(): Promise<any> {

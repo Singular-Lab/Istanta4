@@ -26,7 +26,9 @@ import { OrdiniDiStampa } from '../models/ordini_di_stampa';
 import { OrdiniDiStampaInvii } from '../models/ordini_di_stampa_invii';
 import { Promo, PromoAttributes } from '../models/promo';
 import { RuntimeKit } from '../models/runtime_kit';
+import { STATO_LAVORO } from '../models/lavori_in_background';
 import { ServerUtils } from '../utils/ServerUtils';
+import { mantieniVivo, registroLavori, type RegistroLavori } from './RegistroLavori';
 
 // Declare global.io type to avoid implicit 'any' error
 
@@ -38,6 +40,27 @@ interface ProcessFTPPopOlimpoParams {
   socketId: string;
   // Restituito da prenotaInvio: lo stato da ripristinare se l'ordine non risulta completo
   statoPrecedente: STATO_ORDINI_STAMPA;
+  // Restituito da prenotaInvio: l'updatedat che prova che il blocco IN_INVIO e di questo invio
+  bloccoInvio: Date;
+}
+
+/** Esito di prenotaInvio: lo stato da ripristinare e il blocco dell'invio sull'ordine. */
+export interface PrenotazioneInvio {
+  statoPrecedente: STATO_ORDINI_STAMPA;
+  /** updatedat scritto con IN_INVIO: solo chi lo conosce rinnova o rilascia il blocco. */
+  bloccoInvio: Date;
+}
+
+/** Tipo del raggruppamento nel registro dei lavori; la chiave e l'ordine: uno per ordine fra tutti i worker. */
+export const TIPO_LAVORO_RAGGRUPPAMENTO = 'raggruppamento_ordine_stampa';
+
+/** Esito dell'avvio di un raggruppamento. */
+export interface AvvioRaggruppamento {
+  /** Socket su cui arrivano avanzamento ed esito: quello del raggruppamento gia in corso, se c'era. */
+  socketId: string;
+  giaInCorso: boolean;
+  /** Si risolve al termine del raggruppamento avviato; subito se ce n'era gia uno in corso. */
+  fine: Promise<void>;
 }
 
 interface EmitProgressParams {
@@ -116,23 +139,34 @@ export class OrdiniStampaService implements IOrdiniStampaService {
 
   private readonly gdoService: IGdoService;
   private readonly kitRuntimeService: IKitRuntimeService;
-  private groupingJobs = new Map<string, GroupingJobState>();
-  private virtualDir = new Map<string, VirtualDirectory[]>()
+  // Stato dei raggruppamenti nel registro dei lavori (DB): con piu worker lo stato e "gia in corso" valgono per tutti
+  private readonly registro: RegistroLavori;
 
-  constructor(gdoService: IGdoService, kitRuntimeService: IKitRuntimeService) {
+  constructor(gdoService: IGdoService, kitRuntimeService: IKitRuntimeService, registro: RegistroLavori = registroLavori) {
     this.gdoService = gdoService;
     this.kitRuntimeService = kitRuntimeService;
+    this.registro = registro;
   }
 
-  getGroupingStatus(idOrdineDiStampa: string): GroupingJobState | null {
-    const job = this.groupingJobs.get(idOrdineDiStampa);
-    if (!job) return null;
-    // Clean up expired jobs
-    if (Date.now() - job.startedAt > GROUPING_JOB_TTL_MS) {
-      this.groupingJobs.delete(idOrdineDiStampa);
-      return null;
-    }
-    return job;
+  /** Ultimo raggruppamento dell'ordine, letto dal registro: lo vede qualsiasi worker. */
+  async getGroupingStatus(idOrdineDiStampa: string): Promise<GroupingJobState | null> {
+    const lavoro = await this.registro.ultimo<{ socketId: string }, GroupingJobState['result']>(
+      TIPO_LAVORO_RAGGRUPPAMENTO,
+      { chiave: idOrdineDiStampa }
+    );
+    if (!lavoro) return null;
+    const startedAt = lavoro.avviatoIl.getTime();
+    // Come prima: dopo un'ora il raggruppamento non si ripropone, va rifatto
+    if (Date.now() - startedAt > GROUPING_JOB_TTL_MS) return null;
+    const socketId = lavoro.avanzamento?.socketId ?? '';
+    if (lavoro.attivo) return { socketId, status: 'running', startedAt };
+    if (lavoro.stato === STATO_LAVORO.COMPLETATO) return { socketId, status: 'completed', result: lavoro.risultato ?? undefined, startedAt };
+    return {
+      socketId,
+      status: 'failed',
+      error: lavoro.errore ?? 'Raggruppamento interrotto: il server che lo eseguiva si e fermato, va rifatto',
+      startedAt,
+    };
   }
 
   async getOrdineById(id: string): Promise<OrdiniDiStampaAttributes> {
@@ -305,8 +339,11 @@ export class OrdiniStampaService implements IOrdiniStampaService {
 
 
 
-  /** Porta l'ordine in IN_INVIO e restituisce lo stato da ripristinare a fine invio. */
-  async prenotaInvio(idOrdineDiStampa: string): Promise<STATO_ORDINI_STAMPA> {
+  /**
+   * Porta l'ordine in IN_INVIO e restituisce lo stato da ripristinare a fine invio e il blocco:
+   * l'updatedat scritto qui, che l'invio rinnova a ogni kit e usa per rilasciare solo il proprio blocco.
+   */
+  async prenotaInvio(idOrdineDiStampa: string): Promise<PrenotazioneInvio> {
     return sequelize.transaction(async (t) => {
       // Lock sulla riga: due avvii concorrenti non devono superare entrambi il controllo
       const ordine = await OrdiniDiStampa.findByPk(idOrdineDiStampa, { transaction: t, lock: t.LOCK.UPDATE });
@@ -319,17 +356,36 @@ export class OrdiniStampaService implements IOrdiniStampaService {
         throw new BusinessError({ message: "Invio già in corso per questo ordine", rule: "Un ordine di stampa si invia una volta alla volta" });
       }
       // timestamps:false: updatedat va scritto a mano, misura l'eta' del blocco
-      await ordine.update({ stato_ordinistampa: STATO_ORDINI_STAMPA.IN_INVIO, updatedat: new Date() }, { transaction: t });
-      return stato === STATO_ORDINI_STAMPA.IN_INVIO ? STATO_ORDINI_STAMPA.IN_REVISIONE : stato;
+      const bloccoInvio = new Date();
+      await ordine.update({ stato_ordinistampa: STATO_ORDINI_STAMPA.IN_INVIO, updatedat: bloccoInvio }, { transaction: t });
+      return {
+        statoPrecedente: stato === STATO_ORDINI_STAMPA.IN_INVIO ? STATO_ORDINI_STAMPA.IN_REVISIONE : stato,
+        bloccoInvio,
+      };
     });
   }
 
-  async processFTPPopOlimpo({ req, idOrdineDiStampa, kitIds, socketId, statoPrecedente }: ProcessFTPPopOlimpoParams): Promise<void> {
+  /**
+   * Rinnova il blocco IN_INVIO dell'invio in corso: un invio lungo non sembra interrotto dopo 30 minuti.
+   * Restituisce il nuovo blocco, o null se l'ordine non e piu bloccato da questo invio.
+   */
+  private async rinnovaBloccoInvio(idOrdineDiStampa: string, blocco: Date): Promise<Date | null> {
+    const rinnovato = new Date();
+    const [aggiornati] = await OrdiniDiStampa.update(
+      { updatedat: rinnovato },
+      { where: { id_ordinistampa: idOrdineDiStampa, stato_ordinistampa: STATO_ORDINI_STAMPA.IN_INVIO, updatedat: blocco } }
+    );
+    return aggiornati === 1 ? rinnovato : null;
+  }
+
+  async processFTPPopOlimpo({ req, idOrdineDiStampa, kitIds, socketId, statoPrecedente, bloccoInvio }: ProcessFTPPopOlimpoParams): Promise<void> {
     // Avanzamento ed esito solo a chi ha avviato l'operazione.
     const emit = (event: string, data: unknown) => emitToClients(event, data, roomUtente(req.session.id_utente as string));
     // L'ordine non resta IN_INVIO: senza completamento torna allo stato precedente
     let statoFinale = statoPrecedente;
     let esitoFinale: EmitCompleteParams | undefined;
+    // Blocco IN_INVIO di questo invio; null se l'ha preso un altro invio (questo era fermo da oltre 30 minuti)
+    let bloccoAttuale: Date | null = bloccoInvio;
     try {
       // Funzione di utilità per individuare file duplicati (problema nei kit)
       const fileProblematici = (allKit: RUNTIME_KIT[]): FileItemKit[][] => {
@@ -476,6 +532,16 @@ export class OrdiniStampaService implements IOrdiniStampaService {
 
       // Elaborazione di ciascun kit
       for (const kit of kitsToProcess) {
+        // Prima di ogni kit si rinnova il blocco; se non e piu di questo invio ci si ferma: niente doppio invio FTP
+        bloccoAttuale = await this.rinnovaBloccoInvio(idOrdineDiStampa, bloccoAttuale);
+        if (!bloccoAttuale) {
+          log.warn(`Invio dell'ordine di stampa ${idOrdineDiStampa} interrotto: il blocco IN_INVIO e passato a un altro invio`);
+          emit(`${socketId}_error`, {
+            error: "Invio interrotto: l'ordine è stato preso in carico da un altro invio",
+            esito: false
+          } as EmitErrorParams);
+          break;
+        }
         emit(`${socketId}_progress`, {
           fase: "creazione_cartelle",
           kit: kit.titolo,
@@ -923,7 +989,10 @@ export class OrdiniStampaService implements IOrdiniStampaService {
       } else if (kitInviati.length === 0) {
         message = "Nessun kit da inviare: i kit selezionati risultano già inviati o non pubblicati";
       }
-      esitoFinale = { esito: kitFalliti.length === 0, message, totalFiles, totalKit };
+      if (!bloccoAttuale) {
+        message = `Invio interrotto: l'ordine è stato preso in carico da un altro invio. Kit inviati prima dell'interruzione: ${kitInviati.length}`;
+      }
+      esitoFinale = { esito: kitFalliti.length === 0 && bloccoAttuale !== null, message, totalFiles, totalKit };
 
     } catch (error: any) {
       console.error('Errore in processFTPPopOlimpo:', error);
@@ -933,7 +1002,16 @@ export class OrdiniStampaService implements IOrdiniStampaService {
       } as EmitErrorParams);
     } finally {
       try {
-        await OrdiniDiStampa.update({ stato_ordinistampa: statoFinale }, { where: { id_ordinistampa: idOrdineDiStampa } });
+        // Solo se il blocco e ancora di questo invio: uno piu recente non va sbloccato ne sovrascritto
+        const [aggiornati] = bloccoAttuale
+          ? await OrdiniDiStampa.update(
+            { stato_ordinistampa: statoFinale },
+            { where: { id_ordinistampa: idOrdineDiStampa, stato_ordinistampa: STATO_ORDINI_STAMPA.IN_INVIO, updatedat: bloccoAttuale } }
+          )
+          : [0];
+        if (aggiornati !== 1) {
+          log.warn(`Stato finale dell'ordine di stampa ${idOrdineDiStampa} non scritto: il blocco IN_INVIO non e piu di questo invio`);
+        }
       } catch (error) {
         log.error(`Stato dell'ordine di stampa ${idOrdineDiStampa} non aggiornato a fine invio`, error);
       }
@@ -1200,21 +1278,42 @@ export class OrdiniStampaService implements IOrdiniStampaService {
     }
   }
 
+  /**
+   * Avvia in background il raggruppamento dei file uguali dell'ordine, uno per ordine fra tutti i worker:
+   * se ce n'e gia uno in corso (anche in un altro worker) restituisce il suo socketId senza avviarne un altro.
+   */
   async groupFilesByEquality(params: {
     req: Request;
     idOrdineDiStampa: string;
     socketId: string;
-  }): Promise<void> {
+  }): Promise<AvvioRaggruppamento> {
     const { req, idOrdineDiStampa, socketId } = params;
+    const avvio = await this.registro.avvia<{ socketId: string }>({
+      tipo: TIPO_LAVORO_RAGGRUPPAMENTO,
+      chiave: idOrdineDiStampa,
+      idUtente: (req.session?.id_utente as string) ?? null,
+      avanzamento: { socketId },
+    });
+    if (!avvio.avviato) {
+      return { socketId: avvio.lavoro.avanzamento?.socketId ?? socketId, giaInCorso: true, fine: Promise.resolve() };
+    }
+    return { socketId, giaInCorso: false, fine: this.eseguiRaggruppamento(req, idOrdineDiStampa, socketId, avvio.lavoro.id) };
+  }
+
+  /** Esito del raggruppamento nel registro; se non si riesce a salvarlo l'evento socket parte comunque. */
+  private async concludiRaggruppamento(idLavoro: string, esito: { risultato?: GroupingJobState['result']; errore?: string }) {
+    try {
+      await this.registro.concludi(idLavoro, esito.errore ? STATO_LAVORO.ERRORE : STATO_LAVORO.COMPLETATO, esito);
+    } catch (error) {
+      log.error(`[groupFilesByEquality] esito non salvato nel registro dei lavori`, error);
+    }
+  }
+
+  private async eseguiRaggruppamento(req: Request, idOrdineDiStampa: string, socketId: string, idLavoro: string): Promise<void> {
     // Avanzamento ed esito solo a chi ha avviato l'operazione.
     const emit = (event: string, data: unknown) => emitToClients(event, data, roomUtente(req.session.id_utente as string));
-
-    // Track job state
-    this.groupingJobs.set(idOrdineDiStampa, {
-      socketId,
-      status: 'running',
-      startedAt: Date.now()
-    });
+    // La chiamata a Olimpo puo durare: il battito dice agli altri worker che il raggruppamento e vivo
+    const fermaBattito = mantieniVivo(this.registro, idLavoro);
 
     try {
       const ordine = await this.getOrdineById(idOrdineDiStampa);
@@ -1244,8 +1343,7 @@ export class OrdiniStampaService implements IOrdiniStampaService {
 
       if (kitDisponibili.length === 0) {
         const emptyResult = { totalFiles: 0, analyzedFiles: 0, groupCount: 0, groups: [] as any[], unmatchedIds: [] as string[] };
-        const job = this.groupingJobs.get(idOrdineDiStampa);
-        if (job) { job.status = 'completed'; job.result = emptyResult; }
+        await this.concludiRaggruppamento(idLavoro, { risultato: emptyResult });
         emit(`${socketId}_result`, emptyResult);
         return;
       }
@@ -1263,8 +1361,7 @@ export class OrdiniStampaService implements IOrdiniStampaService {
 
       if (idsForOlympus.length === 0) {
         const emptyResult = { totalFiles: 0, analyzedFiles: 0, groupCount: 0, groups: [] as any[], unmatchedIds: [] as string[] };
-        const job = this.groupingJobs.get(idOrdineDiStampa);
-        if (job) { job.status = 'completed'; job.result = emptyResult; }
+        await this.concludiRaggruppamento(idLavoro, { risultato: emptyResult });
         emit(`${socketId}_result`, emptyResult);
         return;
       }
@@ -1333,29 +1430,20 @@ export class OrdiniStampaService implements IOrdiniStampaService {
         unmatchedIds: olympusResponse.data.unmatchedIds || []
       };
 
-      // Store completed state
-      const job = this.groupingJobs.get(idOrdineDiStampa);
-      if (job) {
-        job.status = 'completed';
-        job.result = resultData;
-      }
-
+      // Prima l'esito nel registro, poi l'evento: chi rilegge lo stato dopo l'evento lo trova completato
+      await this.concludiRaggruppamento(idLavoro, { risultato: resultData });
       emit(`${socketId}_result`, resultData);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Errore sconosciuto durante il raggruppamento';
       log.error(`[groupFilesByEquality] ${message}`);
 
-      // Store failed state
-      const job = this.groupingJobs.get(idOrdineDiStampa);
-      if (job) {
-        job.status = 'failed';
-        job.error = message;
-      }
-
+      await this.concludiRaggruppamento(idLavoro, { errore: message });
       emit(`${socketId}_error`, {
         error: message,
         esito: false
       });
+    } finally {
+      fermaBattito();
     }
   }
 
@@ -1364,9 +1452,8 @@ export class OrdiniStampaService implements IOrdiniStampaService {
     idOrdineDiStampa: string;
   }): Promise<VirtualDirectory[]> {
     const { req, idOrdineDiStampa } = params;
-    if (this.virtualDir.get(idOrdineDiStampa) != undefined) {
-      return this.virtualDir.get(idOrdineDiStampa);
-    }
+    // Nessuna cache: una per processo non era condivisa fra i worker e non si invalidava dopo un invio,
+    // mentre le directory cambiano con i kit gia inviati. Il client le chiede una volta per raggruppamento.
     // Recupero ordine
     const ordine = await this.getOrdineById(idOrdineDiStampa);
     if (!ordine) {
@@ -1500,7 +1587,6 @@ export class OrdiniStampaService implements IOrdiniStampaService {
       });
     }
 
-    this.virtualDir.set(idOrdineDiStampa, resultAPI.data.directories ?? [])
     return resultAPI.data.directories ?? [];
 
   }

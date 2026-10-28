@@ -13,7 +13,14 @@ import { gdoOperativaPerRichiesta } from '../accessi/contestoAccesso';
 import { log } from '../logger';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { permissionGuard } from '../middleware/permissionGuard';
-import { DecisioneNonApplicabile, eventoImportPuntiVendita, GestoreImportPuntiVendita, importPuntiVenditaJobs } from '../services/ImportPuntiVenditaJob';
+import {
+  DecisioneNonApplicabile,
+  eventoImportPuntiVendita,
+  GestoreImportPuntiVendita,
+  ImportGiaInCorso,
+  importPuntiVenditaJobs,
+  type ScritturaRigaImport,
+} from '../services/ImportPuntiVenditaJob';
 import { importPuntiVenditaGenerico, preparaImportPuntiVendita, righeDaImportare } from '../services/importPuntiVendita';
 import { ServerUtils } from '../utils/ServerUtils';
 import { roomUtente } from '../utils/socketRooms';
@@ -400,16 +407,10 @@ export class PuntoVenditaController extends BaseController {
         return;
       }
 
-      const inCorso = this.importJobs.inCorso(idGdo);
-      if (inCorso) {
-        this.sendResponse(res, HttpStatusCode.CONFLICT, { message: 'Un import dei punti vendita e gia in corso', stato: inCorso });
-        return;
-      }
       const idUtente = req.session.id_utente as string;
-      const { stato } = this.importJobs.avvia(idGdo, idUtente, esiti, {
-        scrivi: async esito => ({
-          sincronizzato: (await this.salvaSuIstantaEFp(req, esito.id ?? randomUUID(), esito.dati, Boolean(esito.id))).sincronizzato,
-        }),
+      // Il controllo "un import per GDO" e atomico nel registro dei lavori, valido fra tutti i worker
+      const { stato } = await this.importJobs.avvia(idGdo, idUtente, esiti, {
+        scrivi: this.scritturaRigaImport(req),
         geocodifica: async dati => {
           const [trovato] = await this.cerca(queryIndirizzo(dati), 1);
           return trovato && { lat: trovato.lat, lon: trovato.lon };
@@ -420,8 +421,19 @@ export class PuntoVenditaController extends BaseController {
       log.info('importaPV - avviato', { idGdo, jobId: stato.jobId, righe: esiti.length });
       this.sendResponse(res, HttpStatusCode.ACCEPTED, { jobId: stato.jobId, stato });
     } catch (error) {
+      if (error instanceof ImportGiaInCorso) {
+        this.sendResponse(res, HttpStatusCode.CONFLICT, { message: error.message, stato: error.stato });
+        return;
+      }
       this.handleError(res, error);
     }
+  }
+
+  /** Scrive una riga dell'import su Istanta e FP con la sessione della richiesta che la elabora. */
+  private scritturaRigaImport(req: Request): ScritturaRigaImport {
+    return async esito => ({
+      sincronizzato: (await this.salvaSuIstantaEFp(req, esito.id ?? randomUUID(), esito.dati, Boolean(esito.id))).sincronizzato,
+    });
   }
 
   /** Stato di un import (?jobId=) o, senza jobId, quello in corso sulla GDO o l'ultimo dell'utente. */
@@ -431,10 +443,10 @@ export class PuntoVenditaController extends BaseController {
       const jobId = typeof req.query.jobId === 'string' ? req.query.jobId : undefined;
       let stato: StatoImportPuntiVenditaDTO | undefined;
       if (jobId) {
-        stato = this.importJobs.stato(jobId, idUtente);
+        stato = await this.importJobs.stato(jobId, idUtente);
       } else {
         const idGdo = await this.gdoDellaRichiesta(req, undefined, false);
-        stato = (idGdo && this.importJobs.inCorso(idGdo)) || this.importJobs.ultimo(idUtente);
+        stato = (idGdo && (await this.importJobs.inCorso(idGdo))) || (await this.importJobs.ultimo(idUtente));
       }
       this.sendResponse(res, HttpStatusCode.OK, { stato: stato ?? null });
     } catch (error) {
@@ -445,7 +457,7 @@ export class PuntoVenditaController extends BaseController {
   /** Ferma l'import dopo la riga in corso: le righe gia scritte restano, le altre non si elaborano. */
   private async annullaImportPV(req: Request<{ jobId: string }>, res: Response): Promise<void> {
     try {
-      const stato = this.importJobs.annulla(req.params.jobId, req.session.id_utente as string);
+      const stato = await this.importJobs.annulla(req.params.jobId, req.session.id_utente as string);
       if (!stato) {
         this.sendResponse(res, HttpStatusCode.NOT_FOUND, { message: 'Import non trovato' });
         return;
@@ -461,12 +473,14 @@ export class PuntoVenditaController extends BaseController {
    * Decisione dell'utente sulla riga su cui l'import e fermo: inserirla con i dati confermati
    * nel modale (prima su Istanta e poi in FP, con le chiavi del cliente lette dal file nei meta),
    * oppure scartarla. Poi l'import riprende. Se Istanta rifiuta, la riga resta in attesa.
+   * La richiesta puo arrivare a un worker diverso da quello che esegue l'import: la riga la scrive
+   * questo worker, cosi l'errore di Istanta arriva nella risposta, e l'import riparte dal registro.
    */
   private async decisioneImportPV(req: Request<{ jobId: string }>, res: Response): Promise<void> {
     try {
       const idUtente = req.session.id_utente as string;
       const body = (req.body ?? {}) as { azione?: string } & Partial<FormPuntoVendita>;
-      const stato = this.importJobs.stato(req.params.jobId, idUtente);
+      const stato = await this.importJobs.stato(req.params.jobId, idUtente);
       const riga = stato?.rigaInAttesa;
       if (!stato) {
         this.sendResponse(res, HttpStatusCode.NOT_FOUND, { message: 'Import non trovato' });
@@ -485,7 +499,7 @@ export class PuntoVenditaController extends BaseController {
         return;
       }
       const dati: CreatePuntoVenditaDTO = { ...datiDaForm(body as FormPuntoVendita, riga.dati.id_gdo), meta: riga.dati.meta };
-      const nuovo = await this.importJobs.decidi(req.params.jobId, idUtente, { azione: 'inserisci', dati });
+      const nuovo = await this.importJobs.decidi(req.params.jobId, idUtente, { azione: 'inserisci', dati }, this.scritturaRigaImport(req));
       this.sendResponse(res, HttpStatusCode.OK, { stato: nuovo });
     } catch (error) {
       if (error instanceof DecisioneNonApplicabile) {
