@@ -56,7 +56,7 @@ const PermessoRuoloGdo = sequelize.define<PermessoRuoloGdoClass>("permessi_ruolo
   freezeTableName: true,
   indexes: [
     // L'indice univoco è gestito via raw SQL con COALESCE per gestire i NULL
-    // su id_ruolo_utente_gdo (vedi PermessiRepository.migrateLegacyGdoConstraint)
+    // su id_ruolo_utente_gdo (vedi migrazione 0001_correzioni_installazioni_esistenti.sql)
     { fields: ['id_gdo'] },
   ],
 });

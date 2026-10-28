@@ -164,8 +164,8 @@ export function verifyApiKey(apiKey: string): boolean {
 
 /**
  * Impronta della chiave API salvata in ruolo_utente_gdo al posto della chiave.
- * Deve restare identica alla conversione dello script
- * db/scripts/prima_della_sincronizzazione/hash_api_key_ruoli.sql
+ * Deve restare identica alla conversione della migrazione
+ * db/migrazioni/sql/0001_correzioni_installazioni_esistenti.sql
  * (sha256 dei byte UTF-8, esadecimale minuscolo), altrimenti le chiavi migrate
  * non verrebbero piu' riconosciute.
  */

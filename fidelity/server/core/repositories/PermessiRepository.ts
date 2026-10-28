@@ -7,8 +7,6 @@ import { Permesso, PermessoRuolo, PermessoRuoloGdo } from '../models';
 
 export class PermessiRepository {
   private legacyPermessiRuoloConstraint: boolean | null = null;
-  private migrationDone = false;
-  private gdoMigrationDone = false;
 
   private dedupePermessi(permessi: { id_permesso: string; abilitato: boolean }[]): { id_permesso: string; abilitato: boolean }[] {
     const uniqueByPermesso = new Map<string, boolean>();
@@ -54,100 +52,8 @@ export class PermessiRepository {
     return this.legacyPermessiRuoloConstraint;
   }
 
-  /**
-   * Migra automaticamente il vincolo legacy a 2 colonne (tipo_utente, id_permesso)
-   * al nuovo vincolo a 3 colonne (tipo_utente, id_permesso, id_ruolo_utente_gdo).
-   * Idempotente: non fa nulla se il vincolo legacy non esiste.
-   */
-  async migrateLegacyConstraint(): Promise<boolean> {
-    if (this.migrationDone) return false;
-    this.migrationDone = true;
-
-    const isLegacy = await this.hasLegacyPermessiRuoloConstraint();
-    if (!isLegacy) return false;
-
-    await sequelize.query(`
-      ALTER TABLE permessi_ruolo
-        DROP CONSTRAINT IF EXISTS permessi_ruolo_tipo_utente_id_permesso
-    `);
-
-    // Rimuovi eventuali duplicati prima di creare il nuovo vincolo
-    await sequelize.query(`
-      DELETE FROM permessi_ruolo a
-      USING permessi_ruolo b
-      WHERE a.ctid < b.ctid
-        AND a.tipo_utente = b.tipo_utente
-        AND a.id_permesso = b.id_permesso
-        AND a.id_ruolo_utente_gdo IS NOT DISTINCT FROM b.id_ruolo_utente_gdo
-    `);
-
-    await sequelize.query(`
-      CREATE UNIQUE INDEX IF NOT EXISTS permessi_ruolo_tipo_utente_id_permesso_id_ruolo_utente_gdo
-      ON permessi_ruolo (tipo_utente, id_permesso, COALESCE(id_ruolo_utente_gdo, '00000000-0000-0000-0000-000000000000'))
-    `);
-
-    // Reset cache
-    this.legacyPermessiRuoloConstraint = false;
-    return true;
-  }
-
-  /**
-   * Migra il vincolo legacy a 3 colonne (id_gdo, tipo_utente, id_permesso) su permessi_ruolo_gdo
-   * al nuovo vincolo a 4 colonne con COALESCE su id_ruolo_utente_gdo.
-   * Idempotente: non fa nulla se la migrazione è già stata eseguita.
-   */
-  async migrateLegacyGdoConstraint(): Promise<boolean> {
-    if (this.gdoMigrationDone) return false;
-    this.gdoMigrationDone = true;
-
-    // Controlla se esiste il vincolo legacy a 3 colonne
-    const result = await sequelize.query<{ exists: boolean }>(`
-      SELECT EXISTS (
-        SELECT 1
-        FROM pg_indexes
-        WHERE tablename = 'permessi_ruolo_gdo'
-          AND indexname = 'permessi_ruolo_gdo_id_gdo_tipo_utente_id_permesso'
-      ) AS exists
-    `, { type: QueryTypes.SELECT });
-
-    if (!result[0]?.exists) {
-      // Assicura comunque che l'indice COALESCE esista
-      await sequelize.query(`
-        CREATE UNIQUE INDEX IF NOT EXISTS permessi_ruolo_gdo_unique_override
-        ON permessi_ruolo_gdo (id_gdo, tipo_utente, id_permesso, COALESCE(id_ruolo_utente_gdo, '00000000-0000-0000-0000-000000000000'))
-      `);
-      return false;
-    }
-
-    // Drop vecchio vincolo a 3 colonne
-    await sequelize.query(`
-      DROP INDEX IF EXISTS permessi_ruolo_gdo_id_gdo_tipo_utente_id_permesso
-    `);
-
-    // Drop eventuale indice Sequelize a 4 colonne (senza COALESCE, non gestisce NULL)
-    await sequelize.query(`
-      DROP INDEX IF EXISTS permessi_ruolo_gdo_id_gdo_tipo_utente_id_permesso_id_ruolo_utente_gdo
-    `);
-
-    // Rimuovi eventuali duplicati prima di creare il nuovo vincolo
-    await sequelize.query(`
-      DELETE FROM permessi_ruolo_gdo a
-      USING permessi_ruolo_gdo b
-      WHERE a.ctid < b.ctid
-        AND a.id_gdo = b.id_gdo
-        AND a.tipo_utente = b.tipo_utente
-        AND a.id_permesso = b.id_permesso
-        AND a.id_ruolo_utente_gdo IS NOT DISTINCT FROM b.id_ruolo_utente_gdo
-    `);
-
-    // Crea nuovo indice univoco con COALESCE per gestire NULL
-    await sequelize.query(`
-      CREATE UNIQUE INDEX IF NOT EXISTS permessi_ruolo_gdo_unique_override
-      ON permessi_ruolo_gdo (id_gdo, tipo_utente, id_permesso, COALESCE(id_ruolo_utente_gdo, '00000000-0000-0000-0000-000000000000'))
-    `);
-
-    return true;
-  }
+  // I vincoli univoci storici di permessi_ruolo e permessi_ruolo_gdo li sostituisce la migrazione
+  // 0001 (indici con COALESCE): qui resta solo il controllo per i sotto-ruoli.
 
   private async ensureSubRoleSupported(idRuoloGdo?: string): Promise<void> {
     if (!idRuoloGdo) return;

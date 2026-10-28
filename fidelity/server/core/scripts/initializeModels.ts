@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 
-import { modelliManager, ModelSyncOptions } from '../models';
 import { initializeDatabase, sequelize } from '../db';
-import { log } from '../logger';
+import { applicaMigrazioni, leggiImpostazioniAvvio } from '../db/migrazioni/applicaMigrazioni';
+import { stampaStato, stampaVerifica } from '../db/migrazioni/cli';
+import { TABELLA_STORICO } from '../db/migrazioni/fileMigrazioni';
+import { preparaOggettiDerivati, rimuoviOggettiDerivati } from '../db/migrazioni/oggettiDerivati';
+import { descriviSchemaModelli } from '../db/migrazioni/schemaModelli';
 import { Colorize } from '../../../lib/Colorize';
 import { program } from 'commander';
 import fs from 'fs/promises';
@@ -15,92 +18,79 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+/**
+ * Solo in sviluppo: elimina tabelle dei modelli, enum e storico delle migrazioni, cosi' la
+ * sync successiva riparte dalla baseline. Le altre tabelle (sessions, accessi_stato) restano.
+ */
+const azzeraSchemaSviluppo = async (): Promise<void> => {
+  const descrizione = descriviSchemaModelli();
+  await rimuoviOggettiDerivati(sequelize);
+  for (const tabella of [...Object.keys(descrizione.tabelle), TABELLA_STORICO]) {
+    await sequelize.query(`DROP TABLE IF EXISTS "${tabella}" CASCADE`);
+  }
+  for (const nome of Object.keys(descrizione.enum)) {
+    await sequelize.query(`DROP TYPE IF EXISTS "${nome}" CASCADE`);
+  }
+};
+
 // Configurazione CLI
 program
   .name('initialize-models')
-  .description('Sistema di auto-generazione modelli Sequelize')
-  .version('1.0.0');
+  .description('Schema del database di Fidelity: migrazioni versionate (server/core/db/migrazioni)')
+  .version('2.0.0');
 
 program
   .command('sync')
-  .description('Sincronizza tutti i modelli con il database')
-  .option('-f, --force', 'Forza la ricreazione delle tabelle (CANCELLA I DATI!)')
-  .option('-a, --alter', 'Permetti modifiche alla struttura delle tabelle', true)
-  .option('-l, --logging', 'Abilita logging SQL dettagliato')
-  .option('-d, --drop', 'Elimina tabelle prima di ricrearle')
+  .description('Applica le migrazioni pendenti (come all\'avvio del server, con lo stesso lock e lo stesso storico)')
+  .option('-f, --force', 'Solo in sviluppo: elimina tabelle e storico e riparte dalla baseline (CANCELLA I DATI!)')
+  .option('-a, --alter', 'Ignorata: lo schema cambia solo con le migrazioni')
+  .option('-l, --logging', 'Ignorata')
+  .option('-d, --drop', 'Come --force')
   .action(async (options) => {
     try {
-      console.log(Colorize.bgBlue('🚀 Avvio sincronizzazione modelli...'));
-      
-      // Inizializza database
-      await initializeDatabase();
-      
-      // Opzioni di sincronizzazione
-      const syncOptions: ModelSyncOptions = {
-        force: options.force,
-        alter: options.alter,
-        logging: options.logging,
-        drop: options.drop
-      };
+      const azzera = Boolean(options.force || options.drop);
+      // NODE_ENV esplicito: senza, config vale development e il force passerebbe in produzione
+      if (azzera && process.env.NODE_ENV !== 'development') {
+        console.error(Colorize.bgRed('--force e --drop sono ammessi solo con NODE_ENV=development'));
+        process.exit(1);
+      }
 
-      if (options.force) {
+      // Nel container questo comando gira a ogni avvio: vale lo stesso interruttore del server
+      const impostazioni = leggiImpostazioniAvvio();
+      for (const avviso of impostazioni.avvisi) console.warn(Colorize.yellow(avviso));
+      if (!impostazioni.applica && !azzera) {
+        console.warn(Colorize.yellow(`Migrazioni non applicate: ${impostazioni.variabile}=false (yarn migrazioni:applica per applicarle a mano)`));
+        process.exit(0);
+      }
+
+      await initializeDatabase(false);
+
+      if (azzera) {
         console.log(Colorize.bgRed('⚠️  MODALITÀ FORCE ATTIVA - I DATI VERRANNO PERSI!'));
         await new Promise(resolve => setTimeout(resolve, 3000)); // Pausa di sicurezza
+        await azzeraSchemaSviluppo();
       }
-      
-      // Sincronizza modelli
-      const risultati = await modelliManager.sincronizzaTuttiIModelli(syncOptions);
-      
-      // Mostra riepilogo
-      console.log('\n' + Colorize.bgGreen('📊 RIEPILOGO SINCRONIZZAZIONE'));
-      console.log('='.repeat(50));
-      
-      risultati.forEach(risultato => {
-        const status = risultato.successo ? '✅' : '❌';
-        const tempo = `${risultato.tempo_ms}ms`;
-        console.log(`${status} ${risultato.modello.padEnd(25)} ${tempo.padStart(8)} ${risultato.errore ? '- ' + risultato.errore : ''}`);
-      });
-      
-      const successi = risultati.filter(r => r.successo).length;
-      const errori = risultati.filter(r => !r.successo).length;
-      
-      console.log('='.repeat(50));
-      console.log(Colorize.green(`✅ Successi: ${successi}`));
-      if (errori > 0) {
-        console.log(Colorize.red(`❌ Errori: ${errori}`));
-      }
-      
-      process.exit(errori > 0 ? 1 : 0);
-      
+
+      const esito = await applicaMigrazioni();
+      console.log(esito.applicate.length > 0
+        ? Colorize.green(`✅ Migrazioni applicate: ${esito.applicate.join(', ')}`)
+        : Colorize.green('✅ Nessuna migrazione da applicare'));
+      process.exit(0);
+
     } catch (error) {
-      console.error(Colorize.bgRed('💥 Errore durante la sincronizzazione:'), error);
+      console.error(Colorize.bgRed('💥 Errore durante le migrazioni:'), error);
       process.exit(1);
     }
   });
 
 program
   .command('status')
-  .description('Mostra lo stato di sincronizzazione dei modelli')
+  .description('Migrazioni applicate e da applicare (come yarn migrazioni:stato)')
   .action(async () => {
     try {
-      await initializeDatabase();
-      
-      const stato = modelliManager.getStatoSincronizzazione();
-      
-      console.log(Colorize.bgBlue('📊 STATO MODELLI SEQUELIZE'));
-      console.log('='.repeat(60));
-      console.log(`Modelli totali: ${stato.modelli_totali}`);
-      console.log(`Modelli sincronizzati: ${stato.modelli_sincronizzati}`);
-      console.log(`Ultima sincronizzazione: ${stato.ultima_sincronizzazione || 'Mai'}`);
-      console.log('='.repeat(60));
-      
-      stato.modelli.forEach(modello => {
-        const status = modello.sincronizzato ? '✅' : '⏳';
-        console.log(`${status} ${modello.nome.padEnd(25)} -> ${modello.tabella}`);
-      });
-      
+      await initializeDatabase(false);
+      await stampaStato();
       process.exit(0);
-      
     } catch (error) {
       console.error(Colorize.bgRed('💥 Errore:'), error);
       process.exit(1);
@@ -109,21 +99,12 @@ program
 
 program
   .command('check')
-  .description('Verifica la connessione al database')
+  .description('Confronta il database con i modelli, in sola lettura (come yarn migrazioni:verifica)')
   .action(async () => {
     try {
-      await initializeDatabase();
-      
-      const connessioneOk = await modelliManager.verificaConnessione();
-      
-      if (connessioneOk) {
-        console.log(Colorize.bgGreen('✅ Database connesso correttamente!'));
-        process.exit(0);
-      } else {
-        console.log(Colorize.bgRed('❌ Errore connessione database'));
-        process.exit(1);
-      }
-      
+      await initializeDatabase(false);
+      await stampaVerifica();
+      process.exit(0);
     } catch (error) {
       console.error(Colorize.bgRed('💥 Errore:'), error);
       process.exit(1);
@@ -132,86 +113,15 @@ program
 
 program
   .command('sync-db-objects')
-  .description('Sincronizza oggetti DB custom (views, enums, etc) da file SQL')
+  .description('Ricrea view e materialized view (oggetti derivati)')
   .action(async () => {
     try {
-
-      const baseDir = path.join(__dirname, '../db/definitions');
-      console.log(baseDir);
-      const objectTypes = ['enums', 'views'];
-      let totalSuccess = 0;
-      let totalFailed = 0;
-
-      for (const type of objectTypes) {
-        const dirPath = path.join(baseDir, type);
-        console.log(Colorize.cyan(`\nProcessing ${type} from ${dirPath}...`));
-        try {
-            const files = await fs.readdir(dirPath);
-            for (const file of files) {
-                if (file.endsWith('.sql')) {
-                    const filePath = path.join(dirPath, file);
-                    const sql = await fs.readFile(filePath, 'utf-8');
-                    try {
-                        await sequelize.query(sql);
-                        console.log(`  ✅ ${file}`);
-                        totalSuccess++;
-                    } catch (error: any) {
-                        console.error(`  ❌ ${file} - ${Colorize.red(error.message)}`);
-                        totalFailed++;
-                    }
-                }
-            }
-        } catch (error: any) {
-            if (error.code === 'ENOENT') {
-                console.log(Colorize.yellow(`  ⚠️ Directory non trovata: ${dirPath}, la salto.`));
-            } else {
-                throw error;
-            }
-        }
-      }
-
-      console.log('\n' + Colorize.bgGreen('📊 RIEPILOGO SINCRONIZZAZIONE OGGETTI DB'));
-      console.log('='.repeat(50));
-      console.log(Colorize.green(`✅ Successi: ${totalSuccess}`));
-      if (totalFailed > 0) {
-        console.log(Colorize.red(`❌ Errori: ${totalFailed}`));
-      }
-      console.log('='.repeat(50));
-
-      process.exit(totalFailed > 0 ? 1 : 0);
-
+      await initializeDatabase(false);
+      const { ricreati } = await preparaOggettiDerivati(sequelize, { forza: true });
+      console.log(Colorize.green(`✅ Oggetti derivati ricreati: ${ricreati.join(', ') || 'nessuno'}`));
+      process.exit(0);
     } catch (error) {
-      console.error(Colorize.bgRed('💥 Errore durante la sincronizzazione degli oggetti DB:'), error);
-      process.exit(1);
-    }
-  });
-
-program
-  .command('model <nome>')
-  .description('Sincronizza un singolo modello')
-  .option('-f, --force', 'Forza la ricreazione della tabella')
-  .option('-a, --alter', 'Permetti modifiche alla struttura', true)
-  .option('-l, --logging', 'Abilita logging SQL')
-  .action(async (nome, options) => {
-    try {
-      await initializeDatabase();
-      
-      const risultato = await modelliManager.sincronizzaModello(nome, {
-        force: options.force,
-        alter: options.alter,
-        logging: options.logging
-      });
-      
-      if (risultato.successo) {
-        console.log(Colorize.green(`✅ Modello ${nome} sincronizzato in ${risultato.tempo_ms}ms`));
-        process.exit(0);
-      } else {
-        console.log(Colorize.red(`❌ Errore: ${risultato.errore}`));
-        process.exit(1);
-      }
-      
-    } catch (error) {
-      console.error(Colorize.bgRed('💥 Errore:'), error);
+      console.error(Colorize.bgRed('💥 Errore durante la creazione degli oggetti DB:'), error);
       process.exit(1);
     }
   });

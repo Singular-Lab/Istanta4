@@ -6,7 +6,7 @@ import cluster from 'cluster';
 import { startClusterIfNeeded } from './core/cluster';
 import config from './core/config';
 import { log } from './core/logger';
-import { sincronizzaSchemaAllAvvio } from './core/db/SequelizeConnector';
+import { applicaMigrazioniAllAvvio } from './core/db/migrazioni/applicaMigrazioni';
 import { preparaAccessiAllAvvio } from './core/accessi/migrazioneAccessi';
 import { preparaConfigAllAvvio } from './core/inizializzazione/migrazioneConfig';
 import { createActualServer } from './core/server';
@@ -18,8 +18,8 @@ async function main() {
       cluster.schedulingPolicy = cluster.SCHED_RR;
 
       if (cluster.isPrimary) {
-        // Una volta sola e prima dei worker: niente ALTER concorrenti, i worker partono con lo schema aggiornato
-        await sincronizzaSchemaAllAvvio();
+        // Migrazioni dello schema una volta sola e prima dei worker: i worker partono con lo schema aggiornato
+        await applicaMigrazioniAllAvvio();
         // Catalogo permessi e migrazione degli accessi: una volta sola, prima dei worker
         await preparaAccessiAllAvvio();
         // Configurazione collegata alla GDO del cliente e funzionalita' iniziali, prima dei worker
@@ -38,7 +38,7 @@ async function main() {
 
     } else {
       log.info('Modalità development: avvio single-process...');
-      await sincronizzaSchemaAllAvvio();
+      await applicaMigrazioniAllAvvio();
       await preparaAccessiAllAvvio();
       // Anche in sviluppo: senza, la configurazione non si collega alla GDO e le funzionalita' restano spente
       await preparaConfigAllAvvio();
