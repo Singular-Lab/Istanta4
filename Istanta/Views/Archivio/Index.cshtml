@@ -249,10 +249,12 @@
                                                 string thumbnail = olimpoIp + "/foto/getThumbNailOnDemand?width=88&guidId=" + fotoPrimaria.GuidId;
                                                 string bigImage = olimpoIp + "/foto/getThumbNailOnDemand?width=800&guidId=" + fotoPrimaria.GuidId;
                                                 @* TASK-a77bd7b2: le miniature le genera Olimpo a ogni richiesta; lazy, quelle dei Dettagli chiusi si chiedono solo quando si aprono. *@
+                                                @* Il suggerimento dice nome e date della foto (Utility.DateFoto). *@
                                                 <img src="@thumbnail" loading="lazy"
                                                      class="rounded border miniatura img-preview-hover"
                                                      data-bigimg="@bigImage"
                                                      alt="@fotoPrimaria!.NomeReale"
+                                                     title="@Istanta.Utility.DateFoto.Suggerimento(fotoPrimaria!.NomeReale, fotoPrimaria.DataInserimento, fotoPrimaria.DataModifica)"
                                                      style="cursor:pointer;">
                                             }
                                             else
@@ -366,6 +368,7 @@
                                                                         <div class="col">
                                                                             <div class="small text-muted">Foto in archivio (generica)</div>
                                                                             <div class="small foto-archivio-nome">@(fotoTabNaz != null ? fotoTabNaz.NomeReale : "nessuna foto caricata")</div>
+                                                                            <div class="small text-muted foto-archivio-date">@(fotoTabNaz != null ? Istanta.Utility.DateFoto.Testo(fotoTabNaz.DataInserimento, fotoTabNaz.DataModifica) : "")</div>
                                                                             <div class="small text-danger foto-archivio-errore" style="display:none;"></div>
                                                                         </div>
                                                                         <div class="col-auto">
@@ -484,6 +487,7 @@
                                                                                     }
                                                                                 </div>
                                                                                 <div class="small foto-archivio-nome">@(fotoTabScope != null ? fotoTabScope.NomeReale : "nessuna foto caricata")</div>
+                                                                                <div class="small text-muted foto-archivio-date">@(fotoTabScope != null ? Istanta.Utility.DateFoto.Testo(fotoTabScope.DataInserimento, fotoTabScope.DataModifica) : "")</div>
                                                                                 <div class="small text-danger foto-archivio-errore" style="display:none;"></div>
                                                                             </div>
                                                                             <div class="col-auto">

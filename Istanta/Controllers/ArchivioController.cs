@@ -660,6 +660,8 @@ namespace Istanta.Controllers
                     id = nuovaFoto.Id,
                     guidId = guidOlympo,
                     nomeReale = nuovaFoto.NomeReale,
+                    //Le date della foto come le mostra la pagina, per aggiornarla senza ricaricarla.
+                    date = Istanta.Utility.DateFoto.Testo(nuovaFoto.DataInserimento, nuovaFoto.DataModifica),
                     nFoto = articolo.ArticoliFotos!.Count,
                     thumbnail = olympusServerUrl + "/foto/getThumbNailOnDemand?width=88&guidId=" + guidOlympo
                 });
