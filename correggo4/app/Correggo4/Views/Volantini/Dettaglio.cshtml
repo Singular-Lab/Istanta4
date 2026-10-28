@@ -2609,6 +2609,38 @@
         });
     }
 
+    /* I20-1152: nella scheda della referenza i dati del prodotto del Correggo vecchio, sempre gli
+       stessi e in quest'ordine, al posto di tutti i campi del box (prezzo_info_pack, n_bruciature...).
+       Il valore e' quello del box quando c'e' (scritto come in pagina, "€ 3,78"), se no quello del
+       record del prodotto; per ogni dato si prova il primo nome, poi i successivi (lo sconto e'
+       txt_sconto per Coop, azione_pubblico per Famila). Il peso porta la sua unita' (Descrizioni.Um). */
+    var DATI_SCHEDA_REFERENZA = [
+        { etichetta: 'Prezzo promo', campi: ['prezzo_promo'], prezzo: true },
+        { etichetta: 'Prezzo continuo', campi: ['prezzo_continuo'], prezzo: true },
+        { etichetta: 'Sconto', campi: ['txt_sconto', 'azione_pubblico'] },
+        { etichetta: 'Peso', campi: ['Descrizioni.Peso'], unita: 'Descrizioni.Um' }
+    ];
+    function sintesiReferenza(b) {
+        function cerca(lista, nome) {
+            for (var i = 0; i < (lista || []).length; i++) {
+                var v = String(lista[i].Valore === null || lista[i].Valore === undefined ? '' : lista[i].Valore).trim();
+                if (lista[i].Etichetta === nome && v !== '') return v;
+            }
+            return '';
+        }
+        return DATI_SCHEDA_REFERENZA.map(function (d) {
+            var v = '';
+            for (var i = 0; i < d.campi.length && !v; i++) v = cerca(b.campi, d.campi[i]) || cerca(b.tracciato, d.campi[i]);
+            // un prezzo del record arriva come numero ("4.50"): si scrive come in pagina, "€ 4,50"
+            if (v && d.prezzo && /^\d+([.,]\d+)?$/.test(v)) v = '€ ' + Number(v.replace(',', '.')).toFixed(2).replace('.', ',');
+            if (v && d.unita) {
+                var u = cerca(b.tracciato, d.unita);
+                if (u && v.slice(-u.length).toLowerCase() !== u.toLowerCase()) v += ' ' + u;
+            }
+            return esc(d.etichetta) + ': ' + (v ? esc(v) : '&ndash;');
+        }).join('<br>');
+    }
+
     function disegnaFoto(id) {
         var b = dati[id], cont = document.getElementById('mFoto');
         if (!schedaFoto || schedaFoto.id !== String(id) || schedaFoto.stato === 'carico') {
@@ -2623,7 +2655,7 @@
         if (schedaFoto.foto.length === 0) { cont.innerHTML = '<div class="vuoto">Istanta non ha referenze per questo prodotto.</div>'; return; }
         var ed = editDi(id, 'descrizione');
         var abil = stato.puoScrivere && puoModificare(id, 'descrizione');
-        var sintesi = b.campi.map(function (c) { return esc(c.Etichetta) + ':' + esc(c.Valore); }).join('<br>');
+        var sintesi = sintesiReferenza(b);
         cont.innerHTML = schedaFoto.foto.map(function (f) {
             var c = fotoCorrenti[f.codice];
             var salvata = ((ed && ed.foto) || []).filter(function (v) { return v.codice === f.codice && v.stato <= 3; })[0];
