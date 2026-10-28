@@ -576,7 +576,8 @@
 
     .bottone { border: 1px solid #888; background: #efefef; padding: 2px 14px; cursor: pointer;
                font-family: inherit; font-size: 11px; }
-    /* j246: «CONFERMA CORREZIONE» del vecchio: bottone grande, bianco, centrato sotto la colonna */
+    /* j246: il bottone grande del vecchio, bianco, centrato sotto la colonna: SALVA per chi scrive
+       (I20-1158), CONFERMA CORREZIONE (verde, .accetta) per l'Agenzia */
     .bottone.grande { padding: 6px 20px; font-size: 12px; background: #fff; border-color: #6a6a6a;
                       letter-spacing: .3px; }
     /* j246: le propagazioni come nel vecchio: una pastiglia per volantino gemello, con la i.
@@ -2434,8 +2435,10 @@
             } else if (ed && ed.stato === 0 && ed.idAutore !== stato.idUtente) {
                 html += '<div class="ea_stato">Può modificarla o annullarla solo chi l\'ha fatta. Per segnalare altro usa una nota.</div>';
             } else {
-                // j246: nel vecchio il bottone del salvataggio si chiamava «CONFERMA CORREZIONE»
-                bottoni.push('<button class="bottone grande" type="button" data-ea="salva">CONFERMA CORREZIONE</button>');
+                // I20-1158: chi scrive salva con SALVA, come nel vecchio (screenshot dell'operatore del
+                // 28/10). Da j246 si chiamava «CONFERMA CORREZIONE» come il bottone verde dell'Agenzia,
+                // e chi correggeva non trovava il salvataggio. CONFERMA CORREZIONE resta all'Agenzia.
+                bottoni.push('<button class="bottone grande" type="button" data-ea="salva">SALVA</button>');
                 if (ed && ed.stato === 0) bottoni.push('<button class="bottone pericolo" type="button" data-ea="annulla">ANNULLA CORREZIONE</button>');
             }
         } else if (stato.puoAccettare && ed && ed.stato === 0) {
