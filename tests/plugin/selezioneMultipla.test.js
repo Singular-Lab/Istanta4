@@ -236,7 +236,8 @@ test("nel markup sono segnate le voci che la selezione multipla non offre, e sol
     const html = leggi('index.html');
 
     const voci = (html.match(/<img[^>]*data-selezione-multipla="nascosta"[^>]*>/g) || []).map(t => (/tab="(\w+)"/.exec(t) || [])[1]);
-    assert.deepStrictEqual(voci, ["Tab6", "Tab7", "Tab8", "Tab13"]);
+    //Foto extra (Tab7) resta: dal lotto 3 vale per piu' box.
+    assert.deepStrictEqual(voci, ["Tab6", "Tab8", "Tab13"]);
 
     //Nel piede si nascondono i contenitori di Fix e Info, cosi' le icone che restano stanno vicine.
     //No render resta: dal lotto 2 vale per piu' box.

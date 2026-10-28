@@ -545,6 +545,7 @@ const schedaRef = {
             this.svuotaRef();
             //I20-1063: un box solo: se il pannello mostrava la selezione multipla, se ne esce.
             this.esciDaSelezioneMultipla();
+            this.riapriFotoExtraPiuBox = false;
             this.setInvalidated(false);
             me.refSelected = ref;
 
@@ -901,6 +902,9 @@ const schedaRef = {
             const schede = me.boxSelezioneMultipla || [];
             const stati = me.STATI_SELEZIONE_MULTIPLA;
             const stato = me.statoDellaSelezioneMultipla(schede);
+            //Vale per questa rilettura soltanto.
+            const riapriFotoExtra = me.riapriFotoExtraPiuBox === true;
+            me.riapriFotoExtraPiuBox = false;
 
             me.resetInitSchedaRef();
 
@@ -950,6 +954,14 @@ const schedaRef = {
             $("#refImage").show();
             jsIndexControls.changeSubMenu($("#refImage").attr("subTab"));
             jsIndexControls.changeImage($("#refImage"));
+            //I20-1063, lotto 3: dopo un'operazione di Foto extra la selezione si rilegge e la scheda
+            //torna su Foto extra, non su Edit.
+            if (riapriFotoExtra && stato === stati.impaginati) {
+                const voceFotoExtra = $(".subTab5").find('img[tab="Tab7"]');
+                jsIndexControls.openTab(null, "Tab7");
+                jsIndexControls.changeImage(voceFotoExtra);
+                await me.FotoExtraPanelPiuBox();
+            }
             onresizeWindow();
         }
         catch (e) {
@@ -1515,6 +1527,11 @@ const schedaRef = {
         //writeDebugMessageForCrash("SELECT SCHEDA REF " + enumSchede);
 
         let me = this;
+        //I20-1063, lotto 3: con piu' box selezionati Foto extra vale per tutti.
+        if (enumSchede == 3 && this.inSelezioneMultipla) {
+            await me.FotoExtraPanelPiuBox();
+            return;
+        }
         if (enumSchede != 6) {
             //in questo caso la scheda ref non c'è ed è normale perchè dobbiamo ricollegarla
             if (this.refSelected == null || this.schedeRefDati.length == 0) {
@@ -6422,18 +6439,20 @@ const schedaRef = {
 
     /// Manda al server una decisione, da registrare o da togliere. Torna true se il server
     /// l'ha registrata; gli errori si dicono qui.
-    salvaExtraLavorazione(richiesta) {
+    /// I20-1063: destinazione ({ codiceGruppo, idRec }), se c'e', e' un box della selezione
+    /// multipla; senza, il box della scheda come prima.
+    salvaExtraLavorazione(richiesta, destinazione = null) {
         var me = this;
         return new Promise(function (resolve) {
             var schedaRef = me.schedeRefDati;
-            if (schedaRef == null || schedaRef.length < 1 || richiesta == null) {
+            if ((destinazione == null && (schedaRef == null || schedaRef.length < 1)) || richiesta == null) {
                 resolve(false);
                 return;
             }
             var formData = new FormData();
             formData.append("idLavorazione", idKitLavorazione);
-            formData.append("CodiceGruppo", schedaRef[0].recordInTracciato["Scatto.CodiceGruppo"]);
-            formData.append("idRec", me.idRecDelBoxAperto());
+            formData.append("CodiceGruppo", destinazione != null ? destinazione.codiceGruppo : schedaRef[0].recordInTracciato["Scatto.CodiceGruppo"]);
+            formData.append("idRec", destinazione != null ? destinazione.idRec : me.idRecDelBoxAperto());
             formData.append("richiesta", JSON.stringify(richiesta));
 
             var xhr = new XMLHttpRequestClient();
@@ -9264,6 +9283,8 @@ const schedaRef = {
 //I20-1015: la parte foto della scheda sta in reperimentoFoto/schedaFoto.js, ma e' lo stesso
 //oggetto: si mescola qui, e ogni this di quei membri e' schedaRef.
 Object.assign(schedaRef, require('./reperimentoFoto/schedaFoto'));
+//I20-1063, lotto 3: la schermata Foto extra della selezione multipla, allo stesso modo.
+Object.assign(schedaRef, require('./reperimentoFoto/fotoExtraPiuBox'));
 //I20-1089: i meta del box e la loro finestra, allo stesso modo.
 Object.assign(schedaRef, require('./metaDelBox'));
 
