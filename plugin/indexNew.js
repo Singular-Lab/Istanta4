@@ -364,14 +364,30 @@ function verificaIndirizziDellaLavorazione() {
     }
 }
 
-/// I20-1066: copre il pannello con l'errore a tutta pagina e non lo toglie: col server sbagliato
-/// la lavorazione non si tocca. Come bloccaPerVersioneDisallineata, riusa #istantaDownAlert.
+/// I20-1159: il titolo del blocco degli indirizzi, lo stesso per chi lo mette e per chi lo toglie.
+const TITOLO_INDIRIZZI_DIVERSI = "Il Plugin è configurato per un altro server";
+
+/// I20-1066: copre il pannello con l'errore a tutta pagina: col server sbagliato la lavorazione non
+/// si tocca. Come bloccaPerVersioneDisallineata, riusa #istantaDownAlert.
+/// I20-1159: il blocco vale per il documento che lo ha causato. Lo toglie sbloccaIndirizziDiversi
+/// quando si apre un altro documento; prima restava finche' non si ricaricava il Plugin.
 function bloccaPerIndirizziDiversi(dettaglio) {
     console.error("Code IDX-179 Il Plugin e' configurato per un altro server - " + dettaglio);
 
-    $("#istantaDownAlert").find("h1").text("Il Plugin è configurato per un altro server");
+    $("#istantaDownAlert").find("h1").text(TITOLO_INDIRIZZI_DIVERSI);
     $("#istantaDownAlert").find("h3").text(dettaglio);
     $("#istantaDownAlert").css("display", "flex");
+}
+
+/// I20-1159: toglie il blocco degli indirizzi lasciato dal documento di prima. Lo chiama
+/// initDocumentInLavorazione prima di controllare il documento nuovo: se anche questo e' di un
+/// altro server, verificaIndirizziDellaLavorazione lo rimette. Il riquadro si toglie solo se
+/// mostra il blocco degli indirizzi: lo stesso riquadro porta la versione disallineata e gli
+/// avvisi di Istanta irraggiungibile, che devono restare.
+function sbloccaIndirizziDiversi() {
+    if ($("#istantaDownAlert").find("h1").text() === TITOLO_INDIRIZZI_DIVERSI) {
+        $("#istantaDownAlert").css("display", "none");
+    }
 }
 
 /// Mette in Links/Loghi le due immagini che il Plugin usa quando una foto manca -
@@ -1193,6 +1209,9 @@ async function rileggiDocumentoInLavorazione()
 /// di proposito.
 async function initDocumentInLavorazione()
 {
+    //I20-1159: il blocco degli indirizzi era del documento di prima; per questo si ricontrolla sotto.
+    sbloccaIndirizziDiversi();
+
     if (docInLavorazione == null)
     {
         return null;

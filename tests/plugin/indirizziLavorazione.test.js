@@ -99,3 +99,57 @@ test("diversi blocca a tutta pagina; mancanti registra quelli attuali; un contro
     const blocco = index.substring(index.indexOf("function bloccaPerIndirizziDiversi(dettaglio) {"));
     assert.match(blocco, /\$\("#istantaDownAlert"\)\.css\("display", "flex"\);/);
 });
+
+/* ---- I20-1159: il blocco vale per il documento che lo ha causato ---- */
+
+//sbloccaIndirizziDiversi e il titolo, presi dal sorgente e fatti girare con un riquadro finto.
+function riquadroFinto(titolo, display) {
+    const stato = { titolo: titolo, display: display };
+    const $ = (selettore) => {
+        assert.strictEqual(selettore, "#istantaDownAlert");
+        return {
+            find: () => ({ text: (t) => (t === undefined ? stato.titolo : (stato.titolo = t)) }),
+            css: (nome, valore) => { assert.strictEqual(nome, "display"); stato.display = valore; }
+        };
+    };
+    const index = sorgente("indexNew.js");
+    const costante = index.match(/const TITOLO_INDIRIZZI_DIVERSI = "[^"]*";/)[0];
+    const inizio = index.indexOf("function sbloccaIndirizziDiversi() {");
+    const funzione = index.substring(inizio, index.indexOf("\n}\n", inizio) + 2);
+    const sblocca = new Function("$", costante + "\n" + funzione + "\nreturn sbloccaIndirizziDiversi;")($);
+    return { stato: stato, sblocca: sblocca };
+}
+
+test("aprendo un altro documento il blocco degli indirizzi si toglie", () => {
+    const r = riquadroFinto("Il Plugin è configurato per un altro server", "flex");
+    r.sblocca();
+    assert.strictEqual(r.stato.display, "none");
+});
+
+test("gli altri avvisi dello stesso riquadro restano, compresa la versione disallineata", () => {
+    for (const titolo of ["Versione del Plugin non aggiornata", "Istanta2 indisponibile", "Connessione ad internet assente", "Documento non legato a KIT"]) {
+        const r = riquadroFinto(titolo, "flex");
+        r.sblocca();
+        assert.strictEqual(r.stato.display, "flex", titolo);
+    }
+});
+
+test("il blocco e lo sblocco usano lo stesso titolo", () => {
+    const index = sorgente("indexNew.js");
+    assert.match(index, /const TITOLO_INDIRIZZI_DIVERSI = "Il Plugin è configurato per un altro server";/);
+    const blocco = index.substring(index.indexOf("function bloccaPerIndirizziDiversi(dettaglio) {"));
+    assert.match(blocco, /\$\("#istantaDownAlert"\)\.find\("h1"\)\.text\(TITOLO_INDIRIZZI_DIVERSI\);/);
+    //Nessun altro scrive quel titolo a mano: se cambia, cambia per tutti e due.
+    assert.strictEqual((index.match(/Il Plugin è configurato per un altro server/g) || []).length, 1);
+});
+
+test("il blocco del documento di prima si toglie prima di controllare quello nuovo", () => {
+    const index = sorgente("indexNew.js");
+    const inizio = index.indexOf("async function initDocumentInLavorazione()");
+    const init = index.substring(inizio, index.indexOf("\n}\n", inizio));
+    const sblocco = init.indexOf("sbloccaIndirizziDiversi();");
+    assert.ok(sblocco > 0);
+    //Prima di tutto, anche del documento assente: chiusi i documenti il blocco non ha piu' senso.
+    assert.ok(sblocco < init.indexOf("if (docInLavorazione == null)"));
+    assert.ok(sblocco < init.indexOf("if (!verificaIndirizziDellaLavorazione()) {"));
+});
