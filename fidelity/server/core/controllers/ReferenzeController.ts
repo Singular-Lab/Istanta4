@@ -1,9 +1,11 @@
+import dayjs from 'dayjs';
 import { Request, Response } from 'express';
 import 'express-session';
 import { v4 as uuidv4 } from "uuid";
 import { EVENTI_WEBHOOK, HttpStatusCode, STATO_LOG_FILE } from '../../../lib/enums';
 import { log } from '../logger';
 import type { FileItemKitLog, OggettoTipiDiExport, ReferenzeIstanta } from '../../../lib/types';
+import { dataConsultazioneConsentita, puoConfigurareWebpliant } from '../accessi/consultazioneWebpliant';
 import { BaseController } from '../base/BaseController';
 import config from '../config';
 import { TYPES, container } from '../di';
@@ -226,13 +228,15 @@ export class ReferenzeController extends BaseController {
     try {
       const {
         idWorkspace,
-        dataSelezionata,
         idArea,
         idCanale,
         idPV,
         item,
-        isEditor = false
       } = req.body;
+      // Route pubblica: data e modalita' editor dal browser valgono solo per chi configura WebPliant
+      const dataSelezionata = (await dataConsultazioneConsentita(req, res, req.body.dataSelezionata))
+        ?? dayjs().format('YYYY-MM-DD');
+      const isEditor = req.body.isEditor === true && await puoConfigurareWebpliant(req, res);
       const referenze = await this.referenzeService.getFilteredReferenze(
         idWorkspace,
         dataSelezionata,

@@ -3,6 +3,7 @@ import { Request, Response } from 'express';
 import 'express-session';
 import { CATEGORIA_ATTIVITA, HttpStatusCode, TIPO_ATTIVITA } from '../../../lib/enums';
 import { DataWebPliant } from '../../../lib/types';
+import { dataConsultazioneConsentita, puoConfigurareWebpliant } from '../accessi/consultazioneWebpliant';
 import { BaseController } from '../base/BaseController';
 import config from '../config';
 import { IGdoService } from '../interfaces/IGdoService';
@@ -97,12 +98,10 @@ export class WebPliantController extends BaseController {
    * WebPliant: a tutti gli altri, anonimi compresi, va la vista pubblica.
    */
   private puoUsareEditor(req: Request, res: Response): Promise<boolean> {
-    if (req.query.isEditor !== 'true' || !req.session?.id_utente) {
+    if (req.query.isEditor !== 'true') {
       return Promise.resolve(false);
     }
-    return new Promise(resolve => {
-      permissionGuard('webpliant.configura')(req, res, (err?: unknown) => resolve(!err));
-    });
+    return puoConfigurareWebpliant(req, res);
   }
 
   private async prendiWorkspaceDaID(req: Request<{ idWorkspace: string }>, res: Response): Promise<void> {
@@ -147,7 +146,7 @@ export class WebPliantController extends BaseController {
   private async getReferenzeWebPliant(req: Request, res: Response): Promise<void> {
     try {
       const idWorkspace = (req.query.id ?? req.query.idWorkspace) as string;
-      const rawDate = (req.query.date ?? req.query.dataSelezionata) as string | undefined;
+      const rawDate = await dataConsultazioneConsentita(req, res, req.query.date ?? req.query.dataSelezionata);
       const dataSelezionata = rawDate ? new Date(rawDate) : new Date();
       const idArea = req.query.idArea as string | undefined;
       const idCanale = req.query.idCanale as string | undefined;

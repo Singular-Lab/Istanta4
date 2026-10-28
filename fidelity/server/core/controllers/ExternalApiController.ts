@@ -1367,11 +1367,9 @@ export class ExternalApiController extends BaseController {
 
   private async generateApiKey(req: Request, res: Response): Promise<void> {
     try {
-      let { id_utente } = req.body;
-      if (!ServerUtils.checkIfValueIsValid(id_utente)) {
-        id_utente = req.session.id_utente as string;
-      }
-      const apiKey = await this.externalApiService.generateApiKey(id_utente);
+      // Sempre la chiave del ruolo di chi la chiede, come get_api_key: un id_utente nel body
+      // permetteva di rigenerare (e leggere) la chiave del ruolo di un utente di un'altra GDO
+      const apiKey = await this.externalApiService.generateApiKey(req.session.id_utente as string);
       res.json({ success: true, apiKey });
     } catch (error: any) {
       this.handleErrorWithReturn(res, error);

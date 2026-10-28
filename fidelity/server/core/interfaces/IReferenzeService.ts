@@ -24,7 +24,7 @@ export interface IReferenzeService {
   }): Promise<ReferenzeIstanta[]>;
   getFilteredReferenze(
     idWorkspace: string,
-    dataSelezionata: Date,
+    dataSelezionata: Date | string,
     idArea: string | undefined,
     idCanale: string | undefined,
     idPV: string | undefined,

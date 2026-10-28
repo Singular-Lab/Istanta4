@@ -55,7 +55,11 @@ function sanitizeError(err: unknown): Record<string, unknown> {
   return { error: sanitizeValue(err) };
 }
 
-function sanitizeValue(value: unknown, depth = 0, seen = new WeakSet<object>()): unknown {
+// Credenziali mai nei log, nemmeno quando finisce nel log un oggetto intero (body, sessione...)
+const CHIAVI_RISERVATE = /password|passwd|pwd|secret|token|api[-_]?key|authorization|cookie|private[-_]?key/i;
+const OSCURATO = '[REDACTED]';
+
+export function sanitizeValue(value: unknown, depth = 0, seen = new WeakSet<object>()): unknown {
   if (value === undefined || value === null) return value;
   if (depth > 4) return '[Truncated]';
 
@@ -76,7 +80,9 @@ function sanitizeValue(value: unknown, depth = 0, seen = new WeakSet<object>()):
     const record = value as Record<string, unknown>;
     const sanitizedEntries = Object.entries(record).map(([key, currentValue]) => [
       key,
-      sanitizeValue(currentValue, depth + 1, seen),
+      typeof currentValue === 'string' && CHIAVI_RISERVATE.test(key)
+        ? OSCURATO
+        : sanitizeValue(currentValue, depth + 1, seen),
     ]);
 
     return compactObject(Object.fromEntries(sanitizedEntries) as Record<string, unknown>);
@@ -92,7 +98,10 @@ function normalizeContext(ctx?: LogContext, fallbackContext = DEFAULT_CONTEXT): 
     ? toSingleLine(context)
     : fallbackContext;
 
-  const sanitizedEntries = Object.entries(rest).map(([key, value]) => [key, sanitizeValue(value)]);
+  const sanitizedEntries = Object.entries(rest).map(([key, value]) => [
+    key,
+    typeof value === 'string' && CHIAVI_RISERVATE.test(key) ? OSCURATO : sanitizeValue(value),
+  ]);
 
   return compactObject({
     context: resolvedContext,

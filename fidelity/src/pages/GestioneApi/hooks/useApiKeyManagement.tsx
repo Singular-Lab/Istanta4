@@ -43,9 +43,8 @@ export function useApiKeyManagement(initialApiKey: string = "") {
 
     setIsGenerating(true);
     try {
-      const result = await ServerCall.post<any>('/external/generate-api-key', {
-        id_utente: user.id
-      }, false);
+      // Il server rigenera sempre la chiave del ruolo dell'utente della sessione
+      const result = await ServerCall.post<any>('/external/generate-api-key', {}, false);
 
       if (result.success && result.apiKey) {
         setApiKey(result.apiKey.apiKey);

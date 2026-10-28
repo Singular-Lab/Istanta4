@@ -72,7 +72,10 @@ export class ConfigController extends BaseController {
   private async get_config(req: Request, res: Response): Promise<void> {
     try {
       const config = await this.configService.get_config();
-      this.sendResponse(res, HttpStatusCode.OK, config);
+      // Senza sessione la chiedono solo le pagine pubbliche di WebPliant: dashboard, regole
+      // del menabo', funzionalita' e avvisi restano a chi ha fatto l'accesso
+      const risposta = req.session?.id_utente ? config : { webpliant: config.webpliant, color: config.color };
+      this.sendResponse(res, HttpStatusCode.OK, risposta);
     } catch (error: any) {
       this.handleError(res, error);
     }

@@ -457,7 +457,7 @@ export class ReferenzeService implements IReferenzeService {
 
   async getFilteredReferenze(
     idWorkspace: string,
-    dataSelezionata: Date,
+    dataSelezionata: Date | string,
     idArea: string | undefined,
     idCanale: string | undefined,
     idPV: string | undefined,
@@ -475,13 +475,19 @@ export class ReferenzeService implements IReferenzeService {
         });
       }
 
-      // Step 2: Ottieni le promo valide da Sequelize
-      const promoValide = await this.promoRepository.findAllWithOptions({
+      // Step 2: Ottieni le promo valide da Sequelize. Fuori dall'editor una promo si vede in
+      // anticipo di offset_visibilita giorni (spec referenze-webpliant, Visibilita temporale)
+      const giorno = dayjs(dataSelezionata).startOf('day');
+      const promoNonScadute = await this.promoRepository.findAllWithOptions({
         where: {
-          validita_dal: { [Op.lte]: dataSelezionata },
           validita_al: { [Op.gte]: dataSelezionata }
         } as WhereOptions<PromoAttributes>,
         attributes: ['id_promo', 'validita_dal', 'validita_al', 'offset_visibilita']
+      });
+      const promoValide = promoNonScadute.filter(promo => {
+        const { validita_dal, offset_visibilita } = normalizePromoModel(promo);
+        const anticipo = isEditor ? 0 : Number(offset_visibilita) || 0;
+        return !dayjs(validita_dal).subtract(anticipo, 'day').startOf('day').isAfter(giorno);
       });
 
       if (promoValide.length === 0) {
