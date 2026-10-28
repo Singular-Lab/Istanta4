@@ -238,6 +238,18 @@ public class VolantiniController : Controller
     }
 
     /// <summary>
+    /// I20-1156: la testata della finestra del prodotto al posto della meccanica del box, scelta
+    /// dell'operatore del 28/10: "0S24_26_B – TDM/B". Canale e area come le card della home
+    /// (CanaleArea); senza area resta il canale, con un titolo fuori convenzione solo la promo.
+    /// </summary>
+    public static string TestaProdotto(string titolo, string classificazione)
+    {
+        var (canale, area) = CanaleArea(titolo, classificazione);
+        if (canale == "") return classificazione;
+        return classificazione + " – " + canale + (area == "" ? "" : "/" + area);
+    }
+
+    /// <summary>
     /// LA LETTURA AFFIANCATA (j322): tutto il volantino a coppie di pagine, in una finestra nuova.
     ///
     /// Michele, 01/10: «fallo funzionare». E' il libro nella testa del pannello delle pagine, che
@@ -347,6 +359,7 @@ public class VolantiniController : Controller
             Id = vol.Id,
             Titolo = vol.Titolo,
             Classificazione = vol.Classificazione,
+            TestaProdotto = TestaProdotto(vol.Titolo, vol.Classificazione),
             Versione = versione,
             SolaLettura = storico,
             UltimaVersione = ultimaVersione,

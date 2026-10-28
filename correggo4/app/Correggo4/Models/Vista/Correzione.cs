@@ -72,6 +72,12 @@ public sealed class VolantinoInCorrezione
     public int TotaleCorrezioni => Pagine.Sum(p => p.Correzioni);
     public string UrlFoto { get; set; } = "";
 
+    /// <summary>
+    /// I20-1156: la testata della finestra del prodotto, "promo – canale/area" (il codice del
+    /// prodotto lo aggiunge la pagina). Vedi VolantiniController.TestaProdotto.
+    /// </summary>
+    public string TestaProdotto { get; set; } = "";
+
     /// <summary>Aperto dallo storico (?v=): niente scritture (j213). UltimaVersione per l'avviso.</summary>
     public bool SolaLettura { get; set; }
     public short UltimaVersione { get; set; }
