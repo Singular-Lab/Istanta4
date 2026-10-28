@@ -140,6 +140,7 @@
                                     <h6 class="mb-0">@fotoPrimaria!.NomeReale</h6>
                                     @salvaDestinazioneDiUnaFoto(fotoPrimaria.Id)
                                 </div>
+                                <div class="small text-muted foto-articolo-date">@Istanta.Utility.DateFoto.Testo(fotoPrimaria.DataInserimento, fotoPrimaria.DataModifica)</div>
                                 <h6 class="mt-2">Primaria selezionata</h6>
                                 @destinazioneDiUnaFoto(fotoPrimaria.Id, fotoPrimaria.Area, fotoPrimaria.Canale)
                             </div>
@@ -201,6 +202,7 @@
                                                 <h6 class="mb-0">@foto!.NomeReale</h6>
                                                 @salvaDestinazioneDiUnaFoto(foto.Id)
                                             </div>
+                                            <div class="small text-muted foto-articolo-date">@Istanta.Utility.DateFoto.Testo(foto.DataInserimento, foto.DataModifica)</div>
                                             <input type="button" class="btn btn-sm btn-primary" value="Seleziona" data-azione="selezionaPrimaria" data-guidid="@foto.GuidId">
                                             @destinazioneDiUnaFoto(foto.Id, foto.Area, foto.Canale)
                                         </div>
@@ -303,6 +305,7 @@
                                 <div class="row" style="align-items:center;">
                                     <div class="col">
                                         <h6>@foto!.NomeReale</h6>
+                                        <div class="small text-muted foto-articolo-date mb-1">@Istanta.Utility.DateFoto.Testo(foto.DataInserimento, foto.DataModifica)</div>
                                         <img src="@thumbnail" data-bigimg="@bigImage" class="figure-img img-fluid rounded img-preview-hover" alt="@foto!.NomeReale">
                                     </div>
                                     <div class="col">

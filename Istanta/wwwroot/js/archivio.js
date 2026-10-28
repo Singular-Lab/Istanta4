@@ -1293,6 +1293,8 @@ class Archivio {
 
             wrapper.find(".foto-archivio-thumb").attr("src", result.thumbnail).css("opacity", "1");
             wrapper.find(".foto-archivio-nome").text(result.nomeReale);
+            //Le date della foto caricata, gia' scritte dal server come nella pagina.
+            wrapper.find(".foto-archivio-date").text(result.date || "");
             // Ora questa tab ha una foto propria: tolgo l'eventuale etichetta "ereditata".
             wrapper.find(".foto-archivio-badge-ereditata").remove();
 
@@ -1302,6 +1304,7 @@ class Archivio {
             riga.find("td:first img")
                 .attr("src", result.thumbnail)
                 .attr("data-bigimg", bigImg)
+                .attr("title", result.nomeReale + (result.date ? "\n" + result.date : ""))
                 .removeAttr("style")
                 .addClass("img-preview-hover");
             riga.find("td.text-center .badge")
