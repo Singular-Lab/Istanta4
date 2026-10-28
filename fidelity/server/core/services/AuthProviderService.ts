@@ -11,6 +11,14 @@ import type { IAuthProviderService, DiscoveryOidc } from '../interfaces/IAuthPro
 import type { ISamlService, MetadatiIdpSaml } from '../interfaces/ISamlService';
 import type { IAuthProviderRepository } from '../repositories/AuthProviderRepository';
 import type { AuthProvider } from '../models/auth_provider';
+import { chiamaHttp, ErroreHttp } from '../http/clienteHttp';
+import {
+  chiamaUrlSicuro,
+  CorpoTroppoGrandeError,
+  IndirizzoNonSicuroError,
+  leggiCorpoLimitato,
+  verificaUrlSicuro,
+} from '../http/indirizziSicuri';
 import { log } from '../logger';
 import { cifraSegreto, decifraSegreto, eSegretoCifrato } from '../utils/segretiProvider';
 import {
@@ -22,6 +30,14 @@ import {
 } from './authProviders/configurazioneProvider';
 
 const TIMEOUT_RETE_MS = 10_000;
+// Discovery, metadati SAML e JWKS pesano pochi KB: oltre questa soglia non si scarica
+export const DIMENSIONE_MASSIMA_DOCUMENTO_BYTE = 2 * 1024 * 1024;
+
+const messaggioDi = (error: unknown) => (error instanceof Error ? error.message : String(error));
+
+/** Un indirizzo vietato o un redirect verso la rete interna e' un errore di configurazione, non del servizio. */
+const indirizzoVietato = (error: unknown): error is IndirizzoNonSicuroError =>
+  error instanceof IndirizzoNonSicuroError && error.motivo !== 'dns';
 
 function toDTO(provider: AuthProvider): AuthProviderDTO {
   return {
@@ -46,16 +62,32 @@ function verificaUrlRemoto(url: unknown): string {
   throw new BadRequestError({ message: 'Indirizzo http(s) non valido' });
 }
 
-async function scarica(url: string, servizio: string): Promise<Response> {
+/**
+ * Scarica un documento di configurazione (discovery, metadati, JWKS) indicato dal Superadmin:
+ * niente indirizzi verso l'host stesso o i metadati cloud, redirect ricontrollati a ogni salto,
+ * al massimo DIMENSIONE_MASSIMA_DOCUMENTO_BYTE.
+ */
+async function scarica(url: string, servizio: string): Promise<string> {
+  let risposta: Response;
   try {
-    const risposta = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_RETE_MS), redirect: 'follow' });
-    if (!risposta.ok) {
-      throw new ExternalApiError({ message: `${url} ha risposto ${risposta.status}`, service: servizio, endpoint: url, statusCode: risposta.status });
-    }
-    return risposta;
+    risposta = await chiamaUrlSicuro(url, { method: 'GET', timeoutMs: TIMEOUT_RETE_MS });
   } catch (error) {
-    if (error instanceof ExternalApiError) throw error;
-    throw new ExternalApiError({ message: `${url} non raggiungibile: ${error instanceof Error ? error.message : String(error)}`, service: servizio, endpoint: url });
+    if (indirizzoVietato(error)) throw new BadRequestError({ message: error.message });
+    // ErroreHttp dice gia' chi non risponde
+    const motivo = error instanceof ErroreHttp ? error.message : `${url} non raggiungibile: ${messaggioDi(error)}`;
+    throw new ExternalApiError({ message: motivo, service: servizio, endpoint: url, cause: error instanceof Error ? error : undefined });
+  }
+  if (!risposta.ok) {
+    await risposta.body?.cancel().catch(() => undefined);
+    throw new ExternalApiError({ message: `${url} ha risposto ${risposta.status}`, service: servizio, endpoint: url, statusCode: risposta.status });
+  }
+  try {
+    return await leggiCorpoLimitato(risposta, DIMENSIONE_MASSIMA_DOCUMENTO_BYTE);
+  } catch (error) {
+    if (error instanceof CorpoTroppoGrandeError) {
+      throw new BadRequestError({ message: `${url} restituisce un documento oltre i ${DIMENSIONE_MASSIMA_DOCUMENTO_BYTE / 1024 / 1024} MB` });
+    }
+    throw new ExternalApiError({ message: `${url} non raggiungibile: ${messaggioDi(error)}`, service: servizio, endpoint: url });
   }
 }
 
@@ -196,7 +228,7 @@ export class AuthProviderService implements IAuthProviderService {
   async importaDiscoveryOidc(url: string): Promise<DiscoveryOidc> {
     let indirizzo = verificaUrlRemoto(url);
     if (!indirizzo.includes('/.well-known/')) indirizzo = `${indirizzo.replace(/\/+$/, '')}/.well-known/openid-configuration`;
-    const documento = await (await scarica(indirizzo, 'OIDC_DISCOVERY')).json() as Record<string, unknown>;
+    const documento = JSON.parse(await scarica(indirizzo, 'OIDC_DISCOVERY')) as Record<string, unknown>;
     const { authorization_endpoint, token_endpoint, jwks_uri, issuer } = documento;
     if (typeof authorization_endpoint !== 'string' || typeof token_endpoint !== 'string' || typeof jwks_uri !== 'string') {
       throw new BadRequestError({ message: 'Il documento di discovery non contiene authorization_endpoint, token_endpoint e jwks_uri' });
@@ -214,7 +246,7 @@ export class AuthProviderService implements IAuthProviderService {
     if (!this.samlService) throw new BadRequestError({ message: 'SAML non disponibile' });
     if (origine.url) {
       const url = verificaUrlRemoto(origine.url);
-      const xml = await (await scarica(url, 'SAML_METADATA')).text();
+      const xml = await scarica(url, 'SAML_METADATA');
       return { ...this.samlService.leggiMetadatiIdp(xml), metadata_url: url };
     }
     if (!origine.xml?.trim()) throw new BadRequestError({ message: 'Indicare i metadati XML o il loro indirizzo' });
@@ -246,10 +278,13 @@ export class AuthProviderService implements IAuthProviderService {
     const raggiungibile = async (controllo: string, url: unknown, metodo: 'GET' | 'POST' = 'GET') => {
       if (typeof url !== 'string' || !url) return aggiungi(controllo, 'errore', 'Indirizzo non configurato');
       try {
-        const risposta = await fetch(url, { method: metodo, signal: AbortSignal.timeout(TIMEOUT_RETE_MS), redirect: 'manual' });
+        await verificaUrlSicuro(url);
+        // Il redirect non si segue: un 3xx dice gia' che il servizio risponde
+        const risposta = await chiamaHttp(url, { method: metodo, timeoutMs: TIMEOUT_RETE_MS, redirect: 'manual' });
+        await risposta.body?.cancel().catch(() => undefined);
         aggiungi(controllo, risposta.status >= 500 ? 'errore' : 'ok', `Risposta ${risposta.status}`);
       } catch (error) {
-        aggiungi(controllo, 'errore', `Non raggiungibile: ${error instanceof Error ? error.message : String(error)}`);
+        aggiungi(controllo, 'errore', indirizzoVietato(error) ? error.message : `Non raggiungibile: ${messaggioDi(error)}`);
       }
     };
 
@@ -257,7 +292,7 @@ export class AuthProviderService implements IAuthProviderService {
       await raggiungibile('Indirizzo di autorizzazione', provider.config_client?.authorize_url);
       await raggiungibile('Indirizzo dei token', config.token_url, 'POST');
       try {
-        const jwks = await (await scarica(String(config.jwks_uri ?? ''), 'OIDC_JWKS')).json() as { keys?: unknown[] };
+        const jwks = JSON.parse(await scarica(String(config.jwks_uri ?? ''), 'OIDC_JWKS')) as { keys?: unknown[] };
         const chiavi = Array.isArray(jwks.keys) ? jwks.keys.length : 0;
         aggiungi('Chiavi di firma (JWKS)', chiavi > 0 ? 'ok' : 'errore', `${chiavi} chiavi pubblicate`);
       } catch (error) {

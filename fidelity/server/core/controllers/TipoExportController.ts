@@ -67,7 +67,10 @@ export class TipoExportController extends BaseController {
           req,
           `${config.ISTANTA_IP_ADDRESS}/FicoProcess/salvaTipoDiExport`,
           'PUT',
-          oggettoPerIstanta
+          oggettoPerIstanta,
+          undefined,
+          undefined,
+          { categoria: 'scrittura' }
         ),
         'ISTANTA',
         '/FicoProcess/salvaTipoDiExport'
@@ -117,7 +120,10 @@ export class TipoExportController extends BaseController {
           req,
           `${config.ISTANTA_IP_ADDRESS}/FicoProcess/eliminaTipoDiExport/${idTipoExport}`,
           'PUT',
-          undefined
+          undefined,
+          undefined,
+          undefined,
+          { categoria: 'scrittura' }
         ),
         'ISTANTA',
         '/FicoProcess/eliminaTipoDiExport'

@@ -13,6 +13,14 @@ const parseWorkerCount = (cpuCount: number): number => {
   return Math.min(cpuCount, 2);
 };
 
+/**
+ * Processi HTTP che servono l'app: in produzione e test il primary forka parseWorkerCount
+ * worker (server/index.ts), in sviluppo gira un processo solo. Serve a chi divide un limite
+ * di tutto il server fra i processi, come la coda di Nominatim.
+ */
+export const numeroWorkerHttp = (ambiente: string | undefined = process.env.NODE_ENV): number =>
+  ambiente === 'production' || ambiente === 'test' ? parseWorkerCount(os.cpus().length) : 1;
+
 /** Attesa prima di riforkare un worker: raddoppia a ogni crash ravvicinato, fino a 30 s. */
 export const ritardoRiavvioMs = (crashRavvicinati: number): number =>
   Math.min(1000 * 2 ** crashRavvicinati, 30_000);

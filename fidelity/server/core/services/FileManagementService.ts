@@ -1,5 +1,4 @@
 import archiver from 'archiver';
-import axios from 'axios';
 import dayjs from 'dayjs';
 import { Request as ExpressRequest } from 'express';
 import fs from 'fs';
@@ -19,6 +18,7 @@ import {
   ReferenzeIstanta
 } from '../../../lib/types';
 import config from '../config';
+import { inviaFormDataAOlimpo, motivoFileNonScaricato, scaricaMaterialePdf } from '../http/olimpo';
 import { urlOlimpo } from '../utils/urlOlimpo';
 import type { TipiDiExportResponseDTO } from '../dto';
 import { IAreaService } from '../interfaces/IAreaService';
@@ -44,6 +44,31 @@ import { ServerUtils } from '../utils/ServerUtils';
 import { verificaRisposta } from '../utils/rispostaServizi';
 import { TraduttoreReferenze } from '../utils/Translator';
 import { sostituisciReferenzeKit } from './ReferenzeService';
+
+/** Download da Olimpo contemporanei per uno ZIP: senza limite un kit grande li apriva tutti insieme. */
+export const DOWNLOAD_ZIP_IN_PARALLELO = 4;
+/** Voce dello ZIP che elenca i file non scaricati. */
+export const FILE_MANCANTI_ZIP = 'FILE_MANCANTI.txt';
+
+/** Esegue `lavoro` su tutti gli elementi, al piu' `limite` alla volta. */
+async function eseguiConLimite<T>(elementi: T[], limite: number, lavoro: (elemento: T) => Promise<void>): Promise<void> {
+  let prossimo = 0;
+  const esecutore = async () => {
+    while (prossimo < elementi.length) {
+      await lavoro(elementi[prossimo++]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limite, elementi.length) }, esecutore));
+}
+
+function testoFileMancanti(mancanti: Array<{ nome: string; motivo: string }>): string {
+  return [
+    'Questi file non sono stati inclusi nell\'archivio:',
+    '',
+    ...mancanti.map(({ nome, motivo }) => `- ${nome}: ${motivo}`),
+    '',
+  ].join('\r\n');
+}
 
 // Lo ZIP degli scarti arriva dal client e si decomprime in memoria: limiti contro gli zip bomb
 const MAX_ENTRY_ZIP = 500;
@@ -94,109 +119,85 @@ export class FileManagementService implements IFileManagementService {
   // ── Download ────────────────────────────────────────────────────────
 
   async downloadFilesAsZip(files: FileItemKit[]): Promise<Buffer> {
-    return new Promise(async (resolve, reject) => {
-      const archive = archiver('zip', {
-        zlib: { level: 9 }
-      });
-
-      const bufferStream = new stream.PassThrough();
-      const buffers: Buffer[] = [];
-
-      bufferStream.on('data', (data) => {
-        buffers.push(data);
-      });
-      bufferStream.on('end', () => {
-        resolve(Buffer.concat(buffers));
-      });
-      bufferStream.on('error', reject);
-
-      archive.pipe(bufferStream);
-
-      const downloadPromises = files.map(async (file) => {
-        if (file.id_olimpo_cloud) {
-          try {
-            const localUrl = `${config.OLYMPUS_IP_ADDRESS}/materiali/getMaterialePDF?id=${file.id_olimpo_cloud}`;
-            const response = await axios.get(localUrl, { responseType: 'stream' });
-            archive.append(response.data, { name: file.nome });
-            console.log(`File aggiunto all'archivio: ${file.nome}`);
-          } catch (error) {
-            console.error(`Failed to download file: ${file.nome} (ID: ${file.id_olimpo_cloud})`, error);
-          }
-        } else {
-          console.warn(`File ${file.nome} non ha un id_olimpo_cloud valido`);
-        }
-      });
-
-      try {
-        await Promise.all(downloadPromises);
-        await archive.finalize();
-        console.log(`Archivio finalizzato con ${files.length} file processati`);
-      } catch (error) {
-        console.error('Errore durante la creazione dell\'archivio:', error);
-        reject(error);
-      }
-    });
+    return this.creaZipDaOlimpo(files.map(file => ({ file, nome: file.nome })));
   }
 
   async downloadPromoFilesAsZip(files: FileItemKit[], promoName: string): Promise<Buffer> {
-    return new Promise(async (resolve, reject) => {
-      const archive = archiver('zip', {
-        zlib: { level: 9 }
-      });
-
-      const bufferStream = new stream.PassThrough();
-      const buffers: Buffer[] = [];
-
-      bufferStream.on('data', (data) => {
-        buffers.push(data);
-      });
-      bufferStream.on('end', () => {
-        resolve(Buffer.concat(buffers));
-      });
-      bufferStream.on('error', reject);
-
-      archive.pipe(bufferStream);
-
-      const filesByKit: { [kitName: string]: FileItemKit[] } = {};
-      files.forEach(file => {
-        const kitName = file.nome_kit || 'Kit Senza Nome';
-        if (!filesByKit[kitName]) {
-          filesByKit[kitName] = [];
-        }
-        filesByKit[kitName].push(file);
-      });
-
-      const downloadPromises = Object.entries(filesByKit).flatMap(([kitName, kitFiles]) => {
-        const folderName = kitName.replace(/[<>:"/\\|?*]/g, '_');
-
-        return kitFiles.map(async (file) => {
-          if (file.id_olimpo_cloud) {
-            try {
-              const localUrl = `${config.OLYMPUS_IP_ADDRESS}/materiali/getMaterialePDF?id=${file.id_olimpo_cloud}`;
-              const response = await axios.get(localUrl, { responseType: 'stream' });
-
-              const cleanFileName = file.nome.split(' (Lavorazione:')[0];
-              const filePath = `${folderName}/${cleanFileName}`;
-              archive.append(response.data, { name: filePath });
-              console.log(`File aggiunto all'archivio: ${filePath}`);
-            } catch (error) {
-              console.error(`Failed to download file: ${file.nome} (ID: ${file.id_olimpo_cloud})`, error);
-            }
-          } else {
-            console.warn(`File ${file.nome} non ha un id_olimpo_cloud valido`);
-          }
-        });
-      });
-
-      try {
-        await Promise.all(downloadPromises);
-        await archive.finalize();
-        console.log(`Archivio finalizzato con ${files.length} file processati organizzati in ${Object.keys(filesByKit).length} kit`);
-      } catch (error) {
-        console.error('Errore durante la creazione dell\'archivio:', error);
-        reject(error);
+    const filesByKit: { [kitName: string]: FileItemKit[] } = {};
+    files.forEach(file => {
+      const kitName = file.nome_kit || 'Kit Senza Nome';
+      if (!filesByKit[kitName]) {
+        filesByKit[kitName] = [];
       }
+      filesByKit[kitName].push(file);
     });
+
+    // Una cartella per kit; il nome del file perde il suffisso della lavorazione
+    const voci = Object.entries(filesByKit).flatMap(([kitName, kitFiles]) => {
+      const folderName = kitName.replace(/[<>:"/\\|?*]/g, '_');
+      return kitFiles.map(file => ({ file, nome: `${folderName}/${file.nome.split(' (Lavorazione:')[0]}` }));
+    });
+    log.info('ZIP della promo', { promo: promoName, file: files.length, kit: Object.keys(filesByKit).length });
+    return this.creaZipDaOlimpo(voci);
+  }
+
+  /**
+   * ZIP dei PDF di Olimpo. Al piu' DOWNLOAD_ZIP_IN_PARALLELO download alla volta, e ogni
+   * esecutore aspetta che il suo file sia scritto nell'archivio prima di scaricarne un altro:
+   * in memoria restano pochi file oltre allo ZIP. I file che non arrivano non spariscono in
+   * silenzio: li elenca FILE_MANCANTI_ZIP.
+   */
+  private async creaZipDaOlimpo(voci: Array<{ file: FileItemKit; nome: string }>): Promise<Buffer> {
+    const archive = archiver('zip', {
+      zlib: { level: 9 }
+    });
+    const buffers: Buffer[] = [];
+    let fallito = false;
+    const completato = new Promise<Buffer>((resolve, reject) => {
+      const bufferStream = new stream.PassThrough();
+      bufferStream.on('data', (data) => buffers.push(data));
+      bufferStream.on('end', () => resolve(Buffer.concat(buffers)));
+      bufferStream.on('error', reject);
+      archive.on('error', reject);
+      archive.pipe(bufferStream);
+    });
+    // Archivio rotto: i download che restano non partono piu'
+    completato.catch(() => { fallito = true; });
+
+    // archiver chiama la callback della voce quando l'ha scritta (o non ha potuto farlo)
+    const aggiungi = (contenuto: Buffer | string, nome: string) => new Promise<void>((resolve) => {
+      const voce: archiver.EntryData & { callback: () => void } = { name: nome, callback: resolve };
+      archive.append(contenuto, voce);
+    });
+
+    const mancanti: Array<{ nome: string; motivo: string }> = [];
+    await eseguiConLimite(voci, DOWNLOAD_ZIP_IN_PARALLELO, async ({ file, nome }) => {
+      if (fallito) return;
+      if (!file.id_olimpo_cloud) {
+        mancanti.push({ nome, motivo: 'file non presente su Olimpo' });
+        log.warn('File senza id Olimpo escluso dallo ZIP', { nome });
+        return;
+      }
+      let contenuto: Buffer;
+      try {
+        contenuto = await scaricaMaterialePdf(file.id_olimpo_cloud);
+      } catch (error) {
+        const motivo = motivoFileNonScaricato(error);
+        mancanti.push({ nome, motivo });
+        log.warn('File non scaricato da Olimpo, escluso dallo ZIP', { nome, idOlimpo: file.id_olimpo_cloud, motivo, errore: (error as Error)?.message });
+        return;
+      }
+      await aggiungi(contenuto, nome);
+    });
+
+    if (mancanti.length > 0 && !fallito) {
+      await aggiungi(testoFileMancanti(mancanti), FILE_MANCANTI_ZIP);
+    }
+    // L'esito arriva da completato: fine dello stream o 'error' dell'archivio
+    archive.finalize().catch(() => undefined);
+    const zip = await completato;
+    log.info('ZIP creato', { file: voci.length, mancanti: mancanti.length });
+    return zip;
   }
 
   public async processRejectedZip(zipBuffer: Buffer, rejectedFiles: FileItemKit[]): Promise<MatchedFile[]> {
@@ -812,7 +813,8 @@ export class FileManagementService implements IFileManagementService {
           JsonMeta: meta
         }));
 
-        const result = await axios.post<{
+        // Tempo massimo degli upload: senza, un Olimpo bloccato tiene aperta la richiesta (e il temporaneo) all'infinito
+        const result = await inviaFormDataAOlimpo<{
           esito: boolean,
           error: string,
           content: {
@@ -821,10 +823,9 @@ export class FileManagementService implements IFileManagementService {
             json_meta: string
           }
         }>(
-          `${config.OLYMPUS_IP_ADDRESS}/materiali/uploadMateriale`,
+          '/materiali/uploadMateriale',
           formData,
-          // Senza timeout un Olimpo bloccato tiene aperta la richiesta (e il temporaneo) all'infinito
-          { headers: { "Authorization": req.headers.authorization as string }, timeout: 120_000 }
+          req.headers.authorization
         );
 
         if (!result.data.esito) {
@@ -1683,7 +1684,7 @@ export class FileManagementService implements IFileManagementService {
       JsonMeta: dataFields
     }));
 
-    const result = await axios.post<{
+    const result = await inviaFormDataAOlimpo<{
       esito: boolean,
       error: string,
       content: {
@@ -1696,9 +1697,9 @@ export class FileManagementService implements IFileManagementService {
         pagine: number
       }
     }>(
-      `${config.OLYMPUS_IP_ADDRESS}/materiali/uploadMateriale`,
+      '/materiali/uploadMateriale',
       formData,
-      { headers: { "Authorization": req.headers["authorization"] as string } }
+      req.headers["authorization"]
     );
 
     if (!result.data.esito) {
@@ -1916,7 +1917,9 @@ export class FileManagementService implements IFileManagementService {
           endpoint,
           'POST',
           correggoFormData,
-          { Authorization: req.headers.authorization as string }
+          { Authorization: req.headers.authorization as string },
+          undefined,
+          { categoria: 'lunga' }
         ),
         'CORREGGO',
         '/UploadVolFromFP.ashx',
@@ -2038,7 +2041,7 @@ export class FileManagementService implements IFileManagementService {
         JsonMeta: {}
       }));
 
-      const result = await axios.post<{
+      const result = await inviaFormDataAOlimpo<{
         esito: boolean,
         error: string,
         content: {
@@ -2051,9 +2054,9 @@ export class FileManagementService implements IFileManagementService {
           pagine: number
         }
       }>(
-        `${config.OLYMPUS_IP_ADDRESS}/materiali/uploadMateriale`,
+        '/materiali/uploadMateriale',
         formData,
-        { headers: { "Authorization": req.headers["authorization"] as string } }
+        req.headers["authorization"]
       );
 
       if (!result.data.esito) {

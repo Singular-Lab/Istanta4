@@ -6,10 +6,14 @@ import { ExternalApiError } from '../../../lib/errors/infrastructure/ExternalApi
 import { ErrorCodes } from '../../../lib/errors/ErrorCodes';
 import type { AuthProvider } from '../models/auth_provider';
 import type { IOidcService, OidcTokenResponse, OidcUserClaims, OidcAuthorizeParams } from '../interfaces/IOidcService';
+import { chiamaHttp, ErroreHttp } from '../http/clienteHttp';
 import { log } from '../logger';
 import { configServerInChiaro } from './authProviders/configurazioneProvider';
 
 type JWKSFunction = ReturnType<typeof createRemoteJWKSet>;
+
+/** L'utente e' fermo sulla callback di login: oltre questo tempo meglio un errore chiaro. */
+export const TIMEOUT_SCAMBIO_TOKEN_MS = 10_000;
 
 /**
  * Riduce il payload gia' verificato ai soli claim usati dall'applicazione.
@@ -120,11 +124,29 @@ export class OidcService implements IOidcService {
 
     log.info(`[OidcService] Scambio code per token con provider "${provider.codice}"`);
 
-    const response = await fetch(serverConfig.token_url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: body.toString(),
-    });
+    let response: Response;
+    try {
+      // Il code vale una volta sola: nessun nuovo tentativo, che fallirebbe comunque con invalid_grant
+      response = await chiamaHttp(serverConfig.token_url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body.toString(),
+        timeoutMs: TIMEOUT_SCAMBIO_TOKEN_MS,
+        idempotente: false,
+      });
+    } catch (error) {
+      if (!(error instanceof ErroreHttp)) throw error;
+      log.error(`[OidcService] Scambio code per token non riuscito con "${provider.codice}" (${error.motivo})`, error);
+      throw new ExternalApiError({
+        message: error.motivo === 'timeout'
+          ? `Il provider "${provider.codice}" non ha risposto entro ${TIMEOUT_SCAMBIO_TOKEN_MS / 1000} secondi allo scambio del codice: ripetere l'accesso`
+          : `Il provider "${provider.codice}" non e' raggiungibile per lo scambio del codice: ripetere l'accesso`,
+        service: `OIDC:${provider.codice}`,
+        endpoint: error.destinazione,
+        details: { errorCode: ErrorCodes.OIDC_CALLBACK_FAILED, motivo: error.motivo },
+        cause: error,
+      });
+    }
 
     if (!response.ok) {
       const errorBody = await response.text();

@@ -240,7 +240,10 @@ export class PromoController extends BaseController {
           req,
           `${config.ISTANTA_IP_ADDRESS}/FicoProcess/aggiornaPromo`,
           'PUT',
-          dataPerIstanta
+          dataPerIstanta,
+          undefined,
+          undefined,
+          { categoria: 'scrittura' }
         ),
         'ISTANTA',
         '/FicoProcess/aggiornaPromo'
@@ -260,7 +263,7 @@ export class PromoController extends BaseController {
       if (config.CORREGGO_IP_ADDRESS) {
         try {
           verificaRisposta(
-            await ServerUtils.sendToFICOApi(req, `${config.CORREGGO_IP_ADDRESS}${ROTTA_AGGIORNA_PROMO_CORREGGO}`, 'POST', formdataCorreggo),
+            await ServerUtils.sendToFICOApi(req, `${config.CORREGGO_IP_ADDRESS}${ROTTA_AGGIORNA_PROMO_CORREGGO}`, 'POST', formdataCorreggo, undefined, undefined, { categoria: 'scrittura' }),
             'CORREGGO',
             ROTTA_AGGIORNA_PROMO_CORREGGO,
             aggiornamentoCorreggoRiuscito
@@ -290,7 +293,10 @@ export class PromoController extends BaseController {
           req,
           `${config.ISTANTA_IP_ADDRESS}/FicoProcess/eliminaPromo/${req.params.id}/${true}`,
           'DELETE',
-          undefined
+          undefined,
+          undefined,
+          undefined,
+          { categoria: 'scrittura' }
         ),
         'ISTANTA',
         '/FicoProcess/eliminaPromo',
@@ -324,7 +330,11 @@ export class PromoController extends BaseController {
             req,
             `${config.ISTANTA_IP_ADDRESS}/FicoProcess/restore/${id}`,
             'GET',
-            undefined
+            undefined,
+            undefined,
+            undefined,
+            // GET ma ripristina la promo: scrittura, senza ripetizioni
+            { categoria: 'scrittura' }
           ),
           'ISTANTA',
           '/FicoProcess/restore'
@@ -336,7 +346,10 @@ export class PromoController extends BaseController {
             req,
             `${config.ISTANTA_IP_ADDRESS}/FicoProcess/eliminaPromo/${id}/${false}`,
             'DELETE',
-            undefined
+            undefined,
+            undefined,
+            undefined,
+            { categoria: 'scrittura' }
           ),
           'ISTANTA',
           '/FicoProcess/eliminaPromo'

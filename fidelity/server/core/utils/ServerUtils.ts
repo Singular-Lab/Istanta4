@@ -1,24 +1,29 @@
-import axios, { AxiosResponse } from 'axios';
 import { Request } from 'express';
 import fetchCookie from 'fetch-cookie';
-import fetch, { Headers, RequestInit } from 'node-fetch';
 import * as tough from 'tough-cookie';
 import { Colorize } from '../../../lib/Colorize';
-import { HttpStatusCode, TIPO_ATTIVITA, type CATEGORIA_ATTIVITA } from '../../../lib/enums';
+import { TIPO_ATTIVITA, type CATEGORIA_ATTIVITA } from '../../../lib/enums';
 import { SystemNotification, UtenteAttributes } from '../../../lib/types';
 import { emitToClients } from '../../ws-server';
 import config from '../config';
+import { invalidaPassaporto, passaportoInCache, type Passaporto } from '../http/cachePassaporti';
+import { chiamaHttp, destinazioneDi, ErroreHttp, type CategoriaChiamata, type MotivoErroreHttp, type OpzioniHttp } from '../http/clienteHttp';
 import { log } from '../logger';
 import { Attivita } from '../models/attivita';
 import { Utente } from '../models/utenti';
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'HEAD';
 
+/** Perche' una chiamata non ha avuto risposta HTTP (status 0); "passaporto": non e' partita. */
+export type MotivoNessunaRisposta = MotivoErroreHttp | 'passaporto';
+
 interface ApiResponse<T> {
     data: T;
     status: number;
     statusText: string;
     headers: Headers;
+    /** Solo con status 0. */
+    motivo?: MotivoNessunaRisposta;
 }
 
 interface ApiError {
@@ -27,9 +32,51 @@ interface ApiError {
     errorType?: string;
 }
 
-// Estendi il tipo RequestInit per includere credentials
-interface ExtendedRequestInit extends RequestInit {
-    credentials?: 'include' | 'same-origin' | 'omit';
+/**
+ * Tipo di chiamata, dichiarato da chi chiama: decide il tempo massimo (se non e' passato
+ * esplicitamente) e se la chiamata si puo' ripetere. Non si deduce dal metodo HTTP.
+ */
+export interface OpzioniChiamataServizio {
+    /** Default "lunga", il tempo massimo di prima (FICO_API_TIMEOUT_MS o 10 minuti). */
+    categoria?: CategoriaChiamata;
+    /** Solo le letture: ritentate sugli errori temporanei e dopo un passaporto rifiutato. */
+    idempotente?: boolean;
+}
+
+type EsitoChiamata<T> = { risposta: ApiResponse<T>; passaportoRifiutato: boolean };
+
+const messaggioErrore = (error: unknown): string =>
+    (error as { message?: string } | null)?.message || String(error);
+
+/**
+ * Istanta rifiuta il passaporto prima di eseguire l'azione: 401 con no_login, no_login_byolympus
+ * o "no_login public token empty". "no_login:" seguito dallo stack e' invece un'eccezione,
+ * anche a meta' operazione, e non dipende dal passaporto.
+ */
+function passaportoRifiutato(status: number, corpo: unknown): boolean {
+    if (status !== 401) return false;
+    const codice = (corpo as { error?: unknown } | null)?.error;
+    return typeof codice === 'string' && codice.startsWith('no_login') && !codice.startsWith('no_login:');
+}
+
+/** Corpo come JSON se lo e', altrimenti il testo (come axios); null se vuoto. */
+async function leggiCorpo(risposta: Response): Promise<any> {
+    const testo = await risposta.text();
+    if (!testo) return null;
+    try {
+        return JSON.parse(testo);
+    } catch {
+        return testo;
+    }
+}
+
+/** Copia gli header saltando quelli senza valore, che altrimenti partirebbero come "undefined". */
+function headerDefiniti(origine?: Record<string, string | undefined | null>): Record<string, string> {
+    const headers: Record<string, string> = {};
+    for (const [nome, valore] of Object.entries(origine ?? {})) {
+        if (valore !== undefined && valore !== null) headers[nome] = valore;
+    }
+    return headers;
 }
 
 class ServerUtils {
@@ -110,132 +157,189 @@ class ServerUtils {
         });
     }
 
-    static async getPassportFromOlympo(req: Request): Promise<string> {
-        const jar = await this.getRequestCookieJar(req);
-        const fetchWithCookies = fetchCookie(fetch, jar);
-
-        let id_utente_loggato = req.session.id_utente;
-        if (id_utente_loggato == "" || id_utente_loggato == undefined) {
-            throw this.createErrorObject("Id utente non fornito", 400, { id_utente_loggato });
-        } else {
-            const utente = await Utente.findByPk(id_utente_loggato);
-            if (utente == null) {
-                throw this.createErrorObject("Utente non trovato", 400, { id_utente_loggato });
-            } else {
-                const privateKey = utente.privatekey_utenti;
-                const fico_secret = config.FICO_SECRET;
-                const headers: Record<string, string> = {};
-                if (privateKey == "" || privateKey == undefined) {
-                    headers["fico-secret"] = fico_secret;
-                } else {
-                    headers["authorization"] = "Bearer " + privateKey;
-
-                }
-                const token = await fetchWithCookies(config.OLYMPUS_IP_ADDRESS + "/auth/getPassport", {
-                    method: "PUT",
-                    headers: headers,
-                    body: JSON.stringify({
-                        username: utente.email_utenti,
-                        tipoUtente: utente.tipo_utenti,
-                        origin: "FP",
-                        campi_aggiuntivi: {
-                            nome: utente.nome_utenti,
-                            cognome: utente.cognome_utenti,
-                            email: utente.email_utenti,
-                            stato: utente.stato_utenti,
-                            residenza: utente.residenza_utenti,
-                            dataDiNascita: utente.datadinascita_utenti,
-                            tipo: utente.tipo_utenti
-                        },
-                        policy: {
-                            gruppi: Array.isArray(utente.meta_utenti?.gruppi_ad)
-                                ? utente.meta_utenti.gruppi_ad
-                                : [],
-                            codice_posizione: utente.meta_utenti?.codice_posizione ?? null
-                        }
-                    })
-                })
-                if (token.status != 200) {
-                    log.error(Colorize.bgRed(token.statusText));
-                    throw new Error("Errore durante la richiesta del token");
-                }
-                const content = await token.json() as {
-                    esito: boolean,
-                    error: string,
-                    statusCode: number,
-                    publicKey: string,
-                    privateKey: string
-                }
-                if (content.esito) {
-                    if (content.privateKey &&
-                        content.privateKey !== utente.privatekey_utenti &&
-                        content.privateKey !== undefined &&
-                        content.privateKey !== null) {
-                        utente.privatekey_utenti = content.privateKey;
-                        await utente.save({});
-                    }
-                    // Salva il jar aggiornato dopo la chiamata, solo se è una sessione esterna
-                    if (req.session.isExternalAuth) {
-                        await this.saveRequestCookieJar(req, jar);
-                    }
-                    return content.publicKey;
-                }
-                return content.publicKey;
-            }
-        }
+    /** fetch con il cookie jar della sessione: ogni passaggio, redirect compresi, usa il client comune. */
+    private static fetchConCookie(jar: tough.CookieJar, opzioni: OpzioniHttp) {
+        return fetchCookie((url: string, init?: RequestInit) => chiamaHttp(url, { ...init, ...opzioni }), jar);
     }
 
+    /**
+     * Chiave pubblica del passaporto Olimpo dell'utente in sessione, dalla cache del worker
+     * o chiesta a Olimpo. Lancia se l'utente non c'e' o Olimpo non la rilascia.
+     */
+    static async getPassportFromOlympo(req: Request): Promise<string> {
+        const id_utente_loggato = req.session.id_utente;
+        if (id_utente_loggato == "" || id_utente_loggato == undefined) {
+            throw this.createErrorObject("Id utente non fornito", 400, { id_utente_loggato });
+        }
+        const passaporto = await this.passaportoUtente(req, true);
+        if (!passaporto?.publicKey) {
+            throw this.createErrorObject("Utente non trovato", 400, { id_utente_loggato });
+        }
+        return passaporto.publicKey;
+    }
+
+    /**
+     * Passaporto dell'utente in sessione; null se la sessione non ha un utente esistente.
+     * Con serveChiave la chiave pubblica si chiede anche per gli outsider (upload, contesto FICO).
+     */
+    private static passaportoUtente(req: Request, serveChiave: boolean): Promise<Passaporto | null> {
+        const idUtente = req.session.id_utente;
+        if (!idUtente) return Promise.resolve(null);
+        return passaportoInCache(idUtente, req.session.private_key, async () => {
+            const utente = await Utente.findByPk(idUtente);
+            if (utente == null) return null;
+            // Come prima: solo chi ha outsider_utenti false manda il passaporto a Istanta
+            const outsider = utente.outsider_utenti !== false;
+            if (outsider && !serveChiave) return { outsider, publicKey: null };
+            return { outsider, publicKey: await this.richiediPassaporto(req, utente) };
+        }, serveChiave);
+    }
+
+    /** PUT auth/getPassport: Olimpo rilascia (o aggiorna) il passaporto con i dati e la policy dell'utente. */
+    private static async richiediPassaporto(req: Request, utente: Utente): Promise<string> {
+        const jar = await this.getRequestCookieJar(req);
+        const fetchWithCookies = this.fetchConCookie(jar, { categoria: 'passaporto' });
+
+        const privateKey = utente.privatekey_utenti;
+        const headers: Record<string, string> = {};
+        if (privateKey == "" || privateKey == undefined) {
+            headers["fico-secret"] = config.FICO_SECRET;
+        } else {
+            headers["authorization"] = "Bearer " + privateKey;
+        }
+        const token = await fetchWithCookies(config.OLYMPUS_IP_ADDRESS + "/auth/getPassport", {
+            method: "PUT",
+            headers: headers,
+            body: JSON.stringify({
+                username: utente.email_utenti,
+                tipoUtente: utente.tipo_utenti,
+                origin: "FP",
+                campi_aggiuntivi: {
+                    nome: utente.nome_utenti,
+                    cognome: utente.cognome_utenti,
+                    email: utente.email_utenti,
+                    stato: utente.stato_utenti,
+                    residenza: utente.residenza_utenti,
+                    dataDiNascita: utente.datadinascita_utenti,
+                    tipo: utente.tipo_utenti
+                },
+                policy: {
+                    gruppi: Array.isArray(utente.meta_utenti?.gruppi_ad)
+                        ? utente.meta_utenti.gruppi_ad
+                        : [],
+                    codice_posizione: utente.meta_utenti?.codice_posizione ?? null
+                }
+            })
+        });
+        if (token.status != 200) {
+            log.error(Colorize.bgRed(token.statusText));
+            await token.body?.cancel().catch(() => undefined);
+            throw new Error("Errore durante la richiesta del token");
+        }
+        const content = await token.json() as {
+            esito: boolean,
+            error: string,
+            statusCode: number,
+            publicKey: string,
+            privateKey: string
+        };
+        // Olimpo segnala gli errori con HTTP 200 ed esito false: nessun passaporto, niente in cache
+        if (!content?.esito || !this.checkIfValueIsValid(content.publicKey)) {
+            invalidaPassaporto(utente.id_utenti);
+            log.warn('Olimpo non ha rilasciato il passaporto', { idUtente: utente.id_utenti, statusCode: content?.statusCode });
+            throw new Error("Olimpo non ha rilasciato il passaporto");
+        }
+        if (content.privateKey &&
+            content.privateKey !== utente.privatekey_utenti &&
+            content.privateKey !== undefined &&
+            content.privateKey !== null) {
+            utente.privatekey_utenti = content.privateKey;
+            await utente.save({});
+        }
+        // Salva il jar aggiornato dopo la chiamata, solo se è una sessione esterna
+        if (req.session.isExternalAuth) {
+            await this.saveRequestCookieJar(req, jar);
+        }
+        return content.publicKey;
+    }
+
+    /** Risposta senza HTTP (status 0) nella forma di sendToFICOApi. */
+    private static nessunaRisposta<T>(motivo: MotivoNessunaRisposta | undefined, error: unknown): ApiResponse<T> {
+        return {
+            data: null as T,
+            status: 0,
+            statusText: messaggioErrore(error),
+            ...(motivo && { motivo }),
+        } as ApiResponse<T>;
+    }
 
     /**
      * Sends a request to another API.
+     *
+     * Non lancia mai: risposta HTTP con lo stato reale e il corpo interpretato, oppure status 0
+     * con `motivo` (rete, timeout, passaporto non ottenuto). Se Istanta rifiuta il passaporto
+     * (401 no_login) la cache del passaporto si svuota e solo una chiamata idempotente viene
+     * ripetuta una volta con un passaporto nuovo.
      *
      * @template T - The expected response type.
      * @param {string} url - The URL of the API to send the request to.
      * @param {HttpMethod} method - The HTTP method to use for the request.
      * @param {any} data - The data to send in the body of the request.
      * @param {Record<string, string>} [customHeaders] - Optional additional headers to send with the request.
-     * @param {number} [timeoutMs] - Timeout di questa chiamata; senza, FICO_API_TIMEOUT_MS o 10 minuti.
+     * @param {number} [timeoutMs] - Timeout di questa chiamata; prevale sulla categoria.
+     * @param {OpzioniChiamataServizio} [opzioni] - Categoria (tempo massimo) e idempotenza.
      * @returns {Promise<ApiResponse<T>>} - A promise that resolves to the API response.
-     * @throws Will throw an error if the request fails or the response is not ok.
      */
-    static async sendToFICOApi<T>(req: Request, url: string, method: HttpMethod | string, data: any, customHeaders?: Record<string, string>, timeoutMs?: number): Promise<ApiResponse<T>> {
-        const jar = await this.getRequestCookieJar(req);
+    static async sendToFICOApi<T>(req: Request, url: string, method: HttpMethod | string, data: any, customHeaders?: Record<string, string>, timeoutMs?: number, opzioni?: OpzioniChiamataServizio): Promise<ApiResponse<T>> {
+        const prima = await this.eseguiChiamataServizio<T>(req, url, method, data, customHeaders, timeoutMs, opzioni);
+        if (!prima.passaportoRifiutato) return prima.risposta;
 
-        const fetchWithCookies = fetchCookie(fetch, jar);
-        try {
-            const headers: Record<string, string> = {
-                ...customHeaders // Override or add custom headers
-            };
-            let publicKey = "";
-            if (req.headers.authorization != undefined) {
-                publicKey = req.headers.authorization;
-            } else {
-                const utente = await Utente.findByPk(req.session.id_utente);
-                if (utente != null && utente.outsider_utenti == false) {
-                    // Anche questa chiamata deve usare un jar isolato se vogliamo che funzioni in modo concorrente
-                    publicKey = await this.getPassportFromOlympo(req);
-                    if (this.checkIfValueIsValid(publicKey)) {
-                        headers['Authorization'] = "Bearer " + publicKey;
-                    }
-                    else {
-                        throw this.createErrorObject("Chiave privata non fornita", 400, { url, method, data, customHeaders });
-                    }
+        invalidaPassaporto(req.session.id_utente);
+        // Per decisione una scrittura non si ripete: l'operatore vede "utente non riconosciuto" e riprova
+        if (!opzioni?.idempotente) return prima.risposta;
+        log.info('Passaporto rifiutato da Istanta: nuovo tentativo con un passaporto nuovo', { destinazione: destinazioneDi(url) });
+        return (await this.eseguiChiamataServizio<T>(req, url, method, data, customHeaders, timeoutMs, opzioni)).risposta;
+    }
+
+    private static async eseguiChiamataServizio<T>(req: Request, url: string, method: HttpMethod | string, data: any, customHeaders: Record<string, string> | undefined, timeoutMs: number | undefined, opzioni: OpzioniChiamataServizio | undefined): Promise<EsitoChiamata<T>> {
+        const headers = headerDefiniti(customHeaders);
+        let conPassaporto = false;
+        // Con un Authorization in ingresso (bearer di integrazione) non si chiede il passaporto e il bearer non si inoltra
+        if (req.headers.authorization == undefined) {
+            let passaporto: Passaporto | null;
+            try {
+                passaporto = await this.passaportoUtente(req, false);
+            } catch (error) {
+                log.warn('Passaporto Olimpo non ottenuto: chiamata non inviata', { destinazione: destinazioneDi(url), motivo: messaggioErrore(error) });
+                return { risposta: this.nessunaRisposta<T>('passaporto', error), passaportoRifiutato: false };
+            }
+            if (passaporto && !passaporto.outsider) {
+                // Il passaporto prevale sull'Authorization passato da chi chiama
+                for (const nome of Object.keys(headers)) {
+                    if (nome.toLowerCase() === 'authorization') delete headers[nome];
                 }
+                headers['Authorization'] = "Bearer " + passaporto.publicKey;
+                conPassaporto = true;
             }
-            if (!(data instanceof FormData)) {
-                headers['Content-Type'] = 'application/json';
-                headers['Accept'] = 'application/json';
-            }
-            const options: RequestInit = {
+        }
+        if (!(data instanceof FormData)) {
+            headers['Content-Type'] = 'application/json';
+            headers['Accept'] = 'application/json';
+        }
+
+        const jar = await this.getRequestCookieJar(req);
+        const fetchWithCookies = this.fetchConCookie(jar, {
+            // Il timeout esplicito prevale sulla categoria; senza categoria resta il default lungo di prima
+            categoria: opzioni?.categoria ?? 'lunga',
+            timeoutMs,
+            idempotente: opzioni?.idempotente ?? false,
+        });
+        try {
+            const response = await fetchWithCookies(url, {
                 method: method,
                 headers: headers,
                 body: method !== 'GET' && method !== 'HEAD' ? (data instanceof FormData ? data : JSON.stringify(data)) : undefined,
-                // Default alto: Istanta/Olimpo possono fare trasferimenti FTP lunghi. Il timeout finisce nel catch (status 0)
-                signal: AbortSignal.timeout(timeoutMs ?? (Number(process.env.FICO_API_TIMEOUT_MS) || 600_000))
-            };
-            //console.log(Colorize.bgBlue(url));
-            // Usa il fetch con il cookie jar isolato.
-            const response = await fetchWithCookies(url, options as any);
+            });
 
             // Handle binary responses (images, PDFs, etc)
             if (response.headers.get('Content-Type')?.includes('image') ||
@@ -243,11 +347,14 @@ class ServerUtils {
                 response.headers.get('Content-Type')?.includes('application/octet-stream')) {
                 const buffer = await response.arrayBuffer();
                 return {
-                    data: buffer,
-                    status: response.status,
-                    statusText: response.statusText,
-                    headers: response.headers as any
-                } as ApiResponse<T>;
+                    risposta: {
+                        data: buffer,
+                        status: response.status,
+                        statusText: response.statusText,
+                        headers: response.headers
+                    } as ApiResponse<T>,
+                    passaportoRifiutato: false,
+                };
             }
 
             // Handle text/JSON responses
@@ -257,10 +364,13 @@ class ServerUtils {
                 let corpoErrore: any = null;
                 try { corpoErrore = responseText ? JSON.parse(responseText) : null; } catch { /* corpo non JSON */ }
                 return {
-                    data: corpoErrore,
-                    status: response.status,
-                    statusText: responseText || response.statusText,
-                    headers: response.headers as any
+                    risposta: {
+                        data: corpoErrore,
+                        status: response.status,
+                        statusText: responseText || response.statusText,
+                        headers: response.headers
+                    },
+                    passaportoRifiutato: conPassaporto && passaportoRifiutato(response.status, corpoErrore),
                 };
             }
 
@@ -284,284 +394,81 @@ class ServerUtils {
             }
 
             return {
-                data: responseData,
-                status: response.status,
-                statusText: response.statusText,
-                headers: response.headers as any
+                risposta: {
+                    data: responseData,
+                    status: response.status,
+                    statusText: response.statusText,
+                    headers: response.headers
+                },
+                passaportoRifiutato: false,
             };
-            // Imposta il Content-Type solo se i dati non sono FormData
-        } catch (error: any) {
-            if (typeof error == "string") {
-                error = JSON.parse(error);
-            }
-            // Nessuna risposta HTTP (rete, passaporto Olimpo): status 0, il motivo in statusText
-            return {
-                data: null as any,
-                status: 0,
-                statusText: error.message,
-            } as ApiResponse<T>;
+        } catch (error) {
+            // Nessuna risposta HTTP: status 0, il motivo in statusText e in motivo
+            const motivo = error instanceof ErroreHttp ? error.motivo : undefined;
+            log.warn('Nessuna risposta dal servizio', { destinazione: destinazioneDi(url), motivo: motivo ?? messaggioErrore(error) });
+            return { risposta: this.nessunaRisposta<T>(motivo, error), passaportoRifiutato: false };
         }
     }
-    // Funzione per gestire la richiesta con fetch
-    static async sendRequestWithFetch<T>(url: string, options: RequestInit): Promise<ApiResponse<T>> {
-        log.info("Inizio richiesta con fetch normale: " + url);
-        const response = await fetch(url, options);
 
-        log.info("Stato risposta API: " + response.status);
-        log.info("Testo risposta API: " + response.statusText);
-        const responseText = await response.text();
-        log.info("Contenuto testo risposta API: " + responseText);
-
-        if (!response.ok) {
-            log.error("Errore nella risposta dell'API, stato non OK");
-            throw new Error(responseText || "Errore durante la comunicazione con l'altra API");
-        }
-
-        let responseData: T;
-        try {
-            responseData = JSON.parse(responseText) as T;
-            log.info("Parsing JSON riuscito: " + responseData);
-        } catch (error: any) {
-            log.error("Errore nel parsing della risposta JSON:", error.message);
-            throw new Error("Errore nel parsing della risposta JSON: " + responseText);
-        }
-
-        return {
-            data: responseData,
-            status: response.status,
-            statusText: response.statusText,
-            headers: response.headers as any
-        };
-    }
-
+    /** Upload del tracciato su Istanta (FicoProcess/uploadTracciato), con il passaporto dell'utente. */
     static async sendToFicoApiAxiosUploadTracciato<T>(req: Request, data: any | FormData): Promise<ApiResponse<T>> {
-        try {
-            // Ottieni il token usando la funzione esistente
-            const publicKey = await this.getPassportFromOlympo(req);
-
-            if (publicKey === "") {
-                throw this.createErrorObject("Chiave pubblica non fornita", HttpStatusCode.BAD_REQUEST, { data });
-            }
-
-            // Prepara gli headers
-            const headers: Record<string, string> = {
-                "Authorization": "Bearer " + publicKey,
-                'Content-Type': 'multipart/form-data'
-            };
-
-            log.info(Colorize.red('JSON DI DATA'));
-            log.info(Colorize.red(data instanceof FormData ?
-                'FormData with entries: ' + Array.from((data as any).entries() as Iterable<[any, any]>).map(([key, value]) => `${key}: ${value}`).join(', ') :
-                JSON.stringify(data)
-            ));
-
-            const result = await axios.post(config.ISTANTA_IP_ADDRESS + "/FicoProcess/uploadTracciato", data, { headers });
-            const response = result as AxiosResponse<T>;
-
-            // Verifica lo status della risposta
-            if (response.status < 200 || response.status >= 300) {
-                throw new Error(`HTTP Error: ${response.status} ${response.statusText}`);
-            }
-
-            return {
-                data: response.data,
-                status: response.status,
-                statusText: response.statusText,
-                headers: response.headers as any
-            };
-
-        } catch (error: any) {
-            log.error(Colorize.bgRed(error.message));
-
-            // Gestione errori Axios: il corpo di Istanta (es. { esito, error }) va conservato
-            if (error.response) {
-                return {
-                    data: (error.response.data ?? null) as any,
-                    status: error.response.status,
-                    statusText: error.response.statusText || error.message,
-                } as ApiResponse<T>;
-            }
-
-            // Gestione altri errori
-            if (typeof error === "string") {
-                try {
-                    error = JSON.parse(error);
-                } catch {
-                    // Se non è JSON valido, usa l'errore come stringa
-                }
-            }
-
-            return {
-                data: null as any,
-                status: 0, // nessuna risposta HTTP, come in sendToFICOApi
-                statusText: error.message || 'Errore durante la comunicazione con l\'API',
-            } as ApiResponse<T>;
-        }
+        return this.caricaConPassaporto<T>(req, config.ISTANTA_IP_ADDRESS + "/FicoProcess/uploadTracciato", data);
     }
 
-    // Funzione per gestire la richiesta con fetchWithCookies
-    static async sendRequestWithFetchCookies<T>(url: string, options: RequestInit, req: Request): Promise<ApiResponse<T>> {
-        log.info("Inizio richiesta con fetchWithCookies: " + url);
-
-        // Crea un cookie jar isolato per questa specifica richiesta
-        const requestCookieJar = new tough.CookieJar();
-        if (req.headers.cookie) {
-            const currentUrl = new URL(url);
-            const cookies = req.headers.cookie.split(';');
-            for (const cookie of cookies) {
-                await requestCookieJar.setCookie(cookie.trim(), currentUrl.origin);
-            }
-        }
-        const fetchWithSpecificCookies = fetchCookie(fetch, requestCookieJar);
-
-        const response = await fetchWithSpecificCookies(url, options);
-
-        log.info("Stato risposta API: " + response.status);
-        log.info("Testo risposta API: " + response.statusText);
-        const responseText = await response.text();
-        log.info("Contenuto testo risposta API: " + responseText);
-
-        if (!response.ok) {
-            log.error("Errore nella risposta dell'API, stato non OK");
-            throw new Error(responseText || "Errore durante la comunicazione con l'altra API");
-        }
-
-        let responseData: T;
-        try {
-            responseData = JSON.parse(responseText) as T;
-            log.info("Parsing JSON riuscito: " + responseData);
-        } catch (error: any) {
-            log.error("Errore nel parsing della risposta JSON:", error.message);
-            throw new Error("Errore nel parsing della risposta JSON: " + responseText);
-        }
-
-        return {
-            data: responseData,
-            status: response.status,
-            statusText: response.statusText,
-            headers: response.headers as any
-        };
-    }
-
+    /** Upload (POST) con il passaporto dell'utente; un Authorization in customHeaders prevale. */
     static async sendToFicoApiAxiosUpload<T>(req: Request, url: string, data: any | FormData, customHeaders?: Record<string, string>): Promise<ApiResponse<T>> {
-        try {
-            // Ottieni il token usando la funzione esistente
-            const publicKey = await this.getPassportFromOlympo(req);
-
-            if (publicKey === "") {
-                throw this.createErrorObject("Chiave privata non fornita", HttpStatusCode.BAD_REQUEST, { url, data, customHeaders });
-            }
-
-            // Prepara gli headers
-            // Se esiste già Authorization nei customHeaders, non sovrascriverlo
-            const headers: Record<string, string> = {
-                ...(customHeaders?.['Authorization'] ? {} : { "Authorization": "Bearer " + publicKey }),
-                ...customHeaders // Override o aggiungi headers personalizzati
-            };
-
-            // Imposta Content-Type solo se non è già specificato nei customHeaders
-            if (!customHeaders?.['Content-Type']) {
-                if (data instanceof FormData) {
-                    headers['Content-Type'] = 'multipart/form-data';
-                } else {
-                    headers['Content-Type'] = 'application/json';
-                }
-            }
-
-            log.info(Colorize.red('JSON DI DATA'));
-            log.info(Colorize.red(data instanceof FormData ?
-                'FormData with entries: ' + Array.from((data as any).entries() as Iterable<[any, any]>).map(([key, value]) => `${key}: ${value}`).join(', ') :
-                JSON.stringify(data)
-            ))
-
-            const result = await axios.post(url, data, { headers });
-            const response = result as AxiosResponse<T>;
-
-            // Verifica lo status della risposta
-            if (response.status < 200 || response.status >= 300) {
-                throw new Error(`HTTP Error: ${response.status} ${response.statusText}`);
-            }
-
-            return {
-                data: response.data,
-                status: response.status,
-                statusText: response.statusText,
-                headers: response.headers as any
-            };
-
-        } catch (error: any) {
-            log.error(Colorize.bgRed(error.message));
-
-            // Gestione errori Axios — il body dell'errore (es. { error: "..." } di Olimpo)
-            // va preservato: senza, il chiamante perde il motivo vero del fallimento.
-            if (error.response) {
-                return {
-                    data: (error.response.data ?? null) as any,
-                    status: error.response.status,
-                    statusText: error.response.statusText || error.message,
-                } as ApiResponse<T>;
-            }
-
-            // Gestione altri errori
-            if (typeof error === "string") {
-                try {
-                    error = JSON.parse(error);
-                } catch {
-                    // Se non è JSON valido, usa l'errore come stringa
-                }
-            }
-
-            return {
-                data: null as any,
-                status: 0, // nessuna risposta HTTP, come in sendToFICOApi
-                statusText: error.message || 'Errore durante la comunicazione con l\'API',
-            } as ApiResponse<T>;
-        }
+        return this.caricaConPassaporto<T>(req, url, data, customHeaders);
     }
 
-
-    static async sendToOlympusApi<T>(url: string, method: HttpMethod, data: any, customHeaders?: Record<string, string>): Promise<ApiResponse<T>> {
+    /**
+     * POST di un upload con il tempo massimo delle chiamate lunghe, senza ripetizioni. Come
+     * sendToFICOApi non lancia: il corpo d'errore del servizio (es. { esito, error } di Istanta o
+     * { error } di Olimpo) resta in data, status 0 con motivo se una risposta non arriva.
+     */
+    private static async caricaConPassaporto<T>(req: Request, url: string, data: any | FormData, customHeaders?: Record<string, string>): Promise<ApiResponse<T>> {
+        let publicKey: string;
         try {
-            const headers: Record<string, string> = {
-                ...customHeaders // Override or add custom headers
-            };
+            publicKey = await this.getPassportFromOlympo(req);
+        } catch (error) {
+            log.warn('Passaporto Olimpo non ottenuto: upload non inviato', { destinazione: destinazioneDi(url), motivo: messaggioErrore(error) });
+            return this.nessunaRisposta<T>('passaporto', error);
+        }
 
-            if (!(data instanceof FormData)) {
-                headers['Content-Type'] = 'application/json';
-                headers['Accept'] = 'application/json';
-            }
+        const headers: Record<string, string> = {
+            ...(customHeaders?.['Authorization'] ? {} : { "Authorization": "Bearer " + publicKey }),
+            ...headerDefiniti(customHeaders)
+        };
+        // Il Content-Type multipart, con il boundary, lo scrive fetch: impostato a mano romperebbe il corpo
+        let corpo: FormData | string;
+        if (data instanceof FormData) {
+            corpo = data;
+        } else {
+            corpo = JSON.stringify(data);
+            if (!customHeaders?.['Content-Type']) headers['Content-Type'] = 'application/json';
+        }
 
-            const options: ExtendedRequestInit = {
-                method: method,
-                headers: headers,
-                body: method !== 'GET' && method !== 'HEAD' ? (data instanceof FormData ? data : JSON.stringify(data)) : undefined
-            };
-
-            const response = await fetch(url, options);
-
+        try {
+            const response = await chiamaHttp(url, { method: 'POST', headers, body: corpo, categoria: 'lunga' });
+            const contenuto = await leggiCorpo(response);
             if (!response.ok) {
-                throw new Error(await response.text() || 'Errore durante la comunicazione con l\'altra API');
+                if (passaportoRifiutato(response.status, contenuto)) invalidaPassaporto(req.session.id_utente);
+                log.warn('Upload rifiutato dal servizio', { destinazione: destinazioneDi(url), status: response.status });
+                return {
+                    data: (contenuto ?? null) as any,
+                    status: response.status,
+                    statusText: response.statusText || `HTTP ${response.status}`,
+                } as ApiResponse<T>;
             }
-
-            let responseData: T;
-            try {
-                responseData = await response.json() as T;
-            } catch (error) {
-                throw new Error('Errore nel parsing della risposta JSON: ' + await response.text());
-            }
-
             return {
-                data: responseData,
+                data: contenuto as T,
                 status: response.status,
                 statusText: response.statusText,
-                headers: response.headers as any
+                headers: response.headers
             };
-        } catch (error: any) {
-            return {
-                data: null as any,
-                status: error.code || 500,
-                statusText: error.message,
-            } as ApiResponse<T>;
+        } catch (error) {
+            const motivo = error instanceof ErroreHttp ? error.motivo : undefined;
+            log.warn('Upload senza risposta dal servizio', { destinazione: destinazioneDi(url), motivo: motivo ?? messaggioErrore(error) });
+            return this.nessunaRisposta<T>(motivo, error);
         }
     }
 

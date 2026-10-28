@@ -1,8 +1,15 @@
-import axios from 'axios';
 import express from 'express';
 import request from 'supertest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ConfigController } from '../ConfigController';
+import { inviaFormDataAOlimpo } from '../../http/olimpo';
+
+// Upload verso Olympus: si controlla la risposta, la rete non serve
+vi.mock('../../http/olimpo', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../http/olimpo')>()),
+  inviaFormDataAOlimpo: vi.fn(),
+}));
+const post = vi.mocked(inviaFormDataAOlimpo);
 
 vi.mock('../../middleware/authMiddleware', () => ({
   authMiddleware: (_req: any, _res: any, next: any) => next(),
@@ -39,6 +46,7 @@ const configurazione = (logoBase64: string, iconaPagina: string) => ({
 
 afterEach(() => {
   vi.restoreAllMocks();
+  post.mockReset();
 });
 
 describe('POST /api/saveWebpliantConfig', () => {
@@ -46,7 +54,7 @@ describe('POST /api/saveWebpliantConfig', () => {
     ['logo dell\'header', configurazione(BASE64_IMMAGINE, '')],
     ['icona della pagina', configurazione('', BASE64_IMMAGINE)],
   ])('Olympus rifiuta il %s: risposta di errore e configurazione non salvata', async (_immagine, corpo) => {
-    const post = vi.spyOn(axios, 'post').mockResolvedValue({ data: { esito: false, guidId: '', error: 'formato non supportato' } });
+    post.mockResolvedValue({ data: { esito: false, guidId: '', error: 'formato non supportato' }, status: 200 });
     const { app, configService } = createApp();
 
     const res = await request(app).post('/api/saveWebpliantConfig').send(corpo);
@@ -57,7 +65,7 @@ describe('POST /api/saveWebpliantConfig', () => {
   });
 
   it('base64 vuoti: nessuna chiamata a Olympus e configurazione salvata', async () => {
-    const post = vi.spyOn(axios, 'post').mockRejectedValue(new Error('chiamata non attesa'));
+    post.mockRejectedValue(new Error('chiamata non attesa'));
     const { app, configService } = createApp();
 
     const res = await request(app).post('/api/saveWebpliantConfig').send(configurazione('', ''));
@@ -68,7 +76,7 @@ describe('POST /api/saveWebpliantConfig', () => {
   });
 
   it('Olympus accetta il logo: la configurazione salvata punta all\'immagine caricata', async () => {
-    vi.spyOn(axios, 'post').mockResolvedValue({ data: { esito: true, guidId: 'guid-logo', error: '' } });
+    post.mockResolvedValue({ data: { esito: true, guidId: 'guid-logo', error: '' }, status: 200 });
     const { app, configService } = createApp();
 
     const res = await request(app).post('/api/saveWebpliantConfig').send(configurazione(BASE64_IMMAGINE, ''));
@@ -82,7 +90,7 @@ describe('POST /api/saveWebpliantConfig', () => {
     ['relativa al proxy', '/olimpo/foto/getThumbNailOnDemand?guidId=guid-icona'],
     ['assoluta', 'http://olimpo:3000/foto/getThumbNailOnDemand?guidId=guid-icona'],
   ])("un'icona della pagina rimandata come URL %s viene salvata come GUID", async (_forma, icona) => {
-    vi.spyOn(axios, 'post').mockRejectedValue(new Error('chiamata non attesa'));
+    post.mockRejectedValue(new Error('chiamata non attesa'));
     const { app, configService } = createApp();
 
     const res = await request(app).post('/api/saveWebpliantConfig').send(configurazione('', icona));

@@ -341,7 +341,9 @@ export class ExternalApiController extends BaseController {
         `${config.OLYMPUS_IP_ADDRESS}/materiali/uploadMateriale`,
         "POST",
         formData,
-        { "Authorization": req.headers.authorization as string }
+        { "Authorization": req.headers.authorization as string },
+        undefined,
+        { categoria: 'lunga' }
       );
 
       if (!resultUpload.data?.esito) {

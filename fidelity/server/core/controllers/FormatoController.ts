@@ -69,7 +69,10 @@ export class FormatoController extends BaseController {
           req,
           `${config.ISTANTA_IP_ADDRESS}/FicoProcess/salvaFormato`,
           'PUT',
-          objToIstanta
+          objToIstanta,
+          undefined,
+          undefined,
+          { categoria: 'scrittura' }
         ),
         'ISTANTA',
         '/FicoProcess/salvaFormato'
@@ -90,7 +93,10 @@ export class FormatoController extends BaseController {
           req,
           config.ISTANTA_IP_ADDRESS + '/FicoProcess/eliminaFormato/' + idFormato,
           'PUT',
-          undefined
+          undefined,
+          undefined,
+          undefined,
+          { categoria: 'scrittura' }
         ),
         'ISTANTA',
         '/FicoProcess/eliminaFormato'

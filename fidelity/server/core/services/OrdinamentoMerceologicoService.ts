@@ -54,7 +54,7 @@ export class OrdinamentoMerceologicoService {
   async getOrdinamento(req: Request): Promise<OrdinamentoMerceologico> {
     const leggiDaIstanta = async (): Promise<OrdinamentoMerceologico> => {
       const data = verificaRisposta<RispostaIstanta>(
-        await ServerUtils.sendToFICOApi<RispostaIstanta>(req, `${config.ISTANTA_IP_ADDRESS}${ENDPOINT}`, 'GET', {}),
+        await ServerUtils.sendToFICOApi<RispostaIstanta>(req, `${config.ISTANTA_IP_ADDRESS}${ENDPOINT}`, 'GET', {}, undefined, undefined, { categoria: 'lettura', idempotente: true }),
         'ISTANTA',
         ENDPOINT,
       );
