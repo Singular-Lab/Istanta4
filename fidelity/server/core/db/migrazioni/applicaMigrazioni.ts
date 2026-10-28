@@ -19,8 +19,8 @@ import { segnalaDifferenzeSchema } from './verificaSchema';
  * - Ogni migrazione ha la sua transazione con lock_timeout (tranne quelle "-- senza-transazione"):
  *   se fallisce si annulla solo lei e l'avvio si ferma.
  * - Database vuoto: si esegue la baseline 0000 e poi le altre.
- * - Database esistente senza storico: la baseline si adotta (registrata, non eseguita). Se i modelli
- *   sono quelli della baseline gira un'ultima volta l'allineamento con l'ALTER di Sequelize.
+ * - Database esistente senza storico: la baseline si adotta (registrata, non eseguita) dopo un ultimo
+ *   allineamento con l'ALTER di Sequelize, come all'avvio della versione precedente.
  * - View e materialized view si tolgono prima delle migrazioni e si ricreano dopo.
  */
 
@@ -54,7 +54,7 @@ export interface StatoDatabase {
   gdo: boolean;
 }
 
-export type Adozione = 'nessuna' | 'con-allineamento' | 'senza-allineamento';
+export type Adozione = 'nessuna' | 'con-allineamento';
 
 export interface EsitoMigrazioni {
   /** Migrazioni registrate in questo giro, eseguite o adottate, in ordine. */
@@ -164,29 +164,21 @@ const eseguiMigrazione = async (migrazione: Migrazione): Promise<void> => {
 
 /**
  * Database creato dalla vecchia sincronizzazione: la baseline descrive cio' che ha gia', quindi si
- * registra senza eseguirla. Se i modelli sono quelli della baseline (si sta installando questa
- * versione, o una successiva senza modifiche ai modelli) gira prima, un'ultima volta, l'ALTER di
- * Sequelize; altrimenti l'ALTER porterebbe lo schema oltre la baseline e si salta.
+ * registra senza eseguirla. Prima gira, un'ultima volta, l'ALTER di Sequelize con i modelli di questa
+ * versione, come avrebbe fatto il suo avvio: anche quando i modelli sono piu' nuovi della baseline
+ * (aggiornamento "a salto"), altrimenti tabelle, colonne e indici nati nel frattempo non li crea
+ * nessuno. Le migrazioni dopo la baseline sono idempotenti e sistemano il resto.
  */
 const adottaBaseline = async (baseline: Migrazione, hashModelli: string): Promise<{ adozione: Adozione; falliti: string[] }> => {
   const inizio = Date.now();
-  let adozione: Adozione;
-  let falliti: string[] = [];
-  if (hashModelli === baseline.schemaDopo) {
-    log.info('Migrazioni dello schema: database esistente senza storico, ultimo allineamento ai modelli prima di adottare la baseline');
-    const risultati = await modelliManager.allineamentoLegacyPerAdozione();
-    falliti = risultati.filter(r => !r.successo).map(r => r.modello);
-    adozione = 'con-allineamento';
-  } else {
-    log.warn(
-      'Migrazioni dello schema: database esistente senza storico e modelli diversi dalla baseline: ' +
-      'la baseline viene adottata senza allineamento. Controllare lo schema con yarn migrazioni:verifica'
-    );
-    adozione = 'senza-allineamento';
-  }
+  log.info(hashModelli === baseline.schemaDopo
+    ? 'Migrazioni dello schema: database esistente senza storico, ultimo allineamento ai modelli prima di adottare la baseline'
+    : 'Migrazioni dello schema: database esistente senza storico e modelli piu\' nuovi della baseline (aggiornamento a salto): ultimo allineamento ai modelli prima di adottare la baseline');
+  const risultati = await modelliManager.allineamentoLegacyPerAdozione();
+  const falliti = risultati.filter(r => !r.successo).map(r => r.modello);
   await registra(baseline, 'adottata', Date.now() - inizio);
   log.info(`Migrazioni dello schema: ${baseline.nome} adottata`);
-  return { adozione, falliti };
+  return { adozione: 'con-allineamento', falliti };
 };
 
 /**

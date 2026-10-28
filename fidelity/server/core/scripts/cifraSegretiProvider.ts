@@ -3,6 +3,7 @@
 import { program } from 'commander';
 import { Colorize } from '../../../lib/Colorize';
 import { initializeDatabase, sequelize } from '../db';
+import { eseguiScriptDati, SCRIPT_DATI } from '../db/migrazioni/scriptDati';
 import { AuthProviderRepository } from '../repositories/AuthProviderRepository';
 import { AuthProviderService } from '../services/AuthProviderService';
 import { CODICE_EMAIL_PASSWORD } from '../services/authProviders/configurazioneProvider';
@@ -23,31 +24,36 @@ program
     try {
       // false: nessun sync dello schema. Il dry-run non deve scrivere nulla
       await initializeDatabase(false);
-      const repository = new AuthProviderRepository();
+      // Ripetibile: un segreto gia' nello stato richiesto non si tocca. Nel registro solo codici e
+      // nomi dei campi cambiati, mai i valori
+      await eseguiScriptDati({ ...SCRIPT_DATI.segretiProvider, dryRun: simulazione }, async () => {
+        const repository = new AuthProviderRepository();
 
-      if (options.riattivaEmailPassword) {
-        const provider = await repository.findByCode(CODICE_EMAIL_PASSWORD);
-        if (!provider) {
-          console.log(Colorize.bgYellow(`Metodo ${CODICE_EMAIL_PASSWORD} assente: viene creato al prossimo avvio`));
-        } else if (provider.attivo) {
-          console.log(`Metodo ${CODICE_EMAIL_PASSWORD} gia' attivo`);
-        } else if (simulazione) {
-          console.log(Colorize.bgYellow(`[DRY RUN] Il metodo ${CODICE_EMAIL_PASSWORD} verrebbe riattivato`));
-        } else {
-          await repository.update(provider.id, { attivo: true });
-          console.log(Colorize.bgGreen(`Metodo ${CODICE_EMAIL_PASSWORD} riattivato`));
+        if (options.riattivaEmailPassword) {
+          const provider = await repository.findByCode(CODICE_EMAIL_PASSWORD);
+          if (!provider) {
+            console.log(Colorize.bgYellow(`Metodo ${CODICE_EMAIL_PASSWORD} assente: viene creato al prossimo avvio`));
+          } else if (provider.attivo) {
+            console.log(`Metodo ${CODICE_EMAIL_PASSWORD} gia' attivo`);
+          } else if (simulazione) {
+            console.log(Colorize.bgYellow(`[DRY RUN] Il metodo ${CODICE_EMAIL_PASSWORD} verrebbe riattivato`));
+          } else {
+            await repository.update(provider.id, { attivo: true });
+            console.log(Colorize.bgGreen(`Metodo ${CODICE_EMAIL_PASSWORD} riattivato`));
+          }
         }
-      }
 
-      const modalita = options.decifra ? 'decifra' : 'cifra';
-      const esito = await new AuthProviderService(repository).migraSegreti(modalita, simulazione);
-      for (const { codice, campi } of esito.provider) {
-        console.log(`  ${codice}: ${campi.join(', ')}`);
-      }
-      const azione = modalita === 'cifra' ? 'cifrati' : 'riportati in chiaro';
-      console.log(Colorize.bgGreen(
-        `${simulazione ? '[DRY RUN] ' : ''}Segreti ${azione}: ${esito.totaleCampi} in ${esito.provider.length} metodi di accesso`
-      ));
+        const modalita = options.decifra ? 'decifra' : 'cifra';
+        const esito = await new AuthProviderService(repository).migraSegreti(modalita, simulazione);
+        for (const { codice, campi } of esito.provider) {
+          console.log(`  ${codice}: ${campi.join(', ')}`);
+        }
+        const azione = modalita === 'cifra' ? 'cifrati' : 'riportati in chiaro';
+        console.log(Colorize.bgGreen(
+          `${simulazione ? '[DRY RUN] ' : ''}Segreti ${azione}: ${esito.totaleCampi} in ${esito.provider.length} metodi di accesso`
+        ));
+        return { modalita, totaleCampi: esito.totaleCampi, provider: esito.provider };
+      });
       await sequelize.close();
       process.exit(0);
     } catch (error) {

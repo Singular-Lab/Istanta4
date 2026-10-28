@@ -221,6 +221,11 @@ const PromoDefine = sequelize.define<Promo>("promo", {
   timestamps: false,
   tableName: "promo",
   freezeTableName: true,
+  indexes: [
+    // Elenchi delle promo di una GDO per stato e per periodo di validita' (0008_indici)
+    { name: 'promo_gdo_stato', fields: ['gdo', 'stato'] },
+    { name: 'promo_validita_dal_validita_al', fields: ['validita_dal', 'validita_al'] },
+  ],
   validate: {
     validitaDateCoerenti() {
       if (this.validita_dal && this.validita_al && this.validita_dal >= this.validita_al) {

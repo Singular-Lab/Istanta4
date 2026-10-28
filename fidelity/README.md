@@ -200,9 +200,9 @@ versione dell'applicazione).
 - **Database vuoto**: si esegue `0000_baseline.sql` (estensioni, enum, tabelle e indici dei
   modelli), poi le migrazioni successive.
 - **Database esistente senza storico** (creato dalla vecchia sincronizzazione): la baseline si
-  *adotta*, cioe' si registra senza eseguirla. Se i modelli sono quelli della baseline gira prima,
-  un'ultima volta, l'ALTER di Sequelize; altrimenti (aggiornamento a salto) si salta e un avviso
-  chiede di controllare con `yarn migrazioni:verifica`. Poi si applicano le successive.
+  *adotta*, cioe' si registra senza eseguirla. Prima gira, un'ultima volta, l'ALTER di Sequelize con
+  i modelli della versione installata, anche in un aggiornamento a salto: cosi' tabelle, colonne e
+  indici nati dopo l'ultimo avvio esistono. Poi si applicano le successive, che sistemano il resto.
 - Ogni migrazione gira in una sua transazione con `lock_timeout` di 30 secondi; con
   `-- senza-transazione` in testa gira fuori (solo per `CREATE INDEX CONCURRENTLY` e simili: una
   sola istruzione, rieseguibile). View e materialized view (`db/oggetti_derivati`) si tolgono
@@ -221,6 +221,30 @@ La CI controlla che modelli, `schema.json` e intestazione dell'ultima migrazione
 | `MIGRAZIONI_APPLICA_ALL_AVVIO=false` | non applica le migrazioni all'avvio (avviso nel log); si applicano con `yarn migrazioni:applica` |
 | `DB_SYNC_ON_START=false` | alias deprecato della precedente |
 | `DB_AUTO_SYNC` | ignorata, con avviso |
+
+### Script di dati
+
+Le correzioni dei dati lanciate a mano (`server/core/scripts`) non sono migrazioni: non girano
+all'avvio. Ogni esecuzione reale riuscita si registra nella tabella `script_dati_eseguiti`
+(migrazione `0010`: va applicata prima, altrimenti lo script si ferma e chiede
+`yarn migrazioni:applica`) con data, numero di esecuzioni, durata, riepilogo e versione.
+
+- **Non ripetibile**: se il registro dice che e' gia' stato eseguito, lo script si rifiuta, dice
+  quando e non cambia nulla; si riesegue solo con `--forza`. Le scritture stanno in una sola
+  transazione con la registrazione: un errore non lascia il lavoro a meta'.
+- **Ripetibile**: tocca solo cio' che non e' ancora nello stato voluto; ogni esecuzione si registra.
+- `--dry-run` mostra cosa cambierebbe, non scrive e non si registra.
+- Un errore non si registra. Due esecuzioni dello stesso script insieme: la seconda si rifiuta.
+- Il registro conosce solo le esecuzioni da quando esiste: quelle precedenti non ci sono.
+
+| Script | Ripetibile | Cosa fa |
+| --- | --- | --- |
+| `yarn migrate:utenti-gdo` | no | Associa alla GDO indicata (`--gdo-id`, default la piu' vecchia) gli utenti non SUPERADMIN senza GDO; rilanciato ci metterebbe anche gli utenti creati da allora |
+| `yarn migrate:olimpo-urls` | si' | Riscrive gli URL assoluti di Olimpo nella forma relativa `/olimpo/...` |
+| `yarn accessi:migra` | si' | Prepara gli accessi per aree (lo fa anche l'avvio del server, che non si registra) |
+| `yarn auth:segreti` | si' | Cifra (o con `--decifra` riporta in chiaro) i segreti dei metodi di accesso |
+
+`yarn script-dati:stato` elenca gli script noti e le esecuzioni registrate.
 
 ## Sicurezza
 
@@ -331,6 +355,11 @@ yarn models:sync:force        # Solo NODE_ENV=development: elimina tabelle e sto
 yarn models:status            # Come migrazioni:stato
 yarn models:check             # Come migrazioni:verifica
 yarn models:sync-db-objects   # Ricrea view e materialized view
+yarn script-dati:stato        # Script di dati noti ed esecuzioni registrate
+yarn migrate:utenti-gdo       # Script di dati (anche :dry-run): vedi "Script di dati"
+yarn migrate:olimpo-urls      # Script di dati (anche :dry-run)
+yarn accessi:migra            # Script di dati (--dry-run per il solo report)
+yarn auth:segreti             # Script di dati (anche :dry-run)
 ```
 
 ### Testing & Quality

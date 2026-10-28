@@ -229,6 +229,11 @@ const FilesRuntimeLogDefine = sequelize.define<FilesRuntimeLog>("files_runtime_l
     },
     {
       fields: ['updatedAt']
+    },
+    // Ultima versione di un file di un kit (0008_indici)
+    {
+      name: 'files_runtime_log_kit_file_versione',
+      fields: ['id_kit_runtime', 'nome_file', { name: 'versione', order: 'DESC' }]
     }
   ],
   validate: {

@@ -35,7 +35,7 @@ describe('migraConfig', () => {
     expect(gdoCliente.idGdoCliente).toHaveBeenCalledWith('Coop Firenze');
     expect(modello.update).toHaveBeenCalledWith(
       { id_gdo_config: 'gdo-firenze' },
-      { where: { id_gdo_config: null }, transaction: 'tx' }
+      { where: { id_gdo_config: null }, transaction: 'tx', validate: false }
     );
     expect(esito.collegate).toBe(2);
   });
@@ -45,7 +45,7 @@ describe('migraConfig', () => {
 
     expect(modello.update).toHaveBeenCalledWith(
       { funzionalita: { momenti: true, menabo: true } },
-      { where: { funzionalita: null }, transaction: 'tx' }
+      { where: { funzionalita: null }, transaction: 'tx', validate: false }
     );
     expect(esito.funzionalita).toEqual({ momenti: true, menabo: true });
   });
@@ -58,7 +58,7 @@ describe('migraConfig', () => {
     expect(modello.update).toHaveBeenCalledTimes(1);
     expect(modello.update).toHaveBeenCalledWith(
       { funzionalita: { momenti: false, menabo: false } },
-      { where: { funzionalita: null }, transaction: 'tx' }
+      { where: { funzionalita: null }, transaction: 'tx', validate: false }
     );
     expect(esito.idGdo).toBeNull();
     expect(esito.collegate).toBe(0);

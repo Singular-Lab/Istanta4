@@ -199,7 +199,10 @@ Utente.init({
       fields: ['nome_utenti', 'cognome_utenti']
     },
     {
-      fields: ['meta_utenti']
+      // GIN: in meta_utenti c'e' la foto profilo in base64 (fino a 2 MB) e un indice btree
+      // rifiuterebbe la riga oltre ~2,7 KB ("index row size exceeds"). Stesso nome di prima.
+      fields: ['meta_utenti'],
+      using: 'gin'
     }
   ],
   hooks: {

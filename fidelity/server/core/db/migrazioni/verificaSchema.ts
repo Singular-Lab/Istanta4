@@ -16,15 +16,27 @@ import type { DescrizioneSchema } from './schemaModelli';
  *
  * Gli indici si confrontano per nome e unicita', non per colonne: cosi' l'indice univoco con
  * COALESCE che 0001 crea al posto di quello del modello permessi_ruolo (stesso nome) e' conforme.
+ *
+ * Gli oggetti attesi che i modelli non descrivono (tabelle di servizio, indici univoci con COALESCE
+ * delle migrazioni) non si segnalano affatto: non sono differenze.
  */
 
-// Tabelle che non vengono dai modelli ma sono attese nel database
-export const TABELLE_DI_SERVIZIO = [TABELLA_STORICO, 'oggetti_derivati_schema', 'accessi_stato', 'sessions', 'spatial_ref_sys'];
+// Tabelle che non vengono dai modelli ma sono attese nel database (script_dati_eseguiti: registro
+// degli script di dati, migrazione 0010)
+export const TABELLE_DI_SERVIZIO = [
+  TABELLA_STORICO, 'oggetti_derivati_schema', 'accessi_stato', 'sessions', 'spatial_ref_sys', 'script_dati_eseguiti',
+];
 // Copie di sicurezza delle migrazioni (0002: tracciati_orfani_20261028, _2, ...)
 const PREFISSI_DI_SERVIZIO = ['tracciati_orfani_'];
 
 const eTabellaDiServizio = (tabella: string): boolean =>
   TABELLE_DI_SERVIZIO.includes(tabella) || PREFISSI_DI_SERVIZIO.some(prefisso => tabella.startsWith(prefisso));
+
+// Indici univoci con COALESCE creati da 0001 senza un indice del modello con lo stesso nome
+// (permessi_ruolo_gdo_unique_override): Sequelize non sa descrivere l'espressione
+export const INDICI_DI_SERVIZIO = [/^permessi_ruolo\w*_unique_\w+$/];
+
+const eIndiceDiServizio = (nome: string): boolean => INDICI_DI_SERVIZIO.some(modello => modello.test(nome));
 
 export type Gravita = 'problema' | 'informazione';
 
@@ -109,7 +121,7 @@ export const confrontaSchema = (atteso: DescrizioneSchema, catalogo: Catalogo): 
     }
     const nomiAttesi = new Set(definizione.indici.map(i => i.nome));
     for (const nome of indici.keys()) {
-      if (!nomiAttesi.has(nome) && !eIndiceDiVincolo(nome))
+      if (!nomiAttesi.has(nome) && !eIndiceDiVincolo(nome) && !eIndiceDiServizio(nome))
         aggiungi({ gravita: 'informazione', tipo: 'indice in piu\'', oggetto: `${tabella}.${nome}` });
     }
   }

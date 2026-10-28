@@ -9,7 +9,9 @@ vi.mock('../../SequelizeConnector', () => ({ sequelize: { query: mocks.query } }
 vi.mock('../../../logger', () => ({ log: mocks.log }));
 
 import type { DescrizioneSchema } from '../schemaModelli';
-import { Catalogo, confrontaSchema, leggiCatalogo, leggiSchemaAtteso, segnalaDifferenzeSchema } from '../verificaSchema';
+import {
+  Catalogo, confrontaSchema, leggiCatalogo, leggiSchemaAtteso, segnalaDifferenzeSchema, TABELLE_DI_SERVIZIO,
+} from '../verificaSchema';
 
 const colonna = (tipo: string, nullable = true) => ({
   tipo, nullable, default: null, chiavePrimaria: false, autoIncremento: false, unico: false, riferimento: null,
@@ -104,6 +106,47 @@ describe('confrontaSchema', () => {
 
     expect(differenze.every(d => d.gravita === 'informazione')).toBe(true);
     expect(differenze.map(d => d.oggetto)).toEqual(['gdo.colonna_storica', 'gdo.idx_storico', 'vecchia_tabella', 'enum_promo_stato.ARCHIVIATA']);
+  });
+
+  it('gli oggetti attesi fuori dai modelli non si segnalano: registro degli script di dati e indici con COALESCE', () => {
+    const atteso: DescrizioneSchema = {
+      ...ATTESO,
+      tabelle: {
+        ...ATTESO.tabelle,
+        permessi_ruolo_gdo: {
+          colonne: { id_gdo: colonna('uuid', false) },
+          indici: [{ nome: 'permessi_ruolo_gdo_id_gdo', colonne: ['id_gdo'], unico: false, metodo: 'btree', condizione: null }],
+          vincoliUnici: [],
+        },
+      },
+    };
+    const catalogo = catalogoConforme();
+    catalogo.tabelle.push('permessi_ruolo_gdo', 'script_dati_eseguiti');
+    catalogo.colonne.push({ tabella: 'permessi_ruolo_gdo', colonna: 'id_gdo', tipo: 'uuid', nullable: false });
+    catalogo.indici.push(
+      {
+        tabella: 'permessi_ruolo_gdo', nome: 'permessi_ruolo_gdo_id_gdo',
+        definizione: 'CREATE INDEX permessi_ruolo_gdo_id_gdo ON public.permessi_ruolo_gdo USING btree (id_gdo)',
+      },
+      {
+        tabella: 'permessi_ruolo_gdo', nome: 'permessi_ruolo_gdo_unique_override',
+        definizione: 'CREATE UNIQUE INDEX permessi_ruolo_gdo_unique_override ON public.permessi_ruolo_gdo USING btree '
+          + "(id_gdo, tipo_utente, id_permesso, COALESCE(id_ruolo_utente_gdo, '00000000-0000-0000-0000-000000000000'::uuid))",
+      },
+      // Il vecchio indice univoco senza COALESCE (0009 lo elimina) resta un'informazione
+      {
+        tabella: 'permessi_ruolo_gdo', nome: 'permessi_ruolo_gdo_id_gdo_tipo_utente_id_permesso_id_ruolo_uten',
+        definizione: 'CREATE UNIQUE INDEX permessi_ruolo_gdo_id_gdo_tipo_utente_id_permesso_id_ruolo_uten ON public.permessi_ruolo_gdo '
+          + 'USING btree (id_gdo, tipo_utente, id_permesso, id_ruolo_utente_gdo)',
+      },
+      { tabella: 'gdo', nome: 'idx_storico', definizione: 'CREATE INDEX idx_storico ON public.gdo USING btree (nome_gdo)' }
+    );
+
+    expect(TABELLE_DI_SERVIZIO).toContain('script_dati_eseguiti');
+    expect(confrontaSchema(atteso, catalogo)).toEqual([
+      { gravita: 'informazione', tipo: 'indice in piu\'', oggetto: 'gdo.idx_storico' },
+      { gravita: 'informazione', tipo: 'indice in piu\'', oggetto: 'permessi_ruolo_gdo.permessi_ruolo_gdo_id_gdo_tipo_utente_id_permesso_id_ruolo_uten' },
+    ]);
   });
 
   it('un indice con espressione e lo stesso nome vale come quello del modello (COALESCE di 0001)', () => {

@@ -859,6 +859,8 @@ export type OrdiniDiStampaAttributes = {
   id_promo_ordinistampa: string;
   stato_ordinistampa: STATO_ORDINI_STAMPA;
   data_di_conferma_ordinistampa?: string;
+  /** Colonna storica, non usata dal codice (vedi models/ordini_di_stampa.ts). */
+  datadiconferma_ordinistampa?: Date | null;
   createdat?: Date;
   updatedat?: Date;
 };
