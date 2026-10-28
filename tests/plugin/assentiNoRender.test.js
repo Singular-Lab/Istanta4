@@ -170,7 +170,7 @@ test("la finestra non ha piu' la sezione dei risolti, e il salvataggio della sch
     assert.doesNotMatch(scheda, /riempiSezioneRisolte|descriviRisoltaNoRender/);
     assert.match(scheda, /this\.risolteNoRenderDelBox = preAnalisi != null && Array\.isArray\(preAnalisi\.risolteNoRender\) \? preAnalisi\.risolteNoRender : \[\];/);
 
-    const salva = scheda.substring(scheda.indexOf("    salvaNoRender() {"), scheda.indexOf("    inviaNoRender(elementi) {"));
+    const salva = scheda.substring(scheda.indexOf("    salvaNoRender() {"), scheda.indexOf("    inviaNoRender(elementi, destinazione = null) {"));
     assert.match(salva, /this\.inviaNoRender\(elementi\)\.then\(/);
     assert.match(salva, /this\.ricalcolaSegnalazioniDellaScheda\(\);/);
     //Un solo punto manda la lista al server.

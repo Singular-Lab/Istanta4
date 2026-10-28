@@ -675,7 +675,8 @@
                   data-bs-toggle="tooltip" data-bs-html="true" data-bs-placement="bottom" title="Informazioni referenza"
                   onclick="schedaRef.apriModalInfoReferenza()">
             </div>
-            <div style="width: 8%; display: flex; justify-content: center; align-items: center;" data-selezione-multipla="nascosta">
+            <!-- I20-1063, lotto 2: No render vale anche per piu' box (schedaRef.apriModalNoRenderPiuBox). -->
+            <div style="width: 8%; display: flex; justify-content: center; align-items: center;">
                 <img id="noRenderRefImg" src="images/noRender.png" style="height: 24px; cursor: pointer;"
                   data-bs-toggle="tooltip" data-bs-html="true" data-bs-placement="bottom" title="Elementi non renderizzati"
                   onclick="schedaRef.apriModalNoRender()">
