@@ -1,29 +1,40 @@
+import { numeroWorkerHttp } from '../cluster';
 import type { IndirizzoTrovatoDTO } from '../dto';
 import { log } from '../logger';
 
 /**
  * La policy d'uso di Nominatim (OpenStreetMap) ammette al massimo una richiesta al
- * secondo: le chiamate passano da una coda e partono distanziate di INTERVALLO_MS,
- * anche quando arrivano da sync concorrenti. Il timeout evita che un Nominatim lento
- * tenga ferma la sincronizzazione del plugin.
+ * secondo: le chiamate passano da una coda e partono distanziate, anche quando arrivano
+ * da sync concorrenti. Il timeout evita che un Nominatim lento tenga ferma la
+ * sincronizzazione del plugin o la registrazione di un utente.
  */
 export const INTERVALLO_MS = 1200;
 const TIMEOUT_MS = 5000;
 
-// ponytail: coda in memoria, vale perche il server gira in un solo processo (ecosystem.config.cjs:
-// fork, instances 1). Con piu processi serve un limitatore condiviso, per esempio su Redis.
+// ponytail: la coda e' in memoria, una per processo. Il server ha fino a numeroWorkerHttp()
+// worker HTTP (cluster.ts): ognuno distanzia le proprie chiamate di INTERVALLO_MS per il numero
+// di worker, cosi' insieme restano entro 1 richiesta al secondo. Un limitatore condiviso
+// (per esempio su Redis) permetterebbe di non rallentare il worker che geocodifica da solo.
 let coda: Promise<unknown> = Promise.resolve();
 let ultimaChiamata = 0;
 
-/** Coordinate dell'indirizzo, oppure {} se Nominatim non lo trova, sbaglia o non risponde in tempo. */
-export function geocodifica(query: string): Promise<{ lat?: number; lon?: number }> {
-  return inCoda(() => chiamaNominatim(query));
+/** Distanza fra due chiamate di questo processo. */
+export function intervalloProcessoMs(): number {
+  return INTERVALLO_MS * numeroWorkerHttp();
 }
 
-/** Mette la chiamata in coda dietro le altre, distanziata di INTERVALLO_MS dalla precedente. */
+/**
+ * Coordinate dell'indirizzo, oppure {} se Nominatim non lo trova, sbaglia o non risponde in tempo.
+ * paese (codice ISO, es. "it") limita la ricerca a quel paese.
+ */
+export function geocodifica(query: string, paese?: string): Promise<{ lat?: number; lon?: number }> {
+  return inCoda(() => chiamaNominatim(query, paese));
+}
+
+/** Mette la chiamata in coda dietro le altre, distanziata di intervalloProcessoMs() dalla precedente. */
 function inCoda<T>(chiamata: () => Promise<T>): Promise<T> {
   const turno = coda.then(async () => {
-    const attesa = ultimaChiamata + INTERVALLO_MS - Date.now();
+    const attesa = ultimaChiamata + intervalloProcessoMs() - Date.now();
     if (attesa > 0) await new Promise((resolve) => setTimeout(resolve, attesa));
     ultimaChiamata = Date.now();
     return chiamata();
@@ -81,10 +92,11 @@ export function cercaIndirizzi(query: string, limite = 5): Promise<IndirizzoTrov
   });
 }
 
-async function chiamaNominatim(query: string): Promise<{ lat?: number; lon?: number }> {
+async function chiamaNominatim(query: string, paese?: string): Promise<{ lat?: number; lon?: number }> {
+  const filtroPaese = paese ? `&countrycodes=${encodeURIComponent(paese)}` : '';
   try {
     const response = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(query)}`,
+      `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1${filtroPaese}&q=${encodeURIComponent(query)}`,
       { headers: { 'User-Agent': 'fidelity-promotion/2.18' }, signal: AbortSignal.timeout(TIMEOUT_MS) }
     );
     if (!response.ok) return {};

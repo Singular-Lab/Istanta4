@@ -196,36 +196,13 @@ export class FileManagementController extends BaseController {
       dataForIstanta.append("fileName", file.originalname);
       dataForIstanta.append("context", JSON.stringify(contextDaRicevere));
 
-      log.info("-------------------");
-      log.info(Colorize.red("Grandezza Buffer per istanta"));
-      log.info("Grandezza Buffer per istanta: " + fileBuffer.length);
-      log.info("-------------------");
-
-      log.info("-------------------");
-      log.info(Colorize.red("dataForIstanta per istanta"));
-      // Log FormData entries in modo leggibile
-      for (const entry of (dataForIstanta as any).entries()) {
-        log.info(Colorize.gray(`FormData entry: ${JSON.stringify(entry)}`));
-      }
-      log.info("-------------------");
-
-      // Invio FormData a ServerUtils.sendToFicoApiAxiosUploadTracciato      // Invio FormData a ServerUtils.sendToFicoApiAxiosUploadTracciato
-      log.info(Colorize.bgMagenta("Invio FormData a ServerUtils.sendToFicoApiAxiosUploadTracciato")); log.info(Colorize.bgMagenta("Invio FormData a ServerUtils.sendToFicoApiAxiosUploadTracciato"));
+      // Nei log solo dimensione ed esito: il contenuto del tracciato e il contesto restano fuori
+      log.info('Invio del tracciato a Istanta', { idPromo: promo.id, byte: fileBuffer.length });
       const result = await ServerUtils.sendToFicoApiAxiosUploadTracciato<any>(
         req,
         dataForIstanta,
       );
-
-      log.info("-------------------");
-      log.info(Colorize.red("Risultato chiamata istanta"));
-      log.info("Risultato chiamata istanta: " + JSON.stringify(result));
-      log.info("-------------------");
-      log.info(Colorize.red("Risultato chiamata istanta"));
-      log.info("Risultato chiamata istanta: " + JSON.stringify(result.data));
-      log.info("-------------------");
-      log.info(Colorize.red("Status chiamata istanta"));
-      log.info("Status chiamata istanta: " + result.status);
-      log.info("-------------------");
+      log.info('Risposta di Istanta al tracciato', { idPromo: promo.id, status: result.status, motivo: result.motivo });
 
       // Istanta risponde 200 anche quando rifiuta il tracciato: vale solo esito true
       verificaRisposta(result, 'ISTANTA', '/FicoProcess/uploadTracciato', (d) => d?.esito === true);

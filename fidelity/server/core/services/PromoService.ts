@@ -24,6 +24,7 @@ import {
 import type { IAgenziaLib } from '../agenzia_lib/types';
 import config from '../config';
 import { sequelize } from '../db';
+import { chiamaHttp, destinazioneDi } from '../http/clienteHttp';
 import { CreatePromoDTO, PromoResponseDTO, UpdatePromoDTO, type PromoContextItem } from '../dto';
 import { IConfigService } from '../interfaces/IConfigService';
 import { IIstantaService } from '../interfaces/IIstantaService';
@@ -53,6 +54,20 @@ dayjs.extend(isBetween);
 // lavorazioni (I20-1052): niente kit e niente tracciati, altrimenti solo eliminazione non definitiva
 async function eliminabileDefinitivamente(idPromo: string, kitCollegati: number): Promise<boolean> {
   return kitCollegati === 0 && (await Tracciati.count({ where: { id_promo_tracciati: idPromo } })) === 0;
+}
+
+/**
+ * URL di una chiamata runtime verso Fidelity, oppure null se il percorso non e relativo:
+ * schema, host, "//host" o "@host" porterebbero la firma interna fuori da Fidelity.
+ */
+export function urlInternoFidelity(baseUrl: string, percorso: string): string | null {
+  if (!percorso.startsWith('/') || percorso.startsWith('//') || percorso.includes('\\')) return null;
+  const url = baseUrl + percorso;
+  try {
+    return new URL(url).origin === new URL(baseUrl).origin ? url : null;
+  } catch {
+    return null;
+  }
 }
 
 export class PromoService implements IPromoService {
@@ -103,6 +118,46 @@ export class PromoService implements IPromoService {
     headers['x-internal-request-signature'] = signature;
 
     return headers;
+  }
+
+  /**
+   * Chiamata runtime del contesto verso Fidelity stessa (url che inizia con "."). Porta
+   * l'Authorization dell'utente e la firma interna, quindi parte solo verso un percorso relativo
+   * di Fidelity: un URL assoluto viene rifiutato senza chiamarlo.
+   */
+  private async eseguiChiamataInterna(req: ExpressRequest, chiamata: { url: string; metodo?: string; body?: unknown }): Promise<any> {
+    const relativeUrl = chiamata.url.replace(/^\./, ''); // Rimuovi il punto iniziale
+    const baseUrl = config.VITE_API_URL.split("/api")[0] || 'http://localhost:3000';
+    const url = urlInternoFidelity(baseUrl, relativeUrl);
+    if (!url) {
+      log.warn('Chiamata runtime del contesto rifiutata: non e un percorso relativo di Fidelity', { url: destinazioneDi(relativeUrl) });
+      throw wrapApiError(new Error('Chiamata runtime del contesto non ammessa'), {
+        message: 'Chiamata runtime del contesto non ammessa',
+        service: 'INTERNAL',
+        endpoint: 'chiamata_runtime del contesto'
+      });
+    }
+    const method = chiamata.metodo || 'GET';
+    const body = chiamata.body ? JSON.stringify(chiamata.body) : undefined;
+    const headers = this.buildInternalRequestHeaders(req, method, relativeUrl);
+
+    const response = await chiamaHttp(url, {
+      method,
+      headers,
+      body: method !== 'GET' && body ? body : undefined,
+      categoria: 'lettura',
+    });
+
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => undefined);
+      throw wrapApiError(new Error(`Errore chiamata interna: ${response.statusText}`), {
+        message: `Errore chiamata interna: ${response.statusText}`,
+        service: 'INTERNAL',
+        endpoint: url
+      });
+    }
+
+    return await response.json();
   }
 
   private normalizeMenaboTracciati(risultato: unknown): AnalisiMomentoTracciato[] {
@@ -364,7 +419,10 @@ export class PromoService implements IPromoService {
         req,
         config.ISTANTA_IP_ADDRESS + "/FicoProcess/inizioNuovaLavorazione",
         "PUT",
-        promo
+        promo,
+        undefined,
+        undefined,
+        { categoria: 'scrittura' }
       ),
       'ISTANTA',
       '/FicoProcess/inizioNuovaLavorazione'
@@ -427,7 +485,10 @@ export class PromoService implements IPromoService {
           req,
           config.ISTANTA_IP_ADDRESS + "/FicoProcess/getFormContext/" + TIPO_CONTEXT.NUOVA_LAVORAZIONE,
           "GET",
-          undefined
+          undefined,
+          undefined,
+          undefined,
+          { categoria: 'lettura', idempotente: true }
         ),
         'ISTANTA',
         '/FicoProcess/getFormContext'
@@ -448,38 +509,11 @@ export class PromoService implements IPromoService {
               }
               if (c.chiamata_runtime.url.startsWith(".")) {
                 // Chiamata interna al server
-                // Chiamata interna al server usando node-fetch
-                const fetch = (await import('node-fetch')).default;
-                const relativeUrl = c.chiamata_runtime.url.replace(/^\./, ''); // Rimuovi il punto iniziale
-                const baseUrl = config.VITE_API_URL.split("/api")[0] || 'http://localhost:3000'; // Sostituisci con la tua base URL
-                const url = relativeUrl.startsWith('http')
-                  ? relativeUrl
-                  : baseUrl + relativeUrl;
-                const method = c.chiamata_runtime.metodo || 'GET';
-                const body = c.chiamata_runtime.body ? JSON.stringify(c.chiamata_runtime.body) : undefined;
-                const headers = this.buildInternalRequestHeaders(req, method, relativeUrl);
-
-                const response = await fetch(url, {
-                  method,
-                  headers,
-                  body: method !== 'GET' && body ? body : undefined,
-                });
-
-                if (!response.ok) {
-                  throw wrapApiError(new Error(`Errore chiamata interna: ${response.statusText}`), {
-                    message: `Errore chiamata interna: ${response.statusText}`,
-                    service: 'INTERNAL',
-                    endpoint: url
-                  });
-                }
-
-                const resultChiamataRuntime = await response.json() as any;
+                const resultChiamataRuntime = await this.eseguiChiamataInterna(req, c.chiamata_runtime);
 
                 const val = typeof resultChiamataRuntime === "string"
                   ? JSON.parse(resultChiamataRuntime)
                   : resultChiamataRuntime;
-                console.log("VALORE ARRAY DELLE COMBINAZIONI");
-                console.log(val);
 
                 if (Array.isArray(val)) {
                   const valoreLavorato = val.map((v: any) => {
@@ -504,6 +538,10 @@ export class PromoService implements IPromoService {
                     c.chiamata_runtime.url,
                     c.chiamata_runtime.metodo,
                     c.chiamata_runtime.body,
+                    undefined,
+                    undefined,
+                    // Metodo ed endpoint li decide il contesto di Istanta: lettura, ma senza ripetizioni
+                    { categoria: 'lettura' }
                   ),
                   'ISTANTA',
                   'chiamata_runtime del contesto'
@@ -551,7 +589,10 @@ export class PromoService implements IPromoService {
           req,
           config.ISTANTA_IP_ADDRESS + '/FicoProcess/getFormContext/' + TIPO_CONTEXT.IMPORTA_LAVORAZIONE,
           "GET",
-          undefined
+          undefined,
+          undefined,
+          undefined,
+          { categoria: 'lettura', idempotente: true }
         ),
         'ISTANTA',
         '/FicoProcess/getFormContext'
@@ -576,7 +617,10 @@ export class PromoService implements IPromoService {
           //`${config.ISTANTA_IP_ADDRESS}/FicoProcess/getSourceFields/${req.query.guidId}/importInLavorazione`,
           `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getSourceFields/${req.query.guidId}`,
           "GET",
-          undefined
+          undefined,
+          undefined,
+          undefined,
+          { categoria: 'lettura', idempotente: true }
         ),
         'ISTANTA',
         '/FicoProcess/getSourceFields'
@@ -590,38 +634,11 @@ export class PromoService implements IPromoService {
             console.log(Colorize.bgBlue(c.chiamata_runtime.body))
             if (c.chiamata_runtime.url.startsWith(".")) {
               // Chiamata interna al server
-              // Chiamata interna al server usando node-fetch
-              const fetch = (await import('node-fetch')).default;
-              const relativeUrl = c.chiamata_runtime.url.replace(/^\./, ''); // Rimuovi il punto iniziale
-              const baseUrl = config.VITE_API_URL.split("/api")[0] || 'http://localhost:3000'; // Sostituisci con la tua base URL
-              const url = relativeUrl.startsWith('http')
-                ? relativeUrl
-                : baseUrl + relativeUrl;
-              const method = c.chiamata_runtime.metodo || 'GET';
-              const body = c.chiamata_runtime.body ? JSON.stringify(c.chiamata_runtime.body) : undefined;
-              const headers = this.buildInternalRequestHeaders(req, method, relativeUrl);
-
-              const response = await fetch(url, {
-                method,
-                headers,
-                body: method !== 'GET' && body ? body : undefined,
-              });
-
-              if (!response.ok) {
-                throw wrapApiError(new Error(`Errore chiamata interna: ${response.statusText}`), {
-                  message: `Errore chiamata interna: ${response.statusText}`,
-                  service: 'INTERNAL',
-                  endpoint: url
-                });
-              }
-
-              const resultChiamataRuntime = await response.json() as any;
+              const resultChiamataRuntime = await this.eseguiChiamataInterna(req, c.chiamata_runtime);
 
               const val = typeof resultChiamataRuntime === "string"
                 ? JSON.parse(resultChiamataRuntime)
                 : resultChiamataRuntime;
-              console.log("VALORE ARRAY DELLE COMBINAZIONI");
-              console.log(val);
 
               if (Array.isArray(val)) {
                 const valoreLavorato = val.map((v: any) => {
@@ -646,6 +663,10 @@ export class PromoService implements IPromoService {
                   c.chiamata_runtime.url,
                   c.chiamata_runtime.metodo,
                   c.chiamata_runtime.body,
+                  undefined,
+                  undefined,
+                  // Metodo ed endpoint li decide il contesto di Istanta: lettura, ma senza ripetizioni
+                  { categoria: 'lettura' }
                 ),
                 'ISTANTA',
                 'chiamata_runtime del contesto'

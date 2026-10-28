@@ -22,7 +22,9 @@ import { Utente } from '../models/utenti';
 import { UtentiGDO } from '../models/utenti_gdo';
 import { WishlistWebpliant } from '../models/wishlist_webpliant';
 import type { IUserRepository } from '../repositories/UserRepository';
+import { invalidaPassaporto } from '../http/cachePassaporti';
 import { ServerUtils } from '../utils/ServerUtils';
+import { geocodifica } from '../utils/geocodifica';
 import { verificaRisposta } from '../utils/rispostaServizi';
 
 export const ACCOUNT_NON_ATTIVO = "Account disattivato. Contatta l'amministratore.";
@@ -1269,6 +1271,9 @@ export class UserService implements IUserService {
     sesso?: string;
     meta?: UtentiMeta;
   }, currentUserId: string): Promise<UtenteAttributes> {
+    // Nominatim prima di aprire la transazione: la coda e la risposta (fino a 5 s) non tengono
+    // occupata una connessione del pool. Se l'indirizzo non si trova l'utente nasce senza posizione
+    const pos = userData.residenza ? await geocodeAddress(userData.residenza) : null;
     const transaction = await sequelize.transaction();
 
     try {
@@ -1350,16 +1355,10 @@ export class UserService implements IUserService {
           field: 'idPuntoVendita'
         });
       }
-      let pos: { lat: number; lon: number } | null = null;
-      // Se è presente l'indirizzo allora cercare le posizioni lat long
-      if (userData.residenza) {
-        const posizione = await geocodeAddress(userData.residenza);
-        if (posizione) {
-          console.log('registerUserWithTransaction - Geocoding successful', { posizione });
-          pos = posizione;
-        } else {
-          console.log('registerUserWithTransaction - Geocoding failed for address', { address: userData.residenza });
-        }
+      if (pos) {
+        console.log('registerUserWithTransaction - Geocoding successful', { posizione: pos });
+      } else {
+        console.log('registerUserWithTransaction - Geocoding failed for address', { address: userData.residenza });
       }
 
       // Creazione utente
@@ -1566,6 +1565,8 @@ export class UserService implements IUserService {
         req.session.tipo_utente = newUser.tipo_utenti;
         req.session.email = newUser.email_utenti;
         req.session.private_key = newUser.privatekey_utenti;
+        // Nuovo accesso: il passaporto in cache potrebbe avere profilo e policy vecchi
+        invalidaPassaporto(newUser.id_utenti);
         req.session.cookie.maxAge = 60 * 60 * 1000; // 1 ora
         req.session.isExternalAuth = true;
       } else {
@@ -1574,6 +1575,7 @@ export class UserService implements IUserService {
           await user.update({ meta_utenti: { ...user.meta_utenti, need_ad: true } });
         }
         // 4. Imposta sessione
+        invalidaPassaporto(user.id_utenti);
         req.session.id_utente = user.id_utenti;
         req.session.tipo_utente = user.tipo_utenti;
         req.session.email = user.email_utenti;
@@ -1596,7 +1598,9 @@ export class UserService implements IUserService {
             {},
             {
               "ADToken": data.tokenAD
-            }
+            },
+            undefined,
+            { categoria: 'scrittura' }
           ),
           'ISTANTA',
           '/FicoProcess/AuthADLanded',
@@ -1695,6 +1699,8 @@ export class UserService implements IUserService {
 
       const setSessionData = (user: any, isNewUser: boolean = false) => {
         console.log(`Setting session for ${isNewUser ? 'new' : 'existing'} user:`, user.id_utenti);
+        // Nuovo accesso: il passaporto in cache potrebbe avere profilo e policy vecchi
+        invalidaPassaporto(user.id_utenti);
         req.session.id_utente = user.id_utenti;
         req.session.tipo_utente = user.tipo_utenti;
         req.session.email = user.email_utenti;
@@ -1738,7 +1744,9 @@ export class UserService implements IUserService {
             {},
             {
               "Authorization": "Bearer " + data.publicKey
-            }
+            },
+            undefined,
+            { categoria: 'scrittura' }
           ),
           'ISTANTA',
           '/FicoProcess/AuthLanded'
@@ -1771,32 +1779,13 @@ export class UserService implements IUserService {
     }
   }
 }
-async function geocodeAddress(address: string): Promise<{ lat: number; lon: number } | null> {
-  try {
-    const encoded = encodeURIComponent(address);
-    const response = await fetch(
-      `https://nominatim.openstreetmap.org/search?q=${encoded}&format=json&limit=1&countrycodes=it`,
-      {
-        headers: {
-          'User-Agent': 'FP/1.0' // Nominatim richiede un User-Agent
-        }
-      }
-    );
-
-    const data = await response.json() as any[];
-
-    if (data && data.length > 0) {
-      return {
-        lat: parseFloat(data[0].lat),
-        lon: parseFloat(data[0].lon)
-      };
-    }
-
-    return null;
-  } catch (error) {
-    console.error('Errore geocoding:', error);
-    return null;
-  }
+/**
+ * Posizione della residenza in Italia, oppure null. Passa dalla coda di geocodifica, come i punti
+ * vendita: tempo massimo, User-Agent e distanza fra le chiamate della policy di Nominatim.
+ */
+export async function geocodeAddress(address: string): Promise<{ lat: number; lon: number } | null> {
+  const { lat, lon } = await geocodifica(address, 'it');
+  return lat !== undefined && lon !== undefined ? { lat, lon } : null;
 }
 function checkIfCanLogin(utente: UtenteResponseDTO): boolean {
   if (utente.meta?.need_ad === false) return true;  // override esplicito: login normale consentito

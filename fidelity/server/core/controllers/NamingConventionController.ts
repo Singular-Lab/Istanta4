@@ -66,7 +66,10 @@ export class NamingConventionController extends BaseController {
           req,
           `${config.ISTANTA_IP_ADDRESS}/FicoProcess/eliminaNamingConvention/${idNamingConvention}`,
           'PUT',
-          undefined
+          undefined,
+          undefined,
+          undefined,
+          { categoria: 'scrittura' }
         ),
         'ISTANTA',
         '/FicoProcess/eliminaNamingConvention'

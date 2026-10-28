@@ -16,6 +16,16 @@ import {
     type PasswordResetTokenCheck
 } from '../utils/passwordResetToken';
 
+/**
+ * Tempi massimi del server SMTP: senza, nodemailer aspetta fino a 2 minuti per la connessione
+ * e 10 minuti di inattivita', e la richiesta di recupero password resta appesa.
+ */
+export const TIMEOUT_SMTP = {
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 30_000,
+} as const;
+
 export class EmailController extends BaseController {
     private transporter: Transporter;
 
@@ -32,7 +42,8 @@ export class EmailController extends BaseController {
             auth: {
                 user: config.SMTP_USER,
                 pass: config.SMTP_PASSWORD
-            }
+            },
+            ...TIMEOUT_SMTP
         });
     }
 

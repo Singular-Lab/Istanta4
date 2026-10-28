@@ -1,4 +1,3 @@
-import axios from 'axios';
 import CleanCSS from 'clean-css';
 import { Request, Response } from 'express';
 import 'express-session';
@@ -17,6 +16,7 @@ import {
   createMimeFilter,
   createUpload
 } from '../config/multerConfig';
+import { inviaFormDataAOlimpo } from '../http/olimpo';
 import { IConfigService } from '../interfaces/IConfigService';
 import { log } from '../logger';
 import { authMiddleware } from '../middleware/authMiddleware';
@@ -194,10 +194,10 @@ export class ConfigController extends BaseController {
           const blobIcona = new Blob([bufferIconaHeader], { type: 'image/png' });
           formData.append('file', blobIcona, `${uuidv4()}.png`);
           formData.append('id', "");
-          const result = await axios.post<{ esito: boolean, guidId: string, error: string }>(
-            `${config.OLYMPUS_IP_ADDRESS}/foto/updateFotoPathWeb`,
+          const result = await inviaFormDataAOlimpo<{ esito: boolean, guidId: string, error: string }>(
+            '/foto/updateFotoPathWeb',
             formData,
-            { headers: { Authorization: req.session.private_key } }
+            req.session.private_key
           );
           verificaEsitoOlympus(result.data);
           logo.url = urlOlimpo('/foto/getThumbNailOnDemand', { guidId: result.data.guidId });
@@ -210,10 +210,10 @@ export class ConfigController extends BaseController {
         const blobIcona = new Blob([bufferIconaFavicon], { type: 'image/x-icon' });
         formData.append('file', blobIcona, `${uuidv4()}.ico`);
         formData.append('id', "");
-        const result = await axios.post<{ esito: boolean, guidId: string, error: string }>(
-          `${config.OLYMPUS_IP_ADDRESS}/foto/updateFotoPathWeb`,
+        const result = await inviaFormDataAOlimpo<{ esito: boolean, guidId: string, error: string }>(
+          '/foto/updateFotoPathWeb',
           formData,
-          { headers: { Authorization: req.session.private_key } }
+          req.session.private_key
         );
         verificaEsitoOlympus(result.data);
         configWebpliant.webpliant.icona_pagina = result.data.guidId;

@@ -17,8 +17,14 @@ const CODICI_NOTI: Record<string, string> = {
   impiegata_in_tipo_export: 'la naming convention è usata da un tipo di export',
 };
 
-/** Forma restituita da ServerUtils.sendToFICOApi e dagli upload axios. */
-type RispostaServizio = { data: unknown; status: number | string; statusText?: string };
+/** Forma restituita da ServerUtils.sendToFICOApi e dagli upload. */
+type RispostaServizio = {
+  data: unknown;
+  status: number | string;
+  statusText?: string;
+  /** Con status 0: rete, timeout o passaporto Olimpo non ottenuto (la chiamata non e partita). */
+  motivo?: string;
+};
 
 /** Istanta risponde un oggetto con `esito`; un esito false (anche con HTTP 200) e un fallimento. */
 export const esitoIstanta = (data: any): boolean =>
@@ -44,7 +50,7 @@ export function verificaRisposta<T = any>(
   const grezzo = testoErrore(data) || (httpOk ? '' : risposta.statusText ?? '');
   const codice = grezzo.trim();
   throw new ExternalApiError({
-    message: messaggioPerOperatore(NOMI[servizio], status, grezzo, endpoint),
+    message: messaggioPerOperatore(NOMI[servizio], status, grezzo, endpoint, risposta.motivo),
     service: servizio,
     endpoint,
     statusCode: typeof status === 'number' ? status : undefined,
@@ -63,9 +69,14 @@ function testoErrore(data: any): string {
   return typeof testo === 'string' ? testo : '';
 }
 
-function messaggioPerOperatore(nome: string, status: number | string, grezzo: string, endpoint: string): string {
-  // Nessuna risposta HTTP: rete, DNS o passaporto Olimpo non ottenuto
-  if (typeof status !== 'number' || status === 0) return `Impossibile contattare ${nome}`;
+function messaggioPerOperatore(nome: string, status: number | string, grezzo: string, endpoint: string, motivoSenzaRisposta?: string): string {
+  // Nessuna risposta HTTP: il motivo distingue un servizio fermo, lento o un utente non autorizzato
+  if (typeof status !== 'number' || status === 0) {
+    if (motivoSenzaRisposta === 'passaporto') return `Olimpo non ha riconosciuto o autorizzato l'utente: la richiesta a ${nome} non è stata inviata`;
+    if (motivoSenzaRisposta === 'timeout') return `${nome} non ha risposto in tempo`;
+    if (motivoSenzaRisposta === 'rete') return `${nome} non è raggiungibile`;
+    return `Impossibile contattare ${nome}`;
+  }
   // LoginMiddleWare di Istanta risponde "no_login:" + stack per ogni eccezione non gestita
   if (grezzo.startsWith('no_login:')) return `Errore interno di ${nome}`;
   if (grezzo.startsWith('no_login')) return `${nome} non ha riconosciuto l'utente`;

@@ -29,6 +29,7 @@ import { buildHubUserContext, type HubUserContext } from '../services/hubRoleUti
 import { ServerUtils } from '../utils/ServerUtils';
 import { urlOlimpo } from '../utils/urlOlimpo';
 import { verifyAccessoServizioParams } from '../utils/accessoServizioLink';
+import { invalidaPassaporto } from '../http/cachePassaporti';
 
 function createSingleFileUploadMiddleware(
   upload: ReturnType<typeof uploadHubServiceDocuments.single>
@@ -325,7 +326,9 @@ export class HubController extends BaseController {
         req.session.regenerate((err) => err ? reject(err) : resolve());
       });
 
-      // Imposta i dati della nuova sessione dal risultato di AgenziaLib
+      // Imposta i dati della nuova sessione dal risultato di AgenziaLib.
+      // Nuovo accesso: il passaporto in cache potrebbe avere profilo e policy vecchi
+      invalidaPassaporto(parsed.id);
       req.session.id_utente = parsed.id;
       req.session.private_key = parsed.private_key;
       req.session.id_gdo = parsed.id_gdo;

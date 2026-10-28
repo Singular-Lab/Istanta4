@@ -4,13 +4,18 @@ import { GDOWhatsappQueueJobStatus, STATO_GDO_WHATSAPP_TEMPLATE } from '../../..
 
 const meta = vi.hoisted(() => ({ fetch: vi.fn() }));
 
-vi.mock('node-fetch', () => ({ default: meta.fetch }));
+// Le chiamate a Meta passano dal client HTTP comune: si intercetta quello, ErroreHttp resta reale
+vi.mock('../../http/clienteHttp', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../http/clienteHttp')>()),
+  chiamaHttp: meta.fetch,
+}));
 vi.mock('../../../src/shared/queue/bullmq.client.js', () => ({ createQueue: () => ({ add: vi.fn() }) }));
 vi.mock('../../logger', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
 import { sequelize } from '../../db/SequelizeConnector';
+import { ErroreHttp } from '../../http/clienteHttp';
 import { GDOWhatsappCampagne } from '../../models/whatsapp/gdo_whatsapp_campagne';
 import { GDOWhatsappQueueJob } from '../../models/whatsapp/gdo_whatsapp_message_queue';
 import { GDOWhatsappNumbers } from '../../models/whatsapp/gdo_whatsapp_numbers';
@@ -123,6 +128,8 @@ describe('eliminazione di un template', () => {
     expect(url).toContain('hsm_id=hsm-1');
     expect(url).toContain('name=promo_settimana');
     expect(opzioni.method).toBe('DELETE');
+    // Un'eliminazione non si ripete in automatico, ma non resta appesa
+    expect(opzioni).toMatchObject({ timeoutMs: 15_000, idempotente: false });
     expect(t.update).toHaveBeenCalledWith({ stato_meta_gdowhatsapptemplate: STATO_GDO_WHATSAPP_TEMPLATE.DELETED });
     expect(t.destroy).not.toHaveBeenCalled();
   });
@@ -140,6 +147,24 @@ describe('eliminazione di un template', () => {
     await expect(service().eliminaTemplateWhatsapp('t1', null)).rejects.toMatchObject({
       message: expect.stringContaining('Template inesistente'),
     });
+    expect(t.update).not.toHaveBeenCalled();
+  });
+
+  it('se Meta non risponde il template resta invariato e l\'errore dice di verificare', async () => {
+    const t = template();
+    vi.spyOn(GDOWhatsappTemplate, 'findByPk').mockResolvedValue(t as any);
+    vi.spyOn(GDOWhatsappCampagne, 'findAll').mockResolvedValue([] as any);
+    vi.spyOn(GDOWhatsappNumbers, 'findOne').mockResolvedValue({
+      whatsapp_business_account_id_gdowhatsappnumbers: 'waba-1',
+      access_token_gdowhatsappnumbers: 'token-di-prova',
+    } as any);
+    meta.fetch.mockRejectedValue(new ErroreHttp('timeout', 'https://graph.facebook.com/v24.0/waba-1/message_templates', false));
+
+    await expect(service().eliminaTemplateWhatsapp('t1', null)).rejects.toMatchObject({
+      httpStatus: 503,
+      message: expect.stringContaining('verifica l\'esito'),
+    });
+    expect(meta.fetch).toHaveBeenCalledTimes(1);
     expect(t.update).not.toHaveBeenCalled();
   });
 

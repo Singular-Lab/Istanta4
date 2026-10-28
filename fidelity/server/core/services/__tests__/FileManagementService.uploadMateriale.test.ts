@@ -1,4 +1,3 @@
-import axios from 'axios';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -26,6 +25,7 @@ describe('FileManagementService.uploadMateriale', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     fs.rmSync(tmpRoot, { recursive: true, force: true });
   });
 
@@ -59,9 +59,12 @@ describe('FileManagementService.uploadMateriale', () => {
       getFileRunTimeLogByNomeFileEIdKitRuntime: vi.fn().mockResolvedValue(null),
       insertNewFileRuntimeLog: vi.fn().mockResolvedValue(undefined),
     };
-    const post = vi.spyOn(axios, 'post').mockResolvedValue({
-      data: { esito: true, error: '', content: { id: 'olimpo-1', file_name: 'volantino.pdf', json_meta: '{}' } }
-    });
+    // Olimpo finto dietro il client HTTP comune
+    const post = vi.fn(async () => new Response(
+      JSON.stringify({ esito: true, error: '', content: { id: 'olimpo-1', file_name: 'volantino.pdf', json_meta: '{}' } }),
+      { status: 200, headers: { 'content-type': 'application/json' } }
+    ));
+    vi.stubGlobal('fetch', post);
     const service = new FileManagementService(
       kitRuntimeService as any, tipoExportService as any, {} as any, {} as any, {} as any, {} as any, {} as any
     );
@@ -72,9 +75,12 @@ describe('FileManagementService.uploadMateriale', () => {
       { headers: { authorization: 'Bearer x' } } as any
     );
 
-    const [, formData, opzioni] = post.mock.calls[0] as [string, FormData, any];
-    expect((formData.get('file') as File).name).toBe('volantino.pdf');
-    expect(opzioni.timeout).toBeGreaterThan(0);
+    const [url, opzioni] = post.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toMatch(/\/materiali\/uploadMateriale$/);
+    expect(((opzioni.body as FormData).get('file') as File).name).toBe('volantino.pdf');
+    expect(new Headers(opzioni.headers).get('authorization')).toBe('Bearer x');
+    // Tempo massimo degli upload: la chiamata parte con un segnale di scadenza
+    expect(opzioni.signal).toBeInstanceOf(AbortSignal);
     expect(kitRuntimeService.insertNewFileRuntime).toHaveBeenCalledWith(
       expect.objectContaining({ nome: 'volantino.pdf', id_olimpo_cloud: 'olimpo-1' })
     );

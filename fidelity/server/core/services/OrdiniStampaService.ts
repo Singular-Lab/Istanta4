@@ -1,4 +1,3 @@
-import axios from 'axios';
 import dayjs from 'dayjs';
 import ExcelJS from 'exceljs';
 import { Request } from 'express';
@@ -13,6 +12,7 @@ import { emitToClients } from '../../ws-server';
 import { roomUtente } from '../utils/socketRooms';
 import config from '../config';
 import { sequelize } from '../db/SequelizeConnector';
+import { scaricaMaterialePdf } from '../http/olimpo';
 import { AreaResponseDTO, CanaleResponseDTO, ContrattoTipografiaResponseDTO, type OrdiniDiStampaResponseDTO, type PromoResponseDTO } from '../dto';
 import { IGdoService } from '../interfaces/IGdoService';
 import { IKitRuntimeService } from '../interfaces/IKitRuntimeService';
@@ -582,7 +582,11 @@ export class OrdiniStampaService implements IOrdiniStampaService {
             kit,
             socketId: `${socketId}`,
             ...ftpCredenziali
-          }
+          },
+          undefined,
+          undefined,
+          // Crea cartelle e invia i file via FTP: lunga e non ripetibile
+          { categoria: 'lunga' }
         );
 
         if (!resultAPI.data || !resultAPI.data.esito) {
@@ -1168,9 +1172,7 @@ export class OrdiniStampaService implements IOrdiniStampaService {
 
   async getFileFromOlimpo(id: string): Promise<Buffer> {
     try {
-      const url = `${config.OLYMPUS_IP_ADDRESS}/materiali/getMaterialePDF?id=${id}`;
-      const response = await axios.get(url, { responseType: 'arraybuffer' });
-      return Buffer.from(response.data, "binary");
+      return await scaricaMaterialePdf(id);
     } catch (error: any) {
       if (error instanceof Error) {
         log.error('Errore durante il recupero del file da Olimpo:', error.message);
@@ -1376,7 +1378,11 @@ export class OrdiniStampaService implements IOrdiniStampaService {
         req as Request,
         config.OLYMPUS_IP_ADDRESS + "/materiali/groupPDFsByEquality",
         "POST",
-        { ids: idsForOlympus, socketId }
+        { ids: idsForOlympus, socketId },
+        undefined,
+        undefined,
+        // Confronta i PDF: lunga, ma e una lettura (POST solo per il corpo)
+        { categoria: 'lunga', idempotente: true }
       );
 
       if (!olympusResponse.data?.esito) {
@@ -1576,7 +1582,11 @@ export class OrdiniStampaService implements IOrdiniStampaService {
       "POST",
       {
         kits: kitDisponibili
-      }
+      },
+      undefined,
+      undefined,
+      // Calcola le cartelle senza crearle: lettura (POST solo per il corpo)
+      { categoria: 'lettura', idempotente: true }
     );
 
     if (!resultAPI.data?.esito) {

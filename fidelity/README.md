@@ -251,9 +251,17 @@ FICO_SECRET=your_secret_key
 SESSION_SECRET=your_session_secret
 SALT_ROUNDS=10
 
-# OpenAI
-OPENAI_API_KEY=sk-...
-ASSISTANT_ID=asst_...
+# Servizio AI di ricette e vini (obbligatoria la chiave)
+API_KEY_AI=...
+# Facoltative, con questi default
+# AI_RICETTE_API_URL=https://www.istantabusiness.it/betatools/ricette_ai/endpoint-api.php
+# AI_RICETTE_TIMEOUT_MS=120000
+
+# WhatsApp: versione della Graph API di Meta (facoltativa, default v24.0)
+# META_GRAPH_API_VERSION=v24.0
+
+# OPENAI_API_KEY, ASSISTANT_ID, OPEN_AI_ASSISTANT_ID, OPEN_AI_ASSISTANT_ID_TRANSLATION
+# e OPENAI_PROJECT_ID non sono piu' lette dal codice: facoltative
 
 # External Services
 ISTANTA_IP_ADDRESS=http://...

@@ -5,6 +5,8 @@ import { GDOWhatsappQueueJob } from '../models/whatsapp/gdo_whatsapp_message_que
 import { GDOWhatsappQueueJobStatus } from '../../../lib/enums';
 import { BusinessError, ExternalApiError, NotFoundError, ValidationError } from '../../../lib/errors';
 import { ErrorCodes } from '../../../lib/errors/ErrorCodes';
+import config from '../config';
+import { chiamaHttp, ErroreHttp } from '../http/clienteHttp';
 import { log } from '../logger';
 import { emitToClients } from '../../ws-server';
 import { gdoDellaCampagna, WhatsappQueueService } from '../services/WhatsappQueueService';
@@ -53,6 +55,22 @@ interface WorkerOptions {
      * Default: 0.1 (10% di errori)
      */
     simulationErrorRate?: number;
+    /**
+     * Tempo massimo di attesa della risposta di Meta a un invio
+     * Default: 15000 (15 secondi)
+     */
+    timeoutMetaMs?: number;
+}
+
+/**
+ * Meta potrebbe aver gia' consegnato il messaggio (timeout o connessione caduta dopo l'invio):
+ * il job non si ritenta, per non mandare due volte lo stesso messaggio.
+ */
+class EsitoInvioSconosciuto extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'EsitoInvioSconosciuto';
+    }
 }
 
 /**
@@ -70,6 +88,7 @@ export class WhatsappQueueWorker {
     private readonly sendMessageFn: (to: string, body: string) => Promise<void>;
     private readonly simulationMode: boolean;
     private readonly simulationErrorRate: number;
+    private readonly timeoutMetaMs: number;
     private bulkState: Map<string, BulkProgress> = new Map();
     private timer?: NodeJS.Timeout;
     private bullmqWorker?: BullMQWorker;
@@ -83,6 +102,7 @@ export class WhatsappQueueWorker {
         this.simulationMode = options?.simulationMode ?? false;
         this.simulationErrorRate = options?.simulationErrorRate ?? 0.1; // 10% errori di default
         this.sendMessageFn = options?.sendMessageFn ?? this.defaultSendMessage;
+        this.timeoutMetaMs = options?.timeoutMetaMs ?? 15_000;
     }
 
     /**
@@ -406,86 +426,115 @@ export class WhatsappQueueWorker {
         this.active++;
 
         try {
-            // Qui e non nel tick: se fallisce, il job torna PENDING invece di restare PROCESSING
-            await this.ensureBulkState(job);
-            this.emitJobStatus(job, GDOWhatsappQueueJobStatus.PROCESSING);
-
-            // Incrementa il contatore dei tentativi
-            job.attempts_whatsapp_queue_job += 1;
-            await job.save();
-
-            // Modalità simulazione o invio reale
             let wamid: string | null = null;
-            if (this.simulationMode) {
-                await this.simulateSendMessage(job.to_whatsapp_queue_job, job.body_whatsapp_queue_job);
-            } else {
-                // Invio reale: recupera credenziali dal database e invia
-                wamid = await this.sendWhatsAppMessage(job);
+            try {
+                // Qui e non nel tick: se fallisce, il job torna PENDING invece di restare PROCESSING
+                await this.ensureBulkState(job);
+                this.emitJobStatus(job, GDOWhatsappQueueJobStatus.PROCESSING);
+
+                // Incrementa il contatore dei tentativi
+                job.attempts_whatsapp_queue_job += 1;
+                await job.save();
+
+                // Modalità simulazione o invio reale
+                if (this.simulationMode) {
+                    await this.simulateSendMessage(job.to_whatsapp_queue_job, job.body_whatsapp_queue_job);
+                } else {
+                    // Invio reale: recupera credenziali dal database e invia
+                    wamid = await this.sendWhatsAppMessage(job);
+                }
+            } catch (err: any) {
+                await this.gestisciInvioFallito(job, err);
+                return;
             }
 
-            // Successo!
-            job.status_whatsapp_queue_job = GDOWhatsappQueueJobStatus.SUCCESS;
-            job.last_error_whatsapp_queue_job = null;
-            job.wamid_whatsapp_queue_job = wamid;
+            // Meta ha accettato il messaggio: da qui il job non torna mai in coda, anche se
+            // salvare l'esito o notificarlo fallisce (sarebbe un secondo messaggio al cliente)
+            await this.registraInvioRiuscito(job, wamid);
+        } finally {
+            this.active--;
+        }
+    }
+
+    /**
+     * Salva e notifica un invio accettato. Gli errori si registrano e basta: se il salvataggio
+     * fallisce il job resta PROCESSING e recuperaJobInterrotti lo chiude senza reinviarlo.
+     */
+    private async registraInvioRiuscito(job: typeof GDOWhatsappQueueJob.prototype, wamid: string | null) {
+        job.status_whatsapp_queue_job = GDOWhatsappQueueJobStatus.SUCCESS;
+        job.last_error_whatsapp_queue_job = null;
+        job.wamid_whatsapp_queue_job = wamid;
+        try {
+            await job.save();
+        } catch (err) {
+            log.error(`Job ${job.id_whatsapp_queue_job}: messaggio inviato (wamid ${wamid ?? 'non disponibile'}) ma esito non salvato, non verra' reinviato:`, err);
+            return;
+        }
+
+        try {
+            // I contatori vengono letti dal DB in emitBulkStatus
+            this.emitJobStatus(job, GDOWhatsappQueueJobStatus.SUCCESS);
+            await this.emitBulkStatus(job.bulk_id_whatsapp_queue_job);
+        } catch (err) {
+            log.error(`Job ${job.id_whatsapp_queue_job}: messaggio inviato e salvato, notifica dello stato non riuscita:`, err);
+        }
+    }
+
+    /**
+     * Invio non riuscito (o non partito): riprogramma, annulla o chiude il job.
+     */
+    private async gestisciInvioFallito(job: typeof GDOWhatsappQueueJob.prototype, err: any) {
+        const msg = err?.message ?? String(err);
+        log.error(`❌ Errore job ${job.id_whatsapp_queue_job} (tentativo ${job.attempts_whatsapp_queue_job}/${job.max_attempts_whatsapp_queue_job}):`, msg);
+
+        // Errori permanenti (dati non validi, risorse mancanti, 4xx di Meta tranne il 429) non si risolvono ritentando.
+        // Con esito sconosciuto il messaggio potrebbe essere gia' arrivato: ritentare rischia un doppio invio
+        const statusMeta = Number(err instanceof ExternalApiError ? err.details?.statusCode : undefined);
+        const permanente = err instanceof EsitoInvioSconosciuto
+            || err instanceof ValidationError
+            || err instanceof NotFoundError
+            || (statusMeta >= 400 && statusMeta < 500 && statusMeta !== 429);
+
+        const daRitentare = !permanente && job.attempts_whatsapp_queue_job < job.max_attempts_whatsapp_queue_job;
+        // cancelBulk annulla solo i PENDING: questo job era in invio e non va rimesso in coda.
+        // Contano gli annullamenti successivi alla presa in carico (updatedat del tick), non quelli prima di "Riprova falliti"
+        const annullata = daRitentare && await GDOWhatsappQueueJob.count({
+            where: {
+                bulk_id_whatsapp_queue_job: job.bulk_id_whatsapp_queue_job,
+                status_whatsapp_queue_job: GDOWhatsappQueueJobStatus.CANCELLED,
+                updatedat: { [Op.gte]: job.updatedat ?? new Date(0) },
+            }
+        }) > 0;
+
+        if (annullata) {
+            job.status_whatsapp_queue_job = GDOWhatsappQueueJobStatus.CANCELLED;
+            job.last_error_whatsapp_queue_job = 'Campagna annullata dall\'utente';
+            await job.save();
+
+            this.emitJobStatus(job, GDOWhatsappQueueJobStatus.CANCELLED, msg);
+            await this.emitBulkStatus(job.bulk_id_whatsapp_queue_job);
+        } else if (daRitentare) {
+            // Retry con exponential backoff
+            const delayMs = this.baseBackoffMs * Math.pow(2, job.attempts_whatsapp_queue_job - 1);
+
+            job.status_whatsapp_queue_job = GDOWhatsappQueueJobStatus.PENDING;
+            job.run_at_whatsapp_queue_job = new Date(Date.now() + delayMs);
+            job.last_error_whatsapp_queue_job = msg;
+            await job.save();
+
+            // NON modificare i contatori: rimane PENDING
+            this.emitJobStatus(job, GDOWhatsappQueueJobStatus.FAILED, `retry in ${Math.floor(delayMs / 1000)}s: ${msg}`);
+
+            log.info(`🔄 Job ${job.id_whatsapp_queue_job} riprogrammato tra ${Math.floor(delayMs / 1000)}s`);
+        } else {
+            // Fallimento definitivo
+            job.status_whatsapp_queue_job = GDOWhatsappQueueJobStatus.FAILED;
+            job.last_error_whatsapp_queue_job = msg;
             await job.save();
 
             // Emetti gli aggiornamenti (i contatori vengono letti dal DB in emitBulkStatus)
-            this.emitJobStatus(job, GDOWhatsappQueueJobStatus.SUCCESS);
+            this.emitJobStatus(job, GDOWhatsappQueueJobStatus.FAILED, msg);
             await this.emitBulkStatus(job.bulk_id_whatsapp_queue_job);
-
-        } catch (err: any) {
-            const msg = err?.message ?? String(err);
-            log.error(`❌ Errore job ${job.id_whatsapp_queue_job} (tentativo ${job.attempts_whatsapp_queue_job}/${job.max_attempts_whatsapp_queue_job}):`, msg);
-
-            // Errori permanenti (dati non validi, risorse mancanti, 4xx di Meta tranne il 429) non si risolvono ritentando
-            const statusMeta = Number(err instanceof ExternalApiError ? err.details?.statusCode : undefined);
-            const permanente = err instanceof ValidationError
-                || err instanceof NotFoundError
-                || (statusMeta >= 400 && statusMeta < 500 && statusMeta !== 429);
-
-            const daRitentare = !permanente && job.attempts_whatsapp_queue_job < job.max_attempts_whatsapp_queue_job;
-            // cancelBulk annulla solo i PENDING: questo job era in invio e non va rimesso in coda.
-            // Contano gli annullamenti successivi alla presa in carico (updatedat del tick), non quelli prima di "Riprova falliti"
-            const annullata = daRitentare && await GDOWhatsappQueueJob.count({
-                where: {
-                    bulk_id_whatsapp_queue_job: job.bulk_id_whatsapp_queue_job,
-                    status_whatsapp_queue_job: GDOWhatsappQueueJobStatus.CANCELLED,
-                    updatedat: { [Op.gte]: job.updatedat ?? new Date(0) },
-                }
-            }) > 0;
-
-            if (annullata) {
-                job.status_whatsapp_queue_job = GDOWhatsappQueueJobStatus.CANCELLED;
-                job.last_error_whatsapp_queue_job = 'Campagna annullata dall\'utente';
-                await job.save();
-
-                this.emitJobStatus(job, GDOWhatsappQueueJobStatus.CANCELLED, msg);
-                await this.emitBulkStatus(job.bulk_id_whatsapp_queue_job);
-            } else if (daRitentare) {
-                // Retry con exponential backoff
-                const delayMs = this.baseBackoffMs * Math.pow(2, job.attempts_whatsapp_queue_job - 1);
-
-                job.status_whatsapp_queue_job = GDOWhatsappQueueJobStatus.PENDING;
-                job.run_at_whatsapp_queue_job = new Date(Date.now() + delayMs);
-                job.last_error_whatsapp_queue_job = msg;
-                await job.save();
-
-                // NON modificare i contatori: rimane PENDING
-                this.emitJobStatus(job, GDOWhatsappQueueJobStatus.FAILED, `retry in ${Math.floor(delayMs / 1000)}s: ${msg}`);
-
-                log.info(`🔄 Job ${job.id_whatsapp_queue_job} riprogrammato tra ${Math.floor(delayMs / 1000)}s`);
-            } else {
-                // Fallimento definitivo
-                job.status_whatsapp_queue_job = GDOWhatsappQueueJobStatus.FAILED;
-                job.last_error_whatsapp_queue_job = msg;
-                await job.save();
-
-                // Emetti gli aggiornamenti (i contatori vengono letti dal DB in emitBulkStatus)
-                this.emitJobStatus(job, GDOWhatsappQueueJobStatus.FAILED, msg);
-                await this.emitBulkStatus(job.bulk_id_whatsapp_queue_job);
-            }
-        } finally {
-            this.active--;
         }
     }
 
@@ -574,20 +623,33 @@ export class WhatsappQueueWorker {
                 ? JSON.parse(job.body_whatsapp_queue_job)
                 : job.body_whatsapp_queue_job;
 
-            // 3. Chiamata all'API Meta Cloud
-            const response = await fetch(
-                `https://graph.facebook.com/v24.0/${phoneNumberId}/messages`,
-                {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${accessToken}`,
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json',
-                    },
-                    body: JSON.stringify(payload),
-                    signal: AbortSignal.timeout(15000)
+            // 3. Chiamata all'API Meta Cloud: mai ritentata qui, il nuovo tentativo lo decide la coda
+            let response: Response;
+            try {
+                response = await chiamaHttp(
+                    `https://graph.facebook.com/${config.META_GRAPH_API_VERSION}/${phoneNumberId}/messages`,
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${accessToken}`,
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                        },
+                        body: JSON.stringify(payload),
+                        timeoutMs: this.timeoutMetaMs,
+                        idempotente: false,
+                    }
+                );
+            } catch (error) {
+                if (!(error instanceof ErroreHttp)) throw error;
+                if (error.primaDellInvio) {
+                    // Connessione mai stabilita: nessun messaggio e' partito, la coda puo' ritentare
+                    throw new ExternalApiError({ message: `Errore di connessione all'API Meta: ${error.message}`, service: 'Meta WhatsApp', endpoint: `/${phoneNumberId}/messages`, details: { code: ErrorCodes.WA_BROADCAST_FAILED } });
                 }
-            );
+                throw new EsitoInvioSconosciuto(error.motivo === 'timeout'
+                    ? `Nessuna risposta da Meta entro ${Math.round(this.timeoutMetaMs / 1000)} secondi: esito sconosciuto, il messaggio potrebbe essere stato consegnato e non viene reinviato`
+                    : 'Connessione con Meta interrotta durante l\'invio: esito sconosciuto, il messaggio potrebbe essere stato consegnato e non viene reinviato');
+            }
 
             if (!response.ok) {
                 const errorData = await response.json().catch(() => null) as any;
@@ -600,7 +662,8 @@ export class WhatsappQueueWorker {
                 throw new ExternalApiError({ message: `WhatsApp API Error (${response.status}): ${errorMessage}`, service: 'Meta WhatsApp', endpoint: `/${phoneNumberId}/messages`, statusCode: response.status });
             }
 
-            const data = await response.json() as any;
+            // 2xx: Meta ha accettato il messaggio. Un corpo illeggibile non lo rende fallito
+            const data = await response.json().catch(() => null) as any;
             const wamid: string | null = data?.messages?.[0]?.id ?? null;
 
             if (wamid) {
@@ -611,18 +674,12 @@ export class WhatsappQueueWorker {
             return wamid;
 
         } catch (error: any) {
-            // Se è un errore di parsing JSON, è un problema di formato
+            // Payload del job non valido (JSON.parse): un problema di formato, non si ritenta
             if (error instanceof SyntaxError) {
                 throw new ValidationError({ message: `Formato body non valido: ${error.message}`, field: 'body', details: { code: ErrorCodes.WA_BROADCAST_FAILED } });
             }
 
-            // Se è un errore di fetch/network
-            const networkError = error as { code?: string; message?: string };
-            if (networkError.code === 'ECONNREFUSED' || networkError.code === 'ENOTFOUND') {
-                throw new ExternalApiError({ message: `Errore di connessione all'API Meta: ${error.message}`, service: 'Meta WhatsApp', endpoint: 'graph.facebook.com', details: { code: ErrorCodes.WA_BROADCAST_FAILED } });
-            }
-
-            // Rilancia l'errore originale
+            // Gli errori di rete arrivano gia' tradotti dal client HTTP
             throw error;
         }
     }

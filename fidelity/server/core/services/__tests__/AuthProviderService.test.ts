@@ -4,6 +4,12 @@ vi.mock('../../logger', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+// DNS finto: i nomi della tabella risolvono negli IP indicati, gli altri in un IP pubblico
+const dns = vi.hoisted(() => ({ tabella: { 'interno.test': ['127.0.0.1'] } as Record<string, string[]> }));
+vi.mock('node:dns/promises', () => ({
+  lookup: vi.fn(async (host: string) => (dns.tabella[host] ?? ['93.184.216.34']).map(address => ({ address, family: 4 }))),
+}));
+
 import type { AuthProvider, AuthProviderAttributes } from '../../models/auth_provider';
 import type { IAuthProviderRepository } from '../../repositories/AuthProviderRepository';
 import { cifraSegreto, decifraSegreto, eSegretoCifrato } from '../../utils/segretiProvider';
@@ -190,5 +196,75 @@ describe('AuthProviderService - importazione OIDC', () => {
     const { repository } = repositoryInMemoria([EMAIL_PASSWORD]);
 
     await expect(new AuthProviderService(repository).importaDiscoveryOidc('file:///etc/passwd')).rejects.toThrow(/http\(s\)/);
+  });
+});
+
+describe('AuthProviderService - indirizzi remoti non sicuri', () => {
+  it.each([
+    ['http://169.254.169.254/latest/meta-data'],
+    ['http://127.0.0.1:8080/realms/x'],
+    ['http://[::ffff:127.0.0.1]/'],
+    ['http://interno.test/realms/x'],
+  ])('non scarica la discovery da %s', async (url) => {
+    const { repository } = repositoryInMemoria([EMAIL_PASSWORD]);
+    const fetchFinto = vi.spyOn(globalThis, 'fetch');
+
+    await expect(new AuthProviderService(repository).importaDiscoveryOidc(url)).rejects.toThrow(/non ammesso/);
+    expect(fetchFinto).not.toHaveBeenCalled();
+    fetchFinto.mockRestore();
+  });
+
+  it('non segue un redirect verso un host vietato', async () => {
+    const { repository } = repositoryInMemoria([EMAIL_PASSWORD]);
+    const fetchFinto = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(null, { status: 302, headers: { location: 'http://interno.test/.well-known/openid-configuration' } }),
+    );
+
+    await expect(new AuthProviderService(repository).importaDiscoveryOidc('https://idp.test/v2.0')).rejects.toThrow(/Redirect non seguito/);
+    expect(fetchFinto).toHaveBeenCalledOnce();
+    expect(fetchFinto.mock.calls[0][1]).toMatchObject({ redirect: 'manual' });
+    fetchFinto.mockRestore();
+  });
+
+  it('segue un redirect verso un host ammesso', async () => {
+    const { repository } = repositoryInMemoria([EMAIL_PASSWORD]);
+    const fetchFinto = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(null, { status: 301, headers: { location: 'https://login.idp.test/openid-configuration' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        authorization_endpoint: 'https://idp.test/authorize',
+        token_endpoint: 'https://idp.test/token',
+        jwks_uri: 'https://idp.test/keys',
+      }), { status: 200 }));
+
+    const esito = await new AuthProviderService(repository).importaDiscoveryOidc('https://idp.test/v2.0');
+
+    expect(esito.token_url).toBe('https://idp.test/token');
+    expect(fetchFinto.mock.calls[1][0]).toBe('https://login.idp.test/openid-configuration');
+    fetchFinto.mockRestore();
+  });
+
+  it('non accetta metadati SAML oltre 2 MB', async () => {
+    const { repository } = repositoryInMemoria([EMAIL_PASSWORD]);
+    const leggiMetadatiIdp = vi.fn();
+    const fetchFinto = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('x'.repeat(2 * 1024 * 1024 + 1), { status: 200 }));
+
+    await expect(new AuthProviderService(repository, { leggiMetadatiIdp } as any).importaMetadatiSaml({ url: 'https://idp.test/metadata' }))
+      .rejects.toThrow(/oltre i 2 MB/);
+    expect(leggiMetadatiIdp).not.toHaveBeenCalled();
+    fetchFinto.mockRestore();
+  });
+
+  it('nella verifica non contatta un indirizzo di autorizzazione vietato', async () => {
+    const { repository } = repositoryInMemoria([
+      EMAIL_PASSWORD,
+      { ...ENTRA, config_client: { ...ENTRA.config_client, authorize_url: 'http://127.0.0.1:8080/authorize' } },
+    ]);
+    const fetchFinto = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response('{"keys":[{}]}', { status: 200 }));
+
+    const esiti = await new AuthProviderService(repository).verificaProvider('p2');
+
+    expect(esiti).toContainEqual({ controllo: 'Indirizzo di autorizzazione', esito: 'errore', dettaglio: expect.stringMatching(/non ammesso/) });
+    expect(fetchFinto.mock.calls.map((c) => String(c[0]))).not.toContain('http://127.0.0.1:8080/authorize');
+    fetchFinto.mockRestore();
   });
 });
