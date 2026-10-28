@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cercaIndirizzi, geocodifica, INTERVALLO_MS } from './geocodifica';
+import { cercaIndirizzi, geocodifica, INTERVALLO_MS, intervalloProcessoMs } from './geocodifica';
 
 vi.mock('../logger', () => ({ log: { warn: vi.fn() } }));
+
+// Worker HTTP del server: 1 come in sviluppo, salvo dove il test lo cambia
+const cluster = vi.hoisted(() => ({ numeroWorkerHttp: vi.fn(() => 1) }));
+vi.mock('../cluster', () => cluster);
 
 const risposta = (lat: string, lon: string) => new Response(JSON.stringify([{ lat, lon }]));
 
@@ -9,6 +13,7 @@ describe('geocodifica', () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
+    cluster.numeroWorkerHttp.mockReturnValue(1);
   });
 
   it('l\'intervallo tra le richieste e di 1,2 secondi', () => {
@@ -29,6 +34,39 @@ describe('geocodifica', () => {
     expect(await risultati).toEqual([{ lat: 43.7, lon: 10.4 }, { lat: 43.7, lon: 10.4 }, { lat: 43.7, lon: 10.4 }]);
     expect(partenze[1] - partenze[0]).toBeGreaterThanOrEqual(INTERVALLO_MS);
     expect(partenze[2] - partenze[1]).toBeGreaterThanOrEqual(INTERVALLO_MS);
+  });
+
+  it('con piu worker HTTP ogni processo distanzia le chiamate per il numero di worker: il server resta entro 1 al secondo', async () => {
+    cluster.numeroWorkerHttp.mockReturnValue(2);
+    vi.useFakeTimers();
+    const partenze: number[] = [];
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      partenze.push(Date.now());
+      return risposta('43.7', '10.4');
+    }));
+
+    const risultati = Promise.all([geocodifica('Via Roma 10, Pisa'), geocodifica('Via Po 1, Lucca')]);
+    await vi.runAllTimersAsync();
+    await risultati;
+
+    expect(intervalloProcessoMs()).toBe(2 * INTERVALLO_MS);
+    expect(partenze[1] - partenze[0]).toBeGreaterThanOrEqual(2 * INTERVALLO_MS);
+  });
+
+  it('con un paese limita la ricerca a quel paese', async () => {
+    vi.useFakeTimers();
+    const url: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (indirizzo: string) => {
+      url.push(indirizzo);
+      return risposta('43.7', '10.4');
+    }));
+
+    const risultati = Promise.all([geocodifica('Via Roma 10, Pisa', 'it'), geocodifica('Via Roma 10, Pisa')]);
+    await vi.runAllTimersAsync();
+    await risultati;
+
+    expect(url[0]).toContain('countrycodes=it');
+    expect(url[1]).not.toContain('countrycodes');
   });
 
   it('se Nominatim fallisce torna senza coordinate e non blocca le richieste in coda', async () => {

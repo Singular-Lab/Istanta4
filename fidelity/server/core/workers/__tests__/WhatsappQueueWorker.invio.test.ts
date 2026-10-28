@@ -38,6 +38,16 @@ const nuovoJob = () => ({
 const rispostaMeta = (status: number, body: unknown) =>
   vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify(body), { status }));
 
+// Meta riceve la richiesta e non risponde: la chiamata finisce solo allo scadere del tempo massimo
+const metaNonRisponde = () =>
+  vi.spyOn(globalThis, 'fetch').mockImplementation((_url, init) => new Promise((_risolvi, rifiuta) => {
+    init!.signal!.addEventListener('abort', () => rifiuta(init!.signal!.reason));
+  }));
+
+// fetch nativo: TypeError "fetch failed" con il codice di sistema nella cause
+const erroreDiRete = (code: string) =>
+  vi.spyOn(globalThis, 'fetch').mockRejectedValue(Object.assign(new TypeError('fetch failed'), { cause: { code } }));
+
 describe('invio dei messaggi della coda WhatsApp', () => {
   beforeEach(() => {
     socket.emitToClients.mockReset();
@@ -109,6 +119,68 @@ describe('invio dei messaggi della coda WhatsApp', () => {
     expect(job.wamid_whatsapp_queue_job).toBe('wamid.ABC123');
     // Senza timeout una chiamata appesa bloccherebbe il worker
     expect((chiamataMeta.mock.calls[0][1] as RequestInit).signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('se salvare l\'esito fallisce dopo che Meta ha accettato, il job non torna in coda e il messaggio parte una volta sola', async () => {
+    const chiamataMeta = rispostaMeta(200, { messages: [{ id: 'wamid.ABC123' }] });
+    const job = nuovoJob();
+    const runAt = job.run_at_whatsapp_queue_job;
+    // Il primo salvataggio (tentativi) riesce, quello dell'esito no
+    job.save.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('connessione al database persa'));
+
+    await (new WhatsappQueueWorker() as any).processJob(job);
+
+    expect(chiamataMeta).toHaveBeenCalledTimes(1);
+    expect(job.status_whatsapp_queue_job).not.toBe(GDOWhatsappQueueJobStatus.PENDING);
+    expect(job.run_at_whatsapp_queue_job).toBe(runAt);
+    expect(job.save).toHaveBeenCalledTimes(2);
+  });
+
+  it('se la notifica dello stato fallisce dopo l\'invio, il job resta SUCCESS e non torna in coda', async () => {
+    const chiamataMeta = rispostaMeta(200, { messages: [{ id: 'wamid.ABC123' }] });
+    const job = nuovoJob();
+    const worker = new WhatsappQueueWorker() as any;
+    vi.spyOn(worker, 'emitBulkStatus').mockRejectedValue(new Error('notifica non riuscita'));
+
+    await worker.processJob(job);
+
+    expect(chiamataMeta).toHaveBeenCalledTimes(1);
+    expect(job.status_whatsapp_queue_job).toBe(GDOWhatsappQueueJobStatus.SUCCESS);
+    expect(job.wamid_whatsapp_queue_job).toBe('wamid.ABC123');
+  });
+
+  it('senza risposta da Meta entro il tempo massimo il job e\' FAILED con esito sconosciuto, senza altri tentativi', async () => {
+    const chiamataMeta = metaNonRisponde();
+    const job = nuovoJob();
+
+    await (new WhatsappQueueWorker({ timeoutMetaMs: 20 }) as any).processJob(job);
+
+    expect(chiamataMeta).toHaveBeenCalledTimes(1);
+    expect(job.status_whatsapp_queue_job).toBe(GDOWhatsappQueueJobStatus.FAILED);
+    expect(job.last_error_whatsapp_queue_job).toContain('esito sconosciuto');
+    expect(job.attempts_whatsapp_queue_job).toBe(1);
+  });
+
+  it('una connessione caduta dopo l\'invio chiude il job con esito sconosciuto, senza altri tentativi', async () => {
+    erroreDiRete('ECONNRESET');
+    const job = nuovoJob();
+
+    await (new WhatsappQueueWorker() as any).processJob(job);
+
+    expect(job.status_whatsapp_queue_job).toBe(GDOWhatsappQueueJobStatus.FAILED);
+    expect(job.last_error_whatsapp_queue_job).toContain('esito sconosciuto');
+  });
+
+  it('una connessione rifiutata prima dell\'invio rimette il job in coda per un nuovo tentativo', async () => {
+    const chiamataMeta = erroreDiRete('ECONNREFUSED');
+    const job = nuovoJob();
+
+    await (new WhatsappQueueWorker() as any).processJob(job);
+
+    expect(chiamataMeta).toHaveBeenCalledTimes(1);
+    expect(job.status_whatsapp_queue_job).toBe(GDOWhatsappQueueJobStatus.PENDING);
+    expect(job.run_at_whatsapp_queue_job.getTime()).toBeGreaterThan(Date.now());
+    expect(job.last_error_whatsapp_queue_job).toContain('connessione');
   });
 
   it('il messaggio parte solo dopo il commit della transazione che lo prende in carico', async () => {

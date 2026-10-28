@@ -386,7 +386,10 @@ export class RaccoglitoreKitService implements IRaccoglitoreKitService {
           req,
           `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getSchemasContext`,
           'GET',
-          undefined
+          undefined,
+          undefined,
+          undefined,
+          { categoria: 'lettura', idempotente: true }
         ),
         'ISTANTA',
         '/FicoProcess/getSchemasContext'
@@ -412,7 +415,10 @@ export class RaccoglitoreKitService implements IRaccoglitoreKitService {
           req,
           `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getAllDeclinazioniKit`,
           'GET',
-          undefined
+          undefined,
+          undefined,
+          undefined,
+          { categoria: 'lettura', idempotente: true }
         ),
         'ISTANTA',
         '/FicoProcess/getAllDeclinazioniKit'

@@ -22,6 +22,7 @@ import { RisolutoreAccessi } from '../accessi/RisolutoreAccessi';
 import { normalizzaPercorso } from '../../../lib/accessi/pagine';
 import { calculateSessionTimeout } from '../session';
 import { ServerUtils } from '../utils/ServerUtils';
+import { invalidaPassaporto } from '../http/cachePassaporti';
 
 // Import per gestione file
 import { renderToBuffer } from '@react-pdf/renderer';
@@ -256,6 +257,8 @@ export class UserController extends BaseController {
       };
 
       const utente = await this.userService.updateProfile(userId, updatedData);
+      // Nome, email e meta finiscono nel passaporto Olimpo: alla prossima chiamata si richiede
+      invalidaPassaporto(userId);
       res.status(HttpStatusCode.OK).json(utente);
     } catch (error) {
       this.handleError(res, error as Error);
@@ -299,6 +302,7 @@ export class UserController extends BaseController {
       }
 
       await this.userService.disattivaAccount(userId, req.body?.password);
+      invalidaPassaporto(userId);
       AuditLogService.getInstance().userUpdated(req, userId, { stato: STATO_UTENTI.DISATTIVO, motivo: 'disattivazione dal profilo' });
 
       req.session.destroy(() => {
@@ -509,6 +513,9 @@ export class UserController extends BaseController {
         req.session.requestCookieJar = undefined;
         req.session.isExternalAuth = false;
 
+        // Un nuovo accesso richiede un passaporto nuovo a Olimpo
+        invalidaPassaporto(result.user!.id);
+
         // Imposta i dati della nuova sessione
         req.session.id_utente = result.user!.id;
         req.session.private_key = privateKey;
@@ -555,6 +562,7 @@ export class UserController extends BaseController {
         req.session.requestCookieJar = undefined;
         const userId = req.session.id_utente as string;
         const auditService = AuditLogService.getInstance();
+        invalidaPassaporto(userId);
 
         log.auth.logout(userId, req.ip || 'unknown');
         auditService.logout(req, userId);
@@ -681,6 +689,7 @@ export class UserController extends BaseController {
         idGdo: ((req.session as any).id_gdo as string | undefined) ?? null,
       });
       AuditLogService.getInstance().userDeleted(req, id as string);
+      invalidaPassaporto(id as string);
 
       if (result && req.session.id_utente) {
         await ServerUtils.CREA_ATTIVITA(
@@ -775,6 +784,9 @@ export class UserController extends BaseController {
       // Refresh materialized view
       await this.userService.refreshMaterializedView();
 
+      // Dati, ruolo e stato finiscono nel passaporto Olimpo: alla prossima chiamata si richiede.
+      // Vale per questo worker; l'altro lo rinnova alla scadenza della cache o al primo rifiuto di Istanta.
+      invalidaPassaporto(id);
       AuditLogService.getInstance().userUpdated(req, id, { changedFields: Object.keys(updateData) });
       res.status(HttpStatusCode.OK).json(result);
     } catch (error) {

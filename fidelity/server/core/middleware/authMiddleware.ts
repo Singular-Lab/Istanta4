@@ -1,9 +1,9 @@
-import axios from 'axios';
 import { NextFunction, Request, Response } from 'express';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { TIPO_UTENTI } from '../../../lib/enums';
 import { BadRequestError, UnauthorizedError } from '../../../lib/errors';
 import config from '../config';
+import { chiamaHttp } from '../http/clienteHttp';
 import { log } from '../logger';
 import { AuditLogService } from '../services/AuditLogService';
 import { calculateSessionTimeout } from '../session';
@@ -110,16 +110,21 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
       if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
         try {
           const token = authHeader.split(' ')[1];
-          const result = await axios.get(`${config.OLYMPUS_IP_ADDRESS}/auth/checkIdentity`, {
+          // Categoria passaporto (10 s): senza timeout un Olympus bloccato tiene appese tutte le richieste con bearer.
+          const risposta = await chiamaHttp(`${config.OLYMPUS_IP_ADDRESS}/auth/checkIdentity`, {
             headers: {
               'fico-secret': config.FICO_SECRET as string,
               'Authorization': `Bearer ${token}`
             },
-            // Senza timeout un Olympus bloccato tiene appese tutte le richieste con bearer.
-            timeout: 10_000
+            categoria: 'passaporto',
+            idempotente: true
           });
-          // Olympus risponde 200 anche ai token che non riconosce, con autorizzato:false.
-          if (result.data?.autorizzato !== true) {
+          // Olympus risponde 200 anche ai token che non riconosce, con autorizzato:false;
+          // un altro stato o un corpo non JSON valgono come rifiuto.
+          let data: { autorizzato?: boolean } | null = null;
+          if (risposta.ok) data = await risposta.json().catch(() => null) as { autorizzato?: boolean } | null;
+          else await risposta.body?.cancel().catch(() => undefined);
+          if (data?.autorizzato !== true) {
             throw new UnauthorizedError({ message: 'Token non valido o scaduto' });
           }
           res.locals.authVia = 'bearer';

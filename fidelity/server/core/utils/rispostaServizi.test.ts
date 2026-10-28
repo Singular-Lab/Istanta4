@@ -88,6 +88,22 @@ describe('verificaRisposta', () => {
     expect(m).not.toContain('10.0.0.5');
   });
 
+  it.each([
+    ['passaporto', "Olimpo non ha riconosciuto o autorizzato l'utente: la richiesta a Istanta non è stata inviata"],
+    ['timeout', 'Istanta non ha risposto in tempo'],
+    ['rete', 'Istanta non è raggiungibile'],
+  ])('nessuna risposta HTTP con motivo %s: messaggio senza dettagli tecnici', (motivo, atteso) => {
+    const r = { data: null, status: 0, statusText: 'Nessuna risposta da http://10.0.0.5:5000/FicoProcess/x entro il tempo massimo', motivo };
+    const m = messaggio(() => verificaRisposta(r, 'ISTANTA', '/FicoProcess/x'));
+    expect(m).toBe(atteso);
+    expect(m).not.toContain('10.0.0.5');
+  });
+
+  it('nessuna risposta da Correggo per timeout: il messaggio nomina Correggo', () => {
+    const r = { data: null, status: 0, statusText: 'timeout', motivo: 'timeout' };
+    expect(messaggio(() => verificaRisposta(r, 'CORREGGO', '/UploadVolFromFP.ashx'))).toBe('Correggo non ha risposto in tempo');
+  });
+
   it('pagina HTML di errore: solo lo stato HTTP', () => {
     const r = errore(500, null, '<!DOCTYPE html><html>Error</html>');
     expect(messaggio(() => verificaRisposta(r, 'ISTANTA', '/x'))).toBe('Istanta ha risposto con un errore (HTTP 500)');

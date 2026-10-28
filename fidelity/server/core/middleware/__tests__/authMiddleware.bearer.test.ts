@@ -3,9 +3,12 @@ import { createHmac } from 'node:crypto';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const olympus = vi.hoisted(() => ({ get: vi.fn() }));
+// Olympus finto dietro il client HTTP comune, che usa il fetch globale
+const olympus = { get: vi.fn() };
+vi.stubGlobal('fetch', olympus.get);
 
-vi.mock('axios', () => ({ default: { get: olympus.get } }));
+const rispostaOlympus = (corpo: unknown) =>
+  new Response(JSON.stringify(corpo), { status: 200, headers: { 'content-type': 'application/json' } });
 
 vi.mock('../../config', () => ({
   default: {
@@ -61,7 +64,7 @@ describe('bearer di Olympus', () => {
   });
 
   it('rifiuta un bearer che Olympus non riconosce (200 con autorizzato:false)', async () => {
-    olympus.get.mockResolvedValue({ data: { origin: '', username: '', autorizzato: false } });
+    olympus.get.mockResolvedValue(rispostaOlympus({ origin: '', username: '', autorizzato: false }));
 
     const res = await request(createApp())
       .put('/api/getKitByPromo')
@@ -72,7 +75,7 @@ describe('bearer di Olympus', () => {
   });
 
   it('accetta il bearer di Istanta sulle route di integrazione, senza sessione ne\' permessi', async () => {
-    olympus.get.mockResolvedValue({ data: { origin: 'IS', username: 'istanta@esempio.it', autorizzato: true } });
+    olympus.get.mockResolvedValue(rispostaOlympus({ origin: 'IS', username: 'istanta@esempio.it', autorizzato: true }));
 
     const res = await request(createApp())
       .put('/api/getKitByPromo')
@@ -84,7 +87,7 @@ describe('bearer di Olympus', () => {
   });
 
   it('ignora un bearer valido sulle route non di integrazione: serve la sessione', async () => {
-    olympus.get.mockResolvedValue({ data: { origin: 'IS', username: 'istanta@esempio.it', autorizzato: true } });
+    olympus.get.mockResolvedValue(rispostaOlympus({ origin: 'IS', username: 'istanta@esempio.it', autorizzato: true }));
 
     const res = await request(createApp())
       .delete('/api/tracciati/t1')

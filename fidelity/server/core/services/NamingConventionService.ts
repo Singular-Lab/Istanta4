@@ -68,7 +68,10 @@ export class NamingConventionService implements INamingConventionService {
           req,
           `${config.ISTANTA_IP_ADDRESS}/FicoProcess/salvaNamingConvention`,
           'PUT',
-          objIstanta
+          objIstanta,
+          undefined,
+          undefined,
+          { categoria: 'scrittura' }
         ),
         'ISTANTA',
         '/FicoProcess/salvaNamingConvention'
@@ -151,7 +154,10 @@ export class NamingConventionService implements INamingConventionService {
           req,
           `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getAllNamingConventionComponents`,
           'GET',
-          undefined
+          undefined,
+          undefined,
+          undefined,
+          { categoria: 'lettura', idempotente: true }
         ),
         'ISTANTA',
         '/FicoProcess/getAllNamingConventionComponents'

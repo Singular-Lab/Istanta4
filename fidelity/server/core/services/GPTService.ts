@@ -1,4 +1,3 @@
-import axios, { AxiosError } from 'axios';
 import dayjs from 'dayjs';
 import isBetween from 'dayjs/plugin/isBetween';
 import { Request } from 'express';
@@ -6,10 +5,11 @@ import fs from 'fs';
 import path from 'path';
 import { Op, literal } from 'sequelize';
 import { v4 as uuidv4 } from 'uuid';
-import { DatabaseError, ExternalApiError, NotFoundError, wrapApiError, wrapDatabaseError } from '../../../lib/errors';
+import { ExternalApiError, isAppError, NotFoundError, ServiceUnavailableError, wrapDatabaseError } from '../../../lib/errors';
 import { log } from '../logger';
 import { ApprofondimentoVino, FotoRicetta, ReferenzeIstanta, Ricette, STATO_RICETTA, TIPO_RICETTA } from '../../../lib/types';
 import config from '../config';
+import { chiamaHttp, ErroreHttp } from '../http/clienteHttp';
 import { IGPTService } from '../interfaces/IGPTService';
 import { IImpostazioniService } from '../interfaces/IImpostazioniService';
 import { ApprofondimentoVino as ApprofondimentoVinoModel } from '../models/approfondimento_vino';
@@ -24,6 +24,153 @@ import { urlOlimpo } from '../utils/urlOlimpo';
 const sqlString = (value: unknown): string => ReferenzeIstantaModel.sequelize!.escape(String(value));
 
 dayjs.extend(isBetween);
+
+const SERVIZIO_AI = 'AI ricette';
+// L'immagine arriva da un indirizzo scelto dal servizio AI: tempo e dimensione limitati
+const TIMEOUT_IMMAGINE_MS = 30_000;
+const DIMENSIONE_MASSIMA_IMMAGINE = 10 * 1024 * 1024;
+
+/** Motivo breve dato dal servizio: niente oggetti interi, che potrebbero contenere la richiesta. */
+function motivoBreve(dati: unknown): string {
+  const testo = (dati as { message?: unknown } | null)?.message;
+  return typeof testo === 'string' ? testo.trim().slice(0, 200) : '';
+}
+
+/**
+ * POST verso il servizio AI delle ricette (`?azione=...`). Mai ritentata: ogni chiamata ha un
+ * costo e genera un contenuto nuovo. Gli errori riportano solo stato e motivo breve: la chiave
+ * viaggia nella richiesta e non deve finire nei log.
+ */
+export async function chiamaServizioAi<T>(azione: string, apiKey: string, dati: Record<string, unknown>, operazione: string): Promise<T> {
+  const url = new URL(config.AI_RICETTE_API_URL);
+  url.searchParams.set('azione', azione);
+
+  let risposta: Response;
+  try {
+    risposta = await chiamaHttp(url.toString(), {
+      method: 'POST',
+      timeoutMs: config.AI_RICETTE_TIMEOUT_MS,
+      idempotente: false,
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({ apiKey, ...dati }),
+    });
+  } catch (err) {
+    if (err instanceof ErroreHttp) {
+      throw new ServiceUnavailableError({
+        message: err.motivo === 'timeout'
+          ? `Il servizio AI non ha risposto in tempo durante ${operazione}`
+          : `Servizio AI non raggiungibile durante ${operazione}`,
+        service: SERVIZIO_AI,
+        details: { azione, motivo: err.motivo },
+      });
+    }
+    throw err;
+  }
+
+  const corpo = await risposta.json().catch(() => null) as any;
+  const motivo = motivoBreve(corpo);
+  if (!risposta.ok) {
+    throw new ExternalApiError({
+      message: `Errore del servizio AI durante ${operazione} (HTTP ${risposta.status})${motivo ? `: ${motivo}` : ''}`,
+      service: SERVIZIO_AI,
+      endpoint: azione,
+      statusCode: risposta.status,
+    });
+  }
+  if (!corpo || typeof corpo !== 'object' || corpo.success === false) {
+    throw new ExternalApiError({
+      message: `Il servizio AI non ha completato ${operazione}${motivo ? `: ${motivo}` : ''}`,
+      service: SERVIZIO_AI,
+      endpoint: azione,
+      statusCode: risposta.status,
+    });
+  }
+  return corpo as T;
+}
+
+/** Scarica l'immagine generata: solo https, 30 s, al massimo 10 MB anche se il Content-Length manca o mente. */
+export async function scaricaImmagineGenerata(indirizzo: unknown): Promise<Buffer> {
+  const errore = (message: string, statusCode?: number) =>
+    new ExternalApiError({ message, service: SERVIZIO_AI, endpoint: 'immagine generata', statusCode });
+
+  let url: URL | null = null;
+  try { url = new URL(String(indirizzo)); } catch { /* indirizzo non valido */ }
+  if (!url || url.protocol !== 'https:') {
+    throw errore("Il servizio AI non ha restituito un indirizzo https valido per l'immagine");
+  }
+
+  let risposta: Response;
+  try {
+    // GET senza effetti: un secondo tentativo se la connessione cade
+    risposta = await chiamaHttp(url.toString(), { method: 'GET', timeoutMs: TIMEOUT_IMMAGINE_MS, idempotente: true, tentativi: 2 });
+  } catch (err) {
+    if (err instanceof ErroreHttp) {
+      throw new ServiceUnavailableError({ message: "Download dell'immagine generata non riuscito", service: SERVIZIO_AI, details: { motivo: err.motivo } });
+    }
+    throw err;
+  }
+
+  const scarta = () => risposta.body?.cancel().catch(() => undefined);
+  if (!risposta.ok) {
+    await scarta();
+    throw errore(`Download dell'immagine generata non riuscito (HTTP ${risposta.status})`, risposta.status);
+  }
+  // Un redirect non deve portare fuori da https
+  if (risposta.url && !risposta.url.startsWith('https:')) {
+    await scarta();
+    throw errore("L'immagine generata non e' servita in https");
+  }
+  if (Number(risposta.headers.get('content-length')) > DIMENSIONE_MASSIMA_IMMAGINE) {
+    await scarta();
+    throw errore("L'immagine generata supera il limite di 10 MB");
+  }
+
+  const lettore = risposta.body?.getReader();
+  if (!lettore) throw errore("Il servizio AI ha restituito un'immagine vuota");
+  const parti: Uint8Array[] = [];
+  let letti = 0;
+  try {
+    for (;;) {
+      const { done, value } = await lettore.read();
+      if (done) break;
+      letti += value.byteLength;
+      if (letti > DIMENSIONE_MASSIMA_IMMAGINE) {
+        await lettore.cancel().catch(() => undefined);
+        throw errore("L'immagine generata supera il limite di 10 MB");
+      }
+      parti.push(value);
+    }
+  } catch (err) {
+    if (isAppError(err)) throw err;
+    // Tempo scaduto o connessione caduta durante la lettura
+    throw new ServiceUnavailableError({ message: "Download dell'immagine generata interrotto", service: SERVIZIO_AI });
+  }
+  if (letti === 0) throw errore("Il servizio AI ha restituito un'immagine vuota");
+  return Buffer.concat(parti);
+}
+
+/** sendToFICOApi non lancia: un upload fallito arriva come stato 0/4xx/5xx o come esito false. */
+function guidIdFotoCaricata(send: { status: number; data: any }): string {
+  const riuscito = send.status >= 200 && send.status < 300 && send.data?.esito !== false;
+  const guidId = riuscito ? send.data?.record?.guidId : undefined;
+  if (typeof guidId === 'string' && guidId) return guidId;
+  throw new ExternalApiError({
+    message: send.status === 0
+      ? 'Impossibile contattare Olimpo per salvare la foto della ricetta'
+      : 'Olimpo non ha salvato la foto della ricetta',
+    service: 'Olimpo',
+    endpoint: '/foto/uploadFotoWebPliant',
+    statusCode: send.status || undefined,
+  });
+}
+
+/** Form dell'upload su Olimpo della foto di una ricetta. */
+function formFotoRicetta(immagine: Buffer, idRicetta: string): FormData {
+  const formData = new FormData();
+  formData.append("data", JSON.stringify({ id: idRicetta, device: "desktop", type: "thumbnail" }));
+  formData.append("file", new Blob([immagine], { type: "image/jpeg" }), `thumbnail_${idRicetta}.jpeg`);
+  return formData;
+}
 
 export class GPTService implements IGPTService {
   constructor(private readonly impostazioniService: IImpostazioniService) { }
@@ -42,34 +189,22 @@ export class GPTService implements IGPTService {
 
   async createApprofondimentoVino(params: { cantina: string; nome: string; codice: string; anno: number }): Promise<ApprofondimentoVino> {
     try {
-      const resultAxios = await axios.post<{
+      // success false arriva gia' come ExternalApiError
+      const risultato = await chiamaServizioAi<{
         success: boolean;
         message: string;
         risposta: ApprofondimentoVino
-      }>(`https://www.istantabusiness.it/betatools/ricette_ai/endpoint-api.php?azione=approfondimentoVinoNoDb`, {
-        apiKey: config.API_KEY_AI,
+      }>('approfondimentoVinoNoDb', config.API_KEY_AI, {
         dati_vino: {
           cantina: params.cantina,
           nome: params.nome,
           anno: params.anno
         }
-      }, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${config.API_KEY_AI}`
-        }
-      });
+      }, "la generazione dell'approfondimento vino");
 
-      if (!resultAxios.data.success) {
-        throw new ExternalApiError({
-          message: 'Errore durante la generazione dell\'approfondimento vino',
-          service: 'AI Service',
-          details: { message: resultAxios.data.message }
-        });
-      }
       const approfondimentoVino = await ApprofondimentoVinoModel.create({
         id: uuidv4(),
-        ...resultAxios.data.risposta,
+        ...risultato.risposta,
         anno: params.anno,
         nome: params.nome,
         codice: params.codice,
@@ -77,7 +212,7 @@ export class GPTService implements IGPTService {
       } as any) as unknown as ApprofondimentoVino;
       return approfondimentoVino;
     } catch (error) {
-      if (error instanceof ExternalApiError) {
+      if (isAppError(error)) {
         throw error;
       }
       throw wrapDatabaseError(error, {
@@ -314,33 +449,19 @@ export class GPTService implements IGPTService {
         message: "Ricetta non trovata"
       });
     }
-    const response = await axios.post<{
+    const generata = await chiamaServizioAi<{
       success: boolean;
       message: string;
       prompt: string;
       risultato: string;
       url: string
-    }>("https://www.istantabusiness.it/betatools/ricette_ai/endpoint-api.php?azione=generaImmagineRicettaByDatiRicettaCortaNoDb", {
-      apiKey: params.apiKey,
+    }>('generaImmagineRicettaByDatiRicettaCortaNoDb', params.apiKey, {
       titolo: ricetta.titolo + "Genera un piatto pronto da mangiare",
       ingredienti: ricetta?.ingredienti?.map((ing: any) => ({
         nome_prodotto: ing.nome_prodotto
       }))
-    }, {
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${params.apiKey}`
-      }
-    });
-    let base64Image: string;
-    const fotoBuffer = await axios.get(response.data.url, { responseType: 'arraybuffer' });
-    base64Image = Buffer.from(fotoBuffer.data).toString('base64');
-
-    const formData = new FormData();
-    const buffer = Buffer.from(base64Image, "base64");
-    const blob = new Blob([buffer], { type: "image/jpeg" });
-    formData.append("data", JSON.stringify({ id: ricetta.id, device: "desktop", type: "thumbnail" }));
-    formData.append("file", blob, `thumbnail_${ricetta.id}.jpeg`);
+    }, "la generazione della foto della ricetta");
+    const immagine = await scaricaImmagineGenerata(generata.url);
 
     const send = await ServerUtils.sendToFICOApi<{
       message: string,
@@ -351,27 +472,31 @@ export class GPTService implements IGPTService {
       request,
       `${config.OLYMPUS_IP_ADDRESS}/foto/uploadFotoWebPliant`,
       "POST",
-      formData
+      formFotoRicetta(immagine, ricetta.id),
+      undefined,
+      undefined,
+      { categoria: 'lunga' }
     );
+    const guidId = guidIdFotoCaricata(send);
 
     const fotoRicetta: any[] = [...(ricetta.foto_ricetta || [])];
     const fotoIndex = fotoRicetta.findIndex(foto => foto.id === params.idFoto);
     if (fotoIndex !== -1) {
       fotoRicetta[fotoIndex] = {
         ...fotoRicetta[fotoIndex],
-        id_olimpo_cloud: send.data.record.guidId,
-        url: urlOlimpo('/foto/getThumbNailOnDemand', { guidId: send.data.record.guidId }),
+        id_olimpo_cloud: guidId,
+        url: urlOlimpo('/foto/getThumbNailOnDemand', { guidId }),
         meta: {
           id: ricetta.id,
           device: "desktop",
           type: "thumbnail"
         },
-        prompt: response.data.prompt
+        prompt: generata.prompt
       };
       await RicetteModel.update({ foto_ricetta: fotoRicetta }, { where: { id: ricetta.id } });
     }
     log.info('Foto ricetta rigenerata con successo');
-    return urlOlimpo('/foto/getThumbNailOnDemand', { guidId: send.data.record.guidId });
+    return urlOlimpo('/foto/getThumbNailOnDemand', { guidId });
   }
 
   async generaFotoRicetta(params: { apiKey: string; id: string; }, request: Request): Promise<string> {
@@ -394,39 +519,19 @@ export class GPTService implements IGPTService {
       });
     }
 
-    const requestData = {
-      apiKey: params.apiKey,
-      titolo: ricetta.titolo,
-      ingredienti: ricetta?.ingredienti?.map((ing: any) => ({
-        nome_prodotto: ing.nome_prodotto
-      }))
-    };
-
-    const response = await axios.post<{
+    const generata = await chiamaServizioAi<{
       success: boolean;
       message: string;
       prompt: string;
       risultato: string;
       url: string;
-    }>("https://www.istantabusiness.it/betatools/ricette_ai/endpoint-api.php?azione=generaImmagineRicettaByDatiRicettaCortaNoDb",
-      requestData,
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${params.apiKey}`
-        }
-      }
-    );
-
-    let base64Image: string;
-    const fotoBuffer = await axios.get(response.data.url, { responseType: 'arraybuffer' });
-    base64Image = Buffer.from(fotoBuffer.data).toString('base64');
-
-    const formData = new FormData();
-    const buffer = Buffer.from(base64Image, "base64");
-    const blob = new Blob([buffer], { type: "image/jpeg" });
-    formData.append("data", JSON.stringify({ id: ricetta.id, device: "desktop", type: "thumbnail" }));
-    formData.append("file", blob, `thumbnail_${ricetta.id}.jpeg`);
+    }>('generaImmagineRicettaByDatiRicettaCortaNoDb', params.apiKey, {
+      titolo: ricetta.titolo,
+      ingredienti: ricetta?.ingredienti?.map((ing: any) => ({
+        nome_prodotto: ing.nome_prodotto
+      }))
+    }, "la generazione della foto della ricetta");
+    const immagine = await scaricaImmagineGenerata(generata.url);
 
     const send = await ServerUtils.sendToFICOApi<{
       message: string,
@@ -437,21 +542,25 @@ export class GPTService implements IGPTService {
       request,
       `${config.OLYMPUS_IP_ADDRESS}/foto/uploadFotoWebPliant`,
       "POST",
-      formData
+      formFotoRicetta(immagine, ricetta.id),
+      undefined,
+      undefined,
+      { categoria: 'lunga' }
     );
+    const guidId = guidIdFotoCaricata(send);
 
     const hasFotoMain = (ricetta.foto_ricetta || []).some((foto: any) => foto.main);
     const nuovaFoto: FotoRicetta = {
       main: !hasFotoMain,
-      id_olimpo_cloud: send.data.record.guidId,
-      url: urlOlimpo('/foto/getThumbNailOnDemand', { guidId: send.data.record.guidId }),
+      id_olimpo_cloud: guidId,
+      url: urlOlimpo('/foto/getThumbNailOnDemand', { guidId }),
       meta: {
         id: ricetta.titolo,
         device: "desktop",
         type: "thumbnail"
       },
       id: uuidv4(),
-      prompt: response.data.prompt
+      prompt: generata.prompt
     };
 
     const currentFotoRicetta: any[] = [...(ricetta.foto_ricetta || []), nuovaFoto];
@@ -459,7 +568,7 @@ export class GPTService implements IGPTService {
 
     log.info('Foto ricetta generata con successo');
 
-    return urlOlimpo('/foto/getThumbNailOnDemand', { guidId: send.data.record.guidId });
+    return urlOlimpo('/foto/getThumbNailOnDemand', { guidId });
   }
 
   async generaAbbinamentoVino(params: { apiKey: string; id: string; }): Promise<any> {
@@ -494,35 +603,31 @@ export class GPTService implements IGPTService {
         vino: v.approfondimento.nome,
         anno: v.approfondimento.anno
       }));
-      const response = await axios.post<{
+      const response = await chiamaServizioAi<{
         success: boolean;
         message: string;
         risposta: {
           vini_abbinati: Array<string>;
           motivazione: string;
         };
-      }>("https://www.istantabusiness.it/betatools/ricette_ai/endpoint-api.php?azione=abbinamentoVinoNoDb", {
-        apiKey: params.apiKey,
+      }>('abbinamentoVinoNoDb', params.apiKey, {
         ricetta: {
           titolo: ricetta.titolo,
           ingredienti: ricetta?.ingredienti?.map(ing => ing.nome_prodotto)
         },
         vini: viniDisponibili
-      }, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${params.apiKey}`
-        }
-      });
+      }, "la generazione dell'abbinamento vino");
 
       const abbinamentoVino = {
-        vini_abbinati: response.data.risposta.vini_abbinati,
-        motivazione: response.data.risposta.motivazione
+        vini_abbinati: response.risposta.vini_abbinati,
+        motivazione: response.risposta.motivazione
       };
       await RicetteModel.update({ abbinamento_vino: abbinamentoVino }, { where: { id: params.id } });
       return RicetteModel.findOne({ where: { id: params.id }, raw: true });
     } catch (error) {
       log.error("Errore durante la generazione dell'abbinamento vino", error instanceof Error ? error : new Error(String(error)));
+      // Gli errori del servizio AI hanno gia' stato e motivo
+      if (isAppError(error)) throw error;
       throw new ExternalApiError({
         message: 'Impossibile generare l\'abbinamento vino. Si prega di riprovare più tardi.',
         service: 'MattoliniAPI',
@@ -550,7 +655,7 @@ export class GPTService implements IGPTService {
         details: { id: params.id },
       });
     }
-    const response = await axios.post<{
+    const response = await chiamaServizioAi<{
       success: boolean;
       message: string;
       risposta: {
@@ -566,19 +671,13 @@ export class GPTService implements IGPTService {
         tempo_in_secondi: string;
         costo_in_euro: string;
       }
-    }>("https://www.istantabusiness.it/betatools/ricette_ai/endpoint-api.php?azione=generaRicettaEstesaByDatiInviatiSenzaDb", {
-      apiKey: params.apiKey,
+    }>('generaRicettaEstesaByDatiInviatiSenzaDb', params.apiKey, {
       dati_ricetta: ricetta
-    }, {
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${params.apiKey}`
-      }
-    });
+    }, "l'approfondimento della ricetta");
 
     await RicetteModel.update({
-      procedimento: response.data.risposta.procedimento,
-      ingredienti: response.data.risposta.ingredienti.map(ing => ({
+      procedimento: response.risposta.procedimento,
+      ingredienti: response.risposta.ingredienti.map(ing => ({
         nome_prodotto: ing.nome_prodotto,
         ean: ing.ean,
         quantita_necessaria: ing.quantita_necessaria,
@@ -588,8 +687,8 @@ export class GPTService implements IGPTService {
       })),
       stato: STATO_RICETTA.REVISIONARE,
       tipo: TIPO_RICETTA.LUNGA,
-      tempo_in_secondi: response.data.risposta.tempo_in_secondi,
-      costo_in_euro: response.data.risposta.costo_in_euro
+      tempo_in_secondi: response.risposta.tempo_in_secondi,
+      costo_in_euro: response.risposta.costo_in_euro
     } as any, { where: { id: params.id } });
 
     return RicetteModel.findOne({ where: { id: params.id }, raw: true });
@@ -618,7 +717,7 @@ export class GPTService implements IGPTService {
     }): Promise<any> {
     try {
       const prodottiInOfferta = params.prodottiInOfferta.sort(() => Math.random() - 0.5).slice(10, 30);
-      const response = await axios.post<{
+      const response = await chiamaServizioAi<{
         success: boolean;
         message: string;
         indicazioni: string;
@@ -633,60 +732,41 @@ export class GPTService implements IGPTService {
             inclusoNelVolantino: string;
           }>;
         }>;
-      }>(
-        "https://www.istantabusiness.it/betatools/ricette_ai/endpoint-api.php?azione=generaRicetteCorteMultipleSenzaSalvareNelDb",
-        {
-          apiKey: params.apiKey,
-          indicazioni: params.indicazioni,
-          numero_ricette: params.numero_ricette,
-          prodottiInOfferta: prodottiInOfferta
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${params.apiKey}`
-          }
-        }
-      );
-      if (response.data.success) {
-        const ricette = response.data.risposta.map((ricetta) => ({
-          ...ricetta,
-          id: uuidv4(),
-          stato: STATO_RICETTA.REVISIONARE,
-          tipo: TIPO_RICETTA.CORTA,
-        }));
-        const ricetteSalvate = await RicetteModel.bulkCreate(ricette as any[]);
-        return {
-          success: true,
-          message: response.data.message,
-          indicazioni: response.data.indicazioni,
-          risposta: ricette
-        };
-      } else {
-        throw wrapDatabaseError(new Error("Errore durante la generazione delle ricette"), {
-          message: "Errore durante la generazione delle ricette",
-          operation: 'generaRicetteCorteMultiple',
-          entity: 'GPTService'
+      }>('generaRicetteCorteMultipleSenzaSalvareNelDb', params.apiKey, {
+        indicazioni: params.indicazioni,
+        numero_ricette: params.numero_ricette,
+        prodottiInOfferta: prodottiInOfferta
+      }, "la generazione delle ricette");
+      if (!response.success) {
+        throw new ExternalApiError({
+          message: "Il servizio AI non ha completato la generazione delle ricette",
+          service: SERVIZIO_AI,
+          endpoint: 'generaRicetteCorteMultipleSenzaSalvareNelDb'
         });
       }
+      const ricette = response.risposta.map((ricetta) => ({
+        ...ricetta,
+        id: uuidv4(),
+        stato: STATO_RICETTA.REVISIONARE,
+        tipo: TIPO_RICETTA.CORTA,
+      }));
+      await RicetteModel.bulkCreate(ricette as any[]);
+      return {
+        success: true,
+        message: response.message,
+        indicazioni: response.indicazioni,
+        risposta: ricette
+      };
     } catch (error) {
       log.error('Errore nella generazione delle ricette corte multiple', error instanceof Error ? error : new Error(String(error)));
-      if (error instanceof AxiosError) {
-        throw wrapApiError(error, {
-          message: error.response?.data.message,
-          details: { error },
-          service: 'GPTService',
-          endpoint: 'generaRicetteCorteMultiple'
-        });
-      }
-      if (error instanceof DatabaseError) {
+      // Errori del servizio AI (solo stato e motivo) o del database
+      if (isAppError(error)) {
         throw error;
       }
-      throw wrapDatabaseError(new Error("Errore durante la generazione delle ricette"), {
+      throw wrapDatabaseError(error, {
         message: "Errore durante la generazione delle ricette",
         operation: 'generaRicetteCorteMultiple',
-        entity: 'GPTService',
-        details: { error }
+        entity: 'GPTService'
       });
     }
   }
@@ -712,7 +792,7 @@ export class GPTService implements IGPTService {
   }): Promise<any> {
     try {
       const prodottiInOfferta = params.prodottiInOfferta.sort(() => Math.random() - 0.5).slice(0, 5);
-      const response = await axios.post<{
+      const response = await chiamaServizioAi<{
         status: string;
         message: string;
         risposta: {
@@ -727,54 +807,35 @@ export class GPTService implements IGPTService {
           }[];
         };
         success: boolean;
-      }>(
-        "https://www.istantabusiness.it/betatools/ricette_ai/endpoint-api.php?azione=generaRicettaCortaSenzaSalvareNelDb",
-        {
-          apiKey: params.apiKey,
-          indicazioni: params.indicazioni,
-          prodottiInOfferta: prodottiInOfferta,
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${params.apiKey}`
-          }
-        }
-      );
-      if (response.data.success) {
-        const ricetta = {
-          ...response.data.risposta,
-          id: uuidv4(),
-          stato: STATO_RICETTA.REVISIONARE,
-          tipo: TIPO_RICETTA.CORTA,
-        };
-        const ricettaSalvata = await RicetteModel.create(ricetta as any);
-        return response.data;
-      } else {
-        throw wrapDatabaseError(new Error("Errore durante la generazione della ricetta"), {
-          message: "Errore durante la generazione della ricetta",
-          operation: 'generaRicetta',
-          entity: 'GPTService'
+      }>('generaRicettaCortaSenzaSalvareNelDb', params.apiKey, {
+        indicazioni: params.indicazioni,
+        prodottiInOfferta: prodottiInOfferta,
+      }, "la generazione della ricetta");
+      if (!response.success) {
+        throw new ExternalApiError({
+          message: "Il servizio AI non ha completato la generazione della ricetta",
+          service: SERVIZIO_AI,
+          endpoint: 'generaRicettaCortaSenzaSalvareNelDb'
         });
       }
+      const ricetta = {
+        ...response.risposta,
+        id: uuidv4(),
+        stato: STATO_RICETTA.REVISIONARE,
+        tipo: TIPO_RICETTA.CORTA,
+      };
+      await RicetteModel.create(ricetta as any);
+      return response;
     } catch (error) {
       log.error('Errore nella generazione della ricetta', error instanceof Error ? error : new Error(String(error)));
-      if (error instanceof AxiosError) {
-        throw wrapApiError(error, {
-          message: error.response?.data.message,
-          details: { error },
-          service: 'GPTService',
-          endpoint: 'generaRicetta'
-        });
-      }
-      if (error instanceof DatabaseError) {
+      // Errori del servizio AI (solo stato e motivo) o del database
+      if (isAppError(error)) {
         throw error;
       }
-      throw wrapDatabaseError(new Error("Errore durante la generazione della ricetta"), {
+      throw wrapDatabaseError(error, {
         message: "Errore durante la generazione della ricetta",
         operation: 'generaRicetta',
-        entity: 'GPTService',
-        details: { error }
+        entity: 'GPTService'
       });
     }
   }

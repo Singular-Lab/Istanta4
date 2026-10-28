@@ -34,10 +34,11 @@ export async function scriviSuIstanta(
     method,
     data,
     undefined,
-    sviluppo ? TIMEOUT_SVILUPPO_MS : undefined
+    sviluppo ? TIMEOUT_SVILUPPO_MS : undefined,
+    { categoria: 'scrittura' }
   );
   if (sviluppo && risposta.status === 0) {
-    log.warn('Istanta non raggiungibile: operazione salvata solo in FP', { endpoint: percorso, motivo: risposta.statusText });
+    log.warn('Istanta non raggiungibile: operazione salvata solo in FP', { endpoint: percorso, motivo: risposta.motivo ?? risposta.statusText });
     if (!req.res?.headersSent) req.res?.setHeader(HEADER_DISSINCRONIA, percorso);
     return { sincronizzato: false };
   }

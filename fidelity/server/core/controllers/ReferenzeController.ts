@@ -72,7 +72,11 @@ export class ReferenzeController extends BaseController {
           {
             kit: runtimekit,
             dataFieldsRequest: webpliantFields
-          }
+          },
+          undefined,
+          undefined,
+          // Istanta ricostruisce le referenze dell'intero kit: puo' superare il minuto
+          { categoria: 'lunga' }
         ),
         'ISTANTA',
         '/FicoProcess/downloadKitRuntimeFromFP',

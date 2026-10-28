@@ -1182,7 +1182,11 @@ export class TracciatoService implements ITracciatoService {
           req,
           `${config.ISTANTA_IP_ADDRESS}/FicoProcess/analisiMomento`,
           "POST",
-          oggettoPerIstantaAnalisi
+          oggettoPerIstantaAnalisi,
+          undefined,
+          undefined,
+          // Analisi: lunga, ma e una lettura (POST solo per il corpo)
+          { categoria: 'lunga', idempotente: true }
         ),
         'ISTANTA',
         '/FicoProcess/analisiMomento'
@@ -1390,6 +1394,10 @@ export class TracciatoService implements ITracciatoService {
         `${config.ISTANTA_IP_ADDRESS}/FicoProcess/analisiConfronto`,
         "POST",
         payloadIstanta,
+        undefined,
+        undefined,
+        // Analisi: lunga, ma e una lettura (POST solo per il corpo)
+        { categoria: 'lunga', idempotente: true }
       ),
       'ISTANTA',
       '/FicoProcess/analisiConfronto'
@@ -2290,7 +2298,10 @@ export class TracciatoService implements ITracciatoService {
         //NOTE abbiamo cambiato la dicitura aggiungendo l'ultimo parametro che è lo scope.
         `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getSourceFields/${req.query.guidId}/importInConfronto`,
         "GET",
-        undefined
+        undefined,
+        undefined,
+        undefined,
+        { categoria: 'lettura', idempotente: true }
       ),
       'ISTANTA',
       '/FicoProcess/getSourceFields/importInConfronto'

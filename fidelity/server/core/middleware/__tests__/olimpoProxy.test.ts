@@ -100,3 +100,53 @@ describe('proxy /olimpo', () => {
     expect(ricevute[0].url).toBe('/socket.io/?EIO=4&transport=polling');
   });
 });
+
+describe('proxy /olimpo: tempi massimi', () => {
+  // Olimpo lento: con modo=muto non risponde mai, con modo=lento manda la risposta a pezzi
+  let lento: http.Server;
+  let targetLento: string;
+
+  beforeAll(async () => {
+    lento = http.createServer((req, res) => {
+      if (req.url?.includes('modo=muto')) return;
+      res.writeHead(200, { 'content-type': 'image/png' });
+      let pezzi = 0;
+      const timer = setInterval(() => {
+        res.write('x');
+        if (++pezzi === 10) {
+          clearInterval(timer);
+          res.end();
+        }
+      }, 40);
+      res.on('close', () => clearInterval(timer));
+    });
+    lento.listen(0);
+    await new Promise(resolve => lento.once('listening', resolve));
+    targetLento = `http://127.0.0.1:${(lento.address() as AddressInfo).port}`;
+  });
+
+  afterAll(() => new Promise<void>(resolve => {
+    lento.closeAllConnections();
+    lento.close(() => resolve());
+  }));
+
+  function appLenta(inattivitaMs: number) {
+    const app = express();
+    app.use('/olimpo', creaProxyOlimpo(targetLento, { connessioneMs: 1_000, inattivitaMs }));
+    return app;
+  }
+
+  it('Olimpo resta in silenzio oltre il tempo di inattivita prima degli header: 504', async () => {
+    const res = await request(appLenta(100)).get('/olimpo/foto/getThumbNailOnDemand?guidId=abc&modo=muto');
+
+    expect(res.status).toBe(504);
+  });
+
+  it('nessun tempo massimo complessivo: una risposta che continua ad arrivare passa anche oltre il tempo di inattivita', async () => {
+    // 10 pezzi ogni 40 ms: circa 400 ms in tutto, mai 200 ms di silenzio
+    const res = await request(appLenta(200)).get('/olimpo/foto/getThumbNailOnDemand?guidId=abc&modo=lento');
+
+    expect(res.status).toBe(200);
+    expect(Buffer.from(res.body).toString()).toBe('x'.repeat(10));
+  });
+});

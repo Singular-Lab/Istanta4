@@ -18,7 +18,7 @@ export class IstantaService implements IIstantaService {
   async getStatusImportazione(guidId: string, req: Request): Promise<any> {
     type StatoImportazione = { stato: OperationStatus; error: string; esito: boolean };
     const data = verificaRisposta<StatoImportazione>(
-      await ServerUtils.sendToFICOApi<StatoImportazione>(req, `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getStatoImportazione/${guidId}`, "GET", {}),
+      await ServerUtils.sendToFICOApi<StatoImportazione>(req, `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getStatoImportazione/${guidId}`, "GET", {}, undefined, undefined, { categoria: 'lettura', idempotente: true }),
       'ISTANTA',
       '/FicoProcess/getStatoImportazione'
     );
@@ -70,7 +70,10 @@ export class IstantaService implements IIstantaService {
         req,
         `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getCombinazioniLavorazioneByPromo/${promoId}`,
         "GET",
-        {}
+        {},
+        undefined,
+        undefined,
+        { categoria: 'lettura', idempotente: true }
       ),
       'ISTANTA',
       '/FicoProcess/getCombinazioniLavorazioneByPromo',
@@ -133,7 +136,11 @@ export class IstantaService implements IIstantaService {
               req,
               `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getMaterialeRuntime/${file.id}`,
               'GET',
-              undefined
+              undefined,
+              undefined,
+              undefined,
+              // File binario: lunga, lettura ripetibile
+              { categoria: 'lunga', idempotente: true }
             ),
             'ISTANTA',
             '/FicoProcess/getMaterialeRuntime'
@@ -194,7 +201,11 @@ export class IstantaService implements IIstantaService {
               req,
               `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getMaterialeRuntime/${file.id}`,
               'GET',
-              undefined
+              undefined,
+              undefined,
+              undefined,
+              // File binario: lunga, lettura ripetibile
+              { categoria: 'lunga', idempotente: true }
             ),
             'ISTANTA',
             '/FicoProcess/getMaterialeRuntime'

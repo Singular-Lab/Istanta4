@@ -1,4 +1,3 @@
-import axios from 'axios';
 import crypto from 'node:crypto';
 import { Transaction } from 'sequelize';
 import { v4 as uuidv4 } from 'uuid';
@@ -7,6 +6,8 @@ import { DatabaseError, NotFoundError, ValidationError } from '../../../lib/erro
 import { WebhookAttributes, WebhookStatistiche } from '../../../lib/types';
 import config from '../config';
 import { sequelize } from '../db/SequelizeConnector';
+import { chiamaHttp } from '../http/clienteHttp';
+import { IndirizzoNonSicuroError, leggiCorpoLimitato, verificaUrlSicuro } from '../http/indirizziSicuri';
 import { IWebhookService, PayloadWebhookData } from '../interfaces/IWebhookService';
 import { log } from '../logger';
 import { TentativoWebhookAttributes } from '../models/TentativoWebhook';
@@ -21,6 +22,44 @@ const nascondiSecret = (webhook: WebhookAttributes): WebhookAttributes => {
   return rest;
 }
 
+/** Tetto di un singolo tentativo: un ricevente lento non tiene occupato l'invio per minuti. */
+export const TIMEOUT_MASSIMO_TENTATIVO_MS = 30_000;
+// La UI salva timeout_webhook in secondi (1-300), il default del modello e' in ms (30000)
+const MASSIMO_SECONDI_UI = 300;
+const RITARDO_RETRY_PREDEFINITO_MS = 1000;
+// Del corpo della risposta si registrano solo i primi 1000 caratteri: non serve scaricarne di piu'
+const MASSIMO_CORPO_RISPOSTA_BYTE = 4096;
+
+/** Tempo massimo di un tentativo in ms, fra 1 s e TIMEOUT_MASSIMO_TENTATIVO_MS. */
+export function timeoutTentativoMs(timeoutWebhook: number | null | undefined): number {
+  const valore = Number(timeoutWebhook);
+  if (!Number.isFinite(valore) || valore <= 0) return TIMEOUT_MASSIMO_TENTATIVO_MS;
+  const ms = valore <= MASSIMO_SECONDI_UI ? valore * 1000 : valore;
+  return Math.min(Math.max(ms, 1000), TIMEOUT_MASSIMO_TENTATIVO_MS);
+}
+
+/** L'URL di un webhook non deve portare il server verso se stesso o i metadati del cloud. */
+async function verificaUrlWebhook(url: string): Promise<void> {
+  try {
+    await verificaUrlSicuro(url);
+  } catch (error) {
+    if (!(error instanceof IndirizzoNonSicuroError)) throw error;
+    throw new ValidationError({
+      message: error.motivo === 'protocollo' ? 'URL non valido: sono ammessi solo indirizzi http o https' : `URL non valido: ${error.message}`,
+      field: 'url_Webhook'
+    });
+  }
+}
+
+type EsitoTentativo = {
+  stato: STATO_TENTATIVO_WEBHOOK.SUCCESSO | STATO_TENTATIVO_WEBHOOK.FALLITO;
+  /** Solo i fallimenti temporanei (rete, timeout, 5xx, DNS) si ritentano. */
+  ritentabile: boolean;
+  httpStatus?: number;
+  responseBody?: string;
+  errorMessage?: string;
+};
+
 export class WebhookService implements IWebhookService {
 
   constructor(
@@ -33,34 +72,26 @@ export class WebhookService implements IWebhookService {
    * ================================ */
 
   async creaWebhook(datiWebhook: Partial<WebhookAttributes>, creatoBy: string): Promise<WebhookAttributes> {
+    // Validazioni prima della transazione: il controllo dell'URL interroga il DNS
+    if (!datiWebhook.nome_webhook || !datiWebhook.url_webhook) {
+      throw new ValidationError({
+        message: 'Nome e URL sono obbligatori',
+        field: !datiWebhook.nome_webhook ? 'nome_webhook' : 'url_webhook'
+      });
+    }
+
+    if (!datiWebhook.eventi_webhook || datiWebhook.eventi_webhook.length === 0) {
+      throw new ValidationError({
+        message: 'Almeno un evento deve essere specificato',
+        field: 'eventi_webhook'
+      });
+    }
+
+    await verificaUrlWebhook(datiWebhook.url_webhook);
+
     const transaction: Transaction = await sequelize.transaction();
 
     try {
-      // Validazioni
-      if (!datiWebhook.nome_webhook || !datiWebhook.url_webhook) {
-        throw new ValidationError({
-          message: 'Nome e URL sono obbligatori',
-          field: !datiWebhook.nome_webhook ? 'nome_webhook' : 'url_webhook'
-        });
-      }
-
-      if (!datiWebhook.eventi_webhook || datiWebhook.eventi_webhook.length === 0) {
-        throw new ValidationError({
-          message: 'Almeno un evento deve essere specificato',
-          field: 'eventi_webhook'
-        });
-      }
-
-      // Valida URL
-      try {
-        new URL(datiWebhook.url_webhook);
-      } catch {
-        throw new ValidationError({
-          message: 'URL non valido',
-          field: 'url_Webhook'
-        });
-      }
-
       const webhookData: Partial<WebhookAttributes> = {
         ...datiWebhook,
         secret_webhook: this.generaSecret(),
@@ -103,6 +134,11 @@ export class WebhookService implements IWebhookService {
   }
 
   async aggiornaWebhook(idWebhook: string, datiAggiornamento: Partial<WebhookAttributes>): Promise<WebhookAttributes> {
+    // Validazione dell'URL prima della transazione: interroga il DNS
+    if (datiAggiornamento.url_webhook) {
+      await verificaUrlWebhook(datiAggiornamento.url_webhook);
+    }
+
     const transaction: Transaction = await sequelize.transaction();
 
     try {
@@ -114,18 +150,6 @@ export class WebhookService implements IWebhookService {
           entityType: 'Webhook',
           entityId: idWebhook
         });
-      }
-
-      // Validazioni se si sta aggiornando l'URL
-      if (datiAggiornamento.url_webhook) {
-        try {
-          new URL(datiAggiornamento.url_webhook);
-        } catch {
-          throw new ValidationError({
-            message: 'URL non valido',
-            field: 'url_Webhook'
-          });
-        }
       }
 
       // Impedisce l'aggiornamento del secret
@@ -254,123 +278,123 @@ export class WebhookService implements IWebhookService {
    * INVIO EVENTI
    * ================================ */
 
+  /**
+   * Programma l'invio e torna subito: chi pubblica non aspetta i tentativi dei webhook
+   * (spec revisione-pubblicazione-runtime: un webhook fallito non invalida la pubblicazione).
+   * L'esito di ogni tentativo resta nei tentativi del webhook.
+   */
   async scatenaEvento(payloadData: PayloadWebhookData): Promise<void> {
-    try {
-      const { evento, dati, meta } = payloadData;
-
-      const payload = {
-        id: uuidv4(),
-        evento,
-        timestamp: new Date().toISOString(),
-        environment: config.NODE_ENV || 'development',
-        versione: '1.0.0',
-        dati,
-        meta
-      };
-
-      const webhooks = await this.ottieniWebhookPerEvento(evento);
-
-      if (webhooks.length === 0) {
-        log.debug('Nessun webhook configurato per l\'evento', { evento });
-        return;
-      }
-
-      // Invia in parallelo a tutti i webhook
-      const promises = webhooks.map(webhook =>
-        this.inviaWebhook(webhook, payload)
-      );
-
-      await Promise.allSettled(promises);
-
-      log.info(`Evento '${evento}' inviato a ${webhooks.length} webhook`);
-    } catch (error) {
-      log.error('Errore scatenamento evento:', error);
-      throw new DatabaseError({
-        message: 'Errore durante l\'invio dell\'evento webhook',
-        operation: 'scatenaEvento',
-        entity: 'Webhook',
-        cause: error instanceof Error ? error : undefined
-      });
-    }
+    this.consegnaEvento(payloadData).catch(error => {
+      log.error('Errore scatenamento evento webhook', error instanceof Error ? error : new Error(String(error)), { evento: payloadData?.evento });
+    });
   }
 
-  private async inviaWebhook(webhook: WebhookAttributes, payload: any): Promise<void> {
+  private async consegnaEvento(payloadData: PayloadWebhookData): Promise<void> {
+    const { evento, dati, meta } = payloadData;
+
+    const payload = {
+      id: uuidv4(),
+      evento,
+      timestamp: new Date().toISOString(),
+      environment: config.NODE_ENV || 'development',
+      versione: '1.0.0',
+      dati,
+      meta
+    };
+
+    const webhooks = await this.ottieniWebhookPerEvento(evento);
+
+    if (webhooks.length === 0) {
+      log.debug('Nessun webhook configurato per l\'evento', { evento });
+      return;
+    }
+
+    // Invia in parallelo a tutti i webhook
+    await Promise.allSettled(webhooks.map(webhook => this.inviaWebhook(webhook, payload)));
+
+    log.info(`Evento '${evento}' inviato a ${webhooks.length} webhook`);
+  }
+
+  /** Vero se un tentativo e' andato a buon fine. maxTentativi limita i retry configurati (il test ne fa uno). */
+  private async inviaWebhook(webhook: WebhookAttributes, payload: any, maxTentativi = Math.max(1, (Number(webhook.retry_count_webhook) || 0) + 1)): Promise<boolean> {
     const tempoInizio = Date.now();
-    let tentativo = 0;
-    const maxTentativi = webhook.retry_count_webhook + 1;
+    const timeoutMs = timeoutTentativoMs(webhook.timeout_webhook);
+    const corpo = JSON.stringify(payload);
 
-    while (tentativo < maxTentativi) {
-      try {
-        tentativo++;
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'User-Agent': 'Istanta2GDOSuite-Webhook/1.0',
+      'X-Webhook-Event': payload.evento,
+      'X-Webhook-ID': webhook.id_webhook,
+      'X-Webhook-Timestamp': payload.timestamp,
+      ...webhook.headers_personalizzati_webhook,
+      // Stesso id a ogni tentativo: il ricevente scarta i duplicati di un retry. Dopo gli header
+      // personalizzati, perche' non si possa sovrascrivere
+      'X-Webhook-Delivery-Id': payload.id
+    };
 
-        const firma = webhook.secret_webhook ?
-          this.generaFirma(payload, webhook.secret_webhook) : '';
+    if (webhook.secret_webhook) {
+      headers['X-Webhook-Signature'] = this.generaFirma(payload, webhook.secret_webhook);
+    }
 
-        const headers: any = {
-          'Content-Type': 'application/json',
-          'User-Agent': 'Istanta2GDOSuite-Webhook/1.0',
-          'X-Webhook-Event': payload.evento,
-          'X-Webhook-ID': webhook.id_webhook,
-          'X-Webhook-Timestamp': payload.timestamp,
-          ...webhook.headers_personalizzati_webhook
-        };
+    for (let tentativo = 1; tentativo <= maxTentativi; tentativo++) {
+      const esito = await this.eseguiTentativo(webhook.url_webhook, headers, corpo, timeoutMs);
+      const ultimo = tentativo >= maxTentativi;
+      const ritenta = esito.ritentabile && !ultimo;
 
-        if (firma) {
-          headers['X-Webhook-Signature'] = firma;
-        }
+      await this.registraTentativo(webhook.id_webhook, payload.id, tentativo,
+        ritenta ? STATO_TENTATIVO_WEBHOOK.RETRY : esito.stato, {
+        httpStatus: esito.httpStatus,
+        responseBody: esito.responseBody,
+        errorMessage: esito.errorMessage,
+        durationMs: Date.now() - tempoInizio
+      });
 
-        const response = await axios.post(webhook.url_webhook, payload, {
-          headers,
-          timeout: webhook.timeout_webhook,
-          validateStatus: (status) => status < 500
-        });
-
-        // Successo (2xx)
-        if (response.status >= 200 && response.status < 300) {
-          await this.registraTentativo(webhook.id_webhook, payload.id, tentativo, STATO_TENTATIVO_WEBHOOK.SUCCESSO, {
-            httpStatus: response.status,
-            responseBody: response.data ? JSON.stringify(response.data).substring(0, 1000) : '',
-            durationMs: Date.now() - tempoInizio
-          });
-
-          log.info(`Webhook inviato con successo`, { webhookId: webhook.id_webhook, url: webhook.url_webhook, evento: payload.evento, tentativo, status: response.status });
-          return; // Esce dal ciclo while
-        }
-
-        // Errore client (4xx) - non fare retry
-        const isUltimoTentativo = tentativo >= maxTentativi;
-        await this.registraTentativo(webhook.id_webhook, payload.id, tentativo, STATO_TENTATIVO_WEBHOOK.FALLITO, {
-          httpStatus: response.status,
-          responseBody: response.data ? JSON.stringify(response.data).substring(0, 1000) : '',
-          durationMs: Date.now() - tempoInizio
-        });
-
-        log.warn(`Webhook fallito con errore client (non ritento)`, { webhookId: webhook.id_webhook, status: response.status, tentativo });
-        return; // Esce dal ciclo while
-
-      } catch (error: any) {
-        const isUltimoTentativo = tentativo >= maxTentativi;
-        const shouldRetry = !isUltimoTentativo && this.dovrebbeRitentare(error);
-
-        await this.registraTentativo(webhook.id_webhook, payload.id, tentativo,
-          shouldRetry ? STATO_TENTATIVO_WEBHOOK.RETRY : STATO_TENTATIVO_WEBHOOK.FALLITO, {
-          httpStatus: error.response?.status,
-          errorMessage: error.message,
-          responseBody: error.response?.data ?
-            JSON.stringify(error.response.data).substring(0, 1000) : '',
-          durationMs: Date.now() - tempoInizio
-        });
-
-        if (isUltimoTentativo || !shouldRetry) {
-          log.error(`Webhook fallito definitivamente`, { webhookId: webhook.id_webhook, url: webhook.url_webhook, evento: payload.evento, tentativi: tentativo, errore: error.message });
-          return; // Esce dal ciclo
-        }
-
-        // Aspetta e ritenta
-        const delay = this.calcolaDelayRetry(tentativo, webhook.retry_delay_webhook);
-        log.warn(`Webhook fallito, retry tra ${delay}ms`, { webhookId: webhook.id_webhook, url: webhook.url_webhook, tentativo, errore: error.message });
-        await this.aspetta(delay);
+      if (esito.stato === STATO_TENTATIVO_WEBHOOK.SUCCESSO) {
+        log.info(`Webhook inviato con successo`, { webhookId: webhook.id_webhook, url: webhook.url_webhook, evento: payload.evento, tentativo, status: esito.httpStatus });
+        return true;
       }
+
+      if (!ritenta) {
+        log.error(`Webhook fallito definitivamente`, { webhookId: webhook.id_webhook, url: webhook.url_webhook, evento: payload.evento, tentativi: tentativo, status: esito.httpStatus, errore: esito.errorMessage });
+        return false;
+      }
+
+      const delay = this.calcolaDelayRetry(tentativo, Number(webhook.retry_delay_webhook) > 0 ? Number(webhook.retry_delay_webhook) : RITARDO_RETRY_PREDEFINITO_MS);
+      log.warn(`Webhook fallito, retry tra ${delay}ms`, { webhookId: webhook.id_webhook, url: webhook.url_webhook, tentativo, status: esito.httpStatus, errore: esito.errorMessage });
+      await this.aspetta(delay);
+    }
+    return false;
+  }
+
+  /** Un POST al ricevente: 2xx successo; 3xx e 4xx falliti senza retry; rete, timeout e 5xx da ritentare. */
+  private async eseguiTentativo(url: string, headers: Record<string, string>, corpo: string, timeoutMs: number): Promise<EsitoTentativo> {
+    try {
+      // Ricontrollato a ogni tentativo: il nome puo' risolvere altrove rispetto al salvataggio
+      await verificaUrlSicuro(url);
+      // I retry li governa la configurazione del webhook, non il client
+      const risposta = await chiamaHttp(url, { method: 'POST', headers, body: corpo, timeoutMs, idempotente: false, redirect: 'manual' });
+      const responseBody = (await leggiCorpoLimitato(risposta, MASSIMO_CORPO_RISPOSTA_BYTE, { tronca: true }).catch(() => '')).substring(0, 1000);
+
+      if (risposta.status >= 200 && risposta.status < 300) {
+        return { stato: STATO_TENTATIVO_WEBHOOK.SUCCESSO, ritentabile: false, httpStatus: risposta.status, responseBody };
+      }
+      if (risposta.status >= 300 && risposta.status < 400) {
+        // I redirect non si seguono: potrebbero portare verso la rete interna, e un POST ripetuto altrove non e' atteso
+        return {
+          stato: STATO_TENTATIVO_WEBHOOK.FALLITO, ritentabile: false, httpStatus: risposta.status, responseBody,
+          errorMessage: `Redirect verso ${risposta.headers.get('location') ?? '?'} non seguito: aggiornare l'URL del webhook`
+        };
+      }
+      return { stato: STATO_TENTATIVO_WEBHOOK.FALLITO, ritentabile: risposta.status >= 500, httpStatus: risposta.status, responseBody };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      // Un indirizzo vietato resta tale: ritentare non serve. Il DNS che non risponde invece si'
+      if (error instanceof IndirizzoNonSicuroError) {
+        return { stato: STATO_TENTATIVO_WEBHOOK.FALLITO, ritentabile: error.motivo === 'dns', errorMessage };
+      }
+      // Rete, timeout (ErroreHttp) o errore inatteso: si ritenta come prima
+      return { stato: STATO_TENTATIVO_WEBHOOK.FALLITO, ritentabile: true, errorMessage };
     }
   }
 
@@ -469,13 +493,6 @@ export class WebhookService implements IWebhookService {
     return crypto.randomBytes(32).toString('hex');
   }
 
-  private dovrebbeRitentare(error: any): boolean {
-    if (error.response?.status >= 400 && error.response?.status < 500) {
-      return false;
-    }
-    return true;
-  }
-
   private calcolaDelayRetry(tentativo: number, baseDelay: number): number {
     const exponentialDelay = baseDelay * Math.pow(2, tentativo - 1);
     const jitter = Math.random() * 1000;
@@ -545,9 +562,11 @@ export class WebhookService implements IWebhookService {
     return Math.round(tassoSuccesso);
   }
 
+  /** Prova dalla UI: aspetta l'esito di un solo tentativo, firmato come gli eventi veri. */
   async testaWebhook(idWebhook: string, datiTest?: any): Promise<boolean> {
     try {
-      const webhook = await this.ottieniWebhook(idWebhook);
+      // Con il secret: la prova deve passare la verifica della firma del ricevente
+      const webhook = (await this.webhookRepository.findById(idWebhook))?.toJSON() as WebhookAttributes | undefined;
       if (!webhook) {
         throw new NotFoundError({
           message: 'Webhook non trovato',
@@ -568,8 +587,8 @@ export class WebhookService implements IWebhookService {
         }
       };
 
-      await this.inviaWebhook(webhook, payload);
-      return true;
+      // Un tentativo solo: chi prova dalla UI non aspetta i retry configurati
+      return await this.inviaWebhook(webhook, payload, 1);
     } catch (error) {
       log.error('Errore test webhook:', error);
       return false;

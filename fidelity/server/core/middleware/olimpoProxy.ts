@@ -16,6 +16,19 @@ const HEADER_RICHIESTA_ESCLUSI = new Set([
 const HEADER_RISPOSTA_ESCLUSI = new Set(['set-cookie', 'connection', 'keep-alive', 'transfer-encoding']);
 
 /**
+ * Nessun tempo massimo complessivo: i video in streaming e il long-polling di socket.io
+ * (~25 s) durano quanto serve. Si chiude solo una connessione che non parte o che resta ferma.
+ */
+export interface TempiProxyOlimpo {
+  /** Attesa massima della connessione a Olimpo. */
+  connessioneMs: number;
+  /** Silenzio massimo sul socket, prima e dopo gli header della risposta. */
+  inattivitaMs: number;
+}
+
+export const TEMPI_PROXY_OLIMPO: TempiProxyOlimpo = { connessioneMs: 10_000, inattivitaMs: 60_000 };
+
+/**
  * Proxy di sola lettura verso Olimpo, montato su /olimpo.
  *
  * Inoltra GET e HEAD sugli endpoint di PERCORSI_OLIMPO_LETTURA e il polling di
@@ -23,7 +36,7 @@ const HEADER_RISPOSTA_ESCLUSI = new Set(['set-cookie', 'connection', 'keep-alive
  * modifiche, riceve 404 senza raggiungere Olimpo. Corpo e risposta passano in
  * streaming, quindi le richieste Range dei video funzionano invariate.
  */
-export function creaProxyOlimpo(target: string): RequestHandler {
+export function creaProxyOlimpo(target: string, tempi: TempiProxyOlimpo = TEMPI_PROXY_OLIMPO): RequestHandler {
   const base = new URL(target);
   const client = base.protocol === 'https:' ? https : http;
   const prefisso = base.pathname.replace(/\/+$/, '');
@@ -58,13 +71,34 @@ export function creaProxyOlimpo(target: string): RequestHandler {
           if (valore !== undefined && !HEADER_RISPOSTA_ESCLUSI.has(nome)) intestazioni[nome] = valore;
         }
         res.writeHead(risposta.statusCode ?? 502, intestazioni);
+        // Olimpo che si ferma a meta' risposta: si chiude anche verso il browser
+        risposta.on('error', () => res.destroy());
         risposta.pipe(res);
       }
     );
 
+    // Senza risposta entro il tempo: 504 se gli header non sono partiti, altrimenti si chiude la connessione
+    let scaduta = false;
+    const interrompi = () => {
+      scaduta = true;
+      richiesta.destroy(new Error('Olimpo non ha risposto in tempo'));
+    };
+    richiesta.setTimeout(tempi.inattivitaMs, interrompi);
+    richiesta.on('socket', (socket) => {
+      // Un socket riusato (keep-alive) e' gia' connesso
+      if (!socket.connecting) return;
+      const attesaConnessione = setTimeout(interrompi, tempi.connessioneMs);
+      socket.once('connect', () => clearTimeout(attesaConnessione));
+      socket.once('close', () => clearTimeout(attesaConnessione));
+    });
+
     richiesta.on('error', () => {
       if (!res.headersSent) {
-        res.status(502).json({ message: 'Olimpo non raggiungibile' });
+        if (scaduta) {
+          res.status(504).json({ message: 'Olimpo non ha risposto in tempo' });
+        } else {
+          res.status(502).json({ message: 'Olimpo non raggiungibile' });
+        }
       } else {
         res.destroy();
       }

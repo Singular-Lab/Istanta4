@@ -4,14 +4,20 @@ import { PROVIDER_WHATSAPP, STATO_GDO_WHATSAPP_NUMBER, STATO_GDO_WHATSAPP_TEMPLA
 
 const meta = vi.hoisted(() => ({ fetch: vi.fn() }));
 
-vi.mock('node-fetch', () => ({ default: meta.fetch }));
+// Le chiamate a Meta passano dal client HTTP comune: si intercetta quello, ErroreHttp resta reale
+vi.mock('../../http/clienteHttp', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../http/clienteHttp')>()),
+  chiamaHttp: meta.fetch,
+}));
 vi.mock('../../../src/shared/queue/bullmq.client.js', () => ({ createQueue: () => ({ add: vi.fn() }) }));
 vi.mock('../../logger', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+import { ErroreHttp } from '../../http/clienteHttp';
 import { GDO } from '../../models';
 import { GDOWhatsappNumbers } from '../../models/whatsapp/gdo_whatsapp_numbers';
+import { GDOWhatsappPreset } from '../../models/whatsapp/gdo_whatsapp_preset';
 import { GDOWhatsappTemplate } from '../../models/whatsapp/gdo_whatsapp_template';
 import { WhatsAppService } from '../WhatsAppService';
 
@@ -237,5 +243,90 @@ describe('invio di un modello a Meta', () => {
       message: 'Errore API Meta: Invalid parameter – Il nome del modello esiste già in questa lingua',
     });
     expect(t.update).not.toHaveBeenCalled();
+  });
+
+  it('la creazione su Meta ha un tempo massimo e non viene mai ripetuta in automatico', async () => {
+    vi.spyOn(GDOWhatsappTemplate, 'findOne').mockResolvedValue(modello() as any);
+    vi.spyOn(GDOWhatsappNumbers, 'findOne').mockResolvedValue(canale() as any);
+    meta.fetch.mockResolvedValue({ ok: true, json: async () => ({ id: 'hsm-1', status: 'PENDING' }) });
+
+    await service().sendModifiedTemplateToMeta('t1');
+
+    const [url, opzioni] = meta.fetch.mock.calls[0];
+    expect(url).toBe('https://graph.facebook.com/v24.0/waba-finto/message_templates');
+    expect(opzioni).toMatchObject({ method: 'POST', timeoutMs: 15_000, idempotente: false });
+  });
+
+  it('se Meta non risponde in tempo avvisa di verificare l\'esito, senza riportare il token', async () => {
+    const t = modello();
+    vi.spyOn(GDOWhatsappTemplate, 'findOne').mockResolvedValue(t as any);
+    vi.spyOn(GDOWhatsappNumbers, 'findOne').mockResolvedValue(canale() as any);
+    meta.fetch.mockRejectedValue(new ErroreHttp('timeout', 'https://graph.facebook.com/v24.0/waba-finto/message_templates', false));
+
+    const errore = await service().sendModifiedTemplateToMeta('t1').catch((e) => e);
+
+    expect(errore.httpStatus).toBe(503);
+    expect(errore.message).toContain('verifica l\'esito prima di riprovare');
+    expect(JSON.stringify(errore.toJSON())).not.toContain('access-token-finto');
+    expect(t.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('sincronizzazione dei modelli da Meta', () => {
+  it('legge tutte le pagine, ognuna con un tempo massimo e ritentabile perche\' e\' una lettura', async () => {
+    vi.spyOn(GDOWhatsappNumbers, 'findOne').mockResolvedValue(canale() as any);
+    vi.spyOn(GDOWhatsappTemplate, 'findAll').mockResolvedValue([] as any);
+    meta.fetch
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: [], paging: { next: 'https://graph.facebook.com/v24.0/waba-finto/message_templates?after=x' } }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: [] }) });
+
+    const esito = await service().syncTemplatesFromMeta('gdo-a');
+
+    expect(esito).toEqual({ success: true });
+    expect(meta.fetch).toHaveBeenCalledTimes(2);
+    expect(meta.fetch.mock.calls[0][0]).toBe('https://graph.facebook.com/v24.0/waba-finto/message_templates?limit=100');
+    for (const [, opzioni] of meta.fetch.mock.calls) {
+      expect(opzioni).toMatchObject({ method: 'GET', timeoutMs: 15_000, idempotente: true });
+    }
+  });
+});
+
+describe('messaggio di prova a un utente', () => {
+  const preparaInvio = () => {
+    const s = new WhatsAppService({ getUserById: vi.fn().mockResolvedValue({ nome: 'Mario', telefono: '393330000000' }) } as any);
+    vi.spyOn(s, 'getWhatsappTemplateById').mockResolvedValue({
+      id_gdo_gdowhatsapptemplate: 'gdo-a',
+      nome_template_gdowhatsapptemplate: 'promo_autunno',
+      json_meta_gdowhatsapptemplate: bozza(),
+    } as any);
+    vi.spyOn(s, 'mapPresetToTemplateParams').mockReturnValue([] as any);
+    vi.spyOn(s, 'buildMetaTemplatePayload').mockReturnValue({ messaging_product: 'whatsapp' } as any);
+    vi.spyOn(GDOWhatsappPreset, 'findOne').mockResolvedValue(null);
+    vi.spyOn(GDOWhatsappNumbers, 'findOne').mockResolvedValue(canale() as any);
+    vi.spyOn(console, 'log').mockImplementation(() => { });
+    vi.spyOn(console, 'error').mockImplementation(() => { });
+    return s;
+  };
+
+  it('parte una sola volta con un tempo massimo', async () => {
+    const s = preparaInvio();
+    meta.fetch.mockResolvedValue({ ok: true, json: async () => ({ messages: [{ id: 'wamid.1' }] }) });
+
+    await expect(s.invioDiTestAdUtente('u1', 't1')).resolves.toEqual({ success: true, error: undefined });
+
+    const [url, opzioni] = meta.fetch.mock.calls[0];
+    expect(url).toBe('https://graph.facebook.com/v24.0/phone-id-finto/messages');
+    expect(opzioni).toMatchObject({ method: 'POST', timeoutMs: 15_000, idempotente: false });
+  });
+
+  it('senza risposta dopo l\'invio l\'esito e\' sconosciuto: si avvisa di controllare prima di riprovare', async () => {
+    const s = preparaInvio();
+    meta.fetch.mockRejectedValue(new ErroreHttp('timeout', 'https://graph.facebook.com/v24.0/phone-id-finto/messages', false));
+
+    const esito = await s.invioDiTestAdUtente('u1', 't1');
+
+    expect(esito.success).toBe(false);
+    expect(esito.error).toContain('esito sconosciuto');
+    expect(meta.fetch).toHaveBeenCalledTimes(1);
   });
 });

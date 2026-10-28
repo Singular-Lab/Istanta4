@@ -48,10 +48,13 @@ export class WebhookController extends BaseController {
         eventi_webhook: string[];
         timeout_webhook: number;
         retry_webhook: number;
+        retry_delay_webhook?: number;
         stato_webhook: string;
         headers_webhook: string;
       };
       const creatoBy = req.session.id_utente as string;
+      // Attesa base fra i retry in ms: se non arriva vale il default del modello (1000), non il timeout
+      const retryDelay = Number(webhookDataBody.retry_delay_webhook);
       const webhookData: Partial<WebhookAttributes> = {
         nome_webhook: webhookDataBody.nome_webhook,
         url_webhook: webhookDataBody.url_webhook,
@@ -59,7 +62,7 @@ export class WebhookController extends BaseController {
         eventi_webhook: webhookDataBody.eventi_webhook as EVENTI_WEBHOOK[],
         timeout_webhook: webhookDataBody.timeout_webhook,
         retry_count_webhook: webhookDataBody.retry_webhook,
-        retry_delay_webhook: webhookDataBody.timeout_webhook,
+        ...(Number.isFinite(retryDelay) && retryDelay > 0 ? { retry_delay_webhook: retryDelay } : {}),
         stato_webhook: webhookDataBody.stato_webhook as STATO_WEBHOOK,
         headers_personalizzati_webhook: JSON.parse(webhookDataBody.headers_webhook || '{}') as Record<string, string>,
         // Il secret_webhook viene generato dal servizio e non deve essere passato dal client

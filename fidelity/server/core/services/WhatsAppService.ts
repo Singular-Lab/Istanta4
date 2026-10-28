@@ -1,4 +1,3 @@
-import fetch from 'node-fetch';
 import crypto from 'node:crypto';
 import { Op, QueryTypes, UniqueConstraintError } from 'sequelize';
 import { v4 as uuidv4 } from 'uuid';
@@ -18,6 +17,7 @@ import {
     DatabaseError,
     ExternalApiError,
     NotFoundError,
+    ServiceUnavailableError,
     ValidationError,
     wrapDatabaseError
 } from '../../../lib/errors';
@@ -29,7 +29,9 @@ import {
     type GDOWhatsappTemplateAttributes,
     type WhatsAppTemplate
 } from '../../../lib/types';
+import config from '../config';
 import { sequelize } from '../db';
+import { chiamaHttp, ErroreHttp } from '../http/clienteHttp';
 import type { GDOResponseDTO } from '../dto';
 import type { IUserService } from '../interfaces/IUserService';
 import type { ConfigurazioneGDOWhatsapp, DatiSetupGDOWhatsapp, IWhatsAppService } from '../interfaces/IWhatsAppService';
@@ -40,6 +42,28 @@ import { GDOWhatsappNumbers } from '../models/whatsapp/gdo_whatsapp_numbers';
 import { GDOWhatsappPreset } from '../models/whatsapp/gdo_whatsapp_preset';
 import { GDOWhatsappTemplate } from '../models/whatsapp/gdo_whatsapp_template';
 import { WhatsappQueueService } from './WhatsappQueueService';
+
+// Ogni chiamata a Meta ha un tempo massimo: senza, una risposta che non arriva blocca la richiesta
+const TIMEOUT_META_MS = 15_000;
+
+const urlGraphMeta = (percorso: string) =>
+    `https://graph.facebook.com/${config.META_GRAPH_API_VERSION}/${percorso}`;
+
+/**
+ * Meta non ha risposto: errore per l'operatore senza i dettagli della richiesta (contengono il token).
+ * Se la richiesta era partita, l'operazione potrebbe essere avvenuta comunque.
+ */
+function erroreMetaSenzaRisposta(err: unknown, operazione: string): unknown {
+    if (!(err instanceof ErroreHttp)) return err;
+    const motivo = err.primaDellInvio
+        ? 'Meta non raggiungibile'
+        : `${err.motivo === 'timeout' ? 'Meta non ha risposto in tempo' : 'connessione con Meta interrotta'}, verifica l'esito prima di riprovare`;
+    return new ServiceUnavailableError({
+        message: `${operazione}: ${motivo}`,
+        service: 'Meta WhatsApp API',
+        details: { motivo: err.motivo }
+    });
+}
 
 type PresetBinding = {
     bind?: string;   // "user.cognome" | "user.meta.city" | "literal" ecc.
@@ -672,8 +696,9 @@ export class WhatsAppService implements IWhatsAppService {
                 templateMeta,
                 params
             );
-            const response = await fetch(
-                `https://graph.facebook.com/v24.0/${phoneNumberId}/messages`,
+            // Un messaggio non si ripete in automatico: potrebbe arrivare due volte
+            const response = await chiamaHttp(
+                urlGraphMeta(`${phoneNumberId}/messages`),
                 {
                     method: 'POST',
                     headers: {
@@ -681,12 +706,14 @@ export class WhatsAppService implements IWhatsAppService {
                         'content-type': 'application/json',
                         authorization: `Bearer ${accessToken}`
                     },
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify(payload),
+                    timeoutMs: TIMEOUT_META_MS,
+                    idempotente: false
                 }
             );
 
             if (!response.ok) {
-                const error = await response.json() as any;
+                const error = await response.json().catch(() => ({})) as any;
                 console.error('Errore API Meta (send message):', error);
                 return {
                     success: false,
@@ -694,7 +721,7 @@ export class WhatsAppService implements IWhatsAppService {
                 };
             }
 
-            const data = await response.json();
+            const data = await response.json().catch(() => null);
             console.log('Risposta invio test Meta:', data);
             // TODO: qui effettueresti la vera chiamata a Meta con il template e i params
 
@@ -704,6 +731,13 @@ export class WhatsAppService implements IWhatsAppService {
                 Colorize.bgRed("Errore durante l'invio del test all'utente:"),
                 error
             );
+            // Partito senza risposta: il messaggio potrebbe essere arrivato
+            if (error instanceof ErroreHttp && !error.primaDellInvio) {
+                return {
+                    success: false,
+                    error: "Meta non ha confermato l'invio del messaggio di prova: esito sconosciuto, verifica sul telefono prima di riprovare"
+                };
+            }
             return {
                 success: false,
                 error:
@@ -798,18 +832,25 @@ export class WhatsAppService implements IWhatsAppService {
             components: raw.components
         };
 
-        const response = await fetch(
-            `https://graph.facebook.com/v24.0/${credenziali.whatsapp_business_account_id_gdowhatsappnumbers}/message_templates`,
-            {
-                method: 'POST',
-                headers: {
-                    accept: 'application/json',
-                    'content-type': 'application/json',
-                    authorization: `Bearer ${credenziali.access_token_gdowhatsappnumbers}`
-                },
-                body: JSON.stringify(payload)
-            }
-        );
+        let response: Response;
+        try {
+            response = await chiamaHttp(
+                urlGraphMeta(`${credenziali.whatsapp_business_account_id_gdowhatsappnumbers}/message_templates`),
+                {
+                    method: 'POST',
+                    headers: {
+                        accept: 'application/json',
+                        'content-type': 'application/json',
+                        authorization: `Bearer ${credenziali.access_token_gdowhatsappnumbers}`
+                    },
+                    body: JSON.stringify(payload),
+                    timeoutMs: TIMEOUT_META_MS,
+                    idempotente: false
+                }
+            );
+        } catch (err) {
+            throw erroreMetaSenzaRisposta(err, 'Invio del modello a Meta');
+        }
 
         if (!response.ok) {
             const error = (await response.json().catch(() => ({}))) as any;
@@ -1097,20 +1138,22 @@ export class WhatsAppService implements IWhatsAppService {
 
             // Meta pagina l'elenco: si segue paging.next fino all'ultima pagina
             const templates: WhatsAppTemplate[] = [];
-            let url: string | undefined = `https://graph.facebook.com/v24.0/${credenziali.whatsapp_business_account_id_gdowhatsappnumbers}/message_templates?limit=100`;
+            let url: string | undefined = urlGraphMeta(`${credenziali.whatsapp_business_account_id_gdowhatsappnumbers}/message_templates?limit=100`);
             while (url) {
-                const response = await fetch(url, {
+                // Lettura: si puo' ritentare senza effetti
+                const response = await chiamaHttp(url, {
                     method: 'GET',
                     headers: {
                         accept: 'application/json',
                         'content-type': 'application/json',
                         authorization: `Bearer ${credenziali.access_token_gdowhatsappnumbers}`
                     },
-                    signal: AbortSignal.timeout(15000)
+                    timeoutMs: TIMEOUT_META_MS,
+                    idempotente: true
                 });
 
                 if (!response.ok) {
-                    const error = (await response.json()) as any;
+                    const error = (await response.json().catch(() => ({}))) as any;
                     console.error('Errore API Meta:', error);
                     return {
                         success: false,
@@ -1569,13 +1612,20 @@ export class WhatsAppService implements IWhatsAppService {
         }
 
         const query = new URLSearchParams({ hsm_id: meta.id, name: meta.name ?? '' });
-        const response = await fetch(
-            `https://graph.facebook.com/v24.0/${credenziali.whatsapp_business_account_id_gdowhatsappnumbers}/message_templates?${query}`,
-            {
-                method: 'DELETE',
-                headers: { accept: 'application/json', authorization: `Bearer ${credenziali.access_token_gdowhatsappnumbers}` }
-            }
-        );
+        let response: Response;
+        try {
+            response = await chiamaHttp(
+                urlGraphMeta(`${credenziali.whatsapp_business_account_id_gdowhatsappnumbers}/message_templates?${query}`),
+                {
+                    method: 'DELETE',
+                    headers: { accept: 'application/json', authorization: `Bearer ${credenziali.access_token_gdowhatsappnumbers}` },
+                    timeoutMs: TIMEOUT_META_MS,
+                    idempotente: false
+                }
+            );
+        } catch (err) {
+            throw erroreMetaSenzaRisposta(err, 'Eliminazione del modello su Meta');
+        }
         if (!response.ok) {
             const error = (await response.json().catch(() => ({}))) as any;
             throw new ExternalApiError({

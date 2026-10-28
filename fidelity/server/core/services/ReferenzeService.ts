@@ -602,6 +602,9 @@ export class ReferenzeService implements IReferenzeService {
           config.ISTANTA_IP_ADDRESS + "/FicoProcess/getLoghiBolli",
           "GET",
           {},
+          undefined,
+          undefined,
+          { categoria: 'lettura', idempotente: true },
         ),
         'ISTANTA',
         '/FicoProcess/getLoghiBolli'
@@ -871,7 +874,7 @@ export class ReferenzeService implements IReferenzeService {
         }[], esito: boolean, error: string
       };
       const data = verificaRisposta<Addestramenti>(
-        await ServerUtils.sendToFICOApi<Addestramenti>(req, `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getAddestramenti/true`, 'GET', undefined),
+        await ServerUtils.sendToFICOApi<Addestramenti>(req, `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getAddestramenti/true`, 'GET', undefined, undefined, undefined, { categoria: 'lettura', idempotente: true }),
         'ISTANTA',
         '/FicoProcess/getAddestramenti'
       );

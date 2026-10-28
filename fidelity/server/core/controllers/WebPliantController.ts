@@ -1,14 +1,13 @@
-import axios from 'axios';
 import { Request, Response } from 'express';
 import 'express-session';
 import { CATEGORIA_ATTIVITA, HttpStatusCode, TIPO_ATTIVITA } from '../../../lib/enums';
 import { DataWebPliant } from '../../../lib/types';
 import { dataConsultazioneConsentita, puoConfigurareWebpliant } from '../accessi/consultazioneWebpliant';
 import { BaseController } from '../base/BaseController';
-import config from '../config';
 import { IGdoService } from '../interfaces/IGdoService';
 import { IWebPliantService } from '../interfaces/IWebPliantService';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { inviaFormDataAOlimpo } from '../http/olimpo';
 import { jsonGrande } from '../middleware/jsonGrande';
 import { log } from '../logger';
 import { permissionGuard } from '../middleware/permissionGuard';
@@ -183,14 +182,10 @@ export class WebPliantController extends BaseController {
               const blob = new Blob([buffer], { type: "video/mp4" });
               formDataDesktop.append("data", JSON.stringify({ id: s.id, device: "desktop", type: "video" }));
               formDataDesktop.append("file", blob, "video_" + s.id + ".mp4");
-              const resultAxios = await axios.post<{ esito: boolean, content: { id: string, file: string, device: string, type: string } }>(
-                config.OLYMPUS_IP_ADDRESS + "/materiali/uploadVideoBase",
+              const resultAxios = await inviaFormDataAOlimpo<{ esito: boolean, content: { id: string, file: string, device: string, type: string } }>(
+                "/materiali/uploadVideoBase",
                 formDataDesktop,
-                {
-                  headers: {
-                    "Authorization": req.session.private_key,
-                  }
-                }
+                req.session.private_key
               );
               content.srcDesktop = urlOlimpo('/materiali/getVideoOnDemand', { guidId: resultAxios.data.content.file });
             }
@@ -200,14 +195,10 @@ export class WebPliantController extends BaseController {
               const blob = new Blob([buffer], { type: "image/png" });
               formData.append("data", JSON.stringify({ id: s.id, device: "desktop", type: "thumbnail" }));
               formData.append("file", blob, "thumbnail_" + s.id + ".png");
-              const resultAxios = await axios.post<{ esito: boolean, record: { guidId: string } }>(
-                config.OLYMPUS_IP_ADDRESS + "/foto/uploadFotoWebPliant",
+              const resultAxios = await inviaFormDataAOlimpo<{ esito: boolean, record: { guidId: string } }>(
+                "/foto/uploadFotoWebPliant",
                 formData,
-                {
-                  headers: {
-                    "Authorization": req.session.private_key,
-                  }
-                }
+                req.session.private_key
               );
               content.thumbnailSrcDesktop = urlOlimpo('/foto/getThumbNailOnDemand', { guidId: resultAxios.data.record.guidId });
             }
@@ -217,14 +208,10 @@ export class WebPliantController extends BaseController {
               const buffer = Buffer.from(content.srcMobile.split(",")[1], "base64");
               const blob = new Blob([buffer], { type: "video/mp4" });
               formDataMobile.append("file", blob, "video_" + s.id + ".mp4");
-              const resultAxios = await axios.post<{ esito: boolean, content: { id: string, file: string, device: string, type: string } }>(
-                config.OLYMPUS_IP_ADDRESS + "/materiali/uploadVideoBase",
+              const resultAxios = await inviaFormDataAOlimpo<{ esito: boolean, content: { id: string, file: string, device: string, type: string } }>(
+                "/materiali/uploadVideoBase",
                 formDataMobile,
-                {
-                  headers: {
-                    "Authorization": req.session.private_key,
-                  }
-                }
+                req.session.private_key
               );
               content.srcMobile = urlOlimpo('/materiali/getVideoOnDemand', { guidId: resultAxios.data.content.file });
 
@@ -235,14 +222,10 @@ export class WebPliantController extends BaseController {
               const blob = new Blob([buffer], { type: "image/png" });
               formData.append("data", JSON.stringify({ id: s.id, device: "desktop", type: "thumbnail" }));
               formData.append("file", blob, "thumbnail_" + s.id + ".png");
-              const resultAxios = await axios.post<{ esito: boolean, record: { guidId: string } }>(
-                config.OLYMPUS_IP_ADDRESS + "/foto/uploadFotoWebPliant",
+              const resultAxios = await inviaFormDataAOlimpo<{ esito: boolean, record: { guidId: string } }>(
+                "/foto/uploadFotoWebPliant",
                 formData,
-                {
-                  headers: {
-                    "Authorization": req.session.private_key,
-                  }
-                }
+                req.session.private_key
               );
               content.thumbnailSrcMobile = urlOlimpo('/foto/getThumbNailOnDemand', { guidId: resultAxios.data.record.guidId });
             }
@@ -253,14 +236,10 @@ export class WebPliantController extends BaseController {
                 const buffer = Buffer.from(content.src.split(",")[1], "base64");
                 const blob = new Blob([buffer], { type: mimetype });
                 formData.append("file", blob, "image_" + s.id + mimetype);
-                const resultAxios = await axios.post<{ esito: boolean, record: { guidId: string } }>(
-                  config.OLYMPUS_IP_ADDRESS + "/foto/uploadFotoWebPliant",
+                const resultAxios = await inviaFormDataAOlimpo<{ esito: boolean, record: { guidId: string } }>(
+                  "/foto/uploadFotoWebPliant",
                   formData,
-                  {
-                    headers: {
-                      "Authorization": req.session.private_key,
-                    }
-                  }
+                  req.session.private_key
                 );
                 content.src = urlOlimpo('/foto/getThumbNailOnDemand', { guidId: resultAxios.data.record.guidId, performante: true });
               }
@@ -270,14 +249,10 @@ export class WebPliantController extends BaseController {
                 const buffer = Buffer.from(content.srcMobile.split(",")[1], "base64");
                 const blob = new Blob([buffer], { type: mimetype });
                 formData.append("file", blob, "image_" + s.id + mimetype);
-                const resultAxios = await axios.post<{ esito: boolean, record: { guidId: string } }>(
-                  config.OLYMPUS_IP_ADDRESS + "/foto/uploadFotoWebPliant",
+                const resultAxios = await inviaFormDataAOlimpo<{ esito: boolean, record: { guidId: string } }>(
+                  "/foto/uploadFotoWebPliant",
                   formData,
-                  {
-                    headers: {
-                      "Authorization": req.session.private_key,
-                    }
-                  }
+                  req.session.private_key
                 );
                 content.srcMobile = urlOlimpo('/foto/getThumbNailOnDemand', { guidId: resultAxios.data.record.guidId, performante: true });
               }
@@ -289,14 +264,10 @@ export class WebPliantController extends BaseController {
                 const buffer = Buffer.from(content.backgroundImage.split(",")[1], "base64");
                 const blob = new Blob([buffer], { type: mimetype });
                 formData.append("file", blob, "image_" + s.id + mimetype);
-                const resultAxios = await axios.post<{ esito: boolean, record: { guidId: string } }>(
-                  config.OLYMPUS_IP_ADDRESS + "/foto/uploadFotoWebPliant",
+                const resultAxios = await inviaFormDataAOlimpo<{ esito: boolean, record: { guidId: string } }>(
+                  "/foto/uploadFotoWebPliant",
                   formData,
-                  {
-                    headers: {
-                      "Authorization": req.session.private_key,
-                    }
-                  }
+                  req.session.private_key
                 );
                 content.backgroundImage = urlOlimpo('/foto/getThumbNailOnDemand', { guidId: resultAxios.data.record.guidId, performante: true });
               }
@@ -308,14 +279,10 @@ export class WebPliantController extends BaseController {
                 const buffer = Buffer.from(content.logo.srcLogoCarosello.split(",")[1], "base64");
                 const blob = new Blob([buffer], { type: mimetype });
                 formData.append("file", blob, "image_" + s.id + mimetype);
-                const resultAxios = await axios.post<{ esito: boolean, record: { guidId: string } }>(
-                  config.OLYMPUS_IP_ADDRESS + "/foto/uploadFotoWebPliant",
+                const resultAxios = await inviaFormDataAOlimpo<{ esito: boolean, record: { guidId: string } }>(
+                  "/foto/uploadFotoWebPliant",
                   formData,
-                  {
-                    headers: {
-                      "Authorization": req.session.private_key,
-                    }
-                  }
+                  req.session.private_key
                 );
                 content.logo.srcLogoCarosello = urlOlimpo('/foto/getThumbNailOnDemand', { guidId: resultAxios.data.record.guidId, height: content.logo.height, width: content.logo.width, performante: true });
               }
@@ -327,14 +294,10 @@ export class WebPliantController extends BaseController {
                 const buffer = Buffer.from(content.banner.split(",")[1], "base64");
                 const blob = new Blob([buffer], { type: mimetype });
                 formData.append("file", blob, "image_" + s.id + mimetype);
-                const resultAxios = await axios.post<{ esito: boolean, record: { guidId: string } }>(
-                  config.OLYMPUS_IP_ADDRESS + "/foto/uploadFotoWebPliant",
+                const resultAxios = await inviaFormDataAOlimpo<{ esito: boolean, record: { guidId: string } }>(
+                  "/foto/uploadFotoWebPliant",
                   formData,
-                  {
-                    headers: {
-                      "Authorization": req.session.private_key,
-                    }
-                  }
+                  req.session.private_key
                 );
                 content.banner = urlOlimpo('/foto/getThumbNailOnDemand', { guidId: resultAxios.data.record.guidId, performante: true });
               }
