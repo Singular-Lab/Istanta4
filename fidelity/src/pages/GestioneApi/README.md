@@ -63,10 +63,12 @@ Responsabilità:
 
 ### Custom Hooks
 
-#### `useApiKeyManagement()`
-Gestisce generazione e copia API keys.
+#### `useApiKeyManagement(statoApiKey)`
+Gestisce generazione e copia API keys. Il server conserva solo l'hash della chiave:
+`/external/get_api_key` restituisce `{ configurata, generataIl }` e la chiave in chiaro
+c'è solo in `chiaveGenerata`, subito dopo la generazione.
 ```typescript
-const { apiKey, copied, isGenerating, generateKey, copyToClipboard } = useApiKeyManagement();
+const { stato, chiaveGenerata, copied, isGenerating, generateKey, copyToClipboard } = useApiKeyManagement(statoApiKey);
 ```
 
 #### `useApiTesting()`
@@ -107,7 +109,7 @@ const { exportToCSV, exportToExcel, exportToPDF } = useStatisticsExport();
 - Gestione stato test condiviso
 
 #### ApiKeysTab
-- Visualizzazione API key corrente
+- Stato della chiave (configurata il …); la chiave si vede solo appena generata
 - Generazione nuova chiave
 - Copy to clipboard
 

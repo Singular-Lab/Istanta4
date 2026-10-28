@@ -10,8 +10,9 @@ import config from '../config';
 import { urlOlimpoPubblico, urlFotoOlimpo } from '../utils/urlOlimpo';
 import { sequelize } from '../db/SequelizeConnector';
 import { FilterConditionDTO, FilterTemplateDTO, PromoResponseDTO } from '../dto';
-import { GetCssResponseDTO, GetRefsHtmlResponseDTO, IExternalApiService } from '../interfaces/IExternalApiService';
+import { GetCssResponseDTO, GetRefsHtmlResponseDTO, IExternalApiService, StatoApiKeyDTO } from '../interfaces/IExternalApiService';
 import { log } from '../logger';
+import { hashApiKey } from '../middleware/apiKeyAuth';
 import { TipiDiExport, UtentiGDO } from '../models';
 import { DesignKit } from '../models/design_kit';
 import { FilesRuntime } from '../models/files_runtime';
@@ -962,7 +963,7 @@ export class ExternalApiService implements IExternalApiService {
     })) as PromoResponseDTO[];
   }
 
-  async getApiKey(idUtente: string): Promise<string> {
+  async getStatoApiKey(idUtente: string): Promise<StatoApiKeyDTO> {
     const utenteGDO = await UtentiGDO.findOne({
       where: { id_utente_utentegdo: idUtente }
     });
@@ -984,14 +985,16 @@ export class ExternalApiService implements IExternalApiService {
         entityId: utenteGDO.id_ruolo_utente_gdo
       });
     }
+    // Solo lo stato: a riposo c'e' l'hash, e la chiave in chiaro si vede una
+    // volta sola, nella risposta della generazione
     if (!ruoloUtenteGDO.api_key_ruolo_utente_gdo) {
-      throw new NotFoundError({
-        message: 'API Key utente non trovata',
-        entityType: 'RuoloUtenteGDO',
-        entityId: utenteGDO.id_ruolo_utente_gdo
-      });
+      return { configurata: false, generataIl: null };
     }
-    return ruoloUtenteGDO.api_key_ruolo_utente_gdo;
+    // updatedat del ruolo cambia solo quando si genera la chiave
+    return {
+      configurata: true,
+      generataIl: ruoloUtenteGDO.updatedat ? dayjs(ruoloUtenteGDO.updatedat).toISOString() : null
+    };
   }
 
   async generateApiKey(id_utente: string): Promise<any> {
@@ -1051,8 +1054,10 @@ export class ExternalApiService implements IExternalApiService {
 
       const apiKey = encrypted;
 
+      // Si salva l'hash: la chiave in chiaro esce solo in questa risposta, e chi
+      // legge il database non puo' usarla. apiKeyAuth cerca per hashApiKey(chiave).
       await RuoloUtenteGDO.update({
-        api_key_ruolo_utente_gdo: apiKey,
+        api_key_ruolo_utente_gdo: hashApiKey(apiKey),
         updatedat: dayjs().toDate()
       }, {
         where: { id_ruolo_utente_gdo: utenteGDO.id_ruolo_utente_gdo }

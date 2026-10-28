@@ -12,8 +12,10 @@ vi.mock('../../middleware/permissionGuard', () => ({
 }));
 
 import { sequelize } from '../../db/SequelizeConnector';
+import { UtentiGDO } from '../../models';
 import { GDOWhatsappCampagne } from '../../models/whatsapp/gdo_whatsapp_campagne';
 import { GDOWhatsappQueueJob } from '../../models/whatsapp/gdo_whatsapp_message_queue';
+import { GDOWhatsappPreset } from '../../models/whatsapp/gdo_whatsapp_preset';
 import { GDOWhatsappTemplate } from '../../models/whatsapp/gdo_whatsapp_template';
 import { AuditLogService } from '../../services/AuditLogService';
 import { WhatsAppController } from '../WhatsAppController';
@@ -112,6 +114,12 @@ function createAppConfigurazione(superadmin = false) {
     salvaInLocaleTemplateWhatsappSuperAdminPayload: vi.fn().mockResolvedValue({ success: true, newTemplateId: 't1' }),
     sendModifiedTemplateToMeta: vi.fn().mockResolvedValue({ success: true, stato: 'PENDING' }),
     salvaSetupGDOWhatsapp: vi.fn().mockResolvedValue({ success: true, creato: false, campiModificati: ['stato', 'access_token'] }),
+    getAllGDOWhatsapp: vi.fn().mockResolvedValue([{ id: 'gdo-A', nome: 'Negozi A' }, { id: 'gdo-B', nome: 'Negozi B' }]),
+    getAllPresetsTemplateWhatsapp: vi.fn().mockResolvedValue([]),
+    creaPresetTemplateWhatsapp: vi.fn().mockResolvedValue({ success: true }),
+    modificaPresetTemplateWhatsapp: vi.fn().mockResolvedValue({ success: true }),
+    setDefaultPresetTemplateWhatsapp: vi.fn().mockResolvedValue({ success: true }),
+    invioDiTestAdUtente: vi.fn().mockResolvedValue({ success: true }),
   };
   const app = express();
   app.use(express.json());
@@ -254,5 +262,187 @@ describe('configurazione e modelli WhatsApp: isolamento per GDO', () => {
       campi: ['stato', 'access_token'],
     });
     expect(JSON.stringify(configurationChanged.mock.calls.map((c) => c.slice(1)))).not.toContain('token-di-prova-segreto');
+  });
+});
+
+const PRESET = 'a1b2c3d4-0000-4000-8000-000000000001';
+const DESTINATARIO = 'b1b2c3d4-0000-4000-8000-000000000002';
+
+// Il preset appartiene alla GDO del suo modello
+function presetDellaGdo(idGdo: string) {
+  const findPreset = vi.spyOn(GDOWhatsappPreset, 'findByPk').mockResolvedValue({ id_gdowhatsappreset: PRESET, id_template_gdowhatsappreset: 't1' } as any);
+  vi.spyOn(GDOWhatsappTemplate, 'findByPk').mockResolvedValue({ id_gdo_gdowhatsapptemplate: idGdo } as any);
+  return findPreset;
+}
+
+// Il destinatario del messaggio di prova e' associato solo alla GDO indicata
+function destinatarioDellaGdo(idGdo: string) {
+  return vi.spyOn(UtentiGDO, 'findOne').mockImplementation((async (opzioni: any) =>
+    opzioni?.where?.id_gdo_utentegdo === idGdo ? { id_utentegdo: 'ug-1' } : null) as any
+  );
+}
+
+function modelloDellaGdo(service: ReturnType<typeof createAppConfigurazione>['service'], idGdo: string) {
+  service.getWhatsappTemplateById.mockResolvedValue({ id_gdowhatsapptemplate: 't1', id_gdo_gdowhatsapptemplate: idGdo });
+}
+
+const corpoNuovoPreset = { id_template: 't1', nome_preset: 'Base', contenuto_preset: { body: ['nome'] } };
+const corpoModificaPreset = { id_preset: PRESET, nome_preset: 'Rinominato', contenuto_preset: { body: ['cognome'] } };
+
+describe('preset e invio di prova WhatsApp: isolamento per GDO', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("l'elenco delle GDO con WhatsApp contiene solo la propria GDO", async () => {
+    const { app } = createAppConfigurazione();
+
+    const res = await request(app).get('/api/whatsapp/get_all_gdo_whatsapp');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([{ id: 'gdo-A', nome: 'Negozi A' }]);
+  });
+
+  it("senza una GDO associata l'elenco e' vuoto, e il Superadmin vede tutte le GDO", async () => {
+    const senzaGdo = createAppConfigurazione();
+    senzaGdo.service.getCurrentGDOWhatsappForCampaign.mockResolvedValue(null);
+    const vuoto = await request(senzaGdo.app).get('/api/whatsapp/get_all_gdo_whatsapp');
+    expect(vuoto.status).toBe(200);
+    expect(vuoto.body).toEqual([]);
+    expect(senzaGdo.service.getAllGDOWhatsapp).not.toHaveBeenCalled();
+
+    const superadmin = createAppConfigurazione(true);
+    const res = await request(superadmin.app).get('/api/whatsapp/get_all_gdo_whatsapp');
+    expect(res.status).toBe(200);
+    expect(res.body.map((gdo: any) => gdo.id)).toEqual(['gdo-A', 'gdo-B']);
+  });
+
+  it.each([
+    ['get', '/get_all_presets_template_whatsapp?id_template=t1', undefined, 'getAllPresetsTemplateWhatsapp'],
+    ['post', '/crea_preset_template_whatsapp', corpoNuovoPreset, 'creaPresetTemplateWhatsapp'],
+  ] as const)("%s %s su un modello di un'altra GDO risponde 404", async (metodo, percorso, corpo, operazione) => {
+    const { app, service } = createAppConfigurazione();
+
+    const richiesta = request(app)[metodo](`/api/whatsapp${percorso}`);
+    const res = await (corpo ? richiesta.send(corpo) : richiesta);
+
+    expect(res.status).toBe(404);
+    expect(service[operazione]).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['/modifica_preset_template_whatsapp', corpoModificaPreset, 'modificaPresetTemplateWhatsapp'],
+    // l'id_template del corpo non conta: decide il modello del preset
+    ['/set_default_preset_template_whatsapp', { id_template: 't-propria', id_preset: PRESET }, 'setDefaultPresetTemplateWhatsapp'],
+  ] as const)("put %s su un preset di un'altra GDO risponde 404", async (percorso, corpo, operazione) => {
+    const { app, service } = createAppConfigurazione();
+    presetDellaGdo('gdo-B');
+
+    const res = await request(app).put(`/api/whatsapp${percorso}`).send(corpo);
+
+    expect(res.status).toBe(404);
+    expect(service[operazione]).not.toHaveBeenCalled();
+  });
+
+  it('un preset inesistente o con id non valido risponde 404', async () => {
+    const { app, service } = createAppConfigurazione();
+    const findPreset = vi.spyOn(GDOWhatsappPreset, 'findByPk').mockResolvedValue(null);
+
+    expect((await request(app).put('/api/whatsapp/modifica_preset_template_whatsapp').send(corpoModificaPreset)).status).toBe(404);
+    findPreset.mockClear();
+    expect((await request(app).put('/api/whatsapp/set_default_preset_template_whatsapp').send({ id_preset: 'non-un-uuid' })).status).toBe(404);
+    expect(findPreset).not.toHaveBeenCalled();
+    expect(service.modificaPresetTemplateWhatsapp).not.toHaveBeenCalled();
+    expect(service.setDefaultPresetTemplateWhatsapp).not.toHaveBeenCalled();
+  });
+
+  it('sui modelli e sui preset della propria GDO le operazioni vengono eseguite', async () => {
+    const { app, service } = createAppConfigurazione();
+    modelloDellaGdo(service, 'gdo-A');
+    presetDellaGdo('gdo-A');
+
+    expect((await request(app).get('/api/whatsapp/get_all_presets_template_whatsapp?id_template=t1')).status).toBe(200);
+    expect((await request(app).post('/api/whatsapp/crea_preset_template_whatsapp').send(corpoNuovoPreset)).status).toBe(200);
+    expect((await request(app).put('/api/whatsapp/modifica_preset_template_whatsapp').send(corpoModificaPreset)).status).toBe(200);
+    expect((await request(app).put('/api/whatsapp/set_default_preset_template_whatsapp').send({ id_template: 't1', id_preset: PRESET })).status).toBe(200);
+
+    expect(service.getAllPresetsTemplateWhatsapp).toHaveBeenCalledWith('t1');
+    expect(service.creaPresetTemplateWhatsapp).toHaveBeenCalledWith('t1', 'Base', { body: ['nome'] });
+    expect(service.modificaPresetTemplateWhatsapp).toHaveBeenCalledWith(PRESET, 'Rinominato', { body: ['cognome'] });
+    expect(service.setDefaultPresetTemplateWhatsapp).toHaveBeenCalledWith(PRESET);
+  });
+
+  it('il Superadmin gestisce i preset di ogni GDO', async () => {
+    const { app, service } = createAppConfigurazione(true);
+    presetDellaGdo('gdo-B');
+
+    expect((await request(app).get('/api/whatsapp/get_all_presets_template_whatsapp?id_template=t1')).status).toBe(200);
+    expect((await request(app).post('/api/whatsapp/crea_preset_template_whatsapp').send(corpoNuovoPreset)).status).toBe(200);
+    expect((await request(app).put('/api/whatsapp/modifica_preset_template_whatsapp').send(corpoModificaPreset)).status).toBe(200);
+    expect((await request(app).put('/api/whatsapp/set_default_preset_template_whatsapp').send({ id_preset: PRESET })).status).toBe(200);
+    expect(service.setDefaultPresetTemplateWhatsapp).toHaveBeenCalledWith(PRESET);
+  });
+
+  it("l'invio di prova con un modello di un'altra GDO risponde 404 e non invia nulla", async () => {
+    const { app, service } = createAppConfigurazione();
+    destinatarioDellaGdo('gdo-B');
+
+    const res = await request(app).post('/api/whatsapp/invio_di_test_ad_utente').send({ id_utente: DESTINATARIO, id_template: 't1' });
+
+    expect(res.status).toBe(404);
+    expect(service.invioDiTestAdUtente).not.toHaveBeenCalled();
+  });
+
+  it("l'invio di prova a un destinatario di un'altra GDO risponde 404 e non invia nulla", async () => {
+    const { app, service } = createAppConfigurazione();
+    modelloDellaGdo(service, 'gdo-A');
+    destinatarioDellaGdo('gdo-B');
+
+    const res = await request(app).post('/api/whatsapp/invio_di_test_ad_utente').send({ id_utente: DESTINATARIO, id_template: 't1' });
+
+    expect(res.status).toBe(404);
+    expect(service.invioDiTestAdUtente).not.toHaveBeenCalled();
+  });
+
+  it('un destinatario con id non valido risponde 404 senza interrogare il database', async () => {
+    const { app, service } = createAppConfigurazione();
+    modelloDellaGdo(service, 'gdo-A');
+    const findOne = destinatarioDellaGdo('gdo-A');
+
+    const res = await request(app).post('/api/whatsapp/invio_di_test_ad_utente').send({ id_utente: 'non-un-uuid', id_template: 't1' });
+
+    expect(res.status).toBe(404);
+    expect(findOne).not.toHaveBeenCalled();
+    expect(service.invioDiTestAdUtente).not.toHaveBeenCalled();
+  });
+
+  it('il messaggio di prova parte con modello e destinatario della propria GDO', async () => {
+    const { app, service } = createAppConfigurazione();
+    modelloDellaGdo(service, 'gdo-A');
+    const findOne = destinatarioDellaGdo('gdo-A');
+
+    const res = await request(app).post('/api/whatsapp/invio_di_test_ad_utente').send({ id_utente: DESTINATARIO, id_template: 't1' });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true });
+    expect(findOne).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id_utente_utentegdo: DESTINATARIO, id_gdo_utentegdo: 'gdo-A' },
+    }));
+    expect(service.invioDiTestAdUtente).toHaveBeenCalledWith(DESTINATARIO, 't1');
+  });
+
+  it('il Superadmin invia prove con modelli di ogni GDO, ma solo a destinatari della GDO del modello', async () => {
+    const stessaGdo = createAppConfigurazione(true);
+    destinatarioDellaGdo('gdo-B');
+    const ok = await request(stessaGdo.app).post('/api/whatsapp/invio_di_test_ad_utente').send({ id_utente: DESTINATARIO, id_template: 't1' });
+    expect(ok.status).toBe(200);
+    expect(stessaGdo.service.invioDiTestAdUtente).toHaveBeenCalledWith(DESTINATARIO, 't1');
+
+    vi.restoreAllMocks();
+    const altraGdo = createAppConfigurazione(true);
+    destinatarioDellaGdo('gdo-A');
+    const res = await request(altraGdo.app).post('/api/whatsapp/invio_di_test_ad_utente').send({ id_utente: DESTINATARIO, id_template: 't1' });
+    expect(res.status).toBe(404);
+    expect(altraGdo.service.invioDiTestAdUtente).not.toHaveBeenCalled();
   });
 });

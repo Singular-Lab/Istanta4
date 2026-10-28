@@ -15,7 +15,6 @@ import type { Template } from "../../GestioneApi/types";
 type FormMode = 'view' | 'create' | 'edit';
 
 interface LoaderData {
-  apiKey: string;
   template: Template[];
   template_filters: {
     success: boolean;
@@ -25,7 +24,7 @@ interface LoaderData {
 }
 
 function PluginPage() {
-  const { apiKey, template: templateLoader, template_filters } = useLoaderData<LoaderData>();
+  const { template: templateLoader, template_filters } = useLoaderData<LoaderData>();
 
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [searchParams, setSearchParams] = useSearchParams();
@@ -98,7 +97,6 @@ function PluginPage() {
             fieldOptions={fieldOptions}
             onSuccess={handleFormSuccess}
             onCancel={handleFormCancel}
-            apiKey={apiKey}
           />
         </Sezione>
       </Pagina>

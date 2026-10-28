@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { QueryTypes } from 'sequelize';
+import { validate as isUuid } from 'uuid';
 import { HttpStatusCode, TIPO_UTENTI } from '../../../lib/enums';
 import { ForbiddenError, NotFoundError } from '../../../lib/errors';
 import "../../global.d.ts";
@@ -8,6 +9,9 @@ import { sequelize } from '../db/SequelizeConnector';
 import { IWhatsAppService } from '../interfaces/IWhatsAppService';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { permissionGuard } from '../middleware/permissionGuard';
+import { UtentiGDO } from '../models';
+import { GDOWhatsappPreset } from '../models/whatsapp/gdo_whatsapp_preset';
+import { GDOWhatsappTemplate } from '../models/whatsapp/gdo_whatsapp_template';
 import { AuditLogService } from '../services/AuditLogService';
 import { WhatsappQueueService } from '../services/WhatsappQueueService';
 import { log } from '../logger';
@@ -96,7 +100,10 @@ export class WhatsAppController extends BaseController {
 
     private async invioDiTestAdUtente(req: Request, res: Response): Promise<void> {
         try {
-            const { id_utente, id_template } = req.body;
+            const { id_utente, id_template } = req.body ?? {};
+            const template = await this.templateAmmesso(req, id_template);
+            // Anche per il Superadmin il destinatario deve essere della GDO del modello: il messaggio parte dal suo numero
+            await this.verificaDestinatarioDellaGdo(id_utente, template.id_gdo_gdowhatsapptemplate);
             const result = await this.whatsAppService.invioDiTestAdUtente(id_utente, id_template);
             this.sendResponse(res, HttpStatusCode.OK, result);
         } catch (error: any) {
@@ -116,7 +123,11 @@ export class WhatsAppController extends BaseController {
 
     private async getAllGDOWhatsapp(req: Request, res: Response): Promise<void> {
         try {
-            const result = await this.whatsAppService.getAllGDOWhatsapp();
+            const ammessa = await this.gdoAmmessa(req);
+            // Senza GDO non c'e' nulla da mostrare: evita di leggere tutte le GDO
+            const tutte = ammessa === '' ? [] : await this.whatsAppService.getAllGDOWhatsapp();
+            // Fuori dal Superadmin si vede solo la propria GDO, come per le campagne
+            const result = ammessa === null ? tutte : tutte.filter(gdo => gdo.id === ammessa);
             this.sendResponse(res, HttpStatusCode.OK, result);
         } catch (error: any) {
             this.handleError(res, error);
@@ -235,6 +246,7 @@ export class WhatsAppController extends BaseController {
     private async getAllPresetsTemplateWhatsapp(req: Request, res: Response): Promise<void> {
         try {
             const id_template = req.query.id_template as string;
+            await this.templateAmmesso(req, id_template);
             const result = await this.whatsAppService.getAllPresetsTemplateWhatsapp(id_template);
             this.sendResponse(res, HttpStatusCode.OK, result);
         } catch (error: any) {
@@ -243,7 +255,8 @@ export class WhatsAppController extends BaseController {
     }
     private async creaPresetTemplateWhatsapp(req: Request, res: Response): Promise<void> {
         try {
-            const { id_template, nome_preset, contenuto_preset } = req.body;
+            const { id_template, nome_preset, contenuto_preset } = req.body ?? {};
+            await this.templateAmmesso(req, id_template);
             const result = await this.whatsAppService.creaPresetTemplateWhatsapp(id_template, nome_preset, contenuto_preset);
             this.sendResponse(res, HttpStatusCode.OK, result);
         } catch (error: any) {
@@ -252,7 +265,8 @@ export class WhatsAppController extends BaseController {
     }
     private async modificaPresetTemplateWhatsapp(req: Request, res: Response): Promise<void> {
         try {
-            const { id_preset, nome_preset, contenuto_preset } = req.body;
+            const { id_preset, nome_preset, contenuto_preset } = req.body ?? {};
+            await this.presetAmmesso(req, id_preset);
             const result = await this.whatsAppService.modificaPresetTemplateWhatsapp(id_preset, nome_preset, contenuto_preset);
             this.sendResponse(res, HttpStatusCode.OK, result);
         } catch (error: any) {
@@ -289,6 +303,42 @@ export class WhatsAppController extends BaseController {
         return template;
     }
 
+    // Il preset appartiene alla GDO del suo modello: quello di un'altra GDO risulta inesistente
+    private async presetAmmesso(req: Request, idPreset: unknown) {
+        const preset = typeof idPreset === 'string' && isUuid(idPreset)
+            ? await GDOWhatsappPreset.findByPk(idPreset)
+            : null;
+        const template = preset
+            ? await GDOWhatsappTemplate.findByPk(preset.id_template_gdowhatsappreset, { attributes: ['id_gdo_gdowhatsapptemplate'] })
+            : null;
+        const ammessa = await this.gdoAmmessa(req);
+        if (!preset || !template || (ammessa !== null && template.id_gdo_gdowhatsapptemplate !== ammessa)) {
+            throw new NotFoundError({
+                message: 'Preset non trovato',
+                entityType: 'GDOWhatsappPreset',
+                entityId: typeof idPreset === 'string' ? idPreset : undefined
+            });
+        }
+        return preset;
+    }
+
+    // Un destinatario non associato alla GDO risulta inesistente: nessun messaggio parte verso Meta
+    private async verificaDestinatarioDellaGdo(idUtente: unknown, idGdo: string): Promise<void> {
+        const associazione = typeof idUtente === 'string' && isUuid(idUtente)
+            ? await UtentiGDO.findOne({
+                where: { id_utente_utentegdo: idUtente, id_gdo_utentegdo: idGdo },
+                attributes: ['id_utentegdo']
+            })
+            : null;
+        if (!associazione) {
+            throw new NotFoundError({
+                message: 'Utente non trovato',
+                entityType: 'Utente',
+                entityId: typeof idUtente === 'string' ? idUtente : undefined
+            });
+        }
+    }
+
     private async eliminaPresetTemplateWhatsapp(req: Request<{ id: string }>, res: Response): Promise<void> {
         try {
             await this.whatsAppService.eliminaPresetTemplateWhatsapp(req.params.id, await this.gdoAmmessa(req));
@@ -311,7 +361,9 @@ export class WhatsAppController extends BaseController {
 
     private async setDefaultPresetTemplateWhatsapp(req: Request, res: Response): Promise<void> {
         try {
-            const { id_template, id_preset } = req.body;
+            // Il modello si ricava dal preset: l'id_template del corpo non decide nulla
+            const { id_preset } = req.body ?? {};
+            await this.presetAmmesso(req, id_preset);
             const result = await this.whatsAppService.setDefaultPresetTemplateWhatsapp(id_preset);
             this.sendResponse(res, HttpStatusCode.OK, result);
         } catch (error: any) {

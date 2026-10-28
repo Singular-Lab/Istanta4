@@ -1,11 +1,12 @@
 import Alert from "@/components/Base/Alert";
 import Badge from "@/components/Base/Badge";
+import { FormHelp, FormInput, FormLabel } from "@/components/Base/Form";
 import { Disclosure, Tab } from "@/components/Base/Headless";
 import Lucide from "@/components/Base/Lucide";
 import Table from "@/components/Base/Table";
 import TryItPanel from "@/components/TryItPanel";
 import { useFetchFieldOptions, useFetchTipiExport } from "@/query/query";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useLoaderData } from "react-router-dom";
 import { ServerCall } from "../../../../lib/server_call";
 import { CodeBlock, DocsCapitolo, DocsCard, DocsGuida } from "../DocsCondivisi";
@@ -35,12 +36,14 @@ interface ApiEndpoint {
 }
 
 interface LoaderData {
-  apiKey: string;
   template: Array<{ guidId: string; titolo: string; quantitaKit: number; formatoTemplate: string; codiceFormato: string }>;
 }
 
 function DocumentazioneApiPage() {
-  const { apiKey, template } = useLoaderData<LoaderData>();
+  const { template } = useLoaderData<LoaderData>();
+  // Il server non restituisce più la chiave salvata: per "Prova questo endpoint"
+  // la si incolla qui, e resta solo nello stato della pagina.
+  const [chiaveProva, setChiaveProva] = useState("");
 
   const { data: tipiExportData } = useFetchTipiExport();
   const { data: fieldOptions } = useFetchFieldOptions();
@@ -118,7 +121,7 @@ function DocumentazioneApiPage() {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
-    'x-api-key': 'your-api-key-here'
+    'x-api-key': 'LA_TUA_API_KEY'
   },
   body: JSON.stringify({
     template_id: ['template_001', 'template_002'],
@@ -142,7 +145,7 @@ console.log(data);`
 url = "${ServerCall.getUrl()}/external/refs"
 headers = {
     "Content-Type": "application/json",
-    "x-api-key": "your-api-key-here"
+    "x-api-key": "LA_TUA_API_KEY"
 }
 payload = {
     "template_id": ["template_001", "template_002"],
@@ -163,7 +166,7 @@ print(data)`
           label: "cURL",
           code: `curl -X POST "${ServerCall.getUrl()}/external/refs" \\
   -H "Content-Type: application/json" \\
-  -H "x-api-key: your-api-key-here" \\
+  -H "x-api-key: LA_TUA_API_KEY" \\
   -d '{
     "template_id": ["template_001", "template_002"],
     "filters": [
@@ -203,7 +206,7 @@ print(data)`
           code: `const response = await fetch('${ServerCall.getUrl()}/external/promo', {
   method: 'GET',
   headers: {
-    'x-api-key': 'your-api-key-here'
+    'x-api-key': 'LA_TUA_API_KEY'
   }
 });
 
@@ -214,7 +217,7 @@ console.log(data);`
           language: "curl",
           label: "cURL",
           code: `curl -X GET "${ServerCall.getUrl()}/external/promo" \\
-  -H "x-api-key: your-api-key-here"`
+  -H "x-api-key: LA_TUA_API_KEY"`
         }
       ]
     },
@@ -291,6 +294,24 @@ console.log(data);`
           <p className="text-slate-600">
             Tutte le API esterne richiedono autenticazione tramite API Key. Invia la tua API Key nell'header <code className={codice}>x-api-key</code> o <code className={codice}>api-key</code>.
           </p>
+          <div className="mt-4">
+            <FormLabel htmlFor="api-key-prova">API Key per provare gli endpoint</FormLabel>
+            <FormInput
+              id="api-key-prova"
+              type="password"
+              autoComplete="off"
+              spellCheck={false}
+              aria-describedby="api-key-prova-aiuto"
+              value={chiaveProva}
+              onChange={(e) => setChiaveProva(e.target.value)}
+              placeholder="Incolla qui la tua API Key"
+              className="w-full font-mono"
+            />
+            <FormHelp id="api-key-prova-aiuto">
+              La chiave è mostrata una sola volta, quando la generi: incolla quella che usa la tua integrazione.
+              Non viene salvata e serve solo ai pannelli "Prova questo endpoint".
+            </FormHelp>
+          </div>
         </DocsCard>
       </DocsCapitolo>
 
@@ -395,7 +416,7 @@ console.log(data);`
                       <TryItPanel
                         endpoint={endpoint.path}
                         method={endpoint.method as "GET" | "POST"}
-                        apiKey={apiKey}
+                        apiKey={chiaveProva.trim() || undefined}
                         templates={template}
                         tipiExport={tipiExportData || []}
                         fieldOptions={normalizedFieldOptions}

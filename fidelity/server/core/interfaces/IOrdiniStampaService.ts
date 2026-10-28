@@ -2,7 +2,7 @@ import { Request } from 'express';
 import { STATO_ORDINI_STAMPA } from '../../../lib/enums';
 import { MergedGroupFile, OrdiniDiStampaAttributes, VirtualDirectory } from '../../../lib/types';
 import { ContrattoTipografiaResponseDTO, type OrdiniDiStampaResponseDTO, type PromoResponseDTO } from '../dto';
-import type { GroupingJobState } from '../services/OrdiniStampaService';
+import type { AvvioRaggruppamento, GroupingJobState, PrenotazioneInvio } from '../services/OrdiniStampaService';
 
 export interface IOrdiniStampaService {
     creaOrdineStampa(data: {
@@ -14,13 +14,15 @@ export interface IOrdiniStampaService {
     deleteOrdineStampa(id: string): Promise<boolean>;
 
     getAllOrdiniDiStampaInCorso(): Promise<OrdiniDiStampaResponseDTO[]>;
-    prenotaInvio(idOrdineDiStampa: string): Promise<STATO_ORDINI_STAMPA>;
+    /** Blocca l'ordine in IN_INVIO; il blocco restituito va passato a processFTPPopOlimpo. */
+    prenotaInvio(idOrdineDiStampa: string): Promise<PrenotazioneInvio>;
     processFTPPopOlimpo(params: {
         req: Request;
         idOrdineDiStampa: string;
         kitIds: Record<string, boolean>;
         socketId: string;
         statoPrecedente: STATO_ORDINI_STAMPA;
+        bloccoInvio: Date;
     }): Promise<void>;
     getAllOrdiniDiStampaFiniti(): Promise<(OrdiniDiStampaResponseDTO & { nomePromo: string })[]>;
     creaOrdineDiStampa(data: OrdiniDiStampaAttributes): Promise<any>;
@@ -31,12 +33,13 @@ export interface IOrdiniStampaService {
     getOrdineDiStampaById(idOrdineDiStampa: string): Promise<any>;
     getOrdiniInviiByOrdineStampa(idOrdineDiStampa: string): Promise<any>;
     getExcelReportBuffer(idInvio: string): Promise<Buffer | null>;
+    /** Avvia il raggruppamento, uno per ordine fra tutti i worker; se c'e gia restituisce il suo socketId. */
     groupFilesByEquality(params: {
         req: Request;
         idOrdineDiStampa: string;
         socketId: string;
-    }): Promise<void>;
-    getGroupingStatus(idOrdineDiStampa: string): GroupingJobState | null;
+    }): Promise<AvvioRaggruppamento>;
+    getGroupingStatus(idOrdineDiStampa: string): Promise<GroupingJobState | null>;
     getVirtualDirectories(params: {
         req: Request;
         idOrdineDiStampa: string;

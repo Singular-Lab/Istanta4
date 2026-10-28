@@ -1378,8 +1378,9 @@ export class ExternalApiController extends BaseController {
 
   private async getApiKey(req: Request, res: Response): Promise<void> {
     try {
-      const apiKey = await this.externalApiService.getApiKey(req.session.id_utente as string);
-      res.json(apiKey);
+      // Solo se la chiave c'e' e quando e' stata generata: la chiave non si rilegge
+      const stato = await this.externalApiService.getStatoApiKey(req.session.id_utente as string);
+      res.json(stato);
     } catch (error: any) {
       this.handleErrorWithReturn(res, error);
     }

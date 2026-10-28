@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -22,7 +23,31 @@ describe('script SQL eseguiti all\'avvio', () => {
       'fix_permessi_ruolo_unique_indexes.sql',
       'v_attivita.sql',
     ]);
-    expect(sqlIn(cartellaPrima)).toEqual(['rimuovi_oggetti_derivati.sql', 'sistema_schema_esistente.sql']);
+    expect(sqlIn(cartellaPrima)).toEqual([
+      'hash_api_key_ruoli.sql',
+      'rimuovi_oggetti_derivati.sql',
+      'sistema_schema_esistente.sql',
+    ]);
+  });
+
+  it('prima della sync sostituiscono le chiavi API dei ruoli con il loro hash, una volta sola', () => {
+    const script = leggi(cartellaPrima, 'hash_api_key_ruoli.sql');
+
+    // Su un database vuoto la colonna non c'e' ancora: lo script non fa nulla.
+    expect(script).toMatch(/table_name = 'ruolo_utente_gdo'\s+AND column_name = 'api_key_ruolo_utente_gdo'[\s\S]*THEN\s+UPDATE public\.ruolo_utente_gdo/);
+    // Stessa conversione di hashApiKey (middleware/apiKeyAuth.ts): sha256 dei byte UTF-8 in esadecimale.
+    expect(script).toContain("encode(sha256(convert_to(api_key_ruolo_utente_gdo, 'UTF8')), 'hex')");
+
+    // Idempotenza: un hash gia' convertito e' escluso, una chiave emessa da Fidelity no.
+    const [, giaConvertito] = script.match(/api_key_ruolo_utente_gdo !~ '([^']+)'/) ?? [];
+    expect(giaConvertito).toBeDefined();
+    const escluso = new RegExp(giaConvertito as string);
+    const chiaveEmessa = 'ab'.repeat(80); // 160 caratteri esadecimali, come le chiavi cifrate
+    const hash = createHash('sha256').update(chiaveEmessa, 'utf8').digest('hex');
+
+    expect(escluso.test(chiaveEmessa)).toBe(false);
+    expect(escluso.test(hash)).toBe(true);
+    expect(script).toContain("api_key_ruolo_utente_gdo <> ''");
   });
 
   it('non indicano un proprietario ne\' tipi che Sequelize non crea', () => {

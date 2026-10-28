@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { STATO_PROMO } from '../../../../lib/enums';
+import { DatabaseError } from '../../../../lib/errors';
 import { RuntimeKit } from '../../models/runtime_kit';
 import { Tracciati } from '../../models/tracciati';
 import { PromoService } from '../PromoService';
@@ -39,5 +40,25 @@ describe('PromoService.getAllPromo: eliminazione definitiva', () => {
     const eliminabile = Object.fromEntries(elenco.map((p) => [p.id, p.is_deletable]));
 
     expect(eliminabile).toEqual({ vuota: true, 'con-liste': false, 'con-kit': false });
+  });
+});
+
+describe('PromoService.deletePromo', () => {
+  const conDelete = (deleteRepository: ReturnType<typeof vi.fn>) =>
+    new PromoService({} as any, {} as any, { delete: deleteRepository } as any, {} as any, {} as any);
+
+  it('un errore del repository diventa un DatabaseError con il messaggio dell eliminazione', async () => {
+    const service = conDelete(vi.fn().mockRejectedValue(new Error('violazione di chiave esterna')));
+
+    const errore = await service.deletePromo('p1').catch((e: unknown) => e);
+
+    expect(errore).toBeInstanceOf(DatabaseError);
+    expect((errore as DatabaseError).message).toBe("Errore durante l'eliminazione della promozione");
+  });
+
+  it.each([true, false])('restituisce invariato l esito del repository (%s)', async (esito) => {
+    const service = conDelete(vi.fn().mockResolvedValue(esito));
+
+    await expect(service.deletePromo('p1')).resolves.toBe(esito);
   });
 });

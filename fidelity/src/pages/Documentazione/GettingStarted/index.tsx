@@ -1,12 +1,14 @@
 import Alert from "@/components/Base/Alert";
 import { Tab } from "@/components/Base/Headless";
 import Lucide from "@/components/Base/Lucide";
+import { formatDataOraEstesa } from "@/utils/format";
 import { Link, useLoaderData } from "react-router-dom";
 import { ServerCall } from "../../../../lib/server_call";
+import { PLACEHOLDER_API_KEY, type StatoApiKey } from "../../GestioneApi/types";
 import { CodeBlock, DocsCapitolo, DocsCard, DocsCollegamento, DocsGuida } from "../DocsCondivisi";
 
 interface LoaderData {
-  apiKey: string;
+  statoApiKey: StatoApiKey | null;
 }
 
 // Componente Step
@@ -48,7 +50,9 @@ function Step({
 
 function DocumentazioneGettingStartedPage() {
   const loaderData = useLoaderData<LoaderData | undefined>();
-  const apiKey = loaderData?.apiKey || "YOUR_API_KEY";
+  const statoApiKey = loaderData?.statoApiKey;
+  // Il server conserva solo l'hash della chiave: negli esempi va sempre il placeholder
+  const apiKey = PLACEHOLDER_API_KEY;
   const baseUrl = ServerCall.getUrl();
 
   return (
@@ -87,11 +91,17 @@ function DocumentazioneGettingStartedPage() {
                   <div className="mb-4 rounded-card border border-slate-200 bg-slate-50 p-4">
                     <div className="mb-3 flex items-center gap-3">
                       <Lucide icon="Key" aria-hidden="true" className="h-4 w-4 text-primary" />
-                      <span className="font-medium text-slate-800">La tua API Key attuale:</span>
+                      <span className="font-medium text-slate-800">La tua API Key:</span>
                     </div>
-                    <code className="block break-all rounded-control bg-slate-900 px-4 py-2 font-mono text-sm text-success">
-                      {apiKey}
-                    </code>
+                    <p className="text-sm text-slate-600">
+                      {statoApiKey?.configurata
+                        ? statoApiKey.generataIl
+                          ? `Configurata il ${formatDataOraEstesa(statoApiKey.generataIl)}.`
+                          : "Configurata."
+                        : "Nessuna API Key attiva."}{" "}
+                      Per sicurezza la chiave è mostrata una sola volta, quando la generi: negli esempi
+                      sostituisci <code className="rounded-control bg-slate-100 px-1.5 py-0.5 font-mono text-xs">{PLACEHOLDER_API_KEY}</code> con la tua.
+                    </p>
                   </div>
 
                   <Link

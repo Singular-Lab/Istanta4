@@ -118,7 +118,7 @@ export class OrdiniDiStampaController extends BaseController {
       const socketId = `ftp_progress_${idOrdineDiStampa}_${Date.now()}`;
 
       // Prima della risposta: un secondo avvio dello stesso ordine viene rifiutato subito
-      const statoPrecedente = await this.ordiniStampaService.prenotaInvio(idOrdineDiStampa);
+      const { statoPrecedente, bloccoInvio } = await this.ordiniStampaService.prenotaInvio(idOrdineDiStampa);
 
       AuditLogService.getInstance().bulkOperation(req, 'ordine_stampa', 'ftp_start', { ordineId: idOrdineDiStampa });
       res.status(HttpStatusCode.OK).json({
@@ -132,7 +132,8 @@ export class OrdiniDiStampaController extends BaseController {
         idOrdineDiStampa,
         kitIds,
         socketId,
-        statoPrecedente
+        statoPrecedente,
+        bloccoInvio
       });
     } catch (error: any) {
       this.handleError(res, error);
@@ -287,32 +288,24 @@ export class OrdiniDiStampaController extends BaseController {
         return;
       }
 
-      // If a job is already running for this order, return its socketId
-      const existingJob = this.ordiniStampaService.getGroupingStatus(idOrdineDiStampa);
-      if (existingJob && existingJob.status === 'running') {
-        res.status(HttpStatusCode.OK).json({
-          esito: true,
-          socketId: existingJob.socketId,
-          message: "Un processo di raggruppamento è già in corso"
-        });
-        return;
-      }
-
-      const socketId = `grouping_${idOrdineDiStampa}_${Date.now()}`;
-
-      // Return immediately with socketId (same pattern as iniziaFTPPopOlimpo)
-      res.status(HttpStatusCode.OK).json({
-        esito: true,
-        socketId,
-        message: "Processo di raggruppamento avviato, connettiti al socket per monitorare l'avanzamento"
-      });
-
-      // Fire-and-forget async processing
-      this.ordiniStampaService.groupFilesByEquality({
+      // L'avvio e atomico nel registro dei lavori: con un raggruppamento gia in corso, anche in un
+      // altro worker, si risponde con il suo socketId invece di avviarne un secondo
+      const avvio = await this.ordiniStampaService.groupFilesByEquality({
         req,
         idOrdineDiStampa,
-        socketId
-      }).catch((err) => {
+        socketId: `grouping_${idOrdineDiStampa}_${Date.now()}`
+      });
+
+      res.status(HttpStatusCode.OK).json({
+        esito: true,
+        socketId: avvio.socketId,
+        message: avvio.giaInCorso
+          ? "Un processo di raggruppamento è già in corso"
+          : "Processo di raggruppamento avviato, connettiti al socket per monitorare l'avanzamento"
+      });
+
+      // Il raggruppamento prosegue in background dopo la risposta
+      avvio.fine.catch((err) => {
         log.error('Errore non gestito in groupFilesByEquality', err);
       });
     } catch (error) {
@@ -329,7 +322,7 @@ export class OrdiniDiStampaController extends BaseController {
         return;
       }
 
-      const job = this.ordiniStampaService.getGroupingStatus(idOrdineDiStampa);
+      const job = await this.ordiniStampaService.getGroupingStatus(idOrdineDiStampa);
 
       if (!job) {
         res.status(HttpStatusCode.OK).json({ status: 'idle' });

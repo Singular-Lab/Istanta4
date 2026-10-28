@@ -78,7 +78,8 @@ export class FileManagementController extends BaseController {
     this.router.put('/get_all_files_documentale', authMiddleware, permissionGuard('file.download'), this.getAllFilesDocumentale.bind(this));
     this.router.put('/get_all_contenuti_digitali', authMiddleware, permissionGuard('file.download'), this.getAllContenutiDigitali.bind(this));
     this.router.get('/getProprietaMetaFilesRuntime', authMiddleware, permissionGuard('file.download'), this.getProprietaMetaFilesRuntime.bind(this));
-    this.router.get('/getAllCombinazioniRuntimePDF', authMiddleware, permissionGuard('file.download'), this.getAllCombinazioniRuntimePDF.bind(this));
+    // Elenco della pagina Volantini: chi puo' aprire la pagina deve poterlo caricare
+    this.router.get('/getAllCombinazioniRuntimePDF', authMiddleware, permissionGuard('volantini.visualizza'), this.getAllCombinazioniRuntimePDF.bind(this));
     this.router.put('/getAllCombinazioniRuntimePDFWebPliant', authMiddleware, permissionGuard('file.download'), this.getAllCombinazioniRuntimePDFWebPliant.bind(this));
     this.router.get('/getContenutoDigitali', authMiddleware, permissionGuard('file.download'), this.getContenutoDigitali.bind(this));
 

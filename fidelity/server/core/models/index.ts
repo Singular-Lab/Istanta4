@@ -77,6 +77,7 @@ import { AuditLog } from './audit_log';
 import { AuthProvider } from './auth_provider';
 import { HubService } from './hub_service';
 import { HubNews } from './hub_news';
+import { LavoroInBackground } from './lavori_in_background';
 
 // Elenco di tutti i modelli con metadata
 export const MODELLI_SEQUELIZE = {
@@ -178,6 +179,9 @@ export const MODELLI_SEQUELIZE = {
   AuthProvider: { model: AuthProvider, nome: 'AuthProvider', tabella: 'auth_providers' },
   HubService: { model: HubService, nome: 'HubService', tabella: 'hub_services' },
   HubNews: { model: HubNews, nome: 'HubNews', tabella: 'hub_news' },
+
+  // Lavori in background condivisi fra i worker (import, raggruppamenti)
+  LavoroInBackground: { model: LavoroInBackground, nome: 'LavoroInBackground', tabella: 'lavori_in_background' },
 };
 
 export interface ModelSyncOptions {

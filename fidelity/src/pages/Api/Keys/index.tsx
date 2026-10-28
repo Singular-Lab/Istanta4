@@ -9,12 +9,20 @@ import { PermissionGate } from "@/components/PermissionGate";
 import withSessionCheck from "@/components/SessionChecker";
 import { PERMISSIONS } from "@/constants/permissions";
 import { CodeBlock } from "@/pages/Documentazione/DocsCondivisi";
+import { formatDataOraEstesa } from "@/utils/format";
 import { useState } from "react";
 import { useLoaderData } from "react-router-dom";
 import { useApiKeyManagement } from "../../GestioneApi/hooks/useApiKeyManagement";
+import { PLACEHOLDER_API_KEY, type StatoApiKey } from "../../GestioneApi/types";
 
 interface LoaderData {
-  apiKey: string;
+  statoApiKey: StatoApiKey | null;
+}
+
+/** "Chiave configurata il …": la data può mancare per le chiavi migrate senza data. */
+function descriviStato(stato: StatoApiKey): string {
+  if (!stato.configurata) return "Nessuna API Key attiva";
+  return stato.generataIl ? `Chiave configurata il ${formatDataOraEstesa(stato.generataIl)}` : "Chiave configurata";
 }
 
 const BEST_PRACTICE = [
@@ -25,18 +33,21 @@ const BEST_PRACTICE = [
 ];
 
 function ApiKeysPage() {
-  const { apiKey: apiKeyLoader } = useLoaderData<LoaderData>();
-  const { apiKey, copied, isGenerating, generateKey, copyToClipboard } = useApiKeyManagement(apiKeyLoader);
+  const { statoApiKey } = useLoaderData<LoaderData>();
+  const { stato, chiaveGenerata, copied, isGenerating, generateKey, copyToClipboard } = useApiKeyManagement(statoApiKey);
   const [dialogOpen, setDialogOpen] = useState<boolean>(false);
 
-  const curlExample = `curl -H "x-api-key: ${apiKey || 'your-api-key'}" \\
+  // La chiave vera solo se appena generata (è in memoria); altrimenti il placeholder
+  const chiaveEsempio = chiaveGenerata ?? PLACEHOLDER_API_KEY;
+
+  const curlExample = `curl -H "x-api-key: ${chiaveEsempio}" \\
   ${window.location.origin}/api/external/refs`;
 
   const jsExample = `fetch('${window.location.origin}/api/external/refs', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
-    'x-api-key': '${apiKey || 'your-api-key'}'
+    'x-api-key': '${chiaveEsempio}'
   },
   body: JSON.stringify({
     template_id: ['template_001']
@@ -60,9 +71,9 @@ function ApiKeysPage() {
       <ConfirmDialog
         open={dialogOpen}
         title="Generare una nuova API Key?"
-        subtitle={apiKey ? "La chiave attuale verrà revocata" : "Nuova chiave di accesso"}
+        subtitle={stato.configurata ? "La chiave attuale verrà revocata" : "Nuova chiave di accesso"}
         confirmLabel="Genera chiave"
-        confirmVariant={apiKey ? "danger" : "primary"}
+        confirmVariant={stato.configurata ? "danger" : "primary"}
         loading={isGenerating}
         onClose={() => setDialogOpen(false)}
         onConfirm={async () => {
@@ -76,12 +87,12 @@ function ApiKeysPage() {
               Assicurati di aggiornare tutti i servizi che la utilizzano prima di procedere.
             </p>
             <ul className="list-inside list-disc space-y-1">
-              <li>Salva subito la nuova chiave: non sarà più mostrata dopo la chiusura del dialog.</li>
+              <li>Salva subito la nuova chiave: è mostrata una volta sola e non sarà più visibile lasciata questa pagina.</li>
               <li>Distribuisci la chiave solo a canali sicuri.</li>
               <li>Rigenera periodicamente per mantenere un alto livello di sicurezza.</li>
             </ul>
             <Alert variant="soft-warning" icona="ShieldAlert" titolo="Stato attuale">
-              <code className="block break-all text-xs">{apiKey ?? "Nessuna API Key attiva"}</code>
+              {descriviStato(stato)}
             </Alert>
           </div>
         }
@@ -92,11 +103,11 @@ function ApiKeysPage() {
         titolo="Gestione API Key"
         descrizione="Le API Key sono necessarie per accedere agli endpoint protetti dell'External API. Mantieni sempre le tue chiavi al sicuro e non condividerle pubblicamente."
       >
-        {apiKey ? (
+        {chiaveGenerata ? (
           <div className="rounded-card border border-slate-200 bg-white p-4">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2">
-                <h3 className="title-card">API Key attuale</h3>
+                <h3 className="title-card">Nuova API Key</h3>
                 <StatusBadge tono="success" etichetta="Attiva" />
               </div>
               <Button variant="outline-secondary" size="sm" onClick={copyToClipboard} disabled={copied}>
@@ -105,8 +116,23 @@ function ApiKeysPage() {
               </Button>
             </div>
             <pre className="overflow-x-auto rounded-control bg-slate-900 p-4 text-slate-100">
-              <code className="font-mono text-sm">{apiKey}</code>
+              <code className="font-mono text-sm">{chiaveGenerata}</code>
             </pre>
+            {/* Il server ne conserva solo l'hash: persa la chiave, si può solo rigenerarla */}
+            <Alert variant="soft-warning" icona="TriangleAlert" titolo="Copiala ora" className="mt-3">
+              Per sicurezza la chiave non sarà più mostrata. Se la perdi dovrai generarne una nuova.
+            </Alert>
+          </div>
+        ) : stato.configurata ? (
+          <div className="rounded-card border border-slate-200 bg-white p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="title-card">API Key attiva</h3>
+              <StatusBadge tono="success" etichetta="Attiva" />
+            </div>
+            <p className="mt-2 text-slate-600">{descriviStato(stato)}.</p>
+            <p className="mt-1 text-xs text-slate-500">
+              Per sicurezza la chiave non è più visualizzabile. Se l'hai persa, generane una nuova.
+            </p>
           </div>
         ) : (
           <Alert variant="soft-warning" icona="TriangleAlert" titolo="Nessuna API Key attiva">

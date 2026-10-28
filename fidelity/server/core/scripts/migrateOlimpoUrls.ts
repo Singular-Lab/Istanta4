@@ -1,14 +1,16 @@
 #!/usr/bin/env node
 
 import { program } from 'commander';
-import { Model, ModelStatic } from 'sequelize';
+import { Model, ModelStatic, Op } from 'sequelize';
 import { Colorize } from '../../../lib/Colorize';
 import { initializeDatabase, sequelize } from '../db';
 import { Config } from '../models/config';
+import { FilesRuntime } from '../models/files_runtime';
 import { HubService } from '../models/hub_service';
 import { Ricette as RicetteModel } from '../models/ricette';
 import { WorkspaceWebpliant } from '../models/workspace_webpliant';
 import { riscriviUrlOlimpo } from '../utils/urlOlimpo';
+import { pianificaUrlFilesRuntime, type RigaUrlFileRuntime } from './migrazioneUrlFilesRuntime';
 
 /** Colonne JSON che contengono URL Olimpo mostrati nel browser. */
 const COLONNE: Array<{ modello: ModelStatic<Model>; colonna: string }> = [
@@ -22,7 +24,8 @@ program
   .name('migrate-olimpo-urls')
   .description(
     'Riscrive gli URL assoluti di Olimpo salvati nel DB (http://host/foto/..., /materiali/...) ' +
-    'nella forma relativa /olimpo/..., servita dal proxy di Fidelity e raggiungibile dal browser.'
+    'nella forma relativa /olimpo/..., servita dal proxy di Fidelity e raggiungibile dal browser. ' +
+    'In files_runtime azzera url dove c\'e\' id_olimpo_cloud: l\'URL si ricostruisce alla lettura.'
   )
   .option('--dry-run', 'Mostra le modifiche senza applicarle')
   .action(async (options) => {
@@ -55,8 +58,38 @@ program
         });
       }
 
+      // files_runtime.url: azzerato dove c'e' l'id Olimpo, riscritto in forma relativa dove manca
+      let totaleAzzerati = 0;
+      await sequelize.transaction(async (transaction) => {
+        const righe = await FilesRuntime.findAll({
+          attributes: ['id', 'url', 'id_olimpo_cloud'],
+          where: { url: { [Op.ne]: null } },
+          raw: true,
+          transaction
+        }) as unknown as RigaUrlFileRuntime[];
+        const piano = pianificaUrlFilesRuntime(righe);
+        for (const { id, url } of piano.aggiornamenti) {
+          if (url !== null) console.log(`  files_runtime ${id}.url: 1 URL`);
+        }
+        totaleRighe += piano.aggiornamenti.length;
+        totaleUrl += piano.riscritti;
+        totaleAzzerati += piano.azzerati;
+        console.log(
+          `files_runtime.url: ${piano.azzerati} da azzerare (con id Olimpo), ${piano.riscritti} da riscrivere ` +
+          `su ${righe.length} righe con URL`
+        );
+        if (isDryRun) return;
+        const idsDaAzzerare = piano.aggiornamenti.filter(a => a.url === null).map(a => a.id);
+        if (idsDaAzzerare.length > 0) {
+          await FilesRuntime.update({ url: null }, { where: { id: { [Op.in]: idsDaAzzerare } }, transaction });
+        }
+        for (const { id, url } of piano.aggiornamenti) {
+          if (url !== null) await FilesRuntime.update({ url }, { where: { id }, transaction });
+        }
+      });
+
       console.log(Colorize.bgGreen(
-        `${isDryRun ? '[DRY RUN] ' : ''}Righe: ${totaleRighe}, URL riscritti: ${totaleUrl}`
+        `${isDryRun ? '[DRY RUN] ' : ''}Righe: ${totaleRighe}, URL riscritti: ${totaleUrl}, URL azzerati: ${totaleAzzerati}`
       ));
       await sequelize.close();
       process.exit(0);

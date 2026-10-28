@@ -47,7 +47,6 @@ interface FilterTemplateFormProps {
   fieldOptions: FieldOption[];
   onSuccess: () => void;
   onCancel: () => void;
-  apiKey: string | null;
 }
 
 function FilterTemplateForm({
@@ -57,10 +56,9 @@ function FilterTemplateForm({
   tipiExport,
   fieldOptions,
   onSuccess,
-  onCancel,
-  apiKey
+  onCancel
 }: FilterTemplateFormProps) {
-  const { create, update, deleteTemplate, restore, isCreating, isUpdating, isDeleting, isRestoring } = useFilterTemplates(apiKey);
+  const { create, update, deleteTemplate, restore, isCreating, isUpdating, isDeleting, isRestoring } = useFilterTemplates();
 
   // State per i filtri (come in GetRefsTestPanel)
   const [filterGroups, setFilterGroups] = useState<FilterCondition[][]>(
@@ -758,7 +756,6 @@ function FilterTemplateForm({
           {mode === 'edit' && template?.slug && (
             <FilterTemplateVersionHistory
               slug={template.slug}
-              apiKey={apiKey}
               isOpen={isHistoryOpen}
               onClose={() => setIsHistoryOpen(false)}
               onRestore={async (version: number) => {

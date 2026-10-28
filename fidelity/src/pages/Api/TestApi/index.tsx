@@ -1,9 +1,10 @@
-import { FormLabel, FormSelect, FormSwitch } from "@/components/Base/Form";
+import { FormHelp, FormInput, FormLabel, FormSelect, FormSwitch } from "@/components/Base/Form";
 import Pagina from "@/components/Base/Pagina";
 import Sezione from "@/components/Base/Sezione";
 import StatusBadge from "@/components/Base/StatusBadge";
 import withSessionCheck from "@/components/SessionChecker";
 import clsx from "clsx";
+import { useState } from "react";
 import { useLoaderData } from "react-router-dom";
 import { useFetchFieldOptions, useFetchFilesMetadataFields, useFetchTipiExportPOP } from "../../../query/query";
 import GetFilesTestPanel from "../../GestioneApi/components/test-api/GetFilesTestPanel";
@@ -12,7 +13,6 @@ import { useApiTesting, type ApiEndpoint } from "../../GestioneApi/hooks/useApiT
 import type { Template } from "../../GestioneApi/types";
 
 interface LoaderData {
-  apiKey: string;
   template: Template[];
 }
 
@@ -23,7 +23,11 @@ const endpointDescriptions: Record<ApiEndpoint, string> = {
 };
 
 function TestApiPage() {
-  const { apiKey, template: templateLoader } = useLoaderData<LoaderData>();
+  const { template: templateLoader } = useLoaderData<LoaderData>();
+  // Il server non restituisce più la chiave salvata (ne conserva l'hash): per la
+  // modalità produzione la si incolla qui. Resta solo nello stato della pagina.
+  const [chiaveIncollata, setChiaveIncollata] = useState("");
+  const apiKey = chiaveIncollata.trim();
 
   const {
     selectedEndpoint,
@@ -105,6 +109,31 @@ function TestApiPage() {
               </p>
             </div>
           </div>
+
+          {!testMode && (
+            <div className="col-span-12">
+              <div className="rounded-card border border-slate-200 bg-slate-50 p-4">
+                <FormLabel htmlFor="api-key-test" className="text-sm font-medium text-slate-700">
+                  API Key da usare nel test
+                </FormLabel>
+                <FormInput
+                  id="api-key-test"
+                  type="password"
+                  autoComplete="off"
+                  spellCheck={false}
+                  aria-describedby="api-key-test-aiuto"
+                  value={chiaveIncollata}
+                  onChange={(e) => setChiaveIncollata(e.target.value)}
+                  placeholder="Incolla qui la tua API Key"
+                  className="w-full font-mono"
+                />
+                <FormHelp id="api-key-test-aiuto">
+                  Per sicurezza la chiave non viene salvata né riletta dal server: incolla quella che usa la tua
+                  integrazione. Se non la hai più, generane una nuova da API Keys, oppure usa la modalità test.
+                </FormHelp>
+              </div>
+            </div>
+          )}
         </div>
       </Sezione>
 

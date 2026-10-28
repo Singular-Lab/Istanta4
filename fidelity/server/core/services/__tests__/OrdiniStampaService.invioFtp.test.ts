@@ -17,6 +17,7 @@ import { OrdiniDiStampaInvii } from '../../models/ordini_di_stampa_invii';
 import { Promo } from '../../models/promo';
 import { RuntimeKit } from '../../models/runtime_kit';
 import { ServerUtils } from '../../utils/ServerUtils';
+import { RegistroLavoriInMemoria } from '../../../__tests__/registroLavoriInMemoria';
 import { OrdiniStampaService } from '../OrdiniStampaService';
 
 // I kit della promo arrivano da getAllKitRuntimeByIdPromo: guidId e' runtime_kit.id.
@@ -56,6 +57,8 @@ function preparaInvio(opzioni: {
   const creaAttivita = vi.spyOn(ServerUtils, 'CREA_ATTIVITA').mockResolvedValue(undefined as any);
   const kitRuntimeService = { getAllKitRuntimeByIdPromo: vi.fn().mockResolvedValue(opzioni.kitPromo) };
   const service = new OrdiniStampaService({} as any, kitRuntimeService as any);
+  // Il blocco scritto da prenotaInvio
+  const bloccoInvio = new Date(Date.now() - 1000);
 
   const avvia = () => service.processFTPPopOlimpo({
     req: { session: { id_utente: 'u1' } } as any,
@@ -63,8 +66,9 @@ function preparaInvio(opzioni: {
     kitIds: Object.fromEntries(opzioni.selezionati.map(k => [k.id, true])),
     socketId: 's1',
     statoPrecedente: STATO_ORDINI_STAMPA.IN_REVISIONE,
+    bloccoInvio,
   });
-  return { avvia, olimpo, aggiornaStato, creaInvio, creaAttivita };
+  return { avvia, olimpo, aggiornaStato, creaInvio, creaAttivita, bloccoInvio };
 }
 
 const eventoFinale = () => socket.emitToClients.mock.calls.find(([evento]) => evento === 's1_complete')?.[1];
@@ -177,7 +181,7 @@ describe('OrdiniStampaService.prenotaInvio', () => {
     const bloccato = ordine(STATO_ORDINI_STAMPA.IN_INVIO, 31);
     vi.spyOn(OrdiniDiStampa, 'findByPk').mockResolvedValue(bloccato as any);
 
-    const statoPrecedente = await new OrdiniStampaService({} as any, {} as any).prenotaInvio('o1');
+    const { statoPrecedente } = await new OrdiniStampaService({} as any, {} as any).prenotaInvio('o1');
 
     expect(statoPrecedente).toBe(STATO_ORDINI_STAMPA.IN_REVISIONE);
     expect(bloccato.update).toHaveBeenCalledWith(
@@ -190,7 +194,133 @@ describe('OrdiniStampaService.prenotaInvio', () => {
     const inRevisione = ordine(STATO_ORDINI_STAMPA.IN_REVISIONE, 0);
     vi.spyOn(OrdiniDiStampa, 'findByPk').mockResolvedValue(inRevisione as any);
 
-    await expect(new OrdiniStampaService({} as any, {} as any).prenotaInvio('o1')).resolves.toBe(STATO_ORDINI_STAMPA.IN_REVISIONE);
-    expect(inRevisione.update).toHaveBeenCalledWith(expect.objectContaining({ stato_ordinistampa: STATO_ORDINI_STAMPA.IN_INVIO }), expect.anything());
+    const prenotazione = await new OrdiniStampaService({} as any, {} as any).prenotaInvio('o1');
+
+    expect(prenotazione).toEqual({ statoPrecedente: STATO_ORDINI_STAMPA.IN_REVISIONE, bloccoInvio: expect.any(Date) });
+    // Il blocco restituito e l'updatedat scritto: l'invio lo usa per rinnovarlo e rilasciarlo
+    expect(inRevisione.update).toHaveBeenCalledWith(
+      expect.objectContaining({ stato_ordinistampa: STATO_ORDINI_STAMPA.IN_INVIO, updatedat: prenotazione.bloccoInvio }),
+      expect.anything()
+    );
+  });
+});
+
+// Spec ordini-stampa-distribuzione "Un solo invio alla volta per ordine": il blocco IN_INVIO e di un invio solo
+describe('OrdiniStampaService.processFTPPopOlimpo: blocco dell\'invio', () => {
+  it('rinnova il blocco prima di ogni kit, cosi un invio lungo non sembra interrotto, e a fine invio rilascia solo il proprio', async () => {
+    const { avvia, aggiornaStato, bloccoInvio } = preparaInvio({ selezionati: [kit('k1'), kit('k2')], kitPromo: [kit('k1'), kit('k2')] });
+
+    await avvia();
+
+    const [primo, secondo, rilascio] = aggiornaStato.mock.calls as any[];
+    expect(aggiornaStato).toHaveBeenCalledTimes(3);
+    expect(primo[0]).toEqual({ updatedat: expect.any(Date) });
+    expect(primo[1].where).toEqual({ id_ordinistampa: 'o1', stato_ordinistampa: STATO_ORDINI_STAMPA.IN_INVIO, updatedat: bloccoInvio });
+    // Ogni rinnovo parte dal blocco scritto dal precedente
+    expect(secondo[1].where.updatedat).toBe(primo[0].updatedat);
+    expect(rilascio[0]).toEqual({ stato_ordinistampa: STATO_ORDINI_STAMPA.FINITO });
+    expect(rilascio[1].where).toEqual({ id_ordinistampa: 'o1', stato_ordinistampa: STATO_ORDINI_STAMPA.IN_INVIO, updatedat: secondo[0].updatedat });
+  });
+
+  it('se un invio piu recente ha preso l\'ordine si ferma: niente altri kit via FTP e lo stato del nuovo invio non si tocca', async () => {
+    const { avvia, aggiornaStato, olimpo, creaInvio } = preparaInvio({ selezionati: [kit('k1'), kit('k2')], kitPromo: [kit('k1'), kit('k2')] });
+    // Il rinnovo prima di k1 riesce; prima di k2 il blocco non e piu di questo invio
+    aggiornaStato.mockResolvedValueOnce([1] as any).mockResolvedValueOnce([0] as any);
+
+    await avvia();
+
+    expect(olimpo).toHaveBeenCalledTimes(1);
+    // k1 e partito davvero: resta nel report, cosi non si rimanda
+    expect(creaInvio.mock.calls[0][0].report_ordinistampainvii.kit_guids).toEqual(['k1']);
+    expect(aggiornaStato.mock.calls.some(([valori]: any) => 'stato_ordinistampa' in valori)).toBe(false);
+    expect(eventoFinale()).toMatchObject({ esito: false, totalKit: 1 });
+    expect(eventoFinale().message).toContain('Invio interrotto');
+  });
+
+  it('se il blocco e gia di un altro invio prima del primo kit non invia nulla e non sblocca l\'ordine', async () => {
+    const { avvia, aggiornaStato, olimpo, creaInvio } = preparaInvio({ selezionati: [kit('k1')], kitPromo: [kit('k1')] });
+    aggiornaStato.mockResolvedValueOnce([0] as any);
+
+    await avvia();
+
+    expect(olimpo).not.toHaveBeenCalled();
+    expect(creaInvio).not.toHaveBeenCalled();
+    expect(aggiornaStato).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Il raggruppamento gira in un worker; stato e "gia in corso" li vedono tutti tramite il registro dei lavori
+describe('OrdiniStampaService: raggruppamento dei file con piu worker', () => {
+  const req = { session: { id_utente: 'u1' } } as any;
+
+  function preparaRaggruppamento() {
+    const registro = new RegistroLavoriInMemoria();
+    let rispondiOlimpo: (risposta: unknown) => void = () => undefined;
+    vi.spyOn(OrdiniDiStampa, 'findByPk').mockResolvedValue({ dataValues: { id_ordinistampa: 'o1', id_promo_ordinistampa: 'p1' } } as any);
+    vi.spyOn(ContrattoTipografia, 'findAll').mockResolvedValue([{ id_contrattotipografia: 'c1', tipiexport_contrattotipografia: ['t1'], json_contrattotipografia: {} }] as any);
+    vi.spyOn(OrdiniDiStampaInvii, 'findAll').mockResolvedValue([] as any);
+    vi.spyOn(FilesRuntime, 'findAll').mockResolvedValue([
+      { id_olimpo_cloud: 'f1', nome: 'a.pdf', id_runtime: 'k1' },
+      { id_olimpo_cloud: 'f2', nome: 'b.pdf', id_runtime: 'k1' },
+    ] as any);
+    const olimpo = vi.spyOn(ServerUtils, 'sendToFICOApi').mockImplementation((() => new Promise(resolve => { rispondiOlimpo = resolve; })) as any);
+    const kitRuntimeService = { getAllKitRuntimeByIdPromo: vi.fn().mockResolvedValue([kit('k1')]) };
+    return {
+      registro,
+      olimpo,
+      rispondi: (risposta: unknown) => rispondiOlimpo(risposta),
+      workerA: new OrdiniStampaService({} as any, kitRuntimeService as any, registro),
+      workerB: new OrdiniStampaService({} as any, kitRuntimeService as any, registro),
+    };
+  }
+
+  it('lo stato e il "gia in corso" sono gli stessi da un\'altra istanza del servizio', async () => {
+    const { workerA, workerB, olimpo, rispondi } = preparaRaggruppamento();
+
+    const avvio = await workerA.groupFilesByEquality({ req, idOrdineDiStampa: 'o1', socketId: 's1' });
+    await vi.waitFor(() => expect(olimpo).toHaveBeenCalled());
+
+    expect(avvio).toMatchObject({ socketId: 's1', giaInCorso: false });
+    expect(await workerB.getGroupingStatus('o1')).toMatchObject({ status: 'running', socketId: 's1' });
+    // Un secondo avvio su un altro worker non ne lancia un altro: si aggancia a quello in corso
+    expect(await workerB.groupFilesByEquality({ req, idOrdineDiStampa: 'o1', socketId: 's2' })).toMatchObject({ socketId: 's1', giaInCorso: true });
+
+    rispondi({ data: { esito: true, groups: [{ groupId: 'gr1', ids: ['f1', 'f2'] }], unmatchedIds: [] }, status: 200 });
+    await avvio.fine;
+
+    expect(olimpo).toHaveBeenCalledTimes(1);
+    expect(await workerB.getGroupingStatus('o1')).toMatchObject({
+      status: 'completed', socketId: 's1', result: { groupCount: 1, groups: [{ groupId: 'gr1', size: 2 }] },
+    });
+    expect(socket.emitToClients).toHaveBeenCalledWith('s1_result', expect.objectContaining({ groupCount: 1 }), 'user:u1');
+  });
+
+  it('un errore di Olimpo risulta fallito anche dall\'altra istanza, e il raggruppamento si puo rifare', async () => {
+    const { workerA, workerB, rispondi, olimpo } = preparaRaggruppamento();
+    const avvio = await workerA.groupFilesByEquality({ req, idOrdineDiStampa: 'o1', socketId: 's1' });
+    await vi.waitFor(() => expect(olimpo).toHaveBeenCalled());
+
+    rispondi({ data: { esito: false, error: 'PDF illeggibile' }, status: 200 });
+    await avvio.fine;
+
+    expect(await workerB.getGroupingStatus('o1')).toMatchObject({ status: 'failed', error: 'PDF illeggibile' });
+    expect(await workerB.groupFilesByEquality({ req, idOrdineDiStampa: 'o1', socketId: 's2' })).toMatchObject({ socketId: 's2', giaInCorso: false });
+  });
+
+  it('un raggruppamento il cui worker si e fermato risulta fallito e non impedisce di rifarlo', async () => {
+    const { registro, workerA, workerB, olimpo } = preparaRaggruppamento();
+    await workerA.groupFilesByEquality({ req, idOrdineDiStampa: 'o1', socketId: 's1' });
+    await vi.waitFor(() => expect(olimpo).toHaveBeenCalled());
+    const [lavoro] = [...registro.righe.values()];
+    registro.invecchiaBattito(lavoro.id);
+
+    expect(await workerB.getGroupingStatus('o1')).toMatchObject({ status: 'failed', socketId: 's1' });
+    expect(await workerB.groupFilesByEquality({ req, idOrdineDiStampa: 'o1', socketId: 's2' })).toMatchObject({ socketId: 's2', giaInCorso: false });
+  });
+
+  it('senza raggruppamenti per l\'ordine lo stato e assente', async () => {
+    const { workerB } = preparaRaggruppamento();
+
+    expect(await workerB.getGroupingStatus('o1')).toBeNull();
   });
 });

@@ -1412,7 +1412,8 @@ export class PromoService implements IPromoService {
 
   async deletePromo(id: string): Promise<boolean> {
     try {
-      return this.promoRepository.delete(id);
+      // await: senza, il rifiuto della promise sfugge al catch e arriva al client non tradotto
+      return await this.promoRepository.delete(id);
     } catch (error) {
       throw wrapDatabaseError(new Error("Errore durante l'eliminazione della promozione"), {
         message: "Errore durante l'eliminazione della promozione",

@@ -1,5 +1,17 @@
 import type { TipiDiExportResponseDTO } from "../../../server/core/dto";
 
+/**
+ * Stato della chiave API da /external/get_api_key. La chiave non c'è: il server
+ * ne conserva solo l'hash e la mostra una volta, nella risposta della generazione.
+ */
+export interface StatoApiKey {
+  configurata: boolean;
+  generataIl: string | null;
+}
+
+/** Placeholder degli esempi quando la chiave in chiaro non è disponibile. */
+export const PLACEHOLDER_API_KEY = "LA_TUA_API_KEY";
+
 // Condizione di filtro
 export interface FilterCondition {
   field: string;

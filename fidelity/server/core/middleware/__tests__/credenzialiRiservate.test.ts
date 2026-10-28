@@ -16,13 +16,20 @@ import { GdoController } from '../../controllers/GdoController';
 import { GDO } from '../../models';
 import { RuoloUtenteGDO } from '../../models/ruolo_gdo';
 import { GdoService } from '../../services/GdoService';
-import { apiKeyAuthMiddleware } from '../apiKeyAuth';
+import { apiKeyAuthMiddleware, hashApiKey } from '../apiKeyAuth';
 
 /** Chiave nel formato emesso da Fidelity: uuid-timestamp cifrato con FICO_SECRET. */
 function chiaveApiValida(): string {
   const key = crypto.createHash('sha256').update(config.FICO_SECRET).digest();
   const cipher = crypto.createCipheriv('aes-256-cbc', key, key.subarray(0, 16));
   return cipher.update(`${crypto.randomUUID().replace(/-/g, '')}-${Date.now()}`, 'utf8', 'hex') + cipher.final('hex');
+}
+
+/** Rotta esterna protetta dalla sola chiave API. */
+function appConChiave() {
+  const app = express();
+  app.get('/api/external/test', apiKeyAuthMiddleware, (_req, res) => { res.sendStatus(200); });
+  return app;
 }
 
 describe('chiave API delle integrazioni esterne', () => {
@@ -44,6 +51,50 @@ describe('chiave API delle integrazioni esterne', () => {
     await request(app).get('/api/external/test').set('x-api-key', chiave).expect(200);
 
     expect(registrata).toBe(`${chiave.substring(0, 8)}...`);
+  });
+
+  it('cerca il ruolo per hash della chiave presentata, mai per la chiave in chiaro', async () => {
+    const chiave = chiaveApiValida();
+    const findOne = vi.spyOn(RuoloUtenteGDO, 'findOne').mockResolvedValue({
+      id_ruolo_utente_gdo: 'r1',
+      ruolo_ruolo_utente_gdo: 'Integrazione',
+    } as any);
+
+    await request(appConChiave()).get('/api/external/test').set('x-api-key', chiave).expect(200);
+
+    const impronta = crypto.createHash('sha256').update(chiave, 'utf8').digest('hex');
+    expect(hashApiKey(chiave)).toBe(impronta);
+    expect(findOne).toHaveBeenCalledWith({ where: { api_key_ruolo_utente_gdo: impronta } });
+    expect(JSON.stringify(findOne.mock.calls)).not.toContain(chiave);
+  });
+
+  it('una chiave rimasta in chiaro nel database non e\' riconosciuta finche\' non viene convertita in hash', async () => {
+    const chiave = chiaveApiValida();
+    const ruoloConChiave = (salvata: string) =>
+      vi.spyOn(RuoloUtenteGDO, 'findOne').mockImplementation((async (opzioni: any) =>
+        opzioni.where.api_key_ruolo_utente_gdo === salvata
+          ? { id_ruolo_utente_gdo: 'r1', ruolo_ruolo_utente_gdo: 'Integrazione' }
+          : null) as any);
+
+    // Prima della conversione (script hash_api_key_ruoli.sql) la colonna ha la chiave in chiaro
+    ruoloConChiave(chiave);
+    await request(appConChiave()).get('/api/external/test').set('x-api-key', chiave).expect(401);
+
+    // Dopo la conversione l'integrazione continua a usare la stessa chiave
+    vi.restoreAllMocks();
+    ruoloConChiave(crypto.createHash('sha256').update(chiave, 'utf8').digest('hex'));
+    await request(appConChiave()).get('/api/external/test').set('x-api-key', chiave).expect(200);
+  });
+
+  it('l\'hash salvato, presentato come chiave, non apre le API', async () => {
+    const chiave = chiaveApiValida();
+    const impronta = hashApiKey(chiave);
+    vi.spyOn(RuoloUtenteGDO, 'findOne').mockImplementation((async (opzioni: any) =>
+      opzioni.where.api_key_ruolo_utente_gdo === impronta
+        ? { id_ruolo_utente_gdo: 'r1', ruolo_ruolo_utente_gdo: 'Integrazione' }
+        : null) as any);
+
+    await request(appConChiave()).get('/api/external/test').set('x-api-key', impronta).expect(401);
   });
 
   it('l\'elenco dei ruoli non restituisce le chiavi API', async () => {

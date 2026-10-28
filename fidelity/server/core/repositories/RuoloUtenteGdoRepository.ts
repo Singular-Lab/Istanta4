@@ -1,5 +1,6 @@
 import { Op, type WhereOptions } from 'sequelize';
 import type { RuoloUtenteGDOAttributes } from '../../../lib/types';
+import { hashApiKey } from '../middleware/apiKeyAuth';
 import { RuoloUtenteGDO } from '../models/ruolo_gdo';
 import { BaseRepository } from './BaseRepository';
 import type { IBaseRepository } from './IBaseRepository';
@@ -24,8 +25,9 @@ export class RuoloUtenteGdoRepository
     return this.findOneWhere({ ruolo_ruolo_utente_gdo: ruolo } as WhereOptions<RuoloUtenteGDOAttributes>);
   }
 
+  /** Riceve la chiave in chiaro: la colonna ne contiene solo l'hash. */
   async findByApiKey(apiKey: string): Promise<RuoloUtenteGdoInstance | null> {
-    return this.findOneWhere({ api_key_ruolo_utente_gdo: apiKey } as WhereOptions<RuoloUtenteGDOAttributes>);
+    return this.findOneWhere({ api_key_ruolo_utente_gdo: hashApiKey(apiKey) } as WhereOptions<RuoloUtenteGDOAttributes>);
   }
 
   async search(query: string): Promise<RuoloUtenteGdoInstance[]> {
