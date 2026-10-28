@@ -597,6 +597,13 @@ namespace IstantaLib
         /// come entrambe; con una sola opzione il Plugin non la chiede e usa quella.
         /// </summary>
         public List<string> OpzioniValide { get; set; } = new List<string>();
+
+        /// <summary>
+        /// I20-1157: le aree della lavorazione (le sigle, per esempio "A" e "A-") in cui l'azione
+        /// vale. Vuota vale per tutte, come prima. Con aree dichiarate il Plugin la mostra, e la
+        /// esporta per Correggo, solo se l'area della lavorazione corrente e' una di queste.
+        /// </summary>
+        public List<string> Aree { get; set; } = new List<string>();
     }
 
     public class CampoInddCoinvolto
