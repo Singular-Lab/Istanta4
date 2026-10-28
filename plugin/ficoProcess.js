@@ -1918,7 +1918,9 @@ const FicoProcess=
                                     if (objItem != null) {
                                         
                                         //Ref dati estraiamo lo schema campi
-                                        let schemaAzioni = await cambiStrutturaliJs.getCambioStrutturalePath(objItem, group);
+                                        //I20-1157: anche per Correggo valgono solo le azioni dell'area della lavorazione
+                                        let areaLav = ficoProcess.getAreaLavorazioneCorrente();
+                                        let schemaAzioni = await cambiStrutturaliJs.getCambioStrutturalePath(objItem, group, areaLav ? areaLav.sigla : null);
                                         let data = { boxName: group.label, azioni: [], itemRefStringfied:null, pag:parseInt(pItem.name), bounds:[group.geometricBounds[0],group.geometricBounds[1]-pageOffset,group.geometricBounds[2],group.geometricBounds[3]-pageOffset]};
 
                                         objItem = objItem.recordInTracciato;

@@ -26,9 +26,13 @@ inietta `Utility` come globale.
 
 - `getCambioStrutturale()` → scarica l'elenco da `Menabo/getCambioStrutturale` e lo memorizza.
   Codici di errore: `CST-001` parsing, `CST-002` generico, `CST-003` rete, `CST-004` HTTP.
-- `getCambioStrutturalePath(itemRef, box)` → le azioni applicabili a questa referenza in questo
-  box, numerate da 1. Se l'elenco non è ancora stato caricato lo chiede al server (`CST-005` se non
-  ci riesce).
+- `getCambioStrutturalePath(itemRef, box, siglaArea)` → le azioni applicabili a questa referenza in
+  questo box, numerate da 1. Se l'elenco non è ancora stato caricato lo chiede al server (`CST-005`
+  se non ci riesce). `siglaArea` è l'area della lavorazione corrente: la passano `schedaRef.js` e
+  l'esportazione per Correggo di `ficoProcess.js` (I20-1157).
+- `_areaAmmessa(struttura, siglaArea)` → se l'azione vale nell'area della lavorazione. Senza aree
+  dichiarate vale ovunque; con aree dichiarate serve che l'area corrente sia una di quelle, senza
+  badare a maiuscole e spazi. **Un'area che non si conosce non basta.**
 - `_matchCambioStrutturale(record, condizioneRoot, dbItems)` → se almeno una condizione è
   soddisfatta. **Le condizioni sono in OR fra loro, le regole dentro una condizione sono in AND.**
   Una condizione senza regole vale sempre.
@@ -75,6 +79,24 @@ sue azioni.
 La proprietà vive in `IstantaLib` (`CambioStrutturale.OpzioniValide`). Le quattro azioni scritte
 nel codice di `AgenziaLib.Edro21.GetCambioStrutturalePath` — la riserva usata solo se la
 configurazione è vuota — non la dichiarano, quindi ammettono entrambe le opzioni.
+
+## Azioni limitate ad alcune aree — I20-1157
+
+Coop Firenze ha chiesto che «Forza sconto piccolo» compaia solo nelle aree A e A-. Le condizioni
+guardano solo il record e il box, e l'area della lavorazione non sta in nessuno dei due: un'azione
+non si poteva restringere per area.
+
+Ora ogni azione può dichiarare in `SourceCustomPlugin.json` → `cambiStrutturali` → `Aree` le sigle
+delle aree in cui vale. Senza dichiarazione vale ovunque, come prima. La proprietà vive in
+`IstantaLib` (`CambioStrutturale.Aree`), altrimenti Istanta la perderebbe rileggendo il file.
+
+Il filtro sta in `getCambioStrutturalePath`, quindi vale sia nella scheda ref sia nelle azioni
+esportate per Correggo (la tendina «Seleziona un'azione» della finestra del prodotto). Un volantino
+già in Correggo cambia solo quando si riesporta.
+
+Coopfi dichiara `["A","A-"]` su «Forza sconto piccolo»; «Rimuovi forzatura sconto piccolo» resta in
+tutte le aree, perché una forzatura rimasta su un prodotto di un'altra area si deve poter togliere.
+Da sapere: in `AgenziaLib.Coopfi` la forzatura ha effetto sull'impaginato solo in area A.
 
 ## Il difetto corretto in I20-1002
 

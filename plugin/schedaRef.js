@@ -2347,7 +2347,9 @@ const schedaRef = {
             if (cambiStrutturaliJs.getCambioStrutturalePath != null && me.mostraAzioniStrutturaliInEdit()) {
                 //Implementazioni path di cambio strutturale
 
-                let cambiStrutturali = await cambiStrutturaliJs.getCambioStrutturalePath(primario, box);
+                //I20-1157: l'area della lavorazione, per le azioni che valgono solo in alcune aree
+                let areaLav = ficoProcess.getAreaLavorazioneCorrente();
+                let cambiStrutturali = await cambiStrutturaliJs.getCambioStrutturalePath(primario, box, areaLav ? areaLav.sigla : null);
                 me.azioniStrutturaliDisponibili = cambiStrutturali;
                 me.azioniDiGruppo = primario.recordInTracciato["Referenza.Codice"] != primario.recordInTracciato["Scatto.CodiceGruppo"];
                 if (cambiStrutturali.length > 0) {

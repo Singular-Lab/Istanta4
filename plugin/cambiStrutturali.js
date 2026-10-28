@@ -65,7 +65,9 @@ const cambiStrutturali = {
 
     /// Le azioni applicabili a questa referenza in questo box, numerate da 1.
     /// Se l'elenco non e' ancora stato caricato lo chiede al server.
-    async getCambioStrutturalePath(itemRef, box) {
+    /// I20-1157: siglaArea e' l'area della lavorazione corrente; un'azione che dichiara le sue
+    /// aree passa solo se e' una di quelle (vedi _areaAmmessa).
+    async getCambioStrutturalePath(itemRef, box, siglaArea) {
         let strutture = this.cambiStrutturaliDB || [];
      
 
@@ -85,13 +87,29 @@ const cambiStrutturali = {
 
 
         for (const struttura of strutture) {
-            if (this._matchCambioStrutturale(record, struttura.condizione, dbItems)) {
+            if (this._areaAmmessa(struttura, siglaArea) && this._matchCambioStrutturale(record, struttura.condizione, dbItems)) {
                 result.push(this._mapCambioStrutturaleToLegacy(struttura, record, progressiveId));
                 progressiveId++;
             }
         }
 
         return result;
+    },
+
+    /// I20-1157: se l'azione vale nell'area della lavorazione. Una struttura che non dichiara
+    /// aree vale ovunque, come prima. Con aree dichiarate serve che l'area corrente sia una di
+    /// quelle, senza badare a maiuscole e spazi; un'area che non si conosce non basta, perche'
+    /// l'azione e' stata ristretta apposta (Coop Firenze: "Forza sconto piccolo" solo in A e A-).
+    _areaAmmessa(struttura, siglaArea) {
+        const dichiarate = struttura?.aree ?? struttura?.Aree;
+        const aree = Array.isArray(dichiarate)
+            ? dichiarate.map(a => String(a ?? "").trim().toLowerCase()).filter(a => a !== "")
+            : [];
+        if (aree.length === 0) {
+            return true;
+        }
+        const corrente = String(siglaArea ?? "").trim().toLowerCase();
+        return corrente !== "" && aree.includes(corrente);
     },
 
     /// Se almeno una delle condizioni e' soddisfatta. Le condizioni sono in OR fra loro, le

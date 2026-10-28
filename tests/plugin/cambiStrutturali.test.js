@@ -317,3 +317,69 @@ test('senza RICHIAMO B&F nel ruolo nessuna delle due azioni B&F si offre', () =>
         }
     }
 });
+
+/* ---- I20-1157: azioni limitate ad alcune aree (Forza sconto piccolo di Coop Firenze) ---- */
+
+function azioniCoopfi() {
+    const percorso = path.join(__dirname, '..', '..', 'Istanta', 'wwwroot', 'external_source', 'Coopfi', 'SourceCustomPlugin.json');
+    return inCamelCase(JSON.parse(fs.readFileSync(percorso, 'utf8').replace(/^﻿/, '')).cambiStrutturali);
+}
+
+//Le azioni che il Plugin offrirebbe a un record senza forzatura, nell'area data.
+async function titoliOfferti(azioni, siglaArea) {
+    global.Utility.getAllFieldsInGroup = () => [];
+    cambiStrutturali.cambiStrutturaliDB = azioni;
+    try {
+        const offerte = await cambiStrutturali.getCambioStrutturalePath({ recordInTracciato: { codiceBox: 'BOX_STD' } }, {}, siglaArea);
+        return offerte.map(a => a.titolo);
+    } finally {
+        cambiStrutturali.cambiStrutturaliDB = null;
+    }
+}
+
+test('Forza sconto piccolo di Coopfi si offre in area A e A-', async () => {
+    for (const area of ['A', 'A-', 'a-', ' A ']) {
+        assert.ok((await titoliOfferti(azioniCoopfi(), area)).includes('Forza sconto piccolo'), area);
+    }
+});
+
+test('Forza sconto piccolo di Coopfi non si offre nelle altre aree ne\' ad area sconosciuta', async () => {
+    for (const area of ['B', 'B1', 'A+', '', null, undefined]) {
+        const titoli = await titoliOfferti(azioniCoopfi(), area);
+        assert.ok(!titoli.includes('Forza sconto piccolo'), String(area));
+        //Le azioni senza aree restano: il filtro tocca solo quelle che le dichiarano.
+        assert.ok(titoli.includes('Metti fuori volantino'), String(area));
+    }
+});
+
+test('Rimuovi forzatura sconto piccolo di Coopfi resta in tutte le aree', async () => {
+    const forzata = azioniCoopfi();
+    global.Utility.getAllFieldsInGroup = () => [];
+    cambiStrutturali.cambiStrutturaliDB = forzata;
+    try {
+        for (const area of ['A', 'A-', 'B', 'B1', null]) {
+            const offerte = await cambiStrutturali.getCambioStrutturalePath({ recordInTracciato: { force_scontopiccolo: 'x' } }, {}, area);
+            assert.ok(offerte.some(a => a.titolo === 'Rimuovi forzatura sconto piccolo'), String(area));
+        }
+    } finally {
+        cambiStrutturali.cambiStrutturaliDB = null;
+    }
+    const rimuovi = forzata.find(a => a.titolo === 'Rimuovi forzatura sconto piccolo');
+    assert.strictEqual(rimuovi.aree, undefined);
+});
+
+test('un\'azione senza aree, o con la lista vuota, vale in ogni area', () => {
+    for (const area of ['A', 'B', '', null]) {
+        assert.strictEqual(cambiStrutturali._areaAmmessa({ titolo: 'x' }, area), true, String(area));
+        assert.strictEqual(cambiStrutturali._areaAmmessa({ titolo: 'x', aree: [] }, area), true, String(area));
+        assert.strictEqual(cambiStrutturali._areaAmmessa({ titolo: 'x', aree: [' ', null] }, area), true, String(area));
+    }
+});
+
+test('la scheda e l\'esportazione per Correggo passano l\'area della lavorazione', () => {
+    const scheda = leggiFileDelPlugin('schedaRef.js').replace(/\r/g, '');
+    const processo = leggiFileDelPlugin('ficoProcess.js').replace(/\r/g, '');
+
+    assert.match(scheda, /getCambioStrutturalePath\(primario, box, areaLav \? areaLav\.sigla : null\)/);
+    assert.match(processo, /getCambioStrutturalePath\(objItem, group, areaLav \? areaLav\.sigla : null\)/);
+});
