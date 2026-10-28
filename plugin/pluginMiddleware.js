@@ -761,6 +761,32 @@ const pluginMiddleware = {
             .map(nome => nome.trim());
     },
 
+    /// Le regole del cliente che tolgono alcune foto dalle proposte della schermata Cambia foto
+    /// (AgenziaCustomPlugin_RegolaEsclusioneCambioFoto). La chiave sta nella configurazione del
+    /// cliente sul server; senza, o se non e' una lista, nessuna regola e tutte le foto restano.
+    /// Le estensioni tornano minuscole e senza punto; una regola senza estensioni non vale.
+    getRegoleEsclusioneCambioFoto() {
+        let me = this;
+
+        const valore = me.callCustom
+            ? (typeof customAgenzia !== "undefined" && customAgenzia != null ? customAgenzia.regoleEsclusioneCambioFoto : null)
+            : me.customPluginDB?.regoleEsclusioneCambioFoto;
+        if (!Array.isArray(valore)) {
+            return [];
+        }
+        const estensioni = (lista) => (Array.isArray(lista) ? lista : [])
+            .filter(e => typeof e === "string" && e.trim() !== "")
+            .map(e => e.trim().replace(/^\.+/, "").toLowerCase());
+        return valore
+            .filter(r => r != null && typeof r === "object")
+            .map(r => ({
+                estensioni: estensioni(r.estensioni),
+                seEsisteEstensione: estensioni(r.seEsisteEstensione),
+                mantieniSelezionata: r.mantieniSelezionata !== false
+            }))
+            .filter(r => r.estensioni.length > 0);
+    },
+
     /// I20-1088: se un meta dei testi del box non si segnala da verificare per la sola versione del
     /// record cambiata (la lista ricaricata con lo stesso valore). Come chiediAmbitoDecisioniLavorazione:
     /// la chiave sta nella configurazione del cliente sul server, e senza vale falso (si controlla).

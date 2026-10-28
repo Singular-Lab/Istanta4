@@ -995,6 +995,7 @@ namespace IstantaLib
         public string nomeFotoPrimaria { get; set; }//Label che riceve la foto primaria nel box
         public string nomeFotoSecondaria { get; set; }//Label che riceve la foto secondaria nel box
         public List<string> elementiConnessiAlleFoto { get; set; } = new List<string>();//I20-1130: etichette (con * come jolly) degli elementi del box che "Seleziona tutte le foto" del Plugin prende insieme alle foto, per esempio le ombre sy_ombra*
+        public List<AgenziaCustomPlugin_RegolaEsclusioneCambioFoto> regoleEsclusioneCambioFoto { get; set; } = new List<AgenziaCustomPlugin_RegolaEsclusioneCambioFoto>();//Regole che tolgono alcune foto dalle proposte della schermata Cambia foto del Plugin; vuota = tutte le foto, come prima
         public string fotoNotFound { get; set; }//Nome del file che contiene info FOTO NOT FOUND su disco
         public string nomeNoFoto { get; set; }//Nome del file che contiene info NESSUNA FOTO PER QUESTA REF
         public string[] listCampiConfrontoBypass { get; set; }//Campi che non vengono tenuti in considerazione nel check delle differenze nel confronto
@@ -1306,6 +1307,20 @@ namespace IstantaLib
     {
         public Byte level { get; set; }//Indica l'indice della stringa da interpretare, dove 0 indica il nome del file e a ritroso si legge i nome delle cartelle contenitore
         public string splitChars { get; set; }//Stringa di split da applicare al nome del livello in cui ci troviamo
+    }
+
+    /// <summary>
+    /// Una regola che toglie alcune foto della referenza dalle proposte della schermata Cambia foto
+    /// del Plugin. Una foto con una delle estensioni si toglie se c'e' un'altra foto con lo stesso
+    /// nome in una delle estensioni di seEsisteEstensione (con la lista vuota, sempre); la foto
+    /// impostata per la referenza resta, se mantieniSelezionata. Estensioni senza punto, senza
+    /// distinguere maiuscole. Edro21: jpg, jpeg e png si tolgono quando c'e' lo stesso nome in psd.
+    /// </summary>
+    public class AgenziaCustomPlugin_RegolaEsclusioneCambioFoto
+    {
+        public List<string> estensioni { get; set; } = new List<string>();
+        public List<string> seEsisteEstensione { get; set; } = new List<string>();
+        public bool mantieniSelezionata { get; set; } = true;
     }
 
     public class AgenziaCustomPlugin_LibreriaIndd

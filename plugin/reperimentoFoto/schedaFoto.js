@@ -19,6 +19,56 @@ const DataCaricamentoFoto = require('./dataCaricamento');
 const NoRenderElementi = require('../noRenderElementi');
 
 const schedaFoto = {
+    /// Le foto che la schermata Cambia foto propone, dopo le regole del cliente
+    /// (pluginMiddleware.getRegoleEsclusioneCambioFoto). Una foto con una delle estensioni di una
+    /// regola si toglie se un'altra foto dell'elenco ha lo stesso nome, senza estensione e senza
+    /// guardare le maiuscole, in una delle estensioni di seEsisteEstensione (con la lista vuota,
+    /// sempre). La selezionata ({ id, nome }: la foto impostata per la referenza) resta se la regola
+    /// lo vuole. Senza regole l'elenco e' quello di prima.
+    fotoProponibiliNelCambioFoto(fotoList, regole, selezionata) {
+        const elenco = Array.isArray(fotoList) ? fotoList : [];
+        const valide = Array.isArray(regole) ? regole : [];
+        if (valide.length === 0) {
+            return elenco;
+        }
+
+        const parti = (nome) => {
+            const testo = nome == null ? "" : String(nome);
+            const punto = testo.lastIndexOf(".");
+            return punto <= 0
+                ? { base: testo.toLowerCase(), estensione: "" }
+                : { base: testo.substring(0, punto).toLowerCase(), estensione: testo.substring(punto + 1).toLowerCase() };
+        };
+        const eSelezionata = (foto) => selezionata != null && (
+            (selezionata.id != null && foto.Id != null && String(foto.Id) === String(selezionata.id)) ||
+            (selezionata.nome != null && selezionata.nome !== "" && foto.Nome === selezionata.nome));
+
+        return elenco.filter(foto => {
+            if (foto == null) {
+                return false;
+            }
+            const questa = parti(foto.Nome);
+            return !valide.some(regola => {
+                if (!regola.estensioni.includes(questa.estensione)) {
+                    return false;
+                }
+                if (regola.mantieniSelezionata !== false && eSelezionata(foto)) {
+                    return false;
+                }
+                if (regola.seEsisteEstensione.length === 0) {
+                    return true;
+                }
+                return elenco.some(altra => {
+                    if (altra == null || altra === foto) {
+                        return false;
+                    }
+                    const gemella = parti(altra.Nome);
+                    return gemella.base === questa.base && regola.seEsisteEstensione.includes(gemella.estensione);
+                });
+            });
+        });
+    },
+
     /// Il cambio foto: l'elenco delle foto disponibili, l'anteprima, la
     /// scelta, lo scaricamento. 1.066 righe, ed e' il capofila delle 28 che vanno nel js nuovo.
     async openModalCambiaFoto(codice) {
@@ -86,7 +136,7 @@ const schedaFoto = {
                 const $body = $('#bodyCambiaFoto');
                 $body.empty();
 
-                const fotoList = Array.isArray(objResult.result) ? objResult.result : [];
+                let fotoList = Array.isArray(objResult.result) ? objResult.result : [];
 
                 var schedaRef = me.schedeRefDati;
                 var elementoCercato = schedaRef.find(f => f.recordInTracciato["Referenza.Codice"] == codice);
@@ -104,6 +154,10 @@ const schedaFoto = {
                 var hashFotoImpaginata = elementoCercato != null && elementoCercato.recordInTracciato != null
                     ? elementoCercato.recordInTracciato["Foto.Hash"]
                     : null;
+
+                //Le regole del cliente tolgono alcune foto dalle proposte (Edro21: un jpg o png che ha
+                //lo stesso nome in psd); la foto impostata per la referenza resta.
+                fotoList = me.fotoProponibiliNelCambioFoto(fotoList, pluginMiddleware.getRegoleEsclusioneCambioFoto(), { id: fotoAttuale, nome: nomeFotoImpaginata });
 
                 const state = {
                     selectedUploadFile: null,
