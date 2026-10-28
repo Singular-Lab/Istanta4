@@ -164,7 +164,7 @@ export class ExternalApiController extends BaseController {
   private async sync_json_plugin(req: Request, res: Response): Promise<void> {
     let payload: SyncJsonPluginPayload | undefined;
     try {
-      let payloadString = req.body.payload;
+      const payloadString = req.body.payload;
       try {
         payload = JSON.parse(payloadString);
       } catch {
@@ -363,7 +363,7 @@ export class ExternalApiController extends BaseController {
         ? olympusPageCount
         : (Number.isFinite(payloadPageCount) && payloadPageCount > 0 ? payloadPageCount : undefined);
 
-      let files = await kitRuntimeService.getFilesRuntimeByIdKitRuntime(payload.kitGuidId);
+      const files = await kitRuntimeService.getFilesRuntimeByIdKitRuntime(payload.kitGuidId);
       if (!files) {
         throw new BadRequestError({
           message: "Kit non trovato"
@@ -1930,16 +1930,14 @@ export class ExternalApiController extends BaseController {
    */
   private registraStatisticaAsync(dto: CreateStatisticheApiDTO): void {
     // Esegue la registrazione in modo asincrono per non bloccare la risposta
-    setImmediate(async () => {
-      try {
-        await this.statisticheApiService.registraStatistica(dto);
-      } catch (error) {
+    setImmediate(() => {
+      this.statisticheApiService.registraStatistica(dto).catch(error => {
         // Log dell'errore ma non blocca la risposta principale
         log.error('Errore nella registrazione statistica asincrona', {
           error: error instanceof Error ? error.message : 'Unknown error',
           dto
         });
-      }
+      });
     });
   }
 }

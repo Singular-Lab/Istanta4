@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { IUserService } from "../../../interfaces/IUserService";
 import { ServerUtils } from "../../../utils/ServerUtils";
 import { DefaultAgenziaLib } from "../../default/index.js";
-import type { PayloadConfrontoStorico } from "../../types.js";
+import type { IAgenziaLib, PayloadConfrontoStorico } from "../../types.js";
 import { ConadcnoAgenziaLib } from "../index.js";
 import { mergePluginPhotoRefs, storicoVolantinoDB1 } from "../storico-db1.js";
 
@@ -11,7 +11,7 @@ describe("ConadcnoAgenziaLib", () => {
   it("ha lo storico dei volantini, il default no", () => {
     const userService = {} as IUserService;
     expect(new ConadcnoAgenziaLib(userService).storicoVolantino).toBe(storicoVolantinoDB1);
-    expect(new DefaultAgenziaLib(userService).storicoVolantino).toBeUndefined();
+    expect((new DefaultAgenziaLib(userService) as IAgenziaLib).storicoVolantino).toBeUndefined();
   });
 });
 

@@ -898,7 +898,7 @@ const ElementSettings: React.FC<ElementSettingsProps> = ({
                       <div className="flex items-center space-x-1">
                         <Button
                           onClick={() => {
-                            const newRicettaAI = [...effectiveContent?.ricettaAI];
+                            const newRicettaAI = [...(effectiveContent?.ricettaAI ?? [])];
                             const [movedItem] = newRicettaAI.splice(index, 1);
                             newRicettaAI.splice(index - 1, 0, movedItem);
                             handleContentChange({ ricettaAI: newRicettaAI });
@@ -913,7 +913,7 @@ const ElementSettings: React.FC<ElementSettingsProps> = ({
                         </Button>
                         <Button
                           onClick={() => {
-                            const newRicettaAI = [...effectiveContent?.ricettaAI];
+                            const newRicettaAI = [...(effectiveContent?.ricettaAI ?? [])];
                             const [movedItem] = newRicettaAI.splice(index, 1);
                             newRicettaAI.splice(index + 1, 0, movedItem);
                             handleContentChange({ ricettaAI: newRicettaAI });
@@ -928,7 +928,7 @@ const ElementSettings: React.FC<ElementSettingsProps> = ({
                         </Button>
                         <Button
                           onClick={() => {
-                            const newRicettaAI = [...effectiveContent?.ricettaAI];
+                            const newRicettaAI = [...(effectiveContent?.ricettaAI ?? [])];
                             newRicettaAI.splice(index, 1);
                             handleContentChange({ ricettaAI: newRicettaAI });
                           }}

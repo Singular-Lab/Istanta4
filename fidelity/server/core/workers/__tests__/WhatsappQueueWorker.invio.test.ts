@@ -195,7 +195,7 @@ describe('invio dei messaggi della coda WhatsApp', () => {
       return risultato;
     });
     const worker = new WhatsappQueueWorker() as any;
-    vi.spyOn(worker, 'processJob').mockImplementation(async () => {
+    worker.processJob = vi.fn(async () => {
       ordine.push('invio');
     });
 

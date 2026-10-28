@@ -122,9 +122,9 @@ export class LogController extends BaseController {
             // Determina se è un log JSON o in formato testo
             const isJsonLog = content.trim().startsWith('{');
 
-            let endpoints: Record<string, number> = {};
-            let methodCounts: Record<string, number> = {};
-            let statusCodes: Record<string, number> = {};
+            const endpoints: Record<string, number> = {};
+            const methodCounts: Record<string, number> = {};
+            const statusCodes: Record<string, number> = {};
             let httpRequests = 0;
 
             if (isJsonLog) {
@@ -244,7 +244,7 @@ export class LogController extends BaseController {
             // Funzione per convertire i colori ANSI in HTML
             const convertAnsiToHtml = (text: string): string => {
                 // Escape HTML prima di processare i colori
-                let escaped = text
+                const escaped = text
                     .replace(/&/g, "&amp;")
                     .replace(/</g, "&lt;")
                     .replace(/>/g, "&gt;")
@@ -252,6 +252,7 @@ export class LogController extends BaseController {
                     .replace(/'/g, "&#039;");
 
                 // Regex per i codici ANSI
+                // eslint-disable-next-line no-control-regex -- i codici ANSI iniziano con ESC
                 const ansiRegex = /\x1b\[(\d+(?:;\d+)*)?m/g;
                 let result = '';
                 let lastIndex = 0;

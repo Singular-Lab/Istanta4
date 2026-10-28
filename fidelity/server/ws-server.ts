@@ -258,7 +258,7 @@ export function startWSServer(): Promise<void> {
             socket.disconnect(true);
             return;
           }
-          socket.join(stanze);
+          void socket.join(stanze);
 
           socket.on('pv:subscribe', (payload: PVSubscribePayload) => {
             deviceSocketService.subscribeToPV(socket, payload);
@@ -302,7 +302,7 @@ export function startWSServer(): Promise<void> {
               });
             }
 
-            socket.join(`menabo-page:${idPromo}`);
+            void socket.join(`menabo-page:${idPromo}`);
             // Evici subito eventuali sessioni zombie dello stesso utente (vecchio socket.id da una
             // riconnessione): altrimenti la divisione precedente resterebbe "occupata" fino al pingTimeout.
             const evictedZombie = pruneUserSessions(menaboSessions, idPromo, userId, socket.id);
@@ -529,7 +529,7 @@ export async function stopWSServer(): Promise<void> {
       pluginWss = null;
     }
 
-    io.close(() => {
+    void io.close(() => {
       log.info('Socket.IO chiuso');
     });
 

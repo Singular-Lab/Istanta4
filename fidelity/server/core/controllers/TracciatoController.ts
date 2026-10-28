@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { HttpStatusCode } from '../../../lib/enums';
 import { ExternalApiError } from '../../../lib/errors';
 import { BaseController } from '../base/BaseController';
+import { log } from '../logger';
 import { ITracciatoService } from '../interfaces/ITracciatoService';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { permissionGuard } from '../middleware/permissionGuard';
@@ -51,7 +52,7 @@ export class TracciatoController extends BaseController {
             const tracciati = await this.tracciatoService.getAllTracciati(includeBlob);
             res.status(HttpStatusCode.OK).json(tracciati);
         } catch (error: any) {
-            error = JSON.stringify(error);
+            log.error("Errore durante il recupero dei tracciati", error);
             res.status(HttpStatusCode.INTERNAL_SERVER_ERROR).json({
                 message: "Errore durante il recupero dei tracciati"
             });
@@ -71,7 +72,7 @@ export class TracciatoController extends BaseController {
             const tracciati = await this.tracciatoService.getTracciatiByPromoId(idPromo, includeBlob);
             res.status(HttpStatusCode.OK).json(tracciati);
         } catch (error: any) {
-            error = JSON.stringify(error);
+            log.error("Errore durante il recupero dei tracciati", error);
             res.status(HttpStatusCode.INTERNAL_SERVER_ERROR).json({
                 message: "Errore durante il recupero dei tracciati"
             });
@@ -90,7 +91,7 @@ export class TracciatoController extends BaseController {
             const tracciato = await this.tracciatoService.getTracciatoById(idTracciato, includeBlob);
             res.status(HttpStatusCode.OK).json(tracciato);
         } catch (error: any) {
-            error = JSON.stringify(error);
+            log.error("Errore durante il recupero del tracciato", error);
             res.status(HttpStatusCode.INTERNAL_SERVER_ERROR).json({
                 message: "Errore durante il recupero del tracciato"
             });

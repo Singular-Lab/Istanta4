@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { IUserService } from "../../../interfaces/IUserService";
 import { type ContestoImportPuntiVendita, preparaImportPuntiVendita, righeDaImportare } from "../../../services/importPuntiVendita";
 import { DefaultAgenziaLib } from "../../default/index.js";
+import type { IAgenziaLib } from "../../types.js";
 import { ConadcnoAgenziaLib } from "../index.js";
 import { importPuntiVenditaConadCno } from "../punti-vendita.js";
 
@@ -68,7 +69,7 @@ describe("ConadcnoAgenziaLib", () => {
   it("ha il proprio tracciato dei punti vendita, il default no", () => {
     const userService = {} as IUserService;
     expect(new ConadcnoAgenziaLib(userService).importPuntiVendita).toBe(importPuntiVenditaConadCno);
-    expect(new DefaultAgenziaLib(userService).importPuntiVendita).toBeUndefined();
+    expect((new DefaultAgenziaLib(userService) as IAgenziaLib).importPuntiVendita).toBeUndefined();
   });
 });
 

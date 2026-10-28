@@ -129,13 +129,15 @@ export class ConnectionMonitor {
   public startMonitoring(): void {
     if (this.interval) return;
 
-    this.interval = setInterval(async () => {
+    this.interval = setInterval(() => {
       this.updateMetricsFromPool();
 
-      const health = await this.healthCheck();
-      if (health.status !== 'healthy') {
-        log.warn('Database health check degraded', { health });
-      }
+      // healthCheck intercetta da se' gli errori della query
+      void this.healthCheck().then(health => {
+        if (health.status !== 'healthy') {
+          log.warn('Database health check degraded', { health });
+        }
+      });
     }, this.config.checkIntervalMs);
 
     log.info('Connection monitoring started', {

@@ -283,7 +283,7 @@ export class ReferenzeService implements IReferenzeService {
       }
 
       const searchTerms = data.query.toLowerCase().split(" ");
-      let kitRuntime = await this.webPliantService.getReferenzeWebPliant(data.idWorkspace, new Date(), data.idArea, data.idCanale);
+      const kitRuntime = await this.webPliantService.getReferenzeWebPliant(data.idWorkspace, new Date(), data.idArea, data.idCanale);
 
       if (!Array.isArray(kitRuntime) || kitRuntime.length === 0) {
         throw wrapNotFoundError(new Error("Nessuna referenza trovata"), {

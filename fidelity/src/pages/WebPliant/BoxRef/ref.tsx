@@ -356,6 +356,7 @@ export function generaContenutoDinamico({
                   console.warn(JSON.stringify(value).includes(classe.valore));
                   return JSON.stringify(value).includes(classe.valore);
                 }
+                return false;
               case "equal":
                 if (Array.isArray(value)) {
                   return value.includes(classe.valore);
@@ -676,6 +677,8 @@ export function generaContenutoDinamico({
               } else if (typeof fieldValue === "number") {
                 return fieldValue.toString() === cond.valore;
               }
+              // Campo assente o non confrontabile: la condizione non è soddisfatta
+              return false;
             case "not-equal":
               if (Array.isArray(fieldValue)) {
                 return !fieldValue.includes(cond.valore);
@@ -685,6 +688,8 @@ export function generaContenutoDinamico({
               } else if (typeof fieldValue === "number") {
                 return fieldValue.toString() !== cond.valore;
               }
+              // Come per "equal": un campo vuoto non rende vera "diverso da ''"
+              return false;
             case "greater-than": {
               const fieldValueStr = typeof fieldValue === 'string' ? fieldValue : String(fieldValue || '');
               const parsedValue = parseFloat(fieldValueStr.replace(",", ".").replace("%", "").trim());

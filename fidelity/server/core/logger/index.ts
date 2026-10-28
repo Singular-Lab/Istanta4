@@ -13,6 +13,7 @@ type LogContext = Record<string, unknown> & { context?: string };
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 // I console.log con Colorize portano i codici colore dentro il testo
+// eslint-disable-next-line no-control-regex -- i codici ANSI iniziano con ESC
 const CODICI_ANSI = /\x1b\[[0-9;]*m/g;
 
 function toSingleLine(value: string): string {

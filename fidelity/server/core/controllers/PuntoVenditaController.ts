@@ -368,7 +368,7 @@ export class PuntoVenditaController extends BaseController {
       this.sendResponse(res, HttpStatusCode.OK, resultPuntoVenditaEliminato);
     } catch (error: any) {
       if (error instanceof ExternalApiError) return this.handleError(res, error);
-      error = JSON.stringify(error);
+      log.error("Errore durante l'eliminazione del punto vendita", error);
       this.sendResponse(res, HttpStatusCode.INTERNAL_SERVER_ERROR, {
         message: "Errore durante l'eliminazione del punto vendita"
       });

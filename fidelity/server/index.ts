@@ -56,4 +56,5 @@ async function main() {
   }
 }
 
-main();
+// main intercetta da se' ogni errore e chiude il processo
+void main();

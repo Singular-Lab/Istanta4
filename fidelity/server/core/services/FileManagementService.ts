@@ -593,7 +593,7 @@ export class FileManagementService implements IFileManagementService {
         where: { id_runtime: idKitRuntime },
         raw: true
       }) as unknown as FileItemKit[];
-      let metaProprieta: string[] = [];
+      const metaProprieta: string[] = [];
       await Promise.all(resultCreazioneCombinazioneDesign.map(async (item) => {
         Object.keys(item?.meta_olimpo_cloud ?? {}).forEach((key) => {
           if (!metaProprieta.includes(key)) {
@@ -750,7 +750,7 @@ export class FileManagementService implements IFileManagementService {
 
   async getContenutoDigitali(): Promise<any> {
     try {
-      let oggettoArrayMisto: {
+      const oggettoArrayMisto: {
         fileRuntimeMateriali: FileItemKit[],
         fotoDiGruppo: FotoGruppoReferenze[],
       } = {
@@ -835,7 +835,7 @@ export class FileManagementService implements IFileManagementService {
             endpoint: '/materiali/uploadMateriale'
           });
         }
-        let kitRuntime = await this.kitRuntimeService.getKitRuntimeById(guidKitRuntime);
+        const kitRuntime = await this.kitRuntimeService.getKitRuntimeById(guidKitRuntime);
         if (!kitRuntime) {
           throw wrapNotFoundError(new Error("Kit runtime non trovato"), {
             message: "Kit runtime non trovato",
@@ -850,7 +850,7 @@ export class FileManagementService implements IFileManagementService {
             entity: 'Materiale',
           });
         }
-        let files = await this.kitRuntimeService.getFilesRuntimeByIdKitRuntime(guidKitRuntime);
+        const files = await this.kitRuntimeService.getFilesRuntimeByIdKitRuntime(guidKitRuntime);
         if (!files) {
           throw wrapNotFoundError(new Error("Kit non trovato"), {
             message: "Kit non trovato",
@@ -924,7 +924,7 @@ export class FileManagementService implements IFileManagementService {
         const fileString = await fs.promises.readFile(file.path, 'utf8');
         const fileJson: ReferenzeIstanta[] = JSON.parse(fileString);
 
-        let kit = await this.kitRuntimeService.getKitRuntimeById(guidKitRuntime);
+        const kit = await this.kitRuntimeService.getKitRuntimeById(guidKitRuntime);
         if (!kit) {
           throw wrapNotFoundError(new Error("Kit non trovato"), {
             message: "Kit non trovato",
@@ -1036,7 +1036,7 @@ export class FileManagementService implements IFileManagementService {
       const newFilesToSave: FileItemKit[] = uploadResults.map((result, index) => {
         if (result.status === 'fulfilled') {
           const { uploadResult, originalFileData } = result.value;
-          let jsonMeta = typeof uploadResult.data.content.json_meta === "string" ?
+          const jsonMeta = typeof uploadResult.data.content.json_meta === "string" ?
             JSON.parse(uploadResult.data.content.json_meta) :
             uploadResult.data.content.json_meta;
 
@@ -1071,7 +1071,7 @@ export class FileManagementService implements IFileManagementService {
         }
       });
 
-      let logs: (FileItemKitLog | null)[] = uploadResults.map((result, index) => {
+      const logs: (FileItemKitLog | null)[] = uploadResults.map((result, index) => {
         if (result.status === 'fulfilled') {
           return {
             id: uuidv4(),
@@ -2021,11 +2021,7 @@ export class FileManagementService implements IFileManagementService {
       const runtimekitPg = runtimekit as any; // campi PG snake_case (id_promo, tipi_di_export_in_kit, ...)
       const runtimekitPerWebhook = await this.kitRuntimeService.getKitRuntimeByIdPerWebhook(guidKitRuntime);
       let referenze: ReferenzeIstanta[] = [];
-      try {
-        referenze = JSON.parse(meta);
-      } catch (error: any) {
-        throw error;
-      }
+      referenze = JSON.parse(meta);
       const nomeFile = file.originalname; // su disco il file ha un nome univoco, questo e' il nome logico
       const fileBuffer = await fs.promises.readFile(file.path);
       const hash = crypto.createHash('md5').update(fileBuffer).digest('hex');
@@ -2074,7 +2070,7 @@ export class FileManagementService implements IFileManagementService {
       const fileCercatoPerNome = files.find(f => f.nome === nomeFile);
       // Usa l'id esistente se stiamo aggiornando, altrimenti genera un nuovo UUID
       const fileId = fileCercatoPerNome?.id ?? uuidv4();
-      let newFile: FileItemKit = {
+      const newFile: FileItemKit = {
         id: fileId,
         id_runtime: guidKitRuntime,
         id_olimpo_cloud: result.data.content.id,
@@ -2137,7 +2133,7 @@ export class FileManagementService implements IFileManagementService {
         await FilesRuntimeLog.create({ ...logFileRuntime, id_kit_runtime: logFileRuntime.guid_kit_runtime } as any);
       }
       //INIZIO
-      let configWebpliant = await this.configService.getConfigWebPliantFromVolantino();
+      const configWebpliant = await this.configService.getConfigWebPliantFromVolantino();
       const cfg = configWebpliant.data_fields_refs
       for (let i = 0; i < referenze.length; i++) {
         const ref = referenze[i];

@@ -17,7 +17,6 @@ import type { IWebhookRepository } from '../repositories/WebhookRepository';
 import { WebhookRepository } from '../repositories/WebhookRepository';
 
 const nascondiSecret = (webhook: WebhookAttributes): WebhookAttributes => {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { secret_webhook, ...rest } = webhook;
   return rest;
 }
@@ -153,7 +152,6 @@ export class WebhookService implements IWebhookService {
       }
 
       // Impedisce l'aggiornamento del secret
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { secret_webhook, ...datiDaAggiornare } = datiAggiornamento;
 
       await this.webhookRepository.update(idWebhook, {

@@ -733,7 +733,7 @@ export class WebPliantService implements IWebPliantService {
     try {
       const resultReferenze = await this.getReferenzeWebPliant(idWorkspace, dataSelezionata, idArea, idCanale);
       if (Array.isArray(resultReferenze) && resultReferenze.length > 0) {
-        let referenze: ReferenzeIstanta[] = [];
+        const referenze: ReferenzeIstanta[] = [];
         for (const r of resultReferenze) {
           if (r.webpliant != undefined) {
             for (const w of r.webpliant) {

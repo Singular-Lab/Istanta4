@@ -51,6 +51,7 @@ describe('preparaProvider', () => {
       preparaProvider({
         ...OIDC,
         codice: 'Entra ID',
+        // eslint-disable-next-line no-script-url -- il test verifica che venga rifiutato
         config_client: { ...OIDC.config_client, authorize_url: 'javascript:alert(1)' },
         ruoli_ammessi: ['AdminGDO'],
       });

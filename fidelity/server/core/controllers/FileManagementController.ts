@@ -125,7 +125,6 @@ export class FileManagementController extends BaseController {
       if (!this.promoService) {
         // Lazy load promoService from IoC container
         // Avoid circular dependency in constructor
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
       }
       log.info(Colorize.cyan(`Promo trovata: ${promo ? JSON.stringify({ guid_id: promo.id, nome: promo.nome }) : "Nessuna promo"}`));
       const guidID = uuidv4();

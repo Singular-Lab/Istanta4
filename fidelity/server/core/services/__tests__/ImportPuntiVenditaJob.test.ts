@@ -79,7 +79,7 @@ describe('GestoreImportPuntiVendita', () => {
 
     expect(dopo).toMatchObject({ stato: 'in_corso', inseritiAMano: 1 });
     expect(dopo?.rigaInAttesa).toBeUndefined();
-    expect(op.scrivi.mock.calls.map(([e]: any) => [e.riga, e.azione, e.dati.nome])).toEqual([
+    expect(vi.mocked(op.scrivi).mock.calls.map(([e]: any) => [e.riga, e.azione, e.dati.nome])).toEqual([
       [2, 'crea', 'PV 2'], [3, 'crea', 'Confermato'], [4, 'crea', 'PV 4'],
     ]);
     expect(finale).toMatchObject({ stato: 'completato', elaborate: 3, creati: 3, inseritiAMano: 1 });
@@ -184,7 +184,7 @@ describe('GestoreImportPuntiVendita', () => {
     let jobId = '';
     const scrivi = vi.fn(async (esito: any) => {
       // L'utente annulla mentre e in scrittura la terza riga
-      if (esito.riga === 4) gestore.annulla(jobId, 'u1');
+      if (esito.riga === 4) await gestore.annulla(jobId, 'u1');
     });
     const { op, eventi } = operazioni({ scrivi });
 
@@ -261,7 +261,7 @@ describe('GestoreImportPuntiVendita', () => {
     const finale = await (await gestore.avvia('g1', 'u1', [crea(2), crea(3)], op)).fine;
 
     expect(op.scrivi).toHaveBeenCalledTimes(2);
-    expect((op.scrivi.mock.calls[0] as any)[0].dati.lat).toBeUndefined();
+    expect((vi.mocked(op.scrivi).mock.calls[0] as any)[0].dati.lat).toBeUndefined();
     expect(finale).toMatchObject({
       stato: 'completato', creati: 2, geolocalizzati: 0, senzaCoordinate: 2, erroriNominatim: 1,
       ultimoErroreNominatim: 'Nominatim non disponibile (HTTP 429)',
@@ -285,7 +285,7 @@ describe('GestoreImportPuntiVendita', () => {
     const finale = await (await gestore.avvia('g1', 'u1', righe, op)).fine;
 
     // Riga 2 geolocalizzata, righe 3-6 senza coordinate, alla riga 7 (quinto errore) si ferma
-    expect(op.scrivi.mock.calls.map(([e]: any) => e.riga)).toEqual([2, 3, 4, 5, 6]);
+    expect(vi.mocked(op.scrivi).mock.calls.map(([e]: any) => e.riga)).toEqual([2, 3, 4, 5, 6]);
     expect(finale).toMatchObject({ stato: 'errore', creati: 5, erroriNominatim: 5, elaborate: 5, nonElaborate: 3 });
     expect(finale.errori.at(-1)).toEqual({
       row: 7,
@@ -358,7 +358,7 @@ describe('GestoreImportPuntiVendita con piu worker', () => {
     expect(dopo?.rigaInAttesa).toBeUndefined();
     expect(scriviB).toHaveBeenCalledWith(expect.objectContaining({ riga: 3, azione: 'crea', dati: expect.objectContaining({ nome: 'Confermato' }) }));
     // Le righe automatiche le scrive il worker dell'import, quella decisa no
-    expect(op.scrivi.mock.calls.map(([e]: any) => e.riga)).toEqual([2, 4]);
+    expect(vi.mocked(op.scrivi).mock.calls.map(([e]: any) => e.riga)).toEqual([2, 4]);
     expect(finale).toMatchObject({ stato: 'completato', elaborate: 3, creati: 3, inseritiAMano: 1, nonElaborate: 0 });
     expect(eventi.at(-1)).toMatchObject({ evento: 'complete', stato: { stato: 'completato' } });
     expect(await workerB.stato(stato.jobId, 'u1')).toMatchObject({ stato: 'completato', creati: 3 });

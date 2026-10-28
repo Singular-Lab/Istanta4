@@ -494,7 +494,7 @@ export class PromoService implements IPromoService {
         '/FicoProcess/getFormContext'
       );
 
-      let context = JSON.parse(data.content) as any[];
+      const context = JSON.parse(data.content) as any[];
 
       // Esegui le chiamate in parallelo ma con un intervallo di 200ms tra ciascuna per evitare overload
       const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));

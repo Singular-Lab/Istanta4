@@ -1910,7 +1910,7 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
             return cachedToken;
         }
 
-        if (this.authTokenRequestPromise) {
+        if (this.authTokenRequestPromise !== null) {
             return this.authTokenRequestPromise;
         }
 

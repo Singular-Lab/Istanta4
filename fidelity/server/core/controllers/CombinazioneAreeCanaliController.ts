@@ -45,7 +45,7 @@ export class CombinazioneAreeCanaliController extends BaseController {
 
   private async setCombinazione(req: Request, res: Response): Promise<void> {
     try {
-      let data = req.body as { guidID: string, guidIDCanale: string, guidIDArea: string, enabled: boolean, idGDO: string };
+      const data = req.body as { guidID: string, guidIDCanale: string, guidIDArea: string, enabled: boolean, idGDO: string };
 
       if (!data.guidID) {
         data.guidID = uuidv4();

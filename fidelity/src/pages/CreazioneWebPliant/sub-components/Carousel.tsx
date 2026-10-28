@@ -1142,7 +1142,7 @@ const CarouselContent: React.FC<CarouselContentProps> = ({
               </Disclosure.Button>
               <Disclosure.Panel className="grid grid-cols-2 gap-4 mt-4 p-5">
                 <Button onClick={() => {
-                  const campi = [...forcedStyle?.campi];
+                  const campi = [...(forcedStyle?.campi ?? [])];
                   campi.push("");
                   const updatedForcedStyles = [...(localContent?.options?.forcedStyles || [])];
                   updatedForcedStyles[index].campi = campi;

@@ -133,7 +133,7 @@ export class RaccoglitoreKitService implements IRaccoglitoreKitService {
     files?: FileItemKit[];
   }): Promise<any> {
     try {
-      let arrayCombinazioniDesign: DESIGN_KIT[] = [];
+      const arrayCombinazioniDesign: DESIGN_KIT[] = [];
       const getAllCombinazioni = await this.getAllCombinazioniDesignByIdTemplate(data.id);
       const areePromises = data.guidAree.map(async (area) => {
         if (area == undefined) {

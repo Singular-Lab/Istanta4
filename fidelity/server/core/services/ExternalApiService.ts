@@ -844,7 +844,7 @@ export class ExternalApiService implements IExternalApiService {
 
       // Calcola _matchPriority in JS sui dati già filtrati dal DB
       const hasPriorityFilters = (params.filters ?? []).some(g => g.some(f => (f.priority ?? 0) > 0));
-      let referenze: any[] = rows.map(ref => ({
+      const referenze: any[] = rows.map(ref => ({
         ...this.mapFotoToUrls(ref),
         _matchPriority: hasPriorityFilters ? this.computeMatchPriority(ref, params.filters ?? []) : 0
       }));
@@ -1124,7 +1124,7 @@ export class ExternalApiService implements IExternalApiService {
       }
 
       const hasPriorityFilters = (params.filters ?? []).some(g => g.some(f => (f.priority ?? 0) > 0));
-      let referenze: any[] = rows.map(ref => ({
+      const referenze: any[] = rows.map(ref => ({
         ...this.mapFotoToUrls(ref),
         _matchPriority: hasPriorityFilters ? this.computeMatchPriority(ref, params.filters ?? []) : 0
       }));

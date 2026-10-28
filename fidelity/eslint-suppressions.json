@@ -1,0 +1,4017 @@
+{
+  "lib/Colorize.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 37
+    }
+  },
+  "lib/__tests__/serverCallSessioneScaduta.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "lib/accessi/pagine.ts": {
+    "prefer-template": {
+      "count": 1
+    }
+  },
+  "lib/auditTypes.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "lib/errors/errorUtils.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "lib/extension.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 10
+    },
+    "@typescript-eslint/no-this-alias": {
+      "count": 2
+    }
+  },
+  "lib/server_call.ts": {
+    "@typescript-eslint/ban-ts-comment": {
+      "count": 1
+    },
+    "@typescript-eslint/no-explicit-any": {
+      "count": 36
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "no-console": {
+      "count": 4
+    }
+  },
+  "lib/types.ts": {
+    "@typescript-eslint/no-empty-object-type": {
+      "count": 1
+    },
+    "@typescript-eslint/no-explicit-any": {
+      "count": 41
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "server/__tests__/certificatoProva.ts": {
+    "prefer-template": {
+      "count": 1
+    }
+  },
+  "server/__tests__/registroLavoriInMemoria.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 7
+    }
+  },
+  "server/core/__tests__/csrf.external.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/__tests__/routes.autenticazione.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "server/core/__tests__/server.health-db.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 6
+    }
+  },
+  "server/core/__tests__/server.staticiRimossi.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 6
+    }
+  },
+  "server/core/__tests__/server.upload-auth.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 8
+    }
+  },
+  "server/core/__tests__/server.upload-materiale.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 16
+    },
+    "no-console": {
+      "count": 7
+    }
+  },
+  "server/core/__tests__/server.upload-tracciato.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 19
+    }
+  },
+  "server/core/accessi/__tests__/RisolutoreAccessi.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 7
+    }
+  },
+  "server/core/accessi/__tests__/contestoAccesso.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 7
+    }
+  },
+  "server/core/accessi/__tests__/migrazioneAccessi.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 8
+    }
+  },
+  "server/core/accessi/contestoAccesso.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/agenzia_lib/conadcno/__tests__/conadcno-oidc.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 5
+    }
+  },
+  "server/core/agenzia_lib/conadcno/__tests__/conadcno-punti-vendita.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    }
+  },
+  "server/core/agenzia_lib/conadcno/__tests__/conadcno-storico.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "server/core/agenzia_lib/conadcno/punti-vendita.ts": {
+    "no-useless-escape": {
+      "count": 3
+    }
+  },
+  "server/core/agenzia_lib/conadcno/storico-db1.ts": {
+    "prefer-template": {
+      "count": 1
+    }
+  },
+  "server/core/agenzia_lib/coopfi/__tests__/coopfi-confronto-ordinamento.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/agenzia_lib/coopfi/__tests__/coopfi-http-timeout.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    }
+  },
+  "server/core/agenzia_lib/coopfi/__tests__/coopfi-menabo.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/agenzia_lib/coopfi/__tests__/coopfi-report-pdf.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "server/core/agenzia_lib/coopfi/__tests__/coopfi-scoreboard-groups.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/agenzia_lib/coopfi/__tests__/coopfi-scoreboard-line-chart.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/agenzia_lib/coopfi/index.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 4
+    },
+    "no-console": {
+      "count": 1
+    },
+    "object-shorthand": {
+      "count": 3
+    },
+    "prefer-template": {
+      "count": 1
+    }
+  },
+  "server/core/agenzia_lib/default/index.ts": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "no-console": {
+      "count": 1
+    }
+  },
+  "server/core/base/BaseController.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "server/core/components/BoxRefServer.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 7
+    },
+    "@typescript-eslint/no-unused-expressions": {
+      "count": 2
+    },
+    "no-console": {
+      "count": 2
+    }
+  },
+  "server/core/config/index.ts": {
+    "no-console": {
+      "count": 2
+    }
+  },
+  "server/core/config/multerConfig.ts": {
+    "no-console": {
+      "count": 1
+    }
+  },
+  "server/core/controllers/AreaController.ts": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    },
+    "prefer-template": {
+      "count": 1
+    }
+  },
+  "server/core/controllers/AttivitaController.ts": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "server/core/controllers/AuditLogController.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "prefer-template": {
+      "count": 1
+    }
+  },
+  "server/core/controllers/CanaleController.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    }
+  },
+  "server/core/controllers/CombinazioneAreeCanaliController.ts": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    }
+  },
+  "server/core/controllers/ConfigController.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 19
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 3
+    }
+  },
+  "server/core/controllers/ContrattoTipografiaController.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "server/core/controllers/CorreggoController.ts": {
+    "object-shorthand": {
+      "count": 3
+    }
+  },
+  "server/core/controllers/DesignKitController.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 11
+    },
+    "object-shorthand": {
+      "count": 4
+    }
+  },
+  "server/core/controllers/DisplayContextController.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/controllers/DisplayController.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "server/core/controllers/EmailController.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    },
+    "object-shorthand": {
+      "count": 1
+    }
+  },
+  "server/core/controllers/EphemeralAuthController.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "server/core/controllers/ExternalApiController.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 39
+    }
+  },
+  "server/core/controllers/FileManagementController.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    },
+    "no-console": {
+      "count": 3
+    },
+    "prefer-template": {
+      "count": 3
+    }
+  },
+  "server/core/controllers/FormatoController.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    },
+    "prefer-template": {
+      "count": 1
+    }
+  },
+  "server/core/controllers/GPTController.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "no-console": {
+      "count": 22
+    },
+    "object-shorthand": {
+      "count": 13
+    }
+  },
+  "server/core/controllers/GdoController.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 8
+    }
+  },
+  "server/core/controllers/ImpostazioniController.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 5
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 11
+    }
+  },
+  "server/core/controllers/KitRuntimeController.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 21
+    }
+  },
+  "server/core/controllers/LogController.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 11
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 4
+    }
+  },
+  "server/core/controllers/MenuController.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "server/core/controllers/NamingConventionController.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    }
+  },
+  "server/core/controllers/OrdiniDiStampaController.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "server/core/controllers/PluginAnalyticsController.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/controllers/PromoController.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "server/core/controllers/PuntoVenditaController.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 12
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "object-shorthand": {
+      "count": 12
+    },
+    "prefer-template": {
+      "count": 1
+    }
+  },
+  "server/core/controllers/RaccoglitoreKitController.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 12
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "server/core/controllers/ReferenzeController.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 6
+    },
+    "object-shorthand": {
+      "count": 1
+    }
+  },
+  "server/core/controllers/SuperadminDashboardController.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "server/core/controllers/TipoExportController.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 5
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "server/core/controllers/TracciatoController.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 24
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 6
+    },
+    "no-console": {
+      "count": 6
+    },
+    "prefer-template": {
+      "count": 1
+    }
+  },
+  "server/core/controllers/UserController.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 28
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 5
+    },
+    "no-console": {
+      "count": 22
+    },
+    "prefer-template": {
+      "count": 2
+    }
+  },
+  "server/core/controllers/WebPliantController.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    },
+    "prefer-template": {
+      "count": 9
+    }
+  },
+  "server/core/controllers/WebhookController.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "server/core/controllers/WhatsAppController.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 26
+    }
+  },
+  "server/core/controllers/__tests__/AreaController.istanta.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 11
+    }
+  },
+  "server/core/controllers/__tests__/CanaleCombinazioneController.istanta.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 14
+    }
+  },
+  "server/core/controllers/__tests__/ConfigController.caricaStiliInConfig.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 7
+    }
+  },
+  "server/core/controllers/__tests__/ConfigController.funzionalita.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 8
+    }
+  },
+  "server/core/controllers/__tests__/ConfigController.getConfigPubblica.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 8
+    }
+  },
+  "server/core/controllers/__tests__/ConfigController.saveWebpliantConfig.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 8
+    }
+  },
+  "server/core/controllers/__tests__/DesignKitController.creaCombinazioni.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 11
+    }
+  },
+  "server/core/controllers/__tests__/EmailController.resetPassword.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "server/core/controllers/__tests__/EmailController.trasportoSmtp.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    }
+  },
+  "server/core/controllers/__tests__/ExternalApiController.generateApiKey.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 19
+    }
+  },
+  "server/core/controllers/__tests__/FileManagementController.uploadKitManuali.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 10
+    }
+  },
+  "server/core/controllers/__tests__/GdoController.icona.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 10
+    }
+  },
+  "server/core/controllers/__tests__/HubController.accessoServizio.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 19
+    }
+  },
+  "server/core/controllers/__tests__/HubController.admin.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 10
+    }
+  },
+  "server/core/controllers/__tests__/HubController.oidcRestrizioni.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 15
+    }
+  },
+  "server/core/controllers/__tests__/HubController.serviziGestiti.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 10
+    }
+  },
+  "server/core/controllers/__tests__/ImpostazioniController.senzaMongo.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 13
+    }
+  },
+  "server/core/controllers/__tests__/KitRuntimeController.getKitByPromo.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 21
+    }
+  },
+  "server/core/controllers/__tests__/MetodiAccessoController.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 16
+    }
+  },
+  "server/core/controllers/__tests__/OrdiniDiStampaController.raggruppamento.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 16
+    }
+  },
+  "server/core/controllers/__tests__/PromoController.aggiornaPromo.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 13
+    }
+  },
+  "server/core/controllers/__tests__/PromoController.eliminazione.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 11
+    }
+  },
+  "server/core/controllers/__tests__/PromoController.ordinamentoMerceologico.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 13
+    }
+  },
+  "server/core/controllers/__tests__/PuntoVenditaController.getAllPV.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 10
+    }
+  },
+  "server/core/controllers/__tests__/PuntoVenditaController.importa.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 21
+    }
+  },
+  "server/core/controllers/__tests__/PuntoVenditaController.salva.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 14
+    }
+  },
+  "server/core/controllers/__tests__/ReferenzeController.consultazionePubblica.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 8
+    }
+  },
+  "server/core/controllers/__tests__/ReferenzeController.webpliant.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 9
+    }
+  },
+  "server/core/controllers/__tests__/TracciatoController.rinomina.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 8
+    }
+  },
+  "server/core/controllers/__tests__/UserController.disattivaAccount.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 12
+    }
+  },
+  "server/core/controllers/__tests__/UserController.metodoDisattivato.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 10
+    }
+  },
+  "server/core/controllers/__tests__/UserController.privateKey.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 13
+    }
+  },
+  "server/core/controllers/__tests__/UserController.returnJson.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    }
+  },
+  "server/core/controllers/__tests__/WebPliantController.isEditor.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 14
+    }
+  },
+  "server/core/controllers/__tests__/WebhookController.creazione.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 8
+    }
+  },
+  "server/core/controllers/__tests__/WhatsAppController.gdo.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 26
+    }
+  },
+  "server/core/controllers/__tests__/permessiRouteMutanti.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 17
+    }
+  },
+  "server/core/db/migrazioni/__tests__/applicaMigrazioni.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/db/migrazioni/__tests__/schemaModelli.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "server/core/db/migrazioni/applicaMigrazioni.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/db/migrazioni/generaBaseline.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 7
+    }
+  },
+  "server/core/db/migrazioni/schemaModelli.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 11
+    }
+  },
+  "server/core/dto/AttivitaDTO.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "server/core/dto/ContrattoTipografiaDTO.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "server/core/dto/EphemeralTokenDTO.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/dto/FlyerInsightsDTO.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "server/core/dto/GDOWhatsappDTO.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "server/core/dto/OrdiniDiStampaInviiDTO.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "server/core/dto/TracciatiDTO.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "server/core/dto/WebhookDTO.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/dto/WishlistWebpliantDTO.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "server/core/dto/index.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/inizializzazione/__tests__/inizializzaInstallazione.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 27
+    }
+  },
+  "server/core/inizializzazione/__tests__/migrazioneConfig.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/inizializzazione/inizializzaInstallazione.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 8
+    }
+  },
+  "server/core/inizializzazione/migrazioneConfig.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    }
+  },
+  "server/core/interfaces/IAuditLogService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 9
+    }
+  },
+  "server/core/interfaces/IConfigService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 5
+    }
+  },
+  "server/core/interfaces/IContrattoTipografiaService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "server/core/interfaces/IDesignKitService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 6
+    }
+  },
+  "server/core/interfaces/IExternalApiService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 7
+    }
+  },
+  "server/core/interfaces/IFileManagementService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 21
+    }
+  },
+  "server/core/interfaces/IFormatoService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/interfaces/IGPTService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 12
+    }
+  },
+  "server/core/interfaces/IImpostazioniService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "server/core/interfaces/IIstantaService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "server/core/interfaces/IKitRuntimeService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 25
+    }
+  },
+  "server/core/interfaces/INamingConventionService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    }
+  },
+  "server/core/interfaces/IOrdiniStampaService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 5
+    }
+  },
+  "server/core/interfaces/IPromoService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    }
+  },
+  "server/core/interfaces/IRaccoglitoreKitService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 18
+    }
+  },
+  "server/core/interfaces/IReferenzeService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 8
+    }
+  },
+  "server/core/interfaces/ITipoExportService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/interfaces/IUserService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 15
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "server/core/interfaces/IVolantinoService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/interfaces/IWebPliantService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 11
+    }
+  },
+  "server/core/interfaces/IWebhookService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "server/core/interfaces/IWhatsAppService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 5
+    }
+  },
+  "server/core/logger/index.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/middleware/__tests__/authMiddleware.bearer.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 6
+    }
+  },
+  "server/core/middleware/__tests__/credenzialiRiservate.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 21
+    }
+  },
+  "server/core/middleware/__tests__/csrfProtection.segreto.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    }
+  },
+  "server/core/middleware/__tests__/metodoAccessoAttivo.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/middleware/__tests__/olimpoProxy.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/middleware/__tests__/permissionGuard.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 5
+    }
+  },
+  "server/core/middleware/__tests__/sessionTimeout.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/middleware/__tests__/suspiciousActivityLogger.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/middleware/apiKeyAuth.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "@typescript-eslint/no-namespace": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    },
+    "prefer-template": {
+      "count": 3
+    }
+  },
+  "server/core/middleware/browserSecurityMiddleware.ts": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "no-console": {
+      "count": 1
+    }
+  },
+  "server/core/middleware/csrfProtection.ts": {
+    "@typescript-eslint/no-namespace": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "server/core/middleware/ephemeralRateLimitMiddleware.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "server/core/middleware/ephemeralTokenAuthMiddleware.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    },
+    "@typescript-eslint/no-namespace": {
+      "count": 1
+    }
+  },
+  "server/core/middleware/errorHandler.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "server/core/middleware/originWhitelistMiddleware.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "server/core/middlewares.ts": {
+    "@typescript-eslint/ban-ts-comment": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "server/core/models/TentativoWebhook.ts": {
+    "@typescript-eslint/no-empty-object-type": {
+      "count": 1
+    }
+  },
+  "server/core/models/Webhook.ts": {
+    "@typescript-eslint/no-empty-object-type": {
+      "count": 1
+    }
+  },
+  "server/core/models/__tests__/Config.validazione.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "server/core/models/__tests__/Webhook.eventi.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/models/__tests__/schemaCompatibileConAlter.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "server/core/models/approfondimento_vino.ts": {
+    "@typescript-eslint/no-empty-object-type": {
+      "count": 1
+    }
+  },
+  "server/core/models/attivita.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/models/audit_log.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "server/core/models/config.ts": {
+    "@typescript-eslint/no-empty-object-type": {
+      "count": 1
+    },
+    "@typescript-eslint/no-explicit-any": {
+      "count": 24
+    }
+  },
+  "server/core/models/contenuti_aggiuntivi_referenza.ts": {
+    "@typescript-eslint/no-empty-object-type": {
+      "count": 1
+    },
+    "@typescript-eslint/no-explicit-any": {
+      "count": 6
+    }
+  },
+  "server/core/models/contratto_tipografia.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/models/design_kit.ts": {
+    "@typescript-eslint/no-empty-object-type": {
+      "count": 1
+    },
+    "@typescript-eslint/no-explicit-any": {
+      "count": 11
+    }
+  },
+  "server/core/models/files_runtime.ts": {
+    "@typescript-eslint/no-empty-object-type": {
+      "count": 1
+    },
+    "@typescript-eslint/no-explicit-any": {
+      "count": 5
+    },
+    "no-useless-escape": {
+      "count": 2
+    }
+  },
+  "server/core/models/files_runtime_log.ts": {
+    "@typescript-eslint/no-empty-object-type": {
+      "count": 1
+    },
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    }
+  },
+  "server/core/models/lavori_in_background.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 8
+    }
+  },
+  "server/core/models/mixins.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 32
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 3
+    },
+    "no-console": {
+      "count": 1
+    },
+    "object-shorthand": {
+      "count": 16
+    }
+  },
+  "server/core/models/ordini_di_stampa.ts": {
+    "@typescript-eslint/no-empty-object-type": {
+      "count": 1
+    }
+  },
+  "server/core/models/ordini_di_stampa_invii.ts": {
+    "@typescript-eslint/no-empty-object-type": {
+      "count": 1
+    },
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/models/plugin_analytics_event.ts": {
+    "@typescript-eslint/no-empty-object-type": {
+      "count": 1
+    }
+  },
+  "server/core/models/promo.ts": {
+    "@typescript-eslint/no-empty-object-type": {
+      "count": 1
+    },
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/models/punto_vendita/punti_vendita.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    },
+    "no-console": {
+      "count": 1
+    },
+    "no-useless-escape": {
+      "count": 3
+    }
+  },
+  "server/core/models/raccoglitore_kit.ts": {
+    "@typescript-eslint/no-empty-object-type": {
+      "count": 1
+    },
+    "@typescript-eslint/no-explicit-any": {
+      "count": 14
+    }
+  },
+  "server/core/models/referenze.ts": {
+    "@typescript-eslint/no-empty-object-type": {
+      "count": 1
+    },
+    "@typescript-eslint/no-explicit-any": {
+      "count": 8
+    }
+  },
+  "server/core/models/referenze_gruppo.ts": {
+    "@typescript-eslint/no-empty-object-type": {
+      "count": 1
+    }
+  },
+  "server/core/models/relazioni.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    },
+    "object-shorthand": {
+      "count": 9
+    }
+  },
+  "server/core/models/ricette.ts": {
+    "@typescript-eslint/no-empty-object-type": {
+      "count": 1
+    },
+    "@typescript-eslint/no-explicit-any": {
+      "count": 7
+    }
+  },
+  "server/core/models/runtime_kit.ts": {
+    "@typescript-eslint/no-empty-object-type": {
+      "count": 1
+    },
+    "@typescript-eslint/no-explicit-any": {
+      "count": 12
+    }
+  },
+  "server/core/models/statistiche_api.ts": {
+    "@typescript-eslint/no-empty-object-type": {
+      "count": 1
+    }
+  },
+  "server/core/models/tracciati.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/models/tracciati_momento.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "server/core/models/utenti.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "no-console": {
+      "count": 1
+    },
+    "no-useless-escape": {
+      "count": 3
+    }
+  },
+  "server/core/models/utenti_anonimi.ts": {
+    "@typescript-eslint/no-empty-object-type": {
+      "count": 1
+    }
+  },
+  "server/core/models/whatsapp/gdo_whatsapp_numbers.ts": {
+    "object-shorthand": {
+      "count": 1
+    }
+  },
+  "server/core/models/whatsapp/gdo_whatsapp_preset.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/models/whatsapp/gdo_whatsapp_template.ts": {
+    "object-shorthand": {
+      "count": 1
+    }
+  },
+  "server/core/models/wishlist_webpliant.ts": {
+    "@typescript-eslint/no-empty-object-type": {
+      "count": 1
+    },
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "server/core/models/workspace_webpliant.ts": {
+    "@typescript-eslint/no-empty-object-type": {
+      "count": 1
+    },
+    "@typescript-eslint/no-explicit-any": {
+      "count": 12
+    }
+  },
+  "server/core/monitoring/ConnectionMonitor.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "server/core/monitoring/QueryProfiler.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 6
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "server/core/repositories/ApprofondimentoVinoRepository.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/repositories/AreaRepository.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/repositories/AttivitaRepository.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/repositories/AuditLogRepository.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 17
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    }
+  },
+  "server/core/repositories/AuthProviderRepository.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    }
+  },
+  "server/core/repositories/BaseRepository.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "server/core/repositories/CanaleRepository.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/repositories/CombinazioneCanaleAreaRepository.ts": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "server/core/repositories/ContenutiAggiuntiviReferenzaRepository.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/repositories/ContrattoTipografiaRepository.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/repositories/DesignKitRepository.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/repositories/FilesRuntimeRepository.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/repositories/FilterTemplateRepository.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "server/core/repositories/GdoRepository.ts": {
+    "@typescript-eslint/ban-ts-comment": {
+      "count": 1
+    }
+  },
+  "server/core/repositories/HubNewsRepository.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/repositories/HubServiceRepository.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "server/core/repositories/MenuItemRepository.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    }
+  },
+  "server/core/repositories/OrdiniStampaInviiRepository.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/repositories/OrdiniStampaRepository.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/repositories/PermessiRepository.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 13
+    }
+  },
+  "server/core/repositories/PromoRepository.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "server/core/repositories/PuntoVenditaRepository.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "server/core/repositories/RaccoglitoreKitRepository.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/repositories/ReferenzeGruppoRepository.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "server/core/repositories/ReferenzeRepository.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/repositories/RicetteRepository.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/repositories/RuntimeKitRepository.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/repositories/StatisticheApiRepository.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "server/core/repositories/TentativoWebhookRepository.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/repositories/TracciatiMomentoRepository.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 10
+    }
+  },
+  "server/core/repositories/TracciatiReportRepository.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/repositories/TracciatiRepository.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/repositories/TracciatiSchemaRepository.ts": {
+    "@typescript-eslint/no-empty-object-type": {
+      "count": 1
+    }
+  },
+  "server/core/repositories/UserRepository.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "server/core/repositories/WebhookRepository.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/repositories/__tests__/HubRoleFiltering.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 5
+    }
+  },
+  "server/core/repositories/__tests__/PuntoVenditaRepository.ricerca.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "server/core/scripts/cleanupLogs.ts": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "prefer-template": {
+      "count": 4
+    }
+  },
+  "server/core/scripts/migrateUtentiGDO.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 8
+    }
+  },
+  "server/core/scripts/seed-ephemeral-whitelist.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "server/core/server.ts": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    }
+  },
+  "server/core/services/AreaService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "server/core/services/AttivitaService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "server/core/services/AuditLogService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 12
+    }
+  },
+  "server/core/services/CanaleService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    },
+    "prefer-template": {
+      "count": 1
+    }
+  },
+  "server/core/services/ChronService.ts": {
+    "object-shorthand": {
+      "count": 1
+    }
+  },
+  "server/core/services/CombinazioneAreeCanaliService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "prefer-template": {
+      "count": 4
+    }
+  },
+  "server/core/services/ConfigService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 41
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    }
+  },
+  "server/core/services/ContrattoTipografiaService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "server/core/services/DashboardService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 13
+    }
+  },
+  "server/core/services/DesignKitService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 24
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "server/core/services/DeviceSocketService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "server/core/services/EphemeralTokenService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "server/core/services/ExternalApiService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 40
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "no-useless-escape": {
+      "count": 1
+    },
+    "prefer-template": {
+      "count": 1
+    }
+  },
+  "server/core/services/FileManagementService.ts": {
+    "@typescript-eslint/ban-ts-comment": {
+      "count": 2
+    },
+    "@typescript-eslint/no-explicit-any": {
+      "count": 74
+    },
+    "no-console": {
+      "count": 5
+    },
+    "object-shorthand": {
+      "count": 3
+    },
+    "prefer-template": {
+      "count": 8
+    }
+  },
+  "server/core/services/FilterTemplateService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 5
+    }
+  },
+  "server/core/services/FormatoService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "server/core/services/GPTService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 55
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "object-shorthand": {
+      "count": 2
+    },
+    "prefer-template": {
+      "count": 3
+    }
+  },
+  "server/core/services/GdoService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "server/core/services/HubNewsService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "server/core/services/HubServiceService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 8
+    }
+  },
+  "server/core/services/ImpostazioniService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 12
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "prefer-template": {
+      "count": 2
+    }
+  },
+  "server/core/services/IstantaService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 8
+    }
+  },
+  "server/core/services/KitRuntimeService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 134
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 3
+    },
+    "no-console": {
+      "count": 4
+    },
+    "object-shorthand": {
+      "count": 2
+    },
+    "prefer-template": {
+      "count": 3
+    }
+  },
+  "server/core/services/LogService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    },
+    "object-shorthand": {
+      "count": 1
+    }
+  },
+  "server/core/services/MenuService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 5
+    }
+  },
+  "server/core/services/NamingConventionService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 9
+    }
+  },
+  "server/core/services/OrdiniStampaService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 30
+    },
+    "no-console": {
+      "count": 2
+    },
+    "object-shorthand": {
+      "count": 2
+    },
+    "prefer-template": {
+      "count": 3
+    }
+  },
+  "server/core/services/PluginAnalyticsGatewayService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/services/PromoService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 29
+    },
+    "no-console": {
+      "count": 10
+    },
+    "object-shorthand": {
+      "count": 2
+    },
+    "prefer-template": {
+      "count": 3
+    }
+  },
+  "server/core/services/PuntoVenditaService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 6
+    },
+    "object-shorthand": {
+      "count": 1
+    }
+  },
+  "server/core/services/RaccoglitoreKitService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 49
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "no-console": {
+      "count": 6
+    }
+  },
+  "server/core/services/ReferenzeService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 94
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "no-console": {
+      "count": 4
+    },
+    "prefer-template": {
+      "count": 5
+    }
+  },
+  "server/core/services/RegistroLavori.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 21
+    }
+  },
+  "server/core/services/StatisticheApiService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 11
+    }
+  },
+  "server/core/services/TipoExportService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 7
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    }
+  },
+  "server/core/services/TracciatoService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 28
+    },
+    "no-console": {
+      "count": 1
+    },
+    "prefer-template": {
+      "count": 1
+    }
+  },
+  "server/core/services/UserService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 30
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 4
+    },
+    "no-console": {
+      "count": 47
+    },
+    "object-shorthand": {
+      "count": 4
+    },
+    "prefer-template": {
+      "count": 4
+    }
+  },
+  "server/core/services/VolantinoService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 12
+    }
+  },
+  "server/core/services/WebPliantService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 78
+    },
+    "no-console": {
+      "count": 3
+    },
+    "object-shorthand": {
+      "count": 1
+    }
+  },
+  "server/core/services/WebhookService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "server/core/services/WhatsAppService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 49
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 4
+    },
+    "no-console": {
+      "count": 28
+    },
+    "object-shorthand": {
+      "count": 3
+    },
+    "prefer-template": {
+      "count": 1
+    }
+  },
+  "server/core/services/WhatsappQueueService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "server/core/services/__tests__/AuditLogService.critico.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/services/__tests__/AuditLogService.forceFlush.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/services/__tests__/AuthProviderService.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/services/__tests__/BadgeService.nuovoOds.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 12
+    }
+  },
+  "server/core/services/__tests__/ChronService.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 5
+    }
+  },
+  "server/core/services/__tests__/CombinazioneAreeCanaliService.codici.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 5
+    }
+  },
+  "server/core/services/__tests__/FileManagementService.contenutiDigitali.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 11
+    }
+  },
+  "server/core/services/__tests__/FileManagementService.immagini.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 14
+    }
+  },
+  "server/core/services/__tests__/FileManagementService.invioMateriale.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 17
+    }
+  },
+  "server/core/services/__tests__/FileManagementService.replaceFile.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 15
+    }
+  },
+  "server/core/services/__tests__/FileManagementService.uploadMateriale.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 16
+    }
+  },
+  "server/core/services/__tests__/FileManagementService.volantiniPdf.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 10
+    }
+  },
+  "server/core/services/__tests__/FileManagementService.zip.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 8
+    }
+  },
+  "server/core/services/__tests__/FileManagementService.zipOlimpo.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 8
+    }
+  },
+  "server/core/services/__tests__/GPTService.servizioAi.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 6
+    }
+  },
+  "server/core/services/__tests__/HubNewsService.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "server/core/services/__tests__/HubServiceService.gestiti.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 6
+    }
+  },
+  "server/core/services/__tests__/HubServiceService.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "server/core/services/__tests__/ImportPuntiVenditaJob.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 10
+    }
+  },
+  "server/core/services/__tests__/KitRuntimeService.getKitByPromo.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 11
+    }
+  },
+  "server/core/services/__tests__/KitRuntimeService.stati.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 8
+    }
+  },
+  "server/core/services/__tests__/MenuService.filtro.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "server/core/services/__tests__/MenuService.ripristino.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 6
+    }
+  },
+  "server/core/services/__tests__/MenuService.vociSistema.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "server/core/services/__tests__/OidcService.scambioCodice.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/core/services/__tests__/OrdinamentoMerceologicoService.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 7
+    }
+  },
+  "server/core/services/__tests__/OrdiniStampaService.invioFtp.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 47
+    }
+  },
+  "server/core/services/__tests__/OrdiniStampaService.ordiniInCorso.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "server/core/services/__tests__/PermessiService.configurazione.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 16
+    }
+  },
+  "server/core/services/__tests__/PromoService.aggiornamento.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 7
+    }
+  },
+  "server/core/services/__tests__/PromoService.chiamataInterna.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 7
+    }
+  },
+  "server/core/services/__tests__/PromoService.duplicati.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 11
+    }
+  },
+  "server/core/services/__tests__/PromoService.eliminazione.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 14
+    }
+  },
+  "server/core/services/__tests__/PromoService.menaboOrdinamento.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 11
+    }
+  },
+  "server/core/services/__tests__/PromoService.rispostaIstanta.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 10
+    }
+  },
+  "server/core/services/__tests__/PuntoVenditaService.mapToDTO.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "server/core/services/__tests__/PuntoVenditaService.volantiniAttivi.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 7
+    }
+  },
+  "server/core/services/__tests__/ReferenzeService.sostituzione.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 9
+    }
+  },
+  "server/core/services/__tests__/ReferenzeService.visibilita.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 6
+    }
+  },
+  "server/core/services/__tests__/RegistroLavori.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 29
+    }
+  },
+  "server/core/services/__tests__/TracciatoService.momenti.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 10
+    }
+  },
+  "server/core/services/__tests__/UserService.accessiRuolo.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 6
+    }
+  },
+  "server/core/services/__tests__/UserService.accessoIstanta.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 8
+    }
+  },
+  "server/core/services/__tests__/UserService.geocodifica.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    }
+  },
+  "server/core/services/__tests__/WebhookService.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    }
+  },
+  "server/core/services/__tests__/WhatsAppService.configurazione.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 34
+    }
+  },
+  "server/core/services/__tests__/WhatsAppService.eliminazioni.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 25
+    }
+  },
+  "server/core/services/__tests__/WhatsappQueueService.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 26
+    }
+  },
+  "server/core/services/__tests__/configPerGdo.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 5
+    }
+  },
+  "server/core/services/__tests__/importPuntiVendita.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    }
+  },
+  "server/core/services/__tests__/urlOlimpo.servizi.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 24
+    }
+  },
+  "server/core/services/configPerGdo.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "server/core/services/importPuntiVendita.ts": {
+    "no-useless-escape": {
+      "count": 3
+    }
+  },
+  "server/core/utils/PromoModelUtils.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "no-console": {
+      "count": 1
+    }
+  },
+  "server/core/utils/ServerUtils.passaporto.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "server/core/utils/ServerUtils.sendToFICOApi.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 6
+    }
+  },
+  "server/core/utils/ServerUtils.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 16
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    },
+    "object-shorthand": {
+      "count": 3
+    },
+    "prefer-template": {
+      "count": 5
+    }
+  },
+  "server/core/utils/Translator.ts": {
+    "no-console": {
+      "count": 1
+    }
+  },
+  "server/core/utils/asyncHandler.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 5
+    }
+  },
+  "server/core/utils/istanta.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 8
+    }
+  },
+  "server/core/utils/mappers.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 8
+    }
+  },
+  "server/core/utils/rispostaServizi.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    }
+  },
+  "server/core/workers/WhatsappQueueWorker.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 6
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 3
+    }
+  },
+  "server/core/workers/__tests__/WhatsappQueueWorker.invio.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 26
+    }
+  },
+  "server/core/workers/__tests__/WhatsappQueueWorker.room.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 5
+    }
+  },
+  "server/global.d.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "server/index.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "server/src/shared/observability/metrics.ts": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "server/ws-server.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    }
+  },
+  "src/components/ActivitiesPanel/index.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 3
+    }
+  },
+  "src/components/AppErrorFallback/SchermataErrore.tsx": {
+    "@typescript-eslint/ban-ts-comment": {
+      "count": 1
+    }
+  },
+  "src/components/AppLoaderBridge/index.tsx": {
+    "no-console": {
+      "count": 1
+    },
+    "prefer-template": {
+      "count": 1
+    }
+  },
+  "src/components/Base/Alert/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/components/Base/Button/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "src/components/Base/Chart/index.tsx": {
+    "@typescript-eslint/no-unused-expressions": {
+      "count": 1
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 1
+    }
+  },
+  "src/components/Base/Ckeditor/ClassicEditor/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 17
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "no-console": {
+      "count": 1
+    }
+  },
+  "src/components/Base/Ckeditor/ClassicEditor/plugins/ToolbarPlugin.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/components/Base/Dock/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 1
+    }
+  },
+  "src/components/Base/Dropzone/index.tsx": {
+    "react-hooks/exhaustive-deps": {
+      "count": 1
+    }
+  },
+  "src/components/Base/Form/InputGroup/index.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/components/Base/FormFiltriContextDesign/CondizioniFiltriContextDesign/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 19
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 3
+    }
+  },
+  "src/components/Base/FormFiltriContextDesign/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 11
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 1
+    }
+  },
+  "src/components/Base/FormFiltriDesign/CondizioniFormFiltriDesign/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 15
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    }
+  },
+  "src/components/Base/FormFiltriDesign/ProprietaForm/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/components/Base/FormFiltriDesign/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 8
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 3
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 1
+    }
+  },
+  "src/components/Base/Litepicker/index.tsx": {
+    "react-hooks/exhaustive-deps": {
+      "count": 1
+    }
+  },
+  "src/components/Base/Litepicker/litepicker.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    },
+    "object-shorthand": {
+      "count": 1
+    },
+    "prefer-template": {
+      "count": 2
+    }
+  },
+  "src/components/Base/LoadingIcon/index.tsx": {
+    "react-hooks/exhaustive-deps": {
+      "count": 1
+    }
+  },
+  "src/components/Base/Lucide/risolviIconaLucide.ts": {
+    "no-console": {
+      "count": 1
+    }
+  },
+  "src/components/Base/QRCodeViewer.tsx": {
+    "@typescript-eslint/ban-ts-comment": {
+      "count": 1
+    }
+  },
+  "src/components/Base/TinySlider/index.tsx": {
+    "react-hooks/exhaustive-deps": {
+      "count": 1
+    }
+  },
+  "src/components/Base/Tippy/index.tsx": {
+    "@typescript-eslint/no-unused-expressions": {
+      "count": 1
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 1
+    }
+  },
+  "src/components/Base/TomSelect/index.tsx": {
+    "@typescript-eslint/no-unused-expressions": {
+      "count": 2
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 3
+    }
+  },
+  "src/components/Base/TomSelect/tom-select.ts": {
+    "@typescript-eslint/no-unused-expressions": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "no-console": {
+      "count": 1
+    },
+    "object-shorthand": {
+      "count": 2
+    }
+  },
+  "src/components/ContestoLavorazioneFields/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 6
+    }
+  },
+  "src/components/ErrorBoundary/index.tsx": {
+    "no-console": {
+      "count": 5
+    }
+  },
+  "src/components/ErrorPage/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/components/FilesKit/FilesKit.test.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/components/FlyerInsights/FlyerInsights.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/components/FlyerInsights/RiepilogoMeccaniche.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 7
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 2
+    }
+  },
+  "src/components/FlyerInsights/RiepilogoPagine.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 8
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 2
+    }
+  },
+  "src/components/FlyerInsights/RiepilogoReparti.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 12
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 2
+    }
+  },
+  "src/components/GlobalLoadingIndicator/index.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    }
+  },
+  "src/components/KitOverview/ActionPanel/ActionPanel.test.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "src/components/KitOverview/ActionPanel/index.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    }
+  },
+  "src/components/KitOverview/FileSection/FileErrorsTable.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "no-console": {
+      "count": 2
+    }
+  },
+  "src/components/KitOverview/FileSection/FileRevisionTable.tsx": {
+    "react-hooks/exhaustive-deps": {
+      "count": 1
+    }
+  },
+  "src/components/KitOverview/FileSection/FileUploader.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 3
+    }
+  },
+  "src/components/KitOverview/components/HeroBanner.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/components/KitOverview/components/InfoBadge.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/components/KitOverview/components/KitPreStartView.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/components/KitOverview/components/TimelineItem.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/components/LoadingOverlay/index.tsx": {
+    "@typescript-eslint/ban-ts-comment": {
+      "count": 1
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 1
+    }
+  },
+  "src/components/NamingConvention/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 1
+    }
+  },
+  "src/components/NotificationsPanel/index.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/components/PermissionGate/PermissionGate.test.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/components/PreviewImmaginePdf/index.tsx": {
+    "react-hooks/exhaustive-deps": {
+      "count": 1
+    }
+  },
+  "src/components/QuickSearch/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 2
+    }
+  },
+  "src/components/ReferenzeInVolantinoBox/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/components/SessionChecker/index.tsx": {
+    "@typescript-eslint/no-empty-object-type": {
+      "count": 2
+    },
+    "@typescript-eslint/no-explicit-any": {
+      "count": 7
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 5
+    },
+    "no-console": {
+      "count": 7
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 2
+    }
+  },
+  "src/components/SessionWarningModal/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "no-console": {
+      "count": 11
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 2
+    }
+  },
+  "src/components/SwitchAccount/index.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    }
+  },
+  "src/components/TryItPanel/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 5
+    },
+    "no-console": {
+      "count": 1
+    }
+  },
+  "src/context/ContextMenuContext.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    }
+  },
+  "src/context/GestioneHeaderWebpliant.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/context/GestioneReferenzeContext.tsx": {
+    "no-console": {
+      "count": 3
+    }
+  },
+  "src/context/KeyframeEventContext.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 5
+    },
+    "no-console": {
+      "count": 5
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 1
+    }
+  },
+  "src/context/PermissionContext.tsx": {
+    "no-console": {
+      "count": 1
+    }
+  },
+  "src/context/TimeLinePromoContext.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/hooks/useAppLoading.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/hooks/useCookieConsent.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "no-console": {
+      "count": 11
+    }
+  },
+  "src/hooks/useDebounce.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 1
+    }
+  },
+  "src/hooks/useDeviceSocket.tsx": {
+    "no-console": {
+      "count": 6
+    }
+  },
+  "src/hooks/useHistory.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/hooks/useKeyframeManager.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    },
+    "no-console": {
+      "count": 20
+    }
+  },
+  "src/hooks/usePVDeviceStatus.tsx": {
+    "no-console": {
+      "count": 3
+    }
+  },
+  "src/hooks/usePromoName.tsx": {
+    "no-console": {
+      "count": 1
+    }
+  },
+  "src/hooks/useSessionKeepAlive.ts": {
+    "no-console": {
+      "count": 4
+    }
+  },
+  "src/hooks/useSocket.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    },
+    "no-console": {
+      "count": 6
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 1
+    }
+  },
+  "src/hooks/useWebpliantParamsManager.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "no-console": {
+      "count": 5
+    },
+    "no-empty": {
+      "count": 2
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 5
+    }
+  },
+  "src/i18n.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 11
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/main.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "no-console": {
+      "count": 5
+    }
+  },
+  "src/pages/Api/Plugin/Plugin.test.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/pages/Api/Plugin/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/pages/AreeCanali/AreeCanali.test.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/pages/AreeCanali/index.tsx": {
+    "no-console": {
+      "count": 3
+    }
+  },
+  "src/pages/AuditLogDashboard/AuditLogTable.tsx": {
+    "prefer-template": {
+      "count": 1
+    }
+  },
+  "src/pages/Auth/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 1
+    }
+  },
+  "src/pages/BarCodeReader/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    },
+    "no-console": {
+      "count": 3
+    }
+  },
+  "src/pages/ConfigurazioneWebpliant/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "no-console": {
+      "count": 1
+    }
+  },
+  "src/pages/ConfigurazioneWebpliant/sub-components/EditorStiliReferenza.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 7
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 1
+    }
+  },
+  "src/pages/ContenutiDigitali/index.tsx": {
+    "@typescript-eslint/ban-ts-comment": {
+      "count": 1
+    },
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "no-console": {
+      "count": 3
+    }
+  },
+  "src/pages/CreaTemplatesWhatsappSuperAdmin/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/pages/CreazioneWebPliant/DraggableItem.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    },
+    "no-console": {
+      "count": 2
+    }
+  },
+  "src/pages/CreazioneWebPliant/Dropzone.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 7
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 3
+    },
+    "no-console": {
+      "count": 24
+    }
+  },
+  "src/pages/CreazioneWebPliant/GridItem.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 8
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    },
+    "no-case-declarations": {
+      "count": 1
+    },
+    "no-console": {
+      "count": 14
+    }
+  },
+  "src/pages/CreazioneWebPliant/hooks/useEditorReducer.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    },
+    "no-console": {
+      "count": 1
+    }
+  },
+  "src/pages/CreazioneWebPliant/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 8
+    },
+    "@typescript-eslint/no-unused-expressions": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 21
+    },
+    "no-console": {
+      "count": 14
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 1
+    }
+  },
+  "src/pages/CreazioneWebPliant/reducers/editorReducer.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "no-case-declarations": {
+      "count": 2
+    }
+  },
+  "src/pages/CreazioneWebPliant/sub-components/Carousel.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 11
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 7
+    },
+    "no-console": {
+      "count": 1
+    }
+  },
+  "src/pages/CreazioneWebPliant/sub-components/GrigliaReferenze.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 12
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 1
+    }
+  },
+  "src/pages/CreazioneWebPliant/sub-components/PolicyDiVisualizzazione.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 13
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 3
+    }
+  },
+  "src/pages/CreazioneWebPliant/sub-components/PromotionTimeline.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 10
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 6
+    },
+    "no-console": {
+      "count": 22
+    },
+    "prefer-template": {
+      "count": 1
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 10
+    }
+  },
+  "src/pages/CreazioneWebPliant/sub-components/Setting.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 15
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 8
+    },
+    "no-console": {
+      "count": 4
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 2
+    }
+  },
+  "src/pages/CreazioneWebPliant/sub-components/SitemapTab.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 11
+    }
+  },
+  "src/pages/CreazioneWebPliant/sub-components/pageitem/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/pages/CreazioneWebPliant/sub-components/sitemap/sitemap_item.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 5
+    }
+  },
+  "src/pages/Dashboard3/Dashboard3.test.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/pages/Dashboard3/index.tsx": {
+    "no-console": {
+      "count": 6
+    }
+  },
+  "src/pages/DashboardCategory/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    }
+  },
+  "src/pages/DashboardMarketing/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 6
+    }
+  },
+  "src/pages/DettagliCombinazioniProduzione/components/DatiBaseForm.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 9
+    }
+  },
+  "src/pages/DettagliCombinazioniProduzione/components/DeclinazioniSection.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 9
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/pages/DettagliCombinazioniProduzione/hooks/useCombinazioneMutations.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/pages/DettagliCombinazioniProduzione/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 8
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 6
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 3
+    }
+  },
+  "src/pages/DettaglioAnteprimaTracciato/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/pages/DettaglioKit/DettaglioKit.test.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/pages/DettaglioKit/context/KitContext.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/pages/DettaglioKit/hooks/useKitLogic.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 11
+    },
+    "no-console": {
+      "count": 7
+    }
+  },
+  "src/pages/DettaglioKit/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 15
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/pages/DettaglioSingolaLavorazione/dialogs/DialogLavorazione.test.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/pages/DettaglioSingolaLavorazione/dialogs/UploadErroriDialog.test.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    }
+  },
+  "src/pages/DettaglioSingolaLavorazione/dialogs/UploadErroriDialog.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "no-console": {
+      "count": 1
+    }
+  },
+  "src/pages/DisplayPage/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "no-console": {
+      "count": 1
+    }
+  },
+  "src/pages/Documentazione/Api/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/pages/Documentazione/DocsCondivisi.tsx": {
+    "no-console": {
+      "count": 1
+    }
+  },
+  "src/pages/Documentazione/Statistics/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/pages/GestioneApi/StatistichePdfDocument.tsx": {
+    "prefer-template": {
+      "count": 1
+    }
+  },
+  "src/pages/GestioneApi/components/plugin/FilterTemplateForm.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    },
+    "no-console": {
+      "count": 2
+    }
+  },
+  "src/pages/GestioneApi/components/plugin/FilterTemplateList.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/pages/GestioneApi/components/plugin/FilterTemplateVersionHistory.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "no-console": {
+      "count": 1
+    }
+  },
+  "src/pages/GestioneApi/components/plugin/PluginConfigPanel.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/pages/GestioneApi/components/test-api/GetFilesTestPanel.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/pages/GestioneApi/components/test-api/GetRefsTestPanel.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/pages/GestioneApi/components/test-api/MonacoJsonViewer.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    }
+  },
+  "src/pages/GestioneApi/hooks/useApiKeyManagement.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "no-console": {
+      "count": 1
+    }
+  },
+  "src/pages/GestioneApi/hooks/useFilterTemplates.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    }
+  },
+  "src/pages/GestioneApi/hooks/useStatistics.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/pages/GestioneApi/hooks/useStatisticsExport.tsx": {
+    "no-console": {
+      "count": 3
+    }
+  },
+  "src/pages/GestioneGDOAI/GestioneApprofondimentoVini/GestioneApprofondimentoVini.test.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/pages/GestioneGDOAI/GestioneRicette/GestioneRicette.test.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "src/pages/GestioneGDOAI/GestioneRicette/index.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/pages/GestioneGDOAI/ModificaApprofondimentoVini/ModificaApprofondimentoVini.test.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/pages/GestioneGDOAI/ModificaApprofondimentoVini/index.tsx": {
+    "react-hooks/exhaustive-deps": {
+      "count": 1
+    }
+  },
+  "src/pages/GestioneGDOAI/ModificaRicette/ModificaRicette.test.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/pages/GestioneGDOAI/ModificaRicette/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 6
+    }
+  },
+  "src/pages/GestioneHub/components/ServicesTab.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    }
+  },
+  "src/pages/GestioneMetodiAccesso/GestioneMetodiAccesso.test.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/pages/GestionePermessi/ConfrontoRuoli.test.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/pages/GestionePermessi/ConfrontoRuoli.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/pages/GestionePermessi/GestioneAccessi.test.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/pages/GestionePermessi/MenuTab.test.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/pages/GestionePermessi/MenuTab.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 3
+    }
+  },
+  "src/pages/GestionePermessi/PermessiRuoli.test.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "src/pages/GestionePermessi/PermessiRuoli.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 8
+    }
+  },
+  "src/pages/GestionePresetsWhatsappSuperAdmin/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 8
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 1
+    }
+  },
+  "src/pages/GestionePuntoVendita/GestionePuntoVendita.test.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/pages/GestionePuntoVendita/index.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    },
+    "no-console": {
+      "count": 2
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 1
+    }
+  },
+  "src/pages/GestioneSetupWhatsappSuperAdmin/index.tsx": {
+    "prefer-template": {
+      "count": 2
+    }
+  },
+  "src/pages/GestioneTemplatesWhatsappSuperAdmin/GestioneTemplatesWhatsappSuperAdmin.test.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/pages/GestioneTemplatesWhatsappSuperAdmin/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 5
+    },
+    "no-console": {
+      "count": 1
+    },
+    "prefer-template": {
+      "count": 5
+    }
+  },
+  "src/pages/GestioneUtenti/GestioneUtenti.test.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "src/pages/GestioneUtenti/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 15
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 5
+    },
+    "no-console": {
+      "count": 1
+    }
+  },
+  "src/pages/GestioneWebhook/GestioneWebhook.test.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/pages/GestioneWebhook/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 7
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 4
+    }
+  },
+  "src/pages/GestioneWhatsappAdminGDO/GestioneWhatsappAdminGDO.test.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/pages/GestioneWhatsappSuperAdmin/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    },
+    "prefer-template": {
+      "count": 2
+    }
+  },
+  "src/pages/HubLogin/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 5
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 3
+    }
+  },
+  "src/pages/ImpostazioniDiProduzione/PanelCombinazioni/index.tsx": {
+    "react-hooks/exhaustive-deps": {
+      "count": 2
+    }
+  },
+  "src/pages/ImpostazioniDiProduzione/PanelCombinazioni/types.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "src/pages/ImpostazioniDiProduzione/PanelFormati/index.tsx": {
+    "no-console": {
+      "count": 3
+    }
+  },
+  "src/pages/ImpostazioniDiProduzione/PanelFunzionalita/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/pages/ImpostazioniDiProduzione/PanelNamingConvention/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 9
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    },
+    "no-console": {
+      "count": 2
+    }
+  },
+  "src/pages/ImpostazioniDiProduzione/PanelTipiExport/index.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 3
+    }
+  },
+  "src/pages/ImpostazioniDiProduzione/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 17
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 14
+    },
+    "no-console": {
+      "count": 1
+    }
+  },
+  "src/pages/ImpostazioniTipografia/FileTree/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/pages/ImpostazioniTipografia/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/pages/ImpostazioniUtente/ImpostazioniUtente.test.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "src/pages/ImpostazioniUtente/index.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/pages/ImpostazioniWebpliant/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/pages/InvioCampagnaWhatsapp/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 20
+    },
+    "no-console": {
+      "count": 6
+    },
+    "object-shorthand": {
+      "count": 1
+    }
+  },
+  "src/pages/LavorazioniInCorso/DettagliKitManualiInCorso/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 5
+    }
+  },
+  "src/pages/LavorazioniInCorso/DettagliLavorazioneInCorso/GestioneMomenti.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    }
+  },
+  "src/pages/LavorazioniInCorso/DettagliLavorazioneInCorso/GestioneSchemi.tsx": {
+    "@typescript-eslint/no-empty-object-type": {
+      "count": 1
+    }
+  },
+  "src/pages/LavorazioniInCorso/DettagliLavorazioneInCorso/index.tsx": {
+    "@typescript-eslint/ban-ts-comment": {
+      "count": 1
+    },
+    "@typescript-eslint/no-explicit-any": {
+      "count": 45
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 6
+    },
+    "no-console": {
+      "count": 4
+    }
+  },
+  "src/pages/LavorazioniInCorso/LavorazioniInCorso.test.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/pages/LavorazioniInCorso/index.tsx": {
+    "no-console": {
+      "count": 1
+    }
+  },
+  "src/pages/MenaboPromo/MenaboCanvas.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 13
+    },
+    "no-empty": {
+      "count": 2
+    }
+  },
+  "src/pages/MenaboPromo/index.tsx": {
+    "@typescript-eslint/no-unused-expressions": {
+      "count": 1
+    }
+  },
+  "src/pages/NuovaLavorazione/NuovaLavorazione.test.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/pages/NuovaLavorazione/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 16
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "no-console": {
+      "count": 6
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 2
+    }
+  },
+  "src/pages/NuovaVersioneTemplatesWhatsappSuperAdmin/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    },
+    "no-console": {
+      "count": 1
+    }
+  },
+  "src/pages/OrdiniDiStampaUnified/components/CreateOrderDialog.test.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/pages/OrdiniDiStampaUnified/components/ODSCompletatiSection.test.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/pages/OrdiniDiStampaUnified/components/ODSInCorsoSection.test.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/pages/OrdiniDiStampaUnified/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/pages/OutboxWhatsapp/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 7
+    },
+    "no-console": {
+      "count": 4
+    }
+  },
+  "src/pages/PaginaCreazioneKitDesignAutomatici/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 18
+    }
+  },
+  "src/pages/PaginaCreazioneKitDesignManuali/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 8
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/pages/PaginaDettaglioCombinazione/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 8
+    }
+  },
+  "src/pages/PuntiVendita/InserimentoManualeImport.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/pages/PuntiVendita/PuntiVendita.test.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/pages/PuntiVendita/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 8
+    }
+  },
+  "src/pages/ResetPassword/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/pages/RevisioneOrdiniDiStampaDetail/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "no-console": {
+      "count": 6
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 2
+    }
+  },
+  "src/pages/RisultatoConfrontoTracciati/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 6
+    },
+    "@typescript-eslint/no-unused-expressions": {
+      "count": 3
+    }
+  },
+  "src/pages/ServicesDashboard/components/FeaturedServiceCard.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/pages/ServicesDashboard/components/NewsCard.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/pages/ServicesDashboard/components/ServiceCard.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "src/pages/ServicesDashboard/components/ServiceDetailsModal.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/pages/StoricoVolantini/StoricoVolantini.test.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/pages/StoricoVolantini/index.tsx": {
+    "no-console": {
+      "count": 2
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 1
+    }
+  },
+  "src/pages/SuperadminDashboard/SuperadminDashboard.test.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/pages/SuperadminDashboard/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/pages/WebPliant/BoxRef/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 4
+    },
+    "no-console": {
+      "count": 2
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 5
+    }
+  },
+  "src/pages/WebPliant/BoxRef/ref.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 8
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "no-case-declarations": {
+      "count": 4
+    },
+    "no-console": {
+      "count": 9
+    }
+  },
+  "src/pages/WebPliant/CarouselContainer/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 3
+    },
+    "no-console": {
+      "count": 1
+    },
+    "no-useless-escape": {
+      "count": 2
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 1
+    }
+  },
+  "src/pages/WebPliant/CarouselSwiper/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 3
+    }
+  },
+  "src/pages/WebPliant/GridReferenze/index.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 1
+    }
+  },
+  "src/pages/WebPliant/PdfVolantiniViewer/index.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    },
+    "no-console": {
+      "count": 2
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 1
+    }
+  },
+  "src/pages/WebPliant/Ricette/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 3
+    },
+    "no-useless-escape": {
+      "count": 2
+    }
+  },
+  "src/pages/WebPliant/RicetteContent/index.tsx": {
+    "no-useless-escape": {
+      "count": 2
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 1
+    }
+  },
+  "src/pages/WebPliant/VideoBanner/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "no-console": {
+      "count": 1
+    },
+    "no-useless-escape": {
+      "count": 2
+    }
+  },
+  "src/pages/WebPliant/carouselReducer.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/pages/WebPliant/components/ContentRenderer.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 7
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "no-case-declarations": {
+      "count": 3
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 1
+    }
+  },
+  "src/pages/WebPliant/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/pages/WebPliant/utils.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 56
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 4
+    },
+    "no-case-declarations": {
+      "count": 1
+    }
+  },
+  "src/pages/WebPliantDisponibili/WebPliantDisponibili.test.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/pages/WebPliantDisponibili/index.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 3
+    }
+  },
+  "src/pages/WebpliantLayout/DevConsole/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 3
+    },
+    "no-console": {
+      "count": 1
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 1
+    }
+  },
+  "src/pages/WebpliantLayout/GestioneReferenze/TabContenutiAggiunitivi.tsx": {
+    "no-console": {
+      "count": 1
+    }
+  },
+  "src/pages/WebpliantLayout/GestioneReferenze/index.tsx": {
+    "@typescript-eslint/no-empty-object-type": {
+      "count": 1
+    },
+    "@typescript-eslint/no-explicit-any": {
+      "count": 6
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 11
+    },
+    "no-console": {
+      "count": 6
+    },
+    "no-empty": {
+      "count": 2
+    }
+  },
+  "src/pages/WebpliantLayout/TimeLinePromo/index.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    }
+  },
+  "src/pages/WebpliantLayout/index.tsx": {
+    "@typescript-eslint/no-empty-object-type": {
+      "count": 1
+    },
+    "@typescript-eslint/no-explicit-any": {
+      "count": 7
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 20
+    },
+    "no-console": {
+      "count": 14
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 8
+    }
+  },
+  "src/pages/WishlistWebpliant/index.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "no-console": {
+      "count": 6
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 2
+    }
+  },
+  "src/pages/shared/CardVolantino.tsx": {
+    "no-console": {
+      "count": 1
+    }
+  },
+  "src/query/query.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 14
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "no-console": {
+      "count": 3
+    }
+  },
+  "src/router/gestioneInterna.routes.test.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/router/index.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "src/router/kitPubblicazione.routes.test.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/router/loaderFunctions.ts": {
+    "@typescript-eslint/ban-ts-comment": {
+      "count": 1
+    },
+    "@typescript-eslint/no-explicit-any": {
+      "count": 25
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 29
+    },
+    "no-console": {
+      "count": 36
+    }
+  },
+  "src/router/pagineRimosse.routes.test.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/stores/errorSlice.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/stores/store.ts": {
+    "object-shorthand": {
+      "count": 1
+    }
+  },
+  "src/stores/webpliantParamsStore.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "no-case-declarations": {
+      "count": 2
+    },
+    "no-console": {
+      "count": 11
+    },
+    "no-empty": {
+      "count": 4
+    }
+  },
+  "src/themes/Echo/index.tsx": {
+    "@typescript-eslint/ban-ts-comment": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unused-expressions": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 4
+    },
+    "no-console": {
+      "count": 2
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 1
+    }
+  },
+  "src/types/flyerInsights.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "src/types/utils.d.ts": {
+    "@typescript-eslint/no-empty-object-type": {
+      "count": 2
+    }
+  },
+  "src/utils/chartTheme.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    }
+  },
+  "src/utils/helper.ts": {
+    "@typescript-eslint/no-unused-expressions": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    },
+    "prefer-template": {
+      "count": 13
+    }
+  },
+  "src/utils/importPuntiVendita.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "src/utils/puntoVendita.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/utils/validation.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/utils/wishlistEvents.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    },
+    "no-console": {
+      "count": 2
+    }
+  }
+}

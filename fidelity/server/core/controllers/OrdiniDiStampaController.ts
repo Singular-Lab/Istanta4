@@ -55,7 +55,7 @@ export class OrdiniDiStampaController extends BaseController {
   }
 
   private async creaOrdineDiStampa(req: Request, res: Response): Promise<void> {
-    let { idPromo } = req.body;
+    const { idPromo } = req.body;
     try {
       if (!idPromo) {
         res.status(HttpStatusCode.BAD_REQUEST).json({ message: 'idPromo non puÃ² essere vuoto' });

@@ -434,8 +434,8 @@ export class AttivitaService implements IAttivitaService {
 
   async getAttivitaCount(userId?: string): Promise<{ total: number; unread: number; read: number }> {
     try {
-      let totalQuery = "SELECT COUNT(*) as total FROM attivita";
-      let unreadQuery = `
+      const totalQuery = "SELECT COUNT(*) as total FROM attivita";
+      const unreadQuery = `
                 SELECT COUNT(*) as unread
                 FROM attivita a
                 WHERE a.id_attivita NOT IN (
@@ -444,7 +444,7 @@ export class AttivitaService implements IAttivitaService {
                     WHERE id_utente_attivita_utente = :userId
                 )
             `;
-      let readQuery = `
+      const readQuery = `
                 SELECT COUNT(*) as read
                 FROM attivita_utente
                 WHERE id_utente_attivita_utente = :userId

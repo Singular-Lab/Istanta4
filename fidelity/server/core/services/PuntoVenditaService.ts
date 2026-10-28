@@ -970,6 +970,7 @@ export class PuntoVenditaService implements IPuntoVenditaService {
  */
 export function nomePdfScaricato(nomeFile: string | null | undefined, nomePromo: string): string {
   const pulisci = (nome: string | null | undefined) =>
+    // eslint-disable-next-line no-control-regex -- i caratteri di controllo non vanno nel nome del file
     (nome ?? '').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '').trim();
   const nome = pulisci(nomeFile) || pulisci(nomePromo) || 'volantino';
   return /\.pdf$/i.test(nome) ? nome : `${nome}.pdf`;
