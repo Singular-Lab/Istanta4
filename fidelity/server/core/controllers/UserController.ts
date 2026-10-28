@@ -594,7 +594,7 @@ export class UserController extends BaseController {
       // Mai il body nei log: contiene la password
       log.info('registerUser - Start', { tipo: req.body?.tipo, sessionUser: req.session.id_utente });
 
-      let { email, nome, cognome, password, tipo, stato, residenza, dataDiNascita, gdoScelta, idPuntoVendita, ruoloGDO, telefono, sesso } = req.body as {
+      const { email, nome, cognome, password, tipo, stato, residenza, dataDiNascita, gdoScelta, idPuntoVendita, ruoloGDO, telefono, sesso } = req.body as {
         email: string,
         nome: string,
         cognome: string,
@@ -1270,7 +1270,7 @@ export class UserController extends BaseController {
         return this.createCSVBuffer(data, includeHeaders);
       }).then(csvBuffer => {
         archive.append(csvBuffer, { name: 'dati.csv' });
-        archive.finalize();
+        return archive.finalize();
       }).catch(reject);
     });
   }

@@ -95,7 +95,7 @@ export class ImpostazioniController extends BaseController {
 
   private async richiediConfigMapDatafields(req: Request, res: Response): Promise<void> {
     try {
-      let configWebpliant = await this.configService.getConfigWebPliantFromVolantino();
+      const configWebpliant = await this.configService.getConfigWebPliantFromVolantino();
       const webpliantFields = configWebpliant.data_fields_refs.map((data_field) => data_field.expected_input);
       res.status(HttpStatusCode.OK).json(webpliantFields);
     } catch (error: any) {

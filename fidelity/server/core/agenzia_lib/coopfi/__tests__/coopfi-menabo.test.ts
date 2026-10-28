@@ -172,7 +172,8 @@ describe("coopfi menabo", () => {
               records: [
                 { tema: "Ortofrutta", reparto: "Frutta" },
                 { tema: "Ortofrutta", reparto: "Verdura" },
-                { tema: 123, reparto: 7 },
+                // Dati sporchi del tracciato: numeri al posto delle stringhe
+                { tema: 123, reparto: 7 } as unknown as Record<string, string>,
               ],
               recordCount: 3,
             },

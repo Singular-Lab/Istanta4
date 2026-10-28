@@ -12,6 +12,7 @@ describe('validazione icona SVG', () => {
   it.each([
     ['script', '<svg><script>alert(1)</script></svg>'],
     ['onload', '<svg onload="alert(1)"></svg>'],
+    // eslint-disable-next-line no-script-url -- il test verifica che venga rifiutato
     ['javascript:', '<svg><a href="javascript:alert(1)"><text>x</text></a></svg>'],
     ['foreignObject', '<svg><foreignObject><div>x</div></foreignObject></svg>'],
     ['href esterno', '<svg><image href="https://esempio.it/x.png"/></svg>'],

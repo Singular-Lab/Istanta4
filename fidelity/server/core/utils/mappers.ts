@@ -266,22 +266,21 @@ export async function mapWithConcurrency<TEntity, TDTO>(
   mapper: (entity: TEntity) => Promise<TDTO>,
   concurrency: number = 10
 ): Promise<TDTO[]> {
-  const results: TDTO[] = [];
-  const executing: Promise<void>[] = [];
+  const results: TDTO[] = new Array(entities.length);
+  // Ogni promessa esce da sola dall'insieme quando termina: cosi' resta libero il posto giusto
+  const executing = new Set<Promise<void>>();
 
-  for (const entity of entities) {
-    const promise = mapper(entity).then(result => {
-      results.push(result);
-    });
+  for (const [indice, entity] of entities.entries()) {
+    const promise: Promise<void> = mapper(entity)
+      .then(result => {
+        results[indice] = result;
+      })
+      .finally(() => executing.delete(promise));
 
-    executing.push(promise);
+    executing.add(promise);
 
-    if (executing.length >= concurrency) {
+    if (executing.size >= concurrency) {
       await Promise.race(executing);
-      executing.splice(
-        executing.findIndex(p => p === promise),
-        1
-      );
     }
   }
 

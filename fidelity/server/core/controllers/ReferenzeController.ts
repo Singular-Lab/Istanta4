@@ -59,7 +59,7 @@ export class ReferenzeController extends BaseController {
         res.status(HttpStatusCode.BAD_REQUEST).json({ error: "Id mancante", esito: false, content: [] });
         return;
       }
-      let configWebpliant = await container.get<IConfigService>(TYPES.ConfigService).getConfigWebPliantFromVolantino();
+      const configWebpliant = await container.get<IConfigService>(TYPES.ConfigService).getConfigWebPliantFromVolantino();
       const webpliantFields = configWebpliant.data_fields_refs.map((data_field) => data_field.expected_input);
       const runtimekit = await container.get<IKitRuntimeService>(TYPES.KitRuntimeService).getKitRuntimeById(idKitRuntime);
       const runtimekitPerWebhook = await container.get<IKitRuntimeService>(TYPES.KitRuntimeService).getKitRuntimeByIdPerWebhook(idKitRuntime);

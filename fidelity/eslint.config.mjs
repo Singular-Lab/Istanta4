@@ -24,18 +24,23 @@ const browserGlobals = Object.fromEntries(
   Object.entries(globals.browser).map(([key, value]) => [key.trim(), value])
 );
 
+// Le violazioni già presenti stanno in eslint-suppressions.json (bulk suppressions di
+// ESLint): ogni violazione nuova fa fallire il lint, e quando se ne corregge una il
+// file va ripulito con `yarn lint:prune`, così il conteggio può solo scendere.
 export default [
   // Ignora le cartelle dist e node_modules
   {
-    ignores: ["node_modules/**", "dist/**", "server/**", "coverage/**", ".github/**"],
+    ignores: ["node_modules/**", "dist/**", "coverage/**", ".github/**"],
   },
-  
+
+  js.configs.recommended,
+  ...typescriptEslint.configs["flat/recommended"],
+
   // Configurazione per tutti i file JavaScript/TypeScript
   {
     files: ["**/*.{js,ts,tsx}"],
     plugins: {
       "react-hooks": reactHooks,
-      "@typescript-eslint": typescriptEslint
     },
 
     languageOptions: {
@@ -54,18 +59,25 @@ export default [
 
     rules: {
       // Regole base semplificate
-      "no-console": "warn",
+      "no-console": "error",
       "no-debugger": "error",
-      "no-alert": "warn",
+      "no-alert": "error",
       "no-eval": "error",
       
       // TypeScript
-      "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/no-explicit-any": "error",
       "@typescript-eslint/no-var-requires": "error",
+      "@typescript-eslint/no-unused-vars": ["error", {
+        argsIgnorePattern: "^_",
+        varsIgnorePattern: "^_",
+        caughtErrorsIgnorePattern: "^_",
+        destructuredArrayIgnorePattern: "^_",
+        ignoreRestSiblings: true,
+      }],
       
       // React Hooks
       "react-hooks/rules-of-hooks": "error",
-      "react-hooks/exhaustive-deps": "warn",
+      "react-hooks/exhaustive-deps": "error",
       
       // Sicurezza
       "no-implied-eval": "error",
@@ -75,8 +87,46 @@ export default [
       // Qualità codice
       "prefer-const": "error",
       "no-var": "error",
-      "object-shorthand": "warn",
-      "prefer-template": "warn",
+      "object-shorthand": "error",
+      "prefer-template": "error",
+    },
+  },
+
+  // Server e lib girano (anche) in Node
+  {
+    files: ["server/**/*.ts", "lib/**/*.ts"],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+      },
+    },
+  },
+
+  // Promesse né attese né gestite: sul server un rifiuto perso termina il worker o
+  // sparisce senza log. Regole che leggono i tipi, per questo solo sul server.
+  {
+    files: ["server/**/*.ts"],
+    languageOptions: {
+      parserOptions: {
+        project: "./server/tsconfig.test.json",
+        tsconfigRootDir: __dirname,
+      },
+    },
+    rules: {
+      "@typescript-eslint/no-floating-promises": "error",
+      "@typescript-eslint/no-misused-promises": "error",
+    },
+  },
+
+  // Comandi da terminale e logger: la console è il loro output
+  {
+    files: [
+      "server/core/scripts/**/*.ts",
+      "server/core/db/migrazioni/{cli,generaBaseline,scriptDati}.ts",
+      "server/core/logger/**/*.ts",
+    ],
+    rules: {
+      "no-console": "off",
     },
   },
   
@@ -95,10 +145,10 @@ export default [
     rules: {
       // Regole specifiche per React
       "react-hooks/rules-of-hooks": "error",
-      "react-hooks/exhaustive-deps": "warn",
+      "react-hooks/exhaustive-deps": "error",
       
       // TypeScript specifico per React
-      "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/no-explicit-any": "error",
 
       // Stile unificato: niente misure, raggi e spaziature arbitrarie, colori esadecimali o gray nelle classi
       "no-restricted-syntax": [

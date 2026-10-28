@@ -64,7 +64,7 @@ describe('PUT /api/getKitByPromo, ramo design', () => {
     expect(riga('Runtime creato')).toMatchObject({ idDesign: 'd1', idPromo: 'p1' });
     expect(riga('Primo runtime della promo: promo passata a IN_LAVORAZIONE')).toMatchObject({ idPromo: 'p1' });
     expect(riga('Risposta inviata')).toMatchObject({ esito: 'runtime', runtime: 1 });
-    expect(riga('Risposta inviata')!.durataMs).toEqual(expect.any(Number));
+    expect((riga('Risposta inviata') as { durataMs?: number }).durataMs).toEqual(expect.any(Number));
 
     const richieste = new Set(righe('info').map(([, ctx]) => (ctx as any).richiesta));
     expect(richieste.size).toBe(1);
@@ -84,6 +84,27 @@ describe('PUT /api/getKitByPromo, ramo design', () => {
     expect(riga('Runtime gia esistente per design e promo: restituito quello'))
       .toMatchObject({ idRuntime: 'rt-esistente', statoLavorazione: 'IN_REVISIONE' });
     expect(riga('Runtime creato')).toBeUndefined();
+  });
+
+  it('attivita non registrata per un errore del DB: il runtime resta e l\'errore va nel log', async () => {
+    const app = createApp(
+      {
+        getAllKitRuntimeByIdPromo: vi.fn(async () => []),
+        createKitRunTime: vi.fn(async (dati: Record<string, unknown>) => ({ ...dati })),
+      },
+      { getCombinazioneDesignById: vi.fn(async () => ({ ...design })) },
+    );
+    // Prima il rifiuto non era gestito e unhandledRejection spegneva il worker
+    const errore = new Error('insert attivita fallita');
+    vi.mocked(ServerUtils.CREA_ATTIVITA).mockRejectedValue(errore);
+
+    const res = await request(app).put('/api/getKitByPromo').send({ id: 'd1', idPromo: 'p1', lettura: false });
+
+    expect(res.status).toBe(200);
+    await vi.waitFor(() => expect(log.warn).toHaveBeenCalledWith(
+      'Attivita di creazione runtime non registrata',
+      expect.objectContaining({ error: errore }),
+    ));
   });
 
   it('design non trovato: avviso e 404', async () => {

@@ -50,7 +50,7 @@ function creaServizio(webhook: Record<string, unknown> = WEBHOOK) {
     create: vi.fn(async (dati: Record<string, unknown>) => modello(dati)),
     update: vi.fn(async () => [1]),
   };
-  const tentativi = { create: vi.fn(async () => undefined) };
+  const tentativi = { create: vi.fn(async (_dati: Record<string, unknown>) => undefined) };
   const service = new WebhookService(webhookRepository as any, tentativi as any);
   return { service, webhookRepository, tentativi };
 }

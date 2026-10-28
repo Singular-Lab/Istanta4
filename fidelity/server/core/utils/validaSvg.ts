@@ -7,7 +7,7 @@
  * Restituisce il motivo del rifiuto, o null se l'SVG e' accettabile.
  */
 export function motivoSvgNonValido(contenuto: string): string | null {
-  const svg = contenuto.replace(/^﻿/, '');
+  const svg = contenuto.replace(/^\uFEFF/, '');
 
   if (!/<svg[\s>]/i.test(svg)) {
     return "Il file non contiene un elemento <svg>";

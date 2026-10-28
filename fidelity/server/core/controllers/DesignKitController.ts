@@ -74,7 +74,7 @@ export class DesignKitController extends BaseController {
         return;
       }
 
-      let arrayCombinazioniDesign: DESIGN_KIT[] = [];
+      const arrayCombinazioniDesign: DESIGN_KIT[] = [];
       const guidIdRaccoglitore = uuidv4();
 
       // Ottieni la GDO dell'utente

@@ -98,7 +98,7 @@ export async function initializeRedisClient(): Promise<RedisStatus> {
     return 'unavailable';
   }
 
-  if (connectPromise) {
+  if (connectPromise !== null) {
     return connectPromise;
   }
 

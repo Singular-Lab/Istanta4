@@ -146,7 +146,7 @@ class DeviceSocketService {
     this.socketToDevice.set(socket.id, device.id);
 
     // Join room del punto vendita
-    socket.join(`pv:${pvId}`);
+    void socket.join(`pv:${pvId}`);
 
     // Notifica auth success al dispositivo
     const authPayload: DeviceAuthSuccessPayload = {
@@ -267,7 +267,7 @@ class DeviceSocketService {
    */
   subscribeToPV(socket: Socket, payload: PVSubscribePayload): void {
     const { pvId } = payload;
-    socket.join(`pv:${pvId}`);
+    void socket.join(`pv:${pvId}`);
 
     // Invia stato corrente di tutti i dispositivi del PV
     const currentStatuses = this.getDeviceStatusForPV(pvId);
@@ -281,7 +281,7 @@ class DeviceSocketService {
    */
   unsubscribeFromPV(socket: Socket, payload: PVSubscribePayload): void {
     const { pvId } = payload;
-    socket.leave(`pv:${pvId}`);
+    void socket.leave(`pv:${pvId}`);
     log.debug('Socket UI disiscritto dagli aggiornamenti del punto vendita', { socketId: socket.id, pvId });
   }
 

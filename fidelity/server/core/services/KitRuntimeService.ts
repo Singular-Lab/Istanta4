@@ -1151,7 +1151,7 @@ export class KitRuntimeService implements IKitRuntimeService {
   async bulkCreateRuntime(data: (DESIGN_KIT & { idPromo: string })[], traccia?: Record<string, unknown>): Promise<RUNTIME_KIT[]> {
     const contestoLog = { context: 'getKitByPromo', ...traccia };
     try {
-      let result: (RUNTIME_KIT & { guidIdDesign: string })[] = [];
+      const result: (RUNTIME_KIT & { guidIdDesign: string })[] = [];
       let creati = 0;
       // Estrai gli ID delle combinazioni dal dato in ingresso
 
@@ -2005,7 +2005,7 @@ export class KitRuntimeService implements IKitRuntimeService {
         }
       }
 
-      let dedupedFiles = Array.from(filesByNome.values());
+      const dedupedFiles = Array.from(filesByNome.values());
 
       // Fetch logs for all files of this kit
       const logsRaw = await FilesRuntimeLog.findAll({

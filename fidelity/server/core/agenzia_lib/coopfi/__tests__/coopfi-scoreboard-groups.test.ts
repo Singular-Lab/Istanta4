@@ -10,12 +10,12 @@ const makeAgenziaLib = (
 ): IAgenziaLib => ({
   computeContributo,
   getChangedFields,
-  getScoreboardConfig: () => null,
   normalizzaDatoConfrontoPerScore: async (data) => data,
   buildScoreboardReport: async () => ({ title: "", subtitle: "", generatedAt: "", widgets: [] }),
   elaboraDatoPerAgenzia: async () => ({ title: "", subtitle: "", generatedAt: "", widgets: [] }),
   parseUtenteOIDC: async () => ({ id: "", email: "", tipo_utente: "" as any }),
-});
+  // Solo cio' che serve al test: il resto di IAgenziaLib non viene chiamato
+}) as unknown as IAgenziaLib;
 
 const applyPercentDrops = (scoreIniziale: number, dropsPercentuali: number[]): number =>
   Math.max(

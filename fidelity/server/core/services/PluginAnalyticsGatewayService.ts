@@ -63,8 +63,8 @@ export class PluginAnalyticsGatewayService {
   private metricsTimer: ReturnType<typeof setInterval> | null = null;
 
   private constructor() {
-    // Flush periodico
-    this.flushTimer = setInterval(() => this.flushBuffer(), this.FLUSH_INTERVAL_MS);
+    // Flush periodico. flushBuffer e handleSessionResume intercettano da se' i propri errori
+    this.flushTimer = setInterval(() => void this.flushBuffer(), this.FLUSH_INTERVAL_MS);
 
     // Calcolo events/sec ogni 5 secondi
     this.metricsTimer = setInterval(() => {
@@ -143,7 +143,7 @@ export class PluginAnalyticsGatewayService {
     }
 
     if (msg.type === 'session:resume') {
-      this.handleSessionResume(ws, msg.sessionId || '');
+      void this.handleSessionResume(ws, msg.sessionId || '');
       return;
     }
 
@@ -202,7 +202,7 @@ export class PluginAnalyticsGatewayService {
 
     // Flush se buffer pieno
     if (this.eventBuffer.length >= this.BUFFER_SIZE) {
-      this.flushBuffer();
+      void this.flushBuffer();
     }
   }
 
@@ -280,7 +280,7 @@ export class PluginAnalyticsGatewayService {
     this.metrics.queueSize = this.eventBuffer.length;
 
     if (this.eventBuffer.length >= this.BUFFER_SIZE) {
-      this.flushBuffer();
+      void this.flushBuffer();
     }
   }
 

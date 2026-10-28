@@ -42,7 +42,7 @@ Fidelity Promotion è un'applicazione full-stack che integra:
 ## Quick Start
 
 ### Prerequisiti
-- Node.js >= 20.x
+- Node.js 26 (in `.nvmrc`, come la CI e le immagini Docker)
 - PostgreSQL >= 14.x
 - Yarn: basta un `yarn` qualsiasi (anche 1.x): la versione del progetto, 4.18.1, e' in `.yarn/releases` e viene usata automaticamente
 
@@ -364,15 +364,24 @@ yarn auth:segreti             # Script di dati (anche :dry-run)
 
 ### Testing & Quality
 ```bash
-yarn test                         # Vitest in watch mode
-yarn test:server              # Test una volta (server e lib)
-yarn test:server:coverage     # Coverage report
-yarn lint                     # Lint frontend
+yarn test                     # Vitest in watch mode
+yarn test:server              # Test una volta (server, lib e src) con coverage e soglie
+yarn lint                     # ESLint su src, server e lib, 0 errori e 0 warning
 yarn lint:fix                 # Fix automatico lint
-yarn type-check               # TypeScript check
-yarn security-check           # audit delle vulnerabilita' (yarn npm audit)
+yarn lint:prune               # Toglie dal baseline le violazioni corrette
+yarn type-check               # TypeScript del frontend
+yarn type-check:server        # type-check:test + type-check:strict
+yarn type-check:test          # TypeScript del server, test compresi
+yarn type-check:strict        # Server in strict a cricchetto (--aggiorna dopo una correzione)
+yarn security-check           # audit delle vulnerabilita' high (yarn npm audit), come la CI
 yarn deps-check               # Check dipendenze inutilizzate
+yarn ci                       # Gli stessi controlli della CI, nello stesso ordine
 ```
+
+I controlli partono dallo stato del 2026-10-28 e possono solo migliorare:
+- **ESLint**: le violazioni gia' presenti sono in `eslint-suppressions.json` (bulk suppressions di ESLint). Una violazione nuova fa fallire `yarn lint`. Quando se ne corregge una, `yarn lint` fallisce finche' non si esegue `yarn lint:prune`, che abbassa il baseline. Il baseline non si rigenera con `--suppress-all` per far passare codice nuovo.
+- **TypeScript strict**: il server compila con `strict: false`. `server/tsconfig.strict.json` lo compila in strict e `server/tsconfig.strict.baseline.json` conta gli errori file per file. Un file che peggiora, o un file nuovo con errori, fa fallire il controllo. Dopo una correzione si aggiorna il baseline con `yarn type-check:strict --aggiorna`.
+- **Coverage**: le soglie sono in `vitest.config.ts`, globali e per cartella (http, inizializzazione, agenzia_lib, db, accessi). Si alzano a mano quando i test crescono.
 
 ## Architettura Backend
 
@@ -402,7 +411,7 @@ Gestiti da `ChronService`, in `server/core/cron/`:
 - **Tree Shaking**: PropTypes rimossi in produzione
 
 ### TypeScript
-- **Strict Mode**: Abilitato per frontend
+- **Strict Mode**: Abilitato per frontend; sul server a cricchetto (`yarn type-check:strict`)
 - **Target**: ES2022 (backend), ES6 (frontend)
 - **Path Aliases**: `@/*` → `src/`, `@lib/*` → `lib/`
 
@@ -439,7 +448,7 @@ const fp = new FP('http://localhost:3010/api');
 
 ## CI/CD
 
-La CI e' quella della suite (`.github/workflows/ci.yml` nella root del repository): per fidelity installa con `yarn install --immutable` ed esegue type-check, lint, audit delle dipendenze di runtime, test, build e build dell'immagine di produzione.
+La CI e' quella della suite (`.github/workflows/ci.yml` nella root del repository): per fidelity installa con `yarn install --immutable` ed esegue type-check, lint, audit delle dipendenze di runtime, test, build e build dell'immagine di produzione. Chiama gli script `yarn` (`type-check`, `type-check:server`, `lint`, `test:server`, `build`), quindi i controlli descritti in "Testing & Quality" valgono anche in CI. `yarn ci` li esegue in locale.
 
 ## License
 

@@ -72,5 +72,5 @@ async function seedWhitelist() {
     }
 }
 
-// Esegui seed
-seedWhitelist();
+// Esegui seed (gli errori li gestisce seedWhitelist, che chiude il processo)
+void seedWhitelist();

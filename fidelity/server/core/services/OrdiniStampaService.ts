@@ -456,7 +456,7 @@ export class OrdiniStampaService implements IOrdiniStampaService {
         port_ftp: contrattoDbRecord.port_ftp_contrattotipografia ?? undefined
       };
 
-      let contratto = contrattoDbRecord.json_contrattotipografia as RootFileTree;
+      const contratto = contrattoDbRecord.json_contrattotipografia as RootFileTree;
 
       // Recupero kit selezionati
       const selectedKits = await RuntimeKit.findAll({
@@ -497,7 +497,7 @@ export class OrdiniStampaService implements IOrdiniStampaService {
       });
 
       // Recupero promo
-      let promo = await Promo.findOne({
+      const promo = await Promo.findOne({
         where: {
           id_promo: idPromo
         }
@@ -1827,13 +1827,9 @@ export const processaContrattoTipografiaGDO = async (
     kit: RUNTIME_KIT;
   }
 ): Promise<RootFileTree> => {
-  try {
-    const processedNodes = await Promise.all(
-      contratto.root_file_tree.map(node => processSingleNode(node, data))
-    );
-    contratto.root_file_tree = processedNodes;
-    return contratto;
-  } catch (error) {
-    throw error;
-  }
+  const processedNodes = await Promise.all(
+    contratto.root_file_tree.map(node => processSingleNode(node, data))
+  );
+  contratto.root_file_tree = processedNodes;
+  return contratto;
 };

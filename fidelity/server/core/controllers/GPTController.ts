@@ -437,6 +437,7 @@ export class GPTController extends BaseController {
         // Pulisci il contenuto
         const cleaned = field.content
           .replace(/<[^>]*>/g, '')  // Remove HTML tags
+          // eslint-disable-next-line no-control-regex -- toglie apposta i caratteri di controllo
           .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove control characters
           .replace(/[\\"]/g, '') // Remove backslashes and quotes that could break JSON
           .replace(/\s+/g, ' ')

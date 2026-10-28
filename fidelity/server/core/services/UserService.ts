@@ -645,7 +645,7 @@ export class UserService implements IUserService {
       const utentePuntoVendita = await PuntoVenditaUtenti.findOne({ where: { idutenti_puntivenditautenti: utenteSingolo.id_utenti } });
       const utenteGDO = await UtentiGDO.findOne({ where: { id_utente_utentegdo: utenteSingolo.id_utenti } });
       const utenteIsGDO = utenteSingolo.tipo_utenti == TIPO_UTENTI.GDO;
-      let utenti: (UtenteAttributes & { page_to_land?: string })[] = []
+      const utenti: (UtenteAttributes & { page_to_land?: string })[] = []
       if (
         utenteSingolo.tipo_utenti !== TIPO_UTENTI.GUEST &&
         utenteSingolo.tipo_utenti !== TIPO_UTENTI.GDO &&

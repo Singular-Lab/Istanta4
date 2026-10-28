@@ -39,7 +39,7 @@ export const ephemeralTokenAuthMiddleware = async (
         });
 
         // Delega ad API Key middleware
-        apiKeyAuthMiddleware(req, res, next);
+        await apiKeyAuthMiddleware(req, res, next);
         return;
     }
 
@@ -54,7 +54,7 @@ export const ephemeralTokenAuthMiddleware = async (
             });
 
             // Fallback ad API Key se fingerprint mancante
-            apiKeyAuthMiddleware(req, res, next);
+            await apiKeyAuthMiddleware(req, res, next);
             return;
         }
 
@@ -96,7 +96,7 @@ export const ephemeralTokenAuthMiddleware = async (
                 validationResult.errorCode === EphemeralTokenErrorCode.TOKEN_EXPIRED ||
                 validationResult.errorCode === EphemeralTokenErrorCode.TOKEN_INVALID
             ) {
-                apiKeyAuthMiddleware(req, res, next);
+                await apiKeyAuthMiddleware(req, res, next);
                 return;
             }
 
@@ -134,7 +134,7 @@ export const ephemeralTokenAuthMiddleware = async (
         });
 
         // Fallback ad API Key in caso di errore interno
-        apiKeyAuthMiddleware(req, res, next);
+        await apiKeyAuthMiddleware(req, res, next);
         return;
     }
 };

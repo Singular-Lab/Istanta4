@@ -8,7 +8,8 @@ export function puoConfigurareWebpliant(req: Request, res: Response): Promise<bo
     return Promise.resolve(false);
   }
   return new Promise(resolve => {
-    permissionGuard('webpliant.configura')(req, res, (err?: unknown) => resolve(!err));
+    // Il guard passa i propri errori a next(err); un rifiuto imprevisto vale come "non puo'"
+    permissionGuard('webpliant.configura')(req, res, (err?: unknown) => resolve(!err)).catch(() => resolve(false));
   });
 }
 

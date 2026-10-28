@@ -143,7 +143,7 @@ export class LogService {
         const results: LogSearchResult[] = [];
         
         // Determina quali file cercare
-        let filesToSearch = this.getFilesToSearch(logType, startDate, endDate);
+        const filesToSearch = this.getFilesToSearch(logType, startDate, endDate);
         
         // Cerca nei file
         filesToSearch.forEach(filename => {

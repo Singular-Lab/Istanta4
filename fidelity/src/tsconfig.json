@@ -6,6 +6,7 @@
       "DOM",
       "DOM.Iterable",
       "ES6",
+      "ES2022.Array",
       "WebWorker"
     ],
     "allowJs": false,
@@ -13,6 +14,7 @@
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "strict": true,
+    "noFallthroughCasesInSwitch": true,
     "forceConsistentCasingInFileNames": true,
     "module": "ESNext",
     "moduleResolution": "bundler",

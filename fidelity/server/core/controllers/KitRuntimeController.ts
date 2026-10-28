@@ -186,7 +186,7 @@ export class KitRuntimeController extends BaseController {
                 quantita: resultDesignKit.quantitaCopie,
                 tipo: resultDesignKit.tipo,
                 idPromo: data.idPromo as string
-              })
+              }).catch(error => log.warn('Attivita di creazione runtime non registrata', { ...traccia, error }))
           } else {
             //FIXME attenzione cambiato da "System" a null perché il DB crashava
             ServerUtils.CREA_ATTIVITA(
@@ -203,7 +203,7 @@ export class KitRuntimeController extends BaseController {
                 quantita: resultDesignKit.quantitaCopie,
                 tipo: resultDesignKit.tipo,
                 idPromo: data.idPromo as string
-              })
+              }).catch(error => log.warn('Attivita di creazione runtime non registrata', { ...traccia, error }))
           }
           delete resultInizioLavorazionePerIstanta._id;
           if (kitPerPromo.length == 0) {
@@ -232,7 +232,7 @@ export class KitRuntimeController extends BaseController {
         if (data.idPromo == undefined) {
           log.warn('idPromo mancante: i runtime vengono cercati e creati senza promo', traccia);
         }
-        for (let singleKit of result) {
+        for (const singleKit of result) {
           singleKit.idPromo = data.idPromo;
         }
         const resultInizioLavorazionePerIstanta = await this.kitRuntimeService.bulkCreateRuntime(result.map((singleKit: DESIGN_KIT) => ({ ...singleKit, idPromo: data.idPromo })) as (DESIGN_KIT & { idPromo: string; })[], traccia)

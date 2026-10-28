@@ -20,15 +20,39 @@ export default defineConfig({
       '.git',
       '.cache'
     ],
+    // yarn test:server gira con la coverage: sotto le soglie fallisce, anche in CI.
+    // Le soglie sono il livello del 2026-10-28 arrotondato per difetto: si alzano a mano
+    // quando i test crescono, non si abbassano.
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'json', 'html'],
+      reporter: ['text-summary', 'json-summary', 'html'],
+      // Tutti i sorgenti, anche quelli che nessun test carica: senza, la percentuale li ignora
+      include: [
+        'server/**/*.{ts,tsx}',
+        'lib/**/*.{ts,tsx}',
+        'src/**/*.{ts,tsx}'
+      ],
       exclude: [
         'node_modules/',
         'server/__tests__/',
         'server/**/*.d.ts',
-        'server/**/index.ts'
-      ]
+        'server/**/index.ts',
+        '**/__tests__/**',
+        '**/*.test.{ts,tsx}',
+        '**/*.spec.ts',
+        '**/*.d.ts'
+      ],
+      thresholds: {
+        lines: 26,
+        statements: 26,
+        functions: 22,
+        branches: 22,
+        'server/core/http/**': { lines: 90, statements: 85, functions: 80, branches: 80 },
+        'server/core/inizializzazione/**': { lines: 90, statements: 90, functions: 90, branches: 85 },
+        'server/core/agenzia_lib/**': { lines: 80, statements: 80, functions: 80, branches: 65 },
+        'server/core/db/**': { lines: 75, statements: 75, functions: 75, branches: 70 },
+        'server/core/accessi/**': { lines: 75, statements: 70, functions: 70, branches: 70 }
+      }
     }
   },
   resolve: {

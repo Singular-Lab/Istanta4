@@ -510,8 +510,8 @@ export function hasBinding(id: symbol): boolean {
   return container.isBound(id);
 }
 
-export function resetContainer(): void {
-  container.unbindAll();
+export async function resetContainer(): Promise<void> {
+  await container.unbindAll();
 }
 
 export { container };

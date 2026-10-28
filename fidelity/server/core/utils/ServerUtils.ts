@@ -488,19 +488,16 @@ class ServerUtils {
 
 
     static async CREA_ATTIVITA(idUtente: string | null, tipo: TIPO_ATTIVITA, categoria: CATEGORIA_ATTIVITA, meta: any) {
-        try {
-            const resultCreazioneAttivita = await Attivita.create({
-                idutente_attivita: idUtente ? idUtente == "System" ? null : idUtente : null,
-                tipo_attivita: tipo,
-                meta_attivita: meta,
-                createdat: new Date()
-            });
-            ServerUtils.inviaNotificaAttivita(tipo, meta, idUtente);
+        const resultCreazioneAttivita = await Attivita.create({
+            idutente_attivita: idUtente ? idUtente == "System" ? null : idUtente : null,
+            tipo_attivita: tipo,
+            meta_attivita: meta,
+            createdat: new Date()
+        });
+        // La notifica non blocca la registrazione e intercetta da se' i propri errori
+        void ServerUtils.inviaNotificaAttivita(tipo, meta, idUtente);
 
-            return resultCreazioneAttivita;
-        } catch (error) {
-            throw error;
-        }
+        return resultCreazioneAttivita;
     }
 
     /**
@@ -658,7 +655,7 @@ class ServerUtils {
         let result = dictionary;
 
         for (const part of parts) {
-            if (result && result.hasOwnProperty(part)) {
+            if (result && Object.hasOwn(result, part)) {
                 result = result[part];
             } else {
                 return key; // fallback: restituisce la chiave stessa se non trovata
