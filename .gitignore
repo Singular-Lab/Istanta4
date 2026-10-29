@@ -129,6 +129,11 @@ Istanta/Properties/launchSettings.json
 # a chi clona per costruirsi il proprio appsettings.<cliente>.json.
 !Istanta/appsettings.*.template.json
 
+# Claude Code: agenti, comandi, hook, skill e impostazioni sono di ogni postazione.
+# .claude/settings.local.json resta tracciato (ripristinato apposta in 9050833).
+.claude/*
+!.claude/settings.local.json
+
 #Correggo 4 ignorare carella wwroot/volantini
 
 correggo4/app/correggo4/wwwroot/volantini/
