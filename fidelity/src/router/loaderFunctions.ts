@@ -18,8 +18,9 @@ import type {
 // Rimosso vecchio sistema IndexedDB - ora uso il nuovo sistema centralizzato
 import { getColor } from "@/utils/colors";
 import ReactGA from "react-ga4";
-import type { LoaderFunction, LoaderFunctionArgs, Params } from "react-router-dom";
+import { redirect, type LoaderFunction, type LoaderFunctionArgs, type Params } from "react-router-dom";
 import { STATO_LAVORAZIONE_KIT_RUNTIME } from "../../lib/enums";
+import { percorsoVolantini, periodoDellaPromo } from "../../lib/materiali/periodi";
 import type { AreaResponseDTO, CanaleResponseDTO, PromoResponseDTO, TracciatiResponseDTO, ContrattoTipografiaResponseDTO, GDOResponseDTO, OrdiniDiStampaResponseDTO } from "../../server/core/dto";
 
 /**
@@ -835,31 +836,6 @@ export const funzioneCaricamentoInvioCampagnaWhatsapp = async ({ request }: { re
   };
 }
 
-// Loader functions per MaterialiDocumentale
-export const funzioneCaricamentoMaterialiAttivi = async () => {
-  return {
-    title: "Materiali Attivi",
-    description: "Materiali di promozioni pubblicate ancora valide",
-    filterType: 'attivi' as const
-  };
-};
-
-export const funzioneCaricamentoMaterialiInCorso = async () => {
-  return {
-    title: "Materiali In Corso",
-    description: "Materiali di promozioni in fase di lavorazione",
-    filterType: 'in-corso' as const
-  };
-};
-
-export const funzioneCaricamentoStoricoMateriali = async () => {
-  return {
-    title: "Storico Materiali",
-    description: "Materiali di promozioni pubblicate scadute",
-    filterType: 'storico' as const
-  };
-};
-
 // Tipi per Dashboard3
 interface FileAnteprima {
   id: string;
@@ -923,21 +899,20 @@ export const superadminDashboardLoader = async () => {
   return { overviewPromise };
 };
 
-// Loader per Materiali con Promozione preselezionata
-// Questa pagina è accessibile sia da promo in corso che da promo pubblicate,
-// quindi usiamo 'attivi' per includere le promo pubblicate
-export const funzioneCaricamentoMaterialiPromo = async ({ request }: { request: Request }) => {
-  const url = new URL(request.url);
-  const pathSegments = url.pathname.split("/");
-
-  // Estrai idPromo dal percorso (es: /promozioni/in-corso/dettagli/:idPromo/materiali)
-  const materialiIndex = pathSegments.indexOf("materiali");
-  const idPromo = materialiIndex > 0 ? pathSegments[materialiIndex - 1] : "";
-
-  return {
-    title: "Materiali Promozione",
-    description: "Materiali della promozione selezionata",
-    filterType: 'attivi' as const,
-    preselectedPromoId: idPromo
-  };
+/**
+ * Vecchio indirizzo dei materiali di una promo (.../dettagli/:idPromo/materiali): porta alla vista
+ * Volantini del periodo della promo, filtrata su di lei. Se la promo non si legge o non sta in
+ * nessun periodo (eliminata) si torna al suo dettaglio, sotto la stessa sezione del vecchio indirizzo.
+ */
+export const funzioneRedirectMaterialiPromo = async ({ params, request }: LoaderFunctionArgs) => {
+  const idPromo = params.idPromo ?? "";
+  const sezione = new URL(request.url).pathname.includes("/promozioni/storico/") ? "storico" : "in-corso";
+  const dettaglio = `/promozioni/${sezione}/dettagli/${idPromo}`;
+  try {
+    const promo = await ServerCall.get<PromoResponseDTO>(`/promo/${encodeURIComponent(idPromo)}`);
+    const periodo = periodoDellaPromo(promo?.stato);
+    return redirect(periodo ? percorsoVolantini(periodo, idPromo) : dettaglio);
+  } catch {
+    return redirect(dettaglio);
+  }
 };

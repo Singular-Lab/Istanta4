@@ -139,6 +139,9 @@ import { TracciatoService } from "../services/TracciatoService";
 import { TraduzioneService } from "../services/TraduzioneService";
 import { UserService } from "../services/UserService";
 import { VolantinoService } from "../services/VolantinoService";
+import { MaterialiService } from "../services/MaterialiService";
+import type { IMaterialiService } from "../interfaces/IMaterialiService";
+import { type IMaterialiRepository, MaterialiRepository } from "../repositories/MaterialiRepository";
 import { WebPliantService } from "../services/WebPliantService";
 import { WebhookService } from "../services/WebhookService";
 import { WhatsAppService } from "../services/WhatsAppService";
@@ -228,6 +231,7 @@ function bindRepositories() {
   container.bind<MenuItemRepository>(TYPES.MenuItemRepository).toDynamicValue(() => new MenuItemRepository()).inSingletonScope();
   container.bind<IPluginAnalyticsRepository>(TYPES.PluginAnalyticsRepository).toDynamicValue(() => new PluginAnalyticsRepository()).inSingletonScope();
   container.bind<IAuditLogRepository>(TYPES.AuditLogRepository).toDynamicValue(() => new AuditLogRepository()).inSingletonScope();
+  container.bind<IMaterialiRepository>(TYPES.MaterialiRepository).toDynamicValue(() => new MaterialiRepository()).inSingletonScope();
 
   // Hub
   container.bind<IAuthProviderRepository>(TYPES.AuthProviderRepository).toDynamicValue(() => new AuthProviderRepository()).inSingletonScope();
@@ -432,6 +436,13 @@ function bindServices() {
     (context) => new VolantinoService(
       context.get<IConfigService>(TYPES.ConfigService),
       context.get<IAgenziaLib>(TYPES.AgenziaLib)
+    )
+  );
+  container.bind<IMaterialiService>(TYPES.MaterialiService).toDynamicValue(
+    (context) => new MaterialiService(
+      context.get<IMaterialiRepository>(TYPES.MaterialiRepository),
+      context.get<IKitRuntimeService>(TYPES.KitRuntimeService),
+      context.get<IFileManagementService>(TYPES.FileManagementService)
     )
   );
 

@@ -3,6 +3,7 @@ import {
   STATO_GDO_WHATSAPP_NUMBER,
   STATO_GDO_WHATSAPP_TEMPLATE,
   STATO_LAVORAZIONE_KIT_RUNTIME,
+  STATO_LOG_FILE,
   STATO_ORDINI_STAMPA,
   STATO_PROMO,
   STATO_UTENTI,
@@ -20,6 +21,7 @@ export interface DescrizioneStato {
 export type DominioStato =
   | "promo"
   | "kitRuntime"
+  | "fileKit"
   | "ordineStampa"
   | "utente"
   | "webhook"
@@ -47,12 +49,28 @@ const STATI_PROMO: Record<STATO_PROMO, DescrizioneStato> = {
   [STATO_PROMO.ELIMINATA]: { etichetta: "Eliminata", tono: "danger" },
 };
 
-const STATI_KIT_RUNTIME: Record<STATO_LAVORAZIONE_KIT_RUNTIME, DescrizioneStato> = {
+/** Kit previsto dalla promo ma senza runtime: le viste Volantini e POP lo mostrano come non avviato. */
+export const STATO_KIT_NON_AVVIATO = "NON_AVVIATO";
+
+const STATI_KIT_RUNTIME: Record<STATO_LAVORAZIONE_KIT_RUNTIME | typeof STATO_KIT_NON_AVVIATO, DescrizioneStato> = {
+  [STATO_KIT_NON_AVVIATO]: { etichetta: "Non avviato", tono: "neutral" },
   [STATO_LAVORAZIONE_KIT_RUNTIME.IN_LAVORAZIONE]: { etichetta: "In lavorazione", tono: "info" },
   [STATO_LAVORAZIONE_KIT_RUNTIME.IN_LAVORAZIONE_CON_ERRORI]: { etichetta: "In lavorazione con errori", tono: "warning" },
   [STATO_LAVORAZIONE_KIT_RUNTIME.IN_REVISIONE]: { etichetta: "In revisione", tono: "brand" },
   [STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO]: { etichetta: "Pubblicato", tono: "success" },
   [STATO_LAVORAZIONE_KIT_RUNTIME.ELIMINATO]: { etichetta: "Eliminato", tono: "danger" },
+};
+
+/** Stato dell'ultimo log di un file del kit. */
+const STATI_FILE_KIT: Record<STATO_LOG_FILE, DescrizioneStato> = {
+  [STATO_LOG_FILE.IN_ATTESA]: { etichetta: "In attesa", tono: "neutral" },
+  [STATO_LOG_FILE.IN_REVISIONE]: { etichetta: "In revisione", tono: "brand" },
+  [STATO_LOG_FILE.ACCETTATO]: { etichetta: "Accettato", tono: "success" },
+  [STATO_LOG_FILE.ERRORE]: { etichetta: "Errore", tono: "danger" },
+  [STATO_LOG_FILE.PUBBLICATO]: { etichetta: "Pubblicato", tono: "success" },
+  [STATO_LOG_FILE.IN_ATTESA_DI_CORREGGO]: { etichetta: "In attesa di Correggo", tono: "info" },
+  [STATO_LOG_FILE.CORREGGO_PUBBLICATO]: { etichetta: "Correggo pubblicato", tono: "success" },
+  [STATO_LOG_FILE.CORREGGO_ERRORE]: { etichetta: "Errore Correggo", tono: "danger" },
 };
 
 const STATI_ORDINE_STAMPA: Record<STATO_ORDINI_STAMPA, DescrizioneStato> = {
@@ -118,6 +136,7 @@ const STATI_WA_NUMERO: Record<STATO_GDO_WHATSAPP_NUMBER, DescrizioneStato> = {
 export const CATALOGO_STATI: Record<DominioStato, Record<string, DescrizioneStato>> = {
   promo: STATI_PROMO,
   kitRuntime: STATI_KIT_RUNTIME,
+  fileKit: STATI_FILE_KIT,
   ordineStampa: STATI_ORDINE_STAMPA,
   utente: STATI_UTENTE,
   webhook: STATI_WEBHOOK,

@@ -43,6 +43,14 @@ export const PAGINE: DefinizionePagina[] = [
 
   // Volantini e materiali
   { percorso: '/volantini', permesso: P.VOLANTINI.VISUALIZZA, sottopagine: true },
+  // Viste Volantini e POP per periodo, al posto delle pagine Materiali: stesso permesso
+  { percorso: '/volantini/in-corso', permesso: P.MATERIALI.VISUALIZZA },
+  { percorso: '/volantini/attivi', permesso: P.MATERIALI.VISUALIZZA },
+  { percorso: '/volantini/storico', permesso: P.MATERIALI.VISUALIZZA },
+  { percorso: '/pop/in-corso', permesso: P.MATERIALI.VISUALIZZA },
+  { percorso: '/pop/attivi', permesso: P.MATERIALI.VISUALIZZA },
+  { percorso: '/pop/storico', permesso: P.MATERIALI.VISUALIZZA },
+  // Vecchi indirizzi delle pagine Materiali, ora redirect verso Volantini
   { percorso: '/materiali-attivi', permesso: P.MATERIALI.VISUALIZZA },
   { percorso: '/materiali-in-corso', permesso: P.MATERIALI.VISUALIZZA },
   { percorso: '/storico-materiali', permesso: P.MATERIALI.VISUALIZZA },

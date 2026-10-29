@@ -1,6 +1,7 @@
 import bcrypt from 'bcrypt';
 import { randomUUID } from 'node:crypto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { PERMESSI } from '../../../../lib/accessi/catalogo';
 import { RUOLO_UTENTE_GDO, TIPO_UTENTI } from '../../../../lib/enums';
 import { sequelize } from '../../db/SequelizeConnector';
 import { AuthProvider } from '../../models/auth_provider';
@@ -13,8 +14,10 @@ import { UtentiGDO } from '../../models/utenti_gdo';
 import { MENU_SUPERADMIN, SERVIZI_GESTITI, SERVIZI_HUB_PREDEFINITI } from '../datiPredefiniti';
 import {
   amministratoreDaAmbiente,
+  ID_VOCI_POP_SUPERADMIN,
   inizializzaInstallazione,
   VISTE_DA_AGGIORNARE,
+  vociMenuSuperadmin,
   type OpzioniInizializzazione,
 } from '../inizializzaInstallazione';
 
@@ -116,8 +119,10 @@ describe('inizializzazione di un database vuoto', () => {
       expect.objectContaining({ id_utente_utentegdo: admin.id_utenti, id_gdo_utentegdo: 'g1', id_ruolo_utente_gdo: 'ruolo-admin' }),
     ]);
 
-    expect(stato.menu).toHaveLength(MENU_SUPERADMIN.length);
+    // MENU_SUPERADMIN convertito nelle viste Volantini e POP: tre voci POP in piu'.
+    expect(stato.menu).toHaveLength(MENU_SUPERADMIN.length + 3);
     expect(stato.menu.every(m => m.tipo_utente === TIPO_UTENTI.SUPERADMIN && m.ruolo_gdo === null)).toBe(true);
+    expect(esiti.find(e => e.passo === 'menu del superadmin')?.dettaglio).toBe(`${MENU_SUPERADMIN.length + 3} voci`);
   });
 
   it('crea nell hub i servizi predefiniti e Istanta e Correggo per i tipi di utente concordati', async () => {
@@ -209,7 +214,7 @@ describe('configurazione mancante', () => {
     expect(esito(esiti, 'amministratore')).toBe('saltato');
     expect(esito(esiti, 'amministratore collegato alla gdo')).toBe('saltato');
     expect(stato.gdo).toHaveLength(1);
-    expect(stato.menu).toHaveLength(MENU_SUPERADMIN.length);
+    expect(stato.menu).toHaveLength(MENU_SUPERADMIN.length + 3);
   });
 
   it.each(['', 'default', 'DEFAULT'])('con CLIENT_ID "%s" non crea GDO ne collegamento', async (clientId) => {
@@ -236,6 +241,45 @@ describe('configurazione mancante', () => {
     const esiti = await inizializzaInstallazione(OPZIONI);
 
     expect(esito(esiti, 'materialized view')).toBe('errore');
+  });
+});
+
+describe('menu predefinito del Superadmin', () => {
+  const sezioneMateriali = (voci: ReturnType<typeof vociMenuSuperadmin>) => {
+    const inizio = voci.findIndex(v => v.titolo === 'VOLANTINI E POP');
+    const fine = voci.findIndex((v, i) => i > inizio && v.tipo === 'separator');
+    return voci.slice(inizio, fine).map(v => [v.id_menu_item, v.titolo, v.pathname, v.codice_permesso, v.icona]);
+  };
+
+  it('nasce con le viste Volantini e POP al posto delle pagine Materiali', () => {
+    const voci = vociMenuSuperadmin();
+    const id = (titolo: string) => MENU_SUPERADMIN.find(v => v.titolo === titolo)?.id_menu_item;
+    const M = PERMESSI.MATERIALI.VISUALIZZA;
+
+    expect(sezioneMateriali(voci)).toEqual([
+      [id('MATERIALI'), 'VOLANTINI E POP', null, null, null],
+      [id('Materiali attivi'), 'Volantini attivi', '/volantini/attivi', M, 'FolderOpen'],
+      [id('Materiali in corso'), 'Volantini in corso', '/volantini/in-corso', M, 'Clock'],
+      [id('Storico materiali'), 'Volantini storico', '/volantini/storico', M, 'Archive'],
+      [ID_VOCI_POP_SUPERADMIN.attivi, 'POP attivi', '/pop/attivi', M, 'FolderOpen'],
+      [ID_VOCI_POP_SUPERADMIN['in-corso'], 'POP in corso', '/pop/in-corso', M, 'Clock'],
+      [ID_VOCI_POP_SUPERADMIN.storico, 'POP storico', '/pop/storico', M, 'Archive'],
+    ]);
+    expect(voci.some(v => ['/materiali-attivi', '/materiali-in-corso', '/storico-materiali'].includes(v.pathname ?? ''))).toBe(false);
+    expect(voci.every(v => v.id_parent === null && v.tipo_utente === TIPO_UTENTI.SUPERADMIN)).toBe(true);
+    expect(voci.filter(v => v.pathname?.startsWith('/pop/')).every(v => !v.disabilitato && !v.start_page)).toBe(true);
+  });
+
+  it('ha identificativi fissi, tutti diversi, e un ordinamento senza buchi ne doppioni', () => {
+    const voci = vociMenuSuperadmin();
+    const ids = voci.map(v => v.id_menu_item);
+
+    expect(vociMenuSuperadmin().map(v => v.id_menu_item)).toEqual(ids);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(voci.map(v => v.ordinamento)).toEqual(voci.map((_, i) => i));
+    // Le altre voci restano quelle di MENU_SUPERADMIN, nello stesso ordine.
+    const pop = Object.values(ID_VOCI_POP_SUPERADMIN);
+    expect(ids.filter(i => !pop.includes(i))).toEqual(MENU_SUPERADMIN.map(v => v.id_menu_item));
   });
 });
 

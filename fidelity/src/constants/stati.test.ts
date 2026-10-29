@@ -4,16 +4,18 @@ import {
   STATO_GDO_WHATSAPP_NUMBER,
   STATO_GDO_WHATSAPP_TEMPLATE,
   STATO_LAVORAZIONE_KIT_RUNTIME,
+  STATO_LOG_FILE,
   STATO_ORDINI_STAMPA,
   STATO_PROMO,
   STATO_UTENTI,
   STATO_WEBHOOK,
 } from "../../lib/enums";
-import { DominioStato, descriviStato, STATI_CAMPAGNA_WHATSAPP, STATO_SCONOSCIUTO } from "./stati";
+import { DominioStato, descriviStato, STATI_CAMPAGNA_WHATSAPP, STATO_KIT_NON_AVVIATO, STATO_SCONOSCIUTO } from "./stati";
 
 const ENUM_PER_DOMINIO: Record<DominioStato, Record<string, string>> = {
   promo: STATO_PROMO,
-  kitRuntime: STATO_LAVORAZIONE_KIT_RUNTIME,
+  kitRuntime: { ...STATO_LAVORAZIONE_KIT_RUNTIME, NON_AVVIATO: STATO_KIT_NON_AVVIATO },
+  fileKit: STATO_LOG_FILE,
   ordineStampa: STATO_ORDINI_STAMPA,
   utente: STATO_UTENTI,
   webhook: STATO_WEBHOOK,
@@ -35,6 +37,17 @@ describe("catalogo degli stati", () => {
 
   it("una promo VALIDA si mostra come Valida, mai come Attiva", () => {
     expect(descriviStato("promo", STATO_PROMO.VALIDA)).toEqual({ etichetta: "Valida", tono: "success" });
+  });
+
+  it("un kit previsto ma senza runtime si mostra come Non avviato, con tono neutro", () => {
+    expect(descriviStato("kitRuntime", "NON_AVVIATO")).toEqual({ etichetta: "Non avviato", tono: "neutral" });
+  });
+
+  it("lo stato di un file distingue il proprio esito da quello di Correggo", () => {
+    expect(descriviStato("fileKit", STATO_LOG_FILE.ERRORE)).toEqual({ etichetta: "Errore", tono: "danger" });
+    expect(descriviStato("fileKit", STATO_LOG_FILE.CORREGGO_ERRORE)).toEqual({ etichetta: "Errore Correggo", tono: "danger" });
+    expect(descriviStato("fileKit", STATO_LOG_FILE.IN_REVISIONE).etichetta).toBe("In revisione");
+    expect(descriviStato("fileKit", null)).toBe(STATO_SCONOSCIUTO);
   });
 
   it("un template mai inviato a Meta si mostra come bozza locale, in revisione come revisione Meta", () => {

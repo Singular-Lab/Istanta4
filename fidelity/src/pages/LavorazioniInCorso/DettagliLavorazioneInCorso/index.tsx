@@ -18,7 +18,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
-import React, { Suspense, useEffect, useRef, useState, type ReactNode } from "react";
+import React, { Suspense, useEffect, useRef, useState } from "react";
 import {
   Await,
   useAsyncError,
@@ -45,7 +45,9 @@ import { useUser } from "../../../context/UserContext";
 import { useContestoPerNuovaLavorazione, useFetchFunzionalita } from "../../../query/query";
 import CardVolantino from "../../shared/CardVolantino";
 import SpecificheLavorazione from "../../shared/SpecificheLavorazione";
+import CollegamentiMateriali from "./CollegamentiMateriali";
 import GestioneMomenti from "./GestioneMomenti";
+import SezioneCollegamento from "./SezioneCollegamento";
 import TracciatoCard from "./TracciatoCard";
 import { formatData, formatDataOraEstesa } from "@/utils/format";
 // Serve per leggere le date nel formato DD/MM/YYYY (scadenza imminente)
@@ -167,28 +169,6 @@ const VolantiniSkeleton: React.FC = () => (
       </div>
     ))}
   </div>
-);
-
-// Riquadro di primo livello che porta a un'altra vista della promo: titolo e descrizione a sinistra, comando a destra
-const SezioneCollegamento: React.FC<{
-  icona: string;
-  titolo: string;
-  descrizione: string;
-  azione: ReactNode;
-  className?: string;
-}> = ({ icona, titolo, descrizione, azione, className }) => (
-  <Sezione aria-label={titolo} className={className}>
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-      <div className="flex min-w-0 items-start gap-3">
-        <Lucide icon={icona} aria-hidden="true" className="mt-1 h-5 w-5 flex-none text-slate-500" />
-        <div className="min-w-0">
-          <h2 className="title-section">{titolo}</h2>
-          <p className="text-sm text-slate-500">{descrizione}</p>
-        </div>
-      </div>
-      <div className="flex flex-none items-center gap-2">{azione}</div>
-    </div>
-  </Sezione>
 );
 
 // Passa ai figli il messaggio dell'errore rigettato da un <Await> (stringa vuota se assente)
@@ -2439,19 +2419,7 @@ function Main() {
         </React.Suspense>
       </Sezione>
 
-      {idPromo && promoFinale && (
-        <SezioneCollegamento
-          icona="FolderOpen"
-          titolo="Materiali promozione"
-          descrizione="Visualizza i materiali per questa promozione"
-          azione={
-            <Button variant="outline-secondary" size="sm" onClick={() => navigate(`/promozioni/storico/dettagli/${idPromo}/materiali`)}>
-              Visualizza materiali
-              <Lucide icon="ArrowRight" aria-hidden="true" className="ml-1.5 h-3.5 w-3.5" />
-            </Button>
-          }
-        />
-      )}
+      {idPromo && <CollegamentiMateriali idPromo={idPromo} statoPromo={currentPromoData?.stato} />}
 
       <div className="grid grid-cols-12 gap-6">
         {!promoFinale && <div className="col-span-12 lg:col-span-4">{renderQuickActions()}</div>}

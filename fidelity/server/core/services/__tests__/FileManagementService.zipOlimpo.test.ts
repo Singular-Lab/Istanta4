@@ -1,3 +1,4 @@
+import { PassThrough } from 'node:stream';
 import unzipper from 'unzipper';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ErroreHttp } from '../../http/clienteHttp';
@@ -77,5 +78,43 @@ describe('ZIP dei PDF di Olimpo', () => {
     expect(mancanti).not.toContain('10.0.0.5');
     // Il file senza id non viene neanche chiesto a Olimpo
     expect(scarica).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('ZIP dei PDF di Olimpo scritto in uno stream', () => {
+  it('lo stesso archivio, senza tenerlo in memoria: si risolve quando la destinazione ha ricevuto tutto', async () => {
+    scarica.mockImplementation(async (id: string) => {
+      if (id === 'id-assente') throw new ErroreRispostaOlimpo('/materiali/getMaterialePDF', 404);
+      return Buffer.from(`pdf ${id}`);
+    });
+    const destinazione = new PassThrough();
+    const parti: Buffer[] = [];
+    destinazione.on('data', (parte: Buffer) => parti.push(parte));
+    const letto = new Promise<void>(resolve => destinazione.on('end', () => resolve()));
+
+    const esito = await service.scriviZipDaOlimpo(
+      [{ file: { id_olimpo_cloud: 'id-1' }, nome: 'Kit A/a.pdf' }, { file: { id_olimpo_cloud: 'id-assente' }, nome: 'Kit A/b.pdf' }],
+      destinazione
+    );
+    await letto;
+
+    expect(esito).toEqual({ file: 1, mancanti: 1 });
+    const voci = await contenutoZip(Buffer.concat(parti));
+    expect(Object.keys(voci).sort()).toEqual([FILE_MANCANTI_ZIP, 'Kit A/a.pdf']);
+    expect(voci['Kit A/a.pdf']).toBe('pdf id-1');
+  });
+
+  it('destinazione chiusa a meta\' (il browser interrompe il download): i download che restano non partono e la promessa e\' rifiutata', async () => {
+    const destinazione = new PassThrough();
+    destinazione.resume();
+    scarica.mockImplementation(async (id: string) => {
+      if (id === 'id-0') destinazione.destroy();
+      await new Promise(resolve => setTimeout(resolve, 5));
+      return Buffer.from(`pdf ${id}`);
+    });
+    const files = Array.from({ length: 12 }, (_, i) => ({ file: { id_olimpo_cloud: `id-${i}` }, nome: `volantino_${i}.pdf` }));
+
+    await expect(service.scriviZipDaOlimpo(files, destinazione)).rejects.toBeInstanceOf(Error);
+    expect(scarica.mock.calls.length).toBeLessThanOrEqual(DOWNLOAD_ZIP_IN_PARALLELO);
   });
 });
