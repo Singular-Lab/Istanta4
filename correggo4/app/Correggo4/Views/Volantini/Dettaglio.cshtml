@@ -675,6 +675,9 @@
     .riga_logo { display: flex; align-items: center; gap: 6px; background: #efefef; border: 1px solid #aaa;
                  padding: 3px 5px; margin-bottom: 4px; font-size: 11px; }
     .riga_logo img { width: 34px; height: 34px; object-fit: contain; background: #fff; flex: 0 0 auto; }
+    /* I20-1164: «Annulla questa modifica» con l'icona undo del vecchio, non il carattere; SALVA in fondo ai loghi */
+    .riga_logo .bottone img.undo { width: 14px; height: 14px; background: none; vertical-align: middle; }
+    .salva_loghi { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 8px; }
     .riga_logo .nome { flex: 1; overflow: hidden; text-overflow: ellipsis; }
     .riga_logo .nome small { display: block; color: #555; font-size: 9.5px; }
     .riga_logo.entrante { background: #d7efd7; }
@@ -2109,13 +2112,28 @@
     }
     function compatta(s) { return String(s || '').replace(/\s+/g, ' ').trim(); }
 
+    // I20-1164: loghi e descrizione si salvano da soli. Dopo un'operazione su una delle due si ridisegna
+    // solo quella, e quello che si sta modificando dall'altra (testo, foto o loghi non salvati) resta.
     function riempiEdit(id, soloParte) {
-        if (!soloParte || soloParte === 'descrizione') {
+        if (!soloParte) {
             disegnaDescrizione(id);
             inizializzaFotoELoghi(id);
             disegnaFoto(id);
             disegnaLoghi(id);
             piedeEdit(id, 'descrizione');
+        } else if (soloParte === 'descrizione') {
+            disegnaDescrizione(id);
+            inizializzaFoto(id);
+            disegnaFoto(id);
+            disegnaLoghi(id);   // i loghi restano quelli in modifica: si aggiorna solo il loro ANNULLA
+            piedeEdit(id, 'descrizione');
+        } else if (soloParte === 'loghi') {
+            // il SALVA della descrizione tiene l'impronta di prima: il testo in modifica non e' salvato
+            var primaDescrizione = improntaSalvata.descrizione;
+            inizializzaLoghi(id);
+            disegnaLoghi(id);
+            piedeEdit(id, 'descrizione');   // ANNULLA CORREZIONE sotto la descrizione
+            improntaSalvata.descrizione = primaDescrizione;
         }
         if (!soloParte || soloParte === 'offerta') { disegnaOfferta(id); piedeEdit(id, 'offerta'); }
         ombreRitaglio();
@@ -2414,13 +2432,29 @@
     // (screenshot del 29/10, vale per tutti, Agenzia compresa). SALVA torna accanto ad ANNULLA appena
     // la parte e' diversa da com'era al salvataggio, e sparisce di nuovo se la si riporta li'.
     // L'impronta e' quello che SALVA manderebbe al server.
-    var improntaSalvata = { offerta: null, descrizione: null };
-    function improntaParte(parte) { return JSON.stringify(parte === 'offerta' ? raccogliOfferta() : raccogliScheda()); }
+    // I20-1164: i loghi si salvano e si annullano da soli, con i bottoni in fondo all'elenco Loghi/Bolli:
+    // hanno la loro impronta, e quella della descrizione non li contiene piu'.
+    var improntaSalvata = { offerta: null, descrizione: null, loghi: null };
+    var PIEDE_SALVA = { offerta: '#eaOffertaPiede', descrizione: '#eaDescrPiede', loghi: '#mLoghi' };
+    function corpoParte(parte) {
+        if (parte === 'offerta') return raccogliOfferta();
+        var s = raccogliScheda();
+        return parte === 'loghi' ? { sezione: 'loghi', loghi: s.loghi } : { sezione: 'descrizione', testo: s.testo, foto: s.foto };
+    }
+    function improntaParte(parte) { return JSON.stringify(corpoParte(parte)); }
     function aggiornaSalva() {
-        ['offerta', 'descrizione'].forEach(function (parte) {
-            var bt = document.querySelector('#' + (parte === 'offerta' ? 'eaOffertaPiede' : 'eaDescrPiede') + ' [data-ea="salva"]');
+        ['offerta', 'descrizione', 'loghi'].forEach(function (parte) {
+            var bt = document.querySelector(PIEDE_SALVA[parte] + ' [data-ea="salva"]');
             if (bt) bt.classList.toggle('nascosto', improntaSalvata[parte] !== null && improntaParte(parte) === improntaSalvata[parte]);
         });
+    }
+    // I20-1164: cosa c'e' in attesa nella correzione della descrizione: testo e foto (stati 1-3), loghi (4-5)
+    function sezioniInAttesa(ed) {
+        var voci = (ed && ed.stato === 0 && ed.foto) || [];
+        return {
+            descrizione: !!(ed && ed.stato === 0) && (ed.campi.descrizione !== undefined || voci.some(function (v) { return v.stato <= 3; })),
+            loghi: voci.some(function (v) { return v.stato >= 4; })
+        };
     }
 
     function piedeEdit(id, parte) {
@@ -2465,7 +2499,8 @@
                 // 28/10). Da j246 si chiamava «CONFERMA CORREZIONE» come il bottone verde dell'Agenzia,
                 // e chi correggeva non trovava il salvataggio. CONFERMA CORREZIONE resta all'Agenzia.
                 bottoni.push('<button class="bottone grande" type="button" data-ea="salva">SALVA</button>');
-                if (ed && ed.stato === 0) bottoni.push('<button class="bottone pericolo" type="button" data-ea="annulla">ANNULLA CORREZIONE</button>');
+                if (parte === 'offerta' ? (ed && ed.stato === 0) : sezioniInAttesa(ed).descrizione)
+                    bottoni.push('<button class="bottone pericolo" type="button" data-ea="annulla">ANNULLA CORREZIONE</button>');
             }
         } else if (stato.puoAccettare && ed && ed.stato === 0) {
             bottoni.push('<button class="bottone accetta grande" type="button" data-ea="conferma">CONFERMA CORREZIONE</button>');
@@ -2603,7 +2638,8 @@
         if (azione === 'salva') {
             if (parte === 'offerta') { url += 'Offerta'; corpo = raccogliOfferta(); }
             else {
-                url += 'Descrizione'; corpo = raccogliScheda();
+                // I20-1164: i loghi vanno con la descrizione, ma ognuno manda solo la sua sezione
+                url += 'Descrizione'; corpo = corpoParte(parte);
                 if (corpo.foto && corpo.foto.length) {
                     var p = Object.keys(fotoCorrenti).filter(function (k) { return fotoCorrenti[k].stato === 1; }).length;
                     if (p !== 1) {
@@ -2664,8 +2700,8 @@
             // I20-1160: foto e loghi arrivano dopo il piede: entrano nell'impronta salvata cosi' come
             // arrivano, mentre il testo resta quello del salvataggio (puo' essere gia' stato cambiato)
             if (improntaSalvata.descrizione !== null) {
-                var salvata = JSON.parse(improntaSalvata.descrizione), ora = raccogliScheda();
-                salvata.foto = ora.foto; salvata.loghi = ora.loghi;
+                var salvata = JSON.parse(improntaSalvata.descrizione), ora = corpoParte('descrizione');
+                salvata.foto = ora.foto;
                 improntaSalvata.descrizione = JSON.stringify(salvata);
             }
             disegnaFoto(id);
@@ -2674,16 +2710,27 @@
         });
     }
 
-    function inizializzaFotoELoghi(id) {
+    function inizializzaFotoELoghi(id) { inizializzaFoto(id); inizializzaLoghi(id); }
+    // I20-1164: foto e loghi si inizializzano separatamente, perche' si salvano separatamente
+    function inizializzaFoto(id) {
         fotoCorrenti = {};
-        loghiAlterati = {};
         if (!schedaFoto || schedaFoto.id !== String(id) || schedaFoto.stato !== 'ok') return;
         schedaFoto.foto.forEach(function (f) { fotoCorrenti[f.codice] = { guid: f.guidFoto, stato: statoIstanta(f) }; });
         var ed = editDi(id, 'descrizione');
         ((ed && ed.foto) || []).forEach(function (v) {
             if (v.stato >= 1 && v.stato <= 3 && fotoCorrenti[v.codice]) fotoCorrenti[v.codice] = { guid: v.guidId, stato: v.stato };
+        });
+    }
+    function inizializzaLoghi(id) {
+        loghiAlterati = {};
+        improntaSalvata.loghi = null;
+        if (!schedaFoto || schedaFoto.id !== String(id) || schedaFoto.stato !== 'ok') return;
+        var ed = editDi(id, 'descrizione');
+        ((ed && ed.foto) || []).forEach(function (v) {
             if (v.stato === 4 || v.stato === 5) loghiAlterati[v.guidId] = { guidId: v.guidId, sigla: v.codice, nome: v.nomeFile, stato: v.stato };
         });
+        // i loghi come sono adesso sono quelli salvati: SALVA dei loghi solo se cambiano
+        improntaSalvata.loghi = improntaParte('loghi');
     }
 
     /* I20-1152: nella scheda della referenza i dati del prodotto del Correggo vecchio, sempre gli
@@ -2890,6 +2937,27 @@
                 if (a.stato === 4) righe.push(rigaLogo(a, 'aggiungi', abil, confermati));
             });
             cont.innerHTML = righe.length ? righe.join('') : 'Nessuno';
+            // I20-1164: i loghi si salvano e si annullano da soli, in fondo all'elenco: SALVA quando
+            // differiscono da quelli salvati (aggiornaSalva), ANNULLA CORREZIONE con loghi in attesa.
+            var loghiInAttesa = sezioniInAttesa(ed).loghi;
+            if (abil && (loghiInAttesa || improntaParte('loghi') !== improntaSalvata.loghi)) {
+                cont.insertAdjacentHTML('beforeend', '<div class="salva_loghi">' +
+                    '<button class="bottone grande" type="button" data-ea="salva">SALVA</button>' +
+                    (loghiInAttesa ? '<button class="bottone pericolo" type="button" data-ea="annulla">ANNULLA CORREZIONE</button>' : '') +
+                    '</div><div class="ea_errore" data-ea-errore></div>');
+                var erroreLoghi = cont.querySelector('[data-ea-errore]');
+                cont.querySelectorAll('.salva_loghi [data-ea]').forEach(function (bt) {
+                    bt.addEventListener('click', function () {
+                        // annullare chiede un secondo clic, come sotto la descrizione
+                        if (bt.dataset.ea === 'annulla' && bt.dataset.sicuro !== '1') {
+                            bt.dataset.sicuro = '1'; bt.textContent = 'SICURO? ANNULLA';
+                            return;
+                        }
+                        eseguiEdit(id, 'loghi', bt.dataset.ea, bt, erroreLoghi);
+                    });
+                });
+                aggiornaSalva();
+            }
         } else {
             if (catalogoLoghi === null) {
                 cont.innerHTML = '<span class="vuoto">Carico il catalogo…</span>';
@@ -2939,7 +3007,7 @@
         if (abil) {
             if (modo === 'presente') bottone = '<button type="button" class="bottone" data-logo="' + escA(l.guidId) + '" data-azione="togli">Togli</button>';
             else if (modo === 'catalogo') bottone = '<button type="button" class="bottone" data-logo="' + escA(l.guidId) + '" data-azione="aggiungi">Aggiungi</button>';
-            else bottone = '<button type="button" class="bottone" data-logo="' + escA(l.guidId) + '" data-azione="ripristina" title="Annulla questa modifica">&#8630;</button>';
+            else bottone = '<button type="button" class="bottone" data-logo="' + escA(l.guidId) + '" data-azione="ripristina" title="Annulla questa modifica"><img class="undo" src="' + escA(IMG + 'undo_icon.png') + '" alt="Annulla questa modifica"></button>';
         }
         return '<div class="riga_logo' + cls + '"><img src="' + escA(miniatura(l.guidId, 60)) + '" alt="">' +
                '<div class="nome">' + esc(l.sigla || l.nome) + (l.nome && l.sigla ? '<small>' + esc(l.nome) + '</small>' : '') +

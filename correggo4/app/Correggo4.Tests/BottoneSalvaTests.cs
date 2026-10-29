@@ -43,13 +43,13 @@ public class BottoneSalvaTests
         // SALVA si nasconde quando la parte e' uguale a com'era al salvataggio di una correzione in attesa
         Assert.Contains("improntaSalvata[parte] = (ed && ed.stato === 0 && el.querySelector('[data-ea=\"salva\"]')) ? improntaParte(parte) : null;", html);
         Assert.Contains("bt.classList.toggle('nascosto', improntaSalvata[parte] !== null && improntaParte(parte) === improntaSalvata[parte]);", html);
-        // l'impronta e' quello che SALVA manderebbe al server, per prezzi e per descrizione
-        Assert.Contains("JSON.stringify(parte === 'offerta' ? raccogliOfferta() : raccogliScheda())", html);
+        // l'impronta e' quello che SALVA manderebbe al server, per prezzi, descrizione e (I20-1164) loghi
+        Assert.Contains("function improntaParte(parte) { return JSON.stringify(corpoParte(parte)); }", html);
         // si ricontrolla dopo ogni modifica: campi, descrizione, foto e loghi passano da ombreRitaglio, le azioni no
         Assert.Contains("function ombreRitaglio() {\n        aggiornaSalva();", html.Replace("\r\n", "\n"));
         Assert.Contains("azioniScelte[Number(e.dataset.az)].campi[e.dataset.campo] = e.value; aggiornaSalva();", html);
-        // ANNULLA CORREZIONE resta per la correzione in attesa
-        Assert.Contains("if (ed && ed.stato === 0) bottoni.push('<button class=\"bottone pericolo\" type=\"button\" data-ea=\"annulla\">ANNULLA CORREZIONE</button>');", html);
+        // ANNULLA CORREZIONE resta per la correzione in attesa (I20-1164: sotto la descrizione solo con testo o foto in attesa)
+        Assert.Contains("if (parte === 'offerta' ? (ed && ed.stato === 0) : sezioniInAttesa(ed).descrizione)\n                    bottoni.push('<button class=\"bottone pericolo\" type=\"button\" data-ea=\"annulla\">ANNULLA CORREZIONE</button>');", html.Replace("\r\n", "\n"));
     }
 
     [Fact]

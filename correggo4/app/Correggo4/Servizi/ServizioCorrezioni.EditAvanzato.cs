@@ -34,12 +34,15 @@ public sealed class AzioneEdit
 /// Salvataggio della colonna "descrizione prodotto" (passo 2, j206): descrizione, foto P/S e loghi, come il
 /// SALVA core dell'originale. Foto e Loghi null = il client non ha potuto leggere Istanta: si tengono
 /// quelli gia' registrati. Testo null = prodotto senza descrizione.
+/// I20-1164: Sezione "loghi" salva solo i loghi e tiene testo e foto gia' registrati; "descrizione"
+/// salva testo e foto e tiene i loghi gia' registrati; null salva tutto, come prima.
 /// </summary>
 public sealed class RichiestaEditScheda
 {
     public string? Testo { get; set; }
     public List<FotoEdit>? Foto { get; set; }
     public List<LogoEdit>? Loghi { get; set; }
+    public string? Sezione { get; set; }
 }
 
 public sealed class FotoEdit
@@ -92,6 +95,8 @@ public sealed partial class ServizioCorrezioni
 
     public const string ParteOfferta = "offerta";
     public const string ParteDescrizione = "descrizione";
+    /// <summary>I20-1164: i loghi della parte descrizione, che si salvano e si annullano da soli.</summary>
+    public const string ParteLoghi = "loghi";
 
     private const int LunghezzaMassimaValore = 200;
     private const int LunghezzaMassimaDescrizione = 2000;
@@ -437,13 +442,29 @@ public sealed partial class ServizioCorrezioni
             voci = vociNuove!;
         }
 
-        if (testoNuovo == null && voci.Count == 0)
+        // I20-1164: loghi da una parte, descrizione e foto dall'altra. Quello che la sezione non tocca
+        // resta com'e' registrato: la riga del testo, e nella lista dell'immagine le voci dell'altra sezione.
+        var rigaTesto = figlioDescr == null ? null
+            : esistenti.FirstOrDefault(v => v.IdElemento == figlioDescr.Id && v.Stato == EaRegistrato);
+        if (r.Sezione is ParteLoghi or ParteDescrizione)
+        {
+            var rigaImmReg = figlioImm == null ? null
+                : esistenti.FirstOrDefault(v => v.IdElemento == figlioImm.Id && v.Stato == EaRegistrato);
+            var registrate = rigaImmReg == null ? new List<VoceFoto>() : LeggiVociFoto(rigaImmReg.NuovaVersione);
+            bool loghi = r.Sezione == ParteLoghi;
+            voci = registrate.Where(v => (v.stato >= 4) != loghi)
+                .Concat(voci.Where(v => (v.stato >= 4) == loghi)).ToList();
+        }
+        bool tieniTesto = r.Sezione == ParteLoghi && rigaTesto != null;
+        if (r.Sezione == ParteLoghi) testoNuovo = null;
+
+        if (testoNuovo == null && !tieniTesto && voci.Count == 0)
             return EsitoCorrezione.No(400, "nessuna_modifica",
                 "Non c'è niente da salvare: descrizione, foto e loghi sono quelli originali.");
 
         string registrata = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture);
         var adesso = DateTime.UtcNow;
-        ctx.VolantiniPagineElementiVersionis.RemoveRange(esistenti);
+        ctx.VolantiniPagineElementiVersionis.RemoveRange(tieniTesto ? esistenti.Where(v => v != rigaTesto) : esistenti);
         if (testoNuovo != null)
         {
             var reg = new ModificaRegistrata
@@ -635,11 +656,11 @@ public sealed partial class ServizioCorrezioni
     public async Task<EsitoCorrezione> AnnullaEditAsync(Utente u, long idBox, string? parte)
     {
         if (!u.Scrive) return NonAutorizzato();
-        if (parte is not (ParteOfferta or ParteDescrizione)) return NonTrovata("Parte della scheda sconosciuta.");
+        if (parte is not (ParteOfferta or ParteDescrizione or ParteLoghi)) return NonTrovata("Parte della scheda sconosciuta.");
         var (box, vol, errore) = await BoxScrivibileAsync(u, idBox);
         if (errore != null) return errore;
 
-        var (righe, capo) = await RigheParteAsync(box!.Id, parte);
+        var (righe, capo) = await RigheParteAsync(box!.Id, parte == ParteLoghi ? ParteDescrizione : parte);
         if (capo == null || capo.Stato == EaAnnullato)
             return NonTrovata("Non c'è nessuna correzione da annullare.");
         if (capo.Stato == EaCorretto)
@@ -649,9 +670,41 @@ public sealed partial class ServizioCorrezioni
             return EsitoCorrezione.No(403, "non_autore",
                 $"La correzione è di {await NomeUtenteAsync(capo.IdAutore)}: può annullarla solo chi l'ha fatta.");
 
-        foreach (var riga in righe.Where(x => x.Stato == EaRegistrato)) riga.Stato = EaAnnullato;
+        if (parte == ParteOfferta)
+            foreach (var riga in righe.Where(x => x.Stato == EaRegistrato)) riga.Stato = EaAnnullato;
+        else if (!await AnnullaSezioneAsync(box.Id, righe, loghi: parte == ParteLoghi))
+            return NonTrovata(parte == ParteLoghi ? "Non c'è nessuna correzione dei loghi da annullare."
+                                                  : "Non c'è nessuna correzione da annullare.");
         await ctx.SaveChangesAsync();
         return Fatto(await CaricaAsync(vol!.Id, u), box.Id);
+    }
+
+    /// <summary>
+    /// I20-1164: annulla solo i loghi, o solo descrizione e foto lasciando i loghi. Testo e foto/loghi
+    /// stanno in due righe: dalla lista dell'immagine si tolgono le voci della sezione, e la riga si
+    /// annulla quando resta vuota. Falso se la sezione non aveva niente in attesa.
+    /// </summary>
+    private async Task<bool> AnnullaSezioneAsync(long idBox, List<VolantiniPagineElementiVersioni> righe, bool loghi)
+    {
+        var idImm = await ctx.VolantiniPagineElementis.AsNoTracking()
+            .Where(e => e.IdParent == idBox && e.LabelInd == SchemaReferenza.LabelImmagine)
+            .Select(e => (long?)e.Id).FirstOrDefaultAsync();
+        bool annullato = false;
+        foreach (var riga in righe.Where(x => x.Stato == EaRegistrato))
+        {
+            if (riga.IdElemento != idImm)
+            {
+                if (!loghi) { riga.Stato = EaAnnullato; annullato = true; }   // il testo della descrizione
+                continue;
+            }
+            var voci = LeggiVociFoto(riga.NuovaVersione);
+            var restano = voci.Where(v => (v.stato >= 4) != loghi).ToList();
+            if (restano.Count == voci.Count) continue;
+            annullato = true;
+            if (restano.Count == 0) riga.Stato = EaAnnullato;
+            else riga.NuovaVersione = JsonSerializer.Serialize(restano, JsonRegistro);
+        }
+        return annullato;
     }
 
     public async Task<EsitoCorrezione> ConfermaEditAsync(Utente u, long idBox, string? parte)
@@ -711,9 +764,11 @@ public sealed partial class ServizioCorrezioni
         var figli = await ctx.VolantiniPagineElementis.AsNoTracking().Where(e => e.IdParent == idBox).ToListAsync();
         var ids = IdElementiParte(idBox, figli, parte);
         var righe = await ctx.VolantiniPagineElementiVersionis.Where(v => ids.Contains(v.IdElemento)).ToListAsync();
+        // I20-1164: dopo un annullamento parziale la descrizione puo' avere una riga annullata e una in
+        // attesa: il capo e' quella non annullata
         var capo = parte == ParteOfferta
             ? righe.FirstOrDefault(v => v.IdElemento == idBox) ?? righe.FirstOrDefault()
-            : righe.FirstOrDefault();
+            : righe.FirstOrDefault(v => v.Stato != EaAnnullato) ?? righe.FirstOrDefault();
         return (righe, capo);
     }
 
