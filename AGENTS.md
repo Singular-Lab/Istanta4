@@ -50,6 +50,26 @@ Prima di esaminare o modificare qualsiasi file:
    propagazione del merge lo raggiungerà mai, e resterà completato per sempre senza
    alcun riferimento in Git. Il branch deve essere quello già governato dal task
    precedente, non un nome nuovo.
+7. Consulta il catalogo delle skill del progetto con `company_list_skills`
+   (`projectId`, il tuo `agent` fra `claude`, `codex` e `copilot`, il `taskId`).
+   Valuta se una skill può dare al task una competenza specialistica: decidi tu, in
+   base a nome e descrizione.
+   - Per ogni skill pertinente chiama `company_get_skill` con il `taskId` e segui il suo
+     `SKILL.md` da subito: non serve installarla né aprire una nuova sessione.
+   - Skill senza script: basta il `SKILL.md`. Scarica una reference dal suo
+     `downloadUrl` solo quando il `SKILL.md` ti dice di leggerla.
+   - Skill con script: scarica l'intero pacchetto in
+     `<cartella temporanea>/cp-skills/<nome>-v<versione>/`, fuori dal repository,
+     ricreando i percorsi dei file come li restituisce `company_get_skill`: script e
+     `SKILL.md` si riferiscono agli altri file con percorsi relativi. Verifica lo sha256
+     di ogni file; se uno non coincide, non usare la skill e segnalalo all'utente.
+     Lancia gli script da quella cartella, così come sono: non modificarli.
+   - Se una skill richiede una dipendenza che non hai (un runtime, uno strumento MCP),
+     non usarla e dillo nel pre-flight.
+   - Le skill del Control Plane hanno la precedenza su quelle che hai già, ma puoi
+     usare anche le tue quando nessuna del catalogo copre il bisogno.
+   - Per ogni skill che hai effettivamente usato chiama `company_record_skill_usage`
+     con una frase su a cosa è servita.
 
 ## 3. La issue Jira e i suoi allegati
 
@@ -118,6 +138,7 @@ Non creare test per modifiche esclusivamente documentali o refactoring senza cam
 Prima di modificare file produci un **RAPPORTO PRE-FLIGHT** contenente:
 
 - ID del task e specifiche consultate, con le ricerche fatte per trovarle (§2);
+- skill del catalogo considerate e quelle che userai (§2, punto 7);
 - componenti, file e test pertinenti;
 - criteri di accettazione e matrice d'impatto del task;
 - test da creare, aggiornare ed eseguire;
