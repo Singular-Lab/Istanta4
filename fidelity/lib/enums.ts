@@ -1,29 +1,3 @@
-// ─── Schema Momenti ───────────────────────────────────────────────────────────
-export enum TIPO_SCHEMA {
-  BUSINESS = 'BUSINESS',
-  AGENZIA  = 'AGENZIA',
-}
-
-export enum ERRORS {
-  GENERIC_SERVER_ERROR = "GENERIC_SERVER_ERROR",
-  INVALID_REQUEST = "INVALID_REQUEST",
-  INVALID_USER = "INVALID_USER",
-  INVALID_PASSWORD = "INVALID_PASSWORD",
-  INVALID_EMAIL = "INVALID_EMAIL",
-  BAD_REQUEST = "BAD_REQUEST",
-  EMAIL_ALREADY_EXISTS = "EMAIL_ALREADY_EXISTS",
-  USER_ALREADY_EXISTS = "USER_ALREADY_EXISTS",
-  USER_NOT_FOUND = "USER_NOT_FOUND",
-  UNAUTHORIZED = "UNAUTHORIZED",
-  FORBIDDEN = "FORBIDDEN",
-  NOT_FOUND = "NOT_FOUND",
-  INTERNAL_SERVER_ERROR = "INTERNAL_SERVER_ERROR",
-  SESSION_EXPIRED = "SESSION_EXPIRED",
-  XML_PARSE_ERROR = "XML_PARSE_ERROR",
-  PATH_ALREADY_EXISTS = "PATH_ALREADY_EXISTS",
-  UNVERIFIED_USER = "UNVERIFIED USER",
-}
-
 export enum HttpStatusCode {
   // Informational responses (100–199)
   CONTINUE = 100,
@@ -179,13 +153,6 @@ export enum RUOLO_UTENTE_GDO {
   IMPIEGATO = "IMPIEGATO",
 }
 
-//! Verranno lasciati cosi per adattarsi al codice di istanta
-export const tipoUtenteReverseMapping: { [key: string]: number } = {
-  [TIPO_UTENTI.SUPERADMIN]: 1,
-  [TIPO_UTENTI.AGENZIA]: 2,
-  [TIPO_UTENTI.GUEST]: 4,
-};
-
 export enum STATO_UTENTI {
   ATTIVO = 'ATTIVO',
   DISATTIVO = 'DISATTIVO',
@@ -323,11 +290,6 @@ export enum ItemDisposition {
   grid = 'grid',
   list = 'list',
 }
-
-export const itemDispositionMap = {
-  [ItemDisposition.grid]: 0,
-  [ItemDisposition.list]: 1,
-};
 
 
 export enum TIPO_PAGINA {
@@ -490,23 +452,4 @@ export enum TIPO_MENU_ITEM {
 export enum EXPORT_DI_SISTEMA {
   CORREGGO = "CORREGGO",
   VOL = "VOL"
-}
-
-export enum AUTH_PROVIDER_TIPO {
-  INTERNAL = 'internal',
-  OIDC = 'oidc',
-  SAML = 'saml',
-  CUSTOM = 'custom',
-}
-
-export enum HUB_SERVICE_URL_TIPO {
-  INTERNAL = 'internal',
-  EXTERNAL = 'external',
-}
-
-export enum HUB_NEWS_TIPO {
-  INFO = 'info',
-  WARNING = 'warning',
-  SUCCESS = 'success',
-  UPDATE = 'update',
 }

@@ -160,7 +160,7 @@ export class CanaleService implements ICanaleService {
   async deleteCanale(guidID: string, req?: Request): Promise<boolean> {
     try {
       if (req) {
-        await scriviSuIstanta(req, '/ACPV/eliminaCanale/' + guidID, 'DELETE', undefined);
+        await scriviSuIstanta(req, `/ACPV/eliminaCanale/${guidID}`, 'DELETE', undefined);
       }
 
       const deleted = await this.canaleRepository.delete(guidID);

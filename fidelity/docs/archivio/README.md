@@ -1,0 +1,12 @@
+# Documenti archiviati
+
+Questi documenti descrivono progetti o stati del codice che non esistono più. Restano qui per lo
+storico: **non vanno seguiti** per lavorare sul codice attuale. Archiviati il 2026-10-29 (pulizia e
+documentazione di Fidelity, task T8).
+
+| Documento | Perché è superato | Cosa lo sostituisce |
+| --- | --- | --- |
+| `AuthProvider-EntraID.md` | Guida scritta quando la callback OIDC era ancora da sviluppare: indica una route `GET /api/auth/callback/entra_id` che non esiste, un redirect diretto del browser all'`authorize_url` senza `state` né `nonce`, e la configurazione dei provider solo da seed o con chiamate API a mano. | Il flusso OIDC è in `HubController` (`GET /api/auth/oidc/authorize/:codice`, `GET /api/auth/oidc/callback`) con `OidcService`; SAML è in `MetodiAccessoController` (`/api/auth/saml/*`) con `SamlService`. I metodi di accesso (email e password, OIDC, SAML) si configurano dalla pagina `/gestione-interna/gestione-metodi-accesso`, permesso `sistema.gestisci_metodi_accesso` (solo Superadmin); i segreti si cifrano con `yarn auth:segreti`. |
+| `backend-corporate-foundation.md` | Descrive un'"architettura target" a moduli in `server/src/modules` mai realizzata, un compose di sviluppo con PostgreSQL che oggi non c'è, `.env.docker.example` e lo script `npm run dev:docker`, che non esistono. | Il codice applicativo è tutto in `server/core`. Di quella fondazione restano in uso Redis facoltativo, code BullMQ, `/health` e `/metrics` (`server/src/shared`, `server/src/app/http`) e lo stack di osservabilità dei compose: sono descritti nel `README.md` di Fidelity (Stack, Osservabilità) e in `PRIMO_AVVIO_TEST.md`. |
+| `rollback-corporate-foundation.md` | Istruzioni per annullare la fondazione con `git restore` e `git clean`: elenca file che non esistono più (`server/src/shared/logger`, `errors`, `security`) e oggi cancellerebbe codice in uso (`server/src/shared` è importato da `server/core`). | Nessuno: la fondazione fa parte del codice e non si annulla in blocco. |
+| `moduli/*.md` | Erano i `README.md` segnaposto delle cartelle `server/src/modules/<modulo>`, che non contenevano altro: elencavano file "legacy da migrare" e regole "cosa non fare ancora" per una migrazione mai avviata. Alcuni file citati non esistono (per esempio `WhatsappQueueWorker.ts` è in `server/core/workers`, non in `services`). | Nessuno. L'eventuale riorganizzazione per moduli va progettata in un task dedicato, partendo dal codice attuale di `server/core`. |

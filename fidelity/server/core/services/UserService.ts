@@ -204,10 +204,10 @@ export class UserService implements IUserService {
       }));
 
       return {
-        utenti: utenti,
-        total: total,
-        page: page,
-        limit: limit,
+        utenti,
+        total,
+        page,
+        limit,
         total_pages: Math.ceil(total / limit)
       };
     } catch (error) {
@@ -949,7 +949,7 @@ export class UserService implements IUserService {
       });
       // Chiave testuale usata dall'hub per i destinatari ("GDO_ADMIN"); permessi e menu usano l'id.
       return ruoloGDO?.ruolo_ruolo_utente_gdo
-        ? 'GDO_' + ruoloGDO.ruolo_ruolo_utente_gdo.trim().toUpperCase().replace(/^GDO_/, '')
+        ? `GDO_${ruoloGDO.ruolo_ruolo_utente_gdo.trim().toUpperCase().replace(/^GDO_/, '')}`
         : undefined;
     }
     return undefined;
@@ -1277,15 +1277,13 @@ export class UserService implements IUserService {
     const transaction = await sequelize.transaction();
 
     try {
-      console.log('registerUserWithTransaction - Start', {
-        userData: { ...userData, password: '***HIDDEN***' },
-        currentUserId
-      });
+      // Dati personali (email, nome, residenza, telefono...) mai nei log: solo tipo e identificativi
+      log.debug('registerUserWithTransaction - Start', { tipo: userData.tipo, currentUserId });
 
       // Validazione campi obbligatori
       if (!userData.email || !userData.nome || !userData.cognome ||
         !userData.tipo || !userData.stato || !userData.residenza || !userData.dataDiNascita) {
-        console.log('registerUserWithTransaction - Missing required fields');
+        log.debug('registerUserWithTransaction - Missing required fields');
         throw new ValidationError({
           message: 'Dati non validi',
           field: 'userData'
@@ -1340,7 +1338,7 @@ export class UserService implements IUserService {
 
       // Validazioni specifiche per tipo utente
       if (requiresGdo && !gdoScelta) {
-        console.log('registerUserWithTransaction - User type requires gdoScelta', { tipo: userData.tipo });
+        log.debug('registerUserWithTransaction - User type requires gdoScelta', { tipo: userData.tipo });
         throw new ValidationError({
           message: "Tutti gli utenti (escluso Superadmin) devono essere associati a una GDO",
           field: 'gdoScelta'
@@ -1349,16 +1347,16 @@ export class UserService implements IUserService {
 
 
       if (userData.tipo === TIPO_UTENTI.PUNTOVENDITA && !userData.idPuntoVendita) {
-        console.log('registerUserWithTransaction - PUNTOVENDITA user type requires idPuntoVendita');
+        log.debug('registerUserWithTransaction - PUNTOVENDITA user type requires idPuntoVendita');
         throw new ValidationError({
           message: "Dati non validi, un'utente Punto Vendita deve essere associato ad un Punto Vendita",
           field: 'idPuntoVendita'
         });
       }
       if (pos) {
-        console.log('registerUserWithTransaction - Geocoding successful', { posizione: pos });
+        log.debug('registerUserWithTransaction - Posizione trovata dalla residenza');
       } else {
-        console.log('registerUserWithTransaction - Geocoding failed for address', { address: userData.residenza });
+        log.debug('registerUserWithTransaction - Posizione non trovata dalla residenza');
       }
 
       // Creazione utente
@@ -1380,9 +1378,7 @@ export class UserService implements IUserService {
         lon_utenti: pos ? pos.lon : null,
       };
 
-      console.log('registerUserWithTransaction - Creating user', {
-        utente: { ...utente, password_utenti: '***HIDDEN***' }
-      });
+      log.debug('registerUserWithTransaction - Creating user', { tipo: utente.tipo_utenti });
 
       // Hash della password (solo se fornita — gli utenti OIDC non hanno password locale)
       if (utente.password_utenti) {
@@ -1391,7 +1387,7 @@ export class UserService implements IUserService {
       }
 
       const result = await this.userRepository.createWithOptions(utente, { transaction });
-      console.log('registerUserWithTransaction - User created', { userId: result.id_utenti });
+      log.debug('registerUserWithTransaction - User created', { userId: result.id_utenti });
 
       // Pulizia dati sensibili
       if (result.dataValues) {
@@ -1401,7 +1397,7 @@ export class UserService implements IUserService {
 
       // Registrazione come PUNTOVENDITA se necessario
       if (userData.tipo === TIPO_UTENTI.PUNTOVENDITA && userData.idPuntoVendita) {
-        console.log('registerUserWithTransaction - Registering user as PUNTOVENDITA', {
+        log.debug('registerUserWithTransaction - Registering user as PUNTOVENDITA', {
           userId: result.id_utenti,
           idPuntoVendita: userData.idPuntoVendita
         });
@@ -1409,12 +1405,12 @@ export class UserService implements IUserService {
           idutenti_puntivenditautenti: result.id_utenti,
           idpuntivendita_puntivenditautenti: userData.idPuntoVendita
         }, { transaction });
-        console.log('registerUserWithTransaction - User registered as PUNTOVENDITA successfully');
+        log.debug('registerUserWithTransaction - User registered as PUNTOVENDITA successfully');
       }
 
       // Creazione associazione UtentiGDO per tutti i tipi tranne SUPERADMIN
       if (requiresGdo && gdoScelta) {
-        console.log('registerUserWithTransaction - Creating UtentiGDO association', {
+        log.debug('registerUserWithTransaction - Creating UtentiGDO association', {
           userId: result.id_utenti,
           gdoScelta,
           idRuoloGDO,
@@ -1431,11 +1427,11 @@ export class UserService implements IUserService {
         }
 
         await UtentiGDO.create(utenteGDOData, { transaction });
-        console.log('registerUserWithTransaction - UtentiGDO association created successfully');
+        log.debug('registerUserWithTransaction - UtentiGDO association created successfully');
       }
 
       // Creazione activity log
-      console.log('registerUserWithTransaction - Creating activity log');
+      log.debug('registerUserWithTransaction - Creating activity log');
       const utenteToSend = { ...utente };
       delete utenteToSend.password_utenti;
       await ServerUtils.CREA_ATTIVITA(
@@ -1443,7 +1439,7 @@ export class UserService implements IUserService {
         TIPO_ATTIVITA.CREAZIONE_UTENTE,
         CATEGORIA_ATTIVITA.ACCOUNT,
         { ...utenteToSend });
-      console.log('registerUserWithTransaction - Activity log created');
+      log.debug('registerUserWithTransaction - Activity log created');
 
       // Commit della transazione
       //NOTE: in questo momento per la gestione degli utenti usiamo un materialize view
@@ -1452,7 +1448,7 @@ export class UserService implements IUserService {
         REFRESH MATERIALIZED VIEW mv_utenti_completi;
       `, { transaction });
       await transaction.commit();
-      console.log('registerUserWithTransaction - Transaction committed successfully');
+      log.debug('registerUserWithTransaction - Transaction committed successfully');
       return result;
     } catch (error) {
       // Rollback della transazione in caso di errore
@@ -1593,7 +1589,7 @@ export class UserService implements IUserService {
         const risposta = verificaRisposta<RispostaAuthAD>(
           await ServerUtils.sendToFICOApi<RispostaAuthAD>(
             req,
-            config.ISTANTA_IP_ADDRESS + "/FicoProcess/AuthADLanded",
+            `${config.ISTANTA_IP_ADDRESS}/FicoProcess/AuthADLanded`,
             "GET",
             {},
             {
@@ -1739,11 +1735,11 @@ export class UserService implements IUserService {
             esito: boolean,
           }>(
             req,
-            config.ISTANTA_IP_ADDRESS + "/FicoProcess/AuthLanded",
+            `${config.ISTANTA_IP_ADDRESS}/FicoProcess/AuthLanded`,
             "GET",
             {},
             {
-              "Authorization": "Bearer " + data.publicKey
+              "Authorization": `Bearer ${data.publicKey}`
             },
             undefined,
             { categoria: 'scrittura' }

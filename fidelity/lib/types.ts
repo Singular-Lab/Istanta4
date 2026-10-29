@@ -936,45 +936,6 @@ export interface PromoPerDashboard extends IPromo {
   }[];
 }
 
-export interface KitStatusBase {
-  nome: string;
-  files_totali: number;
-  files_completati: number;
-  files_in_lavorazione: number;
-  tipo: TIPO_KIT_DESIGN;
-  hasRefs: boolean;
-}
-
-export interface KitStatusRunTime extends KitStatusBase {
-  tipo: TIPO_KIT_DESIGN.AUTOMATICO;
-  files_totali: number;
-  files_completati: number;
-  files_in_lavorazione: number;
-  numero_referenze: number;
-}
-
-export interface KitStatusDesign extends KitStatusBase {
-  tipo: TIPO_KIT_DESIGN.MANUALE;
-  files_totali: number;
-  files_completati: number;
-  files_in_lavorazione: number;
-  files_in_revisione: number;
-}
-
-
-export interface NuovaPromoPerDashboard extends IPromo {
-  kit_pubblicati: KitStatusDesign[] | KitStatusRunTime[];
-  kit_in_lavorazione: KitStatusRunTime[] | KitStatusDesign[];
-  kit_in_revisione: KitStatusDesign[] | KitStatusRunTime[];
-  statistiche: {
-    totale_kit: number;
-    kit_completati: number;
-    kit_in_corso: number;
-    kit_in_revisione: number;
-    percentuale_completamento: number;
-  };
-  ultimo_aggiornamento: Date;
-}
 export interface WebhookAttributes {
   id_webhook: string;
   nome_webhook: string;

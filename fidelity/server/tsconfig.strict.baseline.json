@@ -11,7 +11,6 @@
   "server/core/middleware/rateLimiter.ts": 1,
   "server/core/repositories/BaseRepository.ts": 1,
   "server/core/repositories/PermessiRepository.ts": 5,
-  "server/core/scripts/cleanupLogs.ts": 1,
   "server/core/scripts/migrateOlimpoUrls.ts": 2,
   "server/core/services/ContrattoTipografiaService.ts": 4,
   "server/core/services/EphemeralTokenService.ts": 1,

@@ -4,6 +4,7 @@ import { HttpStatusCode } from '../../../lib/enums';
 import { BaseController } from '../base/BaseController';
 import { IVolantinoService } from '../interfaces/IVolantinoService';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { routeDeprecata } from '../middleware/routeDeprecata';
 import { permissionGuard } from '../middleware/permissionGuard';
 
 export class VolantinoController extends BaseController {
@@ -18,7 +19,7 @@ export class VolantinoController extends BaseController {
 
   protected setupRoutes(): void {
     this.router.get('/flyer-insights/:guidIdKitRuntime', authMiddleware, permissionGuard('kit_runtime.visualizza'), this.getFlyerInsights.bind(this));
-    this.router.get('/prendiIVolantiniCaricatiDaDB', authMiddleware, permissionGuard('kit_runtime.visualizza'), this.prendiIVolantiniCaricatiDaDB.bind(this));
+    this.router.get('/prendiIVolantiniCaricatiDaDB', authMiddleware, permissionGuard('kit_runtime.visualizza'), routeDeprecata, this.prendiIVolantiniCaricatiDaDB.bind(this));
   }
 
   private async getFlyerInsights(req: Request<{ guidIdKitRuntime: string }>, res: Response): Promise<void> {

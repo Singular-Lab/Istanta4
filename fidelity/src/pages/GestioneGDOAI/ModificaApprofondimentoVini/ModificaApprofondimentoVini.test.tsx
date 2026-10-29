@@ -39,6 +39,7 @@ describe("Modifica approfondimento vino", () => {
   beforeEach(() => {
     finti.showNotification.mockReset();
     vi.mocked(ServerCall.get).mockReset();
+    vi.mocked(ServerCall.put).mockReset();
   });
 
   it("se l'approfondimento non arriva mostra l'errore nella pagina e Riprova ricarica", async () => {
@@ -64,5 +65,40 @@ describe("Modifica approfondimento vino", () => {
     expect(screen.getByTitle("Generato")).toHaveAttribute("data-tono", "success");
     // Niente più il doppione "Torna alla Lista" in fondo al form
     expect(screen.queryByRole("button", { name: "Torna alla Lista" })).not.toBeInTheDocument();
+  });
+
+  it("un vino gia' generato si apre in sola lettura: niente campi modificabili ne' Rigenera", async () => {
+    rispondi(() => Promise.resolve(approfondimento));
+    apri();
+
+    const dati = await screen.findByRole("region", { name: "Dati del vino" });
+    expect(within(dati).getByText("2022")).toBeInTheDocument();
+    expect(within(dati).getByText("Chianti Classico")).toBeInTheDocument();
+    expect(within(dati).getByText("Cantina Rossi")).toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Genera/ })).not.toBeInTheDocument();
+    expect(screen.getByText("Rosso rubino")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Indietro" })).toBeInTheDocument();
+    expect(ServerCall.put).not.toHaveBeenCalled();
+  });
+
+  it("un vino non ancora generato si crea con Genera", async () => {
+    rispondi(() => Promise.resolve(null));
+    vi.mocked(ServerCall.put).mockResolvedValue({ ...approfondimento, nome: "Chianti Classico" });
+    apri();
+
+    const nome = await screen.findByRole("textbox", { name: /Nome Vino/ });
+    await vi.waitFor(() => expect(nome).toHaveValue("Chianti Classico"));
+    await userEvent.click(screen.getByRole("button", { name: /Genera/ }));
+
+    await vi.waitFor(() => expect(ServerCall.put).toHaveBeenCalledWith("/create_approfondimento_vino", {
+      anno: new Date().getFullYear(),
+      nome: "Chianti Classico",
+      cantina: "Cantina Rossi",
+      codice: "C1",
+    }));
+    // Dopo la generazione la pagina mostra il vino in sola lettura
+    expect(await screen.findByRole("region", { name: "Dati del vino" })).toBeInTheDocument();
   });
 });

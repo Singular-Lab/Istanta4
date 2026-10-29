@@ -70,7 +70,7 @@ const migraUtentiGdo = async (
   if (opzioni.dryRun) {
     console.log(Colorize.bgYellow('[DRY-RUN] Le seguenti modifiche verrebbero applicate:\n'));
     for (const utente of utentiSenzaGDO) {
-      console.log(`  [DRY-RUN] Creazione utenti_gdo per: ${(utente as any).email_utenti} (${(utente as any).tipo_utenti})`);
+      console.log(`  [DRY-RUN] Creazione utenti_gdo per: ${(utente as any).id_utenti} (${(utente as any).tipo_utenti})`);
     }
     console.log(`\n[DRY-RUN] Totale: ${utentiSenzaGDO.length} record da creare`);
     return riepilogo;
@@ -81,7 +81,7 @@ const migraUtentiGdo = async (
       id_utente_utentegdo: (utente as any).id_utenti,
       id_gdo_utentegdo: targetGdoId,
     }, { transaction });
-    console.log(`  Creato utenti_gdo per: ${(utente as any).email_utenti} (${(utente as any).tipo_utenti})`);
+    console.log(`  Creato utenti_gdo per: ${(utente as any).id_utenti} (${(utente as any).tipo_utenti})`);
     riepilogo.creati++;
   }
 

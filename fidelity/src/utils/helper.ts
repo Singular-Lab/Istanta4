@@ -8,7 +8,7 @@ const cutText = (text: string, length: number) => {
     const string = text.substring(0, length);
     const splitText = string.split(" ");
     splitText.pop();
-    return splitText.join(" ") + "...";
+    return `${splitText.join(" ")}...`;
   } else {
     return text;
   }
@@ -66,12 +66,12 @@ const timeAgo = (time: string) => {
     (dayDiff === 0 &&
       ((diff < 60 && "just now") ||
         (diff < 120 && "1 minute ago") ||
-        (diff < 3600 && Math.floor(diff / 60) + " minutes ago") ||
+        (diff < 3600 && `${Math.floor(diff / 60)} minutes ago`) ||
         (diff < 7200 && "1 hour ago") ||
-        (diff < 86400 && Math.floor(diff / 3600) + " hours ago"))) ||
+        (diff < 86400 && `${Math.floor(diff / 3600)} hours ago`))) ||
     (dayDiff === 1 && "Yesterday") ||
-    (dayDiff < 7 && dayDiff + " days ago") ||
-    (dayDiff < 31 && Math.ceil(dayDiff / 7) + " weeks ago")
+    (dayDiff < 7 && `${dayDiff} days ago`) ||
+    (dayDiff < 31 && `${Math.ceil(dayDiff / 7)} weeks ago`)
   );
 };
 
@@ -94,10 +94,10 @@ const diffTimeByNow = (time: string) => {
   }
 
   return {
-    days: days.toString().length < 2 ? "0" + days : days,
-    hours: hours.toString().length < 2 ? "0" + hours : hours,
-    minutes: minutes.toString().length < 2 ? "0" + minutes : minutes,
-    seconds: seconds.toString().length < 2 ? "0" + seconds : seconds,
+    days: days.toString().length < 2 ? `0${days}` : days,
+    hours: hours.toString().length < 2 ? `0${hours}` : hours,
+    minutes: minutes.toString().length < 2 ? `0${minutes}` : minutes,
+    seconds: seconds.toString().length < 2 ? `0${seconds}` : seconds,
   };
 };
 
@@ -167,8 +167,8 @@ const slideUp = (
   callback = (el: HTMLElement) => {}
 ) => {
   el.style.transitionProperty = "height, margin, padding";
-  el.style.transitionDuration = duration + "ms";
-  el.style.height = el.offsetHeight + "px";
+  el.style.transitionDuration = `${duration}ms`;
+  el.style.height = `${el.offsetHeight}px`;
   el.offsetHeight;
   el.style.overflow = "hidden";
   el.style.height = "0";
@@ -208,8 +208,8 @@ const slideDown = (
   el.style.marginBottom = "0";
   el.offsetHeight;
   el.style.transitionProperty = "height, margin, padding";
-  el.style.transitionDuration = duration + "ms";
-  el.style.height = height + "px";
+  el.style.transitionDuration = `${duration}ms`;
+  el.style.height = `${height}px`;
   el.style.removeProperty("padding-top");
   el.style.removeProperty("padding-bottom");
   el.style.removeProperty("margin-top");

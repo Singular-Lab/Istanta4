@@ -20,6 +20,7 @@ import type { ChartOptions, TooltipItem } from "chart.js";
 import dayjs from "dayjs";
 import "dayjs/locale/it";
 import React, { useCallback, useMemo, useState } from "react";
+import { STATO_PROMO } from "../../../lib/enums";
 import { ServerCall } from "../../../lib/server_call";
 import type {
     CategoryScoreboardTimeline,
@@ -310,8 +311,14 @@ const DashboardCategory: React.FC = () => {
         () => timelinePromos.map(promo => promo.nome || promo.id),
         [timelinePromos],
     );
+    // /promo/in-corso include di proposito anche le promo eliminate (LavorazioniInCorso le mostra
+    // per il ripristino): una promo eliminata non e' in corso e qui non va mostrata
+    const promozioniInCorso = useMemo(
+        () => (promoQuery.data ?? []).filter(promo => promo.stato !== STATO_PROMO.ELIMINATA),
+        [promoQuery.data],
+    );
     const filteredPromozioniInCorso = useMemo(
-        () => (promoQuery.data ?? []).filter(promo =>
+        () => promozioniInCorso.filter(promo =>
             promoOverlapsRange(
                 {
                     validaDal: String(promo.validita_dal ?? ""),
@@ -321,7 +328,7 @@ const DashboardCategory: React.FC = () => {
                 dateTo,
             ),
         ),
-        [dateFrom, dateTo, promoQuery.data],
+        [dateFrom, dateTo, promozioniInCorso],
     );
     const filteredPromoIds = useMemo(
         () => new Set(filteredPromozioniInCorso.map(promo => promo.id)),

@@ -303,7 +303,7 @@ export class WebPliantService implements IWebPliantService {
       }
       const id_gdo = gdo.id;
       const workspace = await WorkspaceWebpliant.findAll({
-        where: { id_gdo: id_gdo },
+        where: { id_gdo },
         raw: true
       }) as any;
 

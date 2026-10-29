@@ -165,10 +165,7 @@ export const registrationRateLimiter = createBootstrapRateLimiter('rl:reg:', {
   handler: (req: Request, res: Response) => {
     AuditLogService.getInstance().rateLimitExceeded(req, 'registration');
 
-    log.warn(`Registration rate limit exceeded for IP: ${req.ip}`, {
-      ip: req.ip,
-      email: req.body?.email || 'unknown'
-    });
+    log.warn(`Registration rate limit exceeded for IP: ${req.ip}`, { ip: req.ip });
 
     sendAppError(res, new RateLimitError({
       message: 'Hai superato il limite di registrazioni per ora.',
@@ -195,10 +192,7 @@ export const passwordResetRateLimiter = createBootstrapRateLimiter('rl:pwd-reset
   handler: (req: Request, res: Response) => {
     AuditLogService.getInstance().rateLimitExceeded(req, 'password_reset');
 
-    log.warn(`Password reset rate limit exceeded for IP: ${req.ip}`, {
-      ip: req.ip,
-      email: req.body?.email || 'unknown'
-    });
+    log.warn(`Password reset rate limit exceeded for IP: ${req.ip}`, { ip: req.ip });
 
     sendAppError(res, new RateLimitError({
       message: 'Hai superato il limite di reset password per ora.',

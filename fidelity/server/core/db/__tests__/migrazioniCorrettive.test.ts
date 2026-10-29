@@ -1,8 +1,9 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { STATO_ORDINI_STAMPA } from '../../../../lib/enums';
 import { OrdiniDiStampa } from '../../models/ordini_di_stampa';
+import { GDOWhatsappPreset } from '../../models/whatsapp/gdo_whatsapp_preset';
 import { CARTELLA_SQL, FILE_SCHEMA } from '../migrazioni/fileMigrazioni';
 import type { DescrizioneSchema } from '../migrazioni/schemaModelli';
 
@@ -320,5 +321,206 @@ describe('0009: pulizia degli oggetti inutilizzati', () => {
     expect(sql).toContain(`DROP INDEX public.${legacy};`);
     // Il modello non lo dichiara
     expect(schema.tabelle.permessi_ruolo_gdo.indici.map(i => i.nome)).not.toContain(legacy);
+  });
+});
+
+// Migrazioni 0011-0013: chiavi primarie, enum senza colonne, date doppie dei preset WhatsApp. Il
+// comportamento su un database lo verifica migrazioniInstallazioniVecchie.integrazione.test.ts.
+const CHIAVI = '0011_chiavi_primarie.sql';
+const ENUM_ORFANI = '0012_enum_orfani.sql';
+const DATE_PRESET = '0013_timestamp_preset_whatsapp.sql';
+
+describe('migrazioni 0011-0013', () => {
+  it('sono nella transazione del runner, senza CASCADE e senza eliminare righe', () => {
+    for (const file of [CHIAVI, ENUM_ORFANI, DATE_PRESET]) {
+      const sql = leggi(file);
+      const codice = senzaCommenti(sql);
+      expect(sql.split('\n')[0], file).toMatch(/^-- schema-dopo: [0-9a-f]{64}$/);
+      expect(sql, file).not.toMatch(/^--\s*senza-transazione/im);
+      expect(codice, file).not.toMatch(/\b(?:DELETE\s+FROM|TRUNCATE|INSERT\s+INTO)\b/i);
+      expect(codice, file).not.toMatch(/\bCASCADE\b/i);
+    }
+    // Solo 0013 riscrive righe, e solo le date dei preset
+    expect(senzaCommenti(leggi(CHIAVI))).not.toMatch(/\bUPDATE\b/i);
+    expect(senzaCommenti(leggi(ENUM_ORFANI))).not.toMatch(/\bUPDATE\b/i);
+  });
+});
+
+describe('0011: chiavi primarie', () => {
+  const sql = leggi(CHIAVI);
+  const righe = [...sql.matchAll(/\('(\w+)', '(\w+)'\)/g)].map(([, tabella, nome]) => ({ tabella, nome }));
+
+  it('aggiunge le chiavi primarie dei modelli che le installazioni vecchie non hanno', () => {
+    expect(righe.map(r => `${r.tabella}.${r.nome}`)).toEqual(['gdo_whatsapp_presets.id_gdowhatsappreset', 'utenti_guest.id_UtentiGuest']);
+    for (const r of righe) {
+      const chiave = Object.entries(schema.tabelle[r.tabella].colonne).filter(([, c]) => c.chiavePrimaria).map(([nome]) => nome);
+      expect(chiave, r.tabella).toEqual([r.nome]);
+    }
+  });
+
+  it('non tocca una tabella che ha gia\' una chiave primaria', () => {
+    expect(sql).toMatch(/WHERE k\.conrelid = tabella_oid AND k\.contype = 'p';\s+IF esistente IS NOT NULL THEN[\s\S]*?CONTINUE;\s+END IF;/);
+  });
+
+  it('con id NULL o ripetuti non crea la chiave: un avviso e la tabella resta com\'e\'', () => {
+    expect(sql).toContain("'SELECT count(*) - count(%1$I), count(%1$I) - count(DISTINCT %1$I) FROM public.%2$I'");
+    expect(sql).toMatch(/IF nulli > 0 OR doppi > 0 THEN\s+RAISE NOTICE[^;]*;\s+CONTINUE;\s+END IF;/);
+    const conteggio = sql.indexOf('INTO nulli, doppi;');
+    const aggiunta = sql.indexOf("EXECUTE format('ALTER TABLE public.%I ADD CONSTRAINT %I PRIMARY KEY (%I)', r.tabella, chiave, r.colonna);");
+    expect(conteggio).toBeGreaterThan(0);
+    expect(aggiunta).toBeGreaterThan(conteggio);
+  });
+
+  it('usa il nome che PostgreSQL da\' alle chiavi della baseline, solo se e\' libero', () => {
+    expect(sql).toContain("chiave := r.tabella || '_pkey';");
+    expect(leggi('0000_baseline.sql')).toMatch(/CREATE TABLE IF NOT EXISTS "utenti_guest" \([\s\S]*?PRIMARY KEY \("id_UtentiGuest"\)/);
+    expect(sql).toMatch(/IF to_regclass\(format\('public\.%I', chiave\)\) IS NOT NULL\s+OR EXISTS \([^)]*conname = chiave\) THEN\s+RAISE NOTICE[^;]*;\s+CONTINUE;/);
+  });
+});
+
+describe('0012: enum orfani', () => {
+  const sql = leggi(ENUM_ORFANI);
+  const elenco = sql.match(/modelli TEXT\[\] := ARRAY\[([\s\S]*?)\];/)?.[1] ?? '';
+  const modelli = [...elenco.matchAll(/'([^']+)'/g)].map(([, nome]) => nome);
+  const enumBaseline = [...leggi('0000_baseline.sql').matchAll(/CREATE TYPE "public"\."([^"]+)" AS ENUM/g)].map(([, nome]) => nome);
+
+  it('non tocca gli enum dei modelli: l\'elenco e\' quello della baseline e di schema.json', () => {
+    expect(modelli).toHaveLength(41);
+    expect([...modelli].sort()).toEqual([...enumBaseline].sort());
+    // Uguali a schema.json quando la migrazione e' stata scritta; un enum aggiunto dopo nasce con la
+    // sua colonna, quindi usato, e 0012 non lo elimina comunque
+    expect([...modelli].sort()).toEqual(Object.keys(schema.enum).sort());
+    expect(sql).toContain('AND NOT (t.typname = ANY (modelli))');
+  });
+
+  it('elimina solo gli enum di public che nessuna colonna usa, neanche come array, e da cui niente dipende', () => {
+    expect(sql).toContain("WHERE n.nspname = 'public' AND t.typtype = 'e'");
+    expect(sql).toMatch(/WHERE a\.atttypid IN \(r\.oid, r\.typarray\) AND a\.attnum > 0 AND NOT a\.attisdropped\s+\) THEN\s+RAISE NOTICE[^;]*;\s+CONTINUE;/);
+    expect(sql).toMatch(/d\.refobjid IN \(r\.oid, r\.typarray\)\s+AND NOT \(d\.classid = 'pg_type'::regclass AND d\.objid = r\.typarray\)/);
+    expect(sql).toContain("d.objid = r.oid AND d.deptype = 'e'");
+    const colonne = sql.indexOf('a.atttypid IN (r.oid, r.typarray)');
+    const dipendenze = sql.indexOf('FROM pg_depend d');
+    const elimina = sql.indexOf("EXECUTE format('DROP TYPE public.%I', r.typname);");
+    expect(colonne).toBeGreaterThan(0);
+    expect(dipendenze).toBeGreaterThan(colonne);
+    expect(elimina).toBeGreaterThan(dipendenze);
+  });
+
+  it('DROP TYPE senza CASCADE: se qualcosa lo usa comunque resta, con un avviso', () => {
+    expect(sql).toMatch(/EXECUTE format\('DROP TYPE public\.%I', r\.typname\);\s+RAISE NOTICE[^;]*;\s+EXCEPTION WHEN dependent_objects_still_exist THEN\s+RAISE NOTICE/);
+  });
+});
+
+describe('0013: date dei preset WhatsApp', () => {
+  const sql = leggi(DATE_PRESET);
+  const codice = senzaCommenti(sql);
+  const colonne = schema.tabelle.gdo_whatsapp_presets.colonne;
+
+  it('modello e schema.json hanno una sola coppia di date: createdat/updatedat, che legge il client', () => {
+    expect(Object.keys(colonne)).toEqual(expect.arrayContaining(['createdat', 'updatedat']));
+    expect(colonne).not.toHaveProperty('createdAt');
+    expect(colonne).not.toHaveProperty('updatedAt');
+    expect(colonne.createdat).toMatchObject({ tipo: 'timestamp with time zone', nullable: true, default: 'NOW()' });
+    expect(colonne.updatedat).toMatchObject({ tipo: 'timestamp with time zone', nullable: true, default: 'NOW()' });
+    expect(Object.keys(GDOWhatsappPreset.getAttributes())).not.toEqual(expect.arrayContaining(['createdAt']));
+    expect(Object.keys(GDOWhatsappPreset.getAttributes())).not.toEqual(expect.arrayContaining(['updatedAt']));
+    expect(GDOWhatsappPreset.options).toMatchObject({ timestamps: true, createdAt: 'createdat', updatedAt: 'updatedat' });
+  });
+
+  it('unisce i valori senza perderne prima di eliminare: createdat la data piu\' vecchia, updatedat la piu\' recente', () => {
+    expect(sql).toContain("('createdat', 'createdAt', 'LEAST')");
+    expect(sql).toContain("('updatedat', 'updatedAt', 'GREATEST')");
+    const unisce = sql.indexOf("'UPDATE public.gdo_whatsapp_presets SET %1$I = %3$s(%1$I, %2$I) WHERE %1$I IS DISTINCT FROM %3$s(%1$I, %2$I)'");
+    const facoltativa = sql.indexOf("'ALTER TABLE public.gdo_whatsapp_presets ALTER COLUMN %I DROP NOT NULL', r.doppia");
+    const elimina = sql.indexOf("'ALTER TABLE public.gdo_whatsapp_presets DROP COLUMN %I', r.doppia");
+    expect(unisce).toBeGreaterThan(0);
+    expect(facoltativa).toBeGreaterThan(unisce);
+    expect(elimina).toBeGreaterThan(facoltativa);
+    // Se un altro oggetto usa la colonna resta, facoltativa: l'INSERT del modello non la scrive
+    expect(sql).toMatch(/DROP COLUMN %I', r\.doppia\);\s+RAISE NOTICE[^;]*;\s+EXCEPTION WHEN dependent_objects_still_exist THEN\s+RAISE NOTICE/);
+  });
+
+  it('dove manca aggiunge la colonna del modello senza mettere la data di oggi sulle righe esistenti', () => {
+    expect(sql).toMatch(/'ALTER TABLE public\.gdo_whatsapp_presets ADD COLUMN %I TIMESTAMP WITH TIME ZONE', r\.tenuta\);\s+EXECUTE format\('ALTER TABLE public\.gdo_whatsapp_presets ALTER COLUMN %I SET DEFAULT NOW\(\)', r\.tenuta\);/);
+  });
+
+  it('tocca solo gdo_whatsapp_presets, e solo dove ci sono ancora le colonne doppie', () => {
+    const tabelle = [...codice.matchAll(/\b(?:UPDATE|ALTER TABLE)\s+public\.(\w+)/gi)].map(([, tabella]) => tabella);
+    expect(tabelle.length).toBeGreaterThan(0);
+    expect(new Set(tabelle)).toEqual(new Set(['gdo_whatsapp_presets']));
+    expect(sql).toMatch(/AND column_name = r\.doppia\s+\) THEN\s+CONTINUE;/);
+  });
+});
+
+describe('GDOWhatsappPreset con una sola coppia di date', () => {
+  const RIGA = {
+    id_gdowhatsappreset: '00000000-0000-0000-0000-0000000000a1',
+    id_template_gdowhatsappreset: '00000000-0000-0000-0000-0000000000b1',
+    nome_preset_gdowhatsappreset: 'Preset di prova',
+    is_default_gdowhatsappreset: true,
+    hash_gdowhatsappreset: 'hash',
+    json_meta_gdowhatsappreset: { nome: { origine: 'utente' } },
+    createdat: new Date('2026-01-10T08:00:00.000Z'),
+    updatedat: new Date('2026-03-20T09:30:00.000Z'),
+  };
+  const queryInterface = () => {
+    const istanza = GDOWhatsappPreset.sequelize;
+    if (!istanza) throw new Error('GDOWhatsappPreset senza sequelize');
+    return istanza.getQueryInterface();
+  };
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('la risposta JSON dei preset ha la stessa forma di prima: createdAt/updatedAt restano, uguali a createdat/updatedat', () => {
+    // Come una riga letta da findAll (get_all_presets_template_whatsapp)
+    const preset = GDOWhatsappPreset.build(RIGA, { isNewRecord: false, raw: true });
+
+    const json = JSON.parse(JSON.stringify(preset));
+
+    expect(Object.keys(json)).toEqual([
+      'id_gdowhatsappreset', 'id_template_gdowhatsappreset', 'nome_preset_gdowhatsappreset', 'is_default_gdowhatsappreset',
+      'hash_gdowhatsappreset', 'json_meta_gdowhatsappreset', 'createdat', 'updatedat', 'createdAt', 'updatedAt',
+    ]);
+    expect(json).toMatchObject({
+      createdat: '2026-01-10T08:00:00.000Z', updatedat: '2026-03-20T09:30:00.000Z',
+      createdAt: '2026-01-10T08:00:00.000Z', updatedAt: '2026-03-20T09:30:00.000Z',
+    });
+  });
+
+  // Le colonne si leggono al momento della chiamata: dopo, save() aggiunge al suo oggetto i dataValues
+  it('la creazione scrive createdat e updatedat, non le colonne tolte da 0013', async () => {
+    const scritte: string[][] = [];
+    vi.spyOn(queryInterface(), 'insert').mockImplementation(async (istanza, _tabella, valori) => {
+      scritte.push(Object.keys(valori));
+      return [istanza, 1];
+    });
+
+    await GDOWhatsappPreset.create({
+      id_template_gdowhatsappreset: RIGA.id_template_gdowhatsappreset,
+      nome_preset_gdowhatsappreset: RIGA.nome_preset_gdowhatsappreset,
+      is_default_gdowhatsappreset: true,
+      hash_gdowhatsappreset: RIGA.hash_gdowhatsappreset,
+      json_meta_gdowhatsappreset: RIGA.json_meta_gdowhatsappreset,
+    });
+
+    expect(scritte).toHaveLength(1);
+    expect(scritte[0]).toEqual(expect.arrayContaining(['createdat', 'updatedat']));
+    expect(scritte[0]).not.toEqual(expect.arrayContaining(['createdAt']));
+    expect(scritte[0]).not.toEqual(expect.arrayContaining(['updatedAt']));
+  });
+
+  it('una modifica aggiorna updatedat ("Ultimo aggiornamento" nel client), non piu\' updatedAt', async () => {
+    const scritte: string[][] = [];
+    vi.spyOn(queryInterface(), 'update').mockImplementation(async (istanza, _tabella, valori) => {
+      scritte.push(Object.keys(valori));
+      return [istanza, 1];
+    });
+    const preset = GDOWhatsappPreset.build(RIGA, { isNewRecord: false, raw: true });
+
+    await preset.update({ nome_preset_gdowhatsappreset: 'Preset rinominato' });
+
+    expect(scritte).toEqual([['nome_preset_gdowhatsappreset', 'updatedat']]);
   });
 });

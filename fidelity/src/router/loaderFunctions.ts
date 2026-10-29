@@ -497,38 +497,6 @@ export const funzioneCaricamentoEditWorkspace: LoaderFunction = async ({ request
   return { dataWorkspace, linkWorkspaces, config, contenutiAggiuntivi, listaUtentiOperatori, promos };
 };
 
-export const funzioneCaricamentoGestioneAI = async ({ request }: { request: Request }) => {
-  const url = new URL(request.url);
-  const idWorkspace = url.pathname.split("/").pop() || "";
-  // Due richieste → totalSteps = 2
-  const totalSteps = 2;
-
-
-
-  return {};
-};
-
-
-
-
-export const funzioneCaricamentoGestionePagineSingular = async ({ request }: { request: Request }) => {
-  const url = new URL(request.url);
-  // Due richieste → totalSteps = 2
-  const totalSteps = 2;
-
-
-  const gestionePagineSingular = ServerCall.get<any>("/getGestionePagineSingular");
-
-  const results = await Promise.allSettled([gestionePagineSingular]);
-  const [tipo] = results.map((r) =>
-    r.status === "fulfilled" ? r.value : (console.error("Errore:", r.reason), null)
-  );
-
-
-  const { TIPO_UTENTI } = tipo;
-  return { TIPO_UTENTI };
-}
-
 export const funzioneCaricamentoImpostazioniTipografia = async () => {
   const totalSteps = 1;
 
@@ -546,29 +514,6 @@ export const funzioneCaricamentoImpostazioniTipografia = async () => {
   return { impostazioni, contratto, canali, aree };
 }
 
-
-export const funzioneCaricamentoOrdiniStampa = async () => {
-  const totalSteps = 3;
-
-
-  const ordiniStampa = ServerCall.get<(OrdiniDiStampaResponseDTO & { nomePromo: string })[]>("/getOrdiniDiStampaInCorso");
-  const ordiniStampaCompletati = ServerCall.get<(OrdiniDiStampaResponseDTO & { nomePromo: string })[]>("/getAllOrdiniDiStampaFiniti");
-  const allPromo = ServerCall.get<PromoResponseDTO[]>("/promo/in-corso");
-
-  const results = await Promise.allSettled([ordiniStampa, allPromo, ordiniStampaCompletati]);
-  const [ordiniDiStampa, promo, ordiniStampaFiniti]: [OrdiniDiStampaResponseDTO[] | null, PromoResponseDTO[] | null, OrdiniDiStampaResponseDTO & { nomePromo: string }] = results.map((r) =>
-    r.status === "fulfilled" ? r.value : (console.error("Errore:", r.reason), null)
-  ) as [OrdiniDiStampaResponseDTO[] | null, PromoResponseDTO[] | null, OrdiniDiStampaResponseDTO & { nomePromo: string }];
-
-
-  let newPromo;
-  if (ordiniDiStampa && promo) {
-    newPromo = promo.filter((p) => !ordiniDiStampa?.some((o) => o.id_promo === p.id));
-  }
-
-
-  return { ordiniDiStampa, promo: newPromo, ordiniStampaFiniti };
-}
 
 export const funzioneCaricamentoDettagliOrdiniDiStampa = async ({ request }: { request: Request }) => {
   const idOrdineDiStampa = new URL(request.url).searchParams.get("id") || "";

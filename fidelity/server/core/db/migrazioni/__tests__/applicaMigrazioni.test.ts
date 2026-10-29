@@ -25,8 +25,8 @@ vi.mock('../verificaSchema', () => ({ segnalaDifferenzeSchema: mocks.segnala }))
 vi.mock('../../../logger', () => ({ log: mocks.log }));
 
 import { RUOLO_UTENTE_GDO } from '../../../../../lib/enums';
-import { applicaMigrazioni, RigaStorico } from '../applicaMigrazioni';
-import { analizzaMigrazione, Migrazione } from '../fileMigrazioni';
+import { applicaMigrazioni, PRIMA_DELL_ALLINEAMENTO, RigaStorico } from '../applicaMigrazioni';
+import { analizzaMigrazione, leggiMigrazioni, Migrazione } from '../fileMigrazioni';
 
 const HASH_MODELLI = 'a'.repeat(64);
 const ALTRO_HASH = 'b'.repeat(64);
@@ -348,5 +348,55 @@ describe('applicaMigrazioni: adozione di un database esistente', () => {
 
     expect(esito.adozione).toBe('con-allineamento');
     expect(eseguite()).not.toContain("SELECT 'baseline';");
+  });
+
+  // L'ALTER dell'adozione elimina createdAt/updatedAt dei preset, che il modello non ha piu': 0013 deve
+  // copiarne i valori prima
+  describe('migrazioni che girano anche prima dell\'allineamento', () => {
+    const DATE = migrazione('0013_timestamp_preset_whatsapp', "SELECT 'date';");
+
+    it('sono quelle che recuperano valori da colonne tolte dai modelli, e ci sono', () => {
+      expect(PRIMA_DELL_ALLINEAMENTO).toEqual(['0013_timestamp_preset_whatsapp']);
+      const reali = leggiMigrazioni().filter(m => PRIMA_DELL_ALLINEAMENTO.includes(m.nome));
+      expect(reali.map(m => m.nome)).toEqual(PRIMA_DELL_ALLINEAMENTO);
+      expect(reali.every(m => !m.senzaTransazione)).toBe(true);
+    });
+
+    it('nell\'adozione girano prima dell\'allineamento, nella loro transazione, e di nuovo al loro turno', async () => {
+      preparaDatabase({ storico: false, gdo: true });
+
+      await applicaMigrazioni({ migrazioni: [BASELINE, UNO, DATE] });
+
+      expect(eseguite()).toEqual(["SELECT 'date';", "SELECT 'uno';", "SELECT 'date';"]);
+      const prima = eventi.findIndex(e => /^sql:\d+:SELECT 'date';$/.test(e));
+      const transazione = eventi[prima].split(':')[1];
+      expect(prima).toBeGreaterThan(eventi.indexOf('rimuovi-derivati'));
+      expect(prima).toBeLessThan(eventi.indexOf('allinea:tutti'));
+      expect(eventi.slice(prima - 2, prima + 2)).toEqual([
+        `inizio:${transazione}`, `lock_timeout:${transazione}`, `sql:${transazione}:SELECT 'date';`, `commit:${transazione}`,
+      ]);
+      // Nello storico una volta sola, al suo turno
+      expect(db.righe.map(r => `${r.nome}:${r.modo}`)).toEqual(['0000_baseline:adottata', '0001_uno:eseguita', '0013_timestamp_preset_whatsapp:eseguita']);
+    });
+
+    it('fuori dall\'adozione girano solo al loro turno', async () => {
+      preparaDatabase({ storico: true, gdo: true, righe: [riga(BASELINE), riga(UNO)] });
+
+      await applicaMigrazioni({ migrazioni: [BASELINE, UNO, DATE] });
+
+      expect(eseguite()).toEqual(["SELECT 'date';"]);
+      expect(mocks.allinea).not.toHaveBeenCalled();
+    });
+
+    it('se falliscono prima dell\'allineamento l\'avvio si ferma: niente allineamento ne\' baseline adottata', async () => {
+      preparaDatabase({ storico: false, gdo: true, fallisce: "SELECT 'date';" });
+
+      await expect(applicaMigrazioni({ migrazioni: [BASELINE, UNO, DATE] }))
+        .rejects.toThrow(/0013_timestamp_preset_whatsapp non applicata prima dell'allineamento \(annullata\)/);
+
+      expect(mocks.allinea).not.toHaveBeenCalled();
+      expect(db.righe).toEqual([]);
+      expect(eventi).toContain('prepara-derivati:true');
+    });
   });
 });

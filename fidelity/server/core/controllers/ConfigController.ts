@@ -20,6 +20,7 @@ import { inviaFormDataAOlimpo } from '../http/olimpo';
 import { IConfigService } from '../interfaces/IConfigService';
 import { log } from '../logger';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { routeDeprecata } from '../middleware/routeDeprecata';
 import { jsonGrande } from '../middleware/jsonGrande';
 import { permissionGuard } from '../middleware/permissionGuard';
 import { PERMESSI } from '../../../lib/accessi/catalogo';
@@ -49,14 +50,14 @@ export class ConfigController extends BaseController {
   protected setupRoutes(): void {
     this.router.get('/getStiliToText', this.getStiliToText.bind(this));
     this.router.get('/get_config', this.get_config.bind(this));
-    this.router.post('/saveConfig', authMiddleware, permissionGuard('impostazioni.modifica_generali'), this.saveConfig.bind(this));
+    this.router.post('/saveConfig', authMiddleware, permissionGuard('impostazioni.modifica_generali'), routeDeprecata, this.saveConfig.bind(this));
     this.router.post('/caricaStiliInConfig', authMiddleware, permissionGuard('impostazioni.modifica_generali'), uploadCss.single('file'), this.caricaStiliInConfig.bind(this));
     this.router.get('/getConfigWebPliantFromVolantino', this.getConfigWebPliantFromVolantino.bind(this));
     this.router.get('/getColorGDO', this.getColorGDO.bind(this));
     this.router.post('/saveWebpliantConfig', authMiddleware, permissionGuard('impostazioni.modifica_generali'), jsonGrande, this.saveWebpliantConfig.bind(this));
-    this.router.post('/saveDashBoardConfig', authMiddleware, permissionGuard(PERMESSI.SISTEMA.CONFIGURAZIONE), this.saveDashBoardConfig.bind(this));
-    this.router.get('/getDashBoardConfig', authMiddleware, this.getDashBoardConfig.bind(this));
-    this.router.get('/getPluginRegistry', authMiddleware, permissionGuard('api.gestisci_plugin'), this.getPluginRegistry.bind(this));
+    this.router.post('/saveDashBoardConfig', authMiddleware, permissionGuard(PERMESSI.SISTEMA.CONFIGURAZIONE), routeDeprecata, this.saveDashBoardConfig.bind(this));
+    this.router.get('/getDashBoardConfig', authMiddleware, routeDeprecata, this.getDashBoardConfig.bind(this));
+    this.router.get('/getPluginRegistry', authMiddleware, permissionGuard('api.gestisci_plugin'), routeDeprecata, this.getPluginRegistry.bind(this));
     this.router.get('/getFlyerInsightsConfig', this.getFlyerInsightsConfig.bind(this));
     this.router.get('/avviso-manutenzione', authMiddleware, this.getAvvisoManutenzione.bind(this));
     this.router.post('/avviso-manutenzione', authMiddleware, permissionGuard(PERMESSI.SISTEMA.MANUTENZIONE), this.saveAvvisoManutenzione.bind(this));

@@ -570,12 +570,12 @@ export class OrdiniStampaService implements IOrdiniStampaService {
 
         const contrattoElaborato = await processaContrattoTipografiaGDO(
           contattoNonElaborato,
-          { canali: canaliDTO, aree: areeDTO, promo: promo, kit }
+          { canali: canaliDTO, aree: areeDTO, promo, kit }
         );
 
         const resultAPI = await ServerUtils.sendToFICOApi<{ esito: boolean; error: string }>(
           req as Request,
-          process.env.OLYMPUS_IP_ADDRESS + "/ftp/creazioneCartelleContratto",
+          `${process.env.OLYMPUS_IP_ADDRESS}/ftp/creazioneCartelleContratto`,
           "POST",
           {
             contratto: contrattoElaborato,
@@ -1376,7 +1376,7 @@ export class OrdiniStampaService implements IOrdiniStampaService {
         error?: string;
       }>(
         req as Request,
-        config.OLYMPUS_IP_ADDRESS + "/materiali/groupPDFsByEquality",
+        `${config.OLYMPUS_IP_ADDRESS}/materiali/groupPDFsByEquality`,
         "POST",
         { ids: idsForOlympus, socketId },
         undefined,
@@ -1567,7 +1567,7 @@ export class OrdiniStampaService implements IOrdiniStampaService {
       const contattoNonElaborato = structuredClone(contratto) as RootFileTree;
       const contrattoElaborato = await processaContrattoTipografiaGDO(
         contattoNonElaborato,
-        { canali: canaliDTO, aree: areeDTO, promo: promo, kit }
+        { canali: canaliDTO, aree: areeDTO, promo, kit }
       );
       (kit as any).contrattoElaborato = contrattoElaborato;
     }
@@ -1578,7 +1578,7 @@ export class OrdiniStampaService implements IOrdiniStampaService {
       error?: string;
     }>(
       req as Request,
-      config.OLYMPUS_IP_ADDRESS + "/ftp/getVirtualDirectories",
+      `${config.OLYMPUS_IP_ADDRESS}/ftp/getVirtualDirectories`,
       "POST",
       {
         kits: kitDisponibili

@@ -4,7 +4,6 @@ import { AttivitaController } from './controllers/AttivitaController';
 import { CanaleController } from './controllers/CanaleController';
 import { CombinazioneAreeCanaliController } from './controllers/CombinazioneAreeCanaliController';
 import { ConfigController } from './controllers/ConfigController';
-import { CorreggoController } from './controllers/CorreggoController';
 import { DashboardController } from './controllers/DashboardController';
 import { SuperadminDashboardController } from './controllers/SuperadminDashboardController';
 import { EmailController } from './controllers/EmailController';
@@ -175,7 +174,6 @@ export async function createControllers(): Promise<IController[]> {
     new MaterialiController(materialiService),
 
     // Original controllers
-    new CorreggoController(kitRuntimeService, serviceFacade),
     new WebhookController(webhookService),
     new ImpostazioniController(impostazioniService, webhookService, configService),
     new UserController(userService, badgeService, gdoService, agenziaLib),
@@ -190,7 +188,7 @@ export async function createControllers(): Promise<IController[]> {
     new CanaleController(canaleService),
     new AreaController(areaService, gdoService),
     new OrdiniDiStampaController(ordiniDiStampaService, gdoService, kitRuntimeService),
-    new GdoController(gdoService, webPliantService, serviceFacade),
+    new GdoController(gdoService, serviceFacade),
     new AttivitaController(attivitaService),
     new ConfigController(configService),
     new DashboardController(dashboardService),

@@ -12,6 +12,7 @@ import { IPuntoVenditaService } from '../interfaces/IPuntoVenditaService';
 import { gdoOperativaPerRichiesta } from '../accessi/contestoAccesso';
 import { log } from '../logger';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { routeDeprecata } from '../middleware/routeDeprecata';
 import { permissionGuard } from '../middleware/permissionGuard';
 import {
   DecisioneNonApplicabile,
@@ -108,7 +109,7 @@ export class PuntoVenditaController extends BaseController {
     this.router.post('/ACPV/importaPV/:jobId/decisione', authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), this.decisioneImportPV.bind(this));
     this.router.get('/ACPV/geocodifica/cerca', authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), this.cercaIndirizzo.bind(this));
     this.router.get('/getAllPVFromIdGDO', authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), this.getAllPVFromIdGDO.bind(this));
-    this.router.get('/getAllPVFromIdGDO_paginated', authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), this.getAllPVFromIdGDOPaginated.bind(this));
+    this.router.get('/getAllPVFromIdGDO_paginated', authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), routeDeprecata, this.getAllPVFromIdGDOPaginated.bind(this));
     this.router.get('/getAllPV', authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), this.getAllPV.bind(this));
     this.router.get("/get_pv_by_id", authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), this.getPvById.bind(this))
     this.router.get("/punti-vendita/:id/volantini-attivi", authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), this.getVolantiniAttivi.bind(this))
@@ -116,7 +117,7 @@ export class PuntoVenditaController extends BaseController {
 
     // DISPOSITIVI PUNTO VENDITA
     this.router.get("/dispositivi", authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), this.getDispositiviPuntoVendita.bind(this))
-    this.router.get("/dispositivo/:id", authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), this.getSingoloDispositivoPuntoVendita.bind(this))
+    this.router.get("/dispositivo/:id", authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), routeDeprecata, this.getSingoloDispositivoPuntoVendita.bind(this))
     this.router.post("/dispositivi", authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), this.createDispositivo.bind(this))
     this.router.put("/dispositivi/:id", authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), this.updateDispositivo.bind(this))
     this.router.delete("/dispositivi/:id", authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), this.deleteDispositivo.bind(this))
@@ -144,7 +145,7 @@ export class PuntoVenditaController extends BaseController {
       log.error('Get dispositivi punto vendita error: ', { error });
       this.sendResponse(res, HttpStatusCode.INTERNAL_SERVER_ERROR, {
         message: "Errore durante la richiesta dei dispositivi per il punto vendita",
-        error: error
+        error
       });
     }
   }
@@ -164,7 +165,7 @@ export class PuntoVenditaController extends BaseController {
       log.error('Get dispositivo punto vendita error: ', { error });
       this.sendResponse(res, HttpStatusCode.INTERNAL_SERVER_ERROR, {
         message: "Errore durante la richiesta del dispositivo per il punto vendita",
-        error: error
+        error
       });
     }
   }
@@ -188,7 +189,7 @@ export class PuntoVenditaController extends BaseController {
       log.error('Create dispositivo error: ', { error });
       this.sendResponse(res, HttpStatusCode.INTERNAL_SERVER_ERROR, {
         message: "Errore durante la creazione del dispositivo",
-        error: error
+        error
       });
     }
   }
@@ -206,7 +207,7 @@ export class PuntoVenditaController extends BaseController {
       log.error('Update dispositivo error: ', { error });
       this.sendResponse(res, HttpStatusCode.INTERNAL_SERVER_ERROR, {
         message: "Errore durante l'aggiornamento del dispositivo",
-        error: error
+        error
       });
     }
   }
@@ -224,7 +225,7 @@ export class PuntoVenditaController extends BaseController {
       log.error('Delete dispositivo error: ', { error });
       this.sendResponse(res, HttpStatusCode.INTERNAL_SERVER_ERROR, {
         message: "Errore durante l'eliminazione del dispositivo",
-        error: error
+        error
       });
     }
   }
@@ -242,7 +243,7 @@ export class PuntoVenditaController extends BaseController {
       log.error('Regenerate token error: ', { error });
       this.sendResponse(res, HttpStatusCode.INTERNAL_SERVER_ERROR, {
         message: "Errore durante la rigenerazione del token",
-        error: error
+        error
       });
     }
   }
@@ -264,7 +265,7 @@ export class PuntoVenditaController extends BaseController {
       log.error('Device heartbeat error: ', { error });
       this.sendResponse(res, HttpStatusCode.INTERNAL_SERVER_ERROR, {
         message: "Errore durante l'heartbeat",
-        error: error
+        error
       });
     }
   }
@@ -356,13 +357,13 @@ export class PuntoVenditaController extends BaseController {
         } catch (error) {
           this.sendResponse(res, HttpStatusCode.INTERNAL_SERVER_ERROR, {
             message: "Errore durante l'eliminazione del punto vendita",
-            error: error
+            error
           });
           return;
         }
       }
 
-      await scriviSuIstanta(req, '/ACPV/eliminaPV/' + guidID, 'DELETE', undefined);
+      await scriviSuIstanta(req, `/ACPV/eliminaPV/${guidID}`, 'DELETE', undefined);
 
       const resultPuntoVenditaEliminato = await this.puntoVenditaService.deletePuntoVendita(guidID);
       this.sendResponse(res, HttpStatusCode.OK, resultPuntoVenditaEliminato);
@@ -544,7 +545,7 @@ export class PuntoVenditaController extends BaseController {
     } catch (error: any) {
       this.sendResponse(res, HttpStatusCode.INTERNAL_SERVER_ERROR, {
         message: "Errore durante il recupero dei punti vendita",
-        error: error
+        error
       });
     }
   }
@@ -586,7 +587,7 @@ export class PuntoVenditaController extends BaseController {
       log.error('Get punti vendita paginated error: ', { error });
       this.sendResponse(res, HttpStatusCode.INTERNAL_SERVER_ERROR, {
         message: "Errore durante il recupero paginato dei punti vendita",
-        error: error
+        error
       });
     }
   }
@@ -604,7 +605,7 @@ export class PuntoVenditaController extends BaseController {
     } catch (error: any) {
       this.sendResponse(res, HttpStatusCode.INTERNAL_SERVER_ERROR, {
         message: "Errore durante il recupero dei punti vendita",
-        error: error
+        error
       });
     }
   }
@@ -654,7 +655,7 @@ export class PuntoVenditaController extends BaseController {
       log.error('getAllPuntiLatLonPV - Error', { error });
       this.sendResponse(res, HttpStatusCode.INTERNAL_SERVER_ERROR, {
         message: "Errore durante il recupero dei punti vendita con latitudine e longitudine",
-        error: error
+        error
       });
     }
   }

@@ -22,7 +22,6 @@ export class PluginAnalyticsManager {
     private registeredInstances = new Map<FP, AnalyticsInstanceMeta>();
 
     // Config
-    private apiUrl = '';
     private wsUrl = '';
     private bufferSize = 50;
     private flushIntervalMs = 10_000;
@@ -46,7 +45,6 @@ export class PluginAnalyticsManager {
 
             if (this.registeredInstances.size === 1) {
                 // Prima istanza: configura e connetti
-                this.apiUrl = meta.apiUrl;
                 if (meta.wsPort !== undefined) {
                     this.bufferSize = 50;
                 }
@@ -213,16 +211,11 @@ export class PluginAnalyticsManager {
     }
 
     private setupVisibilityHandler(): void {
+        // Pagina nascosta: si svuota il buffer sul WebSocket finche' e' ancora aperto. Non c'e' un
+        // invio via sendBeacon: il server non ha un endpoint HTTP per gli eventi del plugin.
         this.visibilityHandler = () => {
-            if (document.visibilityState === 'hidden' && this.buffer.length > 0 && !this.pendingResume) {
-                const batch = this.buffer.splice(0);
-                const events = this.assignSequences(batch);
-                const payload = JSON.stringify({
-                    type: 'events:batch',
-                    events,
-                });
-                const beaconUrl = `${this.apiUrl}/api/plugin-analytics/beacon`;
-                navigator.sendBeacon(beaconUrl, new Blob([payload], { type: 'application/json' }));
+            if (document.visibilityState === 'hidden') {
+                this.flush();
             }
         };
         document.addEventListener('visibilitychange', this.visibilityHandler);

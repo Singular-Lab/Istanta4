@@ -3,6 +3,7 @@ import { STATO_UTENTI, TIPO_UTENTI, UTENTE_GENERE } from '../../../lib/enums';
 import { ValidationError } from '../../../lib/errors';
 import { UtenteAttributes, UtentiMeta } from '../../../lib/types';
 import { sequelize } from '../db/SequelizeConnector';
+import { log } from '../logger';
 type UtenteCreationAttributes = Optional<UtenteAttributes, 'id_utenti'>;
 
 class Utente extends Model<UtenteAttributes, UtenteCreationAttributes> implements UtenteAttributes {
@@ -234,7 +235,7 @@ Utente.init({
       }
     },
     afterCreate: (utente: Utente) => {
-      console.log(`Nuovo utente creato: ${utente.getNomeCompleto()} (${utente.email_utenti})`);
+      log.debug('Nuovo utente creato', { userId: utente.id_utenti, tipo: utente.tipo_utenti });
     },
     beforeUpdate: async (utente: Utente) => {
       // Sincronizza geom quando cambiano lat/lon

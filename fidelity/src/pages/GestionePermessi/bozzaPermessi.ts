@@ -119,13 +119,6 @@ export const ripristinaEreditato = (config: ConfigurazioneServer, bozza: Bozza, 
   return ripulisci(config, { ...bozza, [codice]: null });
 };
 
-/** Annulla la modifica in sospeso di un permesso. */
-export const annullaModifica = (bozza: Bozza, codice: string): Bozza => {
-  const prossima: Record<string, boolean | null> = { ...bozza };
-  delete prossima[codice];
-  return prossima;
-};
-
 export type StatoArea = 'tutti' | 'nessuno' | 'misto';
 
 export const statoArea = (config: ConfigurazioneServer, bozza: Bozza, area: DefinizioneArea): { stato: StatoArea; abilitati: number; totale: number } => {

@@ -1244,15 +1244,15 @@ export function verificaRelazioni(): boolean {
 export function getInfoRelazioni(nomeModello: string): any {
   try {
     const modelli: { [key: string]: any } = {
-      'Utente': Utente,
-      'UtentiGDO': UtentiGDO,
-      'GDO': GDO,
-      'PuntoVendita': PuntoVendita,
-      'OrdiniDiStampa': OrdiniDiStampa,
-      'AttivitaUtente': AttivitaUtente,
-      'Webhook': Webhook,
-      'Promo': Promo,
-      'Attivita': Attivita
+      Utente,
+      UtentiGDO,
+      GDO,
+      PuntoVendita,
+      OrdiniDiStampa,
+      AttivitaUtente,
+      Webhook,
+      Promo,
+      Attivita
     };
 
     const modello = modelli[nomeModello];

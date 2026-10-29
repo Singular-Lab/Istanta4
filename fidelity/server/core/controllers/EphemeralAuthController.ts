@@ -3,6 +3,7 @@ import { BaseController } from '../base/BaseController';
 import { CompleteChallengeRequestDTO, EphemeralTokenErrorCode } from '../dto/EphemeralTokenDTO';
 import { log } from '../logger';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { routeDeprecata } from '../middleware/routeDeprecata';
 import { browserSecurityMiddleware } from '../middleware/browserSecurityMiddleware';
 import { ephemeralRateLimitMiddleware } from '../middleware/ephemeralRateLimitMiddleware';
 import { originWhitelistMiddleware } from '../middleware/originWhitelistMiddleware';
@@ -40,7 +41,7 @@ export class EphemeralAuthController extends BaseController {
         );
 
         // Revoke endpoint (amministrazione)
-        this.router.post('/revoke', authMiddleware, permissionGuard('api.gestisci_chiavi'), this.revokeToken.bind(this));
+        this.router.post('/revoke', authMiddleware, permissionGuard('api.gestisci_chiavi'), routeDeprecata, this.revokeToken.bind(this));
     }
 
     /**

@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // jsdom non implementa ResizeObserver, usato da Headless UI all'apertura di Dialog e Popover
 globalThis.ResizeObserver ??= class {
@@ -131,8 +131,6 @@ describe("Dettagli kit dell'ordine di stampa", () => {
 
     const totale = screen.getByText("Totale file").closest("dl")!;
     expect(within(totale).getByText("48")).toBeInTheDocument();
-    const selezionati = screen.getByText("Selezionati").closest("dl")!;
-    expect(within(selezionati).getByText("0")).toBeInTheDocument();
   });
 
   it("l'indietro della pagina ha un nome", async () => {
@@ -141,50 +139,18 @@ describe("Dettagli kit dell'ordine di stampa", () => {
     expect(screen.getByRole("button", { name: "Indietro" })).toBeInTheDocument();
   });
 
-  describe("unione dei file selezionati", () => {
-    afterEach(() => {
-      vi.unstubAllEnvs();
-      finti.post.mockReset();
-    });
+  it("niente selezione dei file ne' controllo e unione: la funzione non e' mai stata completata", async () => {
+    finti.query = {
+      ...finti.query,
+      data: datiPagina([file("f1", "volantino.pdf", "ACCETTATO"), file("f2", "locandina.pdf", "ACCETTATO")]),
+    };
+    await apri();
 
-    it("durante verifica e unione il pulsante del passo in corso è occupato, senza righe di avanzamento a parte", async () => {
-      vi.stubEnv("VITE_ENABLE_PDF_EQUALITY_WS", "true");
-      let rispondiVerifica: (valore: unknown) => void = () => {};
-      finti.post
-        .mockImplementationOnce(() => new Promise((risolvi) => (rispondiVerifica = risolvi)))
-        .mockImplementationOnce(() => new Promise(() => {}));
-      finti.query = {
-        ...finti.query,
-        data: datiPagina([file("f1", "volantino.pdf", "ACCETTATO"), file("f2", "locandina.pdf", "ACCETTATO")]),
-      };
-      await apri();
-
-      fireEvent.click(screen.getByRole("checkbox", { name: "Seleziona volantino.pdf" }));
-      fireEvent.click(screen.getByRole("checkbox", { name: "Seleziona locandina.pdf" }));
-      fireEvent.click(screen.getByRole("button", { name: "Controlla e unisci" }));
-
-      const finestra = await screen.findByRole("dialog");
-      expect(within(finestra).getByRole("button", { name: "Unisci file" })).toBeDisabled();
-
-      fireEvent.click(within(finestra).getByRole("button", { name: "Verifica file" }));
-
-      const verifica = within(finestra).getByRole("button", { name: "Verifica file" });
-      expect(verifica).toBeDisabled();
-      expect(verifica).toHaveAttribute("aria-busy", "true");
-      expect(within(finestra).getByRole("button", { name: "Chiudi" })).toBeDisabled();
-      expect(screen.queryByText(/Controllo file in corso/)).not.toBeInTheDocument();
-
-      rispondiVerifica({ canMerge: true, message: "File compatibili" });
-
-      const unisci = within(finestra).getByRole("button", { name: "Unisci file" });
-      await waitFor(() => expect(unisci).toBeEnabled());
-      expect(within(finestra).getByText("File compatibili")).toBeInTheDocument();
-
-      fireEvent.click(unisci);
-
-      await waitFor(() => expect(within(finestra).getByRole("button", { name: "Unisci file" })).toHaveAttribute("aria-busy", "true"));
-      expect(within(finestra).getByRole("button", { name: "Verifica file" })).not.toHaveAttribute("aria-busy");
-      expect(screen.queryByText(/Unione file in corso/)).not.toBeInTheDocument();
-    });
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Controlla e unisci" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Selezionati")).not.toBeInTheDocument();
+    // Il download del singolo file resta
+    expect(screen.getAllByRole("button", { name: "Scarica" })).toHaveLength(2);
+    expect(finti.post).not.toHaveBeenCalled();
   });
 });

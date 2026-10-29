@@ -439,7 +439,7 @@ export class KitRuntimeService implements IKitRuntimeService {
 
       return {
         lavorazioni: arrayMistoPerFrontEnd,
-        volantini: volantini
+        volantini
       };
     } catch (error: any) {
       if (error instanceof ExternalApiError) throw error;
@@ -1417,7 +1417,7 @@ export class KitRuntimeService implements IKitRuntimeService {
         return result ? normalizeRuntimeKitFromPg(result as any) : null;
       });
     } catch (error: any) {
-      throw wrapDatabaseError(new Error("Errore durante l'avvio della revisione " + error.message), {
+      throw wrapDatabaseError(new Error(`Errore durante l'avvio della revisione ${error.message}`), {
         message: "Errore durante l'avvio della revisione",
         operation: 'updateOne',
         entity: 'RuntimeKit',
@@ -1483,7 +1483,7 @@ export class KitRuntimeService implements IKitRuntimeService {
           }) as unknown as any;
 
           if (!fileLogVersione) {
-            throw new NotFoundError({ message: 'File log non trovato per il file: ' + file.nome, entityType: 'files_runtime_log', details: { nomeFile: file.nome, idLavorazione } });
+            throw new NotFoundError({ message: `File log non trovato per il file: ${file.nome}`, entityType: 'files_runtime_log', details: { nomeFile: file.nome, idLavorazione } });
           }
 
           // Aggiorna il file log aggiungendo il nuovo log entry
@@ -1512,7 +1512,7 @@ export class KitRuntimeService implements IKitRuntimeService {
       });
     } catch (error: any) {
       throw wrapDatabaseError(error, {
-        message: "Errore durante l'avvio della revisione " + error.message,
+        message: `Errore durante l'avvio della revisione ${error.message}`,
         operation: 'updateOne',
         entity: 'RuntimeKit',
         details: { error }
@@ -1808,7 +1808,7 @@ export class KitRuntimeService implements IKitRuntimeService {
       try {
         await this.webhookService.scatenaEvento({
           evento: EVENTI_WEBHOOK.KIT_PUBBLICATO,
-          dati: dati,
+          dati,
           meta: {
             source: 'Istanta 2 GDO Suite',
             request_id: result.id

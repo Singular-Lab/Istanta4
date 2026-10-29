@@ -113,7 +113,7 @@ export class EmailController extends BaseController {
             const emailHtml = this.renderEmailTemplate(
                 React.createElement(RecuperoPasswordEmail, {
                     userName: user.nome_completo || user.email,
-                    resetLink: resetLink,
+                    resetLink,
                     expiresIn: '24 ore'
                 })
             );

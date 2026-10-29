@@ -11,9 +11,7 @@ export const TYPES = {
   // INFRASTRUCTURE
   // ============================================
   Database: Symbol.for('Database'),
-  Cache: Symbol.for('Cache'),
   Logger: Symbol.for('Logger'),
-  EventBus: Symbol.for('EventBus'),
 
   // ============================================
   // SERVICES
@@ -43,9 +41,6 @@ export const TYPES = {
   BadgeService: Symbol.for('BadgeService'),
   ServiceFacade: Symbol.for('ServiceFacade'),
   DisplayContextService: Symbol.for('DisplayContextService'),
-  EphemeralTokenService: Symbol.for('EphemeralTokenService'),
-  EmailService: Symbol.for('EmailService'),
-  ChronService: Symbol.for('ChronService'),
 
   // Decomposed from ImpostazioniService
   FormatoService: Symbol.for('FormatoService'),
@@ -72,13 +67,11 @@ export const TYPES = {
   MenuService: Symbol.for('MenuService'),
 
   // Plugin Analytics
-  PluginAnalyticsService: Symbol.for('PluginAnalyticsService'),
   PluginAnalyticsRepository: Symbol.for('PluginAnalyticsRepository'),
 
   // Audit Log
   AuditLogService: Symbol.for('AuditLogService'),
   AuditLogRepository: Symbol.for('AuditLogRepository'),
-  AuditLogController: Symbol.for('AuditLogController'),
 
   // ============================================
   // REPOSITORIES (for future Repository Pattern)
@@ -90,7 +83,6 @@ export const TYPES = {
   AreaRepository: Symbol.for('AreaRepository'),
   CanaleRepository: Symbol.for('CanaleRepository'),
   OrdiniStampaRepository: Symbol.for('OrdiniStampaRepository'),
-  WhatsAppRepository: Symbol.for('WhatsAppRepository'),
   AttivitaRepository: Symbol.for('AttivitaRepository'),
   ReferenzeRepository: Symbol.for('ReferenzeRepository'),
   RuntimeKitRepository: Symbol.for('RuntimeKitRepository'),
@@ -121,60 +113,6 @@ export const TYPES = {
   MenuItemRepository: Symbol.for('MenuItemRepository'),
   MaterialiRepository: Symbol.for('MaterialiRepository'),
 
-  // ============================================
-  // CONTROLLERS
-  // ============================================
-  UserController: Symbol.for('UserController'),
-  GdoController: Symbol.for('GdoController'),
-  PromoController: Symbol.for('PromoController'),
-  ImpostazioniController: Symbol.for('ImpostazioniController'),
-  WhatsAppController: Symbol.for('WhatsAppController'),
-  WebhookController: Symbol.for('WebhookController'),
-  IstantaController: Symbol.for('IstantaController'),
-  AreaController: Symbol.for('AreaController'),
-  CanaleController: Symbol.for('CanaleController'),
-  ConfigController: Symbol.for('ConfigController'),
-  OrdiniDiStampaController: Symbol.for('OrdiniDiStampaController'),
-  TraduzioneController: Symbol.for('TraduzioneController'),
-  TracciatoController: Symbol.for('TracciatoController'),
-  GPTController: Symbol.for('GPTController'),
-  LogController: Symbol.for('LogController'),
-  AttivitaController: Symbol.for('AttivitaController'),
-  PuntoVenditaController: Symbol.for('PuntoVenditaController'),
-  CombinazioneAreeCanaliController: Symbol.for('CombinazioneAreeCanaliController'),
-  ExternalApiController: Symbol.for('ExternalApiController'),
-  DashboardController: Symbol.for('DashboardController'),
-  SuperadminDashboardController: Symbol.for('SuperadminDashboardController'),
-  CorreggoController: Symbol.for('CorreggoController'),
-  EphemeralAuthController: Symbol.for('EphemeralAuthController'),
-  EmailController: Symbol.for('EmailController'),
-  DisplayController: Symbol.for('DisplayController'),
-  DisplayContextController: Symbol.for('DisplayContextController'),
-
-  // Decomposed from ImpostazioniController
-  FormatoController: Symbol.for('FormatoController'),
-  TipoExportController: Symbol.for('TipoExportController'),
-  NamingConventionController: Symbol.for('NamingConventionController'),
-  ContrattoTipografiaController: Symbol.for('ContrattoTipografiaController'),
-  KitRuntimeController: Symbol.for('KitRuntimeController'),
-  DesignKitController: Symbol.for('DesignKitController'),
-  RaccoglitoreKitController: Symbol.for('RaccoglitoreKitController'),
-
-  // Decomposed from PromoController
-  ReferenzeController: Symbol.for('ReferenzeController'),
-  WebPliantController: Symbol.for('WebPliantController'),
-  FileManagementController: Symbol.for('FileManagementController'),
-  VolantinoController: Symbol.for('VolantinoController'),
-
-  // Permessi
-  PermessiController: Symbol.for('PermessiController'),
-
-  // Menu
-  MenuController: Symbol.for('MenuController'),
-
-  // Plugin Analytics
-  PluginAnalyticsController: Symbol.for('PluginAnalyticsController'),
-
   // Agenzia Lib — logiche custom per cliente
   AgenziaLib: Symbol.for('AgenziaLib'),
 
@@ -187,7 +125,6 @@ export const TYPES = {
   HubServiceRepository: Symbol.for('HubServiceRepository'),
   HubNewsService: Symbol.for('HubNewsService'),
   HubNewsRepository: Symbol.for('HubNewsRepository'),
-  HubController: Symbol.for('HubController'),
 } as const;
 
 export type ServiceTypes = typeof TYPES;

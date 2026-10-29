@@ -568,7 +568,7 @@ export class ExternalApiService implements IExternalApiService {
         updatedat: t.updatedat.toISOString(),
       };
     } catch (e: any) {
-      log.error("Errore durante la richiesta per lo slug:" + e.message, slug);
+      log.error(`Errore durante la richiesta per lo slug:${e.message}`, slug);
       throw e;
     }
   }

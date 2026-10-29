@@ -9,10 +9,13 @@ import StatCard, { StatCardGrid } from "@/components/Base/StatCard";
 import EmptyState from "@/components/EmptyState";
 import { PermissionGate } from "@/components/PermissionGate";
 import { PERMISSIONS } from "@/constants/permissions";
+import { descriviStato } from "@/constants/stati";
 import Skeleton from "@/components/Base/Skeleton";
 import clsx from "clsx";
 import type { Dropzone as DropzoneJs, DropzoneOptions } from "dropzone";
-import { FC, useCallback, useMemo, useRef, useState } from "react";
+import { FC, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { STATO_LAVORAZIONE_KIT_RUNTIME } from "../../../../lib/enums";
+import { CODICE_EXPORT_WEB, estensioniAmmessePerTipi, motivoFileNonAmmesso } from "../../../../lib/materiali/formatiCaricamento";
 import { FileItemKit, OggettoTipiDiExport } from "../../../../lib/types";
 import { StagedUploadFile, UploadFileData } from "../types";
 
@@ -20,17 +23,9 @@ import { StagedUploadFile, UploadFileData } from "../types";
 // CONSTANTS
 // ============================================
 
+// Stesso limite del server per i materiali (multer, FILE_SIZE_LIMITS.EXTRA_LARGE).
+// I formati ammessi dipendono dal tipo di export: lib/materiali/formatiCaricamento.ts
 const MAX_FILE_SIZE = 200 * 1024 * 1024; // 200MB
-const ACCEPTED_FORMATS = [".pdf", ".jpg", ".jpeg", ".png", ".doc", ".docx", ".xls", ".xlsx"];
-const ACCEPTED_MIME_TYPES = [
-  "application/pdf",
-  "image/jpeg",
-  "image/png",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/vnd.ms-excel",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-];
 
 // ============================================
 // INTERFACES
@@ -38,6 +33,8 @@ const ACCEPTED_MIME_TYPES = [
 
 interface FileUploaderProps {
   filesData: FileItemKit[];
+  /** Stato del kit: il server accetta i file solo con il kit IN_LAVORAZIONE. */
+  stato: STATO_LAVORAZIONE_KIT_RUNTIME;
   tipiDiExportInKit: OggettoTipiDiExport[];
   tipiExport?: Array<{ id_tipiexport: string; codice_tipiexport: string; nome_tipiexport?: string }>;
   isLoading?: boolean;
@@ -55,6 +52,8 @@ interface FileUploadCardProps {
   validationError?: string;
   progress?: number;
   selectedExportType: string;
+  /** Estensioni per l'attributo accept, separate da virgola. */
+  formatiAccettati?: string;
   onExportTypeChange: (exportType: string) => void;
   onFileDrop: (file: File) => void;
   onRemove: () => void;
@@ -71,19 +70,13 @@ const formatFileSize = (bytes: number): string => {
   return `${(bytes / 1024).toFixed(1)} KB`;
 };
 
-const validateFile = (file: File): string | null => {
-  // Check file size
-  if (file.size > MAX_FILE_SIZE) {
-    return `File troppo grande (max ${formatFileSize(MAX_FILE_SIZE)})`;
-  }
-
-  // Check file type
-  const extension = `.${file.name.split(".").pop()?.toLowerCase()}`;
-  if (!ACCEPTED_FORMATS.includes(extension) && !ACCEPTED_MIME_TYPES.includes(file.type)) {
-    return `Formato non supportato. Formati accettati: ${ACCEPTED_FORMATS.join(", ")}`;
-  }
-
-  return null;
+/** Testo dei formati ammessi per i tipi di export del kit. */
+const descriviFormati = (codiciExport: string[]): string => {
+  const conWeb = codiciExport.includes(CODICE_EXPORT_WEB);
+  const conStampa = codiciExport.some((codice) => codice !== CODICE_EXPORT_WEB);
+  if (conWeb && conStampa) return `PDF; JSON o WEBPLIANT per il tipo di export ${CODICE_EXPORT_WEB}`;
+  if (conWeb) return "JSON o WEBPLIANT";
+  return "PDF";
 };
 
 const generateUniqueId = (): string => {
@@ -101,26 +94,34 @@ const FileUploadCard: FC<FileUploadCardProps> = ({
   validationError,
   progress,
   selectedExportType,
+  formatiAccettati,
   onExportTypeChange,
   onFileDrop,
   onRemove,
 }) => {
   const dropzoneRef = useRef<DropzoneElement | null>(null);
+  // Dropzone si inizializza una volta sola con le prime opzioni: il gestore va letto da un ref,
+  // altrimenti userebbe il tipo di export scelto al primo render e non quello attuale
+  const onFileDropRef = useRef(onFileDrop);
+  useEffect(() => {
+    onFileDropRef.current = onFileDrop;
+  }, [onFileDrop]);
 
   const dropzoneOptions: DropzoneOptions = useMemo(
     () => ({
       url: "#",
       autoProcessQueue: false,
       maxFiles: 1,
-      acceptedFiles: ACCEPTED_FORMATS.join(","),
+      // Filtra la finestra di scelta; la regola esatta per tipo di export la applica handleFileDrop
+      acceptedFiles: formatiAccettati || undefined,
       init(this: DropzoneJs) {
         this.on("addedfile", (addedFile) => {
-          onFileDrop(addedFile);
+          onFileDropRef.current(addedFile);
           setTimeout(() => this.removeAllFiles(true), 100);
         });
       },
     }),
-    [onFileDrop]
+    [formatiAccettati]
   );
 
   const isUploading = progress !== undefined && progress > 0 && progress < 100;
@@ -261,6 +262,7 @@ const FileUploadCard: FC<FileUploadCardProps> = ({
 
 const FileUploader: FC<FileUploaderProps> = ({
   filesData,
+  stato,
   tipiDiExportInKit,
   tipiExport = [],
   isLoading = false,
@@ -295,6 +297,43 @@ const FileUploader: FC<FileUploaderProps> = ({
     return { required, optional, staged, uploaded, total: filesToUpload.length };
   }, [filesToUpload, uploadedFiles, stagedFiles]);
 
+  // Il server accetta i file solo con il kit in lavorazione: negli altri stati non si invia nulla
+  const caricamentoConsentito = stato === STATO_LAVORAZIONE_KIT_RUNTIME.IN_LAVORAZIONE;
+
+  // Estensioni ammesse da almeno uno dei tipi di export del kit (attributo accept delle dropzone)
+  const codiciExport = useMemo(() => tipiExport.map((tipo) => tipo.codice_tipiexport), [tipiExport]);
+  const formatiAccettati = useMemo(() => estensioniAmmessePerTipi(codiciExport).join(","), [codiciExport]);
+
+  /** Motivo per cui il file non puo' essere caricato con quel tipo di export, null se e' ammesso. */
+  const verificaFile = useCallback(
+    (file: File, idTipoExport: string): string | null => {
+      if (file.size > MAX_FILE_SIZE) {
+        return `File troppo grande (max ${formatFileSize(MAX_FILE_SIZE)})`;
+      }
+      if (tipiExport.length === 0) {
+        return "Il kit non ha tipi di export: non e' possibile caricare file.";
+      }
+      if (!idTipoExport) {
+        return "Seleziona prima il tipo di export.";
+      }
+      const tipo = tipiExport.find((t) => t.id_tipiexport === idTipoExport);
+      if (!tipo) {
+        return "Tipo di export non valido per questo kit.";
+      }
+      return motivoFileNonAmmesso(file.name, tipo.codice_tipiexport);
+    },
+    [tipiExport]
+  );
+
+  /** Chiave della scheda del file atteso (la stessa usata per errori e tipo di export scelto). */
+  const chiaveFileAtteso = useCallback(
+    (nome: string) => {
+      const atteso = filesToUpload.find((f) => f.nome === nome);
+      return atteso ? atteso.id || atteso.nome : nome;
+    },
+    [filesToUpload]
+  );
+
   // Handlers
   const handleFileDrop = useCallback(
     (expectedFile: FileItemKit, file: File) => {
@@ -305,8 +344,13 @@ const FileUploader: FC<FileUploaderProps> = ({
         return next;
       });
 
-      // Validate file
-      const error = validateFile(file);
+      // Get selected export type or use first available
+      const exportType =
+        selectedExportTypes[expectedFile.id || expectedFile.nome] ||
+        (tipiExport.length === 1 ? tipiExport[0].id_tipiexport : "");
+
+      // Dimensione e formato per il tipo di export (stessa regola del server): un file non ammesso non si prepara
+      const error = verificaFile(file, exportType);
       if (error) {
         setValidationErrors((prev) => ({
           ...prev,
@@ -314,11 +358,6 @@ const FileUploader: FC<FileUploaderProps> = ({
         }));
         return;
       }
-
-      // Get selected export type or use first available
-      const exportType =
-        selectedExportTypes[expectedFile.id || expectedFile.nome] ||
-        (tipiExport.length === 1 ? tipiExport[0].id_tipiexport : "");
 
       // Add to staged files
       const stagedFile: StagedUploadFile = {
@@ -337,7 +376,7 @@ const FileUploader: FC<FileUploaderProps> = ({
         return [...filtered, stagedFile];
       });
     },
-    [selectedExportTypes, tipiExport]
+    [selectedExportTypes, tipiExport, verificaFile]
   );
 
   const handleRemoveStaged = useCallback((expectedFileName: string) => {
@@ -354,6 +393,12 @@ const FileUploader: FC<FileUploaderProps> = ({
       ...prev,
       [fileId]: exportType,
     }));
+    // Scelto il tipo, l'eventuale "Seleziona prima il tipo di export" non vale piu'
+    setValidationErrors((prev) => {
+      const next = { ...prev };
+      delete next[fileId];
+      return next;
+    });
 
     // Update staged file if exists
     setStagedFiles((prev) =>
@@ -362,18 +407,17 @@ const FileUploader: FC<FileUploaderProps> = ({
   }, []);
 
   const handleUploadAll = useCallback(() => {
-    if (stagedFiles.length === 0) return;
+    if (stagedFiles.length === 0 || !caricamentoConsentito) return;
 
-    // Validate export types are selected
-    const missingExportType = stagedFiles.some((sf) => !sf.exportType && tipiExport.length > 1);
-    if (missingExportType) {
-      // Set errors for files missing export type
-      const errors: Record<string, string> = {};
-      stagedFiles.forEach((sf) => {
-        if (!sf.exportType && tipiExport.length > 1) {
-          errors[sf.expectedFileName] = "Seleziona un tipo di export";
-        }
-      });
+    // Prima di inviare si ricontrollano tipo di export e formato di ogni file: nessun invio se uno non e' ammesso
+    const errors: Record<string, string> = {};
+    stagedFiles.forEach((sf) => {
+      const motivo = verificaFile(sf.file, sf.exportType || (tipiExport.length === 1 ? tipiExport[0].id_tipiexport : ""));
+      if (motivo) {
+        errors[chiaveFileAtteso(sf.expectedFileName)] = motivo;
+      }
+    });
+    if (Object.keys(errors).length > 0) {
       setValidationErrors((prev) => ({ ...prev, ...errors }));
       return;
     }
@@ -393,7 +437,7 @@ const FileUploader: FC<FileUploaderProps> = ({
     setStagedFiles([]);
     setValidationErrors({});
     setSelectedExportTypes({});
-  }, [stagedFiles, tipiExport, onFileUpload]);
+  }, [stagedFiles, tipiExport, onFileUpload, caricamentoConsentito, verificaFile, chiaveFileAtteso]);
 
   // Loading state
   if (isLoading) {
@@ -462,8 +506,13 @@ const FileUploader: FC<FileUploaderProps> = ({
         <Sezione
           icona="Upload"
           titolo="Carica file richiesti"
-          descrizione="Seleziona i file uno per uno. Formati supportati: PDF, JPG, PNG, DOC, DOCX, XLS, XLSX (max 200MB)"
+          descrizione={`Seleziona i file uno per uno. Formati ammessi: ${descriviFormati(codiciExport)} (max 200MB)`}
         >
+          {!caricamentoConsentito && (
+            <Alert variant="soft-warning" icona="Lock" className="mb-4">
+              I file si possono caricare solo con il kit in lavorazione (stato attuale: {descriviStato("kitRuntime", stato).etichetta}).
+            </Alert>
+          )}
           <div className="space-y-4">
             {filesToUpload.map((file) => {
               const fileKey = file.id || file.nome;
@@ -479,6 +528,7 @@ const FileUploader: FC<FileUploaderProps> = ({
                   validationError={validationError}
                   progress={stagedFile?.progress}
                   selectedExportType={selectedExportTypes[fileKey] || ""}
+                  formatiAccettati={formatiAccettati}
                   onExportTypeChange={(exportType) => handleExportTypeChange(fileKey, exportType)}
                   onFileDrop={(droppedFile) => handleFileDrop(file, droppedFile)}
                   onRemove={() => handleRemoveStaged(file.nome)}
@@ -504,7 +554,7 @@ const FileUploader: FC<FileUploaderProps> = ({
                 <Button
                   variant="primary"
                   onClick={handleUploadAll}
-                  disabled={stagedFiles.length === 0}
+                  disabled={stagedFiles.length === 0 || !caricamentoConsentito}
                   loading={isUploading}
                 >
                   {!isUploading && <Lucide icon="Upload" aria-hidden="true" className="mr-2 h-4 w-4" />}

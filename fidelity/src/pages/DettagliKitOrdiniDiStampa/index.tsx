@@ -1,9 +1,7 @@
-import Alert from '@/components/Base/Alert';
 import BarraFiltri from '@/components/Base/BarraFiltri';
 import Button from '@/components/Base/Button';
 import CampoRicerca from '@/components/Base/CampoRicerca';
-import { FormCheck, FormField, FormInput, FormSelect } from '@/components/Base/Form';
-import { Dialog } from '@/components/Base/Headless';
+import { FormSelect } from '@/components/Base/Form';
 import Lucide from '@/components/Base/Lucide';
 import PageError from '@/components/Base/PageError';
 import Pagina from '@/components/Base/Pagina';
@@ -36,19 +34,6 @@ const PROPERTY_LABELS: Record<string, string> = {
   reparto: 'Reparto',
   settore: 'Settore',
   tema: 'Tema promo',
-};
-
-type MergeApiResponse = {
-  message?: string;
-  canMerge?: boolean;
-  success?: boolean;
-  url_download?: string;
-  downloadUrl?: string;
-  url?: string;
-  id_olimpo_cloud?: string;
-  idOlimpoCloud?: string;
-  nome?: string;
-  fileName?: string;
 };
 
 // Stati del log dei file: non fanno parte del catalogo condiviso, tono ed etichetta restano locali
@@ -102,11 +87,6 @@ const SceltaVista = ({ valore, onChange }: { valore: ItemDisposition; onChange: 
   </div>
 );
 
-type SelectedFileEntry = {
-  selected: boolean;
-  data: Pick<FileItemKit, 'id' | 'nome' | 'id_olimpo_cloud' | 'url_download'>;
-};
-
 const DettagliKitOrdiniDiStampa: React.FC = () => {
   const { kit, proprieta, idKit } = useLoaderData() as {
     kit: RUNTIME_KIT;
@@ -132,21 +112,6 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
 
   // Preview state
   const [previewFile, setPreviewFile] = useState<{ imageUrl: string; pages: number } | null>(null);
-
-  // Selection state (cross-page)
-  const [selectedFiles, setSelectedFiles] = useState<Record<string, SelectedFileEntry>>({});
-
-  // Merge state
-  const [showMergeDialog, setShowMergeDialog] = useState(false);
-  const [showMergeResultDialog, setShowMergeResultDialog] = useState(false);
-  const [mergeStep, setMergeStep] = useState<'idle' | 'checking' | 'check_ok' | 'merging' | 'success' | 'error'>('idle');
-  const [mergeError, setMergeError] = useState<string>('');
-  const [mergeInfo, setMergeInfo] = useState<string>('');
-  const [mergedOutputName, setMergedOutputName] = useState<string>('');
-  const [mergedDownloadUrl, setMergedDownloadUrl] = useState<string | null>(null);
-  const [mergedDownloadName, setMergedDownloadName] = useState<string>('file-unito.pdf');
-  const isPdfEqualityCheckAvailable = import.meta.env.VITE_ENABLE_PDF_EQUALITY_WS === 'true';
-  const pdfEqualityUnavailableMessage = 'Raggruppamento/controllo file uguali non disponibile su questo servizio: WebSocket Olimpo non attivo.';
 
   // Debounce search (400ms)
   useEffect(() => {
@@ -174,7 +139,6 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
   const paginatedData = filesQuery.data;
   const files = useMemo(() => paginatedData?.files ?? [], [paginatedData?.files]);
   const totalItems = paginatedData?.totalItems ?? 0;
-  const totalPages = paginatedData?.totalPages ?? 0;
   const stats = paginatedData?.stats;
   const isLoading = filesQuery.isLoading;
   const isFetching = filesQuery.isFetching;
@@ -241,52 +205,6 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
     return 'Si è verificato un errore imprevisto.';
   };
 
-  // Selection logic (cross-page aware)
-  const selectedCount = Object.keys(selectedFiles).length;
-  const selectedFilesData = useMemo(
-    () => Object.values(selectedFiles).map((v) => v.data),
-    [selectedFiles]
-  );
-  const visibleKeys = useMemo(() => files.map(getFileKey), [files]);
-  const allVisibleSelected = visibleKeys.length > 0 && visibleKeys.every((key) => !!selectedFiles[key]);
-
-  const toggleFileSelection = (file: FileItemKit) => {
-    const key = getFileKey(file);
-    setSelectedFiles((prev) => {
-      if (prev[key]) {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      }
-      return {
-        ...prev,
-        [key]: {
-          selected: true,
-          data: { id: file.id, nome: file.nome, id_olimpo_cloud: file.id_olimpo_cloud, url_download: file.url_download },
-        },
-      };
-    });
-  };
-
-  const toggleSelectAllVisible = () => {
-    setSelectedFiles((prev) => {
-      const next = { ...prev };
-      const shouldSelectAll = !allVisibleSelected;
-      files.forEach((file) => {
-        const key = getFileKey(file);
-        if (shouldSelectAll) {
-          next[key] = {
-            selected: true,
-            data: { id: file.id, nome: file.nome, id_olimpo_cloud: file.id_olimpo_cloud, url_download: file.url_download },
-          };
-        } else {
-          delete next[key];
-        }
-      });
-      return next;
-    });
-  };
-
   // Download handlers
   const handleDownloadSingleFile = (file: FileItemKit) => async () => {
     if (!file.id_olimpo_cloud && !file.url_download) return;
@@ -326,152 +244,11 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
     }
   };
 
-  // Merge flow
-  const resetMergeFlow = () => {
-    setMergeStep('idle');
-    setMergeError('');
-    setMergeInfo('');
-    setMergedDownloadUrl(null);
-    setMergedDownloadName('file-unito.pdf');
-  };
-
-  const handleCloseMergeDialog = () => {
-    setShowMergeDialog(false);
-    resetMergeFlow();
-  };
-
-  const startMergeFlow = () => {
-    resetMergeFlow();
-    setMergeError('');
-    setMergeInfo('');
-    if (!isPdfEqualityCheckAvailable) {
-      setMergeStep('error');
-      setMergeError(pdfEqualityUnavailableMessage);
-      setShowMergeDialog(true);
-      return;
-    }
-    if (selectedCount < 2) {
-      setMergeError('Seleziona almeno 2 file per effettuare il controllo e l\'unione.');
-      return;
-    }
-    setShowMergeDialog(true);
-  };
-
-  const handleCheckSelectedFiles = async () => {
-    if (selectedCount < 2) return;
-    if (!isPdfEqualityCheckAvailable) {
-      setMergeStep('error');
-      setMergeError(pdfEqualityUnavailableMessage);
-      return;
-    }
-    setMergeStep('checking');
-    setMergeError('');
-    setMergeInfo('');
-
-    try {
-      const response = await ServerCall.post<MergeApiResponse>('/checkFilesEquality', {
-        idKitRuntime: kit.guidId,
-        files: selectedFilesData.map((file) => ({
-          id: file.id,
-          nome: file.nome,
-          id_olimpo_cloud: file.id_olimpo_cloud,
-          url_download: file.url_download,
-        })),
-      });
-
-      if (response?.canMerge === false || response?.success === false) {
-        setMergeStep('error');
-        setMergeError(response?.message || 'Il server ha indicato che i file non sono compatibili per l\'unione.');
-        return;
-      }
-
-      setMergeStep('check_ok');
-      setMergeInfo(response?.message || 'Controllo completato con successo. Puoi procedere con l\'unione.');
-    } catch (error: unknown) {
-      setMergeStep('error');
-      setMergeError(getErrorMessage(error));
-    }
-  };
-
-  const resolveMergedDownloadUrl = (response: MergeApiResponse | null | undefined): string | null => {
-    if (!response) return null;
-    if (response.url_download) return response.url_download;
-    if (response.downloadUrl) return response.downloadUrl;
-    if (response.url) return response.url;
-    if (response.id_olimpo_cloud) return `${ServerCall.getUrl()}/getFileFromOlimpo?id=${response.id_olimpo_cloud}`;
-    if (response.idOlimpoCloud) return `${ServerCall.getUrl()}/getFileFromOlimpo?id=${response.idOlimpoCloud}`;
-    return null;
-  };
-
-  const handleMergeSelectedFiles = async () => {
-    if (mergeStep !== 'check_ok') return;
-    setMergeStep('merging');
-    setMergeError('');
-    setMergeInfo('');
-
-    const outputName = mergedOutputName.trim() || `kit-${kit.guidId?.slice(0, 8)}-merged.pdf`;
-
-    try {
-      const response = await ServerCall.post<MergeApiResponse>('/mergeFiles', {
-        idKitRuntime: kit.guidId,
-        outputName,
-        files: selectedFilesData.map((file) => ({
-          id: file.id,
-          nome: file.nome,
-          id_olimpo_cloud: file.id_olimpo_cloud,
-          url_download: file.url_download,
-        })),
-      });
-
-      const mergedUrl = resolveMergedDownloadUrl(response);
-      setMergedDownloadUrl(mergedUrl);
-      setMergedDownloadName(response?.nome || response?.fileName || outputName);
-      setMergeStep('success');
-      setMergeInfo(response?.message || 'File uniti correttamente.');
-      setShowMergeDialog(false);
-      setShowMergeResultDialog(true);
-      setSelectedFiles({});
-      setMergedOutputName('');
-      filesQuery.refetch();
-    } catch (error: unknown) {
-      setMergeStep('error');
-      setMergeError(getErrorMessage(error));
-    }
-  };
-
-  const handleDownloadMergedFile = async () => {
-    if (!mergedDownloadUrl) return;
-
-    try {
-      const response = await axios.get(mergedDownloadUrl, {
-        responseType: 'arraybuffer',
-        withCredentials: true,
-      });
-      const headerContentType = response.headers['content-type'];
-      const contentType = (typeof headerContentType === 'string' && headerContentType) || 'application/pdf';
-      const blob = new Blob([response.data], { type: contentType });
-      const blobUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      link.download = mergedDownloadName;
-      document.body.appendChild(link);
-      link.click();
-      setTimeout(() => {
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(blobUrl);
-      }, 100);
-    } catch (error: unknown) {
-      setMergeError(getErrorMessage(error));
-      setMergeStep('error');
-    }
-  };
-
   const fileVisibili = (file: FileItemKit) => ({
     meta: file.meta_olimpo_cloud || {},
     status: file.log?.stato,
     price: formatCurrency(file.meta_olimpo_cloud?.prezzo),
     fileKey: getFileKey(file),
-    isSelected: !!selectedFiles[getFileKey(file)],
   });
 
   const apriAnteprima = (file: FileItemKit) => {
@@ -481,8 +258,6 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
   };
 
   const filtriAttivi = Boolean(searchProperty || searchValue);
-  const verificaInCorso = mergeStep === 'checking';
-  const unioneInCorso = mergeStep === 'merging';
 
   return (
     <>
@@ -491,11 +266,10 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
         descrizione="Visualizza i file associati al kit"
         indietro={{ onClick: () => navigate(-1) }}
       >
-        <StatCardGrid>
+        <StatCardGrid className="lg:grid-cols-3">
           <StatCard densita="compatta" etichetta="Totale file" valore={formatNumero(stats?.totalFiles ?? 0)} icona="Files" tono="brand" />
           <StatCard densita="compatta" etichetta="In revisione" valore={formatNumero(stats?.inRevisionCount ?? 0)} icona="Clock" tono="warning" />
           <StatCard densita="compatta" etichetta="Con referenza" valore={formatNumero(stats?.filesWithMetaCount ?? 0)} icona="Tag" tono="success" />
-          <StatCard densita="compatta" etichetta="Selezionati" valore={formatNumero(selectedCount)} icona="SquareCheck" tono="info" />
         </StatCardGrid>
 
         <Sezione
@@ -584,33 +358,18 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
                 {itemDisposition === ItemDisposition.grid ? (
                   <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
                     {files.map((file) => {
-                      const { meta, status, price, fileKey, isSelected } = fileVisibili(file);
+                      const { meta, status, price, fileKey } = fileVisibili(file);
 
                       return (
                         <li
                           key={fileKey}
-                          className={twMerge(
-                            'group relative flex flex-col rounded-card border p-4 transition-all',
-                            isSelected
-                              ? 'border-primary/40 bg-primary/5 shadow-sm ring-1 ring-primary/20'
-                              : 'border-slate-200 bg-white hover:border-primary/30 hover:shadow-md'
-                          )}
+                          className="group relative flex flex-col rounded-card border border-slate-200 bg-white p-4 transition-all hover:border-primary/30 hover:shadow-md"
                         >
-                          <div className="absolute left-3 top-3 z-10">
-                            <FormCheck className="rounded-control bg-white/90 px-1">
-                              <FormCheck.Input
-                                type="checkbox"
-                                aria-label={`Seleziona ${formatFileName(file.nome)}`}
-                                checked={isSelected}
-                                onChange={() => toggleFileSelection(file)}
-                              />
-                            </FormCheck>
-                          </div>
                           <button
                             type="button"
                             aria-label={`Anteprima ${file.nome}`}
                             disabled={!file.url}
-                            className="mb-3 flex h-36 w-full cursor-pointer items-center justify-center overflow-hidden rounded-control border border-slate-200 bg-slate-50 pt-4 transition-colors hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40 disabled:cursor-default disabled:hover:border-slate-200"
+                            className="mb-3 flex h-36 w-full cursor-pointer items-center justify-center overflow-hidden rounded-control border border-slate-200 bg-slate-50 transition-colors hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40 disabled:cursor-default disabled:hover:border-slate-200"
                             onClick={() => apriAnteprima(file)}
                           >
                             {file.url ? (
@@ -667,24 +426,13 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
                 ) : (
                   <ul className="divide-y divide-slate-100">
                     {files.map((file) => {
-                      const { meta, status, price, fileKey, isSelected } = fileVisibili(file);
+                      const { meta, status, price, fileKey } = fileVisibili(file);
 
                       return (
                         <li
                           key={fileKey}
-                          className={twMerge(
-                            'flex items-center rounded-control px-3 py-3.5 transition-all',
-                            isSelected ? 'bg-primary/5 ring-1 ring-primary/20' : 'hover:bg-slate-50'
-                          )}
+                          className="flex items-center rounded-control px-3 py-3.5 transition-all hover:bg-slate-50"
                         >
-                          <FormCheck className="mr-3">
-                            <FormCheck.Input
-                              type="checkbox"
-                              aria-label={`Seleziona ${formatFileName(file.nome)}`}
-                              checked={isSelected}
-                              onChange={() => toggleFileSelection(file)}
-                            />
-                          </FormCheck>
                           <button
                             type="button"
                             aria-label={`Anteprima ${file.nome}`}
@@ -745,47 +493,6 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
             )}
           </div>
 
-          {/* Selezione, anche fra pagine diverse, e unione */}
-          {(files.length > 0 || selectedCount > 0) && (
-            <div className="flex flex-col gap-3 border-t border-slate-200 px-5 py-3 sm:flex-row sm:items-center">
-              <FormCheck>
-                <FormCheck.Input
-                  id="dettagli-kit-seleziona-pagina"
-                  type="checkbox"
-                  checked={allVisibleSelected}
-                  onChange={toggleSelectAllVisible}
-                />
-                <FormCheck.Label htmlFor="dettagli-kit-seleziona-pagina" className="text-sm text-slate-700">
-                  Seleziona tutti nella pagina ({files.length})
-                </FormCheck.Label>
-              </FormCheck>
-              <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
-                <span className="text-sm text-slate-600">
-                  {formatNumero(selectedCount)} selezionati
-                  {selectedCount > 0 && totalPages > 1 && (
-                    <span className="ml-1 text-slate-400">(anche da altre pagine)</span>
-                  )}
-                </span>
-                {selectedCount > 0 && (
-                  <Button variant="outline-secondary" size="sm" onClick={() => setSelectedFiles({})}>
-                    <Lucide icon="X" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
-                    Deseleziona tutti
-                  </Button>
-                )}
-                <Button
-                  variant="primary"
-                  size="sm"
-                  disabled={selectedCount < 2 || !isPdfEqualityCheckAvailable}
-                  onClick={startMergeFlow}
-                  title={!isPdfEqualityCheckAvailable ? pdfEqualityUnavailableMessage : undefined}
-                >
-                  <Lucide icon="Send" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
-                  Controlla e unisci
-                </Button>
-              </div>
-            </div>
-          )}
-
           <PaginazioneTabella
             className="border-t border-slate-100"
             totale={totalItems}
@@ -797,116 +504,6 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
           />
         </Sezione>
       </Pagina>
-
-      {/* Dialog merge */}
-      <Dialog centered size="lg" open={showMergeDialog} onClose={handleCloseMergeDialog}>
-        <Dialog.Panel>
-          <Dialog.Title>Unione file selezionati</Dialog.Title>
-          <Dialog.Description>
-            <div className="space-y-4">
-              <p className="text-sm text-slate-600">
-                Hai selezionato <span className="font-semibold text-slate-800">{selectedCount}</span> file.{' '}
-                {isPdfEqualityCheckAvailable
-                  ? 'Il flusso esegue prima un controllo di uguaglianza e, solo dopo esito positivo, abilita l\'unione.'
-                  : pdfEqualityUnavailableMessage}
-              </p>
-
-              <FormField etichetta="Nome file finale (opzionale)">
-                <FormInput
-                  value={mergedOutputName}
-                  onChange={(e) => setMergedOutputName(e.target.value)}
-                  placeholder={`kit-${kit.guidId?.slice(0, 8)}-merged.pdf`}
-                  disabled={verificaInCorso || unioneInCorso}
-                />
-              </FormField>
-
-              <div className="max-h-44 overflow-auto rounded-control border border-slate-200 bg-slate-50 p-3">
-                <p className="title-eyebrow mb-2">File inclusi ({selectedCount})</p>
-                <ul className="space-y-1.5">
-                  {selectedFilesData.map((file) => (
-                    <li key={file.id || file.nome} className="truncate text-sm text-slate-700">
-                      {formatFileName(file.nome)}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              {mergeInfo && (
-                <Alert variant="soft-success" icona="CircleCheck">
-                  {mergeInfo}
-                </Alert>
-              )}
-
-              {mergeError && (
-                <Alert variant="soft-danger" icona="TriangleAlert">
-                  {mergeError}
-                </Alert>
-              )}
-            </div>
-          </Dialog.Description>
-          <Dialog.Footer>
-            <Button
-              variant="outline-secondary"
-              onClick={handleCloseMergeDialog}
-              disabled={verificaInCorso || unioneInCorso}
-            >
-              Chiudi
-            </Button>
-            <Button
-              variant="outline-secondary"
-              onClick={handleCheckSelectedFiles}
-              disabled={selectedCount < 2 || verificaInCorso || unioneInCorso || !isPdfEqualityCheckAvailable}
-              loading={verificaInCorso}
-              title={!isPdfEqualityCheckAvailable ? pdfEqualityUnavailableMessage : undefined}
-            >
-              {!verificaInCorso && <Lucide icon="CircleCheck" aria-hidden="true" className="mr-2 h-4 w-4" />}
-              Verifica file
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handleMergeSelectedFiles}
-              disabled={mergeStep !== 'check_ok' || !isPdfEqualityCheckAvailable}
-              loading={unioneInCorso}
-              title={!isPdfEqualityCheckAvailable ? pdfEqualityUnavailableMessage : undefined}
-            >
-              {!unioneInCorso && <Lucide icon="Send" aria-hidden="true" className="mr-2 h-4 w-4" />}
-              Unisci file
-            </Button>
-          </Dialog.Footer>
-        </Dialog.Panel>
-      </Dialog>
-
-      {/* Dialog risultato merge */}
-      <Dialog centered open={showMergeResultDialog} onClose={() => setShowMergeResultDialog(false)}>
-        <Dialog.Panel>
-          <Dialog.Title>Risultato unione</Dialog.Title>
-          <Dialog.Description>
-            {mergeStep === 'success' ? (
-              <div className="space-y-3">
-                <Alert variant="soft-success" icona="CircleCheck" titolo="Unione completata">
-                  {mergeInfo || 'Il server ha generato il file unito.'}
-                </Alert>
-                <p className="text-sm text-slate-600">Nome file: <span className="font-medium text-slate-800">{mergedDownloadName}</span></p>
-              </div>
-            ) : (
-              <Alert variant="soft-danger" icona="TriangleAlert">
-                {mergeError || 'Operazione non completata.'}
-              </Alert>
-            )}
-          </Dialog.Description>
-          <Dialog.Footer>
-            <Button variant="outline-secondary" onClick={() => setShowMergeResultDialog(false)}>
-              Chiudi
-            </Button>
-            {mergeStep === 'success' && mergedDownloadUrl && (
-              <Button variant="primary" onClick={handleDownloadMergedFile}>
-                <Lucide icon="Download" aria-hidden="true" className="mr-2 h-4 w-4" />
-                Scarica file unito
-              </Button>
-            )}
-          </Dialog.Footer>
-        </Dialog.Panel>
-      </Dialog>
 
       {/* Preview immagine */}
       {previewFile && (

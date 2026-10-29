@@ -26,7 +26,7 @@ import { GdoController } from '../GdoController';
 function createApp() {
   const app = express();
   app.use((req: any, _res, next) => { req.session = { id_gdo: 'gdo-1' }; next(); });
-  new GdoController({} as any, {} as any, {} as any).registerRoutes(app);
+  new GdoController({} as any, {} as any).registerRoutes(app);
   return app;
 }
 

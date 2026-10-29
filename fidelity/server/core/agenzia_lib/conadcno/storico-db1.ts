@@ -238,7 +238,7 @@ export const storicoVolantinoDB1: StoricoVolantinoAgenzia = {
   async confronta(req: Request, payload: PayloadConfrontoStorico): Promise<EsitoConfrontoStorico> {
     const risultato = await ServerUtils.sendToFICOApi<RisultatoUploadVolStorico>(
       req,
-      config.DBUNO_URL + "/UploadVolStorico.ashx",
+      `${config.DBUNO_URL}/UploadVolStorico.ashx`,
       "POST",
       payload,
       undefined,

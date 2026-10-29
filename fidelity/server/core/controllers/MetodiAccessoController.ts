@@ -211,7 +211,7 @@ export class MetodiAccessoController extends BaseController {
       await this.userService.verificaAccountAttivo(parsed.id);
 
       await apriSessioneEsterna(req, parsed);
-      log.info(`[MetodiAccessoController] SAML login riuscito per ${claims.email}`);
+      log.info('[MetodiAccessoController] SAML login riuscito', { userId: parsed.id, tipoUtente: parsed.tipo_utente });
       res.redirect('/hub');
     } catch (error) {
       log.error('[MetodiAccessoController] samlAcs error:', error);

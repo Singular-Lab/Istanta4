@@ -22,7 +22,7 @@ const setValue = (props: LitepickerProps) => {
     let date = dayjs().format(format);
     date +=
       !props.options.singleMode && props.options.singleMode !== undefined
-        ? " - " + dayjs().add(1, "month").format(format)
+        ? ` - ${dayjs().add(1, "month").format(format)}`
         : "";
     if (props.onChange) {
       props.onChange({
@@ -39,7 +39,7 @@ const init = (el: LitepickerElement, props: LitepickerProps) => {
   el.litePickerInstance = new Litepicker({
     ...opzioniLitepicker(props.options),
     element: el,
-    format: format,
+    format,
     setup: (picker: any) => {
       if (picker.on) {
         picker.on(
@@ -51,7 +51,7 @@ const init = (el: LitepickerElement, props: LitepickerProps) => {
             let date = dayjs(startDate.dateInstance).format(format);
             date +=
               endDate !== undefined
-                ? " - " + dayjs(endDate.dateInstance).format(format)
+                ? ` - ${dayjs(endDate.dateInstance).format(format)}`
                 : "";
             if (props.onChange) {
               props.onChange({

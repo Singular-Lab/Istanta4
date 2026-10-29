@@ -1,5 +1,4 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
-import { RootState } from "./store";
 
 export const colorSchemes = [
   "default",
@@ -69,9 +68,5 @@ export const colorSchemeSlice = createSlice({
 });
 
 export const { setColorScheme } = colorSchemeSlice.actions;
-
-/** Selector puro, senza side-effect: niente scritture su localStorage. */
-export const selectColorScheme = (state: RootState) =>
-  state.colorScheme.value;
 
 export default colorSchemeSlice.reducer;

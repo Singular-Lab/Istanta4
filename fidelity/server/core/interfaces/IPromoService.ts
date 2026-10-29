@@ -1,6 +1,6 @@
 import { Request as ExpressRequest } from 'express';
 import { STATO_PROMO } from '../../../lib/enums';
-import { DataWebPliant, DimensioneVisibilitaPromo, IndesignPluginExport, MenaboLayoutDivisioneSalvata, MenaboLayoutSalvato, NuovaPromoPerDashboard, SaveMenaboLayoutRequest } from '../../../lib/types';
+import { DataWebPliant, DimensioneVisibilitaPromo, IndesignPluginExport, MenaboLayoutDivisioneSalvata, MenaboLayoutSalvato, SaveMenaboLayoutRequest } from '../../../lib/types';
 import { CreatePromoDTO, PromoResponseDTO, UpdatePromoDTO } from '../dto';
 export interface IPromoService {
   // Basic CRUD operations
@@ -18,7 +18,6 @@ export interface IPromoService {
   getAllPromoTimeline(): Promise<PromoResponseDTO[]>;
 
   // Promo management
-  getAllPromoInCorso(req: ExpressRequest): Promise<NuovaPromoPerDashboard[]>;
   deleteNonPermanentePromo(id: string): Promise<boolean>;
   riportaInLavorazionePromo(id: string): Promise<boolean>;
   updateStatoPromo(idPromo: string, stato: STATO_PROMO): Promise<boolean>;

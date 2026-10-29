@@ -35,7 +35,7 @@ export class CombinazioneAreeCanaliService implements ICombinazioneAreeCanaliSer
         id_canale: combinazione.id_canale_combinazione_canale_area,
         id_area: combinazione.id_area_combinazione_canale_area ?? '',
         stato: combinazione.stato_combinazione_canale_area as 'ATTIVO' | 'DISATTIVO',
-        sigla: combinazione.id_canale_combinazione_canale_area + '_' + combinazione.id_area_combinazione_canale_area,
+        sigla: `${combinazione.id_canale_combinazione_canale_area}_${combinazione.id_area_combinazione_canale_area}`,
         createdat: combinazione.createdat ?? new Date(),
         updatedat: combinazione.updatedat ?? new Date()
       }));
@@ -87,7 +87,7 @@ export class CombinazioneAreeCanaliService implements ICombinazioneAreeCanaliSer
         const area = areaMap.get(combinazione.id_area_combinazione_canale_area ?? '');
         return {
           id: combinazione.id_combinazione_canale_area,
-          sigla_combinazione: canale?.codice_canali + '_' + area?.codice_aree,
+          sigla_combinazione: `${canale?.codice_canali}_${area?.codice_aree}`,
           stato_combinazione: combinazione.stato_combinazione_canale_area,
           id_canale: combinazione.id_canale_combinazione_canale_area,
           id_area: combinazione.id_area_combinazione_canale_area ?? undefined,
@@ -169,7 +169,7 @@ export class CombinazioneAreeCanaliService implements ICombinazioneAreeCanaliSer
         id_canale: data.guidIDCanale,
         id_area: data.guidIDArea ?? '',
         stato: data.enabled ? 'ATTIVO' : 'DISATTIVO',
-        sigla: canale?.codice_canali + '_' + area?.codice_aree,
+        sigla: `${canale?.codice_canali}_${area?.codice_aree}`,
         createdat: combinazione.createdat ?? new Date(),
         updatedat: combinazione.updatedat ?? new Date(),
       };
@@ -234,7 +234,7 @@ export class CombinazioneAreeCanaliService implements ICombinazioneAreeCanaliSer
       results = await sequelize.query(queryStr).then(([res]) => res);
       const newResults = results.map((result: any) => ({
         ...result,
-        sigla: result.canale_codice + '_' + result.area_codice
+        sigla: `${result.canale_codice}_${result.area_codice}`
       }));
       return newResults as CombinazioneCanaleAreaResponseDTO[];
     } catch (error) {

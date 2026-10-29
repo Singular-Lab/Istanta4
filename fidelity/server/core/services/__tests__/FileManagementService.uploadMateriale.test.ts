@@ -5,7 +5,8 @@ import type { Request } from 'express';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { STATO_LAVORAZIONE_KIT_RUNTIME, STATO_LOG_FILE } from '../../../../lib/enums';
 import type { FileItemKitLog } from '../../../../lib/types';
-import { FileManagementService } from '../FileManagementService';
+import { BadRequestError } from '../../../../lib/errors';
+import { FileManagementService, leggiMetaMateriale } from '../FileManagementService';
 
 vi.mock('../../logger', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }
@@ -153,5 +154,19 @@ describe('FileManagementService.uploadMateriale', () => {
 
     expect(nuovoLog).toMatchObject({ guid_kit_runtime: 'kit-1', nome_file: 'volantino.pdf', versione: 0, stato: STATO_LOG_FILE.IN_ATTESA });
     expect(nuovoLog.logs).toBeUndefined();
+  });
+});
+
+// Il meta verso Olimpo (JsonMeta) e' sempre un oggetto, come negli altri flussi
+describe('leggiMetaMateriale', () => {
+  it('assente o vuoto vale {}; una stringa JSON di un oggetto diventa l\'oggetto; un oggetto resta tale', () => {
+    expect(leggiMetaMateriale(undefined)).toEqual({});
+    expect(leggiMetaMateriale('')).toEqual({});
+    expect(leggiMetaMateriale('{"a":1}')).toEqual({ a: 1 });
+    expect(leggiMetaMateriale({ a: 1 })).toEqual({ a: 1 });
+  });
+
+  it.each(['non json', '"testo"', '42', '[1]', 'null'])('%s: richiesta non valida (400)', (meta) => {
+    expect(() => leggiMetaMateriale(meta)).toThrow(BadRequestError);
   });
 });

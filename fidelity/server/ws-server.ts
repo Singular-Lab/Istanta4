@@ -314,7 +314,8 @@ export function startWSServer(): Promise<void> {
             } else {
               socket.emit('menabo:all-presences', buildAllPresences(idPromo, menaboSessions));
             }
-            log.debug(`Menabò presenza: ${userName} entrato nella pagina promo ${idPromo}`);
+            // Nei log l'id dell'utente, non il nome
+            log.debug(`Menabò presenza: utente ${userId} entrato nella pagina promo ${idPromo}`);
           });
 
           socket.on('menabo:page:leave', () => {
@@ -326,7 +327,7 @@ export function startWSServer(): Promise<void> {
             if (!session) return;
             session.divisionId = payload.divisionId;
             broadcastAllPresences(io!, payload.idPromo, menaboSessions);
-            log.debug(`Menabò presenza: ${session.userName} entrato in ${payload.divisionId}`);
+            log.debug(`Menabò presenza: utente ${session.userId} entrato in ${payload.divisionId}`);
           });
 
           socket.on('menabo:leave', () => {
@@ -351,7 +352,7 @@ export function startWSServer(): Promise<void> {
             target.emit('menabo:kicked', { kickedBy: kicker.userName, divisionId: kickedDivisionId });
             targetSession.divisionId = undefined;
             if (kickedDivisionId) broadcastAllPresences(io!, targetSession.idPromo, menaboSessions);
-            log.debug(`Menabò: ${kicker.userName} ha rimosso ${targetSession.userName} da ${kickedDivisionId}`);
+            log.debug(`Menabò: utente ${kicker.userId} ha rimosso utente ${targetSession.userId} da ${kickedDivisionId}`);
           });
 
           socket.on('disconnect', reason => {

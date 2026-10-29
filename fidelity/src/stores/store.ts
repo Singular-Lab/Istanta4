@@ -10,7 +10,7 @@ import developerConsoleReducer from './errorSlice';
 
 export const store = configureStore({
   reducer: {
-    developerConsoleReducer:developerConsoleReducer,
+    developerConsoleReducer,
     darkMode: darkModeReducer,
     colorScheme: colorSchemeReducer,
     sideMenu: sideMenuReducerIstanta,

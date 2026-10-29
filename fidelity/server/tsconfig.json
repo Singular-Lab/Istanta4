@@ -59,9 +59,6 @@
       ],
       "@repositories/*": [
         "./server/core/repositories/*"
-      ],
-      "@repositories": [
-        "./server/core/repositories/index.ts"
       ]
     },
     "typeRoots": [

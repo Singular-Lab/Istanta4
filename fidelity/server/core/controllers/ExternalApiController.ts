@@ -29,6 +29,7 @@ import type { IReferenzeService } from '../interfaces/IReferenzeService';
 import type { ITipoExportService } from '../interfaces/ITipoExportService';
 import { log } from '../logger';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { routeDeprecata } from '../middleware/routeDeprecata';
 import { ephemeralTokenAuthMiddleware } from '../middleware/ephemeralTokenAuthMiddleware';
 import { permissionGuard } from '../middleware/permissionGuard';
 import { FilterTemplateService } from '../services/FilterTemplateService';
@@ -109,8 +110,8 @@ export class ExternalApiController extends BaseController {
     // Route per Filter Templates - CRUD completo
     this.router.post("/filter-templates", authMiddleware, permissionGuard('api.gestisci_plugin'), this.createFilterTemplate.bind(this));
     this.router.get("/filter-templates", authMiddleware, permissionGuard('api.gestisci_plugin'), this.getAllFilterTemplates.bind(this));
-    this.router.get("/filter-templates/by-endpoint-type/:endpointType", authMiddleware, permissionGuard('api.gestisci_plugin'), this.getFilterTemplatesByEndpointType.bind(this));
-    this.router.post("/filter-templates/validate-slug", authMiddleware, permissionGuard('api.gestisci_plugin'), this.validateFilterTemplateSlug.bind(this));
+    this.router.get("/filter-templates/by-endpoint-type/:endpointType", authMiddleware, permissionGuard('api.gestisci_plugin'), routeDeprecata, this.getFilterTemplatesByEndpointType.bind(this));
+    this.router.post("/filter-templates/validate-slug", authMiddleware, permissionGuard('api.gestisci_plugin'), routeDeprecata, this.validateFilterTemplateSlug.bind(this));
     this.router.get("/filter-templates/slug/:slug/versions", authMiddleware, permissionGuard('api.gestisci_plugin'), this.getFilterTemplateVersionHistory.bind(this));
     this.router.post("/filter-templates/slug/:slug/restore", authMiddleware, permissionGuard('api.gestisci_plugin'), this.restoreFilterTemplateVersion.bind(this));
     this.router.get("/filter-templates/slug/:slug", ephemeralTokenAuthMiddleware, this.getFilterTemplateBySlug.bind(this));

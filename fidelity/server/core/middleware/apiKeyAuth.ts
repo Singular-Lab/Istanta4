@@ -37,7 +37,7 @@ export const apiKeyAuthMiddleware = async (req: Request, res: Response, next: Ne
       log.warn('API Key non valida o scaduta', {
         ip: req.ip,
         path: req.path,
-        apiKeyPrefix: apiKey.substring(0, 8) + '...'
+        apiKeyPrefix: `${apiKey.substring(0, 8)}...`
       });
 
       throw new UnauthorizedError({
@@ -60,7 +60,7 @@ export const apiKeyAuthMiddleware = async (req: Request, res: Response, next: Ne
       log.warn('API Key non trovata o non valida', {
         ip: req.ip,
         path: req.path,
-        apiKeyPrefix: apiKey.substring(0, 8) + '...'
+        apiKeyPrefix: `${apiKey.substring(0, 8)}...`
       });
 
       throw new UnauthorizedError({
@@ -76,7 +76,7 @@ export const apiKeyAuthMiddleware = async (req: Request, res: Response, next: Ne
       ruoloId: ruoloGDO.id_ruolo_utente_gdo,
       ruolo: ruoloGDO.ruolo_ruolo_utente_gdo,
       // Solo il prefisso: finisce nelle statistiche e nei log, la chiave intera no.
-      apiKey: apiKey.substring(0, 8) + '...'
+      apiKey: `${apiKey.substring(0, 8)}...`
     };
 
     log.info('Autenticazione API Key riuscita', {

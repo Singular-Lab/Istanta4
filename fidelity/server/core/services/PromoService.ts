@@ -6,7 +6,7 @@ import { Op, QueryTypes, type GroupedCountResultItem, type WhereOptions } from '
 import { v4 as uuidv4 } from 'uuid';
 import { Colorize } from '../../../lib/Colorize';
 import { ordinaPerMerceologia } from '../../../lib/ordinamentoMerceologico';
-import { STATO_LAVORAZIONE_KIT_RUNTIME, STATO_PROMO, TIPO_CONTEXT, TIPO_KIT_DESIGN } from '../../../lib/enums';
+import { STATO_PROMO, TIPO_CONTEXT } from '../../../lib/enums';
 import { BadRequestError, DatabaseError, ExternalApiError, NotFoundError, wrapApiError, wrapDatabaseError, wrapNotFoundError } from '../../../lib/errors';
 import {
   AnalisiMomentoTracciato,
@@ -14,11 +14,8 @@ import {
   DataWebPliant,
   DimensioneVisibilitaPromo,
   IndesignPluginExport,
-  KitStatusDesign,
-  KitStatusRunTime,
   MenaboLayoutDivisioneSalvata,
   MenaboLayoutSalvato,
-  NuovaPromoPerDashboard,
   SaveMenaboLayoutRequest,
 } from '../../../lib/types';
 import type { IAgenziaLib } from '../agenzia_lib/types';
@@ -33,11 +30,8 @@ import type { IWebPliantService } from '../interfaces/IWebPliantService';
 import { log } from '../logger';
 import { Area } from '../models/aree';
 import { Canale } from '../models/canali';
-import { DesignKit } from '../models/design_kit';
-import { FilesRuntime } from '../models/files_runtime';
 import { OrdiniDiStampa } from '../models/ordini_di_stampa';
 import { Promo, PromoAttributes } from '../models/promo';
-import { Referenze } from '../models/referenze';
 import { RuntimeKit } from '../models/runtime_kit';
 import { Tracciati } from '../models/tracciati';
 import { TracciatiMomento } from '../models/tracciati_momento';
@@ -453,7 +447,7 @@ export class PromoService implements IPromoService {
     verificaRisposta(
       await ServerUtils.sendToFICOApi<{ esito: boolean, error?: string }>(
         req,
-        config.ISTANTA_IP_ADDRESS + "/FicoProcess/inizioNuovaLavorazione",
+        `${config.ISTANTA_IP_ADDRESS}/FicoProcess/inizioNuovaLavorazione`,
         "PUT",
         promo,
         undefined,
@@ -519,7 +513,7 @@ export class PromoService implements IPromoService {
       const data = verificaRisposta<{ content: string, esito: boolean, error: string }>(
         await ServerUtils.sendToFICOApi<{ content: string, esito: boolean, error: string }>(
           req,
-          config.ISTANTA_IP_ADDRESS + "/FicoProcess/getFormContext/" + TIPO_CONTEXT.NUOVA_LAVORAZIONE,
+          `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getFormContext/${TIPO_CONTEXT.NUOVA_LAVORAZIONE}`,
           "GET",
           undefined,
           undefined,
@@ -623,7 +617,7 @@ export class PromoService implements IPromoService {
           content: string, esito: boolean, error: string | null
         }>(
           req,
-          config.ISTANTA_IP_ADDRESS + '/FicoProcess/getFormContext/' + TIPO_CONTEXT.IMPORTA_LAVORAZIONE,
+          `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getFormContext/${TIPO_CONTEXT.IMPORTA_LAVORAZIONE}`,
           "GET",
           undefined,
           undefined,
@@ -1035,8 +1029,8 @@ export class PromoService implements IPromoService {
         promos: objToReturn,
         totalItems: count,
         currentPage: page,
-        totalPages: totalPages,
-        pageSize: pageSize
+        totalPages,
+        pageSize
       };
     } catch (error) {
       console.error('❌ [PromoService] Errore in getAllPromoFiltered:', error);
@@ -1095,166 +1089,6 @@ export class PromoService implements IPromoService {
       });
     }
   }
-  /**
-   * @deprecated
-   * @param req
-   * @returns
-   */
-  async getAllPromoInCorso(req: ExpressRequest): Promise<NuovaPromoPerDashboard[]> {
-    try {
-      // Fetch active promos
-      const promo = await this.promoRepository.findAllWithOptions({
-        where: {
-          stato: {
-            [Op.notIn]: [STATO_PROMO.VALIDA, STATO_PROMO.VALIDA_CON_ERRORI, STATO_PROMO.ARCHIVIATA, STATO_PROMO.ELIMINATA]
-          }
-        } as WhereOptions<PromoAttributes>
-      });
-
-      // Process each promo in parallel
-      const result = await Promise.all(promo.map(async (p) => {
-        // Get istanta combinations for the promo
-        const { lista: listaIstanta } = await this.istantaService.getCombinazioniDaIstanta(p.id_promo, req);
-
-        // Extract area and channel IDs for filtering
-        const areaIds = listaIstanta.map(i => i.guidIdArea);
-        const channelIds = listaIstanta.map(i => i.guidIdCanale);
-
-        // Fetch runtime kits for the promo
-        const kitRuntime = await RuntimeKit.findAll({
-          where: {
-            id_promo: p.id_promo,
-            id_area: { [Op.in]: areaIds },
-            id_canale: { [Op.in]: channelIds }
-          },
-          raw: true
-        }) as any[];
-        const kitDesign = await DesignKit.findAll({
-          where: {
-            id_area: { [Op.in]: areaIds },
-            id_canale: { [Op.in]: channelIds }
-          },
-          raw: true
-        }) as any[];
-
-        // Initialize kit status arrays
-        const kitStatuses = {
-          [STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO]: [],
-          [STATO_LAVORAZIONE_KIT_RUNTIME.IN_LAVORAZIONE]: [],
-          [STATO_LAVORAZIONE_KIT_RUNTIME.IN_REVISIONE]: []
-        } as Record<string, (KitStatusDesign | KitStatusRunTime)[]>;
-
-        // Process each kit in parallel
-        await Promise.all(kitRuntime.map(async (kit) => {
-          const kitStatus = await this.getKitStatus(kit);
-          if (!kitStatus) return;
-
-          const baseKitInfo = {
-            nome: kitStatus.nome,
-            files_totali: kitStatus.files_totali,
-            files_completati: kitStatus.files_completati,
-            files_in_lavorazione: kitStatus.files_in_lavorazione,
-            tipo: kitStatus.tipo,
-            hasRefs: kitStatus.hasRefs,
-            ...(kitStatus.tipo === TIPO_KIT_DESIGN.AUTOMATICO && {
-              numero_referenze: kitStatus.numero_referenze
-            })
-          };
-
-          const targetArray = kitStatuses[kit.stato_lavorazione];
-          if (targetArray) {
-            targetArray.push(baseKitInfo as any);
-          }
-        }));
-
-        // Calculate statistics
-        const statistics = {
-          totale_kit: kitDesign.length,
-          kit_completati: kitStatuses[STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO].length,
-          kit_in_corso: kitStatuses[STATO_LAVORAZIONE_KIT_RUNTIME.IN_LAVORAZIONE].length,
-          kit_in_revisione: kitStatuses[STATO_LAVORAZIONE_KIT_RUNTIME.IN_REVISIONE].length,
-          percentuale_completamento: kitRuntime.length > 0
-            ? (kitStatuses[STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO].length / kitRuntime.length) * 100
-            : 0
-        };
-
-        // Format dates using dayjs
-        const formatDate = (date: Date) => dayjs(date).format("DD/MM/YYYY");
-
-        // Construct promo data object
-        return {
-          guid_id: p.id_promo,
-          nomePromo: p.nome_promo,
-          dataScadenza: formatDate(p.data_scadenza as Date),
-          dataRegistrazione: formatDate(p.data_registrazione as Date),
-          validitaDal: formatDate(p.validita_dal as Date),
-          validitaAl: formatDate(p.validita_al as Date),
-          stato: p.stato,
-          offsetVisibilita: p.offset_visibilita,
-          kit_pubblicati: kitStatuses[STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO],
-          kit_in_lavorazione: kitStatuses[STATO_LAVORAZIONE_KIT_RUNTIME.IN_LAVORAZIONE],
-          kit_in_revisione: kitStatuses[STATO_LAVORAZIONE_KIT_RUNTIME.IN_REVISIONE],
-          statistiche: statistics,
-          ultimo_aggiornamento: new Date(),
-          context: p.context,
-          GDO: p.gdo,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        } as NuovaPromoPerDashboard;
-      }));
-
-      // Sort results by completed kits
-      return result.sort((a, b) => a.statistiche.kit_completati - b.statistiche.kit_completati);
-    } catch (error) {
-      throw wrapDatabaseError(new Error("Errore durante il recupero delle promozioni in corso"), {
-        message: "Errore durante il recupero delle promozioni in corso",
-        operation: 'get',
-        entity: 'Promo',
-        details: { error }
-      });
-    }
-  }
-
-  private async getKitStatus(kit: any): Promise<KitStatusDesign | KitStatusRunTime | null> {
-    if (kit.tipo === TIPO_KIT_DESIGN.MANUALE) {
-      const files = await FilesRuntime.findAll({ where: { id_runtime: kit.id }, raw: true }) as any[];
-      if (files.length === 0 && (kit.files_data?.length === 0 || !kit.files_data)) {
-        return null;
-      }
-
-      const filesCompletati = files.filter((f: any) => f.id_olimpo_cloud !== null && kit.stato_lavorazione === STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO);
-      const filesInCorso = files.filter((f: any) => f.id_olimpo_cloud === null && kit.stato_lavorazione === STATO_LAVORAZIONE_KIT_RUNTIME.IN_LAVORAZIONE);
-      const filesInRevisione = filesCompletati.filter((f: any) => f.id_olimpo_cloud !== null && kit.stato_lavorazione === STATO_LAVORAZIONE_KIT_RUNTIME.IN_REVISIONE);
-      return {
-        nome: kit.titolo,
-        files_totali: kit.files_data?.length || 0,
-        files_completati: filesCompletati.length,
-        files_in_lavorazione: filesInCorso.length,
-        files_in_revisione: filesInRevisione.length,
-        tipo: kit.tipo,
-        hasRefs: false
-      };
-    } else if (kit.tipo === TIPO_KIT_DESIGN.AUTOMATICO) {
-      const hasRefs = await Referenze.findAll({
-        where: { id_runtime_kit: kit.id },
-        raw: true
-      }) as any[];
-
-
-      return {
-        nome: kit.titolo,
-        files_totali: 0,
-        files_completati: 0,
-        files_in_lavorazione: 0,
-        tipo: kit.tipo,
-        hasRefs: hasRefs.length > 0,
-        numero_referenze: hasRefs.length
-      };
-    }
-    return null;
-  }
-
-
   async deleteNonPermanentePromo(id: string): Promise<boolean> {
     try {
       const promo = await this.promoRepository.update(id, { stato: STATO_PROMO.ELIMINATA } as Partial<PromoAttributes>);

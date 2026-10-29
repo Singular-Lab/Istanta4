@@ -1,6 +1,5 @@
 // src/stores/themeSlice.ts
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
-import { RootState } from "./store";
 
 // ──────────────────────────────────────────────────────────────────────────────
 //  Config
@@ -55,8 +54,5 @@ export const themeSlice = createSlice({
 });
 
 export const { setTheme } = themeSlice.actions;
-
-/** Selector puro (nessun side-effect). */
-export const selectTheme = (state: RootState) => state.theme.value;
 
 export default themeSlice.reducer;

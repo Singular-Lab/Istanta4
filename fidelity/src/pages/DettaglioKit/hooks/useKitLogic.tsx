@@ -4,6 +4,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { useCallback } from "react";
 import { useNavigate, useRevalidator } from "react-router-dom";
+import { STATO_LAVORAZIONE_KIT_RUNTIME } from "../../../../lib/enums";
+import { motivoFileNonAmmesso } from "../../../../lib/materiali/formatiCaricamento";
 import { ServerCall } from "../../../../lib/server_call";
 import { FileItemKit } from "../../../../lib/types";
 import { KitType, useKit } from "../context/KitContext";
@@ -11,6 +13,12 @@ import { KitType, useKit } from "../context/KitContext";
 interface UseKitLogicProps {
   kit: KitType;
   abortController?: AbortController;
+}
+
+/** Esito di un caricamento di piu' file: nomi caricati e nomi rifiutati con il motivo. */
+interface EsitoUploadMateriale {
+  caricati: string[];
+  falliti: Array<{ nome: string; motivo: string }>;
 }
 
 /**
@@ -274,46 +282,85 @@ function useKitLogic({ kit }: UseKitLogicProps) {
     }
   });
 
-  // Upload materiale
+  // Upload materiale: POST /uploadMateriale accetta un file per richiesta, quindi si invia un file
+  // alla volta (in sequenza, per non caricare Olimpo con piu' file grandi insieme) e l'esito di
+  // ciascuno resta separato: un file rifiutato non blocca gli altri.
   const mutationUploadMateriale = useMutation<
-    any,
+    EsitoUploadMateriale,
     Error,
     { files: Array<{ id: string; nome: string; direttive: string; isOptional: boolean; file: File; tipo_export: string }> }
   >({
     mutationKey: ["uploadMateriale", kit.guidId],
     mutationFn: async ({ files }) => {
-      const formData = new FormData();
-      formData.append("idLavorazione", kit.guidId);
-
-      files.forEach((fileData, index) => {
-        formData.append(`files[${index}][id]`, fileData.id);
-        formData.append(`files[${index}][nome]`, fileData.nome);
-        formData.append(`files[${index}][direttive]`, fileData.direttive);
-        formData.append(`files[${index}][isOptional]`, String(fileData.isOptional));
-        formData.append(`files[${index}][tipo_export]`, fileData.tipo_export);
-        formData.append(`file_${index}`, fileData.file);
-      });
-
-      const url = `${ServerCall.getUrl()}/uploadMaterialeKitManuale`;
-      const response = await axios.post(url, formData, {
-        withCredentials: true,
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          'x-csrf-token': (await ServerCall.ensureCSRFToken()) ?? ''
+      const esito: EsitoUploadMateriale = { caricati: [], falliti: [] };
+      // Le condizioni del server valgono anche qui: un file che verrebbe rifiutato non parte.
+      // Senza stato la pagina tratta il kit come in lavorazione (vedi DettaglioKit e stateConfig).
+      const kitInLavorazione = (kit.stato_lavorazione ?? STATO_LAVORAZIONE_KIT_RUNTIME.IN_LAVORAZIONE) === STATO_LAVORAZIONE_KIT_RUNTIME.IN_LAVORAZIONE;
+      for (const fileData of files) {
+        const codiceExport = kit.tipiExport?.find((tipo) => tipo.id_tipiexport === fileData.tipo_export)?.codice_tipiexport;
+        const motivoLocale = !kitInLavorazione
+          ? "il kit non è in lavorazione"
+          : codiceExport ? motivoFileNonAmmesso(fileData.file.name, codiceExport) : null;
+        if (motivoLocale) {
+          esito.falliti.push({ nome: fileData.nome, motivo: motivoLocale });
+          continue;
         }
-      });
-      return response.data;
+        // Campi letti dal server (FileManagementService.uploadMateriale); il file per ultimo
+        const formData = new FormData();
+        formData.append("guidKitRuntime", kit.guidId);
+        formData.append("tipoExport", fileData.tipo_export);
+        formData.append("nomeFile", fileData.nome);
+        // Nessun metadato aggiuntivo per il caricamento manuale dell'operatore
+        formData.append("meta", "{}");
+        formData.append("file", fileData.file);
+        try {
+          // ServerCall aggiunge il token CSRF e ripete la richiesta se il token e' scaduto
+          await ServerCall.post("/uploadMateriale", formData);
+          esito.caricati.push(fileData.nome);
+        } catch (error) {
+          esito.falliti.push({
+            nome: fileData.nome,
+            motivo: error instanceof Error && error.message ? error.message : "errore sconosciuto",
+          });
+        }
+      }
+      return esito;
     },
-    onSuccess: () => {
-      showNotification(
-        <div className="flex items-center gap-2">
-          <Lucide icon="CircleCheck" className="w-4 h-4 text-success" />
-          <span>File caricati con successo</span>
-        </div>,
-        { variant: "success" }
-      );
-      revalidator.revalidate();
-      invalidateFilesQuery();
+    onSuccess: ({ caricati, falliti }) => {
+      if (falliti.length === 0) {
+        showNotification(
+          <div className="flex items-center gap-2">
+            <Lucide icon="CircleCheck" className="w-4 h-4 text-success" />
+            <span>File caricati con successo</span>
+          </div>,
+          { variant: "success" }
+        );
+      } else {
+        showNotification(
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <Lucide icon="X" className="w-4 h-4 text-danger" />
+              <span>Errore durante il caricamento dei file</span>
+            </div>
+            <span>
+              {caricati.length > 0
+                ? `Caricati ${caricati.length} di ${caricati.length + falliti.length} file. Non caricati:`
+                : "Non caricati:"}
+            </span>
+            <ul className="list-disc pl-5">
+              {falliti.map((fallito) => (
+                <li key={fallito.nome}>{fallito.nome}: {fallito.motivo}</li>
+              ))}
+            </ul>
+          </div>,
+          { variant: "error" }
+        );
+      }
+      // Anche con qualche errore i file caricati vanno mostrati
+      if (caricati.length > 0) {
+        revalidator.revalidate();
+        invalidateFilesQuery();
+      }
     },
     onError: (error) => {
       console.error(error);

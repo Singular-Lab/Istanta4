@@ -29,7 +29,7 @@ function oid(valore: string): Buffer {
 const nome = (cn: string) => sequenza(tlv(0x31, sequenza(oid('2.5.4.3'), tlv(0x0c, Buffer.from(cn, 'utf8')))));
 
 function utcTime(data: Date): Buffer {
-  const t = data.toISOString().replace(/[-:T]/g, '').slice(2, 14) + 'Z';
+  const t = `${data.toISOString().replace(/[-:T]/g, '').slice(2, 14)}Z`;
   return tlv(0x17, Buffer.from(t, 'ascii'));
 }
 

@@ -1,6 +1,6 @@
 # Fidelity Promotion
 
-**Versione:** 1.4.20.20
+**Versione:** 2.18.002. Fa fede il campo `version` di `package.json`; le novita' sono in `CHANGELOG.md`.
 
 Piattaforma enterprise per la gestione di promozioni retail con focus su GDO (Grande Distribuzione Organizzata).
 
@@ -8,42 +8,43 @@ Piattaforma enterprise per la gestione di promozioni retail con focus su GDO (Gr
 
 Fidelity Promotion è un'applicazione full-stack che integra:
 - **Volantini digitali** - Creazione e gestione WebPliant dinamici
-- **WhatsApp Business** - Campagne massive con queue system
-- **AI-Powered Content** - Generazione contenuti con OpenAI GPT-4
+- **WhatsApp Business** - Campagne massive con coda BullMQ su Redis
+- **Contenuti AI** - Ricette e approfondimenti sui vini generati dal servizio AI esterno (`AI_RICETTE_API_URL`)
 - **Ordini di Stampa** - Gestione completa workflow tipografico
 - **Multi-tenant** - Supporto GDO, Agenzie, Punti Vendita
-- **Real-time** - WebSocket per notifiche e sync
-- **SSR** - Server-Side Rendering per SEO e performance
+- **Real-time** - Socket.IO per notifiche e sync
+
+Il client è una single-page application: le pagine si disegnano nel browser, non c'è rendering lato server.
 
 ## Stack Tecnologico
 
 ### Frontend
-- **React 18.3.1** con TypeScript strict mode
-- **Vite** (rolldown-vite) come build tool
-- **Server-Side Rendering (SSR)** per SEO e performance
-- **React Router DOM 7.6.2** con lazy loading e SSR
+- **React 18** con TypeScript strict mode
+- **Vite 8** (bundler Rolldown, minificazione oxc) come build tool
+- **React Router DOM 7** con lazy loading e loader functions
 - **Redux Toolkit** + **React Query** per state management
-- **TailwindCSS** + **Styled Components** per styling
+- **TailwindCSS**, insieme a fogli CSS e SCSS esistenti
 - **Socket.IO Client** per comunicazione real-time
-- **Leaflet** con MarkerCluster per mappe e geolocalizzazione
+- **Leaflet** (react-leaflet) per mappe e geolocalizzazione
 - **i18next** per internazionalizzazione
 - **React Helmet Async** per meta tag dinamici
 
 ### Backend
-- **Node.js** con **TypeScript** (ES Modules)
-- **Express 5.2.0** framework
-- **Inversify** per Dependency Injection (IoC container)
-- **PostgreSQL** (Sequelize ORM) - 51+ tabelle
-- **Socket.IO Server** con clustering
+- **Node.js 26** con **TypeScript** (ES Modules), eseguito con tsx
+- **Express 5** framework
+- **Inversify** per Dependency Injection di servizi e repository (vedi "Architettura Backend")
+- **PostgreSQL** con PostGIS (Sequelize ORM), schema gestito da migrazioni versionate
+- **Socket.IO Server** nel processo primary del cluster
+- **Redis** facoltativo (`REDIS_URL`): coda BullMQ delle campagne WhatsApp, cache e rate limit condivisi fra i processi
 - **node-cron** per task pianificati
-- **PM2** per process management
+- **PM2** (`ecosystem.config.cjs`, una sola istanza in fork mode) oppure Docker per l'esecuzione
 - **Pino** per logging strutturato
 
 ## Quick Start
 
 ### Prerequisiti
 - Node.js 26 (in `.nvmrc`, come la CI e le immagini Docker)
-- PostgreSQL >= 14.x
+- PostgreSQL >= 14.x con le estensioni `postgis` e `uuid-ossp` (la prima migrazione le crea, se l'utente puo' farlo)
 - Yarn: basta un `yarn` qualsiasi (anche 1.x): la versione del progetto, 4.18.1, e' in `.yarn/releases` e viene usata automaticamente
 
 ### Installazione
@@ -81,40 +82,54 @@ yarn start
 ```
 fidelity_promotion/
 ├── server/                 # Backend Node.js/Express
-│   ├── index.ts           # Entry point (cluster mode)
-│   ├── ws-server.ts       # WebSocket server separato (porta 3400)
-│   └── core/
-│       ├── controllers/   # 37 REST controllers
-│       ├── services/      # 47 business services
-│       ├── repositories/  # 33 repository (BaseRepository)
-│       ├── interfaces/    # 35 interfacce per DI contracts
-│       ├── dto/           # 34 Data Transfer Objects (Zod)
-│       ├── models/        # 51+ Sequelize models
-│       ├── middleware/    # Security, auth, errors
-│       ├── cron/          # Scheduled tasks
-│       ├── workers/       # Background jobs (WhatsApp queue)
-│       ├── di/            # Inversify IoC container
-│       ├── db/            # Database connectors
-│       └── scripts/       # Migration & maintenance
+│   ├── index.ts           # Entry point (cluster in produzione e test)
+│   ├── ws-server.ts       # Server Socket.IO separato (porta WS_PORT, default 3400)
+│   ├── core/
+│   │   ├── controllers/   # REST controllers
+│   │   ├── services/      # Business services
+│   │   ├── repositories/  # Repository (BaseRepository)
+│   │   ├── interfaces/    # Interfacce per DI contracts
+│   │   ├── dto/           # Data Transfer Objects
+│   │   ├── models/        # Sequelize models
+│   │   ├── accessi/       # Permessi effettivi, contesto di accesso, migrazione degli accessi
+│   │   ├── agenzia_lib/   # Logiche specifiche per cliente (CLIENT_ID)
+│   │   ├── http/          # Client HTTP in uscita (clienteHttp.ts) e protezione SSRF
+│   │   ├── inizializzazione/ # Dati e migrazioni di avvio dell'installazione
+│   │   ├── middleware/    # Security, auth, errors
+│   │   ├── cron/          # Job di pulizia avviati da ChronService
+│   │   ├── workers/       # Background jobs (WhatsApp queue)
+│   │   ├── di/            # Inversify IoC container
+│   │   ├── db/            # Connessione, migrazioni (db/migrazioni) e oggetti derivati
+│   │   └── scripts/       # Script a riga di comando e di manutenzione
+│   └── src/               # Redis e cache, code BullMQ (shared/); /health e /metrics (app/http, shared/observability)
 ├── src/                   # Frontend React
-│   ├── pages/            # 153+ pagine applicazione
+│   ├── pages/            # Pagine applicazione
 │   ├── components/       # Componenti riutilizzabili
 │   ├── router/           # Routing + loader functions
-│   ├── stores/           # 10 Redux slices
+│   ├── stores/           # Redux slices
 │   ├── hooks/            # Custom hooks
-│   ├── context/          # 8 Context providers
+│   ├── context/          # Context providers
 │   └── query/            # React Query hooks
 ├── lib/                   # Librerie condivise client/server
-│   ├── types.ts          # 1743+ righe type definitions
+│   ├── types.ts          # Type definitions condivise
 │   ├── enums.ts          # Enumerazioni
+│   ├── accessi/          # Catalogo dei permessi e delle pagine
 │   ├── errors/           # Gerarchia errori strutturata
 │   ├── encryption.ts     # 2-Key TripleDES (.NET-compat)
-│   ├── server_call.ts    # Definizioni API centralizzate
-│   └── MessageBuilder.ts # Utility costruzione messaggi
-├── plugin/                # Plugin FP (libreria esterna)
+│   └── server_call.ts    # ServerCall: client HTTP del frontend verso le API (CSRF, errori, richieste in volo)
+├── plugin/                # Plugin FP (libreria esterna, build con tsup)
+├── scripts/               # Script di build (icone Lucide, budget del bundle)
 ├── public/                # Assets statici
-└── config/                # Configurazioni
+└── config/                # Configurazione dell'installazione, fuori dal repository (vedi sotto)
 ```
+
+### La cartella `config/`
+
+`config/` è in `.gitignore`: ogni installazione ha la sua e il repository non ne contiene una copia. Il server
+ci legge file JSON con `process.cwd()/config/...`, per esempio `plugin_registry.json` e
+`flyerInsightsConfig.json` (`ConfigService`) e `menu.json` delle pagine Singular (`ImpostazioniController`,
+che lo riscrive anche). Se un file manca, la funzione che lo usa risponde con un errore.
+`docker-compose.prod.yml` e `docker-compose.test.yml` montano `./config` in `/app/config`.
 
 ## Features Principali
 
@@ -142,12 +157,10 @@ fidelity_promotion/
 - Formati stampa configurabili
 - Naming convention automatiche
 
-### 4. AI & Content Generation
-- Integrazione OpenAI GPT-4
-- Generazione automatica ricette
-- Approfondimenti vino intelligenti
-- Traduzioni automatiche
-- Suggerimenti contenuti
+### 4. Contenuti AI
+- Generazione delle ricette e delle loro foto
+- Approfondimenti sui vini
+- Le richieste vanno al servizio AI esterno indicato da `AI_RICETTE_API_URL` (`GPTService`), con la chiave `API_KEY_AI`
 
 ### 5. Kit Design & Produzione
 - Kit design automatici e manuali
@@ -155,35 +168,28 @@ fidelity_promotion/
 - Gestione lavorazioni in corso
 - Tracking combinazioni produzione
 
-### 6. Dashboard & Analytics
-- Dashboard personalizzabili con drag & drop
-- Widget configurabili per ruolo
-- Grafici interattivi
-- Export dati personalizzati
+### 6. Dashboard
+- Dashboard per tipo di utente (`/dashboard`, `/gdo/dashboard`, `/marketing/dashboard`, `/category/dashboard`) e dashboard del Superadmin
+- Grafici con Chart.js
 
 ### 7. Multi-Tenant & RBAC
-Sistema gerarchico con ruoli:
-- **Superadmin** - Accesso completo al sistema
-- **Agenzia** - Gestione contenuti e promozioni
-- **GDO** - Gestione catena retail
-- **AdminGDO** - Amministratore catena
-- **PuntoVendita** - Gestione singolo negozio
-- **Guest** - Accesso in sola lettura
+Tipi di utente (`TIPO_UTENTI` in `lib/enums.ts`): **Superadmin**, **Agenzia**, **GDO**, **PuntoVendita**,
+**Category**, **Marketing**, **IT**, **Guest**. Gli utenti GDO hanno anche un sotto-ruolo (tabella
+`ruolo_utente_gdo`). Permessi, aree e pagine sono descritti in `docs/RBAC_MODELLO.md`.
 
 ### 8. Mappe & Geolocalizzazione
-- Leaflet con MarkerCluster
-- Heatmap punti vendita
-- Supporto PostGIS per dati geospaziali
-- Visualizzazione geografica analytics
+- Leaflet (react-leaflet) per le mappe dei punti vendita
+- Mappa di densità dei destinatari nelle campagne WhatsApp, disegnata con `CircleMarker` (nessun plugin di heatmap)
+- PostGIS per i dati geospaziali
 
 ## Database
 
-### PostgreSQL (51+ tabelle)
+### PostgreSQL
 **Categorie principali:**
 - Utenti & Autenticazione
 - Promozioni & Tracciati
 - Prodotti & Referenze
-- WhatsApp (7+ tabelle dedicate)
+- WhatsApp
 - Ordini di Stampa & Contratti
 - Kit Design & Runtime
 - Webhook & API log
@@ -203,13 +209,18 @@ versione dell'applicazione).
   *adotta*, cioe' si registra senza eseguirla. Prima gira, un'ultima volta, l'ALTER di Sequelize con
   i modelli della versione installata, anche in un aggiornamento a salto: cosi' tabelle, colonne e
   indici nati dopo l'ultimo avvio esistono. Poi si applicano le successive, che sistemano il resto.
+  Le migrazioni elencate in `PRIMA_DELL_ALLINEAMENTO` (`applicaMigrazioni.ts`) girano anche prima
+  di quell'ALTER, perche' recuperano valori da colonne che l'ALTER eliminerebbe (oggi `0013`, le date
+  dei preset WhatsApp); al loro turno non trovano piu' nulla da fare e si registrano.
 - Ogni migrazione gira in una sua transazione con `lock_timeout` di 30 secondi; con
   `-- senza-transazione` in testa gira fuori (solo per `CREATE INDEX CONCURRENTLY` e simili: una
   sola istruzione, rieseguibile). View e materialized view (`db/oggetti_derivati`) si tolgono
   prima e si ricreano dopo.
 - **Errore**: la migrazione si annulla e l'avvio si ferma. Si ferma anche se un file gia'
   applicato e' stato modificato (checksum) o se i modelli non corrispondono all'ultima migrazione.
-  Dopo le migrazioni una verifica dello schema scrive solo un avviso.
+  Dopo le migrazioni una verifica dello schema (`verificaSchema.ts`) confronta il database con i
+  modelli e scrive solo un avviso: tabelle, colonne, tipi, enum, indici e chiavi primarie mancanti o
+  diverse; gli enum in piu' non usati da nessuna colonna sono solo un'informazione.
 
 Per cambiare lo schema: modificare il modello, poi `yarn migrazioni:nuova <nome>`. Il comando crea
 il file successivo con l'intestazione `-- schema-dopo: <hash dei modelli>`, aggiorna `schema.json`,
@@ -250,7 +261,8 @@ all'avvio. Ogni esecuzione reale riuscita si registra nella tabella `script_dati
 
 - **Session-based authentication** con cookie HTTP-only
 - **Timeout dinamico** basato su ruolo (30min - 4h)
-- **Password hashing** con bcrypt (10 rounds)
+- **Password hashing** con bcrypt (round da `SALT_ROUNDS`)
+- **Metodi di accesso** configurabili dal Superadmin: email e password, OIDC (`/api/auth/oidc/*`, `HubController`) e SAML (`/api/auth/saml/*`, `MetodiAccessoController`)
 - **Helmet.js** per header HTTP sicuri
 - **CSRF protection** HMAC-SHA256 (scadenza 1h)
 - **Rate limiting** per protezione DDoS
@@ -258,32 +270,31 @@ all'avvio. Ogni esecuzione reale riuscita si registra nella tabella `script_dati
 - **Ephemeral tokens** per integrazioni esterne temporanee
 - **Browser security middleware** - validazione User-Agent e Sec-Fetch-*
 - **Origin whitelist** - validazione origine richieste
-- **Input validation** con express-validator, Zod, Yup
+- **Input validation** con Zod sul server (configurazione e parte delle richieste) e Yup nei form del client
+- **Chiamate in uscita** dal client comune `server/core/http/clienteHttp.ts`, con un timeout per categoria di chiamata; gli indirizzi configurati dagli utenti (webhook, discovery OIDC, metadati SAML) non possono puntare a loopback o link-local (`indirizziSicuri.ts`)
 
 ## Real-Time Communication
 
 ### Socket.IO Architecture
-- Server WebSocket separato su porta 3400
-- Supporto clustering con IPC in produzione
-- Master-Worker pattern
-- Auto-reconnection con recovery 2min
+- Server Socket.IO separato sulla porta `WS_PORT` (default 3400)
+- In produzione e test gira nel processo primary; i worker HTTP gli inoltrano gli eventi via IPC (`process.send`). In sviluppo un solo processo fa tutto
+- Riconnessione con recupero dello stato entro 30 secondi (`connectionStateRecovery`)
 - Transport: Solo WebSocket (no polling)
 
 **Eventi gestiti:**
-- Notifiche sistema (info/success/error/warning)
-- Aggiornamenti stato lavorazioni
-- Status campagne WhatsApp
-- Sync multi-utente dashboard
-- Status elaborazione kit
+- Notifiche (`notifica`) e avviso di manutenzione
+- Avanzamento degli ordini di stampa, inviato all'utente che li ha avviati
+- Stato delle campagne WhatsApp
+- Presenze nel menabò
+- Collegamento dei dispositivi (`device:*`)
 
 ## Integrazioni Esterne
 
-1. **OpenAI (GPT-4)** - Generazione contenuti AI, ricette, traduzioni
-2. **WhatsApp Business API** - Piattaforma messaging
+1. **Servizio AI** (`AI_RICETTE_API_URL`) - Ricette, foto delle ricette, approfondimenti sui vini
+2. **WhatsApp Business API** - Graph API di Meta (`META_GRAPH_API_VERSION`)
 3. **ISTANTA** - Sistema referenze prodotti
 4. **CORREGGO** - Servizio correzione bozze volantini
-5. **OLYMPUS** - Microservizi esterni
-6. **mattoliniapi** - Approfondimenti vino AI
+5. **OLYMPUS** - Microservizi esterni e archivio file (Olimpo)
 
 ## Configurazione
 
@@ -294,6 +305,7 @@ all'avvio. Ogni esecuzione reale riuscita si registra nella tabella `script_dati
 NODE_ENV=development|production|test
 NODE_PORT=3010
 WS_PORT=3400
+PORTA_VITE=3009          # porta del dev server Vite (default 3000)
 CLIENT_URL=http://localhost:3009
 
 # PostgreSQL
@@ -320,26 +332,33 @@ API_KEY_AI=...
 # OPENAI_API_KEY, ASSISTANT_ID, OPEN_AI_ASSISTANT_ID, OPEN_AI_ASSISTANT_ID_TRANSLATION
 # e OPENAI_PROJECT_ID non sono piu' lette dal codice: facoltative
 
+# Redis (facoltativo): senza, la coda WhatsApp non c'e' e cache e rate limit restano per processo
+# REDIS_URL=redis://localhost:6379
+
 # External Services
 ISTANTA_IP_ADDRESS=http://...
 OLYMPUS_IP_ADDRESS=http://...
 ```
 
-## Scripts NPM
+L'elenco completo, con obbligatorieta' e default, e' lo schema Zod di `server/core/config/index.ts`.
+
+## Scripts yarn
 
 ### Development
 ```bash
 yarn dev              # Dev mode (client + server concorrenti)
 yarn dev:debug        # Debug mode con Node inspector
-yarn dev:server       # Solo server (porta 3010)
-yarn dev:client       # Solo client Vite (porta 3009)
+yarn dev:server       # Solo server (porta NODE_PORT)
+yarn dev:client       # Solo client Vite (porta PORTA_VITE)
 ```
 
 ### Build & Production
 ```bash
-yarn build            # Build production completo
+yarn build            # Build production completo: icone Lucide, client, budget del bundle
 yarn build:client     # Build solo frontend
-yarn start                # Start production server
+yarn icone:lucide     # Rigenera l'elenco delle icone Lucide usate
+yarn budget:bundle    # Confronta il bundle con budget.json (--aggiorna con budget:bundle:aggiorna)
+yarn start            # Start production server
 yarn clean            # Rimuovi dist folder
 ```
 
@@ -382,6 +401,7 @@ I controlli partono dallo stato del 2026-10-28 e possono solo migliorare:
 - **ESLint**: le violazioni gia' presenti sono in `eslint-suppressions.json` (bulk suppressions di ESLint). Una violazione nuova fa fallire `yarn lint`. Quando se ne corregge una, `yarn lint` fallisce finche' non si esegue `yarn lint:prune`, che abbassa il baseline. Il baseline non si rigenera con `--suppress-all` per far passare codice nuovo.
 - **TypeScript strict**: il server compila con `strict: false`. `server/tsconfig.strict.json` lo compila in strict e `server/tsconfig.strict.baseline.json` conta gli errori file per file. Un file che peggiora, o un file nuovo con errori, fa fallire il controllo. Dopo una correzione si aggiorna il baseline con `yarn type-check:strict --aggiorna`.
 - **Coverage**: le soglie sono in `vitest.config.ts`, globali e per cartella (http, inizializzazione, agenzia_lib, db, accessi). Si alzano a mano quando i test crescono.
+- **Route senza chiamanti**: le route per cui l'inventario del 2026-10-29 non ha trovato chiamanti sono elencate, con il motivo, in `server/core/middleware/routeSenzaChiamanti.ts` e montano il middleware `server/core/middleware/routeDeprecata.ts`. La risposta non cambia: ogni chiamata incrementa la metrica `api_route_senza_chiamanti_total{method,route}` su `/metrics` e scrive un avviso nel log (al massimo uno ogni 15 minuti per route). Si osservano per 30 giorni, fino a `RIMUOVIBILI_DAL`: quelle mai chiamate si rimuovono, quelle chiamate si analizzano prima di decidere. Il test `server/core/middleware/__tests__/routeSenzaChiamanti.test.ts` verifica che l'elenco e le route che montano il middleware coincidano.
 
 #### Test d'integrazione
 I file `*.integrazione.test.ts` girano su un PostgreSQL vero, con lo schema creato da zero dalle migrazioni come in una installazione nuova (`server/__tests__/integrazione/`). `yarn test:server` li esegue insieme agli altri; `yarn vitest run --project integrazione` solo loro.
@@ -393,68 +413,89 @@ I file `*.integrazione.test.ts` girano su un PostgreSQL vero, con lo schema crea
 
 ### Dependency Injection (Inversify)
 Container IoC in `server/core/di/`:
-- `container.ts` - Binding singleton con lazy `toDynamicValue()`
-- `types.ts` - 100+ costanti simbolo per tutti i servizi, repository e controller
-- Tutti i componenti risolti tramite container
+- `container.ts` - Binding singleton di servizi e repository con lazy `toDynamicValue()`
+- `types.ts` - Costanti simbolo dei binding
+- I controller non passano dal container: `server/core/routes.ts` li crea con `new`, passando i servizi letti dal container. Alcuni servizi si creano direttamente o sono singleton propri (`getInstance()`, `RisolutoreAccessi.get()`)
 
 ### Scheduled Tasks (Cron)
-Gestiti da `ChronService`, in `server/core/cron/`:
-- **logCleanupJob** - Giornaliero alle 3:00 (Europe/Rome): 7d combined / 30d error / 3d HTTP, cap 500 MB
-- **attivitaCleanupJob** - Pulizia attività
+`ChronService` (`server/core/services/ChronService.ts`) avvia i job pianificati e il worker della coda WhatsApp.
+In produzione e test girano solo nel worker HTTP 1 (`server/core/services/startup.ts`):
+- **Stati delle promo** - Ogni 5 minuti
+- **attivitaCleanupJob** (`server/core/cron/`) - Pulizia delle attività scadute, ogni giorno alle 4:00
+- **auditLogCleanupJob** (`server/core/cron/`) - Pulizia dell'audit log, ogni giorno alle 2:30
+- **Eventi analytics del plugin** - Pulizia ogni giorno alle 4:30 degli eventi più vecchi di 90 giorni (valore fisso nel codice)
+
+I log vanno su stdout: la conservazione dipende da chi li raccoglie (driver `json-file` di Docker con
+`max-size`/`max-file`, PM2).
 
 ### Entry Point & Cluster
-- **Produzione**: Master gestisce WebSocket (3400), Worker gestiscono HTTP (3010)
+- **Produzione e test**: il primary applica le migrazioni, prepara accessi e configurazione, ospita Socket.IO (`WS_PORT`) e forka i worker HTTP (`NODE_PORT`; di default 2, oppure `HTTP_WORKERS`, mai piu' dei core)
 - **Development**: Processo singolo per entrambi
+
+### Osservabilità
+- `GET /health`: stato di HTTP, PostgreSQL e Redis; risponde 503 solo se PostgreSQL non risponde
+- `GET /metrics`: metriche Prometheus (`prom-client`), senza autenticazione
+- I compose di test e produzione avviano anche Prometheus, Loki, Promtail e Grafana (`docker/observability/`)
 
 ## Build Configuration
 
 ### Vite (Frontend)
-- **Minification**: oxc in produzione
-- **CSS**: Lightning CSS
-- **Code Splitting**: 7+ vendor chunk (React, Router, Redux, UI, Charts, Maps, Lexical)
-- **Compression**: Gzip + Brotli
-- **Legacy Support**: Browser vecchi via @vitejs/plugin-legacy
-- **Tree Shaking**: PropTypes rimossi in produzione
+- **Target**: `es2020`, anche per i vecchi iPhone che aprono il volantino pubblico; nessun plugin per browser legacy
+- **Minification**: oxc in produzione; `console.log`/`info`/`debug` e `debugger` rimossi, restano `warn` ed `error`
+- **CSS**: minificazione con Lightning CSS
+- **Code Splitting**: gruppi `codeSplitting.groups` in `vite.config.ts`, uno per libreria, con `vendor-core` (React e helper del transpiler) a priorità più alta
+- **Icone Lucide**: `scripts/generaIconeLucide.mjs` (lanciato da `yarn build`) scrive `src/components/Base/Lucide/iconeUsate.ts`; le altre icone si caricano a parte quando servono
+- **Budget**: `budget.json` fissa il peso gzip/brotli di JS e CSS per rotta; `scripts/budgetBundle.mjs` lo controlla dopo la build e fallisce solo in CI (o con `--rigoroso`)
+- **Compression**: la build scrive accanto ai file i `.gz` e `.br`, che Express serve al posto dell'originale (`server/core/middleware/staticiPrecompressi.ts`)
+- **SRI**: `vite-plugin-sri` aggiunge l'attributo `integrity` (sha384) a script e fogli di stile di `index.html`
 
 ### TypeScript
 - **Strict Mode**: Abilitato per frontend; sul server a cricchetto (`yarn type-check:strict`)
-- **Target**: ES2022 (backend), ES6 (frontend)
-- **Path Aliases**: `@/*` → `src/`, `@lib/*` → `lib/`
-
-## Metriche Progetto
-
-- **1.4.20.20** versione corrente
-- **153+** pagine frontend
-- **51+** tabelle PostgreSQL
-- **37** controller REST API
-- **47** servizi business logic
-- **33** repository
-- **1743+** righe type definitions condivise
+- **Target**: ES2022 (server); il client si controlla con target ES6 e si compila con Vite in es2020
+- **Path Aliases**: `@/*` → `src/` nel client (tsconfig e Vite); `lib/` si importa con percorsi relativi
 
 ## Plugin System
 
-Il progetto include un plugin (`/plugin`) per accesso esterno all'API con autenticazione tramite ephemeral token:
+Il progetto include un plugin (`/plugin`) per accesso esterno all'API con autenticazione tramite ephemeral token.
+Non è un workspace di Yarn: ha il suo `package.json` e si costruisce con tsup.
 
 ```bash
 cd plugin
 npm install
-npm run build
+npm run build        # tsup in produzione + offuscamento del bundle IIFE
 ```
 
-Output: `dist/FP.js` (IIFE), `dist/FP.esm.js` (ESM), `dist/FP.cjs.js` (CommonJS)
+Output in `plugin/dist/<versione>/` (la `version` di `plugin/package.json`): `index.js` (ESM), `index.cjs` (CommonJS),
+`index.global.js` (IIFE, globale `FP`) e `index.d.ts`.
 
 ### Utilizzo
 
 ```javascript
-import FP from './plugin/dist/FP.esm.js';
+const fp = new FP();
 
-const fp = new FP('http://localhost:3010/api');
-// Health check automatico all'inizializzazione
+// url, container e slug sono obbligatori; il resto arriva dal Filter Template dello slug
+await fp.init({
+  url: 'https://<host>/api',
+  container: document.getElementById('fp-container'),
+  slug: 'promo-estate-2024'
+});
+
+await fp.render();
 ```
+
+La guida completa è nella pagina Documentazione → Plugin dell'applicazione (`src/pages/Documentazione/Plugin`).
 
 ## CI/CD
 
 La CI e' quella della suite (`.github/workflows/ci.yml` nella root del repository): per fidelity installa con `yarn install --immutable` ed esegue type-check, lint, audit delle dipendenze di runtime, test, build e build dell'immagine di produzione. Chiama gli script `yarn` (`type-check`, `type-check:server`, `lint`, `test:server`, `build`), quindi i controlli descritti in "Testing & Quality" valgono anche in CI. `yarn ci` li esegue in locale.
+
+## Documentazione
+
+- `docs/RBAC_MODELLO.md` - permessi, aree, pagine e menu
+- `docs/AGENZIA_LIB_POLICY_V2.md` - policy CoopFI dal codice posizione
+- `docs/SECURITY_EXTERNAL_API.md` - sicurezza delle API esterne
+- `PRIMO_AVVIO_TEST.md` - primo avvio dell'ambiente Docker di test
+- `docs/archivio/` - documenti superati, con il motivo e cosa li sostituisce
 
 ## License
 
@@ -463,7 +504,3 @@ Questo progetto è proprietario. Tutti i diritti riservati.
 ## Team
 
 Sviluppato da **Singular Lab**
-
----
-
-**Nota**: Piattaforma enterprise complessa. Consultare `CLAUDE.md` per la documentazione completa dell'architettura e dei pattern di sviluppo.

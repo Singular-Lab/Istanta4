@@ -27,6 +27,14 @@ import { segnalaDifferenzeSchema } from './verificaSchema';
 export const CHIAVE_LOCK = 'migrazioni_schema';
 export const LOCK_TIMEOUT = '30s';
 
+/**
+ * Migrazioni che recuperano i valori di colonne tolte dai modelli (0013: createdAt/updatedAt dei
+ * preset WhatsApp). Nell'adozione l'ALTER di Sequelize (alter: true) elimina le colonne che i modelli
+ * non hanno piu' prima che le migrazioni le leggano: queste girano anche prima dell'ALTER. Devono
+ * bastare a se stesse ed essere rieseguibili: al loro turno non trovano piu' nulla e si registrano.
+ */
+export const PRIMA_DELL_ALLINEAMENTO = ['0013_timestamp_preset_whatsapp'];
+
 const SQL_STORICO = `CREATE TABLE IF NOT EXISTS public.${TABELLA_STORICO} (
   nome VARCHAR(200) PRIMARY KEY,
   checksum CHAR(64) NOT NULL,
@@ -167,13 +175,28 @@ const eseguiMigrazione = async (migrazione: Migrazione): Promise<void> => {
  * registra senza eseguirla. Prima gira, un'ultima volta, l'ALTER di Sequelize con i modelli di questa
  * versione, come avrebbe fatto il suo avvio: anche quando i modelli sono piu' nuovi della baseline
  * (aggiornamento "a salto"), altrimenti tabelle, colonne e indici nati nel frattempo non li crea
- * nessuno. Le migrazioni dopo la baseline sono idempotenti e sistemano il resto.
+ * nessuno. Le migrazioni dopo la baseline sono idempotenti e sistemano il resto; quelle di
+ * PRIMA_DELL_ALLINEAMENTO girano anche prima dell'ALTER, che eliminerebbe le colonne da cui leggono.
  */
-const adottaBaseline = async (baseline: Migrazione, hashModelli: string): Promise<{ adozione: Adozione; falliti: string[] }> => {
+const adottaBaseline = async (
+  baseline: Migrazione, hashModelli: string, migrazioni: Migrazione[]
+): Promise<{ adozione: Adozione; falliti: string[] }> => {
   const inizio = Date.now();
   log.info(hashModelli === baseline.schemaDopo
     ? 'Migrazioni dello schema: database esistente senza storico, ultimo allineamento ai modelli prima di adottare la baseline'
     : 'Migrazioni dello schema: database esistente senza storico e modelli piu\' nuovi della baseline (aggiornamento a salto): ultimo allineamento ai modelli prima di adottare la baseline');
+  for (const migrazione of migrazioni.filter(m => PRIMA_DELL_ALLINEAMENTO.includes(m.nome))) {
+    try {
+      await sequelize.transaction(async (transaction) => {
+        await sequelize.query(`SET LOCAL lock_timeout = '${LOCK_TIMEOUT}'`, { transaction });
+        await sequelize.query(migrazione.sql, { transaction });
+      });
+    } catch (errore) {
+      log.error(`Migrazioni dello schema: ${migrazione.nome} non applicata prima dell'allineamento, avvio interrotto`, errore);
+      throw new Error(`Migrazione ${migrazione.nome} non applicata prima dell'allineamento (annullata): ${messaggioDi(errore)}`, { cause: errore });
+    }
+    log.info(`Migrazioni dello schema: ${migrazione.nome} eseguita prima dell'allineamento, che eliminerebbe le colonne da cui recupera i valori`);
+  }
   const risultati = await modelliManager.allineamentoLegacyPerAdozione();
   const falliti = risultati.filter(r => !r.successo).map(r => r.modello);
   await registra(baseline, 'adottata', Date.now() - inizio);
@@ -261,7 +284,7 @@ export const applicaMigrazioni = async (opzioni: OpzioniApplicazione = {}): Prom
       try {
         for (const migrazione of pendenti) {
           if (migrazione.numero === 0 && daAdottare) {
-            const adottata = await adottaBaseline(migrazione, hashModelli);
+            const adottata = await adottaBaseline(migrazione, hashModelli, pendenti);
             esito.adozione = adottata.adozione;
             daRiallineare = adottata.falliti;
           } else {

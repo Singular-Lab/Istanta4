@@ -37,7 +37,7 @@ const init = <T extends string | string[]>(
   // On option add
   if (Array.isArray(props.value)) {
     computedOptions = {
-      onOptionAdd: function (value: string | number) {
+      onOptionAdd (value: string | number) {
         // Add new option
         const newOption = document.createElement("option");
         newOption.value = value.toString();
@@ -62,7 +62,7 @@ const init = <T extends string | string[]>(
             ? ([...selectedItems] as T)
             : (selectedItems as T),
         },
-        preventDefault: function (): void {
+        preventDefault (): void {
           console.log("preventDefault");
         }
       });

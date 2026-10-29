@@ -111,14 +111,3 @@ export function sanitizeHtml(html?: string | null): string {
   Array.from(parsed.body.childNodes).forEach(sanitizeNode);
   return parsed.body.innerHTML;
 }
-
-export function stripHtml(html?: string | null): string {
-  if (!html) return "";
-  if (typeof window === "undefined" || typeof DOMParser === "undefined") {
-    return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-  }
-
-  const documentParser = new DOMParser();
-  const parsed = documentParser.parseFromString(html, "text/html");
-  return (parsed.body.textContent || "").replace(/\s+/g, " ").trim();
-}

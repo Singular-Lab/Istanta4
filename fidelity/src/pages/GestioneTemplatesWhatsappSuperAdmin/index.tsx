@@ -189,10 +189,7 @@ const GestioneTemplatesWhatsappSuperAdmin: React.FC = () => {
                 onConfirm={eliminaTemplate}
             />
             <Pagina
-                titolo={
-                    "Gestione Templates WhatsApp" +
-                    (dettagliGDO?.nome ? ` · ${dettagliGDO.nome}` : "")
-                }
+                titolo={`Gestione Templates WhatsApp${dettagliGDO?.nome ? ` · ${dettagliGDO.nome}` : ""}`}
                 descrizione="Visualizza e gestisci i template Meta WhatsApp associati al cliente."
                 indietro={{ to: "/whatsapp/gestione-whatsapp-superadmin", etichetta: "Torna alle GDO" }}
                 azioni={
@@ -287,25 +284,25 @@ const GestioneTemplatesWhatsappSuperAdmin: React.FC = () => {
                                                         <div className="flex justify-end gap-2">
                                                             {stato === STATO_GDO_WHATSAPP_TEMPLATE.REJECTED && (
                                                                 // ponytail: niente pagina di dettaglio; la nuova versione mostra il template da correggere
-                                                                <Button size="sm" variant="outline-secondary" onClick={() => navigate("nuova-versione?id=" + template.id_gdowhatsapptemplate)}>
+                                                                <Button size="sm" variant="outline-secondary" onClick={() => navigate(`nuova-versione?id=${template.id_gdowhatsapptemplate}`)}>
                                                                     Dettaglio
                                                                 </Button>
                                                             )}
                                                             {stato === STATO_GDO_WHATSAPP_TEMPLATE.CREATED_BUT_NOT_SYNCED && (
-                                                                <Button size="sm" variant="outline-secondary" onClick={() => navigate("nuova-versione?id=" + template.id_gdowhatsapptemplate)}>
+                                                                <Button size="sm" variant="outline-secondary" onClick={() => navigate(`nuova-versione?id=${template.id_gdowhatsapptemplate}`)}>
                                                                     Modifica
                                                                 </Button>
                                                             )}
                                                             {attivo && (
                                                                 <>
-                                                                    <Button size="sm" variant="outline-secondary" onClick={() => navigate("nuova-versione?id=" + template.id_gdowhatsapptemplate)}>
+                                                                    <Button size="sm" variant="outline-secondary" onClick={() => navigate(`nuova-versione?id=${template.id_gdowhatsapptemplate}`)}>
                                                                         Nuova versione
                                                                     </Button>
                                                                     <Button
                                                                         size="sm"
                                                                         variant="outline-secondary"
                                                                         onClick={() => {
-                                                                            navigate("presets?id=" + template.id_gdowhatsapptemplate);
+                                                                            navigate(`presets?id=${template.id_gdowhatsapptemplate}`);
                                                                         }}
                                                                     >
                                                                         Preset (<span className="tabular-nums">{template.preset_count || 0}</span>)

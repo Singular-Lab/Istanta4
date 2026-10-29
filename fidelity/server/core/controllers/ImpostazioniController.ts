@@ -12,6 +12,7 @@ import config from '../config';
 import { IConfigService } from '../interfaces/IConfigService';
 import { IImpostazioniService } from '../interfaces/IImpostazioniService';
 import { authMiddleware, integrationAuthMiddleware } from '../middleware/authMiddleware';
+import { routeDeprecata } from '../middleware/routeDeprecata';
 import { permissionGuard } from '../middleware/permissionGuard';
 import { ServerUtils } from '../utils/ServerUtils';
 
@@ -26,8 +27,8 @@ export class ImpostazioniController extends BaseController {
     // =========================
     // GESTIONE PAGINE E UI
     // =========================
-    this.router.get('/getGestionePagineSingular', authMiddleware, this.getGestionePagineSingular.bind(this));
-    this.router.put('/salvaGestionePagineSingular', authMiddleware, permissionGuard('impostazioni.gestisci_pagine_singular'), this.salvaGestionePagineSingular.bind(this));
+    this.router.get('/getGestionePagineSingular', authMiddleware, routeDeprecata, this.getGestionePagineSingular.bind(this));
+    this.router.put('/salvaGestionePagineSingular', authMiddleware, permissionGuard('impostazioni.gestisci_pagine_singular'), routeDeprecata, this.salvaGestionePagineSingular.bind(this));
 
     // =========================
     // PROMOZIONI E TIMELINE

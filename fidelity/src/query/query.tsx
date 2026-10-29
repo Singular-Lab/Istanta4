@@ -1,14 +1,13 @@
 import { FlyerInsights, FlyerInsightsConfig } from "@/types/flyerInsights";
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Colorize } from "../../lib/Colorize";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { TIPO_ATTIVITA } from "../../lib/enums";
 import { ServerCall } from "../../lib/server_call";
-import type { AuthProviderAdminDTO, AvvisoManutenzione, Config, DESIGN_KIT, DimensioneVisibilitaPromo, FileItemKit, FormatiAttributes, Funzionalita, GlobalUserFilter, HubNewsAdminDTO, HubServiceDTO, MenaboLayoutSalvato, MenaboRisultato, PuntiVenditaAttributes, RUNTIME_KIT, RaccoglitoreKit, RegoleMenabo, ReportOptionDTO, Ricette, SaveMenaboLayoutRequest, TimelinePromoItem, TipiDiExportAttributes, TracciatoQueryRequest, TracciatoQueryResult, TracciatoReport, TracciatiMomentoResponseDTO } from "../../lib/types";
+import type { AuthProviderAdminDTO, AvvisoManutenzione, Config, DESIGN_KIT, DimensioneVisibilitaPromo, FileItemKit, FormatiAttributes, Funzionalita, HubNewsAdminDTO, HubServiceDTO, MenaboLayoutSalvato, MenaboRisultato, PuntiVenditaAttributes, RaccoglitoreKit, RegoleMenabo, ReportOptionDTO, Ricette, SaveMenaboLayoutRequest, TimelinePromoItem, TipiDiExportAttributes, TracciatoQueryResult } from "../../lib/types";
 import type { AuditLogPaginatedResponse, AuditLogSummary } from "../../lib/auditTypes";
 import type { PeriodoMateriali } from "../../lib/materiali/periodi";
 import type { ElencoPromozioniPop, FiltriFilePop, FiltriKitVolantini, PaginaFilePop, PaginaKitVolantini, RiepilogoPop } from "../../lib/materiali/tipi";
 import { parametriMateriali } from "@/utils/materiali";
-import type { AreaResponseDTO, CanaleResponseDTO, CombinazioneCanaleAreaResponseDTO, CreateFilterTemplateDTO, DisplayContextResponseDTO, DispositivoPuntoVenditaResponseDTO, FilterConditionDTO, FilterTemplateDTO, FormatiResponseDTO, GDOResponseDTO, PromoResponseDTO, PuntoVenditaResponseDTO, RuoloUtenteGDOResponseDTO, TipiDiExportResponseDTO, UpdateFilterTemplateDTO, VolantinoAttivoDTO } from "../../server/core/dto";
+import type { AreaResponseDTO, CanaleResponseDTO, CombinazioneCanaleAreaResponseDTO, DisplayContextResponseDTO, DispositivoPuntoVenditaResponseDTO, FormatiResponseDTO, GDOResponseDTO, PromoResponseDTO, PuntoVenditaResponseDTO, RuoloUtenteGDOResponseDTO, TipiDiExportResponseDTO, VolantinoAttivoDTO } from "../../server/core/dto";
 
 
 
@@ -57,17 +56,6 @@ export const useFetchVisibilitaOpzioni = () => {
   });
 };
 
-
-export const useFetchCombinazioni = () => {
-  return useQuery({
-    queryKey: ['fetchCombinazioni'],
-    queryFn: () => ServerCall.get<{
-      id: string;
-      sigla_combinazione: string;
-      stato_combinazione: string;
-    }[]>("/all_combinazion_for_gdo"),
-  });
-};
 
 export const useFetchConfig = () => {
   return useQuery({
@@ -215,21 +203,6 @@ export const useFetchFiltroByIdRaccoglitore = (idCombinazione: string) => {
   });
 };
 
-export const useFetchDataFilePresenti = (selectedFile: any) => {
-  return useQuery({
-    queryKey: ['dataFilePresenti'],
-    queryFn: async () => {
-      const response = await ServerCall.get<{ listaFile: any[] }>('/getNomeFileVectorStoreAI');
-      console.log(response);
-
-      return response;
-    },
-    enabled: () => {
-      return selectedFile == undefined;
-    }
-  });
-};
-
 export const useFetchDatiNamingConventionFromIstanta = () => {
   return useQuery({
     queryKey: ["datiNamingConvention"],
@@ -241,13 +214,6 @@ export const useFetchNamingConventions = () => {
   return useQuery({
     queryKey: ["namingConventions"],
     queryFn: () => ServerCall.get<any[]>("/get_all_naming_conventions"),
-  });
-};
-
-export const useFetchAllUtenti = () => {
-  return useQuery({
-    queryKey: ["get_all_utenti"],
-    queryFn: () => ServerCall.get<any[]>("/get_all_utenti"),
   });
 };
 
@@ -475,48 +441,6 @@ export const useFetchLavorazioniInCorso = () => {
   });
 };
 
-export const useFetchPromoFiltered = (params: {
-  page?: number;
-  pageSize?: number;
-  search?: string;
-  stato?: string;
-  validitaDal?: string;
-  validitaAl?: string;
-  validitaAlFrom?: string;
-  validitaAlTo?: string;
-  excludeStato?: string;
-  sortBy?: 'nome' | 'validita_dal' | 'validita_al' | 'stato';
-  sortDirection?: 'asc' | 'desc';
-}) => {
-  return useQuery({
-    queryKey: ["promoFiltered", params],
-    queryFn: async () => {
-      const queryParams = new URLSearchParams();
-      if (params.page) queryParams.append('page', params.page.toString());
-      if (params.pageSize) queryParams.append('pageSize', params.pageSize.toString());
-      if (params.search) queryParams.append('search', params.search);
-      if (params.stato) queryParams.append('stato', params.stato);
-      if (params.validitaDal) queryParams.append('validitaDal', params.validitaDal);
-      if (params.validitaAl) queryParams.append('validitaAl', params.validitaAl);
-      if (params.validitaAlFrom) queryParams.append('validitaAlFrom', params.validitaAlFrom);
-      if (params.validitaAlTo) queryParams.append('validitaAlTo', params.validitaAlTo);
-      if (params.excludeStato) queryParams.append('excludeStato', params.excludeStato);
-      if (params.sortBy) queryParams.append('sortBy', params.sortBy);
-      if (params.sortDirection) queryParams.append('sortDirection', params.sortDirection);
-
-      const result = await ServerCall.get<{
-        promos: PromoResponseDTO[];
-        totalItems: number;
-        currentPage: number;
-        totalPages: number;
-        pageSize: number;
-      }>(`/promo/filtered?${queryParams.toString()}`);
-      return result;
-    },
-    staleTime: 1000 * 60 * 5,
-  });
-};
-
 export const useFetchStoricoLavorazioni = () => {
   return useQuery({
     queryKey: ["storicoLavorazioni"],
@@ -524,18 +448,6 @@ export const useFetchStoricoLavorazioni = () => {
       const result = await ServerCall.get<PromoResponseDTO[]>("/promo/storico");
       return result;
     },
-    staleTime: 1000 * 60 * 5,
-  });
-};
-
-export const useFetchKitRuntimeByPromo = (idPromo: string) => {
-  return useQuery({
-    queryKey: ["kitRuntimeByPromo", idPromo],
-    queryFn: async () => {
-      const result = await ServerCall.get<RUNTIME_KIT[]>(`/get_kit_runtime_by_promo/${idPromo}`);
-      return result;
-    },
-    enabled: !!idPromo,
     staleTime: 1000 * 60 * 5,
   });
 };
@@ -968,72 +880,8 @@ export const useFetchStatisticheApiDettagli = (filtri?: {
 }
 
 // ============================================
-// Filter Templates Hooks
-// ============================================
-
-// Re-export dei DTO dal server per retrocompatibilità
-export type { CreateFilterTemplateDTO, FilterConditionDTO, FilterTemplateDTO, UpdateFilterTemplateDTO };
-
-// Hook per recuperare tutti i filter templates
-export const useFetchFilterTemplates = (endpointType?: 'refs' | 'refs-html' | 'files') => {
-  return useQuery({
-    queryKey: ['filter-templates', endpointType],
-    queryFn: async (): Promise<FilterTemplateDTO[]> => {
-      const url = endpointType
-        ? `/external/filter-templates/by-endpoint-type/${endpointType}`
-        : '/external/filter-templates';
-      const response = await ServerCall.get<{ templates: FilterTemplateDTO[] } | FilterTemplateDTO[]>(url);
-      // Handle both response formats
-      return Array.isArray(response) ? response : response.templates;
-    },
-    staleTime: 1000 * 60 * 5, // 5 minuti
-  });
-};
-
-// Hook per recuperare un singolo filter template
-export const useFetchFilterTemplateById = (id: string) => {
-  return useQuery({
-    queryKey: ['filter-template', id],
-    queryFn: () => ServerCall.get<FilterTemplateDTO>(`/external/filter-templates/${id}`),
-    enabled: !!id,
-  });
-};
-
-// Hook per recuperare un filter template per slug
-export const useFetchFilterTemplateBySlug = (slug: string) => {
-  return useQuery({
-    queryKey: ['filter-template-slug', slug],
-    queryFn: () => ServerCall.get<FilterTemplateDTO>(`/external/filter-templates/slug/${slug}`),
-    enabled: !!slug,
-  });
-};
-
-// Hook per validare uno slug
-export const useValidateFilterTemplateSlug = (slug: string, excludeId?: string) => {
-  return useQuery({
-    queryKey: ['validate-slug', slug, excludeId],
-    queryFn: () => ServerCall.post<{ available: boolean; suggestion?: string }>(
-      '/external/filter-templates/validate-slug',
-      { slug, excludeId }
-    ),
-    enabled: !!slug && slug.length >= 2,
-    staleTime: 1000 * 30, // 30 secondi
-  });
-};
-
-// ============================================
 // Dispositivi Punto Vendita Hooks
 // ============================================
-
-export const useFetchDisplayContextsByGDO = (idGdo: string) => {
-  return useQuery({
-    queryKey: ['display-contexts-gdo', idGdo],
-    queryFn: () => ServerCall.get<DisplayContextResponseDTO[]>(
-      `/display-contexts/gdo/${idGdo}`
-    ),
-    enabled: !!idGdo,
-  });
-};
 
 export const useFetchDisplayContextsByPuntoVendita = (idPuntoVendita: string) => {
   return useQuery({
@@ -1180,18 +1028,6 @@ export const useFetchAuditSeverities = () => {
   });
 };
 
-export const useCalcolaMultiPromoScoreboard = () =>
-  useMutation({
-    mutationFn: (payload: { promoIds: string[]; confrontoFilter?: { primarioIndex: number; secondarioIndex: number } }) =>
-      ServerCall.post<TracciatoReport>('/scoreboard/multi-promo', payload),
-  });
-
-export const useCalcolaQueryScoreboard = () =>
-  useMutation({
-    mutationFn: (query: TracciatoQueryRequest) =>
-      ServerCall.post<TracciatoQueryResult>('/scoreboard/query', query),
-  });
-
 export const useFetchReportOptions = () =>
   useQuery<ReportOptionDTO[]>({
     queryKey: ['tracciati', 'report-options'],
@@ -1205,27 +1041,10 @@ export const useCalcolaQueryDaOpzione = () =>
       ServerCall.post<TracciatoQueryResult>('/scoreboard/opzione', { optionId }),
   });
 
-export const useFetchMomentiPerPromo = (promoIds: string[], enabled: boolean) =>
-  useQueries({
-    queries: promoIds.map((id) => ({
-      queryKey: ['momentiPromo', id],
-      queryFn: () => ServerCall.get<TracciatiMomentoResponseDTO[]>(`/tracciati/momenti/promo/${id}`),
-      enabled,
-      staleTime: 1000 * 60 * 5,
-    })),
-  });
-
 export const useFetchDatoPerMenabo = (idPromo: string | undefined) =>
   useQuery({
     queryKey: ['datoPerMenabo', idPromo],
     queryFn: () => ServerCall.get<MenaboRisultato>(`/promo/menabo?idPromo=${idPromo}`),
     enabled: !!idPromo,
-    staleTime: 1000 * 60 * 5,
-  });
-
-export const useFetchGlobalUserFilters = () =>
-  useQuery({
-    queryKey: ['globalUserFilters'],
-    queryFn: () => ServerCall.get<GlobalUserFilter>('/utenti/me/global-filters'),
     staleTime: 1000 * 60 * 5,
   });

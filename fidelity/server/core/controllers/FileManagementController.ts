@@ -18,6 +18,7 @@ import {
 import { IFileManagementService } from '../interfaces/IFileManagementService';
 import { log } from '../logger';
 import { authMiddleware, integrationAuthMiddleware } from '../middleware/authMiddleware';
+import { routeDeprecata } from '../middleware/routeDeprecata';
 import { permissionGuard } from '../middleware/permissionGuard';
 import { Tracciati } from '../models';
 
@@ -75,20 +76,20 @@ export class FileManagementController extends BaseController {
 
     // File listing and retrieval
     this.router.get('/getAllFiles', authMiddleware, permissionGuard('file.download'), this.getAllFiles.bind(this));
-    this.router.put('/get_all_files_documentale', authMiddleware, permissionGuard('file.download'), this.getAllFilesDocumentale.bind(this));
+    this.router.put('/get_all_files_documentale', authMiddleware, permissionGuard('file.download'), routeDeprecata, this.getAllFilesDocumentale.bind(this));
     this.router.put('/get_all_contenuti_digitali', authMiddleware, permissionGuard('file.download'), this.getAllContenutiDigitali.bind(this));
-    this.router.get('/getProprietaMetaFilesRuntime', authMiddleware, permissionGuard('file.download'), this.getProprietaMetaFilesRuntime.bind(this));
+    this.router.get('/getProprietaMetaFilesRuntime', authMiddleware, permissionGuard('file.download'), routeDeprecata, this.getProprietaMetaFilesRuntime.bind(this));
     // Elenco della pagina Volantini: chi puo' aprire la pagina deve poterlo caricare
     this.router.get('/getAllCombinazioniRuntimePDF', authMiddleware, permissionGuard('volantini.visualizza'), this.getAllCombinazioniRuntimePDF.bind(this));
     this.router.put('/getAllCombinazioniRuntimePDFWebPliant', authMiddleware, permissionGuard('file.download'), this.getAllCombinazioniRuntimePDFWebPliant.bind(this));
-    this.router.get('/getContenutoDigitali', authMiddleware, permissionGuard('file.download'), this.getContenutoDigitali.bind(this));
+    this.router.get('/getContenutoDigitali', authMiddleware, permissionGuard('file.download'), routeDeprecata, this.getContenutoDigitali.bind(this));
 
     // Download routes
     this.router.get('/downloadPDFVolantino/:id', authMiddleware, permissionGuard('file.download'), this.downloadPDFVolantino.bind(this));
     this.router.post('/downloadKitZip', authMiddleware, permissionGuard('file.download'), this.downloadKitZip.bind(this));
-    this.router.post('/downloadPromoZip', authMiddleware, permissionGuard('file.download'), this.downloadPromoZip.bind(this));
+    this.router.post('/downloadPromoZip', authMiddleware, permissionGuard('file.download'), routeDeprecata, this.downloadPromoZip.bind(this));
 
-    this.router.post("/mergeFiles", authMiddleware, permissionGuard('file.merge'), this.mergeFiles.bind(this))
+    this.router.post("/mergeFiles", authMiddleware, permissionGuard('file.merge'), routeDeprecata, this.mergeFiles.bind(this))
   }
 
   // --- Upload handlers ---
@@ -116,8 +117,7 @@ export class FileManagementController extends BaseController {
       }) : "Nessun file"}`));
       log.info(Colorize.yellow(`Session: ${req.session ? JSON.stringify({
         id_utente: req.session.id_utente,
-        tipo_utente: req.session.tipo_utente,
-        email: req.session.email
+        tipo_utente: req.session.tipo_utente
       }) : "No session"}`));
 
       this.promoService = getService(TYPES.PromoService) as IPromoService;
@@ -166,7 +166,7 @@ export class FileManagementController extends BaseController {
         contextDaRicevere = JSON.parse(req.body.context);
         log.info(Colorize.green(`Context ricevuto: ${JSON.stringify(contextDaRicevere)}`));
       } catch (err) {
-        log.error(Colorize.red("Errore nel parsing del context: " + err));
+        log.error(Colorize.red(`Errore nel parsing del context: ${err}`));
         this.sendResponse(res, HttpStatusCode.BAD_REQUEST, { message: "Context non valido" });
         return;
       }
@@ -245,7 +245,7 @@ export class FileManagementController extends BaseController {
       log.info(Colorize.bgGreen("==== FINE uploadTracciato: invio risposta CREATED ====")); log.info(Colorize.bgGreen("==== FINE uploadTracciato: invio risposta CREATED ===="));
       this.sendResponse(res, HttpStatusCode.CREATED, resultTracciatoSalvato);
     } catch (error: any) {
-      log.error(Colorize.bgRed("Errore in uploadTracciato: " + error)); log.error(Colorize.bgRed("Errore in uploadTracciato: " + error));
+      log.error(Colorize.bgRed(`Errore in uploadTracciato: ${error}`)); log.error(Colorize.bgRed(`Errore in uploadTracciato: ${error}`));
       // Non serve rimuovere file temporanei, multer memoryStorage
       this.handleError(res, error);
     }

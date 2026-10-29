@@ -256,7 +256,8 @@ export class HubController extends BaseController {
 
       const email = claims.email || claims.preferred_username;
       if (!email) {
-        log.error('[HubController] OIDC: nessuna email nei claims', claims);
+        // Solo i nomi dei claim ricevuti: i valori sono dati personali
+        log.error('[HubController] OIDC: nessuna email nei claims', undefined, { claimRicevuti: Object.keys(claims) });
         res.redirect('/login?reason=oidc_error&message=Email+non+disponibile+dal+provider');
         return;
       }
@@ -281,7 +282,7 @@ export class HubController extends BaseController {
 
       await apriSessioneEsterna(req, parsed);
 
-      log.info(`[HubController] OIDC login riuscito per ${email}`);
+      log.info('[HubController] OIDC login riuscito', { userId: parsed.id, tipoUtente: parsed.tipo_utente });
 
       // Redirect alla dashboard
       res.redirect('/hub');
@@ -355,7 +356,7 @@ export class HubController extends BaseController {
       const auditService = AuditLogService.getInstance();
       auditService.loginSuccess(req, parsed.id, parsed.tipo_utente, 'login_accesso_servizio');
 
-      log.warn(`[HubController] Accesso di servizio OIDC per ${email}`);
+      log.warn('[HubController] Accesso di servizio OIDC', { userId: parsed.id, tipoUtente: parsed.tipo_utente });
 
       // Redirect alla dashboard
       res.redirect('/hub');
