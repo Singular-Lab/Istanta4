@@ -104,7 +104,8 @@ export class MenuService implements IMenuService {
   }
 
   /**
-   * Riporta il menu del Superadmin a quello predefinito (server/core/inizializzazione/datiPredefiniti.ts).
+   * Riporta il menu del Superadmin a quello predefinito (server/core/inizializzazione/datiPredefiniti.ts,
+   * con le pagine Materiali già convertite nelle viste Volantini e POP: vedi vociMenuSuperadmin).
    * I menu degli altri tipi di utente non si toccano. Cancellazione, inserimento e incremento della
    * versione dei permessi stanno in una sola transazione: se l'inserimento fallisce il menu resta
    * quello di prima; se riesce, ogni worker ricarica il menu alla richiesta successiva.

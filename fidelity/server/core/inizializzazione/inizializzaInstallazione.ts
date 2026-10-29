@@ -1,5 +1,7 @@
 import bcrypt from 'bcrypt';
+import { convertiMenuMateriali } from '../../../lib/accessi/menuMateriali';
 import { RUOLO_UTENTE_GDO, STATO_UTENTI, TIPO_UTENTI } from '../../../lib/enums';
+import type { PeriodoMateriali } from '../../../lib/materiali/periodi';
 import { sequelize } from '../db/SequelizeConnector';
 import { AuthProvider } from '../models/auth_provider';
 import { GDO } from '../models/gdo';
@@ -53,9 +55,25 @@ export const VISTE_DA_AGGIORNARE = [
   'mv_combinazioni_ottimizzata',
 ] as const;
 
-/** Le voci del menu predefinito del Superadmin, pronte per bulkCreate. */
+/**
+ * Identificativi fissi delle voci POP del menu predefinito del Superadmin: come quelli di
+ * MENU_SUPERADMIN sono dati di riferimento, uguali su tutte le installazioni.
+ */
+export const ID_VOCI_POP_SUPERADMIN: Readonly<Record<PeriodoMateriali, string>> = {
+  'in-corso': '34d3d518-132b-455b-ab99-0ca9a1543582',
+  attivi: 'd0a71ecc-9478-4897-9985-72e2da21c6bf',
+  storico: '5451e8a5-9613-4b22-909b-16c951b7c46c',
+};
+
+/**
+ * Le voci del menu predefinito del Superadmin, pronte per bulkCreate. MENU_SUPERADMIN resta
+ * allineato a seed-fidelity.sh, con le pagine Materiali: qui si converte nelle viste Volantini e
+ * POP come i menu salvati (lib/accessi/menuMateriali.ts), così un'installazione nuova e il
+ * ripristino del menu nascono già convertiti.
+ */
 export function vociMenuSuperadmin(adesso = new Date()) {
-  return MENU_SUPERADMIN.map(voce => ({
+  const { voci } = convertiMenuMateriali(MENU_SUPERADMIN, periodo => ID_VOCI_POP_SUPERADMIN[periodo]);
+  return voci.map(voce => ({
     ...voce,
     tipo_utente: TIPO_UTENTI.SUPERADMIN,
     ruolo_gdo: null,
@@ -162,8 +180,9 @@ export async function inizializzaInstallazione(opzioni: OpzioniInizializzazione)
   await passo('menu del superadmin', async () => {
     if (await MenuItem.count({ where: { tipo_utente: TIPO_UTENTI.SUPERADMIN } }) > 0)
       return { esito: 'invariato', dettaglio: 'il Superadmin ha gia un menu' };
-    await MenuItem.bulkCreate(vociMenuSuperadmin() as any[]);
-    return { esito: 'creato', dettaglio: `${MENU_SUPERADMIN.length} voci` };
+    const voci = vociMenuSuperadmin();
+    await MenuItem.bulkCreate(voci as any[]);
+    return { esito: 'creato', dettaglio: `${voci.length} voci` };
   });
 
   // Prima dei servizi gestiti: l'hub vuoto e' quello di un'installazione nuova.

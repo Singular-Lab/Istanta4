@@ -62,6 +62,9 @@ export const TYPES = {
   FileManagementService: Symbol.for('FileManagementService'),
   VolantinoService: Symbol.for('VolantinoService'),
 
+  // Viste Volantini e POP (ex Materiali)
+  MaterialiService: Symbol.for('MaterialiService'),
+
   // Permessi
   PermessiService: Symbol.for('PermessiService'),
 
@@ -116,6 +119,7 @@ export const TYPES = {
   ContenutiAggiuntiviReferenzaRepository: Symbol.for('ContenutiAggiuntiviReferenzaRepository'),
   PermessiRepository: Symbol.for('PermessiRepository'),
   MenuItemRepository: Symbol.for('MenuItemRepository'),
+  MaterialiRepository: Symbol.for('MaterialiRepository'),
 
   // ============================================
   // CONTROLLERS

@@ -86,6 +86,34 @@ describe("CardVolantino", () => {
     expect(screen.getByRole("button", { name: "Anteprima" })).toBeDisabled();
   });
 
+  it("mostra quanti file ha il kit, Nessun file con zero", () => {
+    const { unmount } = apri({ numeroFile: 1234 });
+    expect(screen.getByText("1.234 file")).toBeInTheDocument();
+    unmount();
+
+    apri({ numeroFile: 0 });
+    expect(screen.getByText("Nessun file")).toBeInTheDocument();
+  });
+
+  it("senza numero di file non mostra il conteggio, come nelle pagine che non lo conoscono", () => {
+    apri();
+
+    expect(screen.queryByText(/file$/)).not.toBeInTheDocument();
+  });
+
+  it("un kit non avviato senza copertina mostra il suo stato e porta comunque ai kit della promo", () => {
+    const { container } = apri({ stato: "NON_AVVIATO", collegamento: "/promozioni/in-corso/dettagli/p1/kits", numeroFile: 0 });
+
+    expect(screen.getByTitle("Non avviato")).toHaveTextContent("Non avviato");
+    // Per le tecnologie assistive resta un solo link, quello del titolo
+    expect(screen.getAllByRole("link")).toHaveLength(1);
+    expect(screen.getByRole("link", { name: "Volantino Nord" })).toHaveAttribute("href", "/promozioni/in-corso/dettagli/p1/kits");
+    // Il segnaposto della copertina porta alla stessa scheda
+    const segnaposto = container.querySelector('a[aria-hidden="true"]');
+    expect(segnaposto).toHaveAttribute("href", "/promozioni/in-corso/dettagli/p1/kits");
+    expect(segnaposto).toHaveAttribute("tabindex", "-1");
+  });
+
   it("con un file scaricabile Scarica è attivo", () => {
     apri({ file: { idOlimpoCloud: "olimpo-1", nome: "volantino.pdf", pagine: 8 } });
 

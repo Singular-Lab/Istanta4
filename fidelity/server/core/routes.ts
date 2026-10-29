@@ -39,6 +39,7 @@ import { ReferenzeController } from './controllers/ReferenzeController';
 import { WebPliantController } from './controllers/WebPliantController';
 import { FileManagementController } from './controllers/FileManagementController';
 import { VolantinoController } from './controllers/VolantinoController';
+import { MaterialiController } from './controllers/MaterialiController';
 
 import { IController } from './interfaces/IController';
 import { container, initializeContainer, TYPES } from './di';
@@ -78,6 +79,7 @@ import type { IReferenzeService } from './interfaces/IReferenzeService';
 import type { IWebPliantService } from './interfaces/IWebPliantService';
 import type { IFileManagementService } from './interfaces/IFileManagementService';
 import type { IVolantinoService } from './interfaces/IVolantinoService';
+import type { IMaterialiService } from './interfaces/IMaterialiService';
 
 import { ScoreboardService } from './services/ScoreboardService';
 import BadgeService from './services/BadgeService';
@@ -144,6 +146,7 @@ export async function createControllers(): Promise<IController[]> {
   const webPliantService = container.get<IWebPliantService>(TYPES.WebPliantService);
   const fileManagementService = container.get<IFileManagementService>(TYPES.FileManagementService);
   const volantinoService = container.get<IVolantinoService>(TYPES.VolantinoService);
+  const materialiService = container.get<IMaterialiService>(TYPES.MaterialiService);
   const permessiService = container.get<IPermessiService>(TYPES.PermessiService);
   const menuService = container.get<IMenuService>(TYPES.MenuService);
   const authProviderService = container.get<IAuthProviderService>(TYPES.AuthProviderService);
@@ -169,6 +172,7 @@ export async function createControllers(): Promise<IController[]> {
     new WebPliantController(webPliantService, gdoService),
     new FileManagementController(fileManagementService),
     new VolantinoController(volantinoService),
+    new MaterialiController(materialiService),
 
     // Original controllers
     new CorreggoController(kitRuntimeService, serviceFacade),

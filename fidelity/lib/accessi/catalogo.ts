@@ -239,7 +239,7 @@ export const AREE: DefinizioneArea[] = [
   {
     id: 'materiali',
     nome: 'Materiali',
-    descrizione: 'Materiali attivi, in corso, storico e contenuti digitali.',
+    descrizione: 'Viste Volantini e POP (in corso, attivi, storico) e contenuti digitali.',
     icona: 'Images',
     accesso: { codice: P.MATERIALI.VISUALIZZA, nome: 'Consultare i materiali', descrizione: 'Aprire le pagine dei materiali e dei contenuti digitali.' },
     azioni: [],

@@ -19,6 +19,7 @@ import { RouteErrorFallback } from "@/components/AppErrorFallback";
 import ErrorPage from "@/components/ErrorPage";
 import NotFoundPage from "@/components/NotFoundPage";
 import { PERCORSI_SPOSTATI } from "../../lib/accessi/gestioneInterna";
+import { PERIODI_MATERIALI, percorsoPop, percorsoVolantini } from "../../lib/materiali/periodi";
 
 type LoaderFunctionsModule = typeof import("./loaderFunctions");
 
@@ -46,16 +47,12 @@ const funzioneCaricamentoGestioneTemplatesWhatsappAdmin = createLazyLoader("funz
 const funzioneCaricamentoGestioneWhatsappSuperAdmin = createLazyLoader("funzioneCaricamentoGestioneWhatsappSuperAdmin");
 const funzioneCaricamentoImpostazioniTipografia = createLazyLoader("funzioneCaricamentoImpostazioniTipografia");
 const funzioneCaricamentoInvioCampagnaWhatsapp = createLazyLoader("funzioneCaricamentoInvioCampagnaWhatsapp");
-const funzioneCaricamentoMaterialiAttivi = createLazyLoader("funzioneCaricamentoMaterialiAttivi");
-const funzioneCaricamentoMaterialiInCorso = createLazyLoader("funzioneCaricamentoMaterialiInCorso");
-const funzioneCaricamentoMaterialiPromo = createLazyLoader("funzioneCaricamentoMaterialiPromo");
 const funzioneCaricamentoModificaRicetta = createLazyLoader("funzioneCaricamentoModificaRicetta");
 const funzioneCaricamentoNuovoODS = createLazyLoader("funzioneCaricamentoNuovoODS");
 const funzioneCaricamentoODSCompletati = createLazyLoader("funzioneCaricamentoODSCompletati");
 const funzioneCaricamentoODSInCorso = createLazyLoader("funzioneCaricamentoODSInCorso");
 const funzioneCaricamentoRicetta = createLazyLoader("funzioneCaricamentoRicetta");
 const funzioneCaricamentoStoricoLavorazioni = createLazyLoader("funzioneCaricamentoStoricoLavorazioni");
-const funzioneCaricamentoStoricoMateriali = createLazyLoader("funzioneCaricamentoStoricoMateriali");
 const funzioneCaricamentoTuttiIFilePerKit = createLazyLoader("funzioneCaricamentoTuttiIFilePerKit");
 const funzioneCaricamentoTuttiIfFilesOrdiniDiStampa = createLazyLoader("funzioneCaricamentoTuttiIfFilesOrdiniDiStampa");
 const funzioneCaricamentoVolantiniPDF = createLazyLoader("funzioneCaricamentoVolantiniPDF");
@@ -68,6 +65,7 @@ const funzioneDettagliKitManualiInCorso = createLazyLoader("funzioneDettagliKitM
 const funzioneDettagliLavorazioniInCorso = createLazyLoader("funzioneDettagliLavorazioniInCorso");
 const funzioneGestionePuntoVendita = createLazyLoader("funzioneGestionePuntoVendita");
 const funzioneLavorazioniInCorso = createLazyLoader("funzioneLavorazioniInCorso");
+const funzioneRedirectMaterialiPromo = createLazyLoader("funzioneRedirectMaterialiPromo");
 const throw404 = () => {
   throw new Response(null, { status: 404 });
 };
@@ -328,35 +326,42 @@ const routes: RouteObject[] = [
       //     return { Component: Documentale };
       //   },
       // },
-      {
-        path: "materiali-attivi",
-        lazy: async () => {
-          const { default: MaterialiDocumentale } = await import("../pages/MaterialiDocumentale");
-          return {
-            Component: MaterialiDocumentale,
-            loader: funzioneCaricamentoMaterialiAttivi,
-          };
+      // Viste Volantini e POP per periodo, al posto delle pagine Materiali: il loader dice il periodo
+      ...PERIODI_MATERIALI.flatMap((periodo): RouteObject[] => [
+        {
+          path: `volantini/${periodo}`,
+          loader: () => ({ periodo }),
+          lazy: async () => {
+            const { default: VolantiniKit } = await import("@/pages/VolantiniKit");
+            return { Component: VolantiniKit };
+          },
         },
+        {
+          path: `pop/${periodo}`,
+          loader: () => ({ periodo }),
+          lazy: async () => {
+            const { default: PopMateriali } = await import("@/pages/PopMateriali");
+            return { Component: PopMateriali };
+          },
+        },
+      ]),
+      {
+        // "/pop" da solo (per esempio dal breadcrumb) apre il periodo in corso
+        path: "pop",
+        loader: () => redirect(percorsoPop("in-corso")),
       },
+      // Vecchi indirizzi delle pagine Materiali (menu salvati, segnalibri): la vista Volantini dello stesso periodo
       {
         path: "materiali-in-corso",
-        lazy: async () => {
-          const { default: MaterialiDocumentale } = await import("../pages/MaterialiDocumentale");
-          return {
-            Component: MaterialiDocumentale,
-            loader: funzioneCaricamentoMaterialiInCorso,
-          };
-        },
+        loader: () => redirect(percorsoVolantini("in-corso")),
+      },
+      {
+        path: "materiali-attivi",
+        loader: () => redirect(percorsoVolantini("attivi")),
       },
       {
         path: "storico-materiali",
-        lazy: async () => {
-          const { default: MaterialiDocumentale } = await import("../pages/MaterialiDocumentale");
-          return {
-            Component: MaterialiDocumentale,
-            loader: funzioneCaricamentoStoricoMateriali,
-          };
-        },
+        loader: () => redirect(percorsoVolantini("storico")),
       },
       {
         path: "contenuti-digitali",
@@ -470,16 +475,9 @@ const routes: RouteObject[] = [
         },
       },
       {
+        // I materiali della promo sono nelle viste Volantini e POP: si apre quella del suo periodo
         path: "promozioni/in-corso/dettagli/:idPromo/materiali",
-        lazy: async () => {
-          const { default: MaterialiDocumentalePromo } = await import(
-            "@/pages/MaterialiDocumentalePromo"
-          );
-          return {
-            Component: MaterialiDocumentalePromo,
-            loader: funzioneCaricamentoMaterialiPromo,
-          };
-        },
+        loader: funzioneRedirectMaterialiPromo,
       },
       {
         // Il kit POP usa la stessa pagina dei kit: DettaglioKit gestisce anche il POP
@@ -551,16 +549,9 @@ const routes: RouteObject[] = [
         },
       },
       {
+        // I materiali della promo sono nelle viste Volantini e POP: si apre quella del suo periodo
         path: "promozioni/storico/dettagli/:idPromo/materiali",
-        lazy: async () => {
-          const { default: MaterialiDocumentalePromo } = await import(
-            "@/pages/MaterialiDocumentalePromo"
-          );
-          return {
-            Component: MaterialiDocumentalePromo,
-            loader: funzioneCaricamentoMaterialiPromo,
-          };
-        },
+        loader: funzioneRedirectMaterialiPromo,
       },
       {
         path: "impostazioni-tipografia",

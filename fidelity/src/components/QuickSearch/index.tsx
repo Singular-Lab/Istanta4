@@ -73,7 +73,8 @@ const getIconColorClass = (iconColor?: string): string => {
 const FALLBACK_PRIMARY_SUGGESTIONS: SuggestionItem[] = [
   { term: "dashboard", icon: "LayoutDashboard" },
   { term: "promozioni", icon: "Activity" },
-  { term: "materiali", icon: "FolderOpen" },
+  // Le pagine Materiali sono diventate le viste Volantini e POP: "materiali" non trova più nulla nel menu
+  { term: "pop", icon: "FolderOpen" },
   { term: "volantini", icon: "FileText" },
   { term: "ordini", icon: "PackagePlus" },
   { term: "impostazioni", icon: "Settings" },

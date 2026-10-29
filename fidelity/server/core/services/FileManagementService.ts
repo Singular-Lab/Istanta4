@@ -5,7 +5,7 @@ import fs from 'fs';
 import crypto from 'node:crypto';
 import path from 'path';
 import { Op } from 'sequelize';
-import stream, { Readable } from 'stream';
+import stream, { Readable, type Writable } from 'stream';
 import unzipper from 'unzipper';
 import { log } from '../logger';
 import { v4 as uuidv4 } from 'uuid';
@@ -24,7 +24,7 @@ import type { TipiDiExportResponseDTO } from '../dto';
 import { IAreaService } from '../interfaces/IAreaService';
 import { ICanaleService } from '../interfaces/ICanaleService';
 import type { IConfigService } from '../interfaces/IConfigService';
-import { IFileManagementService } from '../interfaces/IFileManagementService';
+import { EsitoZipOlimpo, IFileManagementService, VoceZipOlimpo } from '../interfaces/IFileManagementService';
 import type { IKitRuntimeService } from '../interfaces/IKitRuntimeService';
 import type { ITipoExportService } from '../interfaces/ITipoExportService';
 import type { IWebhookService } from '../interfaces/IWebhookService';
@@ -141,32 +141,63 @@ export class FileManagementService implements IFileManagementService {
     return this.creaZipDaOlimpo(voci);
   }
 
+  /** ZIP dei PDF di Olimpo in memoria, per chi risponde con un Buffer. */
+  private async creaZipDaOlimpo(voci: VoceZipOlimpo[]): Promise<Buffer> {
+    const parti: Buffer[] = [];
+    const uscita = new stream.PassThrough();
+    uscita.on('data', (parte: Buffer) => parti.push(parte));
+    const letto = new Promise<void>((resolve) => uscita.on('end', () => resolve()));
+    await this.scriviZipDaOlimpo(voci, uscita);
+    await letto;
+    return Buffer.concat(parti);
+  }
+
   /**
-   * ZIP dei PDF di Olimpo. Al piu' DOWNLOAD_ZIP_IN_PARALLELO download alla volta, e ogni
-   * esecutore aspetta che il suo file sia scritto nell'archivio prima di scaricarne un altro:
-   * in memoria restano pochi file oltre allo ZIP. I file che non arrivano non spariscono in
-   * silenzio: li elenca FILE_MANCANTI_ZIP.
+   * Scrive in `destinazione` (un Buffer in memoria, la risposta HTTP...) lo ZIP dei PDF di Olimpo.
+   * Al piu' DOWNLOAD_ZIP_IN_PARALLELO download alla volta, e ogni esecutore aspetta che il suo
+   * file sia scritto nell'archivio prima di scaricarne un altro: in memoria restano pochi file.
+   * I file che non arrivano non spariscono in silenzio: li elenca FILE_MANCANTI_ZIP.
+   * Si risolve quando la destinazione ha ricevuto tutto l'archivio. Se l'archivio o la
+   * destinazione si rompono (per esempio il browser chiude la connessione) i download che restano
+   * non partono, l'archivio si interrompe senza chiudere la destinazione e la promessa viene
+   * rifiutata: chi l'ha aperta decide come chiuderla.
    */
-  private async creaZipDaOlimpo(voci: Array<{ file: FileItemKit; nome: string }>): Promise<Buffer> {
+  async scriviZipDaOlimpo(voci: VoceZipOlimpo[], destinazione: Writable): Promise<EsitoZipOlimpo> {
     const archive = archiver('zip', {
       zlib: { level: 9 }
     });
-    const buffers: Buffer[] = [];
     let fallito = false;
-    const completato = new Promise<Buffer>((resolve, reject) => {
-      const bufferStream = new stream.PassThrough();
-      bufferStream.on('data', (data) => buffers.push(data));
-      bufferStream.on('end', () => resolve(Buffer.concat(buffers)));
-      bufferStream.on('error', reject);
+    const inAttesaDiScrittura = new Set<() => void>();
+    const completato = new Promise<void>((resolve, reject) => {
       archive.on('error', reject);
-      archive.pipe(bufferStream);
+      destinazione.on('error', reject);
+      destinazione.on('finish', () => resolve());
+      // Dopo 'finish' non cambia niente; prima vuol dire che la destinazione e' stata chiusa
+      destinazione.on('close', () => reject(new Error('Destinazione dello ZIP chiusa prima della fine dell\'archivio')));
+      archive.pipe(destinazione);
     });
-    // Archivio rotto: i download che restano non partono piu'
-    completato.catch(() => { fallito = true; });
+    // Archivio o destinazione rotti: i download che restano non partono piu', chi aspetta la
+    // scrittura della propria voce si sblocca e l'archivio si ferma senza chiudere la destinazione
+    completato.catch(() => {
+      fallito = true;
+      for (const sblocca of inAttesaDiScrittura) sblocca();
+      inAttesaDiScrittura.clear();
+      archive.unpipe(destinazione);
+      archive.abort();
+    });
 
     // archiver chiama la callback della voce quando l'ha scritta (o non ha potuto farlo)
     const aggiungi = (contenuto: Buffer | string, nome: string) => new Promise<void>((resolve) => {
-      const voce: archiver.EntryData & { callback: () => void } = { name: nome, callback: resolve };
+      if (fallito) {
+        resolve();
+        return;
+      }
+      const scritta = () => {
+        inAttesaDiScrittura.delete(scritta);
+        resolve();
+      };
+      inAttesaDiScrittura.add(scritta);
+      const voce: archiver.EntryData & { callback: () => void } = { name: nome, callback: scritta };
       archive.append(contenuto, voce);
     });
 
@@ -193,11 +224,11 @@ export class FileManagementService implements IFileManagementService {
     if (mancanti.length > 0 && !fallito) {
       await aggiungi(testoFileMancanti(mancanti), FILE_MANCANTI_ZIP);
     }
-    // L'esito arriva da completato: fine dello stream o 'error' dell'archivio
-    archive.finalize().catch(() => undefined);
-    const zip = await completato;
+    // L'esito arriva da completato: fine della destinazione, o 'error' dell'archivio o della destinazione
+    if (!fallito) archive.finalize().catch(() => undefined);
+    await completato;
     log.info('ZIP creato', { file: voci.length, mancanti: mancanti.length });
-    return zip;
+    return { file: voci.length - mancanti.length, mancanti: mancanti.length };
   }
 
   public async processRejectedZip(zipBuffer: Buffer, rejectedFiles: FileItemKit[]): Promise<MatchedFile[]> {

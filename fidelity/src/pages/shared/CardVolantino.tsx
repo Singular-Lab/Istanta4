@@ -3,7 +3,7 @@ import Button from "@/components/Base/Button";
 import Lucide from "@/components/Base/Lucide";
 import StatusBadge from "@/components/Base/StatusBadge";
 import { PreviewImmaginePdf } from "@/components/PreviewImmaginePdf";
-import { formatData } from "@/utils/format";
+import { formatData, formatNumero } from "@/utils/format";
 import { twMerge } from "@/utils/twMerge";
 import axios from "axios";
 import { useState } from "react";
@@ -23,7 +23,7 @@ export interface FileVolantino {
 
 export interface CardVolantinoProps {
   titolo: string;
-  /** Stato di lavorazione del kit runtime. */
+  /** Stato di lavorazione del kit runtime, o NON_AVVIATO per un kit previsto ma senza runtime. */
   stato: string;
   nomeArea?: string;
   nomeCanale?: string;
@@ -34,8 +34,13 @@ export interface CardVolantinoProps {
   collegamento?: string;
   /** Promo del kit, mostrata sotto il titolo (con link se indicato). */
   promo?: { nome: string; collegamento?: string };
+  /** File del kit; se indicato la card mostra quanti sono ("Nessun file" con 0). */
+  numeroFile?: number;
   className?: string;
 }
+
+const testoNumeroFile = (numero: number) =>
+  numero === 0 ? "Nessun file" : `${formatNumero(numero)} file`;
 
 const periodoValidita = (dal?: string | Date, al?: string | Date) => {
   if (dal && al) return `${formatData(dal)} – ${formatData(al)}`;
@@ -55,6 +60,7 @@ function CardVolantino({
   validitaAl,
   collegamento,
   promo,
+  numeroFile,
   className,
 }: CardVolantinoProps) {
   const [anteprimaAperta, setAnteprimaAperta] = useState(false);
@@ -107,6 +113,17 @@ function CardVolantino({
                   Anteprima
                 </span>
               </button>
+            ) : collegamento ? (
+              // Senza copertina (kit non avviato o senza PDF) il segnaposto porta comunque alla scheda:
+              // per le tecnologie assistive basta il link del titolo
+              <Link
+                to={collegamento}
+                aria-hidden="true"
+                tabIndex={-1}
+                className="flex h-24 w-20 items-center justify-center rounded-control border border-dashed border-slate-300 bg-slate-50 hover:border-theme-1/40"
+              >
+                <Lucide icon="FileText" className="h-5 w-5 text-slate-400" />
+              </Link>
             ) : (
               <div className="flex h-24 w-20 items-center justify-center rounded-control border border-dashed border-slate-300 bg-slate-50">
                 <Lucide icon="FileText" aria-hidden="true" className="h-5 w-5 text-slate-400" />
@@ -155,6 +172,12 @@ function CardVolantino({
             </div>
 
             <div className="mt-3 flex flex-wrap items-center gap-3 text-2xs text-slate-500">
+              {numeroFile !== undefined && (
+                <span className="inline-flex items-center gap-1 tabular-nums">
+                  <Lucide icon="Files" aria-hidden="true" className="h-3 w-3" />
+                  {testoNumeroFile(numeroFile)}
+                </span>
+              )}
               {periodo && (
                 <span className="inline-flex items-center gap-1 tabular-nums">
                   <Lucide icon="Calendar" aria-hidden="true" className="h-3 w-3" />

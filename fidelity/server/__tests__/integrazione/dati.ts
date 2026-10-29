@@ -40,49 +40,69 @@ export interface KitDiProva {
   idGdo: string;
   idPromo: string;
   idRuntime: string;
+  idArea: string;
+  idCanale: string;
+  idFormato: string;
+  idDesign: string;
 }
 
-/** Promo con un kit runtime, e tutto cio' che il kit richiede: area, canale, formato, raccoglitore, design. */
+/**
+ * Promo con un kit runtime, e tutto cio' che il kit richiede: area, canale, formato, raccoglitore,
+ * design. Con `promo` il kit va in una promo gia' creata (e nella sua GDO) invece che in una nuova.
+ */
 export async function creaKitRuntime(opzioni: {
-  statoLavorazione?: 'IN_LAVORAZIONE' | 'IN_REVISIONE' | 'PUBBLICATO';
+  statoLavorazione?: 'IN_LAVORAZIONE' | 'IN_LAVORAZIONE_CON_ERRORI' | 'IN_REVISIONE' | 'PUBBLICATO' | 'ELIMINATO';
   validitaDal?: Date;
   validitaAl?: Date;
+  promo?: Pick<KitDiProva, 'idGdo' | 'idPromo'>;
+  statoPromo?: string;
+  nomePromo?: string;
+  /** tipo_lavorazione_formati del formato del kit: 1 volantino (predefinito), 2 POP. */
+  tipoLavorazione?: number;
+  nomeFormato?: string;
+  tipo?: 'AUTOMATICO' | 'SEMI_AUTOMATICO' | 'MANUALE';
+  titolo?: string;
 } = {}): Promise<KitDiProva> {
-  const idGdo = await creaGdo();
+  const idGdo = opzioni.promo?.idGdo ?? await creaGdo();
   const idArea = randomUUID();
   const idCanale = randomUUID();
   const idFormato = randomUUID();
   const idRaccoglitore = randomUUID();
   const idDesign = randomUUID();
-  const idPromo = randomUUID();
+  const idPromo = opzioni.promo?.idPromo ?? randomUUID();
   const idRuntime = randomUUID();
+  const tipo = opzioni.tipo ?? 'AUTOMATICO';
+  const titolo = opzioni.titolo ?? 'SS TO VOL';
   const oggi = adesso();
 
   await inserisci('aree', { id_aree: idArea, codice_aree: 'TO', nome_aree: 'Toscana', id_gdo_aree: idGdo, createdat: oggi, updatedat: oggi });
   await inserisci('canali', { id_canali: idCanale, codice_canali: 'SS', nome_canali: 'Superstore', id_gdo_canali: idGdo, createdat: oggi, updatedat: oggi });
+  const nomeFormato = opzioni.nomeFormato ?? 'Volantino';
   await inserisci('formati', {
-    id_formati: idFormato, nome_formati: 'Volantino', codice_formati: 'VOL', descrizione_formati: 'Volantino', tipo_lavorazione_formati: 1,
-    createdat: oggi, updatedat: oggi,
+    id_formati: idFormato, nome_formati: nomeFormato, codice_formati: nomeFormato.slice(0, 3).toUpperCase(), descrizione_formati: nomeFormato,
+    tipo_lavorazione_formati: opzioni.tipoLavorazione ?? 1, createdat: oggi, updatedat: oggi,
   });
   await inserisci('raccoglitore_kit', {
-    id: idRaccoglitore, id_formato: idFormato, titolo: 'Raccoglitore di prova', tipo: 'AUTOMATICO', createdAt: oggi, updatedAt: oggi,
+    id: idRaccoglitore, id_formato: idFormato, titolo: 'Raccoglitore di prova', tipo, createdAt: oggi, updatedAt: oggi,
   });
   await inserisci('design_kit', {
-    id: idDesign, id_area: idArea, id_canale: idCanale, id_formato: idFormato, titolo: 'SS TO VOL', id_raccoglitore: idRaccoglitore,
-    stato: 'ATTIVO', tipo: 'AUTOMATICO', createdAt: oggi, updatedAt: oggi,
+    id: idDesign, id_area: idArea, id_canale: idCanale, id_formato: idFormato, titolo, id_raccoglitore: idRaccoglitore,
+    stato: 'ATTIVO', tipo, createdAt: oggi, updatedAt: oggi,
   });
-  await inserisci('promo', {
-    id_promo: idPromo, nome_promo: 'Promo di prova', data_registrazione: oggi,
-    validita_dal: opzioni.validitaDal ?? new Date(oggi.getTime() - 86_400_000),
-    validita_al: opzioni.validitaAl ?? new Date(oggi.getTime() + 7 * 86_400_000),
-    offset_visibilita: 0, stato: 'VALIDA', gdo: idGdo, createdat: oggi, updatedat: oggi,
-  });
+  if (!opzioni.promo) {
+    await inserisci('promo', {
+      id_promo: idPromo, nome_promo: opzioni.nomePromo ?? 'Promo di prova', data_registrazione: oggi,
+      validita_dal: opzioni.validitaDal ?? new Date(oggi.getTime() - 86_400_000),
+      validita_al: opzioni.validitaAl ?? new Date(oggi.getTime() + 7 * 86_400_000),
+      offset_visibilita: 0, stato: opzioni.statoPromo ?? 'VALIDA', gdo: idGdo, createdat: oggi, updatedat: oggi,
+    });
+  }
   await inserisci('runtime_kit', {
-    id: idRuntime, id_area: idArea, id_design: idDesign, id_canale: idCanale, id_formato: idFormato, titolo: 'SS TO VOL',
-    id_raccoglitore: idRaccoglitore, stato: 'ATTIVO', id_promo: idPromo, tipo: 'AUTOMATICO',
+    id: idRuntime, id_area: idArea, id_design: idDesign, id_canale: idCanale, id_formato: idFormato, titolo,
+    id_raccoglitore: idRaccoglitore, stato: 'ATTIVO', id_promo: idPromo, tipo,
     stato_lavorazione: opzioni.statoLavorazione ?? 'PUBBLICATO', createdAt: oggi, updatedAt: oggi,
   });
-  return { idGdo, idPromo, idRuntime };
+  return { idGdo, idPromo, idRuntime, idArea, idCanale, idFormato, idDesign };
 }
 
 export async function creaTipoExport(codice: string): Promise<string> {
@@ -94,20 +114,24 @@ export async function creaTipoExport(codice: string): Promise<string> {
   return id;
 }
 
-/** File runtime: `tipoExport` e' l'id del tipo, come lo salva Fidelity. */
+/** File runtime: `tipoExport` e' l'id del tipo, come lo salva Fidelity; `tipoExportCodice` il suo codice. */
 export async function creaFile(opzioni: {
   nome: string;
   tipoExport?: string;
+  tipoExportCodice?: string;
   meta?: Record<string, unknown>;
   errore?: string;
   idRuntime?: string;
+  idOlimpoCloud?: string;
+  mime?: string;
   creatoIl?: Date;
 }): Promise<string> {
   const id = randomUUID();
   const creatoIl = opzioni.creatoIl ?? adesso();
   await inserisci('files_runtime', {
-    id, nome: opzioni.nome, tipo_export: opzioni.tipoExport ?? null, meta_olimpo_cloud: opzioni.meta ?? null,
-    error: opzioni.errore ?? null, id_runtime: opzioni.idRuntime ?? null, createdAt: creatoIl, updatedAt: creatoIl,
+    id, nome: opzioni.nome, tipo_export: opzioni.tipoExport ?? null, tipo_export_codice: opzioni.tipoExportCodice ?? null,
+    meta_olimpo_cloud: opzioni.meta ?? null, error: opzioni.errore ?? null, id_runtime: opzioni.idRuntime ?? null,
+    id_olimpo_cloud: opzioni.idOlimpoCloud ?? null, mime: opzioni.mime ?? null, createdAt: creatoIl, updatedAt: creatoIl,
   });
   return id;
 }
