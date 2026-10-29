@@ -915,7 +915,7 @@ export class FileManagementService implements IFileManagementService {
           guid_kit_runtime: guidKitRuntime,
           nome_file: fileResolve,
           data_registrazione: new Date(),
-          versione: existLog?.versione ? existLog.versione + 1 : 0,
+          versione: existLog ? existLog.versione + 1 : 0,
           logs: existLog?.logs,
           stato: STATO_LOG_FILE.IN_ATTESA
         }

@@ -383,6 +383,12 @@ I controlli partono dallo stato del 2026-10-28 e possono solo migliorare:
 - **TypeScript strict**: il server compila con `strict: false`. `server/tsconfig.strict.json` lo compila in strict e `server/tsconfig.strict.baseline.json` conta gli errori file per file. Un file che peggiora, o un file nuovo con errori, fa fallire il controllo. Dopo una correzione si aggiorna il baseline con `yarn type-check:strict --aggiorna`.
 - **Coverage**: le soglie sono in `vitest.config.ts`, globali e per cartella (http, inizializzazione, agenzia_lib, db, accessi). Si alzano a mano quando i test crescono.
 
+#### Test d'integrazione
+I file `*.integrazione.test.ts` girano su un PostgreSQL vero, con lo schema creato da zero dalle migrazioni come in una installazione nuova (`server/__tests__/integrazione/`). `yarn test:server` li esegue insieme agli altri; `yarn vitest run --project integrazione` solo loro.
+- **In CI**: un container `postgis/postgis:17-3.5` avviato dai test con testcontainers, senza configurazione.
+- **In locale**: il database indicato da `FIDELITY_TEST_DB_URL`, nell'ambiente o in `.env`, per esempio `postgres://utente:password@localhost:5433/fidelity_test`. Il nome deve finire in `_test` e non puo' essere quello di `DB_POSTGRESQL_NAME`: viene cancellato e ricreato a ogni esecuzione e cancellato alla fine. L'utente deve poter creare database ed estensioni (postgis, uuid-ossp).
+- **Senza nessuno dei due**: in locale si saltano con un avviso, in CI la suite fallisce.
+
 ## Architettura Backend
 
 ### Dependency Injection (Inversify)
