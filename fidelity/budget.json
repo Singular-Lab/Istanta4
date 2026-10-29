@@ -1,0 +1,103 @@
+{
+  "unita": "KiB",
+  "tolleranza": 0.03,
+  "rotte": {
+    "comune": {
+      "moduli": [],
+      "js": {
+        "gzip": 219,
+        "brotli": 180
+      },
+      "css": {
+        "gzip": 31,
+        "brotli": 23
+      }
+    },
+    "webpliant-volantino": {
+      "moduli": [
+        "src/pages/WebpliantLayout/index.tsx",
+        "src/pages/WebPliant/index.tsx",
+        "src/router/loaderFunctions.ts"
+      ],
+      "js": {
+        "gzip": 429,
+        "brotli": 362
+      },
+      "css": {
+        "gzip": 95,
+        "brotli": 72
+      }
+    },
+    "login": {
+      "moduli": [
+        "src/pages/HubLogin/index.tsx"
+      ],
+      "js": {
+        "gzip": 312,
+        "brotli": 262
+      },
+      "css": {
+        "gzip": 31,
+        "brotli": 23
+      }
+    },
+    "dashboard": {
+      "moduli": [
+        "src/themes/Echo/index.tsx",
+        "src/router/loaderFunctions.ts",
+        "src/pages/Dashboard3/index.tsx"
+      ],
+      "js": {
+        "gzip": 431,
+        "brotli": 369
+      },
+      "css": {
+        "gzip": 33,
+        "brotli": 25
+      }
+    },
+    "promo-in-corso": {
+      "moduli": [
+        "src/themes/Echo/index.tsx",
+        "src/router/loaderFunctions.ts",
+        "src/pages/LavorazioniInCorso/index.tsx"
+      ],
+      "js": {
+        "gzip": 393,
+        "brotli": 335
+      },
+      "css": {
+        "gzip": 34,
+        "brotli": 26
+      }
+    },
+    "dettaglio-promo": {
+      "moduli": [
+        "src/themes/Echo/index.tsx",
+        "src/router/loaderFunctions.ts",
+        "src/pages/LavorazioniInCorso/DettagliLavorazioneInCorso/index.tsx"
+      ],
+      "js": {
+        "gzip": 479,
+        "brotli": 411
+      },
+      "css": {
+        "gzip": 35,
+        "brotli": 27
+      }
+    },
+    "menabo": {
+      "moduli": [
+        "src/pages/MenaboPromo/index.tsx"
+      ],
+      "js": {
+        "gzip": 341,
+        "brotli": 288
+      },
+      "css": {
+        "gzip": 31,
+        "brotli": 23
+      }
+    }
+  }
+}

@@ -30,7 +30,9 @@ import iconaWishlistWhite from "@/assets/images/webpliant/ico_wish_white.png"
 import iconaWishlistRed from "@/assets/images/webpliant/ico_wish_red.png"
 import cuore from "@/assets/images/webpliant/cuore.png";
 import { ServerCall } from "../../../../lib/server_call";
-import { useWebpliantParamsManager } from "@/hooks/useWebpliantParamsManager";
+import { useSessionWishlistIdWebpliant } from "@/stores/webpliantParamsStore";
+import { ConGestoreParametriWebpliant } from "../gestoreParametri";
+import { segnapostoCss } from "../segnaposto";
 import focusAPNG from "@/assets/images/webpliant/ani_focus.apng";
 import wishAPNG from "@/assets/images/webpliant/ani_wish.apng";
 import rotatingStar from "@/assets/images/webpliant/rot_star.gif";
@@ -131,8 +133,9 @@ const BoxRef: React.FC<BoxReferenzeProps> = ({
   // Ref per controllare il rendering dei loghi extra (assicurarsi che siano renderizzati una sola volta)
   const [isInWishListState, setIsInWishListState] = useState(isInWishlist || false);
   
-  // Usa il nuovo sistema centralizzato per i parametri
-  const { sessionWishlistId } = useWebpliantParamsManager();
+  // Solo lettura: il gestore dei parametri è uno per pagina (vedi ConGestoreParametriWebpliant),
+  // non uno per card
+  const sessionWishlistId = useSessionWishlistIdWebpliant();
   const ids = { sessionWishlistId }; // Compatibilità temporanea
 
 
@@ -550,7 +553,10 @@ const BoxRef: React.FC<BoxReferenzeProps> = ({
         style={{
           backgroundImage: options?.removeBackground
         ? undefined
-        : `url(${referenza.fotoExtra.filter((logo) => logo.tipo === 5)[0]?.guidId ?? "https://placehold.co/600x400?text=Hello\nWorld"})`,
+        : (() => {
+          const sfondo = referenza.fotoExtra.filter((logo) => logo.tipo === 5)[0]?.guidId;
+          return sfondo === undefined || sfondo === null ? segnapostoCss(600, 400) : `url(${sfondo})`;
+        })(),
           backgroundSize: 'cover',
           backgroundPosition: 'center',
         }}
@@ -580,7 +586,7 @@ const BoxRef: React.FC<BoxReferenzeProps> = ({
             })}
           <div style={{ position: "absolute", top: "25%", width: "30px", height: "auto", left: "0px" }}>
             <div style={{ position: "relative", marginBottom: "5px", backgroundColor: "steelblue" }}>
-              <img src={wishAPNG} alt="Ricetta abbinata" className="icon-gdo" />
+              <img src={wishAPNG} alt="Ricetta abbinata" className="icon-gdo" loading="lazy" decoding="async" />
             </div>
             {/* <div style={{ position: "relative", marginBottom: "5px", backgroundColor: "coral" }}>
               <img src={focusAPNG} alt="Ricetta abbinata" className="icon-gdo" />
@@ -596,7 +602,7 @@ const BoxRef: React.FC<BoxReferenzeProps> = ({
               justifyContent: "space-around", 
               alignItems: "center" 
               }}>
-              <img style={{width:"80%",height:"80%"}} src={rotatingStar} alt="Ricetta abbinata" className="icon-gdo" />
+              <img style={{width:"80%",height:"80%"}} src={rotatingStar} alt="Ricetta abbinata" className="icon-gdo" loading="lazy" decoding="async" />
               </div>
             }
           </div>
@@ -605,7 +611,7 @@ const BoxRef: React.FC<BoxReferenzeProps> = ({
           <div className={styleBox.contentWrapper}>
             <div className={styleBox.innerContent}>
               <div className={styleWp["wp-flip_container_ref"]}>
-                <img loading="lazy" src={urlFoto(referenza.foto)[0]} alt={referenza.dataFields.descrizione_uno?.toString()} />
+                <img loading="lazy" decoding="async" src={urlFoto(referenza.foto)[0]} alt={referenza.dataFields.descrizione_uno?.toString()} />
                 {state.miniContent}
               </div>
               {referenza.contenutiAggiuntivi?.map((ca) => (
@@ -614,6 +620,7 @@ const BoxRef: React.FC<BoxReferenzeProps> = ({
                     <img
                       alt={ca.guidId}
                       loading="lazy"
+                      decoding="async"
                       src={ca.contenuto.logo == "custom" ? ca.contenuto.logoUrl : ca.contenuto.logo}
                     />
                   ) : (
@@ -647,7 +654,7 @@ const BoxRef: React.FC<BoxReferenzeProps> = ({
                             }, 1000);
                           }
                         }}>
-                          <img style={{ height: 30, verticalAlign: "middle" }} src={iconaWishlistRed} alt="Aggiungi alla Wishlist" />
+                          <img style={{ height: 30, verticalAlign: "middle" }} src={iconaWishlistRed} alt="Aggiungi alla Wishlist" loading="lazy" decoding="async" />
                         </button>
                       </div>
                     </div>
@@ -727,6 +734,8 @@ const BoxRef: React.FC<BoxReferenzeProps> = ({
                         >
                           <img
                             alt="Wishlist"
+                            loading="lazy"
+                            decoding="async"
                             style={{
                               height: "50%",
                               verticalAlign: "middle",
@@ -751,4 +760,11 @@ const BoxRef: React.FC<BoxReferenzeProps> = ({
   );
 };
 
-export default React.memo(BoxRef);
+/** Fuori dal layout del volantino la card porta con sé un gestore dei parametri, come prima. */
+const BoxRefConGestore: React.FC<BoxReferenzeProps> = (props) => (
+  <ConGestoreParametriWebpliant>
+    <BoxRef {...props} />
+  </ConGestoreParametriWebpliant>
+);
+
+export default React.memo(BoxRefConGestore);

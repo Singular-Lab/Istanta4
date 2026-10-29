@@ -25,6 +25,7 @@ import {
   useLoaderData,
   useLocation,
   useNavigate,
+  useParams,
   useRevalidator,
 } from "react-router-dom";
 import { STATO_LAVORAZIONE_KIT_RUNTIME, STATO_PROMO } from "../../../../lib/enums";
@@ -34,14 +35,13 @@ import {
   PromoResponseDTO,
   TracciatiResponseDTO,
   UpdatePromoDTO,
-  type AreaResponseDTO,
-  type CanaleResponseDTO,
 } from "../../../../server/core/dto";
 import LazyChart from "../../../components/Lazy/LazyChart";
 import PermissionGate from "../../../components/PermissionGate";
 import { withSessionCheckOptimized } from "../../../components/SessionChecker";
 import { usePermissionContext } from '../../../context/PermissionContext';
 import { useUser } from "../../../context/UserContext";
+import { opzioniPromo, useQueryConLoader } from "../../../query/condivise";
 import { useContestoPerNuovaLavorazione, useFetchFunzionalita } from "../../../query/query";
 import CardVolantino from "../../shared/CardVolantino";
 import SpecificheLavorazione from "../../shared/SpecificheLavorazione";
@@ -212,7 +212,8 @@ function Main() {
   const funzionalitaQuery = useFetchFunzionalita();
   const showMomenti = funzionalitaQuery.data?.momenti === true;
   const showMenabo = funzionalitaQuery.data?.menabo === true;
-  const [idPromo, setIdPromo] = useState<string | null>(null);
+  // Dalla rotta (/promozioni/{in-corso|storico}/dettagli/:idPromo): c'è già al primo render, le query partono subito
+  const idPromo = useParams<{ idPromo: string }>().idPromo ?? null;
   const [files, setFiles] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState(false);
 
@@ -295,50 +296,40 @@ function Main() {
     }
   };
 
-  useEffect(() => {
-    const pathParts = location.pathname.split("/");
-    const id = pathParts[pathParts.length - 1];
-    setIdPromo(id);
-  }, [location]);
-
   const {
     lavorazioni,
     volantini,
     datoGraficoPaginaLavorazioni,
+    datiTracciatiCaricati,
   } = useLoaderData() as {
     lavorazioni: Promise<any[] | null>;
     volantini: Promise<VolantinoKit[] | null>;
     datoGraficoPaginaLavorazioni: Promise<any>;
-    allAreeGDO: Promise<AreaResponseDTO[] | null>;
-    allCanaliGDO: Promise<CanaleResponseDTO[] | null>;
+    datiTracciatiCaricati?: Promise<TracciatiResponseDTO[]>;
   };
 
-  const promoQuery = useQuery({
-    queryKey: ["promo", idPromo],
-    queryFn: async () => {
-      if (!idPromo) return null;
-      const result = await ServerCall.get<PromoResponseDTO>(
-        `/promo/${idPromo}`
-      );
-      return result;
-    },
-    enabled: !!idPromo,
-  });
+  // Stessa query del breadcrumb (chiave ["promo", id]): una sola richiesta per i due
+  const promoQuery = useQuery(opzioniPromo(idPromo));
 
   const currentPromoData = promoQuery.data;
 
-  const tracciatiQuery = useQuery({
-    queryKey: ["tracciatiPromo", idPromo],
-    queryFn: async () => {
-      if (!idPromo) return [];
-      const result = await ServerCall.get<TracciatiResponseDTO[]>(
-        `/tracciati/promo/${idPromo}?page=1&pageSize=20`
-      );
-      return result ?? [];
+  // I tracciati li ha già chiesti il loader: al caricamento la query usa quella risposta, senza
+  // ripetere la richiesta; i refetch (caricamento, eliminazione, Riprova) chiamano il servizio
+  const tracciatiQuery = useQueryConLoader(
+    {
+      queryKey: ["tracciatiPromo", idPromo],
+      queryFn: async () => {
+        if (!idPromo) return [];
+        const result = await ServerCall.get<TracciatiResponseDTO[]>(
+          `/tracciati/promo/${idPromo}?page=1&pageSize=20`
+        );
+        return result ?? [];
+      },
+      enabled: !!idPromo,
+      placeholderData: (previousData) => previousData ?? [],
     },
-    enabled: !!idPromo,
-    placeholderData: (previousData) => previousData ?? [],
-  });
+    datiTracciatiCaricati
+  );
 
   const isPromoFinalState = (stato?: STATO_PROMO | null) =>
     stato === STATO_PROMO.VALIDA ||
@@ -403,7 +394,6 @@ function Main() {
     queryKey: ["contestoPerImportazione", idPromo],
     queryFn: async () => {
       if (!idPromo) return [];
-      await new Promise((resolve) => setTimeout(resolve, 300));
       const result = await ServerCall.get<
         (ContextLavorazione & { user_value: any })[]
       >(`/promo/contesto-importazione?guidId=${idPromo}`);
@@ -1354,8 +1344,6 @@ function Main() {
             {files.length === 0 ? (
               <Dropzone
                 options={{
-                  dragend: (event) => console.log("Drag end", event),
-                  dragenter: (event) => console.log("Drag enter", event),
                   // I tipi di dropzone dichiarano addedfiles() senza argomenti, ma l'evento passa i file aggiunti
                   addedfiles: (dzFiles?: ArrayLike<File>) => {
                     const addedFiles = Array.from(dzFiles ?? []);

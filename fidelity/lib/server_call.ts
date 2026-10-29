@@ -700,14 +700,23 @@ class ServerCall {
     return message.includes('csrf');
   }
 
-  /** Le scritture passano tutte da qui: si controlla anche l'avviso di dissincronia con Istanta. */
+  /**
+   * Le scritture passano tutte da qui: si controlla anche l'avviso di dissincronia con Istanta.
+   * Inizio e fine della scrittura cambiano la chiave delle GET condivise (vedi get): una lettura
+   * partita dopo non riceve la risposta di una partita prima della scrittura.
+   */
   private static async withCsrfRetry(
     request: () => Promise<Response>,
     applyFreshToken: () => void
   ): Promise<Response> {
-    const response = await this.withCsrfRetryInterno(request, applyFreshToken);
-    segnalaDissincronia(response);
-    return response;
+    this.scrittureAvviate++;
+    try {
+      const response = await this.withCsrfRetryInterno(request, applyFreshToken);
+      segnalaDissincronia(response);
+      return response;
+    } finally {
+      this.scrittureAvviate++;
+    }
   }
 
   private static async withCsrfRetryInterno(
@@ -1214,7 +1223,32 @@ class ServerCall {
     return error.isType(type);
   }
 
+  /**
+   * GET identiche partite mentre la prima e ancora in corso (per esempio layout e pagina del
+   * volantino che chiedono lo stesso dato) fanno una sola richiesta. Si condivide il testo della
+   * risposta e ogni chiamante lo legge per conto suo: nessuno riceve l'oggetto di un altro.
+   * Una scrittura chiude la condivisione (vedi withCsrfRetry): la GET partita dopo non riceve la
+   * risposta di una partita prima. Con un signal la richiesta resta del solo chiamante, che puo
+   * annullarla senza toccare gli altri.
+   */
   public static get = async <T>(url: string, signal?: AbortSignal, customHeaders?: Record<string, string>): Promise<T> => {
+    const testo = signal
+      ? await this.leggiGet(url, signal, customHeaders)
+      : await condividiInVolo(
+        `GET ${this.scrittureAvviate} ${url} ${JSON.stringify(customHeaders ?? {})}`,
+        () => this.leggiGet(url, undefined, customHeaders)
+      );
+    try {
+      return JSON.parse(testo) as T;
+    } catch (parseError) {
+      throw this.handleParseError(parseError);
+    }
+  }
+
+  /** Conta inizio e fine di ogni scrittura: fa parte della chiave delle GET condivise. */
+  private static scrittureAvviate = 0;
+
+  private static leggiGet = async (url: string, signal?: AbortSignal, customHeaders?: Record<string, string>): Promise<string> => {
     try {
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -1237,7 +1271,7 @@ class ServerCall {
 
       if (response.ok) {
         try {
-          return await response.json();
+          return await response.text();
         } catch (parseError) {
           throw this.handleParseError(parseError);
         }

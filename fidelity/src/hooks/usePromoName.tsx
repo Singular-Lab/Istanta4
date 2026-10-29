@@ -1,69 +1,61 @@
 import { useQuery } from "@tanstack/react-query";
-import { ServerCall } from "../../lib/server_call";
-import { IPromo } from "../../lib/types";
-import type { PromoResponseDTO } from "../../server/core/dto";
+import { useEffect } from "react";
+import { opzioniPromo } from "@/query/condivise";
+import { isUUID } from "@/utils/validation";
 
-interface UsePromoNameOptions {
-  promoId: string;
-  enabled?: boolean;
-}
+const SEZIONI_PROMO = ["in-corso", "storico"];
 
-export const usePromoName = ({ promoId, enabled = true }: UsePromoNameOptions) => {
-  return useQuery({
-    queryKey: ['promo-name', promoId],
-    queryFn: async (): Promise<string> => {
-      // Prima controlla la cache locale
-      const cached = sessionStorage.getItem(`promo_${promoId}`);
-      if (cached) {
-        return cached;
-      }
-
-      // Se non è in cache, recupera dal server
-      const promo = await ServerCall.get<IPromo>(`/promo/${promoId}`);
-      if (promo && promo.nomePromo) {
-        // Salva in cache
-        sessionStorage.setItem(`promo_${promoId}`, promo.nomePromo);
-        return promo.nomePromo;
-      }
-
-      throw new Error('Nome promo non trovato');
-    },
-    enabled: enabled && !!promoId,
-    staleTime: 10 * 60 * 1000, // 10 minuti
-    retry: 2,
-  });
+/**
+ * Id della promo nel percorso. Tutte le rotte della promo sono
+ * /promozioni/{in-corso|storico}/dettagli/:idPromo/...: l'id segue "dettagli". Gli altri UUID
+ * del percorso (kit, tracciati, confronti) non sono promo e non si chiedono a /promo/:id.
+ */
+export const idPromoDalPercorso = (segmenti: string[]): string | null => {
+  const [radice, sezione, dettagli, id] = segmenti;
+  if (radice !== "promozioni" || !SEZIONI_PROMO.includes(sezione) || dettagli !== "dettagli") {
+    return null;
+  }
+  return isUUID(id) ? id : null;
 };
 
-export const usePromoNames = (promoIds: string[]) => {
-  return useQuery({
-    queryKey: ['promo-names', promoIds],
-    queryFn: async (): Promise<{ [key: string]: string }> => {
-      const promoDetails: { [key: string]: string } = {};
+// Il nome resta in sessionStorage come prima: lo usa anche il report di confronto dei tracciati
+const chiaveSessione = (idPromo: string) => `promo_${idPromo}`;
 
-      for (const id of promoIds) {
-        try {
-          // Prima controlla la cache locale
-          const cached = sessionStorage.getItem(`promo_${id}`);
-          if (cached) {
-            promoDetails[id] = cached;
-            continue;
-          }
+const leggiNomeSalvato = (idPromo: string | null): string | null => {
+  if (!idPromo) {
+    return null;
+  }
+  try {
+    return sessionStorage.getItem(chiaveSessione(idPromo));
+  } catch {
+    return null;
+  }
+};
 
-          // Se non è in cache, recupera dal server
-          const promo = await ServerCall.get<PromoResponseDTO>(`/promo/${id}`);
-          if (promo && promo.nome) {
-            promoDetails[id] = promo.nome;
-            sessionStorage.setItem(`promo_${id}`, promo.nome);
-          }
-        } catch (error) {
-          console.error(`Errore nel recupero della promo ${id}:`, error);
-        }
-      }
-
-      return promoDetails;
-    },
-    enabled: promoIds.length > 0,
-    staleTime: 10 * 60 * 1000, // 10 minuti
-    retry: 2,
+/**
+ * Nome della promo per il breadcrumb. Usa la stessa query del dettaglio promo (chiave ["promo", id]):
+ * con la pagina aperta la richiesta è una sola. Se il nome è già in sessione non si chiede nulla,
+ * ma un dato più recente in cache (per esempio dopo una modifica della promo) ha la precedenza.
+ */
+export const useNomePromo = (idPromo: string | null) => {
+  const nomeSalvato = leggiNomeSalvato(idPromo);
+  const query = useQuery({
+    ...opzioniPromo(idPromo),
+    enabled: !!idPromo && !nomeSalvato,
+    select: (promo) => promo?.nome || null,
   });
+  const nomeLetto = query.data ?? null;
+
+  useEffect(() => {
+    if (!idPromo || !nomeLetto) {
+      return;
+    }
+    try {
+      sessionStorage.setItem(chiaveSessione(idPromo), nomeLetto);
+    } catch {
+      // sessionStorage non disponibile: il nome resta nella cache di React Query
+    }
+  }, [idPromo, nomeLetto]);
+
+  return { nome: nomeLetto ?? nomeSalvato, isLoading: query.isLoading };
 };

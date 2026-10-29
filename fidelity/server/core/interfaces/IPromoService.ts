@@ -9,6 +9,8 @@ export interface IPromoService {
   updatePromo(id: string, data: Partial<UpdatePromoDTO>): Promise<PromoResponseDTO>;
   deletePromo(id: string): Promise<boolean>;
   getAllPromo(): Promise<PromoResponseDTO[]>;
+  /** Promo della vista "Promozioni in corso", dalla piu' recente: GET /api/promo/in-corso. */
+  getPromoInCorso(): Promise<PromoResponseDTO[]>;
   getCurrentPromoCount(): Promise<number>;
   contaPromoSenzaOrdineDiStampa(): Promise<number>;
   getPromoSenzaOrdineDiStampa(): Promise<PromoResponseDTO[]>;

@@ -26,6 +26,10 @@ import dayjs from 'dayjs';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import { CaricamentoPubblico } from '@/pages/WebpliantLayout/StatiPubblici';
 import EmptyState from '@/components/EmptyState';
+import { ConGestoreParametriWebpliant } from '../gestoreParametri';
+
+/** Risposta di /get_filtered_referenze quando si chiede anche la scritta di validità (conValidita). */
+type ReferenzeConValidita = { referenze: ReferenzeIstanta[]; validita: string };
 
 interface CarouselContainerProps {
   item: PageLayoutItem;
@@ -73,17 +77,24 @@ const CarouselContainer: React.FC<CarouselContainerProps> = memo(function Carous
     const fetchReferenze = async () => {
       setIsLoading(true);
       try {
-        const response = await ServerCall.post<ReferenzeIstanta[]>('/get_filtered_referenze', {
+        // La scritta di validità arriva con le referenze: prima serviva una PUT a
+        // /getDataValiditaPerCarosello che rimandava al server tutte le referenze appena ricevute
+        const response = await ServerCall.post<ReferenzeConValidita | ReferenzeIstanta[]>('/get_filtered_referenze', {
           idWorkspace,
           idArea,
           idCanale,
           idPV,
           dataSelezionata: date,
           item,
-          isEditor
+          isEditor,
+          conValidita: true,
         });
         if (response) {
-          setFetchedReferenze(response);
+          const referenze = Array.isArray(response) ? response : response.referenze ?? [];
+          setFetchedReferenze(referenze);
+          if (referenze.length > 0) {
+            setDataScrittaRef(Array.isArray(response) ? '' : response.validita || '');
+          }
         }
       } catch (error) {
         console.error("Failed to fetch filtered referenze:", error);
@@ -170,25 +181,6 @@ const CarouselContainer: React.FC<CarouselContainerProps> = memo(function Carous
   const currentIndex = useMemo(() => tabs.indexOf(activeTab), [tabs, activeTab]);
 
   useEffect(() => {
-    if (fetchedReferenze.length > 0) {
-        const fetchDataScrittaRef = async () => {
-          const response = await ServerCall.put<string>('/getDataValiditaPerCarosello', {
-            designContent: itemMemo.content,
-            referenze: fetchedReferenze,
-          });
-          if (!response) {
-            return '';
-          }
-          return response;
-        };
-    
-        fetchDataScrittaRef().then((data) => {
-          setDataScrittaRef(data);
-        });
-    }
-  }, [itemMemo, fetchedReferenze]);
-
-  useEffect(() => {
     // Rimuovi slide vuote se necessario
     const removeEmptySlides = () => {
       const slides = document.querySelectorAll('.swiper-slide');
@@ -229,6 +221,8 @@ const CarouselContainer: React.FC<CarouselContainerProps> = memo(function Carous
                 width={item.content?.logo.width}
                 src={item.content?.logo.srcLogoCarosello}
                 alt="Carousel Logo"
+                loading="lazy"
+                decoding="async"
               />
             </div>
             {item.content?.title &&
@@ -260,6 +254,8 @@ const CarouselContainer: React.FC<CarouselContainerProps> = memo(function Carous
                 width={item.content?.logo.width}
                 src={item.content?.logo.srcLogoCarosello}
                 alt="Carousel Logo"
+                loading="lazy"
+                decoding="async"
               />
             </div>
           </>
@@ -273,6 +269,8 @@ const CarouselContainer: React.FC<CarouselContainerProps> = memo(function Carous
                 width={item.content?.logo.width}
                 src={item.content?.logo.srcLogoCarosello}
                 alt="Carousel Logo"
+                loading="lazy"
+                decoding="async"
               />
             </div>
             {item.content?.title &&
@@ -304,6 +302,8 @@ const CarouselContainer: React.FC<CarouselContainerProps> = memo(function Carous
                 width={item.content?.logo.width}
                 src={item.content?.logo.srcLogoCarosello}
                 alt="Carousel Logo"
+                loading="lazy"
+                decoding="async"
               />
             </div>
           </div>
@@ -496,4 +496,13 @@ const CarouselContainer: React.FC<CarouselContainerProps> = memo(function Carous
   );
 });
 
-export default CarouselContainer;
+/** Fuori dal layout del volantino (anteprima dell'editor) un gestore dei parametri per carosello, non uno per card. */
+const CarouselContainerConGestore: React.FC<CarouselContainerProps> = memo(function CarouselContainerConGestore(props) {
+  return (
+    <ConGestoreParametriWebpliant>
+      <CarouselContainer {...props} />
+    </ConGestoreParametriWebpliant>
+  );
+});
+
+export default CarouselContainerConGestore;

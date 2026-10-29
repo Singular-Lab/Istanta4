@@ -14,10 +14,12 @@ import { PreviewImmaginePdf } from "@/components/PreviewImmaginePdf";
 import axios from "axios";
 import clsx from "clsx";
 import dayjs from "dayjs";
-import { FC, ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { keepPreviousData } from "@tanstack/react-query";
+import { FC, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLoaderData } from "react-router-dom";
 import { ServerCall } from "../../../lib/server_call";
 import { AreaResponseDTO, CanaleResponseDTO } from "../../../server/core/dto";
+import { useAreeGdo, useCanaliGdo, useQueryConLoader } from "../../query/condivise";
 import EmptyState from "../../components/EmptyState";
 import { PERMISSIONS } from "../../constants/permissions";
 import { usePermission } from "../../context/PermissionContext";
@@ -77,6 +79,8 @@ export interface Dashboard3LoaderData {
     volantiniPubblicatiInLavorazionePromise: Promise<VolantiniPubblicatiInLavorazione>;
     areePromise: Promise<AreaResponseDTO[]>;
     canaliPromise: Promise<CanaleResponseDTO[]>;
+    /** Ultimi 10 volantini senza filtri; se il loader non la avvia la chiede la pagina. */
+    storicoPromise?: Promise<StoricoVolantini>;
 }
 
 interface Dashboard3Props {
@@ -711,14 +715,55 @@ const MOTIVO_ERRORE = "Il servizio non ha restituito i volantini. Riprova tra qu
 const TITOLO_PAGINA = "Dashboard";
 const DESCRIZIONE_PAGINA = "Panoramica dei volantini attivi e in lavorazione.";
 
+// Le card restano in cache per poco: tornando subito sulla dashboard non si richiedono, ma i dati
+// pubblicati nel frattempo arrivano presto. Le promesse del loader le aggiornano a ogni navigazione.
+const VOLANTINI_STALE_MS = 30 * 1000;
+
+const CHIAVE_DASHBOARD = "dashboardGdo";
+
+const senzaFiltri = (filtro: CardFilter) => !filtro.id_area && !filtro.id_canale;
+
+// Query string con i filtri della card e gli eventuali parametri fissi
+const buildQueryString = (filter: CardFilter, extraParams?: Record<string, string>) => {
+    const params = new URLSearchParams();
+    if (filter.id_area) params.set("id_area", filter.id_area);
+    if (filter.id_canale) params.set("id_canale", filter.id_canale);
+    if (extraParams) {
+        Object.entries(extraParams).forEach(([key, value]) => params.set(key, value));
+    }
+    const queryString = params.toString();
+    return queryString ? `?${queryString}` : "";
+};
+
+/**
+ * Dati di una card: la chiave è l'indirizzo con i filtri. Senza filtri la prima lettura usa la
+ * promessa del loader (o della dashboard Superadmin), se c'è. Cambiando filtro restano visibili i
+ * dati precedenti, attenuati, finché arrivano i nuovi. Senza tentativi automatici: l'errore si
+ * vede subito nella card, con Riprova, come prima.
+ */
+const useVolantiniCard = <T,>(
+    endpoint: string,
+    filtro: CardFilter,
+    promessaLoader?: Promise<T>,
+    extraParams?: Record<string, string>
+) => {
+    const url = `${endpoint}${buildQueryString(filtro, extraParams)}`;
+    return useQueryConLoader(
+        {
+            queryKey: [CHIAVE_DASHBOARD, url],
+            queryFn: () => ServerCall.get<T>(url),
+            placeholderData: keepPreviousData,
+            staleTime: VOLANTINI_STALE_MS,
+            retry: false,
+        },
+        senzaFiltri(filtro) ? promessaLoader : undefined
+    );
+};
+
 const Dashboard3: FC<Dashboard3Props> = ({ embedded = false, loaderDataOverride }) => {
     const routeLoaderData = useLoaderData() as Dashboard3LoaderData | null;
     const { showNotification } = useNotification();
     const loaderData = loaderDataOverride ?? routeLoaderData;
-
-    // Stato per aree e canali (shared)
-    const [aree, setAree] = useState<AreaResponseDTO[]>([]);
-    const [canali, setCanali] = useState<CanaleResponseDTO[]>([]);
 
     // Filtri indipendenti per ogni card
     const [filterInCorso, setFilterInCorso] = useState<CardFilter>({ id_area: "", id_canale: "" });
@@ -726,155 +771,70 @@ const Dashboard3: FC<Dashboard3Props> = ({ embedded = false, loaderDataOverride 
     const [filterPubblicatiInLavorazione, setFilterPubblicatiInLavorazione] = useState<CardFilter>({ id_area: "", id_canale: "" });
     const [filterStorico, setFilterStorico] = useState<CardFilter>({ id_area: "", id_canale: "" });
 
-    // Stato per i dati di ogni card
-    const [volantiniInCorso, setVolantiniInCorso] = useState<VolantiniInCorso | null>(null);
-    const [volantiniInLavorazione, setVolantiniInLavorazione] = useState<VolantiniInLavorazione | null>(null);
-    const [volantiniPubblicatiInLavorazione, setVolantiniPubblicatiInLavorazione] = useState<VolantiniPubblicatiInLavorazione | null>(null);
-    const [storicoVolantini, setStoricoVolantini] = useState<StoricoVolantini | null>(null);
+    // Dati di ogni card, in React Query: tornando sulla dashboard si vedono subito
+    const inCorsoQuery = useVolantiniCard<VolantiniInCorso>(
+        "/dashboard/volantini-in-corso", filterInCorso, loaderData?.volantiniInCorsoPromise
+    );
+    const inLavorazioneQuery = useVolantiniCard<VolantiniInLavorazione>(
+        "/dashboard/volantini-in-lavorazione", filterInLavorazione, loaderData?.volantiniInLavorazionePromise
+    );
+    const pubblicatiInLavorazioneQuery = useVolantiniCard<VolantiniPubblicatiInLavorazione>(
+        "/dashboard/volantini-pubblicati-in-lavorazione", filterPubblicatiInLavorazione, loaderData?.volantiniPubblicatiInLavorazionePromise
+    );
+    // Storico (ultimi 10)
+    const storicoQuery = useVolantiniCard<StoricoVolantini>(
+        "/dashboard/storico-volantini", filterStorico, loaderData?.storicoPromise, { limit: "10" }
+    );
+
+    // Aree e canali (shared): cache comune con le altre pagine che li usano
+    const areeQuery = useAreeGdo(loaderData?.areePromise);
+    const canaliQuery = useCanaliGdo(loaderData?.canaliPromise);
+    const aree = areeQuery.data ?? [];
+    const canali = canaliQuery.data ?? [];
+
+    const tutte = [inCorsoQuery, inLavorazioneQuery, pubblicatiInLavorazioneQuery, storicoQuery, areeQuery, canaliQuery];
+    // Come prima: lo scheletro finché ogni richiesta iniziale ha una risposta (o un errore)
+    const initialLoading = tutte.some((q) => q.isPending);
+
+    // Un endpoint che fallisce non svuota le altre card; al primo caricamento lo si dice una volta
+    const esitoInizialeNotificato = useRef(false);
+    const motiviErrore = tutte.filter((q) => q.isError).map((q) => q.error);
+    useEffect(() => {
+        if (initialLoading || esitoInizialeNotificato.current) {
+            return;
+        }
+        esitoInizialeNotificato.current = true;
+        if (motiviErrore.length > 0) {
+            console.error("Errore durante il caricamento iniziale:", motiviErrore);
+            showNotification("Alcuni dati della dashboard non sono stati caricati. Riprova più tardi.", { variant: "error" });
+        }
+    }, [initialLoading, motiviErrore, showNotification]);
+
+    // Cambiando filtro la card resta attenuata finché arrivano i dati nuovi
+    const inAggiornamento = (q: { isFetching: boolean; isPlaceholderData: boolean }) => q.isFetching && q.isPlaceholderData;
+    const loadingInCorso = inAggiornamento(inCorsoQuery);
+    const loadingInLavorazione = inAggiornamento(inLavorazioneQuery);
+    const loadingPubblicatiInLavorazione = inAggiornamento(pubblicatiInLavorazioneQuery);
+    const loadingStorico = inAggiornamento(storicoQuery);
+
+    const volantiniInCorso = inCorsoQuery.data ?? null;
+    const volantiniInLavorazione = inLavorazioneQuery.data ?? null;
+    const volantiniPubblicatiInLavorazione = pubblicatiInLavorazioneQuery.data ?? null;
+    const storicoVolantini = storicoQuery.data ?? null;
 
     // Card il cui ultimo caricamento è fallito: mostrano l'errore invece di dati vuoti o vecchi
-    const [errori, setErrori] = useState<Partial<Record<IdCard, boolean>>>({});
-    const segnaErrore = useCallback((id: IdCard, inErrore: boolean) => {
-        setErrori((prev) => (prev[id] === inErrore ? prev : { ...prev, [id]: inErrore }));
-    }, []);
+    const errori: Partial<Record<IdCard, boolean>> = {
+        inCorso: inCorsoQuery.isError,
+        inLavorazione: inLavorazioneQuery.isError,
+        pubblicatiInLavorazione: pubblicatiInLavorazioneQuery.isError,
+        storico: storicoQuery.isError,
+    };
 
-    // Loading states indipendenti per ogni card
-    const [loadingInCorso, setLoadingInCorso] = useState(false);
-    const [loadingInLavorazione, setLoadingInLavorazione] = useState(false);
-    const [loadingPubblicatiInLavorazione, setLoadingPubblicatiInLavorazione] = useState(false);
-    const [loadingStorico, setLoadingStorico] = useState(false);
-    const [initialLoading, setInitialLoading] = useState(true);
-
-    // Helper per costruire query string
-    const buildQueryString = useCallback((filter: CardFilter, extraParams?: Record<string, string>) => {
-        const params = new URLSearchParams();
-        if (filter.id_area) params.set("id_area", filter.id_area);
-        if (filter.id_canale) params.set("id_canale", filter.id_canale);
-        if (extraParams) {
-            Object.entries(extraParams).forEach(([key, value]) => params.set(key, value));
-        }
-        const queryString = params.toString();
-        return queryString ? `?${queryString}` : "";
-    }, []);
-
-    // Carica i dati iniziali dal loader
-    useEffect(() => {
-        const loadInitialData = async () => {
-            if (!loaderData) return;
-
-            // allSettled: un endpoint che fallisce non deve svuotare le altre card
-            const risultati = await Promise.allSettled([
-                loaderData.volantiniInCorsoPromise,
-                loaderData.volantiniInLavorazionePromise,
-                loaderData.volantiniPubblicatiInLavorazionePromise,
-                loaderData.areePromise,
-                loaderData.canaliPromise,
-                // Storico (ultimi 10)
-                ServerCall.get<StoricoVolantini>("/dashboard/storico-volantini?limit=10"),
-            ]);
-            const [inCorso, inLavorazione, pubblicatiInLavorazione, areeData, canaliData, storico] = risultati;
-
-            if (inCorso.status === "fulfilled") setVolantiniInCorso(inCorso.value);
-            if (inLavorazione.status === "fulfilled") setVolantiniInLavorazione(inLavorazione.value);
-            if (pubblicatiInLavorazione.status === "fulfilled") setVolantiniPubblicatiInLavorazione(pubblicatiInLavorazione.value);
-            if (areeData.status === "fulfilled") setAree(areeData.value || []);
-            if (canaliData.status === "fulfilled") setCanali(canaliData.value || []);
-            if (storico.status === "fulfilled") setStoricoVolantini(storico.value);
-            setErrori({
-                inCorso: inCorso.status === "rejected",
-                inLavorazione: inLavorazione.status === "rejected",
-                pubblicatiInLavorazione: pubblicatiInLavorazione.status === "rejected",
-                storico: storico.status === "rejected",
-            });
-
-            const rifiutati = risultati.filter((r): r is PromiseRejectedResult => r.status === "rejected");
-            if (rifiutati.length > 0) {
-                console.error("Errore durante il caricamento iniziale:", rifiutati.map((e) => e.reason));
-                showNotification("Alcuni dati della dashboard non sono stati caricati. Riprova più tardi.", { variant: "error" });
-            }
-            setInitialLoading(false);
-        };
-
-        loadInitialData();
-    }, [loaderData, showNotification]);
-
-    // Funzioni fetch per ogni card
-    const fetchVolantiniInCorso = useCallback(async (filter: CardFilter) => {
-        setLoadingInCorso(true);
-        try {
-            const data = await ServerCall.get<VolantiniInCorso>(`/dashboard/volantini-in-corso${buildQueryString(filter)}`);
-            setVolantiniInCorso(data);
-            segnaErrore("inCorso", false);
-        } catch (error) {
-            console.error("Errore caricamento volantini in corso:", error);
-            segnaErrore("inCorso", true);
-        } finally {
-            setLoadingInCorso(false);
-        }
-    }, [buildQueryString, segnaErrore]);
-
-    const fetchVolantiniInLavorazione = useCallback(async (filter: CardFilter) => {
-        setLoadingInLavorazione(true);
-        try {
-            const data = await ServerCall.get<VolantiniInLavorazione>(`/dashboard/volantini-in-lavorazione${buildQueryString(filter)}`);
-            setVolantiniInLavorazione(data);
-            segnaErrore("inLavorazione", false);
-        } catch (error) {
-            console.error("Errore caricamento volantini in lavorazione:", error);
-            segnaErrore("inLavorazione", true);
-        } finally {
-            setLoadingInLavorazione(false);
-        }
-    }, [buildQueryString, segnaErrore]);
-
-    const fetchVolantiniPubblicatiInLavorazione = useCallback(async (filter: CardFilter) => {
-        setLoadingPubblicatiInLavorazione(true);
-        try {
-            const data = await ServerCall.get<VolantiniPubblicatiInLavorazione>(`/dashboard/volantini-pubblicati-in-lavorazione${buildQueryString(filter)}`);
-            setVolantiniPubblicatiInLavorazione(data);
-            segnaErrore("pubblicatiInLavorazione", false);
-        } catch (error) {
-            console.error("Errore caricamento volantini pubblicati in lavorazione:", error);
-            segnaErrore("pubblicatiInLavorazione", true);
-        } finally {
-            setLoadingPubblicatiInLavorazione(false);
-        }
-    }, [buildQueryString, segnaErrore]);
-
-    const fetchStoricoVolantini = useCallback(async (filter: CardFilter) => {
-        setLoadingStorico(true);
-        try {
-            const data = await ServerCall.get<StoricoVolantini>(`/dashboard/storico-volantini${buildQueryString(filter, { limit: "10" })}`);
-            setStoricoVolantini(data);
-            segnaErrore("storico", false);
-        } catch (error) {
-            console.error("Errore caricamento storico volantini:", error);
-            segnaErrore("storico", true);
-        } finally {
-            setLoadingStorico(false);
-        }
-    }, [buildQueryString, segnaErrore]);
-
-    // Handler per cambio filtri per ogni card
-    const handleFilterInCorsoChange = useCallback((filter: CardFilter) => {
-        setFilterInCorso(filter);
-        fetchVolantiniInCorso(filter);
-    }, [fetchVolantiniInCorso]);
-
-    const handleFilterInLavorazioneChange = useCallback((filter: CardFilter) => {
-        setFilterInLavorazione(filter);
-        fetchVolantiniInLavorazione(filter);
-    }, [fetchVolantiniInLavorazione]);
-
-    const handleFilterPubblicatiInLavorazioneChange = useCallback((filter: CardFilter) => {
-        setFilterPubblicatiInLavorazione(filter);
-        fetchVolantiniPubblicatiInLavorazione(filter);
-    }, [fetchVolantiniPubblicatiInLavorazione]);
-
-    const handleFilterStoricoChange = useCallback((filter: CardFilter) => {
-        setFilterStorico(filter);
-        fetchStoricoVolantini(filter);
-    }, [fetchStoricoVolantini]);
+    // Handler per cambio filtri per ogni card: la query della nuova chiave parte da sola
+    const handleFilterInCorsoChange = useCallback((filter: CardFilter) => setFilterInCorso(filter), []);
+    const handleFilterInLavorazioneChange = useCallback((filter: CardFilter) => setFilterInLavorazione(filter), []);
+    const handleFilterPubblicatiInLavorazioneChange = useCallback((filter: CardFilter) => setFilterPubblicatiInLavorazione(filter), []);
+    const handleFilterStoricoChange = useCallback((filter: CardFilter) => setFilterStorico(filter), []);
 
     // Incorporata (Superadmin) la dashboard non ha intestazione propria
     const contenitore = (contenuto: ReactNode) =>
@@ -922,7 +882,7 @@ const Dashboard3: FC<Dashboard3Props> = ({ embedded = false, loaderDataOverride 
                 }
             >
                 {errori.inCorso ? (
-                    errore(() => fetchVolantiniInCorso(filterInCorso), loadingInCorso)
+                    errore(() => inCorsoQuery.refetch(), inCorsoQuery.isFetching)
                 ) : volantiniInCorso ? (
                     <VolantiniInCorsoContent
                         data={volantiniInCorso}
@@ -949,10 +909,7 @@ const Dashboard3: FC<Dashboard3Props> = ({ embedded = false, loaderDataOverride 
                 }
             >
                 {errori.pubblicatiInLavorazione ? (
-                    errore(
-                        () => fetchVolantiniPubblicatiInLavorazione(filterPubblicatiInLavorazione),
-                        loadingPubblicatiInLavorazione
-                    )
+                    errore(() => pubblicatiInLavorazioneQuery.refetch(), pubblicatiInLavorazioneQuery.isFetching)
                 ) : volantiniPubblicatiInLavorazione ? (
                     <VolantiniPubblicatiInLavorazioneContent
                         data={volantiniPubblicatiInLavorazione}
@@ -979,7 +936,7 @@ const Dashboard3: FC<Dashboard3Props> = ({ embedded = false, loaderDataOverride 
                 }
             >
                 {errori.inLavorazione ? (
-                    errore(() => fetchVolantiniInLavorazione(filterInLavorazione), loadingInLavorazione)
+                    errore(() => inLavorazioneQuery.refetch(), inLavorazioneQuery.isFetching)
                 ) : volantiniInLavorazione ? (
                     <VolantiniInLavorazioneContent
                         data={volantiniInLavorazione}
@@ -1001,7 +958,7 @@ const Dashboard3: FC<Dashboard3Props> = ({ embedded = false, loaderDataOverride 
                 descrizione="Ultimi 10 volantini pubblicati"
             >
                 {errori.storico ? (
-                    errore(() => fetchStoricoVolantini(filterStorico), loadingStorico)
+                    errore(() => storicoQuery.refetch(), storicoQuery.isFetching)
                 ) : (
                     <StoricoVolantiniContent
                         data={storicoVolantini}

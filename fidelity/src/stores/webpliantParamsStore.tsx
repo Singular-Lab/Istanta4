@@ -108,14 +108,12 @@ const createWishlistId = async (params: Partial<WebpliantParams>): Promise<strin
       }
     };
 
-    console.log('Invio richiesta creazione wishlist:', wishlistData);
     const response = await ServerCall.put<string>('/generaNuovoInserimentoWishlistWebpliant', wishlistData);
-    
+
     if (!response) {
       throw new Error('Risposta vuota dal server durante la creazione della wishlist');
     }
-    
-    console.log('Wishlist creata con successo, ID:', response);
+
     return response;
   } catch (error) {
     console.error('Errore nella creazione della wishlist:', error);
@@ -250,12 +248,20 @@ const webpliantParamsReducer = (state: WebpliantParams, action: WebpliantParamsA
 // Context
 const WebpliantParamsContext = createContext<WebpliantParamsContextType | undefined>(undefined);
 
+// Solo l'id della wishlist, per le card del volantino: cambia di rado, mentre il contesto completo
+// cambia a ogni aggiornamento dei parametri e farebbe ridisegnare tutte le card
+const SessionWishlistIdContext = createContext<string | undefined>(undefined);
+
 // Provider component
 export const WebpliantParamsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(webpliantParamsReducer, initialState);
-  
+
   // Ref per prevenire chiamate multiple simultanee
   const isCreatingWishlist = useRef(false);
+  // Creazione della sessione in corso, condivisa da chi la chiede nel frattempo (una sola PUT)
+  const sessioneInCorso = useRef<Promise<string> | null>(null);
+  // Ultima sessione creata: vale finche lo stato non si aggiorna, per chi ha ancora lo stato precedente
+  const sessioneCreata = useRef<string | undefined>(undefined);
   const lastWishlistCreationAttempt = useRef<{
     sessionId: string;
     params: string;
@@ -347,19 +353,35 @@ export const WebpliantParamsProvider: React.FC<{ children: ReactNode }> = ({ chi
     }
   }, []);
   
+  // Una sola creazione alla volta: chi chiede la sessione mentre la PUT e in corso riceve la stessa
+  const creaSessioneCondivisa = useCallback(() => {
+    if (!sessioneInCorso.current) {
+      sessioneInCorso.current = createNewSession()
+        .then((sessionId) => {
+          sessioneCreata.current = sessionId;
+          return sessionId;
+        })
+        .finally(() => {
+          sessioneInCorso.current = null;
+        });
+    }
+    return sessioneInCorso.current;
+  }, [createNewSession]);
+
   // Nuovo metodo per garantire che esista una sessione
   const ensureSessionExists = useCallback(async () => {
-    if (state.sessionIdWebpliant) {
-      return state.sessionIdWebpliant; // Sessione già esistente
+    const esistente = state.sessionIdWebpliant || sessioneCreata.current;
+    if (esistente) {
+      return esistente; // Sessione già esistente
     }
-    
+
     try {
-      return await createNewSession();
+      return await creaSessioneCondivisa();
     } catch (error) {
       console.error('Errore nella creazione della sessione webpliant:', error);
       throw error;
     }
-  }, [state.sessionIdWebpliant, createNewSession]);
+  }, [state.sessionIdWebpliant, creaSessioneCondivisa]);
 
   // Nuovo metodo per garantire che esista una wishlist
   const ensureWishlistExists = useCallback(async () => {
@@ -503,14 +525,13 @@ export const WebpliantParamsProvider: React.FC<{ children: ReactNode }> = ({ chi
         state.idWorkspace
       );
 
-      // Se non abbiamo session ID, crealo
+      // Se non abbiamo session ID, crealo (o aspetta quella gia in creazione)
       if (!state.sessionIdWebpliant) {
-        const sessionId = await createSessionId();
+        const sessionId = await ensureSessionExists();
         if (!sessionId) {
           throw new Error('Impossibile creare la sessione webpliant');
         }
-        dispatch({ type: 'CREATE_SESSION_SUCCESS', payload: sessionId });
-        
+
         // Termina qui e lascia che il prossimo ciclo di effetti gestisca la creazione della wishlist
         dispatch({ type: 'SET_LOADING', payload: false });
         return;
@@ -548,10 +569,11 @@ export const WebpliantParamsProvider: React.FC<{ children: ReactNode }> = ({ chi
       dispatch({ type: 'SET_LOADING', payload: false });
       throw error;
     }
-  }, [state, ensureWishlistExists]);
+  }, [state, ensureWishlistExists, ensureSessionExists]);
 
   const reset = useCallback(() => {
     dispatch({ type: 'RESET' });
+    sessioneCreata.current = undefined;
     localStorage.removeItem('webpliant-params-storage');
   }, []);
 
@@ -582,10 +604,18 @@ export const WebpliantParamsProvider: React.FC<{ children: ReactNode }> = ({ chi
 
   return (
     <WebpliantParamsContext.Provider value={contextValue}>
-      {children}
+      <SessionWishlistIdContext.Provider value={state.sessionWishlistId}>
+        {children}
+      </SessionWishlistIdContext.Provider>
     </WebpliantParamsContext.Provider>
   );
 };
+
+/**
+ * Id della wishlist in sola lettura, per i componenti ripetuti (le card del volantino): si
+ * aggiornano solo quando cambia la wishlist, non a ogni cambio dei parametri.
+ */
+export const useSessionWishlistIdWebpliant = (): string | undefined => useContext(SessionWishlistIdContext);
 
 // Hook per utilizzare il context
 export const useWebpliantParams = (): WebpliantParamsContextType => {

@@ -33,6 +33,7 @@ import { sequelize } from './db/SequelizeConnector';
 import { httpLogger, log } from './logger';
 import { authMiddleware } from './middleware/authMiddleware';
 import { creaProxyOlimpo } from './middleware/olimpoProxy';
+import { serviClientStatico } from './middleware/staticiPrecompressi';
 import { permissionGuard } from './middleware/permissionGuard';
 import { applyErrorHandler, applyMiddlewares } from './middlewares';
 import {
@@ -128,19 +129,10 @@ export async function createHttpApp() {
   // - development: redirect HTML routes to Vite dev server
   const clientBuildPath = path.resolve(projectRoot, 'dist/client');
   // if (isProd || isStaging) {
-  app.use(express.static(clientBuildPath));
+  // Asset con hash in cache per un anno, index.html sempre rivalidato, .br/.gz della build
+  // serviti cosi' come sono; poi il fallback della SPA (index.html per le rotte del client)
+  serviClientStatico(app, clientBuildPath);
   log.info(`Servizio statico per la build del client configurato da ${clientBuildPath}`);
-
-  // Handler per SPA: deve venire dopo le API e tutti gli statici specifici
-  // Express 5.x compatibility: use regex instead of wildcard '*'
-  app.get(/(.*)/, (req, res, next) => {
-    // Skip if request is for static files or API routes
-    if (!req.accepts('html') || req.path.startsWith('/api')) {
-      return next();
-    }
-    // Serve index.html for all other routes (SPA fallback)
-    res.sendFile(path.resolve(clientBuildPath, 'index.html'));
-  });
   // }
   // else {
   //   const vitePort = config.PORTA_VITE;

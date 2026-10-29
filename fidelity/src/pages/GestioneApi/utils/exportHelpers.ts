@@ -1,4 +1,3 @@
-import * as XLSX from 'xlsx';
 import type { ApiStatistics } from "../types";
 
 /**
@@ -32,12 +31,14 @@ export function exportStatisticsToCSV(
 }
 
 /**
- * Esporta le statistiche in formato Excel
+ * Esporta le statistiche in formato Excel.
+ * xlsx (~320 KB) si scarica solo al momento dell'esportazione, non con la pagina.
  */
-export function exportStatisticsToExcel(
+export async function exportStatisticsToExcel(
   aggregate: ApiStatistics,
   details: ApiStatistics['attivita_recente']
-): void {
+): Promise<void> {
+  const XLSX = await import('xlsx');
   const workbook = XLSX.utils.book_new();
 
   // Sheet Overview

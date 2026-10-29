@@ -9,6 +9,7 @@ import { v4 as uuidv4 } from "uuid";
 import { CompiledField, Config, ConfigurazioneCampoPersonalizzato, ConfigWebpliant, ForcedStyles, ReferenzeIstanta, Struttura } from "../../../../lib/types";
 import { urlFoto } from "@/utils/helper";
 import styleBox from "./boxref.module.scss";
+import { segnapostoImmagine } from "../segnaposto";
 
 
 // Definizione dell'interfaccia per Referenza
@@ -165,7 +166,7 @@ export function renderPhotos(
         }}
       >
         <img
-          src={photos[0] ? photos[0] : "https://placehold.co/600x400"}
+          src={photos[0] ? photos[0] : segnapostoImmagine(600, 400)}
           onError={() => {
             dispatchErrore(
               `Immagine non trovata. Foto: ${photos.join(", ")}`,
@@ -176,6 +177,7 @@ export function renderPhotos(
           className="object-contain rounded-md img_ref_no_sfondo "
           style={{ height: "inherit" }}
           loading="lazy"
+          decoding="async"
         />
       </div>
     );
@@ -236,6 +238,7 @@ export function renderPhotos(
       className="object-contain rounded-md img_ref_no_sfondo "
       style={{ height: "inherit" }}
       loading="lazy"
+      decoding="async"
       onError={() => {
         dispatchErrore("Immagine non trovata (renderPhotos fallback)", [
           attributi["src"],
@@ -860,6 +863,7 @@ export function renderFotoExtra(
       alt={`Logo-${logo.sigla}`}
       className={`logo_${logo.sigla.replace(/ /g, "_")}`}
       loading="lazy"
+      decoding="async"
       onError={(e) => {
         // Se errore, rimuoviamo quell'elemento
         (e.target as HTMLImageElement).style.display = "none";

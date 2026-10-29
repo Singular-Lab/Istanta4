@@ -1,16 +1,23 @@
-import React, { memo, useEffect, useState } from 'react';
+import React, { memo, useEffect, useMemo, useState } from 'react';
 import clsx from 'clsx';
 import { Config, PageLayoutItem, ReferenzeIstanta, DataFields } from '../../../../lib/types';
 import BoxRef from '../BoxRef';
 import styleWp from "@/assets/css/webpliant/stylewp.module.scss";
 import { ServerCall } from '../../../../lib/server_call';
 import dayjs from 'dayjs';
+import { ConGestoreParametriWebpliant } from '../gestoreParametri';
 
 interface GridReferenzeProps {
     item: PageLayoutItem;
     config: Config;
     refsWishlist?: DataFields[] | null;
 }
+
+// Prop costanti delle card: un oggetto nuovo a ogni render rendeva inutile il memo di BoxRef
+const OPZIONI_CARD = {
+    removeBackground: true,
+    removeBorder: true,
+};
 
 const GridReferenze: React.FC<GridReferenzeProps> = memo(function GridReferenze({
     item,
@@ -45,8 +52,14 @@ const GridReferenze: React.FC<GridReferenzeProps> = memo(function GridReferenze(
     const idWorkspace = url.searchParams.get('id');
     const date = url.searchParams.get("date") || dayjs().format("YYYY-MM-DD");
 
+    // Un solo passaggio sulla wishlist invece di uno per card
+    const codiciInWishlist = useMemo(
+        () => new Set((refsWishlist ?? []).map((r) => r.codice_referenza)),
+        [refsWishlist]
+    );
 
     return (
+        <ConGestoreParametriWebpliant>
         <div
             className={clsx(
                 "grid xl:grid-cols-4 lg:grid-cols-3 md:grid-cols-2 p-14 xl:px-40",
@@ -55,9 +68,7 @@ const GridReferenze: React.FC<GridReferenzeProps> = memo(function GridReferenze(
         >
             {referenze.map((ref, idx) => {
                 const refCode = ref.dataFields?.codice_referenza?.toString() || '';
-                const isInWishlist = refsWishlist?.some(
-                    (r) => r.codice_referenza === refCode
-                );
+                const isInWishlist = codiciInWishlist.has(refCode);
 
                 return (
                     <BoxRef
@@ -68,14 +79,12 @@ const GridReferenze: React.FC<GridReferenzeProps> = memo(function GridReferenze(
                         forzaturaBox={item.content?.options?.forzaturaBox}
                         style={item.content?.customStyles}
                         isInWishlist={isInWishlist}
-                        options={{
-                            removeBackground: true,
-                            removeBorder: true,
-                        }}
+                        options={OPZIONI_CARD}
                     />
                 );
             })}
         </div>
+        </ConGestoreParametriWebpliant>
     );
 });
 

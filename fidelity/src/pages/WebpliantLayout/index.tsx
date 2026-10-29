@@ -2,14 +2,18 @@ import Lucide from '@/components/Base/Lucide';
 import clsx from 'clsx';
 import dayjs from 'dayjs';
 import { motion } from 'framer-motion';
-import React, { FC, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import React, { FC, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useSelector } from 'react-redux';
 import { Link, Outlet, useLoaderData, useLocation, useNavigate } from 'react-router-dom';
 import { ServerCall } from '../../../lib/server_call';
 
 // Local Components
-import DeveloperConsole, { ConsoleMode } from './DevConsole';
+// Console e gestione referenze servono solo in debug/superadmin: fuori dal chunk del volantino
+// (si portano dietro editor, dropzone, axios e il loader di monaco)
+import type { ConsoleMode } from './DevConsole';
+const DeveloperConsole = lazy(() => import('./DevConsole'));
 
 // Styles
 import stylesWP from "@/assets/css/webpliant/stylewp.module.scss";
@@ -18,7 +22,7 @@ import stylesWP from "@/assets/css/webpliant/stylewp.module.scss";
 import { RootState } from '@/stores/store';
 import { TIPO_PAGINA, TIPO_UTENTI } from '../../../lib/enums';
 import {
-  ConfigWebpliant,
+  Config,
   DataFields,
   LoghiInsegne,
   PaginaWebPliant,
@@ -35,6 +39,7 @@ import { useUser } from '@/context/UserContext';
 import { useAppLoading } from '@/hooks/useAppLoading';
 import { useWebpliantParamsManager } from '@/hooks/useWebpliantParamsManager';
 import { useFetchAllPuntiVendita, useFetchConfig } from '@/query/query';
+import { GestoreParametriPresente } from '@/pages/WebPliant/gestoreParametri';
 
 // Assets
 
@@ -163,19 +168,11 @@ const useGeolocationState = () => {
  * Custom hook to handle API calls
  */
 const useWebpliantAPI = (sessionWishlistId: string, guidIdWishlist: string | null) => {
-  const { refLista, setRefLista, setColor } = useReferenzeData();
+  // Niente più /getColorGDO: il colore letto finiva in uno stato che nessuno usava
+  const { refLista, setRefLista } = useReferenzeData();
   // TODO: Migrazione al nuovo sistema - temporaneo stub
   const ids = { sessionIdWebpliant: '', sessionWishlistId: '', URL_WEBPLIANT: '' };
   const refreshReferenze = () => { };
-
-  const fetchColorGDO = useCallback(async () => {
-    try {
-      const res = await ServerCall.get<string>("/getColorGDO");
-      setColor(res);
-    } catch (error) {
-      console.error('Error fetching colorGDO:', error);
-    }
-  }, [setColor]);
 
   const fetchReferenzeWishlist = useCallback(async () => {
     try {
@@ -220,7 +217,6 @@ const useWebpliantAPI = (sessionWishlistId: string, guidIdWishlist: string | nul
   }, [ids.sessionWishlistId, refreshReferenze, setRefLista]);
 
   return {
-    fetchColorGDO,
     fetchReferenzeWishlist,
     fetchDataWishlist,
     fetchRefs,
@@ -281,6 +277,13 @@ const useGeolocationFilter = (allPuntiVendita: PuntiVenditaAttributes[] | undefi
 // =============================================
 
 export interface WebpliantLayoutProps { }
+
+/** Comandi esposti dalla DeveloperConsole tramite ref. */
+type ComandiDevConsole = {
+  toggleVisibilityErrori: () => void;
+  toggleVisibilityTimeLine: () => void;
+  toggleVisibilityGestioneReferenze: () => void;
+};
 
 /**
  * Loading spinner component shown during page transitions
@@ -381,7 +384,17 @@ const WebpliantLayout: FC<WebpliantLayoutProps> = () => {
   const dataConfig = useFetchConfig();
 
   // Add missing ref for DevConsole
-  const refDevConsole = useRef<any>(null);
+  const refDevConsole = useRef<ComandiDevConsole | null>(null);
+  // La console arriva con il suo chunk dopo il primo render: i cambi di referenza avvenuti nel
+  // frattempo si applicano appena si monta, come quando era già presente
+  const toggleReferenzeInSospeso = useRef(false);
+  const collegaDevConsole = useCallback((istanza: ComandiDevConsole | null) => {
+    refDevConsole.current = istanza;
+    if (istanza && toggleReferenzeInSospeso.current) {
+      toggleReferenzeInSospeso.current = false;
+      istanza.toggleVisibilityGestioneReferenze();
+    }
+  }, []);
 
   // =============================================
   // Hooks and Context
@@ -441,12 +454,11 @@ const WebpliantLayout: FC<WebpliantLayoutProps> = () => {
       webpliant: Array<PaginaWebPliant>;
       sitemap: Array<any>;
     };
-    config?: ConfigWebpliant;
+    config?: Config | null;
   } = {};
 
   loaderData = useLoaderData() as typeof loaderData;
   const dataWebPliant = loaderData.dataWebPliant;
-  const config = loaderData.config as ConfigWebpliant;
 
   // =============================================
   // Query Hooks
@@ -456,7 +468,7 @@ const WebpliantLayout: FC<WebpliantLayoutProps> = () => {
   // =============================================
   // API Calls
   // =============================================
-  const { fetchColorGDO, fetchReferenzeWishlist, fetchDataWishlist, fetchRefs, refLista, setRefLista } = useWebpliantAPI(sessionWishlistId as string, guidIdWishlist);
+  const { fetchReferenzeWishlist, fetchDataWishlist, fetchRefs, refLista, setRefLista } = useWebpliantAPI(sessionWishlistId as string, guidIdWishlist);
 
   // =============================================
   // Effects
@@ -479,11 +491,6 @@ const WebpliantLayout: FC<WebpliantLayoutProps> = () => {
   // =============================================
   // Effects
   // =============================================
-
-  // Initialize data
-  useEffect(() => {
-    fetchColorGDO();
-  }, [fetchColorGDO]);
 
   // Fetch wishlist refs when id changes or menu opens
   useEffect(() => {
@@ -571,7 +578,11 @@ const WebpliantLayout: FC<WebpliantLayoutProps> = () => {
   }, [isMenuLista]);
 
   useEffect(() => {
-    refDevConsole.current?.toggleVisibilityGestioneReferenze();
+    if (refDevConsole.current) {
+      refDevConsole.current.toggleVisibilityGestioneReferenze();
+    } else {
+      toggleReferenzeInSospeso.current = !toggleReferenzeInSospeso.current;
+    }
   }, [referenza])
 
   // Listen agli eventi wishlist per aggiornare la sidebar in tempo reale
@@ -1240,7 +1251,11 @@ const WebpliantLayout: FC<WebpliantLayoutProps> = () => {
         <Outlet />
 
         {/* Developer Console vera e propria */}
-        {(mode !== "final_user" && Debug === "true") && <DeveloperConsole ref={refDevConsole} mode={mode || "final_user"} />}
+        {(mode !== "final_user" && Debug === "true") && (
+          <Suspense fallback={null}>
+            <DeveloperConsole ref={collegaDevConsole} mode={mode || "final_user"} />
+          </Suspense>
+        )}
 
         {/* ASIDE */}
         <motion.div
@@ -1371,7 +1386,7 @@ const WebpliantLayout: FC<WebpliantLayoutProps> = () => {
             <ul className={clsx(stylesWP["wp-list-unstyled"], stylesWP["wp-p-0"], stylesWP["wp-m-0"], "float-right h-[78%]")}>
               {refLista && refLista.map((ref, i) => (
                 <li key={ref.codice_referenza as string} className={clsx(stylesWP["wp-d-flex"], stylesWP["wp-align-items-center"], stylesWP["wp-mb-2"])}>
-                  <img src={urlFoto(ref["foto"])[0] ?? ""} alt="" className="w-14 h-14 mr-2 object-contain" />
+                  <img src={urlFoto(ref["foto"])[0] ?? ""} alt="" loading="lazy" decoding="async" width={56} height={56} className="w-14 h-14 mr-2 object-contain" />
                   <span className={clsx(stylesWP["wp-text-small"], stylesWP["wp-flex-grow-1"])}>
                     {ref?.descrizione_uno} {ref?.descrizione_due} {ref?.descrizione_tre}
                   </span>
@@ -1454,11 +1469,24 @@ const WebpliantLayout: FC<WebpliantLayoutProps> = () => {
 };
 
 function App() {
-  const config = useFetchConfig();
+  const queryClient = useQueryClient();
+  const { config: configDalLoader } = useLoaderData() as { config?: Config | null };
+  // Il loader ha già letto /get_config: messa nella cache di React Query, useFetchConfig non la
+  // richiede una terza volta (né qui, né nel layout, né nella ricerca)
+  useState(() => {
+    if (configDalLoader && queryClient.getQueryData(['config']) === undefined) {
+      queryClient.setQueryData<Config>(['config'], configDalLoader);
+    }
+    return true;
+  });
+  useFetchConfig();
   return (
     <GestioneReferenzeProvider>
       <GestioneHeaderWebpliantProvider>
-        <WebpliantLayout />
+        {/* Il layout ha il suo useWebpliantParamsManager: le card sotto non ne creano altri */}
+        <GestoreParametriPresente>
+          <WebpliantLayout />
+        </GestoreParametriPresente>
       </GestioneHeaderWebpliantProvider>
     </GestioneReferenzeProvider>
   );
