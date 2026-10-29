@@ -479,7 +479,21 @@ public sealed partial class ServizioCorrezioni
             ctx.VolantiniPagineElementiVersionis.Add(NuovaRiga(figlioImm!.Id, box.IdPagina, u.Id, adesso,
                 JsonSerializer.Serialize(voci, JsonRegistro)));
         await ctx.SaveChangesAsync();
+        await PropagaDescrizioneAiGemelliAsync(u, box.Id);
         return Fatto(await CaricaAsync(vol!.Id, u), box.Id);
+    }
+
+    /// <summary>
+    /// I20-1166: descrizione, foto e loghi si portano da soli su tutti i gemelli aperti, senza spunte
+    /// (i prezzi restano a spunta). Si saltano i gemelli gia' propagati, quelli con una correzione
+    /// propria, bloccati o scaduti; un gemello che non si riesce a propagare non ferma il salvataggio.
+    /// </summary>
+    private async Task PropagaDescrizioneAiGemelliAsync(Utente u, long idBox)
+    {
+        var elenco = await GemelliEditAsync(u, idBox, ParteDescrizione);
+        if (!elenco.Ok || elenco.Dati is not List<GemelloEditVista> gemelli) return;
+        foreach (var g in gemelli.Where(g => !g.Propagato && !g.Proprio && !g.Bloccato && !g.Scaduto))
+            await PropagaEditAsync(u, idBox, ParteDescrizione, g.IdBox, propaga: true);   // un no si salta
     }
 
     // ------------------------------------------------------------------ carica nuova foto (passo 3, j217)

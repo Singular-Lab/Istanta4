@@ -2542,7 +2542,9 @@
     function disegnaPropagazioniEdit(id) {
         var cont = document.getElementById('mPropagazioni');
         var html = '', quante = 0;
-        ['offerta', 'descrizione'].forEach(function (parte) {
+        // I20-1166: descrizione, foto e loghi si propagano da soli a tutti i gemelli al salvataggio:
+        // nella colonna restano solo le spunte di prezzi e azioni
+        ['offerta'].forEach(function (parte) {
             var ed = editDi(id, parte);
             if (!ed) return;
             quante++;
@@ -2933,8 +2935,20 @@
         // vedeva nessuna linguetta: si nasconde tutta la barra.
         document.getElementById('lingLoghi').parentNode.style.display = abil ? 'flex' : 'none';
         if (!schedaFoto || schedaFoto.id !== String(id) || schedaFoto.stato === 'carico') { cont.innerHTML = '<span class="vuoto">Carico…</span>'; return; }
-        if (schedaFoto.stato === 'errore') { cont.innerHTML = '<span class="vuoto">Loghi non disponibili.</span>'; return; }
         var ed = editDi(id, 'descrizione');
+        if (schedaFoto.stato === 'errore') {
+            // I20-1166: senza Istanta si vedono almeno i loghi della correzione (propria o propagata),
+            // in sola lettura: arrivano con la correzione, non da Istanta
+            var corretti = ((ed && ed.foto) || []).filter(function (v) { return v.stato === 4 || v.stato === 5; });
+            var confermatiErr = {};
+            if (ed && ed.stato === 2) corretti.forEach(function (v) { confermatiErr[v.guidId] = v.stato; });
+            cont.innerHTML = corretti.length
+                ? corretti.map(function (v) {
+                      return rigaLogo({ guidId: v.guidId, sigla: v.codice, nome: v.nomeFile }, v.stato === 4 ? 'aggiungi' : 'togli', false, confermatiErr);
+                  }).join('') + '<span class="vuoto">Elenco completo dei loghi non disponibile.</span>'
+                : '<span class="vuoto">Loghi non disponibili.</span>';
+            return;
+        }
         var confermati = {};
         if (ed && ed.stato === 2) (ed.foto || []).forEach(function (v) { if (v.stato >= 4) confermati[v.guidId] = v.stato; });
         var presenti = loghiDelProdotto();

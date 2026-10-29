@@ -131,6 +131,32 @@ public class FinestraLoghiTests
         Assert.Contains("var nota = modo === 'presente' && l.automatico ? 'automatico' : '';", html);
     }
 
+    /// <summary>
+    /// I20-1166: quando Istanta non risponde (sul gemello «formato non in SourceFormati.json») si
+    /// vedono comunque, in sola lettura, i loghi della correzione propria o propagata.
+    /// </summary>
+    [Fact]
+    public void Senza_Istanta_si_vedono_i_loghi_della_correzione()
+    {
+        string html = Editor();
+
+        Assert.Contains("var corretti = ((ed && ed.foto) || []).filter(function (v) { return v.stato === 4 || v.stato === 5; });", html);
+        Assert.Contains("return rigaLogo({ guidId: v.guidId, sigla: v.codice, nome: v.nomeFile }, v.stato === 4 ? 'aggiungi' : 'togli', false, confermatiErr);", html);
+        Assert.Contains("Elenco completo dei loghi non disponibile.", html);
+        // senza loghi corretti resta il messaggio di prima
+        Assert.Contains(": '<span class=\"vuoto\">Loghi non disponibili.</span>';", html);
+    }
+
+    /// <summary>I20-1166: descrizione, foto e loghi si propagano da soli: nella colonna solo i prezzi.</summary>
+    [Fact]
+    public void Nelle_propagazioni_solo_prezzi_e_azioni()
+    {
+        string html = Editor();
+
+        Assert.Contains("['offerta'].forEach(function (parte) {", html);
+        Assert.DoesNotContain("['offerta', 'descrizione'].forEach(function (parte) {\n            var ed = editDi(id, parte);\n            if (!ed) return;\n            quante++;", html.Replace("\r\n", "\n"));
+    }
+
     [Fact]
     public void Annulla_questa_modifica_ha_l_icona_undo()
     {
