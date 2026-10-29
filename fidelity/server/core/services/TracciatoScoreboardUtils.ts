@@ -1,5 +1,13 @@
-const normalizeCode = (value: unknown): string =>
-  typeof value === "string" ? value.trim() : "";
+/**
+ * Codice di una referenza pronto per il confronto. Un codice arrivato come numero
+ * (es. 12345 da Excel) vale la sua forma testuale, senza perdere cifre: altrimenti
+ * uscirebbe in silenzio dal confronto. null, undefined e gli altri tipi valgono "".
+ */
+export const normalizeCode = (value: unknown): string => {
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return "";
+};
 
 const isGroupByScattoCodice = (record: { scatto_codice?: unknown; codice_referenza?: unknown }): boolean => {
   const scattoCodice = normalizeCode(record.scatto_codice);

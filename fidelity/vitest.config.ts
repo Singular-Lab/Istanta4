@@ -43,7 +43,7 @@ export default defineConfig({
       }
     ],
     // yarn test:server gira con la coverage: sotto le soglie fallisce, anche in CI.
-    // Le soglie sono il livello del 2026-10-29 (dopo T6) arrotondato per difetto: si alzano a
+    // Le soglie sono il livello del 2026-10-29 (dopo T6b) arrotondato per difetto: si alzano a
     // mano quando i test crescono, non si abbassano.
     coverage: {
       provider: 'v8',
@@ -65,10 +65,10 @@ export default defineConfig({
         '**/*.d.ts'
       ],
       thresholds: {
-        lines: 27,
-        statements: 27,
-        functions: 23,
-        branches: 23,
+        lines: 28,
+        statements: 28,
+        functions: 24,
+        branches: 24,
         'server/core/http/**': { lines: 90, statements: 85, functions: 80, branches: 80 },
         'server/core/inizializzazione/**': { lines: 90, statements: 90, functions: 90, branches: 85 },
         'server/core/agenzia_lib/**': { lines: 80, statements: 80, functions: 80, branches: 65 },

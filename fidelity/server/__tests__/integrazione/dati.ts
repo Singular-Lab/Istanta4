@@ -6,9 +6,9 @@ import { sequelize } from '../../core/db/SequelizeConnector';
  * dello schema delle migrazioni, cosi' un test dice chiaramente da quali dati parte.
  */
 
-type Valore = string | number | boolean | Date | null | Record<string, unknown>;
+type Valore = string | number | boolean | Date | null | Record<string, unknown> | unknown[];
 
-/** Gli oggetti vanno nelle colonne JSONB come testo JSON. */
+/** Oggetti ed elenchi vanno nelle colonne JSONB come testo JSON. */
 function comeSostituzione(valore: Valore): string | number | boolean | Date | null {
   if (valore === null || valore === undefined) return null;
   if (valore instanceof Date) return valore;
@@ -38,51 +38,89 @@ export async function creaGdo(nome = 'GDO di prova'): Promise<string> {
 
 export interface KitDiProva {
   idGdo: string;
+  idArea: string;
+  idCanale: string;
+  idFormato: string;
+  idRaccoglitore: string;
+  idDesign: string;
   idPromo: string;
   idRuntime: string;
 }
 
-/** Promo con un kit runtime, e tutto cio' che il kit richiede: area, canale, formato, raccoglitore, design. */
+/**
+ * Promo con un kit runtime, e tutto cio' che il kit richiede: area, canale, formato, raccoglitore,
+ * design. Con `stessaCombinazioneDi` la nuova promo e il nuovo kit riusano GDO, area, canale,
+ * formato, raccoglitore e design di un kit gia' creato.
+ */
 export async function creaKitRuntime(opzioni: {
   statoLavorazione?: 'IN_LAVORAZIONE' | 'IN_REVISIONE' | 'PUBBLICATO';
   validitaDal?: Date;
   validitaAl?: Date;
+  offsetVisibilita?: number;
+  stessaCombinazioneDi?: KitDiProva;
 } = {}): Promise<KitDiProva> {
-  const idGdo = await creaGdo();
-  const idArea = randomUUID();
-  const idCanale = randomUUID();
-  const idFormato = randomUUID();
-  const idRaccoglitore = randomUUID();
-  const idDesign = randomUUID();
+  const base = opzioni.stessaCombinazioneDi;
+  const idGdo = base?.idGdo ?? await creaGdo();
+  const idArea = base?.idArea ?? randomUUID();
+  const idCanale = base?.idCanale ?? randomUUID();
+  const idFormato = base?.idFormato ?? randomUUID();
+  const idRaccoglitore = base?.idRaccoglitore ?? randomUUID();
+  const idDesign = base?.idDesign ?? randomUUID();
   const idPromo = randomUUID();
   const idRuntime = randomUUID();
   const oggi = adesso();
 
-  await inserisci('aree', { id_aree: idArea, codice_aree: 'TO', nome_aree: 'Toscana', id_gdo_aree: idGdo, createdat: oggi, updatedat: oggi });
-  await inserisci('canali', { id_canali: idCanale, codice_canali: 'SS', nome_canali: 'Superstore', id_gdo_canali: idGdo, createdat: oggi, updatedat: oggi });
-  await inserisci('formati', {
-    id_formati: idFormato, nome_formati: 'Volantino', codice_formati: 'VOL', descrizione_formati: 'Volantino', tipo_lavorazione_formati: 1,
-    createdat: oggi, updatedat: oggi,
-  });
-  await inserisci('raccoglitore_kit', {
-    id: idRaccoglitore, id_formato: idFormato, titolo: 'Raccoglitore di prova', tipo: 'AUTOMATICO', createdAt: oggi, updatedAt: oggi,
-  });
-  await inserisci('design_kit', {
-    id: idDesign, id_area: idArea, id_canale: idCanale, id_formato: idFormato, titolo: 'SS TO VOL', id_raccoglitore: idRaccoglitore,
-    stato: 'ATTIVO', tipo: 'AUTOMATICO', createdAt: oggi, updatedAt: oggi,
-  });
+  if (!base) {
+    await inserisci('aree', { id_aree: idArea, codice_aree: 'TO', nome_aree: 'Toscana', id_gdo_aree: idGdo, createdat: oggi, updatedat: oggi });
+    await inserisci('canali', { id_canali: idCanale, codice_canali: 'SS', nome_canali: 'Superstore', id_gdo_canali: idGdo, createdat: oggi, updatedat: oggi });
+    await inserisci('formati', {
+      id_formati: idFormato, nome_formati: 'Volantino', codice_formati: 'VOL', descrizione_formati: 'Volantino', tipo_lavorazione_formati: 1,
+      createdat: oggi, updatedat: oggi,
+    });
+    await inserisci('raccoglitore_kit', {
+      id: idRaccoglitore, id_formato: idFormato, titolo: 'Raccoglitore di prova', tipo: 'AUTOMATICO', createdAt: oggi, updatedAt: oggi,
+    });
+    await inserisci('design_kit', {
+      id: idDesign, id_area: idArea, id_canale: idCanale, id_formato: idFormato, titolo: 'SS TO VOL', id_raccoglitore: idRaccoglitore,
+      stato: 'ATTIVO', tipo: 'AUTOMATICO', createdAt: oggi, updatedAt: oggi,
+    });
+  }
   await inserisci('promo', {
     id_promo: idPromo, nome_promo: 'Promo di prova', data_registrazione: oggi,
     validita_dal: opzioni.validitaDal ?? new Date(oggi.getTime() - 86_400_000),
     validita_al: opzioni.validitaAl ?? new Date(oggi.getTime() + 7 * 86_400_000),
-    offset_visibilita: 0, stato: 'VALIDA', gdo: idGdo, createdat: oggi, updatedat: oggi,
+    offset_visibilita: opzioni.offsetVisibilita ?? 0, stato: 'VALIDA', gdo: idGdo, createdat: oggi, updatedat: oggi,
   });
   await inserisci('runtime_kit', {
     id: idRuntime, id_area: idArea, id_design: idDesign, id_canale: idCanale, id_formato: idFormato, titolo: 'SS TO VOL',
     id_raccoglitore: idRaccoglitore, stato: 'ATTIVO', id_promo: idPromo, tipo: 'AUTOMATICO',
     stato_lavorazione: opzioni.statoLavorazione ?? 'PUBBLICATO', createdAt: oggi, updatedAt: oggi,
   });
-  return { idGdo, idPromo, idRuntime };
+  return { idGdo, idArea, idCanale, idFormato, idRaccoglitore, idDesign, idPromo, idRuntime };
+}
+
+/** Referenza WebPliant di un kit: `dataFields` sono i campi di Istanta (descrizione, prezzi, contesti…). */
+export async function creaReferenza(kit: KitDiProva, opzioni: {
+  codice: string;
+  dataFields?: Record<string, unknown>;
+}): Promise<string> {
+  const id = randomUUID();
+  await inserisci('referenze', {
+    id, codice_box: opzioni.codice, data_fields: { codice_referenza: opzioni.codice, ...opzioni.dataFields },
+    id_runtime_kit: kit.idRuntime, id_promo: kit.idPromo, createdAt: adesso(), updatedAt: adesso(),
+  });
+  return id;
+}
+
+/** Workspace WebPliant (le pagine pubbliche) di una GDO, facoltativamente legato ad area e canale. */
+export async function creaWorkspace(opzioni: { idGdo: string; idArea?: string; idCanale?: string; webpliant?: unknown[] }): Promise<string> {
+  const id = randomUUID();
+  await inserisci('workspace_webpliant', {
+    id, id_gdo: opzioni.idGdo, id_area: opzioni.idArea ?? null, id_canale: opzioni.idCanale ?? null,
+    nome_workspace: 'Workspace di prova', webpliant: opzioni.webpliant ?? [],
+    createdAt: adesso(), updatedAt: adesso(),
+  });
+  return id;
 }
 
 export async function creaTipoExport(codice: string): Promise<string> {

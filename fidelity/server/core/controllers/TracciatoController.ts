@@ -109,12 +109,9 @@ export class TracciatoController extends BaseController {
             }
             const parsedData = await this.tracciatoService.parseTracciatoById(idTracciato);
             res.status(HttpStatusCode.OK).json(parsedData);
-        } catch (error: any) {
-            console.error('Error parsing tracciato:', error);
-            res.status(HttpStatusCode.INTERNAL_SERVER_ERROR).json({
-                message: "Errore durante il parsing del tracciato",
-                error: error.message
-            });
+        } catch (error) {
+            // Tracciato inesistente 404, senza file 400: 500 solo per gli errori imprevisti
+            this.handleError(res, error);
         }
     }
 

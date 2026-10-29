@@ -16,7 +16,15 @@ vi.mock('../../logger', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+import type { IAreaService } from '../../interfaces/IAreaService';
+import type { ICanaleService } from '../../interfaces/ICanaleService';
+import type { IGdoService } from '../../interfaces/IGdoService';
+import type { ITipoExportService } from '../../interfaces/ITipoExportService';
 import { jsonGlobale } from '../../middleware/jsonGrande';
+import { RuntimeKit } from '../../models/runtime_kit';
+import { WorkspaceWebpliant } from '../../models/workspace_webpliant';
+import type { IPromoRepository } from '../../repositories/PromoRepository';
+import { WebPliantService } from '../../services/WebPliantService';
 import { ServerUtils } from '../../utils/ServerUtils';
 import { WebPliantController } from '../WebPliantController';
 
@@ -124,5 +132,37 @@ describe('data di consultazione del volantino WebPliant', () => {
     await request(app).get(`/api/getReferenzeWebPliant?id=w1&date=${futura}`).expect(200);
 
     expect(giorno(webPliantService.getReferenzeWebPliant.mock.calls[0][1])).toBe(futura);
+  });
+});
+
+// Spec referenze-webpliant: il volantino pubblico e' sempre di un'area e di un canale. Qui con il
+// service vero: il frontend manda idArea e idCanale vuoti quando mancano nell'URL.
+describe('consultazione pubblica senza area o canale', () => {
+  function createAppConServiceVero() {
+    const service = new WebPliantService(
+      {} as unknown as IPromoRepository,
+      {} as unknown as IAreaService,
+      {} as unknown as ICanaleService,
+      {} as unknown as IGdoService,
+      {} as unknown as ITipoExportService
+    );
+    const app = express();
+    new WebPliantController(service, {} as unknown as IGdoService).registerRoutes(app);
+    return app;
+  }
+
+  it.each([
+    ['area e canale vuoti', '&idArea=&idCanale='],
+    ['senza canale', '&idArea=a1'],
+    ['senza area ne canale', ''],
+  ])('%s: 400 senza leggere il database', async (_caso, parametri) => {
+    const leggiWorkspace = vi.spyOn(WorkspaceWebpliant, 'findOne');
+    const leggiKit = vi.spyOn(RuntimeKit, 'findAll');
+
+    const res = await request(createAppConServiceVero()).get(`/api/getReferenzeWebPliant?id=w1&gdo=g1${parametri}`);
+
+    expect(res.status).toBe(400);
+    expect(leggiWorkspace).not.toHaveBeenCalled();
+    expect(leggiKit).not.toHaveBeenCalled();
   });
 });
