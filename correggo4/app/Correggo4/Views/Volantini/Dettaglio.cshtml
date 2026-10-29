@@ -665,7 +665,13 @@
        non un riquadro bianco con la scritta. E' lo stesso segno che si vede sulla pagina del volantino. */
     .scheda_foto .senza_foto { width: 60px; height: 60px; background: #fff; object-fit: contain; }
     .scheda_foto .ps label { cursor: pointer; }
-    #mLoghi { max-height: 280px; overflow-y: auto; }
+    /* I20-1163: l'elenco Loghi/Bolli (e Aggiungi/rimuovi) si prende tutta la prima colonna sotto il
+       ritaglio, fino al fondo della finestra: con max-height 280px restava mezza colonna vuota.
+       Sugli schermi bassi resta alto almeno 280px e scorre la colonna. Ritaglio e linguette non si
+       restringono, cosi' il 4:3 di I20-1150 resta quello. */
+    .modale .colonna.c1 { display: flex; flex-direction: column; }
+    .c1 .ritaglio, .c1 .linguette { flex: 0 0 auto; }
+    #mLoghi { flex: 1 0 280px; overflow-y: auto; }
     .riga_logo { display: flex; align-items: center; gap: 6px; background: #efefef; border: 1px solid #aaa;
                  padding: 3px 5px; margin-bottom: 4px; font-size: 11px; }
     .riga_logo img { width: 34px; height: 34px; object-fit: contain; background: #fff; flex: 0 0 auto; }
