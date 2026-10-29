@@ -2070,7 +2070,7 @@
        ===================================================================== */
     var ETICHETTE_EA = {
         prezzo_promo: 'Prezzo Promo', prezzo_promo_kgl: 'Prezzo al Kg/Lt', prezzo_continuo: 'Prezzo Continuo',
-        azione_pubblico: 'Sconto', tipo_offerta: 'Tipo offerta', nome_evento: 'Evento', note: 'Note'
+        azione_pubblico: 'Sconto', txt_sconto: 'Sconto', tipo_offerta: 'Tipo offerta', nome_evento: 'Evento', note: 'Note'
     };
     // Scripts/CoopFi/agenzia.js getStileUniversale: le sole fasce che si possono scrivere.
     var FASCE_EDITABILI = ['DESCRIZIONE_TITOLO', 'DESCRIZIONE_BRAND', 'DESCRIZIONE_TIPO', 'DESCRIZIONE_GRAMMATURA'];
@@ -2202,6 +2202,9 @@
     // Ricalcolo (decisione dell'11/9): formule CoopFi di getIstruzioniAutocomplete (Scripts/CoopFi/agenzia.js),
     // adattate a Famila, dove lo sconto e' il testo "30%" di azione_pubblico. "old" = valore originale.
     // Un campo col lucchetto chiuso non si tocca (correzioni.js:3636).
+    // I20-1162: lo sconto e' txt_sconto in CoopFi ("-30%") e azione_pubblico in Famila ("30%"): si usa
+    // quello che ha il prodotto. Si legge senza segno e si riscrive nella forma del valore originale.
+    var CAMPI_SCONTO = ['txt_sconto', 'azione_pubblico'];
     function ricalcola(cambiato) {
         var cont = document.getElementById('mCampi');
         function el(f) { return cont.querySelector('[data-field="' + f + '"]'); }
@@ -2212,21 +2215,24 @@
             if (!e || e.disabled || e.dataset.lock === '2' || e.tagName === 'SELECT') return false;
             e.value = v; segnaCampo(e); return true;
         }
+        var campoSconto = CAMPI_SCONTO.filter(function (f) { return !!el(f); })[0];
         function sconto(promo, continuo) {
             if (!(continuo > 0) || isNaN(promo)) return null;
             var s = Math.round(100 - promo / continuo * 100);
-            return (s >= 0 && s <= 100) ? s + '%' : null;
+            if (!(s >= 0 && s <= 100)) return null;
+            var forma = old(campoSconto) || val(campoSconto);
+            return /\d/.test(forma) ? forma.replace(/\d+([.,]\d+)?/, String(s)) : s + '%';
         }
         var promo = numeroEa(val('prezzo_promo')), continuo = numeroEa(val('prezzo_continuo'));
         var oPromo = numeroEa(old('prezzo_promo')), oKgl = numeroEa(old('prezzo_promo_kgl'));
         var sc;
         if (cambiato === 'prezzo_promo') {
             if (oPromo > 0 && !isNaN(oKgl) && !isNaN(promo)) scrivi('prezzo_promo_kgl', (oKgl * promo / oPromo).toFixed(2));
-            sc = sconto(promo, continuo); if (sc) scrivi('azione_pubblico', sc);
+            sc = campoSconto && sconto(promo, continuo); if (sc) scrivi(campoSconto, sc);
         } else if (cambiato === 'prezzo_continuo') {
-            sc = sconto(promo, continuo); if (sc) scrivi('azione_pubblico', sc);
-        } else if (cambiato === 'azione_pubblico') {
-            var nuovoSc = percentoEa(val('azione_pubblico')), oSc = percentoEa(old('azione_pubblico'));
+            sc = campoSconto && sconto(promo, continuo); if (sc) scrivi(campoSconto, sc);
+        } else if (campoSconto && cambiato === campoSconto) {
+            var nuovoSc = Math.abs(percentoEa(val(campoSconto))), oSc = Math.abs(percentoEa(old(campoSconto)));
             if (!isNaN(nuovoSc) && !isNaN(oSc) && oSc < 100 && oPromo > 0 && nuovoSc >= 0 && nuovoSc < 100) {
                 var nuovo = oPromo * (100 - nuovoSc) / (100 - oSc);
                 if (scrivi('prezzo_promo', nuovo.toFixed(2)) && !isNaN(oKgl))
