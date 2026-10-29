@@ -2178,8 +2178,10 @@ export class KitRuntimeService implements IKitRuntimeService {
 
   async getFileRunTimeLogByNomeFileEIdKitRuntime(nomeFile: string, idKitRuntime: string): Promise<FileItemKitLog | null> {
     try {
+      // Un file ha un log per versione: quello che conta e l'ultimo
       const result = await FilesRuntimeLog.findOne({
         where: { nome_file: nomeFile, id_kit_runtime: idKitRuntime },
+        order: [['versione', 'DESC']],
         raw: true
       }) as unknown as FileItemKitLog | null;
       return result;

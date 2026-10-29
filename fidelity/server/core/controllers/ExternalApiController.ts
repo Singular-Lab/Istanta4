@@ -109,7 +109,6 @@ export class ExternalApiController extends BaseController {
     // Route per Filter Templates - CRUD completo
     this.router.post("/filter-templates", authMiddleware, permissionGuard('api.gestisci_plugin'), this.createFilterTemplate.bind(this));
     this.router.get("/filter-templates", authMiddleware, permissionGuard('api.gestisci_plugin'), this.getAllFilterTemplates.bind(this));
-    this.router.get("/filter-templates", ephemeralTokenAuthMiddleware, this.getAllFilterTemplates.bind(this));
     this.router.get("/filter-templates/by-endpoint-type/:endpointType", authMiddleware, permissionGuard('api.gestisci_plugin'), this.getFilterTemplatesByEndpointType.bind(this));
     this.router.post("/filter-templates/validate-slug", authMiddleware, permissionGuard('api.gestisci_plugin'), this.validateFilterTemplateSlug.bind(this));
     this.router.get("/filter-templates/slug/:slug/versions", authMiddleware, permissionGuard('api.gestisci_plugin'), this.getFilterTemplateVersionHistory.bind(this));
@@ -172,6 +171,12 @@ export class ExternalApiController extends BaseController {
           message: "Errore durante il parsing del json"
         })
       }
+      // JSON valido ma non un oggetto ("null", un numero, un elenco): richiesta non valida, non un 500
+      if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+        throw new BadRequestError({
+          message: "Il payload deve essere un oggetto JSON"
+        })
+      }
       const file = req.file;
       const kitRuntimeService = container.get<IKitRuntimeService>(TYPES.KitRuntimeService);
       const referenzeService = container.get<IReferenzeService>(TYPES.ReferenzeService)
@@ -197,6 +202,16 @@ export class ExternalApiController extends BaseController {
           message: "L'id del canale non è valido"
         })
       }
+      if (!ServerUtils.checkIfValueIsValid(payload.kitGuidId)) {
+        throw new BadRequestError({
+          message: "L'id del kit non è valido"
+        })
+      }
+      if (!Array.isArray(payload.refs)) {
+        throw new BadRequestError({
+          message: "Le referenze del volantino (refs) devono essere un elenco"
+        })
+      }
 
       const promo = await container.get<IPromoService>(TYPES.PromoService).getPromoById(payload.promoId);
       if (!ServerUtils.checkIfValueIsValid(promo)) {
@@ -213,7 +228,7 @@ export class ExternalApiController extends BaseController {
       const canale = await container.get<ICanaleService>(TYPES.CanaleService).getCanaleById(payload.canaleId);
       if (!ServerUtils.checkIfValueIsValid(canale)) {
         throw new BadRequestError({
-          message: "Non esiste nessuna area con questo id"
+          message: "Non esiste nessun canale con questo id"
         })
       }
       const kitRuntime = await kitRuntimeService.getKitRuntimeById(payload.kitGuidId)
@@ -230,7 +245,7 @@ export class ExternalApiController extends BaseController {
       const tipoExportVOL = await container.get<ITipoExportService>(TYPES.TipoExportService).getTipoExportByCodice(EXPORT_DI_SISTEMA.VOL)
       if (!ServerUtils.checkIfValueIsValid(tipoExportVOL)) {
         throw new BadRequestError({
-          message: "Non esiste nessuna kit runtime con questo id"
+          message: "Il tipo di export VOL non e configurato"
         })
       }
       //#endregion
@@ -679,7 +694,12 @@ export class ExternalApiController extends BaseController {
         return;
       }
 
-      const dna: string = req.body.dna ?? '';
+      // Un campo ripetuto nel multipart arriva come elenco: non e' un dna
+      const dna: unknown = req.body.dna ?? '';
+      if (typeof dna !== 'string') {
+        res.status(400).json({ success: false, message: 'DNA non valido o IdRef non trovato' });
+        return;
+      }
       const isFotoExtra = req.body.is_extra === "true";
       const fileName = file.originalname;
       const fileHash = createHash('md5').update(file.buffer).digest('hex');
@@ -771,7 +791,7 @@ export class ExternalApiController extends BaseController {
 
     } catch (error: any) {
       timestampRisposta = new Date();
-      codiceRisposta = error.status || 500;
+      codiceRisposta = error.httpStatus || error.status || 500;
       errore = error.message;
       stackTrace = error.stack;
 
@@ -830,12 +850,19 @@ export class ExternalApiController extends BaseController {
    */
   private async getRefsFieldValues(req: Request, res: Response): Promise<any> {
     try {
-      const { field, template_id } = req.body;
+      // Express 5 lascia req.body indefinito su un POST senza corpo
+      const { field, template_id } = req.body ?? {};
 
-      if (!field) {
+      if (typeof field !== 'string' || !field.trim()) {
         return res.status(400).json({
           success: false,
-          error: 'Il parametro "field" è obbligatorio'
+          error: 'Il parametro "field" è obbligatorio e deve essere un testo'
+        });
+      }
+      if (template_id !== undefined && (!Array.isArray(template_id) || !template_id.every(t => typeof t === 'string'))) {
+        return res.status(400).json({
+          success: false,
+          error: 'Il parametro "template_id" deve essere un elenco di identificativi'
         });
       }
 
@@ -864,12 +891,13 @@ export class ExternalApiController extends BaseController {
    */
   private async getFilesFieldValues(req: Request, res: Response): Promise<any> {
     try {
-      const { field } = req.body;
+      // Express 5 lascia req.body indefinito su un POST senza corpo
+      const { field } = req.body ?? {};
 
-      if (!field) {
+      if (typeof field !== 'string' || !field.trim()) {
         return res.status(400).json({
           success: false,
-          error: 'Il parametro "field" è obbligatorio'
+          error: 'Il parametro "field" è obbligatorio e deve essere un testo'
         });
       }
 
@@ -926,7 +954,7 @@ export class ExternalApiController extends BaseController {
 
     } catch (error: any) {
       timestampRisposta = new Date();
-      codiceRisposta = error.status || 500;
+      codiceRisposta = error.httpStatus || error.status || 500;
       errore = error.message;
       stackTrace = error.stack;
 
@@ -991,7 +1019,7 @@ export class ExternalApiController extends BaseController {
 
     } catch (error: any) {
       timestampRisposta = new Date();
-      codiceRisposta = error.status || 500;
+      codiceRisposta = error.httpStatus || error.status || 500;
       errore = error.message;
       stackTrace = error.stack;
 
@@ -1055,7 +1083,7 @@ export class ExternalApiController extends BaseController {
 
     } catch (error: any) {
       timestampRisposta = new Date();
-      codiceRisposta = error.status || 500;
+      codiceRisposta = error.httpStatus || error.status || 500;
       errore = error.message;
       stackTrace = error.stack;
 
@@ -1117,7 +1145,7 @@ export class ExternalApiController extends BaseController {
 
     } catch (error: any) {
       timestampRisposta = new Date();
-      codiceRisposta = error.status || 500;
+      codiceRisposta = error.httpStatus || error.status || 500;
       errore = error.message;
       stackTrace = error.stack;
 
@@ -1186,7 +1214,7 @@ export class ExternalApiController extends BaseController {
 
     } catch (error: any) {
       timestampRisposta = new Date();
-      codiceRisposta = error.status || 500;
+      codiceRisposta = error.httpStatus || error.status || 500;
       errore = error.message;
       stackTrace = error.stack;
 
@@ -1250,7 +1278,7 @@ export class ExternalApiController extends BaseController {
 
     } catch (error: any) {
       timestampRisposta = new Date();
-      codiceRisposta = error.status || 500;
+      codiceRisposta = error.httpStatus || error.status || 500;
       errore = error.message;
       stackTrace = error.stack;
 
@@ -1314,7 +1342,7 @@ export class ExternalApiController extends BaseController {
 
     } catch (error: any) {
       timestampRisposta = new Date();
-      codiceRisposta = error.status || 500;
+      codiceRisposta = error.httpStatus || error.status || 500;
       errore = error.message;
       stackTrace = error.stack;
 

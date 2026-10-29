@@ -98,6 +98,52 @@ export class ExternalApiService implements IExternalApiService {
     // Inizializzazione del servizio
   }
 
+  // ─── Richieste dal Plugin ───────────────────────────────────────────────
+
+  /**
+   * Corpo e filtri arrivano dal Plugin cosi' come sono (spec api-esterne-plugin, richieste
+   * incomplete o non valide): un corpo assente vale vuoto, un valore numerico o booleano si
+   * confronta come testo, qualunque altra forma e' una richiesta non valida e non un errore interno.
+   */
+  private normalizzaRichiesta<T extends { filters?: Array<FilterConditionDTO[]> }>(params: T | null | undefined): T {
+    const richiesta = (params ?? {}) as T;
+    const { template_id: templateId, tipo_export: tipoExport } = richiesta as { template_id?: unknown; tipo_export?: unknown };
+    const elencoDiTesti = (valore: unknown) => Array.isArray(valore) && valore.every(v => typeof v === 'string');
+    if (templateId !== undefined && templateId !== null && !elencoDiTesti(templateId)) {
+      throw new BadRequestError({ message: 'template_id deve essere un elenco di identificativi' });
+    }
+    if (tipoExport !== undefined && tipoExport !== null && !elencoDiTesti(tipoExport)) {
+      throw new BadRequestError({ message: 'tipo_export deve essere un elenco di codici' });
+    }
+    const filtri: unknown = richiesta.filters;
+    if (filtri === undefined || filtri === null) return richiesta;
+    if (!Array.isArray(filtri)) {
+      throw new BadRequestError({ message: 'filters deve essere un elenco di gruppi di condizioni' });
+    }
+    const normalizzati = filtri.map((gruppo: unknown, indice: number) => {
+      if (!Array.isArray(gruppo)) {
+        throw new BadRequestError({ message: `Il gruppo di filtri ${indice + 1} deve essere un elenco di condizioni` });
+      }
+      return gruppo.map((condizione: unknown): FilterConditionDTO => {
+        if (!condizione || typeof condizione !== 'object') {
+          throw new BadRequestError({ message: `Il gruppo di filtri ${indice + 1} contiene una condizione non valida` });
+        }
+        const { field, value } = condizione as { field?: unknown; value?: unknown };
+        if (field !== undefined && field !== null && typeof field !== 'string') {
+          throw new BadRequestError({ message: `Il gruppo di filtri ${indice + 1} ha un campo non valido` });
+        }
+        if (typeof value === 'number' || typeof value === 'boolean') {
+          return { ...(condizione as FilterConditionDTO), value: String(value) };
+        }
+        if (value !== undefined && value !== null && typeof value !== 'string') {
+          throw new BadRequestError({ message: `Il filtro sul campo "${String(field)}" ha un valore non valido` });
+        }
+        return condizione as FilterConditionDTO;
+      });
+    });
+    return { ...richiesta, filters: normalizzati };
+  }
+
   // ─── Helpers sicuri per JSONB SQL ──────────────────────────────────────
 
   /**
@@ -542,6 +588,7 @@ export class ExternalApiService implements IExternalApiService {
     gruppi_filtri: number[];
     tipo_export_richiesti: number;
   }> {
+    params = this.normalizzaRichiesta(params);
     try {
       log.info('getFiles chiamato con parametri:', {
         filters: params.filters,
@@ -557,7 +604,9 @@ export class ExternalApiService implements IExternalApiService {
         [Op.or]: [{ error: null }, { error: '' }]
       };
 
-      // Filter by tipo_export if specified
+      // Tipi di export richiesti: se nessuno e riconosciuto, nessun file, con o senza filtri
+      // sui metadati (spec api-esterne-plugin, file filtrati per tipo di export)
+      let idTipiExport: string[] | undefined;
       if (params.tipo_export && params.tipo_export.length > 0) {
         const findTipiExport = await TipiDiExport.findAll({
           where: {
@@ -568,8 +617,8 @@ export class ExternalApiService implements IExternalApiService {
           },
           attributes: ['id_tipiexport', 'codice_tipiexport']
         });
-        const idCodiciValidi = findTipiExport.map(te => te.id_tipiexport);
-        filesWhere.tipo_export = { [Op.in]: idCodiciValidi };
+        idTipiExport = findTipiExport.map(te => te.id_tipiexport);
+        filesWhere.tipo_export = { [Op.in]: idTipiExport };
       }
 
       // Build JSONB filters for meta_olimpo_cloud to apply in DB
@@ -585,20 +634,12 @@ export class ExternalApiService implements IExternalApiService {
         let tipoExportSql = '';
         const extraParams: Record<string, any> = { ...jsonbParams };
 
-        if (params.tipo_export && params.tipo_export.length > 0) {
-          const findTipiExport = await TipiDiExport.findAll({
-            where: {
-              codice_tipiexport: {
-                [Op.in]: params.tipo_export,
-                [Op.not]: EXPORT_DI_SISTEMA.CORREGGO
-              }
-            },
-            attributes: ['id_tipiexport']
-          });
-          const idCodiciValidi = findTipiExport.map(te => te.id_tipiexport);
-          if (idCodiciValidi.length > 0) {
-            extraParams['tipoExportIds'] = idCodiciValidi;
+        if (idTipiExport !== undefined) {
+          if (idTipiExport.length > 0) {
+            extraParams['tipoExportIds'] = idTipiExport;
             tipoExportSql = 'AND tipo_export IN (:tipoExportIds)';
+          } else {
+            tipoExportSql = 'AND FALSE';
           }
         }
 
@@ -799,6 +840,7 @@ export class ExternalApiService implements IExternalApiService {
     template_id: string[];
     skipValidityCheck?: boolean;
   }): Promise<GetRefsResponseDTO> {
+    params = this.normalizzaRichiesta(params);
     if (!params.template_id || params.template_id.length === 0) {
       throw new BadRequestError({
         message: 'è obbligatorio selezionare almeno un template kit'
@@ -1092,6 +1134,7 @@ export class ExternalApiService implements IExternalApiService {
     filters?: Array<FilterConditionDTO[]>;
     template_id: string[];
   }): Promise<GetRefsHtmlResponseDTO> {
+    params = this.normalizzaRichiesta(params);
     if (!params.template_id || params.template_id.length === 0) {
       throw new BadRequestError({
         message: 'è obbligatorio selezionare almeno un template kit'

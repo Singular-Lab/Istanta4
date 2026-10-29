@@ -1,8 +1,10 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import type { Request } from 'express';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { STATO_LAVORAZIONE_KIT_RUNTIME } from '../../../../lib/enums';
+import { STATO_LAVORAZIONE_KIT_RUNTIME, STATO_LOG_FILE } from '../../../../lib/enums';
+import type { FileItemKitLog } from '../../../../lib/types';
 import { FileManagementService } from '../FileManagementService';
 
 vi.mock('../../logger', () => ({
@@ -85,5 +87,71 @@ describe('FileManagementService.uploadMateriale', () => {
       expect.objectContaining({ nome: 'volantino.pdf', id_olimpo_cloud: 'olimpo-1' })
     );
     expect(fileSottoRadice()).toEqual([]);
+  });
+
+  /** Carica volantino.pdf con l'ultimo log del file indicato e restituisce il nuovo log registrato. */
+  const caricaConUltimoLog = async (ultimoLog: FileItemKitLog | null) => {
+    const kitRuntimeService = {
+      getKitRuntimeById: vi.fn().mockResolvedValue({ stato_lavorazione: STATO_LAVORAZIONE_KIT_RUNTIME.IN_LAVORAZIONE }),
+      getFilesRuntimeByIdKitRuntime: vi.fn().mockResolvedValue([]),
+      insertNewFileRuntime: vi.fn().mockResolvedValue(undefined),
+      getFileRunTimeLogByNomeFileEIdKitRuntime: vi.fn().mockResolvedValue(ultimoLog),
+      insertNewFileRuntimeLog: vi.fn().mockResolvedValue(undefined),
+    };
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(
+      JSON.stringify({ esito: true, error: '', content: { id: 'olimpo-1', file_name: 'volantino.pdf', json_meta: '{}' } }),
+      { status: 200, headers: { 'content-type': 'application/json' } }
+    )));
+    const dipendenze = [kitRuntimeService, { getTipoExportById: vi.fn().mockResolvedValue({ codice: 'STAMPA' }) }, {}, {}, {}, {}, {}];
+    const service = new FileManagementService(
+      ...(dipendenze as unknown as ConstructorParameters<typeof FileManagementService>)
+    );
+
+    await service.uploadMateriale(
+      file(),
+      { guidKitRuntime: 'kit-1', tipoExport: 'tipo-1', nomeFile: 'volantino.pdf', meta: '{}' },
+      { headers: { authorization: 'Bearer x' } } as unknown as Request
+    );
+
+    expect(kitRuntimeService.getFileRunTimeLogByNomeFileEIdKitRuntime).toHaveBeenCalledWith('volantino.pdf', 'kit-1');
+    expect(kitRuntimeService.insertNewFileRuntimeLog).toHaveBeenCalledOnce();
+    return kitRuntimeService.insertNewFileRuntimeLog.mock.calls[0][0] as FileItemKitLog;
+  };
+
+  const logAllaVersione = (versione: number): FileItemKitLog => ({
+    id: `log-v${versione}`,
+    guid_kit_runtime: 'kit-1',
+    nome_file: 'volantino.pdf',
+    data_registrazione: new Date('2026-10-01T08:00:00.000Z'),
+    versione,
+    stato: STATO_LOG_FILE.IN_ATTESA,
+    logs: [{ messaggio: `caricamento v${versione}`, data_notifica: new Date('2026-10-01T08:00:00.000Z'), azione: 'Upload' }],
+  });
+
+  // Ogni nuovo caricamento dello stesso file registra un log alla versione successiva all'ultima,
+  // anche quando l'ultima e' la 0 (prima la versione 0 era trattata come "nessun log")
+  it.each([
+    { versioni: 'da 0 a 1', precedente: 0, attesa: 1 },
+    { versioni: 'da 3 a 4', precedente: 3, attesa: 4 },
+  ])('il nuovo log passa alla versione successiva all\'ultimo ($versioni) e ne conserva lo storico', async ({ precedente, attesa }) => {
+    const ultimoLog = logAllaVersione(precedente);
+
+    const nuovoLog = await caricaConUltimoLog(ultimoLog);
+
+    expect(nuovoLog).toMatchObject({
+      guid_kit_runtime: 'kit-1',
+      nome_file: 'volantino.pdf',
+      versione: attesa,
+      stato: STATO_LOG_FILE.IN_ATTESA,
+      logs: ultimoLog.logs,
+    });
+    expect(nuovoLog.id).not.toBe(ultimoLog.id);
+  });
+
+  it('senza log precedente il nuovo log parte dalla versione 0', async () => {
+    const nuovoLog = await caricaConUltimoLog(null);
+
+    expect(nuovoLog).toMatchObject({ guid_kit_runtime: 'kit-1', nome_file: 'volantino.pdf', versione: 0, stato: STATO_LOG_FILE.IN_ATTESA });
+    expect(nuovoLog.logs).toBeUndefined();
   });
 });
