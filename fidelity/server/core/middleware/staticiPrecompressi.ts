@@ -5,7 +5,8 @@ import path from 'node:path';
 
 /**
  * Il client React (dist/client) servito da Express: cache per tipo di file, file precompressi
- * dalla build (vite-plugin-compression scrive .br e .gz accanto all'originale) e compressione
+ * dalla build (il plugin compressioneStatica di vite.config.ts scrive .br e .gz accanto
+ * all'originale) e compressione
  * al volo solo per cio' che non e' gia' compresso.
  */
 

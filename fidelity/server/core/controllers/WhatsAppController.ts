@@ -8,6 +8,7 @@ import { BaseController } from '../base/BaseController';
 import { sequelize } from '../db/SequelizeConnector';
 import { IWhatsAppService } from '../interfaces/IWhatsAppService';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { routeDeprecata } from '../middleware/routeDeprecata';
 import { permissionGuard } from '../middleware/permissionGuard';
 import { UtentiGDO } from '../models';
 import { GDOWhatsappPreset } from '../models/whatsapp/gdo_whatsapp_preset';
@@ -60,7 +61,7 @@ export class WhatsAppController extends BaseController {
 
         // Outbox endpoints - viewing
         this.router.get("/campaigns", authMiddleware, permissionGuard('whatsapp.visualizza_campagne'), this.getAllCampaigns.bind(this));
-        this.router.get("/campaigns/:bulkId/status", authMiddleware, permissionGuard('whatsapp.visualizza_campagne'), this.getCampaignStatus.bind(this));
+        this.router.get("/campaigns/:bulkId/status", authMiddleware, permissionGuard('whatsapp.visualizza_campagne'), routeDeprecata, this.getCampaignStatus.bind(this));
         this.router.get("/campaigns/:bulkId/jobs", authMiddleware, permissionGuard('whatsapp.visualizza_campagne'), this.getCampaignJobs.bind(this));
 
         // Cancel campaign

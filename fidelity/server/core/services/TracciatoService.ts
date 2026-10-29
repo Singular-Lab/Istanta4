@@ -1225,7 +1225,7 @@ export class TracciatoService implements ITracciatoService {
         'ISTANTA',
         '/FicoProcess/analisiMomento'
       );
-      log.info("DATO IN ARRIVO DA ISTANTA " + String(analisiData.esito))
+      log.info(`DATO IN ARRIVO DA ISTANTA ${String(analisiData.esito)}`)
       // Il momento tiene solo i canali/aree visibili nella promo: confronti, report
       // e menabò derivano da qui. Cambiando la scelta il momento va ricalcolato.
       const visibilita = (await Promo.findByPk(momento.id_promo, { attributes: ['meta'] }))?.meta?.visibilita ?? null;

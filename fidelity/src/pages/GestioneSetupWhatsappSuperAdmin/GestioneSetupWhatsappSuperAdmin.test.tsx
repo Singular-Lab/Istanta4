@@ -65,6 +65,18 @@ describe("Setup del canale WhatsApp", () => {
     expect(document.body.innerHTML).not.toContain("segreto-finto");
   });
 
+  it("non mostra l'URL del webhook da registrare su Meta: il ricevitore non esiste ancora", () => {
+    apri({ idGDO: "gdo-1", dettagliGDO: configurato, errore: null });
+
+    expect(screen.queryByRole("heading", { name: "Webhook" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Webhook URL")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Copia" })).not.toBeInTheDocument();
+    expect(document.body.innerHTML).not.toContain("/webhook/whatsapp/");
+    // Il Verify Token resta tra le credenziali: il server lo richiede per salvare il canale
+    expect(screen.getByLabelText(/Verify Token/)).toHaveAttribute("type", "password");
+    expect(screen.getByRole("button", { name: "Sincronizza" })).toBeEnabled();
+  });
+
   it("Salva non invia i token lasciati vuoti", async () => {
     apri({ idGDO: "gdo-1", dettagliGDO: configurato, errore: null });
 

@@ -9,11 +9,6 @@
       "count": 2
     }
   },
-  "lib/accessi/pagine.ts": {
-    "prefer-template": {
-      "count": 1
-    }
-  },
   "lib/auditTypes.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 1
@@ -54,11 +49,6 @@
       "count": 41
     },
     "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    }
-  },
-  "server/__tests__/certificatoProva.ts": {
-    "prefer-template": {
       "count": 1
     }
   },
@@ -145,11 +135,6 @@
       "count": 3
     }
   },
-  "server/core/agenzia_lib/conadcno/storico-db1.ts": {
-    "prefer-template": {
-      "count": 1
-    }
-  },
   "server/core/agenzia_lib/coopfi/__tests__/coopfi-confronto-ordinamento.test.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 1
@@ -188,12 +173,6 @@
       "count": 4
     },
     "no-console": {
-      "count": 1
-    },
-    "object-shorthand": {
-      "count": 3
-    },
-    "prefer-template": {
       "count": 1
     }
   },
@@ -234,9 +213,6 @@
   "server/core/controllers/AreaController.ts": {
     "@typescript-eslint/no-unused-vars": {
       "count": 2
-    },
-    "prefer-template": {
-      "count": 1
     }
   },
   "server/core/controllers/AttivitaController.ts": {
@@ -249,9 +225,6 @@
       "count": 1
     },
     "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    },
-    "prefer-template": {
       "count": 1
     }
   },
@@ -281,17 +254,9 @@
       "count": 2
     }
   },
-  "server/core/controllers/CorreggoController.ts": {
-    "object-shorthand": {
-      "count": 3
-    }
-  },
   "server/core/controllers/DesignKitController.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 11
-    },
-    "object-shorthand": {
-      "count": 4
     }
   },
   "server/core/controllers/DisplayContextController.ts": {
@@ -307,9 +272,6 @@
   "server/core/controllers/EmailController.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 3
-    },
-    "object-shorthand": {
-      "count": 1
     }
   },
   "server/core/controllers/EphemeralAuthController.ts": {
@@ -331,17 +293,11 @@
     },
     "no-console": {
       "count": 3
-    },
-    "prefer-template": {
-      "count": 3
     }
   },
   "server/core/controllers/FormatoController.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 3
-    },
-    "prefer-template": {
-      "count": 1
     }
   },
   "server/core/controllers/GPTController.ts": {
@@ -353,14 +309,11 @@
     },
     "no-console": {
       "count": 22
-    },
-    "object-shorthand": {
-      "count": 13
     }
   },
   "server/core/controllers/GdoController.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 8
+      "count": 7
     }
   },
   "server/core/controllers/ImpostazioniController.ts": {
@@ -399,11 +352,6 @@
       "count": 3
     }
   },
-  "server/core/controllers/PluginAnalyticsController.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 1
-    }
-  },
   "server/core/controllers/PromoController.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 3
@@ -414,12 +362,6 @@
       "count": 12
     },
     "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    },
-    "object-shorthand": {
-      "count": 12
-    },
-    "prefer-template": {
       "count": 1
     }
   },
@@ -434,9 +376,6 @@
   "server/core/controllers/ReferenzeController.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 6
-    },
-    "object-shorthand": {
-      "count": 1
     }
   },
   "server/core/controllers/SuperadminDashboardController.ts": {
@@ -464,9 +403,6 @@
     },
     "no-console": {
       "count": 5
-    },
-    "prefer-template": {
-      "count": 1
     }
   },
   "server/core/controllers/UserController.ts": {
@@ -477,18 +413,12 @@
       "count": 5
     },
     "no-console": {
-      "count": 22
-    },
-    "prefer-template": {
-      "count": 2
+      "count": 20
     }
   },
   "server/core/controllers/WebPliantController.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 3
-    },
-    "prefer-template": {
-      "count": 9
     }
   },
   "server/core/controllers/WebhookController.ts": {
@@ -561,7 +491,7 @@
   },
   "server/core/controllers/__tests__/GdoController.icona.test.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 10
+      "count": 9
     }
   },
   "server/core/controllers/__tests__/HubController.accessoServizio.test.ts": {
@@ -734,11 +664,6 @@
       "count": 3
     }
   },
-  "server/core/dto/GDOWhatsappDTO.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 3
-    }
-  },
   "server/core/dto/OrdiniDiStampaInviiDTO.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 3
@@ -782,11 +707,6 @@
   "server/core/inizializzazione/migrazioneConfig.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 4
-    }
-  },
-  "server/core/interfaces/IAuditLogService.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 9
     }
   },
   "server/core/interfaces/IConfigService.ts": {
@@ -909,7 +829,7 @@
   },
   "server/core/middleware/__tests__/credenzialiRiservate.test.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 21
+      "count": 20
     }
   },
   "server/core/middleware/__tests__/csrfProtection.segreto.test.ts": {
@@ -951,9 +871,6 @@
     },
     "@typescript-eslint/no-unused-vars": {
       "count": 2
-    },
-    "prefer-template": {
-      "count": 3
     }
   },
   "server/core/middleware/browserSecurityMiddleware.ts": {
@@ -1111,9 +1028,6 @@
     },
     "no-console": {
       "count": 1
-    },
-    "object-shorthand": {
-      "count": 16
     }
   },
   "server/core/models/ordini_di_stampa.ts": {
@@ -1177,9 +1091,6 @@
   "server/core/models/relazioni.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 3
-    },
-    "object-shorthand": {
-      "count": 9
     }
   },
   "server/core/models/ricette.ts": {
@@ -1217,9 +1128,6 @@
     "@typescript-eslint/no-explicit-any": {
       "count": 1
     },
-    "no-console": {
-      "count": 1
-    },
     "no-useless-escape": {
       "count": 3
     }
@@ -1229,18 +1137,8 @@
       "count": 1
     }
   },
-  "server/core/models/whatsapp/gdo_whatsapp_numbers.ts": {
-    "object-shorthand": {
-      "count": 1
-    }
-  },
   "server/core/models/whatsapp/gdo_whatsapp_preset.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 1
-    }
-  },
-  "server/core/models/whatsapp/gdo_whatsapp_template.ts": {
-    "object-shorthand": {
       "count": 1
     }
   },
@@ -1467,25 +1365,9 @@
       "count": 3
     }
   },
-  "server/core/scripts/cleanupLogs.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    },
-    "prefer-template": {
-      "count": 4
-    }
-  },
   "server/core/scripts/migrateUtentiGDO.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 8
-    }
-  },
-  "server/core/scripts/seed-ephemeral-whitelist.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
     }
   },
   "server/core/server.ts": {
@@ -1514,22 +1396,11 @@
     },
     "@typescript-eslint/no-unused-vars": {
       "count": 2
-    },
-    "prefer-template": {
-      "count": 1
-    }
-  },
-  "server/core/services/ChronService.ts": {
-    "object-shorthand": {
-      "count": 1
     }
   },
   "server/core/services/CombinazioneAreeCanaliService.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 1
-    },
-    "prefer-template": {
-      "count": 4
     }
   },
   "server/core/services/ConfigService.ts": {
@@ -1577,9 +1448,6 @@
     },
     "no-useless-escape": {
       "count": 1
-    },
-    "prefer-template": {
-      "count": 1
     }
   },
   "server/core/services/FileManagementService.ts": {
@@ -1591,12 +1459,6 @@
     },
     "no-console": {
       "count": 5
-    },
-    "object-shorthand": {
-      "count": 3
-    },
-    "prefer-template": {
-      "count": 8
     }
   },
   "server/core/services/FilterTemplateService.ts": {
@@ -1618,12 +1480,6 @@
     },
     "@typescript-eslint/no-unused-vars": {
       "count": 1
-    },
-    "object-shorthand": {
-      "count": 2
-    },
-    "prefer-template": {
-      "count": 3
     }
   },
   "server/core/services/GdoService.ts": {
@@ -1647,9 +1503,6 @@
     },
     "@typescript-eslint/no-unused-vars": {
       "count": 1
-    },
-    "prefer-template": {
-      "count": 2
     }
   },
   "server/core/services/IstantaService.ts": {
@@ -1666,12 +1519,6 @@
     },
     "no-console": {
       "count": 4
-    },
-    "object-shorthand": {
-      "count": 2
-    },
-    "prefer-template": {
-      "count": 3
     }
   },
   "server/core/services/LogService.ts": {
@@ -1680,9 +1527,6 @@
     },
     "@typescript-eslint/no-unused-vars": {
       "count": 2
-    },
-    "object-shorthand": {
-      "count": 1
     }
   },
   "server/core/services/MenuService.ts": {
@@ -1701,12 +1545,6 @@
     },
     "no-console": {
       "count": 2
-    },
-    "object-shorthand": {
-      "count": 2
-    },
-    "prefer-template": {
-      "count": 3
     }
   },
   "server/core/services/PluginAnalyticsGatewayService.ts": {
@@ -1716,24 +1554,15 @@
   },
   "server/core/services/PromoService.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 29
+      "count": 20
     },
     "no-console": {
       "count": 10
-    },
-    "object-shorthand": {
-      "count": 2
-    },
-    "prefer-template": {
-      "count": 3
     }
   },
   "server/core/services/PuntoVenditaService.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 6
-    },
-    "object-shorthand": {
-      "count": 1
     }
   },
   "server/core/services/RaccoglitoreKitService.ts": {
@@ -1756,9 +1585,6 @@
     },
     "no-console": {
       "count": 4
-    },
-    "prefer-template": {
-      "count": 5
     }
   },
   "server/core/services/RegistroLavori.ts": {
@@ -1785,9 +1611,6 @@
     },
     "no-console": {
       "count": 1
-    },
-    "prefer-template": {
-      "count": 1
     }
   },
   "server/core/services/UserService.ts": {
@@ -1798,13 +1621,7 @@
       "count": 4
     },
     "no-console": {
-      "count": 47
-    },
-    "object-shorthand": {
-      "count": 4
-    },
-    "prefer-template": {
-      "count": 4
+      "count": 32
     }
   },
   "server/core/services/VolantinoService.ts": {
@@ -1818,9 +1635,6 @@
     },
     "no-console": {
       "count": 3
-    },
-    "object-shorthand": {
-      "count": 1
     }
   },
   "server/core/services/WebhookService.ts": {
@@ -1836,16 +1650,10 @@
       "count": 49
     },
     "@typescript-eslint/no-unused-vars": {
-      "count": 4
-    },
-    "no-console": {
-      "count": 28
-    },
-    "object-shorthand": {
       "count": 3
     },
-    "prefer-template": {
-      "count": 1
+    "no-console": {
+      "count": 24
     }
   },
   "server/core/services/WhatsappQueueService.ts": {
@@ -2137,12 +1945,6 @@
     },
     "@typescript-eslint/no-unused-vars": {
       "count": 2
-    },
-    "object-shorthand": {
-      "count": 3
-    },
-    "prefer-template": {
-      "count": 5
     }
   },
   "server/core/utils/Translator.ts": {
@@ -2160,11 +1962,6 @@
       "count": 8
     }
   },
-  "server/core/utils/mappers.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 8
-    }
-  },
   "server/core/utils/rispostaServizi.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 4
@@ -2175,7 +1972,7 @@
       "count": 6
     },
     "@typescript-eslint/no-unused-vars": {
-      "count": 3
+      "count": 2
     }
   },
   "server/core/workers/__tests__/WhatsappQueueWorker.invio.test.ts": {
@@ -2220,9 +2017,6 @@
   },
   "src/components/AppLoaderBridge/index.tsx": {
     "no-console": {
-      "count": 1
-    },
-    "prefer-template": {
       "count": 1
     }
   },
@@ -2329,17 +2123,6 @@
   "src/components/Base/Litepicker/litepicker.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 2
-    },
-    "object-shorthand": {
-      "count": 1
-    },
-    "prefer-template": {
-      "count": 2
-    }
-  },
-  "src/components/Base/LoadingIcon/index.tsx": {
-    "react-hooks/exhaustive-deps": {
-      "count": 1
     }
   },
   "src/components/Base/Lucide/risolviIconaLucide.ts": {
@@ -2349,11 +2132,6 @@
   },
   "src/components/Base/QRCodeViewer.tsx": {
     "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    }
-  },
-  "src/components/Base/TinySlider/index.tsx": {
-    "react-hooks/exhaustive-deps": {
       "count": 1
     }
   },
@@ -2382,9 +2160,6 @@
     },
     "no-console": {
       "count": 1
-    },
-    "object-shorthand": {
-      "count": 2
     }
   },
   "src/components/ContestoLavorazioneFields/index.tsx": {
@@ -2729,11 +2504,6 @@
       "count": 3
     }
   },
-  "src/pages/AuditLogDashboard/AuditLogTable.tsx": {
-    "prefer-template": {
-      "count": 1
-    }
-  },
   "src/pages/Auth/index.tsx": {
     "@typescript-eslint/no-explicit-any": {
       "count": 2
@@ -2900,9 +2670,6 @@
     "no-console": {
       "count": 22
     },
-    "prefer-template": {
-      "count": 1
-    },
     "react-hooks/exhaustive-deps": {
       "count": 10
     }
@@ -3014,7 +2781,7 @@
   },
   "src/pages/DettaglioKit/hooks/useKitLogic.tsx": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 11
+      "count": 10
     },
     "no-console": {
       "count": 7
@@ -3069,11 +2836,6 @@
   },
   "src/pages/Documentazione/Statistics/index.tsx": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 1
-    }
-  },
-  "src/pages/GestioneApi/StatistichePdfDocument.tsx": {
-    "prefer-template": {
       "count": 1
     }
   },
@@ -3260,11 +3022,6 @@
       "count": 1
     }
   },
-  "src/pages/GestioneSetupWhatsappSuperAdmin/index.tsx": {
-    "prefer-template": {
-      "count": 2
-    }
-  },
   "src/pages/GestioneTemplatesWhatsappSuperAdmin/GestioneTemplatesWhatsappSuperAdmin.test.tsx": {
     "@typescript-eslint/no-explicit-any": {
       "count": 1
@@ -3279,9 +3036,6 @@
     },
     "no-console": {
       "count": 1
-    },
-    "prefer-template": {
-      "count": 5
     }
   },
   "src/pages/GestioneUtenti/GestioneUtenti.test.tsx": {
@@ -3320,9 +3074,6 @@
   },
   "src/pages/GestioneWhatsappSuperAdmin/index.tsx": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 2
-    },
-    "prefer-template": {
       "count": 2
     }
   },
@@ -3418,9 +3169,6 @@
     },
     "no-console": {
       "count": 6
-    },
-    "object-shorthand": {
-      "count": 1
     }
   },
   "src/pages/LavorazioniInCorso/DettagliKitManualiInCorso/index.tsx": {
@@ -3773,7 +3521,7 @@
   },
   "src/pages/WebPliant/utils.tsx": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 56
+      "count": 41
     },
     "@typescript-eslint/no-unused-vars": {
       "count": 4
@@ -3868,13 +3616,10 @@
   },
   "src/query/query.tsx": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 14
-    },
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
+      "count": 11
     },
     "no-console": {
-      "count": 3
+      "count": 2
     }
   },
   "src/router/gestioneInterna.routes.test.tsx": {
@@ -3897,13 +3642,13 @@
       "count": 1
     },
     "@typescript-eslint/no-explicit-any": {
-      "count": 24
+      "count": 23
     },
     "@typescript-eslint/no-unused-vars": {
-      "count": 26
+      "count": 21
     },
     "no-console": {
-      "count": 32
+      "count": 30
     }
   },
   "src/router/pagineRimosse.routes.test.tsx": {
@@ -3913,11 +3658,6 @@
   },
   "src/stores/errorSlice.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 1
-    }
-  },
-  "src/stores/store.ts": {
-    "object-shorthand": {
       "count": 1
     }
   },
@@ -3976,9 +3716,6 @@
     },
     "@typescript-eslint/no-unused-vars": {
       "count": 2
-    },
-    "prefer-template": {
-      "count": 13
     }
   },
   "src/utils/importPuntiVendita.test.ts": {
@@ -3993,7 +3730,7 @@
   },
   "src/utils/validation.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 2
+      "count": 1
     }
   },
   "src/utils/wishlistEvents.ts": {

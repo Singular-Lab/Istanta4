@@ -5,6 +5,7 @@ import { BaseController } from '../base/BaseController';
 import type { IScoreboardService } from '../interfaces/IScoreboardService';
 import type { IUserService } from '../interfaces/IUserService';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { routeDeprecata } from '../middleware/routeDeprecata';
 import { ServerUtils } from '../utils/ServerUtils';
 
 export class ScoreboardController extends BaseController {
@@ -25,8 +26,8 @@ export class ScoreboardController extends BaseController {
         this.router.get('/scoreboard/category-timeline', authMiddleware, this.getCategoryScoreboardTimeline.bind(this));
         this.router.get('/scoreboard/promo/:idPromo', authMiddleware, this.getPromoScoreboard.bind(this));
         this.router.post('/scoreboard/promo/:idPromo', authMiddleware, this.calcolaPromoScoreboard.bind(this));
-        this.router.post('/scoreboard/multi-promo', authMiddleware, this.calcolaMultiPromoScoreboard.bind(this));
-        this.router.post('/scoreboard/query', authMiddleware, this.calcolaQueryScoreboard.bind(this));
+        this.router.post('/scoreboard/multi-promo', authMiddleware, routeDeprecata, this.calcolaMultiPromoScoreboard.bind(this));
+        this.router.post('/scoreboard/query', authMiddleware, routeDeprecata, this.calcolaQueryScoreboard.bind(this));
         this.router.get('/scoreboard/report-options', authMiddleware, this.getReportOptions.bind(this));
         this.router.post('/scoreboard/opzione', authMiddleware, this.calcolaQueryDaOpzione.bind(this));
     }

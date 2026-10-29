@@ -13,10 +13,10 @@ import withSessionCheck from "@/components/SessionChecker";
 import clsx from "clsx";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ServerCall } from "../../../lib/server_call";
-import { AreaResponseDTO, CanaleResponseDTO } from "../../../server/core/dto";
 import { PERMISSIONS } from "../../constants/permissions";
 import { usePermission } from "../../context/PermissionContext";
 import CardVolantino from "../shared/CardVolantino";
+import { areeECanaliDaCombinazioni, type CombinazioneConNomi, type OpzioneFiltro } from "./filtriAreeCanali";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
@@ -64,8 +64,8 @@ const StoricoVolantiniPage = () => {
     const [errore, setErrore] = useState<string | null>(null);
 
     // Stato per aree e canali
-    const [aree, setAree] = useState<AreaResponseDTO[]>([]);
-    const [canali, setCanali] = useState<CanaleResponseDTO[]>([]);
+    const [aree, setAree] = useState<OpzioneFiltro[]>([]);
+    const [canali, setCanali] = useState<OpzioneFiltro[]>([]);
 
     // Filtri
     const [filter, setFilter] = useState<CardFilter>({ id_area: "", id_canale: "" });
@@ -102,16 +102,15 @@ const StoricoVolantiniPage = () => {
         }
     }, [buildQueryString]);
 
-    // Carica aree e canali
+    // Carica aree e canali dalle combinazioni area/canale: la rotta richiede solo il login,
+    // come la pagina, e ogni combinazione porta nome e codice di area e canale
     useEffect(() => {
         const loadInitialData = async () => {
             try {
-                const [areeData, canaliData] = await Promise.all([
-                    ServerCall.get<AreaResponseDTO[]>("/aree"),
-                    ServerCall.get<CanaleResponseDTO[]>("/canali")
-                ]);
-                setAree(areeData || []);
-                setCanali(canaliData || []);
+                const combinazioni = await ServerCall.get<CombinazioneConNomi[]>("/get_all_combinazioni_canale_area");
+                const opzioni = areeECanaliDaCombinazioni(Array.isArray(combinazioni) ? combinazioni : []);
+                setAree(opzioni.aree);
+                setCanali(opzioni.canali);
             } catch (error) {
                 console.error("Errore caricamento aree/canali:", error);
             }

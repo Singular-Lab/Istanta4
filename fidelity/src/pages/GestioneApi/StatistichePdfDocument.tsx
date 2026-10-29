@@ -217,7 +217,7 @@ function statusStyle(code: number) {
 }
 
 function truncEnd(s: string, max: number): string {
-  return s.length > max ? "…" + s.slice(-(max - 1)) : s;
+  return s.length > max ? `…${s.slice(-(max - 1))}` : s;
 }
 
 // ── Componente principale ────────────────────────────────────────────────────

@@ -91,7 +91,7 @@ export class FormatoController extends BaseController {
       verificaRisposta(
         await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
           req,
-          config.ISTANTA_IP_ADDRESS + '/FicoProcess/eliminaFormato/' + idFormato,
+          `${config.ISTANTA_IP_ADDRESS}/FicoProcess/eliminaFormato/${idFormato}`,
           'PUT',
           undefined,
           undefined,

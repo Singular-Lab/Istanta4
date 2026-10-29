@@ -58,4 +58,30 @@ describe("Dashboard Category", () => {
     expect(screen.getByLabelText("Da")).toHaveValue("");
     expect(within(periodo).getByRole("radio", { name: "30 giorni" })).toHaveAttribute("aria-checked", "false");
   });
+
+  it("tra le promozioni in corso non mostra le promo eliminate", async () => {
+    risposte["/promo/in-corso"] = () => Promise.resolve([
+      { id: "p1", nome: "Promo autunno", stato: "VALIDA", validita_dal: "2026-10-01", validita_al: "2026-10-31" },
+      { id: "p2", nome: "Promo cancellata", stato: "ELIMINATA", validita_dal: "2026-10-01", validita_al: "2026-10-31" },
+      { id: "p3", nome: "Promo in lavorazione", stato: "IN_LAVORAZIONE", validita_dal: "2026-11-01", validita_al: "2026-11-15" },
+    ]);
+    apri();
+
+    const sezione = await screen.findByRole("region", { name: "Promozioni in corso" });
+    expect(await within(sezione).findByText("Promo autunno")).toBeInTheDocument();
+    expect(within(sezione).getByText("Promo in lavorazione")).toBeInTheDocument();
+    expect(within(sezione).queryByText("Promo cancellata")).not.toBeInTheDocument();
+    expect(within(sezione).getByText("2")).toBeInTheDocument();
+  });
+
+  it("se tutte le promo in corso sono eliminate mostra che non ce ne sono", async () => {
+    risposte["/promo/in-corso"] = () => Promise.resolve([
+      { id: "p2", nome: "Promo cancellata", stato: "ELIMINATA", validita_dal: "2026-10-01", validita_al: "2026-10-31" },
+    ]);
+    apri();
+
+    const sezione = await screen.findByRole("region", { name: "Promozioni in corso" });
+    expect(await within(sezione).findByText("Nessuna promozione in corso")).toBeInTheDocument();
+    expect(within(sezione).queryByText("Promo cancellata")).not.toBeInTheDocument();
+  });
 });

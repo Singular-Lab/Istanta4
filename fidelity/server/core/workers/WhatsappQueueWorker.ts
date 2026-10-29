@@ -541,7 +541,7 @@ export class WhatsappQueueWorker {
     /**
      * Simula l'invio di un messaggio WhatsApp (per testing)
      */
-    private async simulateSendMessage(to: string, body: string): Promise<void> {
+    private async simulateSendMessage(_to: string, _body: string): Promise<void> {
         
 
         // Simula un delay realistico (100-500ms)
@@ -561,7 +561,8 @@ export class WhatsappQueueWorker {
             throw new BusinessError({ message: `[SIMULATO] ${errore}`, rule: 'simulation_error' });
         }
 
-        log.debug(`✅ [SIMULAZIONE] Messaggio "inviato" con successo a ${to}`);
+        // Il numero del destinatario e' un dato personale: non si scrive nei log
+        log.debug('✅ [SIMULAZIONE] Messaggio "inviato" con successo');
     }
 
     /**
@@ -583,8 +584,8 @@ export class WhatsappQueueWorker {
      * @returns wamid del messaggio restituito da Meta
      */
     private async sendWhatsAppMessage(job: typeof GDOWhatsappQueueJob.prototype): Promise<string | null> {
-        const to = job.to_whatsapp_queue_job;
-        log.info(`📡 Invio messaggio WhatsApp REALE a ${to}`);
+        // Il numero del destinatario e' un dato personale: nei log solo l'id del job
+        log.info('📡 Invio messaggio WhatsApp REALE', { idJob: job.id_whatsapp_queue_job });
 
         try {
             // 1. Recupera le credenziali dal database tramite campagna_id
@@ -667,9 +668,9 @@ export class WhatsappQueueWorker {
             const wamid: string | null = data?.messages?.[0]?.id ?? null;
 
             if (wamid) {
-                log.info(`✅ Messaggio inviato con successo a ${to}, ID: ${wamid}`);
+                log.info('✅ Messaggio inviato con successo', { idJob: job.id_whatsapp_queue_job, wamid });
             } else {
-                log.info(`✅ Messaggio inviato a ${to}`);
+                log.info('✅ Messaggio inviato', { idJob: job.id_whatsapp_queue_job });
             }
             return wamid;
 

@@ -1393,7 +1393,7 @@ const PromotionTimeline: React.FC<PromotionTimelineProps> = ({
                                   left: startPos + TIMELINE_PADDING,
                                   width,
                                   height: h,
-                                  backgroundColor: COLORS[promo.stato] + "20",
+                                  backgroundColor: `${COLORS[promo.stato]}20`,
                                   border: `2px solid ${COLORS[promo.stato]}`
                                 }}
                                 title={`${promo.nome} – ${promo.stato}`}

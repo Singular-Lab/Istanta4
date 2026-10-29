@@ -128,11 +128,8 @@ const { exportToCSV, exportToExcel, exportToPDF } = useStatisticsExport();
 - `createChartOptions()` - Configurazioni Chart.js basate sul tema comune (`@/utils/chartTheme`), da chiamare al render
 
 ### filterHelpers.ts
-- `validateFilterCondition()` - Valida singola condizione
-- `validateFilterGroup()` - Valida gruppo filtri
 - `formatFiltersForApi()` - Formatta per backend
-- `createEmptyFilterCondition()` - Helper creazione
-- `cloneFilterGroups()` - Clone sicuro
+- `createEmptyFilterCondition()` / `createEmptyFilterGroup()` - Helper creazione
 
 ### exportHelpers.ts
 - `exportStatisticsToCSV()` - Export CSV con download automatico

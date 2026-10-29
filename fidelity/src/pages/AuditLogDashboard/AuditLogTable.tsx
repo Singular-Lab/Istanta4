@@ -392,11 +392,7 @@ const AuditLogTable: FC<AuditLogTableProps> = ({
               EVENT_CATEGORY_MAP[row.event_type] ?? "system";
             const catLabel = CATEGORY_LABELS[category];
             const eventIcon = EVENT_ICONS[row.event_type] ?? CATEGORY_ICONS[category];
-            const userName = (
-              (row.user_name ?? "") +
-              " " +
-              (row.user_surname ?? "")
-            ).trim();
+            const userName = `${row.user_name ?? ""} ${row.user_surname ?? ""}`.trim();
 
             const hasDetails =
               (row.details && Object.keys(row.details).length > 0) ||

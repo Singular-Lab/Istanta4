@@ -129,7 +129,7 @@ export class ChronService implements IChronService {
   async updateStatoPromo(guidId: string, stato: STATO_PROMO, statoLetto: STATO_PROMO): Promise<boolean> {
     try {
       const result = await Promo.update(
-        { stato: stato },
+        { stato },
         {
           where: {
             id_promo: guidId,

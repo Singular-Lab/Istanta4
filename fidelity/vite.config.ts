@@ -56,7 +56,6 @@ const chunkRules: Array<{ name: string; test: RegExp; testId?: RegExp; priority?
   { name: "xlsx", test: /^xlsx(\/|$)/ },
   { name: "react-dnd", test: /^(react-dnd|react-dnd-html5-backend)(\/|$)/ },
   { name: "swiper", test: /^swiper(\/|$)/ },
-  { name: "tiny-slider", test: /^tiny-slider(\/|$)/ },
   { name: "tom-select", test: /^tom-select(\/|$)/ },
   { name: "litepicker", test: /^litepicker(\/|$)/ },
   { name: "i18n", test: /^(i18next|react-i18next|i18next-browser-languagedetector)(\/|$)/ }

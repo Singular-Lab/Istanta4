@@ -16,6 +16,7 @@ import { IReferenzeService } from '../interfaces/IReferenzeService';
 import type { IWebPliantService } from '../interfaces/IWebPliantService';
 import type { IWebhookService } from '../interfaces/IWebhookService';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { routeDeprecata } from '../middleware/routeDeprecata';
 import { permissionGuard } from '../middleware/permissionGuard';
 import { ServerUtils } from '../utils/ServerUtils';
 import { esitoIstanta, verificaRisposta } from '../utils/rispostaServizi';
@@ -44,14 +45,14 @@ export class ReferenzeController extends BaseController {
     this.router.put('/getContenutiAggiuntiviReferenza', authMiddleware, permissionGuard('referenze.visualizza'), this.getContenutiAggiuntiviReferenza.bind(this));
     this.router.get('/getAllContenutiAggiuntivi', authMiddleware, permissionGuard('referenze.visualizza'), this.getAllContenutiAggiuntivi.bind(this));
     this.router.post('/ricercaReferenzePromo', this.ricercaReferenzePromo.bind(this));
-    this.router.get('/resolveImmaginiGruppo', authMiddleware, permissionGuard('referenze.visualizza'), this.resolveImmaginiGruppo.bind(this));
+    this.router.get('/resolveImmaginiGruppo', authMiddleware, permissionGuard('referenze.visualizza'), routeDeprecata, this.resolveImmaginiGruppo.bind(this));
     this.router.post('/get_filtered_referenze', this.getFilteredReferenze.bind(this));
 
     // Referenze from ImpostazioniController
-    this.router.get('/getReferenzaById', authMiddleware, permissionGuard('referenze.visualizza'), this.getReferenzaById.bind(this));
+    this.router.get('/getReferenzaById', authMiddleware, permissionGuard('referenze.visualizza'), routeDeprecata, this.getReferenzaById.bind(this));
     this.router.get('/getReferenzaByCodice', authMiddleware, permissionGuard('referenze.visualizza'), this.getReferenzaByCodice.bind(this));
     this.router.put('/updateReferenzaWebpliant', authMiddleware, permissionGuard('referenze.modifica'), this.updateReferenzaWebpliant.bind(this));
-    this.router.get('/getDatiPerWebPliantDisponibili', authMiddleware, permissionGuard('referenze.visualizza'), this.getDatiPerWebPliantDisponibili.bind(this));
+    this.router.get('/getDatiPerWebPliantDisponibili', authMiddleware, permissionGuard('referenze.visualizza'), routeDeprecata, this.getDatiPerWebPliantDisponibili.bind(this));
     this.router.get('/get_addestramenti_da_istanta', authMiddleware, permissionGuard('referenze.visualizza'), this.getAddestramentiDaIstanta.bind(this));
     this.router.get('/richiediReferenzeWebpliant', authMiddleware, permissionGuard('referenze.importa'), this.richiediReferenzeWebpliant.bind(this));
   }
@@ -142,7 +143,7 @@ export class ReferenzeController extends BaseController {
           await container.get<IWebhookService>(TYPES.WebhookService).scatenaEvento({
             evento: EVENTI_WEBHOOK.KIT_MATERIALE_ARRIVATO,
             dati: {
-              referenze: referenze,
+              referenze,
               kit: runtimekitPerWebhook
             },
             meta: {

@@ -156,7 +156,7 @@ export class AuditLogController extends BaseController {
                 ].join(';'));
             }
 
-            const csv = '\uFEFF' + csvRows.join('\n'); // BOM per Excel
+            const csv = `\uFEFF${csvRows.join('\n')}`; // BOM per Excel
             res.setHeader('Content-Type', 'text/csv; charset=utf-8');
             res.setHeader('Content-Disposition', `attachment; filename="audit_log_${new Date().toISOString().slice(0, 10)}.csv"`);
             res.status(HttpStatusCode.OK).send(csv);

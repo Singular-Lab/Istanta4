@@ -5,6 +5,7 @@ import { BaseController } from '../base/BaseController';
 import { log } from '../logger';
 import { ITracciatoService } from '../interfaces/ITracciatoService';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { routeDeprecata } from '../middleware/routeDeprecata';
 import { permissionGuard } from '../middleware/permissionGuard';
 import { ServerUtils } from '../utils/ServerUtils';
 
@@ -16,11 +17,11 @@ export class TracciatoController extends BaseController {
         this.initializeRoutes();
     }
     public initializeRoutes(): void {
-        this.router.get('/tracciati', authMiddleware, this.getAllTracciati.bind(this));
+        this.router.get('/tracciati', authMiddleware, routeDeprecata, this.getAllTracciati.bind(this));
         this.router.get('/tracciati/promo/:idPromo', authMiddleware, this.getAllTracciatiPerPromo.bind(this));
-        this.router.get('/tracciati/confronto/contesto', authMiddleware, this.getContestoConfronto.bind(this));
-        this.router.get('/tracciati/confronto/reports', authMiddleware, this.getReportsConfronto.bind(this));
-        this.router.get('/tracciati/confronto/reports/:id', authMiddleware, this.getReportConfrontoById.bind(this));
+        this.router.get('/tracciati/confronto/contesto', authMiddleware, routeDeprecata, this.getContestoConfronto.bind(this));
+        this.router.get('/tracciati/confronto/reports', authMiddleware, routeDeprecata, this.getReportsConfronto.bind(this));
+        this.router.get('/tracciati/confronto/reports/:id', authMiddleware, routeDeprecata, this.getReportConfrontoById.bind(this));
         // Momenti (prima delle route parametriche /:idTracciato)
         this.router.get('/tracciati/momenti/promo/:idPromo', authMiddleware, this.getMomentiPerPromo.bind(this));
         this.router.post('/tracciati/momenti', authMiddleware, this.createMomento.bind(this));
@@ -435,7 +436,7 @@ export class TracciatoController extends BaseController {
                 res.status(HttpStatusCode.NOT_FOUND).json({ message: error?.message ?? 'Confronto non trovato' });
                 return;
             }
-            res.status(HttpStatusCode.INTERNAL_SERVER_ERROR).json({ message: 'Errore durante il calcolo del risultato del confronto: ' + error.message });
+            res.status(HttpStatusCode.INTERNAL_SERVER_ERROR).json({ message: `Errore durante il calcolo del risultato del confronto: ${error.message}` });
         }
     }
 

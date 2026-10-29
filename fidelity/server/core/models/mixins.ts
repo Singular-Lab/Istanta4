@@ -12,17 +12,17 @@ export const SoftDeleteMixin = {
     },
 
     // Metodi di istanza
-    softDelete: async function(this: any) {
+    async softDelete(this: any) {
         this.deletedat = new Date();
         return await this.save();
     },
 
-    restore: async function(this: any) {
+    async restore(this: any) {
         this.deletedat = null;
         return await this.save();
     },
 
-    isDeleted: function(this: any): boolean {
+    isDeleted(this: any): boolean {
         return this.deletedat !== null;
     }
 };
@@ -44,11 +44,11 @@ export const AuditMixin = {
     },
 
     // Metodi di istanza
-    setCreatedBy: function(this: any, userId: string) {
+    setCreatedBy(this: any, userId: string) {
         this.createdby = userId;
     },
 
-    setUpdatedBy: function(this: any, userId: string) {
+    setUpdatedBy(this: any, userId: string) {
         this.updatedby = userId;
     }
 };
@@ -65,12 +65,12 @@ export const VersioningMixin = {
     },
 
     // Metodi di istanza
-    incrementVersion: async function(this: any) {
+    async incrementVersion(this: any) {
         this.version += 1;
         return await this.save();
     },
 
-    getVersion: function(this: any): number {
+    getVersion(this: any): number {
         return this.version;
     }
 };
@@ -80,7 +80,7 @@ export const VersioningMixin = {
  */
 export const FullTextSearchMixin = {
     // Metodi statici per ricerca full-text
-    searchByText: async function(this: any, searchTerm: string, fields: string[]) {
+    async searchByText(this: any, searchTerm: string, fields: string[]) {
         const searchConditions = fields.map(field => ({
             [field]: {
                 [Op.iLike]: `%${searchTerm}%`
@@ -95,7 +95,7 @@ export const FullTextSearchMixin = {
         });
     },
 
-    searchAdvanced: async function(this: any, options: {
+    async searchAdvanced(this: any, options: {
         searchTerm?: string;
         fields?: string[];
         filters?: Record<string, any>;
@@ -162,7 +162,7 @@ export const CacheMixin = {
  */
 export const ExportImportMixin = {
     // Metodi di istanza per export
-    toJSON: function(this: any, options: { includePrivate?: boolean } = {}) {
+    toJSON(this: any, options: { includePrivate?: boolean } = {}) {
         const data = this.get({ plain: true });
         
         if (!options.includePrivate) {
@@ -175,13 +175,13 @@ export const ExportImportMixin = {
         return data;
     },
 
-    toCSV: function(this: any, fields: string[]): string {
+    toCSV(this: any, fields: string[]): string {
         const data = this.get({ plain: true });
         return fields.map(field => data[field] || '').join(',');
     },
 
     // Metodi statici per import
-    bulkCreateFromCSV: async function(this: any, csvData: string[], fields: string[]) {
+    async bulkCreateFromCSV(this: any, csvData: string[], fields: string[]) {
         const records = csvData.map(row => {
             const values = row.split(',');
             const record: any = {};
@@ -203,7 +203,7 @@ export const ExportImportMixin = {
  */
 export const ValidationMixin = {
     // Metodi di istanza per validazione
-    validateCustom: function(this: any, rules: Record<string, any>): { isValid: boolean; errors: string[] } {
+    validateCustom(this: any, rules: Record<string, any>): { isValid: boolean; errors: string[] } {
         const errors: string[] = [];
         
         for (const [field, rule] of Object.entries(rules)) {
@@ -233,7 +233,7 @@ export const ValidationMixin = {
     },
 
     // Metodi statici per validazione bulk
-    validateBulk: function(this: any, records: any[], rules: Record<string, any>) {
+    validateBulk(this: any, records: any[], rules: Record<string, any>) {
         const results : any[] = [];
         
         for (const record of records) {
@@ -253,7 +253,7 @@ export const ValidationMixin = {
  */
 export const StatisticsMixin = {
     // Metodi statici per statistiche
-    getStatistics: async function(this: any, groupBy?: string) {
+    async getStatistics(this: any, groupBy?: string) {
         const attributes: any[] = [
             [sequelize.fn('COUNT', sequelize.col('id')), 'total']
         ];
@@ -270,7 +270,7 @@ export const StatisticsMixin = {
         return await this.findAll(options);
     },
 
-    getGrowthRate: async function(this: any, dateField: string, period: 'day' | 'week' | 'month' = 'month') {
+    async getGrowthRate(this: any, dateField: string, period: 'day' | 'week' | 'month' = 'month') {
         const now = new Date();
         const periods = {
             day: 30,

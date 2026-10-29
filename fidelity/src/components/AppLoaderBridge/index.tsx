@@ -22,7 +22,7 @@ export function AppLoaderBridge() {
         const path = location.pathname;
 
         const disableLoader = NO_LOADER_ROUTES.some(route =>
-            path === route || path.startsWith(route + "/")
+            path === route || path.startsWith(`${route}/`)
         );
 
         // 🔔 In entrambi i casi notifichiamo il loader

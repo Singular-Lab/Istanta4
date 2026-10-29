@@ -11,6 +11,7 @@ import { IFormatoService } from '../interfaces/IFormatoService';
 import { IRaccoglitoreKitService } from '../interfaces/IRaccoglitoreKitService';
 import { IServiceFacade } from '../interfaces/IServiceFacade';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { routeDeprecata } from '../middleware/routeDeprecata';
 import { permissionGuard } from '../middleware/permissionGuard';
 import { Area, Canale } from "../models";
 import { ServerUtils } from '../utils/ServerUtils';
@@ -35,7 +36,7 @@ export class DesignKitController extends BaseController {
     this.router.put('/updateCombinazioneDesign', authMiddleware, permissionGuard('design_kit.modifica'), this.updateCombinazioneDesign.bind(this));
     this.router.get('/get_all_template_combinazioni_design', authMiddleware, permissionGuard('design_kit.visualizza'), this.get_all_template_combinazioni_design.bind(this));
     this.router.get('/get_all_kit_design', authMiddleware, permissionGuard('design_kit.visualizza'), this.getAllKitDesign.bind(this));
-    this.router.get('/getAllKitDesignNoManuale', authMiddleware, permissionGuard('design_kit.visualizza'), this.getAllKitDesignNoManuale.bind(this));
+    this.router.get('/getAllKitDesignNoManuale', authMiddleware, permissionGuard('design_kit.visualizza'), routeDeprecata, this.getAllKitDesignNoManuale.bind(this));
   }
 
   private async get_info_creazione_combinazioni_design(req: Request, res: Response): Promise<void> {
@@ -185,7 +186,7 @@ export class DesignKitController extends BaseController {
                   tipiDiExportInKit: data.tipiDiExportInKit,
                   quantitaCopie: data.quantitaCopie,
                   titolo: data.titolo,
-                  guidIdRaccoglitore: guidIdRaccoglitore,
+                  guidIdRaccoglitore,
                   stato: STATO_COMBINAZIONI.ATTIVO,
                   declinazioni: data.declinazioni ?? [],
                   filtroContesto: data.filtroContesto ?? [],
@@ -202,7 +203,7 @@ export class DesignKitController extends BaseController {
                   tipiDiExportInKit: data.tipiDiExportInKit,
                   quantitaCopie: data.quantitaCopie,
                   titolo: data.titolo !== "" ? `${data.titolo}_${canaleEsiste.codice_canali}${areaEsiste.codice_aree}_${formato?.codice}` : `${canaleEsiste.codice_canali}${areaEsiste.codice_aree}_${formato?.codice}`,
-                  guidIdRaccoglitore: guidIdRaccoglitore,
+                  guidIdRaccoglitore,
                   stato: STATO_COMBINAZIONI.ATTIVO,
                   declinazioni: data.declinazioni ?? [],
                   filtroContesto: data.filtroContesto ?? [],
@@ -226,7 +227,7 @@ export class DesignKitController extends BaseController {
                     tipiDiExportInKit: data.tipiDiExportInKit,
                     quantitaCopie: data.quantitaCopie,
                     titolo: data.titolo !== "" ? `${data.titolo}_${canaleEsiste.codice_canali}${areaEsiste.codice_aree}_${pvEsiste.nome}_${formato?.codice}` : `${canaleEsiste.codice_canali}${areaEsiste.codice_aree}_${pvEsiste.nome}_${formato?.codice}`,
-                    guidIdRaccoglitore: guidIdRaccoglitore,
+                    guidIdRaccoglitore,
                     stato: STATO_COMBINAZIONI.ATTIVO,
                     declinazioni: data.declinazioni ?? [],
                     filtroContesto: data.filtroContesto ?? [],
@@ -243,7 +244,7 @@ export class DesignKitController extends BaseController {
                     tipiDiExportInKit: data.tipiDiExportInKit,
                     quantitaCopie: data.quantitaCopie,
                     titolo: data.titolo !== "" ? `${data.titolo}_${canaleEsiste.codice_canali}${areaEsiste.codice_aree}_${pvEsiste.nome}_${formato?.codice}` : `${canaleEsiste.codice_canali}${areaEsiste.codice_aree}_${pvEsiste.nome}_${formato?.codice}`,
-                    guidIdRaccoglitore: guidIdRaccoglitore,
+                    guidIdRaccoglitore,
                     declinazioni: data.declinazioni ?? [],
                     stato: STATO_COMBINAZIONI.ATTIVO,
                     filtroContesto: data.filtroContesto ?? [],

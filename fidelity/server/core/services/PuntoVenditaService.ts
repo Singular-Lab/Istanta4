@@ -947,7 +947,7 @@ export class PuntoVenditaService implements IPuntoVenditaService {
       return {
         punti_vendita: puntiVendita,
         total: count,
-        page: page,
+        page,
         limit: pageSize,
         total_pages: totalPages
       };

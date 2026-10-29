@@ -4,6 +4,7 @@ import { UnauthorizedError } from '../../../lib/errors';
 import { BaseController } from '../base/BaseController';
 import { IAttivitaService } from '../interfaces/IAttivitaService';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { routeDeprecata } from '../middleware/routeDeprecata';
 
 export class AttivitaController extends BaseController {
 
@@ -21,7 +22,7 @@ export class AttivitaController extends BaseController {
     this.router.get('/get_attivita', authMiddleware, this.get_attivita.bind(this));
     this.router.get('/get_attivita_count', authMiddleware, this.get_attivita_count.bind(this));
     this.router.put('/mark_as_read', authMiddleware, this.mark_as_read.bind(this));
-    this.router.put('/mark_as_unread', authMiddleware, this.mark_as_unread.bind(this));
+    this.router.put('/mark_as_unread', authMiddleware, routeDeprecata, this.mark_as_unread.bind(this));
     this.router.put('/mark_all_as_read', authMiddleware, this.mark_all_as_read.bind(this));
   }
 

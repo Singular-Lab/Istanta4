@@ -849,13 +849,16 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
   const selezioneInvio = selezioneDaInviare(kitDisponibili, selectedKits);
   const selectedKitsCount = contaSelezionati(selezioneInvio);
 
-  const handleDownloadZip = async (idKit: string) => {
+  // Stesso ZIP del dettaglio kit: POST /downloadKitZip con l'id del kit e i suoi file
+  const handleDownloadZip = async (kit: RUNTIME_KIT) => {
     setIsDownloading(true);
     try {
       const url = ServerCall.getUrl();
-      const response = await axios.get(`${url}/getFileZipDownload?id=${idKit}`, {
-        responseType: 'arraybuffer',
+      // Fuori da ServerCall (la risposta e' un file): il token CSRF va aggiunto a mano, senza il server risponde 403
+      const response = await axios.post(`${url}/downloadKitZip`, { lavorazioneId: kit.guidId, files: kit.files ?? [] }, {
+        responseType: 'blob',
         withCredentials: true,
+        headers: { 'x-csrf-token': (await ServerCall.ensureCSRFToken()) ?? '' },
       });
       if (response.status !== 200) {
         showNotification('Download del file ZIP non riuscito.', { variant: 'error' });
@@ -865,13 +868,12 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
       const blobUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = blobUrl;
-      link.download = 'files.zip';
+      link.download = `kit_${kit.titolo || kit.guidId}.zip`;
       document.body.appendChild(link);
       link.click();
-      setTimeout(() => {
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(blobUrl);
-      }, 1000);
+      link.remove();
+      // Il click avvia il download subito; l'URL del blob si libera dopo, senza toccare il DOM
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
     } catch (error) {
       console.error('Errore durante il download del file ZIP:', error);
       showNotification('Download del file ZIP non riuscito.', { variant: 'error' });
@@ -1377,7 +1379,7 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
                         <Lucide icon="ExternalLink" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
                         Mostra tutti i file ({kit.files.length})
                       </Button>
-                      <Button disabled={kit.files?.length === 0 || isDownloading} onClick={() => handleDownloadZip(kit.guidId)} variant="outline-secondary" size="sm">
+                      <Button disabled={kit.files?.length === 0 || isDownloading} onClick={() => handleDownloadZip(kit)} variant="outline-secondary" size="sm">
                         <Lucide icon="Download" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
                         Scarica ZIP
                       </Button>

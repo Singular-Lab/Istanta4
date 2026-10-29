@@ -9,6 +9,7 @@ import { IDesignKitService } from '../interfaces/IDesignKitService';
 import { IKitRuntimeService } from '../interfaces/IKitRuntimeService';
 import { log } from '../logger';
 import { authMiddleware, integrationAuthMiddleware } from '../middleware/authMiddleware';
+import { routeDeprecata } from '../middleware/routeDeprecata';
 import { permissionGuard } from '../middleware/permissionGuard';
 import { Promo } from '../models/promo';
 import { ServerUtils } from '../utils/ServerUtils';
@@ -50,17 +51,17 @@ export class KitRuntimeController extends BaseController {
     this.router.delete('/mettiInStatoDiEliminazione/:id', authMiddleware, permissionGuard('kit_runtime.elimina'), this.mettiInStatoDiEliminazione.bind(this));
     this.router.delete('/eliminaKitRuntime/:id', authMiddleware, permissionGuard('kit_runtime.elimina'), this.eliminaKitRuntime.bind(this));
     this.router.delete('/eliminaFileKitRuntime/:id', authMiddleware, permissionGuard('kit_runtime.elimina_file'), this.eliminaFileKitRuntime.bind(this));
-    this.router.put('/avvioRevisioneKitManuale', authMiddleware, permissionGuard('kit_runtime.revisione'), this.avvioRevisioneKitManuale.bind(this));
+    this.router.put('/avvioRevisioneKitManuale', authMiddleware, permissionGuard('kit_runtime.revisione'), routeDeprecata, this.avvioRevisioneKitManuale.bind(this));
     this.router.put('/avvioRevisioneKitAutomatico', authMiddleware, permissionGuard('kit_runtime.revisione'), this.avvioRevisioneKitAutomatico.bind(this));
-    this.router.put('/riportaInLavorazione', authMiddleware, permissionGuard('kit_runtime.riporta_in_lavorazione'), this.riportaInLavorazione.bind(this));
+    this.router.put('/riportaInLavorazione', authMiddleware, permissionGuard('kit_runtime.riporta_in_lavorazione'), routeDeprecata, this.riportaInLavorazione.bind(this));
     this.router.put('/riportaInLavorazioneConErroriAutomatico', authMiddleware, permissionGuard('kit_runtime.riporta_in_lavorazione'), this.riportaInLavorazioneConErroriAutomatico.bind(this));
     this.router.put('/pubblicaKitRuntime', authMiddleware, permissionGuard('kit_runtime.pubblica'), this.pubblicaKitRuntime.bind(this));
     this.router.get('/getAllKitRuntime', authMiddleware, permissionGuard('kit_runtime.visualizza'), this.getAllKitRuntime.bind(this));
     this.router.put('/cambioStatoCombinazione', authMiddleware, permissionGuard('kit_runtime.cambia_stato'), this.cambioStatoCombinazione.bind(this));
 
     // From PromoController
-    this.router.get('/get_kit_runtime_by_promo/:idPromo', authMiddleware, permissionGuard('kit_runtime.visualizza'), this.getKitRuntimeByPromo.bind(this));
-    this.router.get('/get_all_kit_runtime_by_promo/:idPromo', authMiddleware, permissionGuard('kit_runtime.visualizza'), this.getAllKitRuntimeByPromo.bind(this));
+    this.router.get('/get_kit_runtime_by_promo/:idPromo', authMiddleware, permissionGuard('kit_runtime.visualizza'), routeDeprecata, this.getKitRuntimeByPromo.bind(this));
+    this.router.get('/get_all_kit_runtime_by_promo/:idPromo', authMiddleware, permissionGuard('kit_runtime.visualizza'), routeDeprecata, this.getAllKitRuntimeByPromo.bind(this));
     this.router.get('/getKitRunTimeById', authMiddleware, permissionGuard('kit_runtime.visualizza'), this.getKitRunTimeById.bind(this));
     this.router.get('/getKitRunTimeFilesPaginated', authMiddleware, permissionGuard('kit_runtime.visualizza'), this.getKitRunTimeFilesPaginated.bind(this));
     //NOTE: questa funzione viene chiamata dall'esterno non mettere il controllo.

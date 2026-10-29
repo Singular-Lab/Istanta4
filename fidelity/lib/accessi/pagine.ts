@@ -114,7 +114,7 @@ const segmenti = (percorso: string): string[] =>
   percorso.split('?')[0].split('#')[0].split('/').filter(s => s.length > 0);
 
 /** "/promozioni/in-corso/" e "promozioni/in-corso" diventano "/promozioni/in-corso". */
-export const normalizzaPercorso = (percorso: string): string => '/' + segmenti(percorso || '').join('/');
+export const normalizzaPercorso = (percorso: string): string => `/${segmenti(percorso || '').join('/')}`;
 
 const corrisponde = (schema: string[], richiesto: string[], sottopagine: boolean): boolean => {
   if (richiesto.length < schema.length) return false;

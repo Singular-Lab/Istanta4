@@ -19,6 +19,7 @@ import FileUploader from "./FileUploader";
  * - "error-correction": FileErrorsTable + FileUploader (per IN_LAVORAZIONE_CON_ERRORI)
  */
 const FileSection: FC<FileSectionProps> = ({
+  stato,
   filesData,
   isLoadingFiles,
   tipiDiExportInKit,
@@ -82,6 +83,7 @@ const FileSection: FC<FileSectionProps> = ({
           {/* FileUploader per file non ancora caricati */}
           <FileUploader
             filesData={filesToUpload}
+            stato={stato}
             tipiDiExportInKit={tipiDiExportInKit}
             tipiExport={tipiExport}
             onFileUpload={onFileUpload || (() => { })}

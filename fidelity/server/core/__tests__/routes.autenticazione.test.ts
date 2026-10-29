@@ -38,7 +38,6 @@ const PUBBLICHE_PER_SCELTA = [
   'POST /api/login_user', // accesso
   'POST /api/ricercaReferenzePromo', // ricerca del volantino WebPliant pubblico, in sola lettura
   'POST /api/webhooks/ricevi', // ricevitore di prova: risponde senza scrivere niente
-  'PUT /api/notificaRisultatoPubblicazioneSuCorreggo', // callback di Correggo, verifica il segreto condiviso
 ];
 
 const METODI_CHE_MODIFICANO = ['post', 'put', 'patch', 'delete'];

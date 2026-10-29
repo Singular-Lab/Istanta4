@@ -205,11 +205,11 @@ class ServerUtils {
         if (privateKey == "" || privateKey == undefined) {
             headers["fico-secret"] = config.FICO_SECRET;
         } else {
-            headers["authorization"] = "Bearer " + privateKey;
+            headers["authorization"] = `Bearer ${privateKey}`;
         }
-        const token = await fetchWithCookies(config.OLYMPUS_IP_ADDRESS + "/auth/getPassport", {
+        const token = await fetchWithCookies(`${config.OLYMPUS_IP_ADDRESS}/auth/getPassport`, {
             method: "PUT",
-            headers: headers,
+            headers,
             body: JSON.stringify({
                 username: utente.email_utenti,
                 tipoUtente: utente.tipo_utenti,
@@ -318,7 +318,7 @@ class ServerUtils {
                 for (const nome of Object.keys(headers)) {
                     if (nome.toLowerCase() === 'authorization') delete headers[nome];
                 }
-                headers['Authorization'] = "Bearer " + passaporto.publicKey;
+                headers['Authorization'] = `Bearer ${passaporto.publicKey}`;
                 conPassaporto = true;
             }
         }
@@ -336,8 +336,8 @@ class ServerUtils {
         });
         try {
             const response = await fetchWithCookies(url, {
-                method: method,
-                headers: headers,
+                method,
+                headers,
                 body: method !== 'GET' && method !== 'HEAD' ? (data instanceof FormData ? data : JSON.stringify(data)) : undefined,
             });
 
@@ -412,7 +412,7 @@ class ServerUtils {
 
     /** Upload del tracciato su Istanta (FicoProcess/uploadTracciato), con il passaporto dell'utente. */
     static async sendToFicoApiAxiosUploadTracciato<T>(req: Request, data: any | FormData): Promise<ApiResponse<T>> {
-        return this.caricaConPassaporto<T>(req, config.ISTANTA_IP_ADDRESS + "/FicoProcess/uploadTracciato", data);
+        return this.caricaConPassaporto<T>(req, `${config.ISTANTA_IP_ADDRESS}/FicoProcess/uploadTracciato`, data);
     }
 
     /** Upload (POST) con il passaporto dell'utente; un Authorization in customHeaders prevale. */
@@ -435,7 +435,7 @@ class ServerUtils {
         }
 
         const headers: Record<string, string> = {
-            ...(customHeaders?.['Authorization'] ? {} : { "Authorization": "Bearer " + publicKey }),
+            ...(customHeaders?.['Authorization'] ? {} : { "Authorization": `Bearer ${publicKey}` }),
             ...headerDefiniti(customHeaders)
         };
         // Il Content-Type multipart, con il boundary, lo scrive fetch: impostato a mano romperebbe il corpo

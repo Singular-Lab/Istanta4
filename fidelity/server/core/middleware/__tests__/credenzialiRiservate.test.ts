@@ -119,7 +119,7 @@ describe('icona SVG della GDO', () => {
       (req as any).session = { id_utente: 'u1', id_gdo: 'g1' };
       next();
     });
-    new GdoController({} as any, {} as any, {} as any).registerRoutes(app);
+    new GdoController({} as any, {} as any).registerRoutes(app);
 
     const res = await request(app).get('/api/gdo/icona');
 

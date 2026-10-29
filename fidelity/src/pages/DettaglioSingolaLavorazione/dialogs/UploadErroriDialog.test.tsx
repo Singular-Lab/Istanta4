@@ -9,8 +9,6 @@ const { post, showNotification } = vi.hoisted(() => ({ post: vi.fn(), showNotifi
 vi.mock("../../../../lib/server_call", () => ({ ServerCall: { post } }));
 vi.mock("@/context/NotificationContext", () => ({ useNotification: () => ({ showNotification }) }));
 vi.mock("react-router-dom", () => ({ useRevalidator: () => ({ revalidate: vi.fn() }) }));
-// Lo spinner legge il tema da Redux, che qui non serve
-vi.mock("@/components/Base/LoadingIcon", () => ({ default: () => null }));
 
 import UploadErroriDialog from "./UploadErroriDialog";
 

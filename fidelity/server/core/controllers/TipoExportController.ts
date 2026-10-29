@@ -8,6 +8,7 @@ import config from '../config';
 import { CreateTipiDiExportDTO } from '../dto';
 import { ITipoExportService } from '../interfaces/ITipoExportService';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { routeDeprecata } from '../middleware/routeDeprecata';
 import { permissionGuard } from '../middleware/permissionGuard';
 import { ServerUtils } from '../utils/ServerUtils';
 import { verificaRisposta } from '../utils/rispostaServizi';
@@ -24,7 +25,7 @@ export class TipoExportController extends BaseController {
 
   protected setupRoutes(): void {
     this.router.put('/creaTipoExport', authMiddleware, permissionGuard('impostazioni.gestisci_tipo_export'), this.creaTipoExport.bind(this));
-    this.router.get('/getTipoExportById/:id', authMiddleware, permissionGuard('impostazioni.gestisci_tipo_export'), this.getTipoExportById.bind(this));
+    this.router.get('/getTipoExportById/:id', authMiddleware, permissionGuard('impostazioni.gestisci_tipo_export'), routeDeprecata, this.getTipoExportById.bind(this));
     this.router.get('/get_all_tipi_export', authMiddleware, permissionGuard('impostazioni.gestisci_tipo_export'), this.getAllTipiExport.bind(this));
     this.router.get("/get_all_tipi_export_POP", authMiddleware, permissionGuard('impostazioni.gestisci_tipo_export'), this.getAllTipiExportPOP.bind(this))
     this.router.delete('/deleteTipiExport/:id', authMiddleware, permissionGuard('impostazioni.gestisci_tipo_export'), this.deleteTipiExport.bind(this));

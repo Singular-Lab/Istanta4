@@ -3,6 +3,7 @@ import { BaseController } from '../base/BaseController';
 import type { IWebhookService } from '../interfaces/IWebhookService';
 import { EVENTI_WEBHOOK, HttpStatusCode, STATO_WEBHOOK } from '../../../lib/enums';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { routeDeprecata } from '../middleware/routeDeprecata';
 import { permissionGuard } from '../middleware/permissionGuard';
 import { WebhookAttributes } from '../../../lib/types';
 import { AuditLogService } from '../services/AuditLogService';
@@ -20,12 +21,12 @@ export class WebhookController extends BaseController {
     // CRUD Webhook
     this.router.post('/', authMiddleware, permissionGuard('webhook.gestisci'), this.creaWebhook.bind(this));
     this.router.get('/', authMiddleware, permissionGuard('webhook.visualizza'), this.ottieniTuttiWebhook.bind(this));
-    this.router.get('/:webhookId', authMiddleware, permissionGuard('webhook.visualizza'), this.ottieniWebhook.bind(this));
+    this.router.get('/:webhookId', authMiddleware, permissionGuard('webhook.visualizza'), routeDeprecata, this.ottieniWebhook.bind(this));
     this.router.put('/:webhookId', authMiddleware, permissionGuard('webhook.gestisci'), this.aggiornaWebhook.bind(this));
     this.router.delete('/:webhookId', authMiddleware, permissionGuard('webhook.gestisci'), this.eliminaWebhook.bind(this));
 
     // Eventi
-    this.router.post('/scatena-evento', authMiddleware, permissionGuard('webhook.gestisci'), this.scatenaEvento.bind(this));
+    this.router.post('/scatena-evento', authMiddleware, permissionGuard('webhook.gestisci'), routeDeprecata, this.scatenaEvento.bind(this));
     this.router.get('/eventi/disponibili', this.ottieniEventiDisponibili.bind(this));
 
     // Test e Stats

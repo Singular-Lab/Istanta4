@@ -2,7 +2,6 @@ import { AppError } from './AppError';
 import { ErrorCodes } from './ErrorCodes';
 import { InfrastructureError } from './InfrastructureError';
 import { ForbiddenError } from './application/ForbiddenError';
-import { RateLimitError } from './application/RateLimitError';
 import { NotFoundError } from './domain/NotFoundError';
 import { DatabaseError } from './infrastructure/DatabaseError';
 import { ExternalApiError } from './infrastructure/ExternalApiError';
@@ -185,29 +184,6 @@ export function wrapForbiddenError(
     resource: options?.resource || 'resource',
     action: options?.action || 'action',
     details: options?.details,
-  });
-}
-
-/**
- * Wrappa errori di rate limiting
- */
-export function wrapRateLimitError(
-  error: unknown,
-  options?: {
-    message?: string;
-    limitType?: 'auth' | 'registration' | 'password_reset' | 'api' | 'custom';
-    retryAfter?: number;
-    details?: Record<string, unknown>;
-  }
-): RateLimitError {
-  const defaultMessage = 'Rate limit exceeded';
-
-  return new RateLimitError({
-    message: options?.message || (error instanceof Error ? error.message : defaultMessage),
-    limitType: options?.limitType || 'custom',
-    retryAfter: options?.retryAfter,
-    details: options?.details,
-    cause: error instanceof Error ? error : undefined
   });
 }
 

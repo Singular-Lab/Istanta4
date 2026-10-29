@@ -337,7 +337,7 @@ export class LogService {
                         results.push({
                             file: filename,
                             line: lineNumber + 1,
-                            entry: entry,
+                            entry,
                             timestamp: entry.timestamp
                         });
                     }

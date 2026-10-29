@@ -220,7 +220,7 @@ export class OidcService implements IOidcService {
 
     const claims = mapOidcUserClaims(payload);
 
-    log.info(`[OidcService] id_token validato per: ${claims.email || claims.preferred_username}`);
+    log.info('[OidcService] id_token validato', { provider: provider.codice });
     return claims;
   }
 

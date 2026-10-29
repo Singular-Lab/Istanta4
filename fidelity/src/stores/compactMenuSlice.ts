@@ -1,6 +1,5 @@
 // src/stores/compactMenuSlice.ts
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
-import { RootState } from "./store";
 
 /* -------------------------------------------------------------------------- */
 /*  Helpers                                                                   */
@@ -45,9 +44,5 @@ export const compactMenuSlice = createSlice({
 });
 
 export const { setCompactMenu } = compactMenuSlice.actions;
-
-/** Selector puro, senza effetti collaterali. */
-export const selectCompactMenu = (state: RootState) =>
-  state.compactMenu.value;
 
 export default compactMenuSlice.reducer;

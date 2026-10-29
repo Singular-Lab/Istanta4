@@ -122,19 +122,29 @@ metricsGlobalState.__metricsHealthChecksInterval__ = healthChecksInterval;
 void checkPostgresForMetrics();
 void checkRedisForMetrics();
 
+/** Etichetta `route` delle richieste che nessuna route ha preso in carico (404, statici, proxy). */
+export const ROUTE_NON_TROVATA = 'non_trovata';
+
+/**
+ * Il pattern della route che ha risposto (es. /api/promo/:id), mai il percorso concreto:
+ * con req.path ogni UUID nell'URL apriva una serie nuova in Prometheus (cardinalita' senza limite).
+ * Si legge a risposta finita: solo allora il router ha scelto la route.
+ * Se un errore risale fino al gestore dell'app, il router ha gia' ripristinato baseUrl e
+ * l'etichetta perde il prefisso di montaggio (/api): resta comunque un pattern.
+ */
+export function etichettaRoute(req: Request): string {
+  const percorso: unknown = req.route?.path;
+  if (percorso === undefined || percorso === null) return ROUTE_NON_TROVATA;
+  return `${req.baseUrl ?? ''}${String(percorso)}`;
+}
+
 export function metricsMiddleware(
   req: Request,
   res: Response,
   next: NextFunction,
 ): void {
-  
   const start = process.hrtime.bigint();
-
-  /*
-   * Evita lookup dinamici costosi dopo finish
-   */
   const method = req.method;
-  const route = req.route?.path || req.path;
 
   res.once('finish', () => {
     const durationSeconds =
@@ -144,7 +154,7 @@ export function metricsMiddleware(
 
     const labels = {
       method,
-      route,
+      route: etichettaRoute(req),
       status_code: statusCode,
     };
 

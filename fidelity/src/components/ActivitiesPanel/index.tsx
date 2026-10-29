@@ -2,7 +2,6 @@ import { Slideover } from "@/components/Base/Headless";
 import { Menu } from "@/components/Base/Headless";
 import Lucide from "@/components/Base/Lucide";
 import FileIcon from "@/components/Base/FileIcon";
-import _ from "lodash";
 import clsx from "clsx";
 
 interface MainProps {

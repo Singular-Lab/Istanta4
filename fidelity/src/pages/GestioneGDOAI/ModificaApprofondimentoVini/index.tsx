@@ -80,39 +80,6 @@ const ModificaApprofondimentoVini: React.FC = () => {
     }
   });
 
-  // Mutation per aggiornare un vino esistente
-  const updateMutation = useMutation({
-    mutationFn: (payload: { anno: number; nome: string; cantina: string }) =>
-      ServerCall.put(`/update_vino/${codice}`, payload),
-    onSuccess: () => {
-      showNotification(<>
-        <div className="flex items-center gap-2">
-          <Lucide icon="CircleCheck" aria-hidden="true" className="h-4 w-4 text-success" />
-          <span>Vino aggiornato con successo</span>
-        </div>
-      </>, {
-        variant: "success",
-        duration: 3000,
-        position: "top-right"
-      });
-      queryClient.invalidateQueries({ queryKey: ['approfondimenti-vini'] });
-      queryClient.invalidateQueries({ queryKey: ['approfondimento-vini', codice] });
-      navigate('/gestione-approfondimento-vini');
-    },
-    onError: () => {
-      showNotification(<>
-        <div className="flex items-center gap-2">
-          <Lucide icon="CircleAlert" className="w-4 h-4 text-danger" />
-          <span>Errore durante l'aggiornamento</span>
-        </div>
-      </>, {
-        variant: "error",
-        duration: 3000,
-        position: "top-right"
-      });
-    }
-  });
-
 
 
   useEffect(() => {
@@ -175,26 +142,20 @@ const ModificaApprofondimentoVini: React.FC = () => {
       return;
     }
 
-    const payload = {
+    // Un vino gia' generato non si modifica (non esiste la rotta di aggiornamento): resta creazione ed eliminazione
+    createMutation.mutate({
       anno: formValues.anno,
       nome: formValues.nome.trim(),
       cantina: formValues.cantina.trim(),
-      ...(codice && { codice })
-    };
-
-    if (approfondimento != null && approfondimento.id) {
-      updateMutation.mutate(payload);
-    } else {
-      createMutation.mutate({ ...payload, codice: codice || '' });
-    }
+      codice: codice || ''
+    });
   };
 
   const handleCancel = () => {
     navigate('/gestione-approfondimento-vini');
   };
 
-  const isSaving = createMutation.isPending || updateMutation.isPending;
-  const isNewWine = !approfondimento?.id;
+  const isSaving = createMutation.isPending;
   const indietro = { to: '/gestione-approfondimento-vini', etichetta: 'Torna alla lista' };
   const classeSolaLettura = 'rounded-control border border-slate-200 bg-slate-50 px-3 py-2 text-slate-700';
 
@@ -289,48 +250,27 @@ const ModificaApprofondimentoVini: React.FC = () => {
         )}
       </Sezione>
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-        {/* Dati Editabili */}
-        <Sezione titolo="Dati Modificabili" icona="PenTool">
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
-            <FormField etichetta="Anno" obbligatorio aiuto="Anno di produzione del vino">
-              <FormInput
-                name="anno"
-                type="number"
-                value={formValues.anno.toString()}
-                onChange={handleChange}
-                min="1800"
-                max={new Date().getFullYear() + 10}
-                className={!formValues.anno ? 'border-warning' : ''}
-              />
-            </FormField>
+      {approfondimento?.id ? (
+        // Vino gia' generato: i dati restano in sola lettura (la modifica non e' disponibile)
+        <div className="flex flex-col gap-6">
+          <Sezione titolo="Dati del vino" descrizione="Sola lettura" icona="Lock">
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+              <div>
+                <FormLabel>Anno</FormLabel>
+                <div className={classeSolaLettura}>{approfondimento.anno ?? 'Non specificato'}</div>
+              </div>
+              <div>
+                <FormLabel>Nome Vino</FormLabel>
+                <div className={classeSolaLettura}>{approfondimento.nome || 'Non specificato'}</div>
+              </div>
+              <div>
+                <FormLabel>Cantina</FormLabel>
+                <div className={classeSolaLettura}>{approfondimento.cantina || 'Non specificata'}</div>
+              </div>
+            </div>
+          </Sezione>
 
-            <FormField etichetta="Nome Vino" obbligatorio aiuto="Nome completo della denominazione">
-              <FormInput
-                name="nome"
-                type="text"
-                value={formValues.nome}
-                onChange={handleChange}
-                placeholder="Es. Barolo, Chianti Classico..."
-                className={!formValues.nome ? 'border-warning' : ''}
-              />
-            </FormField>
-
-            <FormField etichetta="Cantina" obbligatorio aiuto="Nome del produttore">
-              <FormInput
-                name="cantina"
-                type="text"
-                value={formValues.cantina}
-                onChange={handleChange}
-                placeholder="Es. Antinori, Gaja..."
-                className={!formValues.cantina ? 'border-warning' : ''}
-              />
-            </FormField>
-          </div>
-        </Sezione>
-
-        {/* Dati Read-Only (solo se esistono) */}
-        {approfondimento && (
+          {/* Dati generati dall'AI */}
           <Sezione titolo="Informazioni Generate dall'AI" descrizione="Sola lettura" icona="Lock">
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
               {/* Colonna Sinistra */}
@@ -399,28 +339,76 @@ const ModificaApprofondimentoVini: React.FC = () => {
               </div>
             )}
           </Sezione>
-        )}
 
-        {/* Azioni: il ritorno all'elenco è già nell'intestazione */}
-        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <Button
-            type="button"
-            variant="outline-secondary"
-            onClick={handleCancel}
-          >
-            {approfondimento?.id ? 'Indietro' : 'Annulla'}
-          </Button>
-
-          <Button
-            type="submit"
-            variant="primary"
-            loading={isSaving}
-          >
-            {!isSaving && <Lucide icon="Sparkles" aria-hidden="true" className="mr-2 h-4 w-4" />}
-            {isNewWine ? 'Genera' : 'Rigenera'}
-          </Button>
+          {/* Il ritorno all'elenco è già nell'intestazione */}
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button type="button" variant="outline-secondary" onClick={handleCancel}>
+              Indietro
+            </Button>
+          </div>
         </div>
-      </form>
+      ) : (
+        <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+          {/* Dati Editabili */}
+          <Sezione titolo="Dati Modificabili" icona="PenTool">
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+              <FormField etichetta="Anno" obbligatorio aiuto="Anno di produzione del vino">
+                <FormInput
+                  name="anno"
+                  type="number"
+                  value={formValues.anno.toString()}
+                  onChange={handleChange}
+                  min="1800"
+                  max={new Date().getFullYear() + 10}
+                  className={!formValues.anno ? 'border-warning' : ''}
+                />
+              </FormField>
+
+              <FormField etichetta="Nome Vino" obbligatorio aiuto="Nome completo della denominazione">
+                <FormInput
+                  name="nome"
+                  type="text"
+                  value={formValues.nome}
+                  onChange={handleChange}
+                  placeholder="Es. Barolo, Chianti Classico..."
+                  className={!formValues.nome ? 'border-warning' : ''}
+                />
+              </FormField>
+
+              <FormField etichetta="Cantina" obbligatorio aiuto="Nome del produttore">
+                <FormInput
+                  name="cantina"
+                  type="text"
+                  value={formValues.cantina}
+                  onChange={handleChange}
+                  placeholder="Es. Antinori, Gaja..."
+                  className={!formValues.cantina ? 'border-warning' : ''}
+                />
+              </FormField>
+            </div>
+          </Sezione>
+
+          {/* Azioni: il ritorno all'elenco è già nell'intestazione */}
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline-secondary"
+              onClick={handleCancel}
+            >
+              Annulla
+            </Button>
+
+            <Button
+              type="submit"
+              variant="primary"
+              loading={isSaving}
+            >
+              {!isSaving && <Lucide icon="Sparkles" aria-hidden="true" className="mr-2 h-4 w-4" />}
+              Genera
+            </Button>
+          </div>
+        </form>
+      )}
     </Pagina>
   );
 };

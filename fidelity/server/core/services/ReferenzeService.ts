@@ -436,10 +436,10 @@ export class ReferenzeService implements IReferenzeService {
           const commonPrefix = minLength >= 4 ? searchTerm.substring(0, 4) === fieldValue.substring(0, 4) : false;
 
           const isPluralOrSingular =
-            (searchTerm.endsWith('o') && fieldValue === searchTerm.slice(0, -1) + 'i') ||
-            (searchTerm.endsWith('i') && fieldValue === searchTerm.slice(0, -1) + 'o') ||
-            (searchTerm.endsWith('a') && fieldValue === searchTerm.slice(0, -1) + 'e') ||
-            (searchTerm.endsWith('e') && fieldValue === searchTerm.slice(0, -1) + 'a');
+            (searchTerm.endsWith('o') && fieldValue === `${searchTerm.slice(0, -1)}i`) ||
+            (searchTerm.endsWith('i') && fieldValue === `${searchTerm.slice(0, -1)}o`) ||
+            (searchTerm.endsWith('a') && fieldValue === `${searchTerm.slice(0, -1)}e`) ||
+            (searchTerm.endsWith('e') && fieldValue === `${searchTerm.slice(0, -1)}a`);
 
           return {
             isMatch: commonPrefix || isPluralOrSingular,
@@ -697,7 +697,7 @@ export class ReferenzeService implements IReferenzeService {
       const data = verificaRisposta<LoghiBolli>(
         await ServerUtils.sendToFICOApi<LoghiBolli>(
           req,
-          config.ISTANTA_IP_ADDRESS + "/FicoProcess/getLoghiBolli",
+          `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getLoghiBolli`,
           "GET",
           {},
           undefined,

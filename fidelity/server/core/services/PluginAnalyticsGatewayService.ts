@@ -4,7 +4,6 @@ import { log } from '../logger';
 import { PluginAnalyticsEvent } from '../models/plugin_analytics_event';
 import { Sequelize } from 'sequelize';
 import type {
-  PluginAnalyticsEvent as PluginAnalyticsEventPayload,
   PluginAnalyticsEventRow,
   PluginWsMessage,
   PluginWsServerMessage,
@@ -248,39 +247,6 @@ export class PluginAnalyticsGatewayService {
     } catch (error) {
       log.error('[PluginAnalytics] Errore in session:resume', error);
       this.sendMessage(ws, { type: 'session:resumed', lastSequence: 0, expired: true });
-    }
-  }
-
-  /**
-   * Gestisce payload beacon (HTTP POST fallback)
-   */
-  handleBeaconPayload(events: PluginAnalyticsEventPayload[], ip: string, userAgent: string): void {
-    for (const event of events) {
-      if (!event.type || !event.eventId || !event.timestamp) continue;
-
-      this.eventBuffer.push({
-        event_id: event.eventId,
-        event_type: event.type,
-        timestamp_event: new Date(event.timestamp),
-        slug: event.slug || '',
-        fp_version: event.fpVersion || '',
-        page_origin: (event.pageOrigin || '').substring(0, 255),
-        page_path: (event.pagePath || '').substring(0, 500),
-        session_id: event.sessionId || '',
-        sequence: event.sequence ?? 0,
-        viewport: event.viewport || null,
-        ip_address: ip,
-        user_agent: userAgent,
-        event_data: event.data || null,
-      });
-    }
-
-    this.metrics.totalEventsReceived += events.length;
-    this.eventsInLastWindow += events.length;
-    this.metrics.queueSize = this.eventBuffer.length;
-
-    if (this.eventBuffer.length >= this.BUFFER_SIZE) {
-      void this.flushBuffer();
     }
   }
 

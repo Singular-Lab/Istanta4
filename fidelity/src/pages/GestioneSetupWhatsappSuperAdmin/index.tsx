@@ -4,7 +4,7 @@ import { STATO_GDO_WHATSAPP_NUMBER } from '../../../lib/enums';
 import withSessionCheck from "@/components/SessionChecker";
 import { ServerCall } from '../../../lib/server_call';
 import Button from '../../components/Base/Button';
-import { FormField, FormInput, FormLabel, FormSelect, InputGroup } from '../../components/Base/Form';
+import { FormField, FormInput, FormSelect } from '../../components/Base/Form';
 import PageError from '../../components/Base/PageError';
 import Lucide from '../../components/Base/Lucide';
 import Pagina from '../../components/Base/Pagina';
@@ -37,11 +37,8 @@ const GestioneSetupWhatsappSuperAdmin: React.FC = () => {
     const [stato, setStato] = useState(dettagliGDO?.stato || STATO_GDO_WHATSAPP_NUMBER.PENDING);
     const [accessToken, setAccessToken] = useState('');
     const [verifyToken, setVerifyToken] = useState('');
-    const [hasCopiedWebhookUrl, setHasCopiedWebhookUrl] = useState(false);
     const [syncing, setSyncing] = useState(false);
     const [salvataggio, setSalvataggio] = useState(false);
-
-    const webhookUrl = ServerCall.getUrl() + `/webhook/whatsapp/${dettagliGDO?.id || ''}`;
 
     const handleSyncTemplates = async () => {
         if (!dettagliGDO?.id_gdo) {
@@ -90,7 +87,7 @@ const GestioneSetupWhatsappSuperAdmin: React.FC = () => {
     };
 
     const proprietaPagina = {
-        titolo: "Gestione WhatsApp" + (dettagliGDO?.nome ? ` per ${dettagliGDO.nome}` : ""),
+        titolo: `Gestione WhatsApp${dettagliGDO?.nome ? ` per ${dettagliGDO.nome}` : ""}`,
         descrizione: "Gestisci il setup per il cliente",
         indietro: { to: "/whatsapp/gestione-whatsapp-superadmin", etichetta: "Torna alle GDO" },
         badges: dettagliGDO
@@ -201,30 +198,13 @@ const GestioneSetupWhatsappSuperAdmin: React.FC = () => {
 
                 {/* Colonna laterale */}
                 <div className="col-span-12 flex flex-col gap-6 xl:col-span-4">
-                    <Sezione
-                        titolo="Webhook"
-                        descrizione="Indirizzo da registrare su Meta insieme al Verify Token del canale."
-                    >
-                        <FormLabel htmlFor="webhook_url">Webhook URL</FormLabel>
-                        <InputGroup>
-                            <FormInput
-                                id="webhook_url"
-                                type="text"
-                                readOnly
-                                spellCheck={false}
-                                value={webhookUrl}
-                            />
-                            <InputGroup.Button
-                                onClick={() => {
-                                    navigator.clipboard.writeText(webhookUrl);
-                                    setHasCopiedWebhookUrl(true);
-                                    setTimeout(() => setHasCopiedWebhookUrl(false), 4000);
-                                }}
-                            >
-                                {hasCopiedWebhookUrl ? 'Copiato!' : 'Copia'}
-                            </InputGroup.Button>
-                        </InputGroup>
-                    </Sezione>
+                    {/*
+                      Sezione "Webhook" nascosta: indicava l'URL /api/webhook/whatsapp/:id da registrare su Meta
+                      insieme al Verify Token, ma sul server il ricevitore dei webhook WhatsApp non esiste e Meta
+                      non riuscirebbe a verificarlo. Va ripristinata con il task futuro che implementera' il
+                      ricevitore (verifica GET con il Verify Token e ricezione POST degli eventi).
+                      Il Verify Token resta nelle credenziali: il server lo richiede per salvare il canale.
+                    */}
                     <Sezione
                         titolo="Sincronizza template"
                         descrizione="Recupera i template approvati dal WABA del cliente."

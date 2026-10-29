@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { TIPO_UTENTI } from '../../../lib/enums';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { routeDeprecata } from '../middleware/routeDeprecata';
 import { BaseController } from '../base/BaseController';
 import { LogService, LogSearchParams } from '../services/LogService';
 import fs from 'fs';
@@ -18,14 +19,14 @@ export class LogController extends BaseController {
     protected setupRoutes(): void {
         const guard = [authMiddleware, permissionGuard(PERMESSI.SISTEMA.LOG)];
 
-        this.router.get(`/list`, ...guard, this.getLogFiles.bind(this));
-        this.router.get(`/audit`, ...guard, this.getAuditInfo.bind(this));
-        this.router.get(`/history`, ...guard, this.getLogHistory.bind(this));
-        this.router.get(`/view/:filename`, ...guard, this.getLogContent.bind(this));
-        this.router.get(`/stats`, ...guard, this.getApiStats.bind(this));
-        this.router.get(`/search`, ...guard, this.searchLogs.bind(this));
-        this.router.delete(`/clear/:filename`, ...guard, this.clearLog.bind(this));
-        this.router.get(`/latest`, ...guard, this.getLatestLog.bind(this));
+        this.router.get(`/list`, ...guard, routeDeprecata, this.getLogFiles.bind(this));
+        this.router.get(`/audit`, ...guard, routeDeprecata, this.getAuditInfo.bind(this));
+        this.router.get(`/history`, ...guard, routeDeprecata, this.getLogHistory.bind(this));
+        this.router.get(`/view/:filename`, ...guard, routeDeprecata, this.getLogContent.bind(this));
+        this.router.get(`/stats`, ...guard, routeDeprecata, this.getApiStats.bind(this));
+        this.router.get(`/search`, ...guard, routeDeprecata, this.searchLogs.bind(this));
+        this.router.delete(`/clear/:filename`, ...guard, routeDeprecata, this.clearLog.bind(this));
+        this.router.get(`/latest`, ...guard, routeDeprecata, this.getLatestLog.bind(this));
 
     }
 

@@ -7,6 +7,7 @@ import { BaseController } from '../base/BaseController';
 import { IGdoService } from '../interfaces/IGdoService';
 import { IWebPliantService } from '../interfaces/IWebPliantService';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { routeDeprecata } from '../middleware/routeDeprecata';
 import { inviaFormDataAOlimpo } from '../http/olimpo';
 import { jsonGrande } from '../middleware/jsonGrande';
 import { log } from '../logger';
@@ -31,7 +32,7 @@ export class WebPliantController extends BaseController {
   protected setupRoutes(): void {
     this.router.put('/aggiungiWorkspaceWebPliant', authMiddleware, permissionGuard('webpliant.crea_workspace'), this.aggiungiWorkspaceWebPliant.bind(this));
     this.router.delete('/eliminaWorkspaceWebPliant', authMiddleware, permissionGuard('webpliant.elimina_workspace'), this.eliminaWorkspaceWebPliant.bind(this));
-    this.router.get('/tuttiIWorkspaceDaGDO', authMiddleware, permissionGuard('webpliant.visualizza'), this.tuttiIWorkspaceDaGDO.bind(this));
+    this.router.get('/tuttiIWorkspaceDaGDO', authMiddleware, permissionGuard('webpliant.visualizza'), routeDeprecata, this.tuttiIWorkspaceDaGDO.bind(this));
     this.router.get('/allWorkspace', authMiddleware, permissionGuard('webpliant.visualizza'), this.getAllWorkspace.bind(this));
     this.router.get('/prendiWorkspaceDaID/:idWorkspace', this.prendiWorkspaceDaID.bind(this));
     this.router.put('/getDataValiditaPerCarosello', authMiddleware, permissionGuard('webpliant.visualizza'), this.getDataValiditaPerCarosello.bind(this));
@@ -181,7 +182,7 @@ export class WebPliantController extends BaseController {
               const buffer = Buffer.from(content.srcDesktop.split(",")[1], "base64");
               const blob = new Blob([buffer], { type: "video/mp4" });
               formDataDesktop.append("data", JSON.stringify({ id: s.id, device: "desktop", type: "video" }));
-              formDataDesktop.append("file", blob, "video_" + s.id + ".mp4");
+              formDataDesktop.append("file", blob, `video_${s.id}.mp4`);
               const resultAxios = await inviaFormDataAOlimpo<{ esito: boolean, content: { id: string, file: string, device: string, type: string } }>(
                 "/materiali/uploadVideoBase",
                 formDataDesktop,
@@ -194,7 +195,7 @@ export class WebPliantController extends BaseController {
               const buffer = Buffer.from(content.thumbnailSrcDesktop.split(",")[1], "base64");
               const blob = new Blob([buffer], { type: "image/png" });
               formData.append("data", JSON.stringify({ id: s.id, device: "desktop", type: "thumbnail" }));
-              formData.append("file", blob, "thumbnail_" + s.id + ".png");
+              formData.append("file", blob, `thumbnail_${s.id}.png`);
               const resultAxios = await inviaFormDataAOlimpo<{ esito: boolean, record: { guidId: string } }>(
                 "/foto/uploadFotoWebPliant",
                 formData,
@@ -207,7 +208,7 @@ export class WebPliantController extends BaseController {
               formDataMobile.append("data", JSON.stringify({ id: s.id, device: "mobile", type: "video" }));
               const buffer = Buffer.from(content.srcMobile.split(",")[1], "base64");
               const blob = new Blob([buffer], { type: "video/mp4" });
-              formDataMobile.append("file", blob, "video_" + s.id + ".mp4");
+              formDataMobile.append("file", blob, `video_${s.id}.mp4`);
               const resultAxios = await inviaFormDataAOlimpo<{ esito: boolean, content: { id: string, file: string, device: string, type: string } }>(
                 "/materiali/uploadVideoBase",
                 formDataMobile,
@@ -221,7 +222,7 @@ export class WebPliantController extends BaseController {
               const buffer = Buffer.from(content.thumbnailSrcMobile.split(",")[1], "base64");
               const blob = new Blob([buffer], { type: "image/png" });
               formData.append("data", JSON.stringify({ id: s.id, device: "desktop", type: "thumbnail" }));
-              formData.append("file", blob, "thumbnail_" + s.id + ".png");
+              formData.append("file", blob, `thumbnail_${s.id}.png`);
               const resultAxios = await inviaFormDataAOlimpo<{ esito: boolean, record: { guidId: string } }>(
                 "/foto/uploadFotoWebPliant",
                 formData,
@@ -235,7 +236,7 @@ export class WebPliantController extends BaseController {
                 const mimetype = content.src.split(",")[0].split(":")[1].split(";")[0];
                 const buffer = Buffer.from(content.src.split(",")[1], "base64");
                 const blob = new Blob([buffer], { type: mimetype });
-                formData.append("file", blob, "image_" + s.id + mimetype);
+                formData.append("file", blob, `image_${s.id}${mimetype}`);
                 const resultAxios = await inviaFormDataAOlimpo<{ esito: boolean, record: { guidId: string } }>(
                   "/foto/uploadFotoWebPliant",
                   formData,
@@ -248,7 +249,7 @@ export class WebPliantController extends BaseController {
                 const mimetype = content.srcMobile.split(",")[0].split(":")[1].split(";")[0];
                 const buffer = Buffer.from(content.srcMobile.split(",")[1], "base64");
                 const blob = new Blob([buffer], { type: mimetype });
-                formData.append("file", blob, "image_" + s.id + mimetype);
+                formData.append("file", blob, `image_${s.id}${mimetype}`);
                 const resultAxios = await inviaFormDataAOlimpo<{ esito: boolean, record: { guidId: string } }>(
                   "/foto/uploadFotoWebPliant",
                   formData,
@@ -263,7 +264,7 @@ export class WebPliantController extends BaseController {
                 const mimetype = content.backgroundImage.split(",")[0].split(":")[1].split(";")[0];
                 const buffer = Buffer.from(content.backgroundImage.split(",")[1], "base64");
                 const blob = new Blob([buffer], { type: mimetype });
-                formData.append("file", blob, "image_" + s.id + mimetype);
+                formData.append("file", blob, `image_${s.id}${mimetype}`);
                 const resultAxios = await inviaFormDataAOlimpo<{ esito: boolean, record: { guidId: string } }>(
                   "/foto/uploadFotoWebPliant",
                   formData,
@@ -278,7 +279,7 @@ export class WebPliantController extends BaseController {
                 const mimetype = content.logo.srcLogoCarosello.split(",")[0].split(":")[1].split(";")[0];
                 const buffer = Buffer.from(content.logo.srcLogoCarosello.split(",")[1], "base64");
                 const blob = new Blob([buffer], { type: mimetype });
-                formData.append("file", blob, "image_" + s.id + mimetype);
+                formData.append("file", blob, `image_${s.id}${mimetype}`);
                 const resultAxios = await inviaFormDataAOlimpo<{ esito: boolean, record: { guidId: string } }>(
                   "/foto/uploadFotoWebPliant",
                   formData,
@@ -293,7 +294,7 @@ export class WebPliantController extends BaseController {
                 const mimetype = content.banner.split(",")[0].split(":")[1].split(";")[0];
                 const buffer = Buffer.from(content.banner.split(",")[1], "base64");
                 const blob = new Blob([buffer], { type: mimetype });
-                formData.append("file", blob, "image_" + s.id + mimetype);
+                formData.append("file", blob, `image_${s.id}${mimetype}`);
                 const resultAxios = await inviaFormDataAOlimpo<{ esito: boolean, record: { guidId: string } }>(
                   "/foto/uploadFotoWebPliant",
                   formData,

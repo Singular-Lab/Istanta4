@@ -4,8 +4,8 @@ import { BaseController } from '../base/BaseController';
 import { uploadSvgIcon } from '../config/multerConfig';
 import { IGdoService } from '../interfaces/IGdoService';
 import { IServiceFacade } from '../interfaces/IServiceFacade';
-import { IWebPliantService } from '../interfaces/IWebPliantService';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { routeDeprecata } from '../middleware/routeDeprecata';
 import { permissionGuard } from '../middleware/permissionGuard';
 import { GDO } from '../models';
 import { motivoSvgNonValido } from '../utils/validaSvg';
@@ -13,7 +13,6 @@ import { motivoSvgNonValido } from '../utils/validaSvg';
 export class GdoController extends BaseController {
   constructor(
     private gdoService: IGdoService,
-    private webPliantService: IWebPliantService,
     private serviceFacade: IServiceFacade
   ) {
     super('/api');
@@ -25,15 +24,13 @@ export class GdoController extends BaseController {
 
   public initializeRoutes(): void {
     // GDO Management
-    this.router.get('/getGDOById/:id', authMiddleware, this.getGDOById.bind(this));
-    this.router.get('/getGDOByUtenteId', authMiddleware, this.getGDOByUtenteId.bind(this));
+    this.router.get('/getGDOById/:id', authMiddleware, routeDeprecata, this.getGDOById.bind(this));
+    this.router.get('/getGDOByUtenteId', authMiddleware, routeDeprecata, this.getGDOByUtenteId.bind(this));
     this.router.get('/get_all_ruoli_gdo', authMiddleware, this.getAllRuoliGDO.bind(this));
     this.router.get('/get_all_gdo', authMiddleware, this.getAllGDO.bind(this));
     this.router.get('/get_all_aree_canali_combinazioni', authMiddleware, permissionGuard('gdo.gestisci_aree_canali'), this.getAllAreeCanaliECombinazioni.bind(this));
     //scoperta da permissionGuard perchè chiamata solo interna
     this.router.get("/get_all_combinazioni_canale_area", authMiddleware, this.getAllCombinazioniCanaleArea.bind(this));
-    // GDO Workspace
-    this.router.get('/tuttiIWorkspaceDaGDO', authMiddleware, this.getTuttiIWorkspaceDaGDO.bind(this));
     this.router.get("/gdo/icona", this.getIcona.bind(this))
     this.router.post(
       '/gdo/icona',
@@ -170,24 +167,6 @@ export class GdoController extends BaseController {
         return;
       }
       this.sendResponse(res, HttpStatusCode.OK, gdo);
-    } catch (error: any) {
-      this.handleError(res, error);
-    }
-  }
-
-  private async getTuttiIWorkspaceDaGDO(req: Request, res: Response): Promise<void> {
-    try {
-      const gdo = await this.gdoService.getGDOByUtenteId(req.session.id_utente as string);
-      if (!gdo) {
-        this.sendResponse(res, HttpStatusCode.BAD_REQUEST, { error: "GDO non trovata" });
-        return;
-      }
-      if (!gdo.id) {
-        this.sendResponse(res, HttpStatusCode.BAD_REQUEST, { error: "Non è stato possibile identificare la GDO" });
-        return;
-      }
-      const result = await this.webPliantService.getAllWorkspaceWebPliantDaIdGdo(gdo.id);
-      this.sendResponse(res, HttpStatusCode.OK, result);
     } catch (error: any) {
       this.handleError(res, error);
     }

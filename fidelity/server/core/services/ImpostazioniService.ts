@@ -166,8 +166,8 @@ export class ImpostazioniService implements IImpostazioniService {
         const hasRefs = combinazioni.some((c: any) => refsSet.has(c.id));
         const startDate = dayjs(promo.validita_dal).format("DD/MM/YYYY");
         const endDate = dayjs(promo.validita_al).format("DD/MM/YYYY");
-        log.info("startDate: " + startDate);
-        log.info("endDate: " + endDate);
+        log.info(`startDate: ${startDate}`);
+        log.info(`endDate: ${endDate}`);
         if (!hasRefs) {
           return null;
         }

@@ -133,19 +133,4 @@ export const useCookieConsent = (): CookieConsentHook => {
   };
 };
 
-/**
- * Hook per verificare se un tipo specifico di cookie è consentito
- */
-export const useCookiePermission = (cookieType: keyof CookiePreferences): boolean => {
-  const { preferences, hasConsent } = useCookieConsent();
-  
-  // Se non c'è consenso, solo i cookie necessari sono permessi
-  if (!hasConsent) {
-    return cookieType === 'necessary';
-  }
-  
-  // Se c'è consenso, controlla le preferenze
-  return preferences?.[cookieType] ?? false;
-};
-
 export default useCookieConsent; 

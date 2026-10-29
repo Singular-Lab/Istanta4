@@ -94,7 +94,7 @@ const HeatmapLayer = ({ points, options }: HeatmapProps) => {
             const radius = 8 + (intensity * 5);
 
             const circle = L.circleMarker([lat, lng], {
-                radius: radius,
+                radius,
                 fillColor: '#3b82f6', // blu
                 color: '#1d4ed8',     // bordo blu scuro
                 weight: 1,

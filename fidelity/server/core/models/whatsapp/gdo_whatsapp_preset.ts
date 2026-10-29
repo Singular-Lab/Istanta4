@@ -18,6 +18,13 @@ class GDOWhatsappPreset extends Model<GDOWhatsappPresetAttributesType, GDOWhatsa
     declare createdat?: Date | undefined;
     declare updatedat?: Date | undefined;
 
+    // La risposta di get_all_presets_template_whatsapp aveva anche createdAt/updatedAt, le colonne
+    // doppie che la migrazione 0013 ha tolto: restano come copia di createdat/updatedat, cosi' la
+    // forma della risposta non cambia. Il client legge createdat/updatedat (lib/types).
+    toJSON<T extends GDOWhatsappPresetAttributesType>(): T {
+        const valori = super.toJSON<T>();
+        return { ...valori, createdAt: valori.createdat, updatedAt: valori.updatedat };
+    }
 }
 
 GDOWhatsappPreset.init(
@@ -63,6 +70,12 @@ GDOWhatsappPreset.init(
         sequelize,
         modelName: 'GDOWhatsappPreset',
         tableName: 'gdo_whatsapp_presets',
+        // Un solo paio di date, createdat/updatedat: Sequelize le valorizza alla creazione e
+        // aggiorna updatedat a ogni modifica. Senza questi nomi aggiungeva anche createdAt/updatedAt
+        // (tolte dalla migrazione 0013) e updatedat restava la data di creazione.
+        timestamps: true,
+        createdAt: 'createdat',
+        updatedAt: 'updatedat',
     }
 );
 

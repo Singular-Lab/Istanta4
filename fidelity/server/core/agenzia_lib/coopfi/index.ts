@@ -1354,7 +1354,7 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
 
                 return {
                     id: utente.id_utenti,
-                    email: email,
+                    email,
                     tipo_utente: TIPO_UTENTI.CATEGORY,
                     private_key: privateKey,
                     codice_posizione: utenteCoopfiCensito.codicePosizione
@@ -1387,7 +1387,7 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
 
                 return {
                     id: utente.id_utenti,
-                    email: email,
+                    email,
                     tipo_utente: tipoRuoloParsed.tipo,
                     private_key: privateKey,
                     codice_posizione: utenteCoopfiCensito.codicePosizione
@@ -1418,7 +1418,7 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
 
             return {
                 id: utente.id_utenti,
-                email: email,
+                email,
                 tipo_utente: TIPO_UTENTI.GDO,
                 private_key: privateKey,
                 codice_posizione: utenteCoopfiCensito.codicePosizione
@@ -1478,7 +1478,7 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
                 (gad) => gad === "GA1040_Marketing" || gad === "GA1040_Admin"
             );
             // Il nuovo utente non ha ancora una private_key: usiamo fico-secret
-            const response = await fetch(config.OLYMPUS_IP_ADDRESS + "/auth/getPassport", {
+            const response = await fetch(`${config.OLYMPUS_IP_ADDRESS}/auth/getPassport`, {
                 method: "PUT",
                 headers: {
                     "Content-Type": "application/json",

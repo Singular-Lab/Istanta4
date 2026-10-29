@@ -157,7 +157,7 @@ export class AreaController extends BaseController {
         }
       }
 
-      await scriviSuIstanta(req, '/ACPV/eliminaArea/' + guidID, 'DELETE', undefined);
+      await scriviSuIstanta(req, `/ACPV/eliminaArea/${guidID}`, 'DELETE', undefined);
 
       const result = await this.areaService.deleteArea(guidID);
       res.status(HttpStatusCode.OK).json(result);

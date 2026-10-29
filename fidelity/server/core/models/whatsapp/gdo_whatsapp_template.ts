@@ -61,7 +61,7 @@ const GDOWhatsappTemplate = GDOWhatsappTemplateClass.init(
         },
     },
     {
-        sequelize: sequelize,
+        sequelize,
         tableName: 'gdo_whatsapp_template',
         timestamps: false,
         underscored: true,

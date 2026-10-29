@@ -120,7 +120,7 @@ const GDOWhatsappNumbers = GDOWhatsappNumbersClass.init(
         },
     },
     {
-        sequelize: sequelize,
+        sequelize,
         tableName: 'gdo_whatsapp_numbers',
         timestamps: false,
         freezeTableName: true,

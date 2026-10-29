@@ -12,6 +12,7 @@ import { IImpostazioniService } from '../interfaces/IImpostazioniService';
 import { IPromoService } from '../interfaces/IPromoService';
 import { log } from '../logger';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { routeDeprecata } from '../middleware/routeDeprecata';
 import { permissionGuard } from '../middleware/permissionGuard';
 
 import { AuditLogService } from '../services/AuditLogService';
@@ -54,7 +55,7 @@ export class PromoController extends BaseController {
 
     // Promo collection (static routes BEFORE parameterized)
     this.router.get('/promo', authMiddleware, permissionGuard('promo.visualizza'), this.getAllPromos.bind(this));
-    this.router.get('/promo/filtered', authMiddleware, permissionGuard('promo.visualizza'), this.getAllPromosFiltered.bind(this));
+    this.router.get('/promo/filtered', authMiddleware, permissionGuard('promo.visualizza'), routeDeprecata, this.getAllPromosFiltered.bind(this));
     this.router.get('/promo/in-corso', authMiddleware, permissionGuard('promo.visualizza'), this.getAllPromosInCorso.bind(this));
     this.router.get('/promo/senza-ordine-stampa', authMiddleware, permissionGuard('ordini_stampa.crea'), this.getPromoSenzaOrdineDiStampa.bind(this));
     this.router.get('/promo/timeline', authMiddleware, permissionGuard('promo.visualizza'), this.getAllPromosTimeline.bind(this));
@@ -62,12 +63,12 @@ export class PromoController extends BaseController {
     this.router.get('/promo/contesto', authMiddleware, permissionGuard('promo.crea'), this.getContestoPerNuovaLavorazione.bind(this));
     this.router.get('/promo/contesto-importazione', authMiddleware, permissionGuard('promo.crea'), this.get_contesto_per_importazione.bind(this));
     this.router.get('/promo/visibilita-opzioni', authMiddleware, permissionGuard('promo.visualizza'), this.getVisibilitaOpzioni.bind(this));
-    this.router.get('/promo/dashboard', authMiddleware, permissionGuard('promo.visualizza'), this.getPromozioniInCorsoPerDashboard.bind(this));
+    this.router.get('/promo/dashboard', authMiddleware, permissionGuard('promo.visualizza'), routeDeprecata, this.getPromozioniInCorsoPerDashboard.bind(this));
 
     // Promo creation
     this.router.post('/promo', authMiddleware, permissionGuard('promo.crea'), this.inizioNuovaLavorazione.bind(this));
     // Promo by ID (parameterized routes)
-    this.router.get("/promo/nome/:nomePromo", authMiddleware, permissionGuard('promo.visualizza'), this.getPromoByNome.bind(this))
+    this.router.get("/promo/nome/:nomePromo", authMiddleware, permissionGuard('promo.visualizza'), routeDeprecata, this.getPromoByNome.bind(this))
     this.router.put('/promo/:id', authMiddleware, permissionGuard('promo.modifica'), this.updatePromo.bind(this));
     this.router.delete('/promo/:id',
       authMiddleware,

@@ -11,6 +11,7 @@ import { IGdoService } from '../interfaces/IGdoService';
 import { IUserService } from '../interfaces/IUserService';
 import { log } from '../logger';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { routeDeprecata } from '../middleware/routeDeprecata';
 import { csrfTokenEndpoint, csrfTokenGenerator } from '../middleware/csrfProtection';
 import { permissionGuard } from '../middleware/permissionGuard';
 import { metodoAccessoAttivo } from '../middleware/metodoAccessoAttivo';
@@ -119,7 +120,7 @@ export class UserController extends BaseController {
     // Session and policy routes
     this.router.get('/session/check', this.checkSession.bind(this));
     this.router.get('/policy/check', this.checkPolicy.bind(this));
-    this.router.get('/check-user', authMiddleware, this.checkUser.bind(this));
+    this.router.get('/check-user', authMiddleware, routeDeprecata, this.checkUser.bind(this));
     this.router.get('/csrf-token', csrfTokenGenerator(), csrfTokenEndpoint);
     this.router.get('/session/info', authMiddleware, this.getSessionInfo.bind(this));
     this.router.post('/export_users', authMiddleware, permissionGuard('utenti.esporta'), this.exportUsers.bind(this));
@@ -134,7 +135,7 @@ export class UserController extends BaseController {
 
     // User management routes
     this.router.get('/getAllUtentiOperatori', authMiddleware, permissionGuard('utenti.visualizza'), this.getAllUtentiOperatori.bind(this));
-    this.router.get('/get_all_utenti', authMiddleware, permissionGuard('utenti.visualizza'), this.get_all_utenti.bind(this));
+    this.router.get('/get_all_utenti', authMiddleware, permissionGuard('utenti.visualizza'), routeDeprecata, this.get_all_utenti.bind(this));
     this.router.get("/get_all_utenti_paginated", authMiddleware, permissionGuard('utenti.visualizza'), this.get_all_utenti_paginated.bind(this));
     this.router.get('/get_all_account', authMiddleware, permissionGuard('utenti.visualizza'), this.get_all_account.bind(this));
     this.router.delete('/deleteUser', authMiddleware, permissionGuard('utenti.elimina'), this.deleteUser.bind(this));
@@ -504,7 +505,7 @@ export class UserController extends BaseController {
       // Rigenera la sessione per prevenire session fixation
       req.session.regenerate((err) => {
         if (err) {
-          log.error("Errore durante la rigenerazione della sessione", { error: err, email });
+          log.error("Errore durante la rigenerazione della sessione", { error: err, userId: result.user!.id });
           this.handleError(res, new Error("Errore durante il login"));
           return;
         }
@@ -610,13 +611,11 @@ export class UserController extends BaseController {
         sesso?: string,
       };
 
-      console.log('registerUser - Extracted data', {
-        email, nome, cognome, tipo, stato, residenza,
-        dataDiNascita, gdoScelta, idPuntoVendita, ruoloGDO, telefono, sesso
-      });
+      // Dati personali (email, nome, residenza, telefono...) mai nei log: solo tipo e identificativi
+      log.debug('registerUser - Dati ricevuti', { tipo, gdoScelta, idPuntoVendita, ruoloGDO });
 
       if (!email || !nome || !cognome || !password || !tipo || !stato || !residenza || !dataDiNascita) {
-        console.log('registerUser - Missing required fields', {
+        log.debug('registerUser - Campi obbligatori mancanti', {
           hasEmail: !!email, hasNome: !!nome, hasCognome: !!cognome,
           hasPassword: !!password, hasTipo: !!tipo, hasStato: !!stato,
           hasResidenza: !!residenza, hasDataDiNascita: !!dataDiNascita
@@ -1422,14 +1421,14 @@ export class UserController extends BaseController {
 
     if (includeHeaders && data.length > 0) {
       const headers = Object.keys(data[0]);
-      csv += headers.join(',') + '\n';
+      csv += `${headers.join(',')}\n`;
     }
 
     data.forEach(row => {
       const values = Object.values(row).map(value =>
         typeof value === 'string' && value.includes(',') ? `"${value}"` : value
       );
-      csv += values.join(',') + '\n';
+      csv += `${values.join(',')}\n`;
     });
 
     return Buffer.from(csv, 'utf-8');

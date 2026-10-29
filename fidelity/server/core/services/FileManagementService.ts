@@ -9,8 +9,8 @@ import stream, { Readable, type Writable } from 'stream';
 import unzipper from 'unzipper';
 import { log } from '../logger';
 import { v4 as uuidv4 } from 'uuid';
-import { CATEGORIA_ATTIVITA, EVENTI_WEBHOOK, EXPORT_DI_SISTEMA, STATO_LAVORAZIONE_KIT_RUNTIME, STATO_LOG_FILE, STATO_PROMO, TIPO_ATTIVITA, TIPO_KIT_DESIGN } from '../../../lib/enums';
-import { AppError, BadRequestError, DatabaseError, ExternalApiError, NotFoundError, wrapApiError, wrapAppError, wrapDatabaseError, wrapExternalError, wrapNotFoundError } from '../../../lib/errors';
+import { CATEGORIA_ATTIVITA, EVENTI_WEBHOOK, EXPORT_DI_SISTEMA, HttpStatusCode, STATO_LAVORAZIONE_KIT_RUNTIME, STATO_LOG_FILE, STATO_PROMO, TIPO_ATTIVITA, TIPO_KIT_DESIGN } from '../../../lib/enums';
+import { AppError, ApplicationError, BadRequestError, DatabaseError, ExternalApiError, NotFoundError, wrapApiError, wrapAppError, wrapDatabaseError, wrapExternalError, wrapNotFoundError } from '../../../lib/errors';
 import {
   FileItemKit,
   FileItemKitLog,
@@ -100,6 +100,27 @@ interface MatchedFile {
     content: string; // base64
     type: string;
   }
+}
+
+/**
+ * Il meta del materiale verso Olimpo (JsonMeta) e' un oggetto, come negli altri flussi. Da un form
+ * multipart arriva come stringa JSON: si converte qui. Assente o vuoto vale {}; una stringa che non
+ * e' JSON, o un JSON che non e' un oggetto, e' una richiesta da correggere (400) e non va a Olimpo.
+ */
+export function leggiMetaMateriale(meta: unknown): Record<string, unknown> {
+  if (meta === undefined || meta === null || meta === '') return {};
+  let valore: unknown = meta;
+  if (typeof meta === 'string') {
+    try {
+      valore = JSON.parse(meta);
+    } catch {
+      throw new BadRequestError({ message: 'Il campo meta non e\' un JSON valido', details: { campo: 'meta' } });
+    }
+  }
+  if (typeof valore !== 'object' || valore === null || Array.isArray(valore)) {
+    throw new BadRequestError({ message: 'Il campo meta deve essere un oggetto JSON', details: { campo: 'meta' } });
+  }
+  return valore as Record<string, unknown>;
 }
 
 export class FileManagementService implements IFileManagementService {
@@ -270,7 +291,7 @@ export class FileManagementService implements IFileManagementService {
         const fileContent = Buffer.concat(chunks);
 
         matchedFiles.push({
-          originalFile: originalFile,
+          originalFile,
           newFile: {
             name: fileName,
             content: fileContent.toString('base64'),
@@ -466,8 +487,8 @@ export class FileManagementService implements IFileManagementService {
         promos
       };
     } catch (error: any) {
-      throw wrapDatabaseError(new Error("Errore durante il recupero dei file documentale " + error.message), {
-        message: "Errore durante il recupero dei file documentale " + error.message,
+      throw wrapDatabaseError(new Error(`Errore durante il recupero dei file documentale ${error.message}`), {
+        message: `Errore durante il recupero dei file documentale ${error.message}`,
         operation: 'get',
         entity: 'KitRuntime',
         details: { error }
@@ -609,8 +630,8 @@ export class FileManagementService implements IFileManagementService {
         promos
       };
     } catch (error: any) {
-      throw wrapDatabaseError(new Error("Errore durante il recupero dei contenuti digitali " + error.message), {
-        message: "Errore durante il recupero dei contenuti digitali " + error.message,
+      throw wrapDatabaseError(new Error(`Errore durante il recupero dei contenuti digitali ${error.message}`), {
+        message: `Errore durante il recupero dei contenuti digitali ${error.message}`,
         operation: 'get',
         entity: 'KitRuntime',
         details: { error }
@@ -831,6 +852,26 @@ export class FileManagementService implements IFileManagementService {
       const codiceExport = tipoDiExportModel.codice;
 
       if (file_extension === ".pdf" && codiceExport !== "WEB") {
+        // Prima di contattare Olimpo: un meta non valido o un kit chiuso non devono lasciare un materiale orfano
+        const metaMateriale = leggiMetaMateriale(meta);
+        const kitRuntime = await this.kitRuntimeService.getKitRuntimeById(guidKitRuntime);
+        if (!kitRuntime) {
+          throw wrapNotFoundError(new Error("Kit runtime non trovato"), {
+            message: "Kit runtime non trovato",
+            entityType: "KitRuntime",
+            entityId: guidKitRuntime
+          });
+        }
+        if (kitRuntime.stato_lavorazione !== STATO_LAVORAZIONE_KIT_RUNTIME.IN_LAVORAZIONE) {
+          // Regola di business, non un guasto: l'operatore deve leggere il motivo
+          throw new ApplicationError({
+            name: 'KitNonInLavorazioneError',
+            code: 'KIT_RUNTIME_NON_IN_LAVORAZIONE',
+            message: `Il kit non e' in lavorazione (stato: ${kitRuntime.stato_lavorazione}): non si possono caricare materiali`,
+            httpStatus: HttpStatusCode.CONFLICT,
+            details: { guidKitRuntime, stato: kitRuntime.stato_lavorazione },
+          });
+        }
         const formData = new FormData();
         const fileBuffer = await fs.promises.readFile(file.path);
         const fileBlob = new Blob([new Uint8Array(fileBuffer)], { type: 'application/pdf' });
@@ -841,7 +882,7 @@ export class FileManagementService implements IFileManagementService {
           Id: "",
           FileHash: hash,
           FileName: fileResolve,
-          JsonMeta: meta
+          JsonMeta: metaMateriale
         }));
 
         // Tempo massimo degli upload: senza, un Olimpo bloccato tiene aperta la richiesta (e il temporaneo) all'infinito
@@ -864,21 +905,6 @@ export class FileManagementService implements IFileManagementService {
             message: result.data.error,
             service: 'OLYMPUS',
             endpoint: '/materiali/uploadMateriale'
-          });
-        }
-        const kitRuntime = await this.kitRuntimeService.getKitRuntimeById(guidKitRuntime);
-        if (!kitRuntime) {
-          throw wrapNotFoundError(new Error("Kit runtime non trovato"), {
-            message: "Kit runtime non trovato",
-            entityType: "KitRuntime",
-            entityId: guidKitRuntime
-          });
-        }
-        if (kitRuntime.stato_lavorazione !== STATO_LAVORAZIONE_KIT_RUNTIME.IN_LAVORAZIONE) {
-          throw wrapDatabaseError(new Error("Kit runtime non in lavorazione, in stato: " + kitRuntime.stato_lavorazione), {
-            message: "Kit runtime non in lavorazione, in stato: " + kitRuntime.stato_lavorazione,
-            operation: 'upload',
-            entity: 'Materiale',
           });
         }
         const files = await this.kitRuntimeService.getFilesRuntimeByIdKitRuntime(guidKitRuntime);
@@ -982,18 +1008,17 @@ export class FileManagementService implements IFileManagementService {
         await this.kitRuntimeService.insertNewFileRuntimeLog(log);
         return result;
       } else {
-        throw wrapDatabaseError(new Error("Tipo di file non supportato o tipo di export errato per il tipo di file"), {
-          message: "Tipo di file non supportato o tipo di export errato per il tipo di file",
-          operation: 'upload',
-          entity: 'Materiale',
+        // Accettati: PDF per i tipi di export diversi da WEB, .json o .webpliant per WEB
+        throw new BadRequestError({
+          message: codiceExport === 'WEB'
+            ? `Tipo di file non supportato per il tipo di export WEB: serve un file .json o .webpliant, ricevuto "${file_extension || 'senza estensione'}"`
+            : `Tipo di file non supportato per il tipo di export ${codiceExport}: serve un PDF, ricevuto "${file_extension || 'senza estensione'}"`,
+          details: { estensione: file_extension, tipoExport: codiceExport },
         });
       }
     } catch (error) {
-      if (error instanceof DatabaseError) {
-        throw error;
-      } else if (error instanceof NotFoundError) {
-        throw error;
-      } else if (error instanceof ExternalApiError) {
+      // Errori gia' classificati (richiesta non valida, regola di business, Olimpo, DB, non trovato) passano cosi' come sono
+      if (error instanceof AppError) {
         throw error;
       } else {
         throw wrapDatabaseError(new Error("Errore durante l'upload del materiale"), {
@@ -1054,7 +1079,7 @@ export class FileManagementService implements IFileManagementService {
           }, esito: boolean, error: string
         }>(
           req,
-          config.OLYMPUS_IP_ADDRESS + "/materiali/uploadMateriale",
+          `${config.OLYMPUS_IP_ADDRESS}/materiali/uploadMateriale`,
           formData
         );
 
@@ -1227,7 +1252,7 @@ export class FileManagementService implements IFileManagementService {
         }, esito: boolean, error: string
       }>(
         req,
-        config.OLYMPUS_IP_ADDRESS + "/materiali/uploadMateriale",
+        `${config.OLYMPUS_IP_ADDRESS}/materiali/uploadMateriale`,
         formData
       );
       const olimpusResponse = olimpusResponseAxios.data;
@@ -1969,7 +1994,7 @@ export class FileManagementService implements IFileManagementService {
           tipo_export: tipoExport,
           codice_tipo_export: tipoDiExportModel.codice,
           id_olimpo_cloud: olympusResult.olympusId,
-          meta: meta
+          meta
         }
       );
 
@@ -2215,7 +2240,7 @@ export class FileManagementService implements IFileManagementService {
           await this.webhookService.scatenaEvento({
             evento: EVENTI_WEBHOOK.KIT_MATERIALE_ARRIVATO,
             dati: {
-              referenze: referenze,
+              referenze,
               kit: runtimekitPerWebhook
             },
             meta: {

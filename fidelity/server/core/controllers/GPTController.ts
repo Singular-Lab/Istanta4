@@ -9,6 +9,7 @@ import config from "../config/index";
 import { IGPTService } from '../interfaces/IGPTService';
 import { IReferenzeService } from '../interfaces/IReferenzeService';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { routeDeprecata } from '../middleware/routeDeprecata';
 import { permissionGuard } from '../middleware/permissionGuard';
 import { ServerUtils } from '../utils/ServerUtils';
 
@@ -55,10 +56,10 @@ export class GPTController extends BaseController {
 
   public initializeRoutes(): void {
     // Recipe routes
-    this.router.put("/genera_ricetta_corta", authMiddleware, permissionGuard('ai.gestisci_ricette'), this.generaRicetta.bind(this));
+    this.router.put("/genera_ricetta_corta", authMiddleware, permissionGuard('ai.gestisci_ricette'), routeDeprecata, this.generaRicetta.bind(this));
     this.router.put("/genera_ricette_corte_multiple", authMiddleware, permissionGuard('ai.gestisci_ricette'), this.generaRicetteCorteMultiple.bind(this));
     this.router.put("/genera_ricetta_approfondita", authMiddleware, permissionGuard('ai.gestisci_ricette'), this.generaRicettaApprofondita.bind(this));
-    this.router.get("/get_all_ricette", authMiddleware, permissionGuard('ai.gestisci_ricette'), this.getAllRicette.bind(this));
+    this.router.get("/get_all_ricette", authMiddleware, permissionGuard('ai.gestisci_ricette'), routeDeprecata, this.getAllRicette.bind(this));
     this.router.get("/get_ricetta", authMiddleware, permissionGuard('ai.gestisci_ricette'), this.getRicettaById.bind(this));
     this.router.put("/get_all_ricette_by_filtri_e_promozioni_in_corso", authMiddleware, permissionGuard('ai.gestisci_ricette'), this.getAllRicetteByFiltriEPromozioniInCorso.bind(this));
     this.router.get("/get_all_ricette_by_promozioni_in_corso_and_pubblicate", authMiddleware, permissionGuard('ai.gestisci_ricette'), this.getAllRicetteByPromozioniInCorsoAndPubblicate.bind(this));
@@ -199,7 +200,7 @@ export class GPTController extends BaseController {
       const { id } = req.body;
       const result = await this.gptService.generaRicettaApprofondita({
         apiKey: config.API_KEY_AI as string,
-        id: id
+        id
       });
       res.status(HttpStatusCode.OK).json(result);
     } catch (error) {
@@ -213,7 +214,7 @@ export class GPTController extends BaseController {
       const { id } = req.body;
       const result = await this.gptService.generaFotoRicetta({
         apiKey: config.API_KEY_AI as string,
-        id: id
+        id
       }, req);
       res.status(HttpStatusCode.OK).json(result);
     } catch (error) {
@@ -227,8 +228,8 @@ export class GPTController extends BaseController {
       const { id, idFoto } = req.body;
       const result = await this.gptService.rigeneraFotoRicetta({
         apiKey: config.API_KEY_AI as string,
-        id: id,
-        idFoto: idFoto
+        id,
+        idFoto
       }, req);
       res.status(HttpStatusCode.OK).json(result);
     } catch (error) {
@@ -259,7 +260,7 @@ export class GPTController extends BaseController {
       const { id } = req.body;
       const result = await this.gptService.generaAbbinamentoVino({
         apiKey: config.API_KEY_AI as string,
-        id: id
+        id
       });
       res.status(HttpStatusCode.OK).json(result);
     } catch (error) {
@@ -272,8 +273,8 @@ export class GPTController extends BaseController {
     try {
       const { id, procedimento } = req.body;
       const result = await this.gptService.aggiornaProcedimentoRicetta({
-        id: id,
-        procedimento: procedimento
+        id,
+        procedimento
       });
       res.status(HttpStatusCode.OK).json(result);
     } catch (error) {
@@ -287,8 +288,8 @@ export class GPTController extends BaseController {
     try {
       const { id, idFoto } = req.body;
       const result = await this.gptService.aggiornaFotoRicettaAMain({
-        id: id,
-        idFoto: idFoto
+        id,
+        idFoto
       });
       res.status(HttpStatusCode.OK).json(result);
     } catch (error) {
@@ -489,10 +490,10 @@ export class GPTController extends BaseController {
         });
       }
       const result = await this.gptService.createApprofondimentoVino({
-        cantina: cantina,
-        nome: nome,
-        codice: codice,
-        anno: anno
+        cantina,
+        nome,
+        codice,
+        anno
       });
       res.status(HttpStatusCode.OK).json(result);
     } catch (error) {

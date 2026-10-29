@@ -323,11 +323,10 @@ export class WhatsAppService implements IWhatsAppService {
     ): any[] {
         const { params, details } = this.buildTemplateParams(template, preset, user);
 
-        // Log di debug leggibile
-        console.debug(
-            Colorize.green('[WhatsAppService] Mappatura template/preset utente:'),
-            JSON.stringify(details, null, 2)
-        );
+        // Solo da dove arriva ogni parametro: i valori legati all'utente sono dati personali
+        log.debug('[WhatsAppService] Mappatura template/preset utente', {
+            parametri: details.map(({ key, source, path }) => ({ key, source, path })),
+        });
 
         return params;
     }
@@ -581,10 +580,12 @@ export class WhatsAppService implements IWhatsAppService {
             );
         }
 
-        console.debug(
-            '[WhatsAppService] Payload finale per Meta:',
-            JSON.stringify(payload, null, 2)
-        );
+        // Il payload contiene il numero del destinatario e i valori dei parametri: non si scrive
+        log.debug('[WhatsAppService] Payload per Meta pronto', {
+            template: payload.template.name,
+            componenti: payload.template.components.length,
+            parametri: cursor,
+        });
 
         return payload;
     }
@@ -640,9 +641,7 @@ export class WhatsAppService implements IWhatsAppService {
                 }
             });
 
-            console.log(
-                `Invio messaggio di test all'utente ${utente.nome} (${utente.telefono}) con il template ${templateRecord.nome_template_gdowhatsapptemplate}`
-            );
+            log.debug('Invio messaggio di test', { template: templateRecord.nome_template_gdowhatsapptemplate });
             if (defaultPresetRecord) {
                 console.log(
                     `Utilizzo del preset di default: ${defaultPresetRecord.nome_preset_gdowhatsappreset}`
@@ -721,9 +720,9 @@ export class WhatsAppService implements IWhatsAppService {
                 };
             }
 
-            const data = await response.json().catch(() => null);
-            console.log('Risposta invio test Meta:', data);
-            // TODO: qui effettueresti la vera chiamata a Meta con il template e i params
+            const data = await response.json().catch(() => null) as { messages?: Array<{ id?: string }> } | null;
+            // La risposta di Meta riporta anche il numero del destinatario: solo l'id del messaggio
+            log.debug('Risposta invio test Meta', { idMessaggio: data?.messages?.[0]?.id ?? null });
 
             return { success: true, error: undefined };
         } catch (error) {
@@ -740,9 +739,7 @@ export class WhatsAppService implements IWhatsAppService {
             }
             return {
                 success: false,
-                error:
-                    "Errore durante l'invio del test all'utente: " +
-                    (error instanceof Error ? error.message : 'Errore sconosciuto')
+                error: `Errore durante l'invio del test all'utente: ${error instanceof Error ? error.message : 'Errore sconosciuto'}`
             };
         }
     }
@@ -1784,7 +1781,7 @@ export class WhatsAppService implements IWhatsAppService {
                 throw new BusinessError({
                     message: 'Nessun utente trovato per questo GDO',
                     rule: 'WA_NO_USERS_FOUND',
-                    details: { code: ErrorCodes.WA_NO_USERS_FOUND, idGdo: idGdo }
+                    details: { code: ErrorCodes.WA_NO_USERS_FOUND, idGdo }
                 });
             }
 
@@ -1819,7 +1816,7 @@ export class WhatsAppService implements IWhatsAppService {
             if (!templateMeta) {
                 throw new BadRequestError({
                     message: 'Template senza json_meta_gdowhatsapptemplate',
-                    details: { templateId: templateId }
+                    details: { templateId }
                 });
             }
 
@@ -1853,7 +1850,7 @@ export class WhatsAppService implements IWhatsAppService {
                 throw new BusinessError({
                     message: 'Nessun utente trovato con i filtri specificati',
                     rule: 'WA_NO_USERS_FOUND',
-                    details: { code: ErrorCodes.WA_NO_USERS_FOUND, idGdo: idGdo }
+                    details: { code: ErrorCodes.WA_NO_USERS_FOUND, idGdo }
                 });
             }
 

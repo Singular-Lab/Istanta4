@@ -456,7 +456,7 @@ export class GPTService implements IGPTService {
       risultato: string;
       url: string
     }>('generaImmagineRicettaByDatiRicettaCortaNoDb', params.apiKey, {
-      titolo: ricetta.titolo + "Genera un piatto pronto da mangiare",
+      titolo: `${ricetta.titolo}Genera un piatto pronto da mangiare`,
       ingredienti: ricetta?.ingredienti?.map((ing: any) => ({
         nome_prodotto: ing.nome_prodotto
       }))
@@ -735,7 +735,7 @@ export class GPTService implements IGPTService {
       }>('generaRicetteCorteMultipleSenzaSalvareNelDb', params.apiKey, {
         indicazioni: params.indicazioni,
         numero_ricette: params.numero_ricette,
-        prodottiInOfferta: prodottiInOfferta
+        prodottiInOfferta
       }, "la generazione delle ricette");
       if (!response.success) {
         throw new ExternalApiError({
@@ -809,7 +809,7 @@ export class GPTService implements IGPTService {
         success: boolean;
       }>('generaRicettaCortaSenzaSalvareNelDb', params.apiKey, {
         indicazioni: params.indicazioni,
-        prodottiInOfferta: prodottiInOfferta,
+        prodottiInOfferta,
       }, "la generazione della ricetta");
       if (!response.success) {
         throw new ExternalApiError({
@@ -963,8 +963,8 @@ export class GPTService implements IGPTService {
       if (error instanceof NotFoundError) {
         throw error;
       }
-      throw wrapDatabaseError(new Error("Errore durante la modifica dello stato della ricetta: " + error), {
-        message: "Errore durante la modifica dello stato della ricetta: " + error,
+      throw wrapDatabaseError(new Error(`Errore durante la modifica dello stato della ricetta: ${error}`), {
+        message: `Errore durante la modifica dello stato della ricetta: ${error}`,
         operation: 'cambiaStatoRicetta',
         entity: 'GPTService',
         details: { error }

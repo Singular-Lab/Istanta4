@@ -96,17 +96,3 @@ export function updateFavicon(environment?: Environment): void {
   link.href = `${faviconPath}?v=${timestamp}`;
   shortcutLink.href = `${faviconPath}?v=${timestamp}`;
 }
-
-/**
- * Hook React per gestire il favicon dinamico
- */
-export function useDynamicFavicon() {
-  const environment = getCurrentEnvironment();
-  const faviconPath = getFaviconForEnvironment(environment);
-
-  return {
-    environment,
-    faviconPath,
-    updateFavicon: () => updateFavicon(environment)
-  };
-}

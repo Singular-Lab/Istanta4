@@ -217,7 +217,7 @@ const GestioneWhatsappSuperAdmin: React.FC = () => {
                             <Table.Td className="text-right">
                               <div className="flex justify-end gap-2">
                                 <Button
-                                  onClick={() => navigate("setup?id=" + gdo.id)}
+                                  onClick={() => navigate(`setup?id=${gdo.id}`)}
                                   size="sm"
                                   variant="outline-secondary"
                                   aria-label={`Setup WhatsApp di ${gdo?.nome ?? "GDO"}`}
@@ -226,7 +226,7 @@ const GestioneWhatsappSuperAdmin: React.FC = () => {
                                   <Lucide icon="Settings" aria-hidden="true" className="h-3.5 w-3.5" />
                                 </Button>
                                 <Button
-                                  onClick={() => navigate("templates?id=" + gdo.id)}
+                                  onClick={() => navigate(`templates?id=${gdo.id}`)}
                                   size="sm"
                                   variant="outline-secondary"
                                   aria-label={`Template WhatsApp di ${gdo?.nome ?? "GDO"}`}
