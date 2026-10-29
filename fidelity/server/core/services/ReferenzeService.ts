@@ -3,8 +3,8 @@ import { Request as ExpressRequest } from 'express';
 import { Op, type WhereOptions } from 'sequelize';
 import { v4 as uuidv4 } from 'uuid';
 import { Colorize } from '../../../lib/Colorize';
-import { FieldType } from '../../../lib/enums';
-import { DatabaseError, ExternalApiError, NotFoundError, wrapDatabaseError, wrapNotFoundError } from '../../../lib/errors';
+import { FieldType, STATO_LAVORAZIONE_KIT_RUNTIME } from '../../../lib/enums';
+import { BadRequestError, DatabaseError, ExternalApiError, NotFoundError, wrapDatabaseError, wrapNotFoundError } from '../../../lib/errors';
 import {
   ContenutoAggiuntivoReferenza,
   FilterCondition,
@@ -29,6 +29,90 @@ import type { IPromoRepository } from '../repositories/PromoRepository';
 import { normalizePromoModel } from '../utils/PromoModelUtils';
 import { ServerUtils } from '../utils/ServerUtils';
 import { verificaRisposta } from '../utils/rispostaServizi';
+import { giornoDiRoma, visibileNelGiorno } from '../utils/visibilitaWebpliant';
+
+/** Referenza come la restituisce Sequelize con raw: true: colonne snake_case, data_fields anche null. */
+type ReferenzaGrezza = ReferenzeIstanta & {
+  id_promo?: string | null;
+  data_fields?: Record<string, unknown> | null;
+};
+
+/** Kit della risposta pubblica di getReferenzeWebPliant: la ricerca usa solo stato e referenze. */
+type KitConReferenze = {
+  stato_lavorazione?: string | null;
+  webpliant?: ReferenzaGrezza[] | null;
+};
+
+function datiReferenza(ref: ReferenzeIstanta): Record<string, unknown> | undefined {
+  const dati = (ref as ReferenzaGrezza).data_fields;
+  return dati && typeof dati === 'object' ? dati : undefined;
+}
+
+function codiceReferenza(ref: ReferenzeIstanta): string | undefined {
+  const codice = datiReferenza(ref)?.codice_referenza;
+  return codice === undefined || codice === null ? undefined : String(codice);
+}
+
+function testoValorizzato(valore: unknown): valore is string {
+  return typeof valore === 'string' && valore.trim() !== '';
+}
+
+/** Filtro di contesto: confronto senza maiuscole e spazi ai bordi; i valori assenti restano assenti. */
+function testoNormalizzato(valore: unknown): string | undefined {
+  if (valore === undefined || valore === null) return undefined;
+  return String(valore).trim().toLowerCase();
+}
+
+/** Valore di un campo in context_promo o context_tracciato (nomeCampo gia' minuscolo e senza spazi). */
+function valoreDiContesto(contesto: unknown, nomeCampo: string): unknown {
+  if (!Array.isArray(contesto)) return undefined;
+  const voce = (contesto as Array<{ nome_field?: unknown; user_value?: unknown } | null>).find(
+    (e) => typeof e?.nome_field === 'string' && e.nome_field.trim().toLowerCase() === nomeCampo
+  );
+  return voce?.user_value;
+}
+
+/**
+ * Filtri sui data_fields, uguaglianza e appartenenza a un elenco (spec referenze-webpliant, Filtri
+ * WebPliant): si confronta il testo, cosi' il codice "00123" non diventa il numero 123. Un campo
+ * assente non e' uguale a nulla; true/false si confrontano senza maiuscole, come prima.
+ */
+function stessoTesto(valoreCampo: unknown, valoreFiltro: unknown): boolean {
+  if (valoreCampo === undefined || valoreCampo === null || typeof valoreCampo === 'object') return false;
+  const filtro = String(valoreFiltro).trim();
+  if (typeof valoreCampo === 'boolean') return String(valoreCampo) === filtro.toLowerCase();
+  return String(valoreCampo).trim() === filtro;
+}
+
+/**
+ * Spec referenze-webpliant, "Referenza presente in piu promo visibili": per ogni codice resta una
+ * sola referenza, quella della promo con la validita iniziale piu recente. A parita' di inizio
+ * vince la promo con l'id minore e, nella stessa promo (stesso codice in due kit), la referenza
+ * con l'id minore: la scelta non dipende dall'ordine in cui il DB restituisce le righe. Le
+ * referenze senza codice restano tutte; l'ordine delle superstiti e' quello di partenza.
+ */
+function unaReferenzaPerCodice(referenze: ReferenzeIstanta[], inizioPromo: Map<string, number>): ReferenzeIstanta[] {
+  const inizio = (ref: ReferenzeIstanta) => inizioPromo.get(String((ref as ReferenzaGrezza).id_promo)) ?? Number.NEGATIVE_INFINITY;
+  const precede = (a: ReferenzeIstanta, b: ReferenzeIstanta): boolean => {
+    if (inizio(a) !== inizio(b)) return inizio(a) > inizio(b);
+    const promoA = String((a as ReferenzaGrezza).id_promo ?? '');
+    const promoB = String((b as ReferenzaGrezza).id_promo ?? '');
+    if (promoA !== promoB) return promoA < promoB;
+    return String(a.id) < String(b.id);
+  };
+
+  const vincitrici = new Map<string, ReferenzeIstanta>();
+  for (const ref of referenze) {
+    const codice = codiceReferenza(ref);
+    if (codice === undefined) continue;
+    const attuale = vincitrici.get(codice);
+    if (!attuale || precede(ref, attuale)) vincitrici.set(codice, ref);
+  }
+  return referenze.filter((ref) => {
+    const codice = codiceReferenza(ref);
+    return codice === undefined || vincitrici.get(codice) === ref;
+  });
+}
 
 /**
  * Il modello PG vuole `foto` come array piatto di guidId (stringhe): il plugin manda
@@ -273,19 +357,25 @@ export class ReferenzeService implements IReferenzeService {
   // ─── Ricerca ───────────────────────────────────────────────────────
 
   async ricercaReferenzePromo(data: { query: string; idWorkspace: string; idArea: string; idCanale: string }): Promise<any[]> {
+    // Richiesta non valida: 400, non un errore di database
+    if (!data || !data.query || typeof data.query !== "string") {
+      throw new BadRequestError({ message: "Query non valida" });
+    }
+    // Ricerca pubblica: senza area e canale non si sa quali kit mostrare (spec referenze-webpliant,
+    // Referenze pubbliche per area e canale)
+    if (!testoValorizzato(data.idArea) || !testoValorizzato(data.idCanale)) {
+      throw new BadRequestError({ message: "Area e canale sono obbligatori per la ricerca" });
+    }
+
     try {
-      if (!data.query || typeof data.query !== "string") {
-        throw wrapDatabaseError(new Error("Query non valida"), {
-          message: "Query non valida",
-          operation: 'get',
-          entity: 'CombinazioniRuntime',
-        });
-      }
-
       const searchTerms = data.query.toLowerCase().split(" ");
-      const kitRuntime = await this.webPliantService.getReferenzeWebPliant(data.idWorkspace, new Date(), data.idArea, data.idCanale);
+      const kitTrovati: KitConReferenze[] = await this.webPliantService.getReferenzeWebPliant(data.idWorkspace, new Date(), data.idArea, data.idCanale);
+      // Il pubblico cerca solo fra i kit PUBBLICATI (spec referenze-webpliant)
+      const kitRuntime = Array.isArray(kitTrovati)
+        ? kitTrovati.filter((kit) => kit?.stato_lavorazione === STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO)
+        : [];
 
-      if (!Array.isArray(kitRuntime) || kitRuntime.length === 0) {
+      if (kitRuntime.length === 0) {
         throw wrapNotFoundError(new Error("Nessuna referenza trovata"), {
           message: "Nessuna referenza trovata",
           entityType: "ReferenzeIstanta",
@@ -296,7 +386,7 @@ export class ReferenzeService implements IReferenzeService {
       const refsGruppo = await ReferenzeGruppo.findAll({ raw: true }) as unknown as any[];
       const referenze = await Promise.all(
         kitRuntime.flatMap((kit) =>
-          kit.webpliant.map(async (ref: any) => {
+          (Array.isArray(kit.webpliant) ? kit.webpliant : []).map(async (ref: any) => {
             ref.foto = ref.foto
               ?.map((f: any) => typeof f === "string" ? f : f?.guidId)
               .filter(Boolean)
@@ -358,9 +448,13 @@ export class ReferenzeService implements IReferenzeService {
           };
         };
 
+        // Referenza senza data_fields: nulla su cui cercare, si salta
+        const dataFields = datiReferenza(ref);
+        if (!dataFields) return 0;
+
         for (const searchTerm of searchTerms) {
           for (const { field, exactMatchWeight, partialMatchWeight } of fieldsToCheck) {
-            const fieldValue = (ref as any).data_fields[field];
+            const fieldValue = dataFields[field];
 
             if (typeof fieldValue !== 'string') continue;
 
@@ -392,7 +486,7 @@ export class ReferenzeService implements IReferenzeService {
 
       return results;
     } catch (error) {
-      if (error instanceof NotFoundError || error instanceof DatabaseError) throw error;
+      if (error instanceof NotFoundError || error instanceof DatabaseError || error instanceof BadRequestError) throw error;
       throw wrapDatabaseError(new Error("Errore durante la ricerca delle referenze"), {
         message: "Errore durante la ricerca delle referenze",
         operation: 'get',
@@ -464,6 +558,11 @@ export class ReferenzeService implements IReferenzeService {
     item: PageLayoutItem,
     isEditor: boolean
   ): Promise<ReferenzeIstanta[]> {
+    // Senza l'elemento della pagina non ci sono filtri da applicare: richiesta non valida
+    if (!item || typeof item !== 'object') {
+      throw new BadRequestError({ message: "Elemento della pagina mancante" });
+    }
+
     try {
       // Step 1: Verifica esistenza workspace
       const workspace = await WorkspaceWebpliant.findOne({ where: { id: idWorkspace }, raw: true });
@@ -475,32 +574,38 @@ export class ReferenzeService implements IReferenzeService {
         });
       }
 
-      // Step 2: Ottieni le promo valide da Sequelize. Fuori dall'editor una promo si vede in
-      // anticipo di offset_visibilita giorni (spec referenze-webpliant, Visibilita temporale)
-      const giorno = dayjs(dataSelezionata).startOf('day');
+      // Step 2: promo visibili nel giorno della consultazione, a giorni di calendario di Roma come
+      // WebPliant (spec referenze-webpliant, Visibilita temporale): l'ultimo giorno di validita e'
+      // incluso per intero. Fuori dall'editor una promo si vede in anticipo di offset_visibilita
+      // giorni. Il DB fa solo un prefiltro largo (fine validita da un giorno prima), decide
+      // visibileNelGiorno.
+      const giornoConsultazione = giornoDiRoma(dataSelezionata);
       const promoNonScadute = await this.promoRepository.findAllWithOptions({
         where: {
-          validita_al: { [Op.gte]: dataSelezionata }
+          validita_al: { [Op.gte]: dayjs(giornoConsultazione).subtract(1, 'day').toDate() }
         } as WhereOptions<PromoAttributes>,
         attributes: ['id_promo', 'validita_dal', 'validita_al', 'offset_visibilita']
       });
-      const promoValide = promoNonScadute.filter(promo => {
-        const { validita_dal, offset_visibilita } = normalizePromoModel(promo);
-        const anticipo = isEditor ? 0 : Number(offset_visibilita) || 0;
-        return !dayjs(validita_dal).subtract(anticipo, 'day').startOf('day').isAfter(giorno);
-      });
+      const promoValide = promoNonScadute.map(normalizePromoModel).filter(promo => visibileNelGiorno({
+        validitaDal: promo.validita_dal,
+        validitaAl: promo.validita_al,
+        offsetGiorni: isEditor ? 0 : Number(promo.offset_visibilita) || 0,
+      }, giornoConsultazione));
 
       if (promoValide.length === 0) {
         return [];
       }
 
-      const promoIds = promoValide.map(promo => normalizePromoModel(promo).id_promo);
+      const promoIds = promoValide.map(promo => promo.id_promo);
+      const inizioPromo = new Map(promoValide.map(promo => [String(promo.id_promo), dayjs(promo.validita_dal).valueOf()]));
 
-      // Step 3: Ottieni i kit runtime per area/canale
+      // Step 3: Ottieni i kit runtime per area/canale. Il pubblico vede solo i kit PUBBLICATI,
+      // l'editor anche quelli in lavorazione o in revisione (spec referenze-webpliant)
       const kitRuntimeWhere: any = {
         id_promo: { [Op.in]: promoIds },
         ...(idArea && { id_area: idArea }),
-        ...(idCanale && { id_canale: idCanale })
+        ...(idCanale && { id_canale: idCanale }),
+        ...(!isEditor && { stato_lavorazione: STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO })
       };
       const kitRuntimeList = await RuntimeKit.findAll({ where: kitRuntimeWhere, raw: true });
 
@@ -531,15 +636,8 @@ export class ReferenzeService implements IReferenzeService {
       // Step 7: Applica filtri policy contenuto (in JS)
       referenze = this.applyPolicyFilters(referenze, item, idArea, idCanale, idPV);
 
-      // Step 8: Deduplicazione per codice_referenza
-      const seen = new Set<string>();
-      referenze = referenze.filter((ref) => {
-        const codice = (ref as any).data_fields?.codice_referenza;
-        if (codice === undefined || codice === null) return true;
-        if (seen.has(String(codice))) return false;
-        seen.add(String(codice));
-        return true;
-      });
+      // Step 8: Deduplicazione per codice_referenza: vince la promo con l'inizio piu recente
+      referenze = unaReferenzaPerCodice(referenze, inizioPromo);
 
       // Step 9: Trasforma le foto e normalizza i campi per il client
       referenze = referenze.map((ref) => {
@@ -950,38 +1048,31 @@ export class ReferenzeService implements IReferenzeService {
   }
 
   private evaluateContestoFilter(ref: ReferenzeIstanta, fieldName: string, filter: FilterConditionContesto): boolean {
-    const filterValue = typeof filter.user_value === 'string'
-      ? filter.user_value.toLowerCase().trim()
-      : filter.user_value;
+    // Spec referenze-webpliant, Filtri WebPliant: il valore si cerca in context_promo e in
+    // context_tracciato senza distinguere maiuscole e minuscole, su entrambi i lati del confronto
+    const filterValue = testoNormalizzato(filter.user_value);
 
-    const getContextValue = (contextArray: any[], nome_field: string) => {
-      if (!Array.isArray(contextArray)) return undefined;
-      const entry = contextArray.find((e: any) =>
-        e.nome_field?.toLowerCase() === nome_field.toLowerCase()
-      );
-      return entry?.user_value;
-    };
-
-    const contextPromo = (ref as any).data_fields?.context_promo;
-    const contextTracciato = (ref as any).data_fields?.context_tracciato;
-
-    const promoValue = getContextValue(contextPromo, fieldName);
-    const tracciatoValue = getContextValue(contextTracciato, fieldName);
+    const dati = datiReferenza(ref);
+    const promoValue = valoreDiContesto(dati?.context_promo, fieldName);
+    const tracciatoValue = valoreDiContesto(dati?.context_tracciato, fieldName);
+    const promoTesto = testoNormalizzato(promoValue);
+    const tracciatoTesto = testoNormalizzato(tracciatoValue);
 
     switch (filter.operator) {
       case 'equals':
-        return promoValue === filterValue || tracciatoValue === filterValue;
+        return promoTesto === filterValue || tracciatoTesto === filterValue;
       case 'not_equals':
-        return promoValue !== filterValue && tracciatoValue !== filterValue;
+        return promoTesto !== filterValue && tracciatoTesto !== filterValue;
+      // Maggiore e minore restano confronti numerici sul valore originale
       case 'greater_than': {
         const converted = this.convertFilterValue(String(filterValue));
-        return (promoValue !== undefined && promoValue > converted) ||
-          (tracciatoValue !== undefined && tracciatoValue > converted);
+        return (promoValue !== undefined && (promoValue as number) > converted) ||
+          (tracciatoValue !== undefined && (tracciatoValue as number) > converted);
       }
       case 'less_than': {
         const converted = this.convertFilterValue(String(filterValue));
-        return (promoValue !== undefined && promoValue < converted) ||
-          (tracciatoValue !== undefined && tracciatoValue < converted);
+        return (promoValue !== undefined && (promoValue as number) < converted) ||
+          (tracciatoValue !== undefined && (tracciatoValue as number) < converted);
       }
       default:
         log.warn(`Operatore contesto non supportato: ${filter.operator}`);
@@ -1067,11 +1158,13 @@ export class ReferenzeService implements IReferenzeService {
 
   private evaluateSingleFilter(fieldValue: any, filter: FilterCondition): boolean {
     switch (filter.operator) {
+      // Uguaglianza ed elenchi confrontano il testo (codici con zeri iniziali); maggiore e minore
+      // restano numerici (spec referenze-webpliant, Filtri WebPliant)
       case 'equals':
-        return fieldValue === this.convertFilterValue(filter.value);
+        return stessoTesto(fieldValue, filter.value);
 
       case 'not_equals':
-        return fieldValue !== this.convertFilterValue(filter.value);
+        return !stessoTesto(fieldValue, filter.value);
 
       case 'greater_than':
         return fieldValue > this.convertFilterValue(filter.value);
@@ -1087,15 +1180,11 @@ export class ReferenzeService implements IReferenzeService {
         return typeof fieldValue !== 'string' ||
           !fieldValue.toLowerCase().includes(filter.value.toLowerCase());
 
-      case 'in': {
-        const values = filter.value.split(',').map((v: string) => v.trim());
-        return values.map((v: string) => this.convertFilterValue(v)).includes(fieldValue);
-      }
+      case 'in':
+        return String(filter.value).split(',').some((v: string) => stessoTesto(fieldValue, v));
 
-      case 'not_in': {
-        const excludeValues = filter.value.split(',').map((v: string) => v.trim());
-        return !excludeValues.map((v: string) => this.convertFilterValue(v)).includes(fieldValue);
-      }
+      case 'not_in':
+        return !String(filter.value).split(',').some((v: string) => stessoTesto(fieldValue, v));
 
       default:
         log.warn(`Operatore non supportato: ${filter.operator}`);

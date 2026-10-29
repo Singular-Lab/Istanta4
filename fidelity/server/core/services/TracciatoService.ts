@@ -2,7 +2,7 @@ import { Request } from "express";
 import { Buffer } from "node:buffer";
 import { Op, QueryTypes, type Transaction } from "sequelize";
 import * as XLSX from 'xlsx';
-import { BadRequestError, DatabaseError, ExternalApiError, NotFoundError } from '../../../lib/errors';
+import { BadRequestError, DatabaseError, ExternalApiError, isAppError, NotFoundError } from '../../../lib/errors';
 import { TracciatiAttributes, type AnalisiMomentoResponse, type AnalisiMomentoTracciato, type CategoryScoreboardTimeline, type DataFields, type MomentoSelectorQuery, type PromoFilterQuery, type ReportOptionDTO, type RisultatoConfrontoMomento, type SavedPromoScoreboard, type SavedReportConfronto, type SavedReportConfrontoSummary, type TipoSchema, type TracciatiMomentoConfrontoResponseDTO, type TracciatiMomentoResponseDTO, type TracciatiSchemaConfronto, type TracciatiSchemaItem, type TracciatiSchemaResponseDTO, type TracciatoQueryPromoResult, type TracciatoQueryRequest, type TracciatoQueryResult, type TracciatoReport, type TracciatoWidgetScoreAudit, type TracciatoWidgetScoreboardCodiceRow, type TracciatoWidgetScoreboardRow } from '../../../lib/types';
 import type { CellaConfronto, IAgenziaLib, MatricePromo, PromoScoreboardInput, StoriaDelCampo } from "../agenzia_lib/types.js";
 import config from '../config';
@@ -24,7 +24,7 @@ import { TracciatiSchemaRepository } from '../repositories/TracciatiSchemaReposi
 import { ServerUtils } from '../utils/ServerUtils';
 import { verificaRisposta } from '../utils/rispostaServizi';
 import { confrontaConVisibilita, filtraPerVisibilita } from './visibilitaPromoUtils.js';
-import { removeSinglesIncludedInGroups as _removeSinglesUtil, resolveGroupMembersFromScattoCodice as _resolveGroupMembersUtil } from './TracciatoScoreboardUtils.js';
+import { normalizeCode as _normalizeCodeUtil, removeSinglesIncludedInGroups as _removeSinglesUtil, resolveGroupMembersFromScattoCodice as _resolveGroupMembersUtil } from './TracciatoScoreboardUtils.js';
 
 
 
@@ -78,6 +78,21 @@ type InnerEvento = {
 const prossimoOrdine = (momenti: { ordine?: number | null }[]): number =>
   Math.max(-1, ...momenti.map((m) => m.ordine ?? -1)) + 1;
 
+// Il formato General scrive in notazione esponenziale i numeri oltre 11 cifre: un EAN salvato
+// come numero diventerebbe 8.00123E+12, illeggibile e introvabile dalla ricerca dell'anteprima.
+// Quelle celle mostrano tutte le cifre; il resto della formattazione dei numeri non cambia.
+const mostraTutteLeCifre = (worksheet: XLSX.WorkSheet): void => {
+  for (const indirizzo of Object.keys(worksheet)) {
+    if (indirizzo.startsWith('!')) continue;
+    const cella = worksheet[indirizzo] as XLSX.CellObject;
+    if (cella.t !== 'n' || typeof cella.v !== 'number') continue;
+    // format_cell è la formattazione di sheet_to_json e ne memorizza il testo nella cella
+    const formattato = XLSX.utils.format_cell(cella);
+    const completo = String(cella.v);
+    if (/E[+-]\d/.test(formattato) && !/e/i.test(completo)) cella.w = completo;
+  }
+};
+
 export class TracciatoService implements ITracciatoService {
   constructor(
     private readonly tracciatiRepository: ITracciatiRepository = new TracciatiRepository(),
@@ -90,8 +105,9 @@ export class TracciatoService implements ITracciatoService {
 
   // ─── Static scoring engine ─────────────────────────────────────────────────
 
+  // Stessa normalizzazione dei gruppi: un codice numerico resta nel confronto come testo
   private static normalizeCode(value: unknown): string {
-    return typeof value === "string" ? value.trim() : "";
+    return _normalizeCodeUtil(value);
   }
 
   private static resolveRecordCodes(record: { scatto_codice?: unknown; codice_referenza?: unknown }) {
@@ -754,6 +770,8 @@ export class TracciatoService implements ITracciatoService {
       const tracciati = await this.tracciatiRepository.findByPromoId(idPromo);
       return tracciati.map((tracciato: TracciatiAttributes) => this.mapToDTO(tracciato, false));
     } catch (error) {
+      // Errori applicativi (es. promo non indicata) restano tali: non sono errori del database
+      if (isAppError(error)) throw error;
       log.error('Error in getAllTracciatiPerPromo:', error);
       throw new DatabaseError({
         message: 'Errore durante il recupero dei tracciati per ID promo',
@@ -789,17 +807,30 @@ export class TracciatoService implements ITracciatoService {
       const sheets = workbook.SheetNames.map((sheetName) => {
         const worksheet = workbook.Sheets[sheetName];
 
+        // L'area letta parte sempre da A1: se il file dichiara dati da B3, l'anteprima
+        // mostra comunque righe e colonne con il numero e la lettera di Excel
+        const ref = worksheet['!ref'];
+        const intervallo = ref ? XLSX.utils.decode_range(ref) : undefined;
+        if (intervallo) {
+          intervallo.s.r = 0;
+          intervallo.s.c = 0;
+        }
+        mostraTutteLeCifre(worksheet);
+
         // Converti il foglio in array di array, mantenendo TUTTI i dati
-        const jsonData = XLSX.utils.sheet_to_json(worksheet, {
+        const jsonData = XLSX.utils.sheet_to_json<(string | number | null)[]>(worksheet, {
           header: 1,
           defval: null,
           blankrows: true,
-          raw: false // Formatta i valori come stringhe
-        }) as (string | number | null)[][];
+          raw: false, // Formatta i valori come stringhe
+          dateNF: 'dd/mm/yyyy', // Date come gg/mm/aaaa, non nel m/d/yy americano di SheetJS
+          ...(intervallo && { range: intervallo }),
+        });
 
         return {
           name: sheetName,
-          rows: jsonData
+          // Cella vuota sempre null: SheetJS dà null per la cella assente ma "" per quella con testo vuoto
+          rows: jsonData.map((riga) => riga.map((valore) => (valore === '' ? null : valore))),
         };
       });
 
@@ -807,6 +838,8 @@ export class TracciatoService implements ITracciatoService {
 
       return { sheets };
     } catch (error) {
+      // Tracciato inesistente o senza file: il controller risponde 404/400, non 500
+      if (isAppError(error)) throw error;
       log.error('Error in parseTracciatoById:', error);
       throw new DatabaseError({
         message: 'Errore durante il parsing del tracciato',
@@ -919,13 +952,14 @@ export class TracciatoService implements ITracciatoService {
       .filter((t): t is AnalisiMomentoTracciato => t !== null);
   }
 
+  // Un codice numerico (12345) vale come "12345": i due record si uniscono invece di restare separati
   private findReferenzaCodice(record: Record<string, unknown>): string | null {
-    const direct = record['Referenza.Codice'];
-    if (typeof direct === 'string' && direct.trim().length > 0) return direct.trim();
+    const direct = TracciatoService.normalizeCode(record['Referenza.Codice']);
+    if (direct.length > 0) return direct;
 
     const referenza = record.Referenza as Record<string, unknown> | undefined;
-    const nested = referenza?.Codice;
-    if (typeof nested === 'string' && nested.trim().length > 0) return nested.trim();
+    const nested = TracciatoService.normalizeCode(referenza?.Codice);
+    if (nested.length > 0) return nested;
 
     return null;
   }

@@ -457,13 +457,13 @@
   },
   "server/core/controllers/TracciatoController.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 24
+      "count": 23
     },
     "@typescript-eslint/no-unused-vars": {
       "count": 6
     },
     "no-console": {
-      "count": 6
+      "count": 5
     },
     "prefer-template": {
       "count": 1
@@ -1749,7 +1749,7 @@
   },
   "server/core/services/ReferenzeService.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 94
+      "count": 88
     },
     "@typescript-eslint/no-unused-vars": {
       "count": 1
@@ -1814,7 +1814,7 @@
   },
   "server/core/services/WebPliantService.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 78
+      "count": 70
     },
     "no-console": {
       "count": 3
@@ -2041,11 +2041,6 @@
   "server/core/services/__tests__/ReferenzeService.sostituzione.test.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 9
-    }
-  },
-  "server/core/services/__tests__/ReferenzeService.visibilita.test.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 6
     }
   },
   "server/core/services/__tests__/RegistroLavori.test.ts": {

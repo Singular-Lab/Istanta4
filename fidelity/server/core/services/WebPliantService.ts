@@ -2,8 +2,8 @@ import dayjs from 'dayjs';
 import isBetween from 'dayjs/plugin/isBetween';
 import { Op, type WhereOptions } from 'sequelize';
 import { v4 as uuidv4 } from 'uuid';
-import { STATO_PROMO } from '../../../lib/enums';
-import { DatabaseError, NotFoundError, wrapDatabaseError, wrapNotFoundError } from '../../../lib/errors';
+import { STATO_LAVORAZIONE_KIT_RUNTIME, STATO_PROMO } from '../../../lib/enums';
+import { BadRequestError, DatabaseError, NotFoundError, wrapDatabaseError, wrapNotFoundError } from '../../../lib/errors';
 import {
   DataWebPliant,
   PageLayoutItem,
@@ -19,12 +19,46 @@ import { log } from '../logger';
 import { trovaConfigInstallazione } from './configPerGdo';
 import { PromoAttributes } from '../models/promo';
 import { Referenze } from '../models/referenze';
-import { RuntimeKit } from '../models/runtime_kit';
+import { RuntimeKit, type RuntimeKitAttributes } from '../models/runtime_kit';
 import { WorkspaceWebpliant } from '../models/workspace_webpliant';
 import type { IPromoRepository } from '../repositories/PromoRepository';
 import { normalizePromoModel, trasformaData } from '../utils/PromoModelUtils';
+import { giornoDiRoma, visibileNelGiorno } from '../utils/visibilitaWebpliant';
 
 dayjs.extend(isBetween);
+
+/** Kit runtime con le sue referenze WebPliant e la visibilita al giorno di consultazione. */
+type KitWebPliant = Omit<RuntimeKitAttributes, 'webpliant'> & {
+  webpliant?: ReferenzeIstanta[];
+  visibile?: boolean;
+};
+
+/** Cio' che la consultazione pubblica vede di un kit: niente file, storico, filtri, export, tag o webhook. */
+type KitWebPliantPubblico = Pick<
+  KitWebPliant,
+  'id' | 'id_promo' | 'id_area' | 'id_canale' | 'id_design' | 'titolo' | 'tipo' | 'stato_lavorazione' | 'visibile' | 'webpliant'
+>;
+
+function kitPubblico(kit: KitWebPliant): KitWebPliantPubblico {
+  return {
+    id: kit.id,
+    id_promo: kit.id_promo,
+    id_area: kit.id_area,
+    id_canale: kit.id_canale,
+    id_design: kit.id_design,
+    titolo: kit.titolo,
+    tipo: kit.tipo,
+    stato_lavorazione: kit.stato_lavorazione,
+    visibile: kit.visibile,
+    webpliant: kit.webpliant,
+  };
+}
+
+/** data_da/data_a dei campi Istanta della referenza, se presenti (come in getReferenzeWebPliant). */
+function dataDellaReferenza(referenza: ReferenzeIstanta, campo: 'data_da' | 'data_a'): string | undefined {
+  const dataFields = (referenza as unknown as { data_fields?: Record<string, string | undefined> }).data_fields;
+  return dataFields?.[campo] || undefined;
+}
 
 /**
  * Autonomous WebPliant service with its own implementation.
@@ -371,6 +405,11 @@ export class WebPliantService implements IWebPliantService {
     let dataScritta = "";
     let validoDal, validoAl;
 
+    // Nessuna referenza, nessuna data da scrivere: prima referenze[0] era undefined e la richiesta finiva in 500
+    if (!Array.isArray(referenze) || referenze.length === 0) {
+      return dataScritta;
+    }
+
     if ((referenze[0] as any).data_fields?.data_da === undefined || (referenze[0] as any).data_fields?.data_a === undefined) {
       const idPromo = (referenze[0] as any).id_promo;
       const promo = await this.promoRepository.findById(idPromo as string);
@@ -402,13 +441,17 @@ export class WebPliantService implements IWebPliantService {
     const auto = content?.options?.validita?.auto;
 
     if (auto) {
+      // Le date di ogni referenza sono i suoi data_da/data_a, altrimenti quelle di riferimento: prima si
+      // controllava valido_al/valido_dal, campi che le referenze non hanno, e le date risultavano sempre uguali
       const dataAlUguali = referenze.every((val) => {
-        const dataFine = (val as any).valido_al ? dayjs((val as any).data_fields?.data_a as string) : refValidoAl;
+        const dataA = dataDellaReferenza(val, 'data_a');
+        const dataFine = dataA ? dayjs(dataA) : refValidoAl;
         return dataFine.isSame(refValidoAl, 'day');
       });
 
       const dataDalUguali = referenze.every((val) => {
-        const dataInizio = (val as any).valido_dal ? dayjs((val as any).data_fields?.data_da as string) : refValidoDal;
+        const dataDa = dataDellaReferenza(val, 'data_da');
+        const dataInizio = dataDa ? dayjs(dataDa) : refValidoDal;
         return dataInizio.isSame(refValidoDal, 'day');
       });
 
@@ -453,6 +496,14 @@ export class WebPliantService implements IWebPliantService {
   }
 
   async getReferenzeWebPliant(idWorkspace: string, dataSelezionata: Date, idArea?: string, idCanale?: string, isEditor?: boolean): Promise<any[]> {
+    // Spec referenze-webpliant: il volantino pubblico e' sempre di un'area e di un canale. Senza (anche
+    // vuoti) la richiesta non e' valida, prima di leggere il database; all'editor restano facoltativi
+    if (!isEditor && (!idArea || !idCanale)) {
+      throw new BadRequestError({
+        message: "Area e canale sono obbligatori per consultare il volantino",
+        details: { idWorkspace, idArea: idArea ?? null, idCanale: idCanale ?? null }
+      });
+    }
     try {
       const workspace = await WorkspaceWebpliant.findOne({ where: { id: idWorkspace }, raw: true });
       if (!workspace) {
@@ -463,16 +514,13 @@ export class WebPliantService implements IWebPliantService {
         });
       }
 
-      const pgQuery: any = {};
-      if (idArea) pgQuery.id_area = idArea;
-      if (idCanale) pgQuery.id_canale = idCanale;
+      const filtroKit: { id_area?: string; id_canale?: string; stato_lavorazione?: STATO_LAVORAZIONE_KIT_RUNTIME } = {};
+      if (idArea) filtroKit.id_area = idArea;
+      if (idCanale) filtroKit.id_canale = idCanale;
+      // Il pubblico vede solo i kit pubblicati; l'editor anche quelli ancora in lavorazione o in revisione
+      if (!isEditor) filtroKit.stato_lavorazione = STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO;
 
-      const combinazioni = await RuntimeKit.findAll({ where: pgQuery, raw: true }) as unknown as Array<
-        any & {
-          webpliant?: ReferenzeIstanta[];
-          visibile?: boolean;
-        }
-      >;
+      const combinazioni = await RuntimeKit.findAll({ where: filtroKit, raw: true }) as unknown as KitWebPliant[];
 
       await Promise.all(
         combinazioni.map(async (combo) => {
@@ -483,19 +531,19 @@ export class WebPliantService implements IWebPliantService {
             const promoValues = normalizePromoModel(promo);
 
             const referenze = await Referenze.findAll({
-              where: { id_runtime_kit: (combo as any).id },
+              where: { id_runtime_kit: combo.id },
               raw: true
             }) as unknown as ReferenzeIstanta[];
 
+            // Spec referenze-webpliant, Visibilita temporale: giorni di calendario di Roma, ultimo giorno
+            // incluso (una validita_al alle 00:00 vale per tutto il suo giorno). L'editor vede tutto
             let visibile = true;
             if (!isEditor && dataSelezionata) {
-              const offsetGiorni = Number(promoValues.offset_visibilita) || 0;
-              const inizioOffset = dayjs(promoValues.validita_dal).subtract(offsetGiorni, 'days');
-              const fineOffset = dayjs(promoValues.validita_al);
-              visibile =
-                (dayjs(dataSelezionata).isAfter(inizioOffset) && dayjs(dataSelezionata).isBefore(fineOffset)) ||
-                dayjs(dataSelezionata).isSame(inizioOffset) ||
-                dayjs(dataSelezionata).isSame(fineOffset);
+              visibile = visibileNelGiorno({
+                validitaDal: promoValues.validita_dal,
+                validitaAl: promoValues.validita_al,
+                offsetGiorni: Number(promoValues.offset_visibilita) || 0,
+              }, giornoDiRoma(dataSelezionata));
             }
 
             combo.visibile = visibile;
@@ -514,15 +562,17 @@ export class WebPliantService implements IWebPliantService {
               return r;
             });
           } catch (innerErr) {
-            log.error(`getReferenzeWebPliant inner error for combo ${(combo as any).id}:`, innerErr);
+            log.error(`getReferenzeWebPliant inner error for combo ${combo.id}:`, innerErr);
             // do not propagate — skip this kit
             combo.visibile = false;
             combo.webpliant = [];
           }
         })
       );
-      const risultato = isEditor ? combinazioni : combinazioni.filter((c) => c.visibile);
-      return risultato;
+      if (isEditor) {
+        return combinazioni;
+      }
+      return combinazioni.filter((c) => c.visibile).map(kitPubblico);
     } catch (error) {
       if (error instanceof NotFoundError) throw error;
       log.error("getReferenzeWebPliant error:", error);

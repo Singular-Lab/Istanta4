@@ -19,6 +19,9 @@ vi.mock('../../logger', () => ({
 
 vi.mock('../../di', () => ({ TYPES: {}, container: { get: vi.fn() } }));
 
+import type { IPromoRepository } from '../../repositories/PromoRepository';
+import type { IWebPliantService } from '../../interfaces/IWebPliantService';
+import { ReferenzeService } from '../../services/ReferenzeService';
 import { ReferenzeController } from '../ReferenzeController';
 
 // /api/get_filtered_referenze e' pubblica (volantino WebPliant): la data e la modalita' editor
@@ -70,11 +73,46 @@ describe('POST /api/get_filtered_referenze', () => {
     expect(isEditor).toBe(true);
   });
 
+  it('senza l\'elemento della pagina risponde 400 e non consulta le referenze', async () => {
+    const { app, referenzeService } = createApp();
+
+    const res = await request(app).post('/api/get_filtered_referenze').send({ idWorkspace: 'w1', dataSelezionata: oggi });
+
+    expect(res.status).toBe(400);
+    expect(referenzeService.getFilteredReferenze).not.toHaveBeenCalled();
+  });
+
   it('senza data usa quella di oggi', async () => {
     const { app, referenzeService } = createApp();
 
     await request(app).post('/api/get_filtered_referenze').send({ idWorkspace: 'w1', item: { content: {} } }).expect(200);
 
     expect(referenzeService.getFilteredReferenze.mock.calls[0][1]).toBe(oggi);
+  });
+});
+
+// Spec referenze-webpliant, "Referenze pubbliche per area e canale": la ricerca pubblica senza
+// area o canale e' una richiesta non valida
+describe('POST /api/ricercaReferenzePromo', () => {
+  function createAppRicerca() {
+    const getReferenzeWebPliant = vi.fn().mockResolvedValue([]);
+    const service = new ReferenzeService({} as unknown as IPromoRepository, { getReferenzeWebPliant } as unknown as IWebPliantService);
+    const app = express();
+    app.use(express.json());
+    new ReferenzeController(service).registerRoutes(app);
+    return { app, getReferenzeWebPliant };
+  }
+
+  it.each([
+    ['senza area', { query: 'pasta', idWorkspace: 'w1', idCanale: 'c1' }],
+    ['senza canale', { query: 'pasta', idWorkspace: 'w1', idArea: 'a1', idCanale: null }],
+    ['senza query', { idWorkspace: 'w1', idArea: 'a1', idCanale: 'c1' }],
+  ])('%s risponde 400', async (_caso, corpo) => {
+    const { app, getReferenzeWebPliant } = createAppRicerca();
+
+    const res = await request(app).post('/api/ricercaReferenzePromo').send(corpo);
+
+    expect(res.status).toBe(400);
+    expect(getReferenzeWebPliant).not.toHaveBeenCalled();
   });
 });

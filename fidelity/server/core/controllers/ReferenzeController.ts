@@ -3,6 +3,7 @@ import { Request, Response } from 'express';
 import 'express-session';
 import { v4 as uuidv4 } from "uuid";
 import { EVENTI_WEBHOOK, HttpStatusCode, STATO_LOG_FILE } from '../../../lib/enums';
+import { BadRequestError } from '../../../lib/errors';
 import { log } from '../logger';
 import type { FileItemKitLog, OggettoTipiDiExport, ReferenzeIstanta } from '../../../lib/types';
 import { dataConsultazioneConsentita, puoConfigurareWebpliant } from '../accessi/consultazioneWebpliant';
@@ -236,7 +237,11 @@ export class ReferenzeController extends BaseController {
         idCanale,
         idPV,
         item,
-      } = req.body;
+      } = req.body ?? {};
+      // Senza l'elemento della pagina (filtri e policy) la richiesta non e' valida: 400, non 500
+      if (!item || typeof item !== 'object') {
+        throw new BadRequestError({ message: "Elemento della pagina (item) mancante" });
+      }
       // Route pubblica: data e modalita' editor dal browser valgono solo per chi configura WebPliant
       const dataSelezionata = (await dataConsultazioneConsentita(req, res, req.body.dataSelezionata))
         ?? dayjs().format('YYYY-MM-DD');
