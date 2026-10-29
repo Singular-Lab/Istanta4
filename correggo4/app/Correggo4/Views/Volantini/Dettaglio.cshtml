@@ -2276,7 +2276,7 @@
                    (abil ? '<span class="x" data-togli="' + idx + '" title="Togli questa azione">X</span>' : '') + '</div>';
         }).join('');
         cont.querySelectorAll('[data-az]').forEach(function (e) {
-            var aggiorna = function () { azioniScelte[Number(e.dataset.az)].campi[e.dataset.campo] = e.value; };
+            var aggiorna = function () { azioniScelte[Number(e.dataset.az)].campi[e.dataset.campo] = e.value; aggiornaSalva(); };
             if (e.tagName === 'SELECT') aggiorna();
             e.addEventListener('input', aggiorna);
             e.addEventListener('change', aggiorna);
@@ -2291,6 +2291,7 @@
             return '<option value="' + a.id + '">' + esc(a.titolo) + '</option>';
         }).join('');
         sel.style.display = (abil && libere.length) ? '' : 'none';
+        aggiornaSalva();   // I20-1160: azione aggiunta o tolta
         sel.onchange = function () {
             var idAz = Number(sel.value);
             if (!idAz) return;
@@ -2397,15 +2398,28 @@
     }
 
     /* ---------- stato, bottoni e chiamate ---------- */
+    // I20-1160: con una correzione in attesa dell'Agenzia, dopo il SALVA resta solo ANNULLA CORREZIONE
+    // (screenshot del 29/10, vale per tutti, Agenzia compresa). SALVA torna accanto ad ANNULLA appena
+    // la parte e' diversa da com'era al salvataggio, e sparisce di nuovo se la si riporta li'.
+    // L'impronta e' quello che SALVA manderebbe al server.
+    var improntaSalvata = { offerta: null, descrizione: null };
+    function improntaParte(parte) { return JSON.stringify(parte === 'offerta' ? raccogliOfferta() : raccogliScheda()); }
+    function aggiornaSalva() {
+        ['offerta', 'descrizione'].forEach(function (parte) {
+            var bt = document.querySelector('#' + (parte === 'offerta' ? 'eaOffertaPiede' : 'eaDescrPiede') + ' [data-ea="salva"]');
+            if (bt) bt.classList.toggle('nascosto', improntaSalvata[parte] !== null && improntaParte(parte) === improntaSalvata[parte]);
+        });
+    }
+
     function piedeEdit(id, parte) {
         var b = dati[id], ed = editDi(id, parte);
         var el = document.getElementById(parte === 'offerta' ? 'eaOffertaPiede' : 'eaDescrPiede');
         var disponibile = parte === 'offerta' ? (b.schema && b.schema.length > 0)
                         : (!!b.descrizioneGrezza || !!(b.figli && b.figli.immagine));
         var html = '';
-        if (ed) {
-            html += '<div class="ea_stato ' + (ed.stato === 2 ? 'confermata' : 'registrata') + '"><b>' +
-                    (ed.stato === 2 ? 'Confermata dall\'Agenzia' : 'In attesa dell\'Agenzia') + '</b><br>' +
+        // I20-1160: il riquadro giallo «In attesa dell'Agenzia» non compare mai; resta quello verde
+        if (ed && ed.stato === 2) {
+            html += '<div class="ea_stato confermata"><b>Confermata dall\'Agenzia</b><br>' +
                     'Correzione di ' + esc(ed.autore) + (ed.tipoAutore ? ' (' + esc(ed.tipoAutore) + ')' : '') +
                     ' &middot; ' + esc(dataBreve(ed.data)) + '</div>';
         }
@@ -2446,6 +2460,8 @@
         }
         html += '<div class="ea_bottoni">' + bottoni.join('') + '</div><div class="ea_errore" data-ea-errore></div>';
         el.innerHTML = html;
+        improntaSalvata[parte] = (ed && ed.stato === 0 && el.querySelector('[data-ea="salva"]')) ? improntaParte(parte) : null;
+        aggiornaSalva();
         el.querySelectorAll('[data-ea]').forEach(function (bt) {
             bt.addEventListener('click', function () {
                 // annullare chiede un secondo clic, come l'eliminazione delle note (niente confirm())
@@ -2633,6 +2649,13 @@
             schedaFoto = j.ok ? { id: String(id), stato: 'ok', foto: j.dati.foto || [] }
                               : { id: String(id), stato: 'errore', errore: j.messaggio };
             inizializzaFotoELoghi(id);
+            // I20-1160: foto e loghi arrivano dopo il piede: entrano nell'impronta salvata cosi' come
+            // arrivano, mentre il testo resta quello del salvataggio (puo' essere gia' stato cambiato)
+            if (improntaSalvata.descrizione !== null) {
+                var salvata = JSON.parse(improntaSalvata.descrizione), ora = raccogliScheda();
+                salvata.foto = ora.foto; salvata.loghi = ora.loghi;
+                improntaSalvata.descrizione = JSON.stringify(salvata);
+            }
             disegnaFoto(id);
             disegnaLoghi(id);
             ombreRitaglio();
@@ -2934,6 +2957,7 @@
 
     /* ---------- ombre nel ritaglio ---------- */
     function ombreRitaglio() {
+        aggiornaSalva();   // I20-1160: si passa di qui dopo ogni modifica della finestra
         var cont = document.getElementById('mRitaglio');
         cont.querySelectorAll('.spaceShadow').forEach(function (x) { x.remove(); });
         if (!boxInModale) return;
