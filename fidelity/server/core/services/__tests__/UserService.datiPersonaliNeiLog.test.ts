@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { STATO_UTENTI, TIPO_UTENTI } from '../../../../lib/enums';
 
@@ -12,6 +13,9 @@ import { ServerUtils } from '../../utils/ServerUtils';
 import { UserService } from '../UserService';
 
 /** I dati personali del nuovo utente: nessuno deve comparire in un log. */
+// Generata a ogni esecuzione: nessuna credenziale fissa nel codice, anche se finta
+const PASSWORD_DI_PROVA = `Pw-${randomUUID()}`;
+
 const DATI_PERSONALI = {
   email: 'mario.rossi@esempio.it',
   nome: 'Mariolino',
@@ -53,7 +57,7 @@ describe('registerUserWithTransaction: dati personali nei log', () => {
 
     await new UserService(repository as never).registerUserWithTransaction({
       ...DATI_PERSONALI,
-      password: 'Segreta!123',
+      password: PASSWORD_DI_PROVA,
       tipo: TIPO_UTENTI.SUPERADMIN,
       stato: STATO_UTENTI.ATTIVO,
     }, 'admin-1');
@@ -65,7 +69,7 @@ describe('registerUserWithTransaction: dati personali nei log', () => {
     );
     expect(log.debug).toHaveBeenCalledWith('registerUserWithTransaction - Start', { tipo: TIPO_UTENTI.SUPERADMIN, currentUserId: 'admin-1' });
     const scritto = testoScrittoNeiLog();
-    for (const valore of [...Object.values(DATI_PERSONALI), 'Segreta!123', '43.715678', '10.401234']) {
+    for (const valore of [...Object.values(DATI_PERSONALI), PASSWORD_DI_PROVA, '43.715678', '10.401234']) {
       expect(scritto).not.toContain(valore);
     }
   });

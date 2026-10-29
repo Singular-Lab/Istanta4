@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import express from 'express';
 import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -26,6 +27,9 @@ vi.mock('../../services/AuditLogService', () => ({
 import { UserController } from '../UserController';
 
 /** I dati personali del nuovo utente: nessuno deve comparire in un log. */
+// Generata a ogni esecuzione: nessuna credenziale fissa nel codice, anche se finta
+const PASSWORD_DI_PROVA = `Pw-${randomUUID()}`;
+
 const DATI_PERSONALI = {
   email: 'mario.rossi@esempio.it',
   nome: 'Mariolino',
@@ -78,7 +82,7 @@ describe('POST /api/register-user: dati personali nei log', () => {
 
     const res = await request(app).post('/api/register-user').send({
       ...DATI_PERSONALI,
-      password: 'Segreta!123',
+      password: PASSWORD_DI_PROVA,
       tipo: TIPO_UTENTI.GDO,
       stato: STATO_UTENTI.ATTIVO,
       gdoScelta: 'gdo-1',
@@ -93,7 +97,7 @@ describe('POST /api/register-user: dati personali nei log', () => {
     // Il log c'e', con tipo e identificativi
     expect(log.debug).toHaveBeenCalledWith('registerUser - Dati ricevuti', expect.objectContaining({ tipo: TIPO_UTENTI.GDO, gdoScelta: 'gdo-1' }));
     const scritto = testoScrittoNeiLog();
-    for (const valore of [...Object.values(DATI_PERSONALI), 'Segreta!123']) {
+    for (const valore of [...Object.values(DATI_PERSONALI), PASSWORD_DI_PROVA]) {
       expect(scritto).not.toContain(valore);
     }
   });
@@ -104,7 +108,7 @@ describe('POST /api/register-user: dati personali nei log', () => {
 
     const res = await request(app).post('/api/register-user').send({
       ...senzaResidenza,
-      password: 'Segreta!123',
+      password: PASSWORD_DI_PROVA,
       tipo: TIPO_UTENTI.GDO,
       stato: STATO_UTENTI.ATTIVO,
     });
