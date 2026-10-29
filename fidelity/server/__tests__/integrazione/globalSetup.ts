@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -99,7 +100,8 @@ async function avviaContainer(): Promise<{ db: DatabaseIntegrazione; ferma: () =
   const container = await new PostgreSqlContainer(IMMAGINE_POSTGIS)
     .withDatabase('fidelity_test')
     .withUsername('fidelity')
-    .withPassword('fidelity')
+    // Container usa e getta: una password nuova a ogni esecuzione, nessuna credenziale nel codice
+    .withPassword(randomBytes(16).toString('hex'))
     .start();
   return {
     db: {
