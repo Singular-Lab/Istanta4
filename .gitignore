@@ -133,3 +133,7 @@ Istanta/Properties/launchSettings.json
 # .claude/settings.local.json resta tracciato (ripristinato apposta in 9050833).
 .claude/*
 !.claude/settings.local.json
+
+#Correggo 4 ignorare carella wwroot/volantini
+
+correggo4/app/correggo4/wwwroot/volantini/
