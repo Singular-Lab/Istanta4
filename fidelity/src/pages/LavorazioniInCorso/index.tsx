@@ -23,7 +23,6 @@ import { useMutation } from "@tanstack/react-query";
 import dayjs from "dayjs";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import * as xlsx from "xlsx";
 import { STATO_PROMO } from "../../../lib/enums";
 import { ServerCall, type CustomError } from "../../../lib/server_call";
 import { PromoResponseDTO } from "../../../server/core/dto";
@@ -298,7 +297,9 @@ function Main() {
     a.click();
   };
 
-  const onExportXlsx = () => {
+  const onExportXlsx = async () => {
+    // xlsx (~320 KB) si scarica solo quando si esporta, non con la pagina
+    const xlsx = await import("xlsx");
     const wsData = filteredData.map((promo) => ({
       "Nome Lavorazione": promo.nome,
       "Data di scadenza": formatData(promo.data_scadenza),

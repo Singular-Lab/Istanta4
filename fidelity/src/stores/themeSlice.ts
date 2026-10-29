@@ -1,16 +1,15 @@
 // src/stores/themeSlice.ts
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 import { RootState } from "./store";
-import Echo from "../themes/Echo";
-// import Hurricane from "../themes/Hurricane"; // ecc.
 
 // ──────────────────────────────────────────────────────────────────────────────
 //  Config
 // ──────────────────────────────────────────────────────────────────────────────
+// Solo i nomi: il layout del tema lo carica il router con un import dinamico. Importarlo qui
+// lo porterebbe, con tutto il suo albero, nel codice comune scaricato da ogni pagina.
 export const themes = [
-  { name: "echo", component: Echo },
-  // { name: "hurricane", component: Hurricane },
-  // { name: "ravage", component: Ravage },
+  { name: "echo" },
+  // { name: "hurricane" },
   // …
 ] as const;
 
@@ -54,10 +53,6 @@ export const themeSlice = createSlice({
     },
   },
 });
-
-export const getTheme = (theme: ThemeName) => {
-  return themes.find((t) => t.name === theme)?.component;
-};
 
 export const { setTheme } = themeSlice.actions;
 

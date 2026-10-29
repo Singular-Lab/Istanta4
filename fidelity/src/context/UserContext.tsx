@@ -1,5 +1,5 @@
 // UserContext.tsx
-import { createContext, ReactNode, useContext, useState } from 'react';
+import { createContext, ReactNode, useContext, useMemo, useState } from 'react';
 import { UtenteResponseDTO } from "../../server/core/dto/UtenteDTO.ts";
 
 interface UserContextType {
@@ -11,9 +11,11 @@ const UserContext = createContext<UserContextType | undefined>(undefined);
 
 export const UserProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<UtenteResponseDTO | null>(null);
+  // Valore nuovo solo quando cambia l'utente
+  const value = useMemo(() => ({ user, setUser }), [user]);
 
   return (
-    <UserContext.Provider value={{ user, setUser }}>
+    <UserContext.Provider value={value}>
       {children}
     </UserContext.Provider>
   );

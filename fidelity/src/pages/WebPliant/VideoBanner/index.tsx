@@ -5,6 +5,7 @@ import Lucide from '@/components/Base/Lucide';
 import clsx from 'clsx';
 import { motion } from 'framer-motion';
 import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { segnapostoCss, segnapostoImmagine } from '../segnaposto';
 
 interface VideoBannerProps {
   src: string;
@@ -127,10 +128,10 @@ const VideoBanner: React.FC<VideoBannerProps> = memo(function VideoBanner({ src,
           background: isMobile
             ? item.content.thumbnailSrcMobile
               ? `url(${item.content?.thumbnailSrcMobile})`
-              : 'url(https://placehold.co/300)'
+              : segnapostoCss(300)
             : item.content?.thumbnailSrcDesktop
               ? `url(${item.content?.thumbnailSrcDesktop})`
-              : 'url(https://placehold.co/300)',
+              : segnapostoCss(300),
         }}
       >
         <video
@@ -140,10 +141,10 @@ const VideoBanner: React.FC<VideoBannerProps> = memo(function VideoBanner({ src,
             isMobile
               ? item.content?.thumbnailSrcMobile
                 ? item.content?.thumbnailSrcMobile
-                : 'https://placehold.co/300'
+                : segnapostoImmagine(300)
               : item.content?.thumbnailSrcDesktop
                 ? item.content?.thumbnailSrcDesktop
-                : 'https://placehold.co/300'
+                : segnapostoImmagine(300)
           }
           id="video_banner_1"
           className={styleWp["wp-bg-video"]}

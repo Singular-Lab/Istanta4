@@ -1,5 +1,6 @@
 import React, {
   createContext,
+  useCallback,
   useContext,
   useState,
   useMemo,
@@ -60,7 +61,9 @@ export const TimelineProvider: React.FC<TimelineProviderProps> = ({
   children,
 }) => {
   dayjs.locale("it");
-  const today = dayjs().startOf("day");
+  // Oggi cambia solo al cambio di giorno: un oggetto nuovo a ogni render ricalcolerebbe tutte le date
+  const giorno = dayjs().format("YYYY-MM-DD");
+  const today = useMemo(() => dayjs(giorno, "YYYY-MM-DD").startOf("day"), [giorno]);
   const [sliderValue, setSliderValue] = useState(0);
   const [numeroRefPromo, setNumeroRefPromo] = useState<Array<{ idPromo: string; numeroRefPromo: number }>>([]);
   // Costruiamo l'array di date
@@ -80,7 +83,7 @@ export const TimelineProvider: React.FC<TimelineProviderProps> = ({
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Aggiorna il range delle date selezionate (debounce)
-  const updateDateRange = (
+  const updateDateRange = useCallback((
     value: number,
     onDateRangeChange?: (arg0: string[]) => void
   ) => {
@@ -102,9 +105,10 @@ export const TimelineProvider: React.FC<TimelineProviderProps> = ({
       setDateRange(newRange);
       if (onDateRangeChange) onDateRangeChange(newRange);
     }, 200);
-  };
+  }, [dates, today]);
 
-  const value = {
+  // Valore nuovo solo quando cambia uno dei dati: i consumatori non si ridisegnano a vuoto
+  const value = useMemo(() => ({
     numeroRefPromo,
     setNumeroRefPromo,
     today,
@@ -116,7 +120,7 @@ export const TimelineProvider: React.FC<TimelineProviderProps> = ({
     dates,
     dateRange,
     updateDateRange,
-  };
+  }), [numeroRefPromo, today, range, sliderValue, selectedDate, dates, dateRange, updateDateRange]);
   return (
     <TimelineContext.Provider value={value}>
       {children}

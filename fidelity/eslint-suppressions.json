@@ -2660,11 +2660,6 @@
       "count": 3
     }
   },
-  "src/hooks/usePromoName.tsx": {
-    "no-console": {
-      "count": 1
-    }
-  },
   "src/hooks/useSessionKeepAlive.ts": {
     "no-console": {
       "count": 4
@@ -2957,7 +2952,7 @@
   },
   "src/pages/Dashboard3/index.tsx": {
     "no-console": {
-      "count": 6
+      "count": 2
     }
   },
   "src/pages/DashboardCategory/index.tsx": {
@@ -3454,7 +3449,7 @@
       "count": 6
     },
     "no-console": {
-      "count": 4
+      "count": 2
     }
   },
   "src/pages/LavorazioniInCorso/LavorazioniInCorso.test.tsx": {
@@ -3843,13 +3838,13 @@
       "count": 1
     },
     "@typescript-eslint/no-explicit-any": {
-      "count": 7
+      "count": 6
     },
     "@typescript-eslint/no-unused-vars": {
-      "count": 20
+      "count": 18
     },
     "no-console": {
-      "count": 14
+      "count": 13
     },
     "react-hooks/exhaustive-deps": {
       "count": 8
@@ -3902,13 +3897,13 @@
       "count": 1
     },
     "@typescript-eslint/no-explicit-any": {
-      "count": 25
+      "count": 24
     },
     "@typescript-eslint/no-unused-vars": {
-      "count": 29
+      "count": 26
     },
     "no-console": {
-      "count": 36
+      "count": 32
     }
   },
   "src/router/pagineRimosse.routes.test.tsx": {
@@ -3937,7 +3932,7 @@
       "count": 2
     },
     "no-console": {
-      "count": 11
+      "count": 9
     },
     "no-empty": {
       "count": 4

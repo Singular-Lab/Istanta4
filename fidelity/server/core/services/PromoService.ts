@@ -2,7 +2,7 @@ import dayjs from 'dayjs';
 import isBetween from 'dayjs/plugin/isBetween';
 import { Request as ExpressRequest } from 'express';
 import { createHmac } from 'node:crypto';
-import { Op, QueryTypes, type WhereOptions } from 'sequelize';
+import { Op, QueryTypes, type GroupedCountResultItem, type WhereOptions } from 'sequelize';
 import { v4 as uuidv4 } from 'uuid';
 import { Colorize } from '../../../lib/Colorize';
 import { ordinaPerMerceologia } from '../../../lib/ordinamentoMerceologico';
@@ -54,6 +54,42 @@ dayjs.extend(isBetween);
 // lavorazioni (I20-1052): niente kit e niente tracciati, altrimenti solo eliminazione non definitiva
 async function eliminabileDefinitivamente(idPromo: string, kitCollegati: number): Promise<boolean> {
   return kitCollegati === 0 && (await Tracciati.count({ where: { id_promo_tracciati: idPromo } })) === 0;
+}
+
+/** Colonne di promo che servono a rispostaPromo: menabo_layout e meta restano nel database. */
+const COLONNE_RISPOSTA_PROMO: (keyof PromoAttributes)[] = [
+  'id_promo', 'nome_promo', 'data_registrazione', 'validita_dal', 'validita_al', 'data_scadenza',
+  'offset_visibilita', 'stato', 'context', 'gdo',
+];
+
+/** Stati che la vista "Promozioni in corso" non mostra: le eliminate invece si', come sempre. */
+const STATI_FUORI_DA_IN_CORSO = [STATO_PROMO.VALIDA, STATO_PROMO.VALIDA_CON_ERRORI, STATO_PROMO.ARCHIVIATA];
+
+/** Righe per promo da un count raggruppato: una promo senza righe non compare e vale 0. */
+function conteggioPerPromo(gruppi: GroupedCountResultItem[], colonna: string): Map<string, number> {
+  return new Map(gruppi.map(gruppo => [String(gruppo[colonna]), gruppo.count]));
+}
+
+/** Una promo negli elenchi (GET /api/promo e /api/promo/in-corso): campi e ordine delle chiavi. */
+function rispostaPromo(promoData: PromoAttributes, numeroKitCollegati: number, eliminabile: boolean): PromoResponseDTO {
+  return {
+    id: promoData.id_promo,
+    nome: promoData.nome_promo,
+    data_registrazione: promoData.data_registrazione!,
+    validita_dal: promoData.validita_dal!,
+    validita_al: promoData.validita_al!,
+    data_scadenza: promoData.data_scadenza!,
+    offset_visibilita: promoData.offset_visibilita,
+    stato: promoData.stato,
+    context: Array.isArray(promoData.context) ? promoData.context : [],
+    gdo: promoData.gdo,
+    is_active: dayjs().isBetween(dayjs(promoData.validita_dal), dayjs(promoData.validita_al), null, '[]'),
+    is_expired: dayjs().isAfter(dayjs(promoData.validita_al)),
+    days_until_expiry: dayjs(promoData.data_scadenza).diff(dayjs(), 'day'),
+    days_since_start: dayjs().diff(dayjs(promoData.validita_dal), 'day'),
+    is_deletable: eliminabile,
+    numero_kit_collegati: numeroKitCollegati
+  };
 }
 
 /**
@@ -791,24 +827,7 @@ export class PromoService implements IPromoService {
           raw: true
         });
         const isDeletable = await eliminabileDefinitivamente(promoData.id_promo, kitCollegati.length);
-        return {
-          id: promoData.id_promo,
-          nome: promoData.nome_promo,
-          data_registrazione: promoData.data_registrazione!,
-          validita_dal: promoData.validita_dal!,
-          validita_al: promoData.validita_al!,
-          data_scadenza: promoData.data_scadenza!,
-          offset_visibilita: promoData.offset_visibilita,
-          stato: promoData.stato,
-          context: Array.isArray(promoData.context) ? promoData.context : [],
-          gdo: promoData.gdo,
-          is_active: dayjs().isBetween(dayjs(promoData.validita_dal), dayjs(promoData.validita_al), null, '[]'),
-          is_expired: dayjs().isAfter(dayjs(promoData.validita_al)),
-          days_until_expiry: dayjs(promoData.data_scadenza).diff(dayjs(), 'day'),
-          days_since_start: dayjs().diff(dayjs(promoData.validita_dal), 'day'),
-          is_deletable: isDeletable,
-          numero_kit_collegati: kitCollegati.length
-        };
+        return rispostaPromo(promoData, kitCollegati.length, isDeletable);
       }));
 
       return objToReturn;
@@ -823,6 +842,48 @@ export class PromoService implements IPromoService {
     }
   }
 
+
+  /**
+   * Promo della vista "Promozioni in corso" (GET /api/promo/in-corso): tutte tranne le valide, le
+   * valide con errori e le archiviate, dalla piu' recente per data di registrazione. La risposta e'
+   * quella del filtro in memoria su getAllPromo che sostituisce, con un numero fisso di query: le
+   * promo filtrate in SQL con le sole colonne usate, poi kit e tracciati contati per promo con un
+   * COUNT ... GROUP BY ciascuno (prima: tutte le promo, e per ognuna i kit interi e i tracciati).
+   */
+  async getPromoInCorso(): Promise<PromoResponseDTO[]> {
+    try {
+      const promo = await this.promoRepository.findAllWithOptions({
+        attributes: COLONNE_RISPOSTA_PROMO,
+        where: { stato: { [Op.notIn]: STATI_FUORI_DA_IN_CORSO } },
+        // A parita' di data l'ordine dipendeva dalla lettura della tabella: id_promo lo rende stabile
+        order: [['data_registrazione', 'DESC'], ['id_promo', 'ASC']]
+      });
+      if (promo.length === 0) return [];
+
+      const promoData = promo.map(p => normalizePromoModel(p));
+      const idPromo = promoData.map(p => p.id_promo);
+      const [kit, tracciati] = await Promise.all([
+        RuntimeKit.count({ where: { id_promo: { [Op.in]: idPromo } }, group: ['id_promo'] }),
+        Tracciati.count({ where: { id_promo_tracciati: { [Op.in]: idPromo } }, group: ['id_promo_tracciati'] })
+      ]);
+      const kitPerPromo = conteggioPerPromo(kit, 'id_promo');
+      const tracciatiPerPromo = conteggioPerPromo(tracciati, 'id_promo_tracciati');
+
+      return promoData.map(p => {
+        const numeroKit = kitPerPromo.get(p.id_promo) ?? 0;
+        // Come eliminabileDefinitivamente: niente kit e niente tracciati
+        const eliminabile = numeroKit === 0 && (tracciatiPerPromo.get(p.id_promo) ?? 0) === 0;
+        return rispostaPromo(p, numeroKit, eliminabile);
+      });
+    } catch (error) {
+      throw wrapDatabaseError(new Error("Errore durante il recupero delle promozioni"), {
+        message: "Errore durante il recupero delle promozioni",
+        operation: 'get',
+        entity: 'Promo',
+        details: { error }
+      });
+    }
+  }
 
   async getAllPromoFiltered(params: {
     page?: number;

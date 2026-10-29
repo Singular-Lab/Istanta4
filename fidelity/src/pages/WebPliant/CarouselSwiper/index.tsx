@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useRef, useState } from 'react';
+import React, { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { Pagination, Navigation, Virtual, Zoom } from 'swiper/modules';
 import BoxRef from '@/pages/WebPliant/BoxRef';
@@ -64,6 +64,14 @@ const CarouselSwiper: React.FC<CarouselSwiperProps> = memo(function CarouselSwip
   const slideIds = useRef<string[]>(
     referenze?.map(() => uuidv4()) || []
   ).current;
+
+  // Prop stabili per BoxRef (memo): lo stile senza sfondo si crea una volta, non per card e per render
+  const stileCard = item.content?.customStyles;
+  const stileCardConFotoSfondo = useMemo(() => ({ ...stileCard, backgroundColor: "" }), [stileCard]);
+  const codiciInWishlist = useMemo(
+    () => (refsWishlist ? new Set(refsWishlist.map((ref) => ref.codice_referenza)) : undefined),
+    [refsWishlist]
+  );
 
   const handleNext = useCallback(() => {
     if (swiperRef.current && swiperRef.current.swiper) {
@@ -153,12 +161,10 @@ const CarouselSwiper: React.FC<CarouselSwiperProps> = memo(function CarouselSwip
               referenza={referenza}
               config={config}
               forzaturaBox={item.content?.options?.forzaturaBox}
-              style={referenza.fotoExtra?.some((foto) => foto.tipo === 5) 
-                ? {...item.content?.customStyles, backgroundColor:""} 
-                : item.content?.customStyles}
-              isInWishlist={refsWishlist?.some(
-                (ref) => ref.codice_referenza === referenza.dataFields.codice_referenza
-              )}
+              style={referenza.fotoExtra?.some((foto) => foto.tipo === 5)
+                ? stileCardConFotoSfondo
+                : stileCard}
+              isInWishlist={codiciInWishlist?.has(referenza.dataFields.codice_referenza)}
             />
           </SwiperSlide>
         ))}

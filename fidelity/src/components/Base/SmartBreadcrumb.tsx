@@ -1,4 +1,4 @@
-import { usePromoNames } from '@/hooks/usePromoName';
+import { idPromoDalPercorso, useNomePromo } from '@/hooks/usePromoName';
 import { isUUID } from '@/utils/validation';
 import React from 'react';
 import { useLocation } from 'react-router-dom';
@@ -26,10 +26,9 @@ const SmartBreadcrumb: React.FC<SmartBreadcrumbProps> = ({
   const location = useLocation();
   const pathnames = location.pathname.split('/').filter((x) => x);
 
-  // Estrai gli ID delle promo dal pathname
-  const promoIds = pathnames.filter((value) => isUUID(value));
-  // Usa il hook personalizzato per recuperare i nomi delle promo
-  const promoNamesQuery = usePromoNames(promoIds);
+  // Solo il segmento che nelle rotte è l'id della promo: kit, tracciati e confronti non si chiedono a /promo/:id
+  const idPromo = idPromoDalPercorso(pathnames);
+  const nomePromo = useNomePromo(idPromo);
 
   // Funzione per formattare il breadcrumb con nomi delle promo
   const getBreadcrumbItems = (): BreadcrumbItem[] => {
@@ -40,8 +39,8 @@ const SmartBreadcrumb: React.FC<SmartBreadcrumbProps> = ({
       const isLast = index === pathnames.length - 1;
 
       if (isUUID(value)) {
-        // È un ID, cerca il nome della promo
-        const promoName = promoNamesQuery.data?.[value];
+        // È un ID: se è la promo se ne mostra il nome
+        const promoName = value === idPromo ? nomePromo.nome : null;
         if (promoName) {
           currentPath += `/${value}`;
           items.push({
@@ -54,7 +53,7 @@ const SmartBreadcrumb: React.FC<SmartBreadcrumbProps> = ({
           currentPath += `/${value}`;
           items.push({
             path: currentPath,
-            label: promoNamesQuery.isLoading ? "Caricamento..." : `${value.substring(0, 8)}...`,
+            label: value === idPromo && nomePromo.isLoading ? "Caricamento..." : `${value.substring(0, 8)}...`,
             isLast
           });
         }

@@ -13,6 +13,7 @@ import { TYPES, container } from '../di';
 import type { IConfigService } from '../interfaces/IConfigService';
 import type { IKitRuntimeService } from '../interfaces/IKitRuntimeService';
 import { IReferenzeService } from '../interfaces/IReferenzeService';
+import type { IWebPliantService } from '../interfaces/IWebPliantService';
 import type { IWebhookService } from '../interfaces/IWebhookService';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { permissionGuard } from '../middleware/permissionGuard';
@@ -22,7 +23,11 @@ import { TraduttoreReferenze } from '../utils/Translator';
 
 export class ReferenzeController extends BaseController {
 
-  constructor(private referenzeService: IReferenzeService) {
+  /**
+   * webPliantService serve solo alla scritta di validità dei caroselli: se non arriva dal
+   * costruttore si prende dal container quando serve.
+   */
+  constructor(private referenzeService: IReferenzeService, private webPliantService?: IWebPliantService) {
     super('/api');
   }
 
@@ -255,9 +260,34 @@ export class ReferenzeController extends BaseController {
         item,
         isEditor
       );
+      // Il carosello chiede con conValidita anche la scritta di validità, che prima otteneva con una
+      // seconda chiamata (PUT /getDataValiditaPerCarosello, ancora attiva per i bundle in cache).
+      // Senza conValidita la risposta resta l'elenco delle referenze.
+      if (req.body.conValidita === true) {
+        const validita = await this.validitaCarosello(item.content, referenze);
+        this.sendResponse(res, HttpStatusCode.OK, { referenze, validita });
+        return;
+      }
       this.sendResponse(res, HttpStatusCode.OK, referenze);
     } catch (error) {
       this.handleError(res, error as Error);
+    }
+  }
+
+  /**
+   * Stessa logica di PUT /getDataValiditaPerCarosello (WebPliantService.getDataValiditaPerCarosello).
+   * Se il calcolo fallisce le referenze arrivano comunque, senza scritta: come prima, quando la
+   * seconda chiamata falliva e il carosello restava senza data.
+   */
+  private async validitaCarosello(content: unknown, referenze: ReferenzeIstanta[]): Promise<string> {
+    try {
+      const webPliantService = this.webPliantService ?? container.get<IWebPliantService>(TYPES.WebPliantService);
+      return await webPliantService.getDataValiditaPerCarosello(content, referenze);
+    } catch (error) {
+      log.warn('Scritta di validita del carosello non calcolata', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return '';
     }
   }
 

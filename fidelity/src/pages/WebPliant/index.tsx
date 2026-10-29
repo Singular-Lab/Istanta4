@@ -51,6 +51,9 @@ interface WebPliantLoaderData {
   }[];
 }
 
+// Wishlist vuota condivisa: un array nuovo a ogni render faceva ridisegnare caroselli e griglie (memo)
+const NESSUNA_WISHLIST: DataFields[] = [];
+
 /**
  * Creates the page layout structure based on the provided data and configurations
  */
@@ -91,7 +94,7 @@ function createPageLayout(
           />
           <div className="overflow-auto w-full h-full">
             {currentPage.struttura?.map((item) =>
-              renderContent(item, [...filteredByDateReferenze], refsWishlist ?? [])
+              renderContent(item, [...filteredByDateReferenze], refsWishlist ?? NESSUNA_WISHLIST)
             )}
           </div>
         </section>
@@ -101,7 +104,7 @@ function createPageLayout(
     return (
       <main className="mt-20 w-full h-full">
         {currentPage.struttura?.map((item) =>
-          renderContent(item, [...filteredByDateReferenze], refsWishlist ?? [])
+          renderContent(item, [...filteredByDateReferenze], refsWishlist ?? NESSUNA_WISHLIST)
         )}
       </main>
     );

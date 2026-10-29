@@ -146,6 +146,8 @@ const PdfVolantiniViewer: React.FC<PdfVolantiniViewerProps> = ({
                   <img 
                     src={pdf.url} 
                     alt={pdf.nome_file} 
+                    loading="lazy"
+                    decoding="async"
                     className={clsx(styleWp["wp-border"], styleWp["wp-rounded"], styleWp["wp-shadow-sm"])}
                     style={{ maxHeight: '250px', objectFit: 'cover', width: 'auto' }}
                   />

@@ -21,7 +21,9 @@ export default defineConfig({
             'lib/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}',
             // Client: i .test.ts girano in node; i .test.tsx dichiarano in testa
             // `// @vitest-environment jsdom` (vitest 4 non ha environmentMatchGlobs)
-            'src/**/*.test.{ts,tsx}'
+            'src/**/*.test.{ts,tsx}',
+            // Script di build (budget del bundle, icone di Lucide)
+            'scripts/**/*.test.mjs'
           ],
           exclude: [...ESCLUSI, '**/*.integrazione.test.ts']
         }
@@ -43,7 +45,7 @@ export default defineConfig({
       }
     ],
     // yarn test:server gira con la coverage: sotto le soglie fallisce, anche in CI.
-    // Le soglie sono il livello del 2026-10-29 (dopo T6b) arrotondato per difetto: si alzano a
+    // Le soglie sono il livello del 2026-10-29 (dopo T7) arrotondato per difetto: si alzano a
     // mano quando i test crescono, non si abbassano.
     coverage: {
       provider: 'v8',
@@ -65,10 +67,10 @@ export default defineConfig({
         '**/*.d.ts'
       ],
       thresholds: {
-        lines: 28,
-        statements: 28,
-        functions: 24,
-        branches: 24,
+        lines: 31,
+        statements: 31,
+        functions: 26,
+        branches: 26,
         'server/core/http/**': { lines: 90, statements: 85, functions: 80, branches: 80 },
         'server/core/inizializzazione/**': { lines: 90, statements: 90, functions: 90, branches: 85 },
         'server/core/agenzia_lib/**': { lines: 80, statements: 80, functions: 80, branches: 65 },

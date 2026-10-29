@@ -48,6 +48,7 @@ const RicetteContent: React.FC<RicetteContentProps> = memo(function RicetteConte
                   >
                     <img
                       loading="lazy"
+                      decoding="async"
                       className="h-auto"
                       src={`${foundRicetta.foto_ricetta.find((v) => v.main === true)?.url}`}
                       alt=""

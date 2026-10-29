@@ -61,6 +61,9 @@ const Ricette: React.FC = () => {
                                                     <div key={index} className="flex-shrink-0">
                                                         <img
                                                             loading="lazy"
+                                                            decoding="async"
+                                                            width={96}
+                                                            height={96}
                                                             className="h-24 w-24 object-cover rounded"
                                                             src={foto.url}
                                                             alt=""

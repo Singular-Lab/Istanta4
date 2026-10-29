@@ -18,7 +18,6 @@ import { formatData } from "@/utils/format";
 import dayjs from "dayjs";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import * as xlsx from "xlsx";
 import { PromoResponseDTO } from "../../../server/core/dto";
 import EmptyState from "../../components/EmptyState";
 import IntestazioneOrdinabile, { ARIA_SORT, type DirezioneOrdinamento } from "../shared/IntestazioneOrdinabile";
@@ -168,7 +167,9 @@ function Main() {
     a.click();
   };
 
-  const onExportXlsx = () => {
+  const onExportXlsx = async () => {
+    // xlsx (~320 KB) si scarica solo quando si esporta, non con la pagina
+    const xlsx = await import("xlsx");
     const wsData = filteredData.map((promo) => ({
       "Nome Lavorazione": promo.nome,
       "Data di scadenza": formatData(promo.data_scadenza),

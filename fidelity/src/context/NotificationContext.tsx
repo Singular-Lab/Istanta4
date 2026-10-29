@@ -1,6 +1,6 @@
 import Lucide from "@/components/Base/Lucide";
 import { ascoltaDissincronia, registraNotifica } from "@/utils/erroriServizi";
-import React, { createContext, ReactNode, useCallback, useContext, useEffect, useRef, useState } from "react";
+import React, { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 type AnimationType = 'slide' | 'fade' | 'scale';
 
@@ -168,8 +168,11 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     const positions = ['top-left', 'top-center', 'top-right', 'bottom-left', 'bottom-center', 'bottom-right'];
 
+    // Valore stabile: aggiungere o togliere un toast non deve far ridisegnare chi usa useNotification
+    const value = useMemo(() => ({ showNotification }), [showNotification]);
+
     return (
-        <NotificationContext.Provider value={{ showNotification }}>
+        <NotificationContext.Provider value={value}>
             {children}
 
             {positions.map(position => (

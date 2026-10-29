@@ -5,7 +5,11 @@ import { useEffect, useRef, useState } from 'react';
 import { ServerCall } from '../../../lib/server_call';
 
 const WARNING_THRESHOLD = 5 * 60 * 1000; // 5 minuti
-const CHECK_INTERVAL = 10 * 1000; // 10 secondi
+const CHECK_INTERVAL = 10 * 1000; // 10 secondi, a scheda visibile
+// A scheda nascosta il controllo si dirada ma non si ferma: ogni /session/info rinnova l'attività
+// sul server (authMiddleware aggiorna lastActivity), quindi la sessione resta viva come prima,
+// perché il timeout più breve di un ruolo è 30 minuti, con un trentesimo delle richieste.
+const CHECK_INTERVAL_SCHEDA_NASCOSTA = 5 * 60 * 1000; // 5 minuti
 const COUNTDOWN_INTERVAL = 1000; // 1 secondo
 
 interface SessionWarningModalProps {
@@ -158,13 +162,30 @@ export const SessionWarningModal: React.FC<SessionWarningModalProps> = ({
       }
     };
 
+    // Check periodico: ogni 10 secondi a scheda visibile, ogni 5 minuti a scheda nascosta
+    const programmaControlli = () => {
+      if (checkIntervalRef.current) {
+        clearInterval(checkIntervalRef.current);
+      }
+      const intervallo = document.visibilityState === 'hidden' ? CHECK_INTERVAL_SCHEDA_NASCOSTA : CHECK_INTERVAL;
+      checkIntervalRef.current = setInterval(checkSessionInfo, intervallo);
+    };
+
+    // Tornando sulla scheda un controllo subito, poi di nuovo ogni 10 secondi
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== 'hidden') {
+        checkSessionInfo();
+      }
+      programmaControlli();
+    };
+
     // Check iniziale
     checkSessionInfo();
-
-    // Check periodico ogni 10 secondi
-    checkIntervalRef.current = setInterval(checkSessionInfo, CHECK_INTERVAL);
+    programmaControlli();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       cleanupTimers();
     };
   }, [isAuthenticated, showWarning]);

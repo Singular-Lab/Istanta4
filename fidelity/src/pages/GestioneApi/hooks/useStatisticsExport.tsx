@@ -29,7 +29,7 @@ export function useStatisticsExport() {
   ) => {
     setIsExporting(true);
     try {
-      exportStatisticsToExcel(aggregate, details);
+      await exportStatisticsToExcel(aggregate, details);
     } catch (error) {
       console.error('Errore durante l\'export Excel:', error);
     } finally {

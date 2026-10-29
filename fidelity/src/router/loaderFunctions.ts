@@ -1,5 +1,6 @@
 import { ServerCall } from "../../lib/server_call";
 import type {
+  Config,
   ConfigWebpliant,
   DESIGN_KIT,
   FileItemKit,
@@ -144,17 +145,14 @@ export const funzioneCaricamentoVolantinoWebPliant = async ({ request }: { reque
   return { dataWebPliant, config, referenze };
 };
 
-export const funzioneCaricamentoWebpliantLayout = async ({ params, request }: { params: Params, request: any }) => {
+export const funzioneCaricamentoWebpliantLayout = async ({ request }: { request: Request }) => {
   const url = new URL(request.url);
   const idWorkspace = url.searchParams.get("id") || "";
   const idArea = url.searchParams.get("idArea") || "";
   const idCanale = url.searchParams.get("idCanale") || "";
-  const idGDO = url.searchParams.get("idGDO") || "";
-  const idPV = url.searchParams.get("idPV") || "";
 
-  const totalSteps = 1;
-
-  console.log(params)
+  // Workspace e configurazione li chiede anche il loader della pagina, in parallelo: ServerCall.get
+  // condivide le GET identiche in corso, quindi partono una volta sola
   const workspacePromise = ServerCall.get<{
     nomeWorkspace: string;
     idArea: string;
@@ -174,7 +172,11 @@ export const funzioneCaricamentoWebpliantLayout = async ({ params, request }: { 
     }>;
   }>(`/prendiWorkspaceDaID/${idWorkspace}?isEditor=false`);
 
-  const configPromise = ServerCall.get<ConfigWebpliant>("/get_config");
+  // E la stessa risposta di useFetchConfig: il layout la mette nella cache di React Query
+  const configPromise = ServerCall.get<Config>("/get_config");
+
+  // Il CSS non dipende da workspace e configurazione: parte insieme a loro, non dopo
+  const stiliPromise = ServerCall.get<string>("/getStiliToText");
 
   // Il nuovo sistema gestisce automaticamente sessioni e wishlist
   // Non è più necessario gestire questo nel loader
@@ -188,47 +190,31 @@ export const funzioneCaricamentoWebpliantLayout = async ({ params, request }: { 
       idArea: idArea || "unknown",
     });
   }
-  const result = await Promise.allSettled([workspacePromise, configPromise]);
-  const [dataWebPliant, config] = result.map((r) =>
+  const [workspaceResult, configResult, stiliResult] = await Promise.allSettled([workspacePromise, configPromise, stiliPromise]);
+  const [dataWebPliant, config] = [workspaceResult, configResult].map((r) =>
     r.status === "fulfilled" ? r.value : (console.error("Errore:", r.reason), null)
-  );
+  ) as [Awaited<typeof workspacePromise> | null, Config | null];
 
   // Gestione degli stili
   const styleId = "webpliant-styles";
+  const existingStyle = document.getElementById(styleId);
 
-  const loadStyles = async () => {
-    const existingStyle = document.getElementById(styleId);
+  // Se il tag <style> esiste già e il numero di stili è maggiore di uno, rimuovilo
+  if (existingStyle && document.querySelectorAll(`#${styleId}`).length > 1) {
+    existingStyle.remove();
+  }
 
-    // Se il tag <style> esiste già e il numero di stili è maggiore di uno, rimuovilo
-    if (existingStyle && document.querySelectorAll(`#${styleId}`).length > 1) {
-      console.log("Più di uno stile trovato, rimuovendo...");
-      existingStyle.remove();
-    }
+  // Crea un nuovo tag <style>
+  const style = document.createElement("style");
+  style.id = styleId; // Assegna un ID al tag <style>
+  document.head.appendChild(style);
 
-    // Crea un nuovo tag <style>
-    const style = document.createElement("style");
-    style.id = styleId; // Assegna un ID al tag <style>
-    document.head.appendChild(style);
+  if (stiliResult.status === "rejected") {
+    console.error("Errore durante il caricamento dei CSS dal server:", stiliResult.reason);
+  }
+  // Applica lo stile al documento
+  style.innerHTML = stiliResult.status === "fulfilled" ? `${stiliResult.value}` : "";
 
-    let stylesContent = "";
-
-    try {
-      // Carica CSS dal server
-      const cssServerCall = await ServerCall.get<string>("/getStiliToText");
-      stylesContent += cssServerCall;
-    } catch (error) {
-      console.error("Errore durante il caricamento dei CSS dal server:", error);
-    }
-
-    // Applica lo stile al documento
-    style.innerHTML = stylesContent;
-  };
-
-  await loadStyles();
-
-
-  console.log("dataWebPliant", dataWebPliant);
-  console.log("config", config);
   return { dataWebPliant, config };
 };
 
@@ -353,8 +339,6 @@ export const funzioneDettagliLavorazioniInCorso = async ({ request }: { request:
 
   const kitPromise = ServerCall.get<KitResponseType>(`/getAllKitPerGestioneLavorazione/${idPromo}`);
   const tracciatiPromise = ServerCall.get<TracciatiResponseDTO[]>(`/tracciati/promo/${idPromo}?page=1&pageSize=20`);
-  const allAreeGDOPromise = ServerCall.get<AreaResponseDTO[]>("/allAreeForGDO");
-  const allCanaliGDOPromise = ServerCall.get<CanaleResponseDTO[]>("/allCanaliForGDO");
   const datoGraficoPaginaLavorazioniPromise = kitPromise.then(result => {
     const lavorazioni = result.lavorazioni;
     const completate = Array.isArray(lavorazioni) ? lavorazioni.filter(item => (item as RUNTIME_KIT).stato_lavorazione === STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO).length : 0;
@@ -400,8 +384,6 @@ export const funzioneDettagliLavorazioniInCorso = async ({ request }: { request:
     volantini: kitPromise.then(r => r.volantini),
     datiTracciatiCaricati: tracciatiPromise,
     datoGraficoPaginaLavorazioni: datoGraficoPaginaLavorazioniPromise,
-    allAreeGDO: allAreeGDOPromise,
-    allCanaliGDO: allCanaliGDOPromise
   };
 };
 
@@ -883,13 +865,16 @@ export const dashboard3Loader = async () => {
   const volantiniPubblicatiInLavorazionePromise = ServerCall.get<VolantiniPubblicatiInLavorazioneResponse>("/dashboard/volantini-pubblicati-in-lavorazione");
   const areePromise = ServerCall.get<AreaResponseDTO[]>("/allAreeForGDO");
   const canaliPromise = ServerCall.get<CanaleResponseDTO[]>("/allCanaliForGDO");
+  // Lo storico parte con la navigazione insieme alle altre card, non dopo il render della pagina
+  const storicoPromise = ServerCall.get<VolantiniPubblicatiInLavorazioneResponse>("/dashboard/storico-volantini?limit=10");
 
   return {
     volantiniInCorsoPromise,
     volantiniInLavorazionePromise,
     volantiniPubblicatiInLavorazionePromise,
     areePromise,
-    canaliPromise
+    canaliPromise,
+    storicoPromise
   };
 };
 

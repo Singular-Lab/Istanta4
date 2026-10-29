@@ -1,4 +1,3 @@
-import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import express, { Express, NextFunction, Request, Response } from 'express';
 import { Session } from 'express-session';
@@ -14,6 +13,7 @@ import { jsonGlobale } from './middleware/jsonGrande';
 import { apiRateLimiter } from './middleware/rateLimiter';
 import { csrfProtection, PREFISSO_ACS_SAML } from './middleware/csrfProtection';
 import { applySecurityMiddlewares } from './middleware/securityMiddleware';
+import { compressioneRisposte } from './middleware/staticiPrecompressi';
 
 // Estendi la sessione per TypeScript
 declare module 'express-session' {
@@ -51,8 +51,8 @@ export function applyMiddlewares(app: Express) {
   // Rate limiting generale per le API
   app.use('/api/', apiRateLimiter);
 
-  // Middleware di compressione
-  app.use(compressionMiddleware);
+  // Compressione al volo: salta le risposte gia' compresse (i .br/.gz della build)
+  app.use(compressioneRisposte);
 
   // Middleware per parsing delle richieste.
   // La sessione e' montata in server.ts prima di questi middleware.
@@ -156,7 +156,6 @@ const requestIdMiddleware = (req: Request, res: Response, next: NextFunction) =>
   next();
 };
 
-const compressionMiddleware = compression({ level: 6, threshold: 0 });
 const poweredByMiddleware = (req: Request, res: Response, next: NextFunction) => {
   res.setHeader('X-Powered-By', 'Istanta 2 GDO Suite');
   next();

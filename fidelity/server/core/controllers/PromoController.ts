@@ -172,19 +172,8 @@ export class PromoController extends BaseController {
 
   private async getAllPromosInCorso(req: ExpressRequest, res: Response): Promise<void> {
     try {
-      const promos = await this.promoService.getAllPromo();
-      const promosInCorso = promos
-        .filter(
-          (promo) =>
-            promo.stato !== STATO_PROMO.VALIDA &&
-            promo.stato !== STATO_PROMO.VALIDA_CON_ERRORI &&
-            promo.stato !== STATO_PROMO.ARCHIVIATA
-        )
-        .sort((a, b) => {
-          const dateA = a.data_registrazione ? new Date(a.data_registrazione).getTime() : 0;
-          const dateB = b.data_registrazione ? new Date(b.data_registrazione).getTime() : 0;
-          return dateB - dateA;
-        });
+      // Filtro (niente valide, valide con errori, archiviate) e ordinamento li fa il database
+      const promosInCorso = await this.promoService.getPromoInCorso();
       this.sendResponse(res, HttpStatusCode.OK, promosInCorso);
     } catch (error) {
       this.handleError(res, error as Error);

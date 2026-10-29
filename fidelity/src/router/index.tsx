@@ -1049,28 +1049,26 @@ const routes: RouteObject[] = [
         <ErroreRottaPubblica />
       </Suspense>
     ),
+    // Vetrina pubblica: i loader stanno fuori da lazy, così le API partono insieme ai chunk delle
+    // pagine invece di aspettarli (React Router esegue loader statico e lazy in parallelo)
+    loader: funzioneCaricamentoWebpliantLayout,
     lazy: async () => {
-      const { default: WebpliantLayout } = await import(
-        "@/pages/WebpliantLayout/index"
-      );
-      const { LoadingWebpliant } = await import(
-        "@/pages/WebpliantLayout/LoadingWebpliant"
-      );
+      const [{ default: WebpliantLayout }, { LoadingWebpliant }] = await Promise.all([
+        import("@/pages/WebpliantLayout/index"),
+        import("@/pages/WebpliantLayout/LoadingWebpliant"),
+      ]);
       return {
         Component: () => <WebpliantLayout />,
-        loader: funzioneCaricamentoWebpliantLayout,
         HydrateFallback: LoadingWebpliant,
       };
     },
     children: [
       {
         path: "volantino",
+        loader: funzioneCaricamentoVolantinoWebPliant,
         lazy: async () => {
           const { default: WebPliant } = await import("@/pages/WebPliant");
-          return {
-            Component: WebPliant,
-            loader: funzioneCaricamentoVolantinoWebPliant,
-          };
+          return { Component: WebPliant };
         },
       },
       {
@@ -1084,12 +1082,10 @@ const routes: RouteObject[] = [
       },
       {
         path: "volantino/ricetta",
+        loader: funzioneCaricamentoRicetta,
         lazy: async () => {
           const { default: Ricette } = await import("@/pages/WebPliant/Ricette");
-          return {
-            Component: Ricette,
-            loader: funzioneCaricamentoRicetta,
-          };
+          return { Component: Ricette };
         },
       },
       {
