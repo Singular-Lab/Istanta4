@@ -680,9 +680,21 @@
     .salva_loghi { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 8px; }
     .riga_logo .nome { flex: 1; overflow: hidden; text-overflow: ellipsis; }
     .riga_logo .nome small { display: block; color: #555; font-size: 9.5px; }
-    .riga_logo.entrante { background: #d7efd7; }
-    .riga_logo.uscente { background: #f5d0d0; }
-    .riga_logo.uscente .nome { text-decoration: line-through; }
+    /* I20-1165: logo aggiunto o tolto dalla correzione: riga bianca, striscia ed etichetta colorate
+       (verde aggiunto, rossa tolto); il tolto e' barrato e sbiadito. La striscia e' un'ombra interna
+       perche' il bordo resta quello rosso/verde della correzione (.borderFix/.borderFixed). */
+    .riga_logo.entrante, .riga_logo.uscente { background: #fff; padding-left: 11px; }
+    .riga_logo.entrante { box-shadow: inset 6px 0 0 #2e8b3a; }
+    .riga_logo.uscente { box-shadow: inset 6px 0 0 #c62828; }
+    .riga_logo.uscente .nome { text-decoration: line-through; color: #666; }
+    .riga_logo.uscente > img { opacity: .45; }
+    /* I20-1165: sui loghi in attesa niente contorno rosso, bastano striscia ed etichetta. La classe
+       borderFix resta: colora di rosso l'immagine nel ritaglio (ombreRitaglio). Il verde resta. */
+    .modale .riga_logo.borderFix { border: 1px solid #aaa !important; }
+    .etichetta_logo { flex: 0 0 auto; font-size: 10px; font-weight: bold; color: #fff; border-radius: 9px;
+                      padding: 2px 8px; letter-spacing: .3px; white-space: nowrap; }
+    .etichetta_logo.piu { background: #2e8b3a; }
+    .etichetta_logo.meno { background: #c62828; }
     .riga_logo .bottone { padding: 1px 6px; font-size: 10px; }
     .scelta_foto { position: fixed; left: 140px; right: 40px; top: 110px; bottom: 40px; z-index: 110; display: none;
                    flex-direction: column; background: #d3d3d3; border: 1px solid #7a7a7a; box-shadow: 0 4px 18px rgba(0,0,0,.35); }
@@ -3002,7 +3014,10 @@
         var cls = modo === 'togli' ? ' uscente' : (modo === 'aggiungi' ? ' entrante' : '');
         if (modo === 'togli' || modo === 'aggiungi')
             cls += confermati[l.guidId] === (modo === 'togli' ? 5 : 4) ? ' borderFixed' : ' borderFix';
-        var nota = modo === 'togli' ? 'da togliere' : (modo === 'aggiungi' ? 'da aggiungere' : (l.automatico ? 'automatico' : ''));
+        var nota = modo === 'presente' && l.automatico ? 'automatico' : '';
+        // I20-1165: aggiunto e tolto si riconoscono dall'etichetta, non da una nota piccola
+        var etichetta = modo === 'aggiungi' ? '<span class="etichetta_logo piu">+ AGGIUNTO</span>'
+                      : (modo === 'togli' ? '<span class="etichetta_logo meno">&minus; TOLTO</span>' : '');
         var bottone = '';
         if (abil) {
             if (modo === 'presente') bottone = '<button type="button" class="bottone" data-logo="' + escA(l.guidId) + '" data-azione="togli">Togli</button>';
@@ -3011,7 +3026,7 @@
         }
         return '<div class="riga_logo' + cls + '"><img src="' + escA(miniatura(l.guidId, 60)) + '" alt="">' +
                '<div class="nome">' + esc(l.sigla || l.nome) + (l.nome && l.sigla ? '<small>' + esc(l.nome) + '</small>' : '') +
-               (nota ? '<small>' + nota + '</small>' : '') + '</div>' + bottone + '</div>';
+               (nota ? '<small>' + nota + '</small>' : '') + '</div>' + etichetta + bottone + '</div>';
     }
     document.getElementById('lingLoghi').addEventListener('click', function () {
         if (!boxInModale) return; tabLoghi = 'prodotto'; disegnaLoghi(boxInModale.id);

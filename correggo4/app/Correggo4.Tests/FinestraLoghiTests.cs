@@ -94,6 +94,43 @@ public class FinestraLoghiTests
         Assert.DoesNotContain("riempiEdit(id, parte === 'loghi' ? 'descrizione' : parte);", html);
     }
 
+    /// <summary>
+    /// I20-1165: un bollo aggiunto o tolto dalla correzione si riconosce subito, anche dall'Agenzia:
+    /// etichetta e striscia verdi «+ AGGIUNTO», rosse «− TOLTO» col nome barrato e il logo sbiadito.
+    /// </summary>
+    [Fact]
+    public void Logo_aggiunto_o_tolto_ha_etichetta_e_striscia_colorate()
+    {
+        string html = Editor();
+
+        Assert.Contains("var etichetta = modo === 'aggiungi' ? '<span class=\"etichetta_logo piu\">+ AGGIUNTO</span>'", html);
+        Assert.Contains(": (modo === 'togli' ? '<span class=\"etichetta_logo meno\">&minus; TOLTO</span>' : '');", html);
+        Assert.Contains("'</div>' + etichetta + bottone + '</div>';", html);
+        Assert.Contains(".riga_logo.entrante { box-shadow: inset 6px 0 0 #2e8b3a; }", html);
+        Assert.Contains(".riga_logo.uscente { box-shadow: inset 6px 0 0 #c62828; }", html);
+        Assert.Contains(".riga_logo.uscente > img { opacity: .45; }", html);
+    }
+
+    [Fact]
+    public void Sui_loghi_in_attesa_niente_contorno_rosso()
+    {
+        string html = Editor();
+
+        Assert.Contains(".modale .riga_logo.borderFix { border: 1px solid #aaa !important; }", html);
+        // altrove nella finestra il rosso della correzione in attesa resta
+        Assert.Contains(".modale .borderFix { border: 3px solid red !important; }", html);
+    }
+
+    [Fact]
+    public void Niente_piu_note_da_aggiungere_e_da_togliere()
+    {
+        string html = Editor();
+
+        Assert.DoesNotContain("'da aggiungere'", html);
+        Assert.DoesNotContain("'da togliere'", html);
+        Assert.Contains("var nota = modo === 'presente' && l.automatico ? 'automatico' : '';", html);
+    }
+
     [Fact]
     public void Annulla_questa_modifica_ha_l_icona_undo()
     {
