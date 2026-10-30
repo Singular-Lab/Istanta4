@@ -306,6 +306,15 @@
     .corr_ok { position: absolute; min-width: 48px; height: auto; z-index: 6; cursor: pointer;
                transform: translate(-50%, -50%); filter: drop-shadow(1px 1px 2px rgba(0,0,0,.4)); }
     body.con_strumento .zona { cursor: crosshair; }
+    /* I20-1174: la nota si mette in qualsiasi punto della pagina, e sopra il cursore un'etichetta
+       dice se si e' su un prodotto (il suo codice) o no. */
+    body.modo_nota .foglio { cursor: crosshair; }
+    .etichetta_nota { position: fixed; z-index: 120; display: none; pointer-events: none; white-space: nowrap;
+                      background: #e30613; color: #fff; font: bold 15px Arial, sans-serif; padding: 4px 8px;
+                      border: 2px solid #1d5b55; transform: translate(-6px, calc(-100% - 14px)); }
+    .etichetta_nota::after { content: ''; position: absolute; left: 0; top: 100%;
+                             border-left: 9px solid transparent; border-right: 9px solid transparent;
+                             border-top: 11px solid #1d5b55; }
 
     .cassetto .fbtn.scelto { background: #1d5b55; color: #fff; }
     /* Cassetto note con le immagini dell'originale (Main.aspx:419-428): 50px, on/off per lo scelto. */
@@ -1021,6 +1030,7 @@
 </div>
 <div class="pop_corr" id="popCorr"></div>
 <div class="suggerimento" id="suggerimento"></div>
+<div class="etichetta_nota" id="etichettaNota"></div>
 <div class="avviso_vol nascosto" id="avvisoVol"></div>
 <div class="cat_velo" id="catVelo">
     <div class="cat_menu">
@@ -1404,6 +1414,46 @@
         });
     });
 
+    /* I20-1174: la nota anche fuori dai prodotti e nelle pagine senza prodotti. Il clic su un
+       prodotto lo gestisce la sua zona (qui sopra); sulle note e sul velo dell'impaginato non si fa
+       niente; col timone aperto la pagina e' del timone. */
+    document.querySelectorAll('.foglio').forEach(function (f) {
+        f.addEventListener('click', function (ev) {
+            if (strumento !== 'nota' || !stato.puoScrivere || document.body.classList.contains('tim_on')) return;
+            if (ev.target.closest('.zona, .corr_el, .attesa_agenzia')) return;
+            if (!scrivibile()) { suggerisci(motivoNonScrivibile(), 3500); return; }
+            var p = posizioneNelFoglio(f.querySelector('img.pagina'), ev);
+            popNuovaNota(0, p.x, p.y, ev, Number(f.dataset.idPagina));
+        });
+    });
+
+    /* I20-1174: l'etichetta sopra il cursore, come negli screenshot della issue. Il prodotto si
+       cerca per posizione e non dal bersaglio del mouse: sopra un prodotto possono esserci le sue
+       note e i suoi timbri, e il punto resta comunque sul prodotto. */
+    var etichettaNota = document.getElementById('etichettaNota');
+    // la chiama anche scegliStrumento: per sicurezza non conta sulla variabile qui sopra
+    function nascondiEtichettaNota() { document.getElementById('etichettaNota').style.display = 'none'; }
+    function zonaNelPunto(f, x, y) {
+        var zone = f.querySelectorAll('.zona');
+        for (var i = zone.length - 1; i >= 0; i--) {
+            var r = zone[i].getBoundingClientRect();
+            if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return zone[i];
+        }
+        return null;
+    }
+    document.getElementById('area').addEventListener('mousemove', function (ev) {
+        var f = ev.target.closest('.foglio');
+        if (strumento !== 'nota' || !f || document.body.classList.contains('tim_on')) { nascondiEtichettaNota(); return; }
+        var z = zonaNelPunto(f, ev.clientX, ev.clientY);
+        etichettaNota.textContent = z ? (z.title || 'Prodotto') : 'Nessuna referenza in questo punto';
+        etichettaNota.style.left = ev.clientX + 'px';
+        etichettaNota.style.top = ev.clientY + 'px';
+        etichettaNota.style.display = 'block';
+    });
+    document.getElementById('area').addEventListener('mouseleave', nascondiEtichettaNota);
+    // al clic si apre la finestrella della nota: l'etichetta non le deve stare sopra
+    document.getElementById('area').addEventListener('click', nascondiEtichettaNota, true);
+
     /* =====================================================================
        Correzioni (11/9/2026): note, timbri e OK visto.
        Stato iniziale da #datiCorrezioni; ogni operazione riuscita su /Correzioni/...
@@ -1506,7 +1556,7 @@
         if (ms) setTimeout(function () { if (s.textContent === testo) aggiornaSuggerimento(); }, ms);
     }
     function aggiornaSuggerimento() {
-        if (strumento === 'nota') suggerisci('Nota: clicca sul prodotto da correggere');
+        if (strumento === 'nota') suggerisci('Nota: clicca nel punto da correggere');
         else if (strumento === 'edit') suggerisci('Edit avanzato: clicca su un prodotto per aprire la scheda');
         else if (strumento === 'ok') suggerisci('OK visto: clicca su un prodotto per mettere o togliere l\'OK');
         else if (strumento && strumento.indexOf('timbro:') === 0)
@@ -1517,6 +1567,8 @@
         strumento = s;
         document.body.classList.toggle('con_strumento', !!s && s !== 'edit');
         document.body.classList.toggle('modo_edit', s === 'edit');
+        document.body.classList.toggle('modo_nota', s === 'nota');   // I20-1174
+        if (s !== 'nota') nascondiEtichettaNota();
         document.getElementById('strNota').classList.toggle('scelto', s === 'nota');
         document.getElementById('strEdit').classList.toggle('scelto', s === 'edit');
         [['strNota', s === 'nota'], ['strEdit', s === 'edit']].forEach(function (c) {
@@ -1932,7 +1984,8 @@
     function inCorso(b, on) { if (b) { b.disabled = on; } }
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') chiudiPop(); });
 
-    function popNuovaNota(idBox, x, y, ev) {
+    // I20-1174: idBox 0 = nota in un punto della pagina idPagina, fuori dai prodotti
+    function popNuovaNota(idBox, x, y, ev, idPagina) {
         mostraPop('Nuova nota ' + badgeTipo(stato.tipoUtente),
             '<textarea placeholder="Scrivi la correzione…"></textarea>' +
             '<div class="pc_bottoni"><button class="bottone" data-azione="annulla">Annulla</button>' +
@@ -1940,7 +1993,7 @@
         suBottone('annulla', chiudiPop);
         var bs = suBottone('salva', function () {
             inCorso(bs, true); errorePop('');
-            api(C4_BASE + 'Correzioni/Nota', { idBox: Number(idBox), testo: pop.querySelector('textarea').value, x: x, y: y })
+            api(C4_BASE + 'Correzioni/Nota', { idBox: Number(idBox), idPagina: idPagina || 0, testo: pop.querySelector('textarea').value, x: x, y: y })
                 .then(function (j) { if (j.ok) chiudiPop(); else { errorePop(j.messaggio); inCorso(bs, false); } });
         });
     }
