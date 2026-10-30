@@ -21,6 +21,7 @@
       "@server_types*": ["server_types*"],
       "@enums*": ["enums*"],
       "@lib/*": ["./lib/*"],
+      "sharp": ["node_modules/sharp/dist/index.d.cts"],
     },
     "resolveJsonModule": true,
     "allowJs": true,
