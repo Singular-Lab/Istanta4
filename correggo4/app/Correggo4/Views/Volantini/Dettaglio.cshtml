@@ -697,16 +697,17 @@
     .etichetta_logo.piu { background: #2e8b3a; }
     .etichetta_logo.meno { background: #c62828; }
     .riga_logo .bottone { padding: 1px 6px; font-size: 10px; }
-    .scelta_foto { position: fixed; left: 140px; right: 40px; top: 110px; bottom: 40px; z-index: 110; display: none;
-                   flex-direction: column; background: #d3d3d3; border: 1px solid #7a7a7a; box-shadow: 0 4px 18px rgba(0,0,0,.35); }
+    /* I20-1172: la scelta della foto come nel vecchio, a tutto schermo sul velo nero: le foto grandi
+       in fila al centro col bordo nero, gialla quella in uso, CHIUDI sotto. Prima era un pannello
+       grande con titolo e griglia. */
+    .scelta_foto { position: fixed; left: 0; top: 0; right: 0; bottom: 0; z-index: 110; display: none;
+                   flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 20px;
+                   background: rgba(0,0,0,.7); }
     .scelta_foto.visibile { display: flex; }
-    .scelta_foto .testa { display: flex; justify-content: space-between; align-items: center; padding: 5px 8px;
-                          font-weight: bold; font-size: 12px; border-bottom: 1px solid #9a9a9a; }
-    .scelta_foto .testa .chiudi { font-weight: normal; border: 1px solid #888; background: #efefef; padding: 1px 8px; cursor: pointer; font-size: 11px; }
-    .griglia_foto { flex: 1; overflow-y: auto; padding: 10px; display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-                    gap: 10px; align-content: start; }
-    .voce_foto { background: #fff; border: 4px solid transparent; padding: 5px; cursor: pointer; text-align: center; font-size: 10.5px; }
-    .voce_foto img { width: 100%; height: 170px; object-fit: contain; display: block; margin-bottom: 4px; }
+    .striscia_foto { display: flex; gap: 18px; overflow-x: auto; max-width: 100%; padding: 2px; }
+    .scelta_foto .vuoto, .scelta_foto .ea_errore { background: #fff; padding: 10px 16px; }
+    .voce_foto { flex: 0 0 auto; width: 360px; height: 240px; background: #fff; border: 3px solid #000; cursor: pointer; }
+    .voce_foto img { width: 100%; height: 100%; object-fit: contain; display: block; }
     .voce_foto:hover { border-color: #5b7fc7; }
     .voce_foto.corrente { border-color: #e6d600; }
     /* ---------- REPORT CORREZIONI (j214): la finestra #report di Main.aspx e reports.js ---------- */
@@ -1015,8 +1016,8 @@
 <script id="datiCorrezioni" type="application/json">@Html.Raw(jsonCorrezioni)</script>
 <input type="file" id="fileFotoNuova" accept=".jpg,.jpeg,.png,.tif,.tiff,.webp,.psd,image/*" style="display:none">
 <div class="scelta_foto" id="sceltaFoto">
-    <div class="testa"><span id="sfTitolo"></span><span class="chiudi" id="sfChiudi">CHIUDI</span></div>
-    <div class="griglia_foto" id="sfGriglia"></div>
+    <div class="striscia_foto" id="sfGriglia"></div>
+    <button class="bottone" type="button" id="sfChiudi">CHIUDI</button>
 </div>
 <div class="pop_corr" id="popCorr"></div>
 <div class="suggerimento" id="suggerimento"></div>
@@ -2890,7 +2891,6 @@
 
     function apriSceltaFoto(id, codice) {
         var ov = document.getElementById('sceltaFoto'), gr = document.getElementById('sfGriglia');
-        document.getElementById('sfTitolo').textContent = 'Foto di ' + codice + ' in Istanta: clicca quella da usare';
         gr.innerHTML = '<div class="vuoto">Carico le foto…</div>';
         ov.classList.add('visibile');
         apiGet(C4_BASE + 'Correzioni/Foto/' + encodeURIComponent(codice)).then(function (j) {
@@ -2899,9 +2899,10 @@
             var corrente = fotoCorrenti[codice] ? fotoCorrenti[codice].guid : '';
             gr.innerHTML = (j.dati || []).length === 0 ? '<div class="vuoto">Nessuna foto per questo codice.</div>'
                 : j.dati.map(function (f) {
-                    return '<div class="voce_foto' + (f.guidId === corrente ? ' corrente' : '') + '" data-guid="' + escA(f.guidId) + '" title="' + escA(f.nome) + '">' +
-                           '<img src="' + escA(miniatura(f.guidId, 220)) + '" alt="">' + esc(f.nome) +
-                           (f.guidId === corrente ? '<br><b>in uso</b>' : '') + '</div>';
+                    // il nome del file sta nel suggerimento; la foto in uso ha il bordo giallo
+                    return '<div class="voce_foto' + (f.guidId === corrente ? ' corrente' : '') + '" data-guid="' + escA(f.guidId) + '" title="' +
+                           escA(f.nome + (f.guidId === corrente ? ' (in uso)' : '')) + '">' +
+                           '<img src="' + escA(miniatura(f.guidId, 220)) + '" alt=""></div>';
                   }).join('');
             gr.querySelectorAll('[data-guid]').forEach(function (el) {
                 el.addEventListener('click', function () {
@@ -2915,6 +2916,10 @@
     }
     document.getElementById('sfChiudi').addEventListener('click', function () {
         document.getElementById('sceltaFoto').classList.remove('visibile');
+    });
+    // I20-1172: un clic sul velo nero, fuori dalle foto, chiude come CHIUDI
+    document.getElementById('sceltaFoto').addEventListener('click', function (ev) {
+        if (ev.target === this) this.classList.remove('visibile');
     });
 
     function loghiDelProdotto() {
