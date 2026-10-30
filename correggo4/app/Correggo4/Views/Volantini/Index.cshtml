@@ -24,6 +24,9 @@
     // hidden="@bellNascosto": Razor con un bool false cancella l'attributo, con true lo scrive
     bool bellNascosto = Model.NotificheNonLette == 0;
     string bellNumero = Model.NotificheNonLette > 99 ? "99+" : Model.NotificheNonLette.ToString();
+    // I20-1173: senza promo si vede solo «Nessuna promo attiva». Ricerca e colonne restano nella
+    // pagina, nascoste, perche' lo script le cerca all'avvio.
+    bool nessunaPromo = Model.Promo.Count == 0;
 }
 <!DOCTYPE html>
 <html lang="it">
@@ -342,6 +345,10 @@ a.act,a.v-thumb{text-decoration:none;color:inherit}
   border:1.5px dashed #cfd8dc;border-radius:12px;padding:40px 20px;text-align:center;color:var(--ink-3);background:rgba(255,255,255,.5)
 }
 .empty b{display:block;color:var(--ink-2);font-size:15px;margin-bottom:4px}
+/* I20-1173: hidden vince sul display:grid della .main */
+.bar[hidden],.main[hidden]{display:none}
+.nessuna-promo{max-width:560px;margin:60px auto 110px;padding-inline:28px;text-align:center}
+.nessuna-promo .empty b{margin-bottom:0}
 
 /* ---------- Toggle notifiche ---------- */
 .notif{
@@ -400,6 +407,11 @@ a.act,a.v-thumb{text-decoration:none;color:inherit}
 {
     <div style="background:#fff0c2;color:#8a5a00;font-weight:600;padding:10px 28px;border-bottom:1px solid #f0d98a">@avvisoHome</div>
 }
+@* I20-1173: l'avviso del Category fuori finestra solo se ha altre promo da vedere *@
+@if (TempData["AvvisoCategory"] is string avvisoCategory && !nessunaPromo)
+{
+    <div style="background:#fff0c2;color:#8a5a00;font-weight:600;padding:10px 28px;border-bottom:1px solid #f0d98a">@avvisoCategory</div>
+}
 <header class="hdr">
   <div class="hdr-in">
     <a class="brand" href="~/Volantini" aria-label="Correggo — home">
@@ -449,7 +461,7 @@ a.act,a.v-thumb{text-decoration:none;color:inherit}
   </div>
 </header>
 
-<nav class="bar" aria-label="Filtri">
+<nav class="bar" aria-label="Filtri" hidden="@nessunaPromo">
   <div class="bar-in">
     @* Tab Tutte / In lavorazione / Approvate tolti l'11/9/2026: "Approvato" non esiste (vedi correggo4-correzioni.md). *@
     <label class="search">
@@ -460,7 +472,21 @@ a.act,a.v-thumb{text-decoration:none;color:inherit}
   </div>
 </nav>
 
-<main class="main">
+@if (nessunaPromo)
+{
+    <div class="nessuna-promo">
+      <div class="empty"><b>Nessuna promo attiva</b></div>
+      @if (Model.MostraScadute)
+      {
+          <a class="more" href="~/Volantini">Nascondi le promo non più valide</a>
+      }
+      else if (Model.PromoScadute > 0)
+      {
+          <a class="more" href="~/Volantini?scadute=true">Mostra anche le promo non più valide (@Model.PromoScadute)</a>
+      }
+    </div>
+}
+<main class="main" hidden="@nessunaPromo">
   <aside class="side">
     <h2 class="sec">Promo attive <small id="campCount"></small></h2>
     <div class="camps" id="camps"></div>

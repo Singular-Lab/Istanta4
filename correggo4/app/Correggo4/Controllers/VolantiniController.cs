@@ -277,7 +277,7 @@ public class VolantiniController : Controller
         if (utenteAff?.TipoFico == ServizioCorrezioni.TipoFicoCategory
             && !FinestreCategory.Aperta(await FinestreCategory.LeggiAsync(ctx, vol.Classificazione), DateTime.UtcNow))
         {
-            TempData["Avviso"] = $"La promo {vol.Classificazione} non è aperta ai Category in questo momento.";
+            TempData["AvvisoCategory"] = $"La promo {vol.Classificazione} non è aperta ai Category in questo momento.";
             return RedirectToAction(nameof(Index));
         }
 
@@ -338,7 +338,8 @@ public class VolantiniController : Controller
         if (!storico && utenteEditor?.TipoFico == ServizioCorrezioni.TipoFicoCategory
             && !FinestreCategory.Aperta(await FinestreCategory.LeggiAsync(ctx, vol.Classificazione), DateTime.UtcNow))
         {
-            TempData["Avviso"] = $"La promo {vol.Classificazione} non è aperta ai Category in questo momento.";
+            // I20-1173: chiave a parte, la home la mostra solo se il Category ha altre promo
+            TempData["AvvisoCategory"] = $"La promo {vol.Classificazione} non è aperta ai Category in questo momento.";
             return RedirectToAction(nameof(Index));
         }
 
