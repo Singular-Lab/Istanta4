@@ -54,6 +54,11 @@ Prima di esaminare o modificare qualsiasi file:
    (`projectId`, il tuo `agent` fra `claude`, `codex` e `copilot`, il `taskId`).
    Valuta se una skill può dare al task una competenza specialistica: decidi tu, in
    base a nome e descrizione.
+   - Se hai la skill `singular-controlplane`, usala con quella stessa risposta per
+     allineare le skill installate al catalogo: installa e aggiorna quelle con
+     `requiresNativeActivation` e toglie le revocate, senza toccare le skill personali.
+     Se non l'hai, prosegui senza installare niente e suggerisci all'utente di
+     installarla.
    - Per ogni skill pertinente chiama `company_get_skill` con il `taskId` e segui il suo
      `SKILL.md` da subito: non serve installarla né aprire una nuova sessione.
    - Skill senza script: basta il `SKILL.md`. Scarica una reference dal suo
