@@ -81,6 +81,9 @@
     "docker:test:logs": "docker compose -f docker-compose.test.yml logs -f app",
     "docker:test:prune": "docker compose -f docker-compose.test.yml down -v && docker image prune -f"
   },
+  "dependencies": {
+    "undici": "^8.12.3"
+  },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.5",
     "@eslint/js": "^9.39.3",

@@ -1,5 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+const agente = vi.hoisted(() => ({
+  opzioni: undefined as { headersTimeout?: number; bodyTimeout?: number } | undefined,
+}));
+
+vi.mock('undici', () => ({
+  Agent: class {
+    constructor(opzioni: { headersTimeout?: number; bodyTimeout?: number }) {
+      agente.opzioni = opzioni;
+    }
+  },
+}));
+
 vi.mock('../../logger', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
@@ -18,6 +30,16 @@ afterEach(() => {
 });
 
 describe('chiamaHttp', () => {
+  it('lascia il tempo massimo all\'AbortSignal disabilitando i timeout interni di Undici', async () => {
+    fetchFinto.mockResolvedValueOnce(risposta(200));
+
+    await chiamaHttp('https://istanta.test/FicoProcess/x', { categoria: 'lunga' });
+
+    const init = fetchFinto.mock.calls[0][1] as RequestInit & { dispatcher?: unknown };
+    expect(agente.opzioni).toEqual({ headersTimeout: 0, bodyTimeout: 0 });
+    expect(init.dispatcher).toBeDefined();
+  });
+
   it('restituisce la risposta anche con uno stato di errore: l\'esito lo legge chi chiama', async () => {
     fetchFinto.mockResolvedValueOnce(risposta(500));
 
@@ -94,6 +116,21 @@ describe('chiamaHttp', () => {
 
     expect(errore).toBeInstanceOf(ErroreHttp);
     expect(errore.motivo).toBe('timeout');
+    expect(fetchFinto).toHaveBeenCalledTimes(1);
+  });
+
+  it('il timeout interno delle intestazioni e\' un timeout leggibile e non viene ritentato', async () => {
+    fetchFinto.mockRejectedValue(erroreConnessione('UND_ERR_HEADERS_TIMEOUT'));
+
+    const errore = await chiamaHttp('https://db1.test/UploadVolStorico.ashx', {
+      timeoutMs: 30 * 60_000,
+      idempotente: true,
+      ritardoBaseMs: 0,
+    }).catch(e => e);
+
+    expect(errore).toBeInstanceOf(ErroreHttp);
+    expect(errore.motivo).toBe('timeout');
+    expect(errore.destinazione).toBe('https://db1.test/UploadVolStorico.ashx');
     expect(fetchFinto).toHaveBeenCalledTimes(1);
   });
 
