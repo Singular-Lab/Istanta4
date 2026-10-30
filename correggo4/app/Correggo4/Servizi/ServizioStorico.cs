@@ -32,9 +32,6 @@ public sealed partial class ServizioStorico
         this.ctx = ctx; this.estrattore = estrattore; this.correzioni = correzioni; this.log = log;
     }
 
-    [GeneratedRegex(@"</?[A-Z0-9_]+>")]
-    private static partial Regex Tag();
-
     // ------------------------------------------------------------------ elenco
 
     public async Task<StoricoPubblicazioni> ElencoAsync(string? cerca, int pagina)
@@ -304,7 +301,7 @@ public sealed partial class ServizioStorico
     {
         var pezzi = new List<string>();
         foreach (var (k, v) in e.Campi)
-            pezzi.Add(k == "descrizione" ? "descrizione «" + Tag().Replace(v, " ").Trim() + "»"
+            pezzi.Add(k == "descrizione" ? "descrizione «" + LettoreDescrizione.InChiaro(v) + "»"
                                          : $"{(NomiCampi.TryGetValue(k, out var n) ? n : k)} {v}");
         foreach (var a in e.Azioni)
             pezzi.Add(a.Titolo + (a.Campi.Count > 0 ? " (" + string.Join(", ", a.Campi.Select(c =>
@@ -341,7 +338,7 @@ public sealed partial class ServizioStorico
                 {
                     using var d = JsonDocument.Parse(b.Dna);
                     if (d.RootElement.TryGetProperty("descrizione", out var de) && de.ValueKind == JsonValueKind.String)
-                        descr = Tag().Replace(de.GetString() ?? "", " ").Trim();
+                        descr = LettoreDescrizione.InChiaro(de.GetString());
                 }
                 catch (JsonException) { }
             }

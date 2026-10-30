@@ -614,7 +614,7 @@ public sealed partial class ServizioPropagazione
                 using var d = JsonDocument.Parse(dati.Dna);
                 if (d.RootElement.ValueKind == JsonValueKind.Object && d.RootElement.TryGetProperty("descrizione", out var de)
                     && de.ValueKind == JsonValueKind.String)
-                    descr = System.Text.RegularExpressions.Regex.Replace(de.GetString() ?? "", "</?[A-Z0-9_]+>", " ").Trim();
+                    descr = Ingestione.LettoreDescrizione.InChiaro(de.GetString());
             }
             catch (JsonException) { }
         }

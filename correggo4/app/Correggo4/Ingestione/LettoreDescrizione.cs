@@ -26,6 +26,24 @@ public static partial class LettoreDescrizione
     public const string ACapoForzato = "FORCED_LINE_BREAK";
     private const string Segnaposto = "\uE000";
 
+    [GeneratedRegex(@"</?[A-Z0-9_]+>")]
+    private static partial Regex Fascia();
+
+    [GeneratedRegex(@"\s+")]
+    private static partial Regex Spazi();
+
+    /// <summary>
+    /// I20-1170: la descrizione su una riga, per le etichette «codice – descrizione» (report,
+    /// propagazioni) e i riassunti: senza fasce, con l'a capo forzato e gli a capo che diventano
+    /// uno spazio. Prima si toglievano solo le fasce e restava "FORCED_LINE_BREAKCOOP".
+    /// </summary>
+    public static string InChiaro(string? grezza)
+    {
+        if (string.IsNullOrWhiteSpace(grezza)) return "";
+        string testo = Fascia().Replace(grezza, " ").Replace(ACapoForzato, " ");
+        return Spazi().Replace(testo, " ").Trim();
+    }
+
     public static List<PezzoDescrizione> Leggi(string? grezza)
     {
         var pezzi = LeggiPezzi(grezza?.Replace(ACapoForzato, Segnaposto));
