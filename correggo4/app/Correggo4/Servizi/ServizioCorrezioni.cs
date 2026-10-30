@@ -215,10 +215,19 @@ public sealed partial class ServizioCorrezioni
 
     // ------------------------------------------------------------------ note
 
-    public async Task<EsitoCorrezione> NuovaNotaAsync(Utente u, long idBox, string? testo, double x, double y)
+    /// <summary>
+    /// I20-1174: con idBox 0 la nota sta in un punto della pagina idPagina, fuori dai prodotti:
+    /// valgono le regole del volantino ma non la policy dei reparti (non c'e' un reparto), e non
+    /// si propaga (la catena e' per prodotto).
+    /// </summary>
+    public async Task<EsitoCorrezione> NuovaNotaAsync(Utente u, long idBox, string? testo, double x, double y, int idPagina = 0)
     {
         if (!u.Scrive) return NonAutorizzato();
-        var (box, vol, errore) = await BoxScrivibileAsync(u, idBox);
+        VolantiniPagineElementi? box = null;
+        Volantini? vol;
+        EsitoCorrezione? errore;
+        if (idBox > 0) (box, vol, errore) = await BoxScrivibileAsync(u, idBox);
+        else (vol, errore) = await VolantinoScrivibileAsync(u, idPagina);
         if (errore != null) return errore;
 
         string? t = PulisciTesto(testo, out var erroreTesto);
@@ -227,8 +236,8 @@ public sealed partial class ServizioCorrezioni
         var adesso = DateTime.UtcNow;
         var nota = new VolantiniPagineNote
         {
-            IdPagina = box!.IdPagina,
-            IdElemento = box.Id,
+            IdPagina = box?.IdPagina ?? idPagina,
+            IdElemento = box?.Id,
             Tipo = TipoNotaTestuale,
             Descrizione = t,
             Posx = x,
@@ -241,7 +250,7 @@ public sealed partial class ServizioCorrezioni
         ctx.VolantiniPagineNotes.Add(nota);
         await ctx.SaveChangesAsync();
         // La catena la costruisce il demone: qui si registra solo il lavoro (j222, come l'originale).
-        await propagazione.GeneraPerNotaAsync(nota.Id, box!.Id, vol!.Id);
+        if (box != null) await propagazione.GeneraPerNotaAsync(nota.Id, box.Id, vol!.Id);
         return Fatto(await CaricaAsync(vol!.Id, u), nota.Id);
     }
 

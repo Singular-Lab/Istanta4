@@ -8,6 +8,8 @@ namespace Correggo4.Controllers;
 public sealed class RichiestaNota
 {
     public long IdBox { get; set; }
+    /// <summary>I20-1174: la pagina, per la nota fuori dai prodotti (IdBox 0).</summary>
+    public int IdPagina { get; set; }
     public string? Testo { get; set; }
     public double X { get; set; }
     public double Y { get; set; }
@@ -78,7 +80,7 @@ public sealed class CorrezioniController : ControllerBase
 
     [HttpPost("Nota")]
     public Task<IActionResult> NuovaNota([FromBody] RichiestaNota r) =>
-        Esegui(u => servizio.NuovaNotaAsync(u, r.IdBox, r.Testo, r.X, r.Y));
+        Esegui(u => servizio.NuovaNotaAsync(u, r.IdBox, r.Testo, r.X, r.Y, r.IdPagina));
 
     [HttpPost("Nota/{id:long}")]
     public Task<IActionResult> ModificaNota(long id, [FromBody] RichiestaTesto r) =>
