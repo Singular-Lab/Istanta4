@@ -128,6 +128,7 @@ const FlyerInsights: FC<FlyerInsightsProps> = ({
             totalePagine={insights.totalePagine}
             config={insightsConfig?.mappa}
             repartiColorStrategy={insightsConfig?.reparti?.colorStrategy}
+            origineStorico={Boolean(insights.origineStorico)}
           />
         ) : (
           <EmptyState

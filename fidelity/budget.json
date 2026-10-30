@@ -6,11 +6,11 @@
       "moduli": [],
       "js": {
         "gzip": 219,
-        "brotli": 180
+        "brotli": 181
       },
       "css": {
-        "gzip": 31,
-        "brotli": 23
+        "gzip": 32,
+        "brotli": 24
       }
     },
     "webpliant-volantino": {
@@ -20,12 +20,12 @@
         "src/router/loaderFunctions.ts"
       ],
       "js": {
-        "gzip": 429,
+        "gzip": 430,
         "brotli": 362
       },
       "css": {
-        "gzip": 95,
-        "brotli": 72
+        "gzip": 96,
+        "brotli": 73
       }
     },
     "login": {
@@ -33,12 +33,12 @@
         "src/pages/HubLogin/index.tsx"
       ],
       "js": {
-        "gzip": 312,
-        "brotli": 262
+        "gzip": 313,
+        "brotli": 263
       },
       "css": {
-        "gzip": 31,
-        "brotli": 23
+        "gzip": 32,
+        "brotli": 24
       }
     },
     "dashboard": {
@@ -48,12 +48,12 @@
         "src/pages/Dashboard3/index.tsx"
       ],
       "js": {
-        "gzip": 431,
-        "brotli": 369
+        "gzip": 432,
+        "brotli": 370
       },
       "css": {
-        "gzip": 33,
-        "brotli": 25
+        "gzip": 34,
+        "brotli": 26
       }
     },
     "promo-in-corso": {
@@ -63,12 +63,12 @@
         "src/pages/LavorazioniInCorso/index.tsx"
       ],
       "js": {
-        "gzip": 393,
-        "brotli": 335
+        "gzip": 394,
+        "brotli": 336
       },
       "css": {
-        "gzip": 34,
-        "brotli": 26
+        "gzip": 35,
+        "brotli": 27
       }
     },
     "dettaglio-promo": {
@@ -78,12 +78,12 @@
         "src/pages/LavorazioniInCorso/DettagliLavorazioneInCorso/index.tsx"
       ],
       "js": {
-        "gzip": 479,
-        "brotli": 411
+        "gzip": 480,
+        "brotli": 413
       },
       "css": {
-        "gzip": 35,
-        "brotli": 27
+        "gzip": 36,
+        "brotli": 28
       }
     },
     "menabo": {
@@ -91,12 +91,12 @@
         "src/pages/MenaboPromo/index.tsx"
       ],
       "js": {
-        "gzip": 341,
-        "brotli": 288
+        "gzip": 342,
+        "brotli": 289
       },
       "css": {
-        "gzip": 31,
-        "brotli": 23
+        "gzip": 32,
+        "brotli": 24
       }
     }
   }

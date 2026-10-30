@@ -24,6 +24,12 @@ describe("PaginazioneTabella", () => {
     expect(screen.getByText("Mostrati 26–50 di 1.234")).toBeInTheDocument();
   });
 
+  it("con l'unità dice cosa sono le righe, dopo il totale", () => {
+    disegna({ totale: 1842, pagina: 1, dimensionePagina: 100, unita: "file" });
+
+    expect(screen.getByText("Mostrati 1–100 di 1.842 file")).toBeInTheDocument();
+  });
+
   it("nell'ultima pagina l'intervallo si ferma al totale", () => {
     disegna({ totale: 120, pagina: 5, dimensionePagina: 25 });
 

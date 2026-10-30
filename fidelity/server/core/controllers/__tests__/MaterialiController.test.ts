@@ -36,9 +36,12 @@ const FILE_1 = 'f1000000-0000-4000-8000-000000000001';
 function servizioFinto(dati: Partial<IMaterialiService> = {}): IMaterialiService {
   return {
     getVolantini: vi.fn<IMaterialiService['getVolantini']>(),
-    getPromozioniPop: vi.fn<IMaterialiService['getPromozioniPop']>(async () => ({ promozioni: [] })),
+    getPromozioniVolantini: vi.fn<IMaterialiService['getPromozioniVolantini']>(),
+    getPromozioniPop: vi.fn<IMaterialiService['getPromozioniPop']>(async () => ({ promozioni: [], avvisi: [] })),
     getRiepilogoPop: vi.fn<IMaterialiService['getRiepilogoPop']>(),
     getFilePop: vi.fn<IMaterialiService['getFilePop']>(),
+    getOpzioniFilePop: vi.fn<IMaterialiService['getOpzioniFilePop']>(async () => ({ aree: [], canali: [], reparti: [] })),
+    verificaZipPop: vi.fn<IMaterialiService['verificaZipPop']>(async () => ({ file: 3, nomeFile: 'Promo ottobre - Espositori.zip' })),
     preparaZipPop: vi.fn<IMaterialiService['preparaZipPop']>(async () => ({ nomeFile: 'Promo ottobre - Espositori.zip', voci: [] })),
     scriviZipPop: vi.fn<IMaterialiService['scriviZipPop']>(async (_zip, destinazione) => {
       destinazione.end(Buffer.from('PK finto'));
@@ -51,6 +54,8 @@ function servizioFinto(dati: Partial<IMaterialiService> = {}): IMaterialiService
 function creaApp(servizio: IMaterialiService) {
   const app = express();
   app.use(express.json());
+  // Come middlewares.ts: il form nascosto del download arriva urlencoded
+  app.use(express.urlencoded({ extended: true }));
   new MaterialiController(servizio).registerRoutes(app);
   return app;
 }
@@ -63,10 +68,13 @@ describe('/api/materiali: parametri', () => {
   it.each([
     ['/api/materiali/volantini?periodo=futuro'],
     ['/api/materiali/volantini'],
+    ['/api/materiali/volantini/promozioni'],
+    ['/api/materiali/volantini/promozioni?periodo=passati'],
     ['/api/materiali/pop/promozioni'],
     ['/api/materiali/pop/promozioni/p1/formati?periodo=correnti'],
     [`/api/materiali/pop/promozioni/p1/file?periodo=&idFormato=${FORMATO}`],
     [`/api/materiali/pop/promozioni/p1/zip?periodo=domani&idFormato=${FORMATO}`],
+    [`/api/materiali/pop/promozioni/p1/file/opzioni?periodo=ieri&idFormato=${FORMATO}`],
   ])('periodo mancante o non valido: 400 (%s)', async (url) => {
     const servizio = servizioFinto();
 
@@ -74,6 +82,7 @@ describe('/api/materiali: parametri', () => {
 
     expect(res.status).toBe(400);
     expect(servizio.getVolantini).not.toHaveBeenCalled();
+    expect(servizio.getPromozioniVolantini).not.toHaveBeenCalled();
     expect(servizio.getPromozioniPop).not.toHaveBeenCalled();
     expect(servizio.preparaZipPop).not.toHaveBeenCalled();
   });
@@ -108,6 +117,106 @@ describe('/api/materiali: parametri', () => {
     expect(fuoriElenco.body).toMatchObject({ pagina: 3, dimensione: 100, totale: 0, file: [] });
     expect(repository.elencaFile).toHaveBeenNthCalledWith(1, expect.any(Object), expect.any(Object), { limite: 100, scarto: 200 });
     expect(prevista.body).toMatchObject({ pagina: 1, dimensione: 500 });
+    // Le tendine non si ricalcolano a ogni pagina: hanno la loro route
+    expect(repository.elencaOpzioniFile).not.toHaveBeenCalled();
+  });
+
+  it('le tendine dei file di un formato hanno la loro route, che chiede solo di consultare i materiali', async () => {
+    permessi.concessi = new Set(['materiali.visualizza']);
+    const servizio = servizioFinto();
+
+    const res = await request(creaApp(servizio)).get(`/api/materiali/pop/promozioni/p1/file/opzioni?periodo=attivi&idFormato=${FORMATO}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ aree: [], canali: [], reparti: [] });
+    expect(servizio.getOpzioniFilePop).toHaveBeenCalledWith('p1', { periodo: 'attivi', idFormato: FORMATO });
+  });
+
+  it('le promozioni POP passano la richiesta al servizio, per chiedere a Istanta i kit non avviati', async () => {
+    const servizio = servizioFinto();
+
+    const res = await request(creaApp(servizio)).get('/api/materiali/pop/promozioni?periodo=in-corso');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ promozioni: [], avvisi: [] });
+    expect(servizio.getPromozioniPop).toHaveBeenCalledWith('in-corso', expect.anything());
+  });
+});
+
+describe('/api/materiali/volantini/promozioni', () => {
+  const AREA = '0a000000-0000-4000-8000-000000000001';
+
+  /** Il servizio vero su un database finto e vuoto: valida i parametri come in produzione. */
+  const servizioVero = () => {
+    const repository = {
+      elencaPromoVolantini: vi.fn<IMaterialiRepository['elencaPromoVolantini']>(async () => []),
+      contaPromoVolantini: vi.fn<IMaterialiRepository['contaPromoVolantini']>(async () => ({ promozioni: 0, kit: 0 })),
+      elencaVariantiVolantini: vi.fn<IMaterialiRepository['elencaVariantiVolantini']>(async () => []),
+      elencaAreeCanaliVolantini: vi.fn<IMaterialiRepository['elencaAreeCanaliVolantini']>(async () => []),
+      elencaAnniPromoVolantini: vi.fn<IMaterialiRepository['elencaAnniPromoVolantini']>(async () => []),
+    } as Partial<IMaterialiRepository> as IMaterialiRepository;
+    return {
+      repository,
+      servizio: new MaterialiService(repository, { getAllKitPerGestioneLavorazione: vi.fn() }, { scriviZipDaOlimpo: vi.fn() }),
+    };
+  };
+
+  it('i filtri arrivano al servizio: anno, pagina e dimensione come numeri, i testi senza spazi', async () => {
+    const servizio = servizioFinto();
+
+    await request(creaApp(servizio)).get(
+      `/api/materiali/volantini/promozioni?periodo=storico&cerca=%20natale%20&idPromo=p1&idArea=${AREA}&anno=2024&pagina=2&dimensione=24`
+    );
+
+    expect(servizio.getPromozioniVolantini).toHaveBeenCalledWith({
+      periodo: 'storico',
+      cerca: 'natale',
+      idPromo: 'p1',
+      idArea: AREA,
+      idCanale: undefined,
+      anno: 2024,
+      pagina: 2,
+      dimensione: 24,
+    });
+    expect(servizio.getVolantini).not.toHaveBeenCalled();
+  });
+
+  it('risponde con la pagina di promozioni, la dimensione non prevista vale 12', async () => {
+    const { servizio, repository } = servizioVero();
+
+    const res = await request(creaApp(servizio)).get('/api/materiali/volantini/promozioni?periodo=attivi&pagina=2&dimensione=1000');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      promozioni: [], totale: 0, totaleKit: 0, totaleSenzaFiltri: 0, pagina: 2, dimensione: 12,
+      opzioni: { promozioni: [], aree: [], canali: [], anni: [] },
+    });
+    expect(repository.elencaPromoVolantini).toHaveBeenNthCalledWith(1, expect.any(Object), expect.any(Object), { limite: 12, scarto: 12 });
+  });
+
+  it.each([
+    ['periodo In corso, che resta per kit', 'periodo=in-corso'],
+    ['anno non numerico', 'periodo=storico&anno=abc'],
+    ['anno con altri caratteri', 'periodo=storico&anno=2024x'],
+    ['anno fuori misura', 'periodo=storico&anno=99999'],
+    ['area non valida', 'periodo=storico&idArea=nord'],
+  ])('%s: 400 senza interrogare il database', async (_, parametri) => {
+    const { servizio, repository } = servizioVero();
+
+    const res = await request(creaApp(servizio)).get(`/api/materiali/volantini/promozioni?${parametri}`);
+
+    expect(res.status).toBe(400);
+    expect(repository.elencaPromoVolantini).not.toHaveBeenCalled();
+  });
+
+  it('senza il permesso di consultare i materiali: 403', async () => {
+    permessi.concessi = new Set();
+    const servizio = servizioFinto();
+
+    const res = await request(creaApp(servizio)).get('/api/materiali/volantini/promozioni?periodo=attivi');
+
+    expect([res.status, res.body.codice]).toEqual([403, 'materiali.visualizza']);
+    expect(servizio.getPromozioniVolantini).not.toHaveBeenCalled();
   });
 });
 
@@ -185,5 +294,79 @@ describe('/api/materiali: ZIP dei file POP', () => {
     expect(res.headers['content-disposition']).toBeUndefined();
     expect(res.headers['content-type']).toContain('application/json');
     expect(servizio.scriviZipPop).not.toHaveBeenCalled();
+  });
+
+  it('POST da form nascosto: la richiesta arriva come testo JSON nel campo "richiesta", accanto al token', async () => {
+    const servizio = servizioFinto();
+    const richiesta = { periodo: 'in-corso', idFormato: FORMATO, idFile: [FILE_1] };
+
+    const res = await request(creaApp(servizio))
+      .post('/api/materiali/pop/promozioni/p1/zip')
+      .type('form')
+      .send({ _csrf: 'token-csrf', richiesta: JSON.stringify(richiesta) });
+
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('application/zip');
+    expect(servizio.preparaZipPop).toHaveBeenCalledWith('p1', expect.objectContaining(richiesta));
+  });
+
+  it('POST da form con una richiesta che non e\' JSON: 400, niente ZIP', async () => {
+    const servizio = servizioFinto();
+
+    const res = await request(creaApp(servizio))
+      .post('/api/materiali/pop/promozioni/p1/zip')
+      .type('form')
+      .send({ _csrf: 'token-csrf', richiesta: '{non json' });
+
+    expect(res.status).toBe(400);
+    expect(res.headers['content-disposition']).toBeUndefined();
+    expect(servizio.preparaZipPop).not.toHaveBeenCalled();
+  });
+});
+
+describe('/api/materiali: verifica prima del download POP', () => {
+  it('risponde in JSON con i file che andranno nello ZIP, senza costruirlo', async () => {
+    const servizio = servizioFinto();
+
+    const res = await request(creaApp(servizio))
+      .post('/api/materiali/pop/promozioni/p1/zip/verifica')
+      .send({ periodo: 'attivi', idFormato: FORMATO, filtri: { reparto: 'Ortofrutta' } });
+
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('application/json');
+    expect(res.body).toMatchObject({ file: 3, nomeFile: 'Promo ottobre - Espositori.zip' });
+    expect(servizio.verificaZipPop).toHaveBeenCalledWith('p1', expect.objectContaining({
+      periodo: 'attivi', idFormato: FORMATO, filtri: expect.objectContaining({ reparto: 'Ortofrutta' }),
+    }));
+    expect(servizio.preparaZipPop).not.toHaveBeenCalled();
+    expect(servizio.scriviZipPop).not.toHaveBeenCalled();
+  });
+
+  it('niente da scaricare o promo fuori dal periodo: l\'errore arriva in JSON, con il motivo', async () => {
+    const servizio = servizioFinto({
+      verificaZipPop: vi.fn<IMaterialiService['verificaZipPop']>(async () => {
+        throw new NotFoundError({ message: 'Nessun file da scaricare per questa selezione.', entityType: 'FilePop' });
+      }),
+    });
+
+    const res = await request(creaApp(servizio))
+      .post('/api/materiali/pop/promozioni/p1/zip/verifica')
+      .send({ periodo: 'attivi', idFormato: FORMATO, idFile: [FILE_1] });
+
+    expect(res.status).toBe(404);
+    expect(res.headers['content-type']).toContain('application/json');
+    expect(res.body.message).toBe('Nessun file da scaricare per questa selezione.');
+  });
+
+  it('come i download, chiede anche il permesso di scaricare i file', async () => {
+    permessi.concessi = new Set(['materiali.visualizza']);
+    const servizio = servizioFinto();
+
+    const res = await request(creaApp(servizio))
+      .post('/api/materiali/pop/promozioni/p1/zip/verifica')
+      .send({ periodo: 'attivi', idFormato: FORMATO });
+
+    expect([res.status, res.body.codice]).toEqual([403, 'file.download']);
+    expect(servizio.verificaZipPop).not.toHaveBeenCalled();
   });
 });

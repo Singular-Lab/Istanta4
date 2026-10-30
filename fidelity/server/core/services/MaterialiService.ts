@@ -14,23 +14,31 @@ import {
 } from '../../../lib/materiali/periodi';
 import {
   AvvisoNonAvviati,
+  CopertinaKit,
   DIMENSIONI_PAGINA_POP,
+  DIMENSIONI_PAGINA_PROMOZIONI_VOLANTINI,
   ElencoPromozioniPop,
   FiltriFilePop,
   FiltriKitVolantini,
+  FiltriPromozioniVolantini,
   FilePop,
   FormatoPop,
   KitPop,
+  OpzioniFilePop,
   OpzioniFiltroKit,
   PaginaFilePop,
   PaginaKitVolantini,
+  PaginaPromozioniVolantini,
   PromoMateriali,
+  PromozioneVolantini,
   Riferimento,
   RichiestaZipPop,
   RiepilogoPop,
   SchedaKitVolantino,
   STATI_KIT_MATERIALI,
   StatoKitMateriali,
+  VarianteVolantino,
+  VerificaZipPop,
 } from '../../../lib/materiali/tipi';
 import type { EsitoZipOlimpo, IFileManagementService, VoceZipOlimpo } from '../interfaces/IFileManagementService';
 import type { IKitRuntimeService } from '../interfaces/IKitRuntimeService';
@@ -40,11 +48,14 @@ import type {
   CriteriKit,
   FiltriSqlFile,
   FiltriSqlKit,
+  FiltriSqlPromoVolantini,
   IMaterialiRepository,
+  RigaAreaCanale,
   RigaFile,
   RigaKit,
   RigaOpzioneFile,
   RigaPromo,
+  RigaVarianteVolantino,
 } from '../repositories/MaterialiRepository';
 
 dayjs.extend(utc);
@@ -55,6 +66,10 @@ const FUSO_PROMO = 'Europe/Rome';
 
 export const DIMENSIONE_PAGINA_VOLANTINI = 24;
 export const DIMENSIONE_MASSIMA_VOLANTINI = 96;
+export const DIMENSIONE_PAGINA_PROMOZIONI_VOLANTINI = 12;
+/** Anni accettati dal filtro dei volantini: fuori, il valore non e' un anno di una promo. */
+const ANNO_MINIMO = 1900;
+const ANNO_MASSIMO = 2999;
 export const DIMENSIONE_PAGINA_POP = 100;
 /** Oltre, l'OFFSET non serve a niente e il numero non entrerebbe nella query come intero. */
 const PAGINA_MASSIMA = 1_000_000;
@@ -123,6 +138,22 @@ export function dimensionePaginaVolantini(valore: unknown): number {
   return typeof valore === 'number' && Number.isFinite(valore) && valore >= 1
     ? Math.min(Math.floor(valore), DIMENSIONE_MASSIMA_VOLANTINI)
     : DIMENSIONE_PAGINA_VOLANTINI;
+}
+
+/** Solo le dimensioni previste (12, 24, 48 promozioni); ogni altro valore vale 12. */
+export function dimensionePaginaPromozioniVolantini(valore: unknown): number {
+  return typeof valore === 'number' && DIMENSIONI_PAGINA_PROMOZIONI_VOLANTINI.includes(valore)
+    ? valore
+    : DIMENSIONE_PAGINA_PROMOZIONI_VOLANTINI;
+}
+
+/** Anno intero fra ANNO_MINIMO e ANNO_MASSIMO; ogni altro valore indicato e' un errore. */
+export function annoOpzionale(valore: unknown): number | undefined {
+  if (valore === undefined || valore === null) return undefined;
+  if (typeof valore !== 'number' || !Number.isInteger(valore) || valore < ANNO_MINIMO || valore > ANNO_MASSIMO) {
+    throw new BadRequestError({ message: 'Anno non valido.' });
+  }
+  return valore;
 }
 
 /** Solo le dimensioni previste (100, 250, 500); ogni altro valore vale 100. */
@@ -304,6 +335,72 @@ function corrispondeAiFiltri(scheda: SchedaKitVolantino, filtri: FiltriSqlKit & 
   return true;
 }
 
+function varianteVolantino(riga: RigaVarianteVolantino): VarianteVolantino {
+  const copertina: CopertinaKit | null = riga.copertina_id_olimpo
+    ? {
+      idOlimpoCloud: riga.copertina_id_olimpo,
+      nome: riga.copertina_nome ?? '',
+      mime: riga.copertina_mime ?? null,
+      pagine: riga.copertina_pagine ?? null,
+    }
+    : null;
+  return {
+    id: riga.id,
+    titolo: riga.titolo,
+    area: { id: riga.id_area, nome: riga.nome_area },
+    canale: { id: riga.id_canale, nome: riga.nome_canale },
+    numeroFile: Number(riga.numero_file) || 0,
+    copertina,
+    numeroPuntiVendita: Number(riga.numero_punti_vendita) || 0,
+  };
+}
+
+/** Per canale, area e titolo: le varianti dello stesso canale stanno vicine. */
+function confrontaVarianti(a: VarianteVolantino, b: VarianteVolantino): number {
+  return confrontaTesto(a.canale.nome, b.canale.nome)
+    || confrontaTesto(a.area.nome, b.area.nome)
+    || confrontaTesto(a.titolo, b.titolo)
+    || a.id.localeCompare(b.id);
+}
+
+/**
+ * Le promo della pagina, nel loro ordine, ciascuna con i kit che corrispondono ai filtri. I kit
+ * che non corrispondono contano nel totale della promo e, se nessun kit mostrato ne ha una,
+ * danno la copertina.
+ */
+export function raggruppaVariantiPerPromo(righePromo: RigaPromo[], righeKit: RigaVarianteVolantino[]): PromozioneVolantini[] {
+  const kitPerPromo = new Map<string, RigaVarianteVolantino[]>();
+  for (const riga of righeKit) {
+    const dellaPromo = kitPerPromo.get(riga.id_promo);
+    if (dellaPromo) dellaPromo.push(riga);
+    else kitPerPromo.set(riga.id_promo, [riga]);
+  }
+  return righePromo.map(rigaPromo => {
+    const tutti = (kitPerPromo.get(rigaPromo.id_promo) ?? [])
+      .map(riga => ({ variante: varianteVolantino(riga), corrisponde: riga.corrisponde === true }))
+      .sort((a, b) => confrontaVarianti(a.variante, b.variante));
+    const mostrati = tutti.filter(kit => kit.corrisponde).map(kit => kit.variante);
+    const copertina = mostrati.find(kit => kit.copertina)?.copertina
+      ?? tutti.find(kit => kit.variante.copertina)?.variante.copertina
+      ?? null;
+    return { promo: promoDa(rigaPromo), copertina, numeroKit: tutti.length, kit: mostrati };
+  });
+}
+
+/** Aree e canali dei filtri, ognuno una volta, per nome. */
+function areeECanali(righe: RigaAreaCanale[]): { aree: Riferimento[]; canali: Riferimento[] } {
+  const aree = new Map<string, Riferimento>();
+  const canali = new Map<string, Riferimento>();
+  for (const riga of righe) {
+    if (riga.id_area && !aree.has(chiaveId(riga.id_area))) aree.set(chiaveId(riga.id_area), { id: riga.id_area, nome: riga.nome_area });
+    if (riga.id_canale && !canali.has(chiaveId(riga.id_canale))) {
+      canali.set(chiaveId(riga.id_canale), { id: riga.id_canale, nome: riga.nome_canale });
+    }
+  }
+  const perNome = (a: Riferimento, b: Riferimento) => confrontaTesto(a.nome, b.nome) || a.id.localeCompare(b.id);
+  return { aree: [...aree.values()].sort(perNome), canali: [...canali.values()].sort(perNome) };
+}
+
 const contatoreStati = (): Record<StatoKitMateriali, number> =>
   Object.fromEntries(STATI_KIT_MATERIALI.map(stato => [stato, 0])) as Record<StatoKitMateriali, number>;
 
@@ -315,6 +412,7 @@ function filePop(riga: RigaFile): FilePop {
     nome: riga.nome ?? '',
     idOlimpoCloud: riga.id_olimpo_cloud || null,
     mime: riga.mime ?? null,
+    pagine: Number(riga.pagine) > 0 ? Number(riga.pagine) : null,
     kit: { id: riga.id_kit, titolo: riga.titolo_kit, stato: riga.stato_kit as StatoKitMateriali },
     area: { id: riga.id_area, nome: riga.nome_area },
     canale: { id: riga.id_canale, nome: riga.nome_canale },
@@ -325,7 +423,7 @@ function filePop(riga: RigaFile): FilePop {
   };
 }
 
-function opzioniFile(righe: RigaOpzioneFile[]): PaginaFilePop['opzioni'] {
+function opzioniFile(righe: RigaOpzioneFile[]): OpzioniFilePop {
   const aree = new Map<string, Riferimento>();
   const canali = new Map<string, Riferimento>();
   const reparti = new Set<string>();
@@ -380,6 +478,9 @@ export function vociZipPop(righe: RigaFile[]): VoceZipOlimpo[] {
 
 export const nomeArchivioPop = (nomePromo: string, nomeFormato: string): string =>
   `${nomeSicuro(`${nomePromo} - ${nomeFormato}`) || 'POP'}.zip`;
+
+const nienteDaScaricare = (idFormato: string): NotFoundError =>
+  new NotFoundError({ message: 'Nessun file da scaricare per questa selezione.', entityType: 'FilePop', entityId: idFormato });
 
 /** Esegue `lavoro` su tutti gli elementi, al piu' `limite` alla volta; i risultati nell'ordine degli elementi. */
 async function mappaConLimite<T, R>(elementi: readonly T[], limite: number, lavoro: (elemento: T) => Promise<R>): Promise<R[]> {
@@ -445,6 +546,54 @@ export class MaterialiService implements IMaterialiService {
   }
 
   /**
+   * Attivi e Storico per promozione: le promo si paginano nel database (dalla validita' piu'
+   * recente), poi si leggono i kit pubblicati delle sole promo della pagina. In corso resta per
+   * kit (getVolantini), perche' unisce i kit non avviati chiesti a Istanta.
+   */
+  async getPromozioniVolantini(filtri: FiltriPromozioniVolantini): Promise<PaginaPromozioniVolantini> {
+    const periodo = verificaPeriodo(filtri.periodo);
+    if (!soloKitPubblicati(periodo)) {
+      throw new BadRequestError({ message: 'Nel periodo In corso i volantini si elencano per kit: usa /api/materiali/volantini.' });
+    }
+    const pagina = paginaRichiesta(filtri.pagina);
+    const dimensione = dimensionePaginaPromozioniVolantini(filtri.dimensione);
+    const filtriPromo: FiltriSqlPromoVolantini = {
+      cerca: testoPulito(filtri.cerca),
+      idPromo: testoPulito(filtri.idPromo),
+      idArea: uuidOpzionale(filtri.idArea, 'Area'),
+      idCanale: uuidOpzionale(filtri.idCanale, 'Canale'),
+      anno: annoOpzionale(filtri.anno),
+    };
+    const criteri = criteriDelPeriodo(periodo, TIPO_LAVORAZIONE.VOLANTINO);
+    const conFiltri = Object.values(filtriPromo).some(valore => valore !== undefined);
+
+    const [righePromo, totali, totaliSenzaFiltri, areeCanali, anni, promozioni] = await Promise.all([
+      this.repository.elencaPromoVolantini(criteri, filtriPromo, { limite: dimensione, scarto: (pagina - 1) * dimensione }),
+      this.repository.contaPromoVolantini(criteri, filtriPromo),
+      conFiltri ? this.repository.contaPromoVolantini(criteri) : Promise.resolve(undefined),
+      this.repository.elencaAreeCanaliVolantini(criteri, periodo === 'storico'),
+      this.repository.elencaAnniPromoVolantini(criteri),
+      // Nello Storico le promo sono centinaia: si cercano per nome e anno, non da una tendina
+      periodo === 'attivi' ? this.repository.elencaPromoVolantini(criteri) : Promise.resolve([] as RigaPromo[]),
+    ]);
+    const righeKit = await this.repository.elencaVariantiVolantini(criteri, righePromo.map(riga => riga.id_promo), filtriPromo);
+
+    return {
+      promozioni: raggruppaVariantiPerPromo(righePromo, righeKit),
+      totale: totali.promozioni,
+      totaleKit: totali.kit,
+      totaleSenzaFiltri: (totaliSenzaFiltri ?? totali).promozioni,
+      pagina,
+      dimensione,
+      opzioni: {
+        promozioni: promozioni.map(riga => ({ id: riga.id_promo, nome: riga.nome_promo })),
+        ...areeECanali(areeCanali),
+        anni,
+      },
+    };
+  }
+
+  /**
    * In corso: ogni kit non eliminato e i kit non ancora avviati, che non stanno nel database e si
    * chiedono a Istanta promo per promo. Le promo in corso sono poche: unione, filtri e pagina in memoria.
    */
@@ -474,18 +623,52 @@ export class MaterialiService implements IMaterialiService {
     };
   }
 
-  async getPromozioniPop(periodo: PeriodoMateriali): Promise<ElencoPromozioniPop> {
+  async getPromozioniPop(periodo: PeriodoMateriali, req: Request): Promise<ElencoPromozioniPop> {
     const periodoValido = verificaPeriodo(periodo);
-    // In corso compaiono tutte le promo del periodo, anche quelle con soli kit non avviati;
-    // in Attivi e Storico solo quelle con almeno un kit POP pubblicato
-    const righe = await this.repository.elencaPromoConKit(
-      criteriDelPeriodo(periodoValido, TIPO_LAVORAZIONE.POP),
-      soloKitPubblicati(periodoValido)
-    );
+    const criteri = criteriDelPeriodo(periodoValido, TIPO_LAVORAZIONE.POP);
+    const promoPop = (riga: RigaPromo, numeroFile: number, numeroFormati: number) => ({ ...promoDa(riga), numeroFile, numeroFormati });
+
+    // Attivi e Storico: le promo con almeno un kit POP pubblicato, contate dal database
+    if (soloKitPubblicati(periodoValido)) {
+      const righe = await this.repository.elencaPromoConKit(criteri);
+      return {
+        promozioni: righe
+          .map(riga => promoPop(riga, Number(riga.numero_file) || 0, Number(riga.numero_formati) || 0))
+          .sort(confrontaPromo),
+        avvisi: [],
+      };
+    }
+
+    // In corso: le promo con almeno un kit POP, avviato o no. Si conta come nel riepilogo della
+    // promo (getRiepilogoPop): i file dei kit avviati e i formati di tutti i kit, anche non avviati
+    const [righe, promozioni] = await Promise.all([
+      this.repository.elencaKit(criteri),
+      this.repository.elencaPromo(criteri.statiPromo),
+    ]);
+    const { kit: nonAvviati, avvisi } = await this.kitNonAvviati(promozioni, req, TIPO_LAVORAZIONE.POP, designAvviati(righe));
+    const conti = new Map<string, { numeroFile: number; formati: Set<string> }>();
+    const contiDi = (idPromo: string) => {
+      const esistenti = conti.get(idPromo);
+      if (esistenti) return esistenti;
+      const nuovi = { numeroFile: 0, formati: new Set<string>() };
+      conti.set(idPromo, nuovi);
+      return nuovi;
+    };
+    for (const riga of righe) {
+      const dellaPromo = contiDi(riga.id_promo);
+      dellaPromo.numeroFile += Number(riga.numero_file) || 0;
+      dellaPromo.formati.add(chiaveId(riga.id_formato));
+    }
+    for (const kit of nonAvviati) contiDi(kit.promo.id).formati.add(chiaveId(kit.formato.id));
+
     return {
-      promozioni: righe
-        .map(riga => ({ ...promoDa(riga), numeroFile: Number(riga.numero_file) || 0, numeroFormati: Number(riga.numero_formati) || 0 }))
+      promozioni: promozioni
+        .flatMap(riga => {
+          const dellaPromo = conti.get(riga.id_promo);
+          return dellaPromo ? [promoPop(riga, dellaPromo.numeroFile, dellaPromo.formati.size)] : [];
+        })
         .sort(confrontaPromo),
+      avvisi,
     };
   }
 
@@ -560,15 +743,43 @@ export class MaterialiService implements IMaterialiService {
     const rigaPromo = await this.promoNelPeriodo(idPromo, periodo);
     const criteri: CriteriKit = { ...criteriDelPeriodo(periodo, TIPO_LAVORAZIONE.POP), idPromo: rigaPromo.id_promo, idFormato };
 
-    const [righe, totale, opzioni] = await Promise.all([
+    // Le tendine non cambiano con pagina e filtri: le dà getOpzioniFilePop, una volta per formato
+    const [righe, totale] = await Promise.all([
       this.repository.elencaFile(criteri, filtriFile, { limite: dimensione, scarto: (pagina - 1) * dimensione }),
       this.repository.contaFile(criteri, filtriFile),
-      this.repository.elencaOpzioniFile(criteri),
     ]);
-    return { file: righe.map(filePop), totale, pagina, dimensione, opzioni: opzioniFile(opzioni) };
+    return { file: righe.map(filePop), totale, pagina, dimensione };
+  }
+
+  async getOpzioniFilePop(idPromo: string, filtri: Pick<FiltriFilePop, 'periodo' | 'idFormato'>): Promise<OpzioniFilePop> {
+    const periodo = verificaPeriodo(filtri.periodo);
+    const idFormato = formatoObbligatorio(filtri.idFormato);
+    const rigaPromo = await this.promoNelPeriodo(idPromo, periodo);
+    const criteri: CriteriKit = { ...criteriDelPeriodo(periodo, TIPO_LAVORAZIONE.POP), idPromo: rigaPromo.id_promo, idFormato };
+    return opzioniFile(await this.repository.elencaOpzioniFile(criteri));
+  }
+
+  async verificaZipPop(idPromo: string, richiesta: RichiestaZipPop): Promise<VerificaZipPop> {
+    const { rigaPromo, nomeFormato, criteri, filtriFile, idFormato } = await this.richiestaZip(idPromo, richiesta);
+    // Solo il conteggio: l'archivio si costruisce con il download vero
+    const file = await this.repository.contaFile(criteri, filtriFile);
+    if (file === 0) throw nienteDaScaricare(idFormato);
+    return { file, nomeFile: nomeArchivioPop(rigaPromo.nome_promo, nomeFormato) };
   }
 
   async preparaZipPop(idPromo: string, richiesta: RichiestaZipPop): Promise<ZipPop> {
+    const { rigaPromo, nomeFormato, criteri, filtriFile, idFormato, periodo, selezione } = await this.richiestaZip(idPromo, richiesta);
+    const righe = await this.repository.elencaFile(criteri, filtriFile);
+    if (righe.length === 0) throw nienteDaScaricare(idFormato);
+    log.info('ZIP POP', {
+      context: 'Materiali', idPromo: rigaPromo.id_promo, idFormato, periodo,
+      file: righe.length, selezionati: selezione?.length ?? null,
+    });
+    return { nomeFile: nomeArchivioPop(rigaPromo.nome_promo, nomeFormato), voci: vociZipPop(righe) };
+  }
+
+  /** Regole comuni a verifica e download: periodo, promo nel periodo, formato esistente, file scelti o filtri. */
+  private async richiestaZip(idPromo: string, richiesta: RichiestaZipPop) {
     const periodo = verificaPeriodo(richiesta.periodo);
     const idFormato = formatoObbligatorio(richiesta.idFormato);
     // Con idFile solo quei file: gli id malformati, e piu' avanti quelli di altre promo o formati, si scartano
@@ -581,17 +792,8 @@ export class MaterialiService implements IMaterialiService {
     if (!formato) {
       throw new NotFoundError({ message: 'Formato non trovato.', entityType: 'Formato', entityId: idFormato });
     }
-
     const criteri: CriteriKit = { ...criteriDelPeriodo(periodo, TIPO_LAVORAZIONE.POP), idPromo: rigaPromo.id_promo, idFormato };
-    const righe = await this.repository.elencaFile(criteri, filtriFile);
-    if (righe.length === 0) {
-      throw new NotFoundError({ message: 'Nessun file da scaricare per questa selezione.', entityType: 'FilePop', entityId: idFormato });
-    }
-    log.info('ZIP POP', {
-      context: 'Materiali', idPromo: rigaPromo.id_promo, idFormato, periodo,
-      file: righe.length, selezionati: selezione?.length ?? null,
-    });
-    return { nomeFile: nomeArchivioPop(rigaPromo.nome_promo, formato.nome_formati), voci: vociZipPop(righe) };
+    return { periodo, idFormato, selezione, filtriFile, rigaPromo, nomeFormato: formato.nome_formati, criteri };
   }
 
   async scriviZipPop(zip: ZipPop, destinazione: Writable): Promise<EsitoZipOlimpo> {

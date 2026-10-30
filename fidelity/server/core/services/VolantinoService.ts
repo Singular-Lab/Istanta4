@@ -21,6 +21,7 @@ import { Referenze } from '../models/referenze';
 import { RuntimeKit } from '../models/runtime_kit';
 import { ReferenzeGruppo } from '../models/referenze_gruppo';
 import { chiaveBox } from '../utils/fantasmi';
+import { percentualeIngombro } from '../utils/referenzaStampata';
 
 /**
  * Autonomous VolantinoService with its own implementation.
@@ -236,14 +237,17 @@ export class VolantinoService implements IVolantinoService {
       });
 
       // 3. Calcola riepilogo per pagina
+      // L'ingombro e' in percentuale della pagina qualunque sia la fonte: Istanta manda perc_ingombro
+      // come frazione, lo storico (sync del Plugin) gia' in percentuale; si decide riga per riga.
       const pagineMap = new Map<number, { refs: ReferenzaPosizioneDTO[], ingombro: number }>();
-      referenzeDTO.filter(r => r.posizione).forEach(ref => {
-        const pag = ref.posizione!.pag;
+      referenzeDTO.forEach((ref, indice) => {
+        if (!ref.posizione) return;
+        const pag = ref.posizione.pag;
         if (!pagineMap.has(pag)) {
           pagineMap.set(pag, { refs: [], ingombro: 0 });
         }
         pagineMap.get(pag)!.refs.push(ref);
-        pagineMap.get(pag)!.ingombro += ref.posizione!.percIngombro;
+        pagineMap.get(pag)!.ingombro += percentualeIngombro(referenze[indice]);
       });
 
       // Config per groupBy
@@ -269,7 +273,7 @@ export class VolantinoService implements IVolantinoService {
           return {
             pagina,
             numeroReferenze: data.refs.length,
-            ingombroTotalePerc: Math.round(data.ingombro * 10000) / 100,
+            ingombroTotalePerc: Math.round(data.ingombro * 100) / 100,
             reparti: Array.from(repartiCount.values())
           };
         });

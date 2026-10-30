@@ -30,8 +30,34 @@ Fidelity del 2026-10-28. Nessun commit I20-… del periodo tocca `fidelity/`.
 - **Route senza chiamanti sotto osservazione** (T8): le 57 route per cui l'inventario non ha trovato chiamanti (compresa `/mergeFiles`, che risponde 501) sono elencate con il motivo in `server/core/middleware/routeSenzaChiamanti.ts` e montano `routeDeprecata`, dopo autenticazione e permessi, che conta le chiamate nella metrica `api_route_senza_chiamanti_total` e le segnala nel log al massimo ogni 15 minuti; dal 2026-11-28 quelle mai chiamate si rimuovono.
 - **Chiavi primarie, enum orfani e date dei preset** (T8): migrazioni `0011` (chiave primaria su `gdo_whatsapp_presets` e `utenti_guest`, saltata con un avviso se ci sono id NULL o doppi), `0012` (eliminati gli enum che nessun modello, colonna o oggetto usa) e `0013` (le colonne `createdAt`/`updatedAt` dei preset WhatsApp confluiscono in `createdat`/`updatedat`, tenendo la data più vecchia e la più recente). Nell'adozione di un database senza storico la `0013` gira anche prima dell'ALTER di Sequelize (`PRIMA_DELL_ALLINEAMENTO`), che altrimenti eliminerebbe le colonne prima del recupero. `verificaSchema` segnala anche chiavi primarie mancanti o diverse ed enum in più non usati.
 - **Componenti comuni dell'interfaccia** (PR #295, #298, #299, #303, #316): `StatusBadge`, `Spinner`, `FormField`, `PageError`, `StatCard`, `Pagina`, `Sezione`, `BarraFiltri`, `CampoRicerca`, `PaginazioneTabella`, `Segmenti`, `SchermataStato`, adottati dalle pagine nei lotti del piano di uniformazione UI.
+- **Storia dei punti vendita dai volantini** (TASK-02c6209c):
+  - il sync storico del plugin legge la lista stampata nel campo `pv` (`utils/listaPuntiVenditaVolantino.ts`) e la salva in `punti_vendita_volantino` (migrazione `0014`);
+  - le righe si abbinano all'anagrafica per telefono, indirizzo o in modo "probabile" (`utils/abbinamentoPuntiVendita.ts`) e, una volta abbinate, restano al loro punto vendita;
+  - l'anagrafica non viene mai modificata;
+  - i volantini già sincronizzati si recuperano importando gli export JSON del plugin (`POST /api/punti-vendita/storia/import-export`).
+- **Pagine dei punti vendita** (TASK-02c6209c):
+  - nuova consultazione `/punti-vendita`, con permesso `gdo.visualizza`: rete per insegna e insegne anno per anno per ogni punto vendita;
+  - scheda con la timeline dei volantini e le infografiche (meccaniche, sconto, marche, prodotti ricorrenti, reparti, recapiti stampati);
+  - pagine del volantino (pagine con i box al loro posto) e della referenza (prezzo nel tempo);
+  - API in `ConsultazionePuntiVenditaController`, `StoriaPuntoVenditaController` e `AnalisiPuntoVenditaController`, con il riepilogo per kit in cache in `analisi_kit` (migrazione `0015`);
+  - contratti in `lib/puntiVendita/`;
+  - grafici SVG riusabili in `src/components/Grafici`.
 
 ### Modificato
+- **Gestione interna dei punti vendita** (TASK-02c6209c):
+  - richiede `gdo.gestisci_punti_vendita`, come le sue API;
+  - l'elenco ha i riquadri della qualità dei dati, le righe dei volantini non abbinate, un solo menu Importa e la mappa come vista alternativa;
+  - la scheda è divisa in Anagrafica (modifica nella pagina), Dispositivi e Display context;
+  - `/punti-vendita` non rimanda più alla gestione: è la pagina di consultazione.
+- **Sync storico del plugin** (TASK-02c6209c):
+  - porta il kit a PUBBLICATO senza il webhook `KIT_PUBBLICATO`;
+  - nella risposta i campi `pvMatched`/`pvCreated`/`pvUpdated`/`pvMissing`/`pvPossibleDuplicates`/`pvDuplicates` lasciano il posto a `pvRighe`, `pvAbbinate`, `pvNonAbbinate`, `kitPubblicato`;
+  - una promo creata con date già passate nasce con lo stato che le darebbe il cron, cioè ARCHIVIATA (`utils/statoAutomaticoPromo.ts`).
+- **Volantini e POP** (TASK-02c6209c):
+  - Attivi e Storico mostrano una scheda per promozione con le varianti canale/area (`GET /api/materiali/volantini/promozioni`, filtro per anno, scadenza, numero di punti vendita);
+  - i periodi sono schede, e Volantini e POP non si rimandano più a vicenda;
+  - nei menu le sezioni sono "MATERIALI VOLANTINO" e "MATERIALI POP".
+- **URL di Olimpo** (TASK-02c6209c): le funzioni passano in `lib/olimpo/url.ts`, condivise con il client; `server/core/utils/urlOlimpo.ts` le riesporta.
 - **Pagine di gestione sotto `/gestione-interna/`** (PR #278): aree e canali, punti vendita, utenti, hub e le altre pagine di gestione cambiano indirizzo; `lib/accessi/gestioneInterna.ts` mappa i vecchi percorsi e `server/core/inizializzazione/migrazionePercorsi.ts` riscrive all'avvio i menu salvati.
 - **Menu laterale** (PR #292): nuovo `src/themes/Echo/SideMenu.tsx` e stile del tema Echo rivisto.
 - **Prestazioni del frontend** (T7, PR #343): gruppi di chunk per libreria rivisti in `vite.config.ts`, con React e gli helper del transpiler nel gruppo base `vendor-core`; i `.gz`/`.br` li scrive un plugin interno al posto di `vite-plugin-compression`; icone Lucide ridotte a quelle usate (`scripts/generaIconeLucide.mjs`, eseguito da `yarn build`); font nel progetto (`src/assets/fonts`); immagini animate del volantino ridotte (`ani_wish.apng` da 5,4 MB a 52 KB); file `.br`/`.gz` precompressi serviti da Express con cache `immutable` per gli asset con hash (`staticiPrecompressi.ts`); la scritta di validità dei caroselli arriva con le referenze (`conValidita`), senza una seconda chiamata; `build:client` forza `NODE_ENV=production`.
@@ -46,6 +72,16 @@ Fidelity del 2026-10-28. Nessun commit I20-… del periodo tocca `fidelity/`.
 - **Documentazione** (T8): `README.md` allineato al codice (versione, servizio AI, niente SSR, Vite 8, cluster e Socket.IO, dependency injection, job pianificati, build, plugin, cartella `config/`); `PRIMO_AVVIO_TEST.md` aggiornato a migrazioni e PostgreSQL sull'host; `docs/RBAC_MODELLO.md` riscritto sul modello per aree; `docs/AGENZIA_LIB_POLICY_V2.md` riscritto sull'implementazione CoopFI attuale.
 
 ### Corretto
+- **Vista POP** (TASK-02c6209c):
+  - In corso elenca solo le promo con kit POP, avviati o no, con gli stessi conteggi del riepilogo;
+  - lo ZIP si verifica prima del download: gli errori compaiono nella pagina e non arriva più un file JSON;
+  - ZIP disattivato con il motivo per un formato senza file;
+  - ZIP dei selezionati in streaming, con il token CSRF;
+  - filtri e pagina dei file nell'indirizzo;
+  - opzioni dei filtri caricate una volta per formato;
+  - colonna Reparto;
+  - anteprima con il numero reale di pagine.
+- **Kit dello storico nella mappa delle pagine** (TASK-02c6209c): `FlyerPageMap` e `ingombroTotalePerc` trattano `x` relativa alla pagina e `perc_ingombro` già in percentuale; prima i box finivano fuori posto e l'ingombro era moltiplicato per 100.
 - **Avvio** (T2, PR #327): la configurazione si collega alla GDO anche in sviluppo; `deletePromo` attende l'eliminazione, così un errore arriva al client tradotto.
 - **Invio FTP degli ordini di stampa** (T2, PR #327): il blocco `IN_INVIO` si rinnova a ogni kit e si rilascia solo dall'invio che lo possiede, quindi un invio lungo non viene ripreso da un secondo e non partono invii doppi.
 - **API esterne del plugin** (T6, PR #337): corpi o filtri non validi danno 400 invece di 500; il filtro per tipo di export senza tipi riconosciuti non restituisce file; del log di un file conta l'ultima versione; `GET /filter-templates` era registrata due volte e la seconda variante non era raggiungibile.

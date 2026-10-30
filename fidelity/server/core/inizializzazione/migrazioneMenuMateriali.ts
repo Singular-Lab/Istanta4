@@ -1,12 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { QueryTypes, Transaction } from 'sequelize';
-import { convertiMenuMateriali, type VoceMenuConvertibile } from '../../../lib/accessi/menuMateriali';
-import type { PeriodoMateriali } from '../../../lib/materiali/periodi';
+import { convertiMenuMateriali, type VoceMenuConvertibile, type VoceNuovaMenu } from '../../../lib/accessi/menuMateriali';
 import { incrementaVersionePermessi } from '../accessi/versionePermessi';
 import { sequelize } from '../db/SequelizeConnector';
 import { log } from '../logger';
 
-/** Una riga di menu_items, con i campi che la migrazione legge, scrive o copia nelle voci POP. */
+/** Una riga di menu_items, con i campi che la migrazione legge, scrive o copia nelle voci aggiunte. */
 export type RigaMenu = VoceMenuConvertibile & {
   tipo_utente: string;
   ruolo_gdo: string | null;
@@ -119,13 +118,15 @@ const nomeMenu = (voce: RigaMenu): string =>
 
 /**
  * Converte nei menu salvati, Superadmin compreso, le voci delle pagine Materiali nelle viste
- * Volantini e aggiunge le voci POP (regole in lib/accessi/menuMateriali.ts). Tutto in una
- * transazione: se una scrittura fallisce nessun menu cambia. Si può rieseguire: un menu già
- * convertito non cambia, e la versione dei permessi sale solo se qualcosa è cambiato.
+ * Volantini, aggiunge le voci POP e divide la sezione in 'MATERIALI VOLANTINO' e 'MATERIALI POP',
+ * anche nei menu già convertiti con l'intestazione unica 'VOLANTINI E POP' (regole in
+ * lib/accessi/menuMateriali.ts). Tutto in una transazione: se una scrittura fallisce nessun menu
+ * cambia. Si può rieseguire: un menu già convertito non cambia, e la versione dei permessi sale
+ * solo se qualcosa è cambiato.
  */
 export const migraMenuMateriali = async (
   fonte: FonteMenuMateriali = fonteDb,
-  nuovoId: (periodo: PeriodoMateriali) => string = () => randomUUID()
+  nuovoId: (voce: VoceNuovaMenu) => string = () => randomUUID()
 ): Promise<EsitoMigrazioneMenuMateriali> => {
   const { esito, righe } = await fonte.inTransazione(async (menu) => {
     const perMenu = new Map<string, RigaMenu[]>();
@@ -146,7 +147,7 @@ export const migraMenuMateriali = async (
       esito.menu++;
       esito.aggiornate += aggiornate.length;
       esito.inserite += inserite.length;
-      righe.push(`  ${nomeMenu(voci[0])}: ${aggiornate.length} voci aggiornate, ${inserite.length} voci POP aggiunte`);
+      righe.push(`  ${nomeMenu(voci[0])}: ${aggiornate.length} voci aggiornate, ${inserite.length} voci aggiunte (POP e intestazioni)`);
     }
     if (esito.menu > 0) await menu.incrementaVersione();
     return { esito, righe };

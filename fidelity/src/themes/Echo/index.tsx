@@ -419,11 +419,13 @@ function Layout() {
                   <div className="flex-1 block order-0 float-start min-w-0 px-2">
                     <SmartBreadcrumb light small startPage={startPage?.pathname} />
                   </div>
+                  {/* Fino a 2xl (con il menu aperto la barra è stretta) la ricerca è larga quanto la sua casella,
+                      accanto alle icone, e lascia il resto al breadcrumb; da 2xl torna al centro dello spazio libero */}
                   <div
-                    className="relative justify-center flex-1 hidden xl:flex flex-shrink-0"
+                    className="relative justify-center hidden xl:flex xl:flex-none xl:px-3 2xl:flex-1 2xl:px-0 flex-shrink-0"
                     onClick={() => setQuickSearch(true)}
                   >
-                    <div className="bg-white/10 border-transparent border w-[350px] flex items-center py-2 px-3.5 rounded-control text-white/60 cursor-pointer hover:bg-white/15 transition-colors duration-300 hover:duration-100">
+                    <div className="bg-white/10 border-transparent border w-[300px] 2xl:w-[350px] flex items-center py-2 px-3.5 rounded-control text-white/60 cursor-pointer hover:bg-white/15 transition-colors duration-300 hover:duration-100">
                       <Lucide icon="Search" aria-hidden="true" className="h-5 w-5" />
                       <div className="ml-2.5 mr-auto">Ricerca veloce...</div>
                       <div>⌘K</div>
@@ -436,7 +438,8 @@ function Layout() {
 
                   {/* END: Search */}
                   {/* BEGIN: Notification & User Menu */}
-                  <div className="flex items-center flex-1">
+                  {/* Larghe quanto le icone: lo spazio che resta va al breadcrumb, che a 1280 altrimenti si tronca */}
+                  <div className="flex items-center flex-none ml-auto">
                     <div className="flex items-center gap-1 ml-auto">
                       {/* <a
                       href=""
@@ -503,7 +506,8 @@ function Layout() {
                         )}
                       </button>
                     </div>
-                    <Menu className="ml-5">
+                    {/* Su mobile meno spazio prima dell'avatar: va al breadcrumb, che lì ha un'ottantina di pixel */}
+                    <Menu className="ml-2 sm:ml-5">
                       <Menu.Button
                         as="button"
                         type="button"

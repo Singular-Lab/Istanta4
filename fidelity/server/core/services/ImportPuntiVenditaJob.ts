@@ -6,6 +6,7 @@ import type {
   RigaInAttesaImportDTO,
   StatoImportPuntiVenditaDTO,
 } from '../dto';
+import type { IStoriaPuntoVenditaService } from '../interfaces/IStoriaPuntoVenditaService';
 import { log } from '../logger';
 import { STATO_LAVORO } from '../models/lavori_in_background';
 import { coordinateValide } from './importPuntiVendita';
@@ -65,6 +66,11 @@ export interface OpzioniGestoreImport {
   /** Oltre questo tempo senza decisione l'import in attesa si annulla da solo e libera la GDO. */
   attesaMassimaMs?: number;
   intervalloBattitoMs?: number;
+  /**
+   * Dopo un import che ha scritto almeno un PV, con la GDO: le righe dei volantini ancora senza PV
+   * si riabbinano qui, una volta sola. Un errore finisce nel log e non cambia l'esito dell'import.
+   */
+  dopoImport?: (idGdo: string) => void | Promise<void>;
 }
 
 /** Tipo dell'import nel registro dei lavori; la chiave e la GDO: al piu un import per GDO fra tutti i worker. */
@@ -143,12 +149,19 @@ export class GestoreImportPuntiVendita {
   private readonly intervalloSalvataggioMs: number;
   private readonly attesaMassimaMs: number;
   private readonly intervalloBattitoMs?: number;
+  private readonly dopoImport?: (idGdo: string) => void | Promise<void>;
 
   constructor(private registro: RegistroLavori = registroLavori, opzioni: OpzioniGestoreImport = {}) {
     this.intervalloAttesaMs = opzioni.intervalloAttesaMs ?? INTERVALLO_ATTESA_MS;
     this.intervalloSalvataggioMs = opzioni.intervalloSalvataggioMs ?? INTERVALLO_SALVATAGGIO_MS;
     this.attesaMassimaMs = opzioni.attesaMassimaMs ?? ATTESA_MASSIMA_DECISIONE_MS;
     this.intervalloBattitoMs = opzioni.intervalloBattitoMs;
+    this.dopoImport = opzioni.dopoImport;
+  }
+
+  /** Un import della GDO gira in questo processo: chi salva PV puo lasciare a lui il lavoro da fare alla fine. */
+  inCorsoQui(idGdo: string): boolean {
+    return [...this.locali.values()].some(job => job.idGdo === idGdo && attivo(job.stato));
   }
 
   /**
@@ -229,6 +242,13 @@ export class GestoreImportPuntiVendita {
     stato.terminatoIl = new Date().toISOString();
     if (stato.creati + stato.aggiornati > 0 && operazioni.alTermine) {
       await operazioni.alTermine(copia(stato)).catch(e => log.warn('importPV - operazioni finali non riuscite', { error: e }));
+    }
+    if (stato.creati + stato.aggiornati > 0 && this.dopoImport) {
+      try {
+        await this.dopoImport(job.idGdo);
+      } catch (e) {
+        log.warn('importPV - riabbinamento dei volantini non avviato', { idGdo: job.idGdo, error: messaggio(e) });
+      }
     }
     // Prima l'esito nel registro, poi l'evento: chi rilegge lo stato dopo l'evento trova l'import concluso
     try {
@@ -453,4 +473,14 @@ export class GestoreImportPuntiVendita {
   }
 }
 
-export const importPuntiVenditaJobs = new GestoreImportPuntiVendita();
+/**
+ * Riabbinamento delle righe dei volantini della GDO a import finito, in background. Il servizio sta
+ * nel container, caricato solo qui: questo modulo resta usabile (e provabile) senza il container.
+ */
+async function riabbinaVolantiniDopoImport(idGdo: string): Promise<void> {
+  const { container, TYPES } = await import('../di');
+  const storia = container.get<IStoriaPuntoVenditaService>(TYPES.StoriaPuntoVenditaService);
+  void storia.riabbina(idGdo).catch(e => log.warn('importPV - riabbinamento dei volantini non riuscito', { idGdo, error: messaggio(e) }));
+}
+
+export const importPuntiVenditaJobs = new GestoreImportPuntiVendita(registroLavori, { dopoImport: riabbinaVolantiniDopoImport });

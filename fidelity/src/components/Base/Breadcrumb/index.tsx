@@ -30,7 +30,8 @@ function Breadcrumb({ className, light, small, children }: BreadcrumbProps) {
       <nav className={clsx(["flex", className])} aria-label="breadcrumb">
         <ol
           className={clsx([
-            "flex items-center text-theme-1 dark:text-slate-300",
+            // min-w-0: le voci possono restringersi (e troncarsi) invece di uscire dalla barra
+            "flex min-w-0 items-center text-theme-1 dark:text-slate-300",
             { "text-white/90": light },
             { "text-xs": small },
           ])}

@@ -68,7 +68,9 @@ export const PAGINE: DefinizionePagina[] = [
 
   // GDO e punti vendita
   { percorso: '/gestione-interna/aree-e-canali', permesso: P.GDO.VISUALIZZA },
-  { percorso: '/gestione-interna/punti-vendita', permesso: P.GDO.VISUALIZZA, sottopagine: true },
+  // Consultazione (elenco e scheda con volantini attivi e storia) e gestione, con le sue API
+  { percorso: '/punti-vendita', permesso: P.GDO.VISUALIZZA, sottopagine: true },
+  { percorso: '/gestione-interna/punti-vendita', permesso: P.GDO.GESTISCI_PUNTI_VENDITA, sottopagine: true },
 
   // Utenti
   { percorso: '/gestione-interna/gestione-utenti', permesso: P.UTENTI.VISUALIZZA },

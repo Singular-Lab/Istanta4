@@ -142,6 +142,15 @@ import { VolantinoService } from "../services/VolantinoService";
 import { MaterialiService } from "../services/MaterialiService";
 import type { IMaterialiService } from "../interfaces/IMaterialiService";
 import { type IMaterialiRepository, MaterialiRepository } from "../repositories/MaterialiRepository";
+import { ConsultazionePuntiVenditaService } from "../services/ConsultazionePuntiVenditaService";
+import type { IConsultazionePuntiVenditaService } from "../interfaces/IConsultazionePuntiVenditaService";
+import { ConsultazionePuntiVenditaRepository, type IConsultazionePuntiVenditaRepository } from "../repositories/ConsultazionePuntiVenditaRepository";
+import { StoriaPuntoVenditaService } from "../services/StoriaPuntoVenditaService";
+import type { IStoriaPuntoVenditaService } from "../interfaces/IStoriaPuntoVenditaService";
+import { type IPuntiVenditaVolantinoRepository, PuntiVenditaVolantinoRepository } from "../repositories/PuntiVenditaVolantinoRepository";
+import { AnalisiPuntoVenditaService } from "../services/AnalisiPuntoVenditaService";
+import type { IAnalisiPuntoVenditaService } from "../interfaces/IAnalisiPuntoVenditaService";
+import { AnalisiPuntiVenditaRepository, type IAnalisiPuntiVenditaRepository } from "../repositories/AnalisiPuntiVenditaRepository";
 import { WebPliantService } from "../services/WebPliantService";
 import { WebhookService } from "../services/WebhookService";
 import { WhatsAppService } from "../services/WhatsAppService";
@@ -232,6 +241,9 @@ function bindRepositories() {
   container.bind<IPluginAnalyticsRepository>(TYPES.PluginAnalyticsRepository).toDynamicValue(() => new PluginAnalyticsRepository()).inSingletonScope();
   container.bind<IAuditLogRepository>(TYPES.AuditLogRepository).toDynamicValue(() => new AuditLogRepository()).inSingletonScope();
   container.bind<IMaterialiRepository>(TYPES.MaterialiRepository).toDynamicValue(() => new MaterialiRepository()).inSingletonScope();
+  container.bind<IConsultazionePuntiVenditaRepository>(TYPES.ConsultazionePuntiVenditaRepository).toDynamicValue(() => new ConsultazionePuntiVenditaRepository()).inSingletonScope();
+  container.bind<IPuntiVenditaVolantinoRepository>(TYPES.PuntiVenditaVolantinoRepository).toDynamicValue(() => new PuntiVenditaVolantinoRepository()).inSingletonScope();
+  container.bind<IAnalisiPuntiVenditaRepository>(TYPES.AnalisiPuntiVenditaRepository).toDynamicValue(() => new AnalisiPuntiVenditaRepository()).inSingletonScope();
 
   // Hub
   container.bind<IAuthProviderRepository>(TYPES.AuthProviderRepository).toDynamicValue(() => new AuthProviderRepository()).inSingletonScope();
@@ -263,7 +275,22 @@ function bindServices() {
   );
   container.bind<IConfigService>(TYPES.ConfigService).toDynamicValue(() => new ConfigService());
   container.bind<IPuntoVenditaService>(TYPES.PuntoVenditaService).toDynamicValue(
-    (context) => new PuntoVenditaService(context.get<IPuntoVenditaRepository>(TYPES.PuntoVenditaRepository))
+    (context) => new PuntoVenditaService(
+      context.get<IPuntoVenditaRepository>(TYPES.PuntoVenditaRepository),
+      // Un PV creato o modificato riabbina le righe dei volantini della sua GDO
+      context.get<IStoriaPuntoVenditaService>(TYPES.StoriaPuntoVenditaService)
+    )
+  );
+  container.bind<IStoriaPuntoVenditaService>(TYPES.StoriaPuntoVenditaService).toDynamicValue(
+    (context) => new StoriaPuntoVenditaService(context.get<IPuntiVenditaVolantinoRepository>(TYPES.PuntiVenditaVolantinoRepository))
+  );
+  container.bind<IAnalisiPuntoVenditaService>(TYPES.AnalisiPuntoVenditaService).toDynamicValue(
+    (context) => new AnalisiPuntoVenditaService(
+      context.get<IAnalisiPuntiVenditaRepository>(TYPES.AnalisiPuntiVenditaRepository),
+      context.get<IPuntiVenditaVolantinoRepository>(TYPES.PuntiVenditaVolantinoRepository),
+      // Il PV "senza codice" e' quello senza la chiave con cui l'import della GDO lo riconosce
+      { chiaveMetaPuntoVendita: context.get<IAgenziaLib>(TYPES.AgenziaLib).importPuntiVendita?.chiaveMeta ?? null }
+    )
   );
   container.bind<IUserService>(TYPES.UserService).toDynamicValue(
     (context) => new UserService(
@@ -443,6 +470,12 @@ function bindServices() {
       context.get<IMaterialiRepository>(TYPES.MaterialiRepository),
       context.get<IKitRuntimeService>(TYPES.KitRuntimeService),
       context.get<IFileManagementService>(TYPES.FileManagementService)
+    )
+  );
+  container.bind<IConsultazionePuntiVenditaService>(TYPES.ConsultazionePuntiVenditaService).toDynamicValue(
+    (context) => new ConsultazionePuntiVenditaService(
+      context.get<IConsultazionePuntiVenditaRepository>(TYPES.ConsultazionePuntiVenditaRepository),
+      context.get<IPuntoVenditaService>(TYPES.PuntoVenditaService)
     )
   );
 

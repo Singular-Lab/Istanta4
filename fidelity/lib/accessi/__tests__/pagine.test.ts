@@ -49,6 +49,21 @@ describe('puoAprirePagina', () => {
     expect(puoAprirePagina('/pagina-che-non-esiste', con(), true)).toBe(true);
   });
 
+  it('punti vendita: la consultazione chiede gdo.visualizza, la gestione gdo.gestisci_punti_vendita', () => {
+    const consulta = con(PERMESSI.GDO.VISUALIZZA);
+    expect(puoAprirePagina('/punti-vendita', consulta)).toBe(true);
+    expect(puoAprirePagina('/punti-vendita/42', consulta)).toBe(true);
+    expect(puoAprirePagina('/gestione-interna/punti-vendita', consulta)).toBe(false);
+    expect(puoAprirePagina('/gestione-interna/punti-vendita/42', consulta)).toBe(false);
+
+    const gestisce = con(PERMESSI.GDO.VISUALIZZA, PERMESSI.GDO.GESTISCI_PUNTI_VENDITA);
+    expect(puoAprirePagina('/gestione-interna/punti-vendita', gestisce)).toBe(true);
+    expect(puoAprirePagina('/gestione-interna/punti-vendita/42', gestisce)).toBe(true);
+    expect(puoAprirePagina('/punti-vendita/42', gestisce)).toBe(true);
+
+    expect(puoAprirePagina('/punti-vendita', con(PERMESSI.PROMO.VISUALIZZA))).toBe(false);
+  });
+
   it('le pagine di sistema richiedono il permesso di sistema', () => {
     expect(puoAprirePagina('/gestione-interna/gestione-permessi', con(PERMESSI.UTENTI.VISUALIZZA))).toBe(false);
     expect(puoAprirePagina('/gestione-interna/gestione-permessi', con(PERMESSI.SISTEMA.GESTISCI_ACCESSI))).toBe(true);

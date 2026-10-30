@@ -11,7 +11,11 @@ import { paginaPer } from './pagine';
  *   l'icona resta;
  * - subito dopo l'ultima voce convertita, sotto lo stesso padre, arrivano le voci POP dei periodi
  *   che il menu aveva, nello stesso ordine e con la stessa icona delle voci Volantini;
- * - l'intestazione di sezione 'MATERIALI' diventa 'VOLANTINI E POP'.
+ * - Volantini e POP sono due sezioni: l'intestazione 'MATERIALI' diventa 'MATERIALI VOLANTINO' e
+ *   subito prima della prima voce POP che la segue (stesso padre, prima dell'intestazione
+ *   successiva) arriva l'intestazione 'MATERIALI POP'. Lo stesso vale per i menu già convertiti
+ *   con l'intestazione unica 'VOLANTINI E POP'. Un menu senza intestazioni resta senza, e
+ *   un'intestazione rinominata dall'amministratore resta com'è.
  *
  * La conversione si può ripetere: su un menu già convertito non cambia nulla.
  */
@@ -41,7 +45,18 @@ export const TITOLO_POP: Readonly<Record<PeriodoMateriali, string>> = {
 };
 
 export const SEPARATORE_MATERIALI = 'MATERIALI';
+/** L'intestazione unica delle prime conversioni: ora si divide in due sezioni, come 'MATERIALI'. */
 export const SEPARATORE_VOLANTINI_E_POP = 'VOLANTINI E POP';
+export const SEPARATORE_VOLANTINI = 'MATERIALI VOLANTINO';
+export const SEPARATORE_POP = 'MATERIALI POP';
+
+/** Intestazioni che la conversione rinomina in SEPARATORE_VOLANTINI e divide. */
+const INTESTAZIONI_DA_DIVIDERE: readonly string[] = [SEPARATORE_MATERIALI, SEPARATORE_VOLANTINI_E_POP];
+
+const PERCORSI_POP: ReadonlySet<string> = new Set(PERIODI_MATERIALI.map(periodo => percorsoPop(periodo)));
+
+/** Le voci che la conversione può aggiungere: la voce POP di un periodo o l'intestazione POP. */
+export type VoceNuovaMenu = PeriodoMateriali | 'intestazione-pop';
 
 /**
  * I campi di una voce di menu che la conversione legge e scrive: li hanno sia le righe di
@@ -61,11 +76,14 @@ export interface VoceMenuConvertibile {
 }
 
 export interface EsitoConversioneMenu<V> {
-  /** Il menu convertito: le voci di prima, aggiornate, con le voci POP subito dopo l'ultima voce convertita. */
+  /**
+   * Il menu convertito: le voci di prima, aggiornate, con le voci POP subito dopo l'ultima voce
+   * convertita e l'intestazione 'MATERIALI POP' subito prima della prima voce POP della sezione.
+   */
   voci: V[];
   /** Voci già presenti che cambiano (percorso, titolo, permesso od ordinamento), nella forma nuova. */
   aggiornate: V[];
-  /** Voci POP da aggiungere. */
+  /** Voci da aggiungere: le voci POP e le intestazioni 'MATERIALI POP'. */
   inserite: V[];
 }
 
@@ -98,40 +116,16 @@ const ordineNelMenu = <V extends VoceMenuConvertibile>(voci: readonly V[]): V[] 
 };
 
 /**
- * Converte UN menu (le voci di un tipo di utente e sotto-ruolo, sottovoci comprese, in un elenco
- * piatto). Non modifica le voci ricevute. `nuovoId` dà l'identificativo di ciascuna voce POP.
+ * Voci POP dei periodi delle voci convertite, subito dopo l'ultima convertita e sotto lo stesso
+ * padre; le voci che seguono scendono per fare posto. Aggiunge le voci nuove a `voci` e le restituisce.
  */
-export const convertiMenuMateriali = <V extends VoceMenuConvertibile>(
-  vociMenu: readonly V[],
-  nuovoId: (periodo: PeriodoMateriali) => string
-): EsitoConversioneMenu<V> => {
-  const voci = vociMenu.map(voce => ({ ...voce }));
-  const cambiate = new Set<V>();
-  const convertite: Array<{ voce: V; periodo: PeriodoMateriali }> = [];
-
-  for (const voce of voci) {
-    if (voce.tipo === TIPO_MENU_ITEM.SEPARATOR && voce.titolo.trim() === SEPARATORE_MATERIALI) {
-      voce.titolo = SEPARATORE_VOLANTINI_E_POP;
-      cambiate.add(voce);
-      continue;
-    }
-    const materiali = voce.pathname ? PAGINE_MATERIALI[voce.pathname] : undefined;
-    if (!materiali) continue;
-    const { periodo, titoloPredefinito } = materiali;
-    voce.pathname = percorsoVolantini(periodo);
-    voce.codice_permesso = permessoDi(voce.pathname);
-    // Un titolo scelto dall'amministratore resta com'è.
-    if (stessoTesto(voce.titolo, titoloPredefinito)) voce.titolo = TITOLO_VOLANTINI[periodo];
-    cambiate.add(voce);
-    convertite.push({ voce, periodo });
-  }
-
-  const esito = (inserite: V[]): EsitoConversioneMenu<V> => ({
-    voci,
-    aggiornate: voci.filter(voce => cambiate.has(voce)),
-    inserite,
-  });
-  if (convertite.length === 0) return esito([]);
+const aggiungiVociPop = <V extends VoceMenuConvertibile>(
+  voci: V[],
+  convertite: Array<{ voce: V; periodo: PeriodoMateriali }>,
+  cambiate: Set<V>,
+  nuovoId: (voce: VoceNuovaMenu) => string
+): V[] => {
+  if (convertite.length === 0) return [];
 
   // Periodi nell'ordine in cui le voci convertite compaiono nel menu; ogni periodo una volta sola.
   const ordine = ordineNelMenu(voci);
@@ -143,7 +137,7 @@ export const convertiMenuMateriali = <V extends VoceMenuConvertibile>(
     .map(periodo => convertite.find(c => c.periodo === periodo))
     .filter((c): c is { voce: V; periodo: PeriodoMateriali } => c !== undefined)
     .sort((a, b) => ordine.indexOf(a.voce) - ordine.indexOf(b.voce));
-  if (daAggiungere.length === 0) return esito([]);
+  if (daAggiungere.length === 0) return [];
 
   // Le voci che seguono l'ultima convertita, sotto lo stesso padre, scendono per fare posto.
   const padre = ultima.id_parent ?? null;
@@ -172,5 +166,87 @@ export const convertiMenuMateriali = <V extends VoceMenuConvertibile>(
     return pop;
   });
   voci.splice(voci.indexOf(ultima) + 1, 0, ...inserite);
-  return esito(inserite);
+  return inserite;
+};
+
+/**
+ * Divide la sezione di ogni intestazione indicata: l'intestazione POP va subito prima della prima
+ * voce POP della sezione (stesso padre, prima dell'intestazione successiva), che scende con le
+ * voci seguenti. Una sezione senza voci POP resta com'è. Aggiunge le intestazioni a `voci` e le
+ * restituisce; le voci appena aggiunte (`nuove`) scendono senza contare fra le aggiornate.
+ */
+const dividiSezioni = <V extends VoceMenuConvertibile>(
+  voci: V[],
+  intestazioni: readonly V[],
+  cambiate: Set<V>,
+  nuove: ReadonlySet<V>,
+  nuovoId: (voce: VoceNuovaMenu) => string
+): V[] => {
+  const aggiunte: V[] = [];
+  for (const intestazione of intestazioni) {
+    const padre = intestazione.id_parent ?? null;
+    const fratelli = ordineNelMenu(voci).filter(voce => (voce.id_parent ?? null) === padre);
+    const seguenti = fratelli.slice(fratelli.indexOf(intestazione) + 1);
+    const fine = seguenti.findIndex(voce => voce.tipo === TIPO_MENU_ITEM.SEPARATOR);
+    const sezione = fine === -1 ? seguenti : seguenti.slice(0, fine);
+    const primaPop = sezione.find(voce => PERCORSI_POP.has(voce.pathname ?? ''));
+    if (!primaPop) continue;
+
+    const ordinamento = primaPop.ordinamento;
+    for (const voce of fratelli.slice(fratelli.indexOf(primaPop))) {
+      voce.ordinamento += 1;
+      if (!nuove.has(voce)) cambiate.add(voce);
+    }
+    const pop: V = {
+      ...intestazione,
+      id_menu_item: nuovoId('intestazione-pop'),
+      titolo: SEPARATORE_POP,
+      ordinamento,
+    };
+    voci.splice(voci.indexOf(primaPop), 0, pop);
+    aggiunte.push(pop);
+  }
+  return aggiunte;
+};
+
+/**
+ * Converte UN menu (le voci di un tipo di utente e sotto-ruolo, sottovoci comprese, in un elenco
+ * piatto). Non modifica le voci ricevute. `nuovoId` dà l'identificativo di ciascuna voce aggiunta:
+ * le voci POP, per periodo, e l'intestazione 'MATERIALI POP'.
+ */
+export const convertiMenuMateriali = <V extends VoceMenuConvertibile>(
+  vociMenu: readonly V[],
+  nuovoId: (voce: VoceNuovaMenu) => string
+): EsitoConversioneMenu<V> => {
+  const voci = vociMenu.map(voce => ({ ...voce }));
+  const cambiate = new Set<V>();
+  const convertite: Array<{ voce: V; periodo: PeriodoMateriali }> = [];
+  const intestazioni: V[] = [];
+
+  for (const voce of voci) {
+    if (voce.tipo === TIPO_MENU_ITEM.SEPARATOR && INTESTAZIONI_DA_DIVIDERE.includes(voce.titolo.trim())) {
+      voce.titolo = SEPARATORE_VOLANTINI;
+      cambiate.add(voce);
+      intestazioni.push(voce);
+      continue;
+    }
+    const materiali = voce.pathname ? PAGINE_MATERIALI[voce.pathname] : undefined;
+    if (!materiali) continue;
+    const { periodo, titoloPredefinito } = materiali;
+    voce.pathname = percorsoVolantini(periodo);
+    voce.codice_permesso = permessoDi(voce.pathname);
+    // Un titolo scelto dall'amministratore resta com'è.
+    if (stessoTesto(voce.titolo, titoloPredefinito)) voce.titolo = TITOLO_VOLANTINI[periodo];
+    cambiate.add(voce);
+    convertite.push({ voce, periodo });
+  }
+
+  // Prima le voci POP, poi le intestazioni: la sezione POP comincia dalla prima voce POP.
+  const vociPop = aggiungiVociPop(voci, convertite, cambiate, nuovoId);
+  const intestazioniPop = dividiSezioni(voci, intestazioni, cambiate, new Set(vociPop), nuovoId);
+  return {
+    voci,
+    aggiornate: voci.filter(voce => cambiate.has(voce)),
+    inserite: [...vociPop, ...intestazioniPop],
+  };
 };

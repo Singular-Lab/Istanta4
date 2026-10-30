@@ -17,21 +17,37 @@ const creaFonte = (percorsi: Record<string, string>) => {
 describe('migrazione dei percorsi del menu', () => {
   it('riscrive i vecchi percorsi, sottopagine comprese, e lascia gli altri', async () => {
     const { fonte, menu } = creaFonte({
-      a: '/punti-vendita',
+      a: '/aree-e-canali',
       b: '/gestione-utenti',
-      c: '/punti-vendita/42',
+      c: '/aree-e-canali/42',
       d: '/promozioni/in-corso',
-      e: '/punti-vendita-bis',
+      e: '/aree-e-canali-bis',
     });
 
     expect(await migraPercorsiSpostati(fonte)).toBe(3);
     expect(Object.fromEntries(menu)).toEqual({
-      a: '/gestione-interna/punti-vendita',
+      a: '/gestione-interna/aree-e-canali',
       b: '/gestione-interna/gestione-utenti',
-      c: '/gestione-interna/punti-vendita/42',
+      c: '/gestione-interna/aree-e-canali/42',
       d: '/promozioni/in-corso',
-      e: '/punti-vendita-bis',
+      e: '/aree-e-canali-bis',
     });
+  });
+
+  it('/punti-vendita resta com\'è: è la consultazione dei punti vendita, non più un vecchio percorso', async () => {
+    const { fonte, menu } = creaFonte({
+      a: '/punti-vendita',
+      b: '/punti-vendita/42',
+      c: '/gestione-interna/punti-vendita',
+    });
+
+    expect(await migraPercorsiSpostati(fonte)).toBe(0);
+    expect(Object.fromEntries(menu)).toEqual({
+      a: '/punti-vendita',
+      b: '/punti-vendita/42',
+      c: '/gestione-interna/punti-vendita',
+    });
+    expect(fonte.aggiornaPercorso).not.toHaveBeenCalled();
   });
 
   it('una seconda esecuzione non cambia nulla', async () => {

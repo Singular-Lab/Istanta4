@@ -39,6 +39,7 @@ import type { IPromoRepository } from '../repositories/PromoRepository';
 import { isStessaPromo, normalizePromoModel } from '../utils/PromoModelUtils';
 import { ServerUtils } from '../utils/ServerUtils';
 import { verificaRisposta } from '../utils/rispostaServizi';
+import { statoAutomaticoPromo } from '../utils/statoAutomaticoPromo';
 import { OrdinamentoMerceologicoService } from './OrdinamentoMerceologicoService';
 import { normalizzaMeta } from './visibilitaPromoUtils';
 dayjs.extend(isBetween);
@@ -465,7 +466,14 @@ export class PromoService implements IPromoService {
       validita_dal: promo.validitaDal as Date,
       validita_al: promo.validitaAl as Date,
       data_scadenza: promo.dataScadenza as Date,
-      stato: promo.stato as STATO_PROMO,
+      // A Istanta va sempre PIANIFICATA (il cron non le sincronizza gli stati); qui la promo nasce
+      // già nello stato delle sue date: una storica del plugin è subito ARCHIVIATA, non "in corso"
+      stato: statoAutomaticoPromo({
+        stato: STATO_PROMO.PIANIFICATA,
+        validita_dal: promo.validitaDal,
+        validita_al: promo.validitaAl,
+        data_scadenza: promo.dataScadenza,
+      }) ?? STATO_PROMO.PIANIFICATA,
       context: promo.context as object,
       // Solo FP: meta non va a Istanta
       meta: normalizzaMeta(data.meta, {}, this.getVisibilitaOpzioni()),

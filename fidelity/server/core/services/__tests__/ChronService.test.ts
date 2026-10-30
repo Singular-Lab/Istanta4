@@ -79,6 +79,21 @@ describe('ChronService: sincronizzazione stati promo', () => {
     );
   });
 
+  it('non riscrive le promo gia nello stato delle loro date ne la VALIDA_CON_ERRORI nel periodo di validita', async () => {
+    vi.spyOn(Promo, 'findAll').mockResolvedValue([
+      promo('p3', STATO_PROMO.VALIDA, '2026-10-05T00:00:00Z', '2026-10-20T00:00:00Z'),
+      promo('p4', STATO_PROMO.VALIDA_CON_ERRORI, '2026-10-05T00:00:00Z', '2026-10-20T00:00:00Z'),
+      promo('p5', STATO_PROMO.ARCHIVIATA, '2026-10-01T00:00:00Z', '2026-10-10T00:00:00Z'),
+      // Futura e senza scadenza: le date non dicono nulla
+      promo('p6', STATO_PROMO.PIANIFICATA, '2026-11-01T00:00:00Z', '2026-11-10T00:00:00Z'),
+    ] as never);
+    const update = vi.spyOn(Promo, 'update').mockResolvedValue([1] as never);
+
+    await eseguiJobStatiPromo();
+
+    expect(update).not.toHaveBeenCalled();
+  });
+
   it('la query esclude le eliminate e le ARCHIVIATA gia scadute secondo il giorno di Roma', async () => {
     const findAll = vi.spyOn(Promo, 'findAll').mockResolvedValue([] as any);
 

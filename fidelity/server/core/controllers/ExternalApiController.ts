@@ -6,7 +6,7 @@ import crypto from "node:crypto";
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { EXPORT_DI_SISTEMA, STATO_LOG_FILE } from '../../../lib/enums';
-import { BadRequestError } from '../../../lib/errors';
+import { BadRequestError, isAppError } from '../../../lib/errors';
 import type { FantasmaDeciso, FileItemKit, FileItemKitLog, ImportStorico, ReferenzeIstanta } from '../../../lib/types';
 import type { IAgenziaLib, PluginPayloadRef, SyncJsonPluginPayload } from '../agenzia_lib/types';
 import { BaseController } from '../base/BaseController';
@@ -26,6 +26,7 @@ import type { IKitRuntimeService } from '../interfaces/IKitRuntimeService';
 import type { IPromoService } from '../interfaces/IPromoService';
 import { IPuntoVenditaService } from '../interfaces/IPuntoVenditaService';
 import type { IReferenzeService } from '../interfaces/IReferenzeService';
+import type { IStoriaPuntoVenditaService } from '../interfaces/IStoriaPuntoVenditaService';
 import type { ITipoExportService } from '../interfaces/ITipoExportService';
 import { log } from '../logger';
 import { authMiddleware } from '../middleware/authMiddleware';
@@ -181,7 +182,6 @@ export class ExternalApiController extends BaseController {
       const file = req.file;
       const kitRuntimeService = container.get<IKitRuntimeService>(TYPES.KitRuntimeService);
       const referenzeService = container.get<IReferenzeService>(TYPES.ReferenzeService)
-      const pvService = container.get<IPuntoVenditaService>(TYPES.PuntoVenditaService);
       //#region NOTE: controllo dei campi
       if (!ServerUtils.checkIfValueIsValid(file)) {
         throw new BadRequestError({
@@ -593,29 +593,9 @@ export class ExternalApiController extends BaseController {
         boxFuoriListino: reportFuoriListino(fantasmi, decisi)
       };
       await kitRuntimeService.salvaImportStorico(payload.kitGuidId, esitoImport)
-      // I PV del plugin sono testo: prima di qualsiasi import li risolviamo
-      // contro l'anagrafica normalizzando citta, indirizzo e telefono.
-      const puntiVendita = (payload.pvData?.gruppi ?? []).flatMap((gruppo) =>
-        gruppo.puntiVendita.map((puntoVendita) => ({
-          nome: puntoVendita.nome ?? puntoVendita.citta ?? "",
-          citta: puntoVendita.citta ?? "",
-          cap: puntoVendita.cap,
-          provincia: puntoVendita.provincia,
-          regione: puntoVendita.regione,
-          indirizzo: puntoVendita.indirizzo ?? "",
-          telefono: puntoVendita.telefono ?? "",
-          lat: puntoVendita.lat,
-          lon: puntoVendita.lon,
-        }))
-      );
-      const pvLoad = puntiVendita.length > 0 && payload.areaId && payload.canaleId
-        ? await pvService.loadPuntiVenditaForPlugin(
-          req.session.id_gdo as string | undefined,
-          payload.areaId as string,
-          payload.canaleId as string,
-          puntiVendita
-        )
-        : { matched: [], created: [], updated: [], missing: [], possibleDuplicates: [], duplicates: [] };
+      // Il volantino recuperato dallo storico e' un volantino uscito: si pubblica, senza webhook
+      const kitPubblicato = await kitRuntimeService.pubblicaKitDaStorico(payload.kitGuidId, req.session.id_utente as string);
+      const puntiVendita = await this.registraListaPuntiVendita(payload, fileResolve, req.session.id_gdo as string | undefined);
       res.status(200).json({
         success: true,
         message: "Payload valido",
@@ -625,12 +605,11 @@ export class ExternalApiController extends BaseController {
         referenzeFantasmaCreate: referenzeFantasma.length,
         fantasmiIgnorati: decisi.filter((fantasma) => fantasma.ignorato).length,
         orfanelliIgnorati: orfanelli.length,
-        pvMatched: pvLoad.matched.length,
-        pvCreated: pvLoad.created.length,
-        pvUpdated: pvLoad.updated.length,
-        pvMissing: pvLoad.missing.length,
-        pvPossibleDuplicates: pvLoad.possibleDuplicates,
-        pvDuplicates: pvLoad.duplicates
+        kitPubblicato,
+        pvRighe: puntiVendita.righe,
+        pvAbbinate: puntiVendita.abbinate,
+        pvNonAbbinate: puntiVendita.nonAbbinate,
+        ...(puntiVendita.errore ? { pvErrore: puntiVendita.errore } : {})
       });
     } catch (e: any) {
       log.error('Errore durante la sincronizzazione del plugin (sync_json_plugin)', e, {
@@ -644,6 +623,35 @@ export class ExternalApiController extends BaseController {
       if (req.file?.path && fs.existsSync(req.file.path)) {
         await fs.promises.unlink(req.file.path)
       }
+    }
+  }
+
+  /**
+   * La lista dei PV stampata nel volantino diventa la storia dei punti vendita: righe del kit
+   * sostituite e abbinate all'anagrafica, che non si tocca. Un errore qui non fa fallire il sync
+   * (referenze e PDF sono gia' salvati): si scrive nel log e si dice al plugin.
+   */
+  private async registraListaPuntiVendita(
+    payload: SyncJsonPluginPayload,
+    nomeFile: string,
+    idGdoSessione: string | undefined
+  ): Promise<{ righe: number; abbinate: number; nonAbbinate: number; errore?: string }> {
+    try {
+      const storia = container.get<IStoriaPuntoVenditaService>(TYPES.StoriaPuntoVenditaService);
+      const esito = await storia.registraListaVolantino({
+        idKit: payload.kitGuidId as string,
+        pv: payload.pv,
+        pvData: payload.pvData,
+        nomeFile,
+        idGdoRiserva: idGdoSessione,
+      });
+      return { righe: esito.righe, abbinate: esito.abbinate, nonAbbinate: esito.nonAbbinate };
+    } catch (errore) {
+      const motivo = errore instanceof Error ? errore.message : String(errore);
+      log.warn('sync_json_plugin: lista dei punti vendita non registrata', { idKit: payload.kitGuidId, errore: motivo });
+      // Al plugin solo i motivi applicativi (kit o GDO non trovati), non i dettagli del database
+      const perIlPlugin = isAppError(errore) ? motivo : 'errore interno, reinviare il volantino';
+      return { righe: 0, abbinate: 0, nonAbbinate: 0, errore: `Lista dei punti vendita non registrata: ${perIlPlugin}` };
     }
   }
 

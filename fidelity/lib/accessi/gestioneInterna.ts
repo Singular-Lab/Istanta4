@@ -3,10 +3,12 @@
  *
  * I vecchi percorsi restano come redirect nel router e vengono riscritti nei menu
  * salvati, così i segnalibri e le voci già configurate continuano a funzionare.
+ *
+ * /punti-vendita non c'è più: è la pagina di consultazione dei punti vendita, separata dalla
+ * gestione (/gestione-interna/punti-vendita). I menu già riscritti restano come sono.
  */
 export const PERCORSI_SPOSTATI: Readonly<Record<string, string>> = {
   '/aree-e-canali': '/gestione-interna/aree-e-canali',
-  '/punti-vendita': '/gestione-interna/punti-vendita',
   '/gestione-utenti': '/gestione-interna/gestione-utenti',
   '/gestione-hub': '/gestione-interna/gestione-hub',
   '/gestione-metodi-accesso': '/gestione-interna/gestione-metodi-accesso',
@@ -15,8 +17,8 @@ export const PERCORSI_SPOSTATI: Readonly<Record<string, string>> = {
 
 /**
  * Nuovo indirizzo di un vecchio percorso, sottopagine comprese
- * ("/punti-vendita/42" → "/gestione-interna/punti-vendita/42"), o undefined se non è stato spostato.
- * Il confronto è per segmenti interi: "/punti-vendita-bis" non è spostato.
+ * ("/aree-e-canali/42" → "/gestione-interna/aree-e-canali/42"), o undefined se non è stato spostato.
+ * Il confronto è per segmenti interi: "/aree-e-canali-bis" non è spostato.
  */
 export const percorsoSpostato = (percorso: string): string | undefined => {
   for (const [vecchio, nuovo] of Object.entries(PERCORSI_SPOSTATI)) {

@@ -112,7 +112,7 @@ export class PuntoVenditaController extends BaseController {
     this.router.get('/getAllPVFromIdGDO_paginated', authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), routeDeprecata, this.getAllPVFromIdGDOPaginated.bind(this));
     this.router.get('/getAllPV', authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), this.getAllPV.bind(this));
     this.router.get("/get_pv_by_id", authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), this.getPvById.bind(this))
-    this.router.get("/punti-vendita/:id/volantini-attivi", authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), this.getVolantiniAttivi.bind(this))
+    // I volantini attivi del punto vendita sono nella consultazione (ConsultazionePuntiVenditaController)
     this.router.get("/get_all_punti_lat_lon_pv", authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), this.getAllPuntiLatLonPV.bind(this))
 
     // DISPOSITIVI PUNTO VENDITA
@@ -621,14 +621,6 @@ export class PuntoVenditaController extends BaseController {
     }
   }
 
-  private async getVolantiniAttivi(req: Request<{ id: string }>, res: Response): Promise<void> {
-    try {
-      const result = await this.puntoVenditaService.getVolantiniAttivi(req.params.id);
-      this.sendResponse(res, HttpStatusCode.OK, result);
-    } catch (error) {
-      this.handleError(res, error);
-    }
-  }
   private async getAllPuntiLatLonPV(req: Request, res: Response): Promise<void> {
     try {
       log.debug('getAllPuntiLatLonPV - Start', { sessionUser: req.session.id_utente });

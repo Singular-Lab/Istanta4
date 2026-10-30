@@ -13,6 +13,12 @@ interface Props {
   totalePagine: number;
   config?: MappaConfig;
   repartiColorStrategy?: ColorStrategy;
+  /**
+   * Kit recuperato dallo storico dei volantini: x è già relativo alla pagina (anche sulle pagine
+   * destre) e percIngombro è già una percentuale. Nei kit di Istanta x è relativo allo spread e
+   * percIngombro è una frazione.
+   */
+  origineStorico?: boolean;
 }
 
 // Colori di fallback per reparto (usati se non c'è config)
@@ -73,25 +79,41 @@ interface RefBoxProps {
   onMouseLeave: () => void;
   pagePosition: 'left' | 'right' | 'single';
   getColorFn: (reparto: string) => string;
+  origineStorico: boolean;
 }
 
-const RefBox: FC<RefBoxProps> = memo(({ ref_data, isHovered, onMouseEnter, onMouseLeave, pagePosition, getColorFn }) => {
+/**
+ * Posizione e misure del box in percentuale della pagina. Nei kit di Istanta x è relativo allo
+ * spread: sulle pagine destre (e sulla copertina) si toglie la larghezza della pagina sinistra.
+ * Nei kit dello storico x è già relativo alla pagina.
+ */
+export const geometriaBox = (
+  posizione: NonNullable<ReferenzaPosizione['posizione']>,
+  pagePosition: 'left' | 'right' | 'single',
+  origineStorico: boolean
+) => {
+  const { x, y, w, h, wPage, hPage } = posizione;
+  const effectiveX = !origineStorico && (pagePosition === 'right' || pagePosition === 'single') ? x - wPage : x;
+  return {
+    left: (effectiveX / wPage) * 100,
+    top: (y / hPage) * 100,
+    width: (w / wPage) * 100,
+    height: (h / hPage) * 100,
+  };
+};
+
+/** Ingombro del box in percentuale: nei kit dello storico lo è già, in quelli di Istanta è una frazione. */
+export const ingombroPercentuale = (percIngombro: number, origineStorico: boolean): number =>
+  origineStorico ? percIngombro : percIngombro * 100;
+
+const RefBox: FC<RefBoxProps> = memo(({ ref_data, isHovered, onMouseEnter, onMouseLeave, pagePosition, getColorFn, origineStorico }) => {
   if (!ref_data.posizione) return null;
 
-  const { x, y, w, h, wPage, hPage } = ref_data.posizione;
-  const effectiveX =
-    pagePosition === 'right' || pagePosition === 'single'
-      ? x - wPage
-      : x;
-
-
-  const leftPerc = (effectiveX / wPage) * 100;
-  const topPerc = (y / hPage) * 100;
-  const widthPerc = (w / wPage) * 100;
-  const heightPerc = (h / hPage) * 100;
+  const { left: leftPerc, top: topPerc, width: widthPerc, height: heightPerc } = geometriaBox(ref_data.posizione, pagePosition, origineStorico);
 
   return (
     <div
+      data-testid={`box-${ref_data.id}`}
       className={clsx(
         "absolute rounded-sm cursor-pointer transition-opacity duration-150",
         isHovered ? "z-20 border-2 border-white shadow-overlay opacity-100" : "border border-white/60 z-10 opacity-70 hover:opacity-90"
@@ -120,9 +142,10 @@ interface PageMapProps {
   position: 'left' | 'right' | 'single';
   pageDimensions: { width: number; height: number };
   getColorFn: (reparto: string) => string;
+  origineStorico: boolean;
 }
 
-const PageMap: FC<PageMapProps> = memo(({ pageNumber, referenze, hoveredRefId, onHoverRef, position, pageDimensions, getColorFn }) => {
+const PageMap: FC<PageMapProps> = memo(({ pageNumber, referenze, hoveredRefId, onHoverRef, position, pageDimensions, getColorFn, origineStorico }) => {
   const referenzePagina = useMemo(() => {
     if (pageNumber === null) return [];
     return referenze.filter(r => r.posizione && Number(r.posizione.pag) === pageNumber);
@@ -210,6 +233,7 @@ const PageMap: FC<PageMapProps> = memo(({ pageNumber, referenze, hoveredRefId, o
           onMouseLeave={handleMouseLeave}
           pagePosition={position}
           getColorFn={getColorFn}
+          origineStorico={origineStorico}
         />
 
       ))}
@@ -233,9 +257,10 @@ interface RefInfoPanelProps {
   ref_data: ReferenzaPosizione | null;
   getColorFn: (reparto: string) => string;
   config?: MappaConfig;
+  origineStorico: boolean;
 }
 
-const RefInfoPanel: FC<RefInfoPanelProps> = memo(({ ref_data, getColorFn, config }) => {
+const RefInfoPanel: FC<RefInfoPanelProps> = memo(({ ref_data, getColorFn, config, origineStorico }) => {
   if (!ref_data) {
     return (
       <div className="rounded-card min-h-[14rem] border border-dashed border-slate-200 bg-slate-50 p-3 text-center">
@@ -292,7 +317,7 @@ const RefInfoPanel: FC<RefInfoPanelProps> = memo(({ ref_data, getColorFn, config
             {showIngombro && (
               <div className="flex items-center gap-1.5">
                 <Lucide icon="SquareStack" className="h-3 w-3" />
-                <span>Ingombro: {(ref_data.posizione.percIngombro * 100).toFixed(1)}%</span>
+                <span>Ingombro: {ingombroPercentuale(ref_data.posizione.percIngombro, origineStorico).toFixed(1)}%</span>
               </div>
             )}
           </>
@@ -304,7 +329,7 @@ const RefInfoPanel: FC<RefInfoPanelProps> = memo(({ ref_data, getColorFn, config
 
 RefInfoPanel.displayName = 'RefInfoPanel';
 
-const FlyerPageMap: FC<Props> = ({ referenze, paginaCorrente, onChangePage, totalePagine, config, repartiColorStrategy }) => {
+const FlyerPageMap: FC<Props> = ({ referenze, paginaCorrente, onChangePage, totalePagine, config, repartiColorStrategy, origineStorico = false }) => {
   const [hoveredRefId, setHoveredRefId] = useState<string | null>(null);
 
   // Funzione per ottenere il colore in base alla config
@@ -470,6 +495,7 @@ const FlyerPageMap: FC<Props> = ({ referenze, paginaCorrente, onChangePage, tota
                     position="single"
                     pageDimensions={pageDimensions}
                     getColorFn={getColor}
+                    origineStorico={origineStorico}
                   />
                 </div>
               </div>
@@ -484,6 +510,7 @@ const FlyerPageMap: FC<Props> = ({ referenze, paginaCorrente, onChangePage, tota
                   position="left"
                   pageDimensions={pageDimensions}
                   getColorFn={getColor}
+                  origineStorico={origineStorico}
                 />
                 <PageMap
                   pageNumber={rightPage}
@@ -493,6 +520,7 @@ const FlyerPageMap: FC<Props> = ({ referenze, paginaCorrente, onChangePage, tota
                   position="right"
                   pageDimensions={pageDimensions}
                   getColorFn={getColor}
+                  origineStorico={origineStorico}
                 />
               </>
             )}
@@ -501,7 +529,7 @@ const FlyerPageMap: FC<Props> = ({ referenze, paginaCorrente, onChangePage, tota
 
         {/* Info Panel */}
         <div style={{ width: config?.infoPanel?.width ?? 192 }} className="shrink-0">
-          <RefInfoPanel ref_data={hoveredRef} getColorFn={getColor} config={config} />
+          <RefInfoPanel ref_data={hoveredRef} getColorFn={getColor} config={config} origineStorico={origineStorico} />
 
           {/* Mini navigation */}
           {config?.display?.showMiniNavigation !== false && (

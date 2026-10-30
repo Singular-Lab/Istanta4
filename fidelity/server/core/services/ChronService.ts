@@ -14,13 +14,11 @@ import { IChronService } from '../interfaces/IChronService';
 import { log } from '../logger';
 import { Promo } from '../models/promo';
 import { PluginAnalyticsEvent } from '../models/plugin_analytics_event';
+import { FUSO_PROMO, statoAutomaticoPromo } from '../utils/statoAutomaticoPromo';
 import { getWhatsappQueueWorker } from '../workers/WhatsappQueueWorker';
 dayjs.extend(isBetween);
 dayjs.extend(utc);
 dayjs.extend(timezone);
-
-// Le date delle promo sono giorni del calendario italiano, qualunque sia il fuso del server
-const FUSO_PROMO = 'Europe/Rome';
 
 export class ChronService implements IChronService {
 
@@ -71,7 +69,7 @@ export class ChronService implements IChronService {
         const promos = await this.getAllPromo();
         if (Array.isArray(promos)) {
           for (const promo of promos) {
-            const nextState = this.determineAutomaticState(promo);
+            const nextState = statoAutomaticoPromo(promo);
             if (!nextState || nextState === promo.stato) {
               continue;
             }
@@ -146,38 +144,6 @@ export class ChronService implements IChronService {
     }
   }
 
-  private determineAutomaticState(promo: PromoResponseDTO): STATO_PROMO | null {
-    // Confronti sul giorno di Roma: alle 23:30 UTC in Italia è già il giorno dopo
-    const now = dayjs().tz(FUSO_PROMO);
-    const validitaDal = promo.validita_dal ? dayjs(promo.validita_dal).tz(FUSO_PROMO) : null;
-    const validitaAl = promo.validita_al ? dayjs(promo.validita_al).tz(FUSO_PROMO) : null;
-    const dataScadenza = promo.data_scadenza ? dayjs(promo.data_scadenza).tz(FUSO_PROMO) : null;
-
-    if (validitaAl && now.isAfter(validitaAl, 'day')) {
-      return promo.stato !== STATO_PROMO.ARCHIVIATA ? STATO_PROMO.ARCHIVIATA : null;
-    }
-
-    if (validitaDal && validitaAl && now.isBetween(validitaDal, validitaAl, 'day', '[]')) {
-      if (promo.stato === STATO_PROMO.VALIDA_CON_ERRORI) {
-        return null;
-      }
-      return promo.stato !== STATO_PROMO.VALIDA ? STATO_PROMO.VALIDA : null;
-    }
-
-    if (dataScadenza && now.isAfter(dataScadenza, 'day')) {
-      return promo.stato !== STATO_PROMO.IN_RITARDO ? STATO_PROMO.IN_RITARDO : null;
-    }
-
-    if (dataScadenza) {
-      const daysUntilExpiry = dataScadenza.diff(now, 'day');
-      if (daysUntilExpiry <= 7 && daysUntilExpiry >= 0) {
-        return promo.stato !== STATO_PROMO.IN_SCADENZA ? STATO_PROMO.IN_SCADENZA : null;
-      }
-    }
-
-    return null;
-  }
-
   /**
    * Avvia il cron job per la pulizia degli eventi analytics del plugin
    * Esegue ogni giorno alle 4:30 AM (Europe/Rome), elimina eventi piu' vecchi di 90 giorni
@@ -214,7 +180,7 @@ export class ChronService implements IChronService {
   async getAllPromo(): Promise<PromoResponseDTO[]> {
     try {
       // ARCHIVIATA non è finale (torna VALIDA se le date vengono spostate): restano fuori
-      // solo quelle già scadute, per cui determineAutomaticState non cambierebbe nulla.
+      // solo quelle già scadute, per cui statoAutomaticoPromo non cambierebbe nulla.
       // validita_al è NOT NULL (modello Promo), quindi non serve il ramo IS NULL.
       const inizioOggi = dayjs().tz(FUSO_PROMO).startOf('day').toDate();
       const result = await Promo.findAll({

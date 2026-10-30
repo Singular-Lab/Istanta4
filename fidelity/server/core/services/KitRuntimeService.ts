@@ -1739,31 +1739,40 @@ export class KitRuntimeService implements IKitRuntimeService {
     }
   }
 
+  /** Il kit con il lock sulla riga: due pubblicazioni concorrenti non devono superare entrambe il controllo di stato. */
+  private async kitDaPubblicare(idLavorazione: string, t: Transaction) {
+    const kit = await RuntimeKit.findOne({ where: { id: idLavorazione }, transaction: t, lock: t.LOCK.UPDATE });
+    if (!kit) {
+      throw wrapNotFoundError(new Error("Kit runtime non trovato"), {
+        message: 'Kit runtime non trovato',
+        entityId: idLavorazione,
+        entityType: 'RuntimeKit'
+      });
+    }
+    return kit;
+  }
+
+  /** Stato PUBBLICATO, fine lavorazione e log di pubblicazione dei file, nella transazione di chi pubblica. */
+  private async segnaKitPubblicato(idLavorazione: string, idUtente: string, t: Transaction): Promise<void> {
+    await RuntimeKit.update(
+      { stato_lavorazione: STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO, fine_lavorazione: new Date() },
+      { where: { id: idLavorazione }, validate: false, transaction: t }
+    );
+    await this.creaLogPubblicazioneFiles(idLavorazione, idUtente, t);
+  }
+
   async pubblicaKitRuntime(idLavorazione: string, req: Request): Promise<any> {
     try {
       const { result, dati } = await sequelize.transaction(async (t) => {
-        // Lock sulla riga: due pubblicazioni concorrenti non devono superare entrambe il controllo di stato
-        const kit = await RuntimeKit.findOne({ where: { id: idLavorazione }, transaction: t, lock: t.LOCK.UPDATE });
-        if (!kit) {
-          throw wrapNotFoundError(new Error("Kit runtime non trovato"), {
-            message: 'Kit runtime non trovato',
-            entityId: idLavorazione,
-            entityType: 'RuntimeKit'
-          });
-        }
+        const kit = await this.kitDaPubblicare(idLavorazione, t);
         if (kit.stato_lavorazione === STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO || kit.stato_lavorazione === STATO_LAVORAZIONE_KIT_RUNTIME.ELIMINATO) {
           throw new BusinessError({
             message: kit.stato_lavorazione === STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO ? 'Kit runtime già pubblicato' : 'Kit runtime eliminato, impossibile pubblicarlo',
             rule: 'Si pubblica solo un kit runtime non ancora pubblicato né eliminato'
           });
         }
-        await RuntimeKit.update(
-          { stato_lavorazione: STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO, fine_lavorazione: new Date() },
-          { where: { id: idLavorazione }, validate: false, transaction: t }
-        );
+        await this.segnaKitPubblicato(idLavorazione, req.session.id_utente as string, t);
         const result = await RuntimeKit.findOne({ where: { id: idLavorazione }, raw: true, transaction: t }) as unknown as any;
-
-        await this.creaLogPubblicazioneFiles(idLavorazione, req.session.id_utente as string, t);
 
         const area = await Area.findOne({ where: { id_aree: result.id_area }, transaction: t });
         const canale = await Canale.findOne({ where: { id_canali: result.id_canale }, transaction: t });
@@ -1823,6 +1832,30 @@ export class KitRuntimeService implements IKitRuntimeService {
       throw wrapDatabaseError(new Error("Errore durante la pubblicazione del kit runtime"), {
         message: "Errore durante la pubblicazione del kit runtime",
         operation: 'updateOne',
+        entity: 'RuntimeKit',
+        details: { error }
+      });
+    }
+  }
+
+  async pubblicaKitDaStorico(idLavorazione: string, idUtente: string): Promise<boolean> {
+    try {
+      return await sequelize.transaction(async (t) => {
+        const kit = await this.kitDaPubblicare(idLavorazione, t);
+        // Gia' pubblicato (lo stesso volantino reinviato) o eliminato: si lascia com'e'
+        if (kit.stato_lavorazione === STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO || kit.stato_lavorazione === STATO_LAVORAZIONE_KIT_RUNTIME.ELIMINATO) {
+          return false;
+        }
+        // Niente webhook KIT_PUBBLICATO: migliaia di volantini storici non vanno notificati ai sistemi esterni
+        await this.segnaKitPubblicato(idLavorazione, idUtente, t);
+        log.info(`Kit ${idLavorazione} pubblicato dall'import da storico`);
+        return true;
+      });
+    } catch (error) {
+      if (isAppError(error)) throw error;
+      throw wrapDatabaseError(new Error("Errore durante la pubblicazione del kit importato da storico"), {
+        message: "Errore durante la pubblicazione del kit importato da storico",
+        operation: 'pubblicaKitDaStorico',
         entity: 'RuntimeKit',
         details: { error }
       });

@@ -33,6 +33,12 @@ export interface FiltriSqlKit {
   idCanale?: string;
 }
 
+/** Filtri dell'utente sulle promozioni della vista Volantini (Attivi e Storico). */
+export interface FiltriSqlPromoVolantini extends FiltriSqlKit {
+  /** Anno dell'inizio di validita' della promo, nel calendario italiano. */
+  anno?: number;
+}
+
 /** Filtri dell'utente sui file di un formato (vista POP). */
 export interface FiltriSqlFile {
   cerca?: string;
@@ -91,11 +97,46 @@ export interface RigaCombinazioneKit extends RigaPromo {
   nome_canale: string;
 }
 
+/** Promo e kit della vista Volantini per promozione. */
+export interface RigaTotaliPromoVolantini {
+  promozioni: number;
+  kit: number;
+}
+
+/** Kit di una promo della pagina (vista Volantini per promozione), con o senza corrispondenza ai filtri. */
+export interface RigaVarianteVolantino {
+  id: string;
+  id_promo: string;
+  titolo: string;
+  id_area: string;
+  nome_area: string;
+  id_canale: string;
+  nome_canale: string;
+  numero_file: number;
+  /** Righe della lista dei punti vendita stampata nel volantino (punti_vendita_volantino). */
+  numero_punti_vendita: number;
+  copertina_id_olimpo: string | null;
+  copertina_nome: string | null;
+  copertina_mime: string | null;
+  copertina_pagine: number | null;
+  /** Il kit corrisponde ai filtri dell'utente: solo questi si mostrano, gli altri si contano. */
+  corrisponde: boolean;
+}
+
+/** Area e canale proposti nei filtri della vista Volantini per promozione. */
+export interface RigaAreaCanale {
+  id_area: string;
+  nome_area: string;
+  id_canale: string;
+  nome_canale: string;
+}
+
 export interface RigaFile {
   id: string;
   nome: string | null;
   id_olimpo_cloud: string | null;
   mime: string | null;
+  pagine: number | null;
   id_kit: string;
   titolo_kit: string;
   stato_kit: string;
@@ -128,10 +169,34 @@ export interface IMaterialiRepository {
   contaKit(criteri: CriteriKit, filtri?: FiltriSqlKit): Promise<number>;
   elencaCombinazioniKit(criteri: CriteriKit): Promise<RigaCombinazioneKit[]>;
   /**
-   * Promo del periodo con file e formati dei loro kit. Con soloConKit restano solo le promo
-   * che hanno almeno un kit ammesso.
+   * Promo con almeno un kit ammesso che corrisponde ai filtri, dalla validita' piu' recente (le
+   * promo senza data in fondo), poi per nome. Senza pagina, tutte.
    */
-  elencaPromoConKit(criteri: CriteriKit, soloConKit: boolean): Promise<RigaPromoPop[]>;
+  elencaPromoVolantini(
+    criteri: CriteriKit,
+    filtri?: FiltriSqlPromoVolantini,
+    pagina?: { limite: number; scarto: number }
+  ): Promise<RigaPromo[]>;
+  /** Promo e kit ammessi che corrispondono ai filtri. */
+  contaPromoVolantini(criteri: CriteriKit, filtri?: FiltriSqlPromoVolantini): Promise<RigaTotaliPromoVolantini>;
+  /** Tutti i kit ammessi delle promo indicate, ciascuno con `corrisponde` ai filtri. */
+  elencaVariantiVolantini(
+    criteri: CriteriKit,
+    idPromo: readonly string[],
+    filtri?: FiltriSqlPromoVolantini
+  ): Promise<RigaVarianteVolantino[]>;
+  /**
+   * Aree e canali dei kit ammessi; con combinazioniGdo anche quelli delle combinazioni canale/area
+   * delle GDO che hanno promo nel periodo, comprese le disattivate. Senza nome vale il codice.
+   */
+  elencaAreeCanaliVolantini(criteri: CriteriKit, combinazioniGdo: boolean): Promise<RigaAreaCanale[]>;
+  /** Anni dell'inizio di validita' delle promo con kit ammessi, nel calendario italiano, dal piu' recente. */
+  elencaAnniPromoVolantini(criteri: CriteriKit): Promise<number[]>;
+  /**
+   * Promo del periodo con almeno un kit ammesso, con file e formati dei loro kit. Le promo che
+   * hanno solo kit non avviati non ci sono: quei kit li conosce Istanta, non il database.
+   */
+  elencaPromoConKit(criteri: CriteriKit): Promise<RigaPromoPop[]>;
   /** File dei kit, ordinati per area, canale e nome. */
   elencaFile(criteri: CriteriKit, filtri?: FiltriSqlFile, pagina?: { limite: number; scarto: number }): Promise<RigaFile[]>;
   contaFile(criteri: CriteriKit, filtri?: FiltriSqlFile): Promise<number>;
@@ -230,6 +295,37 @@ function condizioniFiltriKit(filtri: FiltriSqlKit | undefined, sostituzioni: Sos
   }
   return condizioni;
 }
+
+/** Le date delle promo sono giorni del calendario italiano, qualunque sia il fuso del database. */
+const FUSO_PROMO = 'Europe/Rome';
+
+/** I filtri dei kit e l'anno: dal 1 gennaio dell'anno, ora italiana, al 1 gennaio successivo (escluso). */
+function condizioniFiltriPromoVolantini(filtri: FiltriSqlPromoVolantini | undefined, sostituzioni: Sostituzioni): string[] {
+  const condizioni = condizioniFiltriKit(filtri, sostituzioni);
+  if (filtri?.anno !== undefined) {
+    condizioni.push(`p.validita_dal >= make_timestamptz(:anno, 1, 1, 0, 0, 0, :fusoPromo)
+      AND p.validita_dal < make_timestamptz(:anno + 1, 1, 1, 0, 0, 0, :fusoPromo)`);
+    sostituzioni.anno = filtri.anno;
+    sostituzioni.fusoPromo = FUSO_PROMO;
+  }
+  return condizioni;
+}
+
+/** Nome di area e canale nei filtri e nelle varianti dei volantini: senza nome vale il codice. */
+const NOME_O_CODICE_AREA = `COALESCE(NULLIF(a.nome_aree, ''), NULLIF(k.nome_area, ''), a.codice_aree, '')`;
+const NOME_O_CODICE_CANALE = `COALESCE(NULLIF(c.nome_canali, ''), NULLIF(k.nome_canale, ''), c.codice_canali, '')`;
+
+/** Copertina del kit: il primo file dell'export volantino che sta su Olimpo, meglio se PDF. */
+const COPERTINA_VOLANTINO = `
+  LEFT JOIN LATERAL (
+    SELECT f.id_olimpo_cloud, f.nome, f.mime, f.pages
+    FROM files_runtime f
+    WHERE f.id_runtime = k.id
+      AND COALESCE(f.id_olimpo_cloud, '') <> ''
+      AND ${fileDellExport('codiceVolantino')}
+    ORDER BY (COALESCE(f.mime, '') ILIKE '%pdf%') DESC, f.nome, f."createdAt"
+    LIMIT 1
+  ) cop ON TRUE`;
 
 function condizioniFiltriFile(filtri: FiltriSqlFile | undefined, sostituzioni: Sostituzioni): string[] {
   const condizioni: string[] = [];
@@ -387,31 +483,137 @@ export class MaterialiRepository implements IMaterialiRepository {
     );
   }
 
-  async elencaPromoConKit(criteri: CriteriKit, soloConKit: boolean): Promise<RigaPromoPop[]> {
-    const sostituzioni: Sostituzioni = {
-      statiPromo: [...criteri.statiPromo],
-      statiKit: [...criteri.statiKit],
-      tipoLavorazione: criteri.tipoLavorazione,
-    };
-    // LEFT JOIN: In corso compaiono anche le promo che hanno solo kit non ancora avviati
+  async elencaPromoVolantini(
+    criteri: CriteriKit,
+    filtri?: FiltriSqlPromoVolantini,
+    pagina?: { limite: number; scarto: number }
+  ): Promise<RigaPromo[]> {
+    const sostituzioni: Sostituzioni = {};
+    const condizioni = [...condizioniKit(criteri, sostituzioni), ...condizioniFiltriPromoVolantini(filtri, sostituzioni)];
+    let limite = '';
+    if (pagina) {
+      limite = 'LIMIT :limite OFFSET :scarto';
+      sostituzioni.limite = pagina.limite;
+      sostituzioni.scarto = pagina.scarto;
+    }
+    // Una riga per promo senza GROUP BY: la pagina si taglia sulle promo, non sui kit
+    return this.seleziona<RigaPromo>(
+      `SELECT ${COLONNE_PROMO}
+       FROM promo p
+       WHERE EXISTS (
+         SELECT 1
+         FROM runtime_kit k
+         JOIN formati fo ON fo.id_formati = k.id_formato
+         WHERE k.id_promo = p.id_promo AND ${condizioni.join(' AND ')}
+       )
+       ORDER BY p.validita_dal DESC NULLS LAST, p.nome_promo, p.id_promo
+       ${limite}`,
+      sostituzioni
+    );
+  }
+
+  async contaPromoVolantini(criteri: CriteriKit, filtri?: FiltriSqlPromoVolantini): Promise<RigaTotaliPromoVolantini> {
+    const sostituzioni: Sostituzioni = {};
+    const condizioni = [...condizioniKit(criteri, sostituzioni), ...condizioniFiltriPromoVolantini(filtri, sostituzioni)];
+    const [riga] = await this.seleziona<RigaTotaliPromoVolantini>(
+      `SELECT COUNT(DISTINCT k.id_promo)::int AS promozioni, COUNT(*)::int AS kit
+       FROM runtime_kit k
+       JOIN promo p ON p.id_promo = k.id_promo
+       JOIN formati fo ON fo.id_formati = k.id_formato
+       WHERE ${condizioni.join(' AND ')}`,
+      sostituzioni
+    );
+    return { promozioni: Number(riga?.promozioni ?? 0), kit: Number(riga?.kit ?? 0) };
+  }
+
+  async elencaVariantiVolantini(
+    criteri: CriteriKit,
+    idPromo: readonly string[],
+    filtri?: FiltriSqlPromoVolantini
+  ): Promise<RigaVarianteVolantino[]> {
+    if (idPromo.length === 0) return [];
+    const sostituzioni: Sostituzioni = { idPromoPagina: [...idPromo] };
+    const condizioni = condizioniKit(criteri, sostituzioni);
+    // I filtri non escludono i kit: dicono quali mostrare. Gli altri servono per contare i kit della promo
+    const filtriKit = condizioniFiltriPromoVolantini(filtri, sostituzioni);
+    const corrisponde = filtriKit.length > 0 ? filtriKit.join(' AND ') : 'TRUE';
+    return this.seleziona<RigaVarianteVolantino>(
+      `SELECT
+         k.id::text AS id, k.id_promo, k.titolo,
+         k.id_area::text AS id_area, ${NOME_O_CODICE_AREA} AS nome_area,
+         k.id_canale::text AS id_canale, ${NOME_O_CODICE_CANALE} AS nome_canale,
+         (SELECT COUNT(*) FROM files_runtime f WHERE f.id_runtime = k.id AND ${FILE_NON_CORREGGO})::int AS numero_file,
+         (SELECT COUNT(*) FROM punti_vendita_volantino pvv WHERE pvv.id_kit_runtime = k.id)::int AS numero_punti_vendita,
+         cop.id_olimpo_cloud AS copertina_id_olimpo, cop.nome AS copertina_nome,
+         cop.mime AS copertina_mime, cop.pages AS copertina_pagine,
+         (${corrisponde}) AS corrisponde
+       ${DA_KIT}
+       ${COPERTINA_VOLANTINO}
+       WHERE ${condizioni.join(' AND ')} AND k.id_promo IN (:idPromoPagina)
+       ORDER BY k.id_promo, k.titolo, k.id`,
+      sostituzioni
+    );
+  }
+
+  async elencaAreeCanaliVolantini(criteri: CriteriKit, combinazioniGdo: boolean): Promise<RigaAreaCanale[]> {
+    const sostituzioni: Sostituzioni = {};
+    const condizioni = condizioniKit(criteri, sostituzioni);
+    // Le combinazioni della GDO, anche disattivate: nello Storico un volantino puo' essere di una
+    // combinazione che oggi non c'e' piu'. Le GDO sono quelle delle promo del periodo
+    const combinazioni = combinazioniGdo
+      ? `UNION
+         SELECT
+           cca.id_area_combinazione_canale_area::text, COALESCE(NULLIF(a.nome_aree, ''), a.codice_aree, ''),
+           cca.id_canale_combinazione_canale_area::text, COALESCE(NULLIF(c.nome_canali, ''), c.codice_canali, '')
+         FROM combinazione_canale_area cca
+         LEFT JOIN aree a ON a.id_aree = cca.id_area_combinazione_canale_area
+         LEFT JOIN canali c ON c.id_canali = cca.id_canale_combinazione_canale_area
+         WHERE cca.id_gdo_combinazione_canale_area::text IN (
+           SELECT lower(pg.gdo) FROM promo pg WHERE pg.stato IN (:statiPromo)
+         )`
+      : '';
+    return this.seleziona<RigaAreaCanale>(
+      `SELECT DISTINCT
+         k.id_area::text AS id_area, ${NOME_O_CODICE_AREA} AS nome_area,
+         k.id_canale::text AS id_canale, ${NOME_O_CODICE_CANALE} AS nome_canale
+       ${DA_KIT}
+       WHERE ${condizioni.join(' AND ')}
+       ${combinazioni}`,
+      sostituzioni
+    );
+  }
+
+  async elencaAnniPromoVolantini(criteri: CriteriKit): Promise<number[]> {
+    const sostituzioni: Sostituzioni = { fusoPromo: FUSO_PROMO };
+    const condizioni = condizioniKit(criteri, sostituzioni);
+    const righe = await this.seleziona<{ anno: number }>(
+      `SELECT DISTINCT EXTRACT(YEAR FROM (p.validita_dal AT TIME ZONE :fusoPromo))::int AS anno
+       FROM runtime_kit k
+       JOIN promo p ON p.id_promo = k.id_promo
+       JOIN formati fo ON fo.id_formati = k.id_formato
+       WHERE ${condizioni.join(' AND ')} AND p.validita_dal IS NOT NULL
+       ORDER BY anno DESC`,
+      sostituzioni
+    );
+    return righe.map(riga => Number(riga.anno)).filter(Number.isInteger);
+  }
+
+  async elencaPromoConKit(criteri: CriteriKit): Promise<RigaPromoPop[]> {
+    const sostituzioni: Sostituzioni = {};
+    const condizioni = condizioniKit(criteri, sostituzioni);
+    // Solo le promo con kit ammessi: i kit non avviati (In corso) li aggiunge il servizio
     return this.seleziona<RigaPromoPop>(
       `SELECT ${COLONNE_PROMO},
          COUNT(DISTINCT k.id_formato)::int AS numero_formati,
          COALESCE(SUM(nf.numero), 0)::int AS numero_file
-       FROM promo p
-       LEFT JOIN runtime_kit k ON k.id_promo = p.id_promo
-         AND k.tipo <> :tipoManuale
-         AND k.stato_lavorazione IN (:statiKit)
-         AND EXISTS (
-           SELECT 1 FROM formati fo
-           WHERE fo.id_formati = k.id_formato AND fo.tipo_lavorazione_formati = :tipoLavorazione
-         )
+       FROM runtime_kit k
+       JOIN promo p ON p.id_promo = k.id_promo
+       JOIN formati fo ON fo.id_formati = k.id_formato
        LEFT JOIN LATERAL (
          SELECT COUNT(*) AS numero FROM files_runtime f WHERE f.id_runtime = k.id AND ${FILE_NON_CORREGGO}
        ) nf ON TRUE
-       WHERE p.stato IN (:statiPromo)
+       WHERE ${condizioni.join(' AND ')}
        GROUP BY p.id_promo, p.nome_promo, p.stato, p.validita_dal, p.validita_al
-       ${soloConKit ? 'HAVING COUNT(k.id) > 0' : ''}
        ORDER BY p.validita_dal DESC, p.nome_promo, p.id_promo`,
       sostituzioni
     );
@@ -432,7 +634,7 @@ export class MaterialiRepository implements IMaterialiRepository {
     }
     return this.seleziona<RigaFile>(
       `SELECT
-         f.id::text AS id, f.nome, f.id_olimpo_cloud, f.mime,
+         f.id::text AS id, f.nome, f.id_olimpo_cloud, f.mime, f.pages AS pagine,
          k.id::text AS id_kit, k.titolo AS titolo_kit, k.stato_lavorazione::text AS stato_kit,
          k.id_area::text AS id_area, ${NOME_AREA} AS nome_area,
          k.id_canale::text AS id_canale, ${NOME_CANALE} AS nome_canale,

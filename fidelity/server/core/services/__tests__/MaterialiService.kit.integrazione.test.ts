@@ -91,22 +91,46 @@ describeConDatabase('MaterialiService: kit delle viste Volantini e POP', () => {
     await creaKitRuntime({ nomePromo: 'Solo volantini' });
     await creaKitRuntime({ nomePromo: 'POP manuale', tipoLavorazione: 2, tipo: 'MANUALE' });
 
-    const elenco = await service.getPromozioniPop('attivi');
+    const elenco = await service.getPromozioniPop('attivi', req);
 
     expect(elenco.promozioni).toEqual([expect.objectContaining({ id: pop.idPromo, nome: 'Con POP', numeroFile: 2, numeroFormati: 2 })]);
+    expect(istanta.getAllKitPerGestioneLavorazione).not.toHaveBeenCalled();
   });
 
-  it('POP in corso: ogni promo del periodo, anche senza kit avviati', async () => {
+  // Cambio di comportamento chiesto: prima In corso elencava ogni promo del periodo, anche senza kit POP
+  it('POP in corso: solo le promo con almeno un kit POP, avviato o non avviato, contate come nel loro riepilogo', async () => {
     const pop = await creaKitRuntime({ statoPromo: 'IN_LAVORAZIONE', tipoLavorazione: 2, nomePromo: 'Con POP', statoLavorazione: 'IN_REVISIONE' });
     await creaFile({ nome: 'a.pdf', idRuntime: pop.idRuntime });
-    await creaKitRuntime({ statoPromo: 'PIANIFICATA', nomePromo: 'Ancora da avviare', statoLavorazione: 'ELIMINATO', tipoLavorazione: 2 });
+    // Il kit eliminato non conta: della promo resta solo un kit POP non ancora avviato, che dice Istanta
+    const daAvviare = await creaKitRuntime({
+      statoPromo: 'PIANIFICATA', nomePromo: 'Ancora da avviare', statoLavorazione: 'ELIMINATO', tipoLavorazione: 2, nomeFormato: 'Cartelli',
+    });
+    // Promo del periodo senza kit POP: un volantino, un POP eliminato
+    await creaKitRuntime({ statoPromo: 'IN_RITARDO', nomePromo: 'Solo volantini', statoLavorazione: 'IN_LAVORAZIONE' });
+    await creaKitRuntime({ statoPromo: 'IN_SCADENZA', nomePromo: 'POP eliminato', statoLavorazione: 'ELIMINATO', tipoLavorazione: 2 });
+    // Il kit non avviato vale solo per la promo creata qui: per le altre promo Istanta resta vuoto
+    istanta.getAllKitPerGestioneLavorazione.mockImplementation(async (idPromo) => ({
+      lavorazioni: idPromo === daAvviare.idPromo
+        ? [{
+          isDesignKit: true, lavorazioneStarted: false, guidId: 'd0000000-0000-4000-8000-000000000001', titolo: 'Cartello da avviare',
+          tipo: 'AUTOMATICO', guidArea: daAvviare.idArea, nomeArea: 'Toscana', guidCanale: daAvviare.idCanale, nomeCanale: 'Superstore',
+          guidFormato: daAvviare.idFormato,
+        }]
+        : [],
+      volantini: [],
+    }));
 
-    const elenco = await service.getPromozioniPop('in-corso');
+    const elenco = await service.getPromozioniPop('in-corso', req);
 
     expect(elenco.promozioni.map(p => [p.nome, p.numeroFile, p.numeroFormati]).sort()).toEqual([
-      ['Ancora da avviare', 0, 0],
+      ['Ancora da avviare', 0, 1],
       ['Con POP', 1, 1],
     ]);
+    expect(elenco.avvisi).toEqual([]);
+    for (const voce of elenco.promozioni) {
+      const riepilogo = await service.getRiepilogoPop(voce.id, 'in-corso', req);
+      expect([riepilogo.totali.file, riepilogo.totali.formati]).toEqual([voce.numeroFile, voce.numeroFormati]);
+    }
   });
 
   it('riepilogo POP: kit per formato con i file per stato del kit', async () => {

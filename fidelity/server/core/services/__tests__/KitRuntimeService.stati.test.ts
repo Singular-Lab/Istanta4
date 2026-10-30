@@ -89,3 +89,50 @@ describe('KitRuntimeService.mettiInStatoDiEliminazione', () => {
     expect(save).not.toHaveBeenCalled();
   });
 });
+
+// Il volantino recuperato dallo storico dal Plugin si pubblica, ma senza notificarlo ai sistemi esterni
+describe('KitRuntimeService.pubblicaKitDaStorico', () => {
+  it('kit in lavorazione: PUBBLICATO con fine lavorazione e log dei file, senza webhook', async () => {
+    const { service, findOne, update, webhook } = makeService({ id: 'k1', stato_lavorazione: STATO_LAVORAZIONE_KIT_RUNTIME.IN_LAVORAZIONE });
+    const logFile = (KitRuntimeService.prototype as unknown as Record<string, unknown>).creaLogPubblicazioneFiles;
+
+    const pubblicato = await service.pubblicaKitDaStorico('k1', 'u1');
+
+    expect(pubblicato).toBe(true);
+    expect(findOne).toHaveBeenCalledWith(expect.objectContaining({ transaction: t, lock: t.LOCK.UPDATE }));
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({ stato_lavorazione: STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO, fine_lavorazione: expect.any(Date) }),
+      expect.objectContaining({ where: { id: 'k1' }, transaction: t })
+    );
+    expect(logFile).toHaveBeenCalledWith('k1', 'u1', t);
+    expect(webhook).not.toHaveBeenCalled();
+  });
+
+  it.each([STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO, STATO_LAVORAZIONE_KIT_RUNTIME.ELIMINATO])(
+    'kit %s: non si tocca e non e\' un errore',
+    async (stato) => {
+      const { service, update, webhook } = makeService({ id: 'k1', stato_lavorazione: stato });
+
+      const pubblicato = await service.pubblicaKitDaStorico('k1', 'u1');
+
+      expect(pubblicato).toBe(false);
+      expect(update).not.toHaveBeenCalled();
+      expect(webhook).not.toHaveBeenCalled();
+    }
+  );
+
+  it('kit inesistente: NotFoundError', async () => {
+    const { service, update } = makeService(null);
+
+    await expect(service.pubblicaKitDaStorico('k1', 'u1')).rejects.toBeInstanceOf(NotFoundError);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('la pubblicazione dell\'operatore continua a mandare il webhook', async () => {
+    const { service, webhook } = makeService({ id: 'k1', stato_lavorazione: STATO_LAVORAZIONE_KIT_RUNTIME.IN_REVISIONE });
+
+    await service.pubblicaKitRuntime('k1', req);
+
+    expect(webhook).toHaveBeenCalledOnce();
+  });
+});

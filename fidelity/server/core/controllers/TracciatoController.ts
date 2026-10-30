@@ -18,7 +18,8 @@ export class TracciatoController extends BaseController {
     }
     public initializeRoutes(): void {
         this.router.get('/tracciati', authMiddleware, routeDeprecata, this.getAllTracciati.bind(this));
-        this.router.get('/tracciati/promo/:idPromo', authMiddleware, this.getAllTracciatiPerPromo.bind(this));
+        // DB1 recupera questi tracciati con WebClient.DownloadString, senza una sessione Fidelity.
+        this.router.get('/tracciati/promo/:idPromo', this.getAllTracciatiPerPromo.bind(this));
         this.router.get('/tracciati/confronto/contesto', authMiddleware, routeDeprecata, this.getContestoConfronto.bind(this));
         this.router.get('/tracciati/confronto/reports', authMiddleware, routeDeprecata, this.getReportsConfronto.bind(this));
         this.router.get('/tracciati/confronto/reports/:id', authMiddleware, routeDeprecata, this.getReportConfrontoById.bind(this));

@@ -14,6 +14,7 @@ import { UtentiGDO } from '../../models/utenti_gdo';
 import { MENU_SUPERADMIN, SERVIZI_GESTITI, SERVIZI_HUB_PREDEFINITI } from '../datiPredefiniti';
 import {
   amministratoreDaAmbiente,
+  ID_INTESTAZIONE_POP_SUPERADMIN,
   ID_VOCI_POP_SUPERADMIN,
   inizializzaInstallazione,
   VISTE_DA_AGGIORNARE,
@@ -119,10 +120,10 @@ describe('inizializzazione di un database vuoto', () => {
       expect.objectContaining({ id_utente_utentegdo: admin.id_utenti, id_gdo_utentegdo: 'g1', id_ruolo_utente_gdo: 'ruolo-admin' }),
     ]);
 
-    // MENU_SUPERADMIN convertito nelle viste Volantini e POP: tre voci POP in piu'.
-    expect(stato.menu).toHaveLength(MENU_SUPERADMIN.length + 3);
+    // MENU_SUPERADMIN convertito nelle viste Volantini e POP: tre voci POP e l'intestazione POP in piu'.
+    expect(stato.menu).toHaveLength(MENU_SUPERADMIN.length + 4);
     expect(stato.menu.every(m => m.tipo_utente === TIPO_UTENTI.SUPERADMIN && m.ruolo_gdo === null)).toBe(true);
-    expect(esiti.find(e => e.passo === 'menu del superadmin')?.dettaglio).toBe(`${MENU_SUPERADMIN.length + 3} voci`);
+    expect(esiti.find(e => e.passo === 'menu del superadmin')?.dettaglio).toBe(`${MENU_SUPERADMIN.length + 4} voci`);
   });
 
   it('crea nell hub i servizi predefiniti e Istanta e Correggo per i tipi di utente concordati', async () => {
@@ -214,7 +215,7 @@ describe('configurazione mancante', () => {
     expect(esito(esiti, 'amministratore')).toBe('saltato');
     expect(esito(esiti, 'amministratore collegato alla gdo')).toBe('saltato');
     expect(stato.gdo).toHaveLength(1);
-    expect(stato.menu).toHaveLength(MENU_SUPERADMIN.length + 3);
+    expect(stato.menu).toHaveLength(MENU_SUPERADMIN.length + 4);
   });
 
   it.each(['', 'default', 'DEFAULT'])('con CLIENT_ID "%s" non crea GDO ne collegamento', async (clientId) => {
@@ -245,22 +246,26 @@ describe('configurazione mancante', () => {
 });
 
 describe('menu predefinito del Superadmin', () => {
-  const sezioneMateriali = (voci: ReturnType<typeof vociMenuSuperadmin>) => {
-    const inizio = voci.findIndex(v => v.titolo === 'VOLANTINI E POP');
+  /** Le voci dall'intestazione indicata alla successiva (esclusa). */
+  const sezione = (voci: ReturnType<typeof vociMenuSuperadmin>, titolo: string) => {
+    const inizio = voci.findIndex(v => v.titolo === titolo);
     const fine = voci.findIndex((v, i) => i > inizio && v.tipo === 'separator');
     return voci.slice(inizio, fine).map(v => [v.id_menu_item, v.titolo, v.pathname, v.codice_permesso, v.icona]);
   };
 
-  it('nasce con le viste Volantini e POP al posto delle pagine Materiali', () => {
+  it('nasce con le sezioni MATERIALI VOLANTINO e MATERIALI POP al posto delle pagine Materiali', () => {
     const voci = vociMenuSuperadmin();
     const id = (titolo: string) => MENU_SUPERADMIN.find(v => v.titolo === titolo)?.id_menu_item;
     const M = PERMESSI.MATERIALI.VISUALIZZA;
 
-    expect(sezioneMateriali(voci)).toEqual([
-      [id('MATERIALI'), 'VOLANTINI E POP', null, null, null],
+    expect(sezione(voci, 'MATERIALI VOLANTINO')).toEqual([
+      [id('MATERIALI'), 'MATERIALI VOLANTINO', null, null, null],
       [id('Materiali attivi'), 'Volantini attivi', '/volantini/attivi', M, 'FolderOpen'],
       [id('Materiali in corso'), 'Volantini in corso', '/volantini/in-corso', M, 'Clock'],
       [id('Storico materiali'), 'Volantini storico', '/volantini/storico', M, 'Archive'],
+    ]);
+    expect(sezione(voci, 'MATERIALI POP')).toEqual([
+      [ID_INTESTAZIONE_POP_SUPERADMIN, 'MATERIALI POP', null, null, null],
       [ID_VOCI_POP_SUPERADMIN.attivi, 'POP attivi', '/pop/attivi', M, 'FolderOpen'],
       [ID_VOCI_POP_SUPERADMIN['in-corso'], 'POP in corso', '/pop/in-corso', M, 'Clock'],
       [ID_VOCI_POP_SUPERADMIN.storico, 'POP storico', '/pop/storico', M, 'Archive'],
@@ -278,8 +283,10 @@ describe('menu predefinito del Superadmin', () => {
     expect(new Set(ids).size).toBe(ids.length);
     expect(voci.map(v => v.ordinamento)).toEqual(voci.map((_, i) => i));
     // Le altre voci restano quelle di MENU_SUPERADMIN, nello stesso ordine.
-    const pop = Object.values(ID_VOCI_POP_SUPERADMIN);
-    expect(ids.filter(i => !pop.includes(i))).toEqual(MENU_SUPERADMIN.map(v => v.id_menu_item));
+    const aggiunte = [...Object.values(ID_VOCI_POP_SUPERADMIN), ID_INTESTAZIONE_POP_SUPERADMIN];
+    expect(ids.filter(i => !aggiunte.includes(i))).toEqual(MENU_SUPERADMIN.map(v => v.id_menu_item));
+    // La sezione 'VOLANTINI' delle promozioni del seed non c'entra con i materiali e resta com'e'.
+    expect(voci.find(v => v.id_menu_item === MENU_SUPERADMIN[0].id_menu_item)?.titolo).toBe('VOLANTINI');
   });
 });
 

@@ -6,14 +6,24 @@ import { PeriodoMateriali } from './periodi';
  *
  * Endpoint, tutti con il permesso "materiali.visualizza":
  * - GET  /api/materiali/volantini                        FiltriKitVolantini     -> PaginaKitVolantini
+ *                                                         (un kit per scheda: la vista In corso)
+ * - GET  /api/materiali/volantini/promozioni             FiltriPromozioniVolantini -> PaginaPromozioniVolantini
+ *                                                         (Attivi e Storico: una scheda per promozione con i suoi kit
+ *                                                         come varianti; periodo in-corso -> 400)
  * - GET  /api/materiali/pop/promozioni?periodo=          -> ElencoPromozioniPop
  * - GET  /api/materiali/pop/promozioni/:idPromo/formati?periodo=  -> RiepilogoPop
  * - GET  /api/materiali/pop/promozioni/:idPromo/file     FiltriFilePop          -> PaginaFilePop
+ * - GET  /api/materiali/pop/promozioni/:idPromo/file/opzioni?periodo=&idFormato=  -> OpzioniFilePop
+ *                                                         (valori delle tendine dei file, a parte: non cambiano con la pagina)
+ * - POST /api/materiali/pop/promozioni/:idPromo/zip/verifica  RichiestaZipPop -> VerificaZipPop
+ *                                                         (prima del download: errori in JSON, senza costruire l'archivio)
  * - GET  /api/materiali/pop/promozioni/:idPromo/zip      periodo, idFormato e i filtri di FiltriFilePop in query
  *                                                         -> application/zip di tutti i file del formato che corrispondono
  *                                                            ai filtri, in streaming: il browser lo scarica senza tenerlo in memoria
- * - POST /api/materiali/pop/promozioni/:idPromo/zip      RichiestaZipPop con idFile -> application/zip dei file selezionati
- * I due download richiedono anche "file.download".
+ * - POST /api/materiali/pop/promozioni/:idPromo/zip      RichiestaZipPop con idFile -> application/zip dei file selezionati,
+ *                                                         in streaming. Il corpo è JSON, oppure un form con il token CSRF
+ *                                                         in `_csrf` e la RichiestaZipPop come testo JSON in `richiesta`
+ * La verifica e i due download richiedono anche "file.download".
  */
 
 /** Stato di un kit nelle viste: quello del runtime, o NON_AVVIATO per un kit previsto ma senza runtime. */
@@ -109,8 +119,88 @@ export interface PaginaKitVolantini {
   avvisi: AvvisoNonAvviati[];
 }
 
+/* ---------- Volantini per promozione (Attivi e Storico) ---------- */
+
+/**
+ * Filtri delle promozioni con volantini pubblicati. Una promo compare se almeno un suo kit
+ * pubblicato corrisponde ai filtri, e nella sua scheda restano solo quei kit.
+ */
+export interface FiltriPromozioniVolantini {
+  /** Attivi o Storico: In corso i volantini restano per kit (GET /api/materiali/volantini). */
+  periodo: PeriodoMateriali;
+  /** Nome della promo (tutti i suoi kit) o titolo del kit. */
+  cerca?: string;
+  idPromo?: string;
+  idArea?: string;
+  idCanale?: string;
+  /** Anno dell'inizio di validità della promo, nel calendario italiano. */
+  anno?: number;
+  /** Da 1. */
+  pagina?: number;
+  /** 12, 24 o 48 promozioni; ogni altro valore vale 12. */
+  dimensione?: number;
+}
+
+export const DIMENSIONI_PAGINA_PROMOZIONI_VOLANTINI: readonly number[] = [12, 24, 48];
+
+/** Un kit pubblicato della promo: una variante del volantino per canale e area. */
+export interface VarianteVolantino {
+  /** Id del runtime. */
+  id: string;
+  titolo: string;
+  area: Riferimento;
+  canale: Riferimento;
+  /** File del kit, esclusi quelli dell'export CORREGGO. */
+  numeroFile: number;
+  /** Primo PDF dell'export volantino, se c'è. */
+  copertina: CopertinaKit | null;
+  /** Punti vendita stampati nella lista del volantino; 0 se la lista non è arrivata. */
+  numeroPuntiVendita: number;
+}
+
+export interface PromozioneVolantini {
+  promo: PromoMateriali;
+  /** Copertina di uno dei kit mostrati (il primo che ne ha una), altrimenti di un altro kit della promo. */
+  copertina: CopertinaKit | null;
+  /** Kit pubblicati della promo nel periodo, senza filtri. */
+  numeroKit: number;
+  /** I kit che corrispondono ai filtri, per canale, area e titolo. */
+  kit: VarianteVolantino[];
+}
+
+export interface OpzioniFiltroPromozioniVolantini {
+  /**
+   * Promozioni del periodo con volantini pubblicati, dalla più recente: solo in Attivi. Nello
+   * Storico sono centinaia e si trovano cercando per nome e anno: l'elenco è vuoto.
+   */
+  promozioni: Riferimento[];
+  /** In Storico anche le aree e i canali delle combinazioni della GDO, comprese quelle disattivate. */
+  aree: Riferimento[];
+  canali: Riferimento[];
+  /** Anni di inizio validità delle promozioni del periodo, dal più recente. */
+  anni: number[];
+}
+
+export interface PaginaPromozioniVolantini {
+  promozioni: PromozioneVolantini[];
+  /** Promozioni che corrispondono ai filtri (tutte le pagine). */
+  totale: number;
+  /** Kit che corrispondono ai filtri (tutte le pagine). */
+  totaleKit: number;
+  /** Promozioni del periodo senza filtri: distingue "nessun volantino" da "nessun risultato con i filtri". */
+  totaleSenzaFiltri: number;
+  pagina: number;
+  dimensione: number;
+  /** Valori dei filtri, calcolati sul periodo senza filtri. */
+  opzioni: OpzioniFiltroPromozioniVolantini;
+}
+
 /* ---------- POP ---------- */
 
+/**
+ * Promo con almeno un kit POP nel periodo: In corso anche solo non avviato. File e formati si
+ * contano come nel RiepilogoPop della promo, così elenco e dettaglio dicono gli stessi numeri.
+ */
 export interface PromoPop extends PromoMateriali {
   numeroFile: number;
   numeroFormati: number;
@@ -118,6 +208,8 @@ export interface PromoPop extends PromoMateriali {
 
 export interface ElencoPromozioniPop {
   promozioni: PromoPop[];
+  /** In corso: promo di cui Istanta non ha dato i kit non avviati (possono mancare dall'elenco). */
+  avvisi: AvvisoNonAvviati[];
 }
 
 export interface KitPop {
@@ -174,11 +266,25 @@ export interface FiltriFilePop {
 
 export const DIMENSIONI_PAGINA_POP: readonly number[] = [100, 250, 500];
 
+/**
+ * Stati dell'ultimo log che un file POP può avere. Quelli di Correggo riguardano solo i file
+ * dell'export CORREGGO, che le viste non mostrano.
+ */
+export const STATI_FILE_POP: readonly STATO_LOG_FILE[] = [
+  STATO_LOG_FILE.IN_ATTESA,
+  STATO_LOG_FILE.IN_REVISIONE,
+  STATO_LOG_FILE.ACCETTATO,
+  STATO_LOG_FILE.ERRORE,
+  STATO_LOG_FILE.PUBBLICATO,
+];
+
 export interface FilePop {
   id: string;
   nome: string;
   idOlimpoCloud: string | null;
   mime: string | null;
+  /** Pagine del PDF, per l'anteprima; null se non note. */
+  pagine: number | null;
   kit: { id: string; titolo: string; stato: StatoKitMateriali };
   area: Riferimento;
   canale: Riferimento;
@@ -195,11 +301,13 @@ export interface PaginaFilePop {
   totale: number;
   pagina: number;
   dimensione: number;
-  opzioni: {
-    aree: Riferimento[];
-    canali: Riferimento[];
-    reparti: string[];
-  };
+}
+
+/** Valori delle tendine dei file di un formato, calcolati su tutti i suoi file senza filtri. */
+export interface OpzioniFilePop {
+  aree: Riferimento[];
+  canali: Riferimento[];
+  reparti: string[];
 }
 
 /**
@@ -212,4 +320,14 @@ export interface RichiestaZipPop {
   idFormato: string;
   idFile?: string[];
   filtri?: Omit<FiltriFilePop, 'periodo' | 'idFormato' | 'pagina' | 'dimensione'>;
+}
+
+/**
+ * Esito della verifica di un download POP: c'è almeno un file. Se non c'è niente da scaricare,
+ * la promo è fuori dal periodo o manca un permesso, la verifica risponde con l'errore in JSON.
+ */
+export interface VerificaZipPop {
+  /** File che andranno nell'archivio. */
+  file: number;
+  nomeFile: string;
 }

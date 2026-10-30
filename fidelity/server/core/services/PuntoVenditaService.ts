@@ -2,7 +2,6 @@ import { Op } from 'sequelize';
 import { EXPORT_DI_SISTEMA, STATO_LAVORAZIONE_KIT_RUNTIME, STATO_PROMO } from '../../../lib/enums';
 import { DatabaseError, NotFoundError } from '../../../lib/errors';
 import { CombinazioneCanaleAreaAttributes, PuntiVenditaAttributes } from '../../../lib/types';
-import { sequelize } from '../db/SequelizeConnector';
 import { AreaResponseDTO, CanaleResponseDTO, CreatePuntoVenditaDTO, PuntoVenditaResponseDTO } from '../dto';
 import { DisplayContextResponseDTO } from '../dto/DisplayContextDTO';
 import {
@@ -13,20 +12,42 @@ import {
   type VolantinoAttivoDTO
 } from '../dto/PuntoVenditaDTO';
 import { IPuntoVenditaService } from '../interfaces/IPuntoVenditaService';
+import type { RiabbinamentoPuntiVenditaVolantino } from '../interfaces/IStoriaPuntoVenditaService';
 import { log } from '../logger';
 import { Area, Canale, CombinazioneCanaleArea, FilesRuntime, PuntoVendita, PuntoVenditaUtenti, RuntimeKit, TipiDiExport } from '../models';
 import { Promo } from '../models/promo';
 import { DisplayContextPuntoVendita } from '../models/punto_vendita/display_context_punto_vendita';
 import { DispositivoMetadata, DispositivoPuntoVendita } from '../models/punto_vendita/dispositivi_punto_vendita';
 import type { IPuntoVenditaRepository } from '../repositories/PuntoVenditaRepository';
-import { geocodifica } from '../utils/geocodifica';
 import { urlOlimpo } from '../utils/urlOlimpo';
-import { buildPuntoVenditaKey, isLikelySamePuntoVendita, PuntoVenditaTextInput, stessaPosizione } from '../utils/puntoVenditaNormalization';
+import { buildPuntoVenditaKey, isLikelySamePuntoVendita, PuntoVenditaTextInput } from '../utils/puntoVenditaNormalization';
 import type { ContestoImportPuntiVendita } from './importPuntiVendita';
 
 export class PuntoVenditaService implements IPuntoVenditaService {
 
-  constructor(private readonly puntoVenditaRepository: IPuntoVenditaRepository) { }
+  /**
+   * @param riabbinamento le righe dei volantini da riabbinare quando un PV si crea o cambia
+   *   (storia del punto vendita); senza, il servizio non se ne occupa.
+   */
+  constructor(
+    private readonly puntoVenditaRepository: IPuntoVenditaRepository,
+    private readonly riabbinamento?: RiabbinamentoPuntiVenditaVolantino,
+  ) { }
+
+  /**
+   * Dopo un PV creato o modificato, le righe dei volantini della sua GDO ancora senza PV si
+   * riabbinano in background. Quelle gia' collegate a un PV non si toccano, anche se il PV ha
+   * cambiato indirizzo, telefono o insegna: sono la sua storia. Non fallisce mai: il salvataggio
+   * del PV e' gia' avvenuto.
+   */
+  private riabbinaVolantini(idGdo: string | undefined): void {
+    if (!idGdo || !this.riabbinamento) return;
+    try {
+      this.riabbinamento.pianificaRiabbinamento(idGdo);
+    } catch (error) {
+      log.warn('Riabbinamento dei volantini non pianificato', { idGdo, error: error instanceof Error ? error.message : String(error) });
+    }
+  }
 
 
 
@@ -478,6 +499,7 @@ export class PuntoVenditaService implements IPuntoVenditaService {
           entityId: created.id_puntivendita,
         });
       }
+      this.riabbinaVolantini(result.id_gdo);
       return result;
     } catch (error) {
       log.error('Errore durante la creazione del punto vendita', error, { id_gdo: data.id_gdo });
@@ -526,7 +548,10 @@ export class PuntoVenditaService implements IPuntoVenditaService {
       }
 
       await this.puntoVenditaRepository.update(id, updatePayload);
-      return await this.getPuntoVenditaById(id);
+      const aggiornato = await this.getPuntoVenditaById(id);
+      // Con i dati nuovi il PV puo' riconoscere righe ancora senza PV della sua GDO
+      if (aggiornato) this.riabbinaVolantini(aggiornato.id_gdo);
+      return aggiornato;
     } catch (error) {
       log.error('Errore durante l\'aggiornamento del punto vendita', error, { id });
       throw new DatabaseError({
@@ -786,125 +811,6 @@ export class PuntoVenditaService implements IPuntoVenditaService {
     });
 
     return { results, presenti: presentiResult, mancanti, possibiliDuplicati };
-  }
-
-  async loadPuntiVenditaForPlugin(idGdo: string | undefined, idArea: string, idCanale: string, items: PuntoVenditaTextInput[]) {
-    const combinazione = await CombinazioneCanaleArea.findOne({
-      where: {
-        id_area_combinazione_canale_area: idArea,
-        id_canale_combinazione_canale_area: idCanale,
-        ...(idGdo ? { id_gdo_combinazione_canale_area: idGdo } : {}),
-      },
-    });
-    if (!combinazione) {
-      throw new NotFoundError({
-        message: `Combinazione area/canale non trovata per il punto vendita del plugin: ${idArea}/${idCanale}`,
-        entityType: 'CombinazioneCanaleArea',
-        entityId: `${idArea}/${idCanale}`,
-      });
-    }
-    const effectiveGdoId = combinazione.id_gdo_combinazione_canale_area;
-    const puntiVendita = await this.getPuntiVenditaByGDOId(effectiveGdoId);
-
-    const byKey = new Map<string, PuntoVenditaResponseDTO[]>();
-    for (const puntoVendita of puntiVendita) {
-      const key = buildPuntoVenditaKey(puntoVendita).value;
-      const values = byKey.get(key) ?? [];
-      values.push(puntoVendita);
-      byKey.set(key, values);
-    }
-
-    const matched: Array<{ input: PuntoVenditaTextInput; puntoVendita: PuntoVenditaResponseDTO }> = [];
-    const created: Array<{ input: PuntoVenditaTextInput; puntoVendita: PuntoVenditaResponseDTO }> = [];
-    const updated: Array<{ input: PuntoVenditaTextInput; puntoVendita: PuntoVenditaResponseDTO }> = [];
-    const missing: PuntoVenditaTextInput[] = [];
-    const possibleDuplicates: Array<{ input: PuntoVenditaTextInput; puntoVendita: PuntoVenditaResponseDTO }> = [];
-    const duplicateKeys = new Map<string, string[]>();
-    for (const input of items) {
-      const key = buildPuntoVenditaKey(input).value;
-      const candidates = byKey.get(key) ?? [];
-      if (candidates.length === 0) {
-        const possible = puntiVendita.find((puntoVendita) => isLikelySamePuntoVendita(input, puntoVendita));
-        if (possible) {
-          possibleDuplicates.push({ input, puntoVendita: possible });
-          const puntoVendita = await this.updatePluginPuntoVendita(possible, input);
-          if (puntoVendita) updated.push({ input, puntoVendita });
-        } else {
-          const coordinate = await this.resolvePluginCoordinates(input);
-          const puntoVendita = await this.createPuntoVendita({
-            nome: input.nome ?? input.citta ?? '',
-            citta: input.citta ?? '',
-            cap: input.cap?.trim() ?? '',
-            provincia: input.provincia,
-            regione: input.regione,
-            indirizzo: input.indirizzo ?? '',
-            telefono: input.telefono ?? '',
-            id_gdo: effectiveGdoId,
-            id_combinazione_canale_area: combinazione.id_combinazione_canale_area,
-            ...coordinate,
-          });
-          created.push({ input, puntoVendita });
-          byKey.set(key, [puntoVendita]);
-        }
-      } else {
-        const puntoVendita = await this.updatePluginPuntoVendita(candidates[0], input);
-        matched.push({ input, puntoVendita: puntoVendita ?? candidates[0] });
-        if (puntoVendita) updated.push({ input, puntoVendita });
-        if (candidates.length > 1) duplicateKeys.set(key, candidates.map((candidate) => candidate.id));
-      }
-    }
-
-    if (created.length > 0 || updated.length > 0) {
-      try {
-        await sequelize.query('SELECT refresh_mv_combinazioni()');
-      } catch (error) {
-        log.warn('Punti vendita importati, ma aggiornamento della view combinazioni non riuscito', {
-          error: error instanceof Error ? error.message : String(error),
-          created: created.length,
-        });
-      }
-    }
-
-    return {
-      matched,
-      created,
-      updated,
-      missing,
-      possibleDuplicates,
-      duplicates: [...duplicateKeys].map(([key, puntoVenditaIds]) => ({ key, puntoVenditaIds })),
-    };
-  }
-
-  private async updatePluginPuntoVendita(
-    puntoVendita: PuntoVenditaResponseDTO,
-    input: PuntoVenditaTextInput,
-  ): Promise<PuntoVenditaResponseDTO | null> {
-    const coordinate = await this.resolvePluginCoordinates(input, puntoVendita);
-    return this.updatePuntoVendita(puntoVendita.id, {
-      ...(input.nome?.trim() ? { nome: input.nome.trim() } : {}),
-      ...(input.citta?.trim() ? { citta: input.citta.trim() } : {}),
-      ...(input.cap?.trim() ? { cap: input.cap.trim() } : {}),
-      ...(input.provincia?.trim() ? { provincia: input.provincia.trim() } : {}),
-      ...(input.regione?.trim() ? { regione: input.regione.trim() } : {}),
-      ...(input.indirizzo?.trim() ? { indirizzo: input.indirizzo.trim() } : {}),
-      ...(input.telefono?.trim() ? { telefono: input.telefono.trim() } : {}),
-      ...coordinate,
-    });
-  }
-
-  private async resolvePluginCoordinates(
-    input: PuntoVenditaTextInput,
-    esistente?: PuntoVenditaResponseDTO,
-  ): Promise<{ lat?: number; lon?: number }> {
-    if (Number.isFinite(input.lat) && Number.isFinite(input.lon)) {
-      return { lat: input.lat, lon: input.lon };
-    }
-    if (!input.citta && !input.indirizzo) return {};
-    // Ogni sync rimanda gli stessi PV: se in anagrafica hanno gia le coordinate e il
-    // plugin non ne cambia citta o indirizzo, non si torna a chiederle a Nominatim.
-    if (esistente?.has_coordinate && stessaPosizione(input, esistente)) return {};
-
-    return geocodifica([input.indirizzo, input.citta].filter(Boolean).join(', '));
   }
 
   async getAllPuntiVenditaPaginated(params: {

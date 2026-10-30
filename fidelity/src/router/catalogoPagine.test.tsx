@@ -39,6 +39,17 @@ describe("catalogo delle pagine", () => {
     expect(mancanti).toEqual([]);
   });
 
+  it("i punti vendita hanno consultazione e gestione, ciascuna col suo permesso", () => {
+    expect(percorsi).toEqual(expect.arrayContaining([
+      "/punti-vendita",
+      "/punti-vendita/:id",
+      "/gestione-interna/punti-vendita",
+      "/gestione-interna/punti-vendita/:id",
+    ]));
+    expect(paginaPer("/punti-vendita/x")?.permesso).toBe("gdo.visualizza");
+    expect(paginaPer("/gestione-interna/punti-vendita/x")?.permesso).toBe("gdo.gestisci_punti_vendita");
+  });
+
   it("le rotte fuori dal layout esistono davvero nel router", () => {
     const radici = routes.map((r) => r.path);
     for (const p of PROTETTE_FUORI_DAL_LAYOUT) expect(radici).toContain(p);
