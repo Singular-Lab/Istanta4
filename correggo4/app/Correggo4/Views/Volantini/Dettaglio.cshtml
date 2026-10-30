@@ -1224,9 +1224,9 @@
         return policyPromessa;
     }
 
-    /* j237: i timbri esclusi dalla policy. Nell'originale PolicyManager toglieva ai Category i
-       quattro di dimensione (`_3_*`), che in Correggo4 non ci sono nemmeno nel pannello: vale per
-       qualunque timbro la policy escluda. Il server rifiuta comunque (timbro_fuori_policy). */
+    /* j237: i timbri esclusi dalla policy. Come nell'originale, la policy dei reparti toglie i
+       quattro di dimensione (`_3_*`, nel pannello dall'I20-1169); vale per qualunque timbro la
+       policy escluda. Il server rifiuta comunque (timbro_fuori_policy). */
     function applicaTimbriEsclusi(lista) {
         (lista || []).forEach(function (s) {
             var bt = document.querySelector('.timbro_img[data-simbolo="' + s + '"]');
@@ -3521,9 +3521,10 @@
     // Sta qui, in coda all'avvio, perche' prima `stato` non e' ancora stato letto.
     if (stato.puoScrivere) {
         caricaPolicy().then(function (d) {
-            if (!d || !d.conPolicy) return;
-            applicaBoxFuoriPolicy();
+            if (!d) return;
+            // I20-1169: i timbri di dimensione si tolgono a chi non e' Marketing anche senza policy
             applicaTimbriEsclusi(d.timbriEsclusi);
+            if (d.conPolicy) applicaBoxFuoriPolicy();
         });
     }
 

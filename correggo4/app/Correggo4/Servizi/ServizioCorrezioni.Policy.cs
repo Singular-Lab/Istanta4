@@ -47,11 +47,12 @@ public sealed partial class ServizioCorrezioni
                 conPolicy = false,
                 pagine = pagine.Select(p => new { numero = p.Numero, policyOk = true }),
                 box = Array.Empty<long>(),
-                timbriEsclusi = Array.Empty<string>()
+                // I20-1169: anche senza policy i timbri di dimensione restano ai soli Marketing
+                timbriEsclusi = Timbri.Keys.Where(k => !TimbroPermesso(u, null, k)).ToList()
             });
         }
         // j237: i timbri che la policy esclude (nell'originale i quattro di dimensione `_3_*`)
-        var timbriEsclusi = Timbri.Keys.Where(k => !policy.StrumentoPermesso("timbro", k)).ToList();
+        var timbriEsclusi = Timbri.Keys.Where(k => !TimbroPermesso(u, policy, k)).ToList();
 
         var idPagine = pagine.Select(p => p.Id).ToList();
         var numeroDi = pagine.ToDictionary(p => p.Id, p => p.Numero);

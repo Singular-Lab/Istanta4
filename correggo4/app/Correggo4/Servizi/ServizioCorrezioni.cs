@@ -52,8 +52,8 @@ public sealed partial class ServizioCorrezioni
 
     /// <summary>
     /// I timbri del pannello, con i nomi-file dell'originale (Scripts/agenzia.js:44-77).
-    /// Mancano i quattro di dimensione (_3_1_x2, _3_2_x4, _3_3_meta, _3_4_un_quarto): nell'originale
-    /// la policy dei Category li escludeva, e il pannello di Correggo4 non li ha mai mostrati.
+    /// I20-1169: ci sono anche i quattro di dimensione (_3_*), che prima mancavano a tutti. Sono solo
+    /// dei Marketing, e la policy dei reparti li toglie comunque: vedi TimbroPermesso.
     /// </summary>
     public static readonly IReadOnlyDictionary<string, string> Timbri = new Dictionary<string, string>
     {
@@ -65,6 +65,10 @@ public sealed partial class ServizioCorrezioni
         ["_2_4_g2"] = "Gruppo 2",
         ["_2_5_g3"] = "Gruppo 3",
         ["_2_6_g4"] = "Gruppo 4",
+        ["_3_1_x2"] = "x2",
+        ["_3_2_x4"] = "x4",
+        ["_3_3_meta"] = "Metà",
+        ["_3_4_un_quarto"] = "Un quarto",
         ["_4_1_aconf"] = "A confezione",
         ["_4_2_alkg"] = "Al kg",
         ["_4_3_cad"] = "Cadauno",
@@ -309,6 +313,16 @@ public sealed partial class ServizioCorrezioni
 
     // ------------------------------------------------------------------ timbri
 
+    /// <summary>
+    /// I20-1169: i quattro timbri di dimensione (PolicyManager.TimbriDimensione) sono solo dei
+    /// Marketing; per tutti i timbri decide poi la policy, se l'utente ne ha una.
+    /// </summary>
+    public static bool TimbroPermesso(Utente u, PolicyCorrezione? policy, string simbolo)
+    {
+        if (PolicyManager.TimbriDimensione.Contains(simbolo) && u.TipoFico != TipoFicoMarketing) return false;
+        return policy == null || policy.StrumentoPermesso("timbro", simbolo);
+    }
+
     public async Task<EsitoCorrezione> NuovoTimbroAsync(Utente u, long idBox, string? simbolo, double x, double y)
     {
         if (!u.Scrive) return NonAutorizzato();
@@ -319,10 +333,10 @@ public sealed partial class ServizioCorrezioni
         if (errore != null) return errore;
 
         // j237: la policy puo' escludere dei timbri (nell'originale ai Category venivano tolti i
-        // quattro di dimensione `_3_*`, PolicyManager.cs:405-440). Il pannello non li mostra, e qui
-        // il server rifiuta comunque.
+        // quattro di dimensione `_3_*`, PolicyManager.cs:405-440). I20-1169: quei quattro sono
+        // comunque solo dei Marketing. Il pannello non li mostra, e qui il server rifiuta comunque.
         var policy = await PolicyAsync(u.Id);
-        if (policy != null && !policy.StrumentoPermesso("timbro", simbolo))
+        if (!TimbroPermesso(u, policy, simbolo))
             return EsitoCorrezione.No(403, "timbro_fuori_policy",
                 $"Il timbro «{Timbri[simbolo]}» non e' fra quelli che puoi usare.");
 
