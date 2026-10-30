@@ -51,6 +51,39 @@ public class AcapoForzatoTests
         Assert.Contains(".fascia { padding: 5px 8px; border-radius: 10px; margin-bottom: 7px; white-space: pre-line; }", html);
     }
 
+    /// <summary>
+    /// I20-1170: nelle etichette «codice – descrizione» (report correzioni, propagazioni) e nei
+    /// riassunti restava "FORCED_LINE_BREAKCOOP". La descrizione in chiaro sta su una riga.
+    /// </summary>
+    [Fact]
+    public void In_chiaro_l_a_capo_forzato_diventa_uno_spazio()
+    {
+        Assert.Equal("AVOCADO HASS COOP conf. da 550 g", LettoreDescrizione.InChiaro(Avocado));
+        // anche attaccato alle parole, e senza fasce
+        Assert.Equal("AVOCOCADO HASS COOP conf. da 550 g",
+                     LettoreDescrizione.InChiaro("AVOCOCADO HASS FORCED_LINE_BREAKCOOP FORCED_LINE_BREAKconf. da 550 g"));
+    }
+
+    [Theory]
+    [InlineData(null, "")]
+    [InlineData("", "")]
+    [InlineData("<DESCRIZIONE_BRAND>FORCED_LINE_BREAK</DESCRIZIONE_BRAND>", "")]
+    public void In_chiaro_senza_testo_resta_vuota(string? grezza, string atteso)
+    {
+        Assert.Equal(atteso, LettoreDescrizione.InChiaro(grezza));
+    }
+
+    [Fact]
+    public void Nel_report_l_etichetta_va_a_capo_dentro_la_sua_colonna()
+    {
+        string editor = File.ReadAllText(Path.Combine(RadiceApplicazione(), "Views", "Volantini", "Dettaglio.cshtml")).Replace("\r\n", "\n");
+        string stampa = File.ReadAllText(Path.Combine(RadiceApplicazione(), "Views", "Storico", "Report.cshtml"));
+
+        Assert.Contains(".report_finestra .rp_lab { width: 150px; flex: 0 0 150px; border-right: 1px solid #000; padding-right: 10px; font-weight: bold;\n" +
+                        "                               overflow-wrap: anywhere; }", editor);
+        Assert.Contains(".rp_lab{width:210px;flex:0 0 210px;padding:10px 12px;border-right:1px solid var(--line);font-weight:700;font-size:13px;overflow-wrap:anywhere}", stampa);
+    }
+
     // Come IndirizziNelleVisteTests: la cartella del progetto risalendo da quella dei test.
     private static string RadiceApplicazione()
     {

@@ -724,7 +724,9 @@
     .report_finestra .rp_pag_piccola { padding: 4px 10px; margin: 10px 0 8px; }
     .report_finestra .rp_prodotto { font-weight: bold; margin: -4px 0 8px; }
     .report_finestra .rp_voce { display: flex; margin: 0 0 16px; }
-    .report_finestra .rp_lab { width: 150px; flex: 0 0 150px; border-right: 1px solid #000; padding-right: 10px; font-weight: bold; }
+    /* I20-1170: una parola piu' larga della colonna va a capo qui dentro e non scavalca la linea */
+    .report_finestra .rp_lab { width: 150px; flex: 0 0 150px; border-right: 1px solid #000; padding-right: 10px; font-weight: bold;
+                               overflow-wrap: anywhere; }
     .report_finestra .rp_cont { flex: 1; padding-left: 10px; min-width: 0; }
     .report_finestra .rp_det { margin-bottom: 3px; }
     .report_finestra .rp_t { white-space: pre-wrap; }

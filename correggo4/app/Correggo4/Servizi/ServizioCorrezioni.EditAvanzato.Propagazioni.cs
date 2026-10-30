@@ -333,7 +333,7 @@ public sealed partial class ServizioCorrezioni
                 if (d.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object
                     && d.RootElement.TryGetProperty("descrizione", out var de)
                     && de.ValueKind == System.Text.Json.JsonValueKind.String)
-                    descr = Tag().Replace(de.GetString() ?? "", " ").Trim();
+                    descr = Ingestione.LettoreDescrizione.InChiaro(de.GetString());
             }
             catch (System.Text.Json.JsonException) { }
         }
