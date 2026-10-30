@@ -157,6 +157,32 @@ public class FinestraLoghiTests
         Assert.DoesNotContain("['offerta', 'descrizione'].forEach(function (parte) {\n            var ed = editDi(id, parte);\n            if (!ed) return;\n            quante++;", html.Replace("\r\n", "\n"));
     }
 
+    /// <summary>
+    /// I20-1167: sotto descrizione e prezzi di una correzione propagata non c'e' piu' il riquadro
+    /// «Correzione propagata da …»; all'Agenzia resta CONFERMA CORREZIONE.
+    /// </summary>
+    [Fact]
+    public void Correzione_propagata_senza_riquadro_ma_con_CONFERMA()
+    {
+        string html = Editor().Replace("\r\n", "\n");
+
+        Assert.DoesNotContain("ea_prop_da", html);
+        Assert.DoesNotContain("Sul volantino di partenza trovi la correzione completa.", html);
+        Assert.DoesNotContain("La propagazione si toglie dal volantino di partenza.", html);
+        Assert.Contains("if (ed && ed.propagata) {\n            var bt2 = [];\n            if (stato.puoAccettare && ed.stato === 0)", html);
+    }
+
+    /// <summary>I20-1167: se Istanta non restituisce le foto la sezione resta vuota, il motivo va in console.</summary>
+    [Fact]
+    public void Senza_foto_da_Istanta_nessun_messaggio()
+    {
+        string html = Editor().Replace("\r\n", "\n");
+
+        Assert.DoesNotContain("Foto non disponibili: ' + esc(schedaFoto.errore)", html);
+        Assert.DoesNotContain("La descrizione si può correggere lo stesso.", html);
+        Assert.Contains("console.warn('Foto non disponibili da Istanta: ' + schedaFoto.errore);\n            cont.innerHTML = '';", html);
+    }
+
     [Fact]
     public void Annulla_questa_modifica_ha_l_icona_undo()
     {

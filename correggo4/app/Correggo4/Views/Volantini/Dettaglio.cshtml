@@ -639,8 +639,6 @@
     .ea_prop_riga .promo { font-weight: bold; }
     .ea_prop_riga .st { color: #555; }
     .ea_prop_vuoto { border: 1px solid #c9c9c9; padding: 6px; background: #fff; color: #555; }
-    .ea_prop_da { background: #cfd8d8; border: 2px solid #9a4f5c; padding: 4px 6px; margin-top: 8px;
-                  text-align: left; font-size: 11px; }
     .ea_bottoni { display: flex; justify-content: center; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
     .ea_bottoni:empty { display: none; }
     .bottone.pericolo { background: #c62828; color: #fff; border-color: #c62828; }
@@ -2481,12 +2479,9 @@
                     'Correzione di ' + esc(ed.autore) + (ed.tipoAutore ? ' (' + esc(ed.tipoAutore) + ')' : '') +
                     ' &middot; ' + esc(dataBreve(ed.data)) + '</div>';
         }
-        // j227: correzione arrivata da un altro volantino: si dice da dove, e non si tocca da qui
+        // j227: correzione arrivata da un altro volantino: non si tocca da qui.
+        // I20-1167: niente piu' riquadro «Correzione propagata da …», resta solo CONFERMA per l'Agenzia
         if (ed && ed.propagata) {
-            html += '<div class="ea_prop_da">Correzione <b>propagata</b> da <b>' + esc(ed.daPromo) + '</b> &middot; ' +
-                    esc(ed.daVolantino) + (ed.daPagina ? ' (pag. ' + ed.daPagina + ')' : '') + '<br>' +
-                    (stato.puoScrivere ? 'La propagazione si toglie dal volantino di partenza.'
-                                       : 'Sul volantino di partenza trovi la correzione completa.') + '</div>';
             var bt2 = [];
             if (stato.puoAccettare && ed.stato === 0)
                 // j246: il nome e la misura del vecchio
@@ -2785,9 +2780,10 @@
             cont.innerHTML = '<div class="vuoto">Carico le foto da Istanta…</div>';
             return;
         }
+        // I20-1167: senza foto da Istanta la sezione resta vuota; il motivo solo in console
         if (schedaFoto.stato === 'errore') {
-            cont.innerHTML = '<div class="ea_stato">Foto non disponibili: ' + esc(schedaFoto.errore) +
-                             '<br>La descrizione si può correggere lo stesso.</div>';
+            console.warn('Foto non disponibili da Istanta: ' + schedaFoto.errore);
+            cont.innerHTML = '';
             return;
         }
         if (schedaFoto.foto.length === 0) { cont.innerHTML = '<div class="vuoto">Istanta non ha referenze per questo prodotto.</div>'; return; }
