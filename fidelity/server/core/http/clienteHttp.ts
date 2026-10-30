@@ -1,4 +1,12 @@
+import { Agent, type Dispatcher } from 'undici';
 import { log } from '../logger';
+
+// Il fetch globale di Node usa Undici: i limiti interni non devono scadere prima
+// dell'AbortSignal applicativo, che resta l'unica autorita sul tempo massimo.
+const DISPATCHER_HTTP = new Agent({
+  headersTimeout: 0,
+  bodyTimeout: 0,
+});
 
 /**
  * Client HTTP comune delle chiamate che Fidelity fa verso altri servizi (Istanta, Olimpo,
@@ -121,7 +129,12 @@ export async function chiamaHttp(url: string, opzioni: OpzioniHttp = {}): Promis
     const scadenza = AbortSignal.timeout(timeoutMs ?? timeoutCategoria(categoria));
     const segnale = signal ? AbortSignal.any([signal, scadenza]) : scadenza;
     try {
-      const risposta = await fetch(url, { ...init, signal: segnale });
+      const opzioniFetch: RequestInit & { dispatcher: Dispatcher } = {
+        ...init,
+        signal: segnale,
+        dispatcher: DISPATCHER_HTTP,
+      };
+      const risposta = await fetch(url, opzioniFetch);
       if (STATI_TEMPORANEI.has(risposta.status) && tentativo < massimoTentativi) {
         log.warn('Risposta temporanea, nuovo tentativo', { destinazione, status: risposta.status, tentativo });
         await risposta.body?.cancel().catch(() => undefined);
@@ -136,6 +149,9 @@ export async function chiamaHttp(url: string, opzioni: OpzioniHttp = {}): Promis
         throw new ErroreHttp('timeout', destinazione, false, { cause: err });
       }
       const codice = codiceErrore(err);
+      if (codice === 'UND_ERR_HEADERS_TIMEOUT') {
+        throw new ErroreHttp('timeout', destinazione, false, { cause: err });
+      }
       // fetch nativo: TypeError "fetch failed" con il codice nella cause (un URL non valido ha ERR_INVALID_URL)
       const connessione = codice
         ? CODICI_CONNESSIONE.has(codice)
