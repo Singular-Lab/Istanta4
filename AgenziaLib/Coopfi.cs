@@ -260,6 +260,27 @@ namespace AgenziaLib
         }
 
         /// <summary>
+        /// I20-1175: quante referenze servono, con almeno 3 prezzi promo diversi, perche' un gruppo sia
+        /// una linea: 4 nelle aree A e A-, 5 nelle altre (prima 5 ovunque). La stessa soglia vale per il
+        /// gruppo soci che resta unito e per l'etichetta LINEA?? dei Jolly e degli Sprint.
+        /// </summary>
+        public static int MinimoElementiLinea(string siglaArea)
+        {
+            return siglaArea == "A" || siglaArea == "A-" ? 4 : 5;
+        }
+
+        /// <summary>
+        /// I20-1175: se il gruppo formato all'importazione e' una linea (is_linea): abbastanza referenze per
+        /// l'area, piu' di 2 prezzi promo diversi e nessuna con JOLLY o SPRINT nel tema.
+        /// </summary>
+        public static bool EUnaLinea(List<Dictionary<string, object>> elementiGruppo, string siglaArea)
+        {
+            return elementiGruppo.Count >= MinimoElementiLinea(siglaArea)
+                && elementiGruppo.GroupBy(g => g["prezzo_promo"].ToDecimal()).Count() > 2
+                && !elementiGruppo.Any(w => w["tema"].ToString().ToUpper().Contains("JOLLY") || w["tema"].ToString().ToUpper().Contains("SPRINT"));
+        }
+
+        /// <summary>
         /// I gruppi del PoP i cui cartelli singoli sono per intero il cartello di gruppo, in tutti i formati:
         /// settore 58 con reparto 02, 03, 04, 05, 06 o 08, settore 56 con reparto 03 o 04. I codici si
         /// confrontano come numeri ("3" e "03" sono lo stesso reparto); senza codici la regola non vale.
@@ -4208,7 +4229,7 @@ namespace AgenziaLib
                             codiceBoxStr == "BOX_SPRINT"
                         )
                         {
-                            if (recordsDelGruppo.Count >= 5)
+                            if (recordsDelGruppo.Count >= MinimoElementiLinea(siglaAreaKit))
                             {
                                 var prezzi = new HashSet<string>();
 
@@ -4886,7 +4907,7 @@ namespace AgenziaLib
                             //if (casistica == 3 || (_sorgenteFiltrata.Count >= 5 && casistica != 1))
                             if (!isFreschissimi || prestazionati)
                             {
-                                if (casistica == 3 || casistica == 2 || (_sorgenteFiltrata.Count >= 5 && (casistica != 1 || countVariazionePrezziPromo >= 3)))
+                                if (casistica == 3 || casistica == 2 || (_sorgenteFiltrata.Count >= MinimoElementiLinea(siglaAreaKit) && (casistica != 1 || countVariazionePrezziPromo >= 3)))
                                 {
                                     //Quindi o siamo sprint jolly
                                     //il gurppo è maggiore o uaugale a 5 e NON è SOCI
@@ -5283,18 +5304,11 @@ namespace AgenziaLib
                     {
 
                         var elementiGruppo = tItem.Records.Where(g => g.ContainsKey(GLOBAL_VARIABLES_FICO.keyCodiceGruppo) && g[GLOBAL_VARIABLES_FICO.keyCodiceGruppo].ToString() == codGruppo).ToList();
-                        if (elementiGruppo.Count >= 5)
+                        // I20-1175: la soglia dipende dall'area (4 in A e A-, 5 nelle altre)
+                        if (EUnaLinea(elementiGruppo, siglaAreaKit))
                         {
-                            //Conteggio raggruppamento prezzi
-                            if (elementiGruppo.GroupBy(g => g["prezzo_promo"].ToDecimal()).Count() > 2)
-                            {
-                                //Controlliamo anche che nessuno degli elmenti abbia JOLLY o SPRINT nel tema
-                                if (elementiGruppo.Where(w => w["tema"].ToString().ToUpper().Contains("JOLLY") || w["tema"].ToString().ToUpper().Contains("SPRINT")).Count() == 0)
-                                {
-                                    //E' un linea
-                                    elementiGruppo.ForEach(f => f["is_linea"] = "x");
-                                }
-                            }
+                            //E' un linea
+                            elementiGruppo.ForEach(f => f["is_linea"] = "x");
                         }
                     }
 
@@ -5411,7 +5425,7 @@ namespace AgenziaLib
 
                     if (!isFreschissimi || prestazionati)
                     {
-                        if (casistica == 3 || casistica == 2 || (_sorgenteFiltrata.Count >= 5 && (casistica != 1 || countVariazionePrezziPromo >= 3)))
+                        if (casistica == 3 || casistica == 2 || (_sorgenteFiltrata.Count >= MinimoElementiLinea(siglaAreaKit) && (casistica != 1 || countVariazionePrezziPromo >= 3)))
                         {
                             //Quindi o siamo sprint jolly
                             //il gurppo è maggiore o uaugale a 5 e NON è SOCI
@@ -5953,18 +5967,11 @@ namespace AgenziaLib
             {
 
                 var elementiGruppo = records.Where(g => g.ContainsKey(GLOBAL_VARIABLES_FICO.keyCodiceGruppo) && g[GLOBAL_VARIABLES_FICO.keyCodiceGruppo].ToString() == codGruppo).ToList();
-                if (elementiGruppo.Count >= 5)
+                // I20-1175: la soglia dipende dall'area (4 in A e A-, 5 nelle altre)
+                if (EUnaLinea(elementiGruppo, siglaAreaKit))
                 {
-                    //Conteggio raggruppamento prezzi
-                    if (elementiGruppo.GroupBy(g => g["prezzo_promo"].ToDecimal()).Count() > 2)
-                    {
-                        //Controlliamo anche che nessuno degli elmenti abbia JOLLY o SPRINT nel tema
-                        if (elementiGruppo.Where(w => w["tema"].ToString().ToUpper().Contains("JOLLY") || w["tema"].ToString().ToUpper().Contains("SPRINT")).Count() == 0)
-                        {
-                            //E' un linea
-                            elementiGruppo.ForEach(f => f["is_linea"] = "x");
-                        }
-                    }
+                    //E' un linea
+                    elementiGruppo.ForEach(f => f["is_linea"] = "x");
                 }
 
                 //Scarico suggerimento di descrizione gruppo e lo facio solo su un elemento della lista per non appesantire il dato
