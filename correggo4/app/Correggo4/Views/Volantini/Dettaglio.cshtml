@@ -1203,9 +1203,10 @@
             azione(!el.classList.contains('spento'));
         });
     }
-    var vedi = { correzioni: true, accettate: true, ok: true, marketing: true, category: true, ea: true };
+    var vedi = { correzioni: true, accettate: true, ok: true, marketing: true, category: true, ea: true, suggerimenti: true };
     collegaInterruttore('tVisNote', function (visibile) { vedi.correzioni = visibile; disegna(); });
-    collegaInterruttore('tSugg', function () { /* i suggerimenti non sono ancora portati */ });
+    // I20-1176: come il vecchio, nasconde le note e i timbri propagati ancora da attivare (sbiaditi)
+    collegaInterruttore('tSugg', function (visibile) { vedi.suggerimenti = visibile; disegna(); });
     collegaInterruttore('tFatte', function (visibile) { vedi.accettate = visibile; disegna(); });
     collegaInterruttore('tVisOk', function (visibile) { vedi.ok = visibile; disegna(); });
     collegaInterruttore('tVisEA', function (visibile) { vedi.ea = visibile; disegna(); });
@@ -1810,6 +1811,7 @@
         (stato.propagate || []).forEach(function (r) {
             var f = mf[r.idPagina], b = dati[String(r.idBox)]; if (!f || !b) return;
             if (!vedi.correzioni || (r.stato === 1 && !vedi.accettate) || nascostoPerTipo(r.tipoAutore)) return;
+            if (r.suggerimento && !vedi.suggerimenti) return;   // I20-1176
             var lp = parseFloat(f.dataset.larghezza), ap = parseFloat(f.dataset.altezza);
             var k = pila[r.idBox] || 0; pila[r.idBox] = k + 1;
             // j231: Michele non vuole vedere chi ha propagato la correzione, ne' nella nota ne' nel
