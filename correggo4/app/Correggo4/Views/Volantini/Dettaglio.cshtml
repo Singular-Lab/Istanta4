@@ -260,7 +260,9 @@
     .cat_pilota { border: 3px solid #000; background: #d6d3d3; margin: 10px 12px; }
     table.cat_orig { width: 100%; border-collapse: collapse; }
     table.cat_orig td { padding: 10px 12px; vertical-align: top; }
-    .cat_barra { background: #9a4f5c; color: #fff; font-weight: bold; padding: 7px 14px; margin: 0; }
+    .cat_barra { background: #9a4f5c; color: #fff; font-weight: bold; padding: 7px 14px; margin: 0;
+                 display: flex; align-items: center; gap: 8px; }
+    .cat_barra .cat_bott { color: #000; font-weight: normal; }
     table.cat_tab { width: 100%; border-collapse: collapse; background: transparent; }
     table.cat_tab td { padding: 9px 12px; border-bottom: 2px solid #bbbbbb; vertical-align: middle;
                        background: #b9c9c7; }
@@ -273,7 +275,7 @@
     .cat_rit.grande { width: 240px; height: 108px; }
     .cat_rit img { position: absolute; max-width: none; }
     .cat_col_stato { width: 140px; font-size: 11px; }
-    .cat_col_azione { width: 78px; text-align: center; }
+    .cat_col_azione { width: 110px; text-align: center; white-space: nowrap; }
     .cat_col_vol { width: 24%; line-height: 1.45; }
     .cat_col_orig { width: 190px; line-height: 1.45; }
     .cat_prodotto { color: #333; margin-top: 3px; }
@@ -281,7 +283,7 @@
     .cat_seletta { display: block; margin-top: 6px; font-size: 11px; }
     .cat_fondo { padding: 12px 14px; text-align: center; }
     .cat_timbro { width: 26px; vertical-align: middle; margin-right: 6px; }
-    .cat_spunta { width: 18px; height: 18px; }
+    .cat_spunta { width: 22px; height: 22px; }
     .cat_promo { font-weight: bold; }
     .cat_vol { color: #333; }
     .cat_stato { font-weight: bold; }
@@ -293,10 +295,11 @@
     .cat_lucchetto { width: 20px; height: 20px; vertical-align: middle; }
     /* conferma dell'Agenzia (j224): la spunta done.png dell'originale, come nell'editor */
     .cat_conferma { width: 22px; height: 22px; cursor: pointer; vertical-align: middle; margin-left: 4px; }
-    /* nel riquadro della correzione di partenza la spunta e' grande come nel vecchio */
-    .cat_conferma.grande { width: 52px; height: 52px; margin: 6px 0 0; display: block; }
+    /* I20-1168: in ogni riga, origine compresa, casella e spunta grandi e affiancate come nel vecchio */
+    .cat_conferma.grande { width: 52px; height: 52px; margin: 0 0 0 6px; }
+    .cat_azione_orig { display: flex; align-items: center; margin-top: 6px; }
     .cat_chi { color: #1d7a45; font-size: 11px; }
-    .cat_sel { width: 16px; height: 16px; vertical-align: middle; }
+    .cat_sel { width: 22px; height: 22px; vertical-align: middle; margin: 0; }
     /* OK visto (j215, richiesta di Michele): al centro del prodotto e grande, non piu' 36px in alto a destra.
        La larghezza la mette disegna() in % del foglio (32% del lato corto del box), cosi' segue lo zoom.
        j238: era il 40% con minimo 60px, Michele l'ha chiesto un po' piu' piccolo. */
@@ -1024,8 +1027,8 @@
            DEPRECATI. Riaccendendoli tornerebbero "Propagazione: nota" e
            "1 gemello · 1 attivati · 0 fatti · 0%" in cima alla finestra. *@
         <span class="tit nascosto" id="catTitolo"></span>
-        <button type="button" class="cat_bott" id="catSel">Conferma selezione</button>
-        <button type="button" class="cat_bott" id="catTutti">Attiva su tutti</button>
+        @* I20-1168: «Conferma selezione» e «Conferma tutti» stanno nella fascia «Proposte di
+           propagazioni», come nel vecchio: li scrive disegnaCatena() con barraProposte() *@
         <span class="tit nascosto" id="catConti"></span>
         <button type="button" class="cat_bott pericolo nascosto" id="catElimina">ELIMINA DEFINITIVAMENTE</button>
         <button type="button" class="cat_chiudi" id="catChiudi">CHIUDI</button>
@@ -3181,9 +3184,8 @@
         catCatena = null;
         catVelo.classList.add('visibile');
         catFinestra.innerHTML = '<div class="cat_vuoto">Carico la propagazione…</div>';
-        // j246: titolo e conteggi non si scrivono piu' (vedi il markup di #catTitolo)
-        document.getElementById('catSel').classList.add('nascosto');
-        document.getElementById('catTutti').classList.add('nascosto');
+        // j246: titolo e conteggi non si scrivono piu' (vedi il markup di #catTitolo).
+        // I20-1168: i bottoni di conferma nascono con la fascia delle proposte, qui non ci sono ancora
         document.getElementById('catElimina').classList.add('nascosto');
         caricaCatena(id);
     }
@@ -3270,8 +3272,9 @@
         if (!p) return testa;
         var azione = '';
         if (c.puoConfermare && p.puoConfermare) {
-            azione = spuntaConferma('confpilota', c.id, 'Conferma la correzione di partenza', 'grande') +
-                     '<label class="cat_seletta"><input type="checkbox" class="cat_sel" id="catSelPilota"> seleziona</label>';
+            // I20-1168: casella a sinistra e spunta grande accanto, come nelle righe delle proposte
+            azione = '<div class="cat_azione_orig"><input type="checkbox" class="cat_sel" id="catSelPilota" title="seleziona">' +
+                     spuntaConferma('confpilota', c.id, 'Conferma la correzione di partenza', 'grande') + '</div>';
         } else if (p.stato === 1) {
             azione = '<div class="cat_seletta">' + chiHaConfermato(p) + '</div>';
         }
@@ -3303,6 +3306,16 @@
                 if (catCatena) caricaCatena(catCatena.id);
                 aggiornaStato();
             });
+    }
+
+    /* I20-1168: la fascia «Proposte di propagazioni» comincia con «Conferma selezione» e
+       «Conferma tutti» (o «Attiva su tutti» per chi scrive), come nel vecchio. Nascono nascosti:
+       chi li mostra e' disegnaCatena(). */
+    function barraProposte() {
+        return '<div class="cat_barra">' +
+               '<button type="button" class="cat_bott nascosto" id="catSel">Conferma selezione</button>' +
+               '<button type="button" class="cat_bott nascosto" id="catTutti">Attiva su tutti</button>' +
+               'Proposte di propagazioni:</div>';
     }
 
     function disegnaCatena() {
@@ -3338,13 +3351,13 @@
 
         var html = rigaPilota(c.pilota, c);
         if (c.inCostruzione) {
-            html += '<div class="cat_barra">Proposte di propagazioni:</div>' +
+            html += barraProposte() +
                     '<div class="cat_vuoto">Analisi di propagazione in corso… la finestra si aggiorna da sola.</div>';
         } else if (c.propagati.length === 0) {
-            html += '<div class="cat_barra">Proposte di propagazioni:</div>' +
+            html += barraProposte() +
                     '<div class="cat_vuoto">Nessuna proposta: questo prodotto non compare su altri volantini aperti.</div>';
         } else {
-            html += '<div class="cat_barra">Proposte di propagazioni:</div>' +
+            html += barraProposte() +
                     '<table class="cat_tab">' +
                     c.propagati.map(function (r, i) {
                         var cella;
@@ -3354,7 +3367,7 @@
                             else if (r.bloccato) cella = '<img class="cat_lucchetto" src="' + escA(IMG + 'locked.png') +
                                                          '" alt="" title="Bloccato in ripubblicazione">';
                             else if (r.puoConfermare) cella = '<input type="checkbox" class="cat_sel" data-sel="' + r.id + '">' +
-                                                              spuntaConferma('conf', r.id, 'Conferma l\'attuazione');
+                                                              spuntaConferma('conf', r.id, 'Conferma l\'attuazione', 'grande');
                             // j232: lo stato ha la sua colonna a sinistra, qui non si ripete
                             else cella = '';
                         }
