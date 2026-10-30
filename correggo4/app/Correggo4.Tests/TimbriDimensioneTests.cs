@@ -112,10 +112,29 @@ public class TimbriDimensioneTests
         using var scope = app.Services.CreateScope();
         var servizio = scope.ServiceProvider.GetRequiredService<ServizioCorrezioni>();
 
-        Assert.Equal(PolicyManager.TimbriDimensione, TimbriEsclusi(await servizio.PaginePermesseAsync(utente, v.Id)));
+        // I20-1171: al Category si toglie anche lo Star (viene prima nel pannello)
+        var attesi = tipoFico == ServizioCorrezioni.TipoFicoCategory
+            ? PolicyManager.TimbriDimensione.Prepend(ServizioCorrezioni.TimbroStar).ToList()
+            : PolicyManager.TimbriDimensione.ToList();
+        Assert.Equal(attesi, TimbriEsclusi(await servizio.PaginePermesseAsync(utente, v.Id)));
         Assert.False(ServizioCorrezioni.TimbroPermesso(utente, null, "_3_1_x2"));
         // gli altri timbri restano
-        Assert.True(ServizioCorrezioni.TimbroPermesso(utente, null, "_2_2_star"));
+        Assert.True(ServizioCorrezioni.TimbroPermesso(utente, null, "_2_1_artwork"));
+    }
+
+    /// <summary>I20-1171: lo Star non e' dei Category, con o senza policy; gli altri lo tengono.</summary>
+    [Fact]
+    public void Lo_Star_e_tolto_solo_ai_Category()
+    {
+        var policyReparti = PolicyManager.Crea(["56-03"]);
+        var category = new ServizioCorrezioni.Utente(IdAutore, Ruoli.CodiceGdo, ServizioCorrezioni.TipoFicoCategory, "Category Prova");
+        var gdo = new ServizioCorrezioni.Utente(IdAutore, Ruoli.CodiceGdo, 4, "GDO Prova");
+
+        Assert.False(ServizioCorrezioni.TimbroPermesso(category, null, ServizioCorrezioni.TimbroStar));
+        Assert.False(ServizioCorrezioni.TimbroPermesso(category, policyReparti, ServizioCorrezioni.TimbroStar));
+        Assert.True(ServizioCorrezioni.TimbroPermesso(Marketing(), null, ServizioCorrezioni.TimbroStar));
+        Assert.True(ServizioCorrezioni.TimbroPermesso(gdo, null, ServizioCorrezioni.TimbroStar));
+        Assert.True(ServizioCorrezioni.TimbroPermesso(gdo, policyReparti, ServizioCorrezioni.TimbroStar));
     }
 
     /// <summary>Col GDO (il Category scrive solo a finestra aperta, FinestreCategory) si vede il rifiuto del server.</summary>

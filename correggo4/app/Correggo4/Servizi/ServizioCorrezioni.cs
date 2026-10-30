@@ -313,13 +313,18 @@ public sealed partial class ServizioCorrezioni
 
     // ------------------------------------------------------------------ timbri
 
+    /// <summary>Il timbro Star, che i Category non hanno (I20-1171).</summary>
+    public const string TimbroStar = "_2_2_star";
+
     /// <summary>
     /// I20-1169: i quattro timbri di dimensione (PolicyManager.TimbriDimensione) sono solo dei
-    /// Marketing; per tutti i timbri decide poi la policy, se l'utente ne ha una.
+    /// Marketing; I20-1171: lo Star non e' dei Category. Per tutti i timbri decide poi la policy,
+    /// se l'utente ne ha una.
     /// </summary>
     public static bool TimbroPermesso(Utente u, PolicyCorrezione? policy, string simbolo)
     {
         if (PolicyManager.TimbriDimensione.Contains(simbolo) && u.TipoFico != TipoFicoMarketing) return false;
+        if (simbolo == TimbroStar && u.TipoFico == TipoFicoCategory) return false;
         return policy == null || policy.StrumentoPermesso("timbro", simbolo);
     }
 
