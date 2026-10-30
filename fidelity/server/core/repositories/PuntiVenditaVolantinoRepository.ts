@@ -272,10 +272,11 @@ export class PuntiVenditaVolantinoRepository implements IPuntiVenditaVolantinoRe
   async righeDaRiabbinare(idGdo: string, soloKit?: readonly string[]): Promise<RigaDaRiabbinare[]> {
     if (soloKit && soloKit.length === 0) return [];
     const deiKit = soloKit ? 'AND r.id_kit_runtime IN (:soloKit)' : '';
-    // Dall'indice parziale delle righe senza PV della GDO
+    // Dall'indice parziale delle righe senza PV della GDO. Il tipo di abbinamento di una riga il cui
+    // PV è stato eliminato (la chiave esterna azzera solo id_punto_vendita) non vale più: niente PV, niente abbinamento.
     return this.seleziona<RigaDaRiabbinare>(
       `SELECT r.id::text AS id, r.localita, r.chiave_indirizzo, r.chiave_telefono,
-              r.id_punto_vendita::text AS id_punto_vendita, r.abbinamento
+              r.id_punto_vendita::text AS id_punto_vendita, NULL::text AS abbinamento
        FROM punti_vendita_volantino r
        WHERE r.id_gdo = :idGdo AND r.id_punto_vendita IS NULL
          ${deiKit}
