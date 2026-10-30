@@ -212,6 +212,7 @@ Non inserire credenziali, token, configurazioni cliente o dati reali nei file, n
 4. Se i check sono in corso, mantieni il task nello stato `ReviewApproved` e riutilizza lo stesso `taskId` al controllo successivo.
 5. Se un check fallisce, riporta Jira a `ToDo` e il task a `Blocked` indicando il check fallito.
 6. Quando i controlli richiesti passano, porta Jira a `Completed` e poi il task Control Plane a `Completed`.
+7. A task completato, fai la valutazione di harvesting del §18.
 
 L'agent non deve eseguire merge, pubblicazione di release o distribuzione. Squash/merge, release e stato `Distributed` restano azioni dell'operatore tramite Control Plane.
 
@@ -293,3 +294,27 @@ Non apre un task: niente `company_prepare_task`, niente branch, nessun file del 
 6. Riporta all'utente il giudizio, i rischi principali, i test bloccanti e il link `releaseUrl`. Non riportare il token di caricamento.
 
 Il report è informativo: non blocca né autorizza la distribuzione, che resta un'azione dell'operatore.
+
+## 18. Skill dal basso (harvesting)
+
+Le skill del catalogo sono un patrimonio tecnico dell'azienda: crescono dal basso, dai task, e il Control Plane le consolida e le distribuisce dopo una revisione umana. Questa fase è facoltativa e nella maggior parte dei task si conclude con un no.
+
+Falla a task completato (§12, punto 7), oppure durante un pre-flight significativo: quello di un task tornato più volte al §7 prima di raggiungere l'obiettivo è il segnale più forte. Chiediti:
+
+> In questo task ho sviluppato una tecnica, un algoritmo, uno script o un metodo che potrebbe risolvere problemi analoghi, in questo progetto o in altri?
+
+Proponi una skill **solo** quando la risposta è sì e la competenza è **generalizzabile**. Aver risolto un problema difficile non basta: una skill che serve a un solo caso finirebbe in mezzo a centinaia di skill specifiche, sovrapposte o inutilizzabili. Non proporre:
+
+- la soluzione di un bug preciso, o la descrizione di come funziona un componente: quella è materia di specifiche (§16) o di documentazione;
+- regole già scritte nelle specifiche o in questo protocollo;
+- qualcosa che una skill del catalogo copre già. In quel caso, se hai trovato un modo migliore, proponi la **versione successiva** di quella skill, con lo stesso nome, partendo dal suo `SKILL.md` pubblicato.
+
+Se decidi di proporre:
+
+1. Controlla il catalogo con `company_list_skills` e cerca le skill vicine. Nella proposta indica in `consideredSkills` quelle che hai valutato e perché non bastavano.
+2. Scrivi la skill in una cartella temporanea fuori dal repository: `SKILL.md`, e se servono `references/` e `scripts/`. Segui le regole di scrittura della skill `singular-controlplane`. Senza quella skill: intestazione con `name` e `description` (cosa fa e quando usarla), istruzioni generali e non legate al task, script solo in Python con la libreria standard, nessun dato reale né credenziale.
+3. Chiama `company_propose_skill` con `taskId`, `name`, `rationale` (la competenza e perché vale oltre il task), `reuseCases` (da 1 a 5 altri casi in cui servirebbe) e, se servono, compatibilità e dipendenze.
+4. Carica il pacchetto con il comando `propose` di `singular-controlplane`. Senza quella skill: comprimi la cartella in uno zip, con `SKILL.md` alla radice, e caricalo con l'`uploadCommand` restituito.
+5. Riferisci la proposta all'utente nella chiusura del task, o nel rapporto pre-flight se la fai lì: nome, motivazione, e le skill simili che il Control Plane ha segnalato.
+
+Ogni task può proporre al massimo tre skill. La proposta resta in attesa della revisione nel Control Plane e non è visibile agli agent finché non viene pubblicata: non usarla come se fosse nel catalogo e non riproporla, salvo un errore del Control Plane o una richiesta dell'utente.
