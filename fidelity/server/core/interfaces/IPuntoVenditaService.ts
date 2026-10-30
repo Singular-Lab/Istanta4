@@ -57,14 +57,6 @@ export interface IPuntoVenditaService {
     mancanti: PuntoVenditaTextInput[];
     possibiliDuplicati: Array<{ input: PuntoVenditaTextInput; puntoVendita: PuntoVenditaResponseDTO }>;
   }>;
-  loadPuntiVenditaForPlugin(idGdo: string | undefined, idArea: string, idCanale: string, items: PuntoVenditaTextInput[]): Promise<{
-    matched: Array<{ input: PuntoVenditaTextInput; puntoVendita: PuntoVenditaResponseDTO }>;
-    created: Array<{ input: PuntoVenditaTextInput; puntoVendita: PuntoVenditaResponseDTO }>;
-    updated: Array<{ input: PuntoVenditaTextInput; puntoVendita: PuntoVenditaResponseDTO }>;
-    missing: PuntoVenditaTextInput[];
-    possibleDuplicates: Array<{ input: PuntoVenditaTextInput; puntoVendita: PuntoVenditaResponseDTO }>;
-    duplicates: Array<{ key: string; puntoVenditaIds: string[] }>;
-  }>;
 
   // Paginated Operations
   getAllPuntiVenditaPaginated(params: {

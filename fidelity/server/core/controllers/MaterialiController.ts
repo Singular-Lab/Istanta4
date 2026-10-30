@@ -2,7 +2,13 @@ import { Request, Response } from 'express';
 import { HttpStatusCode, type STATO_LOG_FILE } from '../../../lib/enums';
 import { BadRequestError } from '../../../lib/errors';
 import { isPeriodoMateriali, PeriodoMateriali } from '../../../lib/materiali/periodi';
-import type { FiltriFilePop, FiltriKitVolantini, RichiestaZipPop, StatoKitMateriali } from '../../../lib/materiali/tipi';
+import type {
+  FiltriFilePop,
+  FiltriKitVolantini,
+  FiltriPromozioniVolantini,
+  RichiestaZipPop,
+  StatoKitMateriali,
+} from '../../../lib/materiali/tipi';
 import { BaseController } from '../base/BaseController';
 import type { IMaterialiService } from '../interfaces/IMaterialiService';
 import { log } from '../logger';
@@ -19,6 +25,12 @@ const numero = (valore: unknown): number | undefined => {
   if (cifre === undefined) return undefined;
   const intero = Number.parseInt(cifre, 10);
   return Number.isFinite(intero) ? intero : undefined;
+};
+
+/** Numero scritto per intero: "2024x" o "abc" diventano NaN, e il servizio li rifiuta invece di ignorarli. */
+const numeroEsatto = (valore: unknown): number | undefined => {
+  const cifre = testo(valore);
+  return cifre === undefined ? undefined : Number(cifre);
 };
 
 export function periodoRichiesto(valore: unknown): PeriodoMateriali {
@@ -41,6 +53,32 @@ function filtriFile(sorgente: unknown): Omit<FiltriFilePop, 'periodo' | 'idForma
 }
 
 /**
+ * RichiestaZipPop dal body: JSON, oppure il form nascosto del download, che la manda come testo
+ * JSON nel campo `richiesta` (accanto a `_csrf`) perche' il browser riceva lo ZIP in streaming.
+ */
+function richiestaZipDalCorpo(body: unknown): RichiestaZipPop {
+  let corpo: Record<string, unknown> = body && typeof body === 'object' ? body as Record<string, unknown> : {};
+  if (typeof corpo.richiesta === 'string') {
+    let letto: unknown;
+    try {
+      letto = JSON.parse(corpo.richiesta);
+    } catch {
+      throw new BadRequestError({ message: 'Richiesta di download non valida.' });
+    }
+    corpo = letto && typeof letto === 'object' ? letto as Record<string, unknown> : {};
+  }
+  const idFile = Array.isArray(corpo.idFile)
+    ? corpo.idFile.filter((id): id is string => typeof id === 'string')
+    : undefined;
+  return {
+    periodo: periodoRichiesto(corpo.periodo),
+    idFormato: testo(corpo.idFormato) ?? '',
+    idFile,
+    filtri: filtriFile(corpo.filtri),
+  };
+}
+
+/**
  * Viste Volantini e POP per periodo (In corso, Attivi, Storico), in sola lettura. Contratto in
  * lib/materiali/tipi.ts. Tutto richiede "materiali.visualizza"; gli ZIP anche "file.download".
  */
@@ -54,9 +92,12 @@ export class MaterialiController extends BaseController {
     const scarica = [...visualizza, permissionGuard('file.download')];
 
     this.router.get('/volantini', ...visualizza, this.getVolantini.bind(this));
-    this.router.get('/pop/promozioni', ...visualizza, this.getPromozioniPop.bind(this));
+    this.router.get('/volantini/promozioni', ...visualizza, this.getPromozioniVolantini.bind(this));
+    this.router.get('/pop/promozioni',...visualizza, this.getPromozioniPop.bind(this));
     this.router.get('/pop/promozioni/:idPromo/formati', ...visualizza, this.getRiepilogoPop.bind(this));
     this.router.get('/pop/promozioni/:idPromo/file', ...visualizza, this.getFilePop.bind(this));
+    this.router.get('/pop/promozioni/:idPromo/file/opzioni', ...visualizza, this.getOpzioniFilePop.bind(this));
+    this.router.post('/pop/promozioni/:idPromo/zip/verifica', ...scarica, this.verificaZip.bind(this));
     this.router.get('/pop/promozioni/:idPromo/zip', ...scarica, this.scaricaZipFiltrato.bind(this));
     this.router.post('/pop/promozioni/:idPromo/zip', ...scarica, this.scaricaZipSelezione.bind(this));
   }
@@ -79,10 +120,28 @@ export class MaterialiController extends BaseController {
     }
   }
 
+  private async getPromozioniVolantini(req: Request, res: Response): Promise<void> {
+    try {
+      const filtri: FiltriPromozioniVolantini = {
+        periodo: periodoRichiesto(req.query.periodo),
+        cerca: testo(req.query.cerca),
+        idPromo: testo(req.query.idPromo),
+        idArea: testo(req.query.idArea),
+        idCanale: testo(req.query.idCanale),
+        anno: numeroEsatto(req.query.anno),
+        pagina: numero(req.query.pagina),
+        dimensione: numero(req.query.dimensione),
+      };
+      this.sendResponse(res, HttpStatusCode.OK, await this.materialiService.getPromozioniVolantini(filtri));
+    } catch (error) {
+      this.handleError(res, error);
+    }
+  }
+
   private async getPromozioniPop(req: Request, res: Response): Promise<void> {
     try {
       const periodo = periodoRichiesto(req.query.periodo);
-      this.sendResponse(res, HttpStatusCode.OK, await this.materialiService.getPromozioniPop(periodo));
+      this.sendResponse(res, HttpStatusCode.OK, await this.materialiService.getPromozioniPop(periodo, req));
     } catch (error) {
       this.handleError(res, error);
     }
@@ -112,6 +171,24 @@ export class MaterialiController extends BaseController {
     }
   }
 
+  private async getOpzioniFilePop(req: Request<{ idPromo: string }>, res: Response): Promise<void> {
+    try {
+      const filtri = { periodo: periodoRichiesto(req.query.periodo), idFormato: testo(req.query.idFormato) ?? '' };
+      this.sendResponse(res, HttpStatusCode.OK, await this.materialiService.getOpzioniFilePop(req.params.idPromo, filtri));
+    } catch (error) {
+      this.handleError(res, error);
+    }
+  }
+
+  /** Prima di un download: gli errori (niente da scaricare, promo fuori periodo...) arrivano qui in JSON. */
+  private async verificaZip(req: Request<{ idPromo: string }>, res: Response): Promise<void> {
+    try {
+      this.sendResponse(res, HttpStatusCode.OK, await this.materialiService.verificaZipPop(req.params.idPromo, richiestaZipDalCorpo(req.body)));
+    } catch (error) {
+      this.handleError(res, error);
+    }
+  }
+
   /** Tutti i file del formato che corrispondono ai filtri in query. */
   private async scaricaZipFiltrato(req: Request<{ idPromo: string }>, res: Response): Promise<void> {
     await this.inviaZip(req, res, () => ({
@@ -123,18 +200,7 @@ export class MaterialiController extends BaseController {
 
   /** I file selezionati (idFile), o i filtri del body. */
   private async scaricaZipSelezione(req: Request<{ idPromo: string }>, res: Response): Promise<void> {
-    await this.inviaZip(req, res, () => {
-      const corpo = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
-      const idFile = Array.isArray(corpo.idFile)
-        ? corpo.idFile.filter((id): id is string => typeof id === 'string')
-        : undefined;
-      return {
-        periodo: periodoRichiesto(corpo.periodo),
-        idFormato: testo(corpo.idFormato) ?? '',
-        idFile,
-        filtri: filtriFile(corpo.filtri),
-      };
-    });
+    await this.inviaZip(req, res, () => richiestaZipDalCorpo(req.body));
   }
 
   /**
@@ -147,6 +213,8 @@ export class MaterialiController extends BaseController {
       const zip = await this.materialiService.preparaZipPop(req.params.idPromo, leggiRichiesta());
       res.attachment(zip.nomeFile);
       res.setHeader('Content-Type', 'application/zip');
+      // Le intestazioni partono subito: il browser apre il download mentre arrivano i primi file da Olimpo
+      res.flushHeaders();
       await this.materialiService.scriviZipPop(zip, res);
     } catch (error) {
       if (res.headersSent || res.destroyed) {

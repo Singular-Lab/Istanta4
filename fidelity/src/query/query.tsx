@@ -5,9 +5,14 @@ import { ServerCall } from "../../lib/server_call";
 import type { AuthProviderAdminDTO, AvvisoManutenzione, Config, DESIGN_KIT, DimensioneVisibilitaPromo, FileItemKit, FormatiAttributes, Funzionalita, HubNewsAdminDTO, HubServiceDTO, MenaboLayoutSalvato, MenaboRisultato, PuntiVenditaAttributes, RaccoglitoreKit, RegoleMenabo, ReportOptionDTO, Ricette, SaveMenaboLayoutRequest, TimelinePromoItem, TipiDiExportAttributes, TracciatoQueryResult } from "../../lib/types";
 import type { AuditLogPaginatedResponse, AuditLogSummary } from "../../lib/auditTypes";
 import type { PeriodoMateriali } from "../../lib/materiali/periodi";
-import type { ElencoPromozioniPop, FiltriFilePop, FiltriKitVolantini, PaginaFilePop, PaginaKitVolantini, RiepilogoPop } from "../../lib/materiali/tipi";
+import type { ElencoPromozioniPop, FiltriFilePop, FiltriKitVolantini, OpzioniFilePop, PaginaFilePop, PaginaKitVolantini, RiepilogoPop } from "../../lib/materiali/tipi";
+import type { FiltriPromozioniVolantini, PaginaPromozioniVolantini } from "../../lib/materiali/tipi";
 import { parametriMateriali } from "@/utils/materiali";
 import type { AreaResponseDTO, CanaleResponseDTO, CombinazioneCanaleAreaResponseDTO, DisplayContextResponseDTO, DispositivoPuntoVenditaResponseDTO, FormatiResponseDTO, GDOResponseDTO, PromoResponseDTO, PuntoVenditaResponseDTO, RuoloUtenteGDOResponseDTO, TipiDiExportResponseDTO, VolantinoAttivoDTO } from "../../server/core/dto";
+import type { PuntoVenditaConsultazione } from "../../lib/puntiVendita/consultazione";
+import type { PaginaVolantiniStoria, StoriaPuntoVendita } from "../../lib/puntiVendita/storia";
+import type { PaginaRigheNonAbbinate, QualitaPuntiVendita, ReteInsegne } from "../../lib/puntiVendita/analisi";
+import type { AnalisiPuntoVendita, DettaglioReferenzaPv, DettaglioVolantinoPv } from "../../lib/puntiVendita/analisi";
 
 
 
@@ -534,6 +539,107 @@ export const useFetchVolantiniAttiviPuntoVendita = (idPv: string) => {
   });
 };
 
+/* Consultazione dei punti vendita (contratti in lib/puntiVendita): sola lettura, "gdo.visualizza" */
+
+export const useFetchPuntiVenditaConsultazione = () =>
+  useQuery({
+    queryKey: ["puntiVendita", "consultazione"],
+    queryFn: () => ServerCall.get<PuntoVenditaConsultazione[]>("/punti-vendita"),
+  });
+
+/** Punti vendita per insegna oggi e nei volantini di ogni anno, per le infografiche dell'elenco. */
+export const useFetchReteInsegne = () =>
+  useQuery({
+    queryKey: ["puntiVendita", "rete", "insegne"],
+    queryFn: () => ServerCall.get<ReteInsegne>("/punti-vendita/rete/insegne"),
+  });
+
+/* Gestione dei punti vendita: "gdo.gestisci_punti_vendita" */
+
+/** Problemi dei dati dell'anagrafica (coordinate, codici, righe da revisionare, storia, dispositivi). */
+export const useFetchQualitaPuntiVendita = () =>
+  useQuery({
+    queryKey: ["puntiVendita", "gestione", "qualita"],
+    queryFn: () => ServerCall.get<QualitaPuntiVendita>("/punti-vendita/gestione/qualita"),
+  });
+
+/** Righe delle liste dei volantini che non corrispondono a nessun punto vendita, paginate dal server. */
+export const useFetchRigheNonAbbinate = (pagina: number, dimensione: number) =>
+  useQuery({
+    queryKey: ["puntiVendita", "gestione", "righe-non-abbinate", pagina, dimensione],
+    queryFn: () =>
+      ServerCall.get<PaginaRigheNonAbbinate>(
+        `/punti-vendita/gestione/righe-non-abbinate?${new URLSearchParams({ pagina: String(pagina), dimensione: String(dimensione) })}`
+      ),
+    // Cambiando pagina restano le righe precedenti finché arrivano le nuove
+    placeholderData: (precedenti) => precedenti,
+  });
+
+/**
+ * Il punto vendita della gestione: parte da quello del loader e si rilegge dopo una modifica
+ * (la chiave sta sotto "dataPuntiVendita", che l'elenco invalida a ogni salvataggio).
+ */
+export const useFetchPuntoVenditaGestione = (iniziale: PuntoVenditaResponseDTO) =>
+  useQuery({
+    queryKey: ["dataPuntiVendita", "gestione", iniziale.id],
+    queryFn: () => ServerCall.get<PuntoVenditaResponseDTO>(`/get_pv_by_id?idPv=${encodeURIComponent(iniziale.id)}`),
+    initialData: iniziale,
+    staleTime: 60_000,
+  });
+
+export const useFetchPuntoVenditaConsultazione = (idPv: string) =>
+  useQuery({
+    queryKey: ["puntiVendita", "consultazione", idPv],
+    queryFn: () => ServerCall.get<PuntoVenditaConsultazione>(`/punti-vendita/${encodeURIComponent(idPv)}`),
+    enabled: !!idPv,
+  });
+
+export const useFetchStoriaPuntoVendita = (idPv: string) =>
+  useQuery({
+    queryKey: ["puntiVendita", "storia", idPv],
+    queryFn: () => ServerCall.get<StoriaPuntoVendita>(`/punti-vendita/${encodeURIComponent(idPv)}/storia`),
+    enabled: !!idPv,
+  });
+
+/** Volantini della storia del punto vendita, dal più recente, paginati dal server. */
+export const useFetchVolantiniStoriaPuntoVendita = (idPv: string, pagina: number, dimensione: number) =>
+  useQuery({
+    queryKey: ["puntiVendita", "storia", idPv, "volantini", pagina, dimensione],
+    queryFn: () =>
+      ServerCall.get<PaginaVolantiniStoria>(
+        `/punti-vendita/${encodeURIComponent(idPv)}/storia/volantini?${new URLSearchParams({ pagina: String(pagina), dimensione: String(dimensione) })}`
+      ),
+    enabled: !!idPv,
+    // Cambiando pagina restano i volantini precedenti finché arrivano i nuovi, mai quelli di un altro punto vendita
+    placeholderData: (precedenti, queryPrecedente) => (queryPrecedente?.queryKey[2] === idPv ? precedenti : undefined),
+  });
+
+/** Numeri, timeline dei volantini e infografiche della scheda del punto vendita. */
+export const useFetchAnalisiPuntoVendita = (idPv: string) =>
+  useQuery({
+    queryKey: ["puntiVendita", "analisi", idPv],
+    queryFn: () => ServerCall.get<AnalisiPuntoVendita>(`/punti-vendita/${encodeURIComponent(idPv)}/analisi`),
+    enabled: !!idPv,
+  });
+
+/** Un volantino della storia del punto vendita: pagine, box, numeri e riga stampata del punto vendita. */
+export const useFetchVolantinoPuntoVendita = (idPv: string, idKit: string) =>
+  useQuery({
+    queryKey: ["puntiVendita", "volantino", idPv, idKit],
+    queryFn: () =>
+      ServerCall.get<DettaglioVolantinoPv>(`/punti-vendita/${encodeURIComponent(idPv)}/volantini/${encodeURIComponent(idKit)}`),
+    enabled: !!idPv && !!idKit,
+  });
+
+/** Una referenza nei volantini del punto vendita, per la chiave di ProdottoRicorrente o ReferenzaSintesi. */
+export const useFetchReferenzaPuntoVendita = (idPv: string, chiave: string) =>
+  useQuery({
+    queryKey: ["puntiVendita", "referenza", idPv, chiave],
+    queryFn: () =>
+      ServerCall.get<DettaglioReferenzaPv>(`/punti-vendita/${encodeURIComponent(idPv)}/referenze/${encodeURIComponent(chiave)}`),
+    enabled: !!idPv && !!chiave,
+  });
+
 export const useFetchPromoPerTimeline = (idArea: string, idCanale: string) => {
   return useQuery({
     // Area e canale nella chiave: cambiandoli la timeline si ricarica invece di mostrare la precedente
@@ -579,6 +685,18 @@ export const useFetchKitVolantini = (filtri: FiltriKitVolantini) =>
     staleTime: STALE_MATERIALI,
   });
 
+/** Volantini di Attivi e Storico per promozione, filtrati e paginati dal server. */
+export const useFetchPromozioniVolantini = (filtri: FiltriPromozioniVolantini) =>
+  useQuery({
+    queryKey: ['materiali', 'volantini', 'promozioni', filtri],
+    queryFn: () =>
+      ServerCall.get<PaginaPromozioniVolantini>(`/materiali/volantini/promozioni?${parametriMateriali({ ...filtri })}`),
+    // Cambiando pagina o filtro restano le promo precedenti finché arrivano le nuove; mai quelle di un altro periodo
+    placeholderData: (precedenti, queryPrecedente) =>
+      (queryPrecedente?.queryKey[3] as FiltriPromozioniVolantini | undefined)?.periodo === filtri.periodo ? precedenti : undefined,
+    staleTime: STALE_MATERIALI,
+  });
+
 /** Promozioni del periodo che hanno file POP, con il loro conteggio. */
 export const useFetchPromozioniPop = (periodo: PeriodoMateriali) =>
   useQuery({
@@ -621,6 +739,21 @@ export const useFetchFilePop = (idPromo: string | undefined, filtri: FiltriFileP
         : undefined;
     },
     staleTime: STALE_MATERIALI,
+  });
+
+// Aree, canali e reparti di un formato cambiano solo quando arrivano file nuovi
+const STALE_OPZIONI_POP = 5 * 60 * 1000;
+
+/** Valori delle tendine dei file di un formato: una richiesta per formato, non a ogni pagina o filtro. */
+export const useFetchOpzioniFilePop = (idPromo: string | undefined, periodo: PeriodoMateriali, idFormato: string | undefined) =>
+  useQuery({
+    queryKey: ['materiali', 'pop', 'opzioni-file', idPromo, periodo, idFormato],
+    queryFn: () =>
+      ServerCall.get<OpzioniFilePop>(
+        `/materiali/pop/promozioni/${encodeURIComponent(idPromo ?? '')}/file/opzioni?${parametriMateriali({ periodo, idFormato })}`
+      ),
+    enabled: !!idPromo && !!idFormato,
+    staleTime: STALE_OPZIONI_POP,
   });
 
 export const useFetchAllContenutiDigitali = (page: number, pageSize: number, filters: {

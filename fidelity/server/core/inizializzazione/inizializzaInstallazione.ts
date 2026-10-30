@@ -65,14 +65,20 @@ export const ID_VOCI_POP_SUPERADMIN: Readonly<Record<PeriodoMateriali, string>> 
   storico: '5451e8a5-9613-4b22-909b-16c951b7c46c',
 };
 
+/** Identificativo fisso dell'intestazione 'MATERIALI POP' del menu predefinito del Superadmin. */
+export const ID_INTESTAZIONE_POP_SUPERADMIN = '48bf27f7-ddb5-4fe8-873c-65506fadd405';
+
 /**
  * Le voci del menu predefinito del Superadmin, pronte per bulkCreate. MENU_SUPERADMIN resta
- * allineato a seed-fidelity.sh, con le pagine Materiali: qui si converte nelle viste Volantini e
- * POP come i menu salvati (lib/accessi/menuMateriali.ts), così un'installazione nuova e il
- * ripristino del menu nascono già convertiti.
+ * allineato a seed-fidelity.sh, con le pagine Materiali e l'intestazione 'MATERIALI': qui si
+ * converte nelle sezioni 'MATERIALI VOLANTINO' e 'MATERIALI POP' come i menu salvati
+ * (lib/accessi/menuMateriali.ts), così un'installazione nuova e il ripristino del menu nascono
+ * già convertiti.
  */
 export function vociMenuSuperadmin(adesso = new Date()) {
-  const { voci } = convertiMenuMateriali(MENU_SUPERADMIN, periodo => ID_VOCI_POP_SUPERADMIN[periodo]);
+  const { voci } = convertiMenuMateriali(MENU_SUPERADMIN, voce =>
+    voce === 'intestazione-pop' ? ID_INTESTAZIONE_POP_SUPERADMIN : ID_VOCI_POP_SUPERADMIN[voce]
+  );
   return voci.map(voce => ({
     ...voce,
     tipo_utente: TIPO_UTENTI.SUPERADMIN,

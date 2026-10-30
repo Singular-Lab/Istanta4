@@ -95,13 +95,14 @@ function CardVolantino({
   return (
     <>
       <article className={twMerge("rounded-card border border-slate-200 bg-white p-4", className)}>
-        <div className="flex gap-4">
+        {/* Su mobile la copertina è più piccola e il nome va a capo: i nomi dei kit sono codici lunghi */}
+        <div className="flex gap-3 sm:gap-4">
           <div className="shrink-0">
             {conAnteprima ? (
               <button
                 type="button"
                 aria-label={`Anteprima di ${titolo}`}
-                className="group/anteprima relative h-24 w-20 overflow-hidden rounded-control border border-slate-200 bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40"
+                className="group/anteprima relative h-20 w-16 overflow-hidden rounded-control border border-slate-200 bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40 sm:h-24 sm:w-20"
                 onClick={() => setAnteprimaAperta(true)}
               >
                 <img src={anteprima} alt="" className="h-full w-full object-cover" loading="lazy" />
@@ -120,21 +121,22 @@ function CardVolantino({
                 to={collegamento}
                 aria-hidden="true"
                 tabIndex={-1}
-                className="flex h-24 w-20 items-center justify-center rounded-control border border-dashed border-slate-300 bg-slate-50 hover:border-theme-1/40"
+                className="flex h-20 w-16 items-center justify-center rounded-control border border-dashed border-slate-300 bg-slate-50 hover:border-theme-1/40 sm:h-24 sm:w-20"
               >
                 <Lucide icon="FileText" className="h-5 w-5 text-slate-400" />
               </Link>
             ) : (
-              <div className="flex h-24 w-20 items-center justify-center rounded-control border border-dashed border-slate-300 bg-slate-50">
+              <div className="flex h-20 w-16 items-center justify-center rounded-control border border-dashed border-slate-300 bg-slate-50 sm:h-24 sm:w-20">
                 <Lucide icon="FileText" aria-hidden="true" className="h-5 w-5 text-slate-400" />
               </div>
             )}
           </div>
 
           <div className="min-w-0 flex-1">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <h3 className="title-card truncate">
+            {/* Sotto sm lo stato va sotto il nome invece di stringerlo */}
+            <div className="flex flex-col items-start gap-1.5 sm:flex-row sm:justify-between sm:gap-3">
+              <div className="min-w-0 max-w-full">
+                <h3 title={titolo} className="title-card break-all sm:truncate sm:break-normal">
                   {collegamento ? (
                     <Link to={collegamento} className="hover:text-theme-1">
                       {titolo}
@@ -145,11 +147,11 @@ function CardVolantino({
                 </h3>
                 {promo &&
                   (promo.collegamento ? (
-                    <Link to={promo.collegamento} className="block truncate text-xs text-theme-1 hover:underline">
+                    <Link to={promo.collegamento} className="block break-all text-xs text-theme-1 hover:underline sm:truncate sm:break-normal">
                       Promo: {promo.nome}
                     </Link>
                   ) : (
-                    <p className="truncate text-xs text-slate-500">Promo: {promo.nome}</p>
+                    <p className="break-all text-xs text-slate-500 sm:truncate sm:break-normal">Promo: {promo.nome}</p>
                   ))}
                 {(nomeArea || nomeCanale) && (
                   <div className="mt-1.5 flex flex-wrap items-center gap-1.5">

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DatabaseError } from '../../../../lib/errors';
 import { sequelize } from '../../db/SequelizeConnector';
+import { AnalisiKit } from '../../models/analisi_kit';
 import { Referenze } from '../../models/referenze';
 import { ReferenzeService } from '../ReferenzeService';
 
@@ -14,7 +15,9 @@ const transazione = { id: 't-1' };
 function makeService() {
   // Come sequelize: esegue il callback dentro la transazione e ne propaga l'errore (che causa il rollback)
   const transaction = vi.spyOn(sequelize, 'transaction').mockImplementation((async (callback: any) => callback(transazione)) as any);
-  return { service: new ReferenzeService({} as any, {} as any), transaction };
+  // Il riepilogo del kit per le pagine dei punti vendita (analisi_kit) si toglie nella stessa transazione
+  const togliRiepilogo = vi.spyOn(AnalisiKit, 'destroy').mockResolvedValue(1);
+  return { service: new ReferenzeService({} as any, {} as any), transaction, togliRiepilogo };
 }
 
 afterEach(() => {
@@ -39,6 +42,17 @@ describe('ReferenzeService.sostituisciReferenzeKit', () => {
       { transaction: transazione }
     );
     expect(destroy.mock.invocationCallOrder[0]).toBeLessThan(bulkCreate.mock.invocationCallOrder[0]);
+  });
+
+  it('toglie il riepilogo del kit per le pagine dei punti vendita nella stessa transazione: si ricalcola alla prossima lettura', async () => {
+    const { service, togliRiepilogo } = makeService();
+    vi.spyOn(Referenze, 'destroy').mockResolvedValue(3);
+    const bulkCreate = vi.spyOn(Referenze, 'bulkCreate').mockResolvedValue([]);
+
+    await service.sostituisciReferenzeKit('kit-1', [{ id: 'r-nuova', guidIdKitRuntime: 'kit-1' } as never]);
+
+    expect(togliRiepilogo).toHaveBeenCalledWith({ where: { id_kit_runtime: 'kit-1' }, transaction: transazione });
+    expect(togliRiepilogo.mock.invocationCallOrder[0]).toBeLessThan(bulkCreate.mock.invocationCallOrder[0]);
   });
 
   it('inserimento fallito: errore di database e la transazione non viene confermata', async () => {

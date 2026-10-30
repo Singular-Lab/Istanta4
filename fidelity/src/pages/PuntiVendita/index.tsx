@@ -1,301 +1,128 @@
 import Alert from "@/components/Base/Alert";
-import BarraFiltri from "@/components/Base/BarraFiltri";
 import Button from "@/components/Base/Button";
-import CampoRicerca from "@/components/Base/CampoRicerca";
-import { FormInput, FormLabel, FormSelect } from "@/components/Base/Form";
 import { Dialog, Menu } from "@/components/Base/Headless";
 import Lucide from "@/components/Base/Lucide";
-import PageError from "@/components/Base/PageError";
 import Pagina from "@/components/Base/Pagina";
-import PaginazioneTabella from "@/components/Base/PaginazioneTabella";
+import Segmenti, { type OpzioneSegmento } from "@/components/Base/Segmenti";
 import Sezione from "@/components/Base/Sezione";
-import Spinner from "@/components/Base/Spinner";
 import StatusBadge from "@/components/Base/StatusBadge";
-import ConfirmDialog from "@/components/ConfirmDialog";
-import EmptyState from "@/components/EmptyState";
-import { PermissionGate } from "@/components/PermissionGate";
 import Table from "@/components/Base/Table";
+import Tippy from "@/components/Base/Tippy";
+import ConfirmDialog from "@/components/ConfirmDialog";
+import { PermissionGate } from "@/components/PermissionGate";
+import { codiciIdentificativi, storiaDi, storiaNellElenco, useElencoPuntiVendita, type ConStoria, type FiltroAggiuntivo } from "@/components/PuntiVendita/elenco";
+import { FiltriPuntiVendita } from "@/components/PuntiVendita/FiltriPuntiVendita";
+import { MappaPuntiVendita } from "@/components/PuntiVendita/MappaPuntiVendita";
+import { problemiDati, StatoDati } from "@/components/PuntiVendita/StatoDati";
+import { TabellaPuntiVendita } from "@/components/PuntiVendita/TabellaPuntiVendita";
 import withSessionCheck from "@/components/SessionChecker";
 import { PERMISSIONS } from "@/constants/permissions";
 import { useNotification } from "@/context/NotificationContext";
-import {
-  useFetchAllCombinazioneForGDO,
-  useFetchPuntiVenditaFromIdGDO,
-} from "@/query/query";
-import { yupResolver } from "@hookform/resolvers/yup";
+import { useFetchPuntiVenditaConsultazione, useFetchPuntiVenditaFromIdGDO, useFetchQualitaPuntiVendita } from "@/query/query";
+import { formatNumero } from "@/utils/format";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
-import "leaflet/dist/leaflet.css";
-import _ from "lodash";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useForm } from "react-hook-form";
-import { CircleMarker, MapContainer, Popup, TileLayer, useMap } from "react-leaflet";
 import { useNavigate } from "react-router-dom";
-import * as yup from "yup";
+import type { RigaNonAbbinata } from "../../../lib/puntiVendita/analisi";
 import { ServerCall } from "../../../lib/server_call";
 import { EsitoRigaImportPuntoVenditaDTO, PuntoVenditaResponseDTO, StatoImportPuntiVenditaDTO } from "../../../server/core/dto";
 import { classePunteggio, percentualeImport, riepilogoAnteprima, testoRiepilogoImport } from "../../utils/importPuntiVendita";
-import { canaleArea, codiciGdo, contaPer, filtraPuntiVendita, indirizzoCompleto, valoriFormPuntoVendita } from "../../utils/puntoVendita";
+import { contaPer, valoriFormPuntoVendita } from "../../utils/puntoVendita";
+import { AvanzamentoImport } from "./AvanzamentoImport";
+import {
+  CampiPuntoVendita,
+  corpoSalvataggio,
+  useCombinazioniPerCanale,
+  useFormPuntoVendita,
+  valoriNuovoPuntoVendita,
+  type DatiFormPuntoVendita,
+  type RispostaSalvataggioPuntoVendita,
+} from "./formPuntoVendita";
+import { ImportStoricoVolantini } from "./ImportStoricoVolantini";
 import { InserimentoManualeImport } from "./InserimentoManualeImport";
+import { ETICHETTA_FILTRO_QUALITA, QualitaDati, type FiltroQualita } from "./QualitaDati";
+import { RigheNonAbbinate } from "./RigheNonAbbinate";
 import { useImportPuntiVendita } from "./useImportPuntiVendita";
-// Tipi per le risposte aggiornate del server
-interface ServerResponse<T> {
-  esito: boolean;
-  error: string;
-  message?: string;
-  isUpdate?: boolean;
-  data?: T;
-}
 
-/* --------------------------------------------------
- * VALIDAZIONE FORM
- * ------------------------------------------------*/
-const schema = yup.object().shape({
-  nome: yup.string().required("Il nome è obbligatorio"),
-  indirizzo: yup.string().required("L'indirizzo è obbligatorio"),
-  canaleArea: yup.string().required("Il canale/area è obbligatorio"),
-  citta: yup.string().required("La città è obbligatoria"),
-  cap: yup
-    .string()
-    .required("Il cap è obbligatorio")
-    .matches(/^[0-9]{5}$/, "Il CAP deve essere di 5 cifre"),
-  // Facoltativi come nel modello: un PV importato spesso non ha coordinate o telefono
-  lat: yup
-    .number()
-    .transform((valore, originale) => (originale === "" || originale === null ? undefined : valore))
-    .typeError("La latitudine deve essere un numero")
-    .optional(),
-  lon: yup
-    .number()
-    .transform((valore, originale) => (originale === "" || originale === null ? undefined : valore))
-    .typeError("La longitudine deve essere un numero")
-    .optional(),
-  ragioneSociale: yup.string(),
-  provincia: yup.string(),
-  regione: yup.string(),
-  telefono: yup.string(),
-});
+/** Il punto vendita dell'anagrafica con la sua storia nei volantini, quando il server la manda. */
+type PuntoVenditaGestione = PuntoVenditaResponseDTO & ConStoria;
 
-/** Coordinata del form: vuota resta assente (null), non diventa 0. */
-const coordinataDaForm = (valore: unknown) => {
-  const numero = typeof valore === "number" ? valore : parseFloat(String(valore ?? ""));
-  return Number.isFinite(numero) ? numero : null;
-};
+type Vista = "tabella" | "mappa";
 
-const hasValidCoordinates = (pv: PuntoVenditaResponseDTO) =>
-  pv.has_coordinate &&
-  pv.coordinate &&
-  Number.isFinite(pv.coordinate.lat) &&
-  Number.isFinite(pv.coordinate.lon);
+const OPZIONI_VISTA: OpzioneSegmento<Vista>[] = [
+  { valore: "tabella", etichetta: "Tabella" },
+  { valore: "mappa", etichetta: "Mappa" },
+];
 
-// Un colore per canale, stabile anche filtrando (Tableau 10 senza il grigio).
-// Esadecimali voluti: Leaflet li riceve come opzioni di disegno, non come classi Tailwind.
-const PALETTE_CANALI = ["#4E79A7", "#F28E2B", "#E15759", "#76B7B2", "#59A14F", "#EDC948", "#B07AA1", "#FF9DA7", "#9C755F"];
-const COLORE_SENZA_CANALE = "#94A3B8";
+const percorsoGestione = (pv: { id: string }) => `/gestione-interna/punti-vendita/${pv.id}`;
+const percorsoScheda = (pv: { id: string }) => `/punti-vendita/${pv.id}`;
 
-/** Inquadra i punti mostrati ogni volta che cambiano ricerca o filtri. */
-function AdattaVista({ punti }: { punti: [number, number][] }) {
-  const map = useMap();
-  useEffect(() => {
-    if (punti.length > 0) map.fitBounds(punti, { padding: [32, 32], maxZoom: 15 });
-  }, [map, punti]);
-  return null;
-}
-
-interface MapPuntiVenditaProps {
-  puntiVendita: PuntoVenditaResponseDTO[];
-  coloreCanale: (pv: PuntoVenditaResponseDTO) => string;
-  onDettagli: (pv: PuntoVenditaResponseDTO) => void;
-}
-
-function MapPuntiVendita({ puntiVendita, coloreCanale, onDettagli }: MapPuntiVenditaProps) {
-  const posizionati = useMemo(() => puntiVendita.filter(hasValidCoordinates), [puntiVendita]);
-  const punti = useMemo(
-    () => posizionati.map(pv => [pv.coordinate.lat, pv.coordinate.lon] as [number, number]),
-    [posizionati]
-  );
-
-  return (
-    <MapContainer
-      center={[41.8719, 12.5674]} // Italia
-      zoom={6}
-      preferCanvas
-      scrollWheelZoom={false}
-      className="absolute inset-0"
-    >
-      <TileLayer
-        url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        maxZoom={19}
-      />
-      <AdattaVista punti={punti} />
-      {posizionati.map(pv => (
-        <CircleMarker
-          key={pv.id}
-          center={[pv.coordinate.lat, pv.coordinate.lon]}
-          radius={7}
-          pathOptions={{ color: "#FFFFFF", weight: 2, fillColor: coloreCanale(pv), fillOpacity: 0.9 }}
-        >
-          <Popup>
-            <div className="text-sm">
-              <div className="font-semibold">{pv.nome}</div>
-              <div>{indirizzoCompleto(pv)}</div>
-              <div className="text-slate-500">{canaleArea(pv)}</div>
-              <button type="button" className="mt-2 text-primary underline" onClick={() => onDettagli(pv)}>
-                Dettagli
-              </button>
-            </div>
-          </Popup>
-        </CircleMarker>
-      ))}
-    </MapContainer>
-  );
-}
-
-interface FiltroChipProps {
-  etichetta: string;
-  tutti: string;
-  voci: { id: string; nome: string; totale: number }[];
-  attivo: string;
-  onScegli: (id: string) => void;
-  colore?: (id: string) => string;
-}
-
-/** Una riga di chip: "Tutti" e una voce per canale o area, ciascuna col numero di punti vendita. */
-function FiltroChip({ etichetta, tutti, voci, attivo, onScegli, colore }: FiltroChipProps) {
-  const chip = (id: string, testo: string, totale: number) => (
-    <button
-      key={id || "tutti"}
-      type="button"
-      aria-pressed={attivo === id}
-      onClick={() => onScegli(id)}
-      className={clsx(
-        "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors",
-        attivo === id
-          ? "border-primary bg-primary/10 font-medium text-primary"
-          : "border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-darkmode-400 dark:text-slate-300 dark:hover:bg-darkmode-400"
-      )}
-    >
-      {id && colore && <span aria-hidden="true" className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: colore(id) }} />}
-      {testo}
-      <span className="text-slate-400">{totale}</span>
-    </button>
-  );
-
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="title-eyebrow w-16">{etichetta}</span>
-      {chip("", tutti, voci.reduce((somma, v) => somma + v.totale, 0))}
-      {voci.map(v => chip(v.id, v.nome, v.totale))}
-    </div>
-  );
-}
-
+/**
+ * Gestione dei punti vendita (/gestione-interna/punti-vendita, "gdo.gestisci_punti_vendita"):
+ * in alto i problemi dei dati, che fanno da filtro; una sola azione primaria (Nuovo punto vendita)
+ * e i due import sotto "Importa"; tabella o mappa con i filtri accanto ai risultati; in fondo le
+ * righe dei volantini che non corrispondono a nessun punto vendita.
+ */
 function Main() {
-  /* --------------------------------------------------
-   * REFS E FORM
-   * ------------------------------------------------*/
-  const formRef = useRef<HTMLFormElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { showNotification } = useNotification();
   const [pvDaEliminare, setPvDaEliminare] = useState<PuntoVenditaResponseDTO | null>(null);
-  const navigate = useNavigate()
-  const {
-    register,
-    handleSubmit,
-    setValue,
-    watch,
-    formState: { errors },
-    reset,
-    getValues,
-  } = useForm({ resolver: yupResolver(schema) });
-
-  /* --------------------------------------------------
-   * LISTA PUNTI VENDITA - STATE
-   * ------------------------------------------------*/
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedSearch(searchTerm);
-    }, 400);
-
-    return () => clearTimeout(handler);
-  }, [searchTerm]);
-
-  const [filtroCanale, setFiltroCanale] = useState("");
-  const [filtroArea, setFiltroArea] = useState("");
-
-  useEffect(() => {
-    setPage(1);
-  }, [debouncedSearch, pageSize, filtroCanale, filtroArea]);
+  const navigate = useNavigate();
+  const form = useFormPuntoVendita();
+  const { handleSubmit, reset, getValues } = form;
 
   /* --------------------------------------------------
    * QUERY
    * ------------------------------------------------*/
   const queryClient = useQueryClient();
-  const combinazioniDisponibili = useFetchAllCombinazioneForGDO();
-  // Combinazioni per nome nella tendina del form, raggruppate per canale
-  const combinazioniPerCanale = useMemo(
-    () => Object.entries(_.groupBy(
-      _.sortBy(combinazioniDisponibili.data ?? [], ["nome_canale", "nome_area"]),
-      c => c.nome_canale ?? c.sigla_combinazione
-    )),
-    [combinazioniDisponibili.data]
-  );
+  const { combinazioni: combinazioniDisponibili, perCanale: combinazioniPerCanale } = useCombinazioniPerCanale();
   const puntiVenditaQuery = useFetchPuntiVenditaFromIdGDO();
-  const tuttiPuntiVendita = useMemo(() => puntiVenditaQuery.data ?? [], [puntiVenditaQuery.data]);
-  const hasMappablePoints = tuttiPuntiVendita.some(hasValidCoordinates);
+  // La storia nei volantini di ogni punto vendita arriva con l'elenco della consultazione
+  const consultazioneQuery = useFetchPuntiVenditaConsultazione();
+  const qualitaQuery = useFetchQualitaPuntiVendita();
+  const storiaNota = useMemo(() => storiaNellElenco(consultazioneQuery.data ?? []), [consultazioneQuery.data]);
+  const tuttiPuntiVendita = useMemo<PuntoVenditaGestione[]>(() => {
+    const storie = new Map((consultazioneQuery.data ?? []).map(pv => [pv.id, storiaDi(pv)]));
+    return (puntiVenditaQuery.data ?? []).map(pv => ({ ...pv, storia: storie.get(pv.id) }));
+  }, [puntiVenditaQuery.data, consultazioneQuery.data]);
+  // La colonna e il problema "senza codice" valgono solo per le GDO che usano i codici (es. id ANACAN)
+  const gdoConCodici = useMemo(() => tuttiPuntiVendita.some(pv => codiciIdentificativi(pv.meta).length > 0), [tuttiPuntiVendita]);
+  const contestoDati = useMemo(() => ({ gdoConCodici, storiaNota }), [gdoConCodici, storiaNota]);
 
-  // ponytail: ricerca, filtri e pagine nel browser sull'elenco completo, già scaricato per la mappa;
-  // regge qualche migliaio di PV, oltre si torna a /getAllPVFromIdGDO_paginated con i filtri lato server
-  const filtrati = useMemo(
-    () => filtraPuntiVendita(tuttiPuntiVendita, { testo: debouncedSearch, idCanale: filtroCanale, idArea: filtroArea }),
-    [tuttiPuntiVendita, debouncedSearch, filtroCanale, filtroArea]
-  );
-  // Ogni dimensione conta i PV rispettando gli altri filtri, non il proprio
-  const perCanale = useMemo(
-    () => contaPer(filtraPuntiVendita(tuttiPuntiVendita, { testo: debouncedSearch, idArea: filtroArea }), "canale"),
-    [tuttiPuntiVendita, debouncedSearch, filtroArea]
-  );
-  const perArea = useMemo(
-    () => contaPer(filtraPuntiVendita(tuttiPuntiVendita, { testo: debouncedSearch, idCanale: filtroCanale }), "area"),
-    [tuttiPuntiVendita, debouncedSearch, filtroCanale]
-  );
-  const coloriCanale = useMemo(
-    () => new Map(contaPer(tuttiPuntiVendita, "canale").map((c, i) => [c.id, PALETTE_CANALI[i % PALETTE_CANALI.length]])),
-    [tuttiPuntiVendita]
-  );
-  const coloreCanale = useCallback(
-    (pv: PuntoVenditaResponseDTO) => coloriCanale.get(pv.id_canale ?? "") ?? COLORE_SENZA_CANALE,
-    [coloriCanale]
-  );
-  const senzaCoordinate = filtrati.filter(pv => !hasValidCoordinates(pv)).length;
-
-  const totalItems = filtrati.length;
-  const totalPages = Math.ceil(totalItems / pageSize);
-  const puntiVendita = filtrati.slice((page - 1) * pageSize, page * pageSize);
-  // La colonna dei codici GDO serve solo alle GDO che li hanno (es. id ANACAN di CONAD CNO)
-  const mostraCodiciGdo = puntiVendita.some(pv => codiciGdo(pv.meta).length > 0);
-  const isLoading = puntiVenditaQuery.isLoading;
-  const isTableFetching = puntiVenditaQuery.isFetching;
-  const pageSizeOptions = [10, 25, 50];
-
-  // Dopo un'eliminazione l'ultima pagina può sparire
-  useEffect(() => {
-    if (totalPages > 0 && page > totalPages) setPage(totalPages);
-  }, [page, totalPages]);
-
-  const showingFrom = totalItems === 0 ? 0 : (page - 1) * pageSize + 1;
-  const baseIndex = showingFrom === 0 ? 0 : showingFrom - 1;
-  // Colonne della tabella: #, nome, indirizzo, canale, area, (codice GDO), azioni
-  const numeroColonne = mostraCodiciGdo ? 7 : 6;
+  // Le tessere della qualità dei dati accendono un filtro dell'elenco
+  const [filtroQualita, setFiltroQualita] = useState<FiltroQualita | null>(null);
+  const azzeraFiltroQualita = useCallback(() => setFiltroQualita(null), []);
+  const filtro = useMemo<FiltroAggiuntivo<PuntoVenditaGestione> | null>(() => {
+    if (!filtroQualita) return null;
+    const test = (pv: PuntoVenditaGestione) => {
+      const problemi = problemiDati(pv, contestoDati);
+      if (filtroQualita === "senzaCoordinate") return problemi.senzaCoordinate;
+      if (filtroQualita === "senzaCodice") return problemi.senzaCodice;
+      return problemi.maiNeiVolantini;
+    };
+    return { chiave: filtroQualita, test, azzera: azzeraFiltroQualita };
+  }, [filtroQualita, contestoDati, azzeraFiltroQualita]);
+  const elenco = useElencoPuntiVendita(tuttiPuntiVendita, { filtro });
+  const [vista, setVista] = useState<Vista>("tabella");
+  const errore = puntiVenditaQuery.isError
+    ? (puntiVenditaQuery.error as Error)?.message || "Errore durante il recupero dei punti vendita"
+    : null;
+  const riepilogo = useMemo(() => {
+    if (!puntiVenditaQuery.data) return undefined;
+    const insegne = contaPer(tuttiPuntiVendita, "canale").length;
+    const aree = contaPer(tuttiPuntiVendita, "area").length;
+    return [
+      tuttiPuntiVendita.length === 1 ? "1 punto vendita" : `${formatNumero(tuttiPuntiVendita.length)} punti vendita`,
+      insegne === 1 ? "1 insegna" : `${formatNumero(insegne)} insegne`,
+      aree === 1 ? "1 area" : `${formatNumero(aree)} aree`,
+    ].join(" · ");
+  }, [puntiVenditaQuery.data, tuttiPuntiVendita]);
 
   const invalidatePuntiVendita = () => {
     queryClient.invalidateQueries({ queryKey: ["dataPuntiVendita"] });
+    // Consultazione, rete per insegna e qualità dei dati contano gli stessi punti vendita
+    queryClient.invalidateQueries({ queryKey: ["puntiVendita"] });
   };
 
   /* --------------------------------------------------
@@ -307,6 +134,7 @@ function Main() {
   const [currentPuntoVendita, setCurrentPuntoVendita] =
     useState<PuntoVenditaResponseDTO | null>(null);
   const [isExcelImportDialogOpen, setIsExcelImportDialogOpen] = useState(false);
+  const [isImportStoricoOpen, setIsImportStoricoOpen] = useState(false);
   const [fileImport, setFileImport] = useState<File | null>(null);
   const [anteprimaImport, setAnteprimaImport] = useState<EsitoRigaImportPuntoVenditaDTO[]>([]);
   // Il modale della riga in attesa si apre da solo; "Più tardi" lo nasconde fino alla riga successiva
@@ -316,6 +144,7 @@ function Main() {
   // L'import gira in background: l'avanzamento arriva via socket, anche dopo aver ricaricato la pagina
   const alTermineImport = useCallback((stato: StatoImportPuntiVenditaDTO) => {
     queryClient.invalidateQueries({ queryKey: ["dataPuntiVendita"] });
+    queryClient.invalidateQueries({ queryKey: ["puntiVendita"] });
     const riepilogo = testoRiepilogoImport(stato);
     if (stato.stato === "annullato") showNotification(`Importazione annullata: ${riepilogo}`, { variant: "warning" });
     else if (stato.stato === "errore") showNotification(`Importazione interrotta per un errore: ${riepilogo}`, { variant: "error" });
@@ -325,14 +154,10 @@ function Main() {
   const statoImport = importJob.stato;
   const rigaInAttesa = statoImport?.stato === "in_attesa" ? statoImport.rigaInAttesa : undefined;
   const combinazioniOrdinate = useMemo(
-    () => _.sortBy(combinazioniDisponibili.data ?? [], ["nome_canale", "nome_area"]),
-    [combinazioniDisponibili.data]
+    () => combinazioniPerCanale.flatMap(([, combinazioni]) => combinazioni),
+    [combinazioniPerCanale]
   );
-
-  // Un import in corso trovato riaprendo la pagina si mostra subito
-  useEffect(() => {
-    if (importJob.inCorso) setIsExcelImportDialogOpen(true);
-  }, [importJob.inCorso]);
+  // Un import in corso trovato riaprendo la pagina si vede nella fascia dell'avanzamento, sopra l'elenco
 
   const chiudiImport = () => {
     setIsExcelImportDialogOpen(false);
@@ -378,63 +203,33 @@ function Main() {
   /* --------------------------------------------------
    * MUTAZIONI
    * ------------------------------------------------*/
+  const esitoSalvataggio = (result: RispostaSalvataggioPuntoVendita) => {
+    if (result.esito && result.data) {
+      const message = result.isUpdate
+        ? "Punto vendita aggiornato con successo"
+        : "Punto vendita creato con successo";
+      showNotification(message, { variant: "success" });
+      invalidatePuntiVendita();
+      reset();
+      setIsPuntoVenditaDialogOpen(false);
+    }
+  };
+
+  // salvaPV e modificaPV scrivono prima su Istanta e poi in Fidelity, con lo stesso GUID
   const mutationCreate = useMutation({
-    mutationFn: async (data: any) => {
-      const payload = {
-        ...data,
-        guidID: "",
-        guidIDCombinazione: data.canaleArea,
-        lat: coordinataDaForm(data.lat),
-        lon: coordinataDaForm(data.lon),
-      };
-      return await ServerCall.put<ServerResponse<PuntoVenditaResponseDTO>>("/ACPV/salvaPV", payload);
-    },
-    onSuccess: (result) => {
-      if (result.esito && result.data) {
-        const message = result.isUpdate
-          ? "Punto vendita aggiornato con successo"
-          : "Punto vendita creato con successo";
-        showNotification(message, { variant: "success" });
-        invalidatePuntiVendita();
-        reset();
-        setIsPuntoVenditaDialogOpen(false);
-      }
-    },
-    onError: (e: any) =>
-      showNotification(
-        e?.message ||
-        "Errore durante la creazione del punto vendita",
-        { variant: "error" }
-      ),
+    mutationFn: (data: DatiFormPuntoVendita) =>
+      ServerCall.put<RispostaSalvataggioPuntoVendita>("/ACPV/salvaPV", corpoSalvataggio(data, "")),
+    onSuccess: esitoSalvataggio,
+    onError: (e: Error) =>
+      showNotification(e?.message || "Errore durante la creazione del punto vendita", { variant: "error" }),
   });
 
   const mutationUpdate = useMutation({
-    mutationFn: async (data: any) => {
-      const payload = {
-        ...data,
-        guidIDCombinazione: data.canaleArea,
-        lat: coordinataDaForm(data.lat),
-        lon: coordinataDaForm(data.lon),
-      };
-      return await ServerCall.put<ServerResponse<PuntoVenditaResponseDTO>>("/ACPV/modificaPV", payload);
-    },
-    onSuccess: (result) => {
-      if (result.esito && result.data) {
-        const message = result.isUpdate
-          ? "Punto vendita aggiornato con successo"
-          : "Punto vendita creato con successo";
-        showNotification(message, { variant: "success" });
-        invalidatePuntiVendita();
-        reset();
-        setIsPuntoVenditaDialogOpen(false);
-      }
-    },
-    onError: (e: any) =>
-      showNotification(
-        e?.message ||
-        "Errore durante la modifica del punto vendita",
-        { variant: "error" }
-      ),
+    mutationFn: ({ data, guidID }: { data: DatiFormPuntoVendita; guidID: string }) =>
+      ServerCall.put<RispostaSalvataggioPuntoVendita>("/ACPV/modificaPV", corpoSalvataggio(data, guidID)),
+    onSuccess: esitoSalvataggio,
+    onError: (e: Error) =>
+      showNotification(e?.message || "Errore durante la modifica del punto vendita", { variant: "error" }),
   });
 
   const mutationDelete = useMutation({
@@ -463,7 +258,7 @@ function Main() {
   const mutationAnteprimaImport = useMutation({
     mutationFn: (file: File) => inviaFileImport<{ righe: EsitoRigaImportPuntoVenditaDTO[] }>(file, true),
     onSuccess: (data) => setAnteprimaImport(data.righe),
-    onError: (e: any) => {
+    onError: (e: Error) => {
       setFileImport(null);
       showNotification(e?.message || "Errore durante la lettura del file Excel", {
         variant: "error",
@@ -471,20 +266,22 @@ function Main() {
     },
   });
 
+  const messaggioErrore = (e: unknown) => (e instanceof Error ? e.message : "");
+
   const avviaImport = async () => {
     if (!fileImport) return;
     try {
       await importJob.avvia(fileImport);
-    } catch (e: any) {
-      showNotification(e?.message || "Errore durante l'importazione dei punti vendita", { variant: "error" });
+    } catch (e) {
+      showNotification(messaggioErrore(e) || "Errore durante l'importazione dei punti vendita", { variant: "error" });
     }
   };
 
   const annullaImport = async () => {
     try {
       await importJob.annulla();
-    } catch (e: any) {
-      showNotification(e?.message || "Impossibile annullare l'importazione", { variant: "error" });
+    } catch (e) {
+      showNotification(messaggioErrore(e) || "Impossibile annullare l'importazione", { variant: "error" });
     }
   };
 
@@ -499,34 +296,26 @@ function Main() {
     setIsPuntoVenditaDialogOpen(true);
   };
 
-  const openNewPuntoVenditaDialog = () => {
-    reset({
-      nome: "",
-      citta: "",
-      indirizzo: "",
-      cap: "",
-      lat: undefined,
-      lon: undefined,
-      provincia: "",
-      regione: "",
-      telefono: "",
-      ragioneSociale: "",
-      canaleArea: combinazioniDisponibili.data?.[0]?.id || "",
-    });
+  /** Nuovo punto vendita, con la prima combinazione; dai volantini arrivano già indirizzo, città e telefono. */
+  const openNewPuntoVenditaDialog = (precompilati: Partial<ReturnType<typeof valoriNuovoPuntoVendita>> = {}) => {
+    reset({ ...valoriNuovoPuntoVendita(combinazioniDisponibili.data?.[0]?.id || ""), ...precompilati });
     setIsEditMode(false);
     setCurrentPuntoVendita(null);
     setIsPuntoVenditaDialogOpen(true);
   };
 
-  const onSubmit = (data: any) => {
-    if (isEditMode) {
-      mutationUpdate.mutate({ ...data, guidID: currentPuntoVendita?.id });
+  const aggiungiDaRiga = (riga: RigaNonAbbinata) =>
+    openNewPuntoVenditaDialog({
+      indirizzo: riga.indirizzo ?? "",
+      citta: riga.localita ?? "",
+      telefono: riga.telefono ?? "",
+    });
+
+  const onSubmit = (data: DatiFormPuntoVendita) => {
+    if (isEditMode && currentPuntoVendita) {
+      mutationUpdate.mutate({ data, guidID: currentPuntoVendita.id });
     } else {
-      mutationCreate.mutate({
-        ...data,
-        guidID: "",
-        guidIDCombinazione: data.canaleArea,
-      });
+      mutationCreate.mutate(data);
     }
   };
 
@@ -548,9 +337,43 @@ function Main() {
 
   const openFileSelector = () => fileInputRef.current?.click();
 
+  /** Comandi di riga compatti: Modifica a icona in vista, scheda, dispositivi ed eliminazione nel menu "⋯". */
+  const azioniRiga = (pv: PuntoVenditaGestione) => (
+    <div className="inline-flex items-center justify-end gap-1">
+      <PermissionGate permission={PERMISSIONS.GDO.GESTISCI_PUNTI_VENDITA} mode="disable">
+        <Tippy content="Modifica">
+          <Button size="sm" variant="outline-secondary" onClick={() => handleModify(pv)} aria-label={`Modifica ${pv.nome}`}>
+            <Lucide icon="Pencil" aria-hidden="true" className="h-4 w-4" />
+          </Button>
+        </Tippy>
+      </PermissionGate>
+      <Menu className="inline-block text-left">
+        <Menu.Button as={Button} size="sm" variant="outline-secondary" aria-label={`Altre azioni punto vendita ${pv.nome}`}>
+          <Lucide icon="Ellipsis" aria-hidden="true" className="h-4 w-4" />
+        </Menu.Button>
+        <Menu.Items className="w-52">
+          {/* La scheda di consultazione, con i volantini attivi e la storia */}
+          <Menu.Item onClick={() => navigate(percorsoScheda(pv))}>
+            <Lucide icon="Store" aria-hidden="true" className="mr-2 h-4 w-4" />
+            Apri scheda
+          </Menu.Item>
+          <Menu.Item onClick={() => navigate(`${percorsoGestione(pv)}?scheda=dispositivi`)}>
+            <Lucide icon="Monitor" aria-hidden="true" className="mr-2 h-4 w-4" />
+            Dispositivi e display
+          </Menu.Item>
+          <PermissionGate permission={PERMISSIONS.GDO.GESTISCI_PUNTI_VENDITA}>
+            <Menu.Item className="text-danger" onClick={() => setPvDaEliminare(pv)}>
+              <Lucide icon="Trash2" aria-hidden="true" className="mr-2 h-4 w-4" />
+              Elimina
+            </Menu.Item>
+          </PermissionGate>
+        </Menu.Items>
+      </Menu>
+    </div>
+  );
+
   /* --------------------------------------------------
    * RENDER
-   * (tutto il markup resta identico all'originale)
    * ------------------------------------------------*/
   return (
     <>
@@ -570,165 +393,11 @@ function Main() {
         onClose={() => setIsPuntoVenditaDialogOpen(false)}
       >
         <Dialog.Panel>
-          <Dialog.Title>{isEditMode ? "Modifica Punto Vendita" : "Crea Punto Vendita"}</Dialog.Title>
+          <Dialog.Title>{isEditMode ? "Modifica punto vendita" : "Nuovo punto vendita"}</Dialog.Title>
           <Dialog.Description>
-            <form
-              ref={formRef}
-              id="punto-vendita-form"
-              className="grid grid-cols-12 gap-4 gap-y-3"
-              onSubmit={handleSubmit(onSubmit)}
-            >
-              {/* --- CAMPI --- */}
-              <div className="col-span-12 sm:col-span-6">
-                <FormLabel htmlFor="nome">Nome</FormLabel>
-                <FormInput
-                  id="nome"
-                  {...register("nome")}
-                  className={errors.nome ? "border-danger" : ""}
-                />
-                {errors.nome && (
-                  <p className="text-danger text-xs mt-1">{errors.nome.message}</p>
-                )}
-              </div>
-              <div className="col-span-12 sm:col-span-6">
-                <FormLabel htmlFor="citta">Città</FormLabel>
-                <FormInput
-                  id="citta"
-                  {...register("citta")}
-                  className={errors.citta ? "border-danger" : ""}
-                />
-                {errors.citta && (
-                  <p className="text-danger text-xs mt-1">{errors.citta.message}</p>
-                )}
-              </div>
-              <div className="col-span-12 sm:col-span-6">
-                <FormLabel htmlFor="indirizzo">Indirizzo</FormLabel>
-                <FormInput
-                  id="indirizzo"
-                  {...register("indirizzo")}
-                  className={errors.indirizzo ? "border-danger" : ""}
-                />
-                {errors.indirizzo && (
-                  <p className="text-danger text-xs mt-1">
-                    {errors.indirizzo.message}
-                  </p>
-                )}
-              </div>
-              <div className="col-span-12 sm:col-span-6">
-                <FormLabel htmlFor="cap">Cap</FormLabel>
-                <FormInput
-                  id="cap"
-                  maxLength={5}
-                  {...register("cap")}
-                  className={errors.cap ? "border-danger" : ""}
-                />
-                {errors.cap && (
-                  <p className="text-danger text-xs mt-1">{errors.cap.message}</p>
-                )}
-              </div>
-              <div className="col-span-12">
-                <FormLabel htmlFor="canaleArea">Canale e Area</FormLabel>
-                <FormSelect
-                  id="canaleArea"
-                  value={watch("canaleArea")}
-                  onChange={e => setValue("canaleArea", e.target.value)}
-                  className={errors.canaleArea ? "border-danger" : ""}
-                >
-                  <option value="">Seleziona</option>
-                  {combinazioniPerCanale.map(([canale, combinazioni]) => (
-                    <optgroup key={canale} label={canale}>
-                      {combinazioni.map(c => (
-                        <option key={c.id} value={c.id}>
-                          {c.nome_area ? `${c.nome_area} (${c.sigla_combinazione})` : c.sigla_combinazione}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </FormSelect>
-                {errors.canaleArea && (
-                  <p className="text-danger text-xs mt-1">
-                    {errors.canaleArea.message}
-                  </p>
-                )}
-              </div>
-              <div className="col-span-12 sm:col-span-6">
-                <FormLabel htmlFor="lat">Latitudine</FormLabel>
-                <FormInput
-                  id="lat"
-                  type="number"
-                  step="0.000000000001"
-                  {...register("lat")}
-                  className={errors.lat ? "border-danger" : ""}
-                />
-                {errors.lat && (
-                  <p className="text-danger text-xs mt-1">{errors.lat.message}</p>
-                )}
-              </div>
-              <div className="col-span-12 sm:col-span-6">
-                <FormLabel htmlFor="lon">Longitudine</FormLabel>
-                <FormInput
-                  id="lon"
-                  type="number"
-                  step="0.000000000001"
-                  {...register("lon")}
-                  className={errors.lon ? "border-danger" : ""}
-                />
-                {errors.lon && (
-                  <p className="text-danger text-xs mt-1">{errors.lon.message}</p>
-                )}
-              </div>
-              <div className="col-span-12 sm:col-span-6">
-                <FormLabel htmlFor="provincia">Provincia</FormLabel>
-                <FormInput
-                  id="provincia"
-                  {...register("provincia")}
-                  className={errors.provincia ? "border-danger" : ""}
-                />
-                {errors.provincia && (
-                  <p className="text-danger text-xs mt-1">
-                    {errors.provincia.message}
-                  </p>
-                )}
-              </div>
-              <div className="col-span-12 sm:col-span-6">
-                <FormLabel htmlFor="regione">Regione</FormLabel>
-                <FormInput
-                  id="regione"
-                  {...register("regione")}
-                  className={errors.regione ? "border-danger" : ""}
-                />
-                {errors.regione && (
-                  <p className="text-danger text-xs mt-1">
-                    {errors.regione.message}
-                  </p>
-                )}
-              </div>
-              <div className="col-span-12 sm:col-span-6">
-                <FormLabel htmlFor="ragioneSociale">Ragione Sociale</FormLabel>
-                <FormInput
-                  id="ragioneSociale"
-                  {...register("ragioneSociale")}
-                  className={errors.ragioneSociale ? "border-danger" : ""}
-                />
-                {errors.ragioneSociale && (
-                  <p className="text-danger text-xs mt-1">
-                    {errors.ragioneSociale.message}
-                  </p>
-                )}
-              </div>
-              <div className="col-span-12 sm:col-span-6">
-                <FormLabel htmlFor="telefono">Telefono</FormLabel>
-                <FormInput
-                  id="telefono"
-                  {...register("telefono")}
-                  className={errors.telefono ? "border-danger" : ""}
-                />
-                {errors.telefono && (
-                  <p className="text-danger text-xs mt-1">
-                    {errors.telefono.message}
-                  </p>
-                )}
-              </div>
+            <form id="punto-vendita-form" onSubmit={handleSubmit(onSubmit)} noValidate>
+              <p className="mb-4 text-xs text-slate-500">Il salvataggio scrive prima su Istanta e poi in Fidelity.</p>
+              <CampiPuntoVendita form={form} combinazioniPerCanale={combinazioniPerCanale} />
             </form>
           </Dialog.Description>
           <Dialog.Footer>
@@ -740,13 +409,14 @@ function Main() {
             >
               Annulla
             </Button>
+            {/* Solo submit del form: con anche onClick il salvataggio partirebbe due volte */}
             <Button
+              type="submit"
               variant="primary"
-              onClick={handleSubmit(onSubmit)}
               form="punto-vendita-form"
               loading={mutationCreate.isPending || mutationUpdate.isPending}
             >
-              {isEditMode ? "Modifica" : "Crea"}
+              {isEditMode ? "Salva modifiche" : "Crea punto vendita"}
             </Button>
           </Dialog.Footer>
         </Dialog.Panel>
@@ -773,7 +443,7 @@ function Main() {
         onClose={chiudiImport}
       >
         <Dialog.Panel>
-          <Dialog.Title>Importa Punti Vendita da Excel</Dialog.Title>
+          <Dialog.Title>Importa l&apos;anagrafica da Excel</Dialog.Title>
           <Dialog.Description>
             <div className="grid grid-cols-12 gap-4 gap-y-3">
               <div className="col-span-12">
@@ -999,19 +669,45 @@ function Main() {
         </Dialog.Panel>
       </Dialog>
 
+      <ImportStoricoVolantini open={isImportStoricoOpen} onClose={() => setIsImportStoricoOpen(false)} />
+
       <Pagina
-        titolo="Punti Vendita"
-        descrizione="Gestione punti vendita"
+        titolo="Gestione punti vendita"
+        descrizione={riepilogo}
         azioni={
           <>
+            {/* I due import sotto un solo comando: l'azione primaria resta "Nuovo punto vendita" */}
             <PermissionGate permission={PERMISSIONS.GDO.GESTISCI_PUNTI_VENDITA} mode="disable">
-              <Button variant="outline-secondary" onClick={() => setIsExcelImportDialogOpen(true)}>
-                <Lucide icon="FileSpreadsheet" aria-hidden="true" className="mr-2 h-4 w-4" />
-                {importJob.inCorso ? `Import in corso (${percentualeImport(importJob.stato!)}%)` : "Importa Excel"}
-              </Button>
+              <Menu className="inline-block text-left">
+                <Menu.Button as={Button} variant="outline-secondary">
+                  <Lucide icon="Upload" aria-hidden="true" className="mr-2 h-4 w-4" />
+                  Importa
+                  <Lucide icon="ChevronDown" aria-hidden="true" className="ml-1.5 h-4 w-4" />
+                </Menu.Button>
+                <Menu.Items className="w-72">
+                  <Menu.Item onClick={() => setIsExcelImportDialogOpen(true)} className="items-start">
+                    <Lucide icon="FileSpreadsheet" aria-hidden="true" className="mr-3 mt-0.5 h-4 w-4 flex-none" />
+                    <span>
+                      <span className="block font-medium">Anagrafica da Excel</span>
+                      <span className="block text-xs text-slate-500">
+                        {importJob.inCorso
+                          ? `Import in corso (${percentualeImport(statoImport ?? { elaborate: 0, totale: 0 })}%)`
+                          : "Crea e aggiorna i punti vendita dal file della GDO"}
+                      </span>
+                    </span>
+                  </Menu.Item>
+                  <Menu.Item onClick={() => setIsImportStoricoOpen(true)} className="items-start">
+                    <Lucide icon="History" aria-hidden="true" className="mr-3 mt-0.5 h-4 w-4 flex-none" />
+                    <span>
+                      <span className="block font-medium">Storia dai volantini</span>
+                      <span className="block text-xs text-slate-500">Export JSON del Plugin, non modifica l&apos;anagrafica</span>
+                    </span>
+                  </Menu.Item>
+                </Menu.Items>
+              </Menu>
             </PermissionGate>
             <PermissionGate permission={PERMISSIONS.GDO.GESTISCI_PUNTI_VENDITA} mode="disable">
-              <Button variant="primary" onClick={openNewPuntoVenditaDialog}>
+              <Button variant="primary" onClick={() => openNewPuntoVenditaDialog()}>
                 <Lucide icon="Plus" aria-hidden="true" className="mr-2 h-4 w-4" />
                 Nuovo punto vendita
               </Button>
@@ -1019,214 +715,83 @@ function Main() {
           </>
         }
       >
-        <Sezione titolo="Mappa" descrizione="Punti vendita geolocalizzati, colorati per canale">
-          <div className="relative h-[440px] w-full overflow-hidden rounded-card border border-slate-200 bg-white dark:border-darkmode-500 dark:bg-darkmode-600">
-            {isLoading && (
-              <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/80 px-6 backdrop-blur-sm dark:bg-darkmode-600/80">
-                <Spinner size="lg" etichetta="Caricamento punti vendita" />
-              </div>
-            )}
+        {statoImport && importJob.inCorso && (
+          <AvanzamentoImport
+            stato={statoImport}
+            annullamento={importJob.annullamentoInCorso}
+            onDettagli={() => setIsExcelImportDialogOpen(true)}
+            onApriRiga={rigaInAttesa && rigaRidotta === rigaInAttesa.riga ? () => setRigaRidotta(null) : undefined}
+          />
+        )}
 
-            {puntiVenditaQuery.isError && (
-              <div className="absolute inset-0 z-10 flex items-center justify-center px-6">
-                <PageError
-                  compatta
-                  titolo="Punti vendita non caricati"
-                  motivo={(puntiVenditaQuery.error as Error)?.message || "Errore durante il recupero dei punti vendita"}
-                  onRiprova={() => puntiVenditaQuery.refetch()}
-                  className="w-full max-w-lg bg-white"
-                />
-              </div>
-            )}
+        <QualitaDati
+          query={qualitaQuery}
+          filtroAttivo={filtroQualita}
+          onFiltro={scelto => setFiltroQualita(attuale => (attuale === scelto ? null : scelto))}
+          filtriDisponibili={{ senzaCodice: gdoConCodici, senzaStoria: storiaNota }}
+          onRigheDaRevisionare={statoImport ? () => setIsExcelImportDialogOpen(true) : undefined}
+        />
 
-            {!isLoading && hasMappablePoints && (
-              <MapPuntiVendita
-                puntiVendita={filtrati}
-                coloreCanale={coloreCanale}
-                onDettagli={pv => navigate(`/gestione-interna/punti-vendita/${pv.id}`)}
-              />
-            )}
-
-            {!isLoading && !puntiVenditaQuery.isError && !hasMappablePoints && (
-              <div className="absolute inset-0 z-10 flex items-center justify-center px-6">
-                <EmptyState
-                  compatta
-                  icon="MapPin"
-                  title="Nessun punto vendita geolocalizzato"
-                  description="Inserisci latitudine e longitudine per visualizzarli sulla mappa."
-                />
-              </div>
-            )}
-          </div>
-          {tuttiPuntiVendita.length > 0 && (
-            <div className="mt-4 flex flex-col gap-3">
-              <FiltroChip
-                etichetta="Canale"
-                tutti="Tutti"
-                voci={perCanale}
-                attivo={filtroCanale}
-                onScegli={setFiltroCanale}
-                colore={id => coloriCanale.get(id) ?? COLORE_SENZA_CANALE}
-              />
-              <FiltroChip
-                etichetta="Area"
-                tutti="Tutte"
-                voci={perArea}
-                attivo={filtroArea}
-                onScegli={setFiltroArea}
-              />
-              {senzaCoordinate > 0 && (
-                <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                  <Lucide icon="MapPinOff" aria-hidden="true" className="h-3.5 w-3.5" />
-                  {senzaCoordinate === 1
-                    ? "1 punto vendita filtrato non ha coordinate e non compare sulla mappa."
-                    : `${senzaCoordinate} punti vendita filtrati non hanno coordinate e non compaiono sulla mappa.`}
-                </div>
+        <Sezione
+          senzaPadding
+          titolo="Punti vendita"
+          descrizione="Il nome apre la gestione del punto vendita: anagrafica, dispositivi e display context."
+        >
+          <FiltriPuntiVendita
+            elenco={elenco}
+            aggiornamento={puntiVenditaQuery.isFetching && !puntiVenditaQuery.isLoading}
+            destra={<Segmenti etichetta="Vista" opzioni={OPZIONI_VISTA} valore={vista} onChange={setVista} />}
+          />
+          {!puntiVenditaQuery.isLoading && errore === null && (
+            <div className="flex flex-wrap items-center gap-2 border-b border-dashed border-slate-200 px-5 py-2.5 text-sm text-slate-500 dark:border-darkmode-400">
+              <span>
+                <strong className="tabular-nums text-slate-700 dark:text-slate-200">{formatNumero(elenco.filtrati.length)}</strong>{" "}
+                {elenco.filtrati.length === 1 ? "punto vendita" : "punti vendita"}
+              </span>
+              {filtroQualita && (
+                <button
+                  type="button"
+                  onClick={azzeraFiltroQualita}
+                  className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40"
+                >
+                  Solo: {ETICHETTA_FILTRO_QUALITA[filtroQualita]}
+                  <Lucide icon="X" aria-hidden="true" className="h-3 w-3" />
+                  <span className="sr-only">(togli il filtro)</span>
+                </button>
               )}
+            </div>
+          )}
+          {vista === "tabella" ? (
+            <TabellaPuntiVendita
+              elenco={elenco}
+              caricamento={puntiVenditaQuery.isLoading}
+              errore={errore}
+              onRiprova={() => puntiVenditaQuery.refetch()}
+              percorso={percorsoGestione}
+              statoDati={pv => <StatoDati problemi={problemiDati(pv, contestoDati)} />}
+              azioni={azioniRiga}
+              vuoto={{
+                titolo: "Nessun punto vendita disponibile",
+                descrizione: "Usa Nuovo punto vendita o Importa per aggiungerne.",
+              }}
+            />
+          ) : (
+            <div className="p-5">
+              <MappaPuntiVendita
+                tutti={tuttiPuntiVendita}
+                elenco={elenco}
+                caricamento={puntiVenditaQuery.isLoading}
+                errore={errore}
+                onRiprova={() => puntiVenditaQuery.refetch()}
+                onDettagli={pv => navigate(percorsoGestione(pv))}
+                etichettaDettagli="Apri gestione"
+                descrizioneSenzaPosizione="Inserisci latitudine e longitudine per vederli sulla mappa."
+              />
             </div>
           )}
         </Sezione>
 
-        <Sezione senzaPadding titolo="Punti Vendita" descrizione="Elenco dei punti vendita della GDO, con i filtri della mappa">
-          <BarraFiltri destra={isTableFetching && !isLoading ? <Spinner size="sm" etichetta="Ricerca in corso…" /> : undefined}>
-            <CampoRicerca
-              etichetta="Cerca punto vendita"
-              placeholder="Cerca punto vendita"
-              value={searchTerm}
-              onChange={setSearchTerm}
-              className="sm:w-80"
-            />
-          </BarraFiltri>
-          <div className="overflow-x-auto">
-            <Table>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th className="w-12">#</Table.Th>
-                  <Table.Th>Nome</Table.Th>
-                  <Table.Th>Indirizzo</Table.Th>
-                  <Table.Th>Canale</Table.Th>
-                  <Table.Th>Area</Table.Th>
-                  {mostraCodiciGdo && <Table.Th>Codice GDO</Table.Th>}
-                  <Table.Th className="text-right"><span className="sr-only">Azioni</span></Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {isLoading ? (
-                  <Table.Tr>
-                    <Table.Td colSpan={numeroColonne}>
-                      <div className="flex justify-center py-10">
-                        <Spinner size="lg" etichetta="Caricamento punti vendita..." />
-                      </div>
-                    </Table.Td>
-                  </Table.Tr>
-                ) : puntiVenditaQuery.isError ? (
-                  <Table.Tr>
-                    <Table.Td colSpan={numeroColonne}>
-                      <PageError
-                        compatta
-                        titolo="Punti vendita non caricati"
-                        motivo={(puntiVenditaQuery.error as Error)?.message || "Errore durante il recupero dei punti vendita"}
-                        onRiprova={() => puntiVenditaQuery.refetch()}
-                      />
-                    </Table.Td>
-                  </Table.Tr>
-                ) : puntiVendita.length === 0 ? (
-                  <Table.Tr>
-                    <Table.Td colSpan={numeroColonne} className="p-0">
-                      {debouncedSearch.trim() || filtroCanale || filtroArea ? (
-                        <EmptyState
-                          compatta
-                          icon="SearchX"
-                          title="Nessun risultato"
-                          description="Nessun punto vendita corrisponde alla ricerca o ai filtri."
-                          buttonText="Azzera filtri"
-                          buttonIcon="X"
-                          onButtonClick={() => {
-                            setSearchTerm("");
-                            setFiltroCanale("");
-                            setFiltroArea("");
-                          }}
-                        />
-                      ) : (
-                        <EmptyState
-                          compatta
-                          icon="Store"
-                          title="Nessun punto vendita disponibile"
-                          description="Usa Nuovo punto vendita o Importa Excel per aggiungerne."
-                        />
-                      )}
-                    </Table.Td>
-                  </Table.Tr>
-                ) : (
-                  puntiVendita.map((pv, idx) => (
-                    <Table.Tr key={pv.id}>
-                      <Table.Td className="tabular-nums">{baseIndex + idx + 1}</Table.Td>
-                      <Table.Td>
-                        <div className="font-medium text-slate-800">{pv.nome}</div>
-                        {pv.ragionesociale && (
-                          <div className="text-xs text-slate-500">{pv.ragionesociale}</div>
-                        )}
-                      </Table.Td>
-                      <Table.Td>{indirizzoCompleto(pv)}</Table.Td>
-                      <Table.Td>
-                        <span className="inline-flex items-center gap-1.5">
-                          <span aria-hidden="true" className="h-2.5 w-2.5 flex-none rounded-full" style={{ backgroundColor: coloreCanale(pv) }} />
-                          {pv.nome_canale || "-"}
-                        </span>
-                      </Table.Td>
-                      <Table.Td>{pv.nome_area || "-"}</Table.Td>
-                      {mostraCodiciGdo && (
-                        <Table.Td>
-                          {codiciGdo(pv.meta).map(c => (
-                            <div key={c.etichetta} className="text-xs">
-                              <span className="text-slate-500">{c.etichetta}:</span> {c.valore}
-                            </div>
-                          ))}
-                        </Table.Td>
-                      )}
-                      <Table.Td className="text-right">
-                        <Menu className="inline-block text-left">
-                          <Menu.Button
-                            as={Button}
-                            size="sm"
-                            variant="outline-secondary"
-                            aria-label={`Azioni punto vendita ${pv.nome}`}
-                          >
-                            <Lucide icon="EllipsisVertical" aria-hidden="true" className="h-4 w-4" />
-                          </Menu.Button>
-                          <Menu.Items className="w-44">
-                            <Menu.Item onClick={() => navigate(`/gestione-interna/punti-vendita/${pv.id}`)}>
-                              <Lucide icon="Eye" aria-hidden="true" className="mr-2 h-4 w-4" />
-                              Dettagli
-                            </Menu.Item>
-                            <Menu.Item onClick={() => handleModify(pv)}>
-                              <Lucide icon="Pencil" aria-hidden="true" className="mr-2 h-4 w-4" />
-                              Modifica
-                            </Menu.Item>
-                            <PermissionGate permission={PERMISSIONS.GDO.GESTISCI_PUNTI_VENDITA}>
-                              <Menu.Item className="text-danger" onClick={() => setPvDaEliminare(pv)}>
-                                <Lucide icon="Trash2" aria-hidden="true" className="mr-2 h-4 w-4" />
-                                Elimina
-                              </Menu.Item>
-                            </PermissionGate>
-                          </Menu.Items>
-                        </Menu>
-                      </Table.Td>
-                    </Table.Tr>
-                  ))
-                )}
-              </Table.Tbody>
-            </Table>
-          </div>
-          <PaginazioneTabella
-            totale={totalItems}
-            pagina={page}
-            dimensionePagina={pageSize}
-            opzioniDimensione={pageSizeOptions}
-            onCambiaPagina={setPage}
-            onCambiaDimensione={setPageSize}
-          />
-        </Sezione>
+        <RigheNonAbbinate coloreDelCanale={elenco.coloreDelCanale} onAggiungi={aggiungiDaRiga} />
       </Pagina>
     </>
   );

@@ -19,6 +19,7 @@ import { sequelize } from '../db/SequelizeConnector';
 import { IReferenzeService } from '../interfaces/IReferenzeService';
 import { IWebPliantService } from '../interfaces/IWebPliantService';
 import { log } from '../logger';
+import { AnalisiKit } from '../models/analisi_kit';
 import { ContenutiAggiuntiviReferenza } from '../models/contenuti_aggiuntivi_referenza';
 import { PromoAttributes } from '../models/promo';
 import { Referenze } from '../models/referenze';
@@ -160,11 +161,14 @@ function referenzaToSnakeCase(ref: ReferenzeIstanta): any {
  * "Sostituzione per runtime"). Cancellazione e inserimento stanno in una sola transazione:
  * se l'inserimento fallisce il kit resta con le referenze di prima, non vuoto.
  * Esportata anche fuori dalla classe perche FileManagementService non ha il service iniettato.
+ * Nella stessa transazione si toglie il riepilogo del kit per le pagine dei punti vendita
+ * (analisi_kit): si ricalcola dalle referenze nuove alla prossima lettura.
  */
 export async function sostituisciReferenzeKit(idKitRuntime: string, referenze: ReferenzeIstanta[]): Promise<any> {
   try {
     return await sequelize.transaction(async (transaction) => {
       await Referenze.destroy({ where: { id_runtime_kit: idKitRuntime }, transaction });
+      await AnalisiKit.destroy({ where: { id_kit_runtime: idKitRuntime }, transaction });
       return Referenze.bulkCreate(referenze.map(referenzaToSnakeCase), { transaction });
     });
   } catch (error) {

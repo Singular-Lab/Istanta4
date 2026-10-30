@@ -39,6 +39,9 @@ import { WebPliantController } from './controllers/WebPliantController';
 import { FileManagementController } from './controllers/FileManagementController';
 import { VolantinoController } from './controllers/VolantinoController';
 import { MaterialiController } from './controllers/MaterialiController';
+import { ConsultazionePuntiVenditaController } from './controllers/ConsultazionePuntiVenditaController';
+import { StoriaPuntoVenditaController } from './controllers/StoriaPuntoVenditaController';
+import { AnalisiPuntoVenditaController } from './controllers/AnalisiPuntoVenditaController';
 
 import { IController } from './interfaces/IController';
 import { container, initializeContainer, TYPES } from './di';
@@ -79,6 +82,9 @@ import type { IWebPliantService } from './interfaces/IWebPliantService';
 import type { IFileManagementService } from './interfaces/IFileManagementService';
 import type { IVolantinoService } from './interfaces/IVolantinoService';
 import type { IMaterialiService } from './interfaces/IMaterialiService';
+import type { IConsultazionePuntiVenditaService } from './interfaces/IConsultazionePuntiVenditaService';
+import type { IStoriaPuntoVenditaService } from './interfaces/IStoriaPuntoVenditaService';
+import type { IAnalisiPuntoVenditaService } from './interfaces/IAnalisiPuntoVenditaService';
 
 import { ScoreboardService } from './services/ScoreboardService';
 import BadgeService from './services/BadgeService';
@@ -146,6 +152,9 @@ export async function createControllers(): Promise<IController[]> {
   const fileManagementService = container.get<IFileManagementService>(TYPES.FileManagementService);
   const volantinoService = container.get<IVolantinoService>(TYPES.VolantinoService);
   const materialiService = container.get<IMaterialiService>(TYPES.MaterialiService);
+  const consultazionePuntiVenditaService = container.get<IConsultazionePuntiVenditaService>(TYPES.ConsultazionePuntiVenditaService);
+  const storiaPuntoVenditaService = container.get<IStoriaPuntoVenditaService>(TYPES.StoriaPuntoVenditaService);
+  const analisiPuntoVenditaService = container.get<IAnalisiPuntoVenditaService>(TYPES.AnalisiPuntoVenditaService);
   const permessiService = container.get<IPermessiService>(TYPES.PermessiService);
   const menuService = container.get<IMenuService>(TYPES.MenuService);
   const authProviderService = container.get<IAuthProviderService>(TYPES.AuthProviderService);
@@ -172,6 +181,10 @@ export async function createControllers(): Promise<IController[]> {
     new FileManagementController(fileManagementService),
     new VolantinoController(volantinoService),
     new MaterialiController(materialiService),
+    // Prima della consultazione: '/rete/...' e '/gestione/...' non devono mai finire in un '/:id'
+    new AnalisiPuntoVenditaController(analisiPuntoVenditaService),
+    new ConsultazionePuntiVenditaController(consultazionePuntiVenditaService),
+    new StoriaPuntoVenditaController(storiaPuntoVenditaService),
 
     // Original controllers
     new WebhookController(webhookService),

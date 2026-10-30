@@ -3012,9 +3012,6 @@
     }
   },
   "src/pages/GestionePuntoVendita/index.tsx": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 2
-    },
     "no-console": {
       "count": 2
     },
@@ -3310,11 +3307,6 @@
   "src/pages/PuntiVendita/PuntiVendita.test.tsx": {
     "@typescript-eslint/no-explicit-any": {
       "count": 2
-    }
-  },
-  "src/pages/PuntiVendita/index.tsx": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 8
     }
   },
   "src/pages/ResetPassword/index.tsx": {

@@ -275,6 +275,71 @@
   },
   "formato": 1,
   "tabelle": {
+    "analisi_kit": {
+      "colonne": {
+        "aggiornato_il": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": false,
+          "riferimento": null,
+          "tipo": "timestamp with time zone",
+          "unico": false
+        },
+        "dati": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": false,
+          "riferimento": null,
+          "tipo": "jsonb",
+          "unico": false
+        },
+        "descrizioni": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": false,
+          "riferimento": null,
+          "tipo": "jsonb",
+          "unico": false
+        },
+        "id_kit_runtime": {
+          "autoIncremento": false,
+          "chiavePrimaria": true,
+          "default": null,
+          "nullable": false,
+          "riferimento": {
+            "colonna": "id",
+            "onDelete": "CASCADE",
+            "onUpdate": "CASCADE",
+            "tabella": "runtime_kit"
+          },
+          "tipo": "uuid",
+          "unico": false
+        },
+        "referenze_al": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": true,
+          "riferimento": null,
+          "tipo": "timestamp with time zone",
+          "unico": false
+        },
+        "versione": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": false,
+          "riferimento": null,
+          "tipo": "integer",
+          "unico": false
+        }
+      },
+      "indici": [],
+      "vincoliUnici": []
+    },
     "approfondimento_vino": {
       "colonne": {
         "abbinamenti": {
@@ -6877,6 +6942,250 @@
         }
       },
       "indici": [],
+      "vincoliUnici": []
+    },
+    "punti_vendita_volantino": {
+      "colonne": {
+        "abbinamento": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": true,
+          "riferimento": null,
+          "tipo": "text",
+          "unico": false
+        },
+        "chiave_indirizzo": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": true,
+          "riferimento": null,
+          "tipo": "text",
+          "unico": false
+        },
+        "chiave_telefono": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": true,
+          "riferimento": null,
+          "tipo": "text",
+          "unico": false
+        },
+        "createdat": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": false,
+          "riferimento": null,
+          "tipo": "timestamp with time zone",
+          "unico": false
+        },
+        "gruppo": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": true,
+          "riferimento": null,
+          "tipo": "text",
+          "unico": false
+        },
+        "id": {
+          "autoIncremento": false,
+          "chiavePrimaria": true,
+          "default": null,
+          "nullable": false,
+          "riferimento": null,
+          "tipo": "uuid",
+          "unico": false
+        },
+        "id_area": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": true,
+          "riferimento": null,
+          "tipo": "uuid",
+          "unico": false
+        },
+        "id_canale": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": true,
+          "riferimento": null,
+          "tipo": "uuid",
+          "unico": false
+        },
+        "id_gdo": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": false,
+          "riferimento": null,
+          "tipo": "uuid",
+          "unico": false
+        },
+        "id_kit_runtime": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": false,
+          "riferimento": {
+            "colonna": "id",
+            "onDelete": "CASCADE",
+            "onUpdate": "CASCADE",
+            "tabella": "runtime_kit"
+          },
+          "tipo": "uuid",
+          "unico": false
+        },
+        "id_promo": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": false,
+          "riferimento": null,
+          "tipo": "character varying(255)",
+          "unico": false
+        },
+        "id_punto_vendita": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": true,
+          "riferimento": {
+            "colonna": "id_puntivendita",
+            "onDelete": "SET NULL",
+            "onUpdate": "CASCADE",
+            "tabella": "punti_vendita"
+          },
+          "tipo": "uuid",
+          "unico": false
+        },
+        "indirizzo": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": true,
+          "riferimento": null,
+          "tipo": "text",
+          "unico": false
+        },
+        "localita": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": true,
+          "riferimento": null,
+          "tipo": "text",
+          "unico": false
+        },
+        "nome_file": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": true,
+          "riferimento": null,
+          "tipo": "text",
+          "unico": false
+        },
+        "posizione": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": false,
+          "riferimento": null,
+          "tipo": "integer",
+          "unico": false
+        },
+        "provincia": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": true,
+          "riferimento": null,
+          "tipo": "text",
+          "unico": false
+        },
+        "regione": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": true,
+          "riferimento": null,
+          "tipo": "text",
+          "unico": false
+        },
+        "riga": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": false,
+          "riferimento": null,
+          "tipo": "text",
+          "unico": false
+        },
+        "telefono": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": true,
+          "riferimento": null,
+          "tipo": "text",
+          "unico": false
+        }
+      },
+      "indici": [
+        {
+          "colonne": [
+            "id_gdo",
+            "chiave_indirizzo"
+          ],
+          "condizione": null,
+          "metodo": "btree",
+          "nome": "idx_punti_vendita_volantino_gdo_indirizzo",
+          "unico": false
+        },
+        {
+          "colonne": [
+            "id_gdo"
+          ],
+          "condizione": "WHERE \"id_punto_vendita\" IS NULL",
+          "metodo": "btree",
+          "nome": "idx_punti_vendita_volantino_gdo_non_abbinate",
+          "unico": false
+        },
+        {
+          "colonne": [
+            "id_gdo",
+            "chiave_telefono"
+          ],
+          "condizione": null,
+          "metodo": "btree",
+          "nome": "idx_punti_vendita_volantino_gdo_telefono",
+          "unico": false
+        },
+        {
+          "colonne": [
+            "id_kit_runtime"
+          ],
+          "condizione": null,
+          "metodo": "btree",
+          "nome": "idx_punti_vendita_volantino_id_kit_runtime",
+          "unico": false
+        },
+        {
+          "colonne": [
+            "id_punto_vendita"
+          ],
+          "condizione": null,
+          "metodo": "btree",
+          "nome": "idx_punti_vendita_volantino_id_punto_vendita",
+          "unico": false
+        }
+      ],
       "vincoliUnici": []
     },
     "raccoglitore_kit": {

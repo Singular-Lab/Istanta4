@@ -41,6 +41,12 @@ export interface IKitRuntimeService {
   riportaInLavorazione(idLavorazione: string, filesAccepted: string[], filesRejected: { id: string; log: { messaggio: string } }[], req: Request): Promise<any>;
   riportaInLavorazioneConErroriAutomatico(idLavorazione: string, filesAccepted: string[], filesRejected: { id: string; log: { messaggio: string } }[], req: Request): Promise<any>;
   pubblicaKitRuntime(idLavorazione: string, req: Request): Promise<any>;
+  /**
+   * Pubblica un kit importato dallo storico (sync del Plugin), senza il webhook KIT_PUBBLICATO:
+   * i volantini storici non si notificano ai sistemi esterni. False se il kit era gia' pubblicato
+   * o eliminato: non si tocca.
+   */
+  pubblicaKitDaStorico(idLavorazione: string, idUtente: string): Promise<boolean>;
 
   /** Combinations */
   getAllKitRuntime(): Promise<RUNTIME_KIT[]>;

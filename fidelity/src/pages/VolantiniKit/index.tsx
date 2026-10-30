@@ -21,12 +21,11 @@ import { formatNumero } from "@/utils/format";
 import { PROMOZIONI_DEL_PERIODO, urlAnteprimaMateriale } from "@/utils/materiali";
 import { twMerge } from "@/utils/twMerge";
 import { useEffect, useMemo } from "react";
-import { Link, useLoaderData, useNavigate } from "react-router-dom";
+import { useLoaderData, useNavigate } from "react-router-dom";
 import {
   ETICHETTA_PERIODO,
   isPeriodoMateriali,
   percorsoKit,
-  percorsoPop,
   percorsoPromo,
   type PeriodoMateriali,
 } from "../../../lib/materiali/periodi";
@@ -38,6 +37,8 @@ import {
   type StatoKitMateriali,
 } from "../../../lib/materiali/tipi";
 import CardVolantino from "../shared/CardVolantino";
+import SchedePeriodo from "../shared/SchedePeriodo";
+import VolantiniPerPromozione from "./VolantiniPerPromozione";
 
 export interface VolantiniKitLoaderData {
   periodo: PeriodoMateriali;
@@ -45,24 +46,16 @@ export interface VolantiniKitLoaderData {
 
 const DESCRIZIONE: Readonly<Record<PeriodoMateriali, string>> = {
   "in-corso": "Kit volantino in lavorazione nelle promozioni in corso. Il dettaglio e la lavorazione sono quelli di ogni kit.",
-  attivi: "Kit volantino pubblicati nelle promozioni ancora valide. Il dettaglio e la lavorazione sono quelli di ogni kit.",
-  storico: "Kit volantino pubblicati nelle promozioni concluse. Il dettaglio e la lavorazione sono quelli di ogni kit.",
+  attivi:
+    "Volantini pubblicati nelle promozioni ancora valide, una scheda per promozione con le varianti per canale e area. Ogni variante apre il suo kit.",
+  storico:
+    "Volantini pubblicati nelle promozioni concluse, una scheda per promozione con le varianti per canale e area. Ogni variante apre il suo kit.",
 };
 
-const PERIODO_VUOTO: Readonly<Record<PeriodoMateriali, { titolo: string; descrizione: string }>> = {
-  "in-corso": {
-    titolo: "Nessun kit volantino in lavorazione",
-    descrizione:
-      "I kit compaiono qui quando una promozione in corso ne crea almeno uno. Puoi crearli dal dettaglio della promozione.",
-  },
-  attivi: {
-    titolo: "Nessun kit volantino pubblicato nelle promozioni valide",
-    descrizione: "I kit compaiono qui quando vengono pubblicati in una promozione ancora valida.",
-  },
-  storico: {
-    titolo: "Nessun kit volantino nelle promozioni concluse",
-    descrizione: "I kit pubblicati compaiono qui quando la loro promozione viene archiviata.",
-  },
+const IN_CORSO_VUOTO = {
+  titolo: "Nessun kit volantino in lavorazione",
+  descrizione:
+    "I kit compaiono qui quando una promozione in corso ne crea almeno uno. Puoi crearli dal dettaglio della promozione.",
 };
 
 // Le card sono alte: poche per pagina, multipli di 2 e 3 per riempire le righe della griglia
@@ -127,7 +120,12 @@ function SchedeInCaricamento() {
   );
 }
 
-function ContenutoVolantini({ periodo }: { periodo: PeriodoMateriali }) {
+/**
+ * In corso: una card per kit, compresi i kit non ancora avviati, con il filtro per stato. Attivi
+ * e Storico hanno solo kit pubblicati e si raggruppano per promozione (VolantiniPerPromozione).
+ */
+function VolantiniInCorso() {
+  const periodo = "in-corso";
   const navigate = useNavigate();
   const puoAprirePromo = usePermission(PERMISSIONS.PROMO.VISUALIZZA);
   const [parametri, aggiorna] = useParametriUrl();
@@ -136,10 +134,8 @@ function ContenutoVolantini({ periodo }: { periodo: PeriodoMateriali }) {
   const idArea = parametri.get("area") ?? "";
   const idCanale = parametri.get("canale") ?? "";
   const cerca = parametri.get("cerca") ?? "";
-  // Il filtro per stato c'è solo In corso: negli altri periodi i kit sono tutti pubblicati
-  const conFiltroStato = periodo === "in-corso";
   const statoLetto = parametri.get("stato") ?? "";
-  const stato = conFiltroStato && isStatoKit(statoLetto) ? statoLetto : undefined;
+  const stato = isStatoKit(statoLetto) ? statoLetto : undefined;
   const pagina = Math.max(1, Math.trunc(Number(parametri.get("pagina"))) || 1);
   const dimensioneLetta = Number(parametri.get("dimensione"));
   const dimensione = DIMENSIONI_PAGINA.includes(dimensioneLetta) ? dimensioneLetta : DIMENSIONE_PREDEFINITA;
@@ -182,7 +178,6 @@ function ContenutoVolantini({ periodo }: { periodo: PeriodoMateriali }) {
       : promozioni;
   }, [dati?.opzioni.promozioni, idPromo]);
 
-  const etichettaPeriodo = ETICHETTA_PERIODO[periodo];
   const promozioniDelPeriodo = PROMOZIONI_DEL_PERIODO[periodo];
   const numeroPromozioni = dati ? contaPromozioni(dati, conFiltri, Boolean(idPromo)) : null;
 
@@ -208,13 +203,12 @@ function ContenutoVolantini({ periodo }: { periodo: PeriodoMateriali }) {
     }
     if (!dati) return <SchedeInCaricamento />;
     if (dati.totaleSenzaFiltri === 0) {
-      const vuoto = PERIODO_VUOTO[periodo];
       return (
         <EmptyState
           compatta
           icon="Newspaper"
-          title={vuoto.titolo}
-          description={vuoto.descrizione}
+          title={IN_CORSO_VUOTO.titolo}
+          description={IN_CORSO_VUOTO.descrizione}
           buttonText={puoAprirePromo ? promozioniDelPeriodo.etichetta : undefined}
           buttonIcon="ArrowRight"
           onButtonClick={() => navigate(promozioniDelPeriodo.percorso)}
@@ -279,11 +273,13 @@ function ContenutoVolantini({ periodo }: { periodo: PeriodoMateriali }) {
   })();
 
   return (
-    <Pagina titolo={`Volantini · ${etichettaPeriodo}`} descrizione={DESCRIZIONE[periodo]}>
+    <>
       {dati && <AvvisiNonAvviati avvisi={dati.avvisi} />}
 
       <Sezione senzaPadding aria-label="Kit volantino">
+        {/* Una riga da sm: la ricerca prende lo spazio libero, le tendine hanno larghezza fissa */}
         <BarraFiltri
+          className="[&>div:first-child]:flex-1"
           destra={
             conFiltri ? (
               <Button type="button" variant="outline-secondary" size="sm" onClick={azzeraFiltri}>
@@ -298,11 +294,12 @@ function ContenutoVolantini({ periodo }: { periodo: PeriodoMateriali }) {
             placeholder="Nome kit o promozione…"
             value={testoRicerca}
             onChange={setTestoRicerca}
+            className="sm:w-auto sm:min-w-0 sm:flex-[1_1_10rem]"
           />
           <FormSelect
             formSelectSize="sm"
             aria-label="Promozione"
-            className="sm:w-52"
+            className="sm:min-w-0 sm:flex-[0_0_9rem]"
             value={idPromo}
             onChange={(evento) => filtra("promo", evento.target.value)}
           >
@@ -316,7 +313,7 @@ function ContenutoVolantini({ periodo }: { periodo: PeriodoMateriali }) {
           <FormSelect
             formSelectSize="sm"
             aria-label="Area"
-            className="sm:w-40"
+            className="sm:min-w-0 sm:flex-[0_0_8.5rem]"
             value={idArea}
             onChange={(evento) => filtra("area", evento.target.value)}
           >
@@ -330,7 +327,7 @@ function ContenutoVolantini({ periodo }: { periodo: PeriodoMateriali }) {
           <FormSelect
             formSelectSize="sm"
             aria-label="Canale"
-            className="sm:w-40"
+            className="sm:min-w-0 sm:flex-[0_0_8.5rem]"
             value={idCanale}
             onChange={(evento) => filtra("canale", evento.target.value)}
           >
@@ -341,36 +338,25 @@ function ContenutoVolantini({ periodo }: { periodo: PeriodoMateriali }) {
               </option>
             ))}
           </FormSelect>
-          {conFiltroStato && (
-            <FormSelect
-              formSelectSize="sm"
-              aria-label="Stato"
-              className="sm:w-48"
-              value={stato ?? ""}
-              onChange={(evento) => filtra("stato", evento.target.value)}
-            >
-              <option value="">Tutti gli stati</option>
-              {STATI_KIT_MATERIALI.map((valore) => (
-                <option key={valore} value={valore}>
-                  {descriviStato("kitRuntime", valore).etichetta}
-                </option>
-              ))}
-            </FormSelect>
-          )}
+          <FormSelect
+            formSelectSize="sm"
+            aria-label="Stato"
+            className="sm:min-w-0 sm:flex-[0_0_8.5rem]"
+            value={stato ?? ""}
+            onChange={(evento) => filtra("stato", evento.target.value)}
+          >
+            <option value="">Tutti gli stati</option>
+            {STATI_KIT_MATERIALI.map((valore) => (
+              <option key={valore} value={valore}>
+                {descriviStato("kitRuntime", valore).etichetta}
+              </option>
+            ))}
+          </FormSelect>
         </BarraFiltri>
 
-        <div className="flex flex-col gap-2 px-5 pt-4 text-sm sm:flex-row sm:items-center sm:justify-between">
-          <p aria-live="polite" className="tabular-nums text-slate-500">
-            {conteggio}
-          </p>
-          <Link
-            to={percorsoPop(periodo, idPromo || undefined)}
-            className="inline-flex items-center gap-1 font-medium text-theme-1 hover:underline"
-          >
-            Vai a POP · {etichettaPeriodo.toLowerCase()}
-            <Lucide icon="ArrowRight" aria-hidden="true" className="h-3.5 w-3.5" />
-          </Link>
-        </div>
+        <p aria-live="polite" className="px-5 pt-4 text-sm tabular-nums text-slate-500">
+          {conteggio}
+        </p>
 
         {contenuto}
 
@@ -388,16 +374,28 @@ function ContenutoVolantini({ periodo }: { periodo: PeriodoMateriali }) {
           />
         )}
       </Sezione>
-    </Pagina>
+    </>
   );
 }
 
-/** Kit volantino di un periodo (in corso, attivi, storico): il periodo arriva dal loader della rotta. */
+/**
+ * Volantini di un periodo (in corso, attivi, storico): il periodo arriva dal loader della rotta e
+ * le schede in cima passano da un periodo all'altro. I materiali POP sono una vista a parte.
+ */
 function VolantiniKit() {
   const letto = (useLoaderData() as Partial<VolantiniKitLoaderData> | undefined)?.periodo;
   const periodo = isPeriodoMateriali(letto) ? letto : "in-corso";
-  // Cambiando periodo la pagina riparte da zero: stesso componente, rotte diverse
-  return <ContenutoVolantini key={periodo} periodo={periodo} />;
+  return (
+    <Pagina titolo={`Volantini · ${ETICHETTA_PERIODO[periodo]}`} descrizione={DESCRIZIONE[periodo]}>
+      <SchedePeriodo vista="volantini" periodo={periodo} className="self-start" />
+      {/* Cambiando periodo il contenuto riparte da zero: stesso componente, rotte diverse */}
+      {periodo === "in-corso" ? (
+        <VolantiniInCorso key={periodo} />
+      ) : (
+        <VolantiniPerPromozione key={periodo} periodo={periodo} />
+      )}
+    </Pagina>
+  );
 }
 
 export default withSessionCheck(VolantiniKit);

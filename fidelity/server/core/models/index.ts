@@ -3,6 +3,7 @@ import { sequelize } from '../db/SequelizeConnector';
 import { log } from '../logger';
 
 // Import di tutti i modelli Sequelize
+import { AnalisiKit } from './analisi_kit';
 import { ApprofondimentoVino } from './approfondimento_vino';
 import { Area } from './aree';
 import { Attivita } from './attivita';
@@ -26,6 +27,7 @@ import { DisplayContextPuntoVendita } from './punto_vendita/display_context_punt
 import { DispositivoPuntoVendita } from "./punto_vendita/dispositivi_punto_vendita";
 import { PuntoVendita } from './punto_vendita/punti_vendita';
 import { PuntoVenditaUtenti } from './punto_vendita/punti_vendita_utenti';
+import { PuntoVenditaVolantino } from './punto_vendita/punti_vendita_volantino';
 import { RaccoglitoreKit } from './raccoglitore_kit';
 import { Referenze } from './referenze';
 import { ReferenzeGruppo } from './referenze_gruppo';
@@ -100,6 +102,10 @@ export const MODELLI_SEQUELIZE = {
   PuntoVenditaUtenti: { model: PuntoVenditaUtenti, nome: 'PuntoVenditaUtenti', tabella: 'punti_vendita_utenti' },
   DispositivoPuntoVendita: { model: DispositivoPuntoVendita, nome: 'DispositivoPuntoVendita', tabella: 'dispositivi_punto_vendita' },
   DisplayContextPuntoVendita: { model: DisplayContextPuntoVendita, nome: 'DisplayContextPuntoVendita', tabella: 'display_context_punto_vendita' },
+  // I PV stampati nelle liste dei volantini: la storia del punto vendita
+  PuntoVenditaVolantino: { model: PuntoVenditaVolantino, nome: 'PuntoVenditaVolantino', tabella: 'punti_vendita_volantino' },
+  // Riepilogo di ogni kit per le pagine dei punti vendita (cache)
+  AnalisiKit: { model: AnalisiKit, nome: 'AnalisiKit', tabella: 'analisi_kit' },
   // Modelli export
   TipiDiExport: { model: TipiDiExport, nome: 'TipiDiExport', tabella: 'tipi_export' },
   TipoUtentePuntoVendita: { model: RuoloPuntoVendita, nome: 'RuoloPuntoVendita', tabella: 'ruolo_punto_vendita' },
@@ -339,7 +345,7 @@ export const modelliManager = ModelliManager.getInstance();
 export {
   ApprofondimentoVino, Area, Attivita, Canale, CanaleInterazione, CombinazioneCanaleArea, Config, ContenutiAggiuntiviReferenza,
   ContrattoTipografia, DesignKit, DisplayContextPuntoVendita, DispositivoPuntoVendita, EphemeralAuditLog, EphemeralChallenge, EphemeralOriginsWhitelist, EphemeralToken, FilesRuntime, FilesRuntimeLog, Formati, GDO, NamingConvention,
-  OrdiniDiStampa, OrdiniDiStampaInvii, PromoScoreboard, PuntoVendita, PuntoVenditaUtenti, RaccoglitoreKit, Referenze, ReferenzeGruppo, Ricette, RuntimeKit, RuoloPuntoVendita, TentativoWebhook, TipiDiExport, Tracciati, TracciatiMomentoConfronti,
+  OrdiniDiStampa, OrdiniDiStampaInvii, PromoScoreboard, PuntoVendita, PuntoVenditaUtenti, PuntoVenditaVolantino, RaccoglitoreKit, Referenze, ReferenzeGruppo, Ricette, RuntimeKit, RuoloPuntoVendita, TentativoWebhook, TipiDiExport, Tracciati, TracciatiMomentoConfronti,
   Utente, UtentiAnonimi, UtentiGDO, UtentiGuest, Webhook, WishlistWebpliant, WorkspaceWebpliant,
   MenuItem, Permesso, PermessoRuolo, PermessoRuoloGdo,
   PluginAnalyticsEvent,

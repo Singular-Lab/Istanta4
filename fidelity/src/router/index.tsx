@@ -233,6 +233,36 @@ const routes: RouteObject[] = [
           },
         ],
       },
+      // PUNTI VENDITA: consultazione per chi lavora con la GDO; la gestione resta sotto /gestione-interna
+      {
+        path: "punti-vendita",
+        lazy: async () => {
+          const { default: PuntiVenditaConsultazione } = await import("@/pages/PuntiVenditaConsultazione");
+          return { Component: PuntiVenditaConsultazione };
+        },
+      },
+      {
+        path: "punti-vendita/:id",
+        lazy: async () => {
+          const { default: SchedaPuntoVendita } = await import("@/pages/PuntiVenditaConsultazione/Scheda");
+          return { Component: SchedaPuntoVendita };
+        },
+      },
+      // Un volantino e una referenza nella storia del punto vendita
+      {
+        path: "punti-vendita/:id/volantini/:idKit",
+        lazy: async () => {
+          const { default: VolantinoPuntoVendita } = await import("@/pages/PuntiVenditaConsultazione/Volantino");
+          return { Component: VolantinoPuntoVendita };
+        },
+      },
+      {
+        path: "punti-vendita/:id/referenze/:chiave",
+        lazy: async () => {
+          const { default: ReferenzaPuntoVendita } = await import("@/pages/PuntiVenditaConsultazione/Referenza");
+          return { Component: ReferenzaPuntoVendita };
+        },
+      },
       // Vecchi indirizzi delle pagine spostate sotto /gestione-interna (segnalibri e link esterni)
       ...Object.entries(PERCORSI_SPOSTATI).map(([vecchio, nuovo]) => ({
         path: `${vecchio.slice(1)}/*`,

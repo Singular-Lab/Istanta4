@@ -88,8 +88,31 @@ describeConDatabase('MaterialiService: file POP di un formato', () => {
       stato: null,
       versione: null,
     });
-    expect(pagina.opzioni.reparti).toEqual(['Macelleria', 'Ortofrutta']);
-    expect(pagina.opzioni.aree).toEqual([{ id: kit.idArea, nome: 'Toscana' }]);
+  });
+
+  it('tendine del formato: aree, canali e reparti di tutti i suoi file, senza quelli di Correggo', async () => {
+    const opzioni = await service.getOpzioniFilePop(kit.idPromo, { periodo: 'attivi', idFormato: kit.idFormato });
+
+    expect(opzioni.reparti).toEqual(['Macelleria', 'Ortofrutta']);
+    expect(opzioni.aree).toEqual([{ id: kit.idArea, nome: 'Toscana' }]);
+    expect(opzioni.canali).toEqual([{ id: kit.idCanale, nome: 'Superstore' }]);
+  });
+
+  it('verifica dello ZIP: conta i file scelti della promo e del formato, quelli di altre promo e di Correggo no', async () => {
+    const selezionato = idFile.get(nome(5)) ?? '';
+
+    const verifica = await service.verificaZipPop(kit.idPromo, {
+      periodo: 'attivi',
+      idFormato: kit.idFormato,
+      idFile: [selezionato, idFileAltraPromo, idFileCorreggo],
+    });
+    const perReparto = await service.verificaZipPop(kit.idPromo, { periodo: 'attivi', idFormato: kit.idFormato, filtri: { reparto: 'Ortofrutta' } });
+
+    expect(verifica).toEqual({ file: 1, nomeFile: 'Promo ottobre - Espositori.zip' });
+    expect(perReparto.file).toBe(65);
+    await expect(service.verificaZipPop(kit.idPromo, { periodo: 'attivi', idFormato: kit.idFormato, idFile: [idFileAltraPromo] }))
+      .rejects.toBeInstanceOf(NotFoundError);
+    expect(scarica).not.toHaveBeenCalled();
   });
 
   it('cerca il codice della referenza nei metadati, senza distinguere maiuscole', async () => {

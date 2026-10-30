@@ -60,6 +60,15 @@ export const TYPES = {
   // Viste Volantini e POP (ex Materiali)
   MaterialiService: Symbol.for('MaterialiService'),
 
+  // Consultazione dei punti vendita (pagine /punti-vendita)
+  ConsultazionePuntiVenditaService: Symbol.for('ConsultazionePuntiVenditaService'),
+
+  // Storia dei punti vendita dalle liste dei volantini
+  StoriaPuntoVenditaService: Symbol.for('StoriaPuntoVenditaService'),
+
+  // Pagine del punto vendita sulla timeline dei volantini (scheda, volantino, referenza, rete, qualita')
+  AnalisiPuntoVenditaService: Symbol.for('AnalisiPuntoVenditaService'),
+
   // Permessi
   PermessiService: Symbol.for('PermessiService'),
 
@@ -112,6 +121,9 @@ export const TYPES = {
   PermessiRepository: Symbol.for('PermessiRepository'),
   MenuItemRepository: Symbol.for('MenuItemRepository'),
   MaterialiRepository: Symbol.for('MaterialiRepository'),
+  ConsultazionePuntiVenditaRepository: Symbol.for('ConsultazionePuntiVenditaRepository'),
+  PuntiVenditaVolantinoRepository: Symbol.for('PuntiVenditaVolantinoRepository'),
+  AnalisiPuntiVenditaRepository: Symbol.for('AnalisiPuntiVenditaRepository'),
 
   // Agenzia Lib — logiche custom per cliente
   AgenziaLib: Symbol.for('AgenziaLib'),

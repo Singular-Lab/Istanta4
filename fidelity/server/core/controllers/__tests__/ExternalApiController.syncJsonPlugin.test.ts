@@ -10,6 +10,7 @@ import type { FantasmaDeciso, FileItemKit, FileItemKitLog, ImportStorico, Record
 import type { EsitoConfrontoStorico, PayloadConfrontoStorico, StoricoVolantinoAgenzia, SyncJsonPluginRef } from '../../agenzia_lib/types';
 import type * as MulterConfig from '../../config/multerConfig';
 import type { IExternalApiService } from '../../interfaces/IExternalApiService';
+import type { EsitoListaVolantino, ListaVolantinoDaRegistrare } from '../../interfaces/IStoriaPuntoVenditaService';
 import type { FilterTemplateService } from '../../services/FilterTemplateService';
 import type { StatisticheApiService } from '../../services/StatisticheApiService';
 import { ServerUtils } from '../../utils/ServerUtils';
@@ -39,6 +40,7 @@ vi.mock('../../di', () => ({
     KitRuntimeService: 'KitRuntimeService',
     ReferenzeService: 'ReferenzeService',
     PuntoVenditaService: 'PuntoVenditaService',
+    StoriaPuntoVenditaService: 'StoriaPuntoVenditaService',
     PromoService: 'PromoService',
     AreaService: 'AreaService',
     CanaleService: 'CanaleService',
@@ -127,12 +129,20 @@ function preparaServizi() {
     getFileRunTimeLogByNomeFileEIdKitRuntime: vi.fn(async (_nomeFile: string, _idKit: string): Promise<FileItemKitLog | null> => null),
     insertNewFileRuntimeLog: vi.fn(async (_log: FileItemKitLog) => undefined),
     salvaImportStorico: vi.fn(async (_idKit: string, _esito: ImportStorico) => undefined),
+    pubblicaKitDaStorico: vi.fn(async (_idKit: string, _idUtente: string) => true),
   };
   const referenze = {
     sostituisciReferenzeKit: vi.fn(async (_idKit: string, _referenze: ReferenzeIstanta[]) => undefined),
   };
+  // L'anagrafica dei PV non si tocca piu' dal sync: la lista del volantino va nella storia dei PV
   const puntiVendita = {
-    loadPuntiVenditaForPlugin: vi.fn(async () => ({ matched: [], created: [], updated: [], missing: [], possibleDuplicates: [], duplicates: [] })),
+    createPuntoVendita: vi.fn(),
+    updatePuntoVendita: vi.fn(),
+  };
+  const storiaPuntiVendita = {
+    registraListaVolantino: vi.fn(async (_lista: ListaVolantinoDaRegistrare): Promise<EsitoListaVolantino> => (
+      { registrata: true, righe: 3, abbinate: 2, nonAbbinate: 1 }
+    )),
   };
   const promo = {
     getPromoById: vi.fn(async (_id: string): Promise<{ id: string; context: Array<Record<string, unknown>> } | null> => ({
@@ -165,13 +175,14 @@ function preparaServizi() {
   stato.servizi.set('KitRuntimeService', kitRuntime);
   stato.servizi.set('ReferenzeService', referenze);
   stato.servizi.set('PuntoVenditaService', puntiVendita);
+  stato.servizi.set('StoriaPuntoVenditaService', storiaPuntiVendita);
   stato.servizi.set('PromoService', promo);
   stato.servizi.set('AreaService', area);
   stato.servizi.set('CanaleService', canale);
   stato.servizi.set('TipoExportService', tipoExport);
   stato.servizi.set('AgenziaLib', agenziaLib);
 
-  return { kitRuntime, referenze, promo, area, canale, tipoExport, confronta, agenziaLib, uploadOlimpo };
+  return { kitRuntime, referenze, puntiVendita, storiaPuntiVendita, promo, area, canale, tipoExport, confronta, agenziaLib, uploadOlimpo };
 }
 type Servizi = ReturnType<typeof preparaServizi>;
 
@@ -205,6 +216,8 @@ function nessunaScrittura(servizi: Servizi) {
   expect(servizi.kitRuntime.insertNewFileRuntime).not.toHaveBeenCalled();
   expect(servizi.kitRuntime.updateSingleFileRuntime).not.toHaveBeenCalled();
   expect(servizi.kitRuntime.insertNewFileRuntimeLog).not.toHaveBeenCalled();
+  expect(servizi.kitRuntime.pubblicaKitDaStorico).not.toHaveBeenCalled();
+  expect(servizi.storiaPuntiVendita.registraListaVolantino).not.toHaveBeenCalled();
   expect(servizi.uploadOlimpo).not.toHaveBeenCalled();
 }
 
@@ -536,6 +549,101 @@ describe('POST /api/external/sync_json_plugin: salvataggio', () => {
       fuoriListino: [{ codiceBox: '12', pag: 3, codice: '7770001', descrizione: 'OLIVE VERDI' }],
       fuoriListinoIgnorati: 1,
     }));
+  });
+});
+
+describe('POST /api/external/sync_json_plugin: lista dei punti vendita', () => {
+  const LISTA_PV = 'LIGURIA\rProvincia di GENOVA\rPRA - Via Murtola 12/14 - tel. 010 6197180';
+
+  it('registra la lista del volantino nella storia dei PV e risponde con righe e abbinamenti', async () => {
+    const servizi = preparaServizi();
+
+    const res = await invia({ ...payloadBase(), pv: LISTA_PV });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ success: true, pvRighe: 3, pvAbbinate: 2, pvNonAbbinate: 1 });
+    expect(res.body).not.toHaveProperty('pvErrore');
+    // I vecchi campi dell'import in anagrafica non ci sono piu'
+    for (const campo of ['pvMatched', 'pvCreated', 'pvUpdated', 'pvMissing', 'pvPossibleDuplicates', 'pvDuplicates']) {
+      expect(res.body).not.toHaveProperty(campo);
+    }
+    expect(servizi.storiaPuntiVendita.registraListaVolantino).toHaveBeenCalledWith({
+      idKit: KIT, pv: LISTA_PV, pvData: undefined, nomeFile: NOME_FILE, idGdoRiserva: 'gdo-1',
+    });
+    // Dopo referenze e report dell'import
+    expect(servizi.storiaPuntiVendita.registraListaVolantino.mock.invocationCallOrder[0])
+      .toBeGreaterThan(servizi.kitRuntime.salvaImportStorico.mock.invocationCallOrder[0]);
+  });
+
+  it('non crea ne\' modifica punti vendita dell\'anagrafica, nemmeno con pvData.gruppi', async () => {
+    const servizi = preparaServizi();
+    const pvData = { testo: '', paragrafi: [], gruppi: [{ intestazione: 'BOLOGNA', style: 'citta', puntiVendita: [{ testo: 'Via Emilia 5', indirizzo: 'Via Emilia 5' }] }] };
+
+    const res = await invia({ ...payloadBase(), pvData });
+
+    expect(res.status).toBe(200);
+    expect(servizi.puntiVendita.createPuntoVendita).not.toHaveBeenCalled();
+    expect(servizi.puntiVendita.updatePuntoVendita).not.toHaveBeenCalled();
+    expect(servizi.storiaPuntiVendita.registraListaVolantino).toHaveBeenCalledWith(expect.objectContaining({ idKit: KIT, pvData }));
+  });
+
+  it('un nuovo invio dello stesso volantino registra di nuovo la lista dello stesso kit (che la sostituisce)', async () => {
+    const servizi = preparaServizi();
+
+    await invia({ ...payloadBase(), pv: LISTA_PV });
+    await invia({ ...payloadBase(), pv: LISTA_PV });
+
+    expect(servizi.storiaPuntiVendita.registraListaVolantino).toHaveBeenCalledTimes(2);
+    expect(servizi.storiaPuntiVendita.registraListaVolantino.mock.calls.map(([lista]) => lista.idKit)).toEqual([KIT, KIT]);
+    expect(servizi.referenze.sostituisciReferenzeKit).toHaveBeenCalledTimes(2);
+  });
+
+  it('un errore nella registrazione della lista non fa fallire il sync: lo dice nella risposta', async () => {
+    const servizi = preparaServizi();
+    servizi.storiaPuntiVendita.registraListaVolantino.mockRejectedValue(new Error('database giu'));
+
+    const res = await invia({ ...payloadBase(), pv: LISTA_PV });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ success: true, referenzeCreate: 2, pvRighe: 0, pvAbbinate: 0, pvNonAbbinate: 0 });
+    // Il dettaglio del database resta nel log
+    expect(res.body.pvErrore).toBe('Lista dei punti vendita non registrata: errore interno, reinviare il volantino');
+    expect(servizi.referenze.sostituisciReferenzeKit).toHaveBeenCalledTimes(1);
+    expect(servizi.kitRuntime.salvaImportStorico).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('POST /api/external/sync_json_plugin: pubblicazione del kit', () => {
+  it('il volantino recuperato dallo storico pubblica il kit, dopo referenze e report', async () => {
+    const servizi = preparaServizi();
+
+    const res = await invia(payloadBase());
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ success: true, kitPubblicato: true });
+    expect(servizi.kitRuntime.pubblicaKitDaStorico).toHaveBeenCalledWith(KIT, 'u-operatore');
+    expect(servizi.kitRuntime.pubblicaKitDaStorico.mock.invocationCallOrder[0])
+      .toBeGreaterThan(servizi.kitRuntime.salvaImportStorico.mock.invocationCallOrder[0]);
+  });
+
+  it('kit gia\' pubblicato (nuovo invio): il sync riesce e dice che non l\'ha ripubblicato', async () => {
+    const servizi = preparaServizi();
+    servizi.kitRuntime.pubblicaKitDaStorico.mockResolvedValue(false);
+
+    const res = await invia(payloadBase());
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ success: true, kitPubblicato: false, referenzeCreate: 2 });
+  });
+
+  it('orfanelli senza lasciapassare: niente pubblicazione', async () => {
+    const servizi = preparaServizi();
+    servizi.confronta.mockResolvedValue({ ...esitoSenzaProblemi(), nonImpaginate: [{ codice: '1' }] });
+
+    const res = await invia(payloadBase());
+
+    expect(res.body).toMatchObject({ success: false });
+    expect(servizi.kitRuntime.pubblicaKitDaStorico).not.toHaveBeenCalled();
   });
 });
 

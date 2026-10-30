@@ -1,5 +1,5 @@
 // File generato da scripts/generaIconeLucide.mjs: non modificarlo a mano.
-// Icone Lucide nominate come stringa nel codice (355): <Lucide> le risolve senza caricare la
+// Icone Lucide nominate come stringa nel codice (359): <Lucide> le risolve senza caricare la
 // mappa completa di lucide-react. Rigenera con `node scripts/generaIconeLucide.mjs`.
 export {
   Activity,
@@ -73,6 +73,7 @@ export {
   CircleHelp,
   CircleMinus,
   CircleOff,
+  CirclePause,
   CirclePlay,
   CirclePlus,
   CircleStop,
@@ -94,6 +95,7 @@ export {
   Copy,
   CornerDownRight,
   Cpu,
+  Crosshair,
   Database,
   Delete,
   DoorOpen,
@@ -133,6 +135,7 @@ export {
   Filter,
   FilterX,
   Fingerprint,
+  Flag,
   Focus,
   Folder,
   FolderCog,
@@ -192,6 +195,7 @@ export {
   ListPlus,
   ListX,
   Loader,
+  LoaderCircle,
   Lock,
   LockKeyhole,
   LockKeyholeOpen,
@@ -217,7 +221,6 @@ export {
   MonitorSmartphone,
   MonitorX,
   Moon,
-  MountainSnow,
   MousePointer,
   MousePointer2,
   MousePointerClick,
@@ -246,6 +249,7 @@ export {
   PenTool,
   Pencil,
   PencilLine,
+  Percent,
   Phone,
   PictureInPicture,
   Play,
@@ -265,6 +269,7 @@ export {
   Redo2,
   RefreshCcw,
   RefreshCw,
+  Repeat,
   Rocket,
   RotateCcw,
   RotateCcwClock,
@@ -291,7 +296,6 @@ export {
   ShieldOff,
   ShieldX,
   ShoppingCart,
-  Signal,
   SlidersHorizontal,
   Smartphone,
   Sparkles,

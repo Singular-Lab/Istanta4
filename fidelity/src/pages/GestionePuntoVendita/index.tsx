@@ -1,4 +1,3 @@
-import userIcon from "@/assets/images/users/user_icon_profile.png";
 import Alert from "@/components/Base/Alert";
 import Badge from "@/components/Base/Badge";
 import BarraFiltri from "@/components/Base/BarraFiltri";
@@ -11,31 +10,52 @@ import PageError from "@/components/Base/PageError";
 import Pagina from "@/components/Base/Pagina";
 import Segmenti, { type OpzioneSegmento } from "@/components/Base/Segmenti";
 import Sezione from "@/components/Base/Sezione";
-import Spinner from "@/components/Base/Spinner";
-import StatCard, { StatCardGrid } from "@/components/Base/StatCard";
+import Skeleton from "@/components/Base/Skeleton";
 import StatusBadge from "@/components/Base/StatusBadge";
+import Table from "@/components/Base/Table";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import EmptyState from "@/components/EmptyState";
+import { PermissionGate } from "@/components/PermissionGate";
+import { coloreDaTinta } from "@/components/PuntiVendita/elenco";
+import { problemiDati, StatoDati } from "@/components/PuntiVendita/StatoDati";
+import { PERMISSIONS } from "@/constants/permissions";
 import type { TonoStato } from "@/constants/stati";
-import { formatData } from "@/utils/format";
+import { useNotification } from "@/context/NotificationContext";
+import { useParametriUrl } from "@/hooks/useParametriUrl";
+import { formatDataOra, formatNumero, formatRelativo } from "@/utils/format";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import clsx from "clsx";
-import type { Map as LeafletMap } from "leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Marker, TileLayer } from "react-leaflet";
 import { MapContainer } from "react-leaflet/MapContainer";
-import { useLoaderData } from "react-router-dom";
+import { Link, useLoaderData, useNavigate } from "react-router-dom";
 import { ServerCall } from "../../../lib/server_call";
 import type { CreateDisplayContextDTO, DisplayContextResponseDTO, DispositivoPuntoVenditaResponseDTO, PuntoVenditaResponseDTO } from "../../../server/core/dto";
 import { Dialog, Menu } from "../../components/Base/Headless";
 import { usePVDeviceStatus } from "../../hooks/usePVDeviceStatus";
-import { canaleArea, codiciGdo, indirizzoCompleto } from "../../utils/puntoVendita";
+import { codiciGdo, indirizzoCompleto, valoriFormPuntoVendita } from "../../utils/puntoVendita";
 import { operatorOptions } from "../../pages/GestioneApi/constants";
 import type { FilterCondition } from "../../pages/GestioneApi/types";
 import { createEmptyFilterCondition, createEmptyFilterGroup, formatFiltersForApi } from "../../pages/GestioneApi/utils/filterHelpers";
-import { useFetchDisplayContextsByPuntoVendita, useFetchDispositiviPuntoVendita, useFetchFilesFieldValues, useFetchFilesMetadataFields, useFetchVolantiniAttiviPuntoVendita } from "../../query/query";
+import {
+  useFetchDisplayContextsByPuntoVendita,
+  useFetchDispositiviPuntoVendita,
+  useFetchFilesFieldValues,
+  useFetchFilesMetadataFields,
+  useFetchPuntoVenditaGestione,
+  useFetchStoriaPuntoVendita,
+} from "../../query/query";
+import {
+  CampiCoordinate,
+  CampiPuntoVendita,
+  corpoSalvataggio,
+  useCombinazioniPerCanale,
+  useFormPuntoVendita,
+  type DatiFormPuntoVendita,
+  type RispostaSalvataggioPuntoVendita,
+} from "../PuntiVendita/formPuntoVendita";
+import { useTinteCanali } from "../PuntiVenditaConsultazione/analisi";
 
 // Componente per input valore filtro con caricamento dinamico
 interface ContextFilterValueInputProps {
@@ -80,124 +100,165 @@ const ContextFilterValueInput: React.FC<ContextFilterValueInputProps> = ({
 /** Stato di connessione del dispositivo: offline è un'assenza di segnale, non un errore. */
 const STATO_DISPOSITIVO: Record<"online" | "offline" | "warning", { tono: TonoStato; etichetta: string }> = {
   online: { tono: "success", etichetta: "Online" },
-  warning: { tono: "warning", etichetta: "Warning" },
+  warning: { tono: "warning", etichetta: "In ritardo" },
   offline: { tono: "neutral", etichetta: "Offline" },
 };
 
-/** Volantini delle promo valide, dai kit pubblicati con la stessa area e lo stesso canale del punto vendita. */
-const VolantiniAttivi: React.FC<{ idPv: string; canaleArea: string }> = ({ idPv, canaleArea }) => {
-  const { data: volantini = [], isLoading, isError, error, refetch } = useFetchVolantiniAttiviPuntoVendita(idPv);
+/** Le aree di lavoro della gestione del punto vendita, ciascuna una scheda nell'URL (?scheda=). */
+type SchedaGestione = "anagrafica" | "dispositivi" | "display";
 
-  return (
-    <Sezione titolo="Volantini attivi" descrizione={canaleArea}>
-      {isLoading ? (
-        <div role="status" className="flex items-center gap-2 text-sm text-slate-500">
-          <Spinner size="sm" decorativo /> Caricamento volantini...
-        </div>
-      ) : isError ? (
-        <PageError
-          compatta
-          titolo="Volantini non caricati"
-          motivo={(error as Error)?.message || "Errore durante il recupero dei volantini"}
-          onRiprova={() => refetch()}
-        />
-      ) : volantini.length === 0 ? (
-        <EmptyState
-          compatta
-          icon="FileSearch"
-          title="Nessun volantino attivo"
-          description="Nessun volantino attivo per questo canale e quest'area."
-        />
-      ) : (
-        <div className="flex flex-col gap-6">
-          {volantini.map(v => (
-            <div key={v.id_kit}>
-              <div className="flex flex-wrap items-baseline gap-x-2 mb-3">
-                <h3 className="title-card">{v.promo.nome}</h3>
-                <span className="text-xs tabular-nums text-slate-500">
-                  dal {formatData(v.promo.validita_dal)} al {formatData(v.promo.validita_al)}
-                </span>
-              </div>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-3">
-                {v.files.map(f => (
-                  <div key={f.id} className="overflow-hidden rounded-card border border-slate-200 dark:border-darkmode-400">
-                    <img src={f.url} alt={f.nome} loading="lazy" className="h-40 w-full object-cover object-top bg-slate-50" />
-                    <div className="flex items-center gap-2 p-3">
-                      <span className="truncate text-sm" title={f.nome}>{f.nome}</span>
-                      <a href={f.url_download} download={f.nome_download} className="ml-auto flex flex-none items-center text-sm text-primary">
-                        <Lucide icon="Download" aria-hidden="true" className="mr-1 h-4 w-4 stroke-[1.3]" /> PDF
-                      </a>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </Sezione>
-  );
+const SCHEDE_GESTIONE: readonly SchedaGestione[] = ["anagrafica", "dispositivi", "display"];
+
+const schedaDaUrl = (valore: string | null): SchedaGestione =>
+  SCHEDE_GESTIONE.find(scheda => scheda === valore) ?? "anagrafica";
+
+const PERCORSO_ELENCO = "/gestione-interna/punti-vendita";
+
+/** "Android TV 12 · Chrome 120": sistema e browser che il dispositivo ha mandato con l'ultimo segnale. */
+const tipoDispositivo = (d: DispositivoPuntoVenditaResponseDTO) => {
+  const os = d.metadata?.os;
+  const browser = d.metadata?.browser;
+  return [
+    os?.name && [os.name, os.version].filter(Boolean).join(" "),
+    browser?.name && [browser.name, browser.version?.split(".")[0]].filter(Boolean).join(" "),
+  ]
+    .filter(Boolean)
+    .join(" · ");
 };
 
+/** Una coordinata del form leggibile come numero, oppure null. */
+const numeroCoordinata = (valore: unknown) => {
+  const numero = typeof valore === "number" ? valore : typeof valore === "string" && valore.trim() !== "" ? Number(valore) : NaN;
+  return Number.isFinite(numero) ? numero : null;
+};
+
+const ZOOM_MINIMAPPA = 16;
+
+/** Il loader può non trovare il punto vendita (eliminato, o di un'altra GDO). */
 const GestionePuntoVendita: React.FC = () => {
-  const { puntoVendita } = useLoaderData() as {
-    puntoVendita: PuntoVenditaResponseDTO;
+  const { puntoVendita } = useLoaderData() as { puntoVendita: PuntoVenditaResponseDTO | null };
+  if (!puntoVendita) {
+    return (
+      <Pagina titolo="Punto vendita" indietro={{ to: PERCORSO_ELENCO, etichetta: "Torna ai punti vendita" }}>
+        <PageError titolo="Punto vendita non trovato" motivo="Il punto vendita non esiste più o non è della tua GDO." />
+      </Pagina>
+    );
+  }
+  return <GestioneDelPuntoVendita iniziale={puntoVendita} />;
+};
+
+/**
+ * Gestione di un punto vendita (/gestione-interna/punti-vendita/:id): intestazione compatta con
+ * insegna, area e stato dei dati, poi tre schede con la scelta nell'URL. Anagrafica modificabile
+ * nella pagina con la posizione accanto (stesso salvataggio dell'elenco: prima Istanta, poi
+ * Fidelity); dispositivi filtrati per stato con l'ultimo segnale; display context.
+ */
+function GestioneDelPuntoVendita({ iniziale }: { iniziale: PuntoVenditaResponseDTO }) {
+  const navigate = useNavigate();
+  const { showNotification } = useNotification();
+  const queryClient = useQueryClient();
+  const [parametri, aggiornaParametri] = useParametriUrl();
+  const scheda = schedaDaUrl(parametri.get("scheda"));
+  const vaiA = (nuova: SchedaGestione) => aggiornaParametri({ scheda: nuova === "anagrafica" ? null : nuova });
+
+  // Il punto vendita del loader, riletto dopo ogni salvataggio
+  const { data: puntoVendita = iniziale } = useFetchPuntoVenditaGestione(iniziale);
+  const storiaQuery = useFetchStoriaPuntoVendita(puntoVendita.id);
+  const storeMarker = useMemo(
+    () => L.divIcon({ className: "pv-marker", html: "<span></span>", iconSize: [12, 12], iconAnchor: [6, 6] }),
+    []
+  );
+
+  const nomeVisibile = puntoVendita.nome_display || puntoVendita.nome;
+  const codici = codiciGdo(puntoVendita.meta);
+  const canaleLocale = useMemo(
+    () => (puntoVendita.id_canale ? [{ id: puntoVendita.id_canale, nome: puntoVendita.nome_canale ?? puntoVendita.id_canale }] : []),
+    [puntoVendita.id_canale, puntoVendita.nome_canale]
+  );
+  const tintaCanale = useTinteCanali(canaleLocale);
+  const coloreInsegna = coloreDaTinta(tintaCanale(puntoVendita.id_canale ?? ""));
+  // "Mai nei volantini" solo quando la storia è arrivata e non ha volantini
+  const storia = storiaQuery.data;
+  const problemi = problemiDati(
+    {
+      ...puntoVendita,
+      storia: storia ? { volantini: storia.sintesi?.numeroVolantini ?? 0, insegnePerAnno: [], cambioInsegna: false } : undefined,
+    },
+    { gdoConCodici: false, storiaNota: storia !== undefined }
+  );
+
+  // ============================================================
+  // ANAGRAFICA: il form dell'elenco, nella pagina
+  // ============================================================
+  const form = useFormPuntoVendita(valoriFormPuntoVendita(iniziale));
+  const {
+    handleSubmit,
+    reset,
+    watch,
+    getValues,
+    formState: { isDirty },
+  } = form;
+  const { perCanale: combinazioniPerCanale } = useCombinazioniPerCanale();
+  const [correzione, setCorrezione] = useState(false);
+
+  // Il punto vendita riletto entra nel form, mai sopra le modifiche in corso
+  useEffect(() => {
+    if (!form.formState.isDirty) reset(valoriFormPuntoVendita(puntoVendita));
+  }, [puntoVendita, form, reset]);
+
+  const invalidaPuntiVendita = (refetchType: "active" | "none" = "active") => {
+    queryClient.invalidateQueries({ queryKey: ["dataPuntiVendita"], refetchType });
+    // Consultazione, rete per insegna e qualità dei dati contano gli stessi punti vendita
+    queryClient.invalidateQueries({ queryKey: ["puntiVendita"], refetchType });
   };
-  const refMap = useRef<LeafletMap | null>(null);
-  const storeMarker = L.divIcon({
-    className: "pv-marker",
-    html: `<span></span>`,
-    iconSize: [12, 12],
-    iconAnchor: [6, 6],
+
+  // modificaPV scrive prima su Istanta e poi in Fidelity, con lo stesso GUID: come il modale dell'elenco
+  const salvaAnagrafica = useMutation({
+    mutationFn: (dati: DatiFormPuntoVendita) =>
+      ServerCall.put<RispostaSalvataggioPuntoVendita>("/ACPV/modificaPV", corpoSalvataggio(dati, puntoVendita.id)),
+    onSuccess: (risposta) => {
+      if (!risposta.esito) {
+        showNotification(risposta.error || "Errore durante la modifica del punto vendita", { variant: "error" });
+        return;
+      }
+      showNotification("Punto vendita aggiornato con successo", { variant: "success" });
+      // I valori salvati diventano quelli di partenza: niente più modifiche in sospeso
+      reset(getValues());
+      setCorrezione(false);
+      invalidaPuntiVendita();
+    },
+    onError: (e: Error) =>
+      showNotification(e?.message || "Errore durante la modifica del punto vendita", { variant: "error" }),
   });
 
-  // ✅ Destrutturo i campi del DTO così è tutto tipato e chiaro
-  const {
-    nome,
-    nome_display,
-    citta,
-    provincia,
-    regione,
-    ragionesociale,
-    telefono,
-    has_coordinate,
-    coordinate,
-    numero_utenti_collegati,
-    meta,
-  } = puntoVendita;
-
-  const displayName = nome_display || nome;
-
-  const displayIndirizzoCompleto = [indirizzoCompleto(puntoVendita), regione].filter(Boolean).join(" - ");
-
-  const displayLocationShort = [citta, provincia, regione].filter(Boolean).join(", ");
-
-  const displayCanaleArea = canaleArea(puntoVendita);
-
-  const codici = codiciGdo(meta);
-
-  const parseCoordinate = (value?: number | string | null) => {
-    if (typeof value === "number") return Number.isFinite(value) ? value : null;
-    if (typeof value === "string") {
-      const parsed = Number(value);
-      return Number.isFinite(parsed) ? parsed : null;
-    }
-    return null;
+  const annullaModifiche = () => {
+    reset(valoriFormPuntoVendita(puntoVendita));
+    setCorrezione(false);
   };
 
-  // Senza coordinate il DTO porta 0,0: niente mappa, invece di una mappa centrata in mare
-  const lat = has_coordinate ? parseCoordinate(coordinate?.lat) : null;
-  const lon = has_coordinate ? parseCoordinate(coordinate?.lon) : null;
-  const posizione: [number, number] | null = lat !== null && lon !== null ? [lat, lon] : null;
+  // La mini-mappa segue le coordinate del form: correggendole si vede dove finisce il punto
+  const latitudine = numeroCoordinata(watch("lat"));
+  const longitudine = numeroCoordinata(watch("lon"));
+  const posizione: [number, number] | null = latitudine !== null && longitudine !== null ? [latitudine, longitudine] : null;
 
-  const mapZoom = 17;
+  const [eliminazioneAperta, setEliminazioneAperta] = useState(false);
+  const eliminaPuntoVendita = useMutation({
+    mutationFn: () => ServerCall.delete(`/ACPV/eliminaPV/${puntoVendita.id}`),
+    onSuccess: () => {
+      // Si torna all'elenco: le letture del punto vendita eliminato non vanno ripetute
+      invalidaPuntiVendita("none");
+      showNotification("Punto vendita eliminato", { variant: "success" });
+      navigate(PERCORSO_ELENCO);
+    },
+    onError: (e: Error) =>
+      showNotification(e?.message || "Errore durante l'eliminazione del punto vendita", { variant: "error" }),
+  });
 
   // ============================================================
   // DISPOSITIVI - DATI REALI DA API
   // ============================================================
   type DeviceStatus = "online" | "offline" | "warning";
 
-  const queryClient = useQueryClient();
   const {
     data: dispositivi = [],
     isLoading: isLoadingDevices,
@@ -207,7 +268,7 @@ const GestionePuntoVendita: React.FC = () => {
   } = useFetchDispositiviPuntoVendita(puntoVendita.id);
 
   // Real-time device status via WebSocket
-  const { deviceStatuses, getDeviceStatus } = usePVDeviceStatus(puntoVendita.id);
+  const { getDeviceStatus } = usePVDeviceStatus(puntoVendita.id);
 
   const [deviceQuery, setDeviceQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<DeviceStatus | "all">("all");
@@ -236,22 +297,11 @@ const GestionePuntoVendita: React.FC = () => {
   };
 
 
-  const getLastSeenLabel = (device: DispositivoPuntoVenditaResponseDTO): string => {
-    if (!device.last_seen_at) return "Mai connesso";
-    const lastSeen = new Date(device.last_seen_at).getTime();
-    const now = Date.now();
-    const diffMs = now - lastSeen;
-    const diffSeconds = Math.floor(diffMs / 1000);
-    const diffMinutes = Math.floor(diffSeconds / 60);
-    const diffHours = Math.floor(diffMinutes / 60);
-    const diffDays = Math.floor(diffHours / 24);
-
-    if (diffSeconds < 30) return "Adesso";
-    if (diffSeconds < 60) return `${diffSeconds}s fa`;
-    if (diffMinutes < 60) return `${diffMinutes} min fa`;
-    if (diffHours < 24) return `${diffHours}h ${diffMinutes % 60}m fa`;
-    return `${diffDays}g fa`;
-  };
+  /** Ultimo segnale in parole ("5 minuti fa"), con la data completa per il title. */
+  const ultimoSegnale = (device: DispositivoPuntoVenditaResponseDTO) =>
+    device.last_seen_at
+      ? { testo: formatRelativo(device.last_seen_at), titolo: formatDataOra(device.last_seen_at) }
+      : { testo: "Mai connesso", titolo: undefined };
 
   const filteredDevices = useMemo(() => {
     const q = deviceQuery.trim().toLowerCase();
@@ -273,12 +323,6 @@ const GestionePuntoVendita: React.FC = () => {
   const statusBadge = (status: DeviceStatus, isRealtimeConnected: boolean = false) => {
     const { tono, etichetta } = STATO_DISPOSITIVO[status];
     return <StatusBadge tono={tono} etichetta={status === "online" && isRealtimeConnected ? "Live" : etichetta} />;
-  };
-
-  const statusCardRing = (status: DeviceStatus) => {
-    if (status === "online") return "ring-1 ring-success/15";
-    if (status === "warning") return "ring-1 ring-warning/15";
-    return "ring-1 ring-danger/15";
   };
 
   const handleCopyDisplayUrl = useCallback((device: DispositivoPuntoVenditaResponseDTO) => {
@@ -569,632 +613,489 @@ const GestionePuntoVendita: React.FC = () => {
   const opzioniStato: OpzioneSegmento<DeviceStatus | "all">[] = [
     { valore: "all", etichetta: "Tutti", conteggio: dispositivi.length },
     { valore: "online", etichetta: "Online", conteggio: conteggiStato.online },
-    { valore: "warning", etichetta: "Warning", conteggio: conteggiStato.warning },
+    { valore: "warning", etichetta: "In ritardo", conteggio: conteggiStato.warning },
     { valore: "offline", etichetta: "Offline", conteggio: conteggiStato.offline },
   ];
+  // Il numero accanto alla scheda solo quando è noto
+  const opzioniScheda: OpzioneSegmento<SchedaGestione>[] = [
+    { valore: "anagrafica", etichetta: "Anagrafica" },
+    { valore: "dispositivi", etichetta: "Dispositivi", conteggio: isLoadingDevices || isErrorDevices ? undefined : dispositivi.length },
+    { valore: "display", etichetta: "Display context", conteggio: isLoadingContexts || isErrorContexts ? undefined : displayContexts.length },
+  ];
+
+  const righeInCaricamento = (colonne: number, etichetta: string) => (
+    <div aria-busy="true" aria-label={etichetta} className="flex flex-col gap-3 p-5">
+      {Array.from({ length: 3 }, (_, indice) => (
+        <div key={indice} className="grid gap-4" style={{ gridTemplateColumns: `repeat(${colonne}, minmax(0, 1fr))` }}>
+          {Array.from({ length: colonne }, (_, colonna) => (
+            <Skeleton key={colonna} className="h-4" />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
 
   return (
     <>
       <Pagina
-        titolo={displayName}
-        indietro={{ to: "/gestione-interna/punti-vendita", etichetta: "Torna ai punti vendita" }}
+        titolo={nomeVisibile}
+        indietro={{ to: PERCORSO_ELENCO, etichetta: "Torna ai punti vendita" }}
+        badges={
+          <>
+            {puntoVendita.nome_canale && (
+              // Pastiglia piena e chiara come gli altri badge: leggibile sulla fascia scura dell'intestazione
+              <span className="inline-flex max-w-full items-center gap-1.5 whitespace-nowrap rounded-full bg-slate-100 px-2 py-0.5 text-2xs font-medium text-slate-700">
+                {/* Il colore dell'insegna è quello di tutte le pagine dei punti vendita */}
+                <span aria-hidden="true" className="h-2 w-2 flex-none rounded-full" style={{ backgroundColor: coloreInsegna }} />
+                <span className="truncate">{puntoVendita.nome_canale}</span>
+              </span>
+            )}
+            {puntoVendita.nome_area && <StatusBadge tono="neutral" icon="MapPin" etichetta={puntoVendita.nome_area} />}
+            <StatoDati problemi={problemi} completi="Dati completi" />
+          </>
+        }
+        azioni={
+          <>
+            {/* Volantini attivi e storia del punto vendita sono nella scheda di consultazione */}
+            <Button as={Link} to={`/punti-vendita/${puntoVendita.id}`} variant="outline-secondary">
+              <Lucide icon="Store" aria-hidden="true" className="mr-2 h-4 w-4" />
+              Apri scheda
+            </Button>
+            {/* Elimina non resta in vista sulla fascia: sta nel menu "⋯", come nelle righe dell'elenco */}
+            <PermissionGate permission={PERMISSIONS.GDO.GESTISCI_PUNTI_VENDITA}>
+              <Menu className="inline-block text-left">
+                <Menu.Button as={Button} variant="outline-secondary" aria-label="Altre azioni sul punto vendita">
+                  {/* Icona da 20px: il pulsante è alto come "Apri scheda" */}
+                  <Lucide icon="Ellipsis" aria-hidden="true" className="h-5 w-5" />
+                </Menu.Button>
+                {/* Stretto: su mobile il pulsante non è sul bordo destro e il menu si apre verso sinistra */}
+                <Menu.Items className="w-40">
+                  <Menu.Item className="text-danger" onClick={() => setEliminazioneAperta(true)}>
+                    <Lucide icon="Trash2" aria-hidden="true" className="mr-2 h-4 w-4" />
+                    Elimina
+                  </Menu.Item>
+                </Menu.Items>
+              </Menu>
+            </PermissionGate>
+          </>
+        }
       >
-        {/* HEADER + AVATAR PUNTO VENDITA: fascia del profilo, il nome è già nell'intestazione */}
-        <div className="box box--stacked flex flex-col p-1.5">
-          <div className="relative h-48 w-full rounded-card bg-gradient-to-b from-theme-1/95 to-theme-2/95">
-            <div
-              className={clsx([
-                "w-full h-full relative overflow-hidden",
-                "before:content-[''] before:absolute before:inset-0 before:bg-texture-white before:-mt-[50rem]",
-                "after:content-[''] after:absolute after:inset-0 after:bg-texture-white after:-mt-[50rem]",
-              ])}
-            ></div>
-            <div className="absolute inset-x-0 top-0 mx-auto mt-24 h-32 w-32">
-              <div className="box image-fit h-full w-full overflow-hidden rounded-full border-[6px] border-white">
-                <img alt={displayName} src={userIcon} />
-              </div>
-            </div>
-          </div>
+        <Segmenti etichetta="Aree di gestione" opzioni={opzioniScheda} valore={scheda} onChange={vaiA} className="self-start" />
 
-          {/* INFO PRINCIPALI PUNTO VENDITA */}
-          <div className="rounded-card bg-slate-50 pb-6 pt-12">
-            <div className="mt-2.5 flex flex-col items-center justify-center gap-x-5 gap-y-2 sm:flex-row">
-              {/* Ragione sociale / GDO / tipo */}
-              <div className="flex items-center text-slate-500">
-                <Lucide icon="Briefcase" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5 stroke-[1.3]" />
-                <span className="text-sm">{ragionesociale || "Punto vendita"}</span>
-              </div>
-
-              {/* Regione / Località */}
-              <div className="flex items-center text-slate-500">
-                <Lucide icon="MountainSnow" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5 stroke-[1.3]" />
-                <span className="text-sm">
-                  {displayLocationShort || "Località non impostata"}
-                </span>
-              </div>
-
-              {/* Canale e area */}
-              <div className="flex items-center text-slate-500">
-                <Lucide icon="Signal" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5 stroke-[1.3]" />
-                <span className="text-sm">{displayCanaleArea}</span>
-              </div>
-
-              {/* Codici del sistema della GDO (es. id ANACAN) */}
-              {codici.map(c => (
-                <div key={c.etichetta} className="flex items-center text-slate-500">
-                  <Lucide icon="Hash" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5 stroke-[1.3]" />
-                  <span className="text-sm">
-                    {c.etichetta}: {c.valore}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* PAGINA UNICA: contenuto a sinistra, dati del punto vendita a destra */}
-        <div className="grid grid-cols-12 gap-6">
-          {/* COLONNA SINISTRA */}
-          <div className="col-span-12 flex flex-col gap-6 xl:col-span-8">
-            <VolantiniAttivi idPv={puntoVendita.id} canaleArea={displayCanaleArea} />
-
-            {/* DISPOSITIVI */}
+        {/* ANAGRAFICA: il form nella pagina, la posizione accanto */}
+        {scheda === "anagrafica" && (
+          <div className="grid grid-cols-12 gap-6">
             <Sezione
-              titolo="Gestione dispositivi"
+              className="col-span-12 xl:col-span-8"
+              titolo="Anagrafica"
+              descrizione="Le modifiche vanno prima in Istanta, poi in Fidelity."
               azioni={
-                <Button size="sm" variant="primary" onClick={() => setIsCreateDeviceOpen(true)}>
-                  <Lucide icon="Plus" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
-                  Nuovo dispositivo
-                </Button>
+                <PermissionGate permission={PERMISSIONS.GDO.GESTISCI_PUNTI_VENDITA} mode="disable">
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline-secondary" onClick={annullaModifiche} disabled={!isDirty || salvaAnagrafica.isPending}>
+                      Annulla
+                    </Button>
+                    <Button
+                      size="sm"
+                      type="submit"
+                      variant="primary"
+                      form="form-anagrafica"
+                      disabled={!isDirty}
+                      loading={salvaAnagrafica.isPending}
+                    >
+                      Salva modifiche
+                    </Button>
+                  </div>
+                </PermissionGate>
               }
             >
-              <BarraFiltri variante="interna">
-                <CampoRicerca
-                  etichetta="Cerca dispositivi"
-                  placeholder="Cerca device (nome, posizione, pagina...)"
-                  value={deviceQuery}
-                  onChange={setDeviceQuery}
-                />
-                <Segmenti etichetta="Stato" opzioni={opzioniStato} valore={statusFilter} onChange={setStatusFilter} />
-              </BarraFiltri>
-
-              {/* RIEPILOGO */}
-              <StatCardGrid className="mb-5 lg:grid-cols-3">
-                <StatCard
-                  densita="compatta"
-                  etichetta="Online"
-                  valore={conteggiStato.online}
-                  icona="CircleCheck"
-                  tono="success"
-                  sottotitolo="Device attivi e con heartbeat recente"
-                />
-                <StatCard
-                  densita="compatta"
-                  etichetta="Warning"
-                  valore={conteggiStato.warning}
-                  icona="TriangleAlert"
-                  tono="warning"
-                  sottotitolo="Ritardi heartbeat o errori runtime"
-                />
-                <StatCard
-                  densita="compatta"
-                  etichetta="Offline"
-                  valore={conteggiStato.offline}
-                  icona="CircleX"
-                  tono="neutral"
-                  sottotitolo="Nessun segnale oltre la soglia"
-                />
-              </StatCardGrid>
-
-              {isLoadingDevices ? (
-                <div className="flex justify-center p-8">
-                  <Spinner etichetta="Caricamento dispositivi…" />
+              <form id="form-anagrafica" onSubmit={handleSubmit(dati => salvaAnagrafica.mutate(dati))} noValidate>
+                <CampiPuntoVendita form={form} combinazioniPerCanale={combinazioniPerCanale} conCoordinate={false} />
+              </form>
+              {(codici.length > 0 || puntoVendita.numero_utenti_collegati !== undefined) && (
+                <div className="mt-5 border-t border-dashed border-slate-200 pt-4 dark:border-darkmode-400">
+                  <h3 className="title-eyebrow">Dati di sistema</h3>
+                  <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm tabular-nums sm:grid-cols-[auto_1fr]">
+                    {/* I codici del sistema della GDO arrivano dall'import Excel: qui si leggono e basta */}
+                    {codici.map(c => (
+                      <div key={c.etichetta} className="contents">
+                        <dt className="text-slate-500">{c.etichetta}</dt>
+                        <dd className="font-medium text-slate-800 dark:text-slate-200">{c.valore}</dd>
+                      </div>
+                    ))}
+                    {puntoVendita.numero_utenti_collegati !== undefined && (
+                      <div className="contents">
+                        <dt className="text-slate-500">Dipendenti collegati</dt>
+                        <dd className="font-medium text-slate-800 dark:text-slate-200">{formatNumero(puntoVendita.numero_utenti_collegati)}</dd>
+                      </div>
+                    )}
+                  </dl>
                 </div>
-              ) : isErrorDevices ? (
+              )}
+            </Sezione>
+
+            <div className="col-span-12 flex flex-col gap-6 xl:col-span-4">
+              <Sezione
+                compatta
+                titolo="Posizione"
+                descrizione={
+                  posizione ? (
+                    <span className="tabular-nums">
+                      {posizione[0].toFixed(5)}, {posizione[1].toFixed(5)}
+                    </span>
+                  ) : (
+                    "Senza coordinate: non compare sulla mappa"
+                  )
+                }
+                azioni={
+                  <PermissionGate permission={PERMISSIONS.GDO.GESTISCI_PUNTI_VENDITA} mode="disable">
+                    <Button size="sm" variant="outline-secondary" aria-expanded={correzione} onClick={() => setCorrezione(aperta => !aperta)}>
+                      <Lucide icon={correzione ? "X" : "Crosshair"} aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                      {correzione ? "Chiudi" : "Correggi"}
+                    </Button>
+                  </PermissionGate>
+                }
+              >
+                {posizione ? (
+                  <div className="relative h-44 w-full overflow-hidden rounded-control border border-slate-200 dark:border-darkmode-400">
+                    {/* La chiave ridisegna la mappa sulle coordinate nuove mentre si correggono */}
+                    <MapContainer
+                      key={posizione.join(",")}
+                      center={posizione}
+                      zoom={ZOOM_MINIMAPPA}
+                      preferCanvas
+                      scrollWheelZoom={false}
+                      doubleClickZoom={false}
+                      dragging={false}
+                      touchZoom={false}
+                      keyboard={false}
+                      zoomControl={false}
+                      className="absolute inset-0"
+                    >
+                      <Marker position={posizione} icon={storeMarker} />
+                      <TileLayer
+                        url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                        maxZoom={19}
+                      />
+                    </MapContainer>
+                  </div>
+                ) : (
+                  <EmptyState
+                    compatta
+                    icon="MapPinOff"
+                    title="Coordinate non disponibili"
+                    description="Con Correggi si inseriscono latitudine e longitudine."
+                  />
+                )}
+                {correzione && (
+                  <div className="mt-4 grid grid-cols-2 gap-3">
+                    <CampiCoordinate form={form} className="col-span-2 sm:col-span-1" />
+                    <p className="col-span-2 text-xs text-slate-500">
+                      Vuote, il punto vendita resta senza coordinate. Si salvano con &quot;Salva modifiche&quot;.
+                    </p>
+                  </div>
+                )}
+                <div className="mt-3 text-xs text-slate-500">{indirizzoCompleto(puntoVendita) || "Indirizzo non impostato"}</div>
+              </Sezione>
+
+              <Sezione
+                compatta
+                titolo="Dispositivi"
+                descrizione="Display e totem del punto vendita"
+                azioni={
+                  <Button size="sm" variant="outline-secondary" onClick={() => vaiA("dispositivi")}>
+                    Apri
+                  </Button>
+                }
+              >
+                {isLoadingDevices ? (
+                  <Skeleton className="h-5 w-2/3" />
+                ) : isErrorDevices ? (
+                  <p className="text-sm text-slate-500">Stato dei dispositivi non disponibile.</p>
+                ) : dispositivi.length === 0 ? (
+                  <p className="text-sm text-slate-500">Nessun dispositivo registrato.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2 tabular-nums">
+                    <StatusBadge tono="success" etichetta={`${formatNumero(conteggiStato.online)} online`} />
+                    <StatusBadge tono="warning" etichetta={`${formatNumero(conteggiStato.warning)} in ritardo`} />
+                    <StatusBadge tono="neutral" etichetta={`${formatNumero(conteggiStato.offline)} offline`} />
+                  </div>
+                )}
+              </Sezione>
+            </div>
+          </div>
+        )}
+
+        {/* DISPOSITIVI: filtro per stato, tabella con l'ultimo segnale */}
+        {scheda === "dispositivi" && (
+          <Sezione
+            senzaPadding
+            titolo="Dispositivi"
+            descrizione="Display e totem del negozio, con l'ultimo segnale ricevuto."
+            azioni={
+              <Button size="sm" variant="primary" onClick={() => setIsCreateDeviceOpen(true)}>
+                <Lucide icon="Plus" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                Nuovo dispositivo
+              </Button>
+            }
+          >
+            <BarraFiltri>
+              <Segmenti etichetta="Stato" opzioni={opzioniStato} valore={statusFilter} onChange={setStatusFilter} />
+              <CampoRicerca
+                etichetta="Cerca dispositivi"
+                placeholder="Nome, descrizione o contesto"
+                value={deviceQuery}
+                onChange={setDeviceQuery}
+              />
+            </BarraFiltri>
+            {isLoadingDevices ? (
+              righeInCaricamento(4, "Caricamento dei dispositivi")
+            ) : isErrorDevices ? (
+              <div className="p-5">
                 <PageError
                   compatta
                   titolo="Dispositivi non caricati"
                   motivo={(erroreDevices as Error)?.message || "Errore durante il recupero dei dispositivi"}
                   onRiprova={() => refetchDevices()}
                 />
-              ) : filteredDevices.length === 0 ? (
-                dispositivi.length === 0 ? (
-                  <EmptyState
-                    compatta
-                    icon="MonitorX"
-                    title="Nessun dispositivo registrato"
-                    description="Aggiungi un nuovo dispositivo per iniziare."
-                  />
-                ) : (
-                  <EmptyState
-                    compatta
-                    icon="SearchX"
-                    title="Nessun dispositivo trovato"
-                    description="Modifica i filtri o prova una ricerca diversa."
-                    buttonText="Azzera filtri"
-                    buttonIcon="X"
-                    onButtonClick={() => {
-                      setDeviceQuery("");
-                      setStatusFilter("all");
-                    }}
-                  />
-                )
+              </div>
+            ) : filteredDevices.length === 0 ? (
+              dispositivi.length === 0 ? (
+                <EmptyState
+                  compatta
+                  icon="MonitorX"
+                  title="Nessun dispositivo registrato"
+                  description="Aggiungi un nuovo dispositivo per iniziare."
+                />
               ) : (
-                /* DEVICE GRID */
-                <div className="grid grid-cols-12 gap-4">
-                  {filteredDevices.map((d) => {
-                    const status = getDeviceStatusValue(d);
-                    const lastSeenLabel = getLastSeenLabel(d);
-                    const realtimeStatus = getDeviceStatus(d.id);
-                    const isRealtimeConnected = realtimeStatus?.isConnected ?? false;
-                    return (
-                      <div key={d.id} className="col-span-12 md:col-span-6">
-                        <div
-                          className={clsx([
-                            "rounded-card border border-slate-200 bg-white p-4",
-                            statusCardRing(status),
-                          ])}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="flex min-w-0 items-start gap-3">
-                              <div aria-hidden="true" className="flex h-10 w-10 flex-none items-center justify-center rounded-control border border-slate-200 bg-slate-50">
-                                <Lucide icon="Monitor" className="h-5 w-5 stroke-[1.4] text-slate-700" />
-                              </div>
-
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <h3 className="title-card truncate">{d.nome}</h3>
-                                  {statusBadge(status, isRealtimeConnected)}
-                                </div>
-
-                                <div className="mt-1 truncate text-xs text-slate-500">
-                                  {d.descrizione || "Nessuna descrizione"} •{" "}
-                                  <span className="text-slate-600">{lastSeenLabel}</span>
-                                </div>
-                              </div>
+                <EmptyState
+                  compatta
+                  icon="SearchX"
+                  title="Nessun dispositivo trovato"
+                  description="Modifica i filtri o prova una ricerca diversa."
+                  buttonText="Azzera filtri"
+                  buttonIcon="X"
+                  onButtonClick={() => {
+                    setDeviceQuery("");
+                    setStatusFilter("all");
+                  }}
+                />
+              )
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <Table.Thead>
+                    <Table.Tr>
+                      <Table.Th>Dispositivo</Table.Th>
+                      <Table.Th>Stato</Table.Th>
+                      <Table.Th>Ultimo segnale</Table.Th>
+                      <Table.Th>Display context</Table.Th>
+                      <Table.Th className="text-right"><span className="sr-only">Azioni</span></Table.Th>
+                    </Table.Tr>
+                  </Table.Thead>
+                  <Table.Tbody>
+                    {filteredDevices.map((d) => {
+                      const status = getDeviceStatusValue(d);
+                      const realtimeStatus = getDeviceStatus(d.id);
+                      const isRealtimeConnected = realtimeStatus?.isConnected ?? false;
+                      const segnale = ultimoSegnale(d);
+                      const dettaglio = [d.descrizione, tipoDispositivo(d)].filter(Boolean).join(" · ");
+                      return (
+                        <Table.Tr key={d.id}>
+                          <Table.Td>
+                            <div className="font-medium text-slate-800 dark:text-slate-200">{d.nome}</div>
+                            <div className="text-xs text-slate-500">{dettaglio || "Tipo non ancora noto"}</div>
+                          </Table.Td>
+                          <Table.Td>
+                            <div className="flex flex-wrap gap-1">
+                              {statusBadge(status, isRealtimeConnected)}
+                              {!d.is_active && <StatusBadge tono="danger" etichetta="Disattivato" />}
                             </div>
-
-                            {/* ACTIONS */}
-                            <Menu className="inline-block text-left">
-                              <Menu.Button
-                                as={Button}
-                                size="sm"
-                                variant="outline-secondary"
-                                aria-label={`Azioni dispositivo ${d.nome}`}
-                              >
-                                <Lucide icon="EllipsisVertical" aria-hidden="true" className="h-4 w-4" />
-                              </Menu.Button>
-                              <Menu.Items className="w-56">
-                                {d.display_url ? (
-                                  <Menu.Item onClick={() => window.open(d.display_url, '_blank')}>
-                                    <Lucide icon="Eye" aria-hidden="true" className="mr-2 h-4 w-4" /> Apri preview
+                          </Table.Td>
+                          <Table.Td className="whitespace-nowrap tabular-nums">
+                            {isRealtimeConnected ? (
+                              <>
+                                <div>
+                                  Adesso
+                                  {realtimeStatus?.latencyMs != null && <span className="text-slate-500"> · {realtimeStatus.latencyMs} ms</span>}
+                                </div>
+                                {realtimeStatus?.currentSlideIndex != null && realtimeStatus?.totalSlides != null && (
+                                  <div className="max-w-48 truncate text-xs text-slate-500" title={realtimeStatus.slideName ?? undefined}>
+                                    Slide {realtimeStatus.currentSlideIndex + 1} di {realtimeStatus.totalSlides}
+                                    {realtimeStatus.slideName ? ` · ${realtimeStatus.slideName}` : ""}
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <span title={segnale.titolo}>{segnale.testo}</span>
+                            )}
+                          </Table.Td>
+                          <Table.Td>
+                            {d.displayContext ? (
+                              <span className="text-slate-700 dark:text-slate-300">{d.displayContext.nome}</span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-xs text-warning">
+                                <Lucide icon="TriangleAlert" aria-hidden="true" className="h-3.5 w-3.5" />
+                                Nessuno
+                              </span>
+                            )}
+                          </Table.Td>
+                          <Table.Td className="whitespace-nowrap text-right">
+                            <div className="inline-flex items-center gap-1.5">
+                              <Button size="sm" variant="outline-secondary" onClick={() => openAssignDialog(d)} aria-label={`Assegna contesto a ${d.nome}`}>
+                                <Lucide icon="LayoutDashboard" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                                Assegna
+                              </Button>
+                              <Menu className="inline-block text-left">
+                                <Menu.Button as={Button} size="sm" variant="outline-secondary" aria-label={`Azioni dispositivo ${d.nome}`}>
+                                  <Lucide icon="Ellipsis" aria-hidden="true" className="h-4 w-4" />
+                                </Menu.Button>
+                                <Menu.Items className="w-56">
+                                  {d.display_url ? (
+                                    <Menu.Item onClick={() => window.open(d.display_url, "_blank")}>
+                                      <Lucide icon="Eye" aria-hidden="true" className="mr-2 h-4 w-4" /> Apri preview
+                                    </Menu.Item>
+                                  ) : null}
+                                  <Menu.Item onClick={() => handleCopyDisplayUrl(d)}>
+                                    <Lucide icon="Link" aria-hidden="true" className="mr-2 h-4 w-4" /> Copia URL display
                                   </Menu.Item>
-                                ) : null}
-                                <Menu.Item onClick={() => openAssignDialog(d)}>
-                                  <Lucide icon="LayoutDashboard" aria-hidden="true" className="mr-2 h-4 w-4" /> Assegna contesto
-                                </Menu.Item>
-                                <Menu.Item onClick={() => handleCopyDisplayUrl(d)}>
-                                  <Lucide icon="Link" aria-hidden="true" className="mr-2 h-4 w-4" /> Copia URL display
-                                </Menu.Item>
-                                <Menu.Item onClick={() => handleRegenerateToken(d)}>
-                                  <Lucide icon="RotateCw" aria-hidden="true" className="mr-2 h-4 w-4" /> Rigenera token
-                                </Menu.Item>
-                                <Menu.Item onClick={() => handleToggleActive(d)}>
-                                  <Lucide icon={d.is_active ? "Ban" : "CircleCheck"} aria-hidden="true" className="mr-2 h-4 w-4" />
-                                  {d.is_active ? "Disattiva" : "Attiva"}
-                                </Menu.Item>
-                                <Menu.Item className="text-danger" onClick={() => handleDeleteDevice(d)}>
-                                  <Lucide icon="Trash2" aria-hidden="true" className="mr-2 h-4 w-4" /> Elimina
-                                </Menu.Item>
-                              </Menu.Items>
-                            </Menu>
-                          </div>
-
-                          {/* CONTENT STATUS */}
-                          <div className="mt-4 flex flex-col gap-2">
-                            <div className="flex h-full w-full flex-col gap-3 rounded-card border border-slate-200 bg-slate-50 p-3">
-                              {/* Anteprima del contenuto (in cima) */}
-                              <div className="rounded-card border border-slate-200 bg-white p-3">
-                                <div className="mb-2 flex items-center justify-between text-xs text-slate-500">
-                                  <span className="font-medium text-slate-700">
-                                    {isRealtimeConnected ? "Monitoraggio live" : "Anteprima contenuto"}
-                                  </span>
-                                  {isRealtimeConnected &&
-                                    realtimeStatus?.currentSlideIndex != null &&
-                                    realtimeStatus?.totalSlides != null && (
-                                      <span className="font-medium tabular-nums text-slate-700">
-                                        {realtimeStatus.currentSlideIndex + 1} / {realtimeStatus.totalSlides}
-                                      </span>
-                                    )}
-                                </div>
-
-                                {isRealtimeConnected && realtimeStatus?.slideUrl ? (
-                                  <div className="relative aspect-video w-full overflow-hidden rounded-control border border-slate-200 bg-white">
-                                    <img
-                                      key={realtimeStatus.slideUrl}
-                                      src={realtimeStatus.slideUrl}
-                                      alt={realtimeStatus.slideName || "Slide corrente"}
-                                      className="absolute inset-0 h-full w-full object-contain"
-                                      loading="lazy"
-                                      onError={(e) => {
-                                        (e.currentTarget as HTMLImageElement).style.display = "none";
-                                      }}
-                                    />
-
-                                    {/* fallback */}
-                                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-xs text-slate-400">
-                                      Anteprima non disponibile
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div className="flex h-28 items-center justify-center rounded-control border border-dashed border-slate-200 bg-slate-50 text-xs text-slate-500">
-                                    Nessun dato live disponibile
-                                  </div>
-                                )}
-
-                                {realtimeStatus?.slideName && (
-                                  <div
-                                    className="mt-1 truncate text-xs text-slate-500"
-                                    title={realtimeStatus.slideName}
-                                  >
-                                    {realtimeStatus.slideName}
-                                  </div>
-                                )}
-                              </div>
-
-                              {/* Impostazioni / stato del playback */}
-                              <div className="rounded-card border border-slate-200 bg-white p-3">
-                                <div className="flex items-center justify-between text-xs text-slate-500">
-                                  <span className="font-medium text-slate-700">
-                                    {isRealtimeConnected ? "Playback attivo" : "Impostazioni playback"}
-                                  </span>
-                                  <span className="text-slate-600">
-                                    {d.displayContext?.auto_scroll ? "Auto-scroll" : "Manuale"}
-                                    {d.displayContext?.scroll_speed
-                                      ? ` • ${(d.displayContext.scroll_speed / 1000).toFixed(0)}s`
-                                      : ""}
-                                  </span>
-                                </div>
-
-                                <div className="mt-2 text-sm font-medium text-slate-800">
-                                  {d.displayContext?.scroll_speed
-                                    ? `${(d.displayContext.scroll_speed / 1000).toFixed(0)}s per slide`
-                                    : "—"}
-                                </div>
-                              </div>
-
-                              {/* Stato della connessione / ping */}
-                              <div className="rounded-card border border-slate-200 bg-white p-3">
-                                <div className="flex items-center justify-between text-xs text-slate-500">
-                                  {isRealtimeConnected ? (
-                                    <span className="flex items-center gap-1">
-                                      <span className="relative flex h-2 w-2">
-                                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75"></span>
-                                        <span className="relative inline-flex h-2 w-2 rounded-full bg-success"></span>
-                                      </span>
-                                      Ping
-                                    </span>
-                                  ) : (
-                                    <span>Heartbeat</span>
-                                  )}
-
-                                  <span className="font-medium tabular-nums text-slate-700">
-                                    {isRealtimeConnected
-                                      ? realtimeStatus?.latencyMs != null
-                                        ? `${realtimeStatus.latencyMs}ms`
-                                        : "—"
-                                      : lastSeenLabel}
-                                  </span>
-                                </div>
-
-                                <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
-                                  <div
-                                    className={clsx([
-                                      "h-full rounded-full transition-all duration-300",
-                                      isRealtimeConnected
-                                        ? "bg-success"
-                                        : status === "online"
-                                          ? "bg-success"
-                                          : status === "warning"
-                                            ? "bg-warning"
-                                            : "bg-danger",
-                                    ])}
-                                    style={{
-                                      width: isRealtimeConnected
-                                        ? "100%"
-                                        : status === "online"
-                                          ? "82%"
-                                          : status === "warning"
-                                            ? "48%"
-                                            : "12%",
-                                    }}
-                                  />
-                                </div>
-
-                                {!isRealtimeConnected && (
-                                  <div className="mt-1 text-right text-2xs text-slate-400">
-                                    Ultimo segnale: {lastSeenLabel}
-                                  </div>
-                                )}
-                              </div>
+                                  <Menu.Item onClick={() => handleRegenerateToken(d)}>
+                                    <Lucide icon="RotateCw" aria-hidden="true" className="mr-2 h-4 w-4" /> Rigenera token
+                                  </Menu.Item>
+                                  <Menu.Item onClick={() => handleToggleActive(d)}>
+                                    <Lucide icon={d.is_active ? "Ban" : "CircleCheck"} aria-hidden="true" className="mr-2 h-4 w-4" />
+                                    {d.is_active ? "Disattiva" : "Attiva"}
+                                  </Menu.Item>
+                                  <Menu.Item className="text-danger" onClick={() => handleDeleteDevice(d)}>
+                                    <Lucide icon="Trash2" aria-hidden="true" className="mr-2 h-4 w-4" /> Elimina
+                                  </Menu.Item>
+                                </Menu.Items>
+                              </Menu>
                             </div>
-                            <div className="rounded-card border border-slate-200 bg-slate-50 p-3">
-                              <div className="text-xs text-slate-500">Display Context</div>
-                              <div className="mt-1 truncate text-sm font-medium text-slate-800">
-                                {d.displayContext?.nome || "Nessun context assegnato"}
-                              </div>
-                              <div className="mt-1 text-xs text-slate-500">
-                                Endpoint:{" "}
-                                <span className="font-medium text-slate-700">
-                                  {d.displayContext?.endpoint_type || "—"}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
+                          </Table.Td>
+                        </Table.Tr>
+                      );
+                    })}
+                  </Table.Tbody>
+                </Table>
+              </div>
+            )}
+          </Sezione>
+        )}
 
-                          {/* AVVISO: dispositivo disattivato o senza contesto */}
-                          {!d.is_active ? (
-                            <Alert variant="soft-danger" icona="CircleX" className="mt-3 px-3 py-2 text-xs">
-                              <span className="font-medium">Dispositivo disattivato</span>
-                            </Alert>
-                          ) : !d.displayContext ? (
-                            <Alert variant="soft-warning" icona="TriangleAlert" className="mt-3 px-3 py-2 text-xs">
-                              <span className="font-medium">Nessun display context assegnato</span>
-                            </Alert>
-                          ) : null}
-
-                          {/* FOOTER CTA */}
-                          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
-                            <Button
-                              size="sm"
-                              variant="outline-secondary"
-                              onClick={() => handleCopyDisplayUrl(d)}
-                            >
-                              <Lucide icon="Link" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
-                              Copia link display
-                            </Button>
-
-                            <div className="text-xs text-slate-400 sm:ml-auto">
-                              ID: <span className="text-slate-500">{d.id.slice(0, 8)}...</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </Sezione>
-
-            {/* DISPLAY CONTEXTS */}
-            <Sezione
-              titolo="Display Contexts"
-              azioni={
-                <Button
-                  size="sm"
-                  variant="primary"
-                  onClick={() => { resetContextForm(); setIsCreateContextOpen(true); }}
-                >
-                  <Lucide icon="Plus" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
-                  Nuovo contesto
-                </Button>
-              }
-            >
-              {isLoadingContexts ? (
-                <div className="flex justify-center p-8">
-                  <Spinner etichetta="Caricamento contesti…" />
-                </div>
-              ) : isErrorContexts ? (
+        {/* DISPLAY CONTEXT */}
+        {scheda === "display" && (
+          <Sezione
+            senzaPadding
+            titolo="Display context"
+            descrizione="Che cosa mostrano i display: contenuti, filtri e scorrimento."
+            azioni={
+              <Button
+                size="sm"
+                variant="primary"
+                onClick={() => { resetContextForm(); setIsCreateContextOpen(true); }}
+              >
+                <Lucide icon="Plus" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                Nuovo contesto
+              </Button>
+            }
+          >
+            {isLoadingContexts ? (
+              righeInCaricamento(5, "Caricamento dei contesti")
+            ) : isErrorContexts ? (
+              <div className="p-5">
                 <PageError
                   compatta
                   titolo="Contesti non caricati"
                   motivo={(erroreContexts as Error)?.message || "Errore durante il recupero dei contesti"}
                   onRiprova={() => refetchContexts()}
                 />
-              ) : displayContexts.length === 0 ? (
-                <EmptyState
-                  compatta
-                  icon="LayoutDashboard"
-                  title="Nessun display context"
-                  description="Crea un contesto per configurare cosa mostrare sui display."
-                />
-              ) : (
-                <div className="grid grid-cols-12 gap-4">
-                  {displayContexts.map((ctx) => (
-                    <div key={ctx.id} className="col-span-12 md:col-span-6">
-                      <div className="rounded-card border border-slate-200 bg-white p-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <h3 className="title-card truncate">{ctx.nome}</h3>
-                              <StatusBadge
-                                tono={ctx.is_active ? "success" : "neutral"}
-                                etichetta={ctx.is_active ? "Attivo" : "Inattivo"}
-                              />
+              </div>
+            ) : displayContexts.length === 0 ? (
+              <EmptyState
+                compatta
+                icon="LayoutDashboard"
+                title="Nessun display context"
+                description="Crea un contesto per configurare cosa mostrare sui display."
+              />
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <Table.Thead>
+                    <Table.Tr>
+                      <Table.Th>Contesto</Table.Th>
+                      <Table.Th>Stato</Table.Th>
+                      <Table.Th>Contenuto</Table.Th>
+                      <Table.Th className="text-right">Dispositivi</Table.Th>
+                      <Table.Th>Scorrimento</Table.Th>
+                      <Table.Th className="text-right"><span className="sr-only">Azioni</span></Table.Th>
+                    </Table.Tr>
+                  </Table.Thead>
+                  <Table.Tbody>
+                    {displayContexts.map((ctx) => {
+                      const filtri = ctx.filters?.flat().length || 0;
+                      return (
+                        <Table.Tr key={ctx.id}>
+                          <Table.Td>
+                            <div className="font-medium text-slate-800 dark:text-slate-200">{ctx.nome}</div>
+                            {ctx.descrizione && <div className="max-w-xs truncate text-xs text-slate-500">{ctx.descrizione}</div>}
+                          </Table.Td>
+                          <Table.Td>
+                            <StatusBadge tono={ctx.is_active ? "success" : "neutral"} etichetta={ctx.is_active ? "Attivo" : "Inattivo"} />
+                          </Table.Td>
+                          <Table.Td className="whitespace-nowrap text-xs text-slate-600 dark:text-slate-300">
+                            {ctx.endpoint_type} · {ctx.render_type || "carousel"} · {filtri === 1 ? "1 filtro" : `${filtri} filtri`}
+                          </Table.Td>
+                          <Table.Td className="text-right tabular-nums">{formatNumero(ctx.dispositivi_count ?? 0)}</Table.Td>
+                          <Table.Td className="whitespace-nowrap text-xs text-slate-600 dark:text-slate-300">
+                            {ctx.auto_scroll ? `${(ctx.scroll_speed / 1000).toFixed(0)} s per slide` : "Manuale"}
+                          </Table.Td>
+                          <Table.Td className="whitespace-nowrap text-right">
+                            <div className="inline-flex items-center gap-1.5">
+                              <Button size="sm" variant="outline-secondary" onClick={() => openEditContext(ctx)} aria-label={`Modifica ${ctx.nome}`}>
+                                <Lucide icon="Pencil" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                                Modifica
+                              </Button>
+                              <Menu className="inline-block text-left">
+                                <Menu.Button as={Button} size="sm" variant="outline-secondary" aria-label={`Azioni contesto ${ctx.nome}`}>
+                                  <Lucide icon="Ellipsis" aria-hidden="true" className="h-4 w-4" />
+                                </Menu.Button>
+                                <Menu.Items className="w-48">
+                                  <Menu.Item
+                                    className="text-danger"
+                                    onClick={() => setConferma({
+                                      title: "Eliminare il contesto?",
+                                      description: `Il contesto "${ctx.nome}" verrà eliminato e i dispositivi che lo usano resteranno senza contesto assegnato.`,
+                                      confirmLabel: "Elimina contesto",
+                                      azione: () => deleteContextMutation.mutateAsync(ctx.id),
+                                    })}
+                                  >
+                                    <Lucide icon="Trash2" aria-hidden="true" className="mr-2 h-4 w-4" /> Elimina
+                                  </Menu.Item>
+                                </Menu.Items>
+                              </Menu>
                             </div>
-                            {ctx.descrizione && (
-                              <div className="mt-1 truncate text-xs text-slate-500">{ctx.descrizione}</div>
-                            )}
-                          </div>
-                          <Menu className="inline-block text-left">
-                            <Menu.Button
-                              as={Button}
-                              size="sm"
-                              variant="outline-secondary"
-                              aria-label={`Azioni contesto ${ctx.nome}`}
-                            >
-                              <Lucide icon="EllipsisVertical" aria-hidden="true" className="h-4 w-4" />
-                            </Menu.Button>
-                            <Menu.Items className="w-48">
-                              <Menu.Item onClick={() => openEditContext(ctx)}>
-                                <Lucide icon="Pencil" aria-hidden="true" className="mr-2 h-4 w-4" /> Modifica
-                              </Menu.Item>
-                              <Menu.Item
-                                className="text-danger"
-                                onClick={() => setConferma({
-                                  title: "Eliminare il contesto?",
-                                  description: `Il contesto "${ctx.nome}" verrà eliminato e i dispositivi che lo usano resteranno senza contesto assegnato.`,
-                                  confirmLabel: "Elimina contesto",
-                                  azione: () => deleteContextMutation.mutateAsync(ctx.id),
-                                })}
-                              >
-                                <Lucide icon="Trash2" aria-hidden="true" className="mr-2 h-4 w-4" /> Elimina
-                              </Menu.Item>
-                            </Menu.Items>
-                          </Menu>
-                        </div>
+                          </Table.Td>
+                        </Table.Tr>
+                      );
+                    })}
+                  </Table.Tbody>
+                </Table>
+              </div>
+            )}
+          </Sezione>
+        )}
 
-                        <div className="mt-3 grid grid-cols-3 gap-2">
-                          <div className="rounded-control border border-slate-200 bg-slate-50 p-2">
-                            <div className="text-xs text-slate-500">Endpoint</div>
-                            <div className="mt-0.5 text-sm font-medium text-slate-800">{ctx.endpoint_type}</div>
-                          </div>
-                          <div className="rounded-control border border-slate-200 bg-slate-50 p-2">
-                            <div className="text-xs text-slate-500">Render</div>
-                            <div className="mt-0.5 text-sm font-medium text-slate-800">{ctx.render_type || "carousel"}</div>
-                          </div>
-                          <div className="rounded-control border border-slate-200 bg-slate-50 p-2">
-                            <div className="text-xs text-slate-500">Filtri</div>
-                            <div className="mt-0.5 text-sm font-medium tabular-nums text-slate-800">
-                              {ctx.filters?.flat().length || 0}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
-                          <Lucide icon="Monitor" aria-hidden="true" className="h-3.5 w-3.5" />
-                          <span>{ctx.dispositivi_count ?? 0} dispositivi collegati</span>
-                          {ctx.auto_scroll && (
-                            <>
-                              <span className="text-slate-300">|</span>
-                              <span>{(ctx.scroll_speed / 1000).toFixed(0)}s / slide</span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </Sezione>
-          </div>
-
-          {/* SIDEBAR DESTRA: su mobile viene prima del contenuto */}
-          <div className="col-span-12 row-start-1 xl:col-span-4 xl:col-start-9">
-            <div className="sticky top-24 flex flex-col gap-6">
-              <Sezione titolo="Dati punto vendita">
-                <div className="flex flex-col gap-8">
-                  {/* MAPPA */}
-                  {posizione ? (
-                    <div className="relative h-56 w-full overflow-hidden rounded-control">
-                      <MapContainer
-                        center={posizione}
-                        zoom={mapZoom}
-                        preferCanvas
-                        scrollWheelZoom={false}
-                        doubleClickZoom={false}
-                        dragging={false}
-                        touchZoom={false}
-                        keyboard={false}
-                        zoomControl={false}
-                        className="absolute inset-0"
-                      >
-                        <Marker position={posizione} icon={storeMarker} />
-                        <TileLayer
-                          url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-                          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                          maxZoom={19}
-                        />
-                      </MapContainer>
-                    </div>
-                  ) : (
-                    <EmptyState compatta icon="MapPin" title="Coordinate non disponibili" description="" />
-                  )}
-
-                  {/* DATI GENERALI */}
-                  <div className="flex flex-col gap-3.5">
-                    <div className="flex items-center">
-                      <Lucide icon="Briefcase" aria-hidden="true" className="mr-2 h-4 w-4 stroke-[1.3] text-slate-500" />
-                      <span className="text-sm">
-                        Ragione Sociale:
-                        <span className="ml-1 font-medium">
-                          {ragionesociale || "Non specificata"}
-                        </span>
-                      </span>
-                    </div>
-
-                    <div className="flex items-center">
-                      <Lucide icon="MapPin" aria-hidden="true" className="mr-2 h-4 w-4 stroke-[1.3] text-slate-500" />
-                      <span className="text-sm">
-                        Indirizzo:
-                        <span className="ml-1 font-medium">
-                          {displayIndirizzoCompleto || "Indirizzo non disponibile"}
-                        </span>
-                      </span>
-                    </div>
-
-                    <div className="flex items-center">
-                      <Lucide icon="Signal" aria-hidden="true" className="mr-2 h-4 w-4 stroke-[1.3] text-slate-500" />
-                      <span className="text-sm">
-                        Canale / Area:
-                        <span className="ml-1 font-medium">{displayCanaleArea}</span>
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* DATI DEL SISTEMA DELLA GDO */}
-                  {codici.length > 0 && (
-                    <div>
-                      <h3 className="title-eyebrow">Dati GDO</h3>
-                      <div className="mt-3 flex flex-col gap-2">
-                        {codici.map(c => (
-                          <div key={c.etichetta} className="flex items-center">
-                            <Lucide icon="Hash" aria-hidden="true" className="mr-2 h-4 w-4 stroke-[1.3] text-slate-500" />
-                            <span className="text-sm">
-                              {c.etichetta}:
-                              <span className="ml-1 font-medium">{c.valore}</span>
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* RECAPITI */}
-                  <div>
-                    <h3 className="title-eyebrow">Recapiti</h3>
-
-                    <div className="mt-3">
-                      <div className="flex items-center">
-                        <Lucide icon="Phone" aria-hidden="true" className="mr-2 h-4 w-4 stroke-[1.3] text-slate-500" />
-                        <span className="text-sm">
-                          Recapito Telefonico:
-                          {telefono ? (
-                            <a
-                              href={`tel:${telefono}`}
-                              className="ml-1 text-primary underline decoration-primary/30 decoration-dotted underline-offset-2"
-                            >
-                              {telefono}
-                            </a>
-                          ) : (
-                            <span className="ml-1 text-slate-500">Non disponibile</span>
-                          )}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* STATISTICHE */}
-                  <div className="flex items-center">
-                    <Lucide icon="Users" aria-hidden="true" className="mr-2 h-4 w-4 stroke-[1.3] text-slate-500" />
-                    <span className="mr-1 text-sm">Dipendenti collegati:</span>
-                    <StatusBadge tono="success" etichetta={`${numero_utenti_collegati} dipendenti`} />
-                  </div>
-                </div>
-              </Sezione>
-            </div>
-          </div>
-        </div>
+        <ConfirmDialog
+          open={eliminazioneAperta}
+          title="Eliminare il punto vendita?"
+          description={<>Il punto vendita <strong>{nomeVisibile}</strong> verrà eliminato, prima in Istanta e poi in Fidelity.</>}
+          confirmLabel="Elimina"
+          loading={eliminaPuntoVendita.isPending}
+          onClose={() => !eliminaPuntoVendita.isPending && setEliminazioneAperta(false)}
+          onConfirm={() => eliminaPuntoVendita.mutate()}
+        />
       </Pagina>
 
       {/* DIALOG: Creazione dispositivo */}
@@ -1589,6 +1490,6 @@ const GestionePuntoVendita: React.FC = () => {
       />
     </>
   );
-};
+}
 
 export default withSessionCheck(GestionePuntoVendita);

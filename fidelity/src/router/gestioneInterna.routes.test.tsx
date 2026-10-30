@@ -40,13 +40,23 @@ describe("gestione interna", () => {
     expect(risposta.headers.get("Location")).toBe("/gestione-interna/gestione-utenti?userId=u-1");
   });
 
-  it("il dettaglio di un punto vendita porta al nuovo dettaglio", async () => {
-    const risposta = await vaiA("http://localhost/punti-vendita/42");
+  it("il dettaglio di un'area spostata porta al nuovo dettaglio", async () => {
+    const risposta = await vaiA("http://localhost/aree-e-canali/42");
 
-    expect(risposta.headers.get("Location")).toBe("/gestione-interna/punti-vendita/42");
+    expect(risposta.headers.get("Location")).toBe("/gestione-interna/aree-e-canali/42");
+  });
+
+  it("/punti-vendita non è più un redirect: apre la consultazione, elenco e scheda", () => {
+    expect(rotta("/punti-vendita").path).toBe("punti-vendita");
+    expect(rotta("/punti-vendita").lazy).toBeDefined();
+    expect(rotta("/punti-vendita").loader).toBeUndefined();
+    expect(rotta("/punti-vendita/42").path).toBe("punti-vendita/:id");
+    expect(rotta("/punti-vendita/42").lazy).toBeDefined();
+    expect(rotta("/punti-vendita/42").loader).toBeUndefined();
   });
 
   it("un percorso solo simile non viene reindirizzato", () => {
     expect(rotta("/punti-vendita-bis").path).toBe("*");
+    expect(rotta("/aree-e-canali-bis").path).toBe("*");
   });
 });

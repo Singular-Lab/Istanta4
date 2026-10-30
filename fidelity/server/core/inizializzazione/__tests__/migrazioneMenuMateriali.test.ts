@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PERMESSI } from '../../../../lib/accessi/catalogo';
+import type { VoceNuovaMenu } from '../../../../lib/accessi/menuMateriali';
 import { TIPO_UTENTI } from '../../../../lib/enums';
-import type { PeriodoMateriali } from '../../../../lib/materiali/periodi';
 
 vi.mock('../../db/SequelizeConnector', () => ({ sequelize: {} }));
 vi.mock('../../logger', () => ({ log: { info: vi.fn() } }));
@@ -91,7 +91,7 @@ const menuDi = (tabella: Map<string, RigaMenu>, chi: { tipo_utente: string; id_r
     .map(r => [r.titolo, r.pathname, r.codice_permesso, r.icona]);
 
 let progressivo: number;
-const nuovoId = (periodo: PeriodoMateriali) => `pop-${periodo}-${++progressivo}`;
+const nuovoId = (voce: VoceNuovaMenu) => `pop-${voce}-${++progressivo}`;
 
 beforeEach(() => {
   progressivo = 0;
@@ -106,10 +106,11 @@ describe('migrazione dei menu salvati alle viste Volantini e POP', () => {
 
     const M = PERMESSI.MATERIALI.VISUALIZZA;
     expect(menuDi(tabella(), SUPERADMIN)).toEqual([
-      ['VOLANTINI E POP', null, null, null],
+      ['MATERIALI VOLANTINO', null, null, null],
       ['Volantini attivi', '/volantini/attivi', M, 'FolderOpen'],
       ['Volantini in corso', '/volantini/in-corso', M, 'Clock'],
       ['Volantini storico', '/volantini/storico', M, 'Archive'],
+      ['MATERIALI POP', null, null, null],
       ['POP attivi', '/pop/attivi', M, 'FolderOpen'],
       ['POP in corso', '/pop/in-corso', M, 'Clock'],
       ['POP storico', '/pop/storico', M, 'Archive'],
@@ -126,7 +127,8 @@ describe('migrazione dei menu salvati alle viste Volantini e POP', () => {
     ]);
     expect(menuDi(tabella(), AGENZIA)).toEqual([['Promozioni', '/promozioni/in-corso', null, 'Circle']]);
     expect(vi.mocked(menu.aggiornaVoce).mock.calls.map(([v]) => v.id_menu_item)).not.toContain('ag-promo');
-    expect(esito).toEqual({ menu: 2, aggiornate: 8, inserite: 5 });
+    // Inserite: tre voci POP e l'intestazione POP del Superadmin, due voci POP del sotto-ruolo (senza intestazioni)
+    expect(esito).toEqual({ menu: 2, aggiornate: 8, inserite: 6 });
   });
 
   it('le voci POP nascono nel menu giusto, con un id nuovo, attive e senza pagina iniziale', async () => {
@@ -139,9 +141,31 @@ describe('migrazione dei menu salvati alle viste Volantini e POP', () => {
       expect.objectContaining({ id_ruolo_utente_gdo: 'ruolo-admin', ruolo_gdo: 'GDO_ADMIN', id_parent: null, tipo: 'item', titolo: 'POP attivi', disabilitato: false, start_page: false }),
       expect.objectContaining({ id_ruolo_utente_gdo: 'ruolo-admin', ruolo_gdo: 'GDO_ADMIN', id_parent: null, tipo: 'item', titolo: 'POP storico', disabilitato: false, start_page: false }),
     ]);
+    expect(inserite.filter(v => v.tipo === 'separator')).toEqual([
+      expect.objectContaining({ tipo_utente: TIPO_UTENTI.SUPERADMIN, id_ruolo_utente_gdo: null, titolo: 'MATERIALI POP', pathname: null, ordinamento: 4 }),
+    ]);
     const ids = inserite.map(v => v.id_menu_item);
-    expect(new Set(ids).size).toBe(5);
+    expect(new Set(ids).size).toBe(6);
     expect(ids.every(id => id.startsWith('pop-'))).toBe(true);
+  });
+
+  it('divide anche i menu già convertiti con l intestazione unica VOLANTINI E POP, una volta sola', async () => {
+    const { fonte, menu, tabella } = creaFonte([
+      riga('sep', SUPERADMIN, 'VOLANTINI E POP', null, 0),
+      riga('v-attivi', SUPERADMIN, 'Volantini attivi', '/volantini/attivi', 1),
+      riga('p-attivi', SUPERADMIN, 'POP attivi', '/pop/attivi', 2),
+      riga('ods', SUPERADMIN, 'Ordini in corso', '/ods-in-corso', 3),
+    ]);
+
+    const prima = await migraMenuMateriali(fonte, nuovoId);
+    const seconda = await migraMenuMateriali(fonte, nuovoId);
+
+    expect(menuDi(tabella(), SUPERADMIN).map(([titolo]) => titolo)).toEqual([
+      'MATERIALI VOLANTINO', 'Volantini attivi', 'MATERIALI POP', 'POP attivi', 'Ordini in corso',
+    ]);
+    expect(prima).toEqual({ menu: 1, aggiornate: 3, inserite: 1 });
+    expect(seconda).toEqual({ menu: 0, aggiornate: 0, inserite: 0 });
+    expect(menu.incrementaVersione).toHaveBeenCalledTimes(1);
   });
 
   it('senza generatore indicato le voci POP ricevono un uuid', async () => {
@@ -163,7 +187,8 @@ describe('migrazione dei menu salvati alle viste Volantini e POP', () => {
     expect(log.info).toHaveBeenCalledTimes(1);
     const messaggio = String(vi.mocked(log.info).mock.calls[0][0]);
     expect(messaggio).toContain('in 2 menu');
-    expect(messaggio).toContain(`${TIPO_UTENTI.GDO} · sotto-ruolo ruolo-admin: 3 voci aggiornate, 2 voci POP aggiunte`);
+    expect(messaggio).toContain(`${TIPO_UTENTI.GDO} · sotto-ruolo ruolo-admin: 3 voci aggiornate, 2 voci aggiunte (POP e intestazioni)`);
+    expect(messaggio).toContain(`${TIPO_UTENTI.SUPERADMIN}: 5 voci aggiornate, 4 voci aggiunte (POP e intestazioni)`);
   });
 
   it('una seconda esecuzione non cambia nulla e non tocca la versione', async () => {

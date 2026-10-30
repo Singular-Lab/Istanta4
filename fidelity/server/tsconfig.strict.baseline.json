@@ -1,7 +1,7 @@
 {
   "server/__tests__/registroLavoriInMemoria.ts": 1,
   "server/core/agenzia_lib/coopfi/index.ts": 24,
-  "server/core/controllers/ExternalApiController.ts": 44,
+  "server/core/controllers/ExternalApiController.ts": 42,
   "server/core/controllers/FileManagementController.ts": 1,
   "server/core/controllers/HubController.ts": 9,
   "server/core/controllers/RaccoglitoreKitController.ts": 1,

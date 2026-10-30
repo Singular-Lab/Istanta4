@@ -3,11 +3,12 @@ import { PERMESSI } from '../catalogo';
 import {
   convertiMenuMateriali,
   PERCORSI_MATERIALI,
-  SEPARATORE_VOLANTINI_E_POP,
+  SEPARATORE_POP,
+  SEPARATORE_VOLANTINI,
   type VoceMenuConvertibile,
+  type VoceNuovaMenu,
 } from '../menuMateriali';
 import { paginaPer } from '../pagine';
-import type { PeriodoMateriali } from '../../materiali/periodi';
 
 type Voce = VoceMenuConvertibile & { id_parent: string | null };
 
@@ -28,7 +29,7 @@ const voce = (id: string, titolo: string, pathname: string | null, ordinamento: 
 const separatore = (id: string, titolo: string, ordinamento: number): Voce =>
   voce(id, titolo, null, ordinamento, { tipo: 'separator', icona: null });
 
-const idPop = (periodo: PeriodoMateriali) => `pop-${periodo}`;
+const idPop = (voce: VoceNuovaMenu) => `pop-${voce}`;
 
 /** Le voci come compaiono nel menu: titolo, percorso, ordinamento (le sottovoci col padre davanti). */
 const riassunto = (voci: Voce[]) =>
@@ -83,29 +84,31 @@ describe('conversione delle voci Materiali nei menu salvati', () => {
       voce('v', 'MATERIALI', '/volantini', 2),
     ], idPop);
 
-    expect(voci.map(v => v.titolo)).toEqual([SEPARATORE_VOLANTINI_E_POP, 'Materiali e altro', 'MATERIALI']);
+    expect(voci.map(v => v.titolo)).toEqual([SEPARATORE_VOLANTINI, 'Materiali e altro', 'MATERIALI']);
   });
 
-  it('aggiunge le voci POP subito dopo l ultima voce convertita, nello stesso ordine, e fa scendere le successive', () => {
+  it('aggiunge le voci POP subito dopo l ultima voce convertita, in una sezione MATERIALI POP, e fa scendere le successive', () => {
     const { voci, aggiornate, inserite } = convertiMenuMateriali(menuSuperadmin(), idPop);
 
     expect(riassunto(voci)).toEqual([
       ['PROMOZIONI', null, 0],
       ['Promozioni in corso', '/promozioni/in-corso', 1],
-      ['VOLANTINI E POP', null, 2],
+      ['MATERIALI VOLANTINO', null, 2],
       ['Volantini attivi', '/volantini/attivi', 3],
       ['Volantini in corso', '/volantini/in-corso', 4],
       ['Volantini storico', '/volantini/storico', 5],
-      ['POP attivi', '/pop/attivi', 6],
-      ['POP in corso', '/pop/in-corso', 7],
-      ['POP storico', '/pop/storico', 8],
-      ['ORDINI DI STAMPA', null, 9],
-      ['Ordini in corso', '/ods-in-corso', 10],
+      ['MATERIALI POP', null, 6],
+      ['POP attivi', '/pop/attivi', 7],
+      ['POP in corso', '/pop/in-corso', 8],
+      ['POP storico', '/pop/storico', 9],
+      ['ORDINI DI STAMPA', null, 10],
+      ['Ordini in corso', '/ods-in-corso', 11],
     ]);
-    expect(inserite.map(v => [v.id_menu_item, v.icona, v.codice_permesso, v.disabilitato, v.start_page, v.id_parent])).toEqual([
-      ['pop-attivi', 'FolderOpen', PERMESSI.MATERIALI.VISUALIZZA, false, false, null],
-      ['pop-in-corso', 'Clock', PERMESSI.MATERIALI.VISUALIZZA, false, false, null],
-      ['pop-storico', 'Archive', PERMESSI.MATERIALI.VISUALIZZA, false, false, null],
+    expect(inserite.map(v => [v.id_menu_item, v.tipo, v.icona, v.codice_permesso, v.disabilitato, v.start_page, v.id_parent])).toEqual([
+      ['pop-attivi', 'item', 'FolderOpen', PERMESSI.MATERIALI.VISUALIZZA, false, false, null],
+      ['pop-in-corso', 'item', 'Clock', PERMESSI.MATERIALI.VISUALIZZA, false, false, null],
+      ['pop-storico', 'item', 'Archive', PERMESSI.MATERIALI.VISUALIZZA, false, false, null],
+      ['pop-intestazione-pop', 'separator', null, null, false, false, null],
     ]);
     expect(aggiornate.map(v => v.id_menu_item)).toEqual(['s-materiali', 'attivi', 'in-corso', 'storico', 's-ods', 'ods']);
   });
@@ -210,3 +213,122 @@ describe('conversione delle voci Materiali nei menu salvati', () => {
     }
   });
 });
+
+describe('sezioni MATERIALI VOLANTINO e MATERIALI POP', () => {
+  /** Un menu della prima conversione: un'intestazione unica, Volantini e poi POP. */
+  const menuVolantiniEPop = (): Voce[] => [
+    separatore('s-promo', 'PROMOZIONI', 0),
+    voce('promo', 'Promozioni in corso', '/promozioni/in-corso', 1),
+    separatore('s-materiali', 'VOLANTINI E POP', 2),
+    voce('v-attivi', 'Volantini attivi', '/volantini/attivi', 3, { icona: 'FolderOpen' }),
+    voce('v-storico', 'Volantini storico', '/volantini/storico', 4, { icona: 'Archive' }),
+    voce('p-attivi', 'I nostri POP', '/pop/attivi', 5, { icona: 'FolderOpen' }),
+    voce('p-storico', 'POP storico', '/pop/storico', 6, { icona: 'Archive' }),
+    separatore('s-ods', 'ORDINI DI STAMPA', 7),
+    voce('ods', 'Ordini in corso', '/ods-in-corso', 8),
+  ];
+
+  it('un menu già convertito con VOLANTINI E POP si divide: la nuova intestazione va prima della prima voce POP', () => {
+    const { voci, aggiornate, inserite } = convertiMenuMateriali(menuVolantiniEPop(), idPop);
+
+    expect(riassunto(voci)).toEqual([
+      ['PROMOZIONI', null, 0],
+      ['Promozioni in corso', '/promozioni/in-corso', 1],
+      [SEPARATORE_VOLANTINI, null, 2],
+      ['Volantini attivi', '/volantini/attivi', 3],
+      ['Volantini storico', '/volantini/storico', 4],
+      [SEPARATORE_POP, null, 5],
+      // Il titolo scelto dall'amministratore resta
+      ['I nostri POP', '/pop/attivi', 6],
+      ['POP storico', '/pop/storico', 7],
+      ['ORDINI DI STAMPA', null, 8],
+      ['Ordini in corso', '/ods-in-corso', 9],
+    ]);
+    expect(inserite.map(v => [v.id_menu_item, v.tipo, v.titolo, v.pathname, v.id_parent])).toEqual([
+      ['pop-intestazione-pop', 'separator', SEPARATORE_POP, null, null],
+    ]);
+    // Cambiano l'intestazione rinominata e le voci che scendono, non le voci Volantini
+    expect(aggiornate.map(v => v.id_menu_item)).toEqual(['s-materiali', 'p-attivi', 'p-storico', 's-ods', 'ods']);
+  });
+
+  it.each([
+    ['MATERIALI', () => menuSuperadminRidotto('MATERIALI')],
+    ['VOLANTINI E POP', () => menuVolantiniEPop()],
+  ])('rieseguita su un menu partito da %s non cambia nulla', (_, menu) => {
+    const prima = convertiMenuMateriali(menu(), idPop);
+
+    const seconda = convertiMenuMateriali(prima.voci, idPop);
+
+    expect(seconda.aggiornate).toEqual([]);
+    expect(seconda.inserite).toEqual([]);
+    expect(seconda.voci).toEqual(prima.voci);
+    expect(prima.voci.filter(v => v.tipo === 'separator').map(v => v.titolo)).toContain(SEPARATORE_POP);
+  });
+
+  it('un intestazione rinominata dall amministratore resta com e e non si divide', () => {
+    const menu = menuVolantiniEPop().map(v => (v.id_menu_item === 's-materiali' ? { ...v, titolo: 'I NOSTRI MATERIALI' } : v));
+
+    const { voci, aggiornate, inserite } = convertiMenuMateriali(menu, idPop);
+
+    expect(voci).toEqual(menu);
+    expect(aggiornate).toEqual([]);
+    expect(inserite).toEqual([]);
+  });
+
+  it('un menu senza intestazioni riceve le voci POP ma nessuna intestazione', () => {
+    const { voci, inserite } = convertiMenuMateriali([
+      voce('attivi', 'Materiali attivi', '/materiali-attivi', 0),
+      voce('ods', 'Ordini in corso', '/ods-in-corso', 1),
+    ], idPop);
+
+    expect(inserite.map(v => v.pathname)).toEqual(['/pop/attivi']);
+    expect(voci.some(v => v.tipo === 'separator')).toBe(false);
+  });
+
+  it('una sezione VOLANTINI E POP senza voci POP si rinomina soltanto', () => {
+    const menu = menuVolantiniEPop().filter(v => !v.pathname?.startsWith('/pop/'));
+
+    const { voci, aggiornate, inserite } = convertiMenuMateriali(menu, idPop);
+
+    expect(inserite).toEqual([]);
+    expect(aggiornate.map(v => [v.id_menu_item, v.titolo])).toEqual([['s-materiali', SEPARATORE_VOLANTINI]]);
+    expect(voci.map(v => v.ordinamento)).toEqual(menu.map(v => v.ordinamento));
+  });
+
+  it('le voci POP che stanno già sotto un altra intestazione non si spostano', () => {
+    const menu: Voce[] = [
+      separatore('s-materiali', 'VOLANTINI E POP', 0),
+      voce('v-attivi', 'Volantini attivi', '/volantini/attivi', 1),
+      separatore('s-pop', 'ESPOSIZIONE', 2),
+      voce('p-attivi', 'POP attivi', '/pop/attivi', 3),
+    ];
+
+    const { voci, inserite } = convertiMenuMateriali(menu, idPop);
+
+    expect(inserite).toEqual([]);
+    expect(riassunto(voci)).toEqual([
+      [SEPARATORE_VOLANTINI, null, 0],
+      ['Volantini attivi', '/volantini/attivi', 1],
+      ['ESPOSIZIONE', null, 2],
+      ['POP attivi', '/pop/attivi', 3],
+    ]);
+  });
+
+  it('l intestazione POP eredita la disattivazione dell intestazione divisa', () => {
+    const menu = menuVolantiniEPop().map(v => (v.id_menu_item === 's-materiali' ? { ...v, disabilitato: true } : v));
+
+    const { inserite } = convertiMenuMateriali(menu, idPop);
+
+    expect(inserite.map(v => [v.titolo, v.disabilitato, v.start_page])).toEqual([[SEPARATORE_POP, true, false]]);
+  });
+});
+
+/** Il menu del Superadmin con l'intestazione indicata e le sole voci Materiali. */
+function menuSuperadminRidotto(intestazione: string): Voce[] {
+  return [
+    separatore('s-materiali', intestazione, 0),
+    voce('attivi', 'Materiali attivi', '/materiali-attivi', 1, { icona: 'FolderOpen' }),
+    voce('storico', 'Storico materiali', '/storico-materiali', 2, { icona: 'Archive' }),
+    separatore('s-ods', 'ORDINI DI STAMPA', 3),
+  ];
+}

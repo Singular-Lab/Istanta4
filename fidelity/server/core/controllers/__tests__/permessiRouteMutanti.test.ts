@@ -24,6 +24,8 @@ import { IstantaController } from '../IstantaController';
 import { KitRuntimeController } from '../KitRuntimeController';
 import { PromoController } from '../PromoController';
 import { PuntoVenditaController } from '../PuntoVenditaController';
+import { StoriaPuntoVenditaController } from '../StoriaPuntoVenditaController';
+import type { IStoriaPuntoVenditaService } from '../../interfaces/IStoriaPuntoVenditaService';
 import { TracciatoController } from '../TracciatoController';
 
 function createApp() {
@@ -39,6 +41,7 @@ function createApp() {
   new DisplayContextController({} as any).registerRoutes(app);
   new IstantaController({} as any).registerRoutes(app);
   new PuntoVenditaController({} as any, {} as any, {} as any).registerRoutes(app);
+  new StoriaPuntoVenditaController({} as IStoriaPuntoVenditaService).registerRoutes(app);
   return app;
 }
 
@@ -54,6 +57,7 @@ describe('permessi sulle route che modificano dati', () => {
     ['import dei punti vendita da Excel', 'post', '/api/ACPV/importaPV', 'gdo.gestisci_punti_vendita'],
     ['annullamento dell\'import dei punti vendita', 'post', '/api/ACPV/importaPV/j1/annulla', 'gdo.gestisci_punti_vendita'],
     ['decisione sulla riga dell\'import in attesa', 'post', '/api/ACPV/importaPV/j1/decisione', 'gdo.gestisci_punti_vendita'],
+    ['import degli export del Plugin nella storia dei PV', 'post', '/api/punti-vendita/storia/import-export', 'gdo.gestisci_punti_vendita'],
   ];
 
   it.each(casi)('%s richiede il permesso giusto', async (_nome, metodo, url, permesso) => {

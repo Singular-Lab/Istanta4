@@ -4,7 +4,14 @@ import { describe, expect, it, vi } from 'vitest';
 import { STATO_LAVORAZIONE_KIT_RUNTIME, STATO_PROMO, TIPO_LAVORAZIONE } from '../../../../lib/enums';
 import { BadRequestError, NotFoundError } from '../../../../lib/errors';
 import { STATI_KIT_MATERIALI } from '../../../../lib/materiali/tipi';
-import type { IMaterialiRepository, RigaFile, RigaFormato, RigaKit, RigaPromo } from '../../repositories/MaterialiRepository';
+import type {
+  IMaterialiRepository,
+  RigaFile,
+  RigaFormato,
+  RigaKit,
+  RigaPromo,
+  RigaVarianteVolantino,
+} from '../../repositories/MaterialiRepository';
 import {
   CHIAMATE_ISTANTA_IN_PARALLELO,
   criteriDelPeriodo,
@@ -12,6 +19,7 @@ import {
   MaterialiService,
   MOTIVO_NON_AVVIATI_NON_DISPONIBILI,
   nomeArchivioPop,
+  raggruppaVariantiPerPromo,
   type ScrittoreZipOlimpo,
   vociZipPop,
 } from '../MaterialiService';
@@ -78,6 +86,7 @@ const file = (id: string, dati: Partial<RigaFile> = {}): RigaFile => ({
   nome: `${id}.pdf`,
   id_olimpo_cloud: `olimpo-${id}`,
   mime: 'application/pdf',
+  pagine: null,
   id_kit: 'k1',
   titolo_kit: 'Kit 1',
   stato_kit: STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO,
@@ -116,6 +125,11 @@ function repositoryFinto(dati: Partial<IMaterialiRepository> = {}): IMaterialiRe
     elencaKit: vi.fn<IMaterialiRepository['elencaKit']>(async () => []),
     contaKit: vi.fn<IMaterialiRepository['contaKit']>(async () => 0),
     elencaCombinazioniKit: vi.fn<IMaterialiRepository['elencaCombinazioniKit']>(async () => []),
+    elencaPromoVolantini: vi.fn<IMaterialiRepository['elencaPromoVolantini']>(async () => []),
+    contaPromoVolantini: vi.fn<IMaterialiRepository['contaPromoVolantini']>(async () => ({ promozioni: 0, kit: 0 })),
+    elencaVariantiVolantini: vi.fn<IMaterialiRepository['elencaVariantiVolantini']>(async () => []),
+    elencaAreeCanaliVolantini: vi.fn<IMaterialiRepository['elencaAreeCanaliVolantini']>(async () => []),
+    elencaAnniPromoVolantini: vi.fn<IMaterialiRepository['elencaAnniPromoVolantini']>(async () => []),
     elencaPromoConKit: vi.fn<IMaterialiRepository['elencaPromoConKit']>(async () => []),
     elencaFile: vi.fn<IMaterialiRepository['elencaFile']>(async () => []),
     contaFile: vi.fn<IMaterialiRepository['contaFile']>(async () => 0),
@@ -216,28 +230,31 @@ describe('periodi: stati delle promo e dei kit', () => {
     );
   });
 
-  it('POP: in Attivi e Storico solo le promo con kit pubblicati, In corso tutte le promo del periodo', async () => {
+  it('POP attivi e storico: le promo con kit POP pubblicati, contate dal database, senza chiedere niente a Istanta', async () => {
     const repository = repositoryFinto({
       elencaPromoConKit: vi.fn<IMaterialiRepository['elencaPromoConKit']>(async () => [
         { ...promo('vecchia', STATO_PROMO.VALIDA, '2026-09-01T00:00:00+02:00'), numero_file: 4, numero_formati: 1 },
         { ...promo('nuova', STATO_PROMO.VALIDA, '2026-10-15T00:00:00+02:00'), numero_file: 9, numero_formati: 2 },
       ]),
     });
-    const service = new MaterialiService(repository, istantaFinta(), zipFinto());
+    const istanta = istantaFinta();
+    const service = new MaterialiService(repository, istanta, zipFinto());
 
-    const attivi = await service.getPromozioniPop('attivi');
-    await service.getPromozioniPop('in-corso');
+    const attivi = await service.getPromozioniPop('attivi', req);
+    await service.getPromozioniPop('storico', req);
 
-    expect(repository.elencaPromoConKit).toHaveBeenNthCalledWith(1, criteriDelPeriodo('attivi', TIPO_LAVORAZIONE.POP), true);
-    expect(repository.elencaPromoConKit).toHaveBeenNthCalledWith(2, criteriDelPeriodo('in-corso', TIPO_LAVORAZIONE.POP), false);
+    expect(repository.elencaPromoConKit).toHaveBeenNthCalledWith(1, criteriDelPeriodo('attivi', TIPO_LAVORAZIONE.POP));
+    expect(repository.elencaPromoConKit).toHaveBeenNthCalledWith(2, criteriDelPeriodo('storico', TIPO_LAVORAZIONE.POP));
+    expect(istanta.getAllKitPerGestioneLavorazione).not.toHaveBeenCalled();
     expect(attivi.promozioni.map(p => [p.id, p.numeroFile, p.numeroFormati])).toEqual([['nuova', 9, 2], ['vecchia', 4, 1]]);
+    expect(attivi.avvisi).toEqual([]);
   });
 
   it('periodo non valido: 400', async () => {
     const service = new MaterialiService(repositoryFinto(), istantaFinta(), zipFinto());
 
     await expect(service.getVolantini({ periodo: 'futuro' as never }, req)).rejects.toBeInstanceOf(BadRequestError);
-    await expect(service.getPromozioniPop('' as never)).rejects.toBeInstanceOf(BadRequestError);
+    await expect(service.getPromozioniPop('' as never, req)).rejects.toBeInstanceOf(BadRequestError);
   });
 });
 
@@ -345,6 +362,239 @@ describe('Volantini In corso: kit non avviati', () => {
   });
 });
 
+describe('Volantini Attivi e Storico per promozione', () => {
+  const AREA_NORD = '0a000000-0000-4000-8000-000000000002';
+  const CANALE_IPER = '0c000000-0000-4000-8000-000000000002';
+
+  const variante = (id: string, idPromo: string, dati: Partial<RigaVarianteVolantino> = {}): RigaVarianteVolantino => ({
+    id,
+    id_promo: idPromo,
+    titolo: `Kit ${id}`,
+    id_area: AREA,
+    nome_area: 'Toscana',
+    id_canale: CANALE,
+    nome_canale: 'Superstore',
+    numero_file: 2,
+    numero_punti_vendita: 0,
+    copertina_id_olimpo: null,
+    copertina_nome: null,
+    copertina_mime: null,
+    copertina_pagine: null,
+    corrisponde: true,
+    ...dati,
+  });
+
+  it('pagina le promo nel database, 12 per pagina se la dimensione non e prevista, e legge i kit delle sole promo della pagina', async () => {
+    const repository = repositoryFinto({
+      elencaPromoVolantini: vi.fn<IMaterialiRepository['elencaPromoVolantini']>(async (_criteri, _filtri, pagina) =>
+        pagina ? [promo('nuova', STATO_PROMO.VALIDA, '2026-10-15T00:00:00+02:00'), promo('vecchia', STATO_PROMO.VALIDA)] : []),
+      contaPromoVolantini: vi.fn<IMaterialiRepository['contaPromoVolantini']>(async () => ({ promozioni: 30, kit: 95 })),
+    });
+    const istanta = istantaFinta();
+    const service = new MaterialiService(repository, istanta, zipFinto());
+
+    const fuoriElenco = await service.getPromozioniVolantini({ periodo: 'attivi', pagina: 3, dimensione: 500 });
+    const prevista = await service.getPromozioniVolantini({ periodo: 'attivi', dimensione: 24 });
+
+    const criteri = criteriDelPeriodo('attivi', TIPO_LAVORAZIONE.VOLANTINO);
+    expect(repository.elencaPromoVolantini).toHaveBeenNthCalledWith(1, criteri, expect.any(Object), { limite: 12, scarto: 24 });
+    expect(repository.elencaVariantiVolantini).toHaveBeenNthCalledWith(1, criteri, ['nuova', 'vecchia'], expect.any(Object));
+    expect(fuoriElenco).toMatchObject({ pagina: 3, dimensione: 12, totale: 30, totaleKit: 95, totaleSenzaFiltri: 30 });
+    expect(fuoriElenco.promozioni.map(p => p.promo.id)).toEqual(['nuova', 'vecchia']);
+    expect(prevista).toMatchObject({ pagina: 1, dimensione: 24 });
+    // Senza filtri il totale del periodo e' lo stesso: una sola conta per richiesta
+    expect(repository.contaPromoVolantini).toHaveBeenCalledTimes(2);
+    expect(istanta.getAllKitPerGestioneLavorazione).not.toHaveBeenCalled();
+  });
+
+  it('con i filtri il totale senza filtri si conta a parte; cerca, area, canale, anno e promo arrivano al database', async () => {
+    const repository = repositoryFinto({
+      contaPromoVolantini: vi.fn<IMaterialiRepository['contaPromoVolantini']>(async (_criteri, filtri) =>
+        (filtri ? { promozioni: 2, kit: 3 } : { promozioni: 410, kit: 5200 })),
+    });
+    const service = new MaterialiService(repository, istantaFinta(), zipFinto());
+
+    const pagina = await service.getPromozioniVolantini({
+      periodo: 'storico', cerca: '  sottocosto ', idArea: AREA, idCanale: CANALE, anno: 2024, idPromo: 'p1',
+    });
+
+    const filtri = { cerca: 'sottocosto', idArea: AREA, idCanale: CANALE, anno: 2024, idPromo: 'p1' };
+    expect(repository.contaPromoVolantini).toHaveBeenCalledWith(criteriDelPeriodo('storico', TIPO_LAVORAZIONE.VOLANTINO), filtri);
+    expect(repository.contaPromoVolantini).toHaveBeenCalledWith(criteriDelPeriodo('storico', TIPO_LAVORAZIONE.VOLANTINO));
+    expect(repository.elencaPromoVolantini).toHaveBeenCalledWith(expect.any(Object), filtri, { limite: 12, scarto: 0 });
+    expect(pagina).toMatchObject({ totale: 2, totaleKit: 3, totaleSenzaFiltri: 410 });
+  });
+
+  it('una scheda per promo con i soli kit che corrispondono ai filtri; gli altri contano nel totale della promo', async () => {
+    const repository = repositoryFinto({
+      elencaPromoVolantini: vi.fn<IMaterialiRepository['elencaPromoVolantini']>(async () => [
+        promo('p1', STATO_PROMO.VALIDA), promo('p2', STATO_PROMO.VALIDA),
+      ]),
+      contaPromoVolantini: vi.fn<IMaterialiRepository['contaPromoVolantini']>(async () => ({ promozioni: 2, kit: 3 })),
+      elencaVariantiVolantini: vi.fn<IMaterialiRepository['elencaVariantiVolantini']>(async () => [
+        variante('k2', 'p1', { nome_canale: 'Superstore', nome_area: 'Toscana', numero_punti_vendita: 24 }),
+        variante('k1', 'p1', { id_canale: CANALE_IPER, nome_canale: 'Iper', id_area: AREA_NORD, nome_area: 'Nord' }),
+        variante('k3', 'p1', { corrisponde: false, copertina_id_olimpo: 'olimpo-k3', copertina_nome: 'k3.pdf' }),
+        variante('k4', 'p2', { copertina_id_olimpo: 'olimpo-k4', copertina_nome: 'k4.pdf', copertina_mime: 'application/pdf', copertina_pagine: 8 }),
+      ]),
+    });
+    const service = new MaterialiService(repository, istantaFinta(), zipFinto());
+
+    const pagina = await service.getPromozioniVolantini({ periodo: 'attivi', idArea: AREA });
+
+    const [p1, p2] = pagina.promozioni;
+    expect(p1.promo).toMatchObject({ id: 'p1', stato: STATO_PROMO.VALIDA, validitaDal: '2026-10-01', validitaAl: '2026-10-31' });
+    // Per canale, poi area: Iper prima di Superstore
+    expect(p1.kit.map(k => k.id)).toEqual(['k1', 'k2']);
+    expect(p1.numeroKit).toBe(3);
+    expect(p1.kit[1]).toEqual({
+      id: 'k2',
+      titolo: 'Kit k2',
+      area: { id: AREA, nome: 'Toscana' },
+      canale: { id: CANALE, nome: 'Superstore' },
+      numeroFile: 2,
+      copertina: null,
+      numeroPuntiVendita: 24,
+    });
+    // Nessun kit mostrato ha la copertina: si prende quella di un altro kit della promo
+    expect(p1.copertina).toMatchObject({ idOlimpoCloud: 'olimpo-k3', nome: 'k3.pdf' });
+    expect(p2).toMatchObject({
+      numeroKit: 1,
+      copertina: { idOlimpoCloud: 'olimpo-k4', nome: 'k4.pdf', mime: 'application/pdf', pagine: 8 },
+    });
+  });
+
+  it('la copertina della promo e quella di un kit mostrato, se ne ha una; una promo senza kit letti resta vuota', () => {
+    const [conCopertina, senzaKit] = raggruppaVariantiPerPromo(
+      [promo('p1', STATO_PROMO.ARCHIVIATA), promo('p2', STATO_PROMO.ARCHIVIATA)],
+      [
+        variante('nascosto', 'p1', { corrisponde: false, copertina_id_olimpo: 'olimpo-nascosto' }),
+        variante('mostrato', 'p1', { copertina_id_olimpo: 'olimpo-mostrato' }),
+      ]
+    );
+
+    expect(conCopertina.copertina?.idOlimpoCloud).toBe('olimpo-mostrato');
+    expect(senzaKit).toMatchObject({ numeroKit: 0, kit: [], copertina: null });
+  });
+
+  it('opzioni: in Attivi le promo per la tendina; nello Storico nessuna, e aree e canali anche dalle combinazioni della GDO', async () => {
+    const repository = repositoryFinto({
+      elencaPromoVolantini: vi.fn<IMaterialiRepository['elencaPromoVolantini']>(async (_criteri, _filtri, pagina) =>
+        (pagina ? [] : [promo('p1', STATO_PROMO.VALIDA)])),
+      elencaAreeCanaliVolantini: vi.fn<IMaterialiRepository['elencaAreeCanaliVolantini']>(async () => [
+        { id_area: AREA, nome_area: 'Toscana', id_canale: CANALE, nome_canale: 'Superstore' },
+        { id_area: AREA_NORD, nome_area: 'Nord', id_canale: CANALE, nome_canale: 'Superstore' },
+        { id_area: AREA.toUpperCase(), nome_area: 'Toscana', id_canale: CANALE_IPER, nome_canale: 'Iper' },
+      ]),
+      elencaAnniPromoVolantini: vi.fn<IMaterialiRepository['elencaAnniPromoVolantini']>(async () => [2026, 2025, 2022]),
+    });
+    const service = new MaterialiService(repository, istantaFinta(), zipFinto());
+
+    const attivi = await service.getPromozioniVolantini({ periodo: 'attivi' });
+    const storico = await service.getPromozioniVolantini({ periodo: 'storico' });
+
+    expect(attivi.opzioni).toEqual({
+      promozioni: [{ id: 'p1', nome: 'Promo p1' }],
+      aree: [{ id: AREA_NORD, nome: 'Nord' }, { id: AREA, nome: 'Toscana' }],
+      canali: [{ id: CANALE_IPER, nome: 'Iper' }, { id: CANALE, nome: 'Superstore' }],
+      anni: [2026, 2025, 2022],
+    });
+    expect(storico.opzioni.promozioni).toEqual([]);
+    expect(repository.elencaAreeCanaliVolantini).toHaveBeenNthCalledWith(1, criteriDelPeriodo('attivi', TIPO_LAVORAZIONE.VOLANTINO), false);
+    expect(repository.elencaAreeCanaliVolantini).toHaveBeenNthCalledWith(2, criteriDelPeriodo('storico', TIPO_LAVORAZIONE.VOLANTINO), true);
+    // La tendina delle promo si chiede solo in Attivi, senza filtri ne' pagina
+    expect(repository.elencaPromoVolantini).toHaveBeenCalledWith(criteriDelPeriodo('attivi', TIPO_LAVORAZIONE.VOLANTINO));
+    expect(repository.elencaPromoVolantini).not.toHaveBeenCalledWith(criteriDelPeriodo('storico', TIPO_LAVORAZIONE.VOLANTINO));
+  });
+
+  it.each([
+    ['periodo In corso', { periodo: 'in-corso' as const }],
+    ['periodo sconosciuto', { periodo: 'futuro' as never }],
+    ['anno non intero', { periodo: 'storico' as const, anno: 2024.5 }],
+    ['anno non numerico', { periodo: 'storico' as const, anno: Number.NaN }],
+    ['anno fuori misura', { periodo: 'storico' as const, anno: 1850 }],
+    ['area non valida', { periodo: 'storico' as const, idArea: "1' OR '1'='1" }],
+    ['canale non valido', { periodo: 'attivi' as const, idCanale: 'canale' }],
+  ])('%s: 400 senza interrogare il database', async (_, filtri) => {
+    const repository = repositoryFinto();
+    const service = new MaterialiService(repository, istantaFinta(), zipFinto());
+
+    await expect(service.getPromozioniVolantini(filtri)).rejects.toBeInstanceOf(BadRequestError);
+    expect(repository.elencaPromoVolantini).not.toHaveBeenCalled();
+  });
+});
+
+// Cambio di comportamento chiesto: prima In corso elencava ogni promo del periodo, anche senza kit POP
+describe('Promozioni POP In corso: kit avviati e non avviati', () => {
+  const kitPop = (id: string, idPromo: string, idFormato: string, nomeFormato: string, numeroFile: number) =>
+    kit(id, {
+      ...promo(idPromo, STATO_PROMO.IN_LAVORAZIONE),
+      id_formato: idFormato,
+      nome_formato: nomeFormato,
+      stato_kit: STATO_LAVORAZIONE_KIT_RUNTIME.IN_REVISIONE,
+      numero_file: numeroFile,
+    });
+
+  // p1: kit avviati in due formati; p2 e p3 nessun kit avviato
+  const repositoryInCorso = () => {
+    const righe = [kitPop('k1', 'p1', FORMATO_ESPOSITORI, 'Espositori', 10), kitPop('k2', 'p1', FORMATO_LOCANDINE, 'Locandine', 5)];
+    return repositoryFinto({
+      elencaPromo: vi.fn<IMaterialiRepository['elencaPromo']>(async () => [
+        promo('p1', STATO_PROMO.IN_LAVORAZIONE),
+        promo('p2', STATO_PROMO.PIANIFICATA, '2026-11-01T00:00:00+01:00'),
+        promo('p3', STATO_PROMO.IN_RITARDO, '2026-09-01T00:00:00+02:00'),
+      ]),
+      trovaPromo: vi.fn<IMaterialiRepository['trovaPromo']>(async (id) => promo(id, STATO_PROMO.IN_LAVORAZIONE)),
+      elencaKit: vi.fn<IMaterialiRepository['elencaKit']>(async (criteri) =>
+        righe.filter(riga => criteri.idPromo === undefined || riga.id_promo === criteri.idPromo)),
+    });
+  };
+
+  // p1 ha anche un kit non avviato in un terzo formato (e uno gia' avviato, da non ripetere);
+  // p2 ha solo un kit POP non avviato; p3 solo un volantino non avviato, nessun kit POP
+  const istantaConNonAvviati = () => istantaFinta({
+    p1: [daAvviare('d-p1', FORMATO_CARTELLI), daAvviare('design-k1', FORMATO_ESPOSITORI)],
+    p2: [daAvviare('d-p2', FORMATO_CARTELLI)],
+    p3: [daAvviare('d-p3', FORMATO_VOLANTINO)],
+  });
+
+  it('solo le promo con almeno un kit POP, anche soltanto non avviato: le altre non compaiono', async () => {
+    const repository = repositoryInCorso();
+    const istanta = istantaConNonAvviati();
+    const service = new MaterialiService(repository, istanta, zipFinto());
+
+    const elenco = await service.getPromozioniPop('in-corso', req);
+
+    expect(repository.elencaKit).toHaveBeenCalledWith(criteriDelPeriodo('in-corso', TIPO_LAVORAZIONE.POP));
+    expect(repository.elencaPromoConKit).not.toHaveBeenCalled();
+    expect(istanta.getAllKitPerGestioneLavorazione).toHaveBeenCalledTimes(3);
+    // Dalla validita' piu' recente: p2 (novembre), poi p1 (ottobre); p3 non ha kit POP
+    expect(elenco.promozioni.map(p => [p.id, p.numeroFile, p.numeroFormati])).toEqual([['p2', 0, 1], ['p1', 15, 3]]);
+    expect(elenco.avvisi).toEqual([]);
+  });
+
+  it('elenco e riepilogo della promo dicono gli stessi file e formati', async () => {
+    const service = new MaterialiService(repositoryInCorso(), istantaConNonAvviati(), zipFinto());
+
+    const elenco = await service.getPromozioniPop('in-corso', req);
+
+    expect(elenco.promozioni).toHaveLength(2);
+    for (const voce of elenco.promozioni) {
+      const riepilogo = await service.getRiepilogoPop(voce.id, 'in-corso', req);
+      expect([voce.numeroFile, voce.numeroFormati]).toEqual([riepilogo.totali.file, riepilogo.totali.formati]);
+    }
+  });
+
+  it('se Istanta non risponde per una promo, l\'elenco ha i kit del database e un avviso per quella promo', async () => {
+    const service = new MaterialiService(repositoryInCorso(), istantaFinta({ p2: new Error('timeout') }), zipFinto());
+
+    const elenco = await service.getPromozioniPop('in-corso', req);
+
+    expect(elenco.promozioni.map(p => [p.id, p.numeroFile, p.numeroFormati])).toEqual([['p1', 15, 2]]);
+    expect(elenco.avvisi).toEqual([{ promo: { id: 'p2', nome: 'Promo p2' }, motivo: MOTIVO_NON_AVVIATI_NON_DISPONIBILI }]);
+  });
+});
+
 describe('Riepilogo POP di una promo', () => {
   const kitPop = (id: string, idFormato: string, nomeFormato: string, stato: STATO_LAVORAZIONE_KIT_RUNTIME, numeroFile: number) =>
     kit(id, { id_formato: idFormato, nome_formato: nomeFormato, stato_kit: stato, numero_file: numeroFile });
@@ -448,13 +698,44 @@ describe('File POP di un formato', () => {
     expect(repository.elencaFile).toHaveBeenNthCalledWith(2, expect.any(Object), expect.any(Object), { limite: 250, scarto: 0 });
   });
 
-  it('referenza, reparto e stato dall\'ultimo log; le tendine senza doppioni', async () => {
+  it('referenza, reparto, pagine e stato dall\'ultimo log; le tendine non si ricalcolano a ogni pagina', async () => {
     const repository = repositoryConPromo({
       elencaFile: vi.fn<IMaterialiRepository['elencaFile']>(async () => [
-        file(FILE_1, { codice_referenza: 'REF-1', descrizione_referenza: 'Pomodori', reparto: 'Ortofrutta', stato_log: 'ERRORE', versione_log: 3 }),
-        file(FILE_2),
+        file(FILE_1, {
+          codice_referenza: 'REF-1', descrizione_referenza: 'Pomodori', reparto: 'Ortofrutta', stato_log: 'ERRORE', versione_log: 3, pagine: 4,
+        }),
+        file(FILE_2, { pagine: 0 }),
       ]),
       contaFile: vi.fn<IMaterialiRepository['contaFile']>(async () => 2),
+    });
+    const service = new MaterialiService(repository, istantaFinta(), zipFinto());
+
+    const pagina = await service.getFilePop('p1', {
+      periodo: 'attivi', idFormato: FORMATO_ESPOSITORI, cerca: ' ref-1 ', stato: 'ERRORE' as never, reparto: 'Ortofrutta',
+    });
+    await service.getFilePop('p1', { periodo: 'attivi', idFormato: FORMATO_ESPOSITORI, pagina: 2 });
+
+    expect(repository.contaFile).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ cerca: 'ref-1', stato: 'ERRORE', reparto: 'Ortofrutta' })
+    );
+    expect(repository.elencaOpzioniFile).not.toHaveBeenCalled();
+    expect(pagina).not.toHaveProperty('opzioni');
+    expect(pagina.totale).toBe(2);
+    expect(pagina.file[0]).toMatchObject({
+      id: FILE_1,
+      referenza: { codice: 'REF-1', descrizione: 'Pomodori' },
+      reparto: 'Ortofrutta',
+      stato: 'ERRORE',
+      versione: 3,
+      pagine: 4,
+      kit: { id: 'k1', stato: 'PUBBLICATO' },
+    });
+    expect(pagina.file[1]).toMatchObject({ referenza: null, reparto: null, stato: null, versione: null, pagine: null });
+  });
+
+  it('tendine dei file a parte: aree, canali e reparti del formato senza doppioni', async () => {
+    const repository = repositoryConPromo({
       elencaOpzioniFile: vi.fn<IMaterialiRepository['elencaOpzioniFile']>(async () => [
         { id_area: AREA, nome_area: 'Toscana', id_canale: CANALE, nome_canale: 'Superstore', reparto: 'Ortofrutta' },
         { id_area: AREA, nome_area: 'Toscana', id_canale: CANALE, nome_canale: 'Superstore', reparto: 'Macelleria' },
@@ -463,29 +744,19 @@ describe('File POP di un formato', () => {
     });
     const service = new MaterialiService(repository, istantaFinta(), zipFinto());
 
-    const pagina = await service.getFilePop('p1', {
-      periodo: 'attivi', idFormato: FORMATO_ESPOSITORI, cerca: ' ref-1 ', stato: 'ERRORE' as never, reparto: 'Ortofrutta',
-    });
+    const opzioni = await service.getOpzioniFilePop('p1', { periodo: 'attivi', idFormato: FORMATO_ESPOSITORI });
 
-    expect(repository.contaFile).toHaveBeenCalledWith(
-      expect.any(Object),
-      expect.objectContaining({ cerca: 'ref-1', stato: 'ERRORE', reparto: 'Ortofrutta' })
+    expect(repository.elencaOpzioniFile).toHaveBeenCalledWith(
+      { ...criteriDelPeriodo('attivi', TIPO_LAVORAZIONE.POP), idPromo: 'p1', idFormato: FORMATO_ESPOSITORI }
     );
-    expect(pagina.totale).toBe(2);
-    expect(pagina.file[0]).toMatchObject({
-      id: FILE_1,
-      referenza: { codice: 'REF-1', descrizione: 'Pomodori' },
-      reparto: 'Ortofrutta',
-      stato: 'ERRORE',
-      versione: 3,
-      kit: { id: 'k1', stato: 'PUBBLICATO' },
-    });
-    expect(pagina.file[1]).toMatchObject({ referenza: null, reparto: null, stato: null, versione: null });
-    expect(pagina.opzioni).toEqual({
+    expect(repository.elencaFile).not.toHaveBeenCalled();
+    expect(opzioni).toEqual({
       aree: [{ id: AREA, nome: 'Toscana' }],
       canali: [{ id: CANALE, nome: 'Superstore' }],
       reparti: ['Macelleria', 'Ortofrutta'],
     });
+    await expect(service.getOpzioniFilePop('p1', { periodo: 'storico', idFormato: FORMATO_ESPOSITORI })).rejects.toBeInstanceOf(NotFoundError);
+    await expect(service.getOpzioniFilePop('p1', { periodo: 'attivi', idFormato: '' })).rejects.toBeInstanceOf(BadRequestError);
   });
 
   it('formato mancante, stato o area non validi: 400', async () => {
@@ -535,6 +806,34 @@ describe('ZIP dei file POP', () => {
       periodo: 'attivi', idFormato: FORMATO_ESPOSITORI, filtri: { reparto: 'Ortofrutta' },
     })).rejects.toBeInstanceOf(NotFoundError);
     expect(repository.elencaFile).toHaveBeenCalledWith(expect.any(Object), expect.objectContaining({ reparto: 'Ortofrutta' }));
+  });
+
+  it('verifica prima del download: conta i file con le stesse regole dello ZIP, senza elencarli ne\' scriverli', async () => {
+    const repository = repositoryConPromo({ contaFile: vi.fn<IMaterialiRepository['contaFile']>(async () => 42) });
+    const zip = zipFinto();
+    const service = new MaterialiService(repository, istantaFinta(), zip);
+
+    const filtrati = await service.verificaZipPop('p1', { periodo: 'attivi', idFormato: FORMATO_ESPOSITORI, filtri: { reparto: 'Ortofrutta' } });
+    const scelti = await service.verificaZipPop('p1', { periodo: 'attivi', idFormato: FORMATO_ESPOSITORI, idFile: [FILE_1, 'non-un-uuid'] });
+
+    expect(filtrati).toEqual({ file: 42, nomeFile: 'Promo_ ottobre - Espositori.zip' });
+    expect(scelti.file).toBe(42);
+    const criteri = { ...criteriDelPeriodo('attivi', TIPO_LAVORAZIONE.POP), idPromo: 'p1', idFormato: FORMATO_ESPOSITORI };
+    expect(repository.contaFile).toHaveBeenNthCalledWith(1, criteri, expect.objectContaining({ reparto: 'Ortofrutta' }));
+    expect(repository.contaFile).toHaveBeenNthCalledWith(2, criteri, { idFile: [FILE_1] });
+    expect(repository.elencaFile).not.toHaveBeenCalled();
+    expect(zip.scriviZipDaOlimpo).not.toHaveBeenCalled();
+  });
+
+  it('verifica: niente da scaricare, promo fuori dal periodo o formato inesistente sono errori, prima del download', async () => {
+    // Nessun file nel database finto: contaFile vale 0
+    const service = new MaterialiService(repositoryConPromo(), istantaFinta(), zipFinto());
+
+    await expect(service.verificaZipPop('p1', { periodo: 'attivi', idFormato: FORMATO_ESPOSITORI })).rejects.toThrow(/Nessun file da scaricare/);
+    await expect(service.verificaZipPop('p1', { periodo: 'storico', idFormato: FORMATO_ESPOSITORI })).rejects.toThrow(/Storico/);
+    await expect(service.verificaZipPop('p1', { periodo: 'attivi', idFormato: 'ffffffff-0000-4000-8000-000000000009' }))
+      .rejects.toThrow(/Formato non trovato/);
+    await expect(service.verificaZipPop('p1', { periodo: 'attivi', idFormato: 'non-un-uuid' })).rejects.toBeInstanceOf(BadRequestError);
   });
 
   it('scrive lo ZIP con il servizio dei file, nella destinazione indicata', async () => {

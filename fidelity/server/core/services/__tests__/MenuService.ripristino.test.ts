@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TIPO_UTENTI } from '../../../../lib/enums';
 import { sequelize } from '../../db/SequelizeConnector';
 import { MENU_SUPERADMIN } from '../../inizializzazione/datiPredefiniti';
-import { ID_VOCI_POP_SUPERADMIN } from '../../inizializzazione/inizializzaInstallazione';
+import { ID_INTESTAZIONE_POP_SUPERADMIN, ID_VOCI_POP_SUPERADMIN } from '../../inizializzazione/inizializzaInstallazione';
 import { MenuItem } from '../../models';
 import { MenuService } from '../MenuService';
 
@@ -57,11 +57,16 @@ describe('MenuService.ripristinaMenuPredefiniti', () => {
   it('sostituisce il solo menu del Superadmin con quello predefinito', async () => {
     const voci = await servizio().ripristinaMenuPredefiniti();
 
-    // MENU_SUPERADMIN convertito nelle viste Volantini e POP: le tre voci POP seguono lo storico.
+    // MENU_SUPERADMIN convertito nelle viste Volantini e POP: dopo lo storico l'intestazione POP e le tre voci POP.
     const ids = MENU_SUPERADMIN.map(v => v.id_menu_item);
     const storico = MENU_SUPERADMIN.findIndex(v => v.pathname === '/storico-materiali');
-    const pop = [ID_VOCI_POP_SUPERADMIN.attivi, ID_VOCI_POP_SUPERADMIN['in-corso'], ID_VOCI_POP_SUPERADMIN.storico];
-    expect(voci).toBe(MENU_SUPERADMIN.length + 3);
+    const pop = [
+      ID_INTESTAZIONE_POP_SUPERADMIN,
+      ID_VOCI_POP_SUPERADMIN.attivi,
+      ID_VOCI_POP_SUPERADMIN['in-corso'],
+      ID_VOCI_POP_SUPERADMIN.storico,
+    ];
+    expect(voci).toBe(MENU_SUPERADMIN.length + 4);
     const superadmin = tabella.filter(r => r.tipo_utente === TIPO_UTENTI.SUPERADMIN);
     expect(superadmin.map(r => r.id_menu_item)).toEqual([...ids.slice(0, storico + 1), ...pop, ...ids.slice(storico + 1)]);
     expect(tabella).toContainEqual({ tipo_utente: TIPO_UTENTI.AGENZIA, titolo: 'Menu Agenzia' });
@@ -79,7 +84,9 @@ describe('MenuService.ripristinaMenuPredefiniti', () => {
       ['POP in corso', '/pop/in-corso'],
       ['POP storico', '/pop/storico'],
     ]);
-    expect(superadmin.map(r => r.titolo)).toContain('VOLANTINI E POP');
+    expect(superadmin.map(r => r.titolo)).toContain('MATERIALI VOLANTINO');
+    expect(superadmin.map(r => r.titolo)).toContain('MATERIALI POP');
+    expect(superadmin.map(r => r.titolo)).not.toContain('VOLANTINI E POP');
     expect(superadmin.map(r => r.titolo)).not.toContain('MATERIALI');
     expect(superadmin.some(r => ['/materiali-attivi', '/materiali-in-corso', '/storico-materiali'].includes(r.pathname))).toBe(false);
   });

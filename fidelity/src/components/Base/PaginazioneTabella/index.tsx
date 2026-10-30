@@ -15,6 +15,8 @@ export interface PaginazioneTabellaProps {
   /** Se presente mostra la scelta delle righe per pagina; dopo il cambio si torna alla pagina 1. */
   onCambiaDimensione?: (dimensione: number) => void;
   opzioniDimensione?: number[];
+  /** Cosa sono le righe, scritto dopo il totale: "Mostrati 1–100 di 1.842 file". */
+  unita?: string;
   className?: string;
 }
 
@@ -54,6 +56,7 @@ function PaginazioneTabella({
   onCambiaPagina,
   onCambiaDimensione,
   opzioniDimensione = OPZIONI_PREDEFINITE,
+  unita,
   className,
 }: PaginazioneTabellaProps) {
   const idDimensione = useId();
@@ -105,6 +108,7 @@ function PaginazioneTabella({
     >
       <p aria-live="polite" className="tabular-nums">
         Mostrati {formatNumero(da)}–{formatNumero(a)} di {formatNumero(righe)}
+        {unita ? ` ${unita}` : ""}
       </p>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
         {onCambiaDimensione && (

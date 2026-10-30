@@ -1,6 +1,4 @@
 import Alert from "@/components/Base/Alert";
-import Button from "@/components/Base/Button";
-import Lucide from "@/components/Base/Lucide";
 import PageError from "@/components/Base/PageError";
 import Pagina from "@/components/Base/Pagina";
 import Sezione from "@/components/Base/Sezione";
@@ -13,14 +11,17 @@ import { usePermission } from "@/context/PermissionContext";
 import { useFetchPromozioniPop, useFetchRiepilogoPop } from "@/query/query";
 import { formatNumero } from "@/utils/format";
 import { parametriMateriali, PROMOZIONI_DEL_PERIODO, testoValidita } from "@/utils/materiali";
-import { Link, useLoaderData, useNavigate, useSearchParams } from "react-router-dom";
+import { twMerge } from "@/utils/twMerge";
+import { useState } from "react";
+import { useLoaderData, useNavigate, useSearchParams } from "react-router-dom";
 import {
   ETICHETTA_PERIODO,
   isPeriodoMateriali,
-  percorsoVolantini,
+  soloKitPubblicati,
   type PeriodoMateriali,
 } from "../../../lib/materiali/periodi";
-import type { AvvisoNonAvviati, RiepilogoPop } from "../../../lib/materiali/tipi";
+import type { AvvisoNonAvviati, PromoPop, RiepilogoPop } from "../../../lib/materiali/tipi";
+import SchedePeriodo from "../shared/SchedePeriodo";
 import ElencoPromozioni from "./ElencoPromozioni";
 import FileFormato from "./FileFormato";
 import TabellaFormati from "./TabellaFormati";
@@ -29,9 +30,12 @@ export interface PopMaterialiLoaderData {
   periodo: PeriodoMateriali;
 }
 
+/** Tessere dei totali più basse su mobile, dove sono in due colonne. */
+const CLASSI_TESSERA = "px-3 py-2 sm:px-4 sm:py-3";
+
 const DESCRIZIONE: Readonly<Record<PeriodoMateriali, string>> = {
   "in-corso":
-    "Kit POP delle promozioni in corso, raggruppati per formato. Ogni formato si apre nel dettaglio kit, dove la lavorazione è la stessa dei volantini.",
+    "Kit POP delle promozioni in corso, avviati e non ancora avviati, raggruppati per formato: scegli un formato per vederne e scaricarne i file.",
   attivi: "Kit POP pubblicati delle promozioni ancora valide, raggruppati per formato.",
   storico: "Kit POP pubblicati delle promozioni concluse, raggruppati per formato.",
 };
@@ -52,10 +56,19 @@ const PERIODO_VUOTO: Readonly<Record<PeriodoMateriali, { titolo: string; descriz
   },
 };
 
+/** Avvisi dell'elenco e del riepilogo della promo scelta, una volta per promo. */
+const avvisiUnici = (...elenchi: Array<AvvisoNonAvviati[] | undefined>): AvvisoNonAvviati[] => {
+  const perPromo = new Map<string, AvvisoNonAvviati>();
+  for (const avviso of elenchi.flatMap((elenco) => elenco ?? [])) {
+    if (!perPromo.has(avviso.promo.id)) perPromo.set(avviso.promo.id, avviso);
+  }
+  return [...perPromo.values()];
+};
+
 function AvvisiNonAvviati({ avvisi }: { avvisi: AvvisoNonAvviati[] }) {
   if (avvisi.length === 0) return null;
   return (
-    <Alert variant="soft-warning" icona="TriangleAlert" titolo="Riepilogo incompleto">
+    <Alert variant="soft-warning" icona="TriangleAlert" titolo="Elenco incompleto">
       <ul className="space-y-0.5 text-sm">
         {avvisi.map((avviso) => (
           <li key={avviso.promo.id}>
@@ -114,38 +127,55 @@ interface DettaglioPromoProps {
 
 /** Colonna principale: la promo scelta, i suoi totali, i formati e i file del formato scelto. */
 function DettaglioPromo({ riepilogo, periodo, idFormatoRichiesto, puoScaricare, puoAprireKit }: DettaglioPromoProps) {
-  const { promo, totali, formati, avvisi } = riepilogo;
-  const formato = formati.find((voce) => voce.id === idFormatoRichiesto) ?? formati[0];
+  const { promo, totali, formati } = riepilogo;
+  // Senza ?formato= si apre il primo formato che ha file: uno di soli kit non avviati non mostrerebbe niente
+  const formato =
+    formati.find((voce) => voce.id === idFormatoRichiesto) ?? formati.find((voce) => voce.numeroFile > 0) ?? formati[0];
   const validita = testoValidita(promo.validitaDal, promo.validitaAl);
+  // In Attivi e Storico i kit sono tutti pubblicati: in revisione e con errori varrebbero sempre 0
+  const conLavorazione = !soloKitPubblicati(periodo);
+  // Cresce a ogni formato scelto dalla tabella: i suoi file vengono in vista
+  const [richiesteInVista, setRichiesteInVista] = useState(0);
 
   return (
     <>
       <Sezione
         titolo={promo.nome}
         descrizione={`POP · ${ETICHETTA_PERIODO[periodo]}${validita ? ` · validità ${validita}` : ""}`}
-        azioni={
-          <Button as={Link} to={percorsoVolantini(periodo, promo.id)} variant="outline-secondary" size="sm">
-            Vai ai volantini
-            <Lucide icon="ArrowRight" aria-hidden="true" className="ml-1.5 h-3.5 w-3.5" />
-          </Button>
-        }
       >
-        <StatCardGrid className="lg:grid-cols-5">
-          <StatCard densita="compatta" tono="brand" etichetta="File POP" valore={formatNumero(totali.file)} />
-          <StatCard densita="compatta" tono="neutral" etichetta="Formati" valore={formatNumero(totali.formati)} />
-          <StatCard densita="compatta" tono="success" etichetta="Pubblicati" valore={formatNumero(totali.pubblicati)} />
-          <StatCard densita="compatta" tono="brand" etichetta="In revisione" valore={formatNumero(totali.inRevisione)} />
+        {/* Su mobile tessere basse in due colonne, la prima (i file) su tutta la riga: le tessere
+            sono 5 o 3 e così non resta un buco; da lg tutte in una riga */}
+        <StatCardGrid className={twMerge("gap-2 sm:gap-3", conLavorazione ? "lg:grid-cols-5" : "lg:grid-cols-3")}>
           <StatCard
             densita="compatta"
-            tono="warning"
-            etichetta="Con errori"
-            valore={formatNumero(totali.conErrori)}
-            evidenzia={totali.conErrori > 0}
+            tono="brand"
+            etichetta="File POP"
+            valore={formatNumero(totali.file)}
+            className={twMerge(CLASSI_TESSERA, "col-span-2 lg:col-span-1")}
           />
+          <StatCard densita="compatta" tono="neutral" etichetta="Formati" valore={formatNumero(totali.formati)} className={CLASSI_TESSERA} />
+          <StatCard densita="compatta" tono="success" etichetta="Pubblicati" valore={formatNumero(totali.pubblicati)} className={CLASSI_TESSERA} />
+          {conLavorazione && (
+            <>
+              <StatCard
+                densita="compatta"
+                tono="brand"
+                etichetta="In revisione"
+                valore={formatNumero(totali.inRevisione)}
+                className={CLASSI_TESSERA}
+              />
+              <StatCard
+                densita="compatta"
+                tono="warning"
+                etichetta="Con errori"
+                valore={formatNumero(totali.conErrori)}
+                evidenzia={totali.conErrori > 0}
+                className={CLASSI_TESSERA}
+              />
+            </>
+          )}
         </StatCardGrid>
       </Sezione>
-
-      <AvvisiNonAvviati avvisi={avvisi} />
 
       {formato ? (
         <>
@@ -155,6 +185,7 @@ function DettaglioPromo({ riepilogo, periodo, idFormatoRichiesto, puoScaricare, 
             formati={formati}
             idFormatoSelezionato={formato.id}
             percorsoFormato={(idFormato) => `?${parametriMateriali({ promo: promo.id, formato: idFormato })}`}
+            onSceltaFormato={() => setRichiesteInVista((numero) => numero + 1)}
             puoScaricare={puoScaricare}
             puoAprireKit={puoAprireKit}
           />
@@ -165,6 +196,7 @@ function DettaglioPromo({ riepilogo, periodo, idFormatoRichiesto, puoScaricare, 
             periodo={periodo}
             formato={formato}
             puoScaricare={puoScaricare}
+            richiesteInVista={richiesteInVista}
           />
         </>
       ) : (
@@ -172,14 +204,37 @@ function DettaglioPromo({ riepilogo, periodo, idFormatoRichiesto, puoScaricare, 
           <EmptyState
             compatta
             icon="FolderOpen"
-            title="Nessun file POP per questa promozione"
-            description={`La promozione non ha kit POP con file nel periodo ${ETICHETTA_PERIODO[periodo].toLowerCase()}.`}
+            title="Nessun kit POP per questa promozione"
+            description={`La promozione non ha kit POP nel periodo ${ETICHETTA_PERIODO[periodo].toLowerCase()}.`}
           />
         </Sezione>
       )}
     </>
   );
 }
+
+/** ?promo= di una promozione che non è fra quelle del periodo: si dice e si propone la prima. */
+function PromoNonDisponibile({ periodo, primaPromo }: { periodo: PeriodoMateriali; primaPromo: PromoPop | undefined }) {
+  const navigate = useNavigate();
+  return (
+    <Sezione>
+      <EmptyState
+        compatta
+        icon="SearchX"
+        title="Promozione non disponibile"
+        description={`La promozione indicata nell'indirizzo non ha kit POP fra quelle del periodo ${ETICHETTA_PERIODO[periodo].toLowerCase()}, oppure non esiste più.`}
+        buttonText={primaPromo ? "Apri la prima promozione" : undefined}
+        buttonIcon="ArrowRight"
+        onButtonClick={() => {
+          if (primaPromo) navigate(`?${parametriMateriali({ promo: primaPromo.id })}`, { replace: true });
+        }}
+      />
+    </Sezione>
+  );
+}
+
+/** Errore con stato HTTP, come lo lancia ServerCall. */
+const statoHttp = (errore: unknown): number | undefined => (errore as { httpStatus?: number } | null)?.httpStatus;
 
 function ContenutoPop({ periodo }: { periodo: PeriodoMateriali }) {
   const navigate = useNavigate();
@@ -191,12 +246,16 @@ function ContenutoPop({ periodo }: { periodo: PeriodoMateriali }) {
 
   const promozioni = useFetchPromozioniPop(periodo);
   const elenco = promozioni.data?.promozioni ?? [];
+  // Una promo dell'indirizzo che non è nell'elenco del periodo non si apre
+  const promoNonDisponibile =
+    Boolean(promoRichiesta) && Boolean(promozioni.data) && !elenco.some((promo) => promo.id === promoRichiesta);
   // Senza ?promo= si apre la prima promozione del periodo
-  const idPromo = promoRichiesta || elenco[0]?.id;
+  const idPromo = promoNonDisponibile ? undefined : promoRichiesta || elenco[0]?.id;
   const riepilogo = useFetchRiepilogoPop(idPromo, periodo);
 
   const etichettaPeriodo = ETICHETTA_PERIODO[periodo];
   const promozioniDelPeriodo = PROMOZIONI_DEL_PERIODO[periodo];
+  const avvisi = avvisiUnici(promozioni.data?.avvisi, idPromo ? riepilogo.data?.avvisi : undefined);
 
   const corpo = (() => {
     if (promozioni.isError) {
@@ -212,21 +271,28 @@ function ContenutoPop({ periodo }: { periodo: PeriodoMateriali }) {
     if (promozioni.data && elenco.length === 0) {
       const vuoto = PERIODO_VUOTO[periodo];
       return (
-        <Sezione>
-          <EmptyState
-            compatta
-            icon="Presentation"
-            title={vuoto.titolo}
-            description={vuoto.descrizione}
-            buttonText={puoAprirePromo ? promozioniDelPeriodo.etichetta : undefined}
-            buttonIcon="ArrowRight"
-            onButtonClick={() => navigate(promozioniDelPeriodo.percorso)}
-          />
-        </Sezione>
+        <>
+          <AvvisiNonAvviati avvisi={avvisi} />
+          <Sezione>
+            <EmptyState
+              compatta
+              icon="Presentation"
+              title={vuoto.titolo}
+              description={vuoto.descrizione}
+              buttonText={puoAprirePromo ? promozioniDelPeriodo.etichetta : undefined}
+              buttonIcon="ArrowRight"
+              onButtonClick={() => navigate(promozioniDelPeriodo.percorso)}
+            />
+          </Sezione>
+        </>
       );
     }
 
     const colonnaPrincipale = (() => {
+      // Anche un 404 del riepilogo: la promo è uscita dal periodo dopo che l'elenco è arrivato
+      if (promoNonDisponibile || (riepilogo.isError && statoHttp(riepilogo.error) === 404)) {
+        return <PromoNonDisponibile periodo={periodo} primaPromo={elenco[0]} />;
+      }
       if (riepilogo.isError) {
         return (
           <PageError
@@ -240,6 +306,8 @@ function ContenutoPop({ periodo }: { periodo: PeriodoMateriali }) {
       if (!riepilogo.data) return <ColonnaInCaricamento />;
       return (
         <DettaglioPromo
+          // Cambiando promo la tabella dei formati riparte chiusa e i file non scorrono in vista
+          key={riepilogo.data.promo.id}
           riepilogo={riepilogo.data}
           periodo={periodo}
           idFormatoRichiesto={formatoRichiesto}
@@ -251,23 +319,28 @@ function ContenutoPop({ periodo }: { periodo: PeriodoMateriali }) {
 
     // Due colonne da desktop: le promozioni a sinistra, la promo scelta a destra; su mobile in colonna
     return (
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        {promozioni.data ? (
-          <ElencoPromozioni
-            promozioni={elenco}
-            idSelezionata={idPromo ?? ""}
-            className="lg:col-span-4 lg:self-start xl:col-span-3"
-          />
-        ) : (
-          <ElencoInCaricamento />
-        )}
-        <div className="flex min-w-0 flex-col gap-6 lg:col-span-8 xl:col-span-9">{colonnaPrincipale}</div>
-      </div>
+      <>
+        <AvvisiNonAvviati avvisi={avvisi} />
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+          {promozioni.data ? (
+            <ElencoPromozioni
+              promozioni={elenco}
+              idSelezionata={promoRichiesta || idPromo || ""}
+              className="lg:col-span-4 lg:self-start xl:col-span-3"
+            />
+          ) : (
+            <ElencoInCaricamento />
+          )}
+          <div className="flex min-w-0 flex-col gap-6 lg:col-span-8 xl:col-span-9">{colonnaPrincipale}</div>
+        </div>
+      </>
     );
   })();
 
   return (
     <Pagina titolo={`POP · ${etichettaPeriodo}`} descrizione={DESCRIZIONE[periodo]}>
+      {/* Solo i periodi del POP: i volantini hanno la loro pagina con le loro schede */}
+      <SchedePeriodo vista="pop" periodo={periodo} className="self-start" />
       {corpo}
     </Pagina>
   );
