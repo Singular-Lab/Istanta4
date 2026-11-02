@@ -10,6 +10,8 @@ Le richieste di analisi di una riunione registrata (una trascrizione `TRJ-…` o
 
 Le richieste di report o di analisi dei rischi di una release (`REL-…` o una versione) non modificano il repository e seguono il §17, non il protocollo dei task.
 
+Le richieste di analizzare la codebase per ricavarne le specifiche (per esempio "analizza la codebase e proponi le specifiche") non modificano il repository e seguono il §19, non il protocollo dei task.
+
 ## 1. Verifica del Company Control Plane
 
 Prima di esaminare o modificare qualsiasi file:
@@ -318,3 +320,19 @@ Se decidi di proporre:
 5. Riferisci la proposta all'utente nella chiusura del task, o nel rapporto pre-flight se la fai lì: nome, motivazione, e le skill simili che il Control Plane ha segnalato.
 
 Ogni task può proporre al massimo tre skill. La proposta resta in attesa della revisione nel Control Plane e non è visibile agli agent finché non viene pubblicata: non usarla come se fosse nel catalogo e non riproporla, salvo un errore del Control Plane o una richiesta dell'utente.
+
+## 19. Analisi della codebase
+
+Si applica quando il capo progetto chiede di analizzare la codebase esistente per ricavarne le specifiche OpenSpec, o di riprendere un'analisi in corso.
+
+Non apre un task: niente `company_prepare_task`, niente branch, nessun file del repository modificato né committato. Resta valida la verifica del server MCP del §1, con gli strumenti di questa sezione al posto di `company_prepare_task`.
+
+1. Chiama `company_start_codebase_analysis` con `projectId` `istanta4`. Se un'analisi è già aperta, lo strumento restituisce quella: riprendi da dove si era fermata, con lo stato che restituisce.
+2. Segui il metodo nel campo `instructions`: è la fonte delle regole dell'analisi, aggiornata nel Control Plane. In sintesi:
+   - **mappa** delle capacità raggruppate in poche aree, con `company_submit_codebase_map`, poi fermati finché il capo progetto non la approva nel Control Plane;
+   - **osservazioni**, una capacità approvata alla volta, con `company_submit_codebase_findings`;
+   - **mining**, quando il capo progetto lo chiede dopo aver revisionato e risposto alle domande: per ogni area `company_start_codebase_mining` e poi `company_submit_requirement_proposals`.
+3. Il codice dice cosa fa, non cosa dovrebbe fare: un comportamento che potrebbe essere un bug diventa una domanda, non un requisito. Non trattare come requisito ciò che il capo progetto non ha approvato o a cui non ha risposto.
+4. A ogni fermata riporta al capo progetto il link `url` restituito e cosa deve fare nel Control Plane: approvare la mappa, revisionare le osservazioni, rispondere alle domande, accettare le proposte.
+
+Le change si creano nel Control Plane, una per area, dopo la revisione delle proposte; si applicano alle specifiche dalla pagina Change proposal, come quelle delle riunioni.
