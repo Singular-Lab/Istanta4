@@ -141,7 +141,7 @@ describe("Volantini per periodo", () => {
   it("titolo e descrizione dicono il periodo; la card mostra promo, area, canale e numero di file", async () => {
     await apri();
 
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Volantini · In corso");
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Volantini In corso");
     expect(screen.getByText(/Kit volantino in lavorazione nelle promozioni in corso/)).toBeInTheDocument();
     const scheda = screen.getByRole("article");
     expect(within(scheda).getByRole("link", { name: "Volantino 16 pagine" })).toHaveAttribute(
@@ -168,18 +168,17 @@ describe("Volantini per periodo", () => {
     expect(screen.queryByText(/Vai a POP/)).not.toBeInTheDocument();
   });
 
-  it("le schede del periodo dicono dove si è e portano agli altri periodi dei volantini", async () => {
-    const router = await apri("/volantini/attivi?area=a1");
+  it.each([
+    ["in-corso", "In corso"],
+    ["attivi", "Attivi"],
+    ["storico", "Storico"],
+  ])("la pagina %s mostra il periodo nel titolo senza separatore e non mostra il selettore", async (periodo, etichetta) => {
+    await apri(`/volantini/${periodo}`);
 
-    const schede = screen.getByRole("radiogroup", { name: "Periodo" });
-    expect(within(schede).getAllByRole("radio").map((scheda) => scheda.textContent)).toEqual(["In corso", "Attivi", "Storico"]);
-    expect(within(schede).getByRole("radio", { name: "Attivi" })).toHaveAttribute("aria-checked", "true");
-
-    fireEvent.click(within(schede).getByRole("radio", { name: "Storico" }));
-
-    // I filtri non passano da un periodo all'altro
-    await waitFor(() => expect(router.state.location.pathname).toBe("/volantini/storico"));
-    expect(router.state.location.search).toBe("");
+    const titolo = screen.getByRole("heading", { level: 1 });
+    expect(titolo).toHaveTextContent(`Volantini ${etichetta}`);
+    expect(titolo).not.toHaveTextContent("·");
+    expect(screen.queryByRole("radiogroup", { name: "Periodo" })).not.toBeInTheDocument();
   });
 
   it("il filtro per stato c'è solo In corso, con Non avviato fra le scelte", async () => {
@@ -347,7 +346,7 @@ describe("Volantini Attivi e Storico per promozione", () => {
     oggiE("2026-10-27T10:00:00+01:00");
     await apri("/volantini/attivi");
 
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Volantini · Attivi");
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Volantini Attivi");
     expect(screen.getAllByRole("article")).toHaveLength(1);
     const scheda = screen.getByRole("article", { name: "Speciale Colazione" });
     expect(within(scheda).getByRole("link", { name: "Speciale Colazione" })).toHaveAttribute("href", "/promozioni/in-corso/dettagli/p1");
@@ -379,7 +378,7 @@ describe("Volantini Attivi e Storico per promozione", () => {
 
     await apri("/volantini/storico");
 
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Volantini · Storico");
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Volantini Storico");
     expect(screen.queryByText(/Scade/)).not.toBeInTheDocument();
   });
 

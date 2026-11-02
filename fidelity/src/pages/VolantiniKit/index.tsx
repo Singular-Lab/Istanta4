@@ -37,7 +37,6 @@ import {
   type StatoKitMateriali,
 } from "../../../lib/materiali/tipi";
 import CardVolantino from "../shared/CardVolantino";
-import SchedePeriodo from "../shared/SchedePeriodo";
 import VolantiniPerPromozione from "./VolantiniPerPromozione";
 
 export interface VolantiniKitLoaderData {
@@ -379,16 +378,14 @@ function VolantiniInCorso() {
 }
 
 /**
- * Volantini di un periodo (in corso, attivi, storico): il periodo arriva dal loader della rotta e
- * le schede in cima passano da un periodo all'altro. I materiali POP sono una vista a parte.
+ * Volantini di un periodo (in corso, attivi, storico): il periodo arriva dal loader della rotta.
+ * I materiali POP sono una vista a parte.
  */
 function VolantiniKit() {
   const letto = (useLoaderData() as Partial<VolantiniKitLoaderData> | undefined)?.periodo;
   const periodo = isPeriodoMateriali(letto) ? letto : "in-corso";
   return (
-    <Pagina titolo={`Volantini · ${ETICHETTA_PERIODO[periodo]}`} descrizione={DESCRIZIONE[periodo]}>
-      <SchedePeriodo vista="volantini" periodo={periodo} className="self-start" />
-      {/* Cambiando periodo il contenuto riparte da zero: stesso componente, rotte diverse */}
+    <Pagina titolo={`Volantini ${ETICHETTA_PERIODO[periodo]}`} descrizione={DESCRIZIONE[periodo]}>
       {periodo === "in-corso" ? (
         <VolantiniInCorso key={periodo} />
       ) : (
