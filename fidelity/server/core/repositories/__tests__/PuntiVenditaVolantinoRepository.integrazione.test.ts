@@ -135,11 +135,19 @@ describeConDatabase('PuntiVenditaVolantinoRepository', () => {
   it('storia: apparizioni dalla piu\' vecchia, senza kit eliminati ne\' promo eliminate, coi giorni del calendario italiano', async () => {
     const primo = await creaKitRuntime({ validitaDal: giorno('2022-01-06'), validitaAl: giorno('2022-01-12'), titolo: 'SS LI 1' });
     const secondo = await creaKitRuntime({ stessaCombinazioneDi: primo, validitaDal: giorno('2022-01-13'), validitaAl: giorno('2022-01-19'), titolo: 'SS LI 2' });
+    const altraArea = await creaKitRuntime({ promo: { idGdo: primo.idGdo, idPromo: primo.idPromo }, titolo: 'SS altra area' });
+    const altroCanale = await creaKitRuntime({ promo: { idGdo: primo.idGdo, idPromo: primo.idPromo }, titolo: 'Altro canale TO' });
+    await sequelize.query('UPDATE runtime_kit SET id_canale = :idCanale WHERE id = :idKit', {
+      replacements: { idCanale: primo.idCanale, idKit: altraArea.idRuntime },
+    });
+    await sequelize.query('UPDATE runtime_kit SET id_area = :idArea WHERE id = :idKit', {
+      replacements: { idArea: primo.idArea, idKit: altroCanale.idRuntime },
+    });
     const eliminato = await creaKitRuntime({ stessaCombinazioneDi: primo, validitaDal: giorno('2022-01-20'), statoLavorazione: 'ELIMINATO' });
     const promoEliminata = await creaKitRuntime({ stessaCombinazioneDi: primo, validitaDal: giorno('2022-01-27'), statoPromo: 'ELIMINATA' });
     const combinazione = await creaCombinazione(primo);
     const pra = await creaPuntoVendita(primo, combinazione, { citta: 'Genova', indirizzo: 'Via Murtola 12/14' });
-    for (const kit of [secondo, primo, eliminato, promoEliminata]) {
+    for (const kit of [secondo, primo, altraArea, altroCanale, eliminato, promoEliminata]) {
       await repository.sostituisciRigheKit(kit.idRuntime, [riga(kit, 1, { localita: 'PRA', indirizzo: 'Via Murtola 12/14' })]);
     }
     const righe = await repository.righeDaRiabbinare(primo.idGdo);
@@ -177,9 +185,17 @@ describeConDatabase('PuntiVenditaVolantinoRepository', () => {
     expect(senza).toEqual([{ idKit: senzaPv.idRuntime, data: '2022-01-13' }]);
   });
 
-  it('volantini del PV dal piu\' recente, a pagine, col PDF del volantino e il numero di referenze', async () => {
+  it('volantini del PV dal piu\' recente, a pagine, solo nella combinazione corrente, col PDF e le referenze', async () => {
     const vecchio = await creaKitRuntime({ validitaDal: giorno('2022-01-06'), titolo: 'SS LI vecchio' });
     const recente = await creaKitRuntime({ stessaCombinazioneDi: vecchio, validitaDal: giorno('2023-05-04'), titolo: 'SS LI recente' });
+    const altraArea = await creaKitRuntime({ promo: { idGdo: vecchio.idGdo, idPromo: vecchio.idPromo }, titolo: 'SS altra area' });
+    const altroCanale = await creaKitRuntime({ promo: { idGdo: vecchio.idGdo, idPromo: vecchio.idPromo }, titolo: 'Altro canale TO' });
+    await sequelize.query('UPDATE runtime_kit SET id_canale = :idCanale WHERE id = :idKit', {
+      replacements: { idCanale: vecchio.idCanale, idKit: altraArea.idRuntime },
+    });
+    await sequelize.query('UPDATE runtime_kit SET id_area = :idArea WHERE id = :idKit', {
+      replacements: { idArea: vecchio.idArea, idKit: altroCanale.idRuntime },
+    });
     const combinazione = await creaCombinazione(vecchio);
     const pra = await creaPuntoVendita(vecchio, combinazione, { citta: 'Genova', indirizzo: 'Via Murtola 12/14' });
     const vol = await creaTipoExport('VOL');
@@ -187,7 +203,7 @@ describeConDatabase('PuntiVenditaVolantinoRepository', () => {
     await creaFile({ nome: 'senza-olimpo.pdf', idRuntime: vecchio.idRuntime, tipoExport: vol });
     await creaReferenza(recente, { codice: '4969665' });
     await creaReferenza(recente, { codice: '1404871' });
-    for (const kit of [vecchio, recente]) {
+    for (const kit of [vecchio, recente, altraArea, altroCanale]) {
       // Il PV due volte nella stessa lista conta una volta
       await repository.sostituisciRigheKit(kit.idRuntime, [
         riga(kit, 1, { localita: 'PRA', indirizzo: 'Via Murtola 12/14' }),

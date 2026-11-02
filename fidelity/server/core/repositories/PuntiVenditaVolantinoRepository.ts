@@ -111,6 +111,13 @@ const DA_KIT = `
   LEFT JOIN canali c ON c.id_canali = k.id_canale
   LEFT JOIN aree a ON a.id_aree = k.id_area`;
 
+const COMBINAZIONE_PV = `
+  JOIN punti_vendita pv ON pv.id_puntivendita = r.id_punto_vendita
+  JOIN combinazione_canale_area cca ON cca.id_combinazione_canale_area = pv.id_combinazione_canale_area_puntivendita`;
+const KIT_COMBINAZIONE_PV = `
+  k.id_canale = cca.id_canale_combinazione_canale_area
+  AND k.id_area = cca.id_area_combinazione_canale_area`;
+
 /** Il PDF del volantino: il primo file dell'export VOL che sta su Olimpo, meglio se PDF (come la copertina dei Volantini). */
 export const PDF_VOLANTINO = `
   LEFT JOIN LATERAL (
@@ -322,8 +329,10 @@ export class PuntiVenditaVolantinoRepository implements IPuntiVenditaVolantinoRe
       `SELECT ${COLONNE_APPARIZIONE},
               r.riga, r.localita, r.indirizzo, r.telefono, r.chiave_indirizzo, r.chiave_telefono, r.abbinamento
        FROM punti_vendita_volantino r
+       ${COMBINAZIONE_PV}
        ${DA_KIT}
        WHERE r.id_punto_vendita = :idPuntoVendita AND ${KIT_VALIDI}
+         AND ${KIT_COMBINAZIONE_PV}
        ORDER BY data_edizione, k.id, r.posizione`,
       { idPuntoVendita }
     );
@@ -359,7 +368,10 @@ export class PuntiVenditaVolantinoRepository implements IPuntiVenditaVolantinoRe
       WITH ap AS (
         SELECT DISTINCT ON (r.id_kit_runtime) r.*
         FROM punti_vendita_volantino r
+        ${COMBINAZIONE_PV}
+        JOIN runtime_kit k ON k.id = r.id_kit_runtime
         WHERE r.id_punto_vendita = :idPuntoVendita
+          AND ${KIT_COMBINAZIONE_PV}
         ORDER BY r.id_kit_runtime, r.posizione
       )`;
     const [righe, [conteggio]] = await Promise.all([
