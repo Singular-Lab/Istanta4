@@ -383,3 +383,28 @@ test('la scheda e l\'esportazione per Correggo passano l\'area della lavorazione
     assert.match(scheda, /getCambioStrutturalePath\(primario, box, areaLav \? areaLav\.sigla : null\)/);
     assert.match(processo, /getCambioStrutturalePath\(objItem, group, areaLav \? areaLav\.sigla : null\)/);
 });
+
+/* ---- lo stato in volantino core: "Metti fuori volantino" di Coop e Famila ---- */
+
+function azioniDi(agenzia) {
+    const percorso = path.join(__dirname, '..', '..', 'Istanta', 'wwwroot', 'external_source', agenzia, 'SourceCustomPlugin.json');
+    return inCamelCase(JSON.parse(fs.readFileSync(percorso, 'utf8').replace(/^\uFEFF/, '')).cambiStrutturali);
+}
+
+//L'azione scrive solo il campo core Referenza.InVolantino a false ("$" al posto del punto,
+//come Box$Formato): il tema di Coop e il tipo_offerta di Famila non si toccano piu'.
+test('Metti fuori volantino di Coop e Famila scrive solo il campo core, a false', async () => {
+    for (const agenzia of ['Coopfi', 'Famila']) {
+        global.Utility.getAllFieldsInGroup = () => [];
+        cambiStrutturali.cambiStrutturaliDB = azioniDi(agenzia);
+        try {
+            const record = { recordInTracciato: { codiceBox: 'BOX_STD', tema: 'SPRINT', tipo_offerta: 'PN' } };
+            const offerte = await cambiStrutturali.getCambioStrutturalePath(record, {}, 'A');
+            const fuori = offerte.find(a => a.titolo === 'Metti fuori volantino');
+            assert.ok(fuori, agenzia);
+            assert.deepStrictEqual(fuori.istruzioni.map(i => [i.field, i.valore]), [['Referenza$InVolantino', 'false']], agenzia);
+        } finally {
+            cambiStrutturali.cambiStrutturaliDB = null;
+        }
+    }
+});

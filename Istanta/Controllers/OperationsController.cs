@@ -1020,6 +1020,9 @@ namespace Istanta.Controllers
                                 if (codArticolo == "")
                                     continue;
 
+                                //Lo stato in volantino lo decide l'agenzia; se non l'ha deciso e' in volantino.
+                                StatoVolantino.ApplicaPredefinito(item);
+
                                 if (pkg.persistent)//!pkg.askReport)
                                 {
                                     //Provo a cercare il codice in archivio

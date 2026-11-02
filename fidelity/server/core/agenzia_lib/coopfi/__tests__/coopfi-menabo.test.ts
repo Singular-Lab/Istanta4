@@ -457,3 +457,21 @@ describe("coopfi menabo", () => {
     ]);
   });
 });
+
+describe("coopfi menabo con lo stato in volantino core", () => {
+  const sut = new CoopfiAgenziaLib({} as any);
+
+  it("esclude dal raggruppamento per tema le referenze fuori volantino, dal campo core o dal tema", async () => {
+    const inVol = { tema: "SPRINT", "Scatto.CodiceGruppo": "G001", "Referenza.InVolantino": true };
+    const fuoriDalPlugin = { tema: "SPRINT", "Scatto.CodiceGruppo": "G002", "Referenza.InVolantino": "false" };
+    const fuoriDaListaVecchia = { tema: "FUORI DEPLIANT FOOD", "Scatto.CodiceGruppo": "G003" };
+
+    const result = await sut.getDatoPerMenabo([
+      buildTracciato("canale-1", "area-1", [inVol, fuoriDalPlugin, fuoriDaListaVecchia]),
+    ], { tipoDivisione: "canale", dataDivisione: [] });
+
+    const canale1 = result.risultati.find(s => s.id === "canale-1")!;
+    expect(canale1.raggruppamento.map(g => [g.valore_campo, g.conteggio])).toEqual([["SPRINT", 1]]);
+    expect(canale1.raggruppamento[0].records[0]["Scatto.CodiceGruppo"]).toBe("G001");
+  });
+});

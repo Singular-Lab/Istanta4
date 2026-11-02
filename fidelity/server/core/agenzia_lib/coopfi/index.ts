@@ -192,8 +192,13 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
      * né tra le referenze Entranti, né tra le Uscenti, né nelle Variazioni.
      * Restano invece visibili nella vista a schermo su FP (il filtro è applicato solo
      * alla variante `widgetsPdf` del report). Match case-insensitive, di tipo "contiene".
+     * Le referenze fuori volantino (prima: tema "FUORI DEPLIANT") sono escluse da
+     * {@link fuoriVolantino}.
      */
-    private TEMI_ESCLUSI_DA_PDF = ["FUORI DEPLIANT", "EX TRIPLA"];
+    private TEMI_ESCLUSI_DA_PDF = ["EX TRIPLA"];
+
+    /** Il campo core di Istanta con lo stato in volantino della referenza. */
+    private CHIAVE_IN_VOLANTINO = "Referenza.InVolantino";
 
     constructor(private userService: IUserService) {
         console.log(Colorize.bgRed("Caricato Coopfi Agenzia lib"))
@@ -357,7 +362,7 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
                 const valoreCampo = String(record[this.CHIAVE_CAMPO_MENABO] ?? "").trim();
                 if (!valoreCampo) continue;
                 //ES: FUORI DEPLIANT FOOD (OS9B) 42UFI+17TDM+A => non vogliamo che diventi un gruppo a parte, ma lo escludiamo del tutto dal raggruppamento (resta comunque nei campi filtro)
-                if (valoreCampo.toLowerCase().includes("fuori depliant")) continue;
+                if (this.fuoriVolantino(record)) continue;
 
                 addGroupRecord(this.CHIAVE_CAMPO_MENABO, valoreCampo, record);
             }
@@ -935,8 +940,25 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
     }
 
     /**
-     * Applica le regole di esclusione Coopfi per il PDF: scarta i record il cui `tema` contiene
-     * una delle diciture in {@link TEMI_ESCLUSI_DA_PDF}.
+     * Se la referenza è fuori volantino: il campo core di Istanta (Referenza.InVolantino) se
+     * c'è, altrimenti il tema che contiene "fuori depliant", come nelle liste importate prima
+     * del campo. È la regola di Istanta (Coopfi.cs): l'azione "Metti fuori volantino" scrive
+     * solo il campo, il tema resta com'è.
+     */
+    fuoriVolantino(record: DataFields): boolean {
+        const campo = record[this.CHIAVE_IN_VOLANTINO];
+        if (typeof campo === "boolean") return !campo;
+        // Le azioni del Plugin lo scrivono come testo.
+        const testo = typeof campo === "string" ? campo.trim().toLowerCase() : "";
+        if (testo === "true") return false;
+        if (testo === "false") return true;
+        return String(record.tema ?? "").toLowerCase().includes("fuori depliant");
+    }
+
+    /**
+     * Applica le regole di esclusione Coopfi per il PDF: scarta le referenze fuori volantino
+     * ({@link fuoriVolantino}) e i record il cui `tema` contiene una delle diciture in
+     * {@link TEMI_ESCLUSI_DA_PDF}.
      *
      * Il filtro agisce sui record PRIMA del calcolo dei widget (e non sulle sole liste già
      * costruite) perché altrimenti KPI, dettaglio per reparto e sottotitoli continuerebbero a
@@ -946,7 +968,7 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
      * evitare di ricalcolare i widget.
      */
     filtraRecordPerPdf(records: DataFields[]): DataFields[] {
-        const filtrati = records.filter((record) => !this.temaEsclusoDaPdf(record.tema));
+        const filtrati = records.filter((record) => !this.fuoriVolantino(record) && !this.temaEsclusoDaPdf(record.tema));
         return filtrati.length === records.length ? records : filtrati;
     }
     async normalizzaDatoConfrontoPerScore(confrontiData: PromoScoreboardInput): Promise<PromoScoreboardInput> {

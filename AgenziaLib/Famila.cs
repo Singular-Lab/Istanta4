@@ -168,6 +168,16 @@ namespace AgenziaLib
                 errors += ex.Message;
             }
 
+            //Lo stato in volantino core, deciso sul tipo_offerta finale di ogni record: fuori
+            //le referenze "SS". Il tipo_offerta resta com'e'.
+            foreach (Tracciato tLista in result)
+            {
+                foreach (Dictionary<string, object> rec in tLista.Records ?? new List<Dictionary<string, object>>())
+                {
+                    rec[GLOBAL_VARIABLES_FICO.keyInVolantino] = RegolaPrecedenteInVolantino(rec);
+                }
+            }
+
             impResult.liste = result;
             impResult.errors = errors;
             return JsonConvert.SerializeObject(impResult);
@@ -424,9 +434,9 @@ namespace AgenziaLib
                     ArticoloInKit artInKit = tracciato[i];
                     Dictionary<string, object> recItem = artInKit.recordInTracciato;
 
-                    // ----- Blocco 3a: esclusione record con tipo_offerta = "SS" -----
-                    string tipoOfferta = recItem.ContainsKey("tipo_offerta") ? recItem["tipo_offerta"].ToString() : "";
-                    if (tipoOfferta == "SS")
+                    // ----- Blocco 3a: esclusione dei fuori volantino -----
+                    // Il campo core, o tipo_offerta = "SS" per le liste importate prima del campo.
+                    if (!StatoVolantino.InVolantino(recItem, RegolaPrecedenteInVolantino))
                         continue;
 
                     // Blocco 3b: nessun gate -> tutti i record vengono impaginati.
@@ -939,7 +949,27 @@ namespace AgenziaLib
 
         public List<q_records_per_getListaRevisione> specificaInOutVol(List<q_records_per_getListaRevisione> tracciatoSingoli, List<q_records_per_getListaRevisione> listaOrigine)
         {
-            return tracciatoSingoli;
+            // Il campo core, o tipo_offerta per le liste importate prima del campo. Una referenza
+            // senza il suo record nella lista d'origine resta in volantino, come prima.
+            return StatoVolantino.CalcolaInVolRevisione(
+                tracciatoSingoli,
+                listaOrigine,
+                r => StatoVolantino.InVolantino(r, RegolaPrecedenteInVolantino),
+                inVolSeManca: true);
+        }
+
+        /// Lo stato in volantino da tipo_offerta: fuori le referenze "SS", uguale esatto come
+        /// esportaVolantino prima del campo core; ora decide il campo all'importazione e vale per
+        /// le liste importate prima.
+        internal static bool InVolantinoDaTipoOfferta(object tipoOfferta)
+        {
+            return (tipoOfferta?.ToString() ?? "") != "SS";
+        }
+
+        /// La regola precedente al campo core, sul record: tipo_offerta, se c'e'.
+        internal static bool RegolaPrecedenteInVolantino(IDictionary<string, object> record)
+        {
+            return InVolantinoDaTipoOfferta(record.TryGetValue("tipo_offerta", out object tipoOfferta) ? tipoOfferta : null);
         }
 
         public List<colonnaReportImportazione> getColonneReportImportaziones()

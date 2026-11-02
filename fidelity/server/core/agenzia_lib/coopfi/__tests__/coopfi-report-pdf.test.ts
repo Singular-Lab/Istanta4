@@ -128,3 +128,33 @@ describe("coopfi widget PDF calcolati sui record filtrati", () => {
     expect(riga.inSecondario).toBe(3);
   });
 });
+
+describe("coopfi filtraRecordPerPdf con lo stato in volantino core", () => {
+  const conStato = (codice: string, tema: string, inVolantino: unknown): DataFields => ({
+    ...makeRecord({ codice, tema }),
+    "Referenza.InVolantino": inVolantino as any,
+  });
+
+  it("scarta la referenza messa fuori volantino dal Plugin anche con il tema pulito", () => {
+    const records = [
+      conStato("001", "SPRINT", true),
+      conStato("002", "SPRINT", false),
+      conStato("003", "SPRINT", "false"),
+      conStato("004", "SPRINT", "True"),
+    ];
+
+    expect(sut.filtraRecordPerPdf(records).map((r) => r.codice_referenza)).toEqual(["001", "004"]);
+  });
+
+  it("con il campo core vale il campo, senza il campo vale il tema", () => {
+    expect(sut.fuoriVolantino(conStato("001", "FUORI DEPLIANT CASA", true))).toBe(false);
+    expect(sut.fuoriVolantino(makeRecord({ codice: "002", tema: "Fuori Depliant Casa" }))).toBe(true);
+    expect(sut.fuoriVolantino(makeRecord({ codice: "003", tema: "Ortofrutta" }))).toBe(false);
+    // Un valore che non si capisce non decide: vale il tema.
+    expect(sut.fuoriVolantino(conStato("004", "FUORI DEPLIANT", "boh"))).toBe(true);
+  });
+
+  it("EX TRIPLA resta escluso dal PDF anche in volantino", () => {
+    expect(sut.filtraRecordPerPdf([conStato("001", "EX TRIPLA VINI", true)])).toHaveLength(0);
+  });
+});

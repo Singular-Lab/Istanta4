@@ -1086,6 +1086,9 @@ namespace AgenziaLib
                             item[keyTipo_volantino] = "F - Fuori Volantino";
                         }
                         tipo_vol = item[keyTipo_volantino].ToString();
+                        //Lo stato in volantino core lo decide tipo_volantino, che resta com'e'
+                        //per sottocosto ed etichetta FUORIVOL.
+                        item[GLOBAL_VARIABLES_FICO.keyInVolantino] = InVolantinoDaTipoVolantino(tipo_vol);
 
                         string ean = item[GLOBAL_VARIABLES.keyRefEan].ToString();
                         if (ean.Contains(","))
@@ -2219,10 +2222,8 @@ namespace AgenziaLib
                         recItem.ToString();
                     }
 
-                    string inout_vol = recItem[keyTipo_volantino].ToString().ToLower();
-
-                    bool is_fuori_volantino = (inout_vol.IndexOf("fuori volantino") >= 0) ||
-                        (inout_vol.IndexOf("opportunit") >= 0);
+                    //Il campo core, o tipo_volantino per le liste importate prima del campo.
+                    bool is_fuori_volantino = !StatoVolantino.InVolantino(recItem, RegolaPrecedenteInVolantino);
 
                     if (is_fuori_volantino) // !is_fuori_volantino && FuoriVolField.IndexOf("volantino") < 0)
                     {
@@ -13961,168 +13962,29 @@ Descrizione3.EndsWith("\r\n");
     List<q_records_per_getListaRevisione> tracciatoRevisione,
     List<q_records_per_getListaRevisione> listaOrigine)
         {
+            //Il campo core, o tipo_volantino per le liste importate prima del campo. Una
+            //referenza senza il suo record nella lista d'origine resta fuori, come prima.
+            return StatoVolantino.CalcolaInVolRevisione(
+                tracciatoRevisione,
+                listaOrigine,
+                r => StatoVolantino.InVolantino(r, RegolaPrecedenteInVolantino),
+                inVolSeManca: false);
+        }
 
-            Stopwatch sw1 = new Stopwatch();
-            sw1.Start();
+        /// Lo stato in volantino da tipo_volantino: fuori le referenze "F - Fuori Volantino" e
+        /// "O - Opportunita'", dentro tutte le altre, anche con il valore vuoto. E' la regola con
+        /// cui esportaVolantino escludeva le referenze prima del campo core; ora decide il campo
+        /// all'importazione e vale per le liste importate prima.
+        internal static bool InVolantinoDaTipoVolantino(object tipoVolantino)
+        {
+            string valore = (tipoVolantino?.ToString() ?? "").ToLower();
+            return valore.IndexOf("fuori volantino") < 0 && valore.IndexOf("opportunit") < 0;
+        }
 
-            if (tracciatoRevisione == null)
-            {
-                return new List<q_records_per_getListaRevisione>();
-            }
-
-            if (listaOrigine == null)
-            {
-                listaOrigine = new List<q_records_per_getListaRevisione>();
-            }
-
-            var lookupOrigine = listaOrigine
-                .GroupBy(f => $"{f.Area}_{f.Canale}_{f.Dato[Meta.ReferenzaCodice]}_{f.Label}")
-                .ToDictionary(
-                    g => g.Key,
-                    g => g.First()
-                );
-
-            //
-            // 1. Aggiorno InVol dei singoli.
-            //
-            var singoli = tracciatoRevisione
-                .Where(x => x.Dato != null && !x.isGruppo)
-                .ToList();
-
-
-
-            foreach (var item in singoli)
-            {
-                var acComuni = item.Dato[Meta.keyACComuni] as List<ACcomuni>;
-
-
-
-                if (acComuni == null)
-                {
-                    continue;
-                }
-
-                foreach (var ac in acComuni)
-                {
-                    var key = $"{ac.area}_{ac.canale}_{item.Dato[Meta.ReferenzaCodice]}_{ac.label}";
-
-
-
-                    if (!lookupOrigine.TryGetValue(key, out var elementoCorrispondenteAC))
-                    {
-                        Debug.WriteLine("Errore");
-                        ac.InVol = false;
-                        continue;
-                    }
-
-                    var tipoVolantino = elementoCorrispondenteAC.Dato[Meta.tipo_volantino] as string;
-                    ac.InVol = tipoVolantino != null && tipoVolantino.Contains("V - Volantino");
-                }
-            }
-
-            //
-            // 2. Preparo lookup dei singoli aggiornati per CodiceRef.
-            //
-            var singoliPerCodice = singoli
-                .Where(x => x.Dato.ContainsKey(Meta.ReferenzaCodice))
-                .GroupBy(x => x.Dato[Meta.ReferenzaCodice]?.ToString() ?? "")
-                .ToDictionary(
-                    g => g.Key,
-                    g => g.ToList()
-                );
-
-            //
-            // 3. Aggiorno InVol dei gruppi.
-            //
-            var gruppi = tracciatoRevisione
-                .Where(x => x.Dato != null && x.isGruppo)
-                .ToList();
-
-            foreach (var gruppo in gruppi)
-            {
-                if (!gruppo.Dato.ContainsKey(Meta.ScattoCodiceGruppo))
-                {
-                    continue;
-                }
-
-                var codiceGruppo = gruppo.Dato[Meta.ScattoCodiceGruppo]?.ToString() ?? "";
-
-                if (string.IsNullOrWhiteSpace(codiceGruppo))
-                {
-                    continue;
-                }
-
-                var codiciMembri = codiceGruppo
-                    .Split(',')
-                    .Where(x => !string.IsNullOrWhiteSpace(x))
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToList();
-
-                if (codiciMembri.Contains("440110"))
-                {
-                    Console.WriteLine("");
-                }
-
-                var acComuniGruppo = gruppo.Dato[Meta.keyACComuni] as List<ACcomuni>;
-
-                if (acComuniGruppo == null)
-                {
-                    continue;
-                }
-
-                foreach (var acGruppo in acComuniGruppo)
-                {
-                    bool gruppoInVol = true;
-
-                    foreach (var codiceMembro in codiciMembri)
-                    {
-                        if (!singoliPerCodice.TryGetValue(codiceMembro, out var recordsMembro))
-                        {
-                            gruppoInVol = false;
-                            break;
-                        }
-
-                        var recordMembroSuAC = recordsMembro
-                            .FirstOrDefault(x =>
-                            {
-                                var acMembroList = x.Dato[Meta.keyACComuni] as List<ACcomuni>;
-
-                                if (acMembroList == null)
-                                {
-                                    return false;
-                                }
-
-                                return acMembroList.Any(ac =>
-                                    string.Equals(ac.area, acGruppo.area, StringComparison.OrdinalIgnoreCase) &&
-                                    string.Equals(ac.canale, acGruppo.canale, StringComparison.OrdinalIgnoreCase)
-                                );
-                            });
-
-                        if (recordMembroSuAC == null)
-                        {
-                            gruppoInVol = false;
-                            break;
-                        }
-
-                        var acMembro = (recordMembroSuAC.Dato[Meta.keyACComuni] as List<ACcomuni>)
-                            ?.FirstOrDefault(ac =>
-                                string.Equals(ac.area, acGruppo.area, StringComparison.OrdinalIgnoreCase) &&
-                                string.Equals(ac.canale, acGruppo.canale, StringComparison.OrdinalIgnoreCase)
-                            );
-
-                        if (acMembro == null || !acMembro.InVol)
-                        {
-                            gruppoInVol = false;
-                            break;
-                        }
-                    }
-
-                    acGruppo.InVol = gruppoInVol;
-                }
-            }
-
-            sw1.Stop();
-            return tracciatoRevisione;
+        /// La regola precedente al campo core, sul record: tipo_volantino, se c'e'.
+        internal static bool RegolaPrecedenteInVolantino(IDictionary<string, object> record)
+        {
+            return InVolantinoDaTipoVolantino(record.TryGetValue(Meta.tipo_volantino, out object valore) ? valore : null);
         }
 
         public List<colonnaReportImportazione> getColonneReportImportaziones()

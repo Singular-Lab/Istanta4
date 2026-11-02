@@ -52,6 +52,9 @@ namespace AgenziaLib.Tipi
         //I20-1000: la chiave core che per edro21 ha sostituito la custom nome_foto. Le liste
         //vecchie portano ancora quella, le nuove questa, e per un po' girano insieme.
         public static readonly string keyFotoSelezioneDaTracciato = "Foto.SelezioneDaTracciato";
+        //Lo stato in volantino della referenza, campo core: l'importazione dell'agenzia lo
+        //decide, si legge con IstantaLib.StatoVolantino.
+        public static readonly string keyInVolantino = GLOBAL_VARIABLES_FICO.keyInVolantino;
         public static readonly string keyDescrUmGruppo = "Descrizioni.UmGruppo";
         public static readonly string keyDescrPesoGruppo = "Descrizioni.PesoGruppo";
 
