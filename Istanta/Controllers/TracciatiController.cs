@@ -1567,6 +1567,8 @@ namespace Istanta.Controllers
                         var recs = (_recs as JArray)!.ToObject<List<Dictionary<string, object>>>();
                         foreach (Dictionary<string, object> item in recs!)
                         {
+                            //Lo stato in volantino lo decide l'agenzia; se non l'ha deciso e' in volantino.
+                            StatoVolantino.ApplicaPredefinito(item);
 
                             PromoTracciatiRecord _rec = new PromoTracciatiRecord();
                             _rec.IdTracciato = pTr.Id;

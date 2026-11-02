@@ -358,6 +358,11 @@ namespace IstantaLib
         //Viaggia sempre, anche a false, cosi' chi la legge non deve distinguere "non disattivata"
         //da "chiave assente".
         public static readonly string keyFotoSelezioneDaTracciatoDisabled = "Foto.SelezioneDaTracciatoDisabled";
+        //Stato in volantino / fuori volantino della referenza: bool, lo decide l'importazione
+        //dell'agenzia; se non lo decide vale true. Si legge solo con StatoVolantino.
+        public static readonly string keyInVolantino = "Referenza.InVolantino";
+        //Aree e canali della referenza nel revisore, con lo stato in volantino di ciascuno (List<ACcomuni>).
+        public static readonly string keyACComuni = "ACComuni";
         public static readonly string keyMembriGruppoFoto = "membriGruppoFoto";
 
 

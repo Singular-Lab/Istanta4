@@ -2835,7 +2835,8 @@ namespace AgenziaLib
 
                     string tema = recItem["tema"].ToString().ToLower();
 
-                    bool is_fuori_volantino = (tema.IndexOf("fuori depliant") >= 0);
+                    //Il campo core, o il tema per le liste importate prima del campo.
+                    bool is_fuori_volantino = !StatoVolantino.InVolantino(recItem, RegolaPrecedenteInVolantino);
                     string descr1DaLista = recItem[GLOBAL_VARIABLES_FICO.keyDescr1Tracciato].ToString().ToLower();
 
                     if (is_fuori_volantino) // !is_fuori_volantino && FuoriVolField.IndexOf("volantino") < 0)
@@ -5319,6 +5320,16 @@ namespace AgenziaLib
                 errors += ex.Message + "\n";
             }
 
+            //Lo stato in volantino core, deciso sul tema finale di ogni record (le fusioni
+            //sopra possono cambiarlo): fuori le referenze "fuori depliant". Il tema resta com'e'.
+            foreach (Tracciato tLista in result)
+            {
+                foreach (Dictionary<string, object> rec in tLista.Records ?? new List<Dictionary<string, object>>())
+                {
+                    rec[GLOBAL_VARIABLES_FICO.keyInVolantino] = RegolaPrecedenteInVolantino(rec);
+                }
+            }
+
             impResult.liste = result;
             impResult.errors = errors;
             return JsonConvert.SerializeObject(impResult);
@@ -6043,7 +6054,27 @@ namespace AgenziaLib
 
         public List<q_records_per_getListaRevisione> specificaInOutVol(List<q_records_per_getListaRevisione> tracciatoSingoli, List<q_records_per_getListaRevisione> listaOrigine)
         {
-            return tracciatoSingoli;
+            //Il campo core, o il tema per le liste importate prima del campo. Una referenza
+            //senza il suo record nella lista d'origine resta in volantino, come prima.
+            return StatoVolantino.CalcolaInVolRevisione(
+                tracciatoSingoli,
+                listaOrigine,
+                r => StatoVolantino.InVolantino(r, RegolaPrecedenteInVolantino),
+                inVolSeManca: true);
+        }
+
+        /// Lo stato in volantino dal tema: fuori le referenze il cui tema contiene "fuori
+        /// depliant". E' la regola con cui esportaVolantino escludeva le referenze prima del
+        /// campo core; ora decide il campo all'importazione e vale per le liste importate prima.
+        internal static bool InVolantinoDaTema(object tema)
+        {
+            return (tema?.ToString() ?? "").ToLower().IndexOf("fuori depliant") < 0;
+        }
+
+        /// La regola precedente al campo core, sul record: il tema, se c'e'.
+        internal static bool RegolaPrecedenteInVolantino(IDictionary<string, object> record)
+        {
+            return InVolantinoDaTema(record.TryGetValue("tema", out object tema) ? tema : null);
         }
 
         public List<colonnaReportImportazione> getColonneReportImportaziones()
@@ -6512,7 +6543,9 @@ namespace AgenziaLib
                 titolo: "Metti fuori volantino",
                 istruzioni: new List<IstruzioneCambio>
                 {
-                    new IstruzioneCambio { Field = "tema", Operazione = TipoOperazione.AppendText, Valore = " fuori depliant" }
+                    //Solo il campo core: il tema non si tocca piu'. Nelle istruzioni il punto del
+                    //campo si scrive "$" (Referenza$InVolantino): il server lo rimette.
+                    new IstruzioneCambio { Field = GLOBAL_VARIABLES_FICO.keyInVolantino.Replace(".", "$"), Operazione = TipoOperazione.Set, Valore = "false" }
                 });
 
             return result;

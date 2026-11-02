@@ -2380,6 +2380,11 @@ out var mismatch);
                 }).ToList();
 
 
+                //Lo stato in volantino di ogni area e canale dal campo core, per ogni agenzia. Le
+                //agenzie con liste importate prima del campo lo ricalcolano in specificaInOutVol
+                //con la loro regola precedente.
+                StatoVolantino.CalcolaInVolRevisione(tracciatoRevisione, q_records, r => StatoVolantino.InVolantino(r), inVolSeManca: true);
+
                 IstantaController icItem = new IstantaController(this.connString, this.path_external_lib, this.path_external_source, this._dbContextFactory);
                 Dictionary<string, object> objParams = new Dictionary<string, object>();
                 objParams.Add("tracciatoRevisione", tracciatoRevisione);
