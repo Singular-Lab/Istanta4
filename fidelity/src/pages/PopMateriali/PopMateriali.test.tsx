@@ -630,7 +630,7 @@ describe("POP per periodo", () => {
 
     await waitFor(() => expect(router.state.location.search).toBe("?promo=p1"));
     await waitFor(() => expect(finti.promoRiepilogo.at(-1)).toBe("p1"));
-    expect(screen.getByRole("heading", { level: 2, name: "Speciale Colazione" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 2, name: "Speciale Colazione" })).toBeInTheDocument();
   });
 
   it("con i filtri senza file propone Azzera filtri e riassume i filtri usati", async () => {
