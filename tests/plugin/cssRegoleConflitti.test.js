@@ -318,3 +318,284 @@ test('Edro21: la regola coi loghi prende la descrizione, anche col DNA, e non il
         assert.ok(prende(regola.latoB, 'foto_extra$Logo_SDB$tipo_1'));
     });
 });
+
+/* ---- I20-1178: le misure del contatto nel registro del Plugin ---- */
+
+//Il box della issue, misurato in InDesign: logo TERRITORIO in alto a destra, descrizione col
+//riquadro che sale sul logo di 1 mm e la prima riga di testo 6 mm piu' in basso.
+const LOGO_TERRITORIO = [150, 328.86, 164.48, 343.33];
+const DESCRIZIONE_PANNA = {
+    rettangolo: [163.45, 312.33, 188.45, 344.33],
+    righe: [
+        [170.60, 326.98, 174.13, 342.73],
+        [174.13, 329.35, 177.66, 342.73],
+        [177.66, 320.86, 181.19, 342.73],
+        [181.19, 333.71, 184.71, 342.73],
+        [184.50, 332.78, 188.03, 342.73]
+    ],
+    testi: ["Panna fresca \n", "da montare\n", "Centrale del latte \n", "di Roma\n", "250 ml"]
+};
+
+test('il riquadro che sale sul logo non e\' un contatto: nessuna misura', () => {
+    const logo = { rettangolo: LOGO_TERRITORIO, righe: [], testi: [] };
+
+    assert.strictEqual(cssRegoleConflitti.descriviContatto(DESCRIZIONE_PANNA, logo), '');
+});
+
+test('una riga sul logo: il messaggio dice quale, con le sue parole e le misure', () => {
+    //Il logo abbassato fin dentro la seconda riga.
+    const logo = { rettangolo: [160, 328.86, 175, 343.33], righe: [], testi: [] };
+
+    const misure = cssRegoleConflitti.descriviContatto(DESCRIZIONE_PANNA, logo);
+
+    assert.strictEqual(misure,
+        'Misure in mm [alto, sinistra, basso, destra]: riga 1 \u00ABPanna fresca\u00BB [170.60, 326.98, 174.13, 342.73] ' +
+        'tocca riquadro [160.00, 328.86, 175.00, 343.33].');
+});
+
+test('senza righe le misure sono quelle dei due riquadri', () => {
+    const a = { rettangolo: [0, 0, 10, 10], righe: [], testi: [] };
+    const b = { rettangolo: [5, 5, 15, 15], righe: [], testi: [] };
+
+    assert.strictEqual(cssRegoleConflitti.descriviContatto(a, b),
+        'Misure in mm [alto, sinistra, basso, destra]: riquadro [0.00, 0.00, 10.00, 10.00] tocca riquadro [5.00, 5.00, 15.00, 15.00].');
+});
+
+test('una riga senza parole leggibili si nomina col solo numero', () => {
+    const a = { rettangolo: [0, 0, 20, 20], righe: [[0, 0, 5, 20]], testi: [] };
+    const b = { rettangolo: [1, 1, 3, 3], righe: [], testi: [] };
+
+    assert.match(cssRegoleConflitti.descriviContatto(a, b), /: riga 1 \[0\.00, 0\.00, 5\.00, 20\.00\] tocca riquadro/);
+});
+
+test('la CSF-013 porta le misure nel registro, non nel bollino', () => {
+    const css = sorgente('plugin/CssFramework.js').replace(/\r/g, '');
+    const corpo = css.substring(css.indexOf('    segnalaConflittoElementi(box, elementoA, elementoB, pendente, useTextBounds = false) {'));
+    const segnala = corpo.substring(0, corpo.indexOf('\n    },\n'));
+
+    assert.match(segnala, /var misure = this\.misureContatto\(elementoA\.item, elementoB\.item, useTextBounds\);/);
+    assert.match(segnala, /messaggioUtente\(misure != "" \? msg \+ " " \+ misure : msg, "warning"\);/);
+    //Il bollino ha il testo di sempre; dal secondo giro di I20-1178 porta anche i dati per rimisurarla.
+    assert.match(segnala, /addSegnalazione\(msg, "warning", 2, true, \["CSF-013", "yellow"\], null, cssRegoleConflitti\.datiDiVerifica\(elementoA\.label, elementoB\.label, useTextBounds\)\);/);
+    //Le misure si prendono come il controllo prende il contatto: stessa scelta dei bounds.
+    assert.strictEqual((css.match(/this\.segnalaConflittoElementi\([^)]*, pendente, regola\.useTextBounds\);/g) || []).length, 2);
+});
+
+test('il noRender del record si applica prima del controllo dei conflitti', () => {
+    //Il controllo salta gli elementi nascosti: se il noRender arrivasse dopo, un elemento
+    //destinato a sparire farebbe nascere una CSF-013 che nel box finito non si vede.
+    const index = sorgente('plugin/indexNew.js').replace(/\r/g, '');
+    const inizio = index.indexOf('async function callAllOperationFixBox(');
+    const funzione = index.substring(inizio, index.indexOf('\n}\n', inizio));
+
+    const noRender = funzione.indexOf('applicaNoRenderAgliElementiDelBox(boxImpaginato, itemRef.noRenderElementi);');
+    const controllo = funzione.indexOf('CssFramework.controllaSegnalazioniConflittiPendenti(boxImpaginato);');
+    assert.ok(noRender > 0, 'il noRender non si applica in callAllOperationFixBox');
+    assert.ok(controllo > noRender, 'il controllo dei conflitti viene prima del noRender');
+    assert.ok(funzione.indexOf('SistemazioneFoto.fixFoto(') < noRender, 'il noRender deve venire dopo la sistemazione delle foto');
+    //Dal ricalcolo della griglia arriva senza record.
+    assert.match(funzione, /if \(itemRef != null\) \{\s*applicaNoRenderAgliElementiDelBox/);
+});
+
+/* ---- I20-1178, secondo giro: le CSF-013 del bollino si rimisurano dalla scheda ref ---- */
+
+const TESTO_CSF013 = 'Code CSF-013: Conflitto tra elementi nel box BOX1: descrizione non dovrebbe toccare foto_extra$TERRITORIO_LA VOL$tipo_3.';
+
+test('i dati di verifica sono le due etichette e il modo di misura', () => {
+    assert.deepStrictEqual(cssRegoleConflitti.datiDiVerifica('descrizione', 'foto_extra$X$tipo_3', true),
+        { a: 'descrizione', b: 'foto_extra$X$tipo_3', tb: true });
+    assert.strictEqual(cssRegoleConflitti.datiDiVerifica('a', 'b', undefined).tb, false);
+});
+
+test('una CSF-013 nuova si rimisura con i dati salvati nella voce', () => {
+    const voce = { g: 'warning', c: 'CSF-013', t: TESTO_CSF013, v: { a: 'descrizione', b: 'foto_extra$TERRITORIO_LA VOL$tipo_3', tb: true } };
+
+    assert.deepStrictEqual(cssRegoleConflitti.voceDiConflitto(voce),
+        { a: 'descrizione', b: 'foto_extra$TERRITORIO_LA VOL$tipo_3', useTextBounds: true });
+});
+
+test('una CSF-013 scritta prima: le etichette dal testo, anche con spazi e $, il modo di misura da cercare', () => {
+    const voce = { g: 'warning', c: 'CSF-013', t: TESTO_CSF013 };
+
+    assert.deepStrictEqual(cssRegoleConflitti.voceDiConflitto(voce),
+        { a: 'descrizione', b: 'foto_extra$TERRITORIO_LA VOL$tipo_3', useTextBounds: null });
+});
+
+test('le altre segnalazioni e i testi che non si leggono non sono conflitti da rimisurare', () => {
+    assert.strictEqual(cssRegoleConflitti.voceDiConflitto({ g: 'error', c: 'CSF-009', t: 'Code CSF-009: L\'elemento eccede' }), null);
+    //Bollino vecchio: spesso il solo codice.
+    assert.strictEqual(cssRegoleConflitti.voceDiConflitto({ g: 'warning', c: 'CSF-013', t: 'CSF-013', vecchio: true }), null);
+    assert.strictEqual(cssRegoleConflitti.voceDiConflitto(null), null);
+});
+
+//Il confronto del CSS: "*foto_extra*" diventa /^.*foto_extra.*$/.
+function corrispondeComeIlCss(motivo, etichetta) {
+    const regex = '^' + motivo.replace(/[-\/\\^$+?.()|[\]{}]/g, '\\$&').replace(/\*/g, '.*') + '$';
+    return new RegExp(regex).test(etichetta);
+}
+
+test('il modo di misura si prende dalla regola che riguarda la coppia, nei due versi', () => {
+    const regole = cssRegoleConflitti.getListaRegole([
+        { segnalazioni: ['descrizione', '*foto_extra*'], useTextBounds: true },
+        { segnalazioni: ['foto_extra*tipo_3'], useTextBounds: false }
+    ]);
+    const logo = 'foto_extra$TERRITORIO_LA VOL$tipo_3';
+
+    assert.strictEqual(cssRegoleConflitti.modoDiMisura(regole, 'descrizione', logo, corrispondeComeIlCss), true);
+    assert.strictEqual(cssRegoleConflitti.modoDiMisura(regole, logo, 'descrizione', corrispondeComeIlCss), true);
+    //La regola a un lato solo: due loghi fra loro, sui riquadri.
+    assert.strictEqual(cssRegoleConflitti.modoDiMisura(regole, logo, 'foto_extra$conad_cpq$tipo_3', corrispondeComeIlCss), false);
+    //Nessuna regola riguarda la coppia.
+    assert.strictEqual(cssRegoleConflitti.modoDiMisura(regole, 'descrizione', 'prezzo_offerta', corrispondeComeIlCss), null);
+    assert.strictEqual(cssRegoleConflitti.modoDiMisura(null, 'descrizione', logo, corrispondeComeIlCss), null);
+});
+
+test('se due regole riguardano la coppia e una misura sui riquadri, vale il riquadro', () => {
+    const regole = cssRegoleConflitti.getListaRegole([
+        { segnalazioni: ['descrizione', '*foto_extra*'], useTextBounds: true },
+        { segnalazioni: ['descrizione', '*TERRITORIO*'], useTextBounds: false }
+    ]);
+
+    assert.strictEqual(cssRegoleConflitti.modoDiMisura(regole, 'descrizione', 'foto_extra$TERRITORIO_LA VOL$tipo_3', corrispondeComeIlCss), false);
+});
+
+test('la voce del bollino porta i dati di verifica solo se la segnalazione li ha', () => {
+    const etichetta = require('../../plugin/segnalazioni/etichetta');
+    const v = { a: 'descrizione', b: 'foto_extra$X$tipo_3', tb: true };
+
+    assert.deepStrictEqual(etichetta.daSegnalazione({ msg: TESTO_CSF013, typeMessage: 'warning', verifica: v }),
+        { g: 'warning', c: 'CSF-013', t: TESTO_CSF013, v: v });
+    assert.deepStrictEqual(etichetta.daSegnalazione({ msg: 'Code CSF-009: x', typeMessage: 'error' }),
+        { g: 'error', c: 'CSF-009', t: 'Code CSF-009: x' });
+    //Il campo arriva da addSegnalazione, come ultimo parametro facoltativo.
+    const index = sorgente('plugin/indexNew.js').replace(/\r/g, '');
+    assert.match(index, /function addSegnalazione\(msg, [^)]*, key = null, verifica = null\) \{/);
+    assert.match(index, /if \(verifica != null\) \{\s*segnalazione\.verifica = verifica;\s*\}/);
+});
+
+/* ---- il ricontrollo su un box finto ---- */
+
+function caricaCssFramework() {
+    const Module = require('node:module');
+    const originale = Module._load;
+    Module._load = function (richiesta) {
+        return richiesta === 'indesign' ? {} : originale.apply(this, arguments);
+    };
+    try {
+        return require('../../plugin/CssFramework.js');
+    }
+    finally {
+        Module._load = originale;
+    }
+}
+
+const etichettaBollino = require('../../plugin/segnalazioni/etichetta');
+
+//Un box con due riquadri e un bollino con le voci date. remove toglie davvero, e addBollinoCustom
+//(finto) ridisegna il bollino nello stesso box.
+function boxConBollino(descrizione, logo, voci) {
+    const box = { label: 'BOX1', isValid: true, id: 1, allPageItems: [], ovals: null };
+    let id = 10;
+    const elemento = (label, bounds) => {
+        const el = { id: id++, label: label, constructorName: 'Rectangle', isValid: true, visible: true, parent: null, geometricBounds: bounds };
+        el.remove = function () { box.allPageItems = box.allPageItems.filter(e => e !== el); };
+        box.allPageItems.push(el);
+        return el;
+    };
+    elemento('descrizione', descrizione);
+    elemento('foto_extra$TERRITORIO_LA VOL$tipo_3', logo);
+    elemento(etichettaBollino.scrivi(voci), [0, 0, 5, 5]);
+    return box;
+}
+
+function conAmbienteFinto(fn) {
+    const salvati = { Utility: global.Utility, messaggioUtente: global.messaggioUtente, readFile: global.readFile };
+    const messaggi = [];
+    global.Utility = {
+        parseLabel: label => String(label == null ? '' : label),
+        eUnClone: () => false,
+        percorsoDati: nome => '/dati/' + nome,
+        addBollinoCustom(box, testo, colore, gradiente, posizione, bounds, overflow, etichetta) {
+            const ovale = { id: 99, label: etichetta, isValid: true, visible: true, parent: null, geometricBounds: [0, 0, 5, 5] };
+            ovale.remove = function () { box.allPageItems = box.allPageItems.filter(e => e !== ovale); };
+            box.allPageItems.push(ovale);
+            return box;
+        }
+    };
+    global.messaggioUtente = (testo, stile) => messaggi.push({ testo, stile });
+    global.readFile = () => null;
+    try {
+        fn(caricaCssFramework(), messaggi);
+    }
+    finally {
+        Object.keys(salvati).forEach(k => { if (salvati[k] === undefined) { delete global[k]; } else { global[k] = salvati[k]; } });
+    }
+}
+
+const VOCE_CON_DATI = { g: 'warning', c: 'CSF-013', t: TESTO_CSF013, v: { a: 'descrizione', b: 'foto_extra$TERRITORIO_LA VOL$tipo_3', tb: false } };
+const ALTRA_VOCE = { g: 'warning', c: 'CSF-26', t: 'Code CSF-26: Foto senza tracciato' };
+
+test('una CSF-013 il cui contatto non c\'e\' piu\' si toglie, e il registro lo dice', () => {
+    conAmbienteFinto((CssFramework, messaggi) => {
+        const box = boxConBollino([170, 312, 188, 344], [150, 328, 164, 343], [VOCE_CON_DATI, ALTRA_VOCE]);
+
+        CssFramework.ricontrollaConflittiDelBox(box);
+
+        assert.deepStrictEqual(Segnalazioni().leggiDalBox(box).map(v => v.c), ['CSF-26']);
+        assert.strictEqual(messaggi.length, 1);
+        assert.match(messaggi[0].testo, /^Code CSF-28: Segnalazione CSF-013 tolta dal box BOX1: descrizione e foto_extra\$TERRITORIO_LA VOL\$tipo_3 non si toccano piu'\. Misure in mm/);
+    });
+});
+
+test('una CSF-013 ancora vera resta nel bollino', () => {
+    conAmbienteFinto((CssFramework, messaggi) => {
+        const box = boxConBollino([160, 312, 188, 344], [150, 328, 164, 343], [VOCE_CON_DATI]);
+
+        CssFramework.ricontrollaConflittiDelBox(box);
+
+        assert.deepStrictEqual(Segnalazioni().leggiDalBox(box).map(v => v.c), ['CSF-013']);
+        assert.strictEqual(messaggi.length, 0);
+    });
+});
+
+test('una CSF-013 scritta prima, senza regole da cui sapere come misurare, resta', () => {
+    conAmbienteFinto((CssFramework, messaggi) => {
+        const voceVecchia = { g: 'warning', c: 'CSF-013', t: TESTO_CSF013 };
+        const box = boxConBollino([170, 312, 188, 344], [150, 328, 164, 343], [voceVecchia]);
+
+        CssFramework.ricontrollaConflittiDelBox(box);
+
+        assert.deepStrictEqual(Segnalazioni().leggiDalBox(box).map(v => v.c), ['CSF-013']);
+        assert.strictEqual(messaggi.length, 0);
+    });
+});
+
+test('tolta l\'ultima segnalazione, il box resta senza bollino', () => {
+    conAmbienteFinto((CssFramework) => {
+        const box = boxConBollino([170, 312, 188, 344], [150, 328, 164, 343], [VOCE_CON_DATI]);
+
+        CssFramework.ricontrollaConflittiDelBox(box);
+
+        assert.strictEqual(Segnalazioni().bolliniDelBox(box).length, 0);
+        assert.strictEqual(box.allPageItems.length, 2);
+    });
+});
+
+function Segnalazioni() {
+    return require('../../plugin/segnalazioni/segnalazioni');
+}
+
+test('la scheda ref rimisura le CSF-013 prima di leggere il bollino, e segue il box rigruppato', () => {
+    const scheda = sorgente('plugin/schedaRef.js').replace(/\r/g, '');
+
+    const apertura = scheda.substring(scheda.indexOf('    async attivaSchermateReferenza('));
+    const ricontrollo = apertura.indexOf('box = me.ricontrollaConflittiDelBollino(box);');
+    const lettura = apertura.indexOf('me.leggiVociBollino(box);');
+    assert.ok(ricontrollo > 0 && lettura > ricontrollo, 'il ricontrollo deve venire prima della lettura del bollino');
+
+    const corpo = scheda.substring(scheda.indexOf('    ricontrollaConflittiDelBollino(box) {'));
+    const funzione = corpo.substring(0, corpo.indexOf('\n    },\n'));
+    assert.match(funzione, /const eraSelezionato = SchermataSegnalazioni\.eSelezionato\(box\);\s*const dopo = CssFramework\.ricontrollaConflittiDelBox\(box\);/);
+    assert.match(funzione, /this\.refSelected\.item = dopo;/);
+    assert.match(funzione, /SchermataSegnalazioni\.seguiBoxRigruppato\(box, dopo, eraSelezionato\);/);
+});

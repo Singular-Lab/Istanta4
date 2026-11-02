@@ -3360,6 +3360,8 @@ const schedaRef = {
             const segnalazioniDellaScheda = me.segnalazioniInMemoria() || [];
             //I20-1081: il box di un tipo diverso da quello del dato si dice subito, in rosso.
             me.avvisaDifferenzeGravi(segnalazioniDellaScheda);
+            //I20-1178: prima le CSF-013 del bollino si rimisurano, e quelle non piu' vere si tolgono.
+            box = me.ricontrollaConflittiDelBollino(box);
             //I20-1056, lotto 4: anche le segnalazioni di impaginazione del bollino del box.
             me.leggiVociBollino(box);
             me.aggiornaPulsanteSegnalazioni();
@@ -5716,6 +5718,33 @@ const schedaRef = {
     /// come risolti, annullabili, e il segnalino verde li conta con le foto extra decise.
     risolteNoRenderInMemoria() {
         return Array.isArray(this.risolteNoRenderDelBox) ? this.risolteNoRenderDelBox : [];
+    },
+
+    /// I20-1178: all'apertura della scheda le CSF-013 del bollino si rimisurano
+    /// (CssFramework.ricontrollaConflittiDelBox). Se il bollino si riscrive il box si rigruppa, con un
+    /// altro id: come dopo "Risolvi" (I20-1138) scheda e selezione seguono il gruppo nuovo, perche' il
+    /// ciclo degli eventi non lo prenda per una ref appena scelta. Restituisce il box da usare.
+    ricontrollaConflittiDelBollino(box) {
+        try {
+            if (box == null || typeof CssFramework === "undefined" || CssFramework == null || typeof CssFramework.ricontrollaConflittiDelBox !== "function") {
+                return box;
+            }
+            const eraSelezionato = SchermataSegnalazioni.eSelezionato(box);
+            const dopo = CssFramework.ricontrollaConflittiDelBox(box);
+            if (dopo == null || dopo === box || !dopo.isValid) {
+                return box;
+            }
+            //Anche col box non selezionato (scheda aperta dal report) la scheda segue il gruppo nuovo.
+            if (this.refSelected != null && this.refSelected.item === box) {
+                this.refSelected.item = dopo;
+            }
+            SchermataSegnalazioni.seguiBoxRigruppato(box, dopo, eraSelezionato);
+            return dopo;
+        }
+        catch (e) {
+            console.error("Code SRF-145 Segnalazioni di conflitto del bollino non ricontrollate: " + e);
+            return box;
+        }
     },
 
     /// I20-1056, lotto 4: le segnalazioni del bollino del box, lette dal documento.

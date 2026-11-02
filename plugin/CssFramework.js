@@ -6,6 +6,8 @@ const cssSequenzaOperazioni = require('./cssFramework/sequenzaOperazioni');
 //I20-1009: la sistemazione delle foto sta in un modulo suo; qui ne restano tre rimandi.
 const SistemazioneFoto = require('./sistemazioneFoto/sistemazioneFoto');
 const cssRegoleConflitti = require('./cssFramework/regoleConflitti');
+//I20-1178: per rimisurare le CSF-013 del bollino (ricontrollaConflittiDelBox).
+const Segnalazioni = require('./segnalazioni/segnalazioni');
 //I20-1026: le sovrastrutture, le condizioni sulla ref e sulla forma del box, la regola disattiva.
 const sovrastrutture = require('./cssFramework/sovrastrutture');
 //I20-1102: il piano dei gruppi di allineamento a slot.
@@ -4019,6 +4021,43 @@ const CssFramework =
         }
     },
 
+    /// I20-1178: le parole di ogni riga di un campo di testo, nello stesso ordine di
+    /// righeDiTesto. Servono solo al messaggio della CSF-013: lista vuota se non si leggono.
+    testiDelleRighe(item) {
+        try {
+            if (item == null || item.constructorName != "TextFrame" || !item.lines) {
+                return [];
+            }
+            var testi = [];
+            var elenco = item.lines.everyItem().getElements();
+            for (var i = 0; i < elenco.length; i++) {
+                testi.push(String(elenco[i].contents));
+            }
+            return testi;
+        }
+        catch (e) {
+            return [];
+        }
+    },
+
+    /// I20-1178: le misure del contatto fra due elementi, prese come le prende elementsTouching,
+    /// per il messaggio della CSF-013 nel registro del Plugin. Stringa vuota se non si leggono.
+    misureContatto(item1, item2, useTextBounds = false) {
+        try {
+            var me = this;
+            var parte = function (item) {
+                if (!useTextBounds) {
+                    return { rettangolo: item.geometricBounds, righe: [], testi: [] };
+                }
+                return { rettangolo: me.getRealBounds(item), righe: me.righeDiTesto(item), testi: me.testiDelleRighe(item) };
+            };
+            return cssRegoleConflitti.descriviContatto(parte(item1), parte(item2));
+        }
+        catch (e) {
+            return "";
+        }
+    },
+
     /// Se due elementi si toccano. Con useTextBounds il confronto e' RIGA PER RIGA: il
     /// rettangolo unico ingloba tutte le righe, quindi una riga lunga presterebbe la sua
     /// larghezza alla fascia dove c'e' solo una riga corta, e lo spazio fra le righe
@@ -4092,24 +4131,33 @@ const CssFramework =
         }
     },
 
+    /// Le regole di conflitto di un box: quelle della voce di default e della voce del box, nel kit
+    /// della lavorazione e nel kit di default, senza doppioni. I20-1178: tolta da
+    /// preparaSegnalazioniConflitti, perche' serve anche a ricontrollaConflittiDelBox.
+    regoleConflittiDelBox(meccanica, DBallineamenti, DBDefault) {
+        var elementAllineamento = DBallineamenti ? DBallineamenti.find(el => el.nomiBox.includes(meccanica)) : null;
+        var elementAllineamentoDefault = DBallineamenti ? DBallineamenti.find(el => el.nomiBox.length == 0) : null;
+        var elementDefaultAllineamento = DBDefault ? DBDefault.find(el => el.nomiBox.includes(meccanica)) : null;
+        var elementDefaultAllineamentoDefault = DBDefault ? DBDefault.find(el => el.nomiBox.length == 0) : null;
+
+        var regole = [];
+        var chiaviRegole = [];
+
+        this.aggiungiRegoleSegnalazioniConflitti(regole, elementDefaultAllineamentoDefault, chiaviRegole);
+        this.aggiungiRegoleSegnalazioniConflitti(regole, elementDefaultAllineamento, chiaviRegole);
+        this.aggiungiRegoleSegnalazioniConflitti(regole, elementAllineamentoDefault, chiaviRegole);
+        this.aggiungiRegoleSegnalazioniConflitti(regole, elementAllineamento, chiaviRegole);
+
+        return regole;
+    },
+
     /// Raccoglie le regole di conflitto del box e le mette in sospeso: il controllo vero
     /// avviene alla fine, quando gli elementi hanno preso la posizione definitiva.
     /// La lettura delle regole non e' qui, vive in cssRegoleConflitti.
     preparaSegnalazioniConflitti(box, DBallineamenti, DBDefault) {
         try {
             var meccanica = box.label;
-            var elementAllineamento = DBallineamenti ? DBallineamenti.find(el => el.nomiBox.includes(meccanica)) : null;
-            var elementAllineamentoDefault = DBallineamenti ? DBallineamenti.find(el => el.nomiBox.length == 0) : null;
-            var elementDefaultAllineamento = DBDefault ? DBDefault.find(el => el.nomiBox.includes(meccanica)) : null;
-            var elementDefaultAllineamentoDefault = DBDefault ? DBDefault.find(el => el.nomiBox.length == 0) : null;
-
-            var regole = [];
-            var chiaviRegole = [];
-
-            this.aggiungiRegoleSegnalazioniConflitti(regole, elementDefaultAllineamentoDefault, chiaviRegole);
-            this.aggiungiRegoleSegnalazioniConflitti(regole, elementDefaultAllineamento, chiaviRegole);
-            this.aggiungiRegoleSegnalazioniConflitti(regole, elementAllineamentoDefault, chiaviRegole);
-            this.aggiungiRegoleSegnalazioniConflitti(regole, elementAllineamento, chiaviRegole);
+            var regole = this.regoleConflittiDelBox(meccanica, DBallineamenti, DBDefault);
 
             this.segnalazioniConflittiPendenti = {
                 boxKey: this.getBoxKeySegnalazioniConflitti(box),
@@ -4190,7 +4238,9 @@ const CssFramework =
         return result;
     },
 
-    segnalaConflittoElementi(box, elementoA, elementoB, pendente) {
+    /// I20-1178: nel registro del Plugin la CSF-013 porta anche le misure del contatto, cosi' un
+    /// caso visto solo in produzione si capisce dal file di log. Il bollino resta com'era.
+    segnalaConflittoElementi(box, elementoA, elementoB, pendente, useTextBounds = false) {
         var labels = [elementoA.label, elementoB.label].sort();
         var pairKey = labels[0] + "|" + labels[1] + "|" + [elementoA.key, elementoB.key].sort().join("|");
         if (pendente.chiaviSegnalate.indexOf(pairKey) >= 0) {
@@ -4201,8 +4251,9 @@ const CssFramework =
 
         var boxLabel = box && box.label ? box.label : "senza etichetta";
         var msg = "Code CSF-013: Conflitto tra elementi nel box " + boxLabel + ": " + elementoA.label + " non dovrebbe toccare " + elementoB.label + ".";
-        messaggioUtente(msg, "warning");
-        addSegnalazione(msg, "warning", 2, true, ["CSF-013", "yellow"]);
+        var misure = this.misureContatto(elementoA.item, elementoB.item, useTextBounds);
+        messaggioUtente(misure != "" ? msg + " " + misure : msg, "warning");
+        addSegnalazione(msg, "warning", 2, true, ["CSF-013", "yellow"], null, cssRegoleConflitti.datiDiVerifica(elementoA.label, elementoB.label, useTextBounds));
     },
 
     /// Il controllo finale: guarda se gli elementi che non dovevano toccarsi si toccano, e
@@ -4227,7 +4278,7 @@ const CssFramework =
                     for (var a = 0; a < elementiA.length; a++) {
                         for (var b = a + 1; b < elementiA.length; b++) {
                             if (this.elementsTouching(elementiA[a].item, elementiA[b].item, regola.useTextBounds)) {
-                                this.segnalaConflittoElementi(box, elementiA[a], elementiA[b], pendente);
+                                this.segnalaConflittoElementi(box, elementiA[a], elementiA[b], pendente, regola.useTextBounds);
                             }
                         }
                     }
@@ -4242,7 +4293,7 @@ const CssFramework =
                         }
 
                         if (this.elementsTouching(elementiA[a].item, elementiB[b].item, regola.useTextBounds)) {
-                            this.segnalaConflittoElementi(box, elementiA[a], elementiB[b], pendente);
+                            this.segnalaConflittoElementi(box, elementiA[a], elementiB[b], pendente, regola.useTextBounds);
                         }
                     }
                 }
@@ -4255,7 +4306,134 @@ const CssFramework =
             console.error(error);
         }
     },
-    
+
+    /// I20-1178: le CSF-013 del bollino si rimisurano. Il controllo dei conflitti misura il box una
+    /// volta, a fine impaginazione, e il bollino ne conserva il risultato; quello che lo sposta dopo
+    /// (il fix foto custom nella sincronizzazione delle foto, il Fix foto dopo un cambio foto, una
+    /// mano dell'operatore) non lo ricontrolla. In produzione restava cosi' una CSF-013 fra una
+    /// descrizione e un logo che non si toccavano piu'.
+    ///
+    /// Per ogni CSF-013 si cercano i due elementi e si misura il contatto con la regola di allora:
+    /// se non si toccano piu' - anche perche' uno e' nascosto o non c'e' - la voce si toglie e il
+    /// registro lo dice (CSF-28). Resta se si toccano, se il modo di misura non si conosce o se la
+    /// misura non riesce: nel dubbio non si toglie niente. Restituisce il box, che riscrivere il
+    /// bollino rigruppa: va usato quello restituito.
+    ricontrollaConflittiDelBox(box) {
+        try {
+            if (box == null || !box.isValid) {
+                return box;
+            }
+
+            var me = this;
+            var voci = Segnalazioni.leggiDalBox(box);
+            var regoleDellaCopia;
+            var restanti = [];
+            var tolte = 0;
+            for (var i = 0; i < voci.length; i++) {
+                var voce = voci[i];
+                var dati = cssRegoleConflitti.voceDiConflitto(voce);
+                if (dati == null) {
+                    restanti.push(voce);
+                    continue;
+                }
+
+                var useTextBounds = dati.useTextBounds;
+                if (useTextBounds == null) {
+                    if (regoleDellaCopia === undefined) {
+                        regoleDellaCopia = this.regoleConflittiDallaCopia(box);
+                    }
+                    useTextBounds = cssRegoleConflitti.modoDiMisura(regoleDellaCopia, dati.a, dati.b,
+                        (motivo, etichetta) => me.makeRegexFromGroupName(motivo).test(etichetta));
+                }
+
+                if (useTextBounds == null || this.conflittoAncoraPresente(box, dati.a, dati.b, useTextBounds)) {
+                    restanti.push(voce);
+                    continue;
+                }
+
+                tolte++;
+                messaggioUtente("Code CSF-28: Segnalazione CSF-013 tolta dal box " + box.label + ": " + dati.a + " e " + dati.b +
+                    " non si toccano piu'. " + this.posizioniPerConflitto(box, dati.a, dati.b, useTextBounds), "success");
+            }
+
+            if (tolte == 0) {
+                return box;
+            }
+            return restanti.length > 0 ? Segnalazioni.applicaAlBox(box, restanti) : Segnalazioni.togliDalBox(box);
+        }
+        catch (error) {
+            console.error("Code CSF-28: ricontrollo delle segnalazioni di conflitto non riuscito per il box " + (box && box.label ? box.label : "") + ": " + error);
+            return box;
+        }
+    },
+
+    /// I20-1178: le regole di conflitto del box dall'ultima copia delle regole scaricate
+    /// (allineamenti.json), nel kit della lavorazione corrente. Servono alle CSF-013 scritte prima
+    /// che la voce portasse il modo di misura. Null se la copia o il kit non ci sono.
+    regoleConflittiDallaCopia(box) {
+        try {
+            var file = readFile(Utility.percorsoDati("allineamenti.json"));
+            if (!file || !Array.isArray(file.modificheCssPerKit)) {
+                return null;
+            }
+            var kit = this.kitDelleRegole(file);
+            if (kit == null) {
+                return null;
+            }
+            return this.regoleConflittiDelBox(box.label,
+                kit.fileModifiche ? kit.fileModifiche.operazioniPerBox : null,
+                kit.fileModificheDef ? kit.fileModificheDef.operazioniPerBox : null);
+        }
+        catch (e) {
+            return null;
+        }
+    },
+
+    /// I20-1178: se nel box un elemento con etichetta a tocca ancora uno con etichetta b, misurati
+    /// come li misura il controllo dei conflitti: elementi visibili, e lo stesso useTextBounds.
+    /// Se la misura non riesce risponde di si', cosi' la segnalazione resta.
+    conflittoAncoraPresente(box, etichettaA, etichettaB, useTextBounds) {
+        try {
+            var elementiA = this.getElementiSegnalazioniConflitti(box, [etichettaA]);
+            var elementiB = this.getElementiSegnalazioniConflitti(box, [etichettaB]);
+            for (var a = 0; a < elementiA.length; a++) {
+                for (var b = 0; b < elementiB.length; b++) {
+                    if (elementiA[a].key == elementiB[b].key) {
+                        continue;
+                    }
+                    if (this.elementsTouching(elementiA[a].item, elementiB[b].item, useTextBounds)) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+        catch (e) {
+            console.error("Code CSF-28: contatto fra " + etichettaA + " e " + etichettaB + " non misurato: " + e);
+            return true;
+        }
+    },
+
+    /// I20-1178: dove stanno i due elementi di una CSF-013 tolta, per il registro: il primo con
+    /// ciascuna etichetta, misurato come nel controllo. Stringa vuota se non si leggono.
+    posizioniPerConflitto(box, etichettaA, etichettaB, useTextBounds) {
+        try {
+            var me = this;
+            var posizione = function (etichetta) {
+                var trovati = me.getElementiSegnalazioniConflitti(box, [etichetta]);
+                if (trovati.length == 0) {
+                    return etichetta + " non visibile nel box";
+                }
+                var item = trovati[0].item;
+                return etichetta + " " + cssRegoleConflitti.scriviRettangolo(useTextBounds ? me.getRealBounds(item) : item.geometricBounds);
+            };
+            return "Misure in mm [alto, sinistra, basso, destra]: " + posizione(etichettaA) + "; " + posizione(etichettaB) + ".";
+        }
+        catch (e) {
+            return "";
+        }
+    },
+
 
     /// L'ingresso degli allineamenti, chiamato da indexNew. Scarica le regole se il semaforo
     /// e' alzato e passa ad allineamenti().
