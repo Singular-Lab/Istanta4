@@ -1,6 +1,8 @@
 const InddEvents = require('./events');
 //I20-1031: i conti della barra orizzontale della griglia, gli stessi del Report Integrita' e della Home.
 const barraScorrimento = require('./reportIntegrita/barraScorrimento');
+//I20-1181: l'altezza della griglia dallo spazio vero, come la lista della Home.
+const AltezzaScorrimento = require('./altezzaScorrimento');
 const FuoriVolantino = require('./fuoriVolantino');
 
 /// I20-1002: i filtri di pagina del volantino.
@@ -209,7 +211,7 @@ const filtri = {
             applicaAllaRiga(intestazione);
         }
     },
-    statoBarraGriglia: { barra: null, traccia: null, cursore: null, spostamento: 0, trascinamento: null, larghezzaTotale: 0 },
+    statoBarraGriglia: { barra: null, traccia: null, cursore: null, spostamento: 0, trascinamento: null, larghezzaTotale: 0, altezzaMisurata: 0 },
     _trascinamentoBarraGrigliaAttivo: false,
 
     /// Costruisce la barra, come _crBarraScorrimentoNuovi: freccia, traccia con il cursore, freccia.
@@ -399,8 +401,12 @@ const filtri = {
     },
 
     /// L'altezza che la barra occupa sotto la griglia, zero se non c'e' o e' nascosta. La toglie
-    /// onresizeWindow dall'altezza di #filtriBodyGriglia: #filtriBody taglia quello che sborda, e
-    /// senza questo la barra finirebbe fuori, invisibile.
+    /// adattaAltezzaGriglia dall'altezza di #filtriBodyGriglia: senza, griglia e barra insieme non
+    /// starebbero in #contenitoreTab, che mostrerebbe una seconda barra verticale (I20-1181).
+    ///
+    /// I20-1181: la barra appena creata misura 0 anche se si vede. In quel caso vale l'ultima
+    /// altezza misurata, e prima di ogni misura ALTEZZA_BARRA_GRIGLIA_PREVISTA: contarla 0 faceva
+    /// sbordare la scheda.
     altezzaBarraGriglia() {
         const barra = filtri.statoBarraGriglia.barra;
         if (barra == null || barra.style.display === "none") {
@@ -408,11 +414,57 @@ const filtri = {
         }
 
         try {
-            return Math.ceil(barra.getBoundingClientRect().height || 0);
+            const altezza = Math.ceil(barra.getBoundingClientRect().height || 0);
+            if (altezza > 0) {
+                filtri.statoBarraGriglia.altezzaMisurata = altezza;
+                return altezza;
+            }
         }
         catch (err) {
-            return 0;
         }
+
+        return filtri.statoBarraGriglia.altezzaMisurata || filtri.ALTEZZA_BARRA_GRIGLIA_PREVISTA;
+    },
+
+    /// I20-1181: l'altezza della barra misurata sul pannello (traccia di I20-1181), finche' non se
+    /// ne misura una.
+    ALTEZZA_BARRA_GRIGLIA_PREVISTA: 32,
+
+    /// I20-1181: l'altezza con cui nasce la griglia a ogni ridisegno: quella che aveva prima, cosi'
+    /// non lampeggia, e la prima volta il minimo di AltezzaScorrimento. Nasceva sempre di 400 px: su
+    /// un pannello basso la scheda sbordava finche' adattaAltezzaGriglia non la ricalcolava, e
+    /// #contenitoreTab mostrava la sua barra verticale. Crescendo fino allo spazio non sborda mai.
+    altezzaInizialeGriglia(grigliaPrecedente) {
+        const precedente = grigliaPrecedente != null && grigliaPrecedente.style != null ? parseFloat(grigliaPrecedente.style.height) : NaN;
+        return (precedente > 0 ? Math.floor(precedente) : AltezzaScorrimento.MINIMO) + "px";
+    },
+
+    /// I20-1181: quante volte, al massimo, l'altezza si riprova dopo la prima, e ogni quanto.
+    RIPROVE_ALTEZZA_GRIGLIA: 3,
+    RITARDO_ALTEZZA_GRIGLIA_MS: 100,
+
+    /// I20-1181: da' a #filtriBodyGriglia lo spazio che resta in #contenitoreTab dalla sua cima,
+    /// meno la barra orizzontale, come onResizeTab1Tracciato fa con la lista della Home. Prima era
+    /// l'altezza del contenitore meno costanti e misure prese altrove.
+    ///
+    /// La barra appena creata misura 0 (traccia sul pannello: griglia di 418 px, barra di 32 px
+    /// misurata 0, contenuto di 516 px in un contenitore di 489): la griglia veniva alta quanto la
+    /// barra in piu', e #contenitoreTab mostrava la sua barra verticale accanto a quella della
+    /// griglia. Per questo l'altezza si riprova RIPROVE_ALTEZZA_GRIGLIA volte, a distanza di
+    /// RITARDO_ALTEZZA_GRIGLIA_MS, mentre il pannello si assesta: nella traccia la barra aveva la
+    /// sua altezza 300 ms dopo. orologio serve ai test; di norma e' setTimeout.
+    adattaAltezzaGriglia(orologio = null, riprove = filtri.RIPROVE_ALTEZZA_GRIGLIA) {
+        filtri.aggiornaBarraGriglia();
+
+        const altezza = AltezzaScorrimento.fissaAltezza(document.getElementById("contenitoreTab"), document.getElementById("filtriBodyGriglia"),
+            { margine: AltezzaScorrimento.MARGINE + filtri.altezzaBarraGriglia() });
+
+        //Senza misure (scheda nascosta) non c'e' niente da riprovare: la riapertura ricalcola.
+        if (altezza != null && riprove > 0) {
+            const tempo = orologio || { setTimeout: setTimeout };
+            tempo.setTimeout(() => filtri.adattaAltezzaGriglia(orologio, riprove - 1), filtri.RITARDO_ALTEZZA_GRIGLIA_MS);
+        }
+        return altezza;
     },
 
     /// Mostra o nasconde la barra e mette il cursore dove dice lo spostamento.
@@ -524,6 +576,7 @@ const filtri = {
 
         // svuotiamo filtriBody
         let scrollTop = $('#filtriBodyGriglia').length ? $('#filtriBodyGriglia').scrollTop() : 0;
+        const altezzaIniziale = filtri.altezzaInizialeGriglia(document.getElementById("filtriBodyGriglia"));
         $('#filtriBody').empty();
         // adesso in pagina creeremo un header con i seguenti campi
         // Ordine, Pagina, Filtri, Griglia, Limite, N. ref (10%), Impaginate (10%), Ref. Avanzate (13%), Ref. Escluse (13%), Data Conteggio (14%).
@@ -562,7 +615,7 @@ const filtri = {
 
         //facciamo ora un div che ci farà da body, tale body deve prevedere lo scroll verticale
         const bodyDiv = $('<div></div>').attr('id', 'filtriBodyGriglia').css({
-            height: '400px',
+            height: altezzaIniziale,
             overflowY: 'auto',
             display: 'block',
             margin: '0 px',

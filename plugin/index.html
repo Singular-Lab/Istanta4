@@ -297,7 +297,11 @@
   <div style="width: 80%; margin: 0 auto;"><h3 style="font-size: 13px; font-weight: normal; margin: 0; line-height: 1.4; word-wrap: break-word;">Istanta2 è al momento non disponibile e per poter procedere con l'elaborazione è necessario attendere che Istanta2 sia di nuovo funzionante</h3></div>
 </div>
 
-<div id="wrapper" class="wrapper" style="display: flex; margin: 0px; padding: 0px; width: 100%; height: 100%;">
+<!-- I20-1181: #wrapper non scorre. Non ha niente di suo da far scorrere: #mainContent e' alto quanto
+     lui e taglia, testata, barra in basso e login sono fissi. Ma UXP conta come suo sbordo anche le
+     righe di una griglia che ha la sua barra (misurato: 1338 px su 628 nel Menabo'), e con
+     overflow auto (classe .wrapper) mostrava una seconda barra verticale accanto a quella della griglia. -->
+<div id="wrapper" class="wrapper" style="display: flex; margin: 0px; padding: 0px; width: 100%; height: 100%; overflow: hidden;">
     <div id="header" style="margin: 0px; padding: 0px; position: fixed; width: 100%; background-color: #4d4c4c;">
       <div id="narrow" style="position: absolute;width: 530px;height: 60px;background: #4d4c4cb0;z-index: 999;top: 58px;cursor: none; display : none; ">
         <h3 style="color: white;margin-top: 70px;" id="narrow_talker"></h3>

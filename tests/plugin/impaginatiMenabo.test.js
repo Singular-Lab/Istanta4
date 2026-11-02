@@ -218,8 +218,9 @@ test("l'altezza della griglia lascia posto alla barra, quando la barra si vede",
     const altezza = corpoMembro(filtri, "    altezzaBarraGriglia() {");
     assert.match(altezza, /barra == null \|\| barra\.style\.display === "none"\) \{\s*return 0;/);
 
-    const indexNew = leggiFileDelPlugin("indexNew.js");
-    assert.match(indexNew, /\$\("#filtriBodyGriglia"\)\.css\("height", "" \+ \(altezzaResRef - 10 - altezzaHeaderFiltri - filtriJs\.altezzaBarraGriglia\(\)\) \+ "px"\);/);
+    //I20-1181: lo spazio sotto la cima della griglia, meno la barra (tests/plugin/altezzaGrigliaMenabo.test.js).
+    const adatta = corpoMembro(filtri, "    adattaAltezzaGriglia(orologio = null, riprove = filtri.RIPROVE_ALTEZZA_GRIGLIA) {");
+    assert.match(adatta, /margine: AltezzaScorrimento\.MARGINE \+ filtri\.altezzaBarraGriglia\(\)/);
 });
 
 /* ---- le colonne in pixel ---- */
@@ -272,11 +273,13 @@ test("al ridimensionamento del pannello la griglia si ricalcola, come la lista d
     assert.match(aggiorna, /filtri\._applicaLarghezzeGriglia\(document\.getElementById\("filtriIntestazioneGriglia"\), righe\);/);
     assert.match(aggiorna, /filtri\._scorriGriglia\(filtri\.statoBarraGriglia, filtri\.statoBarraGriglia\.spostamento \|\| 0\);/);
 
-    //In onresizeWindow, prima di dare l'altezza alla griglia: l'altezza dipende da se la barra si vede.
-    const indexNew = leggiFileDelPlugin("indexNew.js");
-    const ricalcolo = indexNew.indexOf("filtriJs.aggiornaBarraGriglia();");
-    const altezza = indexNew.indexOf('$("#filtriBodyGriglia").css("height"');
+    //Prima di dare l'altezza alla griglia: l'altezza dipende da se la barra si vede. Da I20-1181
+    //lo fa adattaAltezzaGriglia, che onresizeWindow chiama.
+    const adatta = corpoMembro(filtri, "    adattaAltezzaGriglia(orologio = null, riprove = filtri.RIPROVE_ALTEZZA_GRIGLIA) {");
+    const ricalcolo = adatta.indexOf("filtri.aggiornaBarraGriglia();");
+    const altezza = adatta.indexOf("AltezzaScorrimento.fissaAltezza(");
     assert.ok(ricalcolo >= 0 && altezza > ricalcolo);
+    assert.match(leggiFileDelPlugin("indexNew.js"), /filtriJs\.adattaAltezzaGriglia\(\);/);
 });
 
 test("ogni cella riceve i suoi pixel e non si restringe, intestazione compresa", () => {
