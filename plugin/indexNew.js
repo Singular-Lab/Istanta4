@@ -5317,7 +5317,9 @@ function getSchedaRefAsync(schedaRef, codiceGruppo, idRec = 0) {
 ///
 /// I20-1029: il bollino e la sua etichetta stanno in segnalazioni/ (segnalazioni.js,
 /// etichetta.js). Qui restano la raccolta durante l'impaginazione e il report di fine.
-function addSegnalazione(msg, typeMessage = "Error", priority = 2, applicaBollino = true, impostazioniBollino = ["", "red", null, 0, null, false], key = null) {
+/// I20-1178: verifica, se c'e', sono i dati con cui la segnalazione si potra' rimisurare dalla
+/// scheda ref (la CSF-013: cssRegoleConflitti.datiDiVerifica); finisce nella voce del bollino.
+function addSegnalazione(msg, typeMessage = "Error", priority = 2, applicaBollino = true, impostazioniBollino = ["", "red", null, 0, null, false], key = null, verifica = null) {
     //le priority sono 1 (alta), 2 (media), 3 (bassa)
     //aggiungiamo la segnalazione in segnalazioniBoxImpaginato
     //in impostaBollino potremmo ricevere array con meno parametri, in quel caso integriamo quelli che mancano con i valori di default
@@ -5345,6 +5347,9 @@ function addSegnalazione(msg, typeMessage = "Error", priority = 2, applicaBollin
         }
     }
     var segnalazione = { msg: msg, typeMessage: typeMessage, priority: priority, applicaBollino: applicaBollino, impostazioniBollino: impostazioniBollino, key: key };
+    if (verifica != null) {
+        segnalazione.verifica = verifica;
+    }
     //I20-1029: il motore CSS ripassa piu' volte sugli stessi controlli; la stessa segnalazione
     //(stessa chiave o stesso testo) entra una volta sola.
     if (etichettaSegnalazioni.giaPresente(segnalazioniBoxImpaginato, segnalazione)) {
@@ -5491,6 +5496,13 @@ async function callAllOperationFixBox(boxImpaginato, bounds, itemRef, garbageKey
     //devono inseguirle: le regole dichiarate per il momento dopoFixFoto e gli elementi derivati,
     //come le ombre, che prendono le misure dalle foto.
     boxImpaginato = CssFramework.applicaOperazioniDopoFixFoto(boxImpaginato, bounds);
+
+    //I20-1178: il controllo dei conflitti salta gli elementi nascosti, ma il noRender del record si
+    //applicava solo dopo, in coda all'impaginazione: un elemento destinato a sparire poteva far
+    //nascere una CSF-013 che nel box finito non si vede. Ripeterlo in coda non cambia niente.
+    if (itemRef != null) {
+        applicaNoRenderAgliElementiDelBox(boxImpaginato, itemRef.noRenderElementi);
+    }
 
     CssFramework.controllaSegnalazioniConflittiPendenti(boxImpaginato);
     //I20-1042: gli spostamenti in griglia si segnalano solo ora, quando nessuno sposta piu' niente.

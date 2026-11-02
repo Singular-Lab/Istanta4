@@ -60,13 +60,18 @@ const etichettaSegnalazioni = {
     },
 
     /// La voce da scrivere nell'etichetta, da una segnalazione di addSegnalazione.
+    /// I20-1178: v, se la segnalazione lo porta, sono i dati per rimisurarla piu' tardi (la CSF-013).
     daSegnalazione(segnalazione) {
         const testo = segnalazione != null && segnalazione.msg != null ? String(segnalazione.msg) : "";
-        return {
+        const voce = {
             g: etichettaSegnalazioni.gravita(segnalazione != null ? segnalazione.typeMessage : null),
             c: etichettaSegnalazioni.codice(testo),
             t: testo
         };
+        if (segnalazione != null && segnalazione.verifica != null) {
+            voce.v = segnalazione.verifica;
+        }
+        return voce;
     },
 
     /// Se una segnalazione e' gia' fra quelle raccolte per il box: stessa chiave, se ce l'ha, o
