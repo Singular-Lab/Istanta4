@@ -15,6 +15,8 @@ const TestoTag = require('./testoTag');
 const etichettaDelBollino = require('./segnalazioni/etichetta');
 //I20-1123: i campi di testo a riposo, sopra cui passano popup e finestre.
 const CampiARiposo = require('./campiARiposo');
+//Il gruppo che un'azione sul box manda fuori volantino passa nella sua sezione della lista del kit.
+const FuoriVolantino = require('./fuoriVolantino');
 
 /// I20-1002: la scheda della referenza - quello che l'operatore vede e modifica quando
 /// seleziona un box nel documento.
@@ -1303,6 +1305,8 @@ const schedaRef = {
                         if (boxPrecedente != null && boxPrecedente.isValid) {
                             boxPrecedente.remove();
                         }
+                        //Il gruppo e' uscito dal volantino: passa nella sezione dei fuori volantino della lista.
+                        await FuoriVolantino.aggiornaDopoUscita(params);
                         resolve({ box: null });
                         return;
                     }
@@ -7828,6 +7832,8 @@ const schedaRef = {
                         if(box != null){
                             box.remove();
                         }
+                        //Il gruppo e' uscito dal volantino: passa nella sezione dei fuori volantino della lista.
+                        await FuoriVolantino.aggiornaDopoUscita(params);
                         hideLoading();
                         indesignEvents.setBusy(false);
                         return;

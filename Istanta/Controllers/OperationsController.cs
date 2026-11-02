@@ -1715,6 +1715,8 @@ namespace Istanta.Controllers
                             {
                                 //ctx_2.SaveChanges();
                                 _ = await ctx_2.SaveChangesAsync();
+                                //Il tracciato ha una versione nuova: la lista del kit in cache non vale piu'.
+                                GenerazioniCacheKit.Invalida(pTr.Id);
                             }
 
                             sw.Stop();

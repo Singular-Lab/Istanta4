@@ -721,6 +721,22 @@ const pluginMiddleware = {
         return typeof valore === "boolean" ? valore : false;
     },
 
+    /// La voce "Fuori vol" del tracciato: se c'e' e le regole del cliente che portano una referenza
+    /// fuori volantino senza il campo core, con i campi da correggere (Coop: il tema con "fuori
+    /// depliant"). Senza configurazione e' spenta.
+    getFuoriVolantinoInTracciato() {
+        let me = this;
+
+        const configurazione = me.callCustom
+            ? (typeof customAgenzia !== "undefined" && customAgenzia != null ? customAgenzia.fuoriVolantinoInTracciato : null)
+            : me.customPluginDB?.fuoriVolantinoInTracciato;
+
+        return {
+            abilitato: configurazione != null && configurazione.abilitato === true,
+            regole: configurazione != null && Array.isArray(configurazione.regole) ? configurazione.regole : []
+        };
+    },
+
     /// Contenitori del noRender: per ogni campo, il contenitore del box che va nascosto con lui e che
     /// la segnalazione indica quando manca insieme al campo (Coop: txt_sconto -> box_sconto). La
     /// chiave sta nella configurazione del cliente sul server, come chiediAmbitoDecisioniLavorazione;

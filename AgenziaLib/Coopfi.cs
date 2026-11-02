@@ -2841,6 +2841,8 @@ namespace AgenziaLib
 
                     if (is_fuori_volantino) // !is_fuori_volantino && FuoriVolField.IndexOf("volantino") < 0)
                     {
+                        //Il "Fuori vol" del Plugin li prende da qui: sono esattamente gli esclusi.
+                        result.esclusiFuoriVolantino.Add(tracciato[i]);
                         continue;
                     }
 

@@ -437,7 +437,11 @@ namespace AgenziaLib
                     // ----- Blocco 3a: esclusione dei fuori volantino -----
                     // Il campo core, o tipo_offerta = "SS" per le liste importate prima del campo.
                     if (!StatoVolantino.InVolantino(recItem, RegolaPrecedenteInVolantino))
+                    {
+                        // Il "Fuori vol" del Plugin li prende da qui: sono esattamente gli esclusi.
+                        result.esclusiFuoriVolantino.Add(artInKit);
                         continue;
+                    }
 
                     // Blocco 3b: nessun gate -> tutti i record vengono impaginati.
 

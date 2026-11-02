@@ -1,6 +1,7 @@
 const InddEvents = require('./events');
 //I20-1031: i conti della barra orizzontale della griglia, gli stessi del Report Integrita' e della Home.
 const barraScorrimento = require('./reportIntegrita/barraScorrimento');
+const FuoriVolantino = require('./fuoriVolantino');
 
 /// I20-1002: i filtri di pagina del volantino.
 ///
@@ -1317,6 +1318,13 @@ const filtri = {
                                     //I20-1141: le referenze il cui box ha segnalazioni di impaginazione.
                                     $('<sp-menu-item></sp-menu-item>').text('Con segnalazioni').val('con_segnalazioni')
                                 )
+                                .append(
+                                    //Le referenze che l'esportazione esclude perche' fuori volantino, dalla loro
+                                    //sezione della lista del kit: solo per le agenzie che lo dichiarano.
+                                    pluginMiddleware.getFuoriVolantinoInTracciato().abilitato
+                                        ? $('<sp-menu-item></sp-menu-item>').text('Fuori vol').val(FuoriVolantino.VISUALIZZAZIONE)
+                                        : $()
+                                )
                                 .on('change', function () {
                                     //togliamo selected ad ogni opzione
                                     //$(this).find('option').prop('selected', false);
@@ -1327,7 +1335,12 @@ const filtri = {
 
                                     const selectedValue = $(this).val();
                                     //impostiamo selected all'opzione selezionata
-                                
+
+                                    //Fuori vol non e' un filtro: i criteri impostati prima si tolgono, per non
+                                    //restringere la lista senza che l'operatore lo veda. Quelli messi dopo valgono.
+                                    if (selectedValue === FuoriVolantino.VISUALIZZAZIONE) {
+                                        newFiltroDiv.find('.criterio').remove();
+                                    }
 
                                     //mandiamo la ricerca per il filtro
                                     me.ricercaFiltro(newFiltroDiv).then((resRicerca) => {
@@ -2681,6 +2694,17 @@ const filtri = {
             if(listaTracciato == null){
                 messaggioUtente("Code FLT-00 Lista non scaricata", "error");
                 return;
+            }
+
+            //Fuori vol: i criteri valgono sulla sezione dei fuori volantino della stessa lista, e
+            //nessuno di loro e' impaginato.
+            if (filtro.find('.filtro-visualizzazione').val() === FuoriVolantino.VISUALIZZAZIONE) {
+                const fuori = FuoriVolantino.sezione(listaTracciato);
+                if (fuori == null) {
+                    messaggioUtente("Code FLT-03 La lista e' stata scaricata prima della sezione dei fuori volantino: riscaricala dalla Home", "warning");
+                }
+                listaTracciato = { records: fuori || [] };
+                listImpaginati = [];
             }
     
             //prendiamo i criteri del filtro

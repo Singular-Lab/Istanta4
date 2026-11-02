@@ -124,6 +124,8 @@ const barraScorrimento = require('./reportIntegrita/barraScorrimento');
 const ficoProcess = require('./ficoProcess');
 const grigliaJs = require('./griglia');
 const filtriJs = require('./filtri');
+//Fuori vol del tracciato: i fuori volantino della lista del kit e la rimessa in volantino.
+const FuoriVolantino = require('./fuoriVolantino');
 const CssFramework = require('./CssFramework');
 //I20-1009: la sistemazione delle foto nel box ha un modulo suo. Anche schedaRef la usa da qui.
 const SistemazioneFoto = require('./sistemazioneFoto/sistemazioneFoto');
@@ -7466,6 +7468,9 @@ async function aggiornaTracciatoPostRicerca(resRicerca) {
 
             if (val === "all") {
                 recordsDaMostrare = contenutoKitInLavorazione.records || [];
+            } else if (val === FuoriVolantino.VISUALIZZAZIONE) {
+                //La sezione dei fuori volantino, una riga per gruppo.
+                recordsDaMostrare = FuoriVolantino.righe(contenutoKitInLavorazione);
             } else if (val === "con_segnalazioni") {
                 //I20-1141: tutti i record, poi solo quelli il cui box ha segnalazioni.
                 //La lettura e' quella che riusano i badge qui sotto (Segnalazioni.riepilogoTracciato).
@@ -7492,6 +7497,11 @@ async function aggiornaTracciatoPostRicerca(resRicerca) {
                 if (val === "con_segnalazioni") {
                     tutti = Segnalazioni.recordConSegnalazioni(tutti, riepilogoSegnalazioniTracciato(), idRecDelRecordDelTracciato);
                 }
+            } else if (val === FuoriVolantino.VISUALIZZAZIONE) {
+                //ricercaFiltro ha gia' preso la sezione dei fuori volantino: come Vedi tutto, nessuno impaginato.
+                tutti = !resRicerca.criteriValidati
+                    ? (resRicerca.listaCompleta || [])
+                    : [].concat(resRicerca.impaginati || [], resRicerca.nonImpaginati || []);
             } else if (val === "impaginati") {
                 tutti = !resRicerca.criteriValidati
                     ? (resRicerca.listaCompletaImpaginati || [])
@@ -7508,6 +7518,9 @@ async function aggiornaTracciatoPostRicerca(resRicerca) {
 
         //I20-1029, lotto 3: le segnalazioni del documento si leggono una volta per ridisegno, non
         //una per riga: le righe possono essere migliaia.
+        //Nei fuori volantino il pulsante Rimetti prende il posto di Impagina: la lista, per i gruppi
+        //misti, si fissa una volta per ridisegno come il riepilogo delle segnalazioni.
+        listaFuoriVolantinoInRidisegno = val === FuoriVolantino.VISUALIZZAZIONE ? contenutoKitInLavorazione : null;
         const riepilogoSegnalazioni = riepilogoSegnalazioniTracciato();
         const frag = $(document.createDocumentFragment());
         var first = true;
@@ -8042,7 +8055,11 @@ function togliRigheSenzaSegnalazioni(riepilogo) {
 /// il pluginMiddleware. Le colonne sono le stesse per tutto l'elenco: su un tracciato da
 /// migliaia di referenze e' lo stesso lavoro rifatto migliaia di volte. Andrebbe calcolato
 /// una volta in aggiornaTracciatoPostRicerca e passato qui.
+//La lista del kit mentre il tracciato mostra i fuori volantino, null con le altre voci.
+let listaFuoriVolantinoInRidisegno = null;
+
 function creaElementoTracciato(obj, isFirst, riepilogoSegnalazioni = {}) {
+    const listaFuoriVolantino = listaFuoriVolantinoInRidisegno;
     const record = obj.recordInTracciato || {};
     const columns = getTracciatoColumns();
 
@@ -8064,7 +8081,10 @@ function creaElementoTracciato(obj, isFirst, riepilogoSegnalazioni = {}) {
         if (col.chiaveDato === "__pagina__") {
             $cell.addClass("pag");
 
-            if (obj.paginaImpaginazione) {
+            if (listaFuoriVolantino != null) {
+                //Fuori vol: un fuori volantino non e' impaginato, si rimette in volantino.
+                $cell.append(FuoriVolantino.pulsante(obj, $row, FuoriVolantino.eGruppoMisto(obj, listaFuoriVolantino)));
+            } else if (obj.paginaImpaginazione) {
                 const $badge = $("<div/>").css({
                     width: "20px",
                     height: "20px",
