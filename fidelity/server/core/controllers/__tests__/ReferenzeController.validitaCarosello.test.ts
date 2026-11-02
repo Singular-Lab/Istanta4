@@ -1,7 +1,7 @@
 import 'dayjs/locale/it';
 import express from 'express';
 import request from 'supertest';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../middleware/authMiddleware', () => ({
   authMiddleware: (req: express.Request, res: express.Response, next: express.NextFunction) =>
@@ -80,6 +80,16 @@ function creaApp(referenze: ReferenzeIstanta[], webPliantService: IWebPliantServ
 }
 
 const richiesta = { idWorkspace: 'w1', idArea: 'a1', idCanale: 'c1', item };
+const OGGI = new Date('2026-10-29T10:00:00Z');
+
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(OGGI);
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('POST /api/get_filtered_referenze con la scritta di validita', () => {
   it('senza conValidita risponde con il solo elenco, come prima', async () => {

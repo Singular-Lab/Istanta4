@@ -21,7 +21,6 @@ import {
   type PeriodoMateriali,
 } from "../../../lib/materiali/periodi";
 import type { AvvisoNonAvviati, PromoPop, RiepilogoPop } from "../../../lib/materiali/tipi";
-import SchedePeriodo from "../shared/SchedePeriodo";
 import ElencoPromozioni from "./ElencoPromozioni";
 import FileFormato from "./FileFormato";
 import TabellaFormati from "./TabellaFormati";
@@ -338,9 +337,7 @@ function ContenutoPop({ periodo }: { periodo: PeriodoMateriali }) {
   })();
 
   return (
-    <Pagina titolo={`POP · ${etichettaPeriodo}`} descrizione={DESCRIZIONE[periodo]}>
-      {/* Solo i periodi del POP: i volantini hanno la loro pagina con le loro schede */}
-      <SchedePeriodo vista="pop" periodo={periodo} className="self-start" />
+    <Pagina titolo={`POP ${etichettaPeriodo}`} descrizione={DESCRIZIONE[periodo]}>
       {corpo}
     </Pagina>
   );

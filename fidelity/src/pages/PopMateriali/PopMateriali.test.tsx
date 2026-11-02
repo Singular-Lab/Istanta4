@@ -202,7 +202,7 @@ describe("POP per periodo", () => {
   it("elenca le promozioni del periodo con i file e apre la prima, con i suoi totali", async () => {
     await apri();
 
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("POP · In corso");
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("POP In corso");
     expect(finti.periodiPromozioni.at(-1)).toBe("in-corso");
     const elenco = screen.getByRole("complementary", { name: "Promozioni" });
     const prima = within(elenco).getByRole("link", { name: /Speciale Colazione/ });
@@ -224,24 +224,23 @@ describe("POP per periodo", () => {
     }
   });
 
-  it("in cima ci sono i periodi del POP, e nessun collegamento ai volantini", async () => {
-    const router = await apri();
+  it.each([
+    ["in-corso", "In corso"],
+    ["attivi", "Attivi"],
+    ["storico", "Storico"],
+  ])("la pagina %s mostra il periodo nel titolo senza separatore e non mostra il selettore", async (periodo, etichetta) => {
+    await apri(`/pop/${periodo}`);
 
-    const periodi = screen.getByRole("radiogroup", { name: "Periodo" });
-    expect(within(periodi).getAllByRole("radio").map((scheda) => scheda.textContent)).toEqual(["In corso", "Attivi", "Storico"]);
-    expect(within(periodi).getByRole("radio", { name: "In corso" })).toHaveAttribute("aria-checked", "true");
+    const titolo = screen.getByRole("heading", { level: 1 });
+    expect(titolo).toHaveTextContent(`POP ${etichetta}`);
+    expect(titolo).not.toHaveTextContent("·");
+    expect(screen.queryByRole("radiogroup", { name: "Periodo" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /volantin/i })).not.toBeInTheDocument();
-
-    fireEvent.click(within(periodi).getByRole("radio", { name: "Storico" }));
-
-    await waitFor(() => expect(router.state.location.pathname).toBe("/pop/storico"));
-    expect(await screen.findByRole("heading", { level: 1, name: "POP · Storico" })).toBeInTheDocument();
-    expect(router.state.location.search).toBe("");
   });
 
   it.each([
-    ["attivi", "POP · Attivi"],
-    ["storico", "POP · Storico"],
+    ["attivi", "POP Attivi"],
+    ["storico", "POP Storico"],
   ])("%s: solo kit pubblicati, quindi niente file in revisione o con errori né stati di lavorazione", async (periodo, titolo) => {
     finti.riepilogo = ok({
       ...riepilogo,
@@ -253,9 +252,6 @@ describe("POP per periodo", () => {
 
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(titolo);
     expect(finti.periodiPromozioni.at(-1)).toBe(periodo);
-    expect(within(screen.getByRole("radiogroup", { name: "Periodo" })).getByRole("radio", { checked: true })).toHaveTextContent(
-      periodo === "attivi" ? "Attivi" : "Storico"
-    );
     expect(screen.getByText("Pubblicati", { selector: "dt" }).nextElementSibling).toHaveTextContent("1.842");
     expect(screen.queryByText("In revisione", { selector: "dt" })).not.toBeInTheDocument();
     expect(screen.queryByText("Con errori", { selector: "dt" })).not.toBeInTheDocument();
@@ -609,7 +605,7 @@ describe("POP per periodo", () => {
     expect(screen.queryByRole("link", { name: /Apri kit/ })).not.toBeInTheDocument();
   });
 
-  it("senza promozioni con kit POP mostra lo stato vuoto del periodo, con le schede dei periodi", async () => {
+  it("senza promozioni con kit POP mostra lo stato vuoto del periodo senza il selettore dei periodi", async () => {
     finti.promozioni = ok({ promozioni: [], avvisi: [] });
     finti.riepilogo = { data: undefined, isError: false, error: null, refetch: vi.fn() };
     await apri();
@@ -617,7 +613,7 @@ describe("POP per periodo", () => {
     expect(screen.getByRole("heading", { name: "Nessun kit POP nelle promozioni in corso" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Vai alle promozioni in corso" })).toBeInTheDocument();
     expect(screen.queryByRole("complementary", { name: "Promozioni" })).not.toBeInTheDocument();
-    expect(screen.getByRole("radiogroup", { name: "Periodo" })).toBeInTheDocument();
+    expect(screen.queryByRole("radiogroup", { name: "Periodo" })).not.toBeInTheDocument();
     // Nessuna promo da aprire: il riepilogo non si chiede
     expect(finti.promoRiepilogo.every((idPromo) => idPromo === undefined)).toBe(true);
   });
@@ -634,7 +630,7 @@ describe("POP per periodo", () => {
 
     await waitFor(() => expect(router.state.location.search).toBe("?promo=p1"));
     await waitFor(() => expect(finti.promoRiepilogo.at(-1)).toBe("p1"));
-    expect(screen.getByRole("heading", { level: 2, name: "Speciale Colazione" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 2, name: "Speciale Colazione" })).toBeInTheDocument();
   });
 
   it("con i filtri senza file propone Azzera filtri e riassume i filtri usati", async () => {
