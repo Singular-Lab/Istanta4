@@ -459,7 +459,7 @@ describe("coopfi menabo", () => {
 });
 
 describe("coopfi menabo con lo stato in volantino core", () => {
-  const sut = new CoopfiAgenziaLib({} as any);
+  const sut = new CoopfiAgenziaLib({} as ConstructorParameters<typeof CoopfiAgenziaLib>[0]);
 
   it("esclude dal raggruppamento per tema le referenze fuori volantino, dal campo core o dal tema", async () => {
     const inVol = { tema: "SPRINT", "Scatto.CodiceGruppo": "G001", "Referenza.InVolantino": true };

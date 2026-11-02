@@ -130,9 +130,9 @@ describe("coopfi widget PDF calcolati sui record filtrati", () => {
 });
 
 describe("coopfi filtraRecordPerPdf con lo stato in volantino core", () => {
-  const conStato = (codice: string, tema: string, inVolantino: unknown): DataFields => ({
+  const conStato = (codice: string, tema: string, inVolantino: string | boolean): DataFields => ({
     ...makeRecord({ codice, tema }),
-    "Referenza.InVolantino": inVolantino as any,
+    "Referenza.InVolantino": inVolantino,
   });
 
   it("scarta la referenza messa fuori volantino dal Plugin anche con il tema pulito", () => {
