@@ -9,7 +9,7 @@ import { twMerge } from "@/utils/twMerge";
 import { useId, useState } from "react";
 import { Link } from "react-router-dom";
 import { STATO_LAVORAZIONE_KIT_RUNTIME } from "../../../lib/enums";
-import { percorsoKit, soloKitPubblicati, type PeriodoMateriali } from "../../../lib/materiali/periodi";
+import { soloKitPubblicati, type PeriodoMateriali } from "../../../lib/materiali/periodi";
 import { STATI_KIT_MATERIALI, type FormatoPop, type PromoMateriali, type StatoKitMateriali } from "../../../lib/materiali/tipi";
 import { MOTIVO_SENZA_DOWNLOAD, MOTIVO_SENZA_FILE, useScaricaZipPop } from "./scaricamenti";
 
@@ -86,12 +86,11 @@ interface TabellaFormatiProps {
   /** Un formato è stato scelto: i suoi file vanno portati in vista. */
   onSceltaFormato: () => void;
   puoScaricare: boolean;
-  puoAprireKit: boolean;
 }
 
 /**
- * Formati POP della promo: file, avanzamento per stato del kit, kit che li contengono (si aprono a
- * richiesta, così le righe restano basse) e ZIP del formato.
+ * Formati POP della promo: file, avanzamento per stato del kit, kit che li contengono (si espandono
+ * a richiesta, così le righe restano basse) e ZIP del formato.
  */
 function TabellaFormati({
   promo,
@@ -101,7 +100,6 @@ function TabellaFormati({
   percorsoFormato,
   onSceltaFormato,
   puoScaricare,
-  puoAprireKit,
 }: TabellaFormatiProps) {
   const idTabella = useId();
   const [kitAperti, setKitAperti] = useState<ReadonlySet<string>>(new Set());
@@ -165,15 +163,6 @@ function TabellaFormati({
                 {kit.area.nome} · {kit.canale.nome}
               </span>
               <StatusBadge dominio="kitRuntime" stato={kit.stato} />
-              {puoAprireKit && (
-                <Link
-                  to={percorsoKit(promo.id, promo.stato, kit.id)}
-                  aria-label={`Apri kit ${kit.titolo}`}
-                  className="text-xs font-medium text-theme-1 hover:underline dark:text-indigo-200"
-                >
-                  Apri kit
-                </Link>
-              )}
             </li>
           ))}
         </ul>
@@ -201,7 +190,7 @@ function TabellaFormati({
     <Sezione
       senzaPadding
       titolo="File per formato"
-      descrizione="Scegli un formato per vederne i file qui sotto; dai suoi kit si apre il dettaglio del kit."
+      descrizione="Scegli un formato per vederne i file qui sotto; espandi la riga per vedere area, canale e stato dei kit."
     >
       {!puoScaricare && (
         <p className="flex items-center gap-1.5 px-5 pb-3 text-xs text-slate-500">

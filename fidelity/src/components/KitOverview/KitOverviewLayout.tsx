@@ -1,10 +1,5 @@
-import Sezione from "@/components/Base/Sezione";
 import Skeleton from "@/components/Base/Skeleton";
-import { FlyerInsights as FlyerInsightsComponent } from "@/components/FlyerInsights";
-import ReferenzeInVolantinoBox from "@/components/ReferenzeInVolantinoBox";
 import { useProductionTimer } from "@/hooks/useProductionTimer";
-import { useFetchFlyerInsights, useFetchFlyerInsightsConfig } from "@/query/query";
-import { resolveColor } from "@/utils/flyerInsightsHelpers";
 import { FC, useMemo, useState } from "react";
 import { EXPORT_DI_SISTEMA, STATO_LAVORAZIONE_KIT_RUNTIME, TIPO_LAVORAZIONE } from "../../../lib/enums";
 import { FileItemKit } from "../../../lib/types";
@@ -21,7 +16,7 @@ import {
   buildTimelineEvents
 } from "./components";
 import { getStateConfig } from "./config/stateConfig";
-import { KitOverviewLayoutProps, RepartoGroup } from "./types";
+import { KitOverviewLayoutProps } from "./types";
 
 
 /**
@@ -36,8 +31,8 @@ import { KitOverviewLayoutProps, RepartoGroup } from "./types";
  * Il layout è lo stesso per tutti gli stati, cambia solo il contenuto interno
  * in base allo stato della lavorazione.
  *
- * Per VOLANTINO (tipo_lavorazione=1): mostra FlyerInsights e ReferenzeInVolantinoBox
- * Per POP (tipo_lavorazione=2): nasconde FlyerInsights e ReferenzeInVolantinoBox
+ * Gli insight di consultazione del volantino vivono nel verticale Volantini, non in Produzione.
+ * Qui restano esclusivamente file, stato, anomalie e azioni della lavorazione.
  */
 const KitOverviewLayout: FC<KitOverviewLayoutProps> = ({
   lavorazione,
@@ -48,10 +43,6 @@ const KitOverviewLayout: FC<KitOverviewLayoutProps> = ({
   tipiDiExportInKit,
   correggoFile,
   tipoLavorazione,
-  // Insights data (optional - for when we want to pass externally)
-  flyerInsights: externalFlyerInsights,
-  isLoadingInsights: externalIsLoadingInsights,
-  insightsConfig: externalInsightsConfig,
   // Actions
   onDownloadZip,
   isDownloading = false,
@@ -86,22 +77,11 @@ const KitOverviewLayout: FC<KitOverviewLayoutProps> = ({
   // Get configuration for current state
   const stateConfig = getStateConfig(stato);
 
-  // Determine if we should show VOLANTINO-specific components
+  // Il report dello storico è un'anomalia operativa della lavorazione, non un insight Marketing.
   const isVolantino = tipoLavorazione === TIPO_LAVORAZIONE.VOLANTINO;
   const hasVolExport = exportCodes.includes(EXPORT_DI_SISTEMA.VOL);
   const hasCorreggoExport = exportCodes.includes(EXPORT_DI_SISTEMA.CORREGGO);
-  const showVolantinoComponents = isVolantino && hasVolExport;
-
-  // Fetch flyer insights (only for VOLANTINO with VOL export)
-  const { data: fetchedFlyerInsights, isLoading: isFetchingInsights } = useFetchFlyerInsights(
-    showVolantinoComponents ? lavorazione.guidId : ""
-  );
-  const { data: fetchedInsightsConfig } = useFetchFlyerInsightsConfig();
-
-  // Use external or fetched data
-  const flyerInsights = externalFlyerInsights ?? fetchedFlyerInsights;
-  const isLoadingInsights = externalIsLoadingInsights ?? isFetchingInsights;
-  const insightsConfig = externalInsightsConfig ?? fetchedInsightsConfig;
+  const origineStoricoReport = isVolantino && hasVolExport ? lavorazione.origineStorico : undefined;
 
   // Calculate production duration with live timer
   const { formattedDuration: productionDuration, isLive: isTimerLive } = useProductionTimer({
@@ -133,40 +113,6 @@ const KitOverviewLayout: FC<KitOverviewLayoutProps> = ({
       byExportType
     };
   }, [filesData, lavorazione.files, tipiDiExportInKit]);
-
-  // Group referenze by reparto (for VOLANTINO)
-  const referenzePerReparto = useMemo<RepartoGroup[]>(() => {
-    if (!flyerInsights?.referenze || !flyerInsights?.riepilogoReparti) return [];
-
-    const grouped = new Map<string, RepartoGroup>();
-
-    // Initialize groups from reparti
-    flyerInsights.riepilogoReparti.forEach(rep => {
-      grouped.set(rep.sigla, {
-        sigla: rep.sigla,
-        descrizione: rep.descrizione,
-        referenze: []
-      });
-    });
-
-    // Group referenze
-    flyerInsights.referenze.forEach(ref => {
-      const reparto = ref.reparto || 'ALTRO';
-      if (!grouped.has(reparto)) {
-        grouped.set(reparto, {
-          sigla: reparto,
-          descrizione: ref.descrizioneReparto || reparto,
-          referenze: []
-        });
-      }
-      grouped.get(reparto)!.referenze.push(ref);
-    });
-
-    // Filter out empty groups and sort by count
-    return Array.from(grouped.values())
-      .filter(g => g.referenze.length > 0)
-      .sort((a, b) => b.referenze.length - a.referenze.length);
-  }, [flyerInsights?.referenze, flyerInsights?.riepilogoReparti]);
 
   // Build timeline events
   const timelineEvents = useMemo(() => {
@@ -224,9 +170,6 @@ const KitOverviewLayout: FC<KitOverviewLayoutProps> = ({
         totalPages={fileStats.totalPages}
         exportTypesCount={exportTypes.length}
         exportTypesList={exportTypes}
-        referenzeCount={flyerInsights?.totaleReferenze}
-        origineStorico={flyerInsights?.origineStorico}
-        paginAnalizzate={flyerInsights?.totalePagine}
         productionDuration={productionDuration}
         isTimerLive={isTimerLive}
         createdAt={lavorazione.createdAt}
@@ -243,27 +186,16 @@ const KitOverviewLayout: FC<KitOverviewLayoutProps> = ({
         nomeCanale={lavorazione.nomeCanale}
         tipoKit={lavorazione.tipo}
         tipoLavorazione={tipoLavorazione}
-        origineStorico={flyerInsights?.origineStorico}
+        origineStorico={lavorazione.origineStorico}
       />
 
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Left Column - Main content (2/3) */}
         <div className="flex min-w-0 flex-col gap-6 lg:col-span-2">
-          {/* FlyerInsights - Only for VOLANTINO with VOL export */}
-          {showVolantinoComponents && (flyerInsights || isLoadingInsights) && (
-            <Sezione>
-              <FlyerInsightsComponent
-                insights={flyerInsights || null}
-                isLoading={isLoadingInsights}
-                exportCodes={exportCodes}
-              />
-            </Sezione>
-          )}
-
-          {/* Report import da storico: sotto gli insights, cosi le anomalie si vedono prima dei file */}
-          {showVolantinoComponents && flyerInsights?.origineStorico && (
-            <ReportStoricoBox origineStorico={flyerInsights.origineStorico} />
+          {/* Report operativo dell'import, prima dei file da verificare. */}
+          {origineStoricoReport && (
+            <ReportStoricoBox origineStorico={origineStoricoReport} />
           )}
 
           {/* File Section */}
@@ -291,17 +223,6 @@ const KitOverviewLayout: FC<KitOverviewLayoutProps> = ({
             showAllFiles={showAllFiles}
             onToggleShowAll={() => setShowAllFiles(!showAllFiles)}
           />
-
-          {/* ReferenzeInVolantinoBox - Only for VOLANTINO with VOL export */}
-          {showVolantinoComponents && flyerInsights && referenzePerReparto.length > 0 && (
-            <ReferenzeInVolantinoBox
-              exportTypes={exportCodes}
-              referenzePerReparto={referenzePerReparto}
-              flyerInsights={flyerInsights}
-              insightsConfig={insightsConfig}
-              resolveColor={resolveColor}
-            />
-          )}
         </div>
 
         {/* Right Column - Sidebar (1/3) */}

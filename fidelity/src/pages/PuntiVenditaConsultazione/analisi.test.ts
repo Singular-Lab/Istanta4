@@ -19,7 +19,6 @@ import {
   identificativiGdo,
   infograficheConDati,
   percorsoReferenza,
-  percorsoVolantino,
   periodoValidita,
   repartiImpilati,
   righeRecapiti,
@@ -64,9 +63,7 @@ describe("formati", () => {
 });
 
 describe("percorsi", () => {
-  it("volantino alla pagina con la referenza da evidenziare, e referenza", () => {
-    expect(percorsoVolantino("pv 1", "k1")).toBe("/punti-vendita/pv%201/volantini/k1");
-    expect(percorsoVolantino("pv1", "k1", 3, "mozzarella-granarolo")).toBe("/punti-vendita/pv1/volantini/k1?pagina=3&referenza=mozzarella-granarolo");
+  it("codifica la referenza nella scheda del punto vendita", () => {
     expect(percorsoReferenza("pv1", "spaghetti-n5")).toBe("/punti-vendita/pv1/referenze/spaghetti-n5");
   });
 });

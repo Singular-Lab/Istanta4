@@ -42,6 +42,7 @@ export const PAGINE: DefinizionePagina[] = [
   { percorso: '/report/tracciati', permesso: P.PROMO.VISUALIZZA, sottopagine: true },
 
   // Volantini e materiali
+  { percorso: '/volantini/tutti_i_volantini', permesso: P.MATERIALI.VISUALIZZA },
   { percorso: '/volantini', permesso: P.VOLANTINI.VISUALIZZA, sottopagine: true },
   // Viste Volantini e POP per periodo, al posto delle pagine Materiali: stesso permesso
   { percorso: '/volantini/in-corso', permesso: P.MATERIALI.VISUALIZZA },

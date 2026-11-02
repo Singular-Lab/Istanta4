@@ -1083,6 +1083,8 @@ export type RUNTIME_KIT = {
   fineLavorazione?: Date,
   stato_lavorazione: STATO_LAVORAZIONE_KIT_RUNTIME;
   files?: FileItemKit[];
+  /** Report operativo dell'import da storico, già adattato al tracciato del cliente. */
+  origineStorico?: OrigineStorico;
   updatedAt?: Date;
   createdAt?: Date;
 }
@@ -1405,6 +1407,35 @@ export interface ImportStorico {
   referenzeDaListino?: number;
   /** Ogni box fuori listino, compilato o ignorato, con cosa c'era scritto. Assente sugli import precedenti. */
   boxFuoriListino?: BoxFuoriListino[];
+}
+
+/** Un record di listino pronto per essere mostrato nel report dell'import da storico. */
+export interface ReferenzaReportStorico {
+  codice: string;
+  descrizione: string;
+  campi: Array<{ label: string; valore: string }>;
+}
+
+/** Un box del volantino che non aveva riscontro nel listino. */
+export interface BoxReportStorico {
+  codiceBox: string;
+  pag?: number;
+  ignorato: boolean;
+  testoBox: string[];
+  referenze: ReferenzaReportStorico[];
+}
+
+/** Dati operativi dell'import da storico, condivisi fra server e dettaglio produttivo. */
+export interface OrigineStorico {
+  importatoIl: string;
+  nomeFile?: string;
+  boxNelVolantino?: number;
+  referenzeDaListino?: number;
+  nonImpaginate: ReferenzaReportStorico[];
+  lasciapassareNonImpaginate: boolean;
+  totaleFuoriListino: number;
+  fuoriListinoIgnorati: number;
+  boxFuoriListino: BoxReportStorico[];
 }
 
 /** Un box fuori listino come resta nel report: cosa c'era nel volantino e cosa si e deciso. */

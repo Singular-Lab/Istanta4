@@ -35,6 +35,7 @@ function createApp(session: Record<string, unknown>) {
   const configService = {
     getFunzionalita: vi.fn().mockResolvedValue({ momenti: true, menabo: false }),
     saveFunzionalita: vi.fn(async (_idGdo: string, f: unknown) => f),
+    getFlyerInsightsConfig: vi.fn().mockResolvedValue({ reparti: {} }),
   };
   const app = express();
   app.use(express.json());
@@ -78,6 +79,28 @@ describe('GET /api/funzionalita', () => {
     await request(app).get('/api/funzionalita?gdo=coop-lazio');
 
     expect(configService.getFunzionalita).toHaveBeenCalledWith('coop-lazio');
+  });
+});
+
+describe('GET /api/getFlyerInsightsConfig', () => {
+  it('richiede materiali.visualizza e restituisce la configurazione degli insight', async () => {
+    const { app, configService } = createApp({ ...operatoreGdo, permessi: ['materiali.visualizza'] });
+
+    const res = await request(app).get('/api/getFlyerInsightsConfig');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ reparti: {} });
+    expect(configService.getFlyerInsightsConfig).toHaveBeenCalledOnce();
+  });
+
+  it('senza materiali.visualizza non espone la configurazione', async () => {
+    const { app, configService } = createApp(operatoreGdo);
+
+    const res = await request(app).get('/api/getFlyerInsightsConfig');
+
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({ codice: 'materiali.visualizza' });
+    expect(configService.getFlyerInsightsConfig).not.toHaveBeenCalled();
   });
 });
 

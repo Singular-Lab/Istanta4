@@ -1,18 +1,18 @@
 import { notifyManager, useQueryClient, type QueryKey, type QueryState } from "@tanstack/react-query";
 import { useCallback, useSyncExternalStore } from "react";
-import type { DettaglioReferenzaPv, DettaglioVolantinoPv } from "../../../lib/puntiVendita/analisi";
+import type { DettaglioReferenzaPv } from "../../../lib/puntiVendita/analisi";
 import type { PuntoVenditaConsultazione } from "../../../lib/puntiVendita/consultazione";
 import type { PuntoVenditaResponseDTO } from "../../../server/core/dto";
 
 /**
  * Nomi del breadcrumb per le pagine dei punti vendita: il nome del punto vendita al posto del suo
- * id, la promo del volantino e il nome della referenza. Il breadcrumb legge i dati che la pagina ha
+ * id e il nome della referenza. Il breadcrumb legge i dati che la pagina ha
  * già chiesto (stesse chiavi di query/query.tsx) e non fa richieste sue: si aggiorna quando
  * arrivano, e dopo una modifica del punto vendita mostra il nome nuovo.
  *
  * Rotte: /gestione-interna/punti-vendita/:id, /punti-vendita/:id,
- * /punti-vendita/:id/volantini/:idKit e /punti-vendita/:id/referenze/:chiave. I segmenti
- * "volantini" e "referenze" non sono pagine: il breadcrumb li salta.
+ * /punti-vendita/:id/referenze/:chiave. Il segmento "referenze" non è una pagina: il breadcrumb
+ * lo salta.
  */
 
 const CARICAMENTO = "Caricamento...";
@@ -32,7 +32,7 @@ interface Dettaglio {
   nome: (dato: unknown) => string | null | undefined;
 }
 
-/** Dove sta il punto vendita nel percorso, e la pagina figlia (volantino o referenza) se c'è. */
+/** Dove sta il punto vendita nel percorso, e la pagina della referenza se c'è. */
 const dettagliDelPercorso = (segmenti: string[]): { puntoVendita: Dettaglio | null; figlio: Dettaglio | null; saltati: number[] } => {
   const [radice, sezione, id] = segmenti;
   if (radice === "gestione-interna" && sezione === "punti-vendita" && id && segmenti.length === 3) {
@@ -56,17 +56,6 @@ const dettagliDelPercorso = (segmenti: string[]): { puntoVendita: Dettaglio | nu
     nome: dato => (dato as PuntoVenditaConsultazione | undefined)?.nome,
   };
   const [, , pagina, idFiglio] = segmenti;
-  if (pagina === "volantini" && idFiglio && segmenti.length === 4) {
-    return {
-      puntoVendita,
-      figlio: {
-        indice: 3,
-        chiave: ["puntiVendita", "volantino", idPv, decodifica(idFiglio)],
-        nome: dato => (dato as DettaglioVolantinoPv | undefined)?.promo?.nome || (dato as DettaglioVolantinoPv | undefined)?.kit?.titolo,
-      },
-      saltati: [2],
-    };
-  }
   if (pagina === "referenze" && idFiglio && segmenti.length === 4) {
     return {
       puntoVendita,

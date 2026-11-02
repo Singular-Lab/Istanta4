@@ -25,6 +25,7 @@ import { PERMISSIONS } from "../../constants/permissions";
 import { usePermission } from "../../context/PermissionContext";
 import { useNotification } from "@/context/NotificationContext";
 import { formatData } from "@/utils/format";
+import { percorsoDettaglioVolantino } from "../../../lib/materiali/periodi";
 
 interface FileAnteprima {
     id: string;
@@ -161,6 +162,7 @@ const VolantiniSkeleton: FC = () => (
 
 const KitCard: FC<{ kit: KitVolantino; showValidita?: boolean, routeClickable?: boolean }> = ({ kit, showValidita, routeClickable = false }) => {
     const canAccessPromo = usePermission(PERMISSIONS.PROMO.VISUALIZZA);
+    const canConsultVolantino = usePermission(PERMISSIONS.MATERIALI.VISUALIZZA);
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
     const file = kit.files?.[0];
@@ -223,10 +225,10 @@ const KitCard: FC<{ kit: KitVolantino; showValidita?: boolean, routeClickable?: 
                         <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                                 <h3 className="title-card truncate">
-                                    {routeClickable && canAccessPromo ? (
+                                    {routeClickable && canConsultVolantino ? (
                                         <Link
                                             className="hover:text-primary"
-                                            to={kit.id_promo ? `/promozioni/in-corso/dettagli/${kit.id_promo}/kits/${kit.id}` : "#"}
+                                            to={percorsoDettaglioVolantino(kit.id)}
                                         >
                                             {kit.titolo}
                                         </Link>

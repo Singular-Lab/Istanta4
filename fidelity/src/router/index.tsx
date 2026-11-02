@@ -53,7 +53,6 @@ const funzioneCaricamentoODSCompletati = createLazyLoader("funzioneCaricamentoOD
 const funzioneCaricamentoODSInCorso = createLazyLoader("funzioneCaricamentoODSInCorso");
 const funzioneCaricamentoRicetta = createLazyLoader("funzioneCaricamentoRicetta");
 const funzioneCaricamentoStoricoLavorazioni = createLazyLoader("funzioneCaricamentoStoricoLavorazioni");
-const funzioneCaricamentoTuttiIFilePerKit = createLazyLoader("funzioneCaricamentoTuttiIFilePerKit");
 const funzioneCaricamentoTuttiIfFilesOrdiniDiStampa = createLazyLoader("funzioneCaricamentoTuttiIfFilesOrdiniDiStampa");
 const funzioneCaricamentoVolantiniPDF = createLazyLoader("funzioneCaricamentoVolantiniPDF");
 const funzioneCaricamentoVolantinoWebPliant = createLazyLoader("funzioneCaricamentoVolantinoWebPliant");
@@ -248,14 +247,7 @@ const routes: RouteObject[] = [
           return { Component: SchedaPuntoVendita };
         },
       },
-      // Un volantino e una referenza nella storia del punto vendita
-      {
-        path: "punti-vendita/:id/volantini/:idKit",
-        lazy: async () => {
-          const { default: VolantinoPuntoVendita } = await import("@/pages/PuntiVenditaConsultazione/Volantino");
-          return { Component: VolantinoPuntoVendita };
-        },
-      },
+      // Una referenza nella storia del punto vendita. I volantini aprono la vista insight condivisa.
       {
         path: "punti-vendita/:id/referenze/:chiave",
         lazy: async () => {
@@ -336,7 +328,6 @@ const routes: RouteObject[] = [
           );
           return {
             Component: TuttiIVolantini,
-            loader: funzioneCaricamentoTuttiIFilePerKit,
           };
         },
       },

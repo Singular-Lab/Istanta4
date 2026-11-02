@@ -10,13 +10,15 @@ import StatusBadge from "@/components/Base/StatusBadge";
 import EmptyState from "@/components/EmptyState";
 import { FasceNelTempo, TimelineVolantini, type Tinta } from "@/components/Grafici";
 import { PreviewImmaginePdf } from "@/components/PreviewImmaginePdf";
+import { PERMISSIONS } from "@/constants/permissions";
+import { usePermission } from "@/context/PermissionContext";
 import { useFetchVolantiniStoriaPuntoVendita, useFetchVolantinoPuntoVendita } from "@/query/query";
 import { formatData, formatNumero } from "@/utils/format";
 import { testoValidita, urlAnteprimaMateriale } from "@/utils/materiali";
 import { twMerge } from "@/utils/twMerge";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { percorsoKit } from "../../../lib/materiali/periodi";
+import { percorsoDettaglioVolantino } from "../../../lib/materiali/periodi";
 import type { AnalisiPuntoVendita, EdizioneTimeline } from "../../../lib/puntiVendita/analisi";
 import { DIMENSIONI_PAGINA_STORIA, type EventoStoria, type StoriaPuntoVendita, type VolantinoNellaStoria } from "../../../lib/puntiVendita/storia";
 import { giorniAllaScadenza, testoScadenza } from "../VolantiniKit/scadenza";
@@ -31,7 +33,6 @@ import {
   NOMI_TONI_RECAPITI,
   PARAMETRO_ANNO,
   PARAMETRO_VOLANTINO,
-  percorsoVolantino,
   periodoValidita,
   righeRecapiti,
 } from "./analisi";
@@ -64,6 +65,8 @@ function EdizioneSelezionata({
   onScegli: (idKit: string) => void;
 }) {
   const dettaglio = useFetchVolantinoPuntoVendita(idPv, edizione.idKit);
+  // Il volantino si apre nella vista di consultazione, che chiede materiali.visualizza
+  const puoConsultareVolantini = usePermission(PERMISSIONS.MATERIALI.VISUALIZZA);
   const dati = dettaglio.data;
   const anteprima = dati?.pdf ? urlAnteprimaMateriale(dati.pdf.idOlimpoCloud) : null;
   const giorni = edizione.attivo ? giorniAllaScadenza(edizione.al) : null;
@@ -139,9 +142,11 @@ function EdizioneSelezionata({
         >
           <Lucide icon="ChevronLeft" aria-hidden="true" className="h-4 w-4" />
         </Button>
-        <Button as={Link} to={percorsoVolantino(idPv, edizione.idKit)} variant="primary">
-          Apri volantino
-        </Button>
+        {puoConsultareVolantini && (
+          <Button as={Link} to={percorsoDettaglioVolantino(edizione.idKit)} variant="primary">
+            Apri volantino
+          </Button>
+        )}
         <Button
           type="button"
           variant="outline-secondary"
@@ -404,8 +409,9 @@ export function RecapitiStampati({ storia }: { storia: QueryBox<StoriaPuntoVendi
   );
 }
 
-function VoceVolantino({ idPv, volantino, puoAprirePromo }: { idPv: string; volantino: VolantinoNellaStoria; puoAprirePromo: boolean }) {
+function VoceVolantino({ volantino }: { volantino: VolantinoNellaStoria }) {
   const [anteprimaAperta, setAnteprimaAperta] = useState(false);
+  const puoConsultareVolantini = usePermission(PERMISSIONS.MATERIALI.VISUALIZZA);
   const { promo, pdf } = volantino;
   const validita = testoValidita(promo.validitaDal, promo.validitaAl);
   const anteprima = pdf ? urlAnteprimaMateriale(pdf.idOlimpoCloud) : null;
@@ -455,14 +461,10 @@ function VoceVolantino({ idPv, volantino, puoAprirePromo }: { idPv: string; vola
       </div>
       {/* Le azioni in riga (due righe al massimo da desktop), non in una colonna alta quanto quattro pulsanti */}
       <div className="flex flex-none flex-wrap content-start items-start gap-2 sm:max-w-[17rem] sm:justify-end">
-        <Button as={Link} to={percorsoVolantino(idPv, volantino.idKit)} size="sm" variant="outline-secondary">
-          <Lucide icon="BookOpen" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
-          Apri volantino
-        </Button>
-        {puoAprirePromo && (
-          <Button as={Link} to={percorsoKit(promo.id, promo.stato, volantino.idKit)} size="sm" variant="outline-secondary">
-            <Lucide icon="ExternalLink" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
-            Apri kit
+        {puoConsultareVolantini && (
+          <Button as={Link} to={percorsoDettaglioVolantino(volantino.idKit)} size="sm" variant="outline-secondary">
+            <Lucide icon="BookOpen" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+            Apri volantino
           </Button>
         )}
         {pdf && (
@@ -495,7 +497,7 @@ function VoceVolantino({ idPv, volantino, puoAprirePromo }: { idPv: string; vola
  * Tutti i volantini in cui compare il punto vendita, dal più recente, paginati dal server, con la
  * riga com'era stampata, l'anteprima e il PDF. Si chiede al server solo se la storia c'è.
  */
-export function TuttiIVolantini({ idPv, puoAprirePromo }: { idPv: string; puoAprirePromo: boolean }) {
+export function TuttiIVolantini({ idPv }: { idPv: string }) {
   const [pagina, setPagina] = useState(1);
   const [dimensione, setDimensione] = useState(DIMENSIONI_PAGINA_STORIA[0]);
   const query = useFetchVolantiniStoriaPuntoVendita(idPv, pagina, dimensione);
@@ -529,7 +531,7 @@ export function TuttiIVolantini({ idPv, puoAprirePromo }: { idPv: string; puoApr
             className={twMerge("divide-y divide-slate-100 border-t border-dashed border-slate-200 transition-opacity dark:divide-darkmode-400 dark:border-darkmode-400", query.isPlaceholderData && "opacity-60")}
           >
             {dati.volantini.map(volantino => (
-              <VoceVolantino key={`${volantino.idKit}-${volantino.rigaStampata}`} idPv={idPv} volantino={volantino} puoAprirePromo={puoAprirePromo} />
+              <VoceVolantino key={`${volantino.idKit}-${volantino.rigaStampata}`} volantino={volantino} />
             ))}
           </ul>
           <PaginazioneTabella

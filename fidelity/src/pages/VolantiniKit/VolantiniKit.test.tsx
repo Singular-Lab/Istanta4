@@ -142,11 +142,11 @@ describe("Volantini per periodo", () => {
     await apri();
 
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Volantini In corso");
-    expect(screen.getByText(/Kit volantino in lavorazione nelle promozioni in corso/)).toBeInTheDocument();
+    expect(screen.getByText(/Ogni scheda avviata apre gli insight del volantino/)).toBeInTheDocument();
     const scheda = screen.getByRole("article");
     expect(within(scheda).getByRole("link", { name: "Volantino 16 pagine" })).toHaveAttribute(
       "href",
-      "/promozioni/in-corso/dettagli/p1/kits/k1"
+      "/volantini/tutti_i_volantini?kit=k1"
     );
     expect(within(scheda).getByRole("link", { name: "Promo: Speciale Colazione" })).toHaveAttribute(
       "href",
@@ -231,15 +231,12 @@ describe("Volantini per periodo", () => {
     expect(finti.filtri.at(-1)).toMatchObject({ idArea: "a1", pagina: 1 });
   });
 
-  it("un kit non avviato porta ai kit della promo e dice che non ha file", async () => {
+  it("un kit non avviato non apre né insight incompleti né la produzione e dice che non ha file", async () => {
     finti.risultato = caricato(pagina({ kit: [kit({ id: null, stato: "NON_AVVIATO", numeroFile: 0 })] }));
     await apri();
 
     const scheda = screen.getByRole("article");
-    expect(within(scheda).getByRole("link", { name: "Volantino 16 pagine" })).toHaveAttribute(
-      "href",
-      "/promozioni/in-corso/dettagli/p1/kits"
-    );
+    expect(within(scheda).queryByRole("link", { name: "Volantino 16 pagine" })).not.toBeInTheDocument();
     expect(within(scheda).getByTitle("Non avviato")).toBeInTheDocument();
     expect(within(scheda).getByText("Nessun file")).toBeInTheDocument();
   });
@@ -254,7 +251,7 @@ describe("Volantini per periodo", () => {
     expect(within(scheda).getByRole("link", { name: "Speciale Colazione" })).toHaveAttribute("href", "/promozioni/storico/dettagli/p1");
     expect(within(scheda).getByRole("link", { name: /Superstore · Toscana/ })).toHaveAttribute(
       "href",
-      "/promozioni/storico/dettagli/p1/kits/k1"
+      "/volantini/tutti_i_volantini?kit=k1"
     );
   });
 
@@ -342,7 +339,7 @@ describe("Volantini Attivi e Storico per promozione", () => {
     vi.setSystemTime(new Date(iso));
   };
 
-  it("una card per promozione: copertina, validità, scadenza e le varianti che aprono il loro kit", async () => {
+  it("una card per promozione: copertina, validità, scadenza e le varianti che aprono gli insight", async () => {
     oggiE("2026-10-27T10:00:00+01:00");
     await apri("/volantini/attivi");
 
@@ -359,7 +356,7 @@ describe("Volantini Attivi e Storico per promozione", () => {
     expect(varianti).toHaveLength(2);
     expect(within(varianti[0]).getByRole("link", { name: "Superstore · Toscana – SS k1 VOL, 3 file, 24 punti vendita" })).toHaveAttribute(
       "href",
-      "/promozioni/in-corso/dettagli/p1/kits/k1"
+      "/volantini/tutti_i_volantini?kit=k1"
     );
     expect(varianti[0]).toHaveTextContent("24 PV");
     // Senza la lista dei punti vendita il numero non si mostra; senza file lo dice

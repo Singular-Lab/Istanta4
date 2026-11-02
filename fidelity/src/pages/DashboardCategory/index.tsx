@@ -13,6 +13,8 @@ import StatCard, { StatCardGrid } from "@/components/Base/StatCard";
 import StatusBadge from "@/components/Base/StatusBadge";
 import Table from "@/components/Base/Table";
 import EmptyState from "@/components/EmptyState";
+import { PERMISSIONS } from "@/constants/permissions";
+import { usePermission } from "@/context/PermissionContext";
 import { opzioniBase, paletteColore, tonoScore } from "@/utils/chartTheme";
 import { formatData, formatNumero, VALORE_ASSENTE } from "@/utils/format";
 import { useQuery } from "@tanstack/react-query";
@@ -20,7 +22,9 @@ import type { ChartOptions, TooltipItem } from "chart.js";
 import dayjs from "dayjs";
 import "dayjs/locale/it";
 import React, { useCallback, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { STATO_PROMO } from "../../../lib/enums";
+import { percorsoDettaglioVolantino } from "../../../lib/materiali/periodi";
 import { ServerCall } from "../../../lib/server_call";
 import type {
     CategoryScoreboardTimeline,
@@ -129,6 +133,8 @@ const CategorySkeleton: React.FC = () => (
 );
 
 const DashboardCategory: React.FC = () => {
+    // Il volantino si apre nella vista di consultazione, che chiede materiali.visualizza
+    const puoConsultareVolantini = usePermission(PERMISSIONS.MATERIALI.VISUALIZZA);
     const [selectedCanaleAreaKey, setSelectedCanaleAreaKey] = useState<string | null>(null);
     const [dateFrom, setDateFrom] = useState<string>("");
     const [dateTo, setDateTo] = useState<string>("");
@@ -607,7 +613,16 @@ const DashboardCategory: React.FC = () => {
                                 <li key={kit.id} className="flex items-center gap-3 rounded-control border border-slate-100 bg-slate-50 px-3 py-2">
                                     <Lucide icon="FileImage" aria-hidden="true" className="h-4 w-4 shrink-0 text-slate-400" />
                                     <div className="min-w-0 flex-1">
-                                        <div className="truncate text-xs font-medium text-slate-700">{kit.titolo || kit.nome_promo}</div>
+                                        {puoConsultareVolantini ? (
+                                            <Link
+                                                to={percorsoDettaglioVolantino(kit.id)}
+                                                className="block truncate text-xs font-medium text-slate-700 hover:text-primary hover:underline"
+                                            >
+                                                {kit.titolo || kit.nome_promo}
+                                            </Link>
+                                        ) : (
+                                            <div className="truncate text-xs font-medium text-slate-700">{kit.titolo || kit.nome_promo}</div>
+                                        )}
                                         <div className="text-xs text-slate-500">{[kit.nome_area, kit.nome_canale].filter(Boolean).join(" / ")}</div>
                                     </div>
                                     <StatusBadge dominio="kitRuntime" stato={kit.stato_lavorazione} className="shrink-0" />

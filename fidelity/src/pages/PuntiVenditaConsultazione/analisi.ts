@@ -31,8 +31,8 @@ import {
 import type { EventoStoria, PeriodoRecapito, RiferimentoStoria, TipoAbbinamento } from "../../../lib/puntiVendita/storia";
 
 /**
- * Supporto comune alle pagine del punto vendita costruite sulla timeline dei volantini (scheda,
- * volantino, referenza; contratto in lib/puntiVendita/analisi.ts): formati, percorsi, colori e
+ * Supporto comune alle pagine del punto vendita costruite sulla timeline dei volantini (scheda e
+ * referenza; contratto in lib/puntiVendita/analisi.ts): formati, percorsi, colori e
  * dati dei grafici. Funzioni pure salvo useTinteCanali.
  */
 
@@ -83,22 +83,11 @@ export const identificativiGdo = <T extends { etichetta: string }>(codici: reado
 
 /* ---------- Percorsi ---------- */
 
-/** Parametri nell'indirizzo: anno e volantino scelti nella scheda, pagina e referenza nel volantino. */
+/** Parametri nell'indirizzo: anno e volantino scelti nella scheda. */
 export const PARAMETRO_ANNO = "anno";
 export const PARAMETRO_VOLANTINO = "volantino";
-export const PARAMETRO_PAGINA = "pagina";
-export const PARAMETRO_REFERENZA = "referenza";
 
 export const percorsoScheda = (idPv: string): string => `/punti-vendita/${encodeURIComponent(idPv)}`;
-
-/** Il volantino nella storia del punto vendita, alla pagina indicata e con la referenza da evidenziare. */
-export const percorsoVolantino = (idPv: string, idKit: string, pagina?: number | null, referenza?: string | null): string => {
-  const parametri = new URLSearchParams();
-  if (pagina) parametri.set(PARAMETRO_PAGINA, String(pagina));
-  if (referenza) parametri.set(PARAMETRO_REFERENZA, referenza);
-  const query = parametri.toString();
-  return `${percorsoScheda(idPv)}/volantini/${encodeURIComponent(idKit)}${query ? `?${query}` : ""}`;
-};
 
 export const percorsoReferenza = (idPv: string, chiave: string): string => `${percorsoScheda(idPv)}/referenze/${encodeURIComponent(chiave)}`;
 

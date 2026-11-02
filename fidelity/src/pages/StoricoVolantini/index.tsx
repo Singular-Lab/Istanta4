@@ -13,6 +13,7 @@ import withSessionCheck from "@/components/SessionChecker";
 import clsx from "clsx";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ServerCall } from "../../../lib/server_call";
+import { percorsoDettaglioVolantino } from "../../../lib/materiali/periodi";
 import { PERMISSIONS } from "../../constants/permissions";
 import { usePermission } from "../../context/PermissionContext";
 import CardVolantino from "../shared/CardVolantino";
@@ -154,6 +155,7 @@ const StoricoVolantiniPage = () => {
     const hasActiveFilters = filter.id_area || filter.id_canale;
 
     const canAccessPromo = usePermission(PERMISSIONS.PROMO.VISUALIZZA);
+    const puoConsultareVolantini = usePermission(PERMISSIONS.MATERIALI.VISUALIZZA);
     const descrizione = "Panoramica completa di tutti i volantini pubblicati dalle promozioni scadute.";
 
     if (isLoading) {
@@ -277,11 +279,7 @@ const StoricoVolantiniPage = () => {
                                             }
                                             validitaDal={kit.validita_dal}
                                             validitaAl={kit.validita_al}
-                                            collegamento={
-                                                canAccessPromo && kit.id_promo
-                                                    ? `/promozioni/in-corso/dettagli/${kit.id_promo}/kits/${kit.id}`
-                                                    : undefined
-                                            }
+                                            collegamento={puoConsultareVolantini ? percorsoDettaglioVolantino(kit.id) : undefined}
                                             promo={{
                                                 nome: kit.nome_promo,
                                                 collegamento: canAccessPromo ? `/promozioni/in-corso/dettagli/${kit.id_promo}` : undefined,

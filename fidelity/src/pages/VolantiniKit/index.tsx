@@ -25,7 +25,7 @@ import { useLoaderData, useNavigate } from "react-router-dom";
 import {
   ETICHETTA_PERIODO,
   isPeriodoMateriali,
-  percorsoKit,
+  percorsoDettaglioVolantino,
   percorsoPromo,
   type PeriodoMateriali,
 } from "../../../lib/materiali/periodi";
@@ -44,11 +44,11 @@ export interface VolantiniKitLoaderData {
 }
 
 const DESCRIZIONE: Readonly<Record<PeriodoMateriali, string>> = {
-  "in-corso": "Kit volantino in lavorazione nelle promozioni in corso. Il dettaglio e la lavorazione sono quelli di ogni kit.",
+  "in-corso": "Volantini delle promozioni in corso. Ogni scheda avviata apre gli insight del volantino.",
   attivi:
-    "Volantini pubblicati nelle promozioni ancora valide, una scheda per promozione con le varianti per canale e area. Ogni variante apre il suo kit.",
+    "Volantini pubblicati nelle promozioni ancora valide, una scheda per promozione con le varianti per canale e area. Ogni variante apre i suoi insight.",
   storico:
-    "Volantini pubblicati nelle promozioni concluse, una scheda per promozione con le varianti per canale e area. Ogni variante apre il suo kit.",
+    "Volantini pubblicati nelle promozioni concluse, una scheda per promozione con le varianti per canale e area. Ogni variante apre i suoi insight.",
 };
 
 const IN_CORSO_VUOTO = {
@@ -258,8 +258,8 @@ function VolantiniInCorso() {
               }
               validitaDal={kit.promo.validitaDal ?? undefined}
               validitaAl={kit.promo.validitaAl ?? undefined}
-              // Un kit non avviato non ha scheda: si apre dai kit della promo
-              collegamento={puoAprirePromo ? percorsoKit(kit.promo.id, kit.promo.stato, kit.id) : undefined}
+              // Un kit non avviato non ha ancora dati da mostrare nella vista insight.
+              collegamento={kit.id ? percorsoDettaglioVolantino(kit.id) : undefined}
               promo={{
                 nome: kit.promo.nome,
                 collegamento: puoAprirePromo ? percorsoPromo(kit.promo.id, kit.promo.stato) : undefined,

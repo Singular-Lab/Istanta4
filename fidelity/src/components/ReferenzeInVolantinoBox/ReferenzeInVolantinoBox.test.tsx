@@ -11,13 +11,14 @@ const gruppi = [
   { sigla: "DR", descrizione: "Drogheria", referenze: [{ id: "r2", descrizione: "Pasta di semola", origine: "fuori_listino" as const }] },
 ];
 
-const apri = () =>
+const apri = (ricercaIniziale?: string) =>
   render(
     <ReferenzeInVolantinoBox
       exportTypes={[EXPORT_DI_SISTEMA.VOL]}
       referenzePerReparto={gruppi}
       flyerInsights={{ totaleReferenze: 2 }}
       resolveColor={() => ({ tw: "bg-slate-100 text-slate-700" })}
+      ricercaIniziale={ricercaIniziale}
     />
   );
 
@@ -39,6 +40,22 @@ describe("ReferenzeInVolantinoBox", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Azzera filtri" }));
     expect(screen.getByText("Mozzarella")).toBeInTheDocument();
+  });
+
+  it("la ricerca iniziale filtra subito le referenze che la contengono", () => {
+    apri("mozzarella");
+
+    expect(screen.getByRole("searchbox", { name: "Cerca referenza" })).toHaveValue("mozzarella");
+    expect(screen.getByText("Mozzarella")).toBeInTheDocument();
+    expect(screen.queryByText("Pasta di semola")).not.toBeInTheDocument();
+  });
+
+  it("una ricerca iniziale che non trova niente viene ignorata: l'elenco parte completo", () => {
+    apri("Mozzarella Alta Qualità");
+
+    expect(screen.getByRole("searchbox", { name: "Cerca referenza" })).toHaveValue("");
+    expect(screen.getByText("Mozzarella")).toBeInTheDocument();
+    expect(screen.getByText("Pasta di semola")).toBeInTheDocument();
   });
 
   it("non espone chiavi di servizi esterni nei collegamenti", () => {

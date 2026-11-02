@@ -121,11 +121,10 @@ interface DettaglioPromoProps {
   periodo: PeriodoMateriali;
   idFormatoRichiesto: string;
   puoScaricare: boolean;
-  puoAprireKit: boolean;
 }
 
 /** Colonna principale: la promo scelta, i suoi totali, i formati e i file del formato scelto. */
-function DettaglioPromo({ riepilogo, periodo, idFormatoRichiesto, puoScaricare, puoAprireKit }: DettaglioPromoProps) {
+function DettaglioPromo({ riepilogo, periodo, idFormatoRichiesto, puoScaricare }: DettaglioPromoProps) {
   const { promo, totali, formati } = riepilogo;
   // Senza ?formato= si apre il primo formato che ha file: uno di soli kit non avviati non mostrerebbe niente
   const formato =
@@ -186,7 +185,6 @@ function DettaglioPromo({ riepilogo, periodo, idFormatoRichiesto, puoScaricare, 
             percorsoFormato={(idFormato) => `?${parametriMateriali({ promo: promo.id, formato: idFormato })}`}
             onSceltaFormato={() => setRichiesteInVista((numero) => numero + 1)}
             puoScaricare={puoScaricare}
-            puoAprireKit={puoAprireKit}
           />
           {/* Cambiando promo o formato filtri, pagina e selezione ripartono da zero */}
           <FileFormato
@@ -311,7 +309,6 @@ function ContenutoPop({ periodo }: { periodo: PeriodoMateriali }) {
           periodo={periodo}
           idFormatoRichiesto={formatoRichiesto}
           puoScaricare={puoScaricare}
-          puoAprireKit={puoAprirePromo}
         />
       );
     })();

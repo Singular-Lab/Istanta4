@@ -1,4 +1,4 @@
-import type { FlyerInsights, FlyerInsightsConfig, OrigineStorico, ReferenzaPosizione } from "@/types/flyerInsights";
+import type { OrigineStorico } from "@/types/flyerInsights";
 import type { icons } from "lucide-react";
 import { STATO_LAVORAZIONE_KIT_RUNTIME, TIPO_KIT_DESIGN, TIPO_LAVORAZIONE } from "../../../lib/enums";
 import { FileItemKit, OggettoTipiDiExport, RUNTIME_KIT } from "../../../lib/types";
@@ -53,10 +53,6 @@ export interface StatsGridProps {
   totalPages: number;
   exportTypesCount: number;
   exportTypesList: string[];
-  referenzeCount?: number;
-  /** Valorizzata solo se la lavorazione viene dallo storico. */
-  origineStorico?: OrigineStorico;
-  paginAnalizzate?: number;
   productionDuration?: string | null;
   isTimerLive?: boolean;
   createdAt?: Date | string;
@@ -253,12 +249,6 @@ export interface ActionPanelProps {
 // Re-export FlyerInsights type from centralized types
 export type { BoxFuoriListino, FlyerInsights, FlyerInsightsConfig, OrigineStorico, ReferenzaPosizione, ReferenzaStorico } from "@/types/flyerInsights";
 
-export interface RepartoGroup {
-  sigla: string;
-  descrizione: string;
-  referenze: ReferenzaPosizione[];
-}
-
 export interface KitOverviewLayoutProps {
   lavorazione: RUNTIME_KIT;
   filesData?: FileItemKit[];
@@ -268,10 +258,6 @@ export interface KitOverviewLayoutProps {
   tipiDiExportInKit: OggettoTipiDiExport[];
   correggoFile?: FileItemKit;
   tipoLavorazione: TIPO_LAVORAZIONE;
-  // Insight data (only for VOLANTINO)
-  flyerInsights?: FlyerInsights | null;
-  isLoadingInsights?: boolean;
-  insightsConfig?: FlyerInsightsConfig;
   // Actions
   onDownloadZip?: () => void;
   isDownloading?: boolean;

@@ -4,14 +4,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ServerCall } from "../../../lib/server_call";
 
-const finti = vi.hoisted(() => ({ showNotification: vi.fn() }));
+const finti = vi.hoisted(() => ({ showNotification: vi.fn(), permessiNegati: new Set<string>() }));
 
 vi.mock("../../../lib/server_call", () => ({ ServerCall: { get: vi.fn(), getUrl: vi.fn(() => "") } }));
 vi.mock("@/context/NotificationContext", () => ({ useNotification: () => ({ showNotification: finti.showNotification }) }));
-vi.mock("@/context/PermissionContext", () => ({ usePermission: () => true }));
+vi.mock("@/context/PermissionContext", () => ({ usePermission: (codice: string) => !finti.permessiNegati.has(codice) }));
 vi.mock("react-router-dom", async (importOriginal) => ({
   ...(await importOriginal<typeof import("react-router-dom")>()),
   useLoaderData: () => null,
@@ -57,6 +57,7 @@ const chiamateA = (prefisso: string) =>
 
 describe("Dashboard GDO", () => {
   beforeEach(() => {
+    finti.permessiNegati = new Set();
     vi.mocked(ServerCall.get).mockReset();
     // Storico all'avvio, e quel che la pagina chiede da sé
     vi.mocked(ServerCall.get).mockImplementation(rispostaPer);
@@ -79,6 +80,46 @@ describe("Dashboard GDO", () => {
     expect(ServerCall.get).toHaveBeenCalledWith("/dashboard/volantini-in-corso");
     expect(await within(card).findByText("Nessun volantino attivo")).toBeInTheDocument();
     expect(within(card).queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  describe("collegamenti dei volantini", () => {
+    const kitInValidita = {
+      id: "k1",
+      titolo: "Volantino ottobre",
+      stato_lavorazione: "PUBBLICATO",
+      nome_promo: "Promo ottobre",
+      id_promo: "p1",
+      files: [],
+    };
+    const conKit = () => datiLoader(Promise.resolve({ totale: 1, inScadenza: 0, kit: [kitInValidita] }));
+
+    beforeEach(() => {
+      vi.stubGlobal("IntersectionObserver", class {
+        observe() {}
+        disconnect() {}
+      });
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it("il titolo del kit apre la consultazione del volantino, non la lavorazione", async () => {
+      apri(conKit());
+
+      const card = await screen.findByRole("region", { name: "Volantini in validità" });
+      const titolo = await within(card).findByRole("link", { name: "Volantino ottobre" });
+      expect(titolo).toHaveAttribute("href", "/volantini/tutti_i_volantini?kit=k1");
+    });
+
+    it("senza materiali.visualizza il titolo resta testo semplice", async () => {
+      finti.permessiNegati = new Set(["materiali.visualizza"]);
+      apri(conKit());
+
+      const card = await screen.findByRole("region", { name: "Volantini in validità" });
+      expect(await within(card).findByRole("heading", { name: "Volantino ottobre" })).toBeInTheDocument();
+      expect(within(card).queryByRole("link", { name: "Volantino ottobre" })).not.toBeInTheDocument();
+    });
   });
 
   it("incorporata nella dashboard Superadmin non ha un'intestazione di pagina, da sola sì", async () => {

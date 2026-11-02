@@ -2,6 +2,12 @@
  * DTO per le statistiche e insights dei volantini
  */
 
+import type {
+  BoxReportStorico,
+  OrigineStorico,
+  ReferenzaReportStorico
+} from '../../../lib/types';
+
 export interface ReferenzaPosizioneDTO {
   id: string;
   /**
@@ -52,49 +58,20 @@ export interface RiepilogoMeccanicaDTO {
   percentuale: number;
 }
 
-/**
- * Un record di listino come lo mostra il report: non impaginato o compilato in un
- * box fuori listino. Il tracciato e del cliente, quindi sono la sua agenzia lib a
- * decidere quali campi mostrare e la UI a stamparli cosi come arrivano.
- */
-export interface ReferenzaStoricoDTO {
-  codice: string;
-  descrizione: string;
-  campi: Array<{ label: string; valore: string }>;
-}
+export type ReferenzaStoricoDTO = ReferenzaReportStorico;
+export type BoxFuoriListinoDTO = BoxReportStorico;
+export type OrigineStoricoDTO = OrigineStorico;
 
-/** Un box del volantino che a listino non c'era: compilato a mano oppure ignorato. */
-export interface BoxFuoriListinoDTO {
-  codiceBox: string;
-  pag?: number;
-  ignorato: boolean;
-  /** Il testo letto nel box, vuoto sugli import precedenti. */
-  testoBox: string[];
-  referenze: ReferenzaStoricoDTO[];
-}
-
-/**
- * Presente solo se la lavorazione e stata recuperata dallo storico. Sta sul kit,
- * non sulle referenze: sono loro a ereditarlo.
- */
-export interface OrigineStoricoDTO {
-  importatoIl: string;
-  nomeFile?: string;
-  /** Assenti sugli import precedenti. */
-  boxNelVolantino?: number;
-  referenzeDaListino?: number;
-  nonImpaginate: ReferenzaStoricoDTO[];
-  lasciapassareNonImpaginate: boolean;
-  /** Quante referenze del kit sono nate da un box fuori listino. */
-  totaleFuoriListino: number;
-  /** Box fuori listino che l'operatore ha deciso di ignorare: nessuna referenza. */
-  fuoriListinoIgnorati: number;
-  /** Sugli import precedenti contiene solo i compilati, senza testo del box. */
-  boxFuoriListino: BoxFuoriListinoDTO[];
+export interface ContestoFlyerInsightsDTO {
+  titolo: string;
+  nomeArea?: string;
+  nomeCanale?: string;
+  idPromo: string;
 }
 
 export interface FlyerInsightsDTO {
   guidIdKitRuntime: string;
+  contesto: ContestoFlyerInsightsDTO;
   /** Assente sulle lavorazioni normali: la scheda resta identica a prima. */
   origineStorico?: OrigineStoricoDTO;
   totaleReferenze: number;

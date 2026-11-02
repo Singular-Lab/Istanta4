@@ -8,10 +8,13 @@ import Table from "@/components/Base/Table";
 import EmptyState from "@/components/EmptyState";
 import { annoDi, dataBreve, GraficoLinee, inizioAnno, MiniaturaPagina, msData, StrisciaNumeri, taccheTempo, type NumeroStriscia } from "@/components/Grafici";
 import withSessionCheck from "@/components/SessionChecker";
+import { PERMISSIONS } from "@/constants/permissions";
+import { usePermission } from "@/context/PermissionContext";
 import { useFetchPuntoVenditaConsultazione, useFetchReferenzaPuntoVendita } from "@/query/query";
 import { formatNumero } from "@/utils/format";
 import type { ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { percorsoDettaglioVolantino } from "../../../lib/materiali/periodi";
 import { ETICHETTA_MECCANICA, type DettaglioReferenzaPv } from "../../../lib/puntiVendita/analisi";
 import type { CustomError } from "../../../lib/server_call";
 import {
@@ -20,7 +23,6 @@ import {
   formatPercentuale,
   meseAnnoBreve,
   percorsoScheda,
-  percorsoVolantino,
   periodoValidita,
   testoReferenze,
 } from "./analisi";
@@ -60,8 +62,12 @@ function Prezzi({ referenza }: { referenza: DettaglioReferenzaPv }) {
   );
 }
 
-/** Dove sta la referenza nell'ultimo volantino che la contiene: miniatura della pagina e numeri. */
-function NelVolantino({ idPv, referenza }: { idPv: string; referenza: DettaglioReferenzaPv }) {
+/**
+ * Dove sta la referenza nell'ultimo volantino che la contiene: miniatura della pagina e numeri.
+ * La pagina del volantino si apre solo a chi può consultare i volantini.
+ */
+function NelVolantino({ referenza }: { referenza: DettaglioReferenzaPv }) {
+  const puoConsultareVolantini = usePermission(PERMISSIONS.MATERIALI.VISUALIZZA);
   const { posizione } = referenza;
   if (!posizione) return null;
   return (
@@ -81,13 +87,15 @@ function NelVolantino({ idPv, referenza }: { idPv: string; referenza: DettaglioR
             <Dato etichetta="Spazio">{formatPercentuale(posizione.spazio)} della pagina</Dato>
             <Dato etichetta="Box">con {testoReferenze(posizione.referenzeNelBox)}</Dato>
           </dl>
-          <Link
-            to={percorsoVolantino(idPv, posizione.idKit, posizione.pagina, referenza.chiave)}
-            className="mt-2 inline-flex items-center gap-1 text-sm text-primary underline-offset-2 hover:underline"
-          >
-            Apri la pagina
-            <Lucide icon="ArrowRight" aria-hidden="true" className="h-3.5 w-3.5" />
-          </Link>
+          {puoConsultareVolantini && (
+            <Link
+              to={percorsoDettaglioVolantino(posizione.idKit, posizione.pagina, referenza.nome)}
+              className="mt-2 inline-flex items-center gap-1 text-sm text-primary underline-offset-2 hover:underline"
+            >
+              Apri la pagina
+              <Lucide icon="ArrowRight" aria-hidden="true" className="h-3.5 w-3.5" />
+            </Link>
+          )}
         </div>
       </div>
     </div>
@@ -171,9 +179,13 @@ function PrezzoNelTempo({ referenza }: { referenza: DettaglioReferenzaPv }) {
   );
 }
 
-/** "In quali volantini": le presenze, dalla più recente; ognuna apre il volantino alla pagina della referenza. */
-function Presenze({ idPv, referenza }: { idPv: string; referenza: DettaglioReferenzaPv }) {
+/**
+ * "In quali volantini": le presenze, dalla più recente; ognuna apre il volantino alla pagina della
+ * referenza, a chi può consultare i volantini.
+ */
+function Presenze({ referenza }: { referenza: DettaglioReferenzaPv }) {
   const navigate = useNavigate();
+  const puoConsultareVolantini = usePermission(PERMISSIONS.MATERIALI.VISUALIZZA);
   if (referenza.presenze.length === 0) {
     return <EmptyState compatta icon="FileSearch" title="Nessuna presenza" description="La referenza non compare nei volantini di questo punto vendita." />;
   }
@@ -191,18 +203,26 @@ function Presenze({ idPv, referenza }: { idPv: string; referenza: DettaglioRefer
         </Table.Thead>
         <Table.Tbody>
           {referenza.presenze.map(presenza => {
-            const percorso = percorsoVolantino(idPv, presenza.idKit, presenza.pagina, referenza.chiave);
+            const percorso = percorsoDettaglioVolantino(presenza.idKit, presenza.pagina, referenza.nome);
             return (
-              <Table.Tr key={`${presenza.idKit}-${presenza.pagina ?? ""}`} className="cursor-pointer" onClick={() => navigate(percorso)}>
+              <Table.Tr
+                key={`${presenza.idKit}-${presenza.pagina ?? ""}`}
+                className={puoConsultareVolantini ? "cursor-pointer" : undefined}
+                onClick={puoConsultareVolantini ? () => navigate(percorso) : undefined}
+              >
                 {/* Larga quanto un nome di promo come A2623_SC_30-10-26_SOS, che così sta su una riga */}
                 <Table.Td className="min-w-56">
-                  <Link
-                    to={percorso}
-                    onClick={evento => evento.stopPropagation()}
-                    className="font-medium text-slate-800 [overflow-wrap:anywhere] hover:text-primary hover:underline dark:text-slate-200"
-                  >
-                    {presenza.promo.nome}
-                  </Link>
+                  {puoConsultareVolantini ? (
+                    <Link
+                      to={percorso}
+                      onClick={evento => evento.stopPropagation()}
+                      className="font-medium text-slate-800 [overflow-wrap:anywhere] hover:text-primary hover:underline dark:text-slate-200"
+                    >
+                      {presenza.promo.nome}
+                    </Link>
+                  ) : (
+                    <span className="font-medium text-slate-800 [overflow-wrap:anywhere] dark:text-slate-200">{presenza.promo.nome}</span>
+                  )}
                   <div className="text-xs text-slate-500">
                     <span className="block tabular-nums">{periodoValidita(presenza.dal, presenza.al)}</span>
                     {/* Le varianti per area della stessa promo hanno nome e periodo uguali: le distingue l'area */}
@@ -364,7 +384,7 @@ function ReferenzaPuntoVendita() {
                 )}
               </div>
             )}
-            <NelVolantino idPv={id} referenza={referenza} />
+            <NelVolantino referenza={referenza} />
             <DatiReferenza referenza={referenza} />
           </div>
         </Sezione>
@@ -375,7 +395,7 @@ function ReferenzaPuntoVendita() {
             <PrezzoNelTempo referenza={referenza} />
           </Sezione>
           <Sezione senzaPadding titolo="In quali volantini" descrizione="Dalla presenza più recente; ognuna apre il volantino alla pagina della referenza.">
-            <Presenze idPv={id} referenza={referenza} />
+            <Presenze referenza={referenza} />
           </Sezione>
         </div>
       </div>

@@ -30,7 +30,7 @@ export interface CardVolantinoProps {
   file?: FileVolantino;
   validitaDal?: string | Date;
   validitaAl?: string | Date;
-  /** Rotta della scheda del kit; senza, il titolo è testo semplice. */
+  /** Rotta di consultazione del volantino; senza, il titolo è testo semplice. */
   collegamento?: string;
   /** Promo del kit, mostrata sotto il titolo (con link se indicato). */
   promo?: { nome: string; collegamento?: string };
@@ -115,7 +115,7 @@ function CardVolantino({
                 </span>
               </button>
             ) : collegamento ? (
-              // Senza copertina (kit non avviato o senza PDF) il segnaposto porta comunque alla scheda:
+              // Senza copertina il segnaposto porta comunque alla vista indicata:
               // per le tecnologie assistive basta il link del titolo
               <Link
                 to={collegamento}

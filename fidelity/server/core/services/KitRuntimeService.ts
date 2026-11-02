@@ -12,6 +12,7 @@ import { sequelize } from '../db';
 import { IIstantaService } from '../interfaces/IIstantaService';
 import { IKitRuntimeService } from '../interfaces/IKitRuntimeService';
 import { IWebhookService } from '../interfaces/IWebhookService';
+import type { IAgenziaLib } from '../agenzia_lib/types';
 import { log } from '../logger';
 import { Area } from '../models/aree';
 import { Canale } from '../models/canali';
@@ -25,6 +26,7 @@ import { Referenze } from '../models/referenze';
 import { RuntimeKit } from '../models/runtime_kit';
 import { TipiDiExport } from '../models/tipi_di_export';
 import { Utente } from '../models/utenti';
+import { origineStoricoPerReport } from '../utils/origineStorico';
 
 /** Maps a raw PG RuntimeKit (snake_case) to the camelCase shape expected by the client */
 function normalizeRuntimeKitFromPg(raw: any): RUNTIME_KIT {
@@ -125,7 +127,8 @@ function mapRaccoglitoreFilesToFilesData(files: any[], newRuntimeId?: string): a
 export class KitRuntimeService implements IKitRuntimeService {
   constructor(
     private readonly istantaService: IIstantaService,
-    private readonly webhookService: IWebhookService
+    private readonly webhookService: IWebhookService,
+    private readonly agenziaLib?: IAgenziaLib
   ) { }
 
   /** ──────────────── Retrieval ──────────────── */
@@ -530,6 +533,11 @@ export class KitRuntimeService implements IKitRuntimeService {
 
         return {
           ...kitRuntime,
+          // import_storico arriva dalla riga grezza: il report lo adatta al tracciato del cliente
+          origineStorico: origineStoricoPerReport(
+            (kitRuntime as RUNTIME_KIT & { import_storico?: ImportStorico | null }).import_storico,
+            this.agenziaLib
+          ),
           numero_referenze_trovate: numeroReferenzeTrovate,
           titolo: kitDesign.titolo,
           lavorazioneStarted: true,
