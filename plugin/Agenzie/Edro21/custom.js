@@ -22,7 +22,9 @@ const customAgenzia={
     
     exceptionElementsToIgnoreFixFoto: ["*cpq*","*conad_logo*","*piacersi*","*lattosio*","*glutine*",
         "*parafarmacia*","*conad_vn*","*conad_11P*","*essentiae*","*PetFr*","*petfrplus*","*conad_baby*","*Friend-of-the-Sea*",
-        "*Marinou*","*Carne_Chianina*","*Logo_filiera*","*Logo_BDP*","*Logo_SDB*",
+        //I20-1177: il confronto distingue le maiuscole, e la sigla e' LOGO_filiera: scritto
+        //con la L sola maiuscola il logo non faceva da ostacolo e la foto gli finiva sopra.
+        "*Marinou*","*Carne_Chianina*","*LOGO_filiera*","*Logo_BDP*","*Logo_SDB*",
         //I20-1026: payoff e testi del Parmigiano stanno in basso a sinistra, dove la foto non deve
         //finire. I20-1131: anche le caratteristiche, che nei box alti e larghi stanno in alto a
         //sinistra; nel box standard sono spente.
