@@ -8,6 +8,8 @@ import { authMiddleware } from '../middleware/authMiddleware';
 import { routeDeprecata } from '../middleware/routeDeprecata';
 import { permissionGuard } from '../middleware/permissionGuard';
 import { ServerUtils } from '../utils/ServerUtils';
+import { AuditLogService } from '../services/AuditLogService';
+import { Promo } from '../models/promo';
 
 export class TracciatoController extends BaseController {
     constructor(private tracciatoService: ITracciatoService) {
@@ -189,6 +191,13 @@ export class TracciatoController extends BaseController {
                 return;
             }
 
+            // Per il Registro Audit nome, file e promo si leggono prima: il tracciato si cancella
+            // per davvero e dopo non ne resta niente. Se la lettura non riesce si elimina lo stesso.
+            const tracciato = await this.tracciatoService.getTracciatoById(idTracciato).catch(() => null);
+            const nomePromo = tracciato?.id_promo
+                ? await Promo.findByPk(tracciato.id_promo, { attributes: ['nome_promo'] }).then((p) => p?.nome_promo ?? null).catch(() => null)
+                : null;
+
             const deleted = await this.tracciatoService.deleteTracciato(idTracciato);
 
             if (!deleted) {
@@ -198,6 +207,14 @@ export class TracciatoController extends BaseController {
                 });
                 return;
             }
+
+            AuditLogService.getInstance().entityChanged(req, 'tracciato', 'delete', { type: 'Tracciato', id: idTracciato }, {
+                tracciatoId: idTracciato,
+                fileName: tracciato?.filename ?? null,
+                nomeTracciato: tracciato?.nome ?? null,
+                promoId: tracciato?.id_promo ?? null,
+                nomePromo
+            });
 
             res.status(HttpStatusCode.OK).json({
                 success: true,

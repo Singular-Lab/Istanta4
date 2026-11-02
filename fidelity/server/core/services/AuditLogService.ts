@@ -518,6 +518,22 @@ export class AuditLogService {
     });
   }
 
+  /**
+   * Come configurationChanged, con l'entita' coinvolta (una promo, un tracciato): la voce si
+   * ritrova cercandone l'id anche quando l'entita' non esiste piu'.
+   */
+  public entityChanged(req: Request, resource: string, action: string, target: { type: string; id: string }, details?: Record<string, unknown>): void {
+    this.logEvent(AuditEventType.CONFIGURATION_CHANGED, {
+      req,
+      resource,
+      action,
+      result: 'SUCCESS',
+      details,
+      targetEntityId: target.id,
+      targetEntityType: target.type
+    });
+  }
+
   public securityViolation(req: Request, violationType: string, details?: Record<string, any>): void {
     this.logEvent(AuditEventType.SECURITY_VIOLATION, {
       req,

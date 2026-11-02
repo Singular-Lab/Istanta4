@@ -30,6 +30,7 @@ import { TYPES } from '../../core/di/types';
 import { IPromoService } from '../interfaces/IPromoService'; // <-- Add this import if not present
 import { ServerUtils } from '../utils/ServerUtils';
 import { verificaRisposta } from '../utils/rispostaServizi';
+import { AuditLogService } from '../services/AuditLogService';
 
 export class FileManagementController extends BaseController {
   private promoService: IPromoService;
@@ -224,6 +225,14 @@ export class FileManagementController extends BaseController {
       })}`));
 
       // Non serve rimuovere file temporanei, multer memoryStorage
+
+      // Nel Registro Audit resta chi ha caricato il tracciato: l'attivita' qui sotto scade dopo 30 giorni.
+      AuditLogService.getInstance().entityChanged(req, 'tracciato', 'upload', { type: 'Tracciato', id: resultTracciatoSalvato.id_tracciati }, {
+        tracciatoId: resultTracciatoSalvato.id_tracciati,
+        fileName: resultTracciatoSalvato.filename_tracciati,
+        promoId: promo.id,
+        nomePromo: promo.nome
+      });
 
       if (req.session.id_utente) {
         log.info(Colorize.blue(`Chiamata CRE_ATTIVITA per utente: ${req.session.id_utente}`));

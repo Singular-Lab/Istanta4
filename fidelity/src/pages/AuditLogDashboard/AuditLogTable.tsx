@@ -267,6 +267,12 @@ const DETAIL_LABELS: Record<string, string> = {
   username: "Username",
   browser: "Browser",
   os: "Sistema operativo",
+  promoId: "ID promo",
+  nomePromo: "Promo",
+  statoPrecedente: "Stato precedente",
+  tracciatoId: "ID tracciato",
+  fileName: "File",
+  nomeTracciato: "Tracciato",
 };
 
 // ── Intestazione ordinabile ──
