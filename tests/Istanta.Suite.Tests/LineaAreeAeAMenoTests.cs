@@ -6,9 +6,9 @@ namespace Istanta.Suite.Tests;
 
 /// <summary>
 /// I20-1175: all'importazione delle liste Coop un gruppo diventava linea con almeno 5 referenze e
-/// almeno 3 prezzi promo diversi, in ogni area. Nelle aree A e A- bastano 4 referenze; nelle altre
-/// restano 5. La stessa soglia vale per il gruppo soci che resta unito e per l'etichetta LINEA?? dei
-/// Jolly e degli Sprint (decisione dell'utente: ovunque ci sia la regola 5 + 3).
+/// almeno 3 prezzi promo diversi, in ogni area; nelle aree A e A- bastavano 4 referenze. I20-1179: 4
+/// in tutte le aree, anche B e B1. La stessa soglia vale per il gruppo soci che resta unito e per
+/// l'etichetta LINEA?? dei Jolly e degli Sprint (decisione dell'utente: ovunque ci sia la regola 5 + 3).
 /// </summary>
 public class LineaAreeAeAMenoTests
 {
@@ -19,10 +19,10 @@ public class LineaAreeAeAMenoTests
     [Theory]
     [InlineData("A", 4)]
     [InlineData("A-", 4)]
-    [InlineData("B", 5)]
-    [InlineData("B1", 5)]
-    [InlineData("", 5)]
-    public void La_soglia_e_4_in_A_e_A_meno_e_5_altrove(string area, int attesa)
+    [InlineData("B", 4)]
+    [InlineData("B1", 4)]
+    [InlineData("", 4)]
+    public void La_soglia_e_4_in_tutte_le_aree(string area, int attesa)
     {
         Assert.Equal(attesa, Coopfi.MinimoElementiLinea(area));
     }
@@ -30,9 +30,9 @@ public class LineaAreeAeAMenoTests
     [Theory]
     [InlineData("A", true)]
     [InlineData("A-", true)]
-    [InlineData("B", false)]
-    [InlineData("B1", false)]
-    public void Quattro_referenze_con_tre_prezzi_sono_linea_solo_in_A_e_A_meno(string area, bool linea)
+    [InlineData("B", true)]
+    [InlineData("B1", true)]
+    public void Quattro_referenze_con_tre_prezzi_sono_linea_in_tutte_le_aree(string area, bool linea)
     {
         var gruppo = Gruppo("", "1,99", "2,49", "2,99", "2,99");
 
@@ -90,9 +90,9 @@ public class LineaAreeAeAMenoTests
     [Theory]
     [InlineData("A", "x")]
     [InlineData("A-", "x")]
-    [InlineData("B", "")]
-    [InlineData("B1", "")]
-    public void Importando_un_gruppo_di_4_con_3_prezzi_e_linea_solo_in_A_e_A_meno(string area, string isLinea)
+    [InlineData("B", "x")]
+    [InlineData("B1", "x")]
+    public void Importando_un_gruppo_di_4_con_3_prezzi_e_linea_in_tutte_le_aree(string area, string isLinea)
     {
         var risultato = Importa(Lista("", "1,99", "2,49", "2,99", "2,99"), area);
 
@@ -126,20 +126,23 @@ public class LineaAreeAeAMenoTests
     }
 
     /// <summary>
-    /// Il gruppo soci (tema NEW SOCI) di 4 referenze con 3 prezzi: in A resta unito ed e' una linea; in B
-    /// si divide per prezzo come prima (le due da 2,99 insieme, le altre singole).
+    /// Il gruppo soci (tema NEW SOCI) di 4 referenze con 3 prezzi resta unito ed e' una linea, in A come
+    /// in B (I20-1179; prima in B si divideva per prezzo). Con 3 referenze si divide per prezzo come prima
+    /// (le due da 2,99 insieme, l'altra singola).
     /// </summary>
     [Fact]
-    public void Il_gruppo_soci_di_4_con_3_prezzi_resta_unito_in_A_e_si_divide_in_B()
+    public void Il_gruppo_soci_di_4_con_3_prezzi_resta_unito_in_ogni_area_e_di_3_si_divide()
     {
-        var inA = Importa(Lista("NEW SOCI", "1,99", "2,49", "2,99", "2,99"), "A");
-        var inB = Importa(Lista("NEW SOCI", "1,99", "2,49", "2,99", "2,99"), "B");
+        foreach (string area in new[] { "A", "B", "B1" })
+        {
+            var gruppo = Importa(Lista("NEW SOCI", "1,99", "2,49", "2,99", "2,99"), area);
+            Assert.All(gruppo, r => Assert.Equal("1001,1002,1003,1004", CodiceGruppo(r)));
+            Assert.All(gruppo, r => Assert.Equal("x", r["is_linea"]?.ToString()));
+        }
 
-        Assert.All(inA, r => Assert.Equal("1001,1002,1003,1004", CodiceGruppo(r)));
-        Assert.All(inA, r => Assert.Equal("x", r["is_linea"]?.ToString()));
-
-        Assert.Equal(new[] { "1001", "1002", "1003,1004", "1003,1004" }, inB.Select(CodiceGruppo));
-        Assert.All(inB, r => Assert.Equal("", r["is_linea"]?.ToString()));
+        var diTre = Importa(Lista("NEW SOCI", "1,99", "2,99", "2,99"), "B");
+        Assert.Equal(new[] { "1001", "1002,1003", "1002,1003" }, diTre.Select(CodiceGruppo));
+        Assert.All(diTre, r => Assert.Equal("", r["is_linea"]?.ToString()));
     }
 
     [Fact]

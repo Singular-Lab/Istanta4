@@ -261,12 +261,49 @@ namespace AgenziaLib
 
         /// <summary>
         /// I20-1175: quante referenze servono, con almeno 3 prezzi promo diversi, perche' un gruppo sia
-        /// una linea: 4 nelle aree A e A-, 5 nelle altre (prima 5 ovunque). La stessa soglia vale per il
-        /// gruppo soci che resta unito e per l'etichetta LINEA?? dei Jolly e degli Sprint.
+        /// una linea (prima 5 ovunque). La stessa soglia vale per il gruppo soci che resta unito e per
+        /// l'etichetta LINEA?? dei Jolly e degli Sprint. I20-1179: 4 in tutte le aree, non solo in A e A-.
         /// </summary>
         public static int MinimoElementiLinea(string siglaArea)
         {
-            return siglaArea == "A" || siglaArea == "A-" ? 4 : 5;
+            return 4;
+        }
+
+        /// <summary>
+        /// I20-1179: un gruppo e' tutto in volantino o tutto fuori. Se le sue referenze hanno esattamente
+        /// due prezzi promo diversi, restano nel gruppo quelle del prezzo che vince e le altre, restituite
+        /// qui, vanno fuori volantino come singoli. Vince il prezzo compilato se l'altro e' 0; altrimenti
+        /// quello con piu' referenze e, a parita', quello della referenza che compare per prima in lista.
+        /// Con un solo prezzo o con tre o piu' non esce nessuno.
+        /// </summary>
+        public static List<Dictionary<string, object>> ElementiFuoriVolantinoDelGruppo(List<Dictionary<string, object>> gruppo)
+        {
+            var nessuno = new List<Dictionary<string, object>>();
+            if (gruppo == null || gruppo.Count < 2)
+            {
+                return nessuno;
+            }
+
+            //Nell'ordine della lista: il primo prezzo e' quello della prima referenza.
+            List<decimal> prezzi = gruppo.Select(r => r["prezzo_promo"].ToDecimal()).Distinct().ToList();
+            if (prezzi.Count != 2)
+            {
+                return nessuno;
+            }
+
+            int Referenze(decimal prezzo) => gruppo.Count(r => r["prezzo_promo"].ToDecimal() == prezzo);
+            decimal vincente;
+            if (prezzi.Count(p => p != 0m) == 1)
+            {
+                vincente = prezzi.First(p => p != 0m);
+            }
+            else
+            {
+                int massimo = prezzi.Max(Referenze);
+                vincente = prezzi.First(p => Referenze(p) == massimo);
+            }
+
+            return gruppo.Where(r => r["prezzo_promo"].ToDecimal() != vincente).ToList();
         }
 
         /// <summary>
@@ -5328,7 +5365,9 @@ namespace AgenziaLib
             {
                 foreach (Dictionary<string, object> rec in tLista.Records ?? new List<Dictionary<string, object>>())
                 {
-                    rec[GLOBAL_VARIABLES_FICO.keyInVolantino] = RegolaPrecedenteInVolantino(rec);
+                    //I20-1179: il fuori volantino deciso dai gruppi con due prezzi resta.
+                    if (StatoVolantino.Leggi(rec) != false)
+                        rec[GLOBAL_VARIABLES_FICO.keyInVolantino] = RegolaPrecedenteInVolantino(rec);
                 }
             }
 
@@ -5394,6 +5433,22 @@ namespace AgenziaLib
 
 
                     var _sorgenteFiltrata = sorgente.Where(r => r["tema"].ToString() == gCar.Tema && r["tipo_evento"].ToString() == gCar.TipoEvento).ToList();
+
+                    //I20-1179: con due prezzi promo il gruppo tiene il prezzo che vince e le altre referenze
+                    //diventano singoli fuori volantino (campo core). Non per soci (si dividono per prezzo
+                    //qui sotto), Jolly e Sprint, ne' per i gruppi gia' fuori volantino dal tema, ne' per i
+                    //freschissimi da 5 in su fuori dall'area A, che il gruppo non lo formano.
+                    bool freschissimiSenzaGruppo = _sorgenteFiltrata.Count >= 5 && siglaAreaKit != "A"
+                        && _sorgenteFiltrata[0]["codice_settore"].ToString() == "58" && _sorgenteFiltrata[0]["prestazione"].ToString() == "";
+                    if (casistica == 2 && InVolantinoDaTema(gCar.Tema) && !freschissimiSenzaGruppo)
+                    {
+                        foreach (var fuori in ElementiFuoriVolantinoDelGruppo(_sorgenteFiltrata))
+                        {
+                            fuori[GLOBAL_VARIABLES_FICO.keyCodiceGruppo] = fuori[GLOBAL_VARIABLES_FICO.keyRefCodice];
+                            fuori[GLOBAL_VARIABLES_FICO.keyInVolantino] = false;
+                            _sorgenteFiltrata.Remove(fuori);
+                        }
+                    }
 
                     int groupcount = _sorgenteFiltrata.Count();
                     //Raggruppiamo questo gruppetto per i prezzi promo
