@@ -153,3 +153,23 @@ test("il fix foto custom usa il gruppo della descrizione per la scelta e per la 
     assert.ok(!/== "Descrizione"/.test(setCustomFixFoto), "la descrizione nel gruppo si chiama descrizione, minuscola");
     assert.ok(!/gruppo_descrizione_BIS" && box\.label == "BOX7"/.test(setCustomFixFoto));
 });
+
+/* ---- I20-1180: il tag quantitativi non copre il testo della descrizione ---- */
+
+test("nei due kit del volantino la descrizione si stacca dal tag quantitativi, anche nel BOX4 col gruppo", () => {
+    const cssEvitaElementiTesto = require("../../plugin/cssFramework/evitaElementiTesto");
+    for (const kit of [kitSsCnCy, kitSc]) {
+        //La regola sta nella voce di default del kit: vale per ogni box, BOX4 compreso.
+        const regole = cssEvitaElementiTesto.regoleDelBox([regoleDelBox(kit, "BOX4"), regoleDelBox(kit, null)]);
+        assert.deepStrictEqual(regole, [{ testi: ["descrizione"], elementi: ["quantitativi"], margine: 1 }]);
+    }
+});
+
+test("se la descrizione non si stacca, la CSF-013 fra quantitativi e descrizione misurata sul testo lo dice", () => {
+    for (const kit of [kitSsCnCy, kitSc]) {
+        const regole = CssFramework.regoleConflittiDelBox("BOX4", kit.operazioniPerBox, null);
+        const delTag = regole.filter(r => r.latoA.includes("quantitativi") && r.latoB.includes("descrizione"));
+        assert.strictEqual(delTag.length, 1);
+        assert.strictEqual(delTag[0].useTextBounds, true);
+    }
+});

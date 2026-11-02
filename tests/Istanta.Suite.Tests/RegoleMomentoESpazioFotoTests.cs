@@ -146,6 +146,61 @@ public class RegoleMomentoESpazioFotoTests
         Assert.All(pop, box => Assert.Null(box.sceltaSpazioFoto));
     }
 
+    /// <summary>
+    /// I20-1180: i testi da tenere lontani da un elemento. I file gia' in esercizio non li hanno.
+    /// </summary>
+    [Fact]
+    public void Un_box_senza_testi_da_tenere_lontani_non_ne_ha()
+    {
+        var box = JsonConvert.DeserializeObject<modificheCssBox>("{\"nomiBox\":[\"BOX1\"]}");
+
+        Assert.Empty(box!.evitaElementiTesto);
+    }
+
+    [Fact]
+    public void I_testi_da_tenere_lontani_si_leggono_e_un_salvataggio_non_li_perde()
+    {
+        const string json = "{\"nomiBox\":[],\"evitaElementiTesto\":[{\"testi\":[\"descrizione\"],"
+            + "\"elementi\":[\"quantitativi\"],\"margine\":1}]}";
+
+        var box = JsonConvert.DeserializeObject<modificheCssBox>(json);
+        var riletto = JsonConvert.DeserializeObject<modificheCssBox>(JsonConvert.SerializeObject(box));
+
+        foreach (var letto in new[] { box!, riletto! })
+        {
+            var regola = letto.evitaElementiTesto.Single();
+            Assert.Equal(new[] { "descrizione" }, regola.testi);
+            Assert.Equal(new[] { "quantitativi" }, regola.elementi);
+            Assert.Equal(1.0, regola.margine);
+        }
+    }
+
+    /// <summary>
+    /// I20-1180: nel Volantino di Edro21 la descrizione si stacca dal tag quantitativi in tutti e due
+    /// i kit, dalla voce di default: se la regola si perdesse passando da Istanta, il tag tornerebbe
+    /// a coprire la descrizione del BOX4.
+    /// </summary>
+    [Fact]
+    public void Nel_volantino_di_Edro21_la_descrizione_si_stacca_dal_tag_quantitativi()
+    {
+        var percorso = TrovaSorgenteEdro21();
+        var root = JsonConvert.DeserializeObject<DbFrameworkCss>(File.ReadAllText(percorso));
+
+        var volantino = root!.dbRidimensionamentiAllineamenti.modificheCssPerKit
+            .Where(m => m.kit.kitTipoLavorazioniValide.Contains(1))
+            .ToList();
+
+        Assert.Equal(2, volantino.Count);
+        foreach (var kit in volantino)
+        {
+            var predefinita = kit.operazioniPerBox.Single(op => op.nomiBox.Count == 0);
+            var regola = predefinita.evitaElementiTesto.Single();
+            Assert.Equal(new[] { "descrizione" }, regola.testi);
+            Assert.Equal(new[] { "quantitativi" }, regola.elementi);
+            Assert.Equal(1.0, regola.margine);
+        }
+    }
+
     private static string TrovaSorgenteEdro21()
     {
         const string relativo = "Istanta/wwwroot/external_source/Edro21/SourceFrameworkCss.json";
