@@ -3634,13 +3634,13 @@
       "count": 1
     },
     "@typescript-eslint/no-explicit-any": {
-      "count": 23
+      "count": 20
     },
     "@typescript-eslint/no-unused-vars": {
-      "count": 21
+      "count": 20
     },
     "no-console": {
-      "count": 30
+      "count": 29
     }
   },
   "src/router/pagineRimosse.routes.test.tsx": {
