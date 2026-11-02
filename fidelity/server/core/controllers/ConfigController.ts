@@ -58,7 +58,7 @@ export class ConfigController extends BaseController {
     this.router.post('/saveDashBoardConfig', authMiddleware, permissionGuard(PERMESSI.SISTEMA.CONFIGURAZIONE), routeDeprecata, this.saveDashBoardConfig.bind(this));
     this.router.get('/getDashBoardConfig', authMiddleware, routeDeprecata, this.getDashBoardConfig.bind(this));
     this.router.get('/getPluginRegistry', authMiddleware, permissionGuard('api.gestisci_plugin'), routeDeprecata, this.getPluginRegistry.bind(this));
-    this.router.get('/getFlyerInsightsConfig', this.getFlyerInsightsConfig.bind(this));
+    this.router.get('/getFlyerInsightsConfig', authMiddleware, permissionGuard('materiali.visualizza'), this.getFlyerInsightsConfig.bind(this));
     this.router.get('/avviso-manutenzione', authMiddleware, this.getAvvisoManutenzione.bind(this));
     this.router.post('/avviso-manutenzione', authMiddleware, permissionGuard(PERMESSI.SISTEMA.MANUTENZIONE), this.saveAvvisoManutenzione.bind(this));
     this.router.delete('/avviso-manutenzione', authMiddleware, permissionGuard(PERMESSI.SISTEMA.MANUTENZIONE), this.deleteAvvisoManutenzione.bind(this));

@@ -9,7 +9,7 @@ import { StatsGridProps } from "../types";
  * StatsGrid - Griglia di statistiche che mostra metriche diverse in base allo stato.
  *
  * Per IN_LAVORAZIONE e PUBBLICATO:
- * - File totali, Export types, Referenze, Tempo produzione
+ * - File totali, Pagine, Tipi di export, Tempo produzione
  *
  * Per IN_REVISIONE:
  * - File totali, Accettati, Rifiutati, In attesa
@@ -22,9 +22,6 @@ const StatsGrid: FC<StatsGridProps> = ({
   totalPages,
   exportTypesCount,
   exportTypesList,
-  referenzeCount = 0,
-  origineStorico,
-  paginAnalizzate,
   productionDuration,
   isTimerLive,
   createdAt,
@@ -126,7 +123,15 @@ const StatsGrid: FC<StatsGridProps> = ({
         tono="brand"
         etichetta={stato === STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO ? "File pubblicati" : "File caricati"}
         valore={filesCount}
-        sottotitolo={`${totalPages} pagine totali`}
+        sottotitolo="Materiali della lavorazione"
+      />
+      <StatCard
+        densita="compatta"
+        icona="BookOpen"
+        tono="neutral"
+        etichetta="Pagine prodotte"
+        valore={totalPages}
+        sottotitolo="Nei file caricati"
       />
       <StatCard
         densita="compatta"
@@ -135,16 +140,6 @@ const StatsGrid: FC<StatsGridProps> = ({
         etichetta="Tipi di export"
         valore={exportTypesCount}
         sottotitolo={exportTypesList.join(", ")}
-      />
-      <StatCard
-        densita="compatta"
-        icona="Package"
-        tono="success"
-        etichetta="Referenze"
-        valore={referenzeCount}
-        sottotitolo={origineStorico && origineStorico.totaleFuoriListino > 0
-          ? `di cui ${origineStorico.totaleFuoriListino} fuori listino`
-          : paginAnalizzate ? `${paginAnalizzate} pagine analizzate` : undefined}
       />
       <StatCard
         densita="compatta"

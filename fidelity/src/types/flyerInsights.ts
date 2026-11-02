@@ -2,6 +2,12 @@
  * Tipi per le statistiche e insights dei volantini
  */
 
+import type {
+  BoxReportStorico,
+  OrigineStorico as OrigineStoricoCondivisa,
+  ReferenzaReportStorico
+} from "../../lib/types";
+
 export interface ReferenzaPosizione {
   id: string;
   /** Campi dinamici estratti secondo flyerInsightsConfig.json dataMapping */
@@ -200,42 +206,27 @@ export interface FlyerInsightsConfig {
  * Un record di listino come lo mostra il report: non impaginato o compilato in un
  * box fuori listino. Quali campi mostrare lo decide l'agenzia lib del cliente.
  */
-export interface ReferenzaStorico {
-  codice: string;
-  descrizione: string;
-  campi: Array<{ label: string; valore: string }>;
-}
+export type ReferenzaStorico = ReferenzaReportStorico;
 
 /** Un box del volantino che a listino non c'era: compilato a mano oppure ignorato. */
-export interface BoxFuoriListino {
-  codiceBox: string;
-  pag?: number;
-  ignorato: boolean;
-  /** Il testo letto nel box, vuoto sugli import precedenti. */
-  testoBox: string[];
-  referenze: ReferenzaStorico[];
-}
+export type BoxFuoriListino = BoxReportStorico;
 
 /**
  * C'è solo sulle lavorazioni recuperate dallo storico. Sta sul kit, non sulle
  * referenze: sono loro a ereditarlo.
  */
-export interface OrigineStorico {
-  importatoIl: string;
-  nomeFile?: string;
-  /** Assenti sugli import precedenti. */
-  boxNelVolantino?: number;
-  referenzeDaListino?: number;
-  nonImpaginate: ReferenzaStorico[];
-  lasciapassareNonImpaginate: boolean;
-  totaleFuoriListino: number;
-  fuoriListinoIgnorati: number;
-  /** Sugli import precedenti contiene solo i compilati, senza testo del box. */
-  boxFuoriListino: BoxFuoriListino[];
+export type OrigineStorico = OrigineStoricoCondivisa;
+
+export interface ContestoFlyerInsights {
+  titolo: string;
+  nomeArea?: string;
+  nomeCanale?: string;
+  idPromo: string;
 }
 
 export interface FlyerInsights {
   guidIdKitRuntime: string;
+  contesto: ContestoFlyerInsights;
   /** Assente sulle lavorazioni normali: la scheda resta quella di sempre. */
   origineStorico?: OrigineStorico;
   totaleReferenze: number;

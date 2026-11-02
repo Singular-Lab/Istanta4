@@ -42,7 +42,23 @@ interface ReferenzeInVolantinoBoxProps {
     };
     insightsConfig?: any;
     resolveColor: (value: string, strategy: any) => { tw: string };
+    ricercaIniziale?: string;
 }
+
+/** Le righe di descrizione della referenza, in minuscolo: il testo su cui lavora la ricerca. */
+const testoDescrizione = (ref: Referenza): string =>
+    [ref.descrizione, ref.descrizioneDue, ref.descrizioneTre, ref.descrizioneQuattro]
+        .filter(Boolean)
+        .join(" ")
+        .replace(/\$br/gi, " ")
+        .toLowerCase();
+
+/** La ricerca iniziale vale solo se trova qualcosa: altrimenti l'elenco partirebbe vuoto. */
+const ricercaUtile = (ricerca: string, gruppi: GruppoReferenze[]): string => {
+    const testo = ricerca.trim().toLowerCase();
+    if (!testo) return "";
+    return gruppi.some((gruppo) => gruppo.referenze.some((ref) => testoDescrizione(ref).includes(testo))) ? ricerca : "";
+};
 
 const ReferenzeInVolantinoBox: React.FC<ReferenzeInVolantinoBoxProps> = ({
     exportTypes,
@@ -50,12 +66,13 @@ const ReferenzeInVolantinoBox: React.FC<ReferenzeInVolantinoBoxProps> = ({
     flyerInsights,
     insightsConfig,
     resolveColor,
+    ricercaIniziale = "",
 }) => {
 
     /* ======================================================
        STATE
     ====================================================== */
-    const [searchText, setSearchText] = useState("");
+    const [searchText, setSearchText] = useState(() => ricercaUtile(ricercaIniziale, referenzePerReparto));
     const [selectedReparto, setSelectedReparto] = useState("");
 
     /* ======================================================
@@ -82,20 +99,7 @@ const ReferenzeInVolantinoBox: React.FC<ReferenzeInVolantinoBoxProps> = ({
             .map((gruppo) => {
                 if (!text) return gruppo;
 
-                const referenzeFiltrate = gruppo.referenze.filter((ref) => {
-                    const fullDescrizione = [
-                        ref.descrizione,
-                        ref.descrizioneDue,
-                        ref.descrizioneTre,
-                        ref.descrizioneQuattro,
-                    ]
-                        .filter(Boolean)
-                        .join(" ")
-                        .replace(/\$br/gi, " ")
-                        .toLowerCase();
-
-                    return fullDescrizione.includes(text);
-                });
+                const referenzeFiltrate = gruppo.referenze.filter((ref) => testoDescrizione(ref).includes(text));
 
                 return {
                     ...gruppo,

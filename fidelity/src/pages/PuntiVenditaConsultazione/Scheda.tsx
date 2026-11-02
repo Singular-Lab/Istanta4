@@ -134,7 +134,6 @@ function SchedaPuntoVendita() {
   const analisi = useFetchAnalisiPuntoVendita(id);
   const storia = useFetchStoriaPuntoVendita(id);
   const puoGestire = usePermission(PERMISSIONS.GDO.GESTISCI_PUNTI_VENDITA);
-  const puoAprirePromo = usePermission(PERMISSIONS.PROMO.VISUALIZZA);
   const [importAperto, setImportAperto] = useState(false);
   const pv = query.data;
   const timeline = analisi.data?.timeline;
@@ -274,7 +273,7 @@ function SchedaPuntoVendita() {
         {conEventi && <EventiStoria storia={storia} primo={timeline?.[0] ?? null} />}
       </Fila>
       <VolantiniAttivi idPv={pv.id} canaleArea={insegnaArea} />
-      {storia.data?.sintesi && <TuttiIVolantini idPv={pv.id} puoAprirePromo={puoAprirePromo} />}
+      {storia.data?.sintesi && <TuttiIVolantini idPv={pv.id} />}
       <div id="dati-e-mappa" className="grid scroll-mt-6 grid-cols-1 gap-6 lg:grid-cols-2">
         <DatiPuntoVendita pv={pv} />
         <MappaPuntoVendita pv={pv} />

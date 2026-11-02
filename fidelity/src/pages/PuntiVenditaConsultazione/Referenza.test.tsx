@@ -14,9 +14,11 @@ import type { DettaglioReferenzaPv, PresenzaReferenza } from "../../../lib/punti
 const finti = vi.hoisted(() => ({
   referenza: {} as Record<string, unknown>,
   richieste: [] as Array<[string, string]>,
+  permessi: new Set<string>(),
 }));
 
 vi.mock("@/components/SessionChecker", () => ({ default: <P extends object>(Componente: ComponentType<P>) => Componente }));
+vi.mock("@/context/PermissionContext", () => ({ usePermission: (codice: string) => finti.permessi.has(codice) }));
 vi.mock("@/query/query", () => ({
   useFetchReferenzaPuntoVendita: (idPv: string, chiave: string) => {
     finti.richieste.push([idPv, chiave]);
@@ -105,7 +107,7 @@ const apri = () =>
     <MemoryRouter initialEntries={["/punti-vendita/pv1/referenze/mozzarella-granarolo"]}>
       <Routes>
         <Route path="/punti-vendita/:id/referenze/:chiave" element={<ReferenzaPuntoVendita />} />
-        <Route path="/punti-vendita/:id/volantini/:idKit" element={<Volantino />} />
+        <Route path="/volantini/tutti_i_volantini" element={<Volantino />} />
         <Route path="/punti-vendita/:id" element={<div>Scheda del punto vendita</div>} />
       </Routes>
     </MemoryRouter>
@@ -117,6 +119,7 @@ describe("Referenza nei volantini del punto vendita", () => {
   beforeEach(() => {
     finti.referenza = caricato(REFERENZA);
     finti.richieste = [];
+    finti.permessi = new Set(["gdo.visualizza", "materiali.visualizza"]);
   });
 
   it("chiede la referenza per la chiave; il percorso è solo nel breadcrumb della barra, non nella pagina", () => {
@@ -163,7 +166,7 @@ describe("Referenza nei volantini del punto vendita", () => {
     expect(scheda).toHaveTextContent("con 1 referenza");
     expect(within(scheda).getByRole("link", { name: /Apri la pagina/ })).toHaveAttribute(
       "href",
-      "/punti-vendita/pv1/volantini/k3?pagina=2&referenza=mozzarella-granarolo"
+      "/volantini/tutti_i_volantini?kit=k3&pagina=2&referenza=Mozzarella+Alta+Qualit%C3%A0"
     );
   });
 
@@ -260,12 +263,26 @@ describe("Referenza nei volantini del punto vendita", () => {
     expect(righe[2]).toHaveTextContent("sottocosto");
     expect(within(righe[0]).getByRole("link", { name: "Promo k3" })).toHaveAttribute(
       "href",
-      "/punti-vendita/pv1/volantini/k3?pagina=2&referenza=mozzarella-granarolo"
+      "/volantini/tutti_i_volantini?kit=k3&pagina=2&referenza=Mozzarella+Alta+Qualit%C3%A0"
     );
 
     await userEvent.click(within(righe[1]).getByText("9%"));
 
-    expect(screen.getByText("Volantino /punti-vendita/pv1/volantini/k2?pagina=5&referenza=mozzarella-granarolo")).toBeInTheDocument();
+    expect(screen.getByText("Volantino /volantini/tutti_i_volantini?kit=k2&pagina=5&referenza=Mozzarella+Alta+Qualit%C3%A0")).toBeInTheDocument();
+  });
+
+  it("senza materiali.visualizza pagina e presenze restano consultabili ma non aprono il volantino", async () => {
+    finti.permessi = new Set(["gdo.visualizza"]);
+    apri();
+
+    expect(within(sezione("La referenza")).queryByRole("link", { name: /Apri la pagina/ })).not.toBeInTheDocument();
+    const righe = within(within(sezione("In quali volantini")).getByRole("table")).getAllByRole("row").slice(1);
+    expect(righe[0]).toHaveTextContent("Promo k3");
+    expect(within(righe[0]).queryByRole("link")).not.toBeInTheDocument();
+
+    await userEvent.click(within(righe[1]).getByText("9%"));
+
+    expect(screen.queryByText(/^Volantino /)).not.toBeInTheDocument();
   });
 
   it("le varianti per area della stessa promo non sono righe uguali: ognuna dice la sua area", () => {
@@ -279,7 +296,7 @@ describe("Referenza nei volantini del punto vendita", () => {
     expect(righe.map(riga => within(riga).getByText(/^City · /).textContent)).toEqual(["City · Emilia", "City · Liguria", "City · Piemonte"]);
     expect(within(righe[1]).getByRole("link", { name: "A2623_SC_30-10-26_SOS" })).toHaveAttribute(
       "href",
-      "/punti-vendita/pv1/volantini/k-li?pagina=22&referenza=mozzarella-granarolo"
+      "/volantini/tutti_i_volantini?kit=k-li&pagina=22&referenza=Mozzarella+Alta+Qualit%C3%A0"
     );
   });
 

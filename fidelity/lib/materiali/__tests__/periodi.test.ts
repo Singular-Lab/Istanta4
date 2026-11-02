@@ -6,6 +6,7 @@ import {
   ETICHETTA_PERIODO,
   isPeriodoMateriali,
   PERIODI_MATERIALI,
+  percorsoDettaglioVolantino,
   percorsoKit,
   percorsoPop,
   percorsoPromo,
@@ -95,5 +96,12 @@ describe('percorsi delle viste', () => {
     expect(percorsoKit('p1', STATO_PROMO.ARCHIVIATA, 'k1')).toBe('/promozioni/storico/dettagli/p1/kits/k1');
     expect(percorsoKit('p1', STATO_PROMO.PIANIFICATA, null)).toBe('/promozioni/in-corso/dettagli/p1/kits');
     expect(percorsoKit('p1', STATO_PROMO.ARCHIVIATA, null)).toBe('/promozioni/storico/dettagli/p1/kits');
+  });
+
+  it('il dettaglio di consultazione del volantino non contiene il contesto produttivo', () => {
+    expect(percorsoDettaglioVolantino('k 1')).toBe('/volantini/tutti_i_volantini?kit=k+1');
+    expect(percorsoDettaglioVolantino('k1', 3, 'Mozzarella Granarolo')).toBe(
+      '/volantini/tutti_i_volantini?kit=k1&pagina=3&referenza=Mozzarella+Granarolo'
+    );
   });
 });

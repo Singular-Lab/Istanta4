@@ -16,7 +16,6 @@ import {
   useFetchPuntoVenditaConsultazione,
   useFetchPuntoVenditaGestione,
   useFetchReferenzaPuntoVendita,
-  useFetchVolantinoPuntoVendita,
 } from "@/query/query";
 import type { PuntoVenditaResponseDTO } from "../../../server/core/dto";
 import SmartBreadcrumb from "./SmartBreadcrumb";
@@ -125,18 +124,12 @@ describe("idPromoDalPercorso", () => {
 
 describe("SmartBreadcrumb nelle pagine dei punti vendita", () => {
   const PV = "33333333-4444-4555-8666-777777777777";
-  const VOLANTINO = "99999999-8888-4777-8666-555555555555";
   // La chiave di una referenza non è un UUID e nell'indirizzo è codificata
   const CHIAVE = "d-Y29uZGltZW50byBjb24gdG9ubm8=";
 
   // Le pagine chiedono i loro dati con le query di query/query.tsx: il breadcrumb legge le stesse
   const PaginaConsultazione = () => {
     useFetchPuntoVenditaConsultazione(PV);
-    return null;
-  };
-  const PaginaVolantino = () => {
-    useFetchPuntoVenditaConsultazione(PV);
-    useFetchVolantinoPuntoVendita(PV, VOLANTINO);
     return null;
   };
   const PaginaReferenza = () => {
@@ -165,7 +158,6 @@ describe("SmartBreadcrumb nelle pagine dei punti vendita", () => {
     finti.get.mockReset();
     finti.get.mockImplementation(async (url: string) => {
       if (url === `/punti-vendita/${PV}`) return { id: PV, nome: "BOLOGNA SANT'ISAIA 67/2" };
-      if (url === `/punti-vendita/${PV}/volantini/${VOLANTINO}`) return { kit: { id: VOLANTINO, titolo: "KIT_01" }, promo: { id: "p1", nome: "Promo di Natale" } };
       if (url === `/punti-vendita/${PV}/referenze/${encodeURIComponent(CHIAVE)}`) return { chiave: CHIAVE, nome: "Condimento con tonno" };
       throw Object.assign(new Error("Not found"), { httpStatus: 404 });
     });
@@ -177,15 +169,6 @@ describe("SmartBreadcrumb nelle pagine dei punti vendita", () => {
     expect(await screen.findByText("BOLOGNA SANT'ISAIA 67/2")).toBeInTheDocument();
     expect(screen.queryByText(`${PV.substring(0, 8)}...`)).not.toBeInTheDocument();
     expect(finti.get).toHaveBeenCalledTimes(1);
-  });
-
-  it("un volantino mostra punto vendita e promo, senza il segmento \"Volantini\" che non è una pagina", async () => {
-    apriPv(`/punti-vendita/${PV}/volantini/${VOLANTINO}`, <PaginaVolantino />);
-
-    expect(await screen.findByText("Promo di Natale")).toBeInTheDocument();
-    await waitFor(() => expect(voci()).toEqual(["FP", "Punti vendita", "BOLOGNA SANT'ISAIA 67/2", "Promo di Natale"]));
-    expect(screen.getByRole("link", { name: "BOLOGNA SANT'ISAIA 67/2" })).toHaveAttribute("href", `/punti-vendita/${PV}`);
-    expect(finti.get).toHaveBeenCalledTimes(2);
   });
 
   it("una referenza mostra il nome del prodotto al posto della chiave", async () => {

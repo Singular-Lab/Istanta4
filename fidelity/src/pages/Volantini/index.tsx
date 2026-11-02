@@ -8,8 +8,11 @@ import PaginazioneTabella from "@/components/Base/PaginazioneTabella";
 import Sezione from "@/components/Base/Sezione";
 import EmptyState from "@/components/EmptyState";
 import withSessionCheck from "@/components/SessionChecker";
+import { PERMISSIONS } from "@/constants/permissions";
+import { usePermission } from "@/context/PermissionContext";
 import { useMemo, useState } from "react";
 import { Link, useLoaderData, useRevalidator } from "react-router-dom";
+import { percorsoDettaglioVolantino } from "../../../lib/materiali/periodi";
 
 interface File {
   nome_file: string;
@@ -38,6 +41,8 @@ const valoriUnici = (valori: string[]) => [...new Set(valori.filter(Boolean))].s
 const Volantini: React.FC = () => {
   const { files } = useLoaderData() as { files: FileGroup[] | null };
   const revalidator = useRevalidator();
+  // Gli insight e tutti i file del volantino stanno nella vista di consultazione (materiali.visualizza)
+  const puoConsultareVolantini = usePermission(PERMISSIONS.MATERIALI.VISUALIZZA);
   const [ricerca, setRicerca] = useState("");
   const [area, setArea] = useState("");
   const [canale, setCanale] = useState("");
@@ -169,12 +174,12 @@ const Volantini: React.FC = () => {
                   ))}
                 </div>
 
-                {gruppo.files_field.length > MAX_FILE_PER_KIT && (
+                {puoConsultareVolantini && (
                   <Link
-                    to={`tutti_i_volantini?kit=${gruppo.idKit}`}
+                    to={percorsoDettaglioVolantino(gruppo.idKit)}
                     className="mt-4 inline-flex items-center text-sm font-medium text-primary hover:underline"
                   >
-                    Vedi tutti ({gruppo.files_field.length})
+                    Apri insight{gruppo.files_field.length > MAX_FILE_PER_KIT ? ` (${gruppo.files_field.length} file)` : ""}
                     <Lucide icon="ArrowRight" aria-hidden="true" className="ml-1 h-3.5 w-3.5" />
                   </Link>
                 )}

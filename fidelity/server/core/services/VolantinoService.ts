@@ -1,14 +1,11 @@
 import { EXPORT_DI_SISTEMA } from '../../../lib/enums';
-import { wrapDatabaseError } from '../../../lib/errors';
-import { FileItemKit, ImportStorico, RecordListino } from '../../../lib/types';
+import { isAppError, wrapDatabaseError, wrapNotFoundError } from '../../../lib/errors';
+import { FileItemKit, ImportStorico } from '../../../lib/types';
 import type { IAgenziaLib } from '../agenzia_lib/types';
 import { urlFotoOlimpo } from '../utils/urlOlimpo';
 import {
-  BoxFuoriListinoDTO,
   FlyerInsightsDTO,
-  OrigineStoricoDTO,
   ReferenzaPosizioneDTO,
-  ReferenzaStoricoDTO,
   RiepilogoMeccanicaDTO,
   RiepilogoPaginaDTO,
   RiepilogoRepartoDTO
@@ -20,7 +17,7 @@ import { FilesRuntime } from '../models/files_runtime';
 import { Referenze } from '../models/referenze';
 import { RuntimeKit } from '../models/runtime_kit';
 import { ReferenzeGruppo } from '../models/referenze_gruppo';
-import { chiaveBox } from '../utils/fantasmi';
+import { origineStoricoPerReport } from '../utils/origineStorico';
 import { percentualeIngombro } from '../utils/referenzaStampata';
 
 /**
@@ -89,52 +86,40 @@ export class VolantinoService implements IVolantinoService {
         volantino da cui sono state compilate.
       */
       const kitRow = await RuntimeKit.findOne({
-        where: { id: guidIdKitRuntime }, attributes: ['import_storico'], raw: true
-      }) as { import_storico?: ImportStorico | null } | null;
+        where: { id: guidIdKitRuntime },
+        attributes: ['titolo', 'nome_area', 'nome_canale', 'id_promo', 'import_storico'],
+        raw: true
+      }) as {
+        titolo: string;
+        nome_area?: string;
+        nome_canale?: string;
+        id_promo: string;
+        import_storico?: ImportStorico | null;
+      } | null;
+      if (!kitRow) {
+        throw wrapNotFoundError(new Error('Volantino non trovato'), {
+          message: 'Volantino non trovato',
+          entityType: 'RuntimeKit',
+          entityId: guidIdKitRuntime
+        });
+      }
+
+      const contesto = {
+        titolo: kitRow.titolo,
+        nomeArea: kitRow.nome_area,
+        nomeCanale: kitRow.nome_canale,
+        idPromo: kitRow.id_promo
+      };
       const importStorico = kitRow?.import_storico ?? null;
       const codiciBoxFuoriListino = new Set(
         (importStorico?.fuoriListino ?? []).map((voce) => String(voce.codiceBox)).filter(Boolean)
       );
-      // I campi dei record sono del cliente: li legge la sua agenzia lib. Senza storico
-      // (es. CLIENT_ID diverso da quello dell'import) si mostra il record campo per campo.
-      const referenzaStorico = (record: RecordListino): ReferenzaStoricoDTO =>
-        this.agenziaLib.storicoVolantino?.referenzaPerReport(record) ?? {
-          codice: '',
-          descrizione: '',
-          campi: Object.entries(record)
-            .filter(([, valore]) => ['string', 'number', 'boolean'].includes(typeof valore) && String(valore).trim() !== '')
-            .map(([label, valore]) => ({ label, valore: String(valore) }))
-        };
-      // Gli import precedenti avevano solo la lista piatta dei compilati: si ricostruiscono i box da li.
-      const boxFuoriListino: BoxFuoriListinoDTO[] = importStorico?.boxFuoriListino
-        ? importStorico.boxFuoriListino.map((box) => ({
-          codiceBox: chiaveBox(box),
-          pag: box.pag,
-          ignorato: box.ignorato,
-          testoBox: box.testoBox ?? [],
-          referenze: (box.referenze ?? []).map(referenzaStorico)
-        }))
-        : Array.from((importStorico?.fuoriListino ?? []).reduce((perBox, voce) => {
-          const codiceBox = String(voce.codiceBox);
-          const box = perBox.get(codiceBox) ?? { codiceBox, pag: voce.pag, ignorato: false, testoBox: [], referenze: [] };
-          box.referenze.push({ codice: voce.codice ?? '', descrizione: voce.descrizione ?? '', campi: [] });
-          return perBox.set(codiceBox, box);
-        }, new Map<string, BoxFuoriListinoDTO>()).values());
-      const origineStorico: OrigineStoricoDTO | undefined = importStorico ? {
-        importatoIl: importStorico.importatoIl,
-        nomeFile: importStorico.nomeFile,
-        boxNelVolantino: importStorico.boxNelVolantino,
-        referenzeDaListino: importStorico.referenzeDaListino,
-        nonImpaginate: (importStorico.nonImpaginate ?? []).map(referenzaStorico),
-        lasciapassareNonImpaginate: importStorico.lasciapassareNonImpaginate === true,
-        totaleFuoriListino: (importStorico.fuoriListino ?? []).length,
-        fuoriListinoIgnorati: importStorico.fuoriListinoIgnorati ?? 0,
-        boxFuoriListino
-      } : undefined;
+      const origineStorico = origineStoricoPerReport(importStorico, this.agenziaLib);
 
       if (!referenze || referenze.length === 0) {
         return {
           guidIdKitRuntime,
+          contesto,
           origineStorico,
           totaleReferenze: 0,
           totalePagine: totalePaginePdf,
@@ -323,6 +308,7 @@ export class VolantinoService implements IVolantinoService {
 
       return {
         guidIdKitRuntime,
+        contesto,
         origineStorico,
         totaleReferenze: referenzeDTO.length,
         totalePagine: actualTotalePagine,
@@ -333,6 +319,7 @@ export class VolantinoService implements IVolantinoService {
       };
 
     } catch (error) {
+      if (isAppError(error)) throw error;
       throw wrapDatabaseError(new Error("Errore durante il recupero degli insights volantino"), {
         message: "Errore durante il recupero degli insights volantino",
         operation: 'getFlyerInsights',

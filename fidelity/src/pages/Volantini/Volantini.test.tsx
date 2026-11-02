@@ -2,9 +2,12 @@
 import "@testing-library/jest-dom/vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const permessi = vi.hoisted(() => ({ concessi: new Set<string>() }));
 
 vi.mock("@/components/SessionChecker", () => ({ default: (Componente: unknown) => Componente }));
+vi.mock("@/context/PermissionContext", () => ({ usePermission: (codice: string) => permessi.concessi.has(codice) }));
 
 import Volantini from ".";
 
@@ -31,6 +34,10 @@ const apri = (files: unknown[] | null) => {
 };
 
 describe("Volantini", () => {
+  beforeEach(() => {
+    permessi.concessi = new Set(["volantini.visualizza", "materiali.visualizza"]);
+  });
+
   it("mostra i volantini senza date fisse né collegamenti finti", async () => {
     apri(gruppi);
 
@@ -39,6 +46,18 @@ describe("Volantini", () => {
     expect(screen.queryByText("Nuovo")).not.toBeInTheDocument();
     expect(document.querySelector('a[href="#"]')).toBeNull();
     expect(screen.getByRole("link", { name: "Scarica il PDF ottobre-nord.pdf" })).toHaveAttribute("href", "https://cdn.example/ottobre-nord.pdf");
+    expect(screen.getAllByRole("link", { name: "Apri insight" }).map((link) => link.getAttribute("href"))).toEqual([
+      "/volantini/tutti_i_volantini?kit=k1",
+      "/volantini/tutti_i_volantini?kit=k2",
+    ]);
+  });
+
+  it("senza materiali.visualizza non offre la consultazione del volantino", async () => {
+    permessi.concessi = new Set(["volantini.visualizza"]);
+    apri(gruppi);
+
+    expect(await screen.findByRole("heading", { name: "Nord · Super" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Apri insight/ })).not.toBeInTheDocument();
   });
 
   it("la ricerca e il filtro per area usano i dati caricati", async () => {

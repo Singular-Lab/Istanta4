@@ -424,7 +424,8 @@ function bindServices() {
   container.bind<IKitRuntimeService>(TYPES.KitRuntimeService).toDynamicValue(
     (context) => new KitRuntimeService(
       context.get<IIstantaService>(TYPES.IstantaService),
-      context.get<IWebhookService>(TYPES.WebhookService)
+      context.get<IWebhookService>(TYPES.WebhookService),
+      context.get<IAgenziaLib>(TYPES.AgenziaLib)
     )
   );
   container.bind<IDesignKitService>(TYPES.DesignKitService).toDynamicValue(

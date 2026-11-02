@@ -3,10 +3,14 @@ import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ServerCall } from "../../../lib/server_call";
 
+const permessi = vi.hoisted(() => ({ concessi: new Set<string>() }));
+
 vi.mock("../../../lib/server_call", () => ({ ServerCall: { get: vi.fn() } }));
+vi.mock("@/context/PermissionContext", () => ({ usePermission: (codice: string) => permessi.concessi.has(codice) }));
 // chart.js non può disegnare in jsdom
 vi.mock("@/components/Base/Chart", () => ({ default: () => <canvas /> }));
 
@@ -17,12 +21,15 @@ const risposte: Record<string, () => Promise<unknown>> = {};
 const apri = () =>
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <DashboardCategory />
+      <MemoryRouter>
+        <DashboardCategory />
+      </MemoryRouter>
     </QueryClientProvider>
   );
 
 describe("Dashboard Category", () => {
   beforeEach(() => {
+    permessi.concessi = new Set(["materiali.visualizza"]);
     risposte["/utenti/me/global-filters"] = () => Promise.resolve({ ruolo: "Category", settoriNomi: ["Freschi"] });
     risposte["/scoreboard/category-timeline"] = () => Promise.resolve({ promos: [], series: [], canaleAreaSeries: [] });
     risposte["/dashboard/volantini-in-corso"] = () => Promise.resolve({ totale: 0, inScadenza: 0, kit: [] });
@@ -42,6 +49,32 @@ describe("Dashboard Category", () => {
     risposte["/dashboard/volantini-in-corso"] = () => Promise.resolve({ totale: 0, inScadenza: 0, kit: [] });
     await userEvent.click(within(sezione).getByRole("button", { name: "Riprova" }));
     expect(await within(sezione).findByText("Nessun volantino in corso")).toBeInTheDocument();
+  });
+
+  it("un volantino in corso apre la sua consultazione, non la lavorazione del kit", async () => {
+    risposte["/dashboard/volantini-in-corso"] = () => Promise.resolve({
+      totale: 1,
+      inScadenza: 0,
+      kit: [{ id: "k1", titolo: "Volantino ottobre", nome_promo: "Promo ottobre", nome_area: "Nord", nome_canale: "Super", stato_lavorazione: "PUBBLICATO" }],
+    });
+    apri();
+
+    const sezione = await screen.findByRole("region", { name: "Volantini in corso" });
+    expect(await within(sezione).findByRole("link", { name: "Volantino ottobre" })).toHaveAttribute("href", "/volantini/tutti_i_volantini?kit=k1");
+  });
+
+  it("senza materiali.visualizza il volantino in corso resta testo semplice", async () => {
+    permessi.concessi = new Set();
+    risposte["/dashboard/volantini-in-corso"] = () => Promise.resolve({
+      totale: 1,
+      inScadenza: 0,
+      kit: [{ id: "k1", titolo: "Volantino ottobre", nome_promo: "Promo ottobre", stato_lavorazione: "PUBBLICATO" }],
+    });
+    apri();
+
+    const sezione = await screen.findByRole("region", { name: "Volantini in corso" });
+    expect(await within(sezione).findByText("Volantino ottobre")).toBeInTheDocument();
+    expect(within(sezione).queryByRole("link", { name: "Volantino ottobre" })).not.toBeInTheDocument();
   });
 
   it("i periodi rapidi sono un gruppo a scelta singola e Azzera torna senza filtro", async () => {

@@ -54,24 +54,6 @@ export const funzioneCaricamentoVolantiniPDF = async ({ request }: { request: an
   return { files };
 };
 
-export const funzioneCaricamentoTuttiIFilePerKit = async ({ request }: { request: any }) => {
-  const url = new URL(request.url);
-  const idKit = url.searchParams.get("kit") || "";
-  const totalSteps = 1;
-
-  let kit: any[] | null = null;
-
-  try {
-    kit = await ServerCall.get<any[]>(`/getAllFiles?id=${idKit}`);
-  } catch (error) {
-    console.error("Errore durante la chiamata:", error);
-  }
-
-
-  return { kit };
-};
-
-
 
 
 

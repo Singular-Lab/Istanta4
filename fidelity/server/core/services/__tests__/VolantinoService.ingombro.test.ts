@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { ImportStorico } from '../../../../lib/types';
 import type { IAgenziaLib } from '../../agenzia_lib/types';
 import type { IConfigService } from '../../interfaces/IConfigService';
 import { TipiDiExport } from '../../models';
@@ -19,11 +20,17 @@ const referenza = (id: string, dati: Record<string, unknown>) => ({
   id, compiled_fields: [], data_fields: {}, foto: [], meccanica: '', codice_box: id, group_elements: [], ...dati,
 });
 
-function creaServizio(referenze: Array<Record<string, unknown>>) {
+function creaServizio(referenze: Array<Record<string, unknown>>, importStorico: ImportStorico | null = null) {
   vi.spyOn(TipiDiExport, 'findOne').mockResolvedValue({ id_tipiexport: 'tipo-vol' } as never);
   vi.spyOn(FilesRuntime, 'findAll').mockResolvedValue([]);
   vi.spyOn(Referenze, 'findAll').mockResolvedValue(referenze as never);
-  vi.spyOn(RuntimeKit, 'findOne').mockResolvedValue({ import_storico: null } as never);
+  vi.spyOn(RuntimeKit, 'findOne').mockResolvedValue({
+    titolo: 'Volantino Nord',
+    nome_area: 'Nord',
+    nome_canale: 'Super',
+    id_promo: 'promo-1',
+    import_storico: importStorico
+  } as never);
   const configService = { getFlyerInsightsConfig: vi.fn(async () => ({})) } as unknown as IConfigService;
   return new VolantinoService(configService, {} as IAgenziaLib);
 }
@@ -47,6 +54,7 @@ describe('VolantinoService.getFlyerInsights: ingombro delle pagine', () => {
 
     const insights = await servizio.getFlyerInsights('kit-1');
 
+    expect(insights.contesto).toEqual({ titolo: 'Volantino Nord', nomeArea: 'Nord', nomeCanale: 'Super', idPromo: 'promo-1' });
     expect(insights.riepilogoPagine.map(pagina => [pagina.pagina, pagina.numeroReferenze, pagina.ingombroTotalePerc])).toEqual([
       [2, 2, 12.86],
       [3, 1, 5.52],
@@ -63,5 +71,31 @@ describe('VolantinoService.getFlyerInsights: ingombro delle pagine', () => {
     const insights = await servizio.getFlyerInsights('kit-1');
 
     expect(insights.riepilogoPagine.map(pagina => [pagina.pagina, pagina.numeroReferenze, pagina.ingombroTotalePerc])).toEqual([[1, 2, 6.43]]);
+  });
+
+  it('include il report dello storico negli insight anche senza referenze', async () => {
+    const servizio = creaServizio([], {
+      importatoIl: '2026-10-30T10:00:00.000Z',
+      nomeFile: 'volantino-ottobre.json',
+      nonImpaginate: [],
+      lasciapassareNonImpaginate: false,
+      fuoriListino: [],
+      fuoriListinoIgnorati: 0,
+    });
+
+    const insights = await servizio.getFlyerInsights('kit-1');
+
+    expect(insights.origineStorico).toMatchObject({
+      importatoIl: '2026-10-30T10:00:00.000Z',
+      nomeFile: 'volantino-ottobre.json',
+      totaleFuoriListino: 0,
+    });
+  });
+
+  it('un runtime inesistente non produce un dettaglio insight vuoto', async () => {
+    const servizio = creaServizio([]);
+    vi.mocked(RuntimeKit.findOne).mockResolvedValue(null);
+
+    await expect(servizio.getFlyerInsights('kit-assente')).rejects.toMatchObject({ httpStatus: 404 });
   });
 });

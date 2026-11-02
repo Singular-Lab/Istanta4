@@ -285,7 +285,7 @@ describe("POP per periodo", () => {
     expect(within(elenco).getByRole("link", { name: /Speciale Colazione/ })).toHaveAttribute("href", "/pop/in-corso?promo=p1");
   });
 
-  it("la tabella dei formati mostra file, avanzamento, i kit a richiesta con Apri kit e lo ZIP del formato", async () => {
+  it("la tabella dei formati mostra file, avanzamento, i kit a richiesta senza accessi produttivi e lo ZIP del formato", async () => {
     await apri();
 
     const [, riga1, riga2] = within(tabellaFormati()).getAllByRole("row");
@@ -302,19 +302,13 @@ describe("POP per periodo", () => {
     fireEvent.click(kitRiga1);
     expect(kitRiga1).toHaveAttribute("aria-expanded", "true");
     expect(within(riga1).getByText("Nord · Supermercati")).toBeInTheDocument();
-    expect(within(riga1).getByRole("link", { name: "Apri kit Cartello Nord" })).toHaveAttribute(
-      "href",
-      "/promozioni/in-corso/dettagli/p1/kits/k1"
-    );
+    expect(within(riga1).queryByRole("link", { name: /Apri kit/ })).not.toBeInTheDocument();
     expect(within(riga1).getByRole("button", { name: "Scarica ZIP di Cartello prezzi A5" })).toBeEnabled();
 
-    // Il kit non avviato si apre dai kit della promo; scegliere il formato resta sulla promo
+    // Anche un kit non avviato resta informativo; scegliere il formato resta sulla promo.
     fireEvent.click(within(riga2).getByRole("button", { name: "1 kit di Totem ingresso 70×200" }));
     expect(within(riga2).getByTitle("Non avviato")).toBeInTheDocument();
-    expect(within(riga2).getByRole("link", { name: "Apri kit Totem Sud" })).toHaveAttribute(
-      "href",
-      "/promozioni/in-corso/dettagli/p1/kits"
-    );
+    expect(within(riga2).queryByRole("link", { name: /Apri kit/ })).not.toBeInTheDocument();
     expect(within(riga2).getByRole("link", { name: "Totem ingresso 70×200" })).toHaveAttribute(
       "href",
       "/pop/in-corso?promo=p1&formato=f2"
@@ -595,7 +589,7 @@ describe("POP per periodo", () => {
     expect(within(screen.getByRole("status")).getByRole("button", { name: /Scarica selezionati/ })).toBeDisabled();
   });
 
-  it("senza il permesso di vedere le promo i kit non hanno il link Apri kit", async () => {
+  it("i kit POP non hanno collegamenti produttivi, qualunque sia il permesso promo", async () => {
     finti.permessi = ["file.download"];
     await apri();
 
@@ -704,7 +698,7 @@ describe("POP per periodo", () => {
     expect(within(scheda1).getByRole("img")).toHaveAccessibleName("File per stato del kit: 1.200 in lavorazione, 90 con errori, 552 in revisione");
     expect(within(scheda1).getByRole("button", { name: "Scarica ZIP di Cartello prezzi A5" })).toBeEnabled();
     fireEvent.click(within(scheda1).getByRole("button", { name: "1 kit di Cartello prezzi A5" }));
-    expect(within(scheda1).getByRole("link", { name: "Apri kit Cartello Nord" })).toBeInTheDocument();
+    expect(within(scheda1).queryByRole("link", { name: /Apri kit/ })).not.toBeInTheDocument();
 
     const file = within(screen.getByRole("region", { name: /File del formato/ })).getByRole("list", { name: "File del formato" });
     const [primoFile] = within(file).getAllByRole("listitem");

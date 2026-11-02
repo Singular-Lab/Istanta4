@@ -18,7 +18,7 @@ export class VolantinoController extends BaseController {
   }
 
   protected setupRoutes(): void {
-    this.router.get('/flyer-insights/:guidIdKitRuntime', authMiddleware, permissionGuard('kit_runtime.visualizza'), this.getFlyerInsights.bind(this));
+    this.router.get('/flyer-insights/:guidIdKitRuntime', authMiddleware, permissionGuard('materiali.visualizza'), this.getFlyerInsights.bind(this));
     this.router.get('/prendiIVolantiniCaricatiDaDB', authMiddleware, permissionGuard('kit_runtime.visualizza'), routeDeprecata, this.prendiIVolantiniCaricatiDaDB.bind(this));
   }
 

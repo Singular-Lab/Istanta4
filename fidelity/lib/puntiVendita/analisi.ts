@@ -14,7 +14,7 @@ import type { PromoStoria, RiferimentoStoria, TipoAbbinamento } from './storia';
  * Endpoint, tutti con "gdo.visualizza" salvo dove indicato; un PV o un kit fuori dalla GDO
  * dell'utente risponde 404:
  * - GET /api/punti-vendita/:id/analisi                         -> AnalisiPuntoVendita
- * - GET /api/punti-vendita/:id/volantini/:idKit                -> DettaglioVolantinoPv (il kit deve essere nella storia del PV)
+ * - GET /api/punti-vendita/:id/volantini/:idKit                -> DettaglioVolantinoPv per la scheda inline della timeline
  * - GET /api/punti-vendita/:id/referenze/:chiave               -> DettaglioReferenzaPv (chiave di ProdottoRicorrente/ReferenzaSintesi)
  * - GET /api/punti-vendita/rete/insegne                        -> ReteInsegne
  * - GET /api/punti-vendita/gestione/qualita                    "gdo.gestisci_punti_vendita" -> QualitaPuntiVendita

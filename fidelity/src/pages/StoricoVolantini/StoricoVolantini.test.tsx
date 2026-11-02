@@ -4,11 +4,11 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const finti = vi.hoisted(() => ({ get: vi.fn() }));
+const finti = vi.hoisted(() => ({ get: vi.fn(), permessiNegati: new Set<string>() }));
 
 vi.mock("@/components/SessionChecker", () => ({ default: (Componente: unknown) => Componente }));
 vi.mock("../../../lib/server_call", () => ({ ServerCall: { get: finti.get, getUrl: () => "" } }));
-vi.mock("../../context/PermissionContext", () => ({ usePermission: () => true }));
+vi.mock("../../context/PermissionContext", () => ({ usePermission: (codice: string) => !finti.permessiNegati.has(codice) }));
 // TomSelect monta un plugin DOM che in jsdom non serve
 vi.mock("@/components/Base/TomSelect", () => ({
   default: ({ children, options: _options, getRef: _getRef, onOptionAdd: _onOptionAdd, ...props }: any) => <select {...props}>{children}</select>,
@@ -40,6 +40,7 @@ const apri = () =>
 describe("Storico volantini", () => {
   beforeEach(() => {
     finti.get.mockReset();
+    finti.permessiNegati = new Set();
   });
 
   it("mostra i KPI sopra l'elenco e i volantini con le date nel formato DD/MM/YYYY", async () => {
@@ -51,7 +52,18 @@ describe("Storico volantini", () => {
     expect(await screen.findByRole("heading", { name: "Volantino Nord" })).toBeInTheDocument();
     expect(screen.getByText("Volantini totali")).toBeInTheDocument();
     expect(screen.getByText("05/10/2026 – 20/10/2026")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Volantino Nord" })).toHaveAttribute("href", "/promozioni/in-corso/dettagli/p1/kits/k1");
+    expect(screen.getByRole("link", { name: "Volantino Nord" })).toHaveAttribute("href", "/volantini/tutti_i_volantini?kit=k1");
+  });
+
+  it("senza materiali.visualizza il titolo del volantino resta testo semplice", async () => {
+    finti.permessiNegati = new Set(["materiali.visualizza"]);
+    finti.get.mockImplementation((url: string) =>
+      Promise.resolve(url.startsWith("/dashboard/storico-volantini") ? { totale: 1, kit: [kit] } : [])
+    );
+    apri();
+
+    expect(await screen.findByRole("heading", { name: "Volantino Nord" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Volantino Nord" })).not.toBeInTheDocument();
   });
 
   it("se lo storico non arriva mostra il motivo e Riprova", async () => {

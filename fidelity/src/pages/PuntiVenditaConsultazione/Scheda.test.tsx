@@ -232,7 +232,7 @@ const sezione = (titolo: string) => screen.getByRole("region", { name: titolo })
 
 describe("Scheda del punto vendita", () => {
   beforeEach(() => {
-    finti.permessi = new Set(["gdo.visualizza"]);
+    finti.permessi = new Set(["gdo.visualizza", "materiali.visualizza"]);
     finti.pv = caricato(PUNTO_VENDITA);
     finti.volantiniAttivi = caricato([
       {
@@ -364,7 +364,7 @@ describe("Scheda del punto vendita", () => {
     expect(scelto).toHaveTextContent("sconto medio 31,2%");
     expect(scelto).toHaveTextContent("212 punti vendita nella lista");
     expect(scelto).toHaveTextContent("LUCCA - Via Roma 1 - tel. 0583 123456 (k3)");
-    expect(within(scelto).getByRole("link", { name: "Apri volantino" })).toHaveAttribute("href", "/punti-vendita/pv1/volantini/k3");
+    expect(within(scelto).getByRole("link", { name: "Apri volantino" })).toHaveAttribute("href", "/volantini/tutti_i_volantini?kit=k3");
     expect(within(scelto).getByRole("button", { name: "Volantino successivo" })).toBeDisabled();
   });
 
@@ -618,7 +618,7 @@ describe("Scheda del punto vendita", () => {
     expect(voci[0]).toHaveTextContent("«LUCCA - Via Roma 1 - tel. 0583 123456»");
     expect(voci[0]).toHaveTextContent("120 referenze");
     expect(voci[0]).not.toHaveTextContent("Abbinamento probabile");
-    expect(within(voci[0]).getByRole("link", { name: /Apri volantino/ })).toHaveAttribute("href", "/punti-vendita/pv1/volantini/k1");
+    expect(within(voci[0]).getByRole("link", { name: /Apri volantino/ })).toHaveAttribute("href", "/volantini/tutti_i_volantini?kit=k1");
     const pdf = within(voci[0]).getByRole("link", { name: /PDF/ });
     expect(pdf).toHaveAttribute("href", "/olimpo/materiali/getMaterialePDF?id=olimpo-1");
     expect(pdf).toHaveAttribute("download", "Volantino ottobre.pdf");
@@ -637,17 +637,28 @@ describe("Scheda del punto vendita", () => {
     expect(screen.getByRole("dialog", { name: "Anteprima del PDF" })).toHaveTextContent("/olimpo/materiali/getThumbnailMaterialePdfs?id=olimpo-1");
   });
 
-  it("Tutti i volantini: il link al kit c'è solo con il permesso di vedere le promozioni", () => {
+  it("Tutti i volantini: non espone collegamenti alla lavorazione produttiva", () => {
     apri();
     expect(within(sezione("Tutti i volantini")).queryByRole("link", { name: /Apri kit/ })).not.toBeInTheDocument();
   });
 
-  it("Tutti i volantini: con il permesso il kit si apre dalla sua promozione", () => {
+  it("Tutti i volantini: il permesso promo non reintroduce il collegamento produttivo", () => {
     finti.permessi = new Set(["gdo.visualizza", "promo.visualizza"]);
     apri();
 
-    const kit = within(sezione("Tutti i volantini")).getAllByRole("link", { name: /Apri kit/ });
-    expect(kit[0]).toHaveAttribute("href", "/promozioni/storico/dettagli/p1/kits/k1");
+    expect(within(sezione("Tutti i volantini")).queryByRole("link", { name: /Apri kit/ })).not.toBeInTheDocument();
+  });
+
+  it("senza materiali.visualizza la storia resta consultabile ma non apre il volantino", () => {
+    finti.permessi = new Set(["gdo.visualizza"]);
+    apri();
+
+    const scelto = within(sezione("Storia")).getByRole("region", { name: "Volantino selezionato" });
+    expect(scelto).toHaveTextContent("Promo k3");
+    expect(within(scelto).queryByRole("link", { name: "Apri volantino" })).not.toBeInTheDocument();
+    const voci = within(within(sezione("Tutti i volantini")).getByRole("list", { name: "Volantini della storia" })).getAllByRole("listitem");
+    expect(voci[0]).toHaveTextContent("Promo ottobre");
+    expect(within(voci[0]).queryByRole("link", { name: /Apri volantino/ })).not.toBeInTheDocument();
   });
 
   it("Tutti i volantini: paginati dal server, dal più recente", async () => {

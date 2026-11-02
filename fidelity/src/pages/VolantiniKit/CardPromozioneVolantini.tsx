@@ -7,7 +7,7 @@ import { testoValidita, urlAnteprimaMateriale } from "@/utils/materiali";
 import { twMerge } from "@/utils/twMerge";
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { percorsoKit, percorsoPromo } from "../../../lib/materiali/periodi";
+import { percorsoDettaglioVolantino, percorsoPromo } from "../../../lib/materiali/periodi";
 import type { PromozioneVolantini, VarianteVolantino } from "../../../lib/materiali/tipi";
 import { GIORNI_SCADENZA_VICINA, giorniAllaScadenza, testoScadenza } from "./scadenza";
 
@@ -15,7 +15,7 @@ export interface CardPromozioneVolantiniProps {
   promozione: PromozioneVolantini;
   /** In Attivi la card dice quanto manca alla fine della validità. */
   conScadenza?: boolean;
-  /** Senza il permesso di vedere le promozioni, promo e kit sono testo semplice. */
+  /** Senza il permesso di vedere le promozioni, soltanto il nome della promo è testo semplice. */
   conCollegamenti?: boolean;
   className?: string;
 }
@@ -81,7 +81,8 @@ function Variante({ variante, collegamento }: { variante: VarianteVolantino; col
 
 /**
  * Una promozione con i suoi volantini pubblicati: copertina, validità, e i kit come varianti per
- * canale e area, ciascuno con i suoi file e i punti vendita stampati. Ogni variante apre il suo kit.
+ * canale e area, ciascuno con i suoi file e i punti vendita stampati. Ogni variante apre i suoi
+ * insight; la promo resta un collegamento separato, quando consentito.
  */
 function CardPromozioneVolantini({
   promozione,
@@ -167,7 +168,7 @@ function CardPromozioneVolantini({
             <li key={variante.id}>
               <Variante
                 variante={variante}
-                collegamento={conCollegamenti ? percorsoKit(promo.id, promo.stato, variante.id) : undefined}
+                collegamento={percorsoDettaglioVolantino(variante.id)}
               />
             </li>
           ))}

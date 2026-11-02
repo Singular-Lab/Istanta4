@@ -50,6 +50,7 @@ describe("viste Volantini e POP", () => {
   it("le pagine dei volantini che c'erano già restano le stesse", () => {
     expect(rotta("/volantini").path).toBe("volantini");
     expect(rotta("/volantini/tutti_i_volantini").path).toBe("volantini/tutti_i_volantini");
+    expect(paginaPer("/volantini/tutti_i_volantini?kit=k1")?.permesso).toBe("materiali.visualizza");
     expect(rotta("/storico-volantini").path).toBe("storico-volantini");
   });
 

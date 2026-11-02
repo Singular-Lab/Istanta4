@@ -55,6 +55,10 @@ describe("gestione interna", () => {
     expect(rotta("/punti-vendita/42").loader).toBeUndefined();
   });
 
+  it("il dettaglio volantino annidato nel punto vendita non esiste più", () => {
+    expect(rotta("/punti-vendita/pv1/volantini/k1").path).toBe("*");
+  });
+
   it("un percorso solo simile non viene reindirizzato", () => {
     expect(rotta("/punti-vendita-bis").path).toBe("*");
     expect(rotta("/aree-e-canali-bis").path).toBe("*");

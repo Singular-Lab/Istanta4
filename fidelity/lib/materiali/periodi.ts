@@ -48,6 +48,21 @@ export const percorsoVolantini = (periodo: PeriodoMateriali, idPromo?: string): 
 export const percorsoPop = (periodo: PeriodoMateriali, idPromo?: string): string =>
   conPromo(`/pop/${periodo}`, idPromo);
 
+/**
+ * Dettaglio di consultazione del volantino, indipendente dalla lavorazione e dal punto vendita.
+ * `referenza` è il nome stampato del prodotto, con cui la pagina cerca fra le referenze del volantino.
+ */
+export const percorsoDettaglioVolantino = (
+  idKit: string,
+  pagina?: number | null,
+  referenza?: string | null
+): string => {
+  const parametri = new URLSearchParams({ kit: idKit });
+  if (pagina != null) parametri.set('pagina', String(pagina));
+  if (referenza) parametri.set('referenza', referenza);
+  return `/volantini/tutti_i_volantini?${parametri.toString()}`;
+};
+
 /** Dettaglio della promo: le promo archiviate stanno sotto lo storico, le altre sotto "in corso". */
 export const percorsoPromo = (idPromo: string, statoPromo: string | null | undefined): string =>
   `/promozioni/${statoPromo === STATO_PROMO.ARCHIVIATA ? 'storico' : 'in-corso'}/dettagli/${idPromo}`;
