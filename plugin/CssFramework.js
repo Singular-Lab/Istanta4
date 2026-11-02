@@ -12,6 +12,8 @@ const Segnalazioni = require('./segnalazioni/segnalazioni');
 const sovrastrutture = require('./cssFramework/sovrastrutture');
 //I20-1102: il piano dei gruppi di allineamento a slot.
 const cssSlot = require('./cssFramework/slot');
+//I20-1180: testi tenuti lontani da un elemento del box (applicaEvitaElementiTesto).
+const cssEvitaElementiTesto = require('./cssFramework/evitaElementiTesto');
 const FotoPlacer = require('./reperimentoFoto/fotoPlacer');
 
 const CssFramework =
@@ -255,6 +257,26 @@ const CssFramework =
     getPrefissiDerivati(box, DBallineamenti, DBDefault) {
         var elementoBox = this.getElementoBoxDB(box, DBallineamenti, DBDefault);
         return elementoBox != null ? cssComposizioneBox.prefissiDerivati(elementoBox.duplicazioni) : [];
+    },
+
+    /// I20-1180: le regole evitaElementiTesto del box (cssFramework/evitaElementiTesto): la voce
+    /// del box, poi quella di default del kit e quella del kit di default, lette dal contesto
+    /// dell'ultima applicazione del CSS come getSceltaSpazioFoto. Lista vuota se il contesto e' di
+    /// un altro box.
+    getEvitaElementiTesto(box) {
+        var contesto = this.contestoCss;
+        if (contesto == null || box == null || contesto.etichettaBox != box.label) {
+            return [];
+        }
+
+        var voceDiDefault = function (db) {
+            return Array.isArray(db) ? db.find(el => el != null && Array.isArray(el.nomiBox) && el.nomiBox.length == 0) : null;
+        };
+        return cssEvitaElementiTesto.regoleDelBox([
+            this.getElementoBoxDB(box, contesto.DBallineamenti, contesto.DBDefault),
+            voceDiDefault(contesto.DBallineamenti),
+            voceDiDefault(contesto.DBDefault)
+        ]);
     },
 
     /*
@@ -3990,6 +4012,90 @@ const CssFramework =
             console.error(error);
             return false;
         }
+    },
+
+    /// I20-1180: i testi che una regola evitaElementiTesto vuole lontani da un elemento si staccano
+    /// da lui (staccaTestoDaElemento). Gira a fine composizione del box, sulle posizioni finali e
+    /// con il noRender gia' applicato: un elemento nascosto non conta. Elementi e testi si cercano
+    /// come per le segnalazioni di conflitto, visibili e per etichetta. Restituisce il box.
+    applicaEvitaElementiTesto(box) {
+        try {
+            if (box == null || !box.isValid) {
+                return box;
+            }
+
+            var regole = this.getEvitaElementiTesto(box);
+            for (var r = 0; r < regole.length; r++) {
+                var regola = regole[r];
+                var testi = this.getElementiSegnalazioniConflitti(box, regola.testi);
+                if (testi.length == 0) {
+                    continue;
+                }
+                var elementi = this.getElementiSegnalazioniConflitti(box, regola.elementi);
+                for (var t = 0; t < testi.length; t++) {
+                    if (testi[t].item.constructorName != "TextFrame") {
+                        continue;
+                    }
+                    for (var e = 0; e < elementi.length; e++) {
+                        if (elementi[e].key != testi[t].key) {
+                            this.staccaTestoDaElemento(box, testi[t], elementi[e], regola.margine);
+                        }
+                    }
+                }
+            }
+        }
+        catch (error) {
+            console.error("Code CSF-29: testi non staccati dagli elementi nel box " + (box && box.label ? box.label : "") + ": " + error);
+        }
+        return box;
+    },
+
+    /// I20-1180: se una riga del testo tocca l'elemento allargato del margine, il bordo del riquadro
+    /// rivolto verso l'elemento passa oltre di lui: le righe si accorciano e vanno a capo da sole, il
+    /// testo non cambia. Se cosi' va in overflow il bordo alto sale verso quello del box, un passo
+    /// alla volta; se non basta, o se non resta larghezza, il riquadro torna com'era e il registro
+    /// lo dice (CSF-29): la regola di conflitto del cliente, se c'e', segnala poi il contatto.
+    /// Un testo che era gia' in overflow non peggiora: basta il restringimento. True se staccato.
+    staccaTestoDaElemento(box, testo, elemento, margine) {
+        var riquadro = testo.item;
+        var ingombro = cssEvitaElementiTesto.ingombro(elemento.item.geometricBounds, margine);
+        var righe = this.righeDiTesto(riquadro);
+        if (righe.length == 0 || !cssRegoleConflitti.contattoConLeRighe(ingombro, righe, riquadro.geometricBounds)) {
+            return false;
+        }
+
+        var prima = riquadro.geometricBounds;
+        var ristretto = cssEvitaElementiTesto.riquadroRistretto(prima, ingombro);
+        if (ristretto == null) {
+            this.segnalaTestoNonStaccato(box, testo, elemento, ingombro, "non resta larghezza");
+            return false;
+        }
+
+        var eraInOverflow = riquadro.overflows === true;
+        riquadro.geometricBounds = ristretto;
+        if (eraInOverflow || !riquadro.overflows) {
+            return true;
+        }
+
+        var altezze = cssEvitaElementiTesto.altezzeDiProva(ristretto[0], box.geometricBounds[0]);
+        for (var i = 0; i < altezze.length; i++) {
+            riquadro.geometricBounds = [altezze[i], ristretto[1], ristretto[2], ristretto[3]];
+            if (!riquadro.overflows) {
+                return true;
+            }
+        }
+
+        riquadro.geometricBounds = prima;
+        this.segnalaTestoNonStaccato(box, testo, elemento, ingombro, "il testo ristretto non ci sta nel box");
+        return false;
+    },
+
+    /// I20-1180: il registro dice quale testo e' rimasto sull'elemento e perche', con le misure.
+    segnalaTestoNonStaccato(box, testo, elemento, ingombro, motivo) {
+        messaggioUtente("Code CSF-29: Nel box " + (box && box.label ? box.label : "") + " " + testo.label +
+            " non si e' potuto staccare da " + elemento.label + ": " + motivo + ". Misure in mm [alto, sinistra, basso, destra]: " +
+            testo.label + " " + cssRegoleConflitti.scriviRettangolo(testo.item.geometricBounds) + "; " +
+            elemento.label + " con il margine " + cssRegoleConflitti.scriviRettangolo(ingombro) + ".", "warning");
     },
 
     /// Rettangoli delle righe di un campo di testo, uno per riga. Sono la geometria vera

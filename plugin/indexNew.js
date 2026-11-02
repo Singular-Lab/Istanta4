@@ -5506,6 +5506,10 @@ async function callAllOperationFixBox(boxImpaginato, bounds, itemRef, garbageKey
         applicaNoRenderAgliElementiDelBox(boxImpaginato, itemRef.noRenderElementi);
     }
 
+    //I20-1180: i testi che devono stare lontani da un elemento (evitaElementiTesto) si staccano
+    //adesso, sulle posizioni finali e col noRender applicato; il controllo dei conflitti vede l'esito.
+    boxImpaginato = CssFramework.applicaEvitaElementiTesto(boxImpaginato);
+
     CssFramework.controllaSegnalazioniConflittiPendenti(boxImpaginato);
     //I20-1042: gli spostamenti in griglia si segnalano solo ora, quando nessuno sposta piu' niente.
     CssFramework.controllaSpostamentiGrigliaPendenti(boxImpaginato);

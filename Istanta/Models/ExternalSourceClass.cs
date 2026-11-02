@@ -3447,6 +3447,20 @@ namespace Istanta.Models
 
         /// I20-1026: loghi automatici da tenere fuori dal box quando le condizioni sono vere.
         public List<DisattivaObj> disattiva { get; set; } = new();
+
+        /// I20-1180: testi da tenere lontani da un elemento del box, come la descrizione dal tag
+        /// quantitativi nel BOX4 di Edro21 (plugin/cssFramework/evitaElementiTesto.js).
+        public List<EvitaElementiTestoObj> evitaElementiTesto { get; set; } = new();
+    }
+
+    /// I20-1180: se una riga di uno dei testi tocca uno degli elementi, allargato del margine in mm,
+    /// il Plugin restringe il riquadro del testo dal lato dell'elemento. testi ed elementi sono
+    /// etichette, anche con l'asterisco.
+    public class EvitaElementiTestoObj
+    {
+        public List<string> testi { get; set; } = new();
+        public List<string> elementi { get; set; } = new();
+        public double margine { get; set; } = 0;
     }
 
     /// Spazio riservato attorno al gruppo foto quando il fixFoto lo colloca, in millimetri
