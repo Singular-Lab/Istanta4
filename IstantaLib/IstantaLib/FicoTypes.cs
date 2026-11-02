@@ -427,6 +427,9 @@ namespace IstantaLib
         public string errors = "";
         public ErrorCodesFico errorCode = ErrorCodesFico.None;
         public List<TracciatoKit> liste = new List<TracciatoKit>();
+        //Le referenze che l'esportazione del volantino esclude perche' fuori volantino, raccolte
+        //nel punto stesso in cui le esclude: chi le mostra vede esattamente quelle.
+        public List<ArticoloInKit> esclusiFuoriVolantino = new List<ArticoloInKit>();
     }
 
     public class LogoBollo:ICloneable
@@ -928,6 +931,23 @@ namespace IstantaLib
 
     #region cutomClasses Plugin
 
+    public class AgenziaCustomPlugin_FuoriVolantinoInTracciato
+    {
+        public bool abilitato { get; set; } = false;
+        public List<AgenziaCustomPlugin_RegolaFuoriVolantino> regole { get; set; } = new List<AgenziaCustomPlugin_RegolaFuoriVolantino>();
+    }
+
+    /// Una regola del cliente che porta una referenza fuori volantino senza il campo core: la
+    /// condizione e' nel formato delle azioni sul box, i campi sono quelli da correggere per
+    /// rimetterla in volantino. Deve dire la stessa cosa della regola precedente dell'agenzia in
+    /// AgenziaLib (per Coop Coopfi.InVolantinoDaTema).
+    public class AgenziaCustomPlugin_RegolaFuoriVolantino
+    {
+        public string titolo { get; set; } = "";
+        public List<BloccoRegole> condizione { get; set; } = new List<BloccoRegole>();
+        public List<string> campi { get; set; } = new List<string>();
+    }
+
     public class AgenziaCustomPlugin
     {
         #region filtri e visualizzazione
@@ -983,6 +1003,12 @@ namespace IstantaLib
         /// meta registrato con una versione del record diversa da quella attuale (la lista ricaricata
         /// con lo stesso valore). Falso: la versione si controlla. Il valore originale si controlla sempre.
         public bool ignoraVersioneMeta { get; set; } = false;
+
+        /// La voce "Fuori vol" nella tendina del tracciato del Plugin, con le referenze che
+        /// l'esportazione esclude perche' fuori volantino e il pulsante per rimetterle in volantino.
+        /// Le regole dicono quando una referenza e' fuori per un campo del cliente (Coop: il tema
+        /// con "fuori depliant") e quali campi correggere. Spenta se manca.
+        public AgenziaCustomPlugin_FuoriVolantinoInTracciato fuoriVolantinoInTracciato { get; set; } = new AgenziaCustomPlugin_FuoriVolantinoInTracciato();
 
         /// Contenitori del noRender: per un campo, il gruppo del box che va nascosto con lui quando il
         /// campo e' in noRender, e che la segnalazione del Plugin indica quando manca insieme al campo

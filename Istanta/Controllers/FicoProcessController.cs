@@ -55,6 +55,8 @@ namespace Istanta.Controllers
         //I20-1069: i record che non si sono completati (descrizioni, foto, firma), uno per riga:
         //la lista arriva lo stesso, e il Plugin li mostra come avviso.
         public List<string> avvisi = new List<string>();
+        //I record che l'esportazione dell'agenzia ha escluso perche' fuori volantino.
+        public List<ArticoloInKit> fuoriVolantino = new List<ArticoloInKit>();
     }
 
     class LoghiBolliPerCorreggo
@@ -2240,7 +2242,9 @@ namespace Istanta.Controllers
                             kit!.records = new List<ArticoloInKit>();
                             try
                             {
-                                string kitCacheId = $"{String.Join('-', idsTrVincitori)}${kit.guidIdRaccoglitore}${mode}";
+                                //Con la generazione dei dati di ogni tracciato: un cambio dei record la alza
+                                //e la lista preparata prima non si usa piu'.
+                                string kitCacheId = $"{GenerazioniCacheKit.Chiave(idsTrVincitori)}${kit.guidIdRaccoglitore}${mode}";
                                 if (!this._cache.TryGetValue(kitCacheId, out PreparazioneListaResult? kitResult) || noCache/* || confronto*/)
                                 {
                                     /*PreparazioneListaResult*/
@@ -2275,6 +2279,7 @@ namespace Istanta.Controllers
                                     //kitResult.records //QUI HO TUTTO
 
                                     result.records.AddRange(kitResult.records);
+                                    result.fuoriVolantino.AddRange(kitResult.fuoriVolantino);
 
                                     //I20-1069: i record che non si sono completati arrivano con la lista, e il Plugin lo dice.
                                     if (kitResult.avvisi.Count > 0)
@@ -2843,8 +2848,10 @@ namespace Istanta.Controllers
 
                         TracciatoResultKit resultAgenzia = esportaConLogicheDiAgenzia(kit, promoContext, tracciatoContext, recordsFiltrati, mode, agenziaFunc);
 
+                        //Gli esclusi perche' fuori volantino, come li ha esclusi l'esportazione.
+                        resultGlobale.fuoriVolantino.AddRange(resultAgenzia.esclusiFuoriVolantino);
 
-                        if (resultAgenzia.errors != "")
+                        if (resultAgenzia.errors != "" && !TuttoFuoriVolantino(resultAgenzia, recordsFiltrati.Count))
                         {
                             //I20-1069: si dice quale passo e quale tracciato; il testo intero di AgenziaLib va nel log e in dettaglio.
                             Console.WriteLine($"Errore di {agenziaFunc} (lavorazione {idLavorazione}, tracciato {tracciato.Id}): " + resultAgenzia.errors);
@@ -2986,6 +2993,29 @@ namespace Istanta.Controllers
                 return resultGlobale;
             }
         }
+
+        /// I gruppi con referenze in volantino e fuori volantino insieme, nella stessa label: un gruppo
+        /// e' tutto dentro o tutto fuori, e questo e' un dato corrotto da segnalare. La chiave e'
+        /// label|codice gruppo, la stessa che il Plugin compone per le sue righe.
+        public static List<string> GruppiMisti(IEnumerable<ArticoloInKit> inVolantino, IEnumerable<ArticoloInKit> fuoriVolantino)
+        {
+            static string Chiave(ArticoloInKit a) =>
+                (a.label ?? "") + "|" + (a.recordInTracciato != null && a.recordInTracciato.TryGetValue(GLOBAL_VARIABLES_FICO.keyCodiceGruppo, out object? codice) ? codice?.ToString() ?? "" : "");
+
+            var dentro = new HashSet<string>(inVolantino.Select(Chiave));
+            return fuoriVolantino
+                .Select(Chiave)
+                .Where(k => k.Contains(',') && dentro.Contains(k))
+                .Distinct()
+                .ToList();
+        }
+
+        /// La lista azzerata perche' tutti i record sono fuori volantino non e' un errore: la lista
+        /// arriva vuota con i suoi fuori volantino, che dal Plugin si possono rimettere in volantino.
+        public static bool TuttoFuoriVolantino(TracciatoResultKit resultAgenzia, int recordsEsportati) =>
+            resultAgenzia.errorCode == ErrorCodesFico.ListaAzzerataInEsportazione
+            && recordsEsportati > 0
+            && resultAgenzia.esclusiFuoriVolantino.Count == recordsEsportati;
 
         private List<Dictionary<string, object>> GetRecordsFirmaPluginPerRec(
     ArticoloInRevisione rec,

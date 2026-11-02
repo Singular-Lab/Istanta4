@@ -365,7 +365,10 @@ namespace Istanta.Controllers
                 if(result.tipoLavorazione != TipoLavorazione.PoP)
                 {
                     result.records = Ordinamento.ordinaRecordsTracciatoNew(result.records, exClass);
+                    //I fuori volantino con lo stesso ordinamento, a parte: quello dei record resta com'era.
+                    result.fuoriVolantino = Ordinamento.ordinaRecordsTracciatoNew(result.fuoriVolantino, exClass);
                 }
+                result.gruppiMisti = FicoProcessController.GruppiMisti(result.records, result.fuoriVolantino);
 
 
                 sw.Stop();
@@ -9476,6 +9479,9 @@ double.TryParse(percorso.ToString(), out double valore16))
         public async Task<IActionResult> getSchedaRef([FromForm] string codiceGruppo, int idLavorazione, [FromForm] long idRec = 0,bool byPassLavorazioneRecord = false, FicoCombinazioneKitReadMode mode = FicoCombinazioneKitReadMode.Classic)
         {
             ArticoloInRevisioneKitResult result = new ArticoloInRevisioneKitResult();
+            //I record del gruppo che l'esportazione esclude perche' fuori volantino: il Plugin li
+            //sposta nella sezione dei fuori volantino della lista del kit.
+            List<ArticoloInKit> fuoriVolantinoDellaScheda = new List<ArticoloInKit>();
 
             LogAssistent logAss = new LogAssistent();
 
@@ -10098,6 +10104,7 @@ double.TryParse(percorso.ToString(), out double valore16))
                     //logAss.WriteLine("GET SCHEDA REF >> step9");
 
                     TracciatoResultKit resultAgenzia = ficoController.esportaConLogicheDiAgenzia(kit!, promoContext, tracciatoContext, prepLista.records, mode, agenziaFunc);
+                    fuoriVolantinoDellaScheda = resultAgenzia.esclusiFuoriVolantino;
                     if (resultAgenzia.errorCode == ErrorCodesFico.ListaAzzerataInEsportazione)
                     {
 
@@ -10180,6 +10187,15 @@ double.TryParse(percorso.ToString(), out double valore16))
                         allEtichette = s.allEtichette,
                         etichetteVisual = s.etichetteVisual,
                         firmaRevisione = firmaRevisione,
+                        sottogruppo = s.sottogruppo,
+                    }).ToList(),
+                    fuoriVolantino = fuoriVolantinoDellaScheda.Select(s => new ArticoloInKit()
+                    {
+                        IdRec = s.IdRec,
+                        recordInTracciato = s.recordInTracciato,
+                        allEtichette = s.allEtichette,
+                        etichetteVisual = s.etichetteVisual,
+                        label = s.label,
                         sottogruppo = s.sottogruppo,
                     }).ToList(),
                     IdRecInLavorazione = lavoriazioneRecord != null ? lavoriazioneRecord.Id : 0,
@@ -11925,6 +11941,8 @@ double.TryParse(percorso.ToString(), out double valore16))
 
 
                 await this.ctx2.SaveChangesAsync();
+                //I gruppi del tracciato sono cambiati: la lista del kit in cache non vale piu'.
+                GenerazioniCacheKit.Invalida(idTracciato);
 
 
                 foreach (var gruppo in gruppi.ListaGruppi)
@@ -12268,6 +12286,8 @@ double.TryParse(percorso.ToString(), out double valore16))
 
                 await this.ctx2.SaveChangesAsync();
                 await tx.CommitAsync();
+                //I gruppi del tracciato sono cambiati: la lista del kit in cache non vale piu'.
+                GenerazioniCacheKit.Invalida(_ptrList.Select(p => p.IdTracciato));
 
                 
 
@@ -12474,6 +12494,94 @@ double.TryParse(percorso.ToString(), out double valore16))
             }
 
             return query.ToList();
+        }
+
+        /// Rimette in volantino il gruppo del record dal "Fuori vol" del tracciato del Plugin: campo
+        /// core in volantino e i campi del cliente scelti dall'operatore, su tutti i record del gruppo
+        /// (stesso tracciato, label e versione). Il gruppo fuori volantino non e' impaginato, per cui
+        /// non si passa dalle azioni sul box. Risponde come loro, con quanti record su quanti salvati.
+        [HttpPut]
+        [Route("Menabo/rimettiInVolantino/{idLavorazione}")]
+        public IActionResult rimettiInVolantino([FromForm] RimettiInVolantinoRequest richiesta, int idLavorazione)
+        {
+            CambioMetaRecordTracciatoResponse result = new CambioMetaRecordTracciatoResponse();
+            var session = SessionIstantaObject.GetSession(HttpContext);
+            int idTracciato = 0;
+            try
+            {
+                if (!Int16.TryParse(session, out Int16 id_utente))
+                    throw ErroreIstanta.SessioneScaduta();
+
+                PromoLavorazioni lavorazione = this.ctx2.PromoLavorazionis.FirstOrDefault(l => l.Id == idLavorazione)
+                    ?? throw new ErroreIstanta("lettura della lavorazione", $"la lavorazione {idLavorazione} non esiste.");
+                Promo promo = this.ctx2.Promos.FirstOrDefault(p => p.guidID == lavorazione.GuidPromo)
+                    ?? throw new ErroreIstanta("lettura della promo", $"la promo {lavorazione.GuidPromo} della lavorazione {idLavorazione} non esiste.");
+                PromoTracciatiRecord recordScelto = this.ctx2.PromoTracciatiRecords.Include(r => r.IdTracciatoNavigation).FirstOrDefault(r => r.Id == richiesta.idRec)
+                    ?? throw new ErroreIstanta("lettura del record", $"il record {richiesta.idRec} non e' piu' nel tracciato: riscaricare la lista e riprovare.");
+                if (recordScelto.IdTracciatoNavigation.IdPromo != promo.Id)
+                    throw new ErroreIstanta("lettura del record", $"il record {richiesta.idRec} non e' di un tracciato della promo della lavorazione {idLavorazione}.");
+                idTracciato = recordScelto.IdTracciato;
+
+                Dictionary<string, string> attributi = richiesta.attributi ?? new Dictionary<string, string>();
+                AddestramentoExcel? adItem = this.ctx2.AddestramentoExcels.Include(a => a.SchemaCampiExcels)
+                    .FirstOrDefault(a => a.Id == (recordScelto.IdAddestramento.HasValue ? recordScelto.IdAddestramento.Value : 0));
+                if (adItem == null && attributi.Count > 0)
+                    throw new ErroreIstanta("lettura dell'addestramento",
+                        $"il record {recordScelto.Id} non ha l'addestramento della lista (IdAddestramento): non si sa di che tipo sono i campi da cambiare.");
+
+                IstantaController icCtrl = new IstantaController("", this.path_external_lib, this.path_external_source, this._dbContextFactory);
+                List<PromoTracciatiRecord> gruppo = GetRecordsGruppoDaRaggruppare(recordScelto.CodiceGruppo!, recordScelto.IdTracciato, recordScelto);
+                result.totale = gruppo.Count;
+
+                foreach (PromoTracciatiRecord ptr in gruppo)
+                {
+                    Dictionary<string, object> dato = Utility.Main.getJsonObject(ptr.Dato!)
+                        ?? throw new ErroreIstanta("lettura del record", $"il Dato del record {ptr.Id} (ref {ptr.Codice}) non si legge.");
+
+                    var campi = new Dictionary<string, object>();
+                    foreach (var attributo in attributi)
+                    {
+                        string chiave = RimessaInVolantino.Chiave(attributo.Key);
+                        SchemaCampiExcel? schema = adItem!.SchemaCampiExcels.FirstOrDefault(s => s.NomeColonna == chiave);
+                        campi[chiave] = schema != null ? icCtrl.parseAddesttramentoValue(attributo.Value ?? "", schema) : (attributo.Value ?? "");
+                    }
+
+                    ptr.Dato = JsonConvert.SerializeObject(RimessaInVolantino.Applica(dato, campi));
+                    this.ctx2.SaveChanges();
+                    result.salvati++;
+                }
+
+                var register = new Register(_config.GetConnectionString("IstandaConnectionDb")!, this._dbContextFactory, dbContextFactory2: this._dbContextFactory2);
+                var operazione = new RegistroOperazioni();
+                operazione.Area = "";
+                operazione.Canale = "";
+                operazione.Stato = (byte)statoOperazioni.risolta;
+                operazione.Autore = id_utente;
+                operazione.TipoOperazione = (byte)tipoOperazione.cambioMeta;
+                operazione.CodiceAssociato = recordScelto.CodiceGruppo;
+                operazione.FormData = JsonConvert.SerializeObject(new { rimettiInVolantino = true, attributi, recTracciatoVersion = recordScelto.Versione, recTracciaoId = recordScelto.Id });
+                operazione.Url = "RimettiInVolantinoRequest";
+                operazione.IdTracciato = recordScelto.IdTracciato;
+                operazione.idPromoLavorazione = idLavorazione;
+                register.addOperazione(operazione, true, session, DateTime.Now);
+                if (register.Errore != null)
+                    throw new ErroreIstanta("registrazione del cambio", $"gruppo {recordScelto.CodiceGruppo}: {register.Errore}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Errore in rimettiInVolantino (record {richiesta?.idRec}, lavorazione {idLavorazione}): " + ex.ToString());
+                result.esito = false;
+                result.error = TestoCambioNonRiuscito(result.salvati, result.totale, ex);
+                result.dettaglio = DescrizioneErrori.Dettaglio(ex);
+            }
+            finally
+            {
+                //Anche a meta': i record gia' salvati sono cambiati.
+                if (result.salvati > 0)
+                    GenerazioniCacheKit.Invalida(idTracciato);
+            }
+
+            return Ok(result);
         }
 
         [HttpPut]
@@ -12921,6 +13029,8 @@ double.TryParse(percorso.ToString(), out double valore16))
                         this.ctx2.SaveChanges();
                         //I20-1069: da qui il record e' salvato; se il ciclo si ferma dopo, l'errore lo conta.
                         result.salvati++;
+                        //La lista del kit in cache non vale piu' per questo tracciato.
+                        GenerazioniCacheKit.Invalida(ptr.IdTracciato);
 
                         var register = new Register(_config.GetConnectionString("IstandaConnectionDb")!, this._dbContextFactory, dbContextFactory2: this._dbContextFactory2);
                         if (idOperazione == 0)

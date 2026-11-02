@@ -1748,6 +1748,11 @@ namespace Istanta.Models
     public class ArticoloInRevisioneKitResult
     {
         public List<ArticoloInKit> records { get; set; } = new List<ArticoloInKit>();
+        //I record che l'esportazione esclude perche' fuori volantino: il Plugin li tiene in una
+        //sezione a parte della lista del kit, per la voce "Fuori vol" del tracciato.
+        public List<ArticoloInKit> fuoriVolantino { get; set; } = new List<ArticoloInKit>();
+        //I codici gruppo con referenze in e fuori volantino insieme: un dato corrotto, da segnalare.
+        public List<string> gruppiMisti { get; set; } = new List<string>();
         public Int64 IdRecInLavorazione { get; set; }
         public TipoLavorazione tipoLavorazione { get; set; }
         public string? error { get; set; }
@@ -2417,6 +2422,15 @@ namespace Istanta.Models
         public string? Id { get; set; }
         public string? FotoId { get; set; }
         public bool delete { get; set; }
+    }
+
+    /// La rimessa in volantino di un gruppo dal "Fuori vol" del tracciato del Plugin: un record del
+    /// gruppo e i campi del cliente da correggere, col "$" al posto del punto come nelle azioni sul
+    /// box. Il campo core lo mette sempre il server.
+    public class RimettiInVolantinoRequest
+    {
+        public long idRec { get; set; }
+        public Dictionary<string, string>? attributi { get; set; }
     }
 
     public class CambioMetaRecordTracciatoRequest

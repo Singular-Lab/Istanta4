@@ -1537,6 +1537,8 @@ namespace Istanta.Controllers
                     string KFirma = Enum.GetName(AddestramentoRuoli.Tracciato) + "." + GLOBAL_VARIABLES.keyTracciatoFirma;
 
                     PromoTracciatiRecord rec;
+                    //I tracciati che ricevono record: dopo il salvataggio la loro lista del kit in cache non vale piu'.
+                    HashSet<int> tracciatiImportati = new HashSet<int>();
                     foreach (Dictionary<string, object> lista in parsingRes.liste!)
                     {
                         List<PromoTracciati> _promo_tracciati_esistenti = await ctx2.PromoTracciatis
@@ -1551,6 +1553,7 @@ namespace Istanta.Controllers
                         {
                             continue;
                         }
+                        tracciatiImportati.Add(pTr.Id);
 
                         List<PromoTracciatiRecord> records = pTr.PromoTracciatiRecords.ToList();
                         List<PromoTracciatiRecord> ultimaVersioneRecords = pTr.PromoTracciatiRecords
@@ -1663,6 +1666,7 @@ namespace Istanta.Controllers
                         }
                     }
                     this.ctx2.SaveChanges();
+                    GenerazioniCacheKit.Invalida(tracciatiImportati);
 
                 }
                 catch (Exception ex)
