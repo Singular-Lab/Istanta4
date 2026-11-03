@@ -2863,7 +2863,13 @@
                 errore.textContent = j.messaggio || 'Operazione non riuscita.';
                 return;
             }
-            if (boxInModale && String(boxInModale.id) === String(id)) riempiEdit(id, parte);
+            if (boxInModale && String(boxInModale.id) === String(id)) {
+                riempiEdit(id, parte);
+                // I20-1188: la colonna Propagazioni dipende dalla correzione appena salvata, annullata o
+                // confermata: si ridisegna qui, non solo all'apertura (prima le spunte comparivano
+                // soltanto chiudendo e riaprendo la finestra)
+                disegnaPropagazioniEdit(id);
+            }
         });
     }
 

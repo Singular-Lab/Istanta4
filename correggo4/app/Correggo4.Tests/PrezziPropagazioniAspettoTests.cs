@@ -51,6 +51,26 @@ public class PrezziPropagazioniAspettoTests
     }
 
     // Come IndirizziNelleVisteTests: la cartella del progetto risalendo da quella dei test.
+    /// <summary>
+    /// I20-1188: dopo SALVA, ANNULLA CORREZIONE o CONFERMA la colonna Propagazioni si ridisegna subito.
+    /// Prima si disegnava solo all'apertura della finestra: dopo il primo SALVA dei prezzi restava
+    /// l'elenco senza spunte finche' non si chiudeva e riapriva il prodotto.
+    /// </summary>
+    [Fact]
+    public void Dopo_ogni_salvataggio_la_colonna_delle_propagazioni_si_ridisegna()
+    {
+        string html = Editor().Replace("\r\n", "\n");
+        int inizio = html.IndexOf("function eseguiEdit(id, parte, azione, bottone, errore)", StringComparison.Ordinal);
+        Assert.True(inizio >= 0, "eseguiEdit non trovata: il test va aggiornato");
+        string esegui = html.Substring(inizio, html.IndexOf("\n    }\n", inizio, StringComparison.Ordinal) - inizio);
+
+        int esito = esegui.IndexOf("api(url, corpo).then(function (j) {", StringComparison.Ordinal);
+        int campi = esegui.IndexOf("riempiEdit(id, parte);", esito, StringComparison.Ordinal);
+        int colonna = esegui.IndexOf("disegnaPropagazioniEdit(id);", esito, StringComparison.Ordinal);
+        Assert.True(esito >= 0 && campi > esito, "dopo la risposta del server si ridisegnano i campi");
+        Assert.True(colonna > campi, "dopo i campi si ridisegna anche la colonna Propagazioni");
+    }
+
     private static string RadiceApplicazione()
     {
         for (var d = new DirectoryInfo(AppContext.BaseDirectory); d != null; d = d.Parent)
