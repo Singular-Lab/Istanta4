@@ -12,7 +12,6 @@ import { sequelize } from '../db';
 import { IIstantaService } from '../interfaces/IIstantaService';
 import { IKitRuntimeService } from '../interfaces/IKitRuntimeService';
 import { IWebhookService } from '../interfaces/IWebhookService';
-import type { IAgenziaLib } from '../agenzia_lib/types';
 import { log } from '../logger';
 import { Area } from '../models/aree';
 import { Canale } from '../models/canali';
@@ -127,8 +126,7 @@ function mapRaccoglitoreFilesToFilesData(files: any[], newRuntimeId?: string): a
 export class KitRuntimeService implements IKitRuntimeService {
   constructor(
     private readonly istantaService: IIstantaService,
-    private readonly webhookService: IWebhookService,
-    private readonly agenziaLib?: IAgenziaLib
+    private readonly webhookService: IWebhookService
   ) { }
 
   /** ──────────────── Retrieval ──────────────── */
@@ -533,10 +531,9 @@ export class KitRuntimeService implements IKitRuntimeService {
 
         return {
           ...kitRuntime,
-          // import_storico arriva dalla riga grezza: il report lo adatta al tracciato del cliente
+          // import_storico arriva dalla riga grezza.
           origineStorico: origineStoricoPerReport(
-            (kitRuntime as RUNTIME_KIT & { import_storico?: ImportStorico | null }).import_storico,
-            this.agenziaLib
+            (kitRuntime as RUNTIME_KIT & { import_storico?: ImportStorico | null }).import_storico
           ),
           numero_referenze_trovate: numeroReferenzeTrovate,
           titolo: kitDesign.titolo,

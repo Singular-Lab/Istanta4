@@ -7,7 +7,6 @@ import { UtentiGDO } from "../../models/utenti_gdo.js";
 import { DefaultAgenziaLib } from "../default/index.js";
 import type { ExternalAuthContext, ParsedOIDCUtente } from "../types.js";
 import { importPuntiVenditaConadCno } from "./punti-vendita.js";
-import { storicoVolantinoDB1 } from "./storico-db1.js";
 
 const DEFAULT_BIRTH_DATE = "1970-01-01";
 const ENTRA_ROLE_TO_USER_TYPE = new Map<string, TIPO_UTENTI>([
@@ -81,7 +80,7 @@ function userNames(claims: OidcUserClaims, email: string): { nome: string; cogno
 
 /**
  * CONAD CNO. Per tutto il resto vale il comportamento di default, che e quello
- * che il loader usava gia per questo cliente; in piu ha lo storico dei volantini su DB1
+ * che il loader usava gia per questo cliente; in piu abilita l'import dei volantini
  * e il proprio tracciato del file punti vendita.
  */
 export class ConadcnoAgenziaLib extends DefaultAgenziaLib {
@@ -89,7 +88,7 @@ export class ConadcnoAgenziaLib extends DefaultAgenziaLib {
     super(conadcnoUserService);
   }
 
-  storicoVolantino = storicoVolantinoDB1;
+  supportaImportStorico = true;
   importPuntiVendita = importPuntiVenditaConadCno;
 
   async parseUtenteOIDC(

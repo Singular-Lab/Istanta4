@@ -1387,6 +1387,7 @@ export interface FantasmaDeciso {
  * kit, non il contrario, quindi non c'e niente da marcare riga per riga.
  */
 export interface ImportStorico {
+  report?: OrigineStorico;
   /** Quando e arrivato l'ultimo invio del plugin. */
   importatoIl: string;
   nomeFile?: string;

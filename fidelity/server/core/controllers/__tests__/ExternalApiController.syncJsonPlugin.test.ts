@@ -6,8 +6,8 @@ import express, { type Express, type Request } from 'express';
 import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EXPORT_DI_SISTEMA, STATO_LOG_FILE } from '../../../../lib/enums';
-import type { FantasmaDeciso, FileItemKit, FileItemKitLog, ImportStorico, RecordListino, ReferenzeIstanta } from '../../../../lib/types';
-import type { EsitoConfrontoStorico, PayloadConfrontoStorico, StoricoVolantinoAgenzia, SyncJsonPluginRef } from '../../agenzia_lib/types';
+import type { FileItemKit, FileItemKitLog, ImportStorico, OrigineStorico, ReferenzeIstanta } from '../../../../lib/types';
+import type { SyncJsonPluginRef } from '../../agenzia_lib/types';
 import type * as MulterConfig from '../../config/multerConfig';
 import type { IExternalApiService } from '../../interfaces/IExternalApiService';
 import type { EsitoListaVolantino, ListaVolantinoDaRegistrare } from '../../interfaces/IStoriaPuntoVenditaService';
@@ -73,14 +73,6 @@ const CANALE = 'canale-1';
 const NOME_FILE = 'VOL 45 Toscana.pdf';
 const PDF = Buffer.from('%PDF-1.4\n% volantino finto del test\n');
 
-/** Un box del volantino come lo manda il plugin: le foto possono arrivare come semplici nomi. */
-const boxPlugin = (groupId: number, codice: string) => ({
-  groupId,
-  dna: `$dna{\n${codice}\n}`,
-  foto: [`${codice}.psd`],
-  compiledFields: [{ labelName: 'descrizione', paragraphName: 'desc', content: `Prodotto ${codice}` }],
-});
-
 /** Lo stesso box dopo il confronto con lo storico: a listino, col suo dato. */
 const boxDaListino = (groupId: number, codice: string): SyncJsonPluginRef => ({
   groupId,
@@ -101,6 +93,8 @@ const boxFantasma = (groupId: number, codice: string): SyncJsonPluginRef => ({
 });
 
 const payloadBase = (): Record<string, unknown> => ({
+  versioneImport: 1,
+  reportStorico: reportBase(),
   promo: 'Volantino 45',
   promoId: PROMO,
   areaId: AREA,
@@ -109,19 +103,23 @@ const payloadBase = (): Record<string, unknown> => ({
   fileName: NOME_FILE,
   scannedAt: '2026-10-29T08:00:00.000Z',
   exportPath: '/export/vol45',
-  refs: [boxPlugin(8, '4969665'), boxPlugin(9, '1404871')],
+  refs: [boxDaListino(8, '4969665'), boxDaListino(9, '1404871')],
 });
 
-const esitoSenzaProblemi = (): EsitoConfrontoStorico => ({
-  lista: [boxDaListino(8, '4969665'), boxDaListino(9, '1404871')],
+const reportBase = (): Omit<OrigineStorico, 'importatoIl' | 'nomeFile'> => ({
+  boxNelVolantino: 2,
+  referenzeDaListino: 2,
   nonImpaginate: [],
-  fuoriListino: [],
+  lasciapassareNonImpaginate: false,
+  totaleFuoriListino: 0,
+  fuoriListinoIgnorati: 0,
+  boxFuoriListino: [],
 });
 
 function preparaServizi() {
   const kitRuntime = {
-    getKitRuntimeById: vi.fn(async (_id: string): Promise<{ guidId: string; guidArea: string; guidCanale: string } | null> => (
-      { guidId: KIT, guidArea: AREA, guidCanale: CANALE }
+    getKitRuntimeById: vi.fn(async (_id: string): Promise<{ guidId: string; guidArea: string; guidCanale: string; idPromo: string } | null> => (
+      { guidId: KIT, guidArea: AREA, guidCanale: CANALE, idPromo: PROMO }
     )),
     getFilesRuntimeByIdKitRuntime: vi.fn(async (_id: string): Promise<FileItemKit[] | null> => []),
     insertNewFileRuntime: vi.fn(async (_file: FileItemKit) => undefined),
@@ -155,14 +153,7 @@ function preparaServizi() {
   const tipoExport = {
     getTipoExportByCodice: vi.fn(async (_codice: string): Promise<{ id: string; codice: string } | null> => ({ id: 'tipo-vol', codice: 'VOL' })),
   };
-  const confronta = vi.fn(async (_req: Request, _payload: PayloadConfrontoStorico): Promise<EsitoConfrontoStorico> => esitoSenzaProblemi());
-  const storico: StoricoVolantinoAgenzia = {
-    confronta,
-    campiObbligatoriFuoriListino: [{ campo: 'codice', etichetta: 'Codice referenza' }],
-    referenzaFuoriListino: (record: RecordListino) => ({ dataFields: { codice_referenza: String(record.codice ?? '') }, meccanica: '' }),
-    referenzaPerReport: (record: RecordListino) => ({ codice: String(record.codice ?? ''), descrizione: String(record.descrizione ?? ''), campi: [] }),
-  };
-  const agenziaLib: { storicoVolantino?: StoricoVolantinoAgenzia } = { storicoVolantino: storico };
+  const agenziaLib: { supportaImportStorico?: boolean } = { supportaImportStorico: true };
   // Upload del PDF su Olimpo: nessuna chiamata di rete, risponde il finto Olimpo
   const uploadOlimpo = vi.spyOn(ServerUtils, 'sendToFICOApi').mockResolvedValue({
     data: { esito: true, error: '', content: { id: 'materiale-olimpo-1', file_name: 'volantino.pdf', json_meta: '{}', pagine: 4 } },
@@ -182,7 +173,7 @@ function preparaServizi() {
   stato.servizi.set('TipoExportService', tipoExport);
   stato.servizi.set('AgenziaLib', agenziaLib);
 
-  return { kitRuntime, referenze, puntiVendita, storiaPuntiVendita, promo, area, canale, tipoExport, confronta, agenziaLib, uploadOlimpo };
+  return { kitRuntime, referenze, puntiVendita, storiaPuntiVendita, promo, area, canale, tipoExport, agenziaLib, uploadOlimpo };
 }
 type Servizi = ReturnType<typeof preparaServizi>;
 
@@ -317,7 +308,6 @@ describe('POST /api/external/sync_json_plugin: payload', () => {
     expect(res.status).toBe(400);
     expect(res.body.message).toBe('Le referenze del volantino (refs) devono essere un elenco');
     nessunaRicerca(servizi);
-    expect(servizi.confronta).not.toHaveBeenCalled();
     nessunaScrittura(servizi);
     await cartellaUploadVuota();
   });
@@ -339,7 +329,6 @@ describe('POST /api/external/sync_json_plugin: anagrafiche', () => {
     expect(res.body.message).toBe(messaggio);
     // Il payload e valido: si arriva davvero alle ricerche, a partire dalla promo
     expect(servizi.promo.getPromoById).toHaveBeenCalledWith(PROMO);
-    expect(servizi.confronta).not.toHaveBeenCalled();
     nessunaScrittura(servizi);
     await cartellaUploadVuota();
   });
@@ -360,13 +349,12 @@ describe('POST /api/external/sync_json_plugin: anagrafiche', () => {
     { caso: 'di un altro canale', guidArea: AREA, guidCanale: 'canale-2' },
   ])('kit $caso: 400 senza confronto con lo storico', async ({ guidArea, guidCanale }) => {
     const servizi = preparaServizi();
-    servizi.kitRuntime.getKitRuntimeById.mockResolvedValue({ guidId: KIT, guidArea, guidCanale });
+    servizi.kitRuntime.getKitRuntimeById.mockResolvedValue({ guidId: KIT, guidArea, guidCanale, idPromo: PROMO });
 
     const res = await invia(payloadBase());
 
     expect(res.status).toBe(400);
     expect(res.body.message).toBe(`Il kit ${KIT} appartiene ad area/canale ${guidArea}/${guidCanale}, non a ${AREA}/${CANALE}`);
-    expect(servizi.confronta).not.toHaveBeenCalled();
     nessunaScrittura(servizi);
   });
 
@@ -379,7 +367,14 @@ describe('POST /api/external/sync_json_plugin: anagrafiche', () => {
     expect(res.status).toBe(400);
     expect(res.body.message).toBe('Il tipo di export VOL non e configurato');
     expect(servizi.tipoExport.getTipoExportByCodice).toHaveBeenCalledWith(EXPORT_DI_SISTEMA.VOL);
-    expect(servizi.confronta).not.toHaveBeenCalled();
+    nessunaScrittura(servizi);
+  });
+  it('kit di una promo diversa: rifiuta l’import senza scritture', async () => {
+    const servizi = preparaServizi();
+    servizi.kitRuntime.getKitRuntimeById.mockResolvedValue({ guidId: KIT, guidArea: AREA, guidCanale: CANALE, idPromo: 'altra-promo' });
+    const res = await invia(payloadBase());
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe('Il kit non appartiene alla promo indicata');
     nessunaScrittura(servizi);
   });
 });
@@ -387,7 +382,7 @@ describe('POST /api/external/sync_json_plugin: anagrafiche', () => {
 describe('POST /api/external/sync_json_plugin: storico del cliente', () => {
   it('cliente senza storico: 400 esplicito e nessuna scrittura', async () => {
     const servizi = preparaServizi();
-    delete servizi.agenziaLib.storicoVolantino;
+    delete servizi.agenziaLib.supportaImportStorico;
 
     const res = await invia(payloadBase());
 
@@ -397,26 +392,23 @@ describe('POST /api/external/sync_json_plugin: storico del cliente', () => {
     await cartellaUploadVuota();
   });
 
-  it('orfanelli senza lasciapassare: esito negativo con l\'elenco, nessuna scrittura', async () => {
+  it('non impaginate senza lasciapassare: 400 e nessuna scrittura', async () => {
     const servizi = preparaServizi();
-    const orfanello = { codice: '5550001', descrizione: 'PASSATA 700G' };
-    servizi.confronta.mockResolvedValue({ ...esitoSenzaProblemi(), nonImpaginate: [orfanello] });
+    const orfanello = { codice: '5550001', descrizione: 'PASSATA 700G', campi: [] };
 
-    const res = await invia(payloadBase());
+    const res = await invia({ ...payloadBase(), reportStorico: { ...reportBase(), nonImpaginate: [orfanello] } });
 
-    expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ success: false, esito: false, orfanelli: [orfanello], fantasmi: [] });
-    expect(res.body.error).toContain('serve il lasciapassare');
+    expect(res.status).toBe(400);
+    expect(res.body.message).toContain('non e coerente');
     nessunaScrittura(servizi);
     await cartellaUploadVuota();
   });
 
   it('orfanelli col lasciapassare: si salva e l\'esito dell\'import li registra', async () => {
     const servizi = preparaServizi();
-    const orfanello = { codice: '5550001', descrizione: 'PASSATA 700G' };
-    servizi.confronta.mockResolvedValue({ ...esitoSenzaProblemi(), nonImpaginate: [orfanello] });
+    const orfanello = { codice: '5550001', descrizione: 'PASSATA 700G', campi: [] };
 
-    const res = await invia({ ...payloadBase(), lasciapassareOrfanelli: true });
+    const res = await invia({ ...payloadBase(), reportStorico: { ...reportBase(), nonImpaginate: [orfanello], lasciapassareNonImpaginate: true } });
 
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ success: true, orfanelliIgnorati: 1 });
@@ -427,29 +419,42 @@ describe('POST /api/external/sync_json_plugin: storico del cliente', () => {
     }));
   });
 
-  it('fantasmi senza conferma: esito negativo con l\'elenco, nessuna scrittura', async () => {
+  it('box fuori listino senza decisione finale: 400 e nessuna scrittura', async () => {
     const servizi = preparaServizi();
-    const fantasma = boxFantasma(12, '7770001');
-    servizi.confronta.mockResolvedValue({ ...esitoSenzaProblemi(), fuoriListino: [fantasma] });
 
-    const res = await invia(payloadBase());
+    const res = await invia({ ...payloadBase(), reportStorico: { ...reportBase(), boxFuoriListino: [{ codiceBox: '12', ignorato: false, testoBox: [], referenze: [] }] } });
 
-    expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ success: false, esito: false, orfanelli: [], fantasmi: [fantasma] });
-    expect(res.body.error).toContain('serve la conferma');
+    expect(res.status).toBe(400);
+    expect(res.body.message).toContain('non e coerente');
     nessunaScrittura(servizi);
     await cartellaUploadVuota();
   });
 
-  it('fantasmi confermati ma senza decisione: dice quale box manca, nessuna scrittura', async () => {
+  it('box compilato senza la corrispondente referenza finale: 400, nessuna scrittura', async () => {
     const servizi = preparaServizi();
-    servizi.confronta.mockResolvedValue({ ...esitoSenzaProblemi(), fuoriListino: [boxFantasma(12, '7770001')] });
 
-    const res = await invia({ ...payloadBase(), confermaFantasmi: true, fantasmi: [] });
+    const res = await invia({ ...payloadBase(), reportStorico: {
+      ...reportBase(), totaleFuoriListino: 1,
+      boxFuoriListino: [{ codiceBox: '12', ignorato: false, testoBox: [], referenze: [{ codice: '7770001', descrizione: 'Olive', campi: [] }] }],
+    } });
 
-    expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ success: false, esito: false });
-    expect(res.body.fantasmiIncompleti).toEqual([expect.objectContaining({ groupId: 12, pag: 3 })]);
+    expect(res.status).toBe(400);
+    expect(res.body.message).toContain('non e coerente');
+    nessunaScrittura(servizi);
+  });
+  it.each(['versioneImport', 'reportStorico'])('senza %s rifiuta il vecchio contratto senza chiamate esterne', async (campo) => {
+    const servizi = preparaServizi();
+    const payload = payloadBase();
+    delete payload[campo];
+    const res = await invia(payload);
+    expect(res.status).toBe(400);
+    expect(res.body.message).toContain('Import finale');
+    nessunaScrittura(servizi);
+  });
+  it.each([null, 'scansione', { groupId: 1 }, { ...boxDaListino(1, '1'), foto: ['1.psd'] }])('rifiuta referenze finali non valide: %j', async (ref) => {
+    const servizi = preparaServizi();
+    const res = await invia({ ...payloadBase(), refs: [ref] });
+    expect(res.status).toBe(400);
     nessunaScrittura(servizi);
   });
 });
@@ -459,20 +464,14 @@ describe('POST /api/external/sync_json_plugin: salvataggio', () => {
     const servizi = preparaServizi();
     const rimozione = vi.spyOn(fs.promises, 'rm');
 
-    const res = await invia({ ...payloadBase(), confermaFantasmi: false, fantasmi: [], lasciapassareOrfanelli: false });
+    const res = await invia(payloadBase());
 
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({
       success: true, referenzeCreate: 2, referenzeFantasmaCreate: 0, fantasmiIgnorati: 0, orfanelliIgnorati: 0,
     });
 
-    // Lo storico riceve il contesto della promo e le foto normalizzate, senza le decisioni dell'operatore
-    const [, inviatoAlloStorico] = servizi.confronta.mock.calls[0];
-    expect(inviatoAlloStorico.promoContext).toEqual([{ nome_field: 'ap_name', user_value: 'LA SPEZIA' }]);
-    expect(inviatoAlloStorico.refs.map((ref) => ref.foto)).toEqual([[{ nome: '4969665.psd' }], [{ nome: '1404871.psd' }]]);
-    expect(inviatoAlloStorico).not.toHaveProperty('confermaFantasmi');
-    expect(inviatoAlloStorico).not.toHaveProperty('fantasmi');
-    expect(inviatoAlloStorico).not.toHaveProperty('lasciapassareOrfanelli');
+    expect(servizi.uploadOlimpo).toHaveBeenCalledTimes(1);
 
     // Il PDF va su Olimpo col suo hash e il nome indicato dal plugin
     const [, url, metodo, corpo] = servizi.uploadOlimpo.mock.calls[0];
@@ -514,7 +513,7 @@ describe('POST /api/external/sync_json_plugin: salvataggio', () => {
       fuoriListinoIgnorati: 0,
       boxNelVolantino: 2,
       referenzeDaListino: 2,
-      boxFuoriListino: [],
+      report: expect.objectContaining({ ...reportBase(), nomeFile: NOME_FILE }),
     }));
 
     // Il temporaneo scritto da multer e rimosso con fs.promises.rm prima delle scritture sul kit
@@ -527,16 +526,13 @@ describe('POST /api/external/sync_json_plugin: salvataggio', () => {
 
   it('fantasmi confermati e decisi: il compilato diventa referenza, l\'ignorato no', async () => {
     const servizi = preparaServizi();
-    servizi.confronta.mockResolvedValue({
-      ...esitoSenzaProblemi(),
-      fuoriListino: [boxFantasma(12, '7770001'), boxFantasma(13, '7770002')],
+    const res = await invia({ ...payloadBase(),
+      refs: [boxDaListino(8, '4969665'), boxDaListino(9, '1404871'), { ...boxFantasma(12, '7770001'), dataFields: { codice_referenza: '7770001' } }],
+      reportStorico: { ...reportBase(), totaleFuoriListino: 1, fuoriListinoIgnorati: 1, boxFuoriListino: [
+        { codiceBox: '12', pag: 3, ignorato: false, testoBox: ['OLIVE VERDI'], referenze: [{ codice: '7770001', descrizione: 'OLIVE VERDI', campi: [] }] },
+        { codiceBox: '13', pag: 3, ignorato: true, testoBox: [], referenze: [] },
+      ] },
     });
-    const decisi: FantasmaDeciso[] = [
-      { groupId: 12, pag: 3, ignorato: false, referenze: [{ codice: '7770001', descrizione: 'OLIVE VERDI' }] },
-      { groupId: 13, pag: 3, ignorato: true, referenze: [] },
-    ];
-
-    const res = await invia({ ...payloadBase(), confermaFantasmi: true, fantasmi: decisi });
 
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ success: true, referenzeCreate: 2, referenzeFantasmaCreate: 1, fantasmiIgnorati: 1 });
@@ -638,11 +634,10 @@ describe('POST /api/external/sync_json_plugin: pubblicazione del kit', () => {
 
   it('orfanelli senza lasciapassare: niente pubblicazione', async () => {
     const servizi = preparaServizi();
-    servizi.confronta.mockResolvedValue({ ...esitoSenzaProblemi(), nonImpaginate: [{ codice: '1' }] });
 
-    const res = await invia(payloadBase());
+    const res = await invia({ ...payloadBase(), reportStorico: { ...reportBase(), nonImpaginate: [{ codice: '1', descrizione: '', campi: [] }] } });
 
-    expect(res.body).toMatchObject({ success: false });
+    expect(res.status).toBe(400);
     expect(servizi.kitRuntime.pubblicaKitDaStorico).not.toHaveBeenCalled();
   });
 });

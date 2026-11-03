@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ImportStorico } from '../../../../lib/types';
-import type { IAgenziaLib } from '../../agenzia_lib/types';
 import type { IConfigService } from '../../interfaces/IConfigService';
 import { TipiDiExport } from '../../models';
 import { FilesRuntime } from '../../models/files_runtime';
@@ -32,7 +31,7 @@ function creaServizio(referenze: Array<Record<string, unknown>>, importStorico: 
     import_storico: importStorico
   } as never);
   const configService = { getFlyerInsightsConfig: vi.fn(async () => ({})) } as unknown as IConfigService;
-  return new VolantinoService(configService, {} as IAgenziaLib);
+  return new VolantinoService(configService);
 }
 
 afterEach(() => {
