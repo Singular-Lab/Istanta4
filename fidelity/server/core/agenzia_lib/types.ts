@@ -1,7 +1,6 @@
-import type { Request } from "express";
 import type { TIPO_UTENTI } from "../../../lib/enums.js";
-import type { AnalisiMomentoTracciato, CompiledField, DataFields, DimensioneVisibilitaPromo, FantasmaDeciso, GlobalUserFilter, IndesignPluginExport, MenaboDivisioneParams, MenaboLayoutDivisioneSalvata, MenaboRisultato, RecordListino, ReferenzeIstanta, RisultatoConfrontoMomento, TracciatoQueryRequest, TracciatoReport, TracciatoReportWidget, UtentiMeta } from "../../../lib/types.js";
-import type { PromoContextValue, PuntoVenditaDaImportareDTO, ReferenzaStoricoDTO } from "../dto/index.js";
+import type { AnalisiMomentoTracciato, CompiledField, DataFields, DimensioneVisibilitaPromo, GlobalUserFilter, IndesignPluginExport, MenaboDivisioneParams, MenaboLayoutDivisioneSalvata, MenaboRisultato, OrigineStorico, RisultatoConfrontoMomento, TracciatoQueryRequest, TracciatoReport, TracciatoReportWidget, UtentiMeta } from "../../../lib/types.js";
+import type { PromoContextValue, PuntoVenditaDaImportareDTO } from "../dto/index.js";
 import type { OidcUserClaims } from "../interfaces/IOidcService.js";
 
 // ── Tipi di base ──────────────────────────────────────────────────────────────
@@ -201,6 +200,7 @@ export interface PluginPayloadRef {
 export interface SyncJsonPluginRef {
   groupId?: number | string;
   dna?: string;
+  meccanica?: string;
   compiledFields?: CompiledField[];
   dataFields?: DataFields;
   /** Foto Olimpo: il nome identifica il link InDesign, guidId identifica l'asset remoto. */
@@ -255,45 +255,8 @@ export interface SyncJsonPluginPayload {
   // "nome_field": "ap_name",
   // "user_value": "LA SPEZIA"
   promoContext?: Array<{ nome_field: string, user_value: PromoContextValue }>
-  /** Il plugin lo rimanda a true quando l'operatore conferma i fantasmi gia segnalati. */
-  confermaFantasmi?: boolean;
-  /** Cosa si e deciso di ogni fantasma segnalato: compilato oppure ignorato. */
-  fantasmi?: FantasmaDeciso[];
-  /**
-   * Gli orfanelli sono in lista e mancano solo dal volantino: e un problema di
-   * impaginazione, non di dati. Con il lasciapassare si salva lo stesso.
-   */
-  lasciapassareOrfanelli?: boolean;
-}
-
-/** Il sistema di storico riceve il payload senza le decisioni dell'operatore: quelle sono di FP. */
-export type PayloadConfrontoStorico = Omit<SyncJsonPluginPayload, 'confermaFantasmi' | 'fantasmi' | 'lasciapassareOrfanelli' | 'refs'> & {
-  refs: PluginPayloadRef[];
-};
-
-/** Il volantino confrontato col listino della GDO. */
-export interface EsitoConfrontoStorico {
-  /** Box trovati a listino, col dato di listino: diventano le referenze del kit. */
-  lista: SyncJsonPluginRef[];
-  /** A listino ma senza un box nel volantino (orfanelli). */
-  nonImpaginate: RecordListino[];
-  /** Nel volantino ma non a listino (fantasmi): di ognuno l'operatore decide. */
-  fuoriListino: SyncJsonPluginRef[];
-}
-
-/**
- * Come una GDO recupera un volantino dallo storico. Il flusso (decisioni
- * dell'operatore, referenze, report) e di FP ed e uguale per tutti; la lib dice
- * solo come confrontare il volantino col listino e come leggere i record del suo sistema.
- */
-export interface StoricoVolantinoAgenzia {
-  confronta(req: Request, payload: PayloadConfrontoStorico): Promise<EsitoConfrontoStorico>;
-  /** Campi da compilare perche un box fuori listino diventi una referenza. */
-  campiObbligatoriFuoriListino: Array<{ campo: string; etichetta: string }>;
-  /** Da record compilato a mano a dato della referenza FP. */
-  referenzaFuoriListino(record: RecordListino): Pick<ReferenzeIstanta, 'dataFields' | 'meccanica'>;
-  /** Da record di listino a voce del report, coi campi che contano per questo cliente. */
-  referenzaPerReport(record: RecordListino): ReferenzaStoricoDTO;
+  versioneImport?: 1;
+  reportStorico?: Omit<OrigineStorico, 'importatoIl' | 'nomeFile'>;
 }
 
 // ── Import dei punti vendita da Excel ─────────────────────────────────────────
@@ -414,7 +377,7 @@ export interface IAgenziaLib {
    * Import del volantino da storico. Opzionale: c'e solo se la GDO ha un sistema
    * di storico da cui recuperarlo; senza, il plugin riceve un errore esplicito.
    */
-  storicoVolantino?: StoricoVolantinoAgenzia;
+  supportaImportStorico?: boolean;
 
   /**
    * Tracciato del file punti vendita della GDO. Opzionale: senza, FP legge il

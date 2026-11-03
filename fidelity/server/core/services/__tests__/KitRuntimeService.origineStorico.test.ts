@@ -1,7 +1,6 @@
 import type { Request } from 'express';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ImportStorico } from '../../../../lib/types';
-import type { IAgenziaLib } from '../../agenzia_lib/types';
 import { Area } from '../../models/aree';
 import { Canale } from '../../models/canali';
 import { DesignKit } from '../../models/design_kit';
@@ -25,13 +24,14 @@ const IMPORT: ImportStorico = {
   lasciapassareNonImpaginate: false,
   fuoriListino: [],
   fuoriListinoIgnorati: 0,
-};
-
-const agenzia = {
-  storicoVolantino: {
-    referenzaPerReport: (record: Record<string, unknown>) => ({ codice: String(record.CODICE), descrizione: 'Mozzarella', campi: [] }),
+  report: {
+    importatoIl: '2026-10-30T10:00:00.000Z',
+    nomeFile: 'volantino-ottobre.json',
+    nonImpaginate: [{ codice: '100', descrizione: 'Mozzarella', campi: [] }],
+    lasciapassareNonImpaginate: true,
+    totaleFuoriListino: 0, fuoriListinoIgnorati: 0, boxFuoriListino: [],
   },
-} as unknown as IAgenziaLib;
+};
 
 const preparaKit = (importStorico: ImportStorico | null) => {
   vi.spyOn(RuntimeKit, 'findOne').mockResolvedValue({
@@ -50,14 +50,14 @@ const preparaKit = (importStorico: ImportStorico | null) => {
   vi.spyOn(Promo, 'findOne').mockResolvedValue(null);
 };
 
-const service = () => new KitRuntimeService({} as never, {} as never, agenzia);
+const service = () => new KitRuntimeService({} as never, {} as never);
 
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
 describe('getKitPerGestioneLavorazione: report dello storico', () => {
-  it("un kit dallo storico porta il report adattato dall'agenzia lib", async () => {
+  it('un kit dallo storico porta il report finale preparato dal plugin', async () => {
     preparaKit(IMPORT);
 
     const kit = await service().getKitPerGestioneLavorazione('p1', 'k1', {} as Request);

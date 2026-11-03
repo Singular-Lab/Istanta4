@@ -1,7 +1,6 @@
 import { EXPORT_DI_SISTEMA } from '../../../lib/enums';
 import { isAppError, wrapDatabaseError, wrapNotFoundError } from '../../../lib/errors';
 import { FileItemKit, ImportStorico } from '../../../lib/types';
-import type { IAgenziaLib } from '../agenzia_lib/types';
 import { urlFotoOlimpo } from '../utils/urlOlimpo';
 import {
   FlyerInsightsDTO,
@@ -26,8 +25,7 @@ import { percentualeIngombro } from '../utils/referenzaStampata';
  */
 export class VolantinoService implements IVolantinoService {
   constructor(
-    private readonly configService: IConfigService,
-    private readonly agenziaLib: IAgenziaLib
+    private readonly configService: IConfigService
   ) { }
 
   async prendiIVolantiniCaricatiDaDB(): Promise<any> {
@@ -114,7 +112,7 @@ export class VolantinoService implements IVolantinoService {
       const codiciBoxFuoriListino = new Set(
         (importStorico?.fuoriListino ?? []).map((voce) => String(voce.codiceBox)).filter(Boolean)
       );
-      const origineStorico = origineStoricoPerReport(importStorico, this.agenziaLib);
+      const origineStorico = origineStoricoPerReport(importStorico);
 
       if (!referenze || referenze.length === 0) {
         return {

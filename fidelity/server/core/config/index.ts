@@ -71,8 +71,6 @@ const envSchema = z.object({
     // Plugin Analytics
     PLUGIN_ANALYTICS_RETENTION_DAYS: z.string().regex(/^\d+$/).transform(Number).default(90),
 
-    //Configurazione url DB1
-    DBUNO_URL: z.url().optional(),
 
     // Identificativo cliente (agenzia_lib) — determina le logiche custom per GDO
     CLIENT_ID: z.string().default('default'),

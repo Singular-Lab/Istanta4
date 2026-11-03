@@ -125,11 +125,6 @@
       "count": 4
     }
   },
-  "server/core/agenzia_lib/conadcno/__tests__/conadcno-storico.test.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 2
-    }
-  },
   "server/core/agenzia_lib/conadcno/punti-vendita.ts": {
     "no-useless-escape": {
       "count": 3

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import type { ImportStorico } from '../../../lib/types';
-import type { IAgenziaLib } from '../agenzia_lib/types';
 import { origineStoricoPerReport } from './origineStorico';
 
 // Il report dell'import da storico, condiviso dal dettaglio produttivo del kit e dagli insight
@@ -16,24 +15,22 @@ const IMPORT: ImportStorico = {
   referenzeDaListino: 38,
 };
 
-const agenzia = {
-  storicoVolantino: {
-    referenzaPerReport: (record: Record<string, unknown>) => ({
-      codice: String(record.CODICE ?? ''),
-      descrizione: String(record.DESCRIZIONE ?? ''),
-      campi: [],
-    }),
-  },
-} as unknown as IAgenziaLib;
-
 describe('origineStoricoPerReport', () => {
   it('senza import da storico non produce un report', () => {
-    expect(origineStoricoPerReport(null, agenzia)).toBeUndefined();
+    expect(origineStoricoPerReport(null)).toBeUndefined();
     expect(origineStoricoPerReport(undefined)).toBeUndefined();
   });
 
-  it("i record di listino passano dall'agenzia lib del cliente", () => {
-    const report = origineStoricoPerReport(IMPORT, agenzia);
+  it('usa il report finale del plugin senza interpretare i dati del listino', () => {
+    const finale = {
+      importatoIl: IMPORT.importatoIl, nomeFile: IMPORT.nomeFile,
+      boxNelVolantino: 40, referenzeDaListino: 38,
+      nonImpaginate: [{ codice: '100', descrizione: 'Mozzarella', campi: [] }],
+      lasciapassareNonImpaginate: true, totaleFuoriListino: 1, fuoriListinoIgnorati: 1,
+      boxFuoriListino: [],
+    };
+    const report = origineStoricoPerReport({ ...IMPORT, report: finale });
+    expect(report).toBe(finale);
 
     expect(report).toMatchObject({
       importatoIl: '2026-10-30T10:00:00.000Z',
@@ -56,7 +53,7 @@ describe('origineStoricoPerReport', () => {
   });
 
   it('sugli import precedenti ricostruisce i box dalla lista dei compilati', () => {
-    const report = origineStoricoPerReport(IMPORT, agenzia);
+    const report = origineStoricoPerReport(IMPORT);
 
     expect(report?.boxFuoriListino).toEqual([
       { codiceBox: 'g7', pag: 3, ignorato: false, testoBox: [], referenze: [{ codice: '200', descrizione: 'Pasta', campi: [] }] },
@@ -70,10 +67,10 @@ describe('origineStoricoPerReport', () => {
         { groupId: 7, pag: 3, ignorato: false, testoBox: ['PASTA 500 G'], referenze: [{ CODICE: '200', DESCRIZIONE: 'Pasta' }] },
         { groupId: 8, pag: 4, ignorato: true, testoBox: ['VOCE'], referenze: [] },
       ],
-    }, agenzia);
+    });
 
     expect(report?.boxFuoriListino).toEqual([
-      { codiceBox: '7', pag: 3, ignorato: false, testoBox: ['PASTA 500 G'], referenze: [{ codice: '200', descrizione: 'Pasta', campi: [] }] },
+      { codiceBox: '7', pag: 3, ignorato: false, testoBox: ['PASTA 500 G'], referenze: [{ codice: '', descrizione: '', campi: [{ label: 'CODICE', valore: '200' }, { label: 'DESCRIZIONE', valore: 'Pasta' }] }] },
       { codiceBox: '8', pag: 4, ignorato: true, testoBox: ['VOCE'], referenze: [] },
     ]);
   });

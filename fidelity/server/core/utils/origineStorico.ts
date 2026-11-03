@@ -5,7 +5,6 @@ import type {
   RecordListino,
   ReferenzaReportStorico
 } from '../../../lib/types';
-import type { IAgenziaLib } from '../agenzia_lib/types';
 import { chiaveBox } from './fantasmi';
 
 const referenzaGenerica = (record: RecordListino): ReferenzaReportStorico => ({
@@ -16,15 +15,14 @@ const referenzaGenerica = (record: RecordListino): ReferenzaReportStorico => ({
     .map(([label, valore]) => ({ label, valore: String(valore) }))
 });
 
-/** Adatta il report salvato sul runtime kit alle etichette previste dalla GDO installata. */
+/** Legge il report del plugin e conserva una vista generica degli import precedenti. */
 export const origineStoricoPerReport = (
-  importStorico: ImportStorico | null | undefined,
-  agenziaLib?: IAgenziaLib
+  importStorico: ImportStorico | null | undefined
 ): OrigineStorico | undefined => {
   if (!importStorico) return undefined;
+  if (importStorico.report) return importStorico.report;
 
-  const referenza = (record: RecordListino): ReferenzaReportStorico =>
-    agenziaLib?.storicoVolantino?.referenzaPerReport(record) ?? referenzaGenerica(record);
+  const referenza = referenzaGenerica;
 
   const boxFuoriListino: BoxReportStorico[] = importStorico.boxFuoriListino
     ? importStorico.boxFuoriListino.map((box) => ({

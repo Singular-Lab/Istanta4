@@ -23,7 +23,7 @@ export async function loadAgenziaLib(
 
   try {
     // Dynamic import del modulo specifico per il cliente
-    const mod = await import(`./${clientFolder}/index.js`);
+    const mod = await import(/* @vite-ignore */ `./${clientFolder}/index.js`);
     if (!mod[`${clientId}AgenziaLib`]) {
       throw new Error(
         `Il modulo agenzia_lib/${clientFolder} non esporta "${clientId}AgenziaLib"`

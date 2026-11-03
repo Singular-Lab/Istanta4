@@ -424,8 +424,7 @@ function bindServices() {
   container.bind<IKitRuntimeService>(TYPES.KitRuntimeService).toDynamicValue(
     (context) => new KitRuntimeService(
       context.get<IIstantaService>(TYPES.IstantaService),
-      context.get<IWebhookService>(TYPES.WebhookService),
-      context.get<IAgenziaLib>(TYPES.AgenziaLib)
+      context.get<IWebhookService>(TYPES.WebhookService)
     )
   );
   container.bind<IDesignKitService>(TYPES.DesignKitService).toDynamicValue(
@@ -462,8 +461,7 @@ function bindServices() {
   );
   container.bind<IVolantinoService>(TYPES.VolantinoService).toDynamicValue(
     (context) => new VolantinoService(
-      context.get<IConfigService>(TYPES.ConfigService),
-      context.get<IAgenziaLib>(TYPES.AgenziaLib)
+      context.get<IConfigService>(TYPES.ConfigService)
     )
   );
   container.bind<IMaterialiService>(TYPES.MaterialiService).toDynamicValue(
