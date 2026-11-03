@@ -35,6 +35,8 @@ COPY --from=builder /app/package.json ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/server ./server
 COPY --from=builder /app/lib ./lib
+# server/core/middleware/ssrWebpliant.ts importa a runtime src/ssr/webpliant.ts
+COPY --from=builder /app/src/ssr ./src/ssr
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/docker/server-entrypoint.prod.sh ./docker/server-entrypoint.prod.sh
 
