@@ -51,11 +51,13 @@
 /* Il bottone sta in alto, nella barra verde acqua, accanto all'info (Michele, 28/09): blu con
    il bordino bianco, cosi' si stacca da tutto il resto e non si confonde con gli strumenti di
    correzione, che sono un'altra cosa. */
-#tTimone { height: 36px; padding: 0 18px; border: 2px solid #fff; border-radius: 9px;
+/* I20-1191: REPORT COMPLETO, accanto, con lo stesso vestito */
+#tTimone, #tReportCompleto { height: 36px; padding: 0 18px; border: 2px solid #fff; border-radius: 9px;
            background: #1f5fd0; color: #fff; font: inherit; font-size: 13px; font-weight: 800;
            letter-spacing: .7px; cursor: pointer; vertical-align: middle; margin-right: 6px;
            box-shadow: 0 1px 3px rgba(0,0,0,.18); white-space: nowrap; }
-#tTimone:hover { background: #2a72ee; }
+#tTimone:hover, #tReportCompleto:hover { background: #2a72ee; }
+#tReportCompleto[disabled] { opacity: .7; cursor: progress; }
 #tTimone.acceso { background: #fff; color: #1f5fd0; }
 
 /* la barra del timone: sotto la barra alta, a destra della barra degli strumenti */
@@ -5182,10 +5184,11 @@ function rpCostruisci(piano, opzioni) {
 
     function chiediCorrezioni(p, poi) {
         if (correzioniReport && correzioniReport.versione === p.versione && correzioniReport.stato !== 'errore') {
-            if (correzioniReport.stato === 'ok') poi();
+            // I20-1191: se la richiesta e' in viaggio (REPORT COMPLETO e REPORT insieme) si aspetta lei
+            if (correzioniReport.stato === 'ok') poi(); else correzioniReport.attesa.push(poi);
             return;
         }
-        var mio = { versione: p.versione, stato: 'carico', perPagina: {} };
+        var mio = { versione: p.versione, stato: 'carico', perPagina: {}, attesa: [poi] };
         correzioniReport = mio;
         fetch(C4_BASE + 'Storico/Report/' + ID_VOL + '/' + p.versione + '?incorporato=true', { credentials: 'same-origin' })
             .then(function (r) { if (!r.ok || r.redirected) throw new Error(String(r.status)); return r.text(); })
@@ -5211,7 +5214,7 @@ function rpCostruisci(piano, opzioni) {
                 mio.stato = 'errore';
                 mio.errore = 'il server non ha risposto (' + ((e && e.message) || 'errore') + ').';
             })
-            .then(function () { if (correzioniReport === mio) poi(); });
+            .then(function () { if (correzioniReport === mio) mio.attesa.forEach(function (cb) { cb(); }); });
     }
 
     /* I20-1189: la miniatura a sinistra di una correzione: la foto della referenza di quel box nel piano
@@ -5430,6 +5433,14 @@ function rpCostruisci(piano, opzioni) {
             b.disabled = si;
             b.textContent = si ? 'PREPARO IL PDF…' : 'ESPORTA PDF';
         }
+        mandaPdf(p, aspetta, null);
+    }
+
+    /* Il report del piano p in PDF, nei Download. I20-1191: la usano ESPORTA PDF del report e il
+       pulsante REPORT COMPLETO dell'editor. senzaMotore(documento), se c'e', si chiama quando il
+       server dice che il motore dei PDF non c'e' (codice «motore_mancante»), col documento gia'
+       pronto e le immagini dentro: REPORT COMPLETO lo manda alla stampa del browser. */
+    function mandaPdf(p, aspetta, senzaMotore) {
         aspetta(true);
 
         var chi = document.querySelector('.barra_alta .utente');
@@ -5447,8 +5458,9 @@ function rpCostruisci(piano, opzioni) {
             correzioniErrore: oc.correzioniErrore
         });
 
+        var documento = null;
         foteDentro(foglio).then(function (conFoto) {
-            var documento =
+            documento =
                 '<!doctype html><html lang="it"><head><meta charset="utf-8">' +
                 '<title>' + rpEsc(nome) + '</title>' +
                 '<style>' + STILE_REPORT + STILE_PDF + '</style></head>' +
@@ -5464,7 +5476,9 @@ function rpCostruisci(piano, opzioni) {
             if (r.ok) return r.blob();
             // il server risponde nella busta di sempre: si prova a leggere il perche'
             return r.json().then(function (j) {
-                throw new Error((j && j.messaggio) || 'Il server non ha fatto il PDF.');
+                var e = new Error((j && j.messaggio) || 'Il server non ha fatto il PDF.');
+                e.codice = j && j.codice;
+                throw e;
             }, function () {
                 throw new Error('Il server non ha fatto il PDF (errore ' + r.status + ').');
             });
@@ -5484,10 +5498,79 @@ function rpCostruisci(piano, opzioni) {
             aspetta(false);
         }).catch(function (e) {
             aspetta(false);
+            if (senzaMotore && documento && e && e.codice === 'motore_mancante') { senzaMotore(documento); return; }
             messaggio('Esporta PDF', ((e && e.message) || 'Non si e\' riusciti a fare il PDF.') +
                       ' Puoi sempre usare STAMPA e scegliere «Salva come PDF».');
         });
     }
+
+    /* I20-1191: quando il server non puo' fare il PDF, il report va alla stampa del browser, da cui
+       si sceglie «Salva come PDF». Si stampa da un riquadro invisibile dentro la pagina e non da
+       una finestra nuova, che il browser bloccherebbe (arriva dopo un'attesa, non subito dopo il
+       clic). Le immagini sono gia' dentro il documento (foteDentro), ma si aspetta che siano
+       disegnate: print() non le aspetta. */
+    function stampaInRiquadro(documento) {
+        var vecchio = document.getElementById('tim_riquadro_stampa');
+        if (vecchio) vecchio.remove();
+        var f = document.createElement('iframe');
+        f.id = 'tim_riquadro_stampa';
+        f.setAttribute('aria-hidden', 'true');
+        f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;';
+        document.body.appendChild(f);
+        var d = f.contentWindow.document;
+        d.open();
+        d.write(documento);
+        d.close();
+        var scaduto = false;
+        setTimeout(function () { scaduto = true; }, 6000);
+        (function aspettaLeFoto() {
+            var img = d.images, pronte = true;
+            for (var i = 0; i < img.length; i++) if (!img[i].complete) { pronte = false; break; }
+            if (!pronte && !scaduto) { setTimeout(aspettaLeFoto, 120); return; }
+            try { f.contentWindow.focus(); f.contentWindow.print(); } catch (e) { /* riquadro tolto nel frattempo */ }
+        })();
+    }
+
+    /* I20-1191: REPORT COMPLETO, il pulsante accanto a MENABÒ AVANZATO. Fa il report del piano
+       SALVATO senza aprire il menabò: legge il piano, chiede le schede di Istanta delle referenze
+       e le correzioni dell'editor, e lo manda come ESPORTA PDF (pagine modificate, correzioni,
+       preview di tutte le pagine in coda). Lo vedono Agenzia e Marketing. */
+    var bReportCompleto = document.getElementById('tReportCompleto');
+
+    function reportCompleto() {
+        if (!bReportCompleto || bReportCompleto.disabled) return;
+        function aspetta(si) {
+            bReportCompleto.disabled = si;
+            bReportCompleto.textContent = si ? 'PREPARO IL REPORT…' : 'REPORT COMPLETO';
+        }
+        aspetta(true);
+        chiedi(C4_BASE + 'Timone/' + ID_VOL + '/Piano').then(function (j) {
+            if (!j || !j.ok || !j.dati || j.dati.esiste !== true) {
+                aspetta(false);
+                messaggio('Report completo', (j && j.messaggio) ||
+                          'Il menabò avanzato di questo volantino non e\' ancora stato aperto: non c\'e\' un report.');
+                return;
+            }
+            var p = j.dati;
+            var manca = {};
+            (p.voci || []).forEach(function (v) {
+                if (!v.idElemento) return;
+                var s = schedePerBox[String(v.idElemento)];
+                if (!s || s.stato === 'carico') manca[String(v.idElemento)] = true;
+            });
+            var daAspettare = Object.keys(manca).length + 1;   // + le correzioni
+            function pronto() {
+                if (--daAspettare > 0) return;
+                mandaPdf(p, aspetta, stampaInRiquadro);
+            }
+            Object.keys(manca).forEach(function (k) { chiediSchedaBox(k, pronto); });
+            chiediCorrezioni(p, pronto);
+        }).catch(function () {
+            aspetta(false);
+            messaggio('Report completo', 'Server non raggiungibile: il report non si e\' potuto fare.');
+        });
+    }
+    if (bReportCompleto) bReportCompleto.addEventListener('click', reportCompleto);
 
     /* DEPRECATA (j315, 29/09) - l'ESPORTA PDF di j313, che apriva una finestra nuova col report
        dentro e chiamava la stampa da li'.
@@ -5863,5 +5946,7 @@ function rpCostruisci(piano, opzioni) {
        server risponde 403 e il bottone resta nascosto: nessuna regola di ruolo scritta due volte. */
     chiedi(C4_BASE + 'Timone/' + ID_VOL + '/Piano').then(function (j) {
         if (j && j.ok) bottone.classList.remove('nascosto');
+        // I20-1191: REPORT COMPLETO solo se il piano c'e' (per chi vede il menabò: Agenzia e Marketing)
+        if (j && j.ok && j.dati && j.dati.esiste === true && bReportCompleto) bReportCompleto.classList.remove('nascosto');
     }).catch(function () { });
 })();
