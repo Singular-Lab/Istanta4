@@ -27,6 +27,7 @@ vi.mock('../../repositories/AuthProviderRepository', () => ({
 import { toUtenteResponseDTO } from '../../dto/UtenteDTO';
 import { UserService } from '../../services/UserService';
 import { sequelize } from '../../db/SequelizeConnector';
+import { hashUxpClientToken, UXP_CLIENT_TOKEN_HEADER } from '../../middleware/uxpOriginSession';
 import { UserController } from '../UserController';
 
 const utenteDb = {
@@ -45,6 +46,7 @@ describe('chiave privata Olympus', () => {
   });
 
   it('il login la mette in sessione ma non nella risposta', async () => {
+    const uxpClientToken = 'ab'.repeat(32);
     const session: Record<string, any> = {
       regenerate: (cb: (err?: unknown) => void) => cb(),
       save: (cb: (err?: unknown) => void) => cb(),
@@ -61,11 +63,16 @@ describe('chiave privata Olympus', () => {
     });
     new UserController(userService as any, {} as any, {} as any, {} as any).registerRoutes(app);
 
-    const res = await request(app).post('/api/login_user').send({ email: 'mario@esempio.it', password: 'x' });
+    const res = await request(app)
+      .post('/api/login_user')
+      .set('Origin', 'null')
+      .set(UXP_CLIENT_TOKEN_HEADER, uxpClientToken)
+      .send({ email: 'mario@esempio.it', password: 'x' });
 
     expect(res.status).toBe(200);
     expect(JSON.stringify(res.body)).not.toContain('chiave-privata-olympus');
     expect(session.private_key).toBe('chiave-privata-olympus');
+    expect(session.uxpClientTokenHash).toBe(hashUxpClientToken(uxpClientToken));
   });
 
   it('l\'elenco utenti dalla vista materializzata non la restituisce', async () => {

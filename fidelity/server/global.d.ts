@@ -31,6 +31,7 @@ declare module 'express-session' {
         lastIP?: string;
         lastUserAgent?: string;
         lastActivity?: Date;
+        uxpClientTokenHash?: string;
         // OIDC flow state
         oidc_state?: string;
         oidc_nonce?: string;

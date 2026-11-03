@@ -4,6 +4,20 @@ import { ForbiddenError } from '../../lib/errors/application/ForbiddenError';
 import { ErrorCodes } from '../../lib/errors/ErrorCodes';
 import config from './config/index';
 import { log } from './logger';
+import { UXP_CLIENT_TOKEN_HEADER } from './middleware/uxpOriginSession';
+
+const hasOpaqueUxpTransportHeader = (req: Request): boolean => {
+  if (!req.path.startsWith('/api/')) return false;
+
+  if (req.method === 'OPTIONS') {
+    const requestedHeaders = req.get('Access-Control-Request-Headers')
+      ?.split(',')
+      .map(header => header.trim().toLowerCase()) || [];
+    return requestedHeaders.includes(UXP_CLIENT_TOKEN_HEADER.toLowerCase());
+  }
+
+  return !!req.get(UXP_CLIENT_TOKEN_HEADER);
+};
 
 // Applica la configurazione CORS all'app Express
 export function applyCors(app: Express) {
@@ -28,7 +42,7 @@ export function applyCors(app: Express) {
     }
 
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-FP-Version, X-Ephemeral-Token, X-Browser-Hash, X-Requested-With, Accept, x-csrf-token, X-Request-ID, x-api-key, x-internal-request, x-internal-request-ts, x-internal-request-signature');
+    res.setHeader('Access-Control-Allow-Headers', `Content-Type, Authorization, X-FP-Version, X-Ephemeral-Token, X-Browser-Hash, X-Requested-With, Accept, x-csrf-token, X-Request-ID, x-api-key, x-internal-request, x-internal-request-ts, x-internal-request-signature, ${UXP_CLIENT_TOKEN_HEADER}`);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Expose-Headers', 'set-cookie, cookie, authorization, x-request-id, x-csrf-token, RateLimit-Limit, RateLimit-Remaining, RateLimit-Reset');
 
@@ -41,7 +55,7 @@ export function applyCors(app: Express) {
   };
 
   // Configurazione CORS standard per tutti gli altri endpoint (esclusi external ed ephemeral)
-  const corsOptions: cors.CorsOptions = {
+  const corsOptions = (req: Request): cors.CorsOptions => ({
     origin: (origin, callback) => {
       // Development: permetti tutti gli origin
       if (isDevelopment) {
@@ -53,8 +67,27 @@ export function applyCors(app: Express) {
         return callback(null, true); // Permetti richieste senza origin (Postman, curl)
       }
 
+      // Una webview locale UXP puo' serializzare la propria origine opaca come
+      // "null". L'header abilita soltanto il trasporto CORS: il suo valore viene
+      // verificato e associato alla sessione dal middleware successivo.
+      if (origin === 'null' && hasOpaqueUxpTransportHeader(req)) {
+        log.debug('Trasporto CORS UXP da origine opaca consentito', {
+          method: req.method,
+          path: req.path,
+          requestedHeaders: req.get('Access-Control-Request-Headers'),
+          userAgent: req.get('User-Agent'),
+        });
+        return callback(null, true);
+      }
+
       if (allowedOrigins.indexOf(origin) === -1) {
-        log.warn('Richiesta CORS bloccata: origin non consentito', { origin });
+        log.warn('Richiesta CORS bloccata: origin non consentito', {
+          origin,
+          method: req.method,
+          path: req.path,
+          requestedHeaders: req.get('Access-Control-Request-Headers'),
+          userAgent: req.get('User-Agent'),
+        });
         return callback(new ForbiddenError({
           message: `Origin non consentito da CORS: ${origin}`,
           resource: origin,
@@ -92,10 +125,11 @@ export function applyCors(app: Express) {
       'x-csrf-token',
       'X-Request-ID',
       'x-api-key',
+      UXP_CLIENT_TOKEN_HEADER,
     ],
     preflightContinue: false,
     optionsSuccessStatus: 204,
-  };
+  });
 
   // Applica CORS condizionale:
   // - development: permissivo su external/ephemeral per DX locale
@@ -107,6 +141,10 @@ export function applyCors(app: Express) {
       return permissiveCorsHandler(req, res, next);
     }
 
-    return cors(corsOptions)(req, res, next);
+    if (req.get('Origin') === 'null') {
+      res.vary('Access-Control-Request-Headers');
+    }
+
+    return cors(corsOptions(req))(req, res, next);
   });
 }
