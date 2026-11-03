@@ -278,6 +278,9 @@ export class PromoController extends BaseController {
 
   private async deletePromo(req: ExpressRequest<{ id: string }>, res: Response): Promise<void> {
     try {
+      // Il nome per il Registro Audit si legge prima: dopo la promo non c'e' piu'. Se non si legge
+      // (promo gia' assente in Fidelity) l'eliminazione va avanti come prima, senza nome.
+      const nomePromo = await this.promoService.getPromoById(req.params.id).then((p) => p?.nome ?? null).catch(() => null);
       verificaRisposta(
         await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
           req,
@@ -297,7 +300,7 @@ export class PromoController extends BaseController {
         this.sendResponse(res, HttpStatusCode.NOT_FOUND, { message: 'Promo not found' });
         return;
       }
-      AuditLogService.getInstance().configurationChanged(req, 'promo', 'delete', { promoId: req.params.id });
+      AuditLogService.getInstance().entityChanged(req, 'promo', 'delete', { type: 'Promo', id: req.params.id }, { promoId: req.params.id, nomePromo });
       this.sendResponse(res, HttpStatusCode.NO_CONTENT, null);
     } catch (error) {
       this.handleError(res, error as Error);
@@ -345,6 +348,16 @@ export class PromoController extends BaseController {
           '/FicoProcess/eliminaPromo'
         );
         result = await this.promoService.deleteNonPermanentePromo(id);
+      }
+      // Chi ha eliminato o ripristinato la promo, e quando: senza, dopo non resta traccia.
+      if (result) {
+        AuditLogService.getInstance().entityChanged(
+          req,
+          'promo',
+          stato === STATO_PROMO.ELIMINATA ? 'restore' : 'soft_delete',
+          { type: 'Promo', id },
+          { promoId: id, nomePromo: promo.nome, statoPrecedente: promo.stato }
+        );
       }
       this.sendResponse(res, HttpStatusCode.OK, result);
     } catch (error) {

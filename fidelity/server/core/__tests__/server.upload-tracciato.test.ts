@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FileManagementController } from '../controllers/FileManagementController';
 import type { IFileManagementService } from '../interfaces/IFileManagementService';
 import { Tracciati } from '../models';
+import { AuditLogService } from '../services/AuditLogService';
 import { ServerUtils } from '../utils/ServerUtils';
 
 vi.mock('../config/multerConfig', () => {
@@ -101,5 +102,49 @@ describe('POST /api/uploadTracciato/:idPromo - unicita del nome file nella promo
         expect(res.status).toBe(409);
         expect(ServerUtils.sendToFicoApiAxiosUploadTracciato).not.toHaveBeenCalled();
         expect(Tracciati.create).not.toHaveBeenCalled();
+    });
+});
+
+/** Chi ha caricato un tracciato resta nel Registro Audit: l'attivita' del pannello scade dopo 30 giorni. */
+describe('POST /api/uploadTracciato/:idPromo - Registro Audit', () => {
+    const createApp = () => {
+        const app = express();
+        app.use(express.json());
+        app.use((req, _res, next) => {
+            (req as unknown as { session: object }).session = {};
+            next();
+        });
+        new FileManagementController({} as IFileManagementService).registerRoutes(app);
+        return app;
+    };
+
+    let audit: { entityChanged: ReturnType<typeof vi.fn>; configurationChanged: ReturnType<typeof vi.fn> };
+    beforeEach(() => {
+        vi.restoreAllMocks();
+        vi.spyOn(Tracciati, 'findOne').mockResolvedValue(null as never);
+        vi.spyOn(Tracciati, 'create').mockImplementation(async (valori: unknown) => valori as never);
+        audit = { entityChanged: vi.fn(), configurationChanged: vi.fn() };
+        vi.spyOn(AuditLogService, 'getInstance').mockReturnValue(audit as unknown as AuditLogService);
+    });
+
+    it('registra il caricamento con file e promo dopo che Istanta lo ha accettato', async () => {
+        vi.spyOn(ServerUtils, 'sendToFicoApiAxiosUploadTracciato').mockResolvedValue({ status: 200, data: { esito: true } } as never);
+
+        const res = await request(createApp()).post('/api/uploadTracciato/promo-2026').send({ context: '[]' });
+
+        expect(res.status).toBe(201);
+        const tracciatoId = res.body.id_tracciati;
+        expect(audit.entityChanged).toHaveBeenCalledWith(expect.anything(), 'tracciato', 'upload', { type: 'Tracciato', id: tracciatoId },
+            { tracciatoId, fileName: 'ufi.xlsx', promoId: 'promo-2026', nomePromo: 'Promo promo-2026' });
+    });
+
+    it('niente voce se Istanta rifiuta il tracciato', async () => {
+        vi.spyOn(ServerUtils, 'sendToFicoApiAxiosUploadTracciato').mockResolvedValue({ status: 200, data: { esito: false, error: 'no' } } as never);
+
+        const res = await request(createApp()).post('/api/uploadTracciato/promo-2026').send({ context: '[]' });
+
+        expect(res.status).not.toBe(201);
+        expect(Tracciati.create).not.toHaveBeenCalled();
+        expect(audit.entityChanged).not.toHaveBeenCalled();
     });
 });

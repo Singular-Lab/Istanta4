@@ -3,6 +3,24 @@ import { AuditLog, AuditLogAttributes, AuditLogCreationAttributes, AuditLogInsta
 import { BaseRepository } from './BaseRepository';
 import { log } from '../logger';
 
+/**
+ * Le condizioni della ricerca testuale del Registro Audit, in OR, senza distinguere maiuscole e
+ * minuscole. details e' JSONB: ILIKE in PostgreSQL vale solo sul testo, e senza la conversione
+ * qualunque ricerca andava in errore. L'id dell'entita' (promo, tracciato) si cerca anche lui, cosi'
+ * le voci di una promo eliminata si ritrovano dal suo id.
+ */
+export function condizioniRicercaAudit(searchTerm: string): WhereOptions<AuditLogAttributes>[] {
+    const likeSearch = `%${searchTerm}%`;
+    return [
+        { resource: { [Op.iLike]: likeSearch } },
+        { action: { [Op.iLike]: likeSearch } },
+        { target_entity_type: { [Op.iLike]: likeSearch } },
+        { target_entity_id: { [Op.iLike]: likeSearch } },
+        { ip_address: { [Op.iLike]: likeSearch } },
+        where(cast(col('details'), 'text'), { [Op.iLike]: likeSearch }) as WhereOptions<AuditLogAttributes>,
+    ];
+}
+
 export interface AuditLogFilterOptions {
     page: number;
     limit: number;
@@ -93,14 +111,7 @@ export class AuditLogRepository
         }
 
         if (searchTerm) {
-            const likeSearch = `%${searchTerm}%`;
-            (where as any)[Op.or] = [
-                { resource: { [Op.iLike]: likeSearch } },
-                { action: { [Op.iLike]: likeSearch } },
-                { target_entity_type: { [Op.iLike]: likeSearch } },
-                { ip_address: { [Op.iLike]: likeSearch } },
-                { details: { [Op.iLike]: likeSearch } },
-            ];
+            (where as any)[Op.or] = condizioniRicercaAudit(searchTerm);
         }
 
         const offset = (page - 1) * limit;

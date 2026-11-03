@@ -1189,9 +1189,6 @@
   "server/core/repositories/AuditLogRepository.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 17
-    },
-    "@typescript-eslint/no-unused-vars": {
-      "count": 2
     }
   },
   "server/core/repositories/AuthProviderRepository.ts": {
