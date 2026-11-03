@@ -81,6 +81,20 @@ public sealed partial class ServizioTimone
         }
         await ctx.SaveChangesAsync();
 
+        // I20-1182: aprendo la finestra si apre il timone di ogni volantino della promo che ha
+        // pagine. Se la finestra parte piu' avanti, ci pensa PianoAsync quando si apre.
+        var adesso = DateTime.UtcNow;
+        if (daUtc <= adesso && adesso <= aUtc)
+        {
+            var versioni = await ctx.VolantiniPagines.AsNoTracking()
+                .Where(p => ctx.Volantinis.Any(v => v.Id == p.IdVol && v.Classificazione == classificazione))
+                .GroupBy(p => p.IdVol)
+                .Select(g => new { IdVol = g.Key, Versione = g.Max(x => x.Versione) })
+                .ToListAsync();
+            foreach (var v in versioni.OrderBy(v => v.IdVol))
+                await AssicuraPianoAsync(chi.Id, v.IdVol, v.Versione);
+        }
+
         return Esito.Fatto(await LeggiFinestraAsync(classificazione));
     }
 
