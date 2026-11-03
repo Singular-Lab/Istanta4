@@ -17,7 +17,7 @@ import utc from 'dayjs/plugin/utc';
 import express from 'express';
 import http from 'node:http';
 import path, { dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 dayjs.extend(customParseFormat);
 dayjs.extend(isSameOrAfter);
 dayjs.extend(isSameOrBefore);
@@ -28,31 +28,37 @@ dayjs.extend(utc);
 dayjs.locale('it');
 
 // ---------------- core / infrastruttura ----------------
+import healthRouter from '../src/app/http/health.routes.js';
+import metricsRouter from '../src/app/http/metrics.routes.js';
+import { closeRedisClient, initializeRedisClient } from '../src/shared/cache/redis.client.js';
+import { metricsMiddleware } from '../src/shared/observability/metrics.js';
 import config from './config/index';
 import { sequelize } from './db/SequelizeConnector';
+import { container, TYPES } from './di';
+import type { IConfigService } from './interfaces/IConfigService';
+import type { IReferenzeService } from './interfaces/IReferenzeService';
+import type { IWebPliantService } from './interfaces/IWebPliantService';
 import { httpLogger, log } from './logger';
 import { authMiddleware } from './middleware/authMiddleware';
 import { creaProxyOlimpo } from './middleware/olimpoProxy';
-import { serviClientStatico } from './middleware/staticiPrecompressi';
 import { permissionGuard } from './middleware/permissionGuard';
+import { creaSsrWebpliant } from './middleware/ssrWebpliant';
+import { serviClientStatico } from './middleware/staticiPrecompressi';
 import { applyErrorHandler, applyMiddlewares } from './middlewares';
 import {
-  getConnectionMonitor,
-  getQueryProfiler,
-  initializeConnectionMonitor,
-  initializeQueryProfiler
+    getConnectionMonitor,
+    getQueryProfiler,
+    initializeConnectionMonitor,
+    initializeQueryProfiler
 } from './monitoring';
 import { applyRoutes } from './routes';
 import { AuditLogService } from './services/AuditLogService';
 import { initializeBackgroundServices } from './services/startup';
+import { WebpliantSsrService } from './services/WebpliantSsrService';
 import { sessionMiddleware } from './session';
 import { asyncHandler } from './utils/asyncHandler';
 import { PREFISSO_PROXY_OLIMPO } from './utils/urlOlimpo';
 import { getWhatsappQueueWorker } from './workers/WhatsappQueueWorker';
-import healthRouter from '../src/app/http/health.routes.js';
-import metricsRouter from '../src/app/http/metrics.routes.js';
-import { metricsMiddleware } from '../src/shared/observability/metrics.js';
-import { closeRedisClient, initializeRedisClient } from '../src/shared/cache/redis.client.js';
 
 // -------------- impostazioni runtime -------------------
 
@@ -128,6 +134,22 @@ export async function createHttpApp() {
   // - production: serve built assets from dist/client
   // - development: redirect HTML routes to Vite dev server
   const clientBuildPath = path.resolve(projectRoot, 'dist/client');
+  const urlRenderer = pathToFileURL(path.resolve(projectRoot, 'dist/ssr/entry-server.js')).href;
+  app.use(creaSsrWebpliant({
+    cartellaClient: clientBuildPath,
+    carica: url => new WebpliantSsrService(
+      container.get<IWebPliantService>(TYPES.WebPliantService),
+      container.get<IReferenzeService>(TYPES.ReferenzeService),
+      container.get<IConfigService>(TYPES.ConfigService),
+    ).carica(url),
+    render: async dati => {
+      const renderer = await import(urlRenderer);
+      return renderer.renderWebpliant(dati);
+    },
+  }));
+  log.info('Rendering SSR del volantino pubblico configurato', {
+    ambiente: isProd ? 'production' : isStaging ? 'test' : 'development',
+  });
   // if (isProd || isStaging) {
   // Asset con hash in cache per un anno, index.html sempre rivalidato, .br/.gz della build
   // serviti cosi' come sono; poi il fallback della SPA (index.html per le rotte del client)
@@ -260,5 +282,3 @@ export async function createActualServer() {
 // -------------------------------------------------------
 //  bootstrap – cluster oppure single process
 // -------------------------------------------------------
-
-

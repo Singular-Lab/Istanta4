@@ -2,6 +2,7 @@ import { useAppDispatch } from '@/stores/hooks';
 import clsx from 'clsx';
 import parse from 'html-react-parser';
 import React, { lazy, Suspense, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 
 // Components
@@ -11,7 +12,7 @@ const CarouselContainer = lazy(() => import('@/pages/WebPliant/CarouselContainer
 
 // Utils
 import {
-  applyFiltriPolicyVisualizzazione,
+    applyFiltriPolicyVisualizzazione,
 } from '../utils';
 
 // Types
@@ -85,31 +86,32 @@ const ImageRenderer: React.FC<{
   isMobile: boolean;
   onError: (error: any) => void;
 }> = ({ item, isMobile, onError }) => {
+  const location = useLocation();
   const buildLinkUrl = useCallback(() => {
-    const currentSearchParams = new URLSearchParams(window.location.search);
+    const currentSearchParams = new URLSearchParams(location.search);
 
     if (item.content?.link) {
-      const url = new URL(item.content?.link, window.location.origin);
+      const url = new URL(item.content?.link, 'https://ssr.invalid');
       currentSearchParams.forEach((value, key) => {
         url.searchParams.set(key, value);
       });
       if (item.content?.page) {
         url.searchParams.set("idPagina", item.content?.page);
       }
-      return url.toString();
+      return url.origin === 'https://ssr.invalid' ? url.pathname + url.search + url.hash : url.toString();
     }
 
     if (item.content?.page) {
-      const url = new URL(`/webpliant/volantino`, window.location.origin);
+      const url = new URL('/webpliant/volantino', 'https://ssr.invalid');
       currentSearchParams.forEach((value, key) => {
         url.searchParams.set(key, value);
       });
       url.searchParams.set("idPagina", item.content?.page);
-      return url.toString();
+      return url.pathname + url.search;
     }
 
     return undefined;
-  }, [item.content?.link, item.content?.page]);
+  }, [item.content?.link, item.content?.page, location.search]);
 
   const link = buildLinkUrl();
   const src = isMobile && item.content?.srcMobile ? item.content?.srcMobile : item.content?.src;
@@ -136,6 +138,8 @@ const ImageRenderer: React.FC<{
   };
 
   const imageElement = (
+    <picture>
+      {item.content?.srcMobile && <source media="(max-width: 768px)" srcSet={item.content.srcMobile} />}
     <img
       style={imageStyles}
       className={clsx(styleWp["wp-grid-banner__item"], styleWp["wp-container"])}
@@ -143,6 +147,7 @@ const ImageRenderer: React.FC<{
       alt={item.content?.title}
       onError={handleImageError}
     />
+    </picture>
   );
 
   if (link) {

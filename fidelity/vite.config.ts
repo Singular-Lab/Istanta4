@@ -10,7 +10,7 @@ import { createRequire } from "node:module"
 import path from "node:path"
 import { fileURLToPath, URL } from "node:url"
 import { promisify } from "node:util"
-import { brotliCompress, constants as zlibConstants, gzip } from "node:zlib"
+import { brotliCompress, gzip, constants as zlibConstants } from "node:zlib"
 import { defineConfig, type Plugin } from "vite"
 //@ts-ignore
 import sri from 'vite-plugin-sri'
@@ -182,7 +182,7 @@ function compressioneStatica(): Plugin {
   }
 }
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ mode, isSsrBuild }) => {
   const isProduction = mode === "production"
   const isDevelopment = mode === "development"
   const enableLazyBarrel = process.env.VITE_EXPERIMENTAL_LAZY_BARREL === "true"
@@ -198,7 +198,7 @@ export default defineConfig(({ mode }) => {
   return {
     base: BASE_URL,
 
-    publicDir: "public",
+    publicDir: isSsrBuild ? false : "public",
 
     assetsInclude: ["**/*.lottie"],
 
@@ -226,11 +226,13 @@ export default defineConfig(({ mode }) => {
     plugins: [
       importDiretteLucide(),
       react(),
-      sri({
+      ...(!isSsrBuild ? [sri({
         algorithms: ['sha384']
       }),
-      compressioneStatica()
+      compressioneStatica()] : [])
     ],
+
+    ssr: { noExternal: ['react-helmet-async'] },
 
     server: {
       host: "0.0.0.0",
@@ -278,11 +280,11 @@ export default defineConfig(({ mode }) => {
 
     build: {
       target: TARGET_BUILD,
-      outDir: "dist/client",
+      outDir: isSsrBuild ? "dist/ssr" : "dist/client",
       emptyOutDir: true,
-      manifest: true,
+      manifest: !isSsrBuild,
       sourcemap: isDevelopment,
-      minify: "oxc",
+      minify: isSsrBuild ? false : "oxc",
       cssMinify: isProduction ? "lightningcss" : false,
       cssCodeSplit: true,
       chunkSizeWarningLimit: 600,
@@ -298,11 +300,11 @@ export default defineConfig(({ mode }) => {
             lazyBarrel: true
           }
           : undefined,
-        input: {
+        input: isSsrBuild ? './src/entry-server.tsx' : {
           main: "./index.html"
         },
         output: {
-          minify: {
+          minify: isSsrBuild ? false : {
             compress: {
               target: TARGET_BUILD,
               dropDebugger: true,
@@ -311,7 +313,7 @@ export default defineConfig(({ mode }) => {
             mangle: true,
             codegen: true
           },
-          entryFileNames: "assets/js/[hash].js",
+          entryFileNames: isSsrBuild ? 'entry-server.js' : "assets/js/[hash].js",
           chunkFileNames: "assets/js/[hash].js",
           assetFileNames: (assetInfo: { name?: string }) => {
             const name = assetInfo.name || ""
@@ -326,7 +328,7 @@ export default defineConfig(({ mode }) => {
             }
             return "assets/[hash][extname]"
           },
-          codeSplitting: {
+          codeSplitting: isSsrBuild ? undefined : {
             groups: codeSplittingGroups
           }
         }

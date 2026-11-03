@@ -1,28 +1,27 @@
 import { ServerCall } from "../../lib/server_call";
 import type {
-  Config,
-  ConfigWebpliant,
-  DESIGN_KIT,
-  FileItemKit,
-  IPromo,
-  OrdiniDiStampaAttributes,
-  OrdiniDiStampaInviiAttributes,
-  PuntiVenditaAttributes,
-  RUNTIME_KIT,
-  ReferenzeIstanta,
-  Ricette,
-  TipiDiExportAttributes,
-  GDOWhatsappTemplateAttributes
+    Config,
+    ConfigWebpliant,
+    DESIGN_KIT,
+    FileItemKit,
+    GDOWhatsappTemplateAttributes,
+    IPromo,
+    OrdiniDiStampaAttributes,
+    OrdiniDiStampaInviiAttributes,
+    PuntiVenditaAttributes,
+    RUNTIME_KIT,
+    ReferenzeIstanta,
+    Ricette,
+    TipiDiExportAttributes
 } from "../../lib/types";
 
 // Extend ImportMeta interface to include 'env'
 // Rimosso vecchio sistema IndexedDB - ora uso il nuovo sistema centralizzato
 import { getColor } from "@/utils/colors";
-import ReactGA from "react-ga4";
 import { redirect, type LoaderFunction, type LoaderFunctionArgs, type Params } from "react-router-dom";
 import { STATO_LAVORAZIONE_KIT_RUNTIME } from "../../lib/enums";
 import { percorsoVolantini, periodoDellaPromo } from "../../lib/materiali/periodi";
-import type { AreaResponseDTO, CanaleResponseDTO, PromoResponseDTO, TracciatiResponseDTO, ContrattoTipografiaResponseDTO, GDOResponseDTO, OrdiniDiStampaResponseDTO } from "../../server/core/dto";
+import type { AreaResponseDTO, CanaleResponseDTO, ContrattoTipografiaResponseDTO, GDOResponseDTO, OrdiniDiStampaResponseDTO, PromoResponseDTO, TracciatiResponseDTO } from "../../server/core/dto";
 
 /**
  * Helper per aggiornare il progresso.
@@ -130,8 +129,6 @@ export const funzioneCaricamentoVolantinoWebPliant = async ({ request }: { reque
 export const funzioneCaricamentoWebpliantLayout = async ({ request }: { request: Request }) => {
   const url = new URL(request.url);
   const idWorkspace = url.searchParams.get("id") || "";
-  const idArea = url.searchParams.get("idArea") || "";
-  const idCanale = url.searchParams.get("idCanale") || "";
 
   // Workspace e configurazione li chiede anche il loader della pagina, in parallelo: ServerCall.get
   // condivide le GET identiche in corso, quindi partono una volta sola
@@ -163,41 +160,15 @@ export const funzioneCaricamentoWebpliantLayout = async ({ request }: { request:
   // Il nuovo sistema gestisce automaticamente sessioni e wishlist
   // Non è più necessario gestire questo nel loader
 
-  //@ts-ignore
-  if (import.meta.env.VITE_USER_NODE_ENV === "production") {
-    ReactGA.initialize('G-BEQBR17LCC');
-    ReactGA.set({
-      timestamp: Date.now(),
-      idCanale: idCanale || "unknown",
-      idArea: idArea || "unknown",
-    });
-  }
   const [workspaceResult, configResult, stiliResult] = await Promise.allSettled([workspacePromise, configPromise, stiliPromise]);
   const [dataWebPliant, config] = [workspaceResult, configResult].map((r) =>
     r.status === "fulfilled" ? r.value : (console.error("Errore:", r.reason), null)
   ) as [Awaited<typeof workspacePromise> | null, Config | null];
 
-  // Gestione degli stili
-  const styleId = "webpliant-styles";
-  const existingStyle = document.getElementById(styleId);
-
-  // Se il tag <style> esiste già e il numero di stili è maggiore di uno, rimuovilo
-  if (existingStyle && document.querySelectorAll(`#${styleId}`).length > 1) {
-    existingStyle.remove();
-  }
-
-  // Crea un nuovo tag <style>
-  const style = document.createElement("style");
-  style.id = styleId; // Assegna un ID al tag <style>
-  document.head.appendChild(style);
-
   if (stiliResult.status === "rejected") {
     console.error("Errore durante il caricamento dei CSS dal server:", stiliResult.reason);
   }
-  // Applica lo stile al documento
-  style.innerHTML = stiliResult.status === "fulfilled" ? `${stiliResult.value}` : "";
-
-  return { dataWebPliant, config };
+  return { dataWebPliant, config, css: stiliResult.status === 'fulfilled' ? stiliResult.value : '' };
 };
 
 export const funzioneCaricamentoRicetta = async ({ request }: { request: Request }) => {

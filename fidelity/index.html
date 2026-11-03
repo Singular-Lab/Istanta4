@@ -22,11 +22,13 @@
   <title>Fidelity Promotion</title>
 
   <!-- Vite inject CSS automatically in dev + build -->
+  <!--ssr-head-->
 </head>
 
 <body class="scrollbar">
   <noscript>Questa applicazione richiede JavaScript abilitato.</noscript>
-  <div id="root"></div>
+  <div id="root"><!--ssr-app--></div>
+  <!--ssr-state-->
 
   <!-- Script loader (deve essere caricato prima di React) -->
   <script src="/loader.js"></script>

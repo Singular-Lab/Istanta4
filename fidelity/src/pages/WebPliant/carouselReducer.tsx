@@ -1,7 +1,5 @@
 // reducers/carouselReducer.ts
-import { Colorize } from "../../../lib/Colorize";
-import { ReferenzeIstanta } from "../../../lib/types";
-import i18n from "../../i18n"
+import type { ReferenzeIstanta } from "../../../lib/types";
 
 export interface CarouselState {
   tabs: string[];
@@ -41,7 +39,7 @@ export function carouselReducer(
         );
         return {
           tabs: uniqueTabs,
-          displayNames: uniqueTabs.map((tab) => i18n.t(tab)),
+          displayNames: uniqueTabs,
           activeTab: uniqueTabs[0],
           referenzeGroupedBy: grouped,
         };

@@ -1,8 +1,8 @@
 import Lucide from '@/components/Base/Lucide';
+import { useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
 import dayjs from 'dayjs';
 import { motion } from 'framer-motion';
-import { useQueryClient } from '@tanstack/react-query';
 import React, { FC, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useSelector } from 'react-redux';
@@ -20,17 +20,17 @@ import stylesWP from "@/assets/css/webpliant/stylewp.module.scss";
 
 // Types and Utils
 import { RootState } from '@/stores/store';
+import { urlFoto } from '@/utils/helper';
 import { TIPO_PAGINA, TIPO_UTENTI } from '../../../lib/enums';
 import {
-  Config,
-  DataFields,
-  LoghiInsegne,
-  PaginaWebPliant,
-  PuntiVenditaAttributes,
-  ReferenzeIstanta,
-  SitemapType
+    Config,
+    DataFields,
+    LoghiInsegne,
+    PaginaWebPliant,
+    PuntiVenditaAttributes,
+    ReferenzeIstanta,
+    SitemapType
 } from '../../../lib/types';
-import { urlFoto } from '@/utils/helper';
 
 // Hooks and Contexts
 import { GestioneHeaderWebpliantProvider, useGestioneHeaderWebpliant } from '@/context/GestioneHeaderWebpliant';
@@ -38,17 +38,18 @@ import { GestioneReferenzeProvider, useGestioneReferenze } from '@/context/Gesti
 import { useUser } from '@/context/UserContext';
 import { useAppLoading } from '@/hooks/useAppLoading';
 import { useWebpliantParamsManager } from '@/hooks/useWebpliantParamsManager';
-import { useFetchAllPuntiVendita, useFetchConfig } from '@/query/query';
 import { GestoreParametriPresente } from '@/pages/WebPliant/gestoreParametri';
+import { useFetchAllPuntiVendita, useFetchConfig } from '@/query/query';
 
 // Assets
 
 // Utils
-import { filtroSitemMap } from './utility';
 import { CLASSE_CAMPO_PUBBLICO, CLASSE_TITOLO_PANNELLO_PUBBLICO } from './StatiPubblici';
+import { filtroSitemMap } from './utility';
 // Rimosso import vecchio sistema - ora si usa useWebpliantParamsManager
 import Dock from '@/components/Base/Dock';
 import CookieConsent from '@/components/CookieConsent';
+import { useDatiWebpliantPagina } from '@/ssr/webpliant';
 import { useWishlistEvents } from '@/utils/wishlistEvents';
 
 // =============================================
@@ -89,15 +90,17 @@ const useUIState = () => {
  */
 const useWebpliantParams = () => {
   const location = useLocation();
+  const datiSsr = useDatiWebpliantPagina();
   const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
-  const date = searchParams.get("date") || dayjs().format("YYYY-MM-DD");
+  const date = searchParams.get("date") || datiSsr?.giorno || dayjs().format("YYYY-MM-DD");
   const [idPV, setIdPV] = useState<string | null>(searchParams.get('idPV'));
   const [idWorkspace, setIdWorkspace] = useState<string | null>(searchParams.get('id'));
   const [Debug, setDebug] = useState<string>(searchParams.get('debug') || "false");
   const [idArea, setIdArea] = useState<string | null>(searchParams.get('idArea'));
   const [idCanale, setIdCanale] = useState<string | null>(searchParams.get('idCanale'));
   const [idGDO, setIdGDO] = useState<string | null>(searchParams.get('idGDO'));
-  const [guidIdWishlist] = useState<string | null>(() => {
+  const [guidIdWishlist, setGuidIdWishlist] = useState<string | null>(searchParams.get('sessionWishlistId'));
+  useEffect(() => {
     // Effettua il parse del valore JSON se presente in localStorage
     const paramsStorage = localStorage.getItem('webpliant-params-storage');
     let sessionWishlistId: string | null = null;
@@ -109,9 +112,9 @@ const useWebpliantParams = () => {
         sessionWishlistId = null;
       }
     }
-    return sessionWishlistId || searchParams.get('sessionWishlistId');
-  });
-  const [idPagina, setIdPagina] = useState<string | null>(searchParams.get('idPagina'));
+    setGuidIdWishlist(sessionWishlistId || searchParams.get('sessionWishlistId'));
+  }, [searchParams]);
+  const [idPagina, setIdPagina] = useState<string | null>(searchParams.get('idPagina') || datiSsr?.idPagina || null);
 
   return {
     location,
@@ -146,10 +149,11 @@ const useReferenzeData = () => {
  * Custom hook to manage geolocation state
  */
 const useGeolocationState = () => {
-  const [userLocationChoice, setUserLocationChoice] = useState(() => {
+  const [userLocationChoice, setUserLocationChoice] = useState<boolean | null>(null);
+  useEffect(() => {
     const savedChoice = localStorage.getItem('userLocationChoice');
-    return savedChoice !== null ? savedChoice === 'true' : null;
-  });
+    setUserLocationChoice(savedChoice !== null ? savedChoice === 'true' : null);
+  }, []);
   const [lat, setLat] = useState<number | null>(null);
   const [lon, setLon] = useState<number | null>(null);
 
@@ -455,10 +459,32 @@ const WebpliantLayout: FC<WebpliantLayoutProps> = () => {
       sitemap: Array<any>;
     };
     config?: Config | null;
+    css?: string;
   } = {};
 
   loaderData = useLoaderData() as typeof loaderData;
   const dataWebPliant = loaderData.dataWebPliant;
+  const datiSsr = useDatiWebpliantPagina();
+
+  useEffect(() => {
+    const css = loaderData.css ?? datiSsr?.css;
+    if (css === undefined) return;
+    const style = document.getElementById('webpliant-styles') || document.createElement('style');
+    style.id = 'webpliant-styles';
+    style.textContent = css;
+    if (!style.parentNode) document.head.appendChild(style);
+  }, [loaderData.css, datiSsr?.css]);
+
+  useEffect(() => {
+    if (import.meta.env.VITE_USER_NODE_ENV !== 'production') return;
+    let attivo = true;
+    void import('react-ga4').then(({ default: analytics }) => {
+      if (!attivo) return;
+      analytics.initialize('G-BEQBR17LCC');
+      analytics.set({ timestamp: Date.now(), idCanale: idCanale || 'unknown', idArea: idArea || 'unknown' });
+    });
+    return () => { attivo = false; };
+  }, [idCanale, idArea]);
 
   // =============================================
   // Query Hooks

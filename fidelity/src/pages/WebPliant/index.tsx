@@ -23,6 +23,8 @@ import ContentRenderer from './components/ContentRenderer';
 // Styles
 import styleWp from "@/assets/css/webpliant/stylewp.module.scss";
 import { CLASSE_TITOLO_PANNELLO_PUBBLICO } from "@/pages/WebpliantLayout/StatiPubblici";
+import { useDatiWebpliantPagina } from '@/ssr/webpliant';
+import { TIPO_PAGINA } from '../../../lib/enums';
 
 // TypeScript interfaces
 
@@ -229,18 +231,20 @@ const SidebarMenu: React.FC<{
  */
 const WebPliant: React.FC = memo(function WebPliant() {
   const appDispatch = useAppDispatch();
-  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const datiSsr = useDatiWebpliantPagina();
+  const [isMobile, setIsMobile] = useState(() => !datiSsr && typeof window !== 'undefined' && window.innerWidth <= 768);
   const { setOggettoHeaderWebpliant } = useGestioneHeaderWebpliant();
   const [params] = useSearchParams();
   const { referenze, dataWebPliant, config } = useLoaderData() as WebPliantLoaderData;
   const { dateRange, setNumeroRefPromo } = useTimeline();
   // Extract query parameters
-  const idPagina = params.get("idPagina");
+  const idPagina = params.get("idPagina") || datiSsr?.idPagina
+    || dataWebPliant?.webpliant?.find(pagina => pagina.tipo === TIPO_PAGINA.HOMEPAGE)?.id || null;
   const idArea = params.get("idArea");
   const idCanale = params.get("idCanale");
   const idPV = params.get("idPV");
   const idSitemap = params.get("idSitemap");
-  const date = params.get("date") || dayjs().format("YYYY-MM-DD");
+  const date = params.get("date") || datiSsr?.giorno || dayjs().format("YYYY-MM-DD");
 
 
   // Handle responsive layout
@@ -248,6 +252,7 @@ const WebPliant: React.FC = memo(function WebPliant() {
     const handleResize = () => {
       setIsMobile(window.innerWidth <= 768);
     };
+    handleResize();
     window.addEventListener("resize", handleResize);
     return () => {
       window.removeEventListener("resize", handleResize);

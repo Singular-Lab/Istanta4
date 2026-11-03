@@ -1,41 +1,39 @@
-import { contentReducer, generaContenutoDinamico } from "./ref";
-import React, {
-  useEffect,
-  useMemo,
-  useReducer,
-  useRef,
-  useCallback,
-  useState,
-} from "react";
-import styleBox from "./boxref.module.scss";
-import { v4 as uuidv4 } from "uuid";
-import { Events, GRAVITA_PROBLEMA } from "@/stores/errorSlice";
-import clsx from "clsx";
-import { useAppDispatch } from "@/stores/hooks";
-import {
-  Config,
-  ConfigWebpliant,
-  DataFields,
-  ForcedStyles,
-  ReferenzeIstanta,
-  StileBoxReferenza,
-} from "../../../../lib/types";
-import { urlFoto } from "@/utils/helper";
+import styleWp from "@/assets/css/webpliant/stylewp.module.scss";
+import wishAPNG from "@/assets/images/webpliant/ani_wish.apng";
+import cuore from "@/assets/images/webpliant/cuore.png";
+import iconaWishlistRed from "@/assets/images/webpliant/ico_wish_red.png";
+import iconaWishlistWhite from "@/assets/images/webpliant/ico_wish_white.png";
+import rotatingStar from "@/assets/images/webpliant/rot_star.gif";
 import Lucide from "@/components/Base/Lucide";
 import { useGestioneReferenze } from "@/context/GestioneReferenzeContext";
+import { Events, GRAVITA_PROBLEMA } from "@/stores/errorSlice";
+import { useAppDispatch } from "@/stores/hooks";
+import { useSessionWishlistIdWebpliant } from "@/stores/webpliantParamsStore";
+import { urlFoto } from "@/utils/helper";
+import clsx from "clsx";
 import { motion } from "framer-motion";
 import parse from "html-react-parser";
-import styleWp from "@/assets/css/webpliant/stylewp.module.scss";
-import iconaWishlistWhite from "@/assets/images/webpliant/ico_wish_white.png"
-import iconaWishlistRed from "@/assets/images/webpliant/ico_wish_red.png"
-import cuore from "@/assets/images/webpliant/cuore.png";
+import React, {
+    useCallback,
+    useEffect,
+    useMemo,
+    useReducer,
+    useRef,
+    useState,
+} from "react";
+import { v4 as uuidv4 } from "uuid";
 import { ServerCall } from "../../../../lib/server_call";
-import { useSessionWishlistIdWebpliant } from "@/stores/webpliantParamsStore";
+import {
+    Config,
+    DataFields,
+    ForcedStyles,
+    ReferenzeIstanta,
+    StileBoxReferenza
+} from "../../../../lib/types";
 import { ConGestoreParametriWebpliant } from "../gestoreParametri";
 import { segnapostoCss } from "../segnaposto";
-import focusAPNG from "@/assets/images/webpliant/ani_focus.apng";
-import wishAPNG from "@/assets/images/webpliant/ani_wish.apng";
-import rotatingStar from "@/assets/images/webpliant/rot_star.gif";
+import styleBox from "./boxref.module.scss";
+import { contentReducer, generaContenutoDinamico } from "./ref";
 
 // --------------------------------------------------
 // INTERFACES E UTILITY
@@ -132,7 +130,7 @@ const BoxRef: React.FC<BoxReferenzeProps> = ({
   //NOTE : extraLogoRenderedRef NON DEVE ESSERE TOCCATO
   // Ref per controllare il rendering dei loghi extra (assicurarsi che siano renderizzati una sola volta)
   const [isInWishListState, setIsInWishListState] = useState(isInWishlist || false);
-  
+
   // Solo lettura: il gestore dei parametri è uno per pagina (vedi ConGestoreParametriWebpliant),
   // non uno per card
   const sessionWishlistId = useSessionWishlistIdWebpliant();
@@ -146,7 +144,7 @@ const BoxRef: React.FC<BoxReferenzeProps> = ({
   //   // Se la referenza è già presente nella wishlist, aggiorna lo stato
   //   const isInWishlist = checkReferenzeIsInWishlist(referenza.dataFields);
   //   setIsInWishListState(isInWishlist);
-    
+
   // }, [referenza,checkReferenzeIsInWishlist]);
 
   const extraLogoRenderedRef = useRef(false);
@@ -180,12 +178,12 @@ const BoxRef: React.FC<BoxReferenzeProps> = ({
         foto: fotos,
       };
       const result = await ServerCall.put("/insertReferenzaInWishlist", { referenza: refConFoto, idWishList: ids.sessionWishlistId });
-      
+
       // Emetti evento per notificare l'aggiunta dell'elemento
       const { wishlistEvents } = await import('@/utils/wishlistEvents');
       wishlistEvents.emit('item-added', refConFoto, ids.sessionWishlistId);
-      
-      
+
+
     } catch (error) {
       console.error("Errore durante l'inserimento nella wishlist:", error);
     }
@@ -510,8 +508,9 @@ const BoxRef: React.FC<BoxReferenzeProps> = ({
   }, [memoizedContentMini, referenza, config, referenza, forcedStyles])
 
   const [flipped, setFlipped] = useState(false);
+  const fullContent = state.fullContent ?? memoizedContent;
   // 7) Se non c'è contenuto, non renderizziamo
-  if (!state.fullContent) {
+  if (!fullContent) {
     return null;
   }
 
@@ -548,7 +547,7 @@ const BoxRef: React.FC<BoxReferenzeProps> = ({
       }}
       className={styleBox.flipContainer}
     >
-      
+
       <motion.div
         style={{
           backgroundImage: options?.removeBackground
@@ -572,8 +571,8 @@ const BoxRef: React.FC<BoxReferenzeProps> = ({
           pointerEvents: flipped ? "none" : "auto",
           perspective:"0"
         }}>
-          {React.isValidElement(state.fullContent) &&
-            React.cloneElement(state.fullContent as React.ReactElement<any>, {
+          {React.isValidElement(fullContent) &&
+            React.cloneElement(fullContent as React.ReactElement<any>, {
               style: {
                 border: options?.removeBorder ? "0" : undefined,
                 backgroundColor: (() => {
@@ -592,15 +591,15 @@ const BoxRef: React.FC<BoxReferenzeProps> = ({
               <img src={focusAPNG} alt="Ricetta abbinata" className="icon-gdo" />
             </div> */}
             {((referenza.contenutiAggiuntivi ?? []).length > 0) &&
-              <div style={{ 
-              position: "relative", 
-              marginBottom: "5px", 
-              backgroundColor: "coral", 
-              height: "30px", 
-              display: "flex", 
-              alignContent: "center", 
-              justifyContent: "space-around", 
-              alignItems: "center" 
+              <div style={{
+              position: "relative",
+              marginBottom: "5px",
+              backgroundColor: "coral",
+              height: "30px",
+              display: "flex",
+              alignContent: "center",
+              justifyContent: "space-around",
+              alignItems: "center"
               }}>
               <img style={{width:"80%",height:"80%"}} src={rotatingStar} alt="Ricetta abbinata" className="icon-gdo" loading="lazy" decoding="async" />
               </div>
@@ -661,7 +660,7 @@ const BoxRef: React.FC<BoxReferenzeProps> = ({
                   ))}
                   </>
               )}
-          
+
 
               {(() => {
                 // mi devi fare un calcolo per vedere se ci sono piu di un contenuto fra tutti quelli che processo
@@ -711,7 +710,7 @@ const BoxRef: React.FC<BoxReferenzeProps> = ({
                 //       </div>
                 //     </footer>
                 //   );
-                // } 
+                // }
                 if (referenza.groupElements.length <= 1) {
                   return (
                     <div

@@ -1,9 +1,9 @@
-import { lazy, Suspense } from "react";
+import { Suspense, lazy } from "react";
 import {
-  RouteObject,
-  redirect,
-  type LoaderFunctionArgs,
-  type ShouldRevalidateFunctionArgs,
+    RouteObject,
+    redirect,
+    type LoaderFunctionArgs,
+    type ShouldRevalidateFunctionArgs,
 } from "react-router-dom";
 
 // Stati della vetrina caricati solo quando servono: portano con sé il CSS del tema wp
@@ -20,6 +20,7 @@ import ErrorPage from "@/components/ErrorPage";
 import NotFoundPage from "@/components/NotFoundPage";
 import { PERCORSI_SPOSTATI } from "../../lib/accessi/gestioneInterna";
 import { PERIODI_MATERIALI, percorsoPop, percorsoVolantini } from "../../lib/materiali/periodi";
+import { ID_LAYOUT_WEBPLIANT, ID_VOLANTINO_WEBPLIANT } from '../ssr/webpliant';
 
 type LoaderFunctionsModule = typeof import("./loaderFunctions");
 
@@ -1065,6 +1066,7 @@ const routes: RouteObject[] = [
   // NODO /webpliant con error boundary e catch-all locale
   {
     path: "/webpliant",
+    id: ID_LAYOUT_WEBPLIANT,
     errorElement: (
       <Suspense fallback={null}>
         <ErroreRottaPubblica />
@@ -1086,6 +1088,7 @@ const routes: RouteObject[] = [
     children: [
       {
         path: "volantino",
+        id: ID_VOLANTINO_WEBPLIANT,
         loader: funzioneCaricamentoVolantinoWebPliant,
         lazy: async () => {
           const { default: WebPliant } = await import("@/pages/WebPliant");
