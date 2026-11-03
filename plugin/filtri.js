@@ -1155,14 +1155,19 @@ const filtri = {
             return;
         }
 
+        //I20-1187: il corpo della finestra appena aperta, non il primo #bodyFiltri del documento. Chiusa la
+        //finestra, quello e' il modello nascosto di index.html: i filtri ancora da caricare finivano li' e
+        //salvaFiltri li riprendeva a ogni Conferma, anche dopo che l'operatore li aveva tolti.
+        const corpoFiltri = me.corpoFiltriAperto();
+
         if( paginaFiltri.blocco ){
-            $('#bodyFiltri').hide();
+            corpoFiltri.hide();
             $('#buttonsFiltri').hide();
             $('#lockIcon').show();
         }
 
         //svuotiamo il bodyFiltri
-        $('#bodyFiltri').empty();
+        corpoFiltri.empty();
         //ordiniamo i filtri per ordine crescente
         paginaFiltri.filtri.sort((a, b) => a.ordine - b.ordine);
         //per ogni filtro creiamo un div, la prima riga del div conterrà il limite con un campo di testo per modificarlo
@@ -1179,8 +1184,25 @@ const filtri = {
         for (let i = 0; i < paginaFiltri.filtri.length; i++) {
             const filtro = paginaFiltri.filtri[i];
             await Utility.sleep(1);
-            await me.addNewFiltro(filtro);
+            //I20-1187: chiusa o riaperta la finestra mentre i filtri si caricano, quelli che restano non
+            //hanno piu' dove andare.
+            if (!me.corpoFiltriAncoraAperto(corpoFiltri)) {
+                return;
+            }
+            await me.addNewFiltro(filtro, corpoFiltri);
         }
+    },
+
+    /// I20-1187: il #bodyFiltri della finestra dei filtri aperta. apriModal ci mette una copia di
+    /// #dialogFiltri, e il modello resta in index.html: un $('#bodyFiltri') globale prende il modello
+    /// quando la finestra e' chiusa, e '#bodyFiltri .filtro' prende i filtri di tutti e due.
+    corpoFiltriAperto() {
+        return $('#overlayModal').find('#bodyFiltri').first();
+    },
+
+    /// I20-1187: vero se corpoFiltri e' ancora il corpo della finestra aperta.
+    corpoFiltriAncoraAperto(corpoFiltri) {
+        return corpoFiltri != null && corpoFiltri.length > 0 && corpoFiltri[0] === this.corpoFiltriAperto()[0];
     },
 
     /// Costruisce il riquadro di un filtro, vuoto o riempito con uno gia' salvato.
@@ -1268,7 +1290,8 @@ const filtri = {
                             })
                             .on('click', function () {
                                 // Logica per spostare il filtro su
-                                const allFilters = $('#bodyFiltri .filtro');
+                                //I20-1187: solo i filtri della finestra, non quelli del modello nascosto.
+                                const allFilters = newFiltroDiv.parent().children('.filtro');
                                 const index = allFilters.index(newFiltroDiv);
                                 if (index > 0) {
                                     newFiltroDiv.insertBefore(allFilters.eq(index - 1));
@@ -1291,7 +1314,8 @@ const filtri = {
                             })
                             .on('click', function () {
                                 // Logica per spostare il filtro giù
-                                const allFilters = $('#bodyFiltri .filtro');
+                                //I20-1187: solo i filtri della finestra, non quelli del modello nascosto.
+                                const allFilters = newFiltroDiv.parent().children('.filtro');
                                 const index = allFilters.index(newFiltroDiv);
                                 if (index < allFilters.length - 1) {
                                     newFiltroDiv.insertAfter(allFilters.eq(index + 1));
@@ -1467,8 +1491,8 @@ const filtri = {
             alternativeBody.append(newFiltroDiv);
         }
         else{
-            //Aggiungiamo il nuovo filtro al bodyFiltri
-            $('#bodyFiltri').append(newFiltroDiv);
+            //Aggiungiamo il nuovo filtro al bodyFiltri della finestra aperta (I20-1187)
+            this.corpoFiltriAperto().append(newFiltroDiv);
         }
 
         //mandiamo la ricerca per il filtro
@@ -2469,9 +2493,11 @@ const filtri = {
         let me = this;
 
         //prendiamo i filtri dal bodyFiltri, per ogni filtro prendiamo il limite e i criteri
+        //I20-1187: solo quelli della finestra aperta. '#bodyFiltri .filtro' prendeva anche i filtri rimasti
+        //nel modello nascosto di index.html, e un filtro tolto tornava a ogni Conferma.
         const filtri_arr = [];
         let ordine = 0;
-        $('#bodyFiltri .filtro').each(function () {
+        this.corpoFiltriAperto().children('.filtro').each(function () {
             ordine++;
             let limite = $(this).find('input[type="number"]').val();
             let criteri = [];
