@@ -200,7 +200,7 @@ public sealed partial class ServizioStorico
                 foreach (var o in stato.Ok)
                     report.Voci.Add(new VoceReport
                     {
-                        Pagina = numeri.TryGetValue(o.IdPagina, out short np) ? np : (short)0, Versione = ver, Etichetta = Etichetta(o.IdBox), Tipo = "ok",
+                        Pagina = numeri.TryGetValue(o.IdPagina, out short np) ? np : (short)0, Versione = ver, Etichetta = Etichetta(o.IdBox), IdBox = o.IdBox, Tipo = "ok",
                         Dettagli = Data(o.Data) + " – " + o.Autore, Testo = "OK visto", Esito = "ok"
                     });
                 continue;
@@ -209,18 +209,28 @@ public sealed partial class ServizioStorico
             foreach (var n in stato.Note.Where(n => Tiene(n.IdBox)))
                 report.Voci.Add(new VoceReport
                 {
-                    Pagina = n.Pagina, Versione = ver, Etichetta = Etichetta(n.IdBox), Tipo = "nota",
+                    Pagina = n.Pagina, Versione = ver, Etichetta = Etichetta(n.IdBox), IdBox = n.IdBox, Tipo = "nota",
                     Dettagli = Data(n.DataModifica ?? n.DataInserimento) + " – " + Autore(n.Autore, n.TipoAutore),
                     Testo = n.Testo,
+                    Blocchi = new() { new BloccoReport { Titolo = "Nota:", Righe = { n.Testo } } },
                     Esito = EsitoNotaTimbro(n.Stato, ultima),
                     Chiusura = n.Stato == ServizioCorrezioni.StatoAccettata ? $"Accettata il {Data(n.DataCorrezione)} da {n.Correttore}" : ""
                 });
             foreach (var t in stato.Timbri.Where(t => Tiene(t.IdBox)))
                 report.Voci.Add(new VoceReport
                 {
-                    Pagina = t.Pagina, Versione = ver, Etichetta = Etichetta(t.IdBox), Tipo = "timbro",
+                    Pagina = t.Pagina, Versione = ver, Etichetta = Etichetta(t.IdBox), IdBox = t.IdBox, Tipo = "timbro",
                     Dettagli = Data(t.DataInserimento) + " – " + Autore(t.Autore, t.TipoAutore),
                     Testo = t.Nome, Simbolo = t.Simbolo,
+                    // I20-1189: «Timbro:» e il simbolo; il nome resta nel suggerimento
+                    Blocchi = new()
+                    {
+                        new BloccoReport
+                        {
+                            Titolo = "Timbro:", NomeSimbolo = t.Nome,
+                            Simbolo = t.Simbolo + (t.Stato == ServizioCorrezioni.StatoAccettata ? "_ok" : "")
+                        }
+                    },
                     Esito = EsitoNotaTimbro(t.Stato, ultima),
                     Chiusura = t.Stato == ServizioCorrezioni.StatoAccettata ? $"Accettato il {Data(t.DataCorrezione)} da {t.Correttore}" : ""
                 });
@@ -229,12 +239,13 @@ public sealed partial class ServizioStorico
                 string riassunto = RiassuntoEdit(e);
                 report.Voci.Add(new VoceReport
                 {
-                    Pagina = e.Pagina, Versione = ver, Etichetta = Etichetta(e.IdBox), Tipo = "edit",
+                    Pagina = e.Pagina, Versione = ver, Etichetta = Etichetta(e.IdBox), IdBox = e.IdBox, Tipo = "edit",
                     Dettagli = Data(e.Data) + " – " + Autore(e.Autore, e.TipoAutore),
                     Testo = (e.Parte == ServizioCorrezioni.ParteOfferta ? "Edit avanzato, prezzi e azioni" : "Edit avanzato, descrizione, foto e loghi")
                             + (riassunto == "" ? "" : ": " + riassunto),
                     // Foto e loghi come miniature, come reports.js (thumbnailFico?width=50 + Primario/Secondario/...).
                     Foto = e.Foto.Where(f => f.GuidId != "").Select(f => new FotoReport { GuidId = f.GuidId, Testo = TestoFoto(f) }).ToList(),
+                    Blocchi = BlocchiEdit(e),
                     Esito = e.Stato == ServizioCorrezioni.EaCorretto ? "accettata" : (ultima ? "attesa" : "irrisolta"),
                     Chiusura = e.Stato == ServizioCorrezioni.EaCorretto ? "Confermata dall'Agenzia" : ""
                 });
@@ -290,11 +301,76 @@ public sealed partial class ServizioStorico
     private static string Data(DateTime? d) =>
         d == null ? "" : FinestreCategory.Locale(d.Value).ToString("dd/MM/yyyy HH:mm");
 
+    /// <summary>I20-1189: gli stessi nomi della scheda dell'Edit avanzato (ETICHETTE_EA in Dettaglio.cshtml).</summary>
     private static readonly Dictionary<string, string> NomiCampi = new()
     {
-        ["prezzo_promo"] = "Prezzo promo", ["prezzo_promo_kgl"] = "Prezzo al Kg/Lt", ["prezzo_continuo"] = "Prezzo continuo",
-        ["azione_pubblico"] = "Sconto", ["tipo_offerta"] = "Tipo offerta", ["nome_evento"] = "Evento", ["note"] = "Note"
+        ["prezzo_promo"] = "Prezzo Promo", ["prezzo_promo_kgl"] = "Prezzo al Kg/Lt", ["prezzo_continuo"] = "Prezzo Continuo",
+        ["azione_pubblico"] = "Sconto", ["txt_sconto"] = "Sconto", ["tipo_offerta"] = "Tipo offerta",
+        ["nome_evento"] = "Evento", ["note"] = "Note"
     };
+
+    /// <summary>
+    /// I20-1189: il nome leggibile di un campo. Quelli che la scheda non nomina si scrivono comunque in
+    /// chiaro («n_pezzi_soci» diventa «N pezzi soci»), non piu' col nome tecnico.
+    /// </summary>
+    private static string NomeCampo(string chiave)
+    {
+        if (NomiCampi.TryGetValue(chiave, out var n)) return n;
+        string chiaro = chiave.Replace('_', ' ').Replace('.', ' ').Trim();
+        return chiaro.Length == 0 ? chiave : char.ToUpperInvariant(chiaro[0]) + chiaro[1..];
+    }
+
+    private static string StatoFoto(int stato) => stato switch
+    {
+        1 => "primaria", 2 => "secondaria", 3 => "non selezionata", _ => ""
+    };
+
+    /// <summary>
+    /// I20-1189: l'Edit avanzato a pezzi, ognuno con la sua intestazione (richiesta dell'operatore del 03/11):
+    /// prezzi cambiati, azioni, descrizione, foto (anche solo P/S), loghi inseriti e rimossi.
+    /// </summary>
+    public static List<BloccoReport> BlocchiEdit(EditVista e)
+    {
+        var blocchi = new List<BloccoReport>();
+        var prezzi = e.Campi.Where(c => c.Key != "descrizione")
+                            .Select(c => $"{NomeCampo(c.Key)}: {(c.Value == "" ? "vuoto" : c.Value)}").ToList();
+        if (prezzi.Count > 0) blocchi.Add(new BloccoReport { Titolo = "Prezzo cambiato in:", Righe = prezzi });
+        foreach (var a in e.Azioni)
+            blocchi.Add(new BloccoReport
+            {
+                Titolo = "Azione:",
+                Righe = { a.Titolo + (a.Campi.Count > 0 ? " (" + string.Join(", ", a.Campi.Select(c =>
+                    $"{NomeCampo(c.Key)}: {(c.Value == "" ? "vuoto" : c.Value)}")) + ")" : "") }
+            });
+        if (e.Campi.TryGetValue("descrizione", out var descr))
+            blocchi.Add(new BloccoReport { Titolo = "Descrizione modificata in:", Righe = { LettoreDescrizione.InChiaro(descr) } });
+
+        var foto = e.Foto.Where(f => f.Stato is >= 1 and <= 3).ToList();
+        if (foto.Count > 0)
+        {
+            var b = new BloccoReport { Titolo = "Foto cambiata in:" };
+            foreach (var f in foto)
+            {
+                string testo = $"{f.Codice} – {StatoFoto(f.Stato)}";
+                if (f.GuidId != "") b.Foto.Add(new FotoReport { GuidId = f.GuidId, Testo = testo });
+                else b.Righe.Add(testo + " (senza foto)");
+            }
+            blocchi.Add(b);
+        }
+        foreach (var (stato, titolo) in new[] { (4, "Logo inserito:"), (5, "Logo rimosso:") })
+        {
+            var loghi = e.Foto.Where(f => f.Stato == stato).ToList();
+            if (loghi.Count == 0) continue;
+            var b = new BloccoReport { Titolo = titolo };
+            foreach (var l in loghi)
+            {
+                if (l.GuidId != "") b.Foto.Add(new FotoReport { GuidId = l.GuidId, Testo = l.Codice });
+                else b.Righe.Add(l.Codice);
+            }
+            blocchi.Add(b);
+        }
+        return blocchi;
+    }
 
     /// <summary>Campi e azioni in una riga; foto e loghi vanno a parte, come miniature (j214).</summary>
     private static string RiassuntoEdit(EditVista e)

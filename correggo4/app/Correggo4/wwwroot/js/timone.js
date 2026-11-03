@@ -54,7 +54,7 @@
 #tTimone { height: 36px; padding: 0 18px; border: 2px solid #fff; border-radius: 9px;
            background: #1f5fd0; color: #fff; font: inherit; font-size: 13px; font-weight: 800;
            letter-spacing: .7px; cursor: pointer; vertical-align: middle; margin-right: 6px;
-           box-shadow: 0 1px 3px rgba(0,0,0,.18); }
+           box-shadow: 0 1px 3px rgba(0,0,0,.18); white-space: nowrap; }
 #tTimone:hover { background: #2a72ee; }
 #tTimone.acceso { background: #fff; color: #1f5fd0; }
 
@@ -66,8 +66,13 @@
 #tim_barra.visibile { display: flex; }
 #tim_barra .tit { font-size: 15px; letter-spacing: .6px; }
 #tim_barra .stato { font-weight: 400; opacity: .93; }
-#tim_barra .sola_lettura { background: #ffffff26; padding: 3px 9px; border-radius: 6px; font-weight: 400; }
-#tim_barra .destra { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+/* I20-1189: su una riga sola. A finestra stretta andava a capo parola per parola e usciva dalla barra,
+   che e' alta 42px: ora si accorcia coi puntini e il testo intero sta nel suggerimento (title). */
+#tim_barra .sola_lettura { background: #ffffff26; padding: 3px 9px; border-radius: 6px; font-weight: 400;
+                           white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+                           min-width: 0; max-width: 360px; flex: 0 1 auto; }
+#tim_barra .destra { margin-left: auto; display: flex; gap: 8px; align-items: center; min-width: 0; }
+#tim_barra .destra > :not(.sola_lettura) { flex-shrink: 0; }
 /* j309: l'icona della guida, bordeaux perche' e' del timone (il blu e' l'info dell'editor) */
 #tim_guida { display: inline-flex; align-items: center; justify-content: center;
              width: 25px; height: 25px; border-radius: 50%; background: #7a1e2d; color: #fff;
@@ -789,14 +794,103 @@ var STILE_REPORT = `
 #tim_report .bdg.lar { background: #1d7a4f; }
 #tim_report .bdg.blo { background: #55646c; }
 #tim_report .bdg.mod { background: #0f6e8c; }
+#tim_report .bdg.cor { background: #7a1e2d; }
+/* I20-1189: LE CORREZIONI DELL'EDITOR sotto la pagina. L'HTML e' quello del report dell'editor
+   (Views/Storico/_VociReport.cshtml): le sue classi si chiamano come alcune del report del timone
+   (rp_foto), quindi qui tutto sta sotto .rp_corr e rp_foto si rimette a posto. */
+#tim_report .rp_corr { margin-top: 12px; padding: 10px 12px; background: #fbf7f0; border: 1px solid #e8dcae;
+                       border-radius: 8px; }
+#tim_report .rp_corr_tit { font-size: 12px; font-weight: 800; letter-spacing: .4px; color: #7a1e2d;
+                           margin-bottom: 8px; }
+#tim_report .rp_corr .rp_voce { display: flex; margin: 0 0 12px; }
+/* la miniatura del prodotto, come quella delle referenze (.rp_foto del report del timone) */
+#tim_report .rp_corr .rp_corr_foto { flex: 0 0 86px; height: 86px; margin-right: 12px; display: flex;
+                                     align-items: center; justify-content: center; background: #fff;
+                                     border: 1px solid #eef2f4; border-radius: 7px; overflow: hidden; }
+#tim_report .rp_corr .rp_corr_foto img { max-width: 100%; max-height: 100%; object-fit: contain; }
+#tim_report .rp_corr .rp_corr_foto img.nofoto { max-width: 42px; max-height: 42px; opacity: .75; }
+#tim_report .rp_corr .rp_voce:last-child { margin-bottom: 0; }
+#tim_report .rp_corr .rp_lab { width: 150px; flex: 0 0 150px; border-right: 1px solid #c8d2d7; padding-right: 10px;
+                               font-weight: 700; overflow-wrap: anywhere; }
+#tim_report .rp_corr .rp_cont { flex: 1; padding-left: 10px; min-width: 0; }
+#tim_report .rp_corr .rp_det { margin-bottom: 3px; font-size: 11.5px; color: #55646c; }
+#tim_report .rp_corr .rp_t { white-space: pre-wrap; }
+#tim_report .rp_corr .rp_blocco { margin: 2px 0 5px; }
+#tim_report .rp_corr .rp_btit { margin-right: 4px; }
+#tim_report .rp_corr .rp_rg { margin-left: 12px; white-space: pre-wrap; }
+#tim_report .rp_corr .rp_simbolo { width: 32px; vertical-align: middle; margin-right: 5px; }
+#tim_report .rp_corr .rp_foto { flex: none; height: auto; display: block; background: none; border: 0;
+                                border-radius: 0; overflow: visible; }
+#tim_report .rp_corr .rp_foto div { display: flex; align-items: center; gap: 6px; margin-top: 3px; }
+#tim_report .rp_corr .rp_foto img { width: 50px; height: 50px; max-width: none; max-height: none;
+                                    object-fit: contain; background: #fff; }
+#tim_report .rp_corr .rp_esito { display: inline-block; margin-top: 4px; padding: 2px 6px; border-radius: 4px;
+                                 font-weight: 700; font-size: 11.5px; }
+#tim_report .rp_corr .rp_esito.accettata { background: #a3eca3; }
+#tim_report .rp_corr .rp_esito.irrisolta { background: #dd7800; color: #fff; }
+#tim_report .rp_corr .rp_esito.attesa { background: #fff0c2; }
 #tim_report .rp_mod { margin-top: 6px; padding: 6px 9px; border-left: 3px solid #0f6e8c;
                       background: #eef6f8; font-size: 12px; color: #26353c; }
 #tim_report .rp_fine { margin-top: 26px; }
-#tim_report table.rp_tab { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-#tim_report table.rp_tab th, #tim_report table.rp_tab td { text-align: left; padding: 6px 8px;
-                                                           border-bottom: 1px solid #eef2f4; }
-#tim_report table.rp_tab th { background: #f4f6f7; font-size: 11px; letter-spacing: .4px;
-                              color: #55646c; }
+/* I20-1189: la riga delle pagine senza modifiche, che nel report non hanno piu' una sezione */
+#tim_report .rp_ferme { margin-top: 12px; padding: 9px 14px; background: #fff; border: 1px solid #dfe5e8;
+                        border-radius: 9px; font-size: 12.5px; color: #55646c; }
+/* I20-1189: il FILTRO per etichette. Solo a schermo: in stampa e nel PDF esce tutto, quindi chi e'
+   nascosto dal filtro (.rp_via) si nasconde solo su schermo, e la fila delle spunte non si stampa. */
+#tim_report .rp_filtro { position: sticky; top: 50px; z-index: 2; margin-top: 12px; padding: 9px 12px;
+                         background: #fff; border: 1px solid #dfe5e8; border-radius: 9px;
+                         display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+#tim_report .rp_filtro > b { font-size: 12px; letter-spacing: .4px; margin-right: 4px; }
+#tim_report .rp_filtro label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer;
+                               user-select: none; }
+#tim_report .rp_filtro label input { margin: 0; }
+#tim_report .rp_filtro label .bdg { margin: 0; }
+#tim_report .rp_filtro label.spento .bdg { opacity: .35; }
+#tim_report .rp_filtro button { margin-left: auto; border: 1px solid #c8d2d7; background: #f4f6f7;
+                                border-radius: 6px; padding: 4px 10px; cursor: pointer; font: inherit;
+                                font-size: 12px; font-weight: 700; color: #1d5b55; }
+#tim_report .rp_filtro button + button { margin-left: 0; }
+@media screen { #tim_report .rp_via { display: none !important; } }
+/* I20-1189: VEDI PREVIEW, in fondo a ogni pagina */
+#tim_report .rp_vedi { margin-top: 12px; border: 0; border-radius: 6px; padding: 7px 14px; cursor: pointer;
+                       font: inherit; font-weight: 700; background: #1d5b55; color: #fff; }
+/* la preview: com'era a sinistra, il piano a destra. Le pagine tengono le loro proporzioni. */
+#tim_report .rp_ante { display: flex; gap: 18px; align-items: flex-start; }
+#tim_report .rp_ante .lato { flex: 1 1 0; min-width: 0; }
+#tim_report .rp_ante .tit { font-size: 12px; font-weight: 800; letter-spacing: .4px; color: #1d5b55;
+                            margin-bottom: 6px; }
+#tim_report .rp_ante .tit small { font-weight: 400; color: #55646c; letter-spacing: 0; }
+#tim_report .rp_ante .pg { position: relative; width: 100%; background: #fff; border: 1px solid #c8d2d7;
+                           overflow: hidden; }
+#tim_report .rp_ante .pg > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; }
+#tim_report .rp_ante .pg .vuota { position: absolute; inset: 0; display: flex; align-items: center;
+                                  justify-content: center; color: #55646c; font-size: 12px; }
+#tim_report .rp_ante .cl { position: absolute; border: 1px dashed #dfe5e8; box-sizing: border-box; }
+#tim_report .rp_ante .cs { position: absolute; box-sizing: border-box; border: 2px solid #c8d2d7;
+                           background: #fff; border-radius: 3px; overflow: hidden; display: flex;
+                           flex-direction: column; align-items: center; justify-content: center;
+                           padding: 2px; text-align: center; line-height: 1.15; }
+#tim_report .rp_ante .cs img { max-width: 100%; min-height: 0; flex: 1 1 auto; object-fit: contain; }
+#tim_report .rp_ante .cs .cod { font-size: 8px; font-weight: 800; word-break: break-all; }
+#tim_report .rp_ante .cs .pz { font-size: 8px; color: #7a1e2d; font-weight: 800; }
+#tim_report .rp_ante .cs.blo { border-style: dashed; border-color: #55646c; background: #eef1f3;
+                               color: #55646c; font-size: 18px; }
+#tim_report .rp_ante_velo { position: fixed; inset: 0; z-index: 5; background: rgba(15,25,30,.55);
+                            display: flex; align-items: flex-start; justify-content: center; overflow: auto;
+                            padding: 30px 16px; }
+#tim_report .rp_ante_velo .fin { background: #fff; border-radius: 10px; padding: 14px 16px 18px;
+                                 width: min(1100px, 100%); box-shadow: 0 12px 34px rgba(0,0,0,.45); }
+#tim_report .rp_ante_velo .fin .testa { display: flex; align-items: center; margin-bottom: 10px; }
+#tim_report .rp_ante_velo .fin .testa b { font-size: 15px; }
+#tim_report .rp_ante_velo .fin .testa button { margin-left: auto; border: 0; border-radius: 6px;
+                                               padding: 6px 14px; cursor: pointer; font: inherit;
+                                               font-weight: 700; background: #7a1e2d; color: #fff; }
+/* le preview in coda: si stampano, a schermo no (a schermo c'e' VEDI PREVIEW) */
+#tim_report .rp_solo_stampa { display: none; }
+/* I20-1189: MOSTRA PREVIEW COMPLETA le apre anche a schermo, in fondo al report */
+#tim_report .rp_solo_stampa.aperta { display: block; }
+#tim_report .rp_vedi_tutte { display: block; margin: 22px auto 0; }
+#tim_report .rp_ante_blocco { margin-top: 14px; }
 #tim_report .rp_coda { margin-top: 18px; font-size: 11.5px; color: #55646c; }
 /* DEPRECATO (j315): l'avviso della finestra ESPORTA PDF di j313. Diceva all'utente di scegliere
    «Salva come PDF» nella finestra di stampa, perche' senza una riga che lo dicesse chi premeva
@@ -818,7 +912,16 @@ var STILE_REPORT = `
     body.tim_stampa_report > *:not(#tim_report) { display: none !important; }
     body.tim_stampa_report { background: #fff; }
     #tim_report { position: static; inset: auto; overflow: visible; background: #fff; }
-    #tim_report .rp_barra, #tim_report .rp_avviso { display: none; }
+    #tim_report .rp_barra, #tim_report .rp_avviso, #tim_report .rp_filtro, #tim_report .rp_vedi,
+    #tim_report .rp_ante_velo { display: none; }
+    /* I20-1189: le preview di tutte le pagine modificate, in coda, una per foglio */
+    #tim_report .rp_solo_stampa { display: block; }
+    #tim_report .rp_ante_blocco { break-before: page; page-break-before: always;
+                                  break-inside: avoid; page-break-inside: avoid; }
+    #tim_report .rp_ante .cs, #tim_report .rp_ante .tit, #tim_report .rp_corr,
+    #tim_report .rp_corr .rp_esito {
+        -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    #tim_report .rp_corr .rp_voce { break-inside: avoid; page-break-inside: avoid; }
     #tim_report .rp_foglio { max-width: none; padding: 0; }
     /* si tiene insieme il singolo cartoncino, NON tutta la pagina: tenendo insieme il blocco
        intero il browser lo buttava sul foglio dopo e lasciava mezzo foglio bianco. */
@@ -4396,6 +4499,7 @@ var STILE_REPORT = `
                 var s = document.createElement('span');
                 s.className = 'sola_lettura';
                 s.textContent = 'sola lettura — ' + (piano.motivoSolaLettura || '');
+                s.title = s.textContent;   // I20-1189: intero al passaggio del mouse, se e' accorciato
                 barra.querySelector('.destra').insertBefore(s, document.getElementById('tim_chiudi'));
             }
         }).catch(function () {
@@ -4614,6 +4718,14 @@ function rpCostruisci(piano, opzioni) {
     var infoRef = o.infoRef || function () { return {}; };
     var nofoto = o.nofoto || '';
     var chiStampa = o.chiStampa || '';
+    /* I20-1189: anteprima(numero) -> l'HTML della preview di quella pagina, com'era e col piano.
+       La da' chi chiama, che conosce la pagina vera e la geometria della griglia. Senza, il report
+       esce senza preview. A schermo (conBarra) ci sono anche il filtro e VEDI PREVIEW. */
+    var anteprima = o.anteprima || null;
+    var aSchermo = o.conBarra !== false;
+    /* I20-1189: correzioni(numero) -> l'HTML delle correzioni dell'editor su quella pagina (note,
+       timbri, Edit avanzato), '' se non ce ne sono. correzioniErrore: perche' non sono arrivate. */
+    var correzioni = o.correzioni || function () { return ''; };
     var righe = rpConfronta(piano);
     var pagine = (piano.pagine || []).slice().sort(function (a, b) { return a.numero - b.numero; });
     var blocchi = piano.blocchi || [];
@@ -4622,6 +4734,25 @@ function rpCostruisci(piano, opzioni) {
 
     function ha(r, t) { return r.tipi.indexOf(t) >= 0; }
     var toccate = righe.filter(function (r) { return r.tipi.length > 0; });
+
+    /* I20-1189: UNA PAGINA VA NEL REPORT SOLO SE E' CAMBIATA. Cambiata = c'e' arrivata o ne e'
+       partita una referenza, una referenza ha un'etichetta (spostata, raggruppata, allargata,
+       gruppo modificato...) o c'e' una casella tenuta per la grafica. Le altre si elencano in una
+       riga: «le 0 referenze stanno dove stavano» non serviva a nessuno (screenshot della issue). */
+    function statoPagina(p) {
+        var dentro = righe.filter(function (r) { return r.paginaOra === p.numero; });
+        var arrivate = dentro.filter(function (r) { return r.tipi.length > 0; });
+        var partite = righe.filter(function (r) {
+            return r.paginaPrima === p.numero && r.paginaOra !== p.numero;
+        });
+        var bloccateQui = blocchi.filter(function (b) { return numeroDi[b.idPagina] === p.numero; });
+        // I20-1189: anche una pagina con sole correzioni dell'editor va nel report
+        var corr = correzioni(p.numero) || '';
+        return { dentro: dentro, arrivate: arrivate, partite: partite, bloccateQui: bloccateQui, corr: corr,
+                 cambiata: arrivate.length > 0 || partite.length > 0 || bloccateQui.length > 0 || corr !== '' };
+    }
+    var cambiate = pagine.filter(function (p) { return statoPagina(p).cambiata; });
+    var ferme = pagine.filter(function (p) { return !statoPagina(p).cambiata; });
     var conta = {
         spo: righe.filter(function (r) { return ha(r, 'spo'); }).length,
         pag: righe.filter(function (r) { return ha(r, 'pag'); }).length,
@@ -4669,12 +4800,27 @@ function rpCostruisci(piano, opzioni) {
            '<li>Si mettono a confronto <b>due cose sole</b>: il volantino <b>com\'era impaginato</b> ' +
            'quando l\'Agenzia ha aperto il timone, e <b>com\'&egrave; adesso</b> nel piano che il ' +
            'Marketing ha salvato.</li>' +
-           '<li>Si va <b>in ordine, dalla pagina 1 all\'ultima</b>. Sotto ogni pagina ci sono solo le ' +
-           'referenze su cui &egrave; stato fatto qualcosa; di quelle rimaste al loro posto si dice ' +
-           'soltanto quante sono.</li>' +
+           '<li>Si va <b>in ordine, dalla pagina 1 all\'ultima</b>, ma <b>solo le pagine su cui ' +
+           '&egrave; cambiato qualcosa</b>: le altre sono elencate in una riga, sotto le etichette. ' +
+           'Sotto ogni pagina ci sono solo le referenze su cui &egrave; stato fatto qualcosa; di ' +
+           'quelle rimaste al loro posto si dice soltanto quante sono.</li>' +
+           '<li><b>VEDI PREVIEW</b>, in fondo a ogni pagina, mette a confronto <b>PRIMA</b>, la ' +
+           'pagina com\'&egrave; arrivata su Correggo, e <b>DOPO</b>, lo schema del piano salvato: ' +
+           'le caselle della griglia con foto, codici e prezzi, le caselle tenute e, colorate come ' +
+           'le etichette, le referenze cambiate. Lo schema non &egrave; il volantino nuovo: &egrave; ' +
+           'quello che l\'Agenzia deve impaginare. <b>MOSTRA PREVIEW COMPLETA</b>, in fondo al ' +
+           'report, fa vedere le preview di <b>tutte le pagine</b>, anche quelle senza modifiche ' +
+           '(segnate cos&igrave;), una dopo l\'altra; nel foglio stampato e nel PDF sono ' +
+           '<b>in coda</b>, una per foglio.</li>' +
+           '<li>A schermo le <b>etichette sopra le pagine fanno da filtro</b>: togliendo la spunta ' +
+           'si nascondono le referenze che non le hanno, e le pagine rimaste vuote. La stampa e il ' +
+           'PDF contengono sempre tutto.</li>' +
+           '<li>Sotto ogni pagina, in <b>CORREZIONI NELL\'EDITOR</b>, ci sono le note, i timbri e ' +
+           'gli Edit avanzato di quella pagina, come nel report dell\'editor. Si confermano ' +
+           'nell\'editor, non qui. Una pagina che ha solo correzioni compare comunque.</li>' +
            '<li>In fondo al foglio ci sono le cose che non stanno su una pagina: le referenze ' +
-           '<b>tolte dal volantino</b>, quelle <b>eliminate</b>, le <b>caselle tenute per la ' +
-           'grafica</b> e la tabella di tutte le pagine.</li>' +
+           '<b>tolte dal volantino</b> e quelle <b>eliminate</b>. Le <b>caselle tenute per la ' +
+           'grafica</b> sono sotto la loro pagina.</li>' +
            '<li>Se il Marketing ha spostato una referenza e poi l\'ha rimessa dov\'era, qui non ' +
            'compare: il foglio dice <b>come &egrave; adesso</b>, non tutti i passaggi.</li>' +
            '</ol>' +
@@ -4720,14 +4866,44 @@ function rpCostruisci(piano, opzioni) {
                return '<div><span class="bdg ' + e[0] + '">' + e[1] + '</span> ' + x[1] + '</div>';
            }).join('') +
            '<div><span class="bdg blo">CASELLA TENUTA</span> una casella vuota che il Marketing ha ' +
-           'bloccato perch&eacute; l&igrave; ci va un elemento grafico</div></div>');
+           'bloccato perch&eacute; l&igrave; ci va un elemento grafico</div>' +
+           '<div><span class="bdg cor">CORREZIONI</span> le correzioni fatte nell\'editor sulla pagina: ' +
+           'note, timbri, Edit avanzato</div></div>');
+
+    // ---- I20-1189: le pagine senza modifiche, che non hanno una sezione
+    h.push('<div class="rp_ferme">' + (ferme.length
+        ? '<b>' + rpPlurale(ferme.length, 'Pagina senza modifiche', 'Pagine senza modifiche') +
+          '</b>, non ' + rpPlurale(ferme.length, 'mostrata', 'mostrate') + ': ' +
+          ferme.map(function (p) { return p.numero; }).join(', ') + '.'
+        : 'Su <b>tutte le pagine</b> &egrave; cambiato qualcosa.') +
+        (o.correzioniErrore ? '<br>Correzioni dell\'editor non disponibili: ' + rpEsc(o.correzioniErrore) : '') +
+        '</div>');
+
+    /* ---- I20-1189: IL FILTRO, solo a schermo. Una spunta per ogni etichetta che nel report c'e'
+       davvero; si vede chi ha almeno un'etichetta accesa. Lo fa funzionare disegnaReport. */
+    var presenti = [];
+    righe.forEach(function (r) {
+        r.tipi.forEach(function (t) { if (RP_ETICHETTE[t] && presenti.indexOf(t) < 0) presenti.push(t); });
+    });
+    if (blocchi.length) presenti.push('blo');
+    if (pagine.some(function (p) { return (correzioni(p.numero) || '') !== ''; })) presenti.push('cor');
+    if (aSchermo && presenti.length) {
+        var ordine = Object.keys(RP_ETICHETTE).concat(['blo', 'cor']);
+        presenti.sort(function (a, b) { return ordine.indexOf(a) - ordine.indexOf(b); });
+        h.push('<div class="rp_filtro"><b>FILTRA</b>' + presenti.map(function (t) {
+            var e = t === 'blo' ? ['blo', 'CASELLA TENUTA'] : t === 'cor' ? ['cor', 'CORREZIONI'] : RP_ETICHETTE[t];
+            return '<label><input type="checkbox" data-filtro="' + t + '" checked>' +
+                   '<span class="bdg ' + e[0] + '">' + e[1] + '</span></label>';
+        }).join('') + '<button type="button" data-filtro-tutte>SELEZIONA TUTTE</button>' +
+               '<button type="button" data-filtro-nessuna>DESELEZIONA TUTTE</button></div>');
+    }
 
     // ---------------------------------------------------------------- una sezione per ogni pagina
     function cartoncino(r) {
         var info = infoRef(r.codice, r.voce) || {};
         var foto = info.foto || '';
         var descrizione = info.descrizione || r.descrizione;
-        var s = '<div class="rp_riga"><div class="rp_foto">' +
+        var s = '<div class="rp_riga" data-tipi="' + r.tipi.join(' ') + '"><div class="rp_foto">' +
                 (foto ? '<img src="' + rpEsc(foto) + '" alt="">'
                       : '<img class="nofoto" src="' + rpEsc(nofoto) + '" alt="nessuna foto">') +
                 '</div><div class="rp_corpo">';
@@ -4771,14 +4947,10 @@ function rpCostruisci(piano, opzioni) {
         return s + '</div></div>';
     }
 
-    pagine.forEach(function (p) {
-        var dentro = righe.filter(function (r) { return r.paginaOra === p.numero; });
-        var arrivate = dentro.filter(function (r) { return r.tipi.length > 0; });
-        var partite = righe.filter(function (r) {
-            return r.paginaPrima === p.numero && r.paginaOra !== p.numero;
-        });
+    cambiate.forEach(function (p) {
+        var sp = statoPagina(p);
+        var dentro = sp.dentro, arrivate = sp.arrivate, partite = sp.partite, bloccateQui = sp.bloccateQui;
         var fermi = dentro.length - arrivate.length;
-        var bloccateQui = blocchi.filter(function (b) { return numeroDi[b.idPagina] === p.numero; });
 
         // quante caselle sono davvero occupate: un gruppo ne prende una, un allargamento piu' di una
         var occupate = 0;
@@ -4802,6 +4974,8 @@ function rpCostruisci(piano, opzioni) {
         if (!p.attiva) flag += '<span class="flag">SEGNATA COME SPENTA</span>';
         if (p.ordine && p.ordine !== p.numero) flag += '<span class="flag">ORDINE DI STAMPA: ' + p.ordine + '</span>';
 
+        // I20-1189: la sezione intera, cosi' il filtro la puo' nascondere quando resta vuota
+        h.push('<div class="rp_sez" data-pagina="' + p.numero + '">');
         h.push('<h2 class="rp_pag">PAGINA ' + p.numero + '<span class="gri">' + gri + '</span>' + flag + '</h2>');
         h.push('<div class="rp_pagina">');
         // Michele si accorgerebbe subito dello scarto: 19 referenze in 9 caselle sembra un errore
@@ -4816,35 +4990,30 @@ function rpCostruisci(piano, opzioni) {
             h.push('<div class="rp_niente">Nel piano questa pagina risulta <b>' +
                    (p.bloccata ? 'bloccata' : '') + (p.bloccata && !p.attiva ? ' e ' : '') +
                    (!p.attiva ? 'spenta' : '') + '</b>: non l\'ha fatto il timone, che oggi non ha ' +
-                   'nessun pulsante per farlo (vedi la nota sotto la tabella delle pagine).</div>');
+                   'nessun pulsante per farlo; arriva dal piano com\'era quando &egrave; stato aperto.</div>');
         }
-        if (!arrivate.length && !partite.length && !bloccateQui.length) {
-            h.push('<div class="rp_niente">Sulle referenze di questa pagina <b>non &egrave; stato ' +
-                   'cambiato niente</b>: le ' + dentro.length + ' ' +
-                   rpPlurale(dentro.length, 'referenza', 'referenze') + ' ' +
-                   rpPlurale(dentro.length, 'sta', 'stanno') + ' dove ' +
-                   rpPlurale(dentro.length, 'stava', 'stavano') + '.</div>');
-        }
-        else {
+        if (sp.cambiata) {   // sempre vero: le pagine ferme non arrivano qui (I20-1189)
             arrivate.sort(function (a, b) { return (a.casellaOra || 99) - (b.casellaOra || 99); });
             arrivate.forEach(function (r) { h.push(cartoncino(r)); });
             if (partite.length) {
                 h.push('<div class="rp_nota" style="margin-top:10px"><b>Queste referenze erano su questa ' +
                        'pagina e non ci sono pi&ugrave;:</b><br>' +
                        partite.map(function (r) {
+                           // I20-1189: ogni riga con le sue etichette, per il filtro
                            var dove = r.tipi.indexOf('eli') >= 0 ? 'eliminata'
                                : r.tipi.indexOf('fuo') >= 0 ? 'tolta dal volantino'
                                : r.paginaOra ? 'spostata alla pagina ' + r.paginaOra +
                                  (r.casellaOra ? ', casella ' + r.casellaOra : '')
                                : 'senza posto';
                            var i2 = infoRef(r.codice, r.voce) || {};
-                           return '&bull; ' + rpEsc(r.codice) + ' &mdash; ' +
+                           return '<div class="rp_partita" data-tipi="' + r.tipi.join(' ') + '">&bull; ' +
+                                  rpEsc(r.codice) + ' &mdash; ' +
                                   rpEsc(i2.descrizione || r.descrizione) +
-                                  ' &rarr; <b>' + dove + '</b>';
-                       }).join('<br>') + '</div>');
+                                  ' &rarr; <b>' + dove + '</b></div>';
+                       }).join('') + '</div>');
             }
             if (bloccateQui.length) {
-                h.push('<div class="rp_nota"><span class="bdg blo">CASELLA TENUTA</span> ' +
+                h.push('<div class="rp_nota" data-tipi="blo"><span class="bdg blo">CASELLA TENUTA</span> ' +
                        rpPlurale(bloccateQui.length, 'la casella', 'le caselle') + ' ' +
                        bloccateQui.map(function (b) { return b.posizione; }).join(', ') +
                        ' ' + rpPlurale(bloccateQui.length, 'resta vuota', 'restano vuote') +
@@ -4858,50 +5027,30 @@ function rpCostruisci(piano, opzioni) {
                        rpPlurale(fermi, 'era', 'erano') + '.</div>');
             }
         }
-        h.push('</div>');
+        // I20-1189: le correzioni dell'editor su questa pagina, come nel report dell'editor
+        if (sp.corr)
+            h.push('<div class="rp_corr" data-tipi="cor"><div class="rp_corr_tit">CORREZIONI NELL\'EDITOR</div>' +
+                   sp.corr + '</div>');
+        if (anteprima && aSchermo)
+            h.push('<button type="button" class="rp_vedi" data-anteprima="' + p.numero + '">VEDI PREVIEW</button>');
+        h.push('</div></div>');
     });
 
     // ------------------------------------------------------------------ quello che non sta in pagina
     h.push('<div class="rp_fine">');
     var fuori = righe.filter(function (r) { return r.tipi.indexOf('fuo') >= 0; });
-    h.push('<h2 class="rp_pag">TOLTE DAL VOLANTINO<span class="gri">non vanno stampate, ma restano ' +
+    h.push('<div class="rp_sez"><h2 class="rp_pag">TOLTE DAL VOLANTINO<span class="gri">non vanno stampate, ma restano ' +
            'nell\'elenco del timone e si possono rimettere dentro</span></h2><div class="rp_pagina">');
     if (!fuori.length) h.push('<div class="rp_niente">Nessuna referenza &egrave; stata tolta dal volantino.</div>');
     else fuori.forEach(function (r) { h.push(cartoncino(r)); });
-    h.push('</div>');
+    h.push('</div></div>');
 
     var eli = righe.filter(function (r) { return r.tipi.indexOf('eli') >= 0; });
-    h.push('<h2 class="rp_pag">ELIMINATE<span class="gri">buttate via dal piano del Marketing</span></h2>' +
+    h.push('<div class="rp_sez"><h2 class="rp_pag">ELIMINATE<span class="gri">buttate via dal piano del Marketing</span></h2>' +
            '<div class="rp_pagina">');
     if (!eli.length) h.push('<div class="rp_niente">Nessuna referenza &egrave; stata eliminata.</div>');
     else eli.forEach(function (r) { h.push(cartoncino(r)); });
-    h.push('</div>');
-
-    // ---- la tabella delle pagine
-    h.push('<h2 class="rp_pag">TUTTE LE PAGINE, IN UNA TABELLA</h2><div class="rp_pagina">' +
-           '<table class="rp_tab"><tr><th>Pagina</th><th>Griglia</th><th>Referenze</th>' +
-           '<th>Caselle usate</th><th>Tenute per la grafica</th><th>Ordine di stampa</th>' +
-           '<th>Stato</th></tr>');
-    pagine.forEach(function (p) {
-        var dentro = righe.filter(function (r) { return r.paginaOra === p.numero; });
-        var usate = 0;
-        dentro.forEach(function (r) {
-            if (r.voce.posizione) usate += (r.voce.colonne || 1) * (r.voce.righe || 1);
-        });
-        var st = [];
-        if (p.bloccata) st.push('bloccata');
-        if (!p.attiva) st.push('spenta');
-        h.push('<tr><td><b>' + p.numero + '</b></td><td>' + (p.griglia || '&mdash;') + '</td><td>' +
-               dentro.length + '</td><td>' + usate + '</td><td>' +
-               blocchi.filter(function (b) { return numeroDi[b.idPagina] === p.numero; }).length +
-               '</td><td>' + (p.ordine || p.numero) + '</td><td>' +
-               (st.length ? st.join(', ') : 'normale') + '</td></tr>');
-    });
-    h.push('</table>' +
-           '<div class="rp_coda" style="margin-top:10px">Le colonne <b>ordine di stampa</b> e ' +
-           '<b>stato</b> arrivano dal piano cos&igrave; come sono: oggi il timone non ha pulsanti ' +
-           'per cambiarle, quindi restano come erano quando il piano &egrave; stato aperto.</div>' +
-           '</div>');
+    h.push('</div></div>');
 
     h.push('<div class="rp_coda">Le referenze <b>in sospeso</b> non compaiono in questo foglio: il ' +
            'timone non si lascia salvare finch&eacute; ce n\'&egrave; anche una sola, quindi in un ' +
@@ -4909,6 +5058,25 @@ function rpCostruisci(piano, opzioni) {
            'Il foglio &egrave; fatto con i dati del piano salvato: se il Marketing salva di nuovo, ' +
            'basta riaprire il report per averlo aggiornato.</div>');
     h.push('</div>');   // rp_fine
+
+    /* I20-1189: IN CODA, LE PREVIEW DI TUTTE LE PAGINE, prima a sinistra e dopo a destra, una per
+       foglio: anche quelle senza modifiche, segnate cosi' (revisione del 03/11: «voglio vedere tutte
+       quante le pagine»). Si stampano e vanno nel PDF; a schermo le apre MOSTRA PREVIEW COMPLETA. */
+    if (anteprima && pagine.length) {
+        // I20-1189: a schermo le apre MOSTRA PREVIEW COMPLETA (disegnaReport); il bottone non si stampa
+        if (aSchermo)
+            h.push('<button type="button" class="rp_vedi rp_vedi_tutte" data-anteprime-tutte>MOSTRA PREVIEW COMPLETA</button>');
+        h.push('<div class="rp_solo_stampa">');
+        pagine.forEach(function (p, i) {
+            var ferma = cambiate.indexOf(p) < 0;
+            h.push('<div class="rp_ante_blocco">' +
+                   (i === 0 ? '<h2 class="rp_pag">PREVIEW DI TUTTE LE PAGINE</h2>' : '') +
+                   '<h2 class="rp_pag">PAGINA ' + p.numero +
+                   (ferma ? '<span class="flag">SENZA MODIFICHE</span>' : '') + '</h2><div class="rp_pagina">' +
+                   anteprima(p.numero) + '</div></div>');
+        });
+        h.push('</div>');
+    }
     h.push('</div>');   // rp_foglio
     return h.join('');
 }
@@ -4929,6 +5097,149 @@ function rpCostruisci(piano, opzioni) {
         };
     }
 
+    /* I20-1189: LA PREVIEW DI UNA PAGINA, per il report. A sinistra la pagina com'e' arrivata su
+       Correggo (l'immagine dell'editor), a destra lo SCHEMA del piano salvato, disegnato con la
+       stessa geometria del timone (riquadro, rettangoloDi, cellaDi): caselle della griglia, in ogni
+       casella foto, codici e prezzo di chi la tiene, caselle tenute col divieto. Il bordo ha il
+       colore della prima etichetta della referenza (del gruppo), grigio se non e' cambiata.
+       Senza griglia le referenze restano al loro posto originale, come le disegna il timone.
+       Lo schema non e' il volantino nuovo: e' quello che l'Agenzia deve impaginare. */
+    var RP_COLORE = { spo: '#b8860b', pag: '#1f5fd0', sta: '#6b3fa0', uni: '#6b3fa0', cam: '#6b3fa0',
+                      lar: '#1d7a4f', mod: '#0f6e8c' };
+
+    function rpAnteprima(p, numero) {
+        var pagina = (p.pagine || []).filter(function (x) { return x.numero === numero; })[0];
+        if (!pagina) return '';
+        var pw = Number(pagina.larghezza), ph = Number(pagina.altezza);
+        var forma = (pw && ph) ? 'aspect-ratio: ' + pw + ' / ' + ph + ';' : 'aspect-ratio: 0.7;';
+        function pc(q) {
+            return 'left:' + (q.x / pw * 100) + '%;top:' + (q.y / ph * 100) + '%;' +
+                   'width:' + (q.w / pw * 100) + '%;height:' + (q.h / ph * 100) + '%;';
+        }
+
+        // com'era: la pagina vera, la stessa immagine dell'editor
+        var img = document.querySelector('.foglio[data-numero="' + numero + '"] img.pagina');
+        var via = img ? img.getAttribute('src') : '';
+        var vecchia = '<div class="pg" style="' + forma + '">' +
+            (via ? '<img src="' + rpEsc(via) + '" alt="pagina ' + numero + '">'
+                 : '<div class="vuota">Immagine della pagina non disponibile</div>') + '</div>';
+
+        // il piano: le etichette di ogni voce, per il colore del bordo
+        var tipiDi = {};
+        rpConfronta(p).forEach(function (r) { tipiDi[r.voce.id] = r.tipi; });
+        var voci = (p.voci || []).filter(function (v) { return v.stato === 0 && v.idPagina === pagina.id; });
+        var dentro = voci.filter(function (v) { return !!v.posizione; });
+        var nativi = dentro.filter(function (v) { return v.paginaOrigine === numero; });
+        var conGriglia = pagina.righe > 0 && pagina.colonne > 0;
+        // la griglia sta nel riquadro dei prodotti nati qui, come nel timone
+        var r = conGriglia ? riquadro(nativi, pagina) : null;
+        var nuova = [];
+        if (pw && ph) {
+            if (conGriglia && r) {
+                for (var k = 1; k <= pagina.righe * pagina.colonne; k++) {
+                    var c = cellaDi(r, pagina, k);
+                    if (c) nuova.push('<div class="cl" style="' + pc(c) + '"></div>');
+                }
+            }
+            dentro.forEach(function (v) {
+                var q = conGriglia ? rettangoloDi(r, pagina, v.posizione, v.colonne, v.righe)
+                    : (v.paginaOrigine === numero ? { x: Number(v.x), y: Number(v.y), w: Number(v.w), h: Number(v.h) } : null);
+                if (!q || !q.w || !q.h) return;
+                var gruppo = v.idGruppo === null || v.idGruppo === undefined ? [v]
+                    : (p.voci || []).filter(function (x) { return x.idGruppo === v.idGruppo; });
+                var tipi = [];
+                gruppo.forEach(function (x) {
+                    (tipiDi[x.id] || []).forEach(function (t) { if (tipi.indexOf(t) < 0) tipi.push(t); });
+                });
+                var colore = '';
+                tipi.forEach(function (t) { if (!colore && RP_COLORE[t]) colore = RP_COLORE[t]; });
+                var info = rpInfoRef(v.codice, v) || {};
+                nuova.push('<div class="cs" style="' + pc(q) + (colore ? 'border-color:' + colore + ';' : '') + '">' +
+                    (info.foto ? '<img src="' + rpEsc(info.foto) + '" alt="">' : '') +
+                    '<span class="cod">' + rpEsc(gruppo.map(function (x) { return x.codice; }).join(', ')) + '</span>' +
+                    (v.prezzo ? '<span class="pz">' + rpEsc(v.prezzo) + '</span>' : '') + '</div>');
+            });
+            if (conGriglia && r) (p.blocchi || []).forEach(function (b) {
+                if (b.idPagina !== pagina.id) return;
+                var c = cellaDi(r, pagina, b.posizione);
+                if (c) nuova.push('<div class="cs blo" style="' + pc(c) + '" title="casella tenuta per la grafica">&#8856;</div>');
+            });
+        }
+        return '<div class="rp_ante">' +
+            '<div class="lato"><div class="tit">PRIMA <small>arrivata su Correggo</small></div>' + vecchia + '</div>' +
+            '<div class="lato"><div class="tit">DOPO <small>' +
+            (conGriglia ? 'griglia ' + rpEsc(pagina.griglia) : 'senza griglia: referenze al loro posto') +
+            '</small></div><div class="pg" style="' + forma + '">' + nuova.join('') + '</div></div></div>';
+    }
+
+    /* I20-1189: LE CORREZIONI DELL'EDITOR per il report, divise per pagina. Si chiede lo stesso report
+       della finestra REPORT dell'editor (/Storico/Report, «incorporato»: solo le voci, versione del
+       piano, niente TOTALE ne' OK/VISTO), cosi' i due report dicono le stesse cose con le stesse
+       parole. Arriva diviso da «PAG. N» (div.rp_pag) seguiti dalle loro voci (div.rp_voce): qui si
+       rimettono sotto il numero di pagina. loading="lazy" si toglie: nel PDF un'immagine pigra puo'
+       restare vuota. */
+    var correzioniReport = null;    // { versione, stato: 'carico'|'ok'|'errore', perPagina: {}, errore }
+
+    function chiediCorrezioni(p, poi) {
+        if (correzioniReport && correzioniReport.versione === p.versione && correzioniReport.stato !== 'errore') {
+            if (correzioniReport.stato === 'ok') poi();
+            return;
+        }
+        var mio = { versione: p.versione, stato: 'carico', perPagina: {} };
+        correzioniReport = mio;
+        fetch(C4_BASE + 'Storico/Report/' + ID_VOL + '/' + p.versione + '?incorporato=true', { credentials: 'same-origin' })
+            .then(function (r) { if (!r.ok || r.redirected) throw new Error(String(r.status)); return r.text(); })
+            .then(function (html) {
+                var c = document.createElement('div');
+                c.innerHTML = html;
+                var numero = null;
+                Array.prototype.forEach.call(c.children, function (el) {
+                    if (el.classList.contains('rp_pag')) {
+                        var m = /(\d+)/.exec(el.textContent || '');
+                        numero = m ? Number(m[1]) : null;
+                    } else if (el.classList.contains('rp_voce') && numero !== null) {
+                        el.querySelectorAll('img[loading]').forEach(function (i) { i.removeAttribute('loading'); });
+                        // il box resta a parte: la miniatura si mette quando si disegna, con le schede che ci sono
+                        (mio.perPagina[numero] = mio.perPagina[numero] || []).push({
+                            idBox: el.dataset.box ? Number(el.dataset.box) : null, html: el.outerHTML
+                        });
+                    }
+                });
+                mio.stato = 'ok';
+            })
+            .catch(function (e) {
+                mio.stato = 'errore';
+                mio.errore = 'il server non ha risposto (' + ((e && e.message) || 'errore') + ').';
+            })
+            .then(function () { if (correzioniReport === mio) poi(); });
+    }
+
+    /* I20-1189: la miniatura a sinistra di una correzione: la foto della referenza di quel box nel piano
+       (chi tiene la casella, se nel box ci sono piu' codici), dalle schede di Istanta gia' in casa.
+       Senza box (nota sulla pagina) o senza foto: il «no foto», come per le altre referenze. */
+    function miniaturaCorrezione(p, idBox) {
+        var voci = idBox ? (p.voci || []).filter(function (v) { return v.idElemento === idBox; }) : [];
+        var v = voci.filter(function (x) { return !!x.posizione; })[0] || voci[0];
+        var foto = v ? (rpInfoRef(v.codice, v) || {}).foto : '';
+        return '<div class="rp_corr_foto">' +
+               (foto ? '<img src="' + rpEsc(foto) + '" alt="">'
+                     : '<img class="nofoto" src="' + rpEsc(VIA_NOFOTO) + '" alt="nessuna foto">') + '</div>';
+    }
+
+    function opzioniCorrezioni(p) {
+        var c = correzioniReport;
+        return {
+            correzioni: function (n) {
+                var lista = (c && c.stato === 'ok' && c.perPagina[n]) || [];
+                return lista.map(function (x) {
+                    // la miniatura entra come primo pezzo della voce, prima dell'etichetta
+                    return x.html.replace(/^(<div[^>]*>)/, function (apertura) { return apertura + miniaturaCorrezione(p, x.idBox); });
+                }).join('');
+            },
+            correzioniErrore: c && c.stato === 'errore' ? c.errore : ''
+        };
+    }
+
     var elReport = null;
 
     function pianoSalvato() { return salvato ? JSON.parse(salvato) : null; }
@@ -4937,12 +5248,29 @@ function rpCostruisci(piano, opzioni) {
         var p = pianoSalvato();
         if (!elReport || !p) return;
         var chi = document.querySelector('.barra_alta .utente');
+        var oc = opzioniCorrezioni(p);
         elReport.innerHTML = rpCostruisci(p, {
             infoRef: rpInfoRef,
             nofoto: VIA_NOFOTO,
-            chiStampa: chi ? (chi.textContent || '').trim() : ''
+            chiStampa: chi ? (chi.textContent || '').trim() : '',
+            anteprima: function (n) { return rpAnteprima(p, n); },
+            correzioni: oc.correzioni,
+            correzioniErrore: oc.correzioniErrore
         });
         elReport.querySelector('#rp_chiudi').addEventListener('click', chiudiReport);
+        collegaFiltro();
+        // I20-1189: VEDI PREVIEW apre la preview della sua pagina sopra il report
+        elReport.querySelectorAll('[data-anteprima]').forEach(function (b) {
+            b.addEventListener('click', function () { apriAnteprima(p, Number(b.dataset.anteprima)); });
+        });
+        // I20-1189: MOSTRA PREVIEW COMPLETA apre e richiude, qui sotto, le preview che vanno in stampa
+        var bTutte = elReport.querySelector('[data-anteprime-tutte]');
+        if (bTutte) bTutte.addEventListener('click', function () {
+            var coda = elReport.querySelector('.rp_solo_stampa');
+            var aperta = coda.classList.toggle('aperta');
+            bTutte.textContent = aperta ? 'NASCONDI PREVIEW COMPLETA' : 'MOSTRA PREVIEW COMPLETA';
+            if (aperta) coda.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
         elReport.querySelector('#rp_stampa').addEventListener('click', function () {
             /* La classe la mette e la toglie il browser intorno alla stampa: senza il ritardo, su
                Chrome window.print() torna subito e la pagina resterebbe mezza nascosta mentre
@@ -4952,6 +5280,69 @@ function rpCostruisci(piano, opzioni) {
             setTimeout(function () { document.body.classList.remove('tim_stampa_report'); }, 500);
         });
         elReport.querySelector('#rp_esporta').addEventListener('click', esportaPdf);
+    }
+
+    /* I20-1189: IL FILTRO PER ETICHETTE, solo a schermo. Ogni cartoncino, riga «non ci sono piu'» e
+       nota delle caselle tenute porta le sue etichette in data-tipi: si nasconde (classe rp_via, che
+       vale solo a schermo) se non ne ha nessuna accesa. Una pagina senza piu' niente di visibile si
+       nasconde tutta. Il filtro si perde riaprendo il report: e' un modo di guardare, non un dato. */
+    function collegaFiltro() {
+        var barra = elReport.querySelector('.rp_filtro');
+        if (!barra) return;
+        function applica() {
+            var accese = [];
+            barra.querySelectorAll('[data-filtro]').forEach(function (cb) {
+                cb.parentNode.classList.toggle('spento', !cb.checked);
+                if (cb.checked) accese.push(cb.dataset.filtro);
+            });
+            elReport.querySelectorAll('[data-tipi]').forEach(function (el) {
+                // senza etichette non c'e' niente da filtrare: resta sempre
+                if (!el.dataset.tipi) { el.classList.remove('rp_via'); return; }
+                var suoi = el.dataset.tipi.split(' ');
+                var visibile = suoi.some(function (t) { return accese.indexOf(t) >= 0; });
+                el.classList.toggle('rp_via', !visibile);
+            });
+            elReport.querySelectorAll('.rp_sez').forEach(function (s) {
+                var conTipi = s.querySelectorAll('[data-tipi]');
+                if (!conTipi.length) { s.classList.remove('rp_via'); return; }
+                var qualcuno = false;
+                conTipi.forEach(function (el) { if (!el.classList.contains('rp_via')) qualcuno = true; });
+                s.classList.toggle('rp_via', !qualcuno);
+            });
+            // la nota «queste referenze erano su questa pagina» senza righe visibili si nasconde
+            elReport.querySelectorAll('.rp_partita').forEach(function (el) {
+                var nota = el.parentNode;
+                var qualcuna = Array.prototype.some.call(nota.querySelectorAll('.rp_partita'),
+                    function (x) { return !x.classList.contains('rp_via'); });
+                nota.classList.toggle('rp_via', !qualcuna);
+            });
+        }
+        barra.querySelectorAll('[data-filtro]').forEach(function (cb) { cb.addEventListener('change', applica); });
+        barra.querySelector('[data-filtro-tutte]').addEventListener('click', function () {
+            barra.querySelectorAll('[data-filtro]').forEach(function (cb) { cb.checked = true; });
+            applica();
+        });
+        barra.querySelector('[data-filtro-nessuna]').addEventListener('click', function () {
+            barra.querySelectorAll('[data-filtro]').forEach(function (cb) { cb.checked = false; });
+            applica();
+        });
+    }
+
+    function apriAnteprima(p, numero) {
+        chiudiAnteprima();
+        var v = document.createElement('div');
+        v.className = 'rp_ante_velo';
+        v.innerHTML = '<div class="fin"><div class="testa"><b>PREVIEW &ndash; PAGINA ' + numero + '</b>' +
+                      '<button type="button">CHIUDI</button></div>' + rpAnteprima(p, numero) + '</div>';
+        v.querySelector('button').addEventListener('click', chiudiAnteprima);
+        v.addEventListener('click', function (ev) { if (ev.target === v) chiudiAnteprima(); });
+        elReport.appendChild(v);
+    }
+
+    function chiudiAnteprima() {
+        var v = elReport ? elReport.querySelector('.rp_ante_velo') : null;
+        if (v) v.remove();
+        return !!v;
     }
 
     /* ======================================================================================
@@ -5043,11 +5434,17 @@ function rpCostruisci(piano, opzioni) {
 
         var chi = document.querySelector('.barra_alta .utente');
         var nome = nomeFilePdf(p);
+        var oc = opzioniCorrezioni(p);
         var foglio = rpCostruisci(p, {
             infoRef: rpInfoRef,
             nofoto: VIA_NOFOTO,
             chiStampa: chi ? (chi.textContent || '').trim() : '',
-            conBarra: false
+            conBarra: false,
+            // I20-1189: le preview in coda, con le pagine vere dentro il PDF come le foto,
+            // e le correzioni dell'editor sotto le pagine
+            anteprima: function (n) { return rpAnteprima(p, n); },
+            correzioni: oc.correzioni,
+            correzioniErrore: oc.correzioniErrore
         });
 
         foteDentro(foglio).then(function (conFoto) {
@@ -5173,6 +5570,11 @@ function rpCostruisci(piano, opzioni) {
         }
         elReport.style.display = '';
         disegnaReport();
+
+        // I20-1189: le correzioni dell'editor; quando arrivano il report si ridisegna
+        chiediCorrezioni(p, function () {
+            if (elReport && elReport.style.display !== 'none') disegnaReport();
+        });
 
         // le schede che servono: solo i box delle referenze che finiranno sul foglio
         var manca = {};
@@ -5378,7 +5780,8 @@ function rpCostruisci(piano, opzioni) {
         if (e.key !== 'Escape') return;
         // prima si chiudono le finestrelle, poi semmai il timone
         // j312: il report sta sopra tutto, quindi l'Escape tocca prima a lui
-        if (elReport && elReport.style.display !== 'none') { chiudiReport(); return; }
+        // I20-1189: e dentro il report, prima alla preview aperta
+        if (elReport && elReport.style.display !== 'none') { if (!chiudiAnteprima()) chiudiReport(); return; }
         if (document.getElementById('tim_cestino')) { chiudiCestino(); return; }
         if (document.getElementById('tim_pagine')) { chiudiPagine(); return; }
         if (document.getElementById('tim_scelta')) { chiudiScelta(); return; }
