@@ -201,8 +201,9 @@ Solo dopo la conferma della revisione:
 1. Esegui prima i test mirati, poi le verifiche richieste dagli `AGENTS.md` dei componenti coinvolti.
 2. Per modifiche trasversali, esegui i test di tutti i componenti impattati dalla matrice.
 3. Registra i comandi realmente eseguiti e i relativi risultati; non dichiarare verifiche mai lanciate. Registrali nel Control Plane con `company_record_task_tests`: per ogni prova tipo, nome, comando, funzionalità verificata, componenti coinvolti ed esito, compresi i test falliti e quelli non eseguiti con il motivo. Richiamalo a ogni giro di test, anche dopo una correzione: ogni chiamata resta nello storico del task e alimenta l'analisi dei rischi della release. Se lo strumento non è disponibile, prosegui: i test restano nella pull request (§12.2).
-4. Se i controlli falliscono, non effettuare il push, riporta Jira a `ToDo` e registra il task come `Blocked` con il dettaglio dell'errore.
-5. Se i controlli pertinenti passano, crea un commit limitato ai file approvati e pubblica il branch remoto. Nei cicli successivi al primo aggiungi un nuovo commit sullo stesso branch, senza riscrivere quelli già pubblicati.
+4. La verifica del Runner (`company_start_task_verification`) serve solo se `executionConfiguration.verificationPolicy`, restituito da `company_prepare_task`, è `RunnerRequired`: in quel caso il task non si completa senza una verifica superata. Con `AgentManaged` non chiamarla: valgono i test che esegui tu e registri con `company_record_task_tests`.
+5. Se i controlli falliscono, non effettuare il push, riporta Jira a `ToDo` e registra il task come `Blocked` con il dettaglio dell'errore.
+6. Se i controlli pertinenti passano, crea un commit limitato ai file approvati e pubblica il branch remoto. Nei cicli successivi al primo aggiungi un nuovo commit sullo stesso branch, senza riscrivere quelli già pubblicati.
 
 Non inserire credenziali, token, configurazioni cliente o dati reali nei file, nei commit, nei log o nell'output del task. I test con database, code, filesystem o servizi esterni devono usare ambienti e dati isolati e non distruttivi.
 
