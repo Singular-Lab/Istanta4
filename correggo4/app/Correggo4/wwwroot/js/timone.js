@@ -462,8 +462,11 @@ body.tim_on .modale {
    sotto e si leggeva come se fosse parte della barra (Michele, 29/09: «puoi staccarle un po' di
    piu' il codice dalla barra degli strumenti? mi sembra tutto appiccicato»). Otto pixel di aria
    bastano a far capire che sono due cose diverse. */
+/* I20-1183: oltre lo zoom «adatta» la scheda si ingrandisce con transform: scale(--tim-s) (vedi
+   scalaScheda). Gli spazi per la barra in alto e l'etichetta in basso si dividono per la scala,
+   cosi' restano dei loro pixel veri: la barra e l'etichetta non crescono con lo zoom. */
 .tim_casella .sk { position: absolute; inset: 0; display: flex; background: #fff;
-                   padding: 32px 0 18px; }
+                   padding: calc(32px / var(--tim-s, 1)) 0 calc(18px / var(--tim-s, 1)); }
 .tim_casella .sk .foto { position: relative; flex: 0 0 34%; display: flex; align-items: center;
                          justify-content: center; padding: 3px 4px; border-right: 1px solid #eceff1;
                          overflow: hidden; }
@@ -521,7 +524,7 @@ body.tim_on .modale {
                                 Sotto i 140 pixel qualunque testo in piu' e' una riga tagliata a
                                 meta', che si legge peggio di niente.
    Il codice resta SEMPRE, in tutte e tre: e' quello che identifica la referenza. */
-.tim_casella.stretta .sk { padding-top: 20px; }
+.tim_casella.stretta .sk { padding-top: calc(20px / var(--tim-s, 1)); }
 .tim_casella.stretta .sk .foto { flex: 0 0 38%; padding: 2px 3px; }
 .tim_casella.stretta .sk .info { padding: 1px 4px 2px; }
 .tim_casella.stretta .sk .riga1 .c { font-size: 9px; }
@@ -530,7 +533,7 @@ body.tim_on .modale {
 .tim_casella.stretta .sk .pz { font-size: 13px; }
 .tim_casella.stretta .sk .chip { display: none; }
 
-.tim_casella.minima .sk { padding-top: 19px; flex-direction: column; }
+.tim_casella.minima .sk { padding-top: calc(19px / var(--tim-s, 1)); flex-direction: column; }
 .tim_casella.minima .sk .foto { flex: 1 1 auto; border-right: 0; padding: 1px 2px; min-height: 0; }
 .tim_casella.minima .sk .foto img { max-height: 100%; }
 .tim_casella.minima .sk .info { flex: 0 0 auto; padding: 0 4px 1px; }
@@ -1003,10 +1006,13 @@ var STILE_REPORT = `
     /* L'etichetta arriva dal dna del box e porta dentro i tag del tracciato, tipo
        "<DESCRIZIONE_TITOLO>MAGNUM X4 MANDORLE</DESCRIZIONE_TITOLO>". A schermo sono rumore:
        si tolgono e si stringono gli spazi. Il testo vero non si perde, si nasconde solo la
-       impalcatura. */
+       impalcatura.
+       I20-1183: anche l'a capo forzato di InDesign, che arriva come FORCED_LINE_BREAK, diventa
+       uno spazio, come nelle altre etichette su una riga di Correggo4 (I20-1170). */
+    var ACAPO_FORZATO = /FORCED_LINE_BREAK/g;
     function leggibile(s) {
         return String(s === null || s === undefined ? '' : s)
-            .replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+            .replace(ACAPO_FORZATO, ' ').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
     }
 
     function esc(s) {
@@ -1229,8 +1235,11 @@ var STILE_REPORT = `
            griglia su una pagina di formato diverso fa caselle diverse, e lo zoom le cambia tutte
            in continuazione (per questo disegna() viene richiamata a ogni cambio di zoom). */
         var largoFoglio0 = foglio.clientWidth || 0, altoFoglio0 = foglio.clientHeight || 0;
-        var largaPx = largoFoglio0 ? q.w / dw * largoFoglio0 : 999;
-        var altaPx = altoFoglio0 ? q.h / dh * altoFoglio0 : 999;
+        // I20-1183: oltre lo zoom «adatta» la scheda si ingrandisce intera, quindi la sua forma si
+        // sceglie sulla misura che la casella avrebbe a zoom «adatta»
+        var scala = scalaScheda();
+        var largaPx = largoFoglio0 ? q.w / dw * largoFoglio0 / scala : 999;
+        var altaPx = altoFoglio0 ? q.h / dh * altoFoglio0 / scala : 999;
         if (largaPx < 140 || altaPx < 92) c.classList.add('minima');
         else if (largaPx < 200 || altaPx < 128) c.classList.add('stretta');
 
@@ -1240,7 +1249,7 @@ var STILE_REPORT = `
            li ricevi gia'.. forse la creerei piu' tecnica». Ha visto la preview e ha risposto
            «ESATTAMENTE. Cosi' la voglio».
            Il ritaglio resta qui sotto, marcato deprecato, perche' spiega da dove veniamo. */
-        disegnaScheda(c, v);
+        disegnaScheda(c, v, scala);
 
         /* IL NUMERO DELLA CASELLA, sempre. Prima lo disegnavo solo sulle caselle che non si
            possono spostare, perche' sulle altre il numero lo diceva il menu a tendina della
@@ -2790,7 +2799,19 @@ var STILE_REPORT = `
     /* La scheda dentro la casella: fondo bianco, foto della referenza, codice, descrizione, peso,
        prezzo. Se la scheda del box non e' ancora arrivata la chiede e intanto disegna quello che
        sa gia' dal piano (codice, descrizione, prezzo): la casella non resta mai vuota. */
-    function disegnaScheda(c, v) {
+    /* I20-1183: LA SCHEDA SEGUE LO ZOOM. Lo zoom allarga il foglio e le caselle crescono con lui,
+       ma dentro la scheda i caratteri sono in pixel e la foto e' una miniatura da 220: zoomando
+       la casella cresceva e scritte e foto restavano uguali, cioe' sempre piu' piccole rispetto
+       alla pagina. Oltre lo zoom «adatta» (il 48% di #zoomFit) la scheda si disegna com'e' a
+       «adatta» e si ingrandisce intera. Sotto resta com'era: si adatta alla casella (j304). */
+    var ZOOM_ADATTA = 48;
+    function scalaScheda() {
+        var z = document.getElementById('zoom');
+        var quanto = z ? Number(z.value) || 0 : 0;
+        return quanto > ZOOM_ADATTA ? quanto / ZOOM_ADATTA : 1;
+    }
+
+    function disegnaScheda(c, v, scala) {
         var s = v.idElemento ? schedePerBox[String(v.idElemento)] : null;
         if (v.idElemento && !s) {
             chiediSchedaBox(v.idElemento, function () { ridisegnaFraPoco(); });
@@ -2802,6 +2823,16 @@ var STILE_REPORT = `
 
         var sk = document.createElement('div');
         sk.className = 'sk';
+        if (scala > 1) {
+            // grande quanto la casella divisa per la scala, poi ingrandita: riempie la casella
+            sk.style.setProperty('--tim-s', String(scala));
+            sk.style.right = 'auto';
+            sk.style.bottom = 'auto';
+            sk.style.width = (100 / scala) + '%';
+            sk.style.height = (100 / scala) + '%';
+            sk.style.transform = 'scale(' + scala + ')';
+            sk.style.transformOrigin = '0 0';
+        }
 
         var box = document.createElement('div');
         box.className = 'foto';
@@ -2871,7 +2902,7 @@ var STILE_REPORT = `
         dd.className = 'd';
         // la descrizione del BOX: e' quella che va in stampa. Quella della singola referenza si
         // legge nell'elenco del gruppo (la graffetta), dove serve a distinguerle.
-        dd.textContent = leggibile(v.etichetta) || (f && f.descrizione) || '';
+        dd.textContent = leggibile(v.etichetta) || leggibile(f && f.descrizione);
         info.appendChild(dd);
 
         var tec = document.createElement('div');
@@ -3066,7 +3097,7 @@ var STILE_REPORT = `
             if (f && f.descrizione) {
                 var de = document.createElement('div');
                 de.className = 'desc';
-                de.textContent = f.descrizione;
+                de.textContent = leggibile(f.descrizione);
                 d.appendChild(de);
             }
             /* IL PESO e' il motivo per cui questo elenco esiste: dentro un gruppo descrizione,
@@ -4335,9 +4366,9 @@ function rpEsc(t) {
 }
 
 /* La descrizione arriva con le etichette dentro (<DESCRIZIONE_TITOLO>...</DESCRIZIONE_TITOLO>):
-   sul report si vuole la frase, non il tracciato. */
+   sul report si vuole la frase, non il tracciato. L'a capo forzato diventa uno spazio (I20-1183). */
 function rpPulisci(t) {
-    return String(t || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    return String(t || '').replace(ACAPO_FORZATO, ' ').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 function rpData(iso, conOra) {
@@ -4779,7 +4810,7 @@ function rpCostruisci(piano, opzioni) {
         if (!mia) return {};
         return {
             foto: (mia.guidFoto || '').trim() ? miniaturaDi(mia.guidFoto, 220) : '',
-            descrizione: (mia.descrizione || '').trim()
+            descrizione: rpPulisci(mia.descrizione)
         };
     }
 
