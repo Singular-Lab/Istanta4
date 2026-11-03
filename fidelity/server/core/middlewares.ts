@@ -14,6 +14,7 @@ import { apiRateLimiter } from './middleware/rateLimiter';
 import { csrfProtection, PREFISSO_ACS_SAML } from './middleware/csrfProtection';
 import { applySecurityMiddlewares } from './middleware/securityMiddleware';
 import { compressioneRisposte } from './middleware/staticiPrecompressi';
+import { uxpOriginSessionProtection } from './middleware/uxpOriginSession';
 
 // Estendi la sessione per TypeScript
 declare module 'express-session' {
@@ -28,6 +29,7 @@ declare module 'express-session' {
     lastIP?: string;
     lastUserAgent?: string;
     lastActivity?: Date;
+    uxpClientTokenHash?: string;
   }
 }
 
@@ -44,6 +46,10 @@ export function applyMiddlewares(app: Express) {
   // CORS deve essere applicato PRIMA dei middleware di sicurezza
   // per permettere alle preflight OPTIONS di rispondere correttamente
   applyCors(app);
+
+  // Una origine UXP opaca non e' un'identita': dopo il CORS ogni richiesta reale
+  // deve presentare la prova dell'installazione associata alla sessione.
+  app.use(uxpOriginSessionProtection);
 
   // Middleware di sicurezza (deve essere tra i primi)
   applySecurityMiddlewares(app);

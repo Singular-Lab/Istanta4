@@ -15,6 +15,7 @@ import { routeDeprecata } from '../middleware/routeDeprecata';
 import { csrfTokenEndpoint, csrfTokenGenerator } from '../middleware/csrfProtection';
 import { permissionGuard } from '../middleware/permissionGuard';
 import { metodoAccessoAttivo } from '../middleware/metodoAccessoAttivo';
+import { uxpClientTokenHashForLogin } from '../middleware/uxpOriginSession';
 import { CODICE_EMAIL_PASSWORD } from '../services/authProviders/configurazioneProvider';
 import { authEmailRateLimiter, authRateLimiter, registrationRateLimiter } from '../middleware/rateLimiter';
 import { AuditLogService } from '../services/AuditLogService';
@@ -483,6 +484,7 @@ export class UserController extends BaseController {
   }
   private async loginUser(req: Request, res: Response): Promise<void> {
     try {
+      const uxpClientTokenHash = uxpClientTokenHashForLogin(req);
       const { email, password, selectedUserType } = req.body;
 
       const result = await this.userService.login(
@@ -528,6 +530,7 @@ export class UserController extends BaseController {
         req.session.lastActivity = new Date();
         req.session.lastIP = req.ip;
         req.session.lastUserAgent = req.get('user-agent');
+        req.session.uxpClientTokenHash = uxpClientTokenHash;
 
         req.session.save((err) => {
           if (err) {
