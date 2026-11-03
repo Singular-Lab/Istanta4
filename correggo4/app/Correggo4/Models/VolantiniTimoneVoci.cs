@@ -65,4 +65,12 @@ public partial class VolantiniTimoneVoci
     public DateTime? DataModifica { get; set; }
 
     public short? IdAutore { get; set; }
+
+    /// <summary>
+    /// I20-1186: la correzione del GRUPPO fatta dalla «Modifica referenza» del timone, in JSON
+    /// ({ offerta, descrizione }, le due parti dell'Edit avanzato). Sta solo sul capogruppo di un
+    /// gruppo di almeno due referenze; null altrove. Non tocca i box: viaggia col report del timone
+    /// e l'Agenzia la riporta a mano.
+    /// </summary>
+    public string? ModificaGruppo { get; set; }
 }

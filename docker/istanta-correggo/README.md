@@ -79,7 +79,8 @@ riavviati: i mount e le variabili si fissano alla creazione.
 
 ## 1. Gli schemi
 
-Nessuna delle due applicazioni crea il proprio schema all'avvio. Gli schemi sono
+Nessuna delle due applicazioni crea il proprio schema all'avvio: lo aggiornano
+con le migration (sotto). Gli schemi di partenza sono
 **già in questa cartella** e vengono applicati al primo avvio di PostgreSQL:
 
 ```
@@ -87,9 +88,11 @@ schemas/istanta/01-istanta.sql   -> database di Istanta,   applicato come utente
 schemas/correggo4/01-schema.sql  -> database di Correggo4, applicato come utente correggo4
 ```
 
-Risultato verificato: **25 tabelle** per Istanta, 21 per Correggo4, e le 25
+Risultato verificato: **25 tabelle** per Istanta e **31** per Correggo4, e
 corrispondono esattamente a quelle della Baseline dei contesti EF — nessuna in
-più, nessuna in meno.
+più, nessuna in meno. Fino a I20-1186 lo schema di Correggo4 qui era fermo a 21
+tabelle (senza timone, policy, finestre dei Category e foto caricate): ora è la
+copia di `correggo4/db/correggo4_schema.sql`, con tre righe di intestazione.
 
 Da I20-1106 Istanta applica da sola, **all'avvio**, le migration EF pendenti dei
 suoi due contesti (`Migrazioni.ApplicaAllAvvio` in `Program.cs`; si spegne con
@@ -100,6 +103,24 @@ nelle sue tabelle `__EFMigrationsHistory_ctx1` e `__EFMigrationsHistory_ctx2`.
 Per questo `01-istanta.sql` resta lo schema della Baseline e **non va esteso a
 mano** con le tabelle o le colonne che arrivano con una migration: all'avvio la
 migration le troverebbe già create e Istanta si fermerebbe.
+
+Da I20-1186 vale lo stesso per Correggo4 (`Migrazioni.ApplicaAllAvvio` in
+`correggo4/app/Correggo4/Data/Migrazioni.cs`; si spegne con
+`Migrazioni__ApplicaAllAvvio=false` in `correggo4.env`). Un solo contesto, quindi
+una sola tabella di storico, `__EFMigrationsHistory`. La prima migration dopo la
+Baseline è `AggiungiModificaGruppo` (`volantini_timone_voci.modifica_gruppo`).
+Su un database di Correggo4 che esiste già il primo avvio crea la tabella di
+storico, registra la Baseline senza toccare niente e applica le successive.
+`ALTER TABLE` lo può fare solo il proprietario della tabella: se le tabelle non
+sono del ruolo con cui gira Correggo4 (`CORREGGO_DB_USER`), l'avvio si ferma con
+"must be owner". Il bundle le crea già con quel ruolo; su un database fatto a mano
+va controllato prima:
+
+```bash
+docker exec istanta-correggo-postgres-1 psql -U istanta -d correggo4 -tAc "select tablename, tableowner from pg_tables where schemaname='public' and tableowner <> '${CORREGGO_DB_USER:-correggo4}'"
+```
+
+Nessuna riga = a posto.
 
 ### `01-istanta.sql` è generato, non copiato
 

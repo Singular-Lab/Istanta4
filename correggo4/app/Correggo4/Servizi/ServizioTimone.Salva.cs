@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Correggo4.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -29,9 +30,13 @@ public sealed partial class ServizioTimone
     /// <summary>
     /// Una voce come la manda il browser al salvataggio. Colonne e Righe dicono quante caselle
     /// occupa (j274): se non arrivano, vale una sola casella, com'era prima.
+    /// ModificaGruppo (I20-1186) e' la correzione del gruppo fatta dalla «Modifica referenza»:
+    /// se non arriva la voce tiene quella salvata (un browser vecchio non la cancella), se arriva
+    /// null la si toglie.
     /// </summary>
     public sealed record VoceSalvata(long Id, long? IdPagina, short? Posizione, short Stato,
-                                     long? IdGruppo, short? Colonne = null, short? Righe = null);
+                                     long? IdGruppo, short? Colonne = null, short? Righe = null,
+                                     JsonElement ModificaGruppo = default);
 
     /// <summary>
     /// Una casella bloccata come la manda il browser (j279): niente altro che la pagina e la
@@ -100,10 +105,18 @@ public sealed partial class ServizioTimone
 
         // ---------------------------------------------------------------- le voci
         var nuovoStato = new Dictionary<long, VoceSalvata>();
+        var nuovaModifica = new Dictionary<long, string?>();
         foreach (var v in voci ?? new List<VoceSalvata>())
         {
-            if (!perIdVoce.ContainsKey(v.Id))
+            if (!perIdVoce.TryGetValue(v.Id, out var rigaVoce))
                 return Esito.No(404, "voce_non_trovata", $"La referenza {v.Id} non e' in questo piano.");
+            // I20-1186: la correzione del gruppo, controllata e nei suoi limiti
+            if (v.ModificaGruppo.ValueKind != JsonValueKind.Undefined)
+            {
+                var noModifica = LeggiModificaGruppo(v.ModificaGruppo, rigaVoce.Codice, out var json);
+                if (noModifica != null) return noModifica;
+                nuovaModifica[v.Id] = json;
+            }
             if (v.Stato is not (VoceInPagina or VoceFuoriVolantino or VoceEliminata or VoceInSospeso))
                 return Esito.No(400, "stato_non_valido", $"Stato {v.Stato} sconosciuto per la referenza {v.Id}.");
             if (v.Stato == VoceInPagina)
@@ -136,6 +149,8 @@ public sealed partial class ServizioTimone
                             riga.Righe < 1 ? (short)1 : riga.Righe));
             }
         }
+        var modificaDi = finale.ToDictionary(f => f.Riga.Id,
+            f => nuovaModifica.TryGetValue(f.Riga.Id, out var m) ? m : f.Riga.ModificaGruppo);
 
         // ------------------------------------------------------- le caselle bloccate (j279)
         // Se il browser non le manda, restano quelle salvate. Se le manda, la sua lista e' la
@@ -313,6 +328,20 @@ public sealed partial class ServizioTimone
                     "Un gruppo non puo' stare metà su una pagina e metà su un'altra: prima vanno rimesse insieme.");
         }
 
+        /* I20-1186: la correzione di un gruppo sta sul capogruppo, cioe' su chi tiene la casella.
+           Se il capogruppo e' cambiato (stacca, unisci) la correzione lo segue; se ce ne sono due
+           vince quella del capogruppo, poi quella della voce piu' vecchia, come fa il browser.
+           Un gruppo sciolto, o che non viene piu' da due box, la perde. */
+        var modificaFinale = finale.ToDictionary(f => f.Riga.Id, f => (string?)null);
+        foreach (var gr in finale.Where(f => f.Stato == VoceInPagina && f.IdGruppo != null)
+                                 .GroupBy(f => f.IdGruppo!.Value))
+        {
+            var ordinate = gr.OrderBy(f => f.Posizione == null ? 1 : 0).ThenBy(f => f.Riga.Id).ToList();
+            if (ordinate.Where(f => f.Riga.IdElemento != null).Select(f => f.Riga.IdElemento).Distinct().Count() < 2)
+                continue;
+            modificaFinale[ordinate[0].Riga.Id] = ordinate.Select(f => modificaDi[f.Riga.Id]).FirstOrDefault(m => m != null);
+        }
+
         // gli elementi in sospeso bloccano il salvataggio (specifica 6.7, voluto da Michele).
         // Gli eliminati e i fuori volantino no: quelli sono una scelta, non un problema aperto.
         int sospesi = finale.Count(f => f.Stato == VoceInSospeso);
@@ -342,9 +371,13 @@ public sealed partial class ServizioTimone
 
             foreach (var f in finale)
             {
+                string? modifica = modificaFinale[f.Riga.Id];
                 bool cambiata = f.Riga.IdPaginaTimone != f.IdPagina || f.Riga.Posizione != f.Posizione
                                 || f.Riga.Stato != f.Stato || f.Riga.IdGruppo != f.IdGruppo
-                                || f.Riga.Colonne != f.Colonne || f.Riga.Righe != f.Righe;
+                                || f.Riga.Colonne != f.Colonne || f.Riga.Righe != f.Righe
+                                || f.Riga.ModificaGruppo != modifica;
+                // I20-1186: una correzione del gruppo nuova o cambiata accende il «da sistemare»
+                f.Riga.ModificaGruppo = modifica;
                 f.Riga.IdPaginaTimone = f.IdPagina;
                 f.Riga.Posizione = f.Posizione;
                 f.Riga.Stato = f.Stato;

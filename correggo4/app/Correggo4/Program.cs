@@ -117,6 +117,10 @@ app.MapControllerRoute(
     pattern: "{controller=Volantini}/{action=Index}/{id?}")
     .WithStaticAssets();
 
+// I20-1186: le migration pendenti si applicano qui, all'avvio, prima di toccare il database e di
+// accettare richieste. Fino a qui lo schema si cambiava con ALTER lanciati a mano su ogni database.
+Migrazioni.ApplicaAllAvvio(app.Services, app.Configuration, app.Logger);
+
 // Utenti di prova: creati solo se la tabella e' vuota. Credenziali inventate
 // per l'esperimento, non provengono da nessun sistema reale.
 using (var scope = app.Services.CreateScope())
