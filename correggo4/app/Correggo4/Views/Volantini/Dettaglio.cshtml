@@ -806,6 +806,10 @@
         @* I20-1189: il bottone si chiama MENABÒ AVANZATO; dentro, per ora, tutto il resto resta «timone» *@
         <button type="button" class="nascosto" id="tTimone"
                 title="MENABÒ AVANZATO - il piano di rimpaginazione">MENABÒ AVANZATO</button>
+        @* I20-1191: il report completo del menabò in PDF, senza aprirlo. Lo scopre timone.js quando il
+           piano c'e'; lo vedono Agenzia e Marketing (al Category il server risponde 403). *@
+        <button type="button" class="nascosto" id="tReportCompleto"
+                title="Scarica il report completo del menabò avanzato (PDF)">REPORT COMPLETO</button>
         <span class="utente">@User.Identity?.Name</span>
         <form method="post" action="~/Account/Logout" style="margin:0;">
             @Html.AntiForgeryToken()

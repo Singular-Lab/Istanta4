@@ -98,8 +98,9 @@ public class TimoneReportTests
         Assert.Contains("h.push('<div class=\"rp_solo_stampa\">');", rp);
         Assert.Contains("#tim_report .rp_solo_stampa { display: none; }", js);
         Assert.Contains("#tim_report .rp_solo_stampa { display: block; }", js);
-        // il PDF le costruisce anche lui
-        Assert.Contains("anteprima: function (n) { return rpAnteprima(p, n); }", Funzione(js, "function esportaPdf()"));
+        // il PDF le costruisce anche lui (da I20-1191 ESPORTA PDF passa da mandaPdf, condivisa con REPORT COMPLETO)
+        Assert.Contains("mandaPdf(p, aspetta, null);", Funzione(js, "function esportaPdf()"));
+        Assert.Contains("anteprima: function (n) { return rpAnteprima(p, n); }", Funzione(js, "function mandaPdf(p, aspetta, senzaMotore)"));
     }
 
     [Fact]
@@ -152,7 +153,7 @@ public class TimoneReportTests
         // lo stile del report dell'editor vale solo dentro il blocco
         Assert.Contains("#tim_report .rp_corr .rp_foto { flex: none; height: auto;", js);
         // anche il PDF le porta
-        Assert.Contains("correzioni: oc.correzioni,", Funzione(js, "function esportaPdf()"));
+        Assert.Contains("correzioni: oc.correzioni,", Funzione(js, "function mandaPdf(p, aspetta, senzaMotore)"));
 
         // a sinistra di ogni correzione la miniatura del prodotto del suo box, o il «no foto»
         Assert.Contains("idBox: el.dataset.box ? Number(el.dataset.box) : null", chiedi);

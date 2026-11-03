@@ -39,6 +39,9 @@ public sealed class TimonePdfController : ControllerBase
     /// <summary>Il foglio da mettere nel PDF e come si deve chiamare il file.</summary>
     public sealed record Richiesta(string? Html, string? Nome);
 
+    /// <summary>I20-1191: chi puo' scaricare il PDF del report: l'Agenzia e il Marketing, non il Category.</summary>
+    public static bool PuoScaricare(ServizioTimone.Chi chi) => chi.Agenzia || chi.Marketing;
+
     [HttpPost("{idVol:int}/Pdf")]
     [RequestSizeLimit(26 * 1024 * 1024)]
     public async Task<IActionResult> Pdf(int idVol, [FromBody] Richiesta? corpo)
@@ -52,11 +55,12 @@ public sealed class TimonePdfController : ControllerBase
             return StatusCode(401, new { ok = false, codice = "non_autenticato",
                                          messaggio = "Utente non attivo." });
 
-        // Il report delle modifiche e' dell'Agenzia (j312): il pulsante lo vede solo lei, e anche
-        // la rotta lo chiede. Un pulsante nascosto non e' una serratura.
-        if (!chi.Agenzia)
+        // Il report delle modifiche era solo dell'Agenzia (j312). Da I20-1191 lo scarica anche il
+        // Marketing, col pulsante REPORT COMPLETO dell'editor. La rotta lo controlla comunque: un
+        // pulsante nascosto non e' una serratura.
+        if (!PuoScaricare(chi))
             return StatusCode(403, new { ok = false, codice = "non_autorizzato",
-                                         messaggio = "Il report del timone lo scarica l'Agenzia." });
+                                         messaggio = "Il report del menabò avanzato lo scaricano l'Agenzia e il Marketing." });
 
         // Si riusa il controllo che c'e' gia': PianoAsync risponde 404 se il volantino non
         // esiste e 403 se chi chiede non c'entra niente col timone. NON garantisce che un piano
