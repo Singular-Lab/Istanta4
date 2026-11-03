@@ -691,8 +691,12 @@ body.tim_on .modale {
 .tim_pan .voce .da { color: #a8481f; font-weight: 700; font-size: 10px; }
 .tim_pan .vuoto { color: #777; font-size: 11px; font-style: italic; padding: 8px 4px; }
 
+/* I20-1185: gli avvisi e le domande stanno SOPRA le finestrelle del timone (gruppo, cestino, pagine:
+   107), perche' spesso nascono da li': a 106 l'avviso «I prezzi promo sono diversi», lanciato dalla
+   finestra del gruppo, finiva sotto di lei. Restano sotto la scheda dell'Edit avanzato (110) e il
+   report (130). */
 #tim_messaggio { position: fixed; left: calc(50% - 30px); top: 52%; transform: translate(-50%, -50%);
-                 z-index: 106; background: #fff; border-radius: 10px; padding: 22px 26px;
+                 z-index: 108; background: #fff; border-radius: 10px; padding: 22px 26px;
                  max-width: 470px; text-align: center; font-size: 13px; line-height: 1.55;
                  box-shadow: 0 12px 34px rgba(0,0,0,.45); }
 #tim_messaggio h3 { margin: 0 0 8px; font-size: 16px; color: #1d5b55; }
