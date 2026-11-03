@@ -54,6 +54,21 @@
 -- due, diff). Il collaudo j329 lo fa e deve uscire senza differenze: e'
 -- l'unica prova che conta per un file come questo.
 -- =====================================================================
+-- DAL 3/11/2026 (I20-1186): LO SCHEMA CAMBIA SOLO CON LE MIGRATION
+-- =====================================================================
+-- Questo file e' lo schema della Baseline, la prima migration EF di
+-- Correggo4 (app/Correggo4/Migrations), e da qui NON va piu' esteso a
+-- mano. Ogni tabella o colonna nuova arriva con la sua migration, che
+-- Correggo4 applica da solo all'avvio (Data/Migrazioni.cs; si spegne con
+-- Migrazioni__ApplicaAllAvvio=false). Una colonna aggiunta anche qui la
+-- migration la troverebbe gia' creata, e Correggo4 non partirebbe.
+-- Su un database nuovo: prima questo file, poi l'avvio di Correggo4.
+-- Prima migration dopo la Baseline: AggiungiModificaGruppo
+-- (volantini_timone_voci.modifica_gruppo).
+--
+-- Copia identica, con tre righe di intestazione, nel bundle:
+-- docker/istanta-correggo/schemas/correggo4/01-schema.sql
+-- =====================================================================
 --
 -- Differenze volute rispetto all'originale SQL Server, tutte motivate:
 --   1. FK polimorfiche: mantenute come colonne tipizzate MA con FK vere

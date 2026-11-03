@@ -788,6 +788,9 @@ var STILE_REPORT = `
 #tim_report .bdg.gru { background: #6b3fa0; }
 #tim_report .bdg.lar { background: #1d7a4f; }
 #tim_report .bdg.blo { background: #55646c; }
+#tim_report .bdg.mod { background: #0f6e8c; }
+#tim_report .rp_mod { margin-top: 6px; padding: 6px 9px; border-left: 3px solid #0f6e8c;
+                      background: #eef6f8; font-size: 12px; color: #26353c; }
 #tim_report .rp_fine { margin-top: 26px; }
 #tim_report table.rp_tab { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 #tim_report table.rp_tab th, #tim_report table.rp_tab td { text-align: left; padding: 6px 8px;
@@ -2264,6 +2267,37 @@ var STILE_REPORT = `
         return gruppoDi(v).length;
     }
 
+    /* I20-1186: un GRUPPO DEL TIMONE mette in una casella referenze che sull'impaginato stanno in
+       box diversi. E' lo stesso conto del server (ServizioTimone.ModificaGruppo.cs): referenze in
+       pagina, almeno due box. Un gruppo nato da Istanta (piu' codici nello stesso box) non lo e':
+       quello la scheda dell'Edit avanzato lo conosce gia'. */
+    function boxDelGruppo(v) {
+        if (!v || v.stato !== 0) return [];
+        var visti = {}, boxes = [];
+        // per primo il box di chi tiene la casella: nella scheda la sua foto e' proposta come P
+        var capo = capoDi(v);
+        [capo].concat(gruppoDi(v).filter(function (x) { return x !== capo; })).forEach(function (x) {
+            if (x.stato !== 0 || !x.idElemento || visti[x.idElemento]) return;
+            visti[x.idElemento] = true;
+            boxes.push(x.idElemento);
+        });
+        return boxes;
+    }
+    function eGruppoDelTimone(v) { return boxDelGruppo(v).length >= 2; }
+
+    /* La correzione del gruppo sta su chi tiene la casella. Se il capo e' cambiato (stacca, unisci)
+       vale quella del capo, poi quella della voce piu' vecchia: la stessa regola del server. */
+    function modificaDelGruppo(v) {
+        var capo = capoDi(v);
+        if (capo && capo.modificaGruppo) return capo.modificaGruppo;
+        var altra = gruppoDi(v).filter(function (x) { return !!x.modificaGruppo; })[0];
+        return altra ? altra.modificaGruppo : null;
+    }
+    function scriviModificaDelGruppo(v, modifica) {
+        var capo = capoDi(v);
+        gruppoDi(v).forEach(function (x) { x.modificaGruppo = x === capo ? modifica : null; });
+    }
+
     /* Il gruppo segue il capo: stessa pagina, stesso stato. La casella la tiene solo il capo,
        quindi i compagni restano senza - ed e' l'invariante che il server pretende. */
     function seguiIlCapo(v) {
@@ -3322,6 +3356,14 @@ var STILE_REPORT = `
             nuovo.idPagina = v.idPagina;
             nuovo.stato = v.stato;
         }
+        // I20-1186: la correzione del gruppo resta al gruppo (passa al nuovo capo); sciolto il gruppo, si perde
+        var modificaRestante = modificaDelGruppo(v);
+        v.modificaGruppo = null;
+        restano.forEach(function (x) { x.modificaGruppo = null; });
+        if (restano.length > 1 && modificaRestante) {
+            var capoRestante = restano.filter(tieneLaCasella)[0] || restano[0];
+            capoRestante.modificaGruppo = modificaRestante;
+        }
 
         // prima si esce dal gruppo, POI si manda in sospeso: mandaA chiama seguiIlCapo, e se la
         // voce fosse ancora nel gruppo si porterebbe dietro tutti gli altri.
@@ -3752,6 +3794,37 @@ var STILE_REPORT = `
             return;
         }
 
+        /* I20-1186: su un gruppo del timone la scheda si apre in modalita' timone, sul box di chi tiene
+           la casella e con le referenze di tutto il gruppo. Non scrive niente sul server: SALVA della
+           scheda mette la correzione nella bozza del timone, che parte col SALVA del timone. Per
+           questo qui non serve salvare prima il timone: le due cose stanno nella stessa bozza. */
+        if (eGruppoDelTimone(v)) {
+            var capo = capoDi(v);
+            var esitoGruppo = gancio.apri(capo.idElemento || v.idElemento, {
+                gruppo: boxDelGruppo(v),
+                codici: codiceDi(v),
+                modifica: modificaDelGruppo(v),
+                modificabile: !!(piano && piano.puoScrivere === true),
+                salva: function (modifica) {
+                    scriviModificaDelGruppo(v, modifica);
+                    segnaModifica();
+                }
+            });
+            if (esitoGruppo === 'fuori_policy') {
+                messaggio('Non e\' fra i tuoi prodotti',
+                    '«' + codiceDi(v) + '» non e\' fra i prodotti che puoi correggere.');
+                return;
+            }
+            if (esitoGruppo !== 'ok') {
+                messaggio('Scheda non disponibile',
+                    'Non si e\' trovato il prodotto di «' + codiceDi(v) + '» in questa pagina: ' +
+                    'puo\' capitare se il volantino e\' stato riesportato dopo l\'apertura del timone.');
+                return;
+            }
+            soloLaReferenza(capo.idElemento ? capo : v);
+            return;
+        }
+
         if (modifiche > 0) {
             messaggio('Prima salva il timone',
                 'Hai ' + modifiche + (modifiche === 1 ? ' modifica' : ' modifiche') + ' non ancora ' +
@@ -4132,7 +4205,9 @@ var STILE_REPORT = `
                 return { id: v.id, idPagina: v.idPagina, posizione: v.posizione, stato: v.stato,
                          idGruppo: v.idGruppo,
                          // j275: quante caselle occupa
-                         colonne: Math.max(1, v.colonne || 1), righe: Math.max(1, v.righe || 1) };
+                         colonne: Math.max(1, v.colonne || 1), righe: Math.max(1, v.righe || 1),
+                         // I20-1186: la correzione del gruppo, null se non c'e'
+                         modificaGruppo: v.modificaGruppo || null };
             }),
             // j280: le caselle bloccate. Si manda sempre la lista intera - anche vuota - perche'
             // per il server la lista che arriva e' la verita' e sostituisce quella salvata.
@@ -4477,6 +4552,8 @@ function rpConfronta(piano) {
         }
         var col = v.colonne || 1, rig = v.righe || 1;
         if (v.stato === 0 && (col > 1 || rig > 1)) r.tipi.push('lar');
+        // I20-1186: la correzione del gruppo fatta dalla «Modifica referenza», sul capogruppo
+        if (v.stato === 0 && v.modificaGruppo) r.tipi.push('mod');
 
         return r;
     });
@@ -4491,8 +4568,37 @@ var RP_ETICHETTE = {
     sta: ['gru', 'SCIOLTA DAL GRUPPO'],
     uni: ['gru', 'UNITA A UN GRUPPO'],
     cam: ['gru', 'GRUPPO CAMBIATO'],
-    lar: ['lar', 'ALLARGATA']
+    lar: ['lar', 'ALLARGATA'],
+    mod: ['mod', 'GRUPPO MODIFICATO']
 };
+
+/* I20-1186: la correzione del gruppo in chiaro, una riga per cosa da rifare. L'Agenzia la riporta a
+   mano, come le correzioni dell'Edit avanzato: qui deve leggere esattamente cosa cambiare. */
+var RP_FOTO_STATO = { 1: 'primaria (P)', 2: 'secondaria (S)', 3: 'non selezionata' };
+function rpModifica(m) {
+    if (!m) return '';
+    var righe = [];
+    var o = m.offerta || {};
+    (o.campi || []).forEach(function (c) {
+        righe.push(rpEsc(c.field) + ': <b>' + rpEsc(c.valore === '' ? '(vuoto)' : c.valore) + '</b>');
+    });
+    (o.azioni || []).forEach(function (a) {
+        var campi = (a.campi || []).map(function (c) { return rpEsc(c.field) + ' ' + rpEsc(c.valore); }).join(', ');
+        righe.push('azione <b>' + rpEsc(a.titolo || ('n° ' + a.id)) + '</b>' + (campi ? ' (' + campi + ')' : ''));
+    });
+    var d = m.descrizione || {};
+    if (d.testo) righe.push('descrizione: <b>' + rpEsc(rpPulisci(d.testo)) + '</b>');
+    (d.foto || []).forEach(function (f) {
+        righe.push('foto di ' + rpEsc(f.codice) + ': ' + (RP_FOTO_STATO[f.stato] || '') +
+                   (f.guidId ? ' &middot; foto ' + rpEsc(f.guidId) : ' &middot; senza foto'));
+    });
+    (d.loghi || []).forEach(function (l) {
+        righe.push((l.stato === 4 ? 'logo da <b>aggiungere</b>: ' : 'logo da <b>togliere</b>: ') +
+                   rpEsc(l.sigla || l.nome || l.guidId));
+    });
+    if (!righe.length) return '';
+    return '<div class="rp_mod"><b>Modifica del gruppo, da riportare a mano:</b><br>' + righe.join('<br>') + '</div>';
+}
 
 /* --------------------------------------------------------------------------- il foglio, in HTML
    fotoDi(codice) -> l'indirizzo della miniatura, oppure '' se a sistema non c'e' una foto.
@@ -4523,6 +4629,7 @@ function rpCostruisci(piano, opzioni) {
         eli: righe.filter(function (r) { return ha(r, 'eli'); }).length,
         gru: righe.filter(function (r) { return ha(r, 'sta') || ha(r, 'uni') || ha(r, 'cam'); }).length,
         lar: righe.filter(function (r) { return ha(r, 'lar'); }).length,
+        mod: righe.filter(function (r) { return ha(r, 'mod'); }).length,
         blo: blocchi.length,
         fermi: righe.length - toccate.length
     };
@@ -4590,6 +4697,7 @@ function rpCostruisci(piano, opzioni) {
            num(conta.eli, 'eliminate') +
            num(conta.gru, 'staccate o unite a un gruppo') +
            num(conta.lar, 'allargate su pi&ugrave; caselle') +
+           num(conta.mod, rpPlurale(conta.mod, 'gruppo modificato', 'gruppi modificati')) +
            num(conta.blo, 'caselle tenute per la grafica') +
            num(conta.fermi, 'rimaste dove erano') +
            '</div>');
@@ -4602,7 +4710,9 @@ function rpCostruisci(piano, opzioni) {
         ['eli', 'buttata via dal piano: per il Marketing non esiste pi&ugrave;'],
         ['sta', 'sull\'impaginato stava in un box insieme ad altre referenze, adesso ha una casella sua'],
         ['uni', 'adesso condivide la casella con altre referenze'],
-        ['lar', 'occupa pi&ugrave; di una casella della griglia']
+        ['lar', 'occupa pi&ugrave; di una casella della griglia'],
+        ['mod', 'il Marketing ha corretto il gruppo (prezzi, descrizione, foto o loghi): ' +
+                'le correzioni sono scritte sotto e vanno riportate a mano']
     ];
     h.push('<div class="rp_legenda"><h2>LE ETICHETTE COLORATE</h2>' +
            leg.map(function (x) {
@@ -4657,6 +4767,7 @@ function rpCostruisci(piano, opzioni) {
             note.push('Occupa <b>' + (col * rig) + ' caselle</b> (' + col + ' in larghezza, ' +
                       rig + ' in altezza), a partire da quella indicata.');
         if (note.length) s += '<div class="rp_nota">' + note.join('<br>') + '</div>';
+        s += rpModifica(r.voce.modificaGruppo);
         return s + '</div></div>';
     }
 

@@ -171,6 +171,9 @@ public sealed partial class ServizioCorrezioni
             // j307: le pagine che il timone ha cambiato. Si mandano a tutti: all'Agenzia servono
             // per sapere dove mettere le mani, agli altri per vedere il velo con la scritta.
             PagineDaSistemare = (await PagineDaSistemareAsync(idVolantino, versione)).OrderBy(n => n).ToList(),
+            BoxGruppoTimone = utente.TipoFico == TipoFicoMarketing && utente.Ruolo == Ruoli.CodiceGdo
+                ? (await ServizioTimone.BoxNeiGruppiAsync(ctx, idVolantino, versione)).OrderBy(x => x).ToList()
+                : new List<long>(),
             Note = note.Select(n => new NotaVista
             {
                 Id = n.Id, IdBox = n.IdElemento, IdPagina = n.IdPagina, Pagina = numero[n.IdPagina],

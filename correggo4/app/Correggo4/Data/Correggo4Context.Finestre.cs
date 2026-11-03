@@ -158,6 +158,8 @@ public partial class Correggo4Context
             entity.Property(e => e.PosizioneOrigine).HasColumnName("posizione_origine");
             entity.Property(e => e.DataModifica).HasColumnName("data_modifica");
             entity.Property(e => e.IdAutore).HasColumnName("id_autore");
+            // I20-1186: arriva con la migration AggiungiModificaGruppo
+            entity.Property(e => e.ModificaGruppo).HasColumnType("jsonb").HasColumnName("modifica_gruppo");
         });
 
         // j279: le caselle bloccate. Una riga = una casella dove non deve andare niente, perche'

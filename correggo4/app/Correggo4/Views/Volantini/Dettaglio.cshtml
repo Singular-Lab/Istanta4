@@ -510,6 +510,20 @@
     .modale .reset_valori { position: absolute; left: 50%; width: 26%; bottom: 0; transform: translateY(50%);
                             text-align: center; z-index: 2; font-weight: normal; }
     .modale .colonna.c3 { padding-top: 18px; }
+    /* I20-1186: il Marketing su un box di un gruppo del timone. La scheda resta visibile ma sbiadita
+       e non si tocca; al centro il riquadro rosso. CHIUDI sta sopra il velo: la scheda si chiude. */
+    .modale .avviso_gruppo_timone {
+        display: none; position: absolute; left: 0; right: 0; bottom: 0; top: 0; z-index: 3;
+        background: rgba(235,235,235,.68); align-items: center; justify-content: center;
+    }
+    .modale .avviso_gruppo_timone.visibile { display: flex; }
+    .modale .avviso_gruppo_timone .riquadro {
+        max-width: 640px; margin: 0 24px; padding: 22px 28px; border-radius: 8px;
+        background: #b3261e; color: #fff; text-align: center; box-shadow: 0 6px 24px rgba(0,0,0,.35);
+        font-size: 18px; line-height: 1.4;
+    }
+    .modale .avviso_gruppo_timone .riquadro b { display: block; font-size: 22px; margin-bottom: 8px; }
+    .modale .testa .chiudi { position: relative; z-index: 4; }
     .modale .colonne { display: flex; flex: 1; overflow: hidden; }
     .modale .colonna { padding: 10px 12px; overflow-y: auto; }
     /* Le due macro-aree del manuale: descrizione prodotto | prezzi e meccaniche */
@@ -974,6 +988,8 @@
             </div>
         </div>
     </div>
+    @* I20-1186: copre la scheda quando il Marketing e' fermato dal gruppo del timone; CHIUDI resta sopra *@
+    <div class="avviso_gruppo_timone" id="mAvvisoGruppo"><div class="riquadro"></div></div>
 </div>
 
 @{
@@ -1065,6 +1081,8 @@
     var dati = JSON.parse(document.getElementById('datiBox').textContent);
     var urlFoto = @Html.Raw(jsonUrlFoto);
     var testaProdotto = @Html.Raw(jsonTestaProdotto);   // I20-1156: "promo – canale/area" del volantino
+    // I20-1186: lo stesso testo che il server manda col rifiuto «gruppo_timone»
+    var MESSAGGIO_GRUPPO_TIMONE = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Correggo4.Servizi.ServizioCorrezioni.MessaggioGruppoTimone));
 
     function esc(s) {
         return (s === null || s === undefined) ? '' : String(s)
@@ -1321,6 +1339,8 @@
     var velo = document.getElementById('velo');
     var modale = document.getElementById('modale');
     function chiudiModale() {
+        modoTimone = null;   // I20-1186: la prossima apertura e' quella normale, se il timone non dice altro
+        document.getElementById('mAvvisoGruppo').classList.remove('visibile');
         velo.classList.remove('visibile');
         modale.classList.remove('visibile');
         document.querySelectorAll('.zona.aperta').forEach(function (z) { z.classList.remove('aperta'); });
@@ -1360,6 +1380,8 @@
 
         // I20-1156: promo e canale/area del volantino al posto della meccanica del box (b.nomeBox)
         document.getElementById('mTitolo').textContent = testaProdotto + ' – ' + (b.basecode || '');
+        // I20-1186: nel timone, su un gruppo, i codici di tutte le referenze del gruppo
+        if (inModoTimone(id)) document.getElementById('mTitolo').textContent = 'Modifica del gruppo – ' + modoTimone.codici;
 
         boxInModale = { id: id, x: (clickX !== undefined ? clickX : b.px), y: (clickY !== undefined ? clickY : b.py) };
 
@@ -1382,6 +1404,20 @@
         modale.classList.add('visibile');
         ritaglia(b);
         ombreRitaglio();
+        avvisoGruppoTimone(id);
+    }
+
+    /* I20-1186: il messaggio del gruppo del timone, grande e al centro della scheda (screenshot
+       dell'operatore del 03/11: la riga grigia sotto i campi non la vedeva nessuno). Solo nella scheda
+       normale, solo per chi e' fermato: lo stato manda l'elenco dei box al solo Marketing. */
+    function avvisoGruppoTimone(id) {
+        var av = document.getElementById('mAvvisoGruppo');
+        var acceso = !inModoTimone(id) && bloccatoDalTimone(id);
+        av.classList.toggle('visibile', acceso);
+        if (!acceso) return;
+        var i = MESSAGGIO_GRUPPO_TIMONE.indexOf(':');
+        av.firstChild.innerHTML = '&#9888; <b>' + esc(i > 0 ? MESSAGGIO_GRUPPO_TIMONE.slice(0, i) : MESSAGGIO_GRUPPO_TIMONE) + '</b>' +
+                                  (i > 0 ? esc(MESSAGGIO_GRUPPO_TIMONE.slice(i + 1).trim()) : '');
     }
 
     function posizioneNelFoglio(el, ev) {
@@ -1469,6 +1505,20 @@
     var scarto = 0;          // differenza fra orologio del browser e del server, in ms
     var strumento = null;    // null | 'nota' | 'edit' | 'ok' | 'timbro:<simbolo>'
     var boxInModale = null;  // { id, x, y } del box aperto nella modale
+
+    /* I20-1186: LA SCHEDA IN MODALITA' TIMONE. La «Modifica referenza» del timone, su un gruppo fatto
+       nel timone (referenze di box diversi in una casella), apre questa stessa scheda sul box del
+       capogruppo ma non scrive niente sul server: SALVA e ANNULLA CORREZIONE cambiano la correzione
+       del gruppo che il timone tiene nella sua bozza, e che parte col SALVA del timone. Le correzioni
+       registrate sul box non c'entrano: la scheda parte dalla correzione del gruppo.
+       null = scheda normale. Altrimenti { idBox, boxGruppo: [id dei box], codici, modifica,
+       modificabile, salva(modifica) }, dal gancio schedaBox.apri del timone. */
+    var modoTimone = null;
+    function inModoTimone(id) { return !!modoTimone && String(id) === modoTimone.idBox; }
+    // il Marketing non corregge dall'Edit avanzato un box raggruppato nel timone (il server lo rifiuta)
+    function bloccatoDalTimone(id) {
+        return (stato.boxGruppoTimone || []).some(function (x) { return String(x) === String(id); });
+    }
     var pop = document.getElementById('popCorr');
     var timerPop = null;
 
@@ -2160,9 +2210,33 @@
     function chiaveTracciato(f) { return String(f).split('$').join('.'); }
     function etichettaEa(f) { return ETICHETTE_EA[chiaveTracciato(f)] || chiaveTracciato(f); }
     function editDi(id, parte) {
+        if (inModoTimone(id)) return editDelGruppo(parte);
         return (stato.edit || []).filter(function (e) { return String(e.idBox) === String(id) && e.parte === parte; })[0];
     }
+    /* I20-1186: la correzione del gruppo nella forma delle correzioni dell'editor (stato.edit), cosi'
+       il resto della scheda la disegna senza sapere da dove arriva: registrata, mia, mai confermata. */
+    function editDelGruppo(parte) {
+        var m = modoTimone.modifica || {};
+        var ed = { stato: 0, idAutore: stato.idUtente, campi: {}, azioni: [], foto: [] };
+        if (parte === 'offerta') {
+            if (!m.offerta) return undefined;
+            (m.offerta.campi || []).forEach(function (c) { ed.campi[c.field] = c.valore; });
+            ed.azioni = (m.offerta.azioni || []).map(function (a) {
+                var c = {}; (a.campi || []).forEach(function (x) { c[x.field] = x.valore; });
+                return { id: a.id, campi: c };
+            });
+            return ed;
+        }
+        var d = m.descrizione;
+        if (!d) return undefined;
+        if (d.testo !== null && d.testo !== undefined) ed.campi.descrizione = d.testo;
+        ed.foto = (d.foto || []).map(function (f) { return { codice: f.codice, guidId: f.guidId, stato: f.stato }; })
+            .concat((d.loghi || []).map(function (l) { return { guidId: l.guidId, stato: l.stato, codice: l.sigla, nomeFile: l.nome }; }));
+        return ed;
+    }
     function puoModificare(id, parte) {
+        if (inModoTimone(id)) return scrivibile() && modoTimone.modificabile;
+        if (bloccatoDalTimone(id)) return false;
         var ed = editDi(id, parte);
         return scrivibile() && !(ed && ed.stato === 0 && ed.idAutore !== stato.idUtente);
     }
@@ -2560,6 +2634,10 @@
         if (disponibile && stato.puoScrivere) {
             if (!scrivibile()) {
                 html += '<div class="ea_stato">' + esc(motivoNonScrivibile()) + '</div>';
+            } else if (inModoTimone(id) && !modoTimone.modificabile) {
+                html += '<div class="ea_stato">Il timone è in sola lettura: la modifica del gruppo non si cambia.</div>';
+            } else if (!inModoTimone(id) && bloccatoDalTimone(id)) {
+                // niente bottoni: il messaggio lo dice il riquadro rosso al centro (avvisoGruppoTimone)
             } else if (ed && ed.stato === 0 && ed.idAutore !== stato.idUtente) {
                 html += '<div class="ea_stato">Può modificarla o annullarla solo chi l\'ha fatta. Per segnalare altro usa una nota.</div>';
             } else {
@@ -2570,9 +2648,12 @@
                 if (parte === 'offerta' ? (ed && ed.stato === 0) : sezioniInAttesa(ed).descrizione)
                     bottoni.push('<button class="bottone pericolo" type="button" data-ea="annulla">ANNULLA CORREZIONE</button>');
             }
-        } else if (stato.puoAccettare && ed && ed.stato === 0) {
+        } else if (stato.puoAccettare && ed && ed.stato === 0 && !inModoTimone(id)) {
             bottoni.push('<button class="bottone accetta grande" type="button" data-ea="conferma">CONFERMA CORREZIONE</button>');
         }
+        // I20-1186: nel timone la correzione del gruppo si salva con il timone, non da qui
+        if (inModoTimone(id) && bottoni.length)
+            html += '<div class="ea_stato">SALVA tiene la modifica nel timone: arriva all\'Agenzia con il SALVA del timone.</div>';
         html += '<div class="ea_bottoni">' + bottoni.join('') + '</div><div class="ea_errore" data-ea-errore></div>';
         el.innerHTML = html;
         improntaSalvata[parte] = (ed && ed.stato === 0 && el.querySelector('[data-ea="salva"]')) ? improntaParte(parte) : null;
@@ -2598,6 +2679,12 @@
     function disegnaPropagazioniEdit(id) {
         var cont = document.getElementById('mPropagazioni');
         var html = '', quante = 0;
+        // I20-1186: la modifica del gruppo arriva all'Agenzia col timone, non si propaga ai gemelli
+        if (inModoTimone(id)) {
+            cont.innerHTML = '<div class="ea_prop"><div class="ea_prop_vuoto">La modifica del gruppo arriva ' +
+                             'all\'Agenzia con il timone: da qui non si propaga ad altri volantini.</div></div>';
+            return;
+        }
         // I20-1166: descrizione, foto e loghi si propagano da soli a tutti i gemelli al salvataggio:
         // nella colonna restano solo le spunte di prezzi e azioni
         ['offerta'].forEach(function (parte) {
@@ -2703,7 +2790,52 @@
         };
     }
 
+    /* I20-1186: SALVA e ANNULLA CORREZIONE della scheda in modalita' timone. Non chiamano il server:
+       cambiano la correzione del gruppo e la passano al timone, che la tiene nella bozza. */
+    function eseguiNelTimone(id, parte, azione, errore) {
+        var m = JSON.parse(JSON.stringify(modoTimone.modifica || {}));
+        if (parte === 'offerta') {
+            var o = azione === 'salva' ? raccogliOfferta() : { campi: [], azioni: [] };
+            var base = azioniBase(dati[id]);
+            o.azioni.forEach(function (a) {
+                var x = base.filter(function (y) { return y.id === a.id; })[0];
+                if (x) a.titolo = x.titolo;   // il report lo scrive in chiaro
+            });
+            m.offerta = (o.campi.length || o.azioni.length) ? o : null;
+        } else {
+            var d = m.descrizione || {};
+            if (parte === 'loghi') {
+                d.loghi = azione !== 'salva' ? null : Object.keys(loghiAlterati).map(function (k) {
+                    var l = loghiAlterati[k];
+                    return { guidId: k, stato: l.stato, sigla: l.sigla, nome: l.nome };
+                });
+            } else if (azione === 'salva') {
+                var s = raccogliScheda();
+                if (s.foto && s.foto.length) {
+                    var p = Object.keys(fotoCorrenti).filter(function (k) { return fotoCorrenti[k].stato === 1; }).length;
+                    if (p !== 1) {
+                        errore.textContent = p === 0 ? 'Deve esserci una foto primaria (P).'
+                                                     : 'Nel gruppo ci può essere una sola foto primaria (P): togli la P dalle altre.';
+                        return;
+                    }
+                }
+                var origine = document.getElementById('mDescrizione').dataset.origine || '';
+                d.testo = (s.testo !== null && compatta(s.testo) !== compatta(origine)) ? s.testo : null;
+                if (s.foto !== null) d.foto = s.foto;   // null = Istanta non ha risposto: restano quelle di prima
+            } else {
+                d.testo = null;
+                d.foto = null;
+            }
+            m.descrizione = (d.testo || (d.foto && d.foto.length) || (d.loghi && d.loghi.length)) ? d : null;
+        }
+        if (!m.offerta && !m.descrizione) m = null;
+        modoTimone.modifica = m;
+        modoTimone.salva(m);
+        riempiEdit(id, parte);
+    }
+
     function eseguiEdit(id, parte, azione, bottone, errore) {
+        if (inModoTimone(id)) { errore.textContent = ''; eseguiNelTimone(id, parte, azione, errore); return; }
         var url = C4_BASE + 'Correzioni/Edit/' + encodeURIComponent(id) + '/', corpo = {};
         if (azione === 'salva') {
             if (parte === 'offerta') { url += 'Offerta'; corpo = raccogliOfferta(); }
@@ -2759,10 +2891,33 @@
     }
     function statoIstanta(f) { return (f.statoSelezione === 1 || f.statoSelezione === 2) ? f.statoSelezione : 3; }
 
+    /* I20-1186: le referenze della scheda. Nella modalita' timone sono quelle di TUTTI i box del gruppo:
+       si chiede la scheda di ognuno e si uniscono, e ogni foto ricorda il suo box (idBox), perche'
+       «Carica nuova foto» la carica sul box a cui appartiene il codice. */
+    function schedaDelBox(id) {
+        var boxes = inModoTimone(id) ? modoTimone.boxGruppo : [String(id)];
+        return Promise.all(boxes.map(function (b) {
+            return apiGet(C4_BASE + 'Correzioni/Edit/' + encodeURIComponent(b) + '/Scheda');
+        })).then(function (risposte) {
+            var ko = risposte.filter(function (j) { return !j.ok; })[0];
+            if (ko) return ko;
+            var foto = [], visti = {};
+            risposte.forEach(function (j, i) {
+                ((j.dati && j.dati.foto) || []).forEach(function (f) {
+                    if (visti[f.codice]) return;
+                    visti[f.codice] = true;
+                    f.idBox = boxes[i];
+                    foto.push(f);
+                });
+            });
+            return { ok: true, dati: { foto: foto } };
+        });
+    }
+
     function caricaSchedaFoto(id) {
         schedaFoto = { id: String(id), stato: 'carico' };
         tabLoghi = 'prodotto';
-        apiGet(C4_BASE + 'Correzioni/Edit/' + encodeURIComponent(id) + '/Scheda').then(function (j) {
+        schedaDelBox(id).then(function (j) {
             if (!schedaFoto || schedaFoto.id !== String(id)) return;   // nel frattempo si e' aperto un altro prodotto
             schedaFoto = j.ok ? { id: String(id), stato: 'ok', foto: j.dati.foto || [] }
                               : { id: String(id), stato: 'errore', errore: j.messaggio };
@@ -2786,6 +2941,12 @@
         fotoCorrenti = {};
         if (!schedaFoto || schedaFoto.id !== String(id) || schedaFoto.stato !== 'ok') return;
         schedaFoto.foto.forEach(function (f) { fotoCorrenti[f.codice] = { guid: f.guidFoto, stato: statoIstanta(f) }; });
+        /* I20-1186: nel gruppo del timone ogni box porta la sua P da Istanta, ma il gruppo sta in una
+           casella sola: si propone P la prima foto (quella di chi tiene la casella, il suo box arriva
+           per primo) e S tutte le altre. Le foto gia' salvate nella modifica del gruppo, qui sotto,
+           vincono sulla proposta. */
+        if (inModoTimone(id))
+            schedaFoto.foto.forEach(function (f, i) { fotoCorrenti[f.codice].stato = i === 0 ? 1 : 2; });
         var ed = editDi(id, 'descrizione');
         ((ed && ed.foto) || []).forEach(function (v) {
             if (v.stato >= 1 && v.stato <= 3 && fotoCorrenti[v.codice]) fotoCorrenti[v.codice] = { guid: v.guidId, stato: v.stato };
@@ -2924,7 +3085,10 @@
         suggerisci('Carico «' + file.name + '»… con i file grandi ci vuole qualche minuto.', 8000);
         var corpo = new FormData();
         corpo.append('file', file, file.name);
-        fetch(C4_BASE + 'Correzioni/Edit/' + id + '/Foto/' + encodeURIComponent(codice), {
+        // I20-1186: nel gruppo del timone il codice puo' stare su un altro box: si carica su quello
+        var suo = ((schedaFoto && schedaFoto.foto) || []).filter(function (f) { return f.codice === codice; })[0];
+        var idBoxFoto = (suo && suo.idBox) || id;
+        fetch(C4_BASE + 'Correzioni/Edit/' + idBoxFoto + '/Foto/' + encodeURIComponent(codice), {
             method: 'POST', credentials: 'same-origin',
             headers: { 'RequestVerificationToken': token() }, body: corpo
         })
@@ -3642,11 +3806,24 @@
         try { return aggiornaStato(); } catch (e) { return null; }
     };
 
+    /* I20-1186: con «gruppo» la scheda si apre in modalita' timone (vedi modoTimone): opzioni =
+       { gruppo: [id dei box], codici, modifica, modificabile, salva(modifica) }. Senza, com'era. */
     window.correggo4.schedaBox = {
-        apri: function (idBox) {
+        apri: function (idBox, opzioni) {
             var k = String(idBox);
             if (!dati[k]) return 'box_sconosciuto';
             if (fuoriPolicy(k)) return 'fuori_policy';
+            modoTimone = null;
+            if (opzioni && opzioni.gruppo) {
+                modoTimone = {
+                    idBox: k,
+                    boxGruppo: opzioni.gruppo.map(String),
+                    codici: opzioni.codici || '',
+                    modifica: opzioni.modifica || null,
+                    modificabile: opzioni.modificabile === true,
+                    salva: typeof opzioni.salva === 'function' ? opzioni.salva : function () { }
+                };
+            }
             apri(k);
             return 'ok';
         },

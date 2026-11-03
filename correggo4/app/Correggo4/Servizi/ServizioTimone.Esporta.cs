@@ -402,6 +402,10 @@ public sealed partial class ServizioTimone
                     // e questa e' la referenza da impaginare: StatoSelezione = 1
                     primaria = codici.Count > 0 ? codici[0] : "",
                     pagina = pagine.FirstOrDefault(p => p.Id == ordinate[0].IdPaginaTimone)?.Numero,
+                    // I20-1186: la correzione del gruppo fatta dalla «Modifica referenza» del
+                    // timone (prezzi e azioni, descrizione, foto P/S, loghi). Sta sul capogruppo;
+                    // l'Agenzia la riporta a mano, come le correzioni dell'Edit avanzato.
+                    modifiche = ordinate.Select(v => ModificaInUscita(v.ModificaGruppo)).FirstOrDefault(m => m != null),
                     componenti = ordinate.Select(v => new
                     {
                         codice = v.Codice, etichetta = v.Etichetta, posizione = v.Posizione
@@ -551,6 +555,11 @@ public sealed partial class ServizioTimone
         t.AppendLine("3. Le referenze ELIMINATE non stanno in nessuno dei due file del plug-in:");
         t.AppendLine("   eliminata vuol dire «togliere del tutto», ed e' una cosa da fare sul");
         t.AppendLine("   listato. L'elenco e' in timone.json.");
+        t.AppendLine();
+        t.AppendLine("4. LE MODIFICHE DEI GRUPPI (prezzi e azioni, descrizione, foto P/S, loghi)");
+        t.AppendLine("   fatte con «Modifica referenza» nel timone. Non arrivano a Istanta ne' al");
+        t.AppendLine("   plug-in: vanno riportate a mano, come le correzioni dell'Edit avanzato.");
+        t.AppendLine("   Sono in timone.json, sezione «gruppi», voce «modifiche», e nel report.");
         t.AppendLine();
         t.AppendLine("DA VERIFICARE ALLA PRIMA PROVA  <-- IMPORTANTE");
         t.AppendLine("---------------------------------------------");

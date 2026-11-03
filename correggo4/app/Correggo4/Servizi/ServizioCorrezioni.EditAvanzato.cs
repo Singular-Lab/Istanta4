@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Correggo4.Auth;
 using Correggo4.Models;
 using Correggo4.Models.Vista;
 using Microsoft.EntityFrameworkCore;
@@ -287,6 +288,8 @@ public sealed partial class ServizioCorrezioni
         if (!u.Scrive) return NonAutorizzato();
         var (box, vol, errore) = await BoxScrivibileAsync(u, idBox);
         if (errore != null) return errore;
+        var gruppo = await GruppoDelTimoneAsync(u, box!);
+        if (gruppo != null) return gruppo;
 
         var schema = SchemaReferenza.Leggi(box!.Contenuto);
         if (schema == null || schema.Azioni.Count == 0) return SenzaSchema();
@@ -398,6 +401,8 @@ public sealed partial class ServizioCorrezioni
         if (!u.Scrive) return NonAutorizzato();
         var (box, vol, errore) = await BoxScrivibileAsync(u, idBox);
         if (errore != null) return errore;
+        var gruppo = await GruppoDelTimoneAsync(u, box!);
+        if (gruppo != null) return gruppo;
 
         var figli = await ctx.VolantiniPagineElementis.AsNoTracking().Where(e => e.IdParent == box!.Id).ToListAsync();
         var figlioDescr = figli.FirstOrDefault(e => e.LabelInd == SchemaReferenza.LabelDescrizione);
@@ -673,6 +678,8 @@ public sealed partial class ServizioCorrezioni
         if (parte is not (ParteOfferta or ParteDescrizione or ParteLoghi)) return NonTrovata("Parte della scheda sconosciuta.");
         var (box, vol, errore) = await BoxScrivibileAsync(u, idBox);
         if (errore != null) return errore;
+        var gruppo = await GruppoDelTimoneAsync(u, box!);
+        if (gruppo != null) return gruppo;
 
         var (righe, capo) = await RigheParteAsync(box!.Id, parte == ParteLoghi ? ParteDescrizione : parte);
         if (capo == null || capo.Stato == EaAnnullato)
@@ -691,6 +698,29 @@ public sealed partial class ServizioCorrezioni
                                                   : "Non c'è nessuna correzione da annullare.");
         await ctx.SaveChangesAsync();
         return Fatto(await CaricaAsync(vol!.Id, u), box.Id);
+    }
+
+    /// <summary>
+    /// I20-1186: il messaggio che il Marketing vede sull'Edit avanzato di un box raggruppato nel timone.
+    /// </summary>
+    public const string MessaggioGruppoTimone =
+        "Impossibile modificare tramite Edit avanzato: l'elemento fa parte di un gruppo impostato sul timone. " +
+        "Modificalo da «Modifica referenza» nel timone.";
+
+    /// <summary>
+    /// I20-1186: il Marketing non corregge dall'Edit avanzato un box che, nel timone della sua versione,
+    /// sta in un gruppo del timone: la correzione del gruppo si fa dalla «Modifica referenza» del timone
+    /// e arriva all'Agenzia con le altre modifiche del timone. Agenzia e Category non sono fermati.
+    /// Non si ferma «Carica nuova foto», che non corregge niente: mette solo una foto in archivio.
+    /// </summary>
+    private async Task<EsitoCorrezione?> GruppoDelTimoneAsync(Utente u, VolantiniPagineElementi box)
+    {
+        if (u.Ruolo != Ruoli.CodiceGdo || u.TipoFico != TipoFicoMarketing) return null;
+        var pagina = await ctx.VolantiniPagines.AsNoTracking()
+            .Where(p => p.Id == box.IdPagina).Select(p => new { p.IdVol, p.Versione }).FirstOrDefaultAsync();
+        if (pagina == null) return null;
+        var bloccati = await ServizioTimone.BoxNeiGruppiAsync(ctx, pagina.IdVol, pagina.Versione);
+        return bloccati.Contains(box.Id) ? EsitoCorrezione.No(423, "gruppo_timone", MessaggioGruppoTimone) : null;
     }
 
     /// <summary>

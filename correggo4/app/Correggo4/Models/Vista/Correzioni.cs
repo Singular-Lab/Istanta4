@@ -42,6 +42,13 @@ public sealed class StatoCorrezioni
     /// </summary>
     public List<short> PagineDaSistemare { get; set; } = new();
 
+    /// <summary>
+    /// I20-1186: i box che stanno in un gruppo del timone. Solo per il Marketing, che su questi non
+    /// usa l'Edit avanzato dell'editor ma la «Modifica referenza» del timone: la scheda li apre in
+    /// sola lettura con il messaggio. Vuota per tutti gli altri.
+    /// </summary>
+    public List<long> BoxGruppoTimone { get; set; } = new();
+
     public List<NotaVista> Note { get; set; } = new();
     public List<TimbroVista> Timbri { get; set; } = new();
     public List<OkVista> Ok { get; set; } = new();

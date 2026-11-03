@@ -571,6 +571,8 @@ public sealed partial class ServizioTimone
                 stato = v.Stato,
                 paginaOrigine = v.PaginaOrigine,
                 posizioneOrigine = v.PosizioneOrigine,
+                // I20-1186: la correzione del gruppo, solo sul capogruppo di un gruppo del timone
+                modificaGruppo = ModificaInUscita(v.ModificaGruppo),
                 // geometria del box vero: serve al browser per ritagliare il prodotto dalla pagina
                 x, y, w, h
             });
