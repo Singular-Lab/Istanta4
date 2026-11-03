@@ -14,7 +14,20 @@ Fidelity Promotion è un'applicazione full-stack che integra:
 - **Multi-tenant** - Supporto GDO, Agenzie, Punti Vendita
 - **Real-time** - Socket.IO per notifiche e sync
 
-Il client è una single-page application: le pagine si disegnano nel browser, non c'è rendering lato server.
+Il client mantiene la navigazione SPA. Il volantino pubblico ordinario su
+`/webpliant/volantino` usa SSR selettivo: HTML con contenuti iniziali e hydration React.
+Editor/debug, date esplicite, wishlist condivise e altre pagine restano SPA.
+
+### Rendering del volantino pubblico
+
+`yarn build` produce `dist/client` e `dist/ssr`. Express carica il renderer da
+`dist/ssr/entry-server.js`; solo `dist/client` viene esposto come contenuto statico.
+La build SSR usa `yarn build:ssr`. Per provare il percorso SSR locale con gli
+artefatti compilati usare `yarn dev:ssr`; il normale `yarn dev` conserva Vite/HMR.
+Servono workspace, area e canale; senza pagina esplicita si usa la homepage.
+Le risposte SSR sono `no-store`, non includono configurazione privata e applicano
+i filtri pubblici di pubblicazione e visibilita alla data corrente di Roma.
+Il server non crea wishlist e non avvia Analytics durante il rendering.
 
 ## Stack Tecnologico
 

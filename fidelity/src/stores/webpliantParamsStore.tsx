@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useReducer, useEffect, ReactNode, useMemo, useCallback, useRef } from 'react';
+import React, { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
 import { ServerCall } from '../../lib/server_call';
+import { useWebpliantSsr } from '../ssr/webpliant';
 
 // Interfaccia per i parametri webpliant
 export interface WebpliantParams {
@@ -10,15 +11,15 @@ export interface WebpliantParams {
   idPV?: string;
   idWorkspace?: string;
   idPagina?: string;
-  
+
   // Parametri di sessione
   sessionIdWebpliant?: string;
   sessionWishlistId?: string;
   URL_WEBPLIANT?: string;
-  
+
   // Parametri condivisi/temporanei
   isCondivisa?: boolean;
-  
+
   // Metadata
   lastUpdated?: number;
   isInitialized?: boolean;
@@ -43,16 +44,16 @@ interface WebpliantParamsActions {
   // Azioni per settare i parametri
   setParams: (params: Partial<WebpliantParams>) => void;
   updateParam: <K extends keyof WebpliantParams>(key: K, value: WebpliantParams[K]) => void;
-  
+
   // Azioni per gestire la sessione
   initializeFromURL: (searchParams: URLSearchParams) => void;
   createNewSession: () => Promise<string>;
   ensureSessionExists: () => Promise<string>;
-  
+
   // Azioni per gestire la wishlist
   validateAndCreateWishlist: () => Promise<void>;
   ensureWishlistExists: () => Promise<string | null>;
-  
+
   // Utility
   reset: () => void;
   getCompletionStatus: () => {
@@ -70,15 +71,15 @@ export type WebpliantParamsContextType = WebpliantParams & WebpliantParamsAction
 const createSessionId = async (): Promise<string> => {
   try {
     const response = await ServerCall.put<string>('/generaNuovaSessioneWebpliant', {});
-    
+
     if (!response) {
       throw new Error('Risposta vuota dal server');
     }
-    
+
     return response;
   } catch (error) {
     console.error('Errore nella creazione del session ID:', error);
-    
+
     // Fallback: genera un ID locale con prefisso che indica che è un fallback
     const fallbackId = `local_session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     console.warn('Generato ID di sessione locale come fallback:', fallbackId);
@@ -254,7 +255,28 @@ const SessionWishlistIdContext = createContext<string | undefined>(undefined);
 
 // Provider component
 export const WebpliantParamsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [state, dispatch] = useReducer(webpliantParamsReducer, initialState);
+  const datiSsr = useWebpliantSsr();
+  const paramsSsr = datiSsr ? new URL(datiSsr.url, 'http://ssr.local').searchParams : null;
+  const [state, dispatch] = useReducer(webpliantParamsReducer, {
+    ...initialState,
+    ...(datiSsr ? {
+      idWorkspace: paramsSsr?.get('id') || undefined,
+      idArea: paramsSsr?.get('idArea') || undefined,
+      idCanale: paramsSsr?.get('idCanale') || undefined,
+      idGDO: paramsSsr?.get('idGDO') || datiSsr.dataWebPliant.idGDO,
+      idPV: paramsSsr?.get('idPV') || undefined,
+      idPagina: datiSsr.idPagina,
+      isInitialized: true,
+    } : {}),
+  });
+
+  const contestoPersistenzaIniziale = useRef({
+    datiSsr,
+    idWorkspace: state.idWorkspace,
+    idArea: state.idArea,
+    idCanale: state.idCanale,
+    idPV: state.idPV,
+  });
 
   // Ref per prevenire chiamate multiple simultanee
   const isCreatingWishlist = useRef(false);
@@ -270,13 +292,21 @@ export const WebpliantParamsProvider: React.FC<{ children: ReactNode }> = ({ chi
 
   // Carica dati persistenti al mount
   useEffect(() => {
+    const contesto = contestoPersistenzaIniziale.current;
     const loadPersistedData = () => {
       try {
         const stored = localStorage.getItem('webpliant-params-storage');
-        
+
         if (stored) {
           const parsedData = JSON.parse(stored);
-          dispatch({ type: 'SET_PARAMS', payload: parsedData });
+          if (!contesto.datiSsr) dispatch({ type: 'SET_PARAMS', payload: parsedData });
+          else if (parsedData.idWorkspace === contesto.idWorkspace && parsedData.idArea === contesto.idArea
+            && parsedData.idCanale === contesto.idCanale && (parsedData.idPV || '') === (contesto.idPV || '')) {
+            dispatch({ type: 'SET_PARAMS', payload: {
+              sessionIdWebpliant: parsedData.sessionIdWebpliant,
+              sessionWishlistId: parsedData.sessionWishlistId,
+            } });
+          }
         } else {
         }
       } catch (error) {
@@ -338,7 +368,7 @@ export const WebpliantParamsProvider: React.FC<{ children: ReactNode }> = ({ chi
     dispatch({ type: 'INITIALIZE_FROM_URL', payload: searchParams });
   }, []);
 
-  
+
 
   const createNewSession = useCallback(async () => {
     try {
@@ -352,7 +382,7 @@ export const WebpliantParamsProvider: React.FC<{ children: ReactNode }> = ({ chi
       throw error;
     }
   }, []);
-  
+
   // Una sola creazione alla volta: chi chiede la sessione mentre la PUT e in corso riceve la stessa
   const creaSessioneCondivisa = useCallback(() => {
     if (!sessioneInCorso.current) {
@@ -436,11 +466,11 @@ export const WebpliantParamsProvider: React.FC<{ children: ReactNode }> = ({ chi
     // Controlla se abbiamo già tentato di creare una wishlist con gli stessi parametri
     const paramsKey = JSON.stringify(createParams);
     const now = Date.now();
-    const timeSinceLastAttempt = lastWishlistCreationAttempt.current 
-      ? now - lastWishlistCreationAttempt.current.timestamp 
+    const timeSinceLastAttempt = lastWishlistCreationAttempt.current
+      ? now - lastWishlistCreationAttempt.current.timestamp
       : Infinity;
 
-    if (lastWishlistCreationAttempt.current && 
+    if (lastWishlistCreationAttempt.current &&
         lastWishlistCreationAttempt.current.sessionId === state.sessionIdWebpliant &&
         lastWishlistCreationAttempt.current.params === paramsKey &&
         timeSinceLastAttempt < 5000) { // 5 secondi di cooldown
@@ -450,7 +480,7 @@ export const WebpliantParamsProvider: React.FC<{ children: ReactNode }> = ({ chi
 
     // Crea una nuova wishlist
     try {
-      
+
       // Marca che stiamo creando una wishlist
       isCreatingWishlist.current = true;
       lastWishlistCreationAttempt.current = {
@@ -458,9 +488,9 @@ export const WebpliantParamsProvider: React.FC<{ children: ReactNode }> = ({ chi
         params: paramsKey,
         timestamp: now
       };
-      
+
       dispatch({ type: 'SET_LOADING', payload: true });
-      
+
       const wishlistId = await createWishlistId(createParams);
 
       dispatch({ type: 'CREATE_WISHLIST_SUCCESS', payload: wishlistId });
@@ -562,7 +592,7 @@ export const WebpliantParamsProvider: React.FC<{ children: ReactNode }> = ({ chi
 
       // Usa ensureWishlistExists invece di duplicare la logica
       await ensureWishlistExists();
-      
+
     } catch (error) {
       console.error('Errore nella creazione della wishlist:', error);
       dispatch({ type: 'SET_ERROR', payload: 'Errore nella creazione della wishlist' });
@@ -624,4 +654,4 @@ export const useWebpliantParams = (): WebpliantParamsContextType => {
     throw new Error('useWebpliantParams deve essere usato all\'interno di WebpliantParamsProvider');
   }
   return context;
-}; 
+};

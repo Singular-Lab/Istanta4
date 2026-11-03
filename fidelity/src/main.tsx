@@ -1,11 +1,8 @@
 // src/main.tsx
-import "@vitejs/plugin-react/preamble";
-import { ContextMenuProvider } from "@/context/ContextMenuContext";
-import { NotificationProvider } from "@/context/NotificationContext";
-import { WebpliantParamsProvider } from "@/stores/webpliantParamsStore";
 import { getCurrentEnvironment, updateFavicon } from "@/utils/environmentFavicon";
 import { isErroreServizio, notificaErroreServizio } from "@/utils/erroriServizi";
-import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MutationCache, QueryCache, QueryClient } from "@tanstack/react-query";
+import "@vitejs/plugin-react/preamble";
 import dayjs from "dayjs";
 import 'dayjs/locale/it';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
@@ -16,19 +13,14 @@ import relativeTime from 'dayjs/plugin/relativeTime';
 import timezone from 'dayjs/plugin/timezone';
 import utc from 'dayjs/plugin/utc';
 import ReactDOM from "react-dom/client";
-import { HelmetProvider } from "react-helmet-async";
-import { Provider } from "react-redux";
-import { RouterProvider, createBrowserRouter } from "react-router-dom";
+import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import { AppProviders } from './app/AppProviders';
 import "./assets/css/app.css";
-import { ErrorBoundary } from "./components/ErrorBoundary";
-import { LoadingProvider } from "./context/LoadingContext";
-import { TimelineProvider } from "./context/TimeLinePromoContext";
-import { PermissionProvider } from "./context/PermissionContext";
-import { UserProvider } from "./context/UserContext";
 import './customComponents';
 import "./i18n";
 import routes from "./router";
-import { store } from "./stores/store";
+import { datiLoaderWebpliant, ID_DATI_SSR, type BootstrapWebpliantSsr } from './ssr/webpliant';
+import { createAppStore, store } from "./stores/store";
 dayjs.extend(customParseFormat);
 dayjs.extend(isSameOrAfter);
 dayjs.extend(isSameOrBefore);
@@ -63,14 +55,6 @@ if (import.meta.env.DEV && typeof window !== "undefined") {
 }
 
 
-const AppWrapper = ({ children }: { children: React.ReactNode }) => {
-  return (
-    <>
-      {children}
-    </>
-  );
-};
-
 // Configurazione QueryClient ottimizzata
 const queryClient = new QueryClient({
   // Errori di Istanta/Correggo: toast globale per le query e per le mutation senza onError proprio
@@ -97,9 +81,22 @@ const queryClient = new QueryClient({
 });
 
 // Creazione del router
+const testoSsr = document.getElementById(ID_DATI_SSR)?.textContent;
+const bootstrapSsr: BootstrapWebpliantSsr | null = testoSsr ? JSON.parse(testoSsr) : null;
+const appStore = bootstrapSsr ? createAppStore(bootstrapSsr.reduxState) : store;
+if (bootstrapSsr) queryClient.setQueryData(['config'], bootstrapSsr.dati.config);
 const router = createBrowserRouter(routes, {
   basename: import.meta.env.BASE_URL,
+  hydrationData: bootstrapSsr ? { loaderData: datiLoaderWebpliant(bootstrapSsr.dati) } : undefined,
 });
+if (bootstrapSsr) {
+  const unsubscribe = router.subscribe(state => {
+    if (state.location.pathname + state.location.search !== bootstrapSsr.dati.url) {
+      queryClient.removeQueries({ queryKey: ['config'], exact: true });
+      unsubscribe();
+    }
+  });
+}
 
 // Funzione principale di inizializzazione
 function initApp() {
@@ -121,35 +118,14 @@ function initApp() {
   try {
     // Applicazione React con tutti i provider necessari
     const app = (
-      <ErrorBoundary >
-        <QueryClientProvider client={queryClient}>
-          <HelmetProvider>
-            <Provider store={store}>
-              <NotificationProvider>
-                  <UserProvider>
-                    <PermissionProvider>
-                    <ContextMenuProvider>
-                      <TimelineProvider range={90}>
-                        <WebpliantParamsProvider>
-                          <LoadingProvider>
-                            <AppWrapper>
-                              <RouterProvider router={router} />
-                            </AppWrapper>
-                          </LoadingProvider>
-                        </WebpliantParamsProvider>
-                      </TimelineProvider>
-                    </ContextMenuProvider>
-                    </PermissionProvider>
-                  </UserProvider>
-              </NotificationProvider>
-            </Provider>
-          </HelmetProvider>
-        </QueryClientProvider>
-      </ErrorBoundary>
+      <AppProviders queryClient={queryClient} store={appStore} datiSsr={bootstrapSsr?.dati}>
+        <RouterProvider router={router} />
+      </AppProviders>
     );
 
     // Rendering dell'applicazione
-    ReactDOM.createRoot(rootElement).render(app);
+    if (bootstrapSsr) ReactDOM.hydrateRoot(rootElement, app);
+    else ReactDOM.createRoot(rootElement).render(app);
   } catch (error) {
     console.error("Errore durante l'inizializzazione dell'app:", error);
 

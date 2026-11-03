@@ -59,6 +59,11 @@ afterEach(() => {
 });
 
 describe("caricamento della vetrina /webpliant", () => {
+  it('mantiene gli identificativi dei loader usati da SSR e hydration', () => {
+    expect(rotta('/webpliant').id).toBe('webpliant-layout');
+    expect(rotta('volantino').id).toBe('webpliant-volantino');
+  });
+
   it("aprendo il volantino i loader di layout e pagina partono prima che arrivino i chunk delle pagine", async () => {
     const router = createMemoryRouter([conChunkInRitardo(rotta("/webpliant"))], {
       initialEntries: ["/webpliant/volantino?id=w1&idArea=a1&idCanale=c1"],

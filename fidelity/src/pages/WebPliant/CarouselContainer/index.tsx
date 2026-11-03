@@ -1,31 +1,32 @@
 // components/carousel/CarouselContainer.tsx
 
-import React, {
-  memo,
-  useReducer,
-  useEffect,
-  useMemo,
-  useState,
-  useCallback,
-  useRef,
-} from 'react';
 import styleEditor from '@/assets/css/editor.module.scss';
-import { Tab, TabGroup, TabList, TabPanel, TabPanels, Transition } from '@headlessui/react';
-import clsx from 'clsx';
-import parse from 'html-react-parser';
-import { CarouselState, carouselReducer } from '../carouselReducer';
-import CarouselSwiper from '../CarouselSwiper';
-import { ServerCall } from '../../../../lib/server_call';
-import { t } from 'i18next';
-import { v4 as uuid } from 'uuid';
-import { Config, ConfigWebpliant, DataFields, PageLayoutItem, PaginaWebPliant, ReferenzeIstanta } from '../../../../lib/types';
-import styleWp from "@/assets/css/webpliant/stylewp\.module\.scss"
-import { TIPO_PAGINA } from '../../../../lib/enums';
-import { Link } from 'react-router-dom';
-import dayjs from 'dayjs';
+import styleWp from "@/assets/css/webpliant/stylewp\.module\.scss";
+import EmptyState from '@/components/EmptyState';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import { CaricamentoPubblico } from '@/pages/WebpliantLayout/StatiPubblici';
-import EmptyState from '@/components/EmptyState';
+import { useDatiWebpliantPagina } from '@/ssr/webpliant';
+import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '@headlessui/react';
+import clsx from 'clsx';
+import dayjs from 'dayjs';
+import parse from 'html-react-parser';
+import React, {
+    memo,
+    useCallback,
+    useEffect,
+    useMemo,
+    useReducer,
+    useRef,
+    useState,
+} from 'react';
+import { useTranslation } from 'react-i18next';
+import { Link, useLocation } from 'react-router-dom';
+import { v4 as uuid } from 'uuid';
+import { TIPO_PAGINA } from '../../../../lib/enums';
+import { ServerCall } from '../../../../lib/server_call';
+import { Config, DataFields, PageLayoutItem, PaginaWebPliant, ReferenzeIstanta } from '../../../../lib/types';
+import { CarouselState, carouselReducer } from '../carouselReducer';
+import CarouselSwiper from '../CarouselSwiper';
 import { ConGestoreParametriWebpliant } from '../gestoreParametri';
 
 /** Risposta di /get_filtered_referenze quando si chiede anche la scritta di validità (conValidita). */
@@ -50,30 +51,42 @@ const CarouselContainer: React.FC<CarouselContainerProps> = memo(function Carous
   idAreaProps,
   idCanaleProps,
 }) {
- 
-  const [fetchedReferenze, setFetchedReferenze] = useState<ReferenzeIstanta[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+
+  const { t } = useTranslation();
+  const location = useLocation();
+  const datiSsr = useDatiWebpliantPagina();
+  const iniziale = datiSsr?.blocchi[item.id];
+  const [fetchedReferenze, setFetchedReferenze] = useState<ReferenzeIstanta[]>(iniziale?.referenze ?? []);
+  const [isLoading, setIsLoading] = useState(!iniziale);
 
   const [state, dispatch] = useReducer(carouselReducer, {
     tabs: [],
     activeTab: '',
     referenzeGroupedBy: [[]],
-  } as CarouselState);
-  const [dataScrittaRef, setDataScrittaRef] = useState<string>('');
+  } as CarouselState, stato => iniziale
+    ? carouselReducer(stato, { type: 'INIT', payload: { referenze: iniziale.referenze, item } })
+    : stato);
+  const [dataScrittaRef, setDataScrittaRef] = useState<string>(iniziale?.validita ?? '');
 
-  const url = new URL(window.location.href);
+  const url = new URL(location.pathname + location.search, 'http://ssr.local');
   const idCanale = idCanaleProps ?? url.searchParams.get('idCanale');
   const idArea = idAreaProps ?? url.searchParams.get('idArea');
   const idGDO = url.searchParams.get('idGDO');
   const idPV = url.searchParams.get('idPV');
   const idSitemap = url.searchParams.get('idSitemap');
   const idWorkspace = url.searchParams.get('id');
-  const date = url.searchParams.get("date") || dayjs().format("YYYY-MM-DD");
+  const date = url.searchParams.get("date") || datiSsr?.giorno || dayjs().format("YYYY-MM-DD");
 
   const itemMemo = useMemo(() => item, [item]);
   const linkCache = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
+    if (iniziale) {
+      setFetchedReferenze(iniziale.referenze);
+      setDataScrittaRef(iniziale.validita);
+      setIsLoading(false);
+      return;
+    }
     const fetchReferenze = async () => {
       setIsLoading(true);
       try {
@@ -105,8 +118,8 @@ const CarouselContainer: React.FC<CarouselContainerProps> = memo(function Carous
     };
 
     fetchReferenze();
-  }, [itemMemo, idWorkspace, idArea, idCanale, idPV, date]);
-  
+  }, [itemMemo, idWorkspace, idArea, idCanale, idPV, date, iniziale]);
+
   const createDinamicLink = useCallback(
     ({
       idWorkspace,
@@ -131,9 +144,9 @@ const CarouselContainer: React.FC<CarouselContainerProps> = memo(function Carous
       if (linkCache.current.has(cacheKey)) {
         return linkCache.current.get(cacheKey);
       }
-      
+
       const sp = new URLSearchParams();
-      
+
       // If no page ID provided, default to homepage
       if (!idPagina) {
         const homepage = pagine.find((s) => s.tipo === TIPO_PAGINA.HOMEPAGE);
@@ -141,7 +154,7 @@ const CarouselContainer: React.FC<CarouselContainerProps> = memo(function Carous
           sp.set('idPagina', homepage.id.toString());
         }
       }
-      
+
       // Add parameters
       if (idWorkspace) sp.set('id', idWorkspace);
       if (idArea) sp.set('idArea', idArea);
@@ -154,9 +167,9 @@ const CarouselContainer: React.FC<CarouselContainerProps> = memo(function Carous
       } else {
         sp.delete('idSitemap');
       }
-      
+
       const result = `/webpliant/volantino?${  sp.toString()}`;
-      
+
       // Cache the result
       linkCache.current.set(cacheKey, result);
       return result;
@@ -439,7 +452,7 @@ const CarouselContainer: React.FC<CarouselContainerProps> = memo(function Carous
               ))}
             </TabList>
 
-            
+
             <TabPanels>
               {referenzeGroupedBy.map((group, index) => (
                 <TabPanel key={uuid()}>

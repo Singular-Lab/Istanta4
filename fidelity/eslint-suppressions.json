@@ -1367,11 +1367,6 @@
       "count": 8
     }
   },
-  "server/core/server.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 2
-    }
-  },
   "server/core/services/AreaService.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 2
@@ -3381,7 +3376,7 @@
       "count": 2
     },
     "@typescript-eslint/no-unused-vars": {
-      "count": 4
+      "count": 2
     },
     "no-console": {
       "count": 2
@@ -3409,7 +3404,7 @@
       "count": 1
     },
     "@typescript-eslint/no-unused-vars": {
-      "count": 3
+      "count": 1
     },
     "no-console": {
       "count": 1
@@ -3426,7 +3421,7 @@
       "count": 2
     },
     "@typescript-eslint/no-unused-vars": {
-      "count": 3
+      "count": 2
     }
   },
   "src/pages/WebPliant/GridReferenze/index.tsx": {
@@ -3480,9 +3475,6 @@
   },
   "src/pages/WebPliant/carouselReducer.tsx": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unused-vars": {
       "count": 1
     }
   },
@@ -3627,9 +3619,6 @@
     }
   },
   "src/router/loaderFunctions.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
     "@typescript-eslint/no-explicit-any": {
       "count": 20
     },

@@ -1,18 +1,18 @@
-import React, { memo, useCallback, useMemo, useRef, useState } from 'react';
-import { Swiper, SwiperSlide } from 'swiper/react';
-import { Pagination, Navigation, Virtual, Zoom } from 'swiper/modules';
-import BoxRef from '@/pages/WebPliant/BoxRef';
+import styleWp from '@/assets/css/webpliant/stylewp.module.scss';
 import Lucide from '@/components/Base/Lucide';
+import BoxRef from '@/pages/WebPliant/BoxRef';
+import { useDatiWebpliantPagina } from '@/ssr/webpliant';
+import clsx from 'clsx';
+import React, { memo, useCallback, useMemo, useRef, useState } from 'react';
 import 'swiper/css';
-import 'swiper/css/pagination';
 import 'swiper/css/navigation';
+import 'swiper/css/pagination';
 import 'swiper/css/virtual';
 import 'swiper/css/zoom';
-import { Config, ConfigWebpliant, DataFields, ReferenzeIstanta } from '../../../../lib/types';
-import clsx from 'clsx';
-import styleWp from '@/assets/css/webpliant/stylewp.module.scss';
-import {v4 as uuidv4} from 'uuid';
+import { Navigation, Pagination, Virtual, Zoom } from 'swiper/modules';
+import { Swiper, SwiperSlide } from 'swiper/react';
 import { Swiper as SwiperType } from 'swiper/types';
+import { Config, DataFields, ReferenzeIstanta } from '../../../../lib/types';
 
 // Custom CSS for pagination animation
 const paginationStyles = `
@@ -20,14 +20,14 @@ const paginationStyles = `
     transition: transform 0.3s ease, background-color 0.3s ease;
     opacity: 0.5;
   }
-  
+
   .swiper-pagination-bullet-active {
     transform: scale(1.5);
     opacity: 1;
     background-color: #007aff;
     animation: pulse 1.5s infinite;
   }
-  
+
   @keyframes pulse {
     0% {
       transform: scale(1.2);
@@ -58,11 +58,12 @@ const CarouselSwiper: React.FC<CarouselSwiperProps> = memo(function CarouselSwip
   refsWishlist,
 }) {
   const [swiperInstance, setSwiperInstance] = useState<SwiperType>();
+  const datiSsr = useDatiWebpliantPagina();
   const swiperRef = useRef<any>(null);
-  
+
   // Store stable reference to slideIds to prevent unnecessary re-renders
   const slideIds = useRef<string[]>(
-    referenze?.map(() => uuidv4()) || []
+    referenze?.map((referenza, indice) => `${item.id}-${referenza.dataFields?.codice_referenza ?? indice}`) || []
   ).current;
 
   // Prop stabili per BoxRef (memo): lo stile senza sfondo si crea una volta, non per card e per render
@@ -115,7 +116,7 @@ const CarouselSwiper: React.FC<CarouselSwiperProps> = memo(function CarouselSwip
         key={item.id}
         modules={[Virtual, Pagination, Navigation, Zoom]}
         // pagination={paginationOptions}
-        virtual={true}
+        virtual={!datiSsr}
         slideBlankClass="swiper-slide-blank"
         spaceBetween={50}
         direction="horizontal"
