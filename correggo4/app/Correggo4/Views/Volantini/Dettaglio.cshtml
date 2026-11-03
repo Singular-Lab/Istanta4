@@ -34,18 +34,24 @@
     button { font-family: inherit; }
 
     /* ---------- barra alta (80px, #60cabb) ---------- */
+    /* I20-1190: in riga (flex) e non piu' a float. A finestra stretta il titolo si accorcia coi
+       puntini e i bottoni a destra restano sempre visibili: prima finivano sotto gli 80px della
+       barra e sparivano. A finestra larga la disposizione e' quella di sempre. */
     .barra_alta {
         position: fixed; left: 0; right: 0; top: 0; height: 80px; z-index: 100;
         background-color: #60cabb; color: #fff;
+        display: flex; align-items: center;
     }
-    .barra_alta .logo { float: left; width: 80px; margin-right: 10px; cursor: pointer; }
+    .barra_alta .logo { flex: none; align-self: flex-start; width: 80px; margin-right: 10px; cursor: pointer; }
     .barra_alta .titolo_zona {
-        float: left; margin-top: 20px; margin-left: 12px;
+        flex: 1 1 auto; min-width: 0; margin-left: 12px;
         display: flex; align-items: center; font-size: 20px;
     }
+    .barra_alta .titolo_zona .titolo_testo { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .barra_alta .titolo_zona img { flex: none; }
     .barra_alta .titolo_zona .dropdown { width: 20px; margin-right: 5px; cursor: pointer; }
     .barra_alta .postit { width: 50px; margin-left: 15px; margin-top: -5px; cursor: pointer; }
-    .barra_alta .destra { float: right; display: flex; align-items: center; height: 80px; }
+    .barra_alta .destra { flex: none; margin-left: auto; display: flex; align-items: center; height: 80px; }
     .barra_alta .pagine_btn { width: 100px; margin: 5px; cursor: pointer; }
     .barra_alta .utente { font-size: 14px; font-weight: bold; margin-right: 20px; }
     /* LEGENDA (j216): iconcina del manuale accanto al nome dell'utente */
@@ -368,7 +374,8 @@
 
     /* ---------- cassetto pagine ---------- */
     .pannello_pagine {
-        position: fixed; right: 10px; top: 90px; width: 300px; height: 85%;
+        /* I20-1190: 300px come sempre, ma non piu' del 30% della finestra (minimo 180px) */
+        position: fixed; right: 10px; top: 90px; width: clamp(180px, 30vw, 300px); height: 85%;
         background-color: aliceblue; border: 2px solid black; z-index: 98;
         display: flex; flex-direction: column;
     }
@@ -781,7 +788,7 @@
     <img class="logo" src="@img/Icon_Correggo.png" alt="Correggo" onclick="location.href='@Url.Content("~/Volantini")'">
     <div class="titolo_zona">
         <img class="dropdown" src="@img/dropdown_titvol.png" alt="" title="Cambia volantino">
-        <span>@Model.Titolo &ndash; VERSIONE N&deg; @Model.Versione</span>
+        <span class="titolo_testo" title="@Model.Titolo &ndash; VERSIONE N&deg; @Model.Versione">@Model.Titolo &ndash; VERSIONE N&deg; @Model.Versione</span>
         <img class="postit" src="@img/post-it.png" alt="" title="APPUNTI">
     </div>
     <div class="destra">

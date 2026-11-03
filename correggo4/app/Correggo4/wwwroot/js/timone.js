@@ -59,9 +59,16 @@
 #tTimone.acceso { background: #fff; color: #1f5fd0; }
 
 /* la barra del timone: sotto la barra alta, a destra della barra degli strumenti */
-#tim_barra { position: fixed; left: 0; right: 0; top: 80px; height: 42px; z-index: 105;
-             background: #1d5b55; color: #fff; display: none; align-items: center; gap: 12px;
-             padding: 0 12px; font-size: 13px; font-weight: 600; box-sizing: border-box;
+/* I20-1190: a finestra stretta la barra VA A CAPO invece di uscire dallo schermo (si perdevano
+   REPORT e CHIUDI). E' alta almeno 42px, come sempre; quando va su due righe e' piu' alta, e
+   tutto quello che sta sotto scende con lei: la sua altezza vera sta in --tim-h (vedi
+   altezzaBarra), e i 122 px che erano scritti a mano ovunque sono diventati 80px + --tim-h.
+   Allo stesso modo i pannelli a sinistra sono larghi --tim-pan: 240px come sempre, ma non piu'
+   del 22% della finestra (minimo 170px). Sopra i 1100px circa non cambia niente. */
+:root { --tim-h: 42px; --tim-pan: clamp(170px, 22vw, 240px); }
+#tim_barra { position: fixed; left: 0; right: 0; top: 80px; min-height: 42px; z-index: 105;
+             background: #1d5b55; color: #fff; display: none; align-items: center; gap: 4px 12px;
+             flex-wrap: wrap; padding: 5px 12px; font-size: 13px; font-weight: 600; box-sizing: border-box;
              border-top: 2px solid #0f3d39; }
 #tim_barra.visibile { display: flex; }
 #tim_barra .tit { font-size: 15px; letter-spacing: .6px; }
@@ -136,8 +143,8 @@
    niente si muove - e' la regola che Michele ha dettato in j302: le icone devono stare ferme.
    L'elemento sta FUORI dal foglio, percio' il velo di sotto non lo tocca: serve questa riga. */
 body.tim_on .barra_alta .legenda_btn { visibility: hidden; }
-body.tim_on .area { top: 122px; left: 250px; }
-body.tim_on .pannello_pagine { top: 132px; height: calc(100% - 150px); }
+body.tim_on .area { top: calc(80px + var(--tim-h)); left: calc(var(--tim-pan) + 10px); }
+body.tim_on .pannello_pagine { top: calc(90px + var(--tim-h)); height: calc(100% - 108px - var(--tim-h)); }
 body.tim_on .foglio { background: #10171c; }
 body.tim_on .foglio img.pagina { filter: brightness(.14) saturate(.18) contrast(.9); }
 /* Questa riga spegne tutto quello che sta sul foglio e non e' del timone: e' lei che fa il velo
@@ -189,7 +196,7 @@ body.tim_sbircia .tim_bloccata { display: none; }
 /* La finestrella per scegliere la griglia (Michele, 28/09: non tutte in fila orizzontale, ma una
    finestra che si apre). Ogni griglia si vede disegnata in piccolo, cosi' si capisce la forma
    prima di sceglierla, e quella in vigore ha il rettangolo intorno. */
-#tim_scelta { position: fixed; top: 128px; left: 258px; z-index: 106; width: 336px;
+#tim_scelta { position: fixed; top: calc(86px + var(--tim-h)); left: calc(var(--tim-pan) + 18px); z-index: 106; width: 336px;
               background: #fff; border: 2px solid #1d5b55; border-radius: 10px; padding: 14px 16px;
               box-shadow: 0 12px 30px rgba(0,0,0,.4); font-size: 13px; color: #1f2a30; }
 #tim_scelta h4 { margin: 0 0 3px; font-size: 14px; color: #1d5b55; }
@@ -366,7 +373,7 @@ body.tim_on .modale .ritaglio .tim_copri {
 
 body.tim_on .modale {
     z-index: 110;
-    top: 126px; left: 8px; right: 8px; bottom: 8px;
+    top: calc(84px + var(--tim-h)); left: 8px; right: 8px; bottom: 8px;
 }
 .tim_casella .cmd button.divieto:hover { background: #fff; }
 .tim_casella .cmd button.divieto:hover svg { fill: #9b2a22; }
@@ -663,14 +670,15 @@ body.tim_on .modale {
 #tim_gruppo .unisci .niente { font-size: 11px; color: #7c8a91; }
 
 /* i tre pannelli laterali */
-.tim_pan { position: fixed; left: 0; width: 240px; z-index: 105; background: #fff;
+.tim_pan { position: fixed; left: 0; width: var(--tim-pan); z-index: 105; background: #fff;
            border-right: 2px solid #1d5b55; display: none; flex-direction: column; box-sizing: border-box; }
 .tim_pan.visibile { display: flex; }
 /* tre pannelli, uno per stato (Michele, 28/09): in sospeso, fuori volantino, eliminate */
-#tim_sospesi   { top: 122px; height: calc((100vh - 122px) / 3); }
-#tim_fuori     { top: calc(122px + (100vh - 122px) / 3); height: calc((100vh - 122px) / 3);
+#tim_sospesi   { top: calc(80px + var(--tim-h)); height: calc((100vh - 80px - var(--tim-h)) / 3); }
+#tim_fuori     { top: calc(80px + var(--tim-h) + (100vh - 80px - var(--tim-h)) / 3);
+                 height: calc((100vh - 80px - var(--tim-h)) / 3);
                  border-top: 2px solid #1d5b55; }
-#tim_eliminate { top: calc(122px + 2 * (100vh - 122px) / 3); bottom: 0;
+#tim_eliminate { top: calc(80px + var(--tim-h) + 2 * (100vh - 80px - var(--tim-h)) / 3); bottom: 0;
                  border-top: 2px solid #1d5b55; }
 #tim_eliminate .testa { background: #9b2a22; }
 .tim_pan.bersaglio { box-shadow: inset 0 0 0 3px #ffd166; }
@@ -1023,6 +1031,15 @@ var STILE_REPORT = `
         '  <button type="button" id="tim_chiudi" class="chiaro">CHIUDI</button>' +
         '</span>';
     document.body.appendChild(barra);
+
+    /* I20-1190: l'altezza VERA della barra, per chi sta sotto (--tim-h). A finestra stretta va su
+       due righe; da chiusa e' nascosta e misura 0: allora resta 42px, la sua altezza di sempre. */
+    function altezzaBarra() {
+        var h = barra.offsetHeight;
+        document.documentElement.style.setProperty('--tim-h', (h > 0 ? h : 42) + 'px');
+    }
+    if (window.ResizeObserver) new ResizeObserver(altezzaBarra).observe(barra);
+    window.addEventListener('resize', altezzaBarra);
 
     /* LE TRE ICONE, scritte una volta sola e usate in tre posti: sul pulsante del box, dentro la
        finestrella del cestino e sulla testa del pannello di destinazione. Michele, 28/09: «per far
