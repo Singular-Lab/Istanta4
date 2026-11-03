@@ -119,6 +119,35 @@ public sealed partial class ServizioTimone
     }
 
     /// <summary>
+    /// I20-1182: a finestra del Marketing aperta il timone c'e' sempre. Prima la finestra si apriva
+    /// sulla promo ma il piano nasceva solo da ApriAsync, volantino per volantino, e Agenzia e
+    /// Marketing trovavano «Il timone non e' ancora stato aperto». Qui si fotografa il piano della
+    /// versione se manca; se c'e' gia' non si tocca, cosi' gli spostamenti fatti restano.
+    ///
+    /// La fotografia sta in una transazione: due persone che entrano insieme si fermano sull'indice
+    /// unico ux_timone_vol_versione, e la seconda trova il piano della prima.
+    /// </summary>
+    private async Task AssicuraPianoAsync(short idAutore, int idVolantino, short versione)
+    {
+        // 0 = senza pagine, sotto lo 0 = versioni revocate (I20-1149): niente da fotografare
+        if (versione <= 0) return;
+        if (await ctx.Timoni.AnyAsync(t => t.IdVol == idVolantino && t.Versione == versione)) return;
+
+        using var trans = await ctx.Database.BeginTransactionAsync();
+        try
+        {
+            await FotografaAsync(idAutore, idVolantino, versione);
+            await trans.CommitAsync();
+        }
+        catch (DbUpdateException)
+        {
+            await trans.RollbackAsync();
+            ctx.ChangeTracker.Clear();
+            if (!await ctx.Timoni.AnyAsync(t => t.IdVol == idVolantino && t.Versione == versione)) throw;
+        }
+    }
+
+    /// <summary>
     /// La fotografia vera e propria: crea il piano, una pagina per ogni pagina del volantino e una
     /// voce per ogni box radice. Sta in un metodo suo (j256) perche' la usano in due: ApriAsync,
     /// la prima volta, e RimettiComeEraAsync, quando si vuole ributtare via tutto e ripartire
@@ -363,6 +392,19 @@ public sealed partial class ServizioTimone
             .FirstOrDefaultAsync(t => t.IdVol == idVolantino && t.Versione == versione);
 
         var (aperta, inizio, fine) = await FinestraAsync(vol.Classificazione);
+
+        // I20-1182: a finestra aperta il timone non aspetta l'Agenzia. Vale anche per le finestre
+        // aperte prima della correzione e per una versione arrivata a finestra aperta. L'autore e'
+        // chi ha aperto la finestra: il timone lo apre sempre l'Agenzia.
+        if (piano == null && aperta && versione > 0)
+        {
+            short idAutore = await ctx.TimoneFinestre.AsNoTracking()
+                .Where(f => f.Classificazione == vol.Classificazione)
+                .Select(f => f.IdAutore).FirstAsync();
+            await AssicuraPianoAsync(idAutore, idVolantino, versione);
+            piano = await ctx.Timoni.AsNoTracking()
+                .FirstOrDefaultAsync(t => t.IdVol == idVolantino && t.Versione == versione);
+        }
 
         if (piano == null)
             return Esito.Fatto(new
