@@ -4,7 +4,7 @@ import { ForbiddenError } from '../../lib/errors/application/ForbiddenError';
 import { ErrorCodes } from '../../lib/errors/ErrorCodes';
 import config from './config/index';
 import { log } from './logger';
-import { UXP_CLIENT_TOKEN_HEADER } from './middleware/uxpOriginSession';
+import { isOpaqueUxpOrigin, UXP_CLIENT_TOKEN_HEADER } from './middleware/uxpOriginSession';
 
 const hasOpaqueUxpTransportHeader = (req: Request): boolean => {
   if (!req.path.startsWith('/api/')) return false;
@@ -67,10 +67,10 @@ export function applyCors(app: Express) {
         return callback(null, true); // Permetti richieste senza origin (Postman, curl)
       }
 
-      // Una webview locale UXP puo' serializzare la propria origine opaca come
-      // "null". L'header abilita soltanto il trasporto CORS: il suo valore viene
-      // verificato e associato alla sessione dal middleware successivo.
-      if (origin === 'null' && hasOpaqueUxpTransportHeader(req)) {
+      // Una webview locale UXP serializza la propria origine opaca come "null"
+      // (WebView2) o "file://" (WebKit). L'header abilita soltanto il trasporto CORS:
+      // il suo valore viene verificato e associato alla sessione dal middleware successivo.
+      if (isOpaqueUxpOrigin(origin) && hasOpaqueUxpTransportHeader(req)) {
         log.debug('Trasporto CORS UXP da origine opaca consentito', {
           method: req.method,
           path: req.path,
@@ -141,7 +141,7 @@ export function applyCors(app: Express) {
       return permissiveCorsHandler(req, res, next);
     }
 
-    if (req.get('Origin') === 'null') {
+    if (isOpaqueUxpOrigin(req.get('Origin'))) {
       res.vary('Access-Control-Request-Headers');
     }
 
