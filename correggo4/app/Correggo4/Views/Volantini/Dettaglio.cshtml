@@ -754,6 +754,10 @@
     .report_finestra .rp_cont { flex: 1; padding-left: 10px; min-width: 0; }
     .report_finestra .rp_det { margin-bottom: 3px; }
     .report_finestra .rp_t { white-space: pre-wrap; }
+    /* I20-1189: le voci a pezzi, «Nota:», «Prezzo cambiato in:»... con le righe sotto l'intestazione */
+    .report_finestra .rp_blocco { margin: 2px 0 5px; }
+    .report_finestra .rp_btit { margin-right: 4px; }
+    .report_finestra .rp_rg { margin-left: 12px; white-space: pre-wrap; }
     .report_finestra .rp_simbolo { width: 40px; vertical-align: middle; margin-right: 5px; }
     .report_finestra .rp_foto div { display: flex; align-items: center; gap: 6px; margin-top: 3px; }
     .report_finestra .rp_foto img { width: 50px; height: 50px; object-fit: contain; background: #fff; }
@@ -792,8 +796,9 @@
            correzione ma un'altra cosa (Michele, 28/09). Parte nascosto e lo scopre timone.js
            solo se il server dice che questo utente puo' usarlo: la regola dei ruoli sta in un
            posto solo, in ServizioTimone. Il colore e la forma stanno in wwwroot/js/timone.js. *@
+        @* I20-1189: il bottone si chiama MENABÒ AVANZATO; dentro, per ora, tutto il resto resta «timone» *@
         <button type="button" class="nascosto" id="tTimone"
-                title="TIMONE - il piano di rimpaginazione">TIMONE</button>
+                title="MENABÒ AVANZATO - il piano di rimpaginazione">MENABÒ AVANZATO</button>
         <span class="utente">@User.Identity?.Name</span>
         <form method="post" action="~/Account/Logout" style="margin:0;">
             @Html.AntiForgeryToken()

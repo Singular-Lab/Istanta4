@@ -21,10 +21,44 @@
         <div class="@(Model.Prodotto ? "rp_pag rp_pag_piccola" : "rp_pag")">PAG. @gp.Key</div>
         foreach (var v in gp)
         {
-            <div class="rp_voce">
+            @* I20-1189: data-box non si vede; il report del timone lo usa per la miniatura del prodotto *@
+            <div class="rp_voce" data-box="@v.IdBox">
                 <div class="rp_lab">@v.Etichetta</div>
                 <div class="rp_cont">
                     <div class="rp_det">@(Model.Tutte ? "VER. " + v.Versione + " · " : "")@v.Dettagli</div>
+                    @if (v.Blocchi.Count > 0)
+                    {
+                        @* I20-1189: cosa e' stato fatto, un pezzo per intestazione *@
+                        foreach (var b in v.Blocchi)
+                        {
+                            <div class="rp_blocco">
+                                <b class="rp_btit">@b.Titolo</b>
+                                @if (b.Simbolo != "")
+                                {
+                                    <img class="rp_simbolo" src="@Url.Content($"~/immagini-correggo/{b.Simbolo}.png")" alt="@b.NomeSimbolo" title="@b.NomeSimbolo">
+                                }
+                                @if (b.Righe.Count == 1 && b.Foto.Count == 0)
+                                {
+                                    <span class="rp_t">@b.Righe[0]</span>
+                                }
+                                else
+                                {
+                                    foreach (var r in b.Righe) { <div class="rp_rg">@r</div> }
+                                }
+                                @if (b.Foto.Count > 0)
+                                {
+                                    <div class="rp_foto">
+                                        @foreach (var f in b.Foto)
+                                        {
+                                            <div><img src="@Url.Content($"~/Foto/Miniatura?guidId={f.GuidId}&width=50")" alt="" loading="lazy"><span>@f.Testo</span></div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+                    }
+                    else
+                    {
                     <div class="rp_testo">
                         @if (v.Tipo == "timbro")
                         {
@@ -44,6 +78,7 @@
                                 <div><img src="@Url.Content($"~/Foto/Miniatura?guidId={f.GuidId}&width=50")" alt="" loading="lazy"><span>@f.Testo</span></div>
                             }
                         </div>
+                    }
                     }
                     @if (v.Esito == "accettata") { <div class="rp_esito accettata">@v.Chiusura</div> }
                     else if (v.Esito == "irrisolta") { <div class="rp_esito irrisolta">IRRISOLTA</div> }
