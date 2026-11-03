@@ -8,6 +8,11 @@ export const UXP_CLIENT_TOKEN_HEADER = 'X-UXP-Client-Token';
 const UXP_CLIENT_TOKEN_PATTERN = /^[a-f0-9]{64}$/i;
 const UXP_BOOTSTRAP_PATHS = new Set(['/api/csrf-token', '/api/login_user']);
 const UXP_SESSION_INFO_PATH = '/api/session/info';
+// WebView2 (Windows) serializza l'origine di file:// come "null", WebKit (macOS) come "file://".
+const UXP_OPAQUE_ORIGINS = new Set(['null', 'file://']);
+
+export const isOpaqueUxpOrigin = (origin?: string): boolean =>
+  !!origin && UXP_OPAQUE_ORIGINS.has(origin);
 
 const forbidden = (req: Request, reason: 'missing_or_invalid' | 'unbound' | 'mismatch') => {
   log.warn('Richiesta UXP da origine opaca rifiutata', {
@@ -31,7 +36,7 @@ const apiRequestPath = (req: Request): string =>
   (req.originalUrl?.split('?')[0] || req.path);
 
 export const isOpaqueUxpRequest = (req: Request): boolean =>
-  apiRequestPath(req).startsWith('/api/') && req.get('Origin') === 'null';
+  apiRequestPath(req).startsWith('/api/') && isOpaqueUxpOrigin(req.get('Origin'));
 
 export const readUxpClientToken = (req: Request): string | undefined => {
   const token = req.get(UXP_CLIENT_TOKEN_HEADER)?.trim();

@@ -53,4 +53,47 @@ describe('CORS della webview UXP locale', () => {
     expect(res.headers['access-control-allow-headers'].toLowerCase()).toContain('x-uxp-client-token');
     expect(res.headers.vary).toContain('Access-Control-Request-Headers');
   });
+
+  it('completa il preflight da file:// (WebKit macOS) soltanto con l header UXP', async () => {
+    const res = await request(createApp())
+      .options('/api/ping')
+      .set('Origin', 'file://')
+      .set('Access-Control-Request-Method', 'POST')
+      .set('Access-Control-Request-Headers', `content-type,x-csrf-token,${UXP_CLIENT_TOKEN_HEADER}`);
+
+    expect(res.status).toBe(204);
+    expect(res.headers['access-control-allow-origin']).toBe('file://');
+    expect(res.headers['access-control-allow-credentials']).toBe('true');
+    expect(res.headers.vary).toContain('Access-Control-Request-Headers');
+  });
+
+  it('rifiuta Origin file:// quando non viene richiesto il trasporto UXP protetto', async () => {
+    const res = await request(createApp())
+      .options('/api/ping')
+      .set('Origin', 'file://')
+      .set('Access-Control-Request-Method', 'GET');
+
+    expect(res.status).toBe(403);
+    expect(res.headers['access-control-allow-origin']).toBeUndefined();
+  });
+
+  it('rifiuta una GET da file:// senza X-UXP-Client-Token', async () => {
+    const res = await request(createApp())
+      .get('/api/ping')
+      .set('Origin', 'file://');
+
+    expect(res.status).toBe(403);
+    expect(res.headers['access-control-allow-origin']).toBeUndefined();
+  });
+
+  it('consente una GET da file:// che trasporta X-UXP-Client-Token', async () => {
+    const res = await request(createApp())
+      .get('/api/ping')
+      .set('Origin', 'file://')
+      .set(UXP_CLIENT_TOKEN_HEADER, 'ab'.repeat(32));
+
+    expect(res.status).toBe(200);
+    expect(res.headers['access-control-allow-origin']).toBe('file://');
+    expect(res.headers['access-control-allow-credentials']).toBe('true');
+  });
 });
