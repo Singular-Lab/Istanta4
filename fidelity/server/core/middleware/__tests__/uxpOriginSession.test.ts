@@ -1,4 +1,4 @@
-import type { NextFunction, Request, Response } from 'express';
+import type { Request, Response } from 'express';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../logger', () => ({ log: { warn: vi.fn() } }));
@@ -35,10 +35,10 @@ function run(options: {
     },
     get: (name: string) => headers[name.toLowerCase()],
   } as unknown as Request;
-  const next = vi.fn() as unknown as NextFunction;
+  const next = vi.fn<(error?: unknown) => void>();
 
   uxpOriginSessionProtection(req, {} as Response, next);
-  return vi.mocked(next);
+  return next;
 }
 
 describe('associazione fra origine UXP opaca e sessione', () => {
