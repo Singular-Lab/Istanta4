@@ -508,6 +508,16 @@ public sealed partial class ServizioCorrezioni
             .FirstOrDefaultAsync(t => t.IdVol == idVolantino && t.Versione == versione);
         if (piano == null || piano.Revisione < 1) return vuoto;
 
+        // I20-1184: a finestra del Marketing aperta il Marketing sta ancora lavorando sul timone, e
+        // l'Agenzia non sistema niente finche' non si chiude: niente velo e niente blocco. La regola
+        // e' quella di ServizioTimone.FinestraAsync; una finestra che deve ancora partire non conta.
+        string classificazione = await ctx.Volantinis.AsNoTracking()
+            .Where(v => v.Id == idVolantino).Select(v => v.Classificazione).FirstAsync();
+        var adesso = DateTime.UtcNow;
+        if (await ctx.TimoneFinestre.AsNoTracking().AnyAsync(f => f.Classificazione == classificazione
+                && f.DataInizio <= adesso && adesso <= f.DataFine))
+            return vuoto;
+
         var pagine = await ctx.TimonePagine.AsNoTracking()
             .Where(p => p.IdTimone == piano.Id)
             .Select(p => new { p.Id, p.Numero }).ToListAsync();
