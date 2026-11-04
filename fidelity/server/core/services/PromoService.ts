@@ -22,7 +22,7 @@ import type { IAgenziaLib } from '../agenzia_lib/types';
 import config from '../config';
 import { sequelize } from '../db';
 import { chiamaHttp, destinazioneDi } from '../http/clienteHttp';
-import { CreatePromoDTO, PromoResponseDTO, UpdatePromoDTO, type PromoContextItem } from '../dto';
+import { CreatePromoDTO, PromoResponseDTO, UpdatePromoDTO, type PromoContextItem, type VerificaArchivioDTO, type VerificaArchivioPromoDTO } from '../dto';
 import { IConfigService } from '../interfaces/IConfigService';
 import { IIstantaService } from '../interfaces/IIstantaService';
 import { IPromoService } from '../interfaces/IPromoService';
@@ -259,6 +259,62 @@ export class PromoService implements IPromoService {
           details: { error }
         });
       }
+    }
+  }
+
+  /**
+   * Archivio storico del volantino-analyzer: per ogni nome le promo omonime, confrontate come nel
+   * controllo dei doppioni (senza maiuscole e spazi ai lati), e per le non eliminate i tracciati con
+   * l'MD5 del file. L'impronta la calcola PostgreSQL, cosi' i file non escono dal database.
+   */
+  async verificaArchivio(nomi: string[]): Promise<VerificaArchivioDTO[]> {
+    const chiave = (nome: string) => String(nome ?? '').trim().toLowerCase();
+    const richiesti = [...new Set(nomi)];
+    try {
+      const promo = (await this.promoRepository.findAllWithOptions({
+        where: sequelize.where(
+          sequelize.fn('lower', sequelize.fn('trim', sequelize.col('nome_promo'))),
+          { [Op.in]: [...new Set(richiesti.map(chiave))] }
+        ),
+        attributes: ['id_promo', 'nome_promo', 'stato', 'validita_dal', 'validita_al'],
+        order: [['validita_dal', 'ASC']],
+      })).map(normalizePromoModel);
+      const nonEliminate = promo.filter(p => p.stato !== STATO_PROMO.ELIMINATA).map(p => p.id_promo);
+      const tracciati = nonEliminate.length
+        ? await Tracciati.findAll({
+          where: { id_promo_tracciati: { [Op.in]: nonEliminate } },
+          attributes: ['id_tracciati', 'id_promo_tracciati', 'filename_tracciati', 'nome_tracciati',
+            [sequelize.fn('md5', sequelize.col('blobfile_tracciati')), 'md5']],
+          order: [['createdat', 'ASC']],
+          raw: true,
+        }) as unknown as Array<{ id_tracciati: string; id_promo_tracciati: string; filename_tracciati: string; nome_tracciati: string | null; md5: string }>
+        : [];
+
+      const perNome = new Map<string, VerificaArchivioPromoDTO[]>();
+      for (const p of promo) {
+        const voce: VerificaArchivioPromoDTO = {
+          id: p.id_promo,
+          nome: p.nome_promo,
+          stato: p.stato,
+          validita_dal: p.validita_dal,
+          validita_al: p.validita_al,
+          tracciati: tracciati.filter(t => t.id_promo_tracciati === p.id_promo).map(t => ({
+            id: t.id_tracciati,
+            filename: t.filename_tracciati,
+            nome: t.nome_tracciati || t.filename_tracciati,
+            md5: t.md5,
+          })),
+        };
+        perNome.set(chiave(p.nome_promo), [...(perNome.get(chiave(p.nome_promo)) ?? []), voce]);
+      }
+      return richiesti.map(nome => ({ nome, promo: perNome.get(chiave(nome)) ?? [] }));
+    } catch (error) {
+      throw wrapDatabaseError(new Error("Errore durante la verifica dell'archivio"), {
+        message: "Errore durante la verifica dell'archivio",
+        operation: 'get',
+        entity: 'Promo',
+        details: { error }
+      });
     }
   }
 

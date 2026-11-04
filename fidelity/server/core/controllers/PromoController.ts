@@ -29,6 +29,9 @@ const aggiornamentoCorreggoRiuscito = (d: any): boolean =>
   String(d?.error_detail ?? '').includes('volantino_non_trovato') ||
   (typeof d === 'object' && d !== null && d.result !== 'error' && d.result !== false && d.esito !== false && !d.error_detail);
 
+// Verifica dell'archivio storico: cinque anni di volantini sono qualche centinaio di promo
+const MAX_NOMI_VERIFICA_ARCHIVIO = 2000;
+
 // eliminaPromo definitiva: una promo che Istanta non ha piu e gia eliminata, si completa la cancellazione locale
 const eliminazioneIstantaRiuscita = (d: any): boolean => esitoIstanta(d) || d?.error === 'promo_not_found';
 
@@ -67,6 +70,8 @@ export class PromoController extends BaseController {
 
     // Promo creation
     this.router.post('/promo', authMiddleware, permissionGuard('promo.crea'), this.inizioNuovaLavorazione.bind(this));
+    // Archivio storico del volantino-analyzer: quali promo e liste ci sono gia' (sola lettura)
+    this.router.post('/promo/verifica-archivio', authMiddleware, permissionGuard('promo.visualizza'), this.verificaArchivio.bind(this));
     // Promo by ID (parameterized routes)
     this.router.get("/promo/nome/:nomePromo", authMiddleware, permissionGuard('promo.visualizza'), routeDeprecata, this.getPromoByNome.bind(this))
     this.router.put('/promo/:id', authMiddleware, permissionGuard('promo.modifica'), this.updatePromo.bind(this));
@@ -108,6 +113,23 @@ export class PromoController extends BaseController {
       }
       const promos = await this.promoService.getPromoByNome(nomePromo);
       this.sendResponse(res, HttpStatusCode.OK, promos);
+    } catch (error) {
+      this.handleError(res, error as Error);
+    }
+  }
+
+  private async verificaArchivio(req: ExpressRequest, res: Response): Promise<void> {
+    try {
+      const nomi = req.body?.nomi;
+      if (!Array.isArray(nomi) || nomi.length === 0 || nomi.length > MAX_NOMI_VERIFICA_ARCHIVIO) {
+        this.sendResponse(res, HttpStatusCode.BAD_REQUEST, { message: `nomi: serve un elenco da 1 a ${MAX_NOMI_VERIFICA_ARCHIVIO} nomi di promo` });
+        return;
+      }
+      if (nomi.some((nome) => typeof nome !== 'string' || !nome.trim())) {
+        this.sendResponse(res, HttpStatusCode.BAD_REQUEST, { message: 'nomi: ogni nome di promo deve essere un testo non vuoto' });
+        return;
+      }
+      this.sendResponse(res, HttpStatusCode.OK, await this.promoService.verificaArchivio(nomi));
     } catch (error) {
       this.handleError(res, error as Error);
     }

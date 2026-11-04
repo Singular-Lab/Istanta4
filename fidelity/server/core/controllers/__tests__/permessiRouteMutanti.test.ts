@@ -58,6 +58,7 @@ describe('permessi sulle route che modificano dati', () => {
     ['annullamento dell\'import dei punti vendita', 'post', '/api/ACPV/importaPV/j1/annulla', 'gdo.gestisci_punti_vendita'],
     ['decisione sulla riga dell\'import in attesa', 'post', '/api/ACPV/importaPV/j1/decisione', 'gdo.gestisci_punti_vendita'],
     ['import degli export del Plugin nella storia dei PV', 'post', '/api/punti-vendita/storia/import-export', 'gdo.gestisci_punti_vendita'],
+    ['verifica dell\'archivio storico del volantino-analyzer', 'post', '/api/promo/verifica-archivio', 'promo.visualizza'],
   ];
 
   it.each(casi)('%s richiede il permesso giusto', async (_nome, metodo, url, permesso) => {
