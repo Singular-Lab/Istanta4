@@ -24,7 +24,10 @@ type TracciatoCardProps = {
     getShortError: (error: string, maxLength?: number) => string;
     onDeleteTracciato: (tracciato: TracciatiResponseDTO) => void;
     isDeletingTracciato?: boolean;
+    /** Promo chiusa: l'anteprima si apre dallo storico. */
     promoStorico: boolean;
+    /** Nasconde rinomina ed eliminazione; senza, segue promoStorico. Il Superadmin agisce anche sulle promo chiuse. */
+    azioniBloccate?: boolean;
 };
 
 // Tono e icona dello stato dell'importazione, con i colori comuni di StatusBadge
@@ -80,6 +83,7 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
     onDeleteTracciato,
     isDeletingTracciato = false,
     promoStorico = false,
+    azioniBloccate = promoStorico,
 }) => {
     const { hasPermission } = usePermissionContext();
     const navigate = useNavigate();
@@ -304,7 +308,7 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
                         >
                             <Lucide icon="Download" aria-hidden="true" className="h-4 w-4" />
                         </Button>
-                        {!promoStorico && (
+                        {!azioniBloccate && (
                             <Button
                                 type="button"
                                 size="sm"
@@ -321,7 +325,7 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
                                 <Lucide icon="Pencil" aria-hidden="true" className="h-4 w-4" />
                             </Button>
                         )}
-                        {(canDeleteTracciato && !promoStorico) && (
+                        {(canDeleteTracciato && !azioniBloccate) && (
                             <Button
                                 type="button"
                                 size="sm"

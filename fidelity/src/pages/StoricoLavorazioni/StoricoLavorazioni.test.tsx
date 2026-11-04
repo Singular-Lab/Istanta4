@@ -1,17 +1,30 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const finti = vi.hoisted(() => ({
   query: { data: [] as unknown[], isLoading: false, isError: false, error: null as Error | null, refetch: vi.fn() },
+  superadmin: false,
 }));
 
 vi.mock("@/components/SessionChecker", () => ({ default: (Componente: unknown) => Componente }));
 vi.mock("@/query/query", () => ({ useFetchStoricoLavorazioni: () => finti.query }));
+vi.mock("@/context/PermissionContext", () => ({ usePermissionContext: () => ({ superadmin: finti.superadmin }) }));
+vi.mock("@/context/NotificationContext", () => ({ useNotification: () => ({ showNotification: vi.fn() }) }));
+vi.mock("../../../lib/server_call", () => ({ ServerCall: { delete: vi.fn() } }));
 
+import { ServerCall } from "../../../lib/server_call";
 import StoricoLavorazioni from ".";
+
+// jsdom non implementa ResizeObserver, usato da Headless UI all'apertura dei Dialog
+globalThis.ResizeObserver ??= class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+};
 
 const promo = (id: string, nome: string, stato: string) => ({
   id: `${id}-0000-0000`,
@@ -21,18 +34,24 @@ const promo = (id: string, nome: string, stato: string) => ({
   validita_dal: "2026-09-05",
   validita_al: "2026-09-20",
   offset_visibilita: 3,
+  is_deletable: false,
+  numero_kit_collegati: 0,
 });
 
 const apri = () =>
   render(
-    <MemoryRouter>
-      <StoricoLavorazioni />
-    </MemoryRouter>
+    <QueryClientProvider client={new QueryClient()}>
+      <MemoryRouter>
+        <StoricoLavorazioni />
+      </MemoryRouter>
+    </QueryClientProvider>
   );
 
 describe("Storico promozioni", () => {
   beforeEach(() => {
     finti.query = { data: [], isLoading: false, isError: false, error: null, refetch: vi.fn() };
+    finti.superadmin = false;
+    vi.mocked(ServerCall.delete).mockReset();
   });
 
   it("una promo VALIDA si legge Valida, non In validità", () => {
@@ -103,5 +122,29 @@ describe("Storico promozioni", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Servizio promo non raggiungibile");
     fireEvent.click(screen.getByRole("button", { name: "Riprova" }));
     expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("il Superadmin elimina una promo archiviata dopo la conferma, in modo non definitivo", async () => {
+    finti.superadmin = true;
+    vi.mocked(ServerCall.delete).mockResolvedValue(true);
+    finti.query.data = [promo("h", "Promo archiviata", "ARCHIVIATA")];
+    apri();
+
+    fireEvent.click(screen.getByRole("button", { name: "Elimina Promo archiviata" }));
+    const finestra = await screen.findByRole("dialog");
+    expect(within(finestra).getByText("Elimina lavorazione")).toBeInTheDocument();
+    expect(ServerCall.delete).not.toHaveBeenCalled();
+
+    fireEvent.click(within(finestra).getByRole("button", { name: "Elimina" }));
+    await waitFor(() => expect(ServerCall.delete).toHaveBeenCalledWith("/promo/h-0000-0000/stato/ARCHIVIATA"));
+    await waitFor(() => expect(finti.query.refetch).toHaveBeenCalled());
+  });
+
+  it("chi non è Superadmin non trova il comando di eliminazione", () => {
+    finti.query.data = [promo("i", "Promo archiviata", "ARCHIVIATA")];
+    apri();
+
+    expect(screen.queryByRole("button", { name: "Elimina Promo archiviata" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Elimina" })).not.toBeInTheDocument();
   });
 });
