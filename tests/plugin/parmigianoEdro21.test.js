@@ -555,6 +555,9 @@ test("box verticale: la colonna dei prezzi sale intera finche' il suo fondo e' s
             assert.ok(gruppo.gruppoEtichette.includes(e), "manca " + e);
         }
         assert.ok(gruppo.gruppoEtichette.includes("sy_etto"), "l'ALL'ETTO segue il prezzo");
+        //I20-1201: anche il rettangolo rosso dell'etto, che la regola del box ancora in fondo alla base:
+        //fuori dal blocco restava giu', sopra il testo verticale.
+        assert.ok(gruppo.gruppoEtichette.includes("rect_etto"), "il rettangolo dell'etto segue il prezzo");
 
         //Solo in verticale, fondo su fondo, sull'etichetta del payoff: un gruppo con etichette a
         //asterisco non si risolve come gruppo seguito, l'etichetta si'.
