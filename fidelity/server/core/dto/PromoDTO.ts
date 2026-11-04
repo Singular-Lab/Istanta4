@@ -170,3 +170,30 @@ export interface ExportPromoResponseDTO {
   file_size: number;
   total_records: number;
 }
+
+/**
+ * Tracciato di una promo nella verifica dell'archivio storico: `md5` e' l'impronta del file
+ * caricato, cosi' il volantino-analyzer riconosce una lista anche se ha cambiato nome.
+ */
+export interface VerificaArchivioTracciatoDTO {
+  id: string;
+  filename: string;
+  nome: string;
+  md5: string;
+}
+
+export interface VerificaArchivioPromoDTO {
+  id: string;
+  nome: string;
+  stato: string;
+  validita_dal: Date;
+  validita_al: Date;
+  /** Vuoto per una promo eliminata: non riceve liste. */
+  tracciati: VerificaArchivioTracciatoDTO[];
+}
+
+/** Esito per ogni nome chiesto: `promo` vuoto se in FP non c'e' nessuna promo con quel nome. */
+export interface VerificaArchivioDTO {
+  nome: string;
+  promo: VerificaArchivioPromoDTO[];
+}

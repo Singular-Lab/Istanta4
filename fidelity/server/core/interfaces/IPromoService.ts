@@ -1,7 +1,7 @@
 import { Request as ExpressRequest } from 'express';
 import { STATO_PROMO } from '../../../lib/enums';
 import { DataWebPliant, DimensioneVisibilitaPromo, IndesignPluginExport, MenaboLayoutDivisioneSalvata, MenaboLayoutSalvato, SaveMenaboLayoutRequest } from '../../../lib/types';
-import { CreatePromoDTO, PromoResponseDTO, UpdatePromoDTO } from '../dto';
+import { CreatePromoDTO, PromoResponseDTO, UpdatePromoDTO, VerificaArchivioDTO } from '../dto';
 export interface IPromoService {
   // Basic CRUD operations
   createPromo(data: Partial<CreatePromoDTO>): Promise<PromoResponseDTO>;
@@ -72,6 +72,8 @@ export interface IPromoService {
     data_fine_promo_corrente: string;
   }[]>;
   getPromoByNome(nome: string): Promise<PromoResponseDTO>
+  /** Promo omonime e loro tracciati (con MD5) per i nomi dell'archivio storico: sola lettura. */
+  verificaArchivio(nomi: string[]): Promise<VerificaArchivioDTO[]>;
   getDatoPerMenabo(idPromo: string, canale?: string, req?: ExpressRequest): Promise<any>;
   getMenaboLayout(idPromo: string): Promise<MenaboLayoutSalvato | null>;
   saveMenaboLayout(idPromo: string, payload: SaveMenaboLayoutRequest): Promise<MenaboLayoutSalvato>;
