@@ -89,7 +89,8 @@ public class PopCoopGustiVariTests
         int fine = coop.IndexOf("public TracciatoResultKit esportaVolantino(", StringComparison.Ordinal);
         string esporta = coop.Substring(inizio, fine - inizio);
 
-        Assert.Contains("bool gruppoConGustiVari = codice_referenza != codice_gruppo && !prezziDiversiInGruppo", esporta);
+        // I20-1193: solo fuori dagli A3, dove ogni gruppo esce con cartello di gruppo e copia.
+        Assert.Contains("bool gruppoConGustiVari = !formatoA3(formatoKit) && codice_referenza != codice_gruppo && !prezziDiversiInGruppo", esporta);
         Assert.Contains("&& descrizioneDiGruppoConGustiVari(recItem[GLOBAL_VARIABLES.keyXMLDescrizioneGruppo] as Dictionary<string, object>);", esporta);
         Assert.Contains("isLineaMaggioreUguale10, gruppoConGustiVari))", esporta);
         Assert.Contains("if (!eludi && codice_gruppo != codice_referenza && !isLineaMaggioreUguale10 && !gruppoConGustiVari)", esporta);

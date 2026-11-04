@@ -66,14 +66,30 @@ namespace AgenziaLib
         public sealed class CartelliDellaLinea
         {
             public const int Massimo = 10;
+            /// <summary>I20-1193: negli A3 una linea da 10 referenze in su esce con 2 cartelli linea.</summary>
+            public const int MassimoNegliA3 = 2;
+            private readonly int massimo;
             private readonly Dictionary<string, int> usciti = new Dictionary<string, int>();
+
+            public CartelliDellaLinea() : this(Massimo) { }
+
+            public CartelliDellaLinea(int massimo)
+            {
+                this.massimo = massimo;
+            }
+
+            /// <summary>I cartelli di ogni linea nel formato del kit: 2 negli A3, Massimo negli altri.</summary>
+            public static CartelliDellaLinea PerFormato(string formato)
+            {
+                return new CartelliDellaLinea(formatoA3(formato) ? MassimoNegliA3 : Massimo);
+            }
 
             /// <summary>True se la linea ha gia' fatto uscire i suoi cartelli e la referenza va saltata.</summary>
             public bool Salta(string codiceGruppo)
             {
                 string chiave = codiceGruppo ?? "";
                 usciti.TryGetValue(chiave, out int giaUsciti);
-                if (giaUsciti >= Massimo)
+                if (giaUsciti >= massimo)
                     return true;
                 usciti[chiave] = giaUsciti + 1;
                 return false;
@@ -384,6 +400,87 @@ namespace AgenziaLib
                 }
                 singolo[chiave] = valore == null || valore is string ? valore : JsonConvert.DeserializeObject(JsonConvert.SerializeObject(valore), valore.GetType());
             }
+        }
+
+        /// <summary>
+        /// I20-1193: gli A3 del PoP Coop, verticali e orizzontali. Le regole della I20-1193 valgono solo qui:
+        /// negli A7 non cambia niente.
+        /// </summary>
+        public static bool formatoA3(string formato)
+        {
+            return formato == "A3_VERTICALI" || formato == "A3_ORIZZONTALI";
+        }
+
+        /// <summary>
+        /// I20-1193: negli A3 una referenza senza prezzo promo (vuoto o 0) non esce: nessun cartello, e non
+        /// conta nel suo gruppo.
+        /// </summary>
+        public static bool senzaPrezzoPromoNegliA3(object prezzoPromo, string formato)
+        {
+            return formatoA3(formato) && prezzoPromo.ToDecimal() == 0m;
+        }
+
+        /// <summary>
+        /// I20-1193: negli A3 ogni gruppo, linee comprese, esce con il cartello di gruppo e una sola copia: il
+        /// primo membro che esce diventa per intero il cartello di gruppo (ripetiIlCartelloDiGruppo), gli altri
+        /// membri non escono. Le linee da 10 in su, che non hanno cartello di gruppo, si limitano con
+        /// CartelliDellaLinea.
+        /// </summary>
+        public static bool altroMembroDelGruppoNegliA3(string formato, bool inGruppo, bool lineaDa10InSu, bool cartelloDiGruppoGiaUscito)
+        {
+            return formatoA3(formato) && inGruppo && !lineaDa10InSu && cartelloDiGruppoGiaUscito;
+        }
+
+        /// <summary>
+        /// Il singolo di un gruppo che esce come copia del cartello di gruppo: negli A3 sempre (I20-1193), negli
+        /// A7 solo nei gruppi di singoliComeIlGruppo.
+        /// </summary>
+        public static bool singoloCopiaDelGruppo(string formato, object codiceSettore, object codiceReparto)
+        {
+            return formatoA3(formato) || singoliComeIlGruppo(codiceSettore, codiceReparto);
+        }
+
+        /// <summary>
+        /// I20-1193: le diciture dei separatori di reparto negli A3. Piu' reparti della lista finiscono sotto
+        /// un solo separatore. Il reparto si confronta senza maiuscole e senza spazi ai bordi.
+        /// </summary>
+        public static readonly Dictionary<string, string> DicitureDeiSeparatoriNegliA3 = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "CARNI ROSSE", "MACELLERIA" },
+            { "CARNI BIANCHE", "MACELLERIA" },
+            { "ELABORATI", "MACELLERIA" },
+            { "CUCINA", "NO FOOD" },
+            { "GASTRONOMIA E PROD. GASTRONOM.", "GASTRONOMIA" },
+            { "SALUMI E FORMAGGI", "GASTRONOMIA" },
+            { "IGIENE AMBIENTI", "IGIENE CASA" },
+            { "USA E GETTA E AVVOLGENTI", "IGIENE CASA" },
+            { "IGIENE PERSONA", "CURA PERSONA" },
+            { "PANE", "FORNERIA" },
+            { "PASTICCERIA", "FORNERIA" },
+            { "PESCE", "PESCHERIA" },
+        };
+
+        /// <summary>
+        /// La dicitura del separatore di reparto: negli A3 quella della I20-1193, se il reparto e' fra quelli
+        /// accorpati; altrimenti il reparto com'e' scritto nella lista. La lista si ordina per questa dicitura,
+        /// cosi' i reparti accorpati stanno sotto un solo separatore.
+        /// </summary>
+        public static string separatoreDelReparto(string reparto, string formato)
+        {
+            string r = reparto ?? "";
+            if (formatoA3(formato) && DicitureDeiSeparatoriNegliA3.TryGetValue(r.Trim(), out string dicitura))
+                return dicitura;
+            return r;
+        }
+
+        /// <summary>
+        /// I20-1193: il prezzo al kg/l che l'esportazione calcola (la meta' del BOX_1+1, il kg soci del doppio
+        /// sconto) negli A3 per le referenze fuori volantino si arrotonda al centesimo, con il mezzo per
+        /// eccesso. In volantino, e negli A7, resta com'e'.
+        /// </summary>
+        public static decimal prezzoAlKgDelPoP(decimal prezzoAlKg, bool inVolantino, string formato)
+        {
+            return formatoA3(formato) && !inVolantino ? MathExt.Round(prezzoAlKg, 2, MidpointRounding.AwayFromZero) : prezzoAlKg;
         }
         //Settori/reparti No FOOD
         private readonly string[] settori_no_food = new string[] { "62", "64", "66", "68" };
@@ -705,7 +802,7 @@ namespace AgenziaLib
                 //I20-1093: le referenze di ogni gruppo, contate dall'inizio del gruppo.
                 ContatoreDelGruppo contatoreDelGruppo = new ContatoreDelGruppo();
                 //I20-1096: i cartelli gia' usciti per ogni linea da 10 referenze in su.
-                CartelliDellaLinea cartelliDellaLinea = new CartelliDellaLinea();
+                CartelliDellaLinea cartelliDellaLinea = CartelliDellaLinea.PerFormato(formatoKit);
 
                 string curr_group_processed = "";
                 string curr_fotoPgroup_processed = "";
@@ -713,7 +810,9 @@ namespace AgenziaLib
 
                 string curr_reparto = "";
 
-                tracciato = tracciato.OrderBy(o => o.recordInTracciato["reparto"].ToString()).ToList();
+                //I20-1193: negli A3 per dicitura del separatore, poi per reparto; negli A7 la dicitura e' il reparto.
+                tracciato = tracciato.OrderBy(o => separatoreDelReparto(o.recordInTracciato["reparto"].ToString(), formatoKit))
+                    .ThenBy(o => o.recordInTracciato["reparto"].ToString()).ToList();
 
                 for (int i = 0; i < tracciato.Count; i++) //lista_tracciato.Count; i++)
                 {
@@ -760,6 +859,8 @@ namespace AgenziaLib
                     string tema = recItem["tema"].ToString().ToLower();
                     bool is_tasto_bilancia = false;
                     bool is_fuori_volantino = (tema.IndexOf("fuori depliant") >= 0);
+                    //I20-1193: lo stato in volantino core, o la regola precedente se il record non ce l'ha.
+                    bool inVolantino = StatoVolantino.InVolantino(recItem, RegolaPrecedenteInVolantino);
                     string descr1DaLista = recItem[GLOBAL_VARIABLES_FICO.keyDescr1Tracciato].ToString().ToLower();
 
                     if (is_fuori_volantino) // !is_fuori_volantino && FuoriVolField.IndexOf("volantino") < 0)
@@ -810,6 +911,12 @@ namespace AgenziaLib
                         continue;
                     }
 
+                    //I20-1193: negli A3 senza prezzo promo nessun cartello.
+                    if (senzaPrezzoPromoNegliA3(recItem["prezzo_promo"], formatoKit))
+                    {
+                        continue;
+                    }
+
                     //Negli A7 il tema sprint esce con il cartello Sprint. Prima del gruppo, perche' il cartello di
                     //gruppo nasce copiando questo record.
                     recItem[key_codiceBox] = boxSprintNegliA7(tema, formatoKit, recItem[key_codiceBox].ToString());
@@ -834,7 +941,8 @@ namespace AgenziaLib
                     //gestione delle tipologie di gruppo
                     if (codice_referenza != codice_gruppo)//codice_gruppo.Contains(",") && recItem.ContainsKey(GLOBAL_VARIABLES.keyXMLDescrizioneGruppo))
                     {
-                        listaDelGruppo = tracciato.Where(it => it.recordInTracciato[GLOBAL_VARIABLES_FICO.keyCodiceGruppo].ToString() == codice_gruppo).ToList();
+                        listaDelGruppo = tracciato.Where(it => it.recordInTracciato[GLOBAL_VARIABLES_FICO.keyCodiceGruppo].ToString() == codice_gruppo
+                            && !senzaPrezzoPromoNegliA3(it.recordInTracciato["prezzo_promo"], formatoKit)).ToList();
 
                         prezziDiversiInGruppo = listaDelGruppo.GroupBy(g => g.recordInTracciato["prezzo_promo"].ToDecimal()).Count() > 1;
                         pesiDiversiInGruppo = listaDelGruppo.GroupBy(g => g.recordInTracciato[GLOBAL_VARIABLES_FICO.keyDescrPeso].ToDecimal()).Count() > 1;
@@ -887,7 +995,8 @@ namespace AgenziaLib
                     //I20-1099: un gruppo con "vari"/"varie" nella descrizione di gruppo e tutte le referenze allo
                     //stesso prezzo esce con un cartello per referenza, tutti con la descrizione di gruppo, e senza
                     //il cartello di gruppo. Con prezzi diversi restano i cartelli singoli.
-                    bool gruppoConGustiVari = codice_referenza != codice_gruppo && !prezziDiversiInGruppo
+                    //I20-1193: negli A3 anche questi gruppi escono con cartello di gruppo e copia.
+                    bool gruppoConGustiVari = !formatoA3(formatoKit) && codice_referenza != codice_gruppo && !prezziDiversiInGruppo
                         && recItem.ContainsKey(GLOBAL_VARIABLES.keyXMLDescrizioneGruppo)
                         && descrizioneDiGruppoConGustiVari(recItem[GLOBAL_VARIABLES.keyXMLDescrizioneGruppo] as Dictionary<string, object>);
 
@@ -970,6 +1079,12 @@ namespace AgenziaLib
                         continue;
                     }
 
+                    //I20-1193: negli A3 del gruppo escono solo il cartello di gruppo e la sua copia.
+                    if (altroMembroDelGruppoNegliA3(formatoKit, codice_referenza != codice_gruppo, isLineaMaggioreUguale10, _cacheSottogruppi.Contains(codice_gruppo)))
+                    {
+                        continue;
+                    }
+
 
                     string settore = recItem["settore"].ToString();
                     string stile_prezzo_promo = "PREZZO_PROMO";
@@ -986,7 +1101,9 @@ namespace AgenziaLib
                     decimal sconto = MathExt.Round(recItem["txt_sconto"].ToDecimal(), 2, MidpointRounding.AwayFromZero);
 
 
-                    if (reparto != curr_reparto)
+                    //I20-1193: negli A3 i reparti accorpati hanno un solo separatore, con la dicitura.
+                    string separatore = separatoreDelReparto(reparto, formatoKit);
+                    if (separatore != curr_reparto)
                     {
                         //Console.WriteLine($"Aggiungo: reparto: {reparto} separatore corrente {curr_reparto}");
                         //Segnaposto reparto
@@ -994,7 +1111,7 @@ namespace AgenziaLib
                         separtatoreReparto.IdRec = artInKit.IdRec;
                         separtatoreReparto.recordInTracciato = new Dictionary<string, object>();
                         separtatoreReparto.recordInTracciato[key_codiceBox] = "BOX_SEPARATORE_REPARTO";
-                        string _codSep = $"sep_" + reparto;
+                        string _codSep = $"sep_" + separatore;
                         _codSep = _codSep.Substring(0, Math.Min(_codSep.Length, 100));
                         separtatoreReparto.recordInTracciato[GLOBAL_VARIABLES_FICO.keyRefCodice] = _codSep;
                         separtatoreReparto.recordInTracciato[GLOBAL_VARIABLES_FICO.keyCodiceGruppo] = _codSep;
@@ -1002,7 +1119,7 @@ namespace AgenziaLib
                         separtatoreReparto.recordInTracciato[GLOBAL_VARIABLES_FICO.keyFirmaRevisione] = "separatore";
 
                         CompiledFieldInterpreter interpreteXSegmento = new CompiledFieldInterpreter();
-                        interpreteXSegmento.assignCompiledField("titolo", "SEPARATORE_REPARTO", reparto);
+                        interpreteXSegmento.assignCompiledField("titolo", "SEPARATORE_REPARTO", separatore);
                         interpreteXSegmento.assignCompiledField(GLOBAL_VARIABLES_FICO.compiledFieldKeyMastro, "", "[Nessuna]");
 
                         CompiledFieldInterpreter.fields _fields = interpreteXSegmento.getFields();
@@ -1012,7 +1129,7 @@ namespace AgenziaLib
 
                         result.liste[0].Records.Add(separtatoreReparto);
 
-                        curr_reparto = reparto;
+                        curr_reparto = separatore;
                     }
 
                     //Console.WriteLine($"Aggiungo ref {codice_referenza}");
@@ -1708,7 +1825,7 @@ namespace AgenziaLib
                     }
                     else if (codiceBox == "BOX_1+1")
                     {
-                        prezzo_promo_kgl = prezzo_promo_kgl / 2;
+                        prezzo_promo_kgl = prezzoAlKgDelPoP(prezzo_promo_kgl / 2, inVolantino, formatoKit);
     
 
                         if (meccanica == "MXN")
@@ -1948,7 +2065,7 @@ namespace AgenziaLib
                             //Console.WriteLine("prezzo_promo_soci_doppia esiste e vale " + recItem["prezzo_promo_soci_doppia"].ToDecimal());
 
                             prezzo_promo_soci = recItem["prezzo_promo_soci_doppia"].ToDecimal();
-                            prezzo_promo_kgl_soci = recItem["prezzo_promo_kgl_soci_doppia"].ToDecimal();
+                            prezzo_promo_kgl_soci = prezzoAlKgDelPoP(recItem["prezzo_promo_kgl_soci_doppia"].ToDecimal(), inVolantino, formatoKit);
                         }
 
                         stileDescr1 += "_SPENDIPUNTI";
@@ -2665,7 +2782,7 @@ namespace AgenziaLib
                     //Nei gruppi di singoliComeIlGruppo il singolo e' per intero il cartello di gruppo, anche il primo
                     //membro da cui il cartello e' nato. Dopo tutte le altre regole, cosi' niente lo cambia piu'.
                     if (codice_referenza != codice_gruppo
-                        && singoliComeIlGruppo(recItem.GetValueOrDefault("codice_settore"), recItem.GetValueOrDefault("codice_reparto"))
+                        && singoloCopiaDelGruppo(formatoKit, recItem.GetValueOrDefault("codice_settore"), recItem.GetValueOrDefault("codice_reparto"))
                         && _cartelliDiGruppo.TryGetValue(codice_gruppo, out Dictionary<string, object> cartelloDiGruppo))
                     {
                         ripetiIlCartelloDiGruppo(recItem, cartelloDiGruppo);

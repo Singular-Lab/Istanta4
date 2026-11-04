@@ -65,11 +65,12 @@ public class PopCoopLineeTests
         int fine = coop.IndexOf("public TracciatoResultKit esportaVolantino(", StringComparison.Ordinal);
         string esporta = coop.Substring(inizio, fine - inizio);
 
-        Assert.Contains("CartelliDellaLinea cartelliDellaLinea = new CartelliDellaLinea();", esporta);
+        // I20-1193: 10 cartelli negli A7, 2 negli A3.
+        Assert.Contains("CartelliDellaLinea cartelliDellaLinea = CartelliDellaLinea.PerFormato(formatoKit);", esporta);
         int salto = esporta.IndexOf("if (isLineaMaggioreUguale10 && cartelliDellaLinea.Salta(codice_gruppo))", StringComparison.Ordinal);
         Assert.True(salto > esporta.IndexOf("bool isLineaMaggioreUguale10 = (codiceBox == \"BOX_LINEA\" && listaDelGruppo.Count >= 10);", StringComparison.Ordinal));
         // Prima del separatore di reparto, che si aggiunge con la prima referenza che esce.
-        Assert.True(salto < esporta.IndexOf("if (reparto != curr_reparto)", StringComparison.Ordinal));
+        Assert.True(salto < esporta.IndexOf("if (separatore != curr_reparto)", StringComparison.Ordinal));
 
         // Sotto i 10 non cambia niente: cartelli singoli (BOX_STD) e il sottogruppo, che e' il cartello linea.
         Assert.Contains("if (!isLineaMaggioreUguale10)", esporta);
