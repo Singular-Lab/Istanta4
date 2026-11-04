@@ -557,6 +557,54 @@ namespace AgenziaLib
             return SourceInCache(percorso, p => JObject.Parse(File.ReadAllText(p)).ToObject<T>()!);
         }
 
+        /// TASK-16f63122: i campi che stanno dentro i gruppi del box (campiDeiContenitori del
+        /// SourceCustomPlugin, nella cartella degli altri source), per l'interprete dei campi
+        /// compilati: cancellato il gruppo, i suoi campi non si mandano al Plugin. Si legge dal JSON e
+        /// non dal modello AgenziaCustomPlugin, cosi' la DLL funziona anche con un Istanta che la
+        /// proprieta' non l'ha ancora. Senza file o senza chiave nessun contenitore, come prima.
+        internal static Dictionary<string, List<string>> CampiDeiContenitori(string pathMappaStili)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(pathMappaStili))
+                {
+                    return new Dictionary<string, List<string>>();
+                }
+
+                string percorso = Path.Combine(Path.GetDirectoryName(pathMappaStili) ?? "", "SourceCustomPlugin.json");
+                if (!File.Exists(percorso))
+                {
+                    return new Dictionary<string, List<string>>();
+                }
+
+                return SourceInCache(percorso, p => LeggiCampiDeiContenitori(File.ReadAllText(p)));
+            }
+            catch (Exception ex)
+            {
+                IstantaLib.Utility.Logger.Log("CampiDeiContenitori: SourceCustomPlugin illeggibile, nessun contenitore. " + ex.Message);
+                return new Dictionary<string, List<string>>();
+            }
+        }
+
+        internal static Dictionary<string, List<string>> LeggiCampiDeiContenitori(string json)
+        {
+            var mappa = new Dictionary<string, List<string>>();
+            if (JObject.Parse(json)["campiDeiContenitori"] is not JObject contenitori)
+            {
+                return mappa;
+            }
+
+            foreach (var contenitore in contenitori.Properties())
+            {
+                if (contenitore.Value is JArray campi)
+                {
+                    mappa[contenitore.Name] = campi.Select(c => c.ToString()).Where(c => c.Trim() != "").ToList();
+                }
+            }
+
+            return mappa;
+        }
+
         private List<Meccanica> dbMeccaniche;
         private List<Ordinamento> dbGrammature;
         private List<AreaItem> dbAree;
@@ -2205,6 +2253,8 @@ namespace AgenziaLib
                 }
 
                 CompiledFieldInterpreter interprete = new CompiledFieldInterpreter();
+                //TASK-16f63122: cancellato un gruppo del box, i suoi campi non si mandano.
+                interprete.campiDeiContenitori = CampiDeiContenitori(pathMappaStili);
 
                 int counter = 0;
                 tracciato = tracciato.OrderBy(o => Convert.ToInt32(o.recordInTracciato[GLOBAL_VARIABLES.keyIndiceOrdinamento])).ToList();
@@ -5332,6 +5382,9 @@ descrizioneEsempio.EndsWith("\r\n");
 
                 CompiledFieldInterpreter interprete = new CompiledFieldInterpreter();
                 CompiledFieldInterpreter interpreteSottogruppo = new CompiledFieldInterpreter();
+                //TASK-16f63122: cancellato un gruppo del box, i suoi campi non si mandano.
+                interprete.campiDeiContenitori = CampiDeiContenitori(pathMappaStili);
+                interpreteSottogruppo.campiDeiContenitori = interprete.campiDeiContenitori;
 
                 Console.WriteLine("Inizio elaborazione tracciato POP... count " + tracciato.Count);
 
