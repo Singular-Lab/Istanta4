@@ -45,6 +45,19 @@ public class ReportCompletoTests
     }
 
     [Fact]
+    public void Ha_solo_il_contorno_bianco_e_il_blu_pieno_resta_a_menabo_avanzato()
+    {
+        // I20-1194: col blu pieno di MENABÒ AVANZATO era troppo in vista
+        string js = Timone();
+        Assert.Contains("#tReportCompleto { background: transparent; box-shadow: none; }", js);
+        Assert.Contains("#tReportCompleto:hover { background: rgba(255,255,255,.18); }", js);
+        Assert.Contains("border: 2px solid #fff;", js);
+        Assert.Contains("#tTimone:hover { background: #2a72ee; }", js);
+        Assert.DoesNotContain("#tReportCompleto:hover { background: #2a72ee; }", js);
+        Assert.DoesNotContain("#tTimone:hover, #tReportCompleto:hover", js);
+    }
+
+    [Fact]
     public void Fa_il_report_del_piano_salvato_con_schede_e_correzioni_e_lo_manda_in_PDF()
     {
         string js = Timone();
