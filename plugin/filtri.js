@@ -2482,6 +2482,13 @@ const filtri = {
                 "etichetteRef"
             );
         }
+        else {
+            //I20-1198: se il plugin di agenzia dichiara uno schema di ordinamento col nome del campo (per
+            //Edro21 «sigla_reparto», l'ordine merceologico dei reparti) i valori escono in quell'ordine, e
+            //quelli che lo schema non elenca restano in fondo nell'ordine della lista. Senza schema non
+            //cambia niente: prima la tendina aveva solo l'ordine in cui i valori comparivano nella lista.
+            valoriTrovatiArray = pluginMiddleware.applicaSchemaDiOrdinamentoConPesi(valoriTrovatiArray, "", chiave) || valoriTrovatiArray;
+        }
         //convertiamo il set in un array e lo ritorniamo
         return valoriTrovatiArray;
     },
