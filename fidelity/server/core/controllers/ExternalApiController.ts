@@ -21,6 +21,7 @@ import {
 } from '../dto';
 import type { IAreaService } from '../interfaces/IAreaService';
 import type { ICanaleService } from '../interfaces/ICanaleService';
+import type { IConfigService } from '../interfaces/IConfigService';
 import type { IExternalApiService } from '../interfaces/IExternalApiService';
 import type { IKitRuntimeService } from '../interfaces/IKitRuntimeService';
 import type { IPromoService } from '../interfaces/IPromoService';
@@ -37,6 +38,7 @@ import { FilterTemplateService } from '../services/FilterTemplateService';
 import { StatisticheApiService } from '../services/StatisticheApiService';
 import { validaImportFinale } from '../utils/importPlugin';
 import { ServerUtils } from '../utils/ServerUtils';
+import { TraduttoreReferenze } from '../utils/Translator';
 
 interface JSONMetaFoto {
   Id?: string;
@@ -245,6 +247,10 @@ export class ExternalApiController extends BaseController {
           message: "L'import del volantino da storico non e disponibile per questo cliente"
         })
       }
+      // I campi del volantino si salvano coi nomi di FP, come le referenze di Istanta: la mappa e'
+      // quella delle impostazioni WebPliant, e un campo senza mappa resta col suo nome (si traduce
+      // dopo, con il Sync del mapping). Letta prima di scrivere: se manca, niente scritture a meta'.
+      const mappaCampi = (await container.get<IConfigService>(TYPES.ConfigService).getConfigWebPliantFromVolantino()).data_fields_refs ?? [];
       /*
         prima di passare il payload allo storico aggiungiamo la chiave
         promoContext prendendo il dato dalla promo e ripulendolo del dato non necessario
@@ -417,7 +423,7 @@ export class ExternalApiController extends BaseController {
 
       //adesso salviamo i dati nuovi delle referenze
       const datoReferenze: ReferenzeIstanta[] = finalRefs.map((ref) => {
-        const compiledFields = (Array.isArray(ref.compiledFields) ? ref.compiledFields : []).map((field) => ({
+        const compiledFields = TraduttoreReferenze.traduci_compiled_fields(Array.isArray(ref.compiledFields) ? ref.compiledFields : [], mappaCampi).map((field) => ({
           labelName: field.labelName,
           paragraphName: field.paragraphName,
           content: field.content,
@@ -444,8 +450,8 @@ export class ExternalApiController extends BaseController {
           meccanica: ref.meccanica ?? '',
           codiceBox: String(ref.groupId ?? ref.dna ?? uuidv4()),
           fotoExtra: [],
-          groupElements: Array.isArray(ref.groupElements) ? ref.groupElements : [],
-          dataFields: ref.dataFields,
+          groupElements: Array.isArray(ref.groupElements) ? ref.groupElements.map((elemento) => TraduttoreReferenze.traduci_data_fields(elemento, mappaCampi)) : [],
+          dataFields: TraduttoreReferenze.traduci_data_fields(ref.dataFields ?? {}, mappaCampi),
           pag: ref.pag,
           x: ref.x,
           y: ref.y,

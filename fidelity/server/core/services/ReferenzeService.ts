@@ -1,6 +1,6 @@
 import dayjs from 'dayjs';
 import { Request as ExpressRequest } from 'express';
-import { Op, type WhereOptions } from 'sequelize';
+import { Op, QueryTypes, type WhereOptions } from 'sequelize';
 import { v4 as uuidv4 } from 'uuid';
 import { Colorize } from '../../../lib/Colorize';
 import { FieldType, STATO_LAVORAZIONE_KIT_RUNTIME } from '../../../lib/enums';
@@ -181,6 +181,101 @@ export async function sostituisciReferenzeKit(idKitRuntime: string, referenze: R
   }
 }
 
+// ─── Campi non ancora tradotti ────────────────────────────────────────
+// Un campo col nome originale di un mapping si cerca, e si rinomina, dove lo mette
+// TraduttoreReferenze: data_fields, elementi dei gruppi, etichette dei testi stampati
+// (labelName e label_name) e campi eliminati. Nei campi eliminati il nome tradotto non si
+// ripete e l'ordine resta quello di prima. Solo CAST(... AS ...) e niente apici nei commenti
+// SQL: `?`, `::` e un apice spaiato confondono le sostituzioni di Sequelize.
+
+const OGGETTO_O_VUOTO = (colonna: string) => `CASE WHEN jsonb_typeof(${colonna}) = 'object' THEN ${colonna} ELSE CAST('{}' AS jsonb) END`;
+const ELENCO_O_VUOTO = (colonna: string) => `CASE WHEN jsonb_typeof(${colonna}) = 'array' THEN ${colonna} ELSE CAST('[]' AS jsonb) END`;
+
+/** Una referenza che ha ancora il campo :campo, in uno dei quattro posti. */
+const HA_IL_CAMPO = `
+  jsonb_exists(${OGGETTO_O_VUOTO('r.data_fields')}, CAST(:campo AS text))
+  OR EXISTS (SELECT 1 FROM jsonb_array_elements(${ELENCO_O_VUOTO('r.group_elements')}) e
+             WHERE jsonb_typeof(e) = 'object' AND jsonb_exists(e, CAST(:campo AS text)))
+  OR EXISTS (SELECT 1 FROM jsonb_array_elements(${ELENCO_O_VUOTO('r.compiled_fields')}) c
+             WHERE jsonb_typeof(c) = 'object' AND (c ->> 'labelName' = CAST(:campo AS text) OR c ->> 'label_name' = CAST(:campo AS text)))
+  OR CAST(:campo AS varchar) = ANY(r.deleted_fields)`;
+
+/** :campo diventa :tradotto in un oggetto; se :tradotto c'e' gia' vince il suo valore. */
+const RINOMINA_CHIAVE = (oggetto: string) => `
+  CASE WHEN jsonb_typeof(${oggetto}) = 'object' AND jsonb_exists(${oggetto}, CAST(:campo AS text)) THEN
+    CASE WHEN jsonb_exists(${oggetto}, CAST(:tradotto AS text)) THEN ${oggetto} - CAST(:campo AS text)
+         ELSE (${oggetto} - CAST(:campo AS text)) || jsonb_build_object(CAST(:tradotto AS text), ${oggetto} -> CAST(:campo AS text)) END
+  ELSE ${oggetto} END`;
+
+const SINCRONIZZA_CAMPO = `
+  UPDATE referenze r SET
+    data_fields = ${RINOMINA_CHIAVE('r.data_fields')},
+    group_elements = CASE WHEN jsonb_typeof(r.group_elements) = 'array' THEN
+      (SELECT COALESCE(jsonb_agg(${RINOMINA_CHIAVE('g.e')} ORDER BY g.i), CAST('[]' AS jsonb))
+       FROM jsonb_array_elements(r.group_elements) WITH ORDINALITY AS g(e, i))
+      ELSE r.group_elements END,
+    compiled_fields = CASE WHEN jsonb_typeof(r.compiled_fields) = 'array' THEN
+      (SELECT COALESCE(jsonb_agg(CASE WHEN jsonb_typeof(g.c) = 'object' THEN g.c
+          || CASE WHEN g.c ->> 'labelName' = CAST(:campo AS text) THEN jsonb_build_object('labelName', CAST(:tradotto AS text)) ELSE CAST('{}' AS jsonb) END
+          || CASE WHEN g.c ->> 'label_name' = CAST(:campo AS text) THEN jsonb_build_object('label_name', CAST(:tradotto AS text)) ELSE CAST('{}' AS jsonb) END
+        ELSE g.c END ORDER BY g.i), CAST('[]' AS jsonb))
+       FROM jsonb_array_elements(r.compiled_fields) WITH ORDINALITY AS g(c, i))
+      ELSE r.compiled_fields END,
+    deleted_fields = CASE WHEN CAST(:campo AS varchar) = ANY(r.deleted_fields) THEN ARRAY(
+      SELECT d.nome FROM unnest(array_replace(r.deleted_fields, CAST(:campo AS varchar), CAST(:tradotto AS varchar))) WITH ORDINALITY AS d(nome, i)
+      GROUP BY d.nome ORDER BY min(d.i)) ELSE r.deleted_fields END,
+    "updatedAt" = now()
+  WHERE ${HA_IL_CAMPO}
+  RETURNING r.id_runtime_kit`;
+
+/** Per ogni nome originale, quante referenze salvate lo hanno ancora: una sola lettura della tabella. */
+export async function contaCampiNonTradotti(campi: string[]): Promise<Record<string, number>> {
+  if (!campi.length) return {};
+  try {
+    const righe = await sequelize.query<{ chiave: string; referenze: number }>(`
+      SELECT t.chiave, CAST(count(DISTINCT t.id) AS integer) AS referenze FROM (
+        SELECT r.id, k AS chiave FROM referenze r, jsonb_object_keys(${OGGETTO_O_VUOTO('r.data_fields')}) k
+        UNION ALL
+        SELECT r.id, k FROM referenze r, jsonb_array_elements(${ELENCO_O_VUOTO('r.group_elements')}) e,
+          jsonb_object_keys(${OGGETTO_O_VUOTO('e')}) k
+        UNION ALL
+        SELECT r.id, c ->> 'labelName' FROM referenze r, jsonb_array_elements(${ELENCO_O_VUOTO('r.compiled_fields')}) c WHERE jsonb_typeof(c) = 'object'
+        UNION ALL
+        SELECT r.id, c ->> 'label_name' FROM referenze r, jsonb_array_elements(${ELENCO_O_VUOTO('r.compiled_fields')}) c WHERE jsonb_typeof(c) = 'object'
+        UNION ALL
+        SELECT r.id, d FROM referenze r, unnest(r.deleted_fields) d
+      ) t WHERE t.chiave IN (:campi) GROUP BY t.chiave`,
+      { replacements: { campi }, type: QueryTypes.SELECT }
+    );
+    return Object.fromEntries(righe.map((r) => [r.chiave, Number(r.referenze)]));
+  } catch (error) {
+    throw wrapDatabaseError(error, { message: "Errore durante il conteggio dei campi non tradotti", operation: 'get', entity: 'ReferenzeIstanta' });
+  }
+}
+
+/**
+ * Rinomina `campo` in `tradotto` in tutte le referenze che lo hanno, e toglie le analisi
+ * salvate dei loro kit (come sostituisciReferenzeKit): tutto in una transazione, quindi o
+ * cambiano tutte o nessuna.
+ */
+export async function sincronizzaCampoNonTradotto(campo: string, tradotto: string): Promise<{ referenze: number; kit: number }> {
+  try {
+    return await sequelize.transaction(async (transaction) => {
+      const [righe] = await sequelize.query(SINCRONIZZA_CAMPO, { replacements: { campo, tradotto }, transaction });
+      const kit = [...new Set((righe as Array<{ id_runtime_kit: string }>).map((r) => r.id_runtime_kit))];
+      if (kit.length) await AnalisiKit.destroy({ where: { id_kit_runtime: kit }, transaction });
+      return { referenze: (righe as unknown[]).length, kit: kit.length };
+    });
+  } catch (error) {
+    throw wrapDatabaseError(error, {
+      message: "Errore durante la sincronizzazione del campo: nessuna referenza e' stata modificata",
+      operation: 'update',
+      entity: 'ReferenzeIstanta',
+      details: { campo, tradotto },
+    });
+  }
+}
+
 /**
  * ReferenzeServicePg - Autonomous service for referenze operations
  *
@@ -356,6 +451,14 @@ export class ReferenzeService implements IReferenzeService {
 
   async sostituisciReferenzeKit(idKitRuntime: string, referenze: ReferenzeIstanta[]): Promise<any> {
     return sostituisciReferenzeKit(idKitRuntime, referenze);
+  }
+
+  async contaCampiNonTradotti(campi: string[]): Promise<Record<string, number>> {
+    return contaCampiNonTradotti(campi);
+  }
+
+  async sincronizzaCampoNonTradotto(campo: string, tradotto: string): Promise<{ referenze: number; kit: number }> {
+    return sincronizzaCampoNonTradotto(campo, tradotto);
   }
 
   // ─── Ricerca ───────────────────────────────────────────────────────

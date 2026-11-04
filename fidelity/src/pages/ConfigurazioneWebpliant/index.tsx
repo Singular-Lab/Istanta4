@@ -12,14 +12,21 @@ import withSessionCheck from "@/components/SessionChecker";
 import { useNotification } from '@/context/NotificationContext';
 import { useFetchAree, useFetchCanali } from '@/query/query';
 import Editor from '@monaco-editor/react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import beautify from 'js-beautify';
-import { ChevronDown, ChevronUp, Edit, Plus, Trash, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Edit, Plus, RefreshCw, Trash, X } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import { useLoaderData, useRevalidator } from 'react-router-dom';
 import { ServerCall } from '../../../lib/server_call';
 import { Config, LoghiInsegne } from '../../../lib/types';
 import EditorStiliReferenza from './sub-components/EditorStiliReferenza';
+
+/** Mapping salvato e quante referenze hanno ancora il nome originale (GET /referenze/campi-non-tradotti). */
+interface CampoNonTradotto {
+  campo: string;
+  tradotto: string;
+  referenze: number;
+}
 
 const cssBeautify = beautify.css;
 
@@ -131,6 +138,7 @@ const ConfigurazioneWebpliant: React.FC = () => {
   // ------------------------------
   // 5) MUTATION PER IL SALVATAGGIO
   // ------------------------------
+  const queryClient = useQueryClient();
   const mutationCSSTEXT = useMutation({
     mutationFn: async (data: { css: string; stili: any[]; logos: LoghiInsegne[], dataFields?: { expected_input: string; expected_output: string }[] }) => {
       const result = await ServerCall.post('/saveWebpliantConfig', {
@@ -153,6 +161,8 @@ const ConfigurazioneWebpliant: React.FC = () => {
     onSuccess: () => {
       showNotification("Salvataggio completato con successo", { variant: "success" });
       revalidator.revalidate();
+      // Un mapping appena salvato puo' avere referenze da sincronizzare
+      queryClient.invalidateQueries({ queryKey: ['campiNonTradotti'] });
     },
   });
 
@@ -186,6 +196,28 @@ const ConfigurazioneWebpliant: React.FC = () => {
     const [editingIndex, setEditingIndex] = useState<number | null>(null);
     const [editingFieldInput, setEditingFieldInput] = useState('');
     const [editingFieldOutput, setEditingFieldOutput] = useState('');
+    /** Nome originale del mapping di cui si sta confermando il Sync. */
+    const [syncDaConfermare, setSyncDaConfermare] = useState<string | null>(null);
+
+    // Per ogni mapping salvato, quante referenze hanno ancora il nome originale
+    const { data: campiNonTradotti = [] } = useQuery({
+      queryKey: ['campiNonTradotti'],
+      queryFn: () => ServerCall.get<CampoNonTradotto[]>('/referenze/campi-non-tradotti'),
+    });
+    const mutationSync = useMutation({
+      mutationFn: (campo: string) => ServerCall.post<CampoNonTradotto & { kit: number }>('/referenze/campi-non-tradotti/sync', { campo }),
+      onSuccess: (esito) => {
+        setSyncDaConfermare(null);
+        showNotification(`Sync di «${esito.campo}» completato: ${esito.referenze} referenze ora hanno «${esito.tradotto}».`, { variant: "success" });
+        queryClient.invalidateQueries({ queryKey: ['campiNonTradotti'] });
+      },
+      onError: () => {
+        showNotification("Sync non riuscito: nessuna referenza è stata modificata. Riprova più tardi.", { variant: "error" });
+      },
+    });
+    /** Il Sync vale per il mapping salvato: se la riga e' stata cambiata e non salvata, niente pulsante. */
+    const daSincronizzare = (field: { expected_input: string; expected_output: string }) =>
+      campiNonTradotti.find((c) => c.campo === field.expected_input && c.tradotto === field.expected_output && c.referenze > 0);
 
     // Aggiunge un nuovo campo
     const handleAddField = () => {
@@ -468,6 +500,41 @@ const ConfigurazioneWebpliant: React.FC = () => {
                               {field.expected_input} → {field.expected_output}
                             </div>
                           )}
+
+                          {!isEditing && daSincronizzare(field) && (() => {
+                            const sync = daSincronizzare(field)!;
+                            return syncDaConfermare === sync.campo ? (
+                              <div className="rounded-control border border-warning/30 bg-warning/10 p-3" role="alertdialog" aria-label={`Conferma il Sync di ${sync.campo}`}>
+                                <p className="text-sm text-slate-700">
+                                  In <strong className="tabular-nums">{sync.referenze}</strong> referenze il campo <code>{sync.campo}</code> diventa <code>{sync.tradotto}</code>.
+                                  Dove <code>{sync.tradotto}</code> c'è già, resta il suo valore. Da qui non si annulla.
+                                </p>
+                                <div className="mt-2 flex gap-2">
+                                  <Button variant="outline-secondary" size="sm" onClick={() => setSyncDaConfermare(null)} disabled={mutationSync.isPending}>
+                                    Annulla
+                                  </Button>
+                                  <Button variant="primary" size="sm" onClick={() => mutationSync.mutate(sync.campo)} disabled={mutationSync.isPending}>
+                                    <RefreshCw aria-hidden="true" className={`mr-1.5 h-3.5 w-3.5 ${mutationSync.isPending ? 'animate-spin' : ''}`} />
+                                    Conferma Sync
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex flex-wrap items-center gap-2">
+                                <StatusBadge tono="warning" etichetta={`${sync.referenze} referenze da sincronizzare`} />
+                                <Button
+                                  variant="outline-secondary"
+                                  size="sm"
+                                  onClick={() => setSyncDaConfermare(sync.campo)}
+                                  disabled={editingIndex !== null || mutationSync.isPending}
+                                  aria-label={`Sincronizza il mapping ${sync.campo}`}
+                                >
+                                  <RefreshCw aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                                  Sync
+                                </Button>
+                              </div>
+                            );
+                          })()}
                         </div>
 
                         {!isEditing && (
