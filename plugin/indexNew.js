@@ -5384,6 +5384,18 @@ function addSegnalazione(msg, typeMessage = "Error", priority = 2, applicaBollin
     segnalazioniBoxImpaginato.push(segnalazione);
 }
 
+/// I20-1200: le segnalazioni personalizzate del cliente sul nome di una foto primaria o secondaria
+/// appena impaginata (pluginMiddleware.segnalazioniPersonalizzate; Edro21: la foto non e' un psd).
+/// Non lancia: chi la chiama sta impaginando la foto, e un errore qui non deve toglierla dal box.
+function segnalazioniPersonalizzateFoto(nomeFoto) {
+    try {
+        pluginMiddleware.segnalazioniPersonalizzate("nomeFoto", nomeFoto).forEach(s => addSegnalazione(s.testo, s.gravita, 2, true));
+    }
+    catch (e) {
+        console.error("Code IDX-200 Segnalazioni personalizzate sulla foto " + nomeFoto + " non valutate: " + e);
+    }
+}
+
 /// Chiude le segnalazioni raccolte per un box: le ordina per gravita', ne fa un unico
 /// messaggio nel report, scrive nel bollino del box tutte le segnalazioni, e svuota la lista
 /// per il box successivo.
@@ -5900,6 +5912,7 @@ async function impaginaBoxNelContesto(meccanica, pagCoinvolta, bounds, itemRef, 
                                                             FotoPlacer.placeFoto(nomeFoto, photo);
                                                             //Impaginata comunque, resa invisibile se richiesto dai meta della lavorazione
                                                             FotoPlacer.applicaNoRender(photo, elemento.noRender);
+                                                            segnalazioniPersonalizzateFoto(nomeFoto);
                                                             secondarie++;
                                                             //mettiamo foto sul livello InPagina
                                                             photo.label = label;
@@ -5924,6 +5937,7 @@ async function impaginaBoxNelContesto(meccanica, pagCoinvolta, bounds, itemRef, 
                                                     //non sul record contenitore del box.
                                                     var membroPrimaria = itemRef.membriGruppoFoto.find(m => m.statoSelezione == 1);
                                                     FotoPlacer.applicaNoRender(field, membroPrimaria != null && membroPrimaria.noRender);
+                                                    segnalazioniPersonalizzateFoto(nomeFoto);
                                                     listElementToSendBack.push(field);
                                                 } catch (err) {
                                                     console.log(err);

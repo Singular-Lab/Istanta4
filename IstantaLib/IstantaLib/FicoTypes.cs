@@ -1027,6 +1027,7 @@ namespace IstantaLib
         public string nomeFotoSecondaria { get; set; }//Label che riceve la foto secondaria nel box
         public List<string> elementiConnessiAlleFoto { get; set; } = new List<string>();//I20-1130: etichette (con * come jolly) degli elementi del box che "Seleziona tutte le foto" del Plugin prende insieme alle foto, per esempio le ombre sy_ombra*
         public List<AgenziaCustomPlugin_RegolaEsclusioneCambioFoto> regoleEsclusioneCambioFoto { get; set; } = new List<AgenziaCustomPlugin_RegolaEsclusioneCambioFoto>();//Regole che tolgono alcune foto dalle proposte della schermata Cambia foto del Plugin; vuota = tutte le foto, come prima
+        public List<AgenziaCustomPlugin_SegnalazionePersonalizzata> segnalazioniPersonalizzate { get; set; } = new List<AgenziaCustomPlugin_SegnalazionePersonalizzata>();//I20-1200: segnalazioni di impaginazione decise dal cliente (Edro21: le foto che non sono psd); vuota = nessuna, come prima
         /// TASK-60aaf10d: la foto della referenza indicata dal tracciato, quando l'agenzia la fa
         /// comandare. Assente: tutto come prima, vale solo Foto.SelezioneDaTracciato.
         public AgenziaCustomPlugin_FotoDaTracciato fotoDaTracciato { get; set; }
@@ -1355,6 +1356,22 @@ namespace IstantaLib
         public List<string> estensioni { get; set; } = new List<string>();
         public List<string> seEsisteEstensione { get; set; } = new List<string>();
         public bool mantieniSelezionata { get; set; } = true;
+    }
+
+    /// <summary>
+    /// I20-1200: una segnalazione di impaginazione decisa dal cliente. Durante l'impaginazione il
+    /// Plugin passa alla regola il valore del campo (nomeFoto: il nome della foto primaria e di ogni
+    /// secondaria) e, se il valore c'e' e non contiene deveContenere, senza distinguere maiuscole,
+    /// scrive la segnalazione nel bollino del box. Nel testo {valore} diventa il valore; gravita
+    /// "warning" o "error". Edro21: le foto il cui nome non contiene ".psd".
+    /// </summary>
+    public class AgenziaCustomPlugin_SegnalazionePersonalizzata
+    {
+        public string campo { get; set; } = "";
+        public string deveContenere { get; set; } = "";
+        public string gravita { get; set; } = "warning";
+        public string codice { get; set; } = "";
+        public string testo { get; set; } = "";
     }
 
     /// TASK-60aaf10d: come l'agenzia usa la foto indicata dal tracciato (Edro21: NOME_FOTO, scritto
