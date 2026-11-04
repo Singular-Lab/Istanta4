@@ -25,9 +25,12 @@ function corpoDi(firma) {
     return indexNew.substring(inizio, indexNew.indexOf("\n}\n", inizio) + 2);
 }
 
-async function mostraIlLogin(credenziali) {
+//accessoDuranteLaLettura: TASK-325cdb29, l'evento di accesso che arriva mentre showLogin legge le
+//credenziali ricordate.
+async function mostraIlLogin(credenziali, accessoDuranteLaLettura = false) {
     const registro = [];
     const valori = {};
+    const accesso = { riusciti: 0 };
     const $ = (selettore) => ({
         css: (k, v) => { registro.push(selettore + " " + k + ":" + v); },
         hide: () => { registro.push(selettore + " hide"); },
@@ -36,7 +39,15 @@ async function mostraIlLogin(credenziali) {
     });
     const ambiente = {
         $: $,
-        credenzialiSalvate: { leggi: async () => credenziali },
+        accesso: accesso,
+        credenzialiSalvate: {
+            leggi: async () => {
+                if (accessoDuranteLaLettura) {
+                    accesso.riusciti++;
+                }
+                return credenziali;
+            }
+        },
         hideLoading: () => registro.push("hideLoading"),
         Modali: { closeAllModal: () => registro.push("chiudi finestre") },
         console: { log: () => { } }
@@ -56,6 +67,36 @@ test("mostrando il login si chiudono le finestre e si nasconde il pannello di la
     assert.ok(chiusura >= 0, "le finestre non si chiudono");
     assert.ok(pannello >= 0, "il pannello di lavoro non si nasconde");
     assert.ok(login > pannello && login > chiusura, "il login compare dopo: " + registro.join(" | "));
+});
+
+test("un accesso arrivato mentre si leggono le credenziali non fa ricomparire il login", async () => {
+    //TASK-325cdb29: Plugin ricaricato con la sessione valida, l'evento "online" chiede il login e
+    //quello di accesso lo nasconde prima che la lettura finisca.
+    const { registro } = await mostraIlLogin(null, true);
+
+    assert.ok(!registro.includes("#loginPanel display:flex"), "il login ricompare: " + registro.join(" | "));
+    assert.ok(!registro.includes("#mainContent hide"), "il pannello di lavoro si nasconde: " + registro.join(" | "));
+    assert.ok(!registro.includes("chiudi finestre"), "le finestre si chiudono: " + registro.join(" | "));
+});
+
+test("senza accessi nel frattempo il login compare, come dopo un logout", async () => {
+    const { registro } = await mostraIlLogin(null, false);
+    assert.ok(registro.includes("#loginPanel display:flex"));
+});
+
+test("il gestore dell'accesso conta l'accesso prima di tutto il resto", () => {
+    const inizio = indexNew.indexOf("indesignEvents.addEventListener(indesignEvents.EVENT_USER_LOGGED, function(args){");
+    assert.ok(inizio > 0);
+    const gestore = indexNew.substring(inizio, indexNew.indexOf("\n});\n", inizio));
+    assert.match(gestore, /function\(args\)\{\s*accesso\.riusciti\+\+;\s*istantaState=IstantaState\.Logged;/);
+    assert.match(indexNew, /const accesso = \{ riusciti: 0 \};/);
+    //Il confronto sta dopo la lettura delle credenziali e prima di toccare il pannello.
+    const login = corpoDi("async function showLogin()");
+    const lettura = login.indexOf("await credenzialiSalvate.leggi();");
+    const controllo = login.indexOf("if (accesso.riusciti !== accessiPrima) {");
+    assert.ok(login.indexOf("var accessiPrima = accesso.riusciti;") < lettura);
+    assert.ok(controllo > lettura);
+    assert.ok(controllo < login.indexOf("Modali.closeAllModal();"));
 });
 
 test("le credenziali ricordate si ritrovano nel login come prima (I20-956)", async () => {

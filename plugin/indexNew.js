@@ -212,6 +212,10 @@ const IstantaState = {
 }
 
 let istantaState=IstantaState.None;
+//TASK-325cdb29: gli accessi riconosciuti dall'avvio, contati dal gestore di EVENT_USER_LOGGED.
+//showLogin li confronta prima e dopo la lettura delle credenziali: un accesso arrivato nel frattempo
+//vuol dire che il login non va piu' mostrato. Un oggetto, cosi' i test lo vedono cambiare.
+const accesso = { riusciti: 0 };
 let isOnline = false;
 
 var ruoloUtenteLoggato = RuoloUtente.nonTrovato;
@@ -620,6 +624,7 @@ indesignEvents.addEventListener(indesignEvents.EVENT_ONLINE, function(args){
 
 indesignEvents.addEventListener(indesignEvents.EVENT_USER_LOGGED, function(args){
 
+    accesso.riusciti++;
     istantaState=IstantaState.Logged;
     userLoggedDetails=args[0];
 
@@ -1282,6 +1287,16 @@ async function initDocumentInLavorazione()
 
     if (docInLavorazione == null)
     {
+        return null;
+    }
+
+    //TASK-325cdb29: un documento mai salvato (Cmd+N) non ha percorso: filePath lancerebbe, e una
+    //lavorazione non ci puo' essere. Si azzerano le cartelle del documento di prima e lo si dice;
+    //tornando su un documento salvato il cambio di documento rifa' tutto da qui.
+    if (await InddEvents.documentoNonSalvato(docInLavorazione))
+    {
+        azzeraCartelleDiSistema();
+        setNarrow("Il documento " + docInLavorazione.name + " non e' salvato e non ha una lavorazione: torna sul documento della lavorazione per continuare");
         return null;
     }
 
@@ -2336,11 +2351,20 @@ function leggiContenutoKit(idKit, skipMostraTracciato = false)
 async function showLogin()
 {
     console.log("Devo mostrare il form di login");
+    var accessiPrima = accesso.riusciti;
 
     //I20-956: se l'operatore ha chiesto di ricordare le credenziali, le ritrova gia'
     //scritte nei campi. Il Plugin non entra da solo: l'accesso resta un gesto suo.
     //Dopo un logout non c'e' nulla da rimettere, perche' il logout le dimentica.
     var ricordate = await credenzialiSalvate.leggi();
+
+    //TASK-325cdb29: ricaricando il Plugin con la sessione ancora valida, l'evento "online" chiede il
+    //login e subito dopo l'evento di accesso lo nasconde; se il login ricompariva qui, a lettura
+    //finita, restava sopra un Plugin gia' loggato e un nuovo login non lo toglieva piu'.
+    if (accesso.riusciti !== accessiPrima) {
+        console.log("Accesso gia' riconosciuto: il form di login non si mostra");
+        return;
+    }
     if (ricordate != null) {
         $("#username").val(ricordate.username);
         $("#password").val(ricordate.password);
@@ -5655,6 +5679,12 @@ function makeRegexFromFieldName(groupName) {
 /// CssFramework, sistemazione foto, campi, loghi. Il corpo e' impaginaBoxNelContesto; il finally
 /// rimette il contesto di prima per ogni uscita, anche con un errore.
 async function impaginaBox(meccanica, pagCoinvolta, bounds, itemRef, ...altri) {
+    //TASK-325cdb29: se durante l'impaginazione l'operatore ha portato davanti un altro documento
+    //(Cmd+N ne crea uno), il documento su cui si impagina torna davanti prima del box.
+    var docDelBox = altri[6] != null ? altri[6] : docInLavorazione;
+    if (InddEvents.riportaDavanti(docDelBox, app)) {
+        messaggioUtente("Code IDX-199 Durante l'impaginazione era davanti un altro documento: il Plugin ha rimesso davanti " + docDelBox.name + ", su cui sta impaginando", "warning");
+    }
     var contestoPrecedente = contestoBoxInImpaginazione;
     contestoBoxInImpaginazione = contestoDelBox(itemRef, pagCoinvolta, altri[6]);
     try {
