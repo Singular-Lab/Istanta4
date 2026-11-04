@@ -51,12 +51,16 @@
 /* Il bottone sta in alto, nella barra verde acqua, accanto all'info (Michele, 28/09): blu con
    il bordino bianco, cosi' si stacca da tutto il resto e non si confonde con gli strumenti di
    correzione, che sono un'altra cosa. */
-/* I20-1191: REPORT COMPLETO, accanto, con lo stesso vestito */
+/* I20-1191: REPORT COMPLETO, accanto, con la stessa forma */
 #tTimone, #tReportCompleto { height: 36px; padding: 0 18px; border: 2px solid #fff; border-radius: 9px;
            background: #1f5fd0; color: #fff; font: inherit; font-size: 13px; font-weight: 800;
            letter-spacing: .7px; cursor: pointer; vertical-align: middle; margin-right: 6px;
            box-shadow: 0 1px 3px rgba(0,0,0,.18); white-space: nowrap; }
-#tTimone:hover, #tReportCompleto:hover { background: #2a72ee; }
+#tTimone:hover { background: #2a72ee; }
+/* I20-1194: ma senza il blu pieno, che lo metteva troppo in vista: solo il contorno bianco sul verde
+   acqua della barra. Il pulsante pieno resta MENABÒ AVANZATO. */
+#tReportCompleto { background: transparent; box-shadow: none; }
+#tReportCompleto:hover { background: rgba(255,255,255,.18); }
 #tReportCompleto[disabled] { opacity: .7; cursor: progress; }
 #tTimone.acceso { background: #fff; color: #1f5fd0; }
 
