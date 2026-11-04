@@ -180,6 +180,8 @@ export interface VerificaArchivioTracciatoDTO {
   filename: string;
   nome: string;
   md5: string;
+  /** In Istanta, o ancora in coda (in attesa o dopo un errore, col motivo). */
+  istanta: { stato: 'inviato' | 'in_attesa' | 'errore'; errore: string | null; tentativi: number };
 }
 
 export interface VerificaArchivioPromoDTO {

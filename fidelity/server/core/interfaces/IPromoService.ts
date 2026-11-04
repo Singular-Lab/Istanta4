@@ -32,7 +32,9 @@ export interface IPromoService {
   }, idGDO: string, req: ExpressRequest): Promise<PromoResponseDTO>;
   getVisibilitaOpzioni(): DimensioneVisibilitaPromo[];
   getContestoPerNuovaLavorazione(req: ExpressRequest): Promise<any>;
-  get_contesto_per_importazione(req: ExpressRequest): Promise<any>;
+  get_contesto_per_importazione(req: ExpressRequest, guidId?: string): Promise<any>;
+  /** Contesti di importazione di piu' promo dell'archivio storico: per promo il contesto o il motivo. */
+  contestiImportazione(req: ExpressRequest, guidIds: string[]): Promise<Array<{ guidId: string; contesto?: unknown; errore?: string }>>;
   creaInizioLavorazione(data: CreatePromoDTO): Promise<PromoResponseDTO>;
 
   // Filtered / paginated

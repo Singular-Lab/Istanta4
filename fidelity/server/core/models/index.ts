@@ -38,6 +38,7 @@ import { StatisticheApi } from './statistiche_api';
 import { TentativoWebhook } from './TentativoWebhook';
 import { TipiDiExport } from './tipi_di_export';
 import { Tracciati } from './tracciati';
+import { TracciatiInvioIstanta } from './tracciati_invio_istanta';
 import { TracciatiMomento } from './tracciati_momento';
 import { TracciatiMomentoConfronti } from './tracciati_momento_confronti';
 import { TracciatiReport } from './tracciati_report';
@@ -111,6 +112,8 @@ export const MODELLI_SEQUELIZE = {
   TipoUtentePuntoVendita: { model: RuoloPuntoVendita, nome: 'RuoloPuntoVendita', tabella: 'ruolo_punto_vendita' },
   // Modelli tracciamento
   Tracciati: { model: Tracciati, nome: 'Tracciati', tabella: 'tracciati' },
+  // Tracciati dell'archivio storico ancora da inviare a Istanta
+  TracciatiInvioIstanta: { model: TracciatiInvioIstanta, nome: 'TracciatiInvioIstanta', tabella: 'tracciati_invio_istanta' },
   TracciatiReport: { model: TracciatiReport, nome: 'TracciatiReport', tabella: 'tracciati_report' },
   TracciatiMomento: { model: TracciatiMomento, nome: 'TracciatiMomento', tabella: 'tracciati_momento' },
   TracciatiMomentoConfronti: { model: TracciatiMomentoConfronti, nome: 'TracciatiMomentoConfronti', tabella: 'tracciati_momento_confronti' },
@@ -345,7 +348,7 @@ export const modelliManager = ModelliManager.getInstance();
 export {
   ApprofondimentoVino, Area, Attivita, Canale, CanaleInterazione, CombinazioneCanaleArea, Config, ContenutiAggiuntiviReferenza,
   ContrattoTipografia, DesignKit, DisplayContextPuntoVendita, DispositivoPuntoVendita, EphemeralAuditLog, EphemeralChallenge, EphemeralOriginsWhitelist, EphemeralToken, FilesRuntime, FilesRuntimeLog, Formati, GDO, NamingConvention,
-  OrdiniDiStampa, OrdiniDiStampaInvii, PromoScoreboard, PuntoVendita, PuntoVenditaUtenti, PuntoVenditaVolantino, RaccoglitoreKit, Referenze, ReferenzeGruppo, Ricette, RuntimeKit, RuoloPuntoVendita, TentativoWebhook, TipiDiExport, Tracciati, TracciatiMomentoConfronti,
+  OrdiniDiStampa, OrdiniDiStampaInvii, PromoScoreboard, PuntoVendita, PuntoVenditaUtenti, PuntoVenditaVolantino, RaccoglitoreKit, Referenze, ReferenzeGruppo, Ricette, RuntimeKit, RuoloPuntoVendita, TentativoWebhook, TipiDiExport, Tracciati, TracciatiInvioIstanta, TracciatiMomentoConfronti,
   Utente, UtentiAnonimi, UtentiGDO, UtentiGuest, Webhook, WishlistWebpliant, WorkspaceWebpliant,
   MenuItem, Permesso, PermessoRuolo, PermessoRuoloGdo,
   PluginAnalyticsEvent,

@@ -11,6 +11,7 @@ import { sequelize } from '../db/SequelizeConnector';
 import { CreateTracciatiDTO, TracciatiResponseDTO, UpdateTracciatiDTO } from '../dto';
 import { ITracciatoService } from '../interfaces/ITracciatoService';
 import { log } from '../logger';
+import { statoIstantaTracciati } from './AllineamentoIstanta';
 import { Area, Canale } from '../models';
 import { Promo } from '../models/promo';
 import type { ITracciatiMomentoRepository } from '../repositories/TracciatiMomentoRepository';
@@ -629,7 +630,12 @@ export class TracciatoService implements ITracciatoService {
   async getTracciatiByPromoId(promoId: string, includeBlob = false): Promise<TracciatiResponseDTO[]> {
     try {
       const tracciati = await this.tracciatiRepository.findByPromoId(promoId);
-      return tracciati.map((tracciato: TracciatiAttributes) => this.mapToDTO(tracciato, includeBlob));
+      // Quelli salvati in FP e non ancora in Istanta (archivio storico, upload rifiutati)
+      const istanta = await statoIstantaTracciati(tracciati.map((t: TracciatiAttributes) => t.id_tracciati as string));
+      return tracciati.map((tracciato: TracciatiAttributes) => ({
+        ...this.mapToDTO(tracciato, includeBlob),
+        istanta: istanta.get(tracciato.id_tracciati as string),
+      }));
     } catch (error) {
       log.error('Error in getTracciatiByPromoId:', error);
       throw new DatabaseError({

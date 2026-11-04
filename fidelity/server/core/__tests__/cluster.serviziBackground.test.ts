@@ -1,11 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const chron = vi.hoisted(() => ({ startAllJobs: vi.fn() }));
+const chron = vi.hoisted(() => ({ startAllJobs: vi.fn(), avviaAllineamentoIstanta: vi.fn() }));
 
 vi.mock('../services/ChronService', () => ({
   ChronService: class {
     startAllJobs = chron.startAllJobs;
   },
+}));
+
+vi.mock('../services/AllineamentoIstanta', () => ({
+  avviaAllineamentoIstanta: chron.avviaAllineamentoIstanta,
 }));
 
 vi.mock('../logger', () => ({
@@ -17,6 +21,7 @@ import { initializeBackgroundServices } from '../services/startup';
 
 afterEach(() => {
   chron.startAllJobs.mockClear();
+  chron.avviaAllineamentoIstanta.mockClear();
   vi.unstubAllEnvs();
 });
 
@@ -28,6 +33,7 @@ describe('servizi di background nel cluster', () => {
     initializeBackgroundServices();
 
     expect(chron.startAllJobs).not.toHaveBeenCalled();
+    expect(chron.avviaAllineamentoIstanta).not.toHaveBeenCalled();
   });
 
   it.each([['1'], [undefined]])('con WORKER_INDEX=%s (worker 1 o senza cluster) partono', (indice) => {
@@ -36,6 +42,8 @@ describe('servizi di background nel cluster', () => {
     initializeBackgroundServices();
 
     expect(chron.startAllJobs).toHaveBeenCalledTimes(1);
+    // Anche l'allineamento con Istanta dei tracciati in attesa, una volta sola
+    expect(chron.avviaAllineamentoIstanta).toHaveBeenCalledTimes(1);
   });
 });
 

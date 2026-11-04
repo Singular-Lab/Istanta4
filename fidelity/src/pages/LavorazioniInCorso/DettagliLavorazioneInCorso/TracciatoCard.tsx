@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { ServerCall } from "../../../../lib/server_call";
 import type { TracciatiResponseDTO } from "../../../../server/core/dto";
 import Button from "../../../components/Base/Button";
-import { FormInput } from "../../../components/Base/Form";
+import { FormInput, FormSelect } from "../../../components/Base/Form";
 import { Dialog } from "../../../components/Base/Headless";
 import Lucide from "../../../components/Base/Lucide";
 import Spinner from "../../../components/Base/Spinner";
@@ -13,6 +13,14 @@ import ConfirmDialog from "../../../components/ConfirmDialog";
 import type { TonoStato } from "../../../constants/stati";
 import { usePermissionContext } from "../../../context/PermissionContext";
 import { PERMISSIONS } from "../../../constants/permissions";
+
+/** Un campo del contesto salvato col tracciato: nome, opzioni e valore scelto al caricamento. */
+type ContestoTracciato = {
+    nome_field: string;
+    titolo_field?: string;
+    valore?: { titolo: string; valore: string }[];
+    user_value?: string;
+};
 
 type TracciatoCardProps = {
     tracciato: TracciatiResponseDTO;
@@ -100,6 +108,31 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
             await queryClient.invalidateQueries({ queryKey: ["tracciatiPromo", tracciato.id_promo] });
         },
     });
+    // Salvato in FP e non ancora accettato da Istanta: Istanta non ne sa niente, niente polling
+    const istanta = tracciato.istanta;
+    const inAttesaIstanta = !!istanta && istanta.stato !== "inviato";
+    const puoAgire = !azioniBloccate && hasPermission(PERMISSIONS.FILE.UPLOAD_TRACCIATO);
+    const aggiornaTracciati = () => queryClient.invalidateQueries({ queryKey: ["tracciatiPromo", tracciato.id_promo] });
+    const rimandaMutation = useMutation({
+        mutationFn: () =>
+            ServerCall.post<{ esito: "inviata" } | { esito: "errore"; motivo: string; tentativi: number }>(
+                `/tracciati/${tracciato.id}/rimanda-istanta`,
+                {}
+            ),
+        onSettled: aggiornaTracciati,
+    });
+    const [showDialogContesto, setShowDialogContesto] = useState<boolean>(false);
+    const [contestoInModifica, setContestoInModifica] = useState<ContestoTracciato[]>([]);
+    const contestoMutation = useMutation({
+        mutationFn: (context: ContestoTracciato[]) =>
+            ServerCall.put<{ esito: string }>(`/tracciati/${tracciato.id}/contesto`, { context }),
+        onSuccess: async () => {
+            setShowDialogContesto(false);
+            await aggiornaTracciati();
+        },
+    });
+    const esitoRinvio = rimandaMutation.data;
+
     const statusImportazioneQuery = useQuery({
         queryKey: ["statusImportazione", tracciato.id],
         queryFn: async () => {
@@ -128,7 +161,7 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
             }
             return 3000;
         },
-        enabled: !!tracciato.id,
+        enabled: !!tracciato.id && !inAttesaIstanta,
     });
 
     const statusData = statusImportazioneQuery.data as
@@ -146,7 +179,7 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
 
     const isExpanded = expandedErrorTracciatoId === tracciato.id;
     const canDeleteTracciato =
-        tracciato.stato === "Scartato" || statusData?.stato === "Scartata";
+        tracciato.stato === "Scartato" || statusData?.stato === "Scartata" || inAttesaIstanta;
 
     // Comandi del tracciato: icone con nome accessibile, come le azioni di riga
     const comando = "h-8 w-8 p-0";
@@ -180,6 +213,16 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
                                     </span>
                                 </div>
                             </div>
+
+                            {inAttesaIstanta && (
+                                <span className="inline-flex flex-none items-center gap-1.5">
+                                    <StatusBadge
+                                        tono={istanta?.stato === "errore" ? "danger" : "warning"}
+                                        etichetta={istanta?.stato === "errore" ? "Non accettato da Istanta" : "In attesa di Istanta"}
+                                        icon={istanta?.stato === "errore" ? "TriangleAlert" : "Clock"}
+                                    />
+                                </span>
+                            )}
 
                             {statusData && statusStyle && (
                                 <span className="inline-flex flex-none items-center gap-1.5">
@@ -233,6 +276,28 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
                                             );
                                         }
                                     )}
+                            </div>
+                        )}
+
+                        {inAttesaIstanta && (
+                            <div className="mt-1 space-y-1 text-xs">
+                                <p className="text-slate-600">
+                                    Il tracciato è in FP ma Istanta non l'ha ancora ricevuto: FP lo rimanda da solo.
+                                </p>
+                                {istanta?.errore && (
+                                    <pre className="whitespace-pre-wrap break-words rounded-control border border-danger/20 bg-danger/5 p-2 font-mono text-2xs text-danger">
+                                        {istanta.tentativi > 1 ? `Tentativi: ${istanta.tentativi}. ` : ""}{istanta.errore}
+                                    </pre>
+                                )}
+                                {esitoRinvio?.esito === "inviata" && (
+                                    <p className="text-success">Istanta ha accettato il tracciato.</p>
+                                )}
+                                {esitoRinvio?.esito === "errore" && (
+                                    <p className="text-danger">Istanta non l'ha accettato: {esitoRinvio.motivo}</p>
+                                )}
+                                {rimandaMutation.isError && (
+                                    <p className="text-danger">Rinvio non riuscito: {rimandaMutation.error?.message}</p>
+                                )}
                             </div>
                         )}
 
@@ -308,6 +373,38 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
                         >
                             <Lucide icon="Download" aria-hidden="true" className="h-4 w-4" />
                         </Button>
+                        {inAttesaIstanta && puoAgire && (
+                            <>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline-secondary"
+                                    className={comando}
+                                    onClick={() => {
+                                        setContestoInModifica((tracciato.context ?? []).map((c: ContestoTracciato) => ({ ...c })));
+                                        contestoMutation.reset();
+                                        setShowDialogContesto(true);
+                                    }}
+                                    title="Modifica contesto"
+                                    aria-label="Modifica contesto"
+                                >
+                                    <Lucide icon="SlidersHorizontal" aria-hidden="true" className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline-secondary"
+                                    className={comando}
+                                    onClick={() => rimandaMutation.mutate()}
+                                    disabled={rimandaMutation.isPending}
+                                    loading={rimandaMutation.isPending}
+                                    title="Rimanda a Istanta"
+                                    aria-label="Rimanda a Istanta"
+                                >
+                                    <Lucide icon="Send" aria-hidden="true" className="h-4 w-4" />
+                                </Button>
+                            </>
+                        )}
                         {!azioniBloccate && (
                             <Button
                                 type="button"
@@ -362,6 +459,81 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
                     </p>
                 }
             />
+
+            <Dialog
+                open={showDialogContesto}
+                onClose={() => {
+                    if (contestoMutation.isPending) return;
+                    setShowDialogContesto(false);
+                }}
+            >
+                <Dialog.Panel>
+                    <form
+                        onSubmit={(e) => {
+                            e.preventDefault();
+                            contestoMutation.mutate(contestoInModifica);
+                        }}
+                    >
+                        <Dialog.Title>
+                            <Lucide icon="SlidersHorizontal" aria-hidden="true" className="h-5 w-5 text-slate-500" />
+                            Contesto del tracciato
+                        </Dialog.Title>
+                        <Dialog.Description>
+                            <div className="space-y-3 text-sm text-slate-600">
+                                {contestoInModifica.map((campo, i) => {
+                                    const titolo = campo.titolo_field || campo.nome_field;
+                                    const cambia = (valore: string) =>
+                                        setContestoInModifica((prima) => prima.map((c, j) => (j === i ? { ...c, user_value: valore } : c)));
+                                    return (
+                                        <label key={campo.nome_field} className="block space-y-1">
+                                            <span className="text-xs font-medium text-slate-700">{titolo}</span>
+                                            {Array.isArray(campo.valore) && campo.valore.length > 0 ? (
+                                                <FormSelect value={campo.user_value ?? ""} onChange={(e) => cambia(e.target.value)} aria-label={titolo}>
+                                                    {campo.valore.map((opzione) => (
+                                                        <option key={opzione.valore} value={opzione.valore}>{opzione.titolo}</option>
+                                                    ))}
+                                                </FormSelect>
+                                            ) : (
+                                                <FormInput
+                                                    type="text"
+                                                    value={campo.user_value ?? ""}
+                                                    maxLength={campo.nome_field === "idLabel" ? 40 : undefined}
+                                                    onChange={(e) => cambia(e.target.value)}
+                                                    aria-label={titolo}
+                                                />
+                                            )}
+                                        </label>
+                                    );
+                                })}
+                                <p className="text-xs text-slate-500">
+                                    Il tracciato non è ancora in Istanta: riceverà questo contesto al prossimo invio.
+                                </p>
+                                {contestoMutation.isError && (
+                                    <p className="text-xs text-danger">Modifica non riuscita: {contestoMutation.error?.message}</p>
+                                )}
+                            </div>
+                        </Dialog.Description>
+                        <Dialog.Footer>
+                            <Button
+                                type="button"
+                                variant="outline-secondary"
+                                onClick={() => setShowDialogContesto(false)}
+                                disabled={contestoMutation.isPending}
+                            >
+                                Annulla
+                            </Button>
+                            <Button
+                                type="submit"
+                                variant="primary"
+                                disabled={contestoMutation.isPending}
+                                loading={contestoMutation.isPending}
+                            >
+                                Salva
+                            </Button>
+                        </Dialog.Footer>
+                    </form>
+                </Dialog.Panel>
+            </Dialog>
 
             <Dialog
                 open={showDialogRinomina}

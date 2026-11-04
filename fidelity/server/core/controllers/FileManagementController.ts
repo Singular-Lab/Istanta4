@@ -10,9 +10,12 @@ import { BadRequestError } from '../../../lib/errors/application/BadRequestError
 import { BaseController } from '../base/BaseController';
 import config from '../config';
 import {
+  BYTE_PER_LOTTO_ARCHIVIO,
+  LISTE_PER_LOTTO_ARCHIVIO,
   uploadMaterialiPubblicazioni,
   uploadOlimpoImages,
   uploadTracciati,
+  uploadTracciatiArchivio,
   uploadZipMemory
 } from '../config/multerConfig';
 import { IFileManagementService } from '../interfaces/IFileManagementService';
@@ -31,6 +34,12 @@ import { IPromoService } from '../interfaces/IPromoService'; // <-- Add this imp
 import { ServerUtils } from '../utils/ServerUtils';
 import { verificaRisposta } from '../utils/rispostaServizi';
 import { AuditLogService } from '../services/AuditLogService';
+import { accodaPerIstanta, salvaListeArchivio } from '../services/AllineamentoIstanta';
+import { soloImportStorico } from '../middleware/soloImportStorico';
+import { sequelize } from '../db/SequelizeConnector';
+
+/** Istanta accetta solo file Excel come tracciati. */
+const ESTENSIONE_TRACCIATO = /\.xlsx?$/i;
 
 export class FileManagementController extends BaseController {
   private promoService: IPromoService;
@@ -67,6 +76,20 @@ export class FileManagementController extends BaseController {
     );
 
     this.router.post('/uploadTracciato/:idPromo', authMiddleware, permissionGuard('file.upload_tracciato'), uploadTracciati.single('file'), this.uploadTracciato.bind(this));
+    // Archivio storico (solo dove c'e' l'import da storico): liste in blocco, Istanta si allinea dopo
+    this.router.post('/tracciati/archivio', authMiddleware, permissionGuard('file.upload_tracciato'), soloImportStorico, (req: Request, res: Response, next) => {
+      uploadTracciatiArchivio.array('files', LISTE_PER_LOTTO_ARCHIVIO)(req, res, (err: unknown) => {
+        if (err instanceof multer.MulterError) {
+          const troppo = err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_FILE_SIZE';
+          this.sendResponse(res, troppo ? HttpStatusCode.PAYLOAD_TOO_LARGE : HttpStatusCode.BAD_REQUEST, {
+            message: troppo ? `Lotto troppo grande: al massimo ${LISTE_PER_LOTTO_ARCHIVIO} liste e 100 MB` : err.message,
+          });
+          return;
+        }
+        if (err) return next(err);
+        next();
+      });
+    }, this.caricaTracciatiArchivio.bind(this));
     this.router.post('/uploadMateriale', authMiddleware, permissionGuard('file.upload_materiale'), uploadMaterialiPubblicazioni.single('file'), this.uploadMateriale.bind(this));
     this.router.post('/uploadKitManuali/:idPromo/:idKit', authMiddleware, permissionGuard('file.upload_kit_manuali'), uploadMaterialiPubblicazioni.array('file'), this.uploadKitManuali.bind(this));
     this.router.post('/replaceFileKitRuntime/:idFile', authMiddleware, permissionGuard('file.sostituisci'), uploadForzatoImmaginiOlimpo.single('file'), this.replaceFileKitRuntime.bind(this));
@@ -100,6 +123,51 @@ export class FileManagementController extends BaseController {
       const { guidKitRuntime, tipoExport, nomeFile, meta } = req.body;
       await this.fileManagementService.invioMaterialeAdFP(guidKitRuntime, tipoExport, nomeFile, meta, req.file!, req);
       res.status(200).json({ success: true });
+    } catch (error) {
+      this.handleError(res, error as Error);
+    }
+  }
+
+  /**
+   * POST /api/tracciati/archivio: fino a 50 liste dell'archivio storico e 100 MB, coi file in
+   * `files` e in `liste` (JSON) nome, promo e contesto di ognuno, nello stesso ordine. Si salvano
+   * subito in FP e vanno in coda per Istanta; l'esito e' per lista.
+   */
+  private async caricaTracciatiArchivio(req: Request, res: Response): Promise<void> {
+    try {
+      const files = (req.files as Express.Multer.File[] | undefined) ?? [];
+      if (!files.length) {
+        this.sendResponse(res, HttpStatusCode.BAD_REQUEST, { message: "files: nessuna lista nel lotto" });
+        return;
+      }
+      if (files.reduce((totale, f) => totale + f.size, 0) > BYTE_PER_LOTTO_ARCHIVIO) {
+        this.sendResponse(res, HttpStatusCode.PAYLOAD_TOO_LARGE, { message: `Lotto troppo grande: al massimo ${LISTE_PER_LOTTO_ARCHIVIO} liste e 100 MB` });
+        return;
+      }
+      let voci: unknown;
+      try {
+        voci = JSON.parse(String(req.body?.liste ?? ''));
+      } catch {
+        voci = null;
+      }
+      if (!Array.isArray(voci) || voci.length !== files.length) {
+        this.sendResponse(res, HttpStatusCode.BAD_REQUEST, { message: "liste: serve una voce (nomeFile, idPromo, context) per ogni file, nello stesso ordine" });
+        return;
+      }
+      // Il nome viene dalla voce, in UTF-8: multer legge il nome del file come latin1
+      const esiti = await salvaListeArchivio(files.map((file, i) => ({
+        nomeFile: (voci as Array<Record<string, unknown>>)[i]?.nomeFile as string,
+        idPromo: (voci as Array<Record<string, unknown>>)[i]?.idPromo as string,
+        context: (voci as Array<Record<string, unknown>>)[i]?.context,
+        contenuto: file.buffer,
+      })), String(req.session.id_utente));
+      for (const esito of esiti) {
+        if (esito.esito !== 'caricata') continue;
+        AuditLogService.getInstance().entityChanged(req, 'tracciato', 'upload', { type: 'Tracciato', id: esito.id }, {
+          tracciatoId: esito.id, fileName: esito.nomeFile, promoId: esito.idPromo, archivio: true,
+        });
+      }
+      this.sendResponse(res, HttpStatusCode.OK, { liste: esiti });
     } catch (error) {
       this.handleError(res, error as Error);
     }
@@ -143,6 +211,11 @@ export class FileManagementController extends BaseController {
       }
 
       const file = req.file;
+      // Un file che non e' Excel Istanta non lo accettera' mai: non si salva e non va in coda
+      if (!ESTENSIONE_TRACCIATO.test(file.originalname)) {
+        this.sendResponse(res, HttpStatusCode.BAD_REQUEST, { message: "Formato non valido: il tracciato deve essere un file .xls o .xlsx" });
+        return;
+      }
 
       // Il nome file del marketing si conserva cosi com'e' (I20-957): l'unicita vale solo nella promo,
       // cosi lo stesso nome puo ripetersi fra promo diverse (es. promo 2025 e 2026)
@@ -204,19 +277,33 @@ export class FileManagementController extends BaseController {
       );
       log.info('Risposta di Istanta al tracciato', { idPromo: promo.id, status: result.status, motivo: result.motivo });
 
-      // Istanta risponde 200 anche quando rifiuta il tracciato: vale solo esito true
-      verificaRisposta(result, 'ISTANTA', '/FicoProcess/uploadTracciato', (d) => d?.esito === true);
+      // Istanta risponde 200 anche quando rifiuta il tracciato: vale solo esito true. Se non lo
+      // accetta, o non risponde, il tracciato si salva lo stesso e va in coda: l'allineamento lo
+      // rimanda da solo, e dalla promo lo si rimanda o se ne corregge il contesto.
+      let rifiutoIstanta: string | null = null;
+      try {
+        verificaRisposta(result, 'ISTANTA', '/FicoProcess/uploadTracciato', (d) => d?.esito === true);
+      } catch (error) {
+        rifiutoIstanta = error instanceof Error ? error.message : String(error);
+        log.warn('Tracciato non accettato da Istanta: salvato in FP e messo in coda', { idPromo: promo.id, motivo: rifiutoIstanta });
+      }
 
-      // Salvataggio tracciato nel database
+      // Salvataggio tracciato nel database, con la coda per Istanta nella stessa transazione
       log.info(Colorize.bgGreen("Salvataggio tracciato nel database"));
-      const resultTracciatoSalvato = await Tracciati.create({
-        id_tracciati: guidID,
-        id_promo_tracciati: promo.id,
-        filename_tracciati: file.originalname,
-        blobfile_tracciati: fileBuffer,
-        context_tracciati: contextDaRicevere,
-        createdat: new Date(),
-        updatedat: new Date()
+      const resultTracciatoSalvato = await sequelize.transaction(async (transaction) => {
+        const salvato = await Tracciati.create({
+          id_tracciati: guidID,
+          id_promo_tracciati: promo.id,
+          filename_tracciati: file.originalname,
+          blobfile_tracciati: fileBuffer,
+          context_tracciati: contextDaRicevere,
+          createdat: new Date(),
+          updatedat: new Date()
+        }, { transaction });
+        if (rifiutoIstanta) {
+          await accodaPerIstanta([{ idTracciato: guidID, idUtente: String(req.session.id_utente), motivo: rifiutoIstanta }], transaction);
+        }
+        return salvato;
       });
       log.info(Colorize.green(`Tracciato salvato: ${JSON.stringify({
         id_tracciati: resultTracciatoSalvato.id_tracciati,
@@ -233,6 +320,15 @@ export class FileManagementController extends BaseController {
         promoId: promo.id,
         nomePromo: promo.nome
       });
+
+      if (rifiutoIstanta) {
+        // L'attivita' di import la registra l'allineamento quando Istanta lo accetta
+        this.sendResponse(res, HttpStatusCode.ACCEPTED, {
+          ...resultTracciatoSalvato.toJSON(),
+          istanta: { stato: 'errore', errore: rifiutoIstanta, tentativi: 1 },
+        });
+        return;
+      }
 
       if (req.session.id_utente) {
         log.info(Colorize.blue(`Chiamata CRE_ATTIVITA per utente: ${req.session.id_utente}`));

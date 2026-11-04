@@ -4,8 +4,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FileManagementController } from '../controllers/FileManagementController';
 import type { IFileManagementService } from '../interfaces/IFileManagementService';
 import { Tracciati } from '../models';
+import { sequelize } from '../db/SequelizeConnector';
+import { accodaPerIstanta } from '../services/AllineamentoIstanta';
 import { AuditLogService } from '../services/AuditLogService';
 import { ServerUtils } from '../utils/ServerUtils';
+
+vi.mock('../services/AllineamentoIstanta', () => ({
+    accodaPerIstanta: vi.fn(async () => undefined),
+    salvaListeArchivio: vi.fn(async () => []),
+}));
 
 vi.mock('../config/multerConfig', () => {
     const single = vi.fn(() => (req: any, _res: any, next: any) => {
@@ -80,6 +87,8 @@ describe('POST /api/uploadTracciato/:idPromo - unicita del nome file nella promo
             (Object.entries(opzioni.where).every(([campo, valore]) => (esistente as any)[campo] === valore) ? esistente : null) as never
         );
         vi.spyOn(Tracciati, 'create').mockImplementation(async (valori: any) => valori as never);
+        // Tracciato e coda per Istanta si salvano in una transazione: qui senza database
+        vi.spyOn(sequelize, 'transaction').mockImplementation((async (fn: (t: unknown) => unknown) => fn({})) as never);
         vi.spyOn(ServerUtils, 'sendToFicoApiAxiosUploadTracciato').mockResolvedValue({ status: 200, data: { esito: true } } as never);
     });
 
@@ -122,7 +131,9 @@ describe('POST /api/uploadTracciato/:idPromo - Registro Audit', () => {
     beforeEach(() => {
         vi.restoreAllMocks();
         vi.spyOn(Tracciati, 'findOne').mockResolvedValue(null as never);
-        vi.spyOn(Tracciati, 'create').mockImplementation(async (valori: unknown) => valori as never);
+        // Come un'istanza Sequelize: la risposta 202 parte da toJSON()
+        vi.spyOn(Tracciati, 'create').mockImplementation(async (valori: object) => ({ ...valori, toJSON: () => valori }) as never);
+        vi.spyOn(sequelize, 'transaction').mockImplementation((async (fn: (t: unknown) => unknown) => fn({})) as never);
         audit = { entityChanged: vi.fn(), configurationChanged: vi.fn() };
         vi.spyOn(AuditLogService, 'getInstance').mockReturnValue(audit as unknown as AuditLogService);
     });
@@ -138,13 +149,18 @@ describe('POST /api/uploadTracciato/:idPromo - Registro Audit', () => {
             { tracciatoId, fileName: 'ufi.xlsx', promoId: 'promo-2026', nomePromo: 'Promo promo-2026' });
     });
 
-    it('niente voce se Istanta rifiuta il tracciato', async () => {
+    // TASK-3dfe3302: prima un tracciato rifiutato non si salvava; ora resta in FP, in coda per Istanta
+    it('Istanta rifiuta il tracciato: resta in FP, va in coda per Istanta e il caricamento va nel Registro Audit', async () => {
         vi.spyOn(ServerUtils, 'sendToFicoApiAxiosUploadTracciato').mockResolvedValue({ status: 200, data: { esito: false, error: 'no' } } as never);
 
         const res = await request(createApp()).post('/api/uploadTracciato/promo-2026').send({ context: '[]' });
 
-        expect(res.status).not.toBe(201);
-        expect(Tracciati.create).not.toHaveBeenCalled();
-        expect(audit.entityChanged).not.toHaveBeenCalled();
+        expect(res.status).toBe(202);
+        expect(res.body.istanta).toMatchObject({ stato: 'errore', tentativi: 1 });
+        expect(Tracciati.create).toHaveBeenCalledTimes(1);
+        const tracciatoId = res.body.id_tracciati;
+        expect(vi.mocked(accodaPerIstanta).mock.calls[0][0]).toEqual([expect.objectContaining({ idTracciato: tracciatoId, motivo: res.body.istanta.errore })]);
+        expect(audit.entityChanged).toHaveBeenCalledWith(expect.anything(), 'tracciato', 'upload', { type: 'Tracciato', id: tracciatoId },
+            { tracciatoId, fileName: 'ufi.xlsx', promoId: 'promo-2026', nomePromo: 'Promo promo-2026' });
     });
 });

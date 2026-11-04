@@ -59,6 +59,10 @@ describe('permessi sulle route che modificano dati', () => {
     ['decisione sulla riga dell\'import in attesa', 'post', '/api/ACPV/importaPV/j1/decisione', 'gdo.gestisci_punti_vendita'],
     ['import degli export del Plugin nella storia dei PV', 'post', '/api/punti-vendita/storia/import-export', 'gdo.gestisci_punti_vendita'],
     ['verifica dell\'archivio storico del volantino-analyzer', 'post', '/api/promo/verifica-archivio', 'promo.visualizza'],
+    ['creazione in blocco delle promo dell\'archivio', 'post', '/api/promo/archivio', 'promo.crea'],
+    ['contesti in blocco delle promo dell\'archivio', 'post', '/api/promo/contesto-importazione/archivio', 'promo.crea'],
+    ['rinvio di un tracciato a Istanta', 'post', '/api/tracciati/t1/rimanda-istanta', 'file.upload_tracciato'],
+    ['modifica del contesto di un tracciato in attesa', 'put', '/api/tracciati/t1/contesto', 'file.upload_tracciato'],
   ];
 
   it.each(casi)('%s richiede il permesso giusto', async (_nome, metodo, url, permesso) => {

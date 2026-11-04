@@ -14,6 +14,7 @@ import { log } from '../logger';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { routeDeprecata } from '../middleware/routeDeprecata';
 import { permissionGuard } from '../middleware/permissionGuard';
+import { soloImportStorico } from '../middleware/soloImportStorico';
 
 import { AuditLogService } from '../services/AuditLogService';
 import { OrdinamentoMerceologicoService } from '../services/OrdinamentoMerceologicoService';
@@ -31,6 +32,9 @@ const aggiornamentoCorreggoRiuscito = (d: any): boolean =>
 
 // Verifica dell'archivio storico: cinque anni di volantini sono qualche centinaio di promo
 const MAX_NOMI_VERIFICA_ARCHIVIO = 2000;
+// Promo create in una richiesta: una alla volta su Istanta, ben sotto i 300 s del proxy
+const MAX_PROMO_PER_LOTTO_ARCHIVIO = 25;
+const MAX_CONTESTI_PER_LOTTO_ARCHIVIO = 100;
 
 // eliminaPromo definitiva: una promo che Istanta non ha piu e gia eliminata, si completa la cancellazione locale
 const eliminazioneIstantaRiuscita = (d: any): boolean => esitoIstanta(d) || d?.error === 'promo_not_found';
@@ -72,6 +76,9 @@ export class PromoController extends BaseController {
     this.router.post('/promo', authMiddleware, permissionGuard('promo.crea'), this.inizioNuovaLavorazione.bind(this));
     // Archivio storico del volantino-analyzer: quali promo e liste ci sono gia' (sola lettura)
     this.router.post('/promo/verifica-archivio', authMiddleware, permissionGuard('promo.visualizza'), this.verificaArchivio.bind(this));
+    // Archivio storico (solo dove c'e' l'import da storico): promo e contesti in blocco
+    this.router.post('/promo/archivio', authMiddleware, permissionGuard('promo.crea'), soloImportStorico, this.creaPromoArchivio.bind(this));
+    this.router.post('/promo/contesto-importazione/archivio', authMiddleware, permissionGuard('promo.crea'), soloImportStorico, this.contestiImportazioneArchivio.bind(this));
     // Promo by ID (parameterized routes)
     this.router.get("/promo/nome/:nomePromo", authMiddleware, permissionGuard('promo.visualizza'), routeDeprecata, this.getPromoByNome.bind(this))
     this.router.put('/promo/:id', authMiddleware, permissionGuard('promo.modifica'), this.updatePromo.bind(this));
@@ -113,6 +120,57 @@ export class PromoController extends BaseController {
       }
       const promos = await this.promoService.getPromoByNome(nomePromo);
       this.sendResponse(res, HttpStatusCode.OK, promos);
+    } catch (error) {
+      this.handleError(res, error as Error);
+    }
+  }
+
+  /**
+   * POST /api/promo/archivio: fino a 25 promo dell'archivio storico, ognuna come POST /promo
+   * (prima Istanta, poi FP, coi doppioni rifiutati). Una che non si crea non ferma le altre.
+   */
+  private async creaPromoArchivio(req: ExpressRequest, res: Response): Promise<void> {
+    try {
+      const lista = req.body?.promo;
+      if (!Array.isArray(lista) || lista.length === 0 || lista.length > MAX_PROMO_PER_LOTTO_ARCHIVIO) {
+        this.sendResponse(res, HttpStatusCode.BAD_REQUEST, { message: `promo: serve un elenco da 1 a ${MAX_PROMO_PER_LOTTO_ARCHIVIO} promo` });
+        return;
+      }
+      if (lista.some((p) => !p || typeof p !== 'object' || typeof p.titolo !== 'string' || !p.titolo.trim())) {
+        this.sendResponse(res, HttpStatusCode.BAD_REQUEST, { message: 'promo: ogni promo deve avere un titolo' });
+        return;
+      }
+      const idUtente = req.session.id_utente as string;
+      const esiti: Array<{ titolo: string; esito: 'creata'; promo: unknown } | { titolo: string; esito: 'errore'; motivo: string }> = [];
+      for (const dati of lista) {
+        try {
+          const creata = await this.promoService.inizioNuovaLavorazione(dati, idUtente, req);
+          await ServerUtils.CREA_ATTIVITA(idUtente, TIPO_ATTIVITA.CREAZIONE_LAVORAZIONE, CATEGORIA_ATTIVITA.PRODUZIONE, {
+            nomePromo: creata.nome || dati.titolo,
+            id_promo: creata.id,
+          });
+          AuditLogService.getInstance().configurationChanged(req, 'promo', 'create', { promoId: creata.id, archivio: true });
+          esiti.push({ titolo: dati.titolo, esito: 'creata', promo: creata });
+        } catch (error) {
+          esiti.push({ titolo: dati.titolo, esito: 'errore', motivo: error instanceof Error ? error.message : String(error) });
+        }
+      }
+      this.sendResponse(res, HttpStatusCode.OK, { promo: esiti });
+    } catch (error) {
+      this.handleError(res, error as Error);
+    }
+  }
+
+  /** POST /api/promo/contesto-importazione/archivio: il contesto di importazione di fino a 100 promo. */
+  private async contestiImportazioneArchivio(req: ExpressRequest, res: Response): Promise<void> {
+    try {
+      const guidIds = req.body?.guidIds;
+      if (!Array.isArray(guidIds) || guidIds.length === 0 || guidIds.length > MAX_CONTESTI_PER_LOTTO_ARCHIVIO
+        || guidIds.some((g) => typeof g !== 'string' || !g.trim())) {
+        this.sendResponse(res, HttpStatusCode.BAD_REQUEST, { message: `guidIds: serve un elenco da 1 a ${MAX_CONTESTI_PER_LOTTO_ARCHIVIO} id di promo` });
+        return;
+      }
+      this.sendResponse(res, HttpStatusCode.OK, { contesti: await this.promoService.contestiImportazione(req, guidIds) });
     } catch (error) {
       this.handleError(res, error as Error);
     }

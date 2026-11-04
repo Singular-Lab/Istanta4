@@ -679,7 +679,7 @@ function Main() {
       return out;
     },
 
-    onSuccess: async () => {
+    onSuccess: async (caricati) => {
       setIsUploading(false);
       setFiles([]);
       setContextLavorazione([]);
@@ -687,6 +687,23 @@ function Main() {
       setSelectedFileIndex(0);
       setContextErrors({});
       setFileContextErrors({});
+      // Istanta non li ha accettati: sono in FP, in coda, e si rimandano da soli o dalla card
+      const inAttesa = caricati.filter((t) => t.istanta && t.istanta.stato !== "inviato");
+      if (inAttesa.length) {
+        showNotification(
+          <div className="flex flex-row items-center">
+            <Lucide icon="TriangleAlert" className="text-warning w-8 h-8" />
+            <div className="ml-4 mr-4">
+              <div className="font-bold">
+                {inAttesa.length === 1 ? "Tracciato salvato in FP, non ancora in Istanta" : `${inAttesa.length} tracciati salvati in FP, non ancora in Istanta`}
+              </div>
+              <div className="mt-1 text-slate-500">
+                Istanta non l'ha accettato: {inAttesa[0].istanta?.errore}. FP lo rimanda da solo; dalla card puoi correggere il contesto e rimandarlo subito.
+              </div>
+            </div>
+          </div>
+        );
+      }
       await refreshContent();
     },
 

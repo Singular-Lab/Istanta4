@@ -16,6 +16,8 @@ import { PromoService } from '../PromoService';
 
 const giorno = (data: string) => new Date(`${data}T00:00:00Z`);
 const md5 = (contenuto: Buffer) => createHash('md5').update(contenuto).digest('hex');
+/** Un tracciato che non e' in coda per Istanta. */
+const GIA_IN_ISTANTA = { stato: 'inviato', errore: null, tentativi: 0 };
 
 async function creaPromo(idGdo: string, nome: string, stato: STATO_PROMO, dal = '2021-01-07', al = '2021-01-16'): Promise<string> {
   const id = randomUUID();
@@ -80,8 +82,8 @@ describeConDatabase('PromoService.verificaArchivio su PostgreSQL', () => {
           validita_dal: giorno('2021-01-07'),
           validita_al: giorno('2021-01-16'),
           tracciati: expect.arrayContaining([
-            { id: idLista, filename: '01_SSCN_070121.xlsx', nome: '01_SSCN_070121.xlsx', md5: md5(lista) },
-            { id: idRinominata, filename: '01_CY_070121.xlsx', nome: 'City gennaio', md5: md5(rinominata) },
+            { id: idLista, filename: '01_SSCN_070121.xlsx', nome: '01_SSCN_070121.xlsx', md5: md5(lista), istanta: GIA_IN_ISTANTA },
+            { id: idRinominata, filename: '01_CY_070121.xlsx', nome: 'City gennaio', md5: md5(rinominata), istanta: GIA_IN_ISTANTA },
           ]),
         }],
       },
