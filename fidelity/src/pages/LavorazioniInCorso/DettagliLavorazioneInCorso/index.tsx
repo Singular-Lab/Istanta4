@@ -207,7 +207,7 @@ function Main() {
   const refDropzone = useRef<any>(null);
   const location = useLocation();
   const navigate = useNavigate();
-  const { hasPermission } = usePermissionContext();
+  const { hasPermission, superadmin } = usePermissionContext();
   // Momenti e menabò si attivano per GDO dalle Impostazioni di produzione: finché la risposta non arriva restano nascosti
   const funzionalitaQuery = useFetchFunzionalita();
   const showMomenti = funzionalitaQuery.data?.momenti === true;
@@ -340,6 +340,10 @@ function Main() {
     ? dayjs().isAfter(dayjs(currentPromoData.validita_al), "day") ||
     isPromoFinalState(currentPromoData?.stato)
     : isPromoFinalState(currentPromoData?.stato);
+
+  // Promo chiusa o scaduta: in sola lettura per tutti tranne il Superadmin, che può fare ogni azione
+  const azioniBloccate = isPromoFinalState(currentPromoData?.stato) && !superadmin;
+  const caricamentoBloccato = isExpired && !superadmin;
 
   const downloadBlobXLSX = (blob: Blob, fileName = "file.xlsx") => {
     if (!blob) {
@@ -1311,7 +1315,7 @@ function Main() {
               <Button
                 variant="outline-secondary"
                 className="w-full"
-                onClick={() => navigate(`/promozioni/in-corso/dettagli/${idPromo}/kits`)}
+                onClick={() => navigate(`/promozioni/${isPromoFinalState(currentPromoData?.stato) ? "storico" : "in-corso"}/dettagli/${idPromo}/kits`)}
               >
                 Vai ai kit
                 <Lucide icon="ArrowRight" aria-hidden="true" className="ml-2 h-4 w-4" />
@@ -1325,7 +1329,7 @@ function Main() {
 
   const renderUploadForm = () => {
     if (hasPermission("file.upload_tracciato")) {
-      if (isExpired) {
+      if (caricamentoBloccato) {
         return (
           <Alert variant="soft-danger" icona="CalendarX" titolo="Lavorazione scaduta" className="mb-4">
             Questa lavorazione è scaduta il {formatData(currentPromoData?.data_scadenza)}. Non è più possibile caricare nuovi tracciati.
@@ -1908,7 +1912,7 @@ function Main() {
         fallback={
           <div className="space-y-3">
             {
-              (!isExpired || lavorazioni == undefined) && (
+              (!caricamentoBloccato || lavorazioni == undefined) && (
                 <div className="rounded-card border border-slate-200 bg-white p-4">
                   <div className="flex items-center mb-3">
                     <Skeleton className="mr-2 h-8 w-8 rounded-control" />
@@ -1975,7 +1979,7 @@ function Main() {
               return (
                 <>
                   {renderUploadForm()}
-                  {!isExpired && (
+                  {!caricamentoBloccato && (
                     <EmptyState
                       compatta
                       title="Nessun tracciato caricato"
@@ -2007,6 +2011,7 @@ function Main() {
                         deleteTracciatoMutation.variables === String(tracciato.id)
                       }
                       promoStorico={isPromoFinalState(currentPromoData?.stato)}
+                      azioniBloccate={azioniBloccate}
                     />
                   ))}
                 </div>
@@ -2307,6 +2312,12 @@ function Main() {
         </Alert>
       )}
 
+      {superadmin && isExpired && currentPromoData?.stato !== STATO_PROMO.ELIMINATA && (
+        <Alert variant="soft-info" icona="ShieldCheck" titolo={isPromoFinalState(currentPromoData?.stato) ? "Promozione chiusa" : "Promozione scaduta"}>
+          Come Superadmin puoi comunque modificarla, caricare e gestire i tracciati e aprirne i kit.
+        </Alert>
+      )}
+
       <Sezione
         icona="Info"
         titolo="Informazioni promozione"
@@ -2315,7 +2326,7 @@ function Main() {
           !isEditing &&
           currentPromoData &&
           currentPromoData.stato !== STATO_PROMO.ELIMINATA &&
-          !promoFinale && (
+          !azioniBloccate && (
             <Button variant="outline-secondary" size="sm" onClick={handleEditStart}>
               <Lucide icon="Pencil" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
               Modifica
@@ -2410,13 +2421,13 @@ function Main() {
       {idPromo && <CollegamentiMateriali idPromo={idPromo} statoPromo={currentPromoData?.stato} />}
 
       <div className="grid grid-cols-12 gap-6">
-        {!promoFinale && <div className="col-span-12 lg:col-span-4">{renderQuickActions()}</div>}
+        {!azioniBloccate && <div className="col-span-12 lg:col-span-4">{renderQuickActions()}</div>}
 
         <Sezione
           icona="ChartPie"
           titolo="Stato lavorazioni"
           descrizione="Panoramica dello stato delle lavorazioni"
-          className={clsx("col-span-12", !promoFinale && "lg:col-span-8")}
+          className={clsx("col-span-12", !azioniBloccate && "lg:col-span-8")}
         >
           <React.Suspense
             fallback={

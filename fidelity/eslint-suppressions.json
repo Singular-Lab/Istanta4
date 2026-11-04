@@ -3189,11 +3189,6 @@
       "count": 1
     }
   },
-  "src/pages/LavorazioniInCorso/index.tsx": {
-    "no-console": {
-      "count": 1
-    }
-  },
   "src/pages/MenaboPromo/MenaboCanvas.tsx": {
     "@typescript-eslint/no-unused-vars": {
       "count": 13

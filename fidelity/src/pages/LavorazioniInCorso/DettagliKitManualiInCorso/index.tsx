@@ -11,6 +11,7 @@ import StatusBadge from "@/components/Base/StatusBadge";
 import Table from "@/components/Base/Table";
 import EmptyState from "@/components/EmptyState";
 import withSessionCheck from "@/components/SessionChecker";
+import { usePermissionContext } from "@/context/PermissionContext";
 import { formatDataOra, valoreOAssente } from "@/utils/format";
 import { twMerge } from "@/utils/twMerge";
 import { useEffect, useMemo, useState } from "react";
@@ -35,8 +36,9 @@ function DettagliKitManualiInCorso() {
   const { idPromo } = useParams();
   // La pagina serve sia le promo in corso sia lo storico: si torna al dettaglio della stessa sezione
   const sezione = useLocation().pathname.startsWith("/promozioni/storico") ? "storico" : "in-corso";
-  // Promo in uno stato finale (attiva o archiviata): i kit non si modificano più
-  const promoChiusa = [STATO_PROMO.VALIDA, STATO_PROMO.VALIDA_CON_ERRORI, STATO_PROMO.ARCHIVIATA].includes(datiLavorazione?.stato as STATO_PROMO);
+  const { superadmin } = usePermissionContext();
+  // Promo in uno stato finale (attiva o archiviata): i kit non si modificano più, tranne per il Superadmin
+  const promoChiusa = !superadmin && [STATO_PROMO.VALIDA, STATO_PROMO.VALIDA_CON_ERRORI, STATO_PROMO.ARCHIVIATA].includes(datiLavorazione?.stato as STATO_PROMO);
 
   const [lavorazioni, setLavorazioni] = useState<Lavorazione[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -187,7 +189,7 @@ function DettagliKitManualiInCorso() {
                       ) : (
                         <Button
                           as={Link}
-                          to={`/promozioni/in-corso/dettagli/${datiLavorazione?.id}/kits/${lavorazione.guidId}`}
+                          to={`/promozioni/${sezione}/dettagli/${datiLavorazione?.id}/kits/${lavorazione.guidId}`}
                           variant="outline-secondary"
                           size="sm"
                           aria-label={`Apri il kit ${lavorazione.titolo}`}

@@ -13,13 +13,16 @@ import StatusBadge from "@/components/Base/StatusBadge";
 import Table from "@/components/Base/Table";
 import withSessionCheck from "@/components/SessionChecker";
 import { descriviStato } from "@/constants/stati";
+import { usePermissionContext } from "@/context/PermissionContext";
 import { useFetchStoricoLavorazioni } from "@/query/query";
 import { formatData } from "@/utils/format";
+import { useQueryClient } from "@tanstack/react-query";
 import dayjs from "dayjs";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { PromoResponseDTO } from "../../../server/core/dto";
 import EmptyState from "../../components/EmptyState";
+import { useEliminazionePromo } from "../shared/EliminazionePromo";
 import IntestazioneOrdinabile, { ARIA_SORT, type DirezioneOrdinamento } from "../shared/IntestazioneOrdinabile";
 
 type SortField = 'nome' | 'data_scadenza' | 'validita_dal' | 'validita_al' | 'stato' | 'offset_visibilita';
@@ -37,6 +40,8 @@ const CAMPI_RICERCA: { valore: SortField; etichetta: string }[] = [
 
 function Main() {
   const navigate = useNavigate();
+  const { superadmin } = usePermissionContext();
+  const queryClient = useQueryClient();
 
   // Stato per il filtro
   const [filter, setFilter] = useState({
@@ -54,6 +59,11 @@ function Main() {
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
   const data = useFetchStoricoLavorazioni();
+  // Solo il Superadmin elimina dallo storico: la promo eliminata passa fra quelle in corso, da cui si ripristina
+  const { apriDialogEliminazione, dialogoEliminazione } = useEliminazionePromo(() => {
+    data.refetch();
+    queryClient.invalidateQueries({ queryKey: ["lavorazioniInCorso"] });
+  });
 
   // Filtra e ordina i dati
   const filteredData = useMemo<PromoResponseDTO[]>(() => {
@@ -303,6 +313,7 @@ function Main() {
 
   return (
     <Pagina titolo="Storico promozioni" descrizione="Visualizza lo storico delle lavorazioni completate, eliminate o scadute">
+      {dialogoEliminazione}
       <Sezione senzaPadding aria-label="Storico delle promozioni">
         <BarraFiltri
           destra={
@@ -421,14 +432,27 @@ function Main() {
                       </Table.Td>
                       <Table.Td className="whitespace-nowrap tabular-nums text-slate-600">{promo.offset_visibilita} giorni</Table.Td>
                       <Table.Td className="text-right">
-                        <Button
-                          variant="outline-secondary"
-                          size="sm"
-                          onClick={() => navigate(`/promozioni/storico/dettagli/${promo.id}`)}
-                        >
-                          Visualizza
-                          <Lucide icon="ArrowRight" aria-hidden="true" className="ml-1.5 h-3.5 w-3.5" />
-                        </Button>
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="outline-secondary"
+                            size="sm"
+                            onClick={() => navigate(`/promozioni/storico/dettagli/${promo.id}`)}
+                          >
+                            Visualizza
+                            <Lucide icon="ArrowRight" aria-hidden="true" className="ml-1.5 h-3.5 w-3.5" />
+                          </Button>
+                          {superadmin && (
+                            <Button
+                              variant="outline-danger"
+                              size="sm"
+                              aria-label={`Elimina ${promo.nome}`}
+                              title="Elimina"
+                              onClick={() => apriDialogEliminazione(promo)}
+                            >
+                              <Lucide icon="Trash2" aria-hidden="true" className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
                       </Table.Td>
                     </Table.Tr>
                   ))}
@@ -465,15 +489,23 @@ function Main() {
                       <dd className="tabular-nums text-slate-700 dark:text-slate-300">{formatData(promo.validita_al)}</dd>
                     </div>
                   </dl>
-                  <Button
-                    variant="outline-secondary"
-                    size="sm"
-                    className="w-full sm:w-auto"
-                    onClick={() => navigate(`/promozioni/storico/dettagli/${promo.id}`)}
-                  >
-                    Visualizza
-                    <Lucide icon="ArrowRight" aria-hidden="true" className="ml-1.5 h-3.5 w-3.5" />
-                  </Button>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Button
+                      variant="outline-secondary"
+                      size="sm"
+                      className="w-full sm:w-auto"
+                      onClick={() => navigate(`/promozioni/storico/dettagli/${promo.id}`)}
+                    >
+                      Visualizza
+                      <Lucide icon="ArrowRight" aria-hidden="true" className="ml-1.5 h-3.5 w-3.5" />
+                    </Button>
+                    {superadmin && (
+                      <Button variant="outline-danger" size="sm" className="w-full sm:w-auto" onClick={() => apriDialogEliminazione(promo)}>
+                        <Lucide icon="Trash2" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                        Elimina
+                      </Button>
+                    )}
+                  </div>
                 </li>
               ))}
             </ul>
