@@ -53,7 +53,10 @@ public class TimoneSchedaTests
         string js = Timone();
 
         Assert.Contains("dd.textContent = leggibile(v.etichetta) || leggibile(f && f.descrizione);", js);
-        Assert.Contains("de.textContent = leggibile(f.descrizione);", js);
+        // I20-1197: nella finestra del gruppo il nome della scheda viene da nomeDi, che pulisce la
+        // descrizione di Istanta come faceva la riga di prima (de.textContent = leggibile(f.descrizione))
+        Assert.Contains("var n = f && f.descrizione ? leggibile(f.descrizione) : '';", js);
+        Assert.Contains("no.textContent = nomeDi(x);", js);
         Assert.Contains("descrizione: rpPulisci(mia.descrizione)", js);
         Assert.DoesNotContain("de.textContent = f.descrizione;", js);
     }

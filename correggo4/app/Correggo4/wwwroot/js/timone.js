@@ -595,51 +595,60 @@ body.tim_on .modale {
 .tim_casella .cod button.copia.fatto { background: #7ad3a0; }
 .tim_casella .cod button.copia.fatto svg { fill: #12482f; }
 
-/* ---------- L'ELENCO DELLE REFERENZE DI UN GRUPPO (j295) ----------
-   Michele, 29/09: dentro un gruppo vuole vedere le referenze una per una - foto, descrizione,
-   PESO («aggiungici anche l'info del peso che e' importante»), prezzo, primario/secondario - e
-   poterne staccare una. Sta sopra al foglio come la finestrella del cestino, e si chiude con un
-   clic fuori. Piu' alta di #tim_cestino di un filo perche' la si apre anche da sopra di lui. */
+/* ---------- LA FINESTRA DEL GRUPPO (j295, j296; rifatta con I20-1197) ----------
+   Si apre dalla graffetta della casella, sta sopra al foglio come la finestrella del cestino e si
+   chiude con un clic fuori. Piu' alta di #tim_cestino di un filo perche' la si apre anche da sopra
+   di lui.
+   I20-1197: la grafica e' quella del mockup del cliente - la fascia verde con quante referenze e
+   in che casella, l'istruzione con la mano, le referenze affiancate con «SGRUPPA E SOSPENDI», e
+   sotto «Unisci» con la ricerca. L'intestazione «GESTIONE GRUPPO (ID)» del mockup, l'inglese e le
+   forbici sul bottone l'operatore li ha fatti togliere. Restano le regole di
+   j295/j296: il PESO si vede (Michele, 29/09: «aggiungici anche l'info del peso che e'
+   importante»), il «no foto» e' quello di sistema, e unire o staccare si spengono in sola lettura. */
 #tim_gruppo { position: fixed; z-index: 107; background: #fff; border: 2px solid #1d5b55;
-              border-radius: 10px; padding: 10px 11px; font-size: 13px; color: #1f2a30;
-              box-shadow: 0 10px 28px rgba(0,0,0,.4); width: 350px;
-              max-height: 76vh; overflow-y: auto; }
-#tim_gruppo h5 { margin: 0 0 2px; font-size: 13px; color: #1d5b55; }
-#tim_gruppo .sotto { color: #7c8a91; font-size: 11.5px; margin-bottom: 9px; }
-#tim_gruppo .ref { display: flex; gap: 8px; align-items: flex-start; border: 2px solid #dfe5e8;
-                   border-radius: 8px; padding: 6px 7px; margin-bottom: 6px; }
-#tim_gruppo .ref.capo { border-color: #46a9a2; background: #f2fbfa; }
-#tim_gruppo .ref img { flex: 0 0 46px; width: 46px; height: 46px; object-fit: contain;
-                       background: #fff; border-radius: 4px; }
+              border-radius: 10px; padding: 0 0 10px; font-size: 13px; color: #1f2a30;
+              box-shadow: 0 10px 28px rgba(0,0,0,.4); width: 430px; max-width: calc(100vw - 16px);
+              max-height: 80vh; overflow-y: auto; box-sizing: border-box; }
+#tim_gruppo .tg_fascia { background: #1d5b55; color: #fff; font-size: 13px; font-weight: 700;
+                         padding: 6px 11px; margin-bottom: 9px; }
+#tim_gruppo .tg_corpo { padding: 0 11px; }
+#tim_gruppo .tg_istr { display: flex; gap: 8px; align-items: center; border: 2px solid #dfe5e8;
+                       border-radius: 8px; padding: 6px 8px; margin-bottom: 9px; font-size: 11.5px;
+                       color: #4a5860; }
+#tim_gruppo .tg_istr svg { flex: 0 0 24px; width: 24px; height: 24px; fill: #1d5b55; }
+#tim_gruppo .avvisino { font-size: 11px; color: #a8481f; margin: -2px 0 8px; }
+/* le referenze del gruppo, affiancate: due per riga */
+#tim_gruppo .tg_refs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+#tim_gruppo .tg_ref { display: flex; flex-direction: column; gap: 4px; min-width: 0;
+                      border: 2px solid #dfe5e8; border-radius: 8px; padding: 6px 7px; }
+#tim_gruppo .tg_ref.capo { border-color: #46a9a2; background: #f2fbfa; }
+#tim_gruppo .tg_ref .tg_quale { font-size: 10.5px; color: #7c8a91; }
+#tim_gruppo .tg_ref .tg_alto { display: flex; gap: 6px; align-items: flex-start; }
+#tim_gruppo .tg_ref img { flex: 0 0 46px; width: 46px; height: 46px; object-fit: contain;
+                          background: #fff; border-radius: 4px; }
 /* quando la foto non c'e' si mette il «no foto» di sistema, lo stesso che usa la scheda
    dell'Edit avanzato: in j295 avevo disegnato un quadratino con «senza foto» scritto dentro, e
    Michele l'ha fatto cambiare il giorno stesso (29/09). Un segnaposto solo, in tutte le schermate. */
-#tim_gruppo .ref .nofoto { flex: 0 0 46px; width: 46px; height: 46px; border-radius: 4px;
-                           object-fit: contain; background: #fff; opacity: .75; }
-#tim_gruppo .ref .dati { flex: 1 1 auto; min-width: 0; }
-#tim_gruppo .ref .codice { font-size: 12px; font-weight: 800; color: #1d5b55;
-                           overflow-wrap: anywhere; }
-#tim_gruppo .ref .desc { font-size: 11px; line-height: 1.3; color: #1f2a30;
-                         overflow-wrap: anywhere; }
-#tim_gruppo .ref .numeri { font-size: 11px; color: #4a5860; margin-top: 2px; }
-#tim_gruppo .ref .numeri b { color: #1f2a30; }
-#tim_gruppo .ref .ps { display: inline-block; font-size: 9.5px; font-weight: 800;
-                       border-radius: 3px; padding: 0 4px; margin-right: 5px; }
-#tim_gruppo .ref .ps.p { background: #a5bb9b; color: #1c3315; }
-#tim_gruppo .ref .ps.s { background: #bbb79b; color: #3a3316; }
-#tim_gruppo .ref .ps.n { background: #dfe5e8; color: #6b7a82; }
-#tim_gruppo .ref .qui { display: inline-block; font-size: 9.5px; font-weight: 800; color: #1d5b55;
-                        background: #d6f0ec; border-radius: 3px; padding: 0 4px; }
-#tim_gruppo .ref .via { flex: 0 0 auto; align-self: center; border: 2px solid #dfe5e8;
-                        border-radius: 7px; background: #fff; cursor: pointer; padding: 5px 6px;
-                        line-height: 0; }
-#tim_gruppo .ref .via svg { width: 15px; height: 15px; fill: #4a5860; pointer-events: none; }
-#tim_gruppo .ref .via:hover { border-color: #a8481f; }
-#tim_gruppo .ref .via:hover svg { fill: #a8481f; }
-#tim_gruppo .ref .via[disabled] { opacity: .3; cursor: default; }
-#tim_gruppo .ref .via[disabled]:hover { border-color: #dfe5e8; }
-#tim_gruppo .ref .via[disabled]:hover svg { fill: #4a5860; }
-#tim_gruppo .avvisino { font-size: 11px; color: #a8481f; margin: -2px 0 8px; }
+#tim_gruppo .tg_ref img.nofoto { opacity: .75; }
+#tim_gruppo .tg_ref .tg_nome { font-size: 11.5px; font-weight: 700; line-height: 1.25;
+                               overflow-wrap: anywhere; }
+#tim_gruppo .tg_ref .codice { font-size: 11px; font-weight: 800; color: #1d5b55;
+                              overflow-wrap: anywhere; }
+#tim_gruppo .tg_ref .numeri { font-size: 11px; color: #4a5860; }
+#tim_gruppo .tg_ref .ps { display: inline-block; font-size: 9.5px; font-weight: 800;
+                          border-radius: 3px; padding: 0 4px; margin-right: 5px; }
+#tim_gruppo .tg_ref .ps.p { background: #a5bb9b; color: #1c3315; }
+#tim_gruppo .tg_ref .ps.s { background: #bbb79b; color: #3a3316; }
+#tim_gruppo .tg_ref .ps.n { background: #dfe5e8; color: #6b7a82; }
+#tim_gruppo .tg_ref .qui { display: inline-block; font-size: 9.5px; font-weight: 800; color: #1d5b55;
+                           background: #d6f0ec; border-radius: 3px; padding: 0 4px; }
+#tim_gruppo .tg_ref .via { margin-top: auto; display: flex; align-items: center; justify-content: center;
+                           gap: 5px; border: 2px solid #dfe5e8; border-radius: 7px; background: #fff;
+                           cursor: pointer; padding: 4px 6px; font: inherit; font-size: 10.5px;
+                           font-weight: 800; letter-spacing: .3px; color: #4a5860; }
+#tim_gruppo .tg_ref .via:hover { border-color: #a8481f; color: #a8481f; }
+#tim_gruppo .tg_ref .via[disabled] { opacity: .35; cursor: default; }
+#tim_gruppo .tg_ref .via[disabled]:hover { border-color: #dfe5e8; color: #4a5860; }
 #tim_gruppo .chi { border: 2px solid #a8481f; border-radius: 8px; padding: 7px 8px;
                    margin-bottom: 7px; background: #fdf4f0; }
 #tim_gruppo .chi p { margin: 0 0 6px; font-size: 11.5px; color: #7a3a19; }
@@ -650,29 +659,44 @@ body.tim_on .modale {
 #tim_gruppo .chi .lascia { border: 0; background: none; color: #7c8a91; font-weight: 400;
                            text-decoration: underline; padding: 0; width: auto; }
 
-/* ---------- UNIRE (j296): la parte di sotto della stessa finestra ----------
+/* ---------- UNIRE (j296, allargata con I20-1197): la parte di sotto della stessa finestra ----------
    Michele, 29/09: «se volessero mettere un singolo e unirlo con altre referenze per prendere meno
-   spazio in volantino?». Si sceglie da un elenco: le referenze in casella di QUESTA pagina e gli
-   elementi in sospeso, che e' dove finisce chi viene staccato - cosi' staccare e riunire sono un
-   giro chiuso. */
-#tim_gruppo .unisci { border-top: 2px solid #dfe5e8; margin-top: 9px; padding-top: 8px; }
-#tim_gruppo .unisci h6 { margin: 0 0 2px; font-size: 12px; color: #1d5b55; }
-#tim_gruppo .unisci .sotto { margin-bottom: 7px; }
+   spazio in volantino?». Si sceglie da un elenco: con I20-1197 ci sono le referenze in casella di
+   tutte le pagine - questa per prima - e gli elementi in sospeso, e si cerca per nome, codice,
+   reparto o tema. */
+#tim_gruppo .unisci { border-top: 2px solid #dfe5e8; margin-top: 10px; padding-top: 9px; }
+#tim_gruppo .unisci h6 { margin: 0 0 2px; font-size: 13px; color: #1d5b55; }
+#tim_gruppo .unisci .sotto { color: #7c8a91; font-size: 11.5px; margin-bottom: 6px; }
+#tim_gruppo .tg_cerca { position: relative; margin-bottom: 8px; }
+#tim_gruppo .tg_cerca svg { position: absolute; left: 8px; top: 50%; transform: translateY(-50%);
+                            width: 16px; height: 16px; fill: #7c8a91; pointer-events: none; }
+#tim_gruppo .tg_cerca input { width: 100%; box-sizing: border-box; border: 2px solid #dfe5e8;
+                              border-radius: 7px; padding: 6px 8px 6px 30px; font: inherit;
+                              font-size: 12px; color: #1f2a30; }
+#tim_gruppo .tg_cerca input:focus { outline: none; border-color: #46a9a2; }
 #tim_gruppo .unisci .gruppetto { font-size: 10.5px; font-weight: 800; color: #7c8a91;
                                  text-transform: uppercase; letter-spacing: .3px; margin: 6px 0 4px; }
-#tim_gruppo .unisci button.c { display: flex; align-items: center; gap: 7px; width: 100%;
-                               text-align: left; border: 2px solid #dfe5e8; border-radius: 7px;
-                               background: #fff; padding: 5px 8px; cursor: pointer; font: inherit;
-                               font-size: 11.5px; color: #1f2a30; margin-bottom: 5px; }
-#tim_gruppo .unisci button.c:hover { border-color: #46a9a2; }
-#tim_gruppo .unisci button.c .cod2 { font-weight: 800; color: #1d5b55; overflow-wrap: anywhere; }
-#tim_gruppo .unisci button.c .dove { margin-left: auto; flex: 0 0 auto; color: #7c8a91;
-                                     font-size: 10.5px; }
-#tim_gruppo .unisci button.c .pr { flex: 0 0 auto; font-weight: 800; }
+#tim_gruppo .tg_riga { display: flex; align-items: center; gap: 7px; border: 2px solid #dfe5e8;
+                       border-radius: 7px; padding: 5px 7px; margin-bottom: 5px; }
+#tim_gruppo .tg_riga img { flex: 0 0 36px; width: 36px; height: 36px; object-fit: contain;
+                           background: #fff; border-radius: 4px; }
+#tim_gruppo .tg_riga img.nofoto { opacity: .75; }
+#tim_gruppo .tg_riga .tg_info { flex: 1 1 auto; min-width: 0; font-size: 11px; color: #4a5860; }
+#tim_gruppo .tg_riga .tg_nome2 { font-size: 11.5px; font-weight: 700; color: #1f2a30;
+                                 overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#tim_gruppo .tg_riga .cod2 { font-weight: 800; color: #1d5b55; overflow-wrap: anywhere; }
+#tim_gruppo .tg_riga .pr { font-weight: 800; color: #1f2a30; }
 /* il pallino arancione: il prezzo promo non e' lo stesso. Non impedisce niente - Michele ha detto
    «Si', ma con un avviso» - ma si vede prima di premere. */
-#tim_gruppo .unisci button.c .pr.diverso { color: #a8481f; }
-#tim_gruppo .unisci button.c .pr.diverso::after { content: ' ●'; }
+#tim_gruppo .tg_riga .pr.diverso { color: #a8481f; }
+#tim_gruppo .tg_riga .pr.diverso::after { content: ' ●'; }
+#tim_gruppo .tg_riga button.c { flex: 0 0 auto; display: flex; align-items: center; gap: 4px;
+                                border: 2px solid #46a9a2; border-radius: 7px; background: #f2fbfa;
+                                padding: 4px 6px; cursor: pointer; font: inherit; font-size: 10px;
+                                font-weight: 800; letter-spacing: .3px; color: #1d5b55; }
+#tim_gruppo .tg_riga button.c svg { width: 14px; height: 14px; fill: currentColor; pointer-events: none; }
+#tim_gruppo .tg_riga button.c span { pointer-events: none; }
+#tim_gruppo .tg_riga button.c:hover { background: #d6f0ec; }
 #tim_gruppo .unisci .niente { font-size: 11px; color: #7c8a91; }
 
 /* i tre pannelli laterali */
@@ -1112,12 +1136,8 @@ var STILE_REPORT = `
                         '<path d="M16.1 6.3 8.4 14a2.1 2.1 0 0 0 3 3l7.2-7.2a4.2 4.2 0 0 0-6-6L4.9 ' +
                         '11.4a6.3 6.3 0 0 0 8.9 8.9l6.3-6.3-1.4-1.4-6.3 6.3a4.3 4.3 0 0 1-6.1-6.1l7.7-7.7a2.2 ' +
                         '2.2 0 0 1 3.1 3.1l-7.2 7.2a.1.1 0 0 1-.2-.2l7.7-7.7-1.3-1.2z"/></svg>';
-    /* lo strappo: la referenza esce dal gruppo. Una forbice si legge subito e non si confonde col
-       cestino, che vuol dire un'altra cosa (via dal volantino). */
-    var ICO_SGRUPPA = '<svg viewBox="0 0 24 24" aria-hidden="true">' +
-                      '<path d="M6 2h1.8l5.2 8.4-1.6 2.6L6 4.6V2zm12 0h-1.8l-3.4 5.5 1.6 2.6L18 4.6V2z"/>' +
-                      '<path d="M5.5 15a3.2 3.2 0 1 0 0 6.4 3.2 3.2 0 0 0 0-6.4zm0 1.8a1.4 1.4 0 1 1 0 2.8 1.4 1.4 0 0 1 0-2.8z"/>' +
-                      '<path d="M18.5 15a3.2 3.2 0 1 0 0 6.4 3.2 3.2 0 0 0 0-6.4zm0 1.8a1.4 1.4 0 1 1 0 2.8 1.4 1.4 0 0 1 0-2.8z"/></svg>';
+    /* I20-1197: la forbice dello strappo (ICO_SGRUPPA) se n'e' andata: il bottone «STACCA E
+       SOSPENDI» della finestra del gruppo era l'unico a usarla, e ora e' solo testo. */
 
     function pannello(id, titolo, icona) {
         var p = document.createElement('div');
@@ -3118,6 +3138,7 @@ var STILE_REPORT = `
 
     function apriGruppo(bottone, v) {
         chiudiGruppo();
+        cercaGruppo = '';       // I20-1197: un gruppo nuovo, una ricerca nuova
         var q = document.createElement('div');
         q.id = 'tim_gruppo';
         document.body.appendChild(q);
@@ -3146,37 +3167,92 @@ var STILE_REPORT = `
                                                                : Math.max(8, r.top - alt - 6)) + 'px';
     }
 
-    /* Disegna l'elenco. «chiCapo» diverso da null vuol dire che si sta staccando il capogruppo e
+    /* I20-1197: le icone della finestra del gruppo, come nel mockup del cliente: la mano
+       dell'istruzione, la lente della ricerca e l'omino col piu' di «UNISCI AL GRUPPO». */
+    var ICO_MANO = '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+                   '<path d="M9 11.24V7.5a2.5 2.5 0 0 1 5 0v3.74c1.21-.81 2-2.18 2-3.74C16 5.01 13.99 3 11.5 3S7 5.01 7 7.5c0 1.56.79 2.93 2 3.74z"/>' +
+                   '<path d="M18.84 15.87l-4.54-2.26a1.3 1.3 0 0 0-.54-.11H13v-6c0-.83-.67-1.5-1.5-1.5S10 6.67 10 7.5v10.74l-3.43-.72a1.1 1.1 0 0 0-1.03.3l-.79.8 4.94 4.94c.27.27.65.44 1.06.44h6.79c.75 0 1.33-.55 1.44-1.28l.75-5.27c.01-.07.02-.14.02-.2 0-.62-.38-1.16-.91-1.38z"/></svg>';
+    var ICO_LENTE = '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+                    '<path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>';
+    var ICO_UNISCI = '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+                     '<path d="M15 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>';
+
+    /* I20-1197: il testo cercato. Resta finche' la finestra e' sullo stesso gruppo - dopo un'unione
+       l'elenco si ridisegna e chi stava cercando ritrova la sua ricerca - e si azzera aprendola. */
+    var cercaGruppo = '';
+
+    /* La foto di una referenza dalla scheda del suo box, se e' gia' arrivata da Istanta. */
+    function fotoDellaScheda(x) {
+        var s = x && x.idElemento ? schedePerBox[String(x.idElemento)] : null;
+        if (!s || s.stato !== 'ok') return null;
+        return (s.foto || []).filter(function (y) { return y.codice === x.codice; })[0] || null;
+    }
+
+    /* Il nome da far leggere: la descrizione della scheda se c'e', altrimenti quella del box
+       (etichetta, che il server legge dal dna) e in fondo il codice. */
+    function nomeDi(x) {
+        var f = fotoDellaScheda(x);
+        var n = f && f.descrizione ? leggibile(f.descrizione) : '';
+        return n || leggibile(x.etichetta || '') || x.codice || '';
+    }
+
+    /* La ricerca: ogni parola scritta deve stare nel nome, nel codice, nel reparto o nel tema di
+       una referenza del gruppo candidato. Senza badare a maiuscole e accenti. */
+    function normalizzaRicerca(s) {
+        return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    }
+    function corrispondeAllaRicerca(x, testo) {
+        var parole = normalizzaRicerca(testo).split(/\s+/).filter(function (w) { return w.length > 0; });
+        if (parole.length === 0) return true;
+        var dove = normalizzaRicerca(gruppoDi(x).map(function (y) {
+            return [y.codice, y.etichetta, nomeDi(y), y.reparto, y.tema].join(' ');
+        }).join(' '));
+        return parole.every(function (w) { return dove.indexOf(w) >= 0; });
+    }
+
+    /* Disegna la finestra. «chiCapo» diverso da null vuol dire che si sta staccando il capogruppo e
        si sta chiedendo chi tiene la casella: in quel caso l'elenco lascia il posto alla domanda. */
     function disegnaGruppo(v, chiCapo) {
         var q = document.getElementById('tim_gruppo');
         if (!q) return;
         var g = gruppoDi(v);
+        var capo = capoDi(v);
         var s = v.idElemento ? schedePerBox[String(v.idElemento)] : null;
         q.innerHTML = '';
 
-        var h = document.createElement('h5');
-        h.textContent = g.length > 1 ? 'Gruppo di ' + g.length + ' referenze' : v.codice;
-        q.appendChild(h);
-        var sub = document.createElement('div');
-        sub.className = 'sotto';
-        sub.textContent = g.length > 1
-            ? 'Occupano una casella sola. Staccarne una la manda in sospeso, poi la rimetti in ' +
-              'pagina da dove vuoi.'
-            : 'Questa referenza sta da sola nella casella ' + (v.posizione || '') + '.';
-        q.appendChild(sub);
+        // I20-1197: la fascia verde del mockup. L'intestazione «GESTIONE GRUPPO (ID)» sopra di lei
+        // l'operatore l'ha fatta togliere: la finestra comincia da qui.
+        var fa = document.createElement('div');
+        fa.className = 'tg_fascia';
+        fa.textContent = g.length > 1
+            ? 'Gruppo di ' + g.length + ' referenze' + (capo.posizione ? ' in casella ' + capo.posizione : '')
+            : 'Referenza da sola' + (v.posizione ? ' in casella ' + v.posizione : '');
+        q.appendChild(fa);
+        var corpo = document.createElement('div');
+        corpo.className = 'tg_corpo';
+        q.appendChild(corpo);
+
+        if (g.length > 1) {
+            var is = document.createElement('div');
+            is.className = 'tg_istr';
+            is.innerHTML = ICO_MANO;
+            var ist = document.createElement('span');
+            ist.textContent = 'Stacca una referenza per metterla in sospeso. Puoi poi trascinarla in una casella vuota.';
+            is.appendChild(ist);
+            corpo.appendChild(is);
+        }
 
         if (s && s.stato === 'carico') {
             var att = document.createElement('div');
             att.className = 'avvisino';
             att.textContent = 'Chiedo a Istanta foto, peso e prezzi…';
-            q.appendChild(att);
+            corpo.appendChild(att);
         } else if (s && s.stato === 'errore') {
             var er = document.createElement('div');
             er.className = 'avvisino';
             er.textContent = 'Foto, peso e prezzi non disponibili: ' + s.errore +
                              ' I codici sotto sono quelli giusti.';
-            q.appendChild(er);
+            corpo.appendChild(er);
         }
 
         if (chiCapo) {
@@ -3201,28 +3277,47 @@ var STILE_REPORT = `
             la.dataset.lascia = '1';
             la.textContent = 'lascia stare';
             box.appendChild(la);
-            q.appendChild(box);
+            corpo.appendChild(box);
             return;
         }
 
-        g.forEach(function (x) {
-            var f = null;
-            if (s && s.stato === 'ok') {
-                f = (s.foto || []).filter(function (y) { return y.codice === x.codice; })[0] || null;
-            }
+        // I20-1197: le referenze del gruppo affiancate, ognuna col suo «SGRUPPA E SOSPENDI»
+        var griglia = document.createElement('div');
+        griglia.className = 'tg_refs';
+        g.forEach(function (x, i) {
+            var f = fotoDellaScheda(x);
+            /* I20-1197: un gruppo del timone mette insieme referenze di box diversi, e ogni box ha la
+               sua scheda in Istanta. Prima si chiedeva solo quella del box della casella: le altre
+               referenze restavano col «no foto», senza peso ne' prezzo. */
+            if (x.idElemento && !schedePerBox[String(x.idElemento)]) chiediSchedaBox(x.idElemento, gruppoFraPoco);
             var r = document.createElement('div');
-            r.className = 'ref' + (tieneLaCasella(x) ? ' capo' : '');
+            r.className = 'tg_ref' + (tieneLaCasella(x) ? ' capo' : '');
 
+            var qu = document.createElement('div');
+            qu.className = 'tg_quale';
+            qu.textContent = 'Referenza ' + (i + 1) + ':';
+            if (tieneLaCasella(x)) {
+                var qq = document.createElement('span');
+                qq.className = 'qui';
+                qq.textContent = 'casella ' + x.posizione;
+                qq.title = 'E\' lei che tiene la casella per tutto il gruppo';
+                qu.appendChild(document.createTextNode(' '));
+                qu.appendChild(qq);
+            }
+            r.appendChild(qu);
+
+            var alto = document.createElement('div');
+            alto.className = 'tg_alto';
             if (f && f.guidFoto) {
                 var im = document.createElement('img');
                 im.setAttribute('src', miniaturaDi(f.guidFoto, 92));
                 im.setAttribute('alt', '');
                 im.draggable = false;
-                r.appendChild(im);
+                alto.appendChild(im);
             } else {
                 /* j300: anche qui il «no foto» e' quello di sistema, non una scritta mia (Michele,
-                   29/09). Prima era un quadratino con «senza foto» scritto dentro: due segnaposti
-                   diversi nella stessa schermata si leggono come due cose diverse. */
+                   29/09). Due segnaposti diversi nella stessa schermata si leggono come due cose
+                   diverse. */
                 var nf = document.createElement('img');
                 nf.className = 'nofoto';
                 nf.draggable = false;
@@ -3231,11 +3326,13 @@ var STILE_REPORT = `
                 nf.title = s && s.stato === 'ok'
                     ? 'A sistema non c\'e' + '\' una foto per questa referenza'
                     : 'Foto non ancora arrivate da Istanta';
-                r.appendChild(nf);
+                alto.appendChild(nf);
             }
-
             var d = document.createElement('div');
-            d.className = 'dati';
+            var no = document.createElement('div');
+            no.className = 'tg_nome';
+            no.textContent = nomeDi(x);
+            d.appendChild(no);
             var cc = document.createElement('div');
             cc.className = 'codice';
             if (f) {
@@ -3248,22 +3345,10 @@ var STILE_REPORT = `
                 cc.appendChild(ps);
             }
             cc.appendChild(document.createTextNode(x.codice));
-            if (tieneLaCasella(x)) {
-                var qq = document.createElement('span');
-                qq.className = 'qui';
-                qq.textContent = 'casella ' + x.posizione;
-                qq.title = 'E\' lei che tiene la casella per tutto il gruppo';
-                cc.appendChild(document.createTextNode(' '));
-                cc.appendChild(qq);
-            }
             d.appendChild(cc);
+            alto.appendChild(d);
+            r.appendChild(alto);
 
-            if (f && f.descrizione) {
-                var de = document.createElement('div');
-                de.className = 'desc';
-                de.textContent = leggibile(f.descrizione);
-                d.appendChild(de);
-            }
             /* IL PESO e' il motivo per cui questo elenco esiste: dentro un gruppo descrizione,
                foto e prezzo del box sono uno solo, il peso invece distingue una referenza
                dall'altra (Michele: «aggiungici anche l'info del peso che e' importante»). */
@@ -3274,15 +3359,15 @@ var STILE_REPORT = `
                 var nu = document.createElement('div');
                 nu.className = 'numeri';
                 nu.textContent = pezzi.join(' · ');
-                d.appendChild(nu);
+                r.appendChild(nu);
             }
-            r.appendChild(d);
 
             var bv = document.createElement('button');
             bv.type = 'button';
             bv.className = 'via';
             bv.dataset.stacca = x.id;
-            bv.innerHTML = ICO_SGRUPPA;
+            // I20-1197: in italiano e senza le forbici, come ha chiesto l'operatore in revisione
+            bv.textContent = 'SGRUPPA E SOSPENDI';
             if (g.length < 2) {
                 bv.disabled = true;
                 bv.title = 'Non e\' in un gruppo: non c\'e' + '\' niente da staccare';
@@ -3293,8 +3378,9 @@ var STILE_REPORT = `
                 bv.title = 'Il timone e\' in sola lettura: staccare non si puo\'';
             }
             r.appendChild(bv);
-            q.appendChild(r);
+            griglia.appendChild(r);
         });
+        corpo.appendChild(griglia);
 
         /* ---- e in fondo: UNISCI (j296). Solo a chi puo' scrivere: a chi guarda mostrare un
            elenco di cose che non puo' fare sarebbe una presa in giro. */
@@ -3307,57 +3393,167 @@ var STILE_REPORT = `
         u.appendChild(h6);
         var su = document.createElement('div');
         su.className = 'sotto';
-        su.textContent = 'Va nella casella ' + (v.posizione || '') + ' insieme a questa, e la sua ' +
-                         'casella si libera.';
+        su.textContent = 'Va nella casella ' + (capo.posizione || v.posizione || '') + ' insieme a questa, e la ' +
+                         'sua casella si libera, anche se sta in un\'altra pagina.';
         u.appendChild(su);
 
-        var cand = candidatiPer(v);
-        if (cand.length === 0) {
+        // I20-1197: la ricerca per nome, codice, reparto o tema
+        var ce = document.createElement('div');
+        ce.className = 'tg_cerca';
+        ce.innerHTML = ICO_LENTE;
+        var inp = document.createElement('input');
+        inp.type = 'search';
+        inp.placeholder = 'Cerca per nome, codice, reparto o tema';
+        inp.value = cercaGruppo;
+        inp.setAttribute('aria-label', 'Cerca una referenza da unire');
+        ce.appendChild(inp);
+        u.appendChild(ce);
+
+        var el = document.createElement('div');
+        el.className = 'tg_elenco';
+        u.appendChild(el);
+        corpo.appendChild(u);
+        inp.addEventListener('input', function () {
+            cercaGruppo = inp.value;
+            disegnaElencoUnisci(v, el);
+        });
+        disegnaElencoUnisci(v, el);
+    }
+
+    /* I20-1197: l'elenco di chi si puo' unire, filtrato dalla ricerca. Si rifa' da solo, senza
+       toccare il resto della finestra: cosi' il campo di ricerca non perde il cursore. */
+    var SCHEDE_PER_ELENCO = 30;     // quante foto si chiedono a Istanta a ogni giro, al massimo
+    function disegnaElencoUnisci(v, el) {
+        el.innerHTML = '';
+        var tutte = candidatiPer(v);
+        if (tutte.length === 0) {
             var nn = document.createElement('div');
             nn.className = 'niente';
-            nn.textContent = 'In questa pagina non c\'e' + '\' nessun\'altra referenza da unire, e ' +
-                             'non ci sono elementi in sospeso.';
-            u.appendChild(nn);
-            q.appendChild(u);
+            nn.textContent = 'Non c\'e' + '\' nessun\'altra referenza in casella da unire, e non ci sono ' +
+                             'elementi in sospeso.';
+            el.appendChild(nn);
+            return;
+        }
+        var cand = tutte.filter(function (x) { return corrispondeAllaRicerca(x, cercaGruppo); });
+        if (cand.length === 0) {
+            var n2 = document.createElement('div');
+            n2.className = 'niente';
+            n2.textContent = 'Nessuna referenza corrisponde a «' + cercaGruppo.trim() + '».';
+            el.appendChild(n2);
             return;
         }
         var mio = prezzoDi(v);
-        var titolato = { pagina: false, sospesi: false };
+        var titolato = {};
+        var chieste = 0;
         cand.forEach(function (x) {
-            var sosp = x.stato === 3;
-            var chiave = sosp ? 'sospesi' : 'pagina';
+            var chiave = x.stato === 3 ? 'sospesi' : (x.idPagina === v.idPagina ? 'pagina' : 'altre');
             if (!titolato[chiave]) {
                 titolato[chiave] = true;
                 var ti = document.createElement('div');
                 ti.className = 'gruppetto';
-                ti.textContent = sosp ? 'in sospeso' : 'in questa pagina';
-                u.appendChild(ti);
+                ti.textContent = chiave === 'sospesi' ? 'in sospeso'
+                               : chiave === 'pagina' ? 'in questa pagina' : 'nelle altre pagine';
+                el.appendChild(ti);
             }
-            var b = document.createElement('button');
-            b.type = 'button';
-            b.className = 'c';
-            b.dataset.unisci = x.id;
+            var r = document.createElement('div');
+            r.className = 'tg_riga';
+
+            /* La miniatura viene dalla scheda del box, come nelle caselle. Le schede che mancano si
+               chiedono a Istanta, ma poche per volta: un volantino intero sarebbero centinaia di
+               richieste. Chi cerca restringe l'elenco, e le foto delle righe rimaste arrivano. */
+            var f = fotoDellaScheda(x);
+            var im = document.createElement('img');
+            im.draggable = false;
+            im.setAttribute('alt', '');
+            if (f && f.guidFoto) {
+                im.setAttribute('src', miniaturaDi(f.guidFoto, 72));
+            } else {
+                im.className = 'nofoto';
+                im.setAttribute('src', VIA_NOFOTO);
+                if (x.idElemento && !schedePerBox[String(x.idElemento)] && chieste < SCHEDE_PER_ELENCO) {
+                    chieste++;
+                    chiediSchedaBox(x.idElemento, elencoFraPoco);
+                }
+            }
+            r.appendChild(im);
+
+            var info = document.createElement('div');
+            info.className = 'tg_info';
+            var no = document.createElement('div');
+            no.className = 'tg_nome2';
+            no.textContent = nomeDi(x);
+            info.appendChild(no);
             var c1 = document.createElement('span');
             c1.className = 'cod2';
             c1.textContent = codiceDi(x);
-            b.appendChild(c1);
+            info.appendChild(c1);
+            var pg = x.stato === 3 ? null : paginaDi(x.idPagina);
+            var quanteX = quanteNelGruppo(x);
+            info.appendChild(document.createTextNode(' · ' +
+                (x.stato === 3 ? 'in sospeso'
+                 : (x.idPagina === v.idPagina ? '' : 'pag. ' + (pg ? pg.numero : '?') + ' · ') + 'casella ' + x.posizione) +
+                (quanteX > 1 ? ' · gruppo di ' + quanteX : '')));
             var suo = prezzoDi(x);
             if (suo) {
+                info.appendChild(document.createTextNode(' · '));
                 var pr = document.createElement('span');
                 pr.className = 'pr' + (mio && suo !== mio ? ' diverso' : '');
                 pr.textContent = suo;
                 if (mio && suo !== mio) pr.title = 'Prezzo promo diverso da questa casella (' + mio + ')';
-                b.appendChild(pr);
+                info.appendChild(pr);
             }
-            var dv = document.createElement('span');
-            dv.className = 'dove';
-            var quanteX = quanteNelGruppo(x);
-            dv.textContent = (sosp ? 'in sospeso' : 'casella ' + x.posizione) +
-                             (quanteX > 1 ? ' · gruppo di ' + quanteX : '');
-            b.appendChild(dv);
-            u.appendChild(b);
+            r.appendChild(info);
+
+            var b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'c';
+            b.dataset.unisci = x.id;
+            b.innerHTML = ICO_UNISCI + '<span>UNISCI AL GRUPPO</span>';
+            b.title = 'Unisci «' + codiceDi(x) + '» a questa casella';
+            r.appendChild(b);
+            el.appendChild(r);
         });
-        q.appendChild(u);
+    }
+
+    /* I20-1197: arriva la scheda di un altro box del gruppo: si rifa' la finestra, una volta sola per
+       una raffica. Non mentre chiede chi tiene la casella (rifarla toglierebbe la domanda), e chi
+       stava scrivendo nella ricerca ritrova il cursore dove l'aveva lasciato. */
+    var gruppoInAttesa = false;
+    function gruppoFraPoco() {
+        if (gruppoInAttesa) return;
+        gruppoInAttesa = true;
+        setTimeout(function () {
+            gruppoInAttesa = false;
+            var q = document.getElementById('tim_gruppo');
+            if (!q || q.querySelector('.chi')) return;
+            var v = vocePerId(Number(q.dataset.voce));
+            if (!v) return;
+            var cerca = q.querySelector('.tg_cerca input');
+            var scrivendo = cerca && document.activeElement === cerca;
+            var inizio = scrivendo ? cerca.selectionStart : 0, fine = scrivendo ? cerca.selectionEnd : 0;
+            var scorrimento = q.scrollTop;
+            disegnaGruppo(v, null);
+            q.scrollTop = scorrimento;
+            var nuovo = scrivendo ? q.querySelector('.tg_cerca input') : null;
+            if (nuovo) {
+                try { nuovo.focus({ preventScroll: true }); } catch (e) { nuovo.focus(); }
+                try { nuovo.setSelectionRange(inizio, fine); } catch (e2) { /* il campo non lo consente */ }
+            }
+        }, 150);
+    }
+
+    /* Arriva una scheda chiesta dall'elenco: si rifa' l'elenco, una volta sola per una raffica. */
+    var elencoInAttesa = false;
+    function elencoFraPoco() {
+        if (elencoInAttesa) return;
+        elencoInAttesa = true;
+        setTimeout(function () {
+            elencoInAttesa = false;
+            var q = document.getElementById('tim_gruppo');
+            var el = q ? q.querySelector('.tg_elenco') : null;
+            var v = q ? vocePerId(Number(q.dataset.voce)) : null;
+            if (el && v) disegnaElencoUnisci(v, el);
+        }, 150);
     }
 
     /* ================= UNIRE DUE REFERENZE IN UNA CASELLA (j296) =================
@@ -3367,8 +3563,10 @@ var STILE_REPORT = `
 
        CHI SI PUO' UNIRE. Una referenza per riga (il capogruppo: se e' un gruppo, entra tutto), e
        solo due razze:
-        - quelle IN CASELLA IN QUESTA PAGINA: un gruppo sta su una pagina sola, il server rifiuta
-          quelli a cavallo (gruppo_pagine_diverse), quindi da un'altra pagina non si puo' pescare;
+        - quelle IN CASELLA, prima in questa pagina e poi - da I20-1197 - nelle altre. Un gruppo
+          sta su una pagina sola (il server rifiuta quelli a cavallo, gruppo_pagine_diverse), ma
+          chi entra nel gruppo viene in QUESTA pagina e lascia la sua casella: unisciDavvero gli
+          cambia pagina, e la pagina da cui viene si ricompatta come questa;
         - quelle IN SOSPESO, da qualunque pagina vengano: e' dove finisce chi viene staccato, e
           unirla e' anche il modo di togliersela dai piedi (in sospeso il timone non si salva).
        Quelle fuori volantino ed eliminate no: sono state messe via di proposito, e ripescarle di
@@ -3388,11 +3586,14 @@ var STILE_REPORT = `
             if (mio.indexOf(x.id) >= 0) return false;
             if (capoDi(x).id !== x.id) return false;    // una riga per gruppo: entra tutto lui
             if (x.stato === 3) return true;             // in sospeso: sempre
-            return x.stato === 0 && x.idPagina === v.idPagina && !!x.posizione;
+            return x.stato === 0 && !!x.posizione;      // I20-1197: in casella, in qualunque pagina
         }).sort(function (a, b) {
-            // prima quelle in casella in questa pagina, in ordine di casella; poi i sospesi
-            if ((a.stato === 3) !== (b.stato === 3)) return a.stato === 3 ? 1 : -1;
-            return (a.posizione || 0) - (b.posizione || 0) || a.id - b.id;
+            // prima quelle in casella in questa pagina, poi nelle altre pagine in ordine di pagina,
+            // ognuna in ordine di casella; in fondo i sospesi
+            function gruppo(x) { return x.stato === 3 ? 2 : (x.idPagina === v.idPagina ? 0 : 1); }
+            function numero(x) { var pg = paginaDi(x.idPagina); return pg ? (pg.ordine || pg.numero || 0) : 0; }
+            return gruppo(a) - gruppo(b) || numero(a) - numero(b) ||
+                   (a.posizione || 0) - (b.posizione || 0) || a.id - b.id;
         });
     }
 
@@ -3425,6 +3626,9 @@ var STILE_REPORT = `
         var gid = (v.idGruppo === null || v.idGruppo === undefined) ? nuovoIdGruppo() : v.idGruppo;
         v.idGruppo = gid;
         var quanti = 0;
+        /* I20-1197: chi arriva da un'altra pagina vi lascia una casella vuota. Si ricorda da dove
+           viene, per ricompattare anche quella pagina come si fa qui sotto con questa. */
+        var paginaDiProvenienza = (c.stato === 0 && c.idPagina !== v.idPagina) ? paginaDi(c.idPagina) : null;
         /* Si prende il gruppo di «c» PRIMA di toccargli il numero: dopo, gruppoDi non lo
            ritroverebbe piu' insieme ai suoi, e i compagni resterebbero indietro - in pagina e
            senza casella, che al salvataggio e' proprio quello che il server rifiuta. */
@@ -3445,12 +3649,17 @@ var STILE_REPORT = `
         var paginaUnione = paginaDi(v.idPagina);
         chiudiIBuchi(paginaUnione);
         var tornata = riadattaGiu(paginaUnione);
+        if (paginaDiProvenienza) {
+            chiudiIBuchi(paginaDiProvenienza);
+            riadattaGiu(paginaDiProvenienza);
+        }
         segnaModifica();
         disegna();
         disegnaGruppo(v, null);
         var bn = bottoneDi(v);
         if (bn) mettiVicino(document.getElementById('tim_gruppo'), bn);
         avviso('«' + nome + '»' + (quanti > 1 ? ' (gruppo di ' + quanti + ')' : '') +
+               (paginaDiProvenienza ? ' e\' arrivata da pagina ' + paginaDiProvenienza.numero + ' ed' : '') +
                ' e\' entrata nella casella ' + v.posizione + ' con «' + v.codice + '»: adesso il ' +
                'gruppo e\' di ' + quanteNelGruppo(v) + ' referenze e occupa una casella sola.' +
                (tornata ? ' La pagina e\' tornata da ' + tornata + '.' : ''));
@@ -5887,6 +6096,8 @@ function rpCostruisci(piano, opzioni) {
         // I20-1189: e dentro il report, prima alla preview aperta
         if (elReport && elReport.style.display !== 'none') { if (!chiudiAnteprima()) chiudiReport(); return; }
         if (document.getElementById('tim_cestino')) { chiudiCestino(); return; }
+        // I20-1197: c'e' un campo di ricerca, e un Escape li' dentro chiudeva tutto il timone
+        if (document.getElementById('tim_gruppo')) { chiudiGruppo(); return; }
         if (document.getElementById('tim_pagine')) { chiudiPagine(); return; }
         if (document.getElementById('tim_scelta')) { chiudiScelta(); return; }
         if (aperto) chiudi();

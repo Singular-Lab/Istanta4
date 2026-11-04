@@ -374,6 +374,43 @@ public sealed partial class ServizioTimone
 
     private static string Taglia(string s, int max) => s.Length <= max ? s : s[..max];
 
+    /// <summary>
+    /// I20-1197: reparto e tema della referenza, per la ricerca della finestra del gruppo. Stanno
+    /// nel dato della ref che il Plugin manda col volantino: itemRefStringfied, una stringa json
+    /// dentro il json di contenuto del box (ImportatorePack lo salva cosi' com'e'). Reparto e' il
+    /// campo «reparto» con «descrizione_reparto» accanto, se c'e'; tema e' il campo «tema» (i dati
+    /// di Edro21 l'hanno, quelli di Coop no). Stringhe vuote se il dato non c'e' o non si legge.
+    /// </summary>
+    public static (string Reparto, string Tema) RepartoETema(string? contenuto)
+    {
+        if (string.IsNullOrWhiteSpace(contenuto) || !contenuto.TrimStart().StartsWith('{')) return ("", "");
+        try
+        {
+            using var box = JsonDocument.Parse(contenuto);
+            if (box.RootElement.ValueKind != JsonValueKind.Object
+                || !box.RootElement.TryGetProperty("itemRefStringfied", out var s)
+                || s.ValueKind != JsonValueKind.String) return ("", "");
+            string json = s.GetString() ?? "";
+            if (!json.TrimStart().StartsWith('{')) return ("", "");
+            using var rif = JsonDocument.Parse(json);
+            var r = rif.RootElement;
+            string Campo(string nome)
+            {
+                if (!r.TryGetProperty(nome, out var v)) return "";
+                return v.ValueKind switch
+                {
+                    JsonValueKind.String => (v.GetString() ?? "").Trim(),
+                    JsonValueKind.Number => v.GetRawText(),
+                    _ => ""
+                };
+            }
+            var reparti = new[] { Campo("reparto"), Campo("descrizione_reparto") }
+                .Where(x => x.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase);
+            return (Taglia(string.Join(" · ", reparti), 80), Taglia(Campo("tema"), 80));
+        }
+        catch (JsonException) { return ("", ""); }
+    }
+
     // ------------------------------------------------------------------ leggere il piano
 
     /// <summary>Il piano salvato, con le sue pagine e le sue voci. Lo leggono Marketing e Agenzia.</summary>
@@ -458,10 +495,13 @@ public sealed partial class ServizioTimone
            «4x4», tipo_offerta e' «PN»: nessuno dei quattro), poi ho cercato la parola in tutte le
            colonne di testo del database, ed era qui. */
         var meccanicaPerId = new Dictionary<long, string>();
+        // I20-1197: reparto e tema, per cercare nella finestra del gruppo
+        var repartoETemaPerId = new Dictionary<long, (string Reparto, string Tema)>();
         foreach (var g in geo)
         {
             string m = BoxName(g.Contenuto);
             if (m.Length > 0) meccanicaPerId[g.Id] = m;
+            repartoETemaPerId[g.Id] = RepartoETema(g.Contenuto);
         }
 
         // Il PREZZO PROMO non sta nel dna (li' ci sono solo codice, gruppo e descrizione): sta in
@@ -552,6 +592,8 @@ public sealed partial class ServizioTimone
             if (v.IdElemento != null && prezzoPerId.TryGetValue(v.IdElemento.Value, out var pz2)) prezzo = pz2;
             string meccanica = "";
             if (v.IdElemento != null && meccanicaPerId.TryGetValue(v.IdElemento.Value, out var mc2)) meccanica = mc2;
+            var repartoETema = ("", "");
+            if (v.IdElemento != null && repartoETemaPerId.TryGetValue(v.IdElemento.Value, out var rt)) repartoETema = rt;
 
             vociFuori.Add(new
             {
@@ -562,6 +604,9 @@ public sealed partial class ServizioTimone
                 prezzo,
                 // j300: BOX_STD, BOX_FID e compagnia: la scheda della casella la fa vedere
                 meccanica,
+                // I20-1197: per la ricerca della finestra del gruppo
+                reparto = repartoETema.Item1,
+                tema = repartoETema.Item2,
                 // j274: quante caselle occupa. La "posizione" e' quella in alto a sinistra.
                 colonne = v.Colonne < 1 ? (short)1 : v.Colonne,
                 righe = v.Righe < 1 ? (short)1 : v.Righe,
