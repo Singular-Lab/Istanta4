@@ -5405,35 +5405,35 @@ namespace Istanta.Controllers
 
                         if (item.ContainsKey(viewY))
                         {
-                            record.y = Convert.ToDecimal(item[viewY]);
+                            record.y = NumeroDiRegola.ComeDecimale(item[viewY]);
                         }
                         if (item.ContainsKey(viewX))
                         {
-                            record.x = Convert.ToDecimal(item[viewX]);
+                            record.x = NumeroDiRegola.ComeDecimale(item[viewX]);
                         }
                         if (item.ContainsKey(viewW))
                         {
-                            record.w = Convert.ToDecimal(item[viewW]);
+                            record.w = NumeroDiRegola.ComeDecimale(item[viewW]);
                         }
                         if (item.ContainsKey(viewH))
                         {
-                            record.h = Convert.ToDecimal(item[viewH]);
+                            record.h = NumeroDiRegola.ComeDecimale(item[viewH]);
                         }
                         if (item.ContainsKey(viewWPage))
                         {
-                            record.wPage = Convert.ToDecimal(item[viewWPage]);
+                            record.wPage = NumeroDiRegola.ComeDecimale(item[viewWPage]);
                         }
                         if (item.ContainsKey(viewHPage))
                         {
-                            record.hPage = Convert.ToDecimal(item[viewHPage]);
+                            record.hPage = NumeroDiRegola.ComeDecimale(item[viewHPage]);
                         }
                         if (item.ContainsKey(viewAR))
                         {
-                            record.aspectRatio = Convert.ToDecimal(item[viewAR]);
+                            record.aspectRatio = NumeroDiRegola.ComeDecimale(item[viewAR]);
                         }
                         if (item.ContainsKey(viewPERC))
                         {
-                            record.percIngombro = Convert.ToDecimal(item[viewPERC]);
+                            record.percIngombro = NumeroDiRegola.ComeDecimale(item[viewPERC]);
                         }
                         if (item.ContainsKey(viewPag))
                         {
@@ -5668,10 +5668,10 @@ namespace Istanta.Controllers
                             {
                                 //Valore numerico probabilmente
                                 double valNum;
-                                if (Double.TryParse(val, out valNum))
+                                if (NumeroDiRegola.TryLeggi(val, out valNum))
                                 {
                                     double valConfronto;
-                                    if (Double.TryParse(cond.valore, out valConfronto))
+                                    if (NumeroDiRegola.TryLeggi(cond.valore, out valConfronto))
                                     {
                                         if (cond.operatore == ">")
                                         {
@@ -5879,10 +5879,10 @@ namespace Istanta.Controllers
                             {
                                 //Valore numerico probabilmente
                                 double valNum;
-                                if (Double.TryParse(val, out valNum))
+                                if (NumeroDiRegola.TryLeggi(val, out valNum))
                                 {
                                     double valConfronto;
-                                    if (Double.TryParse(cond.valore, out valConfronto))
+                                    if (NumeroDiRegola.TryLeggi(cond.valore, out valConfronto))
                                     {
                                         if (cond.operatore == ">")
                                         {

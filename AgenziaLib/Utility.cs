@@ -1,11 +1,13 @@
 ﻿using IstantaLib;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using AgenziaLib.Tipi;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace AgenziaLib
 {
@@ -384,6 +386,115 @@ namespace AgenziaLib
         }
     }
 
+    /// <summary>
+    /// TASK-13e871a5: i numeri dei record (prezzi, pesi, sconti) letti allo stesso modo qualunque sia
+    /// la cultura del thread: le esportazioni impostano it-IT, le altre chiamate arrivano in en-GB, e
+    /// Decimal.TryParse nella cultura corrente leggeva "0.25" come 25 e "2,87" come 287.
+    /// E' la stessa lettura di Istanta.Models.NumeroDiRegola, copiata qui e non messa in IstantaLib:
+    /// AgenziaLib.dll si distribuisce da sola, e una DLL che chiedesse un metodo nuovo di IstantaLib
+    /// a un'immagine di Istanta piu' vecchia fallirebbe a runtime. Un test tiene uguali le due copie.
+    /// </summary>
+    public static class NumeriSenzaCultura
+    {
+        /// <summary>
+        /// Il numero contenuto nel valore. Un numero vero si usa com'e'; un JValue per il suo
+        /// contenuto; un testo con un solo tipo di separatore lo prende come decimale ("0,25" e
+        /// "0.25" sono 0,25), con tutti e due l'ultimo e' il decimale e gli altri sono migliaia
+        /// ("1.234,5" e "1,234.5" sono 1234,5). Vuoto, null o non numerico: false.
+        /// </summary>
+        public static bool TryLeggi(object valore, out double numero)
+        {
+            numero = 0;
+            switch (valore)
+            {
+                case null:
+                case bool:
+                    return false;
+                case JValue jValue:
+                    return TryLeggi(jValue.Value, out numero);
+                case double d:
+                    numero = d;
+                    return !double.IsNaN(d);
+                case float f:
+                    numero = f;
+                    return !float.IsNaN(f);
+                case decimal m:
+                    numero = (double)m;
+                    return true;
+                case int or long or short or byte or uint or ulong or ushort or sbyte:
+                    numero = Convert.ToDouble(valore, CultureInfo.InvariantCulture);
+                    return true;
+            }
+
+            string testo = TestoNormalizzato(valore);
+            return testo != null && double.TryParse(testo, NumberStyles.Float, CultureInfo.InvariantCulture, out numero);
+        }
+
+        /// <summary>Come TryLeggi, in decimale: prezzi e pesi senza gli arrotondamenti del double.</summary>
+        public static bool TryLeggiDecimale(object valore, out decimal numero)
+        {
+            numero = 0;
+            switch (valore)
+            {
+                case null:
+                case bool:
+                    return false;
+                case JValue jValue:
+                    return TryLeggiDecimale(jValue.Value, out numero);
+                case decimal m:
+                    numero = m;
+                    return true;
+                case double or float or int or long or short or byte or uint or ulong or ushort or sbyte:
+                    if (!TryLeggi(valore, out double d) || double.IsInfinity(d))
+                    {
+                        return false;
+                    }
+                    numero = Convert.ToDecimal(valore, CultureInfo.InvariantCulture);
+                    return true;
+            }
+
+            string testo = TestoNormalizzato(valore);
+            return testo != null && decimal.TryParse(testo, NumberStyles.Float, CultureInfo.InvariantCulture, out numero);
+        }
+
+        /// <summary>
+        /// Al posto di double.Parse e Convert.ToDouble: il numero letto da TryLeggi; se il valore non
+        /// e' un numero, la conversione di prima, che lancia come prima.
+        /// </summary>
+        public static double ComeDouble(object valore)
+        {
+            return TryLeggi(valore, out double numero) ? numero : Convert.ToDouble(valore, CultureInfo.InvariantCulture);
+        }
+
+        /// <summary>Al posto di decimal.Parse e Convert.ToDecimal, come ComeDouble.</summary>
+        public static decimal ComeDecimale(object valore)
+        {
+            return TryLeggiDecimale(valore, out decimal numero) ? numero : Convert.ToDecimal(valore, CultureInfo.InvariantCulture);
+        }
+
+        /// <summary>
+        /// Il testo pronto per la lettura invariante: un solo separatore e' il decimale, con tutti e due
+        /// l'ultimo e' il decimale e l'altro separa le migliaia. Null se e' vuoto.
+        /// </summary>
+        private static string TestoNormalizzato(object valore)
+        {
+            string testo = (Convert.ToString(valore, CultureInfo.InvariantCulture) ?? "").Trim();
+            if (testo == "")
+            {
+                return null;
+            }
+
+            int virgola = testo.LastIndexOf(',');
+            int punto = testo.LastIndexOf('.');
+            if (virgola >= 0 && punto >= 0)
+            {
+                char migliaia = virgola > punto ? '.' : ',';
+                testo = testo.Replace(migliaia.ToString(), "");
+            }
+            return testo.Replace(',', '.');
+        }
+    }
+
     public static class ObjectExtension
     {
         public static decimal ToDecimal(this object obj)
@@ -405,7 +516,8 @@ namespace AgenziaLib
             {
                 if (obj.ToString() != "")
                 {
-                    Decimal.TryParse(obj.ToString(), out d);// Convert.ToDecimal((double)obj);
+                    //TASK-13e871a5: "2,87" e "2.87" valgono 2,87 in ogni cultura.
+                    NumeriSenzaCultura.TryLeggiDecimale(obj.ToString(), out d);
                 }
             }
 

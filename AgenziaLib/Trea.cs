@@ -1685,8 +1685,8 @@ namespace AgenziaLib
                                         {
                                             if (match.Success)
                                             {
-                                                Double prezzoPromoEstratto = Convert.ToDouble(match.Groups[1].Value);
-                                                if (Math.Round(Convert.ToDouble(elemento["prezzo_promo"]),2) != Math.Round(prezzoPromoEstratto, 2))
+                                                Double prezzoPromoEstratto = NumeriSenzaCultura.ComeDouble(match.Groups[1].Value);
+                                                if (Math.Round(NumeriSenzaCultura.ComeDouble(elemento["prezzo_promo"]),2) != Math.Round(prezzoPromoEstratto, 2))
                                                 {
                                                     csvRec["Codice"] = elemento[keyRefCodice].ToString();
                                                     csvRec["Descrizione"] = elemento[keyDescr].ToString();
@@ -1770,12 +1770,12 @@ namespace AgenziaLib
                                         {
                                             if (match.Success)
                                             {
-                                                Double prezzoInizio = Convert.ToDouble(match.Groups[1].Value);
-                                                Double prezzoFine = Convert.ToDouble(match.Groups[2].Value);
+                                                Double prezzoInizio = NumeriSenzaCultura.ComeDouble(match.Groups[1].Value);
+                                                Double prezzoFine = NumeriSenzaCultura.ComeDouble(match.Groups[2].Value);
                                                 string unitaMisura = match.Groups[3].Value;
 
-                                                var prezzoInizioGruppo = Convert.ToDouble(gruppo.OrderBy(d => Convert.ToDouble(d["prezzo_kgl"])).First()["prezzo_kgl"]);
-                                                var prezzoFineGruppo = Convert.ToDouble(gruppo.OrderBy(d => Convert.ToDouble(d["prezzo_kgl"])).Last()["prezzo_kgl"]);
+                                                var prezzoInizioGruppo = NumeriSenzaCultura.ComeDouble(gruppo.OrderBy(d => NumeriSenzaCultura.ComeDouble(d["prezzo_kgl"])).First()["prezzo_kgl"]);
+                                                var prezzoFineGruppo = NumeriSenzaCultura.ComeDouble(gruppo.OrderBy(d => NumeriSenzaCultura.ComeDouble(d["prezzo_kgl"])).Last()["prezzo_kgl"]);
 
                                                 if (Math.Round(prezzoInizio,2) != Math.Round(prezzoInizioGruppo,2) || Math.Round(prezzoFine,2) != Math.Round(prezzoFineGruppo,2))
                                                 {
@@ -1801,8 +1801,8 @@ namespace AgenziaLib
                                             }
                                             else if (!match.Success && indd["prezzo_promo_kgl"].ToString() != "a confezione" && indd["prezzo_promo_kgl"].ToString() != "al kg")
                                             {
-                                                var prezzoInizioGruppo = Convert.ToDouble(gruppo.OrderBy(d => Convert.ToDouble(d["prezzo_kgl"])).First()["prezzo_kgl"]);
-                                                var prezzoFineGruppo = Convert.ToDouble(gruppo.OrderBy(d => Convert.ToDouble(d["prezzo_kgl"])).Last()["prezzo_kgl"]);
+                                                var prezzoInizioGruppo = NumeriSenzaCultura.ComeDouble(gruppo.OrderBy(d => NumeriSenzaCultura.ComeDouble(d["prezzo_kgl"])).First()["prezzo_kgl"]);
+                                                var prezzoFineGruppo = NumeriSenzaCultura.ComeDouble(gruppo.OrderBy(d => NumeriSenzaCultura.ComeDouble(d["prezzo_kgl"])).Last()["prezzo_kgl"]);
 
                                                 csvRec["Codice"] = indd.ContainsKey("codice_gruppo") ? indd["codice_gruppo"].ToString() : "";
                                                 csvRec["Descrizione"] = indd.ContainsKey("descrizione") ? indd["descrizione"].ToString() : "";
@@ -1855,11 +1855,11 @@ namespace AgenziaLib
                                         {
                                             if (match.Success)
                                             {
-                                                Double prezzoPromoEstratto = Convert.ToDouble(match.Groups[1].Value);
-                                                if (Math.Round(Convert.ToDouble(elemento["prezzo_promo"]), 2) != Math.Round(prezzoPromoEstratto, 2))
+                                                Double prezzoPromoEstratto = NumeriSenzaCultura.ComeDouble(match.Groups[1].Value);
+                                                if (Math.Round(NumeriSenzaCultura.ComeDouble(elemento["prezzo_promo"]), 2) != Math.Round(prezzoPromoEstratto, 2))
                                                 {
-                                                    var prezzoInizioGruppo = Convert.ToDouble(gruppo.OrderBy(d => Convert.ToDouble(d["prezzo_kgl"])).First()["prezzo_kgl"]);
-                                                    var prezzoFineGruppo = Convert.ToDouble(gruppo.OrderBy(d => Convert.ToDouble(d["prezzo_kgl"])).Last()["prezzo_kgl"]);
+                                                    var prezzoInizioGruppo = NumeriSenzaCultura.ComeDouble(gruppo.OrderBy(d => NumeriSenzaCultura.ComeDouble(d["prezzo_kgl"])).First()["prezzo_kgl"]);
+                                                    var prezzoFineGruppo = NumeriSenzaCultura.ComeDouble(gruppo.OrderBy(d => NumeriSenzaCultura.ComeDouble(d["prezzo_kgl"])).Last()["prezzo_kgl"]);
 
                                                     csvRec["Codice"] = elemento.ContainsKey(keyRefCodice) ? elemento[keyRefCodice].ToString() : "";
                                                     csvRec["Descrizione"] = elemento.ContainsKey(keyDescr) ? elemento[keyDescr].ToString() : "";
@@ -1884,8 +1884,8 @@ namespace AgenziaLib
                                             }
                                             else
                                             {
-                                                var prezzoInizioGruppo = Convert.ToDouble(gruppo.OrderBy(d => Convert.ToDouble(d["prezzo_kgl"])).First()["prezzo_kgl"]);
-                                                var prezzoFineGruppo = Convert.ToDouble(gruppo.OrderBy(d => Convert.ToDouble(d["prezzo_kgl"])).Last()["prezzo_kgl"]);
+                                                var prezzoInizioGruppo = NumeriSenzaCultura.ComeDouble(gruppo.OrderBy(d => NumeriSenzaCultura.ComeDouble(d["prezzo_kgl"])).First()["prezzo_kgl"]);
+                                                var prezzoFineGruppo = NumeriSenzaCultura.ComeDouble(gruppo.OrderBy(d => NumeriSenzaCultura.ComeDouble(d["prezzo_kgl"])).Last()["prezzo_kgl"]);
                                                 csvRec["Codice"] = elemento.ContainsKey(keyRefCodice) ? elemento[keyRefCodice].ToString() : "";
                                                 csvRec["Descrizione"] = elemento.ContainsKey(keyDescr) ? elemento[keyDescr].ToString() : "";
                                                 csvRec["|"] = "";
@@ -1952,7 +1952,7 @@ namespace AgenziaLib
 
                                                     foreach (var prezzo in prezziArray)
                                                     {
-                                                        prezziKgl.Add(Math.Round(Convert.ToDouble(prezzo),2));
+                                                        prezziKgl.Add(Math.Round(NumeriSenzaCultura.ComeDouble(prezzo),2));
                                                     }
                                                 }
 
@@ -1961,7 +1961,7 @@ namespace AgenziaLib
                                                 foreach (var single in gruppo)
                                                 {
                                                     prezzoKglLista += single["prezzo_kgl"].ToString() + "/";
-                                                    if (!prezziKgl.Contains(Math.Round(Convert.ToDouble(single["prezzo_kgl"]),2)))
+                                                    if (!prezziKgl.Contains(Math.Round(NumeriSenzaCultura.ComeDouble(single["prezzo_kgl"]),2)))
                                                     {
                                                         prezzoKglTrovato = false;
                                                     }
@@ -2060,8 +2060,8 @@ namespace AgenziaLib
                                         {
                                             if (match.Success)
                                             {
-                                                Double prezzoPromoEstratto = Convert.ToDouble(match.Groups[1].Value);
-                                                if (Math.Round(Convert.ToDouble(elemento["prezzo_promo"]), 2) != Math.Round(prezzoPromoEstratto, 2))
+                                                Double prezzoPromoEstratto = NumeriSenzaCultura.ComeDouble(match.Groups[1].Value);
+                                                if (Math.Round(NumeriSenzaCultura.ComeDouble(elemento["prezzo_promo"]), 2) != Math.Round(prezzoPromoEstratto, 2))
                                                 {
                                                     string prezzoKglLista = "";
                                                     foreach (var single in gruppo)
@@ -2162,18 +2162,18 @@ namespace AgenziaLib
                                         {
                                             if (match.Success)
                                             {
-                                                Double prezzoKglEstratto = Convert.ToDouble(match.Groups[1].Value);
+                                                Double prezzoKglEstratto = NumeriSenzaCultura.ComeDouble(match.Groups[1].Value);
                                                 bool categoriaEtto = false;
                                                 if (elemento.ContainsKey("categoria") && (elemento["categoria"].ToString().ToLower() == "gastronomia" || elemento["categoria"].ToString().ToLower() == "pescheria"))
                                                 {
                                                     categoriaEtto = true;
                                                 }
-                                                if (Math.Round(Convert.ToDouble(elemento["prezzo_kgl"]), 2) != Math.Round(prezzoKglEstratto, 2))
+                                                if (Math.Round(NumeriSenzaCultura.ComeDouble(elemento["prezzo_kgl"]), 2) != Math.Round(prezzoKglEstratto, 2))
                                                 {
                                                     csvRec["Codice"] = elemento.ContainsKey(keyRefCodice) ? elemento[keyRefCodice].ToString() : "";
                                                     csvRec["Descrizione"] = elemento[keyDescr].ToString();
                                                     csvRec["|"] = "";
-                                                    csvRec["Lista prezzo promo"] = (categoriaEtto ? (Convert.ToDouble(elemento["prezzo_promo"]) / 10d).ToString() : elemento["prezzo_promo"]).ToString();
+                                                    csvRec["Lista prezzo promo"] = (categoriaEtto ? (NumeriSenzaCultura.ComeDouble(elemento["prezzo_promo"]) / 10d).ToString() : elemento["prezzo_promo"]).ToString();
                                                     csvRec["Lista prezzo kgl"] = elemento.ContainsKey("prezzo_kgl") ? elemento["prezzo_kgl"].ToString() : "";
 
                                                     csvRec["||"] = "";
@@ -2248,19 +2248,19 @@ namespace AgenziaLib
                                         {
                                             if (match.Success)
                                             {
-                                                Double prezzoPromoEstratto = Convert.ToDouble(match.Groups[1].Value);
+                                                Double prezzoPromoEstratto = NumeriSenzaCultura.ComeDouble(match.Groups[1].Value);
                                                 bool categoriaEtto = false;
                                                 if (elemento.ContainsKey("categoria") && (elemento["categoria"].ToString().ToLower() == "gastronomia" || elemento["categoria"].ToString().ToLower() == "pescheria"))
                                                 {
                                                     categoriaEtto = true;
                                                     prezzoPromoEstratto = prezzoPromoEstratto * 10d;
                                                 }
-                                                if (Math.Round(Convert.ToDouble(elemento["prezzo_promo"]), 2) != Math.Round(prezzoPromoEstratto, 2))
+                                                if (Math.Round(NumeriSenzaCultura.ComeDouble(elemento["prezzo_promo"]), 2) != Math.Round(prezzoPromoEstratto, 2))
                                                 {
                                                     csvRec["Codice"] = elemento.ContainsKey(keyRefCodice) ? elemento[keyRefCodice].ToString() : "";
                                                     csvRec["Descrizione"] = elemento[keyDescr].ToString();
                                                     csvRec["|"] = "";
-                                                    csvRec["Lista prezzo promo"] = (categoriaEtto ? (Convert.ToDouble(elemento["prezzo_promo"]) / 10d).ToString() : elemento["prezzo_promo"].ToString());
+                                                    csvRec["Lista prezzo promo"] = (categoriaEtto ? (NumeriSenzaCultura.ComeDouble(elemento["prezzo_promo"]) / 10d).ToString() : elemento["prezzo_promo"].ToString());
                                                     csvRec["Lista prezzo kgl"] = elemento.ContainsKey("prezzo_kgl") ? elemento["prezzo_kgl"].ToString() : "";
 
                                                     csvRec["||"] = "";
@@ -2340,18 +2340,18 @@ namespace AgenziaLib
                                     {
                                         if (match.Success)
                                         {
-                                            Double prezzoKglEstratto = Convert.ToDouble(match.Groups[1].Value);
+                                            Double prezzoKglEstratto = NumeriSenzaCultura.ComeDouble(match.Groups[1].Value);
                                             bool categoriaEtto = false;
                                             if (elemento.ContainsKey("categoria") && (elemento["categoria"].ToString().ToLower() == "gastronomia" || elemento["categoria"].ToString().ToLower() == "pescheria"))
                                             {
                                                 categoriaEtto = true;
                                             }
-                                            if (Math.Round(Convert.ToDouble(elemento["prezzo_kgl"]), 2) != Math.Round(prezzoKglEstratto, 2))
+                                            if (Math.Round(NumeriSenzaCultura.ComeDouble(elemento["prezzo_kgl"]), 2) != Math.Round(prezzoKglEstratto, 2))
                                             {
                                                 csvRec["Codice"] = elemento.ContainsKey(keyRefCodice) ? elemento[keyRefCodice].ToString() : "";
                                                 csvRec["Descrizione"] = elemento[keyDescr].ToString();
                                                 csvRec["|"] = "";
-                                                csvRec["Lista prezzo promo"] = (categoriaEtto ? (Convert.ToDouble(elemento["prezzo_promo"]) / 10d).ToString() : elemento["prezzo_promo"]).ToString();
+                                                csvRec["Lista prezzo promo"] = (categoriaEtto ? (NumeriSenzaCultura.ComeDouble(elemento["prezzo_promo"]) / 10d).ToString() : elemento["prezzo_promo"]).ToString();
                                                 csvRec["Lista prezzo kgl"] = elemento["prezzo_kgl"].ToString();
 
                                                 csvRec["||"] = "";
@@ -2427,19 +2427,19 @@ namespace AgenziaLib
                                     {
                                         if (match.Success)
                                         {
-                                            Double prezzoPromoEstratto = Convert.ToDouble(match.Groups[1].Value);
+                                            Double prezzoPromoEstratto = NumeriSenzaCultura.ComeDouble(match.Groups[1].Value);
                                             bool categoriaEtto = false;
                                             if (elemento.ContainsKey("categoria") && (elemento["categoria"].ToString().ToLower() == "gastronomia" || elemento["categoria"].ToString().ToLower() == "pescheria"))
                                             {
                                                 categoriaEtto = true;
                                                 prezzoPromoEstratto = prezzoPromoEstratto * 10d;
                                             }
-                                            if (Math.Round(Convert.ToDouble(elemento["prezzo_promo"]), 2) != Math.Round(prezzoPromoEstratto, 2))
+                                            if (Math.Round(NumeriSenzaCultura.ComeDouble(elemento["prezzo_promo"]), 2) != Math.Round(prezzoPromoEstratto, 2))
                                             {
                                                 csvRec["Codice"] = elemento.ContainsKey(keyRefCodice) ? elemento[keyRefCodice].ToString() : "";
                                                 csvRec["Descrizione"] = elemento[keyDescr].ToString();
                                                 csvRec["|"] = "";
-                                                csvRec["Lista prezzo promo"] = (categoriaEtto ? (Convert.ToDouble(elemento["prezzo_promo"]) / 10d).ToString() : elemento["prezzo_promo"]).ToString();
+                                                csvRec["Lista prezzo promo"] = (categoriaEtto ? (NumeriSenzaCultura.ComeDouble(elemento["prezzo_promo"]) / 10d).ToString() : elemento["prezzo_promo"]).ToString();
                                                 csvRec["Lista prezzo kgl"] = elemento.ContainsKey("prezzo_kgl") ? elemento["prezzo_kgl"].ToString() : "";
 
                                                 csvRec["||"] = "";

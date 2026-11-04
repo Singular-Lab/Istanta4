@@ -181,11 +181,11 @@ namespace Istanta.Controllers
                         return _decVal;
                     }
 
-                    Decimal.TryParse(_val.ToString(), out _decVal);
+                    NumeroDiRegola.TryLeggiDecimale(_val.ToString(), out _decVal);
                     return _decVal;
                 }
                 else
-                    return Convert.ToDecimal(_val);
+                    return NumeroDiRegola.ComeDecimale(_val);
 
             }
             else if (schema_campo.TipoDato == (Byte)AddestramentoTipoValore.Bool)

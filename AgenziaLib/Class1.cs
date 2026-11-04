@@ -45,7 +45,7 @@ namespace AgenziaLib
                 string meccanica_originale = rec["meccanica_originale"].ToString();
                 string meccanica = traduciNomeMeccanica(meccanica_originale);
 
-                decimal peso = Decimal.Parse(rec["peso"].ToString());
+                decimal peso = NumeriSenzaCultura.ComeDecimale(rec["peso"].ToString());
                 string um_fatt = rec["um_fatt"].ToString();
                 string myTema = rec["tema"].ToString();
                 string tipo_tema = rec["tipo_tema"].ToString();
@@ -357,12 +357,12 @@ namespace AgenziaLib
                         //Response.Write("tipo_tracciato... " + tipo_tracciato);
 
                         decimal sc_agenzia;
-                        Decimal.TryParse(sconto_agenzia, out sc_agenzia);
+                        NumeriSenzaCultura.TryLeggiDecimale(sconto_agenzia, out sc_agenzia);
 
                         if (tipo_tracciato == 1 &&
                             codice_area.IndexOf("LA") == 2)
                         {
-                            if (meccanica == "TP_MM" && (Decimal.TryParse(sconto_agenzia, out sc_agenzia) && sc_agenzia != 0))
+                            if (meccanica == "TP_MM" && (NumeriSenzaCultura.TryLeggiDecimale(sconto_agenzia, out sc_agenzia) && sc_agenzia != 0))
                             {
                                 if (reparto != "29" &&
                                             reparto != "31" &&
@@ -385,7 +385,7 @@ namespace AgenziaLib
                             if (meccanica == "TP_MM")
                             {
                                 if (
-                                    Decimal.TryParse(sconto_agenzia, out sc_agenzia) && sc_agenzia != 0 &&
+                                    NumeriSenzaCultura.TryLeggiDecimale(sconto_agenzia, out sc_agenzia) && sc_agenzia != 0 &&
                                     (meccanica != "50al50Norm" && meccanica != "50al50Fid")
                                     )
                                 {
@@ -922,7 +922,7 @@ namespace AgenziaLib
                             decimal sconto_massmarket = 0;
                             string str_sconto_mm = item["scontoMM"].ToString();
                             str_sconto_mm = str_sconto_mm.Replace(" ", "");
-                            Decimal.TryParse(str_sconto_mm, out sconto_massmarket);
+                            NumeriSenzaCultura.TryLeggiDecimale(str_sconto_mm, out sconto_massmarket);
                             sconto_massmarket = Math.Abs(sconto_massmarket);
                             item["scontoMM"] = sconto_massmarket;
 
@@ -931,7 +931,7 @@ namespace AgenziaLib
                             decimal sconto_fidelity = 0;
                             string str_sconto_fid = item["scontoFID"].ToString();
                             str_sconto_fid = str_sconto_fid.Replace(" ", "");
-                            Decimal.TryParse(str_sconto_fid, out sconto_fidelity);
+                            NumeriSenzaCultura.TryLeggiDecimale(str_sconto_fid, out sconto_fidelity);
                             sconto_fidelity = Math.Abs(sconto_fidelity);
                             item["scontoFID"] = sconto_fidelity;
 
@@ -962,7 +962,7 @@ namespace AgenziaLib
                             decimal sconto_agenzia = 0;
                             string str_sconto_agenzia = item["sconto_agenzia"].ToString();
                             str_sconto_agenzia = str_sconto_agenzia.Replace(" ", "");
-                            Decimal.TryParse(str_sconto_agenzia, out sconto_agenzia);
+                            NumeriSenzaCultura.TryLeggiDecimale(str_sconto_agenzia, out sconto_agenzia);
                             sconto_agenzia = Math.Abs(sconto_agenzia);
                             item["sconto_agenzia"] = sconto_agenzia;
 

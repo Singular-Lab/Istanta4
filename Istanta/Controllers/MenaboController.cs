@@ -496,8 +496,8 @@ namespace Istanta.Controllers
                                             }
                                             break;
                                         case "==":
-                                            if (double.TryParse(regola.Value.ToString(), out double valore1) &&
-        double.TryParse(percorso.ToString(), out double valore2))
+                                            if (NumeroDiRegola.TryLeggi(regola.Value, out double valore1) &&
+        NumeroDiRegola.TryLeggi(percorso, out double valore2))
                                             {
                                                 // Confronto numerico
                                                 if (valore1 != valore2)
@@ -515,8 +515,8 @@ namespace Istanta.Controllers
                                             }
                                             break;
                                         case "C==":
-                                            if (double.TryParse(regola.Value.ToString(), out double valore3) &&
-        double.TryParse(percorso.ToString(), out double valore4))
+                                            if (NumeroDiRegola.TryLeggi(regola.Value, out double valore3) &&
+        NumeroDiRegola.TryLeggi(percorso, out double valore4))
                                             {
                                                 // Confronto numerico
                                                 if (valore3 != valore4)
@@ -533,8 +533,8 @@ namespace Istanta.Controllers
                                             }
                                             break;
                                         case "S==":
-                                            if (double.TryParse(regola.Value.ToString(), out double valore5) &&
-double.TryParse(percorso.ToString(), out double valore6))
+                                            if (NumeroDiRegola.TryLeggi(regola.Value, out double valore5) &&
+NumeroDiRegola.TryLeggi(percorso, out double valore6))
                                             {
                                                 // Confronto numerico
                                                 if (valore5 != valore6)
@@ -551,8 +551,8 @@ double.TryParse(percorso.ToString(), out double valore6))
                                             }
                                             break;
                                         case "SC==":
-                                            if (double.TryParse(regola.Value.ToString(), out double valore7) &&
-double.TryParse(percorso.ToString(), out double valore8))
+                                            if (NumeroDiRegola.TryLeggi(regola.Value, out double valore7) &&
+NumeroDiRegola.TryLeggi(percorso, out double valore8))
                                             {
                                                 // Confronto numerico
                                                 if (valore7 != valore8)
@@ -569,8 +569,8 @@ double.TryParse(percorso.ToString(), out double valore8))
                                             }
                                             break;
                                         case "!=":
-                                            if (double.TryParse(regola.Value.ToString(), out double valore9) &&
-double.TryParse(percorso.ToString(), out double valore10))
+                                            if (NumeroDiRegola.TryLeggi(regola.Value, out double valore9) &&
+NumeroDiRegola.TryLeggi(percorso, out double valore10))
                                             {
                                                 // Confronto numerico
                                                 if (valore9 == valore10)
@@ -587,8 +587,8 @@ double.TryParse(percorso.ToString(), out double valore10))
                                             }
                                             break;
                                         case "C!=":
-                                            if (double.TryParse(regola.Value.ToString(), out double valore11) &&
-double.TryParse(percorso.ToString(), out double valore12))
+                                            if (NumeroDiRegola.TryLeggi(regola.Value, out double valore11) &&
+NumeroDiRegola.TryLeggi(percorso, out double valore12))
                                             {
                                                 // Confronto numerico
                                                 if (valore11 == valore12)
@@ -605,8 +605,8 @@ double.TryParse(percorso.ToString(), out double valore12))
                                             }
                                             break;
                                         case "S!=":
-                                            if (double.TryParse(regola.Value.ToString(), out double valore13) &&
-double.TryParse(percorso.ToString(), out double valore14))
+                                            if (NumeroDiRegola.TryLeggi(regola.Value, out double valore13) &&
+NumeroDiRegola.TryLeggi(percorso, out double valore14))
                                             {
                                                 // Confronto numerico
                                                 if (valore13 == valore14)
@@ -623,8 +623,8 @@ double.TryParse(percorso.ToString(), out double valore14))
                                             }
                                             break;
                                         case "SC!=":
-                                            if (double.TryParse(regola.Value.ToString(), out double valore15) &&
-double.TryParse(percorso.ToString(), out double valore16))
+                                            if (NumeroDiRegola.TryLeggi(regola.Value, out double valore15) &&
+NumeroDiRegola.TryLeggi(percorso, out double valore16))
                                             {
                                                 // Confronto numerico
                                                 if (valore15 == valore16)
@@ -641,7 +641,7 @@ double.TryParse(percorso.ToString(), out double valore16))
                                             }
                                             break;
                                         case ">":
-                                            if (double.TryParse(percorso.ToString(), out double numericValue) && double.TryParse(regola.Value.ToString(), out double regolaValue))
+                                            if (NumeroDiRegola.TryLeggi(percorso, out double numericValue) && NumeroDiRegola.TryLeggi(regola.Value, out double regolaValue))
                                             {
                                                 if (numericValue <= regolaValue)
                                                 {
@@ -657,7 +657,7 @@ double.TryParse(percorso.ToString(), out double valore16))
                                             break;
                                         case "<":
 
-                                            if (double.TryParse(percorso.ToString(), out numericValue) && double.TryParse(regola.Value.ToString(), out regolaValue))
+                                            if (NumeroDiRegola.TryLeggi(percorso, out numericValue) && NumeroDiRegola.TryLeggi(regola.Value, out regolaValue))
                                             {
                                                 if (numericValue >= regolaValue)
                                                 {
@@ -671,7 +671,7 @@ double.TryParse(percorso.ToString(), out double valore16))
                                             }
                                             break;
                                         case ">=":
-                                            if (double.TryParse(percorso.ToString(), out numericValue) && double.TryParse(regola.Value.ToString(), out regolaValue))
+                                            if (NumeroDiRegola.TryLeggi(percorso, out numericValue) && NumeroDiRegola.TryLeggi(regola.Value, out regolaValue))
                                             {
                                                 if (numericValue < regolaValue)
                                                 {
@@ -685,7 +685,7 @@ double.TryParse(percorso.ToString(), out double valore16))
                                             }
                                             break;
                                         case "<=":
-                                            if (double.TryParse(percorso.ToString(), out numericValue) && double.TryParse(regola.Value.ToString(), out regolaValue))
+                                            if (NumeroDiRegola.TryLeggi(percorso, out numericValue) && NumeroDiRegola.TryLeggi(regola.Value, out regolaValue))
                                             {
                                                 if (numericValue > regolaValue)
                                                 {
@@ -826,8 +826,8 @@ double.TryParse(percorso.ToString(), out double valore16))
                                     }
                                     break;
                                 case "==":
-                                    if (double.TryParse(regola.Value.ToString(), out double valore1) &&
-double.TryParse(percorso.ToString(), out double valore2))
+                                    if (NumeroDiRegola.TryLeggi(regola.Value, out double valore1) &&
+NumeroDiRegola.TryLeggi(percorso, out double valore2))
                                     {
                                         // Confronto numerico
                                         if (valore1 != valore2)
@@ -845,8 +845,8 @@ double.TryParse(percorso.ToString(), out double valore2))
                                     }
                                     break;
                                 case "C==":
-                                    if (double.TryParse(regola.Value.ToString(), out double valore3) &&
-double.TryParse(percorso.ToString(), out double valore4))
+                                    if (NumeroDiRegola.TryLeggi(regola.Value, out double valore3) &&
+NumeroDiRegola.TryLeggi(percorso, out double valore4))
                                     {
                                         // Confronto numerico
                                         if (valore3 != valore4)
@@ -863,8 +863,8 @@ double.TryParse(percorso.ToString(), out double valore4))
                                     }
                                     break;
                                 case "S==":
-                                    if (double.TryParse(regola.Value.ToString(), out double valore5) &&
-double.TryParse(percorso.ToString(), out double valore6))
+                                    if (NumeroDiRegola.TryLeggi(regola.Value, out double valore5) &&
+NumeroDiRegola.TryLeggi(percorso, out double valore6))
                                     {
                                         // Confronto numerico
                                         if (valore5 != valore6)
@@ -881,8 +881,8 @@ double.TryParse(percorso.ToString(), out double valore6))
                                     }
                                     break;
                                 case "SC==":
-                                    if (double.TryParse(regola.Value.ToString(), out double valore7) &&
-double.TryParse(percorso.ToString(), out double valore8))
+                                    if (NumeroDiRegola.TryLeggi(regola.Value, out double valore7) &&
+NumeroDiRegola.TryLeggi(percorso, out double valore8))
                                     {
                                         // Confronto numerico
                                         if (valore7 != valore8)
@@ -899,8 +899,8 @@ double.TryParse(percorso.ToString(), out double valore8))
                                     }
                                     break;
                                 case "!=":
-                                    if (double.TryParse(regola.Value.ToString(), out double valore9) &&
-double.TryParse(percorso.ToString(), out double valore10))
+                                    if (NumeroDiRegola.TryLeggi(regola.Value, out double valore9) &&
+NumeroDiRegola.TryLeggi(percorso, out double valore10))
                                     {
                                         // Confronto numerico
                                         if (valore9 == valore10)
@@ -917,8 +917,8 @@ double.TryParse(percorso.ToString(), out double valore10))
                                     }
                                     break;
                                 case "C!=":
-                                    if (double.TryParse(regola.Value.ToString(), out double valore11) &&
-double.TryParse(percorso.ToString(), out double valore12))
+                                    if (NumeroDiRegola.TryLeggi(regola.Value, out double valore11) &&
+NumeroDiRegola.TryLeggi(percorso, out double valore12))
                                     {
                                         // Confronto numerico
                                         if (valore11 == valore12)
@@ -935,8 +935,8 @@ double.TryParse(percorso.ToString(), out double valore12))
                                     }
                                     break;
                                 case "S!=":
-                                    if (double.TryParse(regola.Value.ToString(), out double valore13) &&
-double.TryParse(percorso.ToString(), out double valore14))
+                                    if (NumeroDiRegola.TryLeggi(regola.Value, out double valore13) &&
+NumeroDiRegola.TryLeggi(percorso, out double valore14))
                                     {
                                         // Confronto numerico
                                         if (valore13 == valore14)
@@ -953,8 +953,8 @@ double.TryParse(percorso.ToString(), out double valore14))
                                     }
                                     break;
                                 case "SC!=":
-                                    if (double.TryParse(regola.Value.ToString(), out double valore15) &&
-double.TryParse(percorso.ToString(), out double valore16))
+                                    if (NumeroDiRegola.TryLeggi(regola.Value, out double valore15) &&
+NumeroDiRegola.TryLeggi(percorso, out double valore16))
                                     {
                                         // Confronto numerico
                                         if (valore15 == valore16)
@@ -971,7 +971,7 @@ double.TryParse(percorso.ToString(), out double valore16))
                                     }
                                     break;
                                 case ">":
-                                    if (double.TryParse(percorso.ToString(), out double numericValue) && double.TryParse(regola.Value.ToString(), out double regolaValue))
+                                    if (NumeroDiRegola.TryLeggi(percorso, out double numericValue) && NumeroDiRegola.TryLeggi(regola.Value, out double regolaValue))
                                     {
                                         if (numericValue <= regolaValue)
                                         {
@@ -987,7 +987,7 @@ double.TryParse(percorso.ToString(), out double valore16))
                                     break;
                                 case "<":
 
-                                    if (double.TryParse(percorso.ToString(), out numericValue) && double.TryParse(regola.Value.ToString(), out regolaValue))
+                                    if (NumeroDiRegola.TryLeggi(percorso, out numericValue) && NumeroDiRegola.TryLeggi(regola.Value, out regolaValue))
                                     {
                                         if (numericValue >= regolaValue)
                                         {
@@ -1001,7 +1001,7 @@ double.TryParse(percorso.ToString(), out double valore16))
                                     }
                                     break;
                                 case ">=":
-                                    if (double.TryParse(percorso.ToString(), out numericValue) && double.TryParse(regola.Value.ToString(), out regolaValue))
+                                    if (NumeroDiRegola.TryLeggi(percorso, out numericValue) && NumeroDiRegola.TryLeggi(regola.Value, out regolaValue))
                                     {
                                         if (numericValue < regolaValue)
                                         {
@@ -1015,7 +1015,7 @@ double.TryParse(percorso.ToString(), out double valore16))
                                     }
                                     break;
                                 case "<=":
-                                    if (double.TryParse(percorso.ToString(), out numericValue) && double.TryParse(regola.Value.ToString(), out regolaValue))
+                                    if (NumeroDiRegola.TryLeggi(percorso, out numericValue) && NumeroDiRegola.TryLeggi(regola.Value, out regolaValue))
                                     {
                                         if (numericValue > regolaValue)
                                         {
@@ -4426,8 +4426,8 @@ double.TryParse(percorso.ToString(), out double valore16))
                                             }
                                             break;
                                         case "==":
-                                            if (double.TryParse(regola.Value.ToString(), out double valore1) &&
-double.TryParse(percorso.ToString(), out double valore2))
+                                            if (NumeroDiRegola.TryLeggi(regola.Value.ToString(), out double valore1) &&
+NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore2))
                                             {
                                                 // Confronto numerico
                                                 if (valore1 != valore2)
@@ -4444,8 +4444,8 @@ double.TryParse(percorso.ToString(), out double valore2))
                                             }
                                             break;
                                         case "C==":
-                                            if (double.TryParse(regola.Value.ToString(), out double valore3) &&
-double.TryParse(percorso.ToString(), out double valore4))
+                                            if (NumeroDiRegola.TryLeggi(regola.Value.ToString(), out double valore3) &&
+NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore4))
                                             {
                                                 // Confronto numerico
                                                 if (valore3 != valore4)
@@ -4462,8 +4462,8 @@ double.TryParse(percorso.ToString(), out double valore4))
                                             }
                                             break;
                                         case "S==":
-                                            if (double.TryParse(regola.Value.ToString(), out double valore5) &&
-double.TryParse(percorso.ToString(), out double valore6))
+                                            if (NumeroDiRegola.TryLeggi(regola.Value.ToString(), out double valore5) &&
+NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore6))
                                             {
                                                 // Confronto numerico
                                                 if (valore5 != valore6)
@@ -4480,8 +4480,8 @@ double.TryParse(percorso.ToString(), out double valore6))
                                             }
                                             break;
                                         case "SC==":
-                                            if (double.TryParse(regola.Value.ToString(), out double valore7) &&
-double.TryParse(percorso.ToString(), out double valore8))
+                                            if (NumeroDiRegola.TryLeggi(regola.Value.ToString(), out double valore7) &&
+NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore8))
                                             {
                                                 // Confronto numerico
                                                 if (valore7 != valore8)
@@ -4498,8 +4498,8 @@ double.TryParse(percorso.ToString(), out double valore8))
                                             }
                                             break;
                                         case "!=":
-                                            if (double.TryParse(regola.Value.ToString(), out double valore9) &&
-double.TryParse(percorso.ToString(), out double valore10))
+                                            if (NumeroDiRegola.TryLeggi(regola.Value.ToString(), out double valore9) &&
+NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore10))
                                             {
                                                 // Confronto numerico
                                                 if (valore9 == valore10)
@@ -4516,8 +4516,8 @@ double.TryParse(percorso.ToString(), out double valore10))
                                             }
                                             break;
                                         case "C!=":
-                                            if (double.TryParse(regola.Value.ToString(), out double valore11) &&
-double.TryParse(percorso.ToString(), out double valore12))
+                                            if (NumeroDiRegola.TryLeggi(regola.Value.ToString(), out double valore11) &&
+NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore12))
                                             {
                                                 // Confronto numerico
                                                 if (valore11 == valore12)
@@ -4534,8 +4534,8 @@ double.TryParse(percorso.ToString(), out double valore12))
                                             }
                                             break;
                                         case "S!=":
-                                            if (double.TryParse(regola.Value.ToString(), out double valore13) &&
-double.TryParse(percorso.ToString(), out double valore14))
+                                            if (NumeroDiRegola.TryLeggi(regola.Value.ToString(), out double valore13) &&
+NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore14))
                                             {
                                                 // Confronto numerico
                                                 if (valore13 == valore14)
@@ -4552,8 +4552,8 @@ double.TryParse(percorso.ToString(), out double valore14))
                                             }
                                             break;
                                         case "SC!=":
-                                            if (double.TryParse(regola.Value.ToString(), out double valore15) &&
-double.TryParse(percorso.ToString(), out double valore16))
+                                            if (NumeroDiRegola.TryLeggi(regola.Value.ToString(), out double valore15) &&
+NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                                             {
                                                 // Confronto numerico
                                                 if (valore15 == valore16)
@@ -4570,7 +4570,7 @@ double.TryParse(percorso.ToString(), out double valore16))
                                             }
                                             break;
                                         case ">":
-                                            if (double.TryParse(percorso.ToString(), out double numericValue) && double.TryParse(regola.Value.ToString(), out double regolaValue))
+                                            if (NumeroDiRegola.TryLeggi(percorso.ToString(), out double numericValue) && NumeroDiRegola.TryLeggi(regola.Value.ToString(), out double regolaValue))
                                             {
                                                 if (numericValue <= regolaValue)
                                                 {
@@ -4586,7 +4586,7 @@ double.TryParse(percorso.ToString(), out double valore16))
                                             break;
                                         case "<":
 
-                                            if (double.TryParse(percorso.ToString(), out numericValue) && double.TryParse(regola.Value.ToString(), out regolaValue))
+                                            if (NumeroDiRegola.TryLeggi(percorso.ToString(), out numericValue) && NumeroDiRegola.TryLeggi(regola.Value.ToString(), out regolaValue))
                                             {
                                                 if (numericValue >= regolaValue)
                                                 {
@@ -4600,7 +4600,7 @@ double.TryParse(percorso.ToString(), out double valore16))
                                             }
                                             break;
                                         case ">=":
-                                            if (double.TryParse(percorso.ToString(), out numericValue) && double.TryParse(regola.Value.ToString(), out regolaValue))
+                                            if (NumeroDiRegola.TryLeggi(percorso.ToString(), out numericValue) && NumeroDiRegola.TryLeggi(regola.Value.ToString(), out regolaValue))
                                             {
                                                 if (numericValue < regolaValue)
                                                 {
@@ -4614,7 +4614,7 @@ double.TryParse(percorso.ToString(), out double valore16))
                                             }
                                             break;
                                         case "<=":
-                                            if (double.TryParse(percorso.ToString(), out numericValue) && double.TryParse(regola.Value.ToString(), out regolaValue))
+                                            if (NumeroDiRegola.TryLeggi(percorso.ToString(), out numericValue) && NumeroDiRegola.TryLeggi(regola.Value.ToString(), out regolaValue))
                                             {
                                                 if (numericValue > regolaValue)
                                                 {
@@ -4914,8 +4914,8 @@ double.TryParse(percorso.ToString(), out double valore16))
                                 }
                                 break;
                             case "==":
-                                if (double.TryParse(regola.Value.ToString(), out double valore1) &&
-double.TryParse(percorso.ToString(), out double valore2))
+                                if (NumeroDiRegola.TryLeggi(regola.Value.ToString(), out double valore1) &&
+NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore2))
                                 {
                                     // Confronto numerico
                                     if (valore1 != valore2)
@@ -4932,8 +4932,8 @@ double.TryParse(percorso.ToString(), out double valore2))
                                 }
                                 break;
                             case "C==":
-                                if (double.TryParse(regola.Value.ToString(), out double valore3) &&
-double.TryParse(percorso.ToString(), out double valore4))
+                                if (NumeroDiRegola.TryLeggi(regola.Value.ToString(), out double valore3) &&
+NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore4))
                                 {
                                     // Confronto numerico
                                     if (valore3 != valore4)
@@ -4950,8 +4950,8 @@ double.TryParse(percorso.ToString(), out double valore4))
                                 }
                                 break;
                             case "S==":
-                                if (double.TryParse(regola.Value.ToString(), out double valore5) &&
-double.TryParse(percorso.ToString(), out double valore6))
+                                if (NumeroDiRegola.TryLeggi(regola.Value.ToString(), out double valore5) &&
+NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore6))
                                 {
                                     // Confronto numerico
                                     if (valore5 != valore6)
@@ -4968,8 +4968,8 @@ double.TryParse(percorso.ToString(), out double valore6))
                                 }
                                 break;
                             case "SC==":
-                                if (double.TryParse(regola.Value.ToString(), out double valore7) &&
-double.TryParse(percorso.ToString(), out double valore8))
+                                if (NumeroDiRegola.TryLeggi(regola.Value.ToString(), out double valore7) &&
+NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore8))
                                 {
                                     // Confronto numerico
                                     if (valore7 != valore8)
@@ -4986,8 +4986,8 @@ double.TryParse(percorso.ToString(), out double valore8))
                                 }
                                 break;
                             case "!=":
-                                if (double.TryParse(regola.Value.ToString(), out double valore9) &&
-double.TryParse(percorso.ToString(), out double valore10))
+                                if (NumeroDiRegola.TryLeggi(regola.Value.ToString(), out double valore9) &&
+NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore10))
                                 {
                                     // Confronto numerico
                                     if (valore9 == valore10)
@@ -5004,8 +5004,8 @@ double.TryParse(percorso.ToString(), out double valore10))
                                 }
                                 break;
                             case "C!=":
-                                if (double.TryParse(regola.Value.ToString(), out double valore11) &&
-double.TryParse(percorso.ToString(), out double valore12))
+                                if (NumeroDiRegola.TryLeggi(regola.Value.ToString(), out double valore11) &&
+NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore12))
                                 {
                                     // Confronto numerico
                                     if (valore11 == valore12)
@@ -5022,8 +5022,8 @@ double.TryParse(percorso.ToString(), out double valore12))
                                 }
                                 break;
                             case "S!=":
-                                if (double.TryParse(regola.Value.ToString(), out double valore13) &&
-double.TryParse(percorso.ToString(), out double valore14))
+                                if (NumeroDiRegola.TryLeggi(regola.Value.ToString(), out double valore13) &&
+NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore14))
                                 {
                                     // Confronto numerico
                                     if (valore13 == valore14)
@@ -5040,8 +5040,8 @@ double.TryParse(percorso.ToString(), out double valore14))
                                 }
                                 break;
                             case "SC!=":
-                                if (double.TryParse(regola.Value.ToString(), out double valore15) &&
-double.TryParse(percorso.ToString(), out double valore16))
+                                if (NumeroDiRegola.TryLeggi(regola.Value.ToString(), out double valore15) &&
+NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                                 {
                                     // Confronto numerico
                                     if (valore15 == valore16)
@@ -5058,7 +5058,7 @@ double.TryParse(percorso.ToString(), out double valore16))
                                 }
                                 break;
                             case ">":
-                                if (double.TryParse(percorso.ToString(), out double numericValue) && double.TryParse(regola.Value.ToString(), out double regolaValue))
+                                if (NumeroDiRegola.TryLeggi(percorso.ToString(), out double numericValue) && NumeroDiRegola.TryLeggi(regola.Value.ToString(), out double regolaValue))
                                 {
                                     if (numericValue <= regolaValue)
                                     {
@@ -5074,7 +5074,7 @@ double.TryParse(percorso.ToString(), out double valore16))
                                 break;
                             case "<":
 
-                                if (double.TryParse(percorso.ToString(), out numericValue) && double.TryParse(regola.Value.ToString(), out regolaValue))
+                                if (NumeroDiRegola.TryLeggi(percorso.ToString(), out numericValue) && NumeroDiRegola.TryLeggi(regola.Value.ToString(), out regolaValue))
                                 {
                                     if (numericValue >= regolaValue)
                                     {
@@ -5088,7 +5088,7 @@ double.TryParse(percorso.ToString(), out double valore16))
                                 }
                                 break;
                             case ">=":
-                                if (double.TryParse(percorso.ToString(), out numericValue) && double.TryParse(regola.Value.ToString(), out regolaValue))
+                                if (NumeroDiRegola.TryLeggi(percorso.ToString(), out numericValue) && NumeroDiRegola.TryLeggi(regola.Value.ToString(), out regolaValue))
                                 {
                                     if (numericValue < regolaValue)
                                     {
@@ -5102,7 +5102,7 @@ double.TryParse(percorso.ToString(), out double valore16))
                                 }
                                 break;
                             case "<=":
-                                if (double.TryParse(percorso.ToString(), out numericValue) && double.TryParse(regola.Value.ToString(), out regolaValue))
+                                if (NumeroDiRegola.TryLeggi(percorso.ToString(), out numericValue) && NumeroDiRegola.TryLeggi(regola.Value.ToString(), out regolaValue))
                                 {
                                     if (numericValue > regolaValue)
                                     {
@@ -6477,8 +6477,9 @@ double.TryParse(percorso.ToString(), out double valore16))
 
         private bool CheckCorrispondenza(operatorId operatorId, Dictionary<string, object> dato, string nomeCampo, string value)
         {
-            float floatValue = 0;
-            float regolaFloatValue = 0;
+            //TASK-13e871a5: letti con NumeroDiRegola, uguali in ogni cultura.
+            double floatValue = 0;
+            double regolaFloatValue = 0;
             if (!dato.ContainsKey(nomeCampo))
             {
                 return false;
@@ -6504,7 +6505,7 @@ double.TryParse(percorso.ToString(), out double valore16))
                     return dato[nomeCampo].ToString()!.ToLower().EndsWith(value.ToLower());
 
                 case operatorId.Maggiore_di:
-                    if (float.TryParse(dato[nomeCampo].ToString(), out floatValue) && float.TryParse(value, out regolaFloatValue))
+                    if (NumeroDiRegola.TryLeggi(dato[nomeCampo], out floatValue) && NumeroDiRegola.TryLeggi(value, out regolaFloatValue))
                     {
                         return floatValue > regolaFloatValue;
                     }
@@ -6514,7 +6515,7 @@ double.TryParse(percorso.ToString(), out double valore16))
                     }
 
                 case operatorId.Maggiore_o_uguale_di:
-                    if (float.TryParse(dato[nomeCampo].ToString(), out floatValue) && float.TryParse(value, out regolaFloatValue))
+                    if (NumeroDiRegola.TryLeggi(dato[nomeCampo], out floatValue) && NumeroDiRegola.TryLeggi(value, out regolaFloatValue))
                     {
                         return floatValue >= regolaFloatValue;
                     }
@@ -6524,7 +6525,7 @@ double.TryParse(percorso.ToString(), out double valore16))
                     }
 
                 case operatorId.Minore_di:
-                    if (float.TryParse(dato[nomeCampo].ToString(), out floatValue) && float.TryParse(value, out regolaFloatValue))
+                    if (NumeroDiRegola.TryLeggi(dato[nomeCampo], out floatValue) && NumeroDiRegola.TryLeggi(value, out regolaFloatValue))
                     {
                         return floatValue < regolaFloatValue;
                     }
@@ -6534,7 +6535,7 @@ double.TryParse(percorso.ToString(), out double valore16))
                     }
 
                 case operatorId.Minore_o_uguale_di:
-                    if (float.TryParse(dato[nomeCampo].ToString(), out floatValue) && float.TryParse(value, out regolaFloatValue))
+                    if (NumeroDiRegola.TryLeggi(dato[nomeCampo], out floatValue) && NumeroDiRegola.TryLeggi(value, out regolaFloatValue))
                     {
                         return floatValue <= regolaFloatValue;
                     }
@@ -8757,8 +8758,9 @@ double.TryParse(percorso.ToString(), out double valore16))
             }
 
             // Se non sono date, provo come numeri.
-            if (float.TryParse(datoStr, NumberStyles.Float, CultureInfo.GetCultureInfo("it-IT"), out float datoValue) &&
-                float.TryParse(regolaStr, NumberStyles.Float, CultureInfo.GetCultureInfo("it-IT"), out float regolaValue))
+            //TASK-13e871a5: con it-IT fissa "0.25" valeva 25.
+            if (NumeroDiRegola.TryLeggi(datoStr, out double datoValue) &&
+                NumeroDiRegola.TryLeggi(regolaStr, out double regolaValue))
             {
                 return operatore switch
                 {
@@ -13343,21 +13345,23 @@ double.TryParse(percorso.ToString(), out double valore16))
                         }
                         else if (tracciatoRecord[kvp.Key] is float)
                         {
-                            if (float.TryParse(tracciatoRecord[kvp.Key].ToString(), NumberStyles.Any, numberFormatInfo, out float floatResult))
-                                tracciatoRecord[kvp.Key] = floatResult;
+                            //TASK-13e871a5: il valore e' gia' un numero; riscritto col ToString della cultura corrente
+                            //e riletto con numberFormatInfo poteva cambiare (0,25 -> 25).
+                            if (NumeroDiRegola.TryLeggi(tracciatoRecord[kvp.Key], out double floatResult))
+                                tracciatoRecord[kvp.Key] = (float)floatResult;
                             else
                                 tracciatoRecord[kvp.Key] = default(float);
                         }
                         else if (tracciatoRecord[kvp.Key] is decimal)
                         {
-                            if (decimal.TryParse(tracciatoRecord[kvp.Key].ToString(), NumberStyles.Any, numberFormatInfo, out decimal decimalResult))
+                            if (NumeroDiRegola.TryLeggiDecimale(tracciatoRecord[kvp.Key], out decimal decimalResult))
                                 tracciatoRecord[kvp.Key] = decimalResult;
                             else
                                 tracciatoRecord[kvp.Key] = default(decimal);
                         }
                         else if (tracciatoRecord[kvp.Key] is double)
                         {
-                            if (double.TryParse(tracciatoRecord[kvp.Key].ToString(), NumberStyles.Any, numberFormatInfo, out double doubleResult))
+                            if (NumeroDiRegola.TryLeggi(tracciatoRecord[kvp.Key], out double doubleResult))
                                 tracciatoRecord[kvp.Key] = doubleResult;
                             else
                                 tracciatoRecord[kvp.Key] = default(double);

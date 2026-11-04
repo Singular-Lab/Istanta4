@@ -1642,7 +1642,7 @@ namespace AgenziaLib
                                 decimal sconto_massmarket = 0;
                                 string str_sconto_mm = item[keySconto_MM].ToString();
                                 str_sconto_mm = str_sconto_mm.Replace(" ", "");
-                                Decimal.TryParse(str_sconto_mm, out sconto_massmarket);
+                                NumeriSenzaCultura.TryLeggiDecimale(str_sconto_mm, out sconto_massmarket);
                                 sconto_massmarket = Math.Abs(sconto_massmarket);
                                 item[keySconto_MM] = sconto_massmarket;
 
@@ -1651,7 +1651,7 @@ namespace AgenziaLib
                                 decimal sconto_fidelity = 0;
                                 string str_sconto_fid = item[keySconto_FID].ToString();
                                 str_sconto_fid = str_sconto_fid.Replace(" ", "");
-                                Decimal.TryParse(str_sconto_fid, out sconto_fidelity);
+                                NumeriSenzaCultura.TryLeggiDecimale(str_sconto_fid, out sconto_fidelity);
                                 sconto_fidelity = Math.Abs(sconto_fidelity);
                                 item[keySconto_FID] = sconto_fidelity;
 
@@ -1682,7 +1682,7 @@ namespace AgenziaLib
                                 decimal sconto_agenzia = 0;
                                 string str_sconto_agenzia = item[keySconto_agenzia].ToString();
                                 str_sconto_agenzia = str_sconto_agenzia.Replace(" ", "");
-                                Decimal.TryParse(str_sconto_agenzia, out sconto_agenzia);
+                                NumeriSenzaCultura.TryLeggiDecimale(str_sconto_agenzia, out sconto_agenzia);
                                 sconto_agenzia = Math.Abs(sconto_agenzia);
                                 item[keySconto_agenzia] = sconto_agenzia;
 
@@ -12873,8 +12873,8 @@ Descrizione3.EndsWith("\r\n");
             if (!item.ContainsKey(GLOBAL_VARIABLES.keyDescrPeso) || item[GLOBAL_VARIABLES.keyDescrPeso] == null)
                 return false;
 
-            return decimal.TryParse(Convert.ToString(item[GLOBAL_VARIABLES.keyDescrPeso], CultureInfo.InvariantCulture),
-                NumberStyles.Any, CultureInfo.InvariantCulture, out decimal peso) && peso == 1m;
+            //TASK-13e871a5: NumberStyles.Any con la cultura invariante leggeva "1,0" come 10.
+            return NumeriSenzaCultura.TryLeggiDecimale(item[GLOBAL_VARIABLES.keyDescrPeso], out decimal peso) && peso == 1m;
         }
 
         public string eseguiAutoSelezioneGruppo(List<Dictionary<string, object>> gruppo, List<Dictionary<string, object>> ghost)

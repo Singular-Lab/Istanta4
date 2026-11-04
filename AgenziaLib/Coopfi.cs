@@ -6175,11 +6175,11 @@ namespace AgenziaLib
                         DESCRIZIONE2 = s.ContainsKey(GLOBAL_VARIABLES_FICO.keyDescrizione2)?s[GLOBAL_VARIABLES_FICO.keyDescrizione2].ToString():"",
                         DESCRIZIONE3 = s.ContainsKey(GLOBAL_VARIABLES_FICO.keyDescrizione3)?s[GLOBAL_VARIABLES_FICO.keyDescrizione3].ToString():"",
                         DESCRIZIONE4 = s.ContainsKey(GLOBAL_VARIABLES_FICO.keyDescrizione4)?s[GLOBAL_VARIABLES_FICO.keyDescrizione4].ToString():"",
-                        PREZZO_PROMO = Convert.ToDecimal(s.ContainsKey("prezzo_promo")?s["prezzo_promo"]:0),
-                        PREZZO_CONTINUO = Convert.ToDecimal(s.ContainsKey("prezzo_continuo")?s["prezzo_continuo"]:0),
-                        PREZZO_KGL = Convert.ToDecimal(s.ContainsKey("prezzo_kgl")?s["prezzo_kgl"]:0),
+                        PREZZO_PROMO = NumeriSenzaCultura.ComeDecimale(s.ContainsKey("prezzo_promo")?s["prezzo_promo"]:0),
+                        PREZZO_CONTINUO = NumeriSenzaCultura.ComeDecimale(s.ContainsKey("prezzo_continuo")?s["prezzo_continuo"]:0),
+                        PREZZO_KGL = NumeriSenzaCultura.ComeDecimale(s.ContainsKey("prezzo_kgl")?s["prezzo_kgl"]:0),
                         UM = s.ContainsKey(GLOBAL_VARIABLES_FICO.keyDescrUm)?s[GLOBAL_VARIABLES_FICO.keyDescrUm].ToString():"",
-                        PESO = Convert.ToDecimal(s.ContainsKey(GLOBAL_VARIABLES_FICO.keyDescrPeso)?s[GLOBAL_VARIABLES_FICO.keyDescrPeso]:0),
+                        PESO = NumeriSenzaCultura.ComeDecimale(s.ContainsKey(GLOBAL_VARIABLES_FICO.keyDescrPeso)?s[GLOBAL_VARIABLES_FICO.keyDescrPeso]:0),
                     }).ToList();
 
                     string _params = JsonConvert.SerializeObject(lista_descrelementiGruppo);
