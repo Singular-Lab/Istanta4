@@ -803,6 +803,21 @@ const pluginMiddleware = {
             .filter(r => r.estensioni.length > 0);
     },
 
+    /// TASK-60aaf10d: come il cliente usa la foto indicata dal tracciato
+    /// (AgenziaCustomPlugin_FotoDaTracciato). Per il Plugin conta solo se la foto della lista si
+    /// cambia solo per la lavorazione. Senza la chiave, o se non e' un oggetto, null: tutto come prima.
+    getFotoDaTracciato() {
+        let me = this;
+
+        const valore = me.callCustom
+            ? (typeof customAgenzia !== "undefined" && customAgenzia != null ? customAgenzia.fotoDaTracciato : null)
+            : me.customPluginDB?.fotoDaTracciato;
+        if (valore == null || typeof valore !== "object" || Array.isArray(valore)) {
+            return null;
+        }
+        return { cambioSoloPerLavorazione: valore.cambioSoloPerLavorazione === true };
+    },
+
     /// I20-1088: se un meta dei testi del box non si segnala da verificare per la sola versione del
     /// record cambiata (la lista ricaricata con lo stesso valore). Come chiediAmbitoDecisioniLavorazione:
     /// la chiave sta nella configurazione del cliente sul server, e senza vale falso (si controlla).

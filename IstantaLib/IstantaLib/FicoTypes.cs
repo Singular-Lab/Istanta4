@@ -1027,6 +1027,9 @@ namespace IstantaLib
         public string nomeFotoSecondaria { get; set; }//Label che riceve la foto secondaria nel box
         public List<string> elementiConnessiAlleFoto { get; set; } = new List<string>();//I20-1130: etichette (con * come jolly) degli elementi del box che "Seleziona tutte le foto" del Plugin prende insieme alle foto, per esempio le ombre sy_ombra*
         public List<AgenziaCustomPlugin_RegolaEsclusioneCambioFoto> regoleEsclusioneCambioFoto { get; set; } = new List<AgenziaCustomPlugin_RegolaEsclusioneCambioFoto>();//Regole che tolgono alcune foto dalle proposte della schermata Cambia foto del Plugin; vuota = tutte le foto, come prima
+        /// TASK-60aaf10d: la foto della referenza indicata dal tracciato, quando l'agenzia la fa
+        /// comandare. Assente: tutto come prima, vale solo Foto.SelezioneDaTracciato.
+        public AgenziaCustomPlugin_FotoDaTracciato fotoDaTracciato { get; set; }
         public string fotoNotFound { get; set; }//Nome del file che contiene info FOTO NOT FOUND su disco
         public string nomeNoFoto { get; set; }//Nome del file che contiene info NESSUNA FOTO PER QUESTA REF
         public string[] listCampiConfrontoBypass { get; set; }//Campi che non vengono tenuti in considerazione nel check delle differenze nel confronto
@@ -1352,6 +1355,24 @@ namespace IstantaLib
         public List<string> estensioni { get; set; } = new List<string>();
         public List<string> seEsisteEstensione { get; set; } = new List<string>();
         public bool mantieniSelezionata { get; set; } = true;
+    }
+
+    /// TASK-60aaf10d: come l'agenzia usa la foto indicata dal tracciato (Edro21: NOME_FOTO, scritto
+    /// senza estensione). La foto del tracciato comanda su quella scelta in archivio; l'operatore la
+    /// cambia, se l'agenzia lo vuole, solo per la lavorazione, e la scelta decade quando una lista
+    /// nuova indica un'altra foto.
+    public class AgenziaCustomPlugin_FotoDaTracciato
+    {
+        /// Chiavi del record che portano il nome della foto, in ordine: vale la prima presente e
+        /// non vuota. Le liste Edro21 di generazioni diverse usano nome_foto o Foto.SelezioneDaTracciato.
+        public List<string> campi { get; set; } = new List<string>();
+        /// Estensioni da preferire fra le foto con il nome del tracciato, in ordine (senza punto).
+        /// Senza una di queste vale la foto con quel nome modificata per ultima.
+        public List<string> estensioniPreferite { get; set; } = new List<string>();
+        /// La foto del tracciato si cambia dal Plugin solo per la lavorazione corrente.
+        public bool cambioSoloPerLavorazione { get; set; } = false;
+        /// Se una lavorazione senza meta propri eredita la foto scelta in una lavorazione passata.
+        public bool ereditaFotoDalPassato { get; set; } = true;
     }
 
     public class AgenziaCustomPlugin_LibreriaIndd
