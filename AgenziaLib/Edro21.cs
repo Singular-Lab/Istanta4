@@ -4798,7 +4798,7 @@ Descrizione1.EndsWith("\r\n");
 
                                 //DA AGGIORNARE IN MAPPA STILI
                                 //var nome_stile = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "descr_esempio", codiceBox, canale);
-                                var nome_stile_esempio = getStileEsempio(recItem, canale); //GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "descr_esempio", codiceBox, canale);
+                                var nome_stile_esempio = getStileEsempio(recItem, canale, codiceBox); //GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "descr_esempio", codiceBox, canale);
 
                                 if (!descrizioneEsempio.ToLower().StartsWith("un esempio"))
                                 {
@@ -4992,8 +4992,14 @@ descrizioneEsempio.EndsWith("\r\n");
             return "DES_descr_alkg";
         }
 
-        private string getStileEsempio(Dictionary<string, object> recItem, string canale)
+        /// TASK-d4976be3: nel BOX14, il box delle mini collection, l'esempio ha lo stile MC come gli altri
+        /// stili della descrizione di quel box (DES_descr_nome_MC...), in ogni canale.
+        internal static string getStileEsempio(Dictionary<string, object> recItem, string canale, string codiceBox)
         {
+            if (codiceBox == "BOX14")
+            {
+                return "DES_descr_es_MC";
+            }
             if (canale == "SC")
             {
                 return "A.DES_descr_es_SC";
