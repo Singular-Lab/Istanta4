@@ -427,6 +427,14 @@ namespace AgenziaLib
         {
             return forzato && !string.Equals((siglaReparto ?? "").Trim(), SiglaRepartoExtra, StringComparison.OrdinalIgnoreCase);
         }
+
+        /// I20-1195: se il box esce anche senza prezzo offerta ("€ 7,92"). Era solo la cura persona con
+        /// prezzi diversi nel gruppo (mismatchPrezzi di esportaVolantino); la ref forzata con meccanica ALL
+        /// deve uscire allo stesso modo, sennò perde il prezzo barrato ma tiene il prezzo offerta.
+        public static bool SenzaPrezzoOfferta(bool prezziDiversiCuraPersona, bool forzato, string? combinazioneAssegnata)
+        {
+            return prezziDiversiCuraPersona || (forzato && MeccanicaAll((combinazioneAssegnata ?? "").ToUpperInvariant()));
+        }
     }
 
     /// I20-1132: gli scatti con confezioni. Un gruppo accosta a un codice radice (codice_vv 1, il pezzo
@@ -2652,6 +2660,10 @@ namespace AgenziaLib
                             }
                         }
                     }
+                    //I20-1195: la ref forzata a sconto linea esce senza prezzo offerta come la cura persona qui sopra.
+                    //Solo i prezzi: mismatchPrezzi toglie anche l'esempio dalla descrizione, e li' la forzatura ha la sua regola.
+                    bool senzaPrezzoOfferta = ScontoLineaEdro21.SenzaPrezzoOfferta(mismatchPrezzi, ScontoLineaEdro21.Forzato(recItem),
+                                                                                   recItem[key_combinazioneAssegnata].ToString());
 
                     bool foto = recItem[referenza_pilota].ToString() == "S";
                     bool esempio = recItem[potenziale_esempio].ToString() != "";
@@ -2687,7 +2699,7 @@ namespace AgenziaLib
 
                         //Aggiusto 0 nei prezzi addestramento nativi
 
-                        recItem[keyPrezzo_offerta] = mismatchPrezzi ? "" : MathExt.DecimalRoundToString(paghi);
+                        recItem[keyPrezzo_offerta] = senzaPrezzoOfferta ? "" : MathExt.DecimalRoundToString(paghi);
                         recItem[keyPrezzo_offerta_kgl] = MathExt.DecimalRoundToString(paghi_kgl);
                         //recItem["prezzo_offerta_KgL"] = MathExt.DecimalRoundToString(paghi_kgl);
                         var prezzo_offerta_KgL = MathExt.DecimalRoundToString(paghi_kgl);
@@ -2766,7 +2778,7 @@ namespace AgenziaLib
                         //recItem["prezzo_offerta_EURprima"] = "€ " + MathExt.DecimalRoundToString(paghi);
                         //recItem["prezzo_offerta_KgL_EURprima"] = "€ " + MathExt.DecimalRoundToString(paghi_kgl);
 
-                        var prezzo_offerta_EURprima = mismatchPrezzi ? "" : "€ " + MathExt.DecimalRoundToString(paghi);
+                        var prezzo_offerta_EURprima = senzaPrezzoOfferta ? "" : "€ " + MathExt.DecimalRoundToString(paghi);
                         var prezzo_offerta_KgL_EURprima = "€ " + MathExt.DecimalRoundToString(paghi_kgl);
 
 

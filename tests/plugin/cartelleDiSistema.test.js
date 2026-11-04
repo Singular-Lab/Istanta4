@@ -135,8 +135,11 @@ test("all'apertura le cartelle si preparano solo se il documento ha gia' una lav
     //I20-1133: un .indd qualunque, senza lavorazione, non deve trovarsi logs, export e SingularData. I
     //percorsi del documento aperto prima si azzerano comunque.
     const documento = corpoFunzione("async function initDocumentInLavorazione()");
-    const azzera = documento.indexOf("azzeraCartelleDiSistema();");
-    assert.ok(azzera > documento.indexOf("pathLavorazione = f.nativePath;"));
+    //TASK-325cdb29: la prima chiamata e' quella del documento non salvato, che esce prima del percorso.
+    const percorso = documento.indexOf("pathLavorazione = f.nativePath;");
+    assert.ok(percorso > 0);
+    const azzera = documento.indexOf("azzeraCartelleDiSistema();", percorso);
+    assert.ok(azzera > percorso);
     assert.match(documento, /const nomeDocumento = docInLavorazione\.name;\n\s*if \(Utility\.esisteLavorazione\(pathLavorazione, idMacchina\(\), nomeDocumento, libroDelDocumentoInLavorazione\(nomeDocumento\)\)\) \{\n\s*await preparaCartelleDiSistema\(pathLavorazione\);\n\s*\}/);
     assert.strictEqual((documento.match(/preparaCartelleDiSistema\(/g) || []).length, 1);
     const prepara = documento.indexOf("await preparaCartelleDiSistema(pathLavorazione);");

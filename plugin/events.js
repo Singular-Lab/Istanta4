@@ -216,13 +216,10 @@ class InddEvents {
 
                         //console.log("Selezione intercettata");
 
-                        var f = await app.activeDocument.fullName;
-                        //console.log(f.nativePath);
-                        //console.log(me.lastActiveDocument);
-                        //console.log(f.nativePath + "!=" +me.lastActiveDocument );
-                        if (me.lastActiveDocument != f.nativePath) {
-                            //console.log("Nuovo documento aperto: " + f.nativePath);
-                            me.lastActiveDocument = f.nativePath;
+                        //TASK-325cdb29: il percorso, o il nome per un documento mai salvato (Cmd+N).
+                        var identita = await InddEvents.identitaDocumento(app.activeDocument);
+                        if (me.lastActiveDocument != identita) {
+                            me.lastActiveDocument = identita;
                             me.lastActiveLibro=null;
                             me.policyIsLocked=false;
                             me.fireEvent(me.EVENT_NEW_DOCUMENT_SELECTED, [app.activeDocument]);
@@ -660,8 +657,7 @@ class InddEvents {
             let documentoAttuale = null;
 
             if (app.documents.length > 0) {
-                const nomeCompleto = await app.activeDocument.fullName;
-                documentoAttuale = nomeCompleto != null ? nomeCompleto.nativePath : null;
+                documentoAttuale = await InddEvents.identitaDocumento(app.activeDocument);
             }
 
             ReportIntegrita.chiudiSeNonValePiu(documentoAttuale);
@@ -1040,6 +1036,68 @@ class InddEvents {
     setBusy(busy)
     {
         this.isBusy=busy;
+    }
+
+    /// TASK-325cdb29: chi e' un documento, per accorgersi che il documento attivo cambia: il suo
+    /// percorso. Un documento mai salvato (Cmd+N, "Senza titolo-1") non ne ha, e fullName lancia
+    /// "Non esiste un nome completo per i documenti non salvati": l'errore finiva nel catch del
+    /// ciclo a ogni giro, e il Plugin restava fermo finche' quel documento stava davanti. Ora si
+    /// riconosce dal nome, con un prefisso che nessun percorso ha. Non lancia mai.
+    /// Su un documento salvato fullName e' una Promise (va aspettata, come faceva il ciclo: senza
+    /// await nativePath era undefined e il documento d'avvio non si riconosceva mai); su uno non
+    /// salvato lancia subito. Il try copre tutti e due.
+    static async identitaDocumento(documento)
+    {
+        if (documento == null) {
+            return null;
+        }
+        try {
+            const nomeCompleto = await documento.fullName;
+            return nomeCompleto.nativePath;
+        }
+        catch (e) {
+            try {
+                return "non salvato:" + documento.name;
+            }
+            catch (e2) {
+                return "non salvato:";
+            }
+        }
+    }
+
+    /// TASK-325cdb29: vero se il documento non e' mai stato salvato, e quindi non puo' avere una
+    /// lavorazione.
+    static async documentoNonSalvato(documento)
+    {
+        const identita = await InddEvents.identitaDocumento(documento);
+        return identita != null && identita.startsWith("non salvato:");
+    }
+
+    /// TASK-325cdb29: durante un lavoro sul documento (l'impaginazione) l'operatore puo' portarne
+    /// davanti un altro, per esempio crearne uno con Cmd+N. Il lavoro resta sul suo documento, ma
+    /// l'operatore guarderebbe quello sbagliato: qui lo si rimette davanti. I documenti si
+    /// confrontano per id: app.activeDocument e il documento fissato all'avvio possono essere
+    /// oggetti diversi per lo stesso documento. True se l'ha rimesso davanti. Non lancia mai.
+    static riportaDavanti(documento, applicazione)
+    {
+        try {
+            if (documento == null || applicazione == null || documento.isValid === false) {
+                return false;
+            }
+            if (applicazione.documents.length === 0) {
+                return false;
+            }
+            const attivo = applicazione.activeDocument;
+            if (attivo != null && attivo.id === documento.id) {
+                return false;
+            }
+            applicazione.activeDocument = documento;
+            return true;
+        }
+        catch (e) {
+            console.warn("TASK-325cdb29: il documento del lavoro non si e' potuto rimettere davanti: " + e);
+            return false;
+        }
     }
 
     /// I20-1074: la scheda ref e' aperta in vista controllata, dal Report Integrita' o dalla

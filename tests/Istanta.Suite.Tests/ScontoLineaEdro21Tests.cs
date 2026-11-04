@@ -67,6 +67,27 @@ public class ScontoLineaEdro21Tests
         Assert.Equal(atteso, ScontoLineaEdro21.EsempioEscluso(forzato, sigla));
     }
 
+    /// I20-1195: la ref forzata perdeva il prezzo barrato ma teneva "€ 7,92": il prezzo offerta lo toglieva
+    /// solo la cura persona con prezzi diversi nel gruppo. Ora anche la forzatura, con una meccanica ALL.
+    [Theory]
+    //Cura persona con prezzi diversi nel gruppo: come sempre, qualunque cosa dica la forzatura.
+    [InlineData(true, false, "PERCENTO_MM_ALL", true)]
+    [InlineData(true, true, "PERCENTO_FID_ALL", true)]
+    //Forzata con meccanica ALL, anche scritta in minuscolo o con un suffisso: il caso della issue.
+    [InlineData(false, true, "PERCENTO_FID_ALL", true)]
+    [InlineData(false, true, "percento_mm_all", true)]
+    [InlineData(false, true, "PERCENTO_FID_ALL_KgL", true)]
+    //Senza forzatura i prezzi restano.
+    [InlineData(false, false, "PERCENTO_FID_ALL", false)]
+    //Forzata ma senza una meccanica ALL: la forzatura non fa niente.
+    [InlineData(false, true, "PERCENTO_MM", false)]
+    [InlineData(false, true, "", false)]
+    [InlineData(false, true, null, false)]
+    public void Il_prezzo_offerta_esce_dal_box_per_cura_persona_con_prezzi_diversi_o_per_forzatura(bool prezziDiversi, bool forzato, string? combinazione, bool atteso)
+    {
+        Assert.Equal(atteso, ScontoLineaEdro21.SenzaPrezzoOfferta(prezziDiversi, forzato, combinazione));
+    }
+
     private static List<(int Blocco, string Campo, IstantaLib.OperatoreCondizione Operatore, string Value)> Regole(IstantaLib.CambioStrutturale azione)
         => azione.Condizione.SelectMany(b => b.Regole.Select(r => (b.Id, r.Campo, r.Operatore, r.Value))).ToList();
 
