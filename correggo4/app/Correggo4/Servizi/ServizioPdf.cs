@@ -11,9 +11,15 @@ namespace Correggo4.Servizi;
 /// deve fare il server e mandarlo come allegato: il browser allora lo scarica e basta.
 ///
 /// COME: si scrive l'HTML in un file temporaneo e si chiama il motore di stampa di Chrome
-/// (chrome-headless-shell, installato in /opt/chrome-pdf con j314b - Chrome senza interfaccia,
-/// solo il motore). Il PDF che esce e' fatto dallo stesso motore che stamperebbe la pagina dal
-/// browser, quindi viene identico a quello che l'utente vede.
+/// (chrome-headless-shell - Chrome senza interfaccia, solo il motore). Il PDF che esce e' fatto
+/// dallo stesso motore che stamperebbe la pagina dal browser, quindi viene identico a quello che
+/// l'utente vede.
+///
+/// DOVE STA IL MOTORE (I20-1192). Con j314b era installato a mano sulla vecchia macchina, in
+/// /opt/chrome-pdf; passati al container, l'immagine non ce l'aveva e ESPORTA PDF rispondeva
+/// «motore_mancante». Ora lo installa correggo4/Dockerfile, nello stesso posto, con il
+/// collegamento MotoreDiSerie. Sul computer di chi sviluppa quel collegamento non c'e': si usa il
+/// Chrome (o Chromium, o Edge) installato, che stampa con le stesse opzioni.
 ///
 /// PERCHE' NON UNA LIBRERIA .NET DI PDF: perche' vorrebbe dire riscrivere il report in C#, e da
 /// quel giorno ci sarebbero due report - quello a schermo e quello stampato - che si allontanano a
@@ -34,15 +40,58 @@ namespace Correggo4.Servizi;
 /// </summary>
 public static class ServizioPdf
 {
-    private const string MotoreDiSerie = "/usr/local/bin/chrome-pdf";
+    /// <summary>Dove correggo4/Dockerfile mette il motore: i due devono dire lo stesso posto.</summary>
+    public const string MotoreDiSerie = "/usr/local/bin/chrome-pdf";
 
-    private static string Motore
+    private static string? Motore =>
+        TrovaMotore(Environment.GetEnvironmentVariable("ISTANTA4_CHROME_PDF"), File.Exists,
+                    MotoriDelComputer());
+
+    /// <summary>
+    /// Il motore da usare, oppure null. La variabile, se c'e', decide da sola: chi la scrive vuole
+    /// QUEL motore, e se non c'e' e' meglio saperlo che ritrovarsi a stampare con un altro. Senza
+    /// variabile si prova quello di serie e poi i browser del computer, nell'ordine.
+    /// </summary>
+    public static string? TrovaMotore(string? variabile, Func<string, bool> esiste,
+                                      IEnumerable<string> delComputer)
     {
-        get
+        if (!string.IsNullOrWhiteSpace(variabile)) return esiste(variabile) ? variabile : null;
+        if (esiste(MotoreDiSerie)) return MotoreDiSerie;
+        return delComputer.FirstOrDefault(esiste);
+    }
+
+    /// <summary>
+    /// I browser che, sul computer di chi sviluppa, stampano in PDF come chrome-headless-shell:
+    /// Chrome, Chromium ed Edge, nei posti dove si installano di solito.
+    /// </summary>
+    public static IReadOnlyList<string> MotoriDelComputer()
+    {
+        if (OperatingSystem.IsMacOS())
+            return new[]
+            {
+                "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+                "/Applications/Chromium.app/Contents/MacOS/Chromium",
+                "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"
+            };
+        if (OperatingSystem.IsWindows())
         {
-            string? v = Environment.GetEnvironmentVariable("ISTANTA4_CHROME_PDF");
-            return string.IsNullOrWhiteSpace(v) ? MotoreDiSerie : v;
+            var dove = new[]
+            {
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)
+            }.Where(c => c.Length > 0).Distinct().ToList();
+            return dove.Select(c => Path.Combine(c, "Google", "Chrome", "Application", "chrome.exe"))
+                       .Concat(dove.Select(c => Path.Combine(c, "Microsoft", "Edge", "Application", "msedge.exe")))
+                       .ToList();
         }
+        return new[]
+        {
+            "/usr/bin/google-chrome",
+            "/usr/bin/google-chrome-stable",
+            "/usr/bin/chromium",
+            "/usr/bin/chromium-browser"
+        };
     }
 
     /// <summary>Quanto HTML si accetta. Le foto viaggiano dentro, percio' non e' poco.</summary>
@@ -56,7 +105,7 @@ public static class ServizioPdf
     private static Esito No(string codice, string messaggio) =>
         new(false, codice, messaggio, Array.Empty<byte>());
 
-    public static bool MotoreCe() => File.Exists(Motore);
+    public static bool MotoreCe() => Motore != null;
 
     public static async Task<Esito> DaHtmlAsync(string? html, CancellationToken ct = default)
     {
@@ -66,7 +115,8 @@ public static class ServizioPdf
             return No("html_troppo_grande",
                 "Il report e' troppo grande per essere spedito al server. Usa STAMPA e scegli " +
                 "«Salva come PDF».");
-        if (!MotoreCe())
+        string? motore = Motore;
+        if (motore == null)
             return No("motore_mancante",
                 "Su questo server non c'e' il motore per fare i PDF. Usa STAMPA e scegli " +
                 "«Salva come PDF».");
@@ -80,7 +130,7 @@ public static class ServizioPdf
             Directory.CreateDirectory(cartella);
             await File.WriteAllTextAsync(entrata, html, new UTF8Encoding(false), ct);
 
-            var avvio = new ProcessStartInfo(Motore)
+            var avvio = new ProcessStartInfo(motore)
             {
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
