@@ -11,6 +11,10 @@ export interface IReferenzeService {
   updateReferenza(id: string, data: ReferenzeIstanta): Promise<any>;
   /** Elimina le referenze del kit e inserisce le nuove in un'unica transazione */
   sostituisciReferenzeKit(idKitRuntime: string, referenze: ReferenzeIstanta[]): Promise<any>;
+  /** Per ogni nome originale di un mapping, quante referenze salvate lo hanno ancora. */
+  contaCampiNonTradotti(campi: string[]): Promise<Record<string, number>>;
+  /** Rinomina il campo in tutte le referenze, in una transazione: tutte o nessuna. */
+  sincronizzaCampoNonTradotto(campo: string, tradotto: string): Promise<{ referenze: number; kit: number }>;
 
   /** Ricerca */
   ricercaReferenzePromo(data: { query: string; idWorkspace: string; idArea: string; idCanale: string }): Promise<any[]>;

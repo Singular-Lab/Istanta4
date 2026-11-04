@@ -18,6 +18,7 @@ import type { IWebhookService } from '../interfaces/IWebhookService';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { routeDeprecata } from '../middleware/routeDeprecata';
 import { permissionGuard } from '../middleware/permissionGuard';
+import { AuditLogService } from '../services/AuditLogService';
 import { ServerUtils } from '../utils/ServerUtils';
 import { esitoIstanta, verificaRisposta } from '../utils/rispostaServizi';
 import { TraduttoreReferenze } from '../utils/Translator';
@@ -52,11 +53,54 @@ export class ReferenzeController extends BaseController {
     this.router.get('/getReferenzaById', authMiddleware, permissionGuard('referenze.visualizza'), routeDeprecata, this.getReferenzaById.bind(this));
     this.router.get('/getReferenzaByCodice', authMiddleware, permissionGuard('referenze.visualizza'), this.getReferenzaByCodice.bind(this));
     this.router.put('/updateReferenzaWebpliant', authMiddleware, permissionGuard('referenze.modifica'), this.updateReferenzaWebpliant.bind(this));
+
+    // Mapping WebPliant aggiunti dopo: referenze salvate col nome originale e loro Sync
+    this.router.get('/referenze/campi-non-tradotti', authMiddleware, permissionGuard('impostazioni.modifica_generali'), this.getCampiNonTradotti.bind(this));
+    this.router.post('/referenze/campi-non-tradotti/sync', authMiddleware, permissionGuard('impostazioni.modifica_generali'), this.sincronizzaCampoNonTradotto.bind(this));
     this.router.get('/getDatiPerWebPliantDisponibili', authMiddleware, permissionGuard('referenze.visualizza'), routeDeprecata, this.getDatiPerWebPliantDisponibili.bind(this));
     this.router.get('/get_addestramenti_da_istanta', authMiddleware, permissionGuard('referenze.visualizza'), this.getAddestramentiDaIstanta.bind(this));
     this.router.get('/richiediReferenzeWebpliant', authMiddleware, permissionGuard('referenze.importa'), this.richiediReferenzeWebpliant.bind(this));
   }
 
+
+  /** I mapping salvati che il Sync puo' applicare, letti sempre dalla configurazione e mai dal client. */
+  private async mappingDaSincronizzare(): Promise<{ campo: string; tradotto: string }[]> {
+    const configWebpliant = await container.get<IConfigService>(TYPES.ConfigService).getConfigWebPliantFromVolantino();
+    return TraduttoreReferenze.mapping_da_sincronizzare(configWebpliant.data_fields_refs ?? []);
+  }
+
+  private async getCampiNonTradotti(_req: Request, res: Response): Promise<void> {
+    try {
+      const mapping = await this.mappingDaSincronizzare();
+      const conteggi = await this.referenzeService.contaCampiNonTradotti(mapping.map((m) => m.campo));
+      res.status(HttpStatusCode.OK).json(mapping.map((m) => ({ ...m, referenze: conteggi[m.campo] ?? 0 })));
+    } catch (error) {
+      this.handleError(res, error as Error);
+    }
+  }
+
+  private async sincronizzaCampoNonTradotto(req: Request, res: Response): Promise<void> {
+    try {
+      const campo = req.body?.campo;
+      if (typeof campo !== 'string' || !campo.trim()) {
+        throw new BadRequestError({ message: "campo: indica il nome originale del mapping da sincronizzare" });
+      }
+      const mapping = (await this.mappingDaSincronizzare()).find((m) => m.campo === campo);
+      if (!mapping) {
+        throw new BadRequestError({ message: `campo: «${campo}» non e' un mapping salvato con un nome tradotto diverso` });
+      }
+      const esito = await this.referenzeService.sincronizzaCampoNonTradotto(mapping.campo, mapping.tradotto);
+      AuditLogService.getInstance().entityChanged(req, 'referenze', 'sincronizza_campo', { type: 'MappingDataFields', id: mapping.campo }, {
+        campo: mapping.campo,
+        tradotto: mapping.tradotto,
+        referenze: esito.referenze,
+        kit: esito.kit,
+      });
+      res.status(HttpStatusCode.OK).json({ ...mapping, ...esito });
+    } catch (error) {
+      this.handleError(res, error as Error);
+    }
+  }
 
   // --- Handlers from PromoController ---
   private async richiediReferenzeWebpliant(req: Request, res: Response): Promise<void> {

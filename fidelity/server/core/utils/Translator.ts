@@ -57,6 +57,27 @@ export class TraduttoreReferenze {
     }
 
 
+    /**
+     * Mapping che il Sync puo' applicare alle referenze gia' salvate: con un nome tradotto
+     * diverso dall'originale (reparto -> reparto o tema -> "" non cambiano nulla). Se lo stesso
+     * nome originale compare piu' volte vale il primo, come in traduci_data_fields.
+     */
+    static mapping_da_sincronizzare(
+        translation_map: { expected_input?: string, expected_output?: string }[]
+    ): { campo: string, tradotto: string }[] {
+        const visti = new Set<string>();
+        const out: { campo: string, tradotto: string }[] = [];
+        for (const mapping of translation_map ?? []) {
+            // Nomi esatti, come li confronta traduci_data_fields
+            const campo = String(mapping?.expected_input ?? '');
+            const tradotto = String(mapping?.expected_output ?? '');
+            if (!campo.trim() || visti.has(campo)) continue;
+            visti.add(campo);
+            if (tradotto.trim() && tradotto !== campo) out.push({ campo, tradotto });
+        }
+        return out;
+    }
+
     static traduci_deleted_fields(
         deleted_fields_referenza: string[],
         deleted_fields_translation_map: {

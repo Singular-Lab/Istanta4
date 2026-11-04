@@ -46,6 +46,7 @@ vi.mock('../../di', () => ({
     CanaleService: 'CanaleService',
     TipoExportService: 'TipoExportService',
     AgenziaLib: 'AgenziaLib',
+    ConfigService: 'ConfigService',
   },
   container: { get: (tipo: string) => stato.servizi.get(tipo) },
 }));
@@ -154,6 +155,10 @@ function preparaServizi() {
     getTipoExportByCodice: vi.fn(async (_codice: string): Promise<{ id: string; codice: string } | null> => ({ id: 'tipo-vol', codice: 'VOL' })),
   };
   const agenziaLib: { supportaImportStorico?: boolean } = { supportaImportStorico: true };
+  // Mapping traduzione DataFields delle impostazioni WebPliant: vuoto, i campi restano come arrivano
+  const configWebpliant = {
+    getConfigWebPliantFromVolantino: vi.fn(async (): Promise<{ data_fields_refs: { expected_input: string; expected_output: string }[] }> => ({ data_fields_refs: [] })),
+  };
   // Upload del PDF su Olimpo: nessuna chiamata di rete, risponde il finto Olimpo
   const uploadOlimpo = vi.spyOn(ServerUtils, 'sendToFICOApi').mockResolvedValue({
     data: { esito: true, error: '', content: { id: 'materiale-olimpo-1', file_name: 'volantino.pdf', json_meta: '{}', pagine: 4 } },
@@ -172,8 +177,9 @@ function preparaServizi() {
   stato.servizi.set('CanaleService', canale);
   stato.servizi.set('TipoExportService', tipoExport);
   stato.servizi.set('AgenziaLib', agenziaLib);
+  stato.servizi.set('ConfigService', configWebpliant);
 
-  return { kitRuntime, referenze, puntiVendita, storiaPuntiVendita, promo, area, canale, tipoExport, agenziaLib, uploadOlimpo };
+  return { kitRuntime, referenze, puntiVendita, storiaPuntiVendita, promo, area, canale, tipoExport, agenziaLib, configWebpliant, uploadOlimpo };
 }
 type Servizi = ReturnType<typeof preparaServizi>;
 
@@ -521,6 +527,44 @@ describe('POST /api/external/sync_json_plugin: salvataggio', () => {
     const percorso = String(rimozione.mock.calls[0][0]);
     expect(path.dirname(percorso)).toBe(stato.cartellaUpload);
     expect(fs.existsSync(percorso)).toBe(false);
+    await cartellaUploadVuota();
+  });
+
+  it('traduce i campi con la mappa WebPliant e salva comunque quelli senza mappa', async () => {
+    const servizi = preparaServizi();
+    servizi.configWebpliant.getConfigWebPliantFromVolantino.mockResolvedValue({
+      data_fields_refs: [
+        { expected_input: 'prezzo_offerta', expected_output: 'prezzo' },
+        { expected_input: 'descrizione', expected_output: 'descrizione_uno' },
+        { expected_input: 'tema', expected_output: '' },
+      ],
+    });
+    const box = {
+      ...boxDaListino(8, '4969665'),
+      dataFields: { codice_referenza: '4969665', prezzo_offerta: 2.49, promo_db1: '2101P', tema: 'MC' },
+      groupElements: [{ codice_referenza: '4969665', prezzo_offerta: 2.49 }, { codice_referenza: '4969666', promo_db1: '2101P' }],
+    };
+
+    const res = await invia({ ...payloadBase(), refs: [box, boxDaListino(9, '1404871')] });
+
+    expect(res.status).toBe(200);
+    const [, referenze] = servizi.referenze.sostituisciReferenzeKit.mock.calls[0];
+    // Mappati col nome di FP; senza mappa (promo_db1) o senza nome tradotto (tema) col loro nome
+    expect(referenze[0].dataFields).toEqual({ codice_referenza: '4969665', prezzo: 2.49, promo_db1: '2101P', tema: 'MC' });
+    expect(referenze[0].groupElements).toEqual([{ codice_referenza: '4969665', prezzo: 2.49 }, { codice_referenza: '4969666', promo_db1: '2101P' }]);
+    expect(referenze[0].compiledFields).toEqual([{
+      labelName: 'descrizione_uno', paragraphName: 'desc', content: 'Prodotto 4969665', label_name: 'descrizione_uno', paragraph_name: 'desc',
+    }]);
+  });
+
+  it('senza la mappa WebPliant non scrive nulla', async () => {
+    const servizi = preparaServizi();
+    servizi.configWebpliant.getConfigWebPliantFromVolantino.mockRejectedValue(new Error('Configurazione non trovata'));
+
+    const res = await invia(payloadBase());
+
+    expect(res.status).toBeGreaterThanOrEqual(400);
+    nessunaScrittura(servizi);
     await cartellaUploadVuota();
   });
 
