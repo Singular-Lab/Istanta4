@@ -7,6 +7,7 @@ import { authMiddleware } from '../middleware/authMiddleware';
 import { permissionGuard } from '../middleware/permissionGuard';
 import { leggiContestoAccesso } from '../accessi/contestoAccesso';
 import { PERMESSI } from '../../../lib/accessi/catalogo';
+import { eSezioneMenu } from '../../../lib/accessi/sezioni';
 import type BadgeService from '../services/BadgeService';
 
 export class MenuController extends BaseController {
@@ -24,6 +25,8 @@ export class MenuController extends BaseController {
 
     // Menu runtime per utente corrente: solo le pagine che puo' aprire
     this.router.get('/me', authMiddleware, this.getMenuMe.bind(this));
+    // Pagina con cui l'utente entra in Fidelity (indirizzo principale e hub); prima di '/:tipoUtente'
+    this.router.get('/pagina-iniziale', authMiddleware, this.getPaginaIniziale.bind(this));
 
     // Menu configurato per tipo utente (con opzionale ?ruoloGdo=<id sotto-ruolo>)
     this.router.get('/:tipoUtente', ...gestione, this.getMenuPerTipoUtente.bind(this));
@@ -55,7 +58,7 @@ export class MenuController extends BaseController {
       const injectBadges = (items: any[]) => {
         if (!Array.isArray(items)) return;
         for (const item of items) {
-          if (typeof item === 'string') continue;
+          if (typeof item === 'string' || eSezioneMenu(item)) continue;
 
           const keyByPath = item.pathname && badges[item.pathname];
           const keyByTitle = item.title && badges[item.title];
@@ -82,6 +85,20 @@ export class MenuController extends BaseController {
       }
 
       this.sendResponse(res, 200, clonedMenu);
+    } catch (error) {
+      this.handleError(res, error);
+    }
+  }
+
+  private async getPaginaIniziale(req: Request, res: Response): Promise<void> {
+    try {
+      const contesto = await leggiContestoAccesso(req, res);
+      if (!contesto) {
+        throw new UnauthorizedError({
+          message: 'Sessione non valida',
+        });
+      }
+      this.sendResponse(res, 200, { percorso: await this.menuService.getPaginaIniziale(contesto) });
     } catch (error) {
       this.handleError(res, error);
     }

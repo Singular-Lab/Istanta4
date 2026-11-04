@@ -1,6 +1,7 @@
 
 import { CATEGORIA_ATTIVITA, EVENTI_WEBHOOK, FieldType, InteractionType, MODALITA_TIPO_EXPORT, PRIORITA_ATTIVITA, STATO_CANALI_INTERAZIONE, STATO_COMBINAZIONI, STATO_LAVORAZIONE_KIT_RUNTIME, STATO_LOG_FILE, STATO_ORDINI_STAMPA, STATO_PROMO, STATO_UTENTI, STATO_WEBHOOK, TIPI_CANALI_INTERAZIONE, TIPO_ATTIVITA, TIPO_COMANDO_CONTRATTO_TIPOGRAFIA, TIPO_KIT_DESIGN, TIPO_PAGINA, TIPO_UTENTI, UTENTE_GENERE, type CATEGORIA_TEMPLATE_WHATSAPP, type GDOWhatsappQueueJobStatus, type PROVIDER_WHATSAPP, type STATO_GDO_WHATSAPP_NUMBER, type STATO_GDO_WHATSAPP_TEMPLATE } from "../lib/enums";
 import type { OrdinamentoMerceologico } from "./ordinamentoMerceologico";
+import type { SezionePagina } from "./accessi/sezioni";
 
 // ===========================
 // SISTEMA NOTIFICHE
@@ -1955,8 +1956,14 @@ export interface MenuItem {
 // Tipo per un separatore (stringa)
 export type MenuSeparator = string;
 
-// Tipo per un elemento del menu (può essere un item o un separatore)
-export type MenuElement = MenuItem | MenuSeparator;
+/** Intestazione di una sezione di primo livello del menu (Produzione, Visualizzazione...). */
+export interface MenuSezione {
+  sezione: SezionePagina;
+  title: string;
+}
+
+// Tipo per un elemento del menu: una voce, l'intestazione di un gruppo (stringa) o di una sezione
+export type MenuElement = MenuItem | MenuSeparator | MenuSezione;
 
 // Tipo per i ruoli GDO specifici
 export type GdoRole =

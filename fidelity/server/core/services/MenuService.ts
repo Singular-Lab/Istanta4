@@ -1,8 +1,9 @@
 import { TIPO_MENU_ITEM, TIPO_UTENTI } from '../../../lib/enums';
 import { BadRequestError } from '../../../lib/errors';
-import { paginaPer, puoAprirePagina } from '../../../lib/accessi/pagine';
+import { paginaPer, puoAprirePagina, sezioneDiPercorso } from '../../../lib/accessi/pagine';
+import { eSezioneMenu, sezionaMenu } from '../../../lib/accessi/sezioni';
 import type { CodicePermesso } from '../../../lib/accessi/catalogo';
-import type { MenuElement, MenuItem as MenuItemType } from '../../../lib/types';
+import type { MenuElement, MenuItem as MenuItemType, MenuSezione } from '../../../lib/types';
 import type { ContestoAccesso } from '../accessi/contestoAccesso';
 import { RisolutoreAccessi } from '../accessi/RisolutoreAccessi';
 import { incrementaVersionePermessi, leggiVersionePermessi } from '../accessi/versionePermessi';
@@ -15,12 +16,13 @@ import { MenuItemRepository } from '../repositories/MenuItemRepository';
 
 /**
  * Tiene nel menu solo le voci delle pagine consentite. Una voce senza pagina resta
- * se ha almeno una sottovoce visibile; un'intestazione di sezione resta solo se
+ * se ha almeno una sottovoce visibile; l'intestazione di un gruppo resta solo se
  * sotto ha almeno una voce.
  */
 export const filtraMenu = (menu: MenuElement[], puoAprire: (percorso: string) => boolean): MenuElement[] => {
   const voci: MenuElement[] = [];
   for (const elemento of menu) {
+    if (eSezioneMenu(elemento)) continue;
     if (typeof elemento === 'string') {
       voci.push(elemento);
       continue;
@@ -37,6 +39,38 @@ export const filtraMenu = (menu: MenuElement[], puoAprire: (percorso: string) =>
     const successivo = voci[i + 1];
     return successivo !== undefined && typeof successivo !== 'string';
   });
+};
+
+type VoceMenu = Exclude<MenuElement, string | MenuSezione>;
+
+/** Le voci del menu nell'ordine in cui compaiono, ogni voce seguita dalle sue sottovoci. */
+const vociInOrdine = (menu: readonly MenuElement[]): VoceMenu[] =>
+  menu.flatMap(voce => typeof voce === 'string' || eSezioneMenu(voce)
+    ? []
+    : [voce, ...(Array.isArray(voce.subMenu) ? vociInOrdine(voce.subMenu) : [])]);
+
+/**
+ * La pagina con cui l'utente entra: la prima voce attiva segnata come pagina iniziale, altrimenti
+ * la prima voce attiva con una pagina, nell'ordine del menu salvato. Il menu va passato già
+ * filtrato sui permessi e prima della divisione in sezioni, che cambierebbe la prima voce.
+ */
+export const paginaInizialeDi = (menu: readonly MenuElement[]): string | null => {
+  const navigabili = vociInOrdine(menu).filter(voce => voce.pathname && !voce.disabled);
+  return (navigabili.find(voce => voce.start_page) ?? navigabili[0])?.pathname ?? null;
+};
+
+/** Segna come pagina iniziale solo la prima voce con quel percorso: menu, hub e client usano la stessa. */
+const segnaPaginaIniziale = (menu: MenuElement[], percorso: string | null): MenuElement[] => {
+  let segnata = false;
+  const segna = (voci: MenuElement[]): MenuElement[] => voci.map(voce => {
+    if (typeof voce === 'string' || eSezioneMenu(voce)) return voce;
+    const iniziale = !segnata && percorso !== null && voce.pathname === percorso && !voce.disabled;
+    if (iniziale) segnata = true;
+    const { start_page: _precedente, ...resto } = voce;
+    const subMenu = Array.isArray(voce.subMenu) ? (segna(voce.subMenu) as MenuItemType[]) : voce.subMenu;
+    return { ...resto, ...(iniziale ? { start_page: true } : {}), subMenu };
+  });
+  return segna(menu);
 };
 
 export class MenuService implements IMenuService {
@@ -67,11 +101,26 @@ export class MenuService implements IMenuService {
     return menu;
   }
 
+  /**
+   * Menu dell'utente diviso nelle sezioni (Produzione, Visualizzazione...): solo le pagine che può
+   * aprire, ciascuna nella sezione dichiarata dal catalogo. Le voci senza pagina nel catalogo non
+   * compaiono, nemmeno al Superadmin. Una sola voce resta segnata come pagina iniziale.
+   */
   async getMenuDiUtente(contesto: ContestoAccesso): Promise<MenuElement[]> {
     const menu = await this.getMenuConfigurato(contesto.tipo, contesto.idRuoloGdo);
-    if (contesto.superadmin) return menu;
-    const permessi = await this.risolutore.permessiDi(contesto);
-    return filtraMenu(menu, percorso => puoAprirePagina(percorso, (codice: CodicePermesso) => permessi.has(codice)));
+    let consentito = menu;
+    if (!contesto.superadmin) {
+      const permessi = await this.risolutore.permessiDi(contesto);
+      consentito = filtraMenu(menu, percorso => puoAprirePagina(percorso, (codice: CodicePermesso) => permessi.has(codice)));
+    }
+    // Le voci senza pagina nel catalogo spariscono anche per il Superadmin: non possono essere la pagina iniziale
+    const conPagina = filtraMenu(consentito, percorso => sezioneDiPercorso(percorso) !== undefined);
+    return segnaPaginaIniziale(sezionaMenu(conPagina, sezioneDiPercorso), paginaInizialeDi(conPagina));
+  }
+
+  /** La pagina con cui l'utente entra in Fidelity (hub e indirizzo principale); null se il menu è vuoto. */
+  async getPaginaIniziale(contesto: ContestoAccesso): Promise<string | null> {
+    return paginaInizialeDi(await this.getMenuDiUtente(contesto));
   }
 
   async getMenuItemsPerUtente(tipoUtente: TIPO_UTENTI, idRuoloGdo?: string | null): Promise<MenuItemDTO[]> {
@@ -83,6 +132,15 @@ export class MenuService implements IMenuService {
   async saveMenu(tipoUtente: TIPO_UTENTI, idRuoloGdo: string | null, items: MenuItemDTO[]): Promise<void> {
     if (!(Object.keys(TIPO_UTENTI) as Array<keyof typeof TIPO_UTENTI>).some(k => TIPO_UTENTI[k] === tipoUtente)) {
       throw new BadRequestError({ message: 'Tipo utente non valido', details: { tipoUtente } });
+    }
+
+    // Il menu si compone solo con pagine vere: una voce senza pagina porterebbe a una pagina inesistente
+    const senzaPagina = items
+      .flatMap(item => [item, ...(item.tipo === TIPO_MENU_ITEM.SEPARATOR ? [] : (item.subMenu ?? []))])
+      .filter(item => item.tipo !== TIPO_MENU_ITEM.SEPARATOR && item.pathname && !sezioneDiPercorso(item.pathname))
+      .map(item => item.pathname as string);
+    if (senzaPagina.length > 0) {
+      throw new BadRequestError({ message: 'Il menu contiene voci che non aprono una pagina di Fidelity', details: { senzaPagina } });
     }
 
     await sequelize.transaction(async (transaction) => {
@@ -163,7 +221,7 @@ export class MenuService implements IMenuService {
 
   private aggiungiVoceSistema(menu: MenuElement[], voce: MenuItemType): MenuElement[] {
     const alreadyPresent = menu.some(
-      (item) => typeof item !== 'string' && item.pathname === voce.pathname
+      (item) => typeof item !== 'string' && !eSezioneMenu(item) && item.pathname === voce.pathname
     );
     if (alreadyPresent) {
       return menu;
@@ -175,7 +233,7 @@ export class MenuService implements IMenuService {
     const gestioneInternaIndex = nextMenu.findIndex((item) => item === 'GESTIONE INTERNA');
     if (gestioneInternaIndex >= 0) {
       let insertAt = gestioneInternaIndex + 1;
-      while (insertAt < nextMenu.length && typeof nextMenu[insertAt] !== 'string') {
+      while (insertAt < nextMenu.length && typeof nextMenu[insertAt] !== 'string' && !eSezioneMenu(nextMenu[insertAt])) {
         insertAt += 1;
       }
       nextMenu.splice(insertAt, 0, hubItem);

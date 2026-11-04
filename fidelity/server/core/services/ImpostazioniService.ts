@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { STATO_LAVORAZIONE_KIT_RUNTIME, STATO_PROMO, TIPO_UTENTI } from '../../../lib/enums';
 import { DatabaseError, NotFoundError, wrapDatabaseError, wrapNotFoundError } from '../../../lib/errors';
 import { GDOAttributes, MenuElement, MenuItem, OggettoTipiDiExport, RaccoglitoreKit, TimelinePromoItem } from '../../../lib/types';
+import { eSezioneMenu } from '../../../lib/accessi/sezioni';
 import { TYPES, container } from '../di';
 import { IImpostazioniService } from '../interfaces/IImpostazioniService';
 import { IIstantaService } from '../interfaces/IIstantaService';
@@ -332,6 +333,11 @@ export class ImpostazioniService implements IImpostazioniService {
         items.forEach(item => {
           if (typeof item === 'string') {
             currentTopLevelCategory = item;
+            return;
+          }
+          // Le voci di una sezione fuori da un gruppo prendono il nome della sezione
+          if (eSezioneMenu(item)) {
+            currentTopLevelCategory = item.title;
             return;
           }
 

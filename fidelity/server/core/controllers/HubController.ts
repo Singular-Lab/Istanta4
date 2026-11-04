@@ -552,19 +552,15 @@ export class HubController extends BaseController {
   }
 
   /**
-   * Risolve la start_page dal menu dell'utente per determinare l'URL di atterraggio
+   * Pagina di atterraggio: la pagina iniziale del menu dell'utente, se puo' aprirla, altrimenti la
+   * prima voce del menu (MenuService.getPaginaIniziale, la stessa dell'indirizzo principale).
    */
-  /** Pagina di atterraggio: la start_page del menu dell'utente, se puo' aprirla, altrimenti la prima voce. */
   private async resolveStartPage(req: Request): Promise<string | null> {
     try {
       if (!this.menuService) return null;
       const contesto = await leggiContestoAccesso(req);
       if (!contesto) return null;
-
-      const menu = await this.menuService.getMenuDiUtente(contesto);
-      const voci = menu.filter((item): item is Exclude<typeof item, string> => typeof item !== 'string' && !!item.pathname);
-      const iniziale = voci.find(item => item.start_page) ?? voci[0];
-      return iniziale?.pathname ?? null;
+      return await this.menuService.getPaginaIniziale(contesto);
     } catch {
       return null;
     }

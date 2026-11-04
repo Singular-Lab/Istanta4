@@ -10,7 +10,7 @@ import { fetchSideMenu, selectSideMenu, selectSideMenuError } from "@/stores/sid
 import clsx from "clsx";
 import { createRef, startTransition, useContext, useEffect, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { FormattedMenu, nestedMenu } from "./side-menu";
+import { ElementoMenuFormattato, FormattedMenu, nestedMenu } from "./side-menu";
 import SideMenu from "./SideMenu";
 //@ts-ignore
 // import logo from "@/assets/images/logo.svg";
@@ -33,18 +33,19 @@ import { SocketProvider } from "@/hooks/useSocket";
 import { useFetchAttivita, useFetchAvvisoManutenzione } from "@/query/query";
 import { useMutation } from "@tanstack/react-query";
 import SimpleBar from "simplebar";
+import { eSezioneMenu } from "../../../lib/accessi/sezioni";
 import { TIPO_UTENTI } from "../../../lib/enums";
 import { ServerCall } from "../../../lib/server_call";
 import { AppLoaderBridge } from "../../components/AppLoaderBridge";
 import GlobalLoadingIndicator from "../../components/GlobalLoadingIndicator";
 
 const findStartPageItem = (
-  items: Array<FormattedMenu | string>
+  items: ElementoMenuFormattato[]
 ): FormattedMenu | undefined => {
   let firstNavigableItem: FormattedMenu | undefined;
 
   for (const item of items) {
-    if (typeof item === "string") {
+    if (typeof item === "string" || eSezioneMenu(item)) {
       continue;
     }
 
@@ -134,9 +135,7 @@ function Layout() {
     return () => controller.abort();
   }, [logoGDO]);
 
-  const [formattedMenu, setFormattedMenu] = useState<
-    Array<FormattedMenu | string>
-  >([]);
+  const [formattedMenu, setFormattedMenu] = useState<ElementoMenuFormattato[]>([]);
   const [startPage, setStartPage] = useState<FormattedMenu | undefined>(undefined)
   const sideMenuStore = useAppSelector(selectSideMenu);
   const sideMenuError = useAppSelector(selectSideMenuError);

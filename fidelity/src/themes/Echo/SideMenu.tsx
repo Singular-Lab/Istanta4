@@ -1,34 +1,66 @@
 import Button from "@/components/Base/Button";
 import Lucide from "@/components/Base/Lucide";
 import clsx from "clsx";
-import { MouseEvent, useEffect, useState } from "react";
+import { MouseEvent, useEffect, useId, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { FormattedMenu, gruppiAttivi, toggleGruppo } from "./side-menu";
+import SelettoreArea from "./SelettoreArea";
+import {
+  areaDellaPagina,
+  areaIniziale,
+  areeDelMenu,
+  ElementoMenuFormattato,
+  FormattedMenu,
+  gruppiAttiviDelleAree,
+  percorsoAttivo,
+  prefissoArea,
+  toggleGruppo,
+} from "./side-menu";
 
 interface SideMenuProps {
-  menu: Array<FormattedMenu | string>;
+  menu: ElementoMenuFormattato[];
   /** Menu ridotto alle sole icone: i titoli diventano suggerimenti. */
   compresso?: boolean;
   errore?: boolean;
   onRiprova?: () => void;
   /** Chiamata dopo un click su una voce che porta a una pagina (chiude il menu su mobile). */
   onNavigate?: () => void;
+  /**
+   * Se c'è, le voci non portano alle pagine: sono pulsanti che passano il loro indirizzo a questa
+   * funzione (anteprima dell'editor del menu, che non deve navigare).
+   */
+  onSeleziona?: (pathname: string) => void;
 }
 
 const classiBadge = (variant?: string) =>
   clsx("side-menu__link__badge", variant && `side-menu__link__badge--${variant}`);
 
 /**
- * Voci del menu laterale. Un gruppo con sottovoci si apre e si chiude col click;
- * il gruppo che contiene la pagina corrente si apre da solo a ogni cambio pagina.
+ * Menu laterale ad area attiva: mostra le voci di una sola area (Produzione, Visualizzazione...),
+ * con sopra il selettore dell'area quando le aree sono più di una. L'area mostrata è quella della
+ * pagina corrente; scegliere un'area dal selettore cambia solo le voci mostrate, e il menu torna
+ * a seguire la pagina quando se ne apre un'altra. Se la pagina corrente non è nel menu resta l'ultima
+ * area mostrata; all'inizio è quella della pagina iniziale, o la prima.
+ *
+ * Dentro l'area un gruppo con sottovoci si apre e si chiude col click; il gruppo che contiene la
+ * pagina corrente si apre da solo a ogni cambio pagina.
  */
-function SideMenu({ menu, compresso = false, errore = false, onRiprova, onNavigate }: SideMenuProps) {
-  const [aperti, setAperti] = useState<Set<string>>(() => new Set(gruppiAttivi(menu)));
+function SideMenu({
+  menu,
+  compresso = false,
+  errore = false,
+  onRiprova,
+  onNavigate,
+  onSeleziona,
+}: SideMenuProps) {
+  // Due menu nella stessa pagina (layout e anteprima dell'editor) non devono ripetere gli id
+  const idMenu = `side-menu-${useId().replace(/[^A-Za-z0-9_-]/g, "")}`;
+  const aree = useMemo(() => areeDelMenu(menu), [menu]);
+  const [aperti, setAperti] = useState<Set<string>>(() => new Set(gruppiAttiviDelleAree(aree)));
 
   // A ogni cambio di pagina si aggiungono i gruppi della pagina corrente,
   // lasciando aperti quelli che l'operatore ha aperto
   useEffect(() => {
-    const attivi = gruppiAttivi(menu);
+    const attivi = gruppiAttiviDelleAree(aree);
     if (attivi.length === 0) {
       return;
     }
@@ -38,7 +70,21 @@ function SideMenu({ menu, compresso = false, errore = false, onRiprova, onNaviga
       }
       return new Set([...precedenti, ...attivi]);
     });
-  }, [menu]);
+  }, [aree]);
+
+  // L'area segue la pagina corrente solo quando la pagina cambia: un'area scelta dal selettore
+  // resta finché non si apre un'altra pagina del menu
+  const areaPagina = areaDellaPagina(aree);
+  const pagina = areaPagina ? `${areaPagina.chiave}|${percorsoAttivo(areaPagina.elementi) ?? ""}` : undefined;
+  const [paginaVista, setPaginaVista] = useState(pagina);
+  const [areaScelta, setAreaScelta] = useState(areaPagina?.chiave);
+  if (pagina !== paginaVista) {
+    setPaginaVista(pagina);
+    if (areaPagina) {
+      setAreaScelta(areaPagina.chiave);
+    }
+  }
+  const area = aree.find((a) => a.chiave === areaScelta) ?? areaIniziale(aree);
 
   const vociDi = (voci: Array<FormattedMenu | string>, prefisso: string, livello: number) =>
     voci.map((voce, indice) => {
@@ -65,7 +111,7 @@ function SideMenu({ menu, compresso = false, errore = false, onRiprova, onNaviga
 
       if (voce.subMenu && voce.subMenu.length > 0) {
         const aperto = aperti.has(chiave);
-        const idSottomenu = `side-menu-gruppo-${chiave.replace(/\./g, "-")}`;
+        const idSottomenu = `${idMenu}-gruppo-${chiave.replace(/[^A-Za-z0-9_-]/g, "-")}`;
         return (
           <li key={chiave}>
             <button
@@ -119,6 +165,28 @@ function SideMenu({ menu, compresso = false, errore = false, onRiprova, onNaviga
         );
       }
 
+      if (onSeleziona) {
+        return (
+          <li key={chiave}>
+            <button
+              type="button"
+              title={suggerimento}
+              aria-current={voce.active && !voce.disabled ? "page" : undefined}
+              aria-disabled={voce.disabled || undefined}
+              tabIndex={voce.disabled ? -1 : undefined}
+              className={classi}
+              onClick={() => {
+                if (!voce.disabled && voce.pathname) {
+                  onSeleziona(voce.pathname);
+                }
+              }}
+            >
+              {contenuto}
+            </button>
+          </li>
+        );
+      }
+
       return (
         <li key={chiave}>
           <Link
@@ -157,7 +225,12 @@ function SideMenu({ menu, compresso = false, errore = false, onRiprova, onNaviga
           </Button>
         </li>
       )}
-      {vociDi(menu, "", 0)}
+      {area && aree.length > 1 && (
+        <li className="side-menu__area">
+          <SelettoreArea aree={aree} corrente={area.chiave} compresso={compresso} onScegli={setAreaScelta} />
+        </li>
+      )}
+      {area && vociDi(area.elementi, prefissoArea(area.chiave), 0)}
     </ul>
   );
 }
