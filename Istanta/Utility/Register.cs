@@ -108,6 +108,7 @@ namespace Istanta.Utility
                                 {
                                     fieldGiaEsistente.nomeFoto = upFotoField.nomeFoto;
                                     fieldGiaEsistente.guidId = upFotoField.guidId;
+                                    fieldGiaEsistente.nomeFotoTracciato = upFotoField.nomeFotoTracciato;
                                 }
                             }
                         }

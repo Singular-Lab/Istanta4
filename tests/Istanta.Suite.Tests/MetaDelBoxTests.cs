@@ -66,8 +66,11 @@ public class MetaDelBoxTests
 
         Assert.Contains("annotaSostituzioneFoto(item.recordInTracciato, \"selezione\", fieldGiaEsistente.codRef, statoDelDato, (int)fieldGiaEsistente.stato, false);", fico);
         Assert.Contains("annotaSostituzioneFoto(item.recordInTracciato, \"selezione\", psItem.codRef, statoDelDato, (int)psItem.stato, true);", fico);
-        Assert.Contains("annotaSostituzioneFoto(item.recordInTracciato, \"foto\", fotoScelta.codRef, fotoDelDato, artFotoItem.NomeReale, false);", fico);
-        Assert.Contains("annotaSostituzioneFoto(item.recordInTracciato, \"foto\", fotoScelta.codRef, fotoDelDato, artFotoItem.NomeReale, true);", fico);
+        // TASK-60aaf10d: la foto del meta, della lavorazione o ereditata, si applica in un punto solo,
+        // che annota con l'origine ricevuta: false dal meta della lavorazione, true da quello ereditato.
+        Assert.Contains("annotaSostituzioneFoto(record, \"foto\", fotoScelta.codRef, fotoDelDato, artFotoItem.NomeReale, ereditata);", fico);
+        Assert.Contains("applicaFotoDaMeta(item.recordInTracciato, fotoScelta, false);", fico);
+        Assert.Contains("applicaFotoDaMeta(item.recordInTracciato, fotoScelta, true);", fico);
     }
 
     /* ---- il meta di testo nuovo ---- */
