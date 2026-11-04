@@ -667,7 +667,7 @@ namespace Istanta.Controllers
                                                     else if (schema_campo.TipoDato == (Byte)AddestramentoTipoValore.Decimale)
                                                     {
                                                         decimal _decVal = 0;
-                                                        Decimal.TryParse(_val, out _decVal);
+                                                        NumeroDiRegola.TryLeggiDecimale(_val, out _decVal);
                                                         rec[schema_campo.NomeColonna] = _decVal;
                                                     }
                                                     else if (schema_campo.TipoDato == (Byte)AddestramentoTipoValore.Bool)
@@ -1473,7 +1473,8 @@ namespace Istanta.Controllers
 
                                         CultureInfo culture = CultureInfo.InvariantCulture;
 
-                                        if (Decimal.TryParse(campo.Value, NumberStyles.AllowDecimalPoint, culture, out dc_val))
+                                        //TASK-13e871a5: con la sola cultura invariante "2,87" non era un numero.
+                                        if (NumeroDiRegola.TryLeggiDecimale(campo.Value, out dc_val))
                                         {
                                             recordInTracciato.Add(campo.Key, dc_val);
                                         }

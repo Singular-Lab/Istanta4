@@ -376,21 +376,21 @@ namespace AgenziaLib
                             if (objDb.ContainsKey("prezzo_imponibile"))
                             {
                                 decimal prezzo;
-                                if (Decimal.TryParse(objDb["prezzo_imponibile"].ToString(), out prezzo))
+                                if (NumeriSenzaCultura.TryLeggiDecimale(objDb["prezzo_imponibile"].ToString(), out prezzo))
                                     objDb["prezzo_imponibile"] = MathExt.DecimalRoundMidpoint(prezzo).ToString();
                             }
 
                             if (objDb.ContainsKey("prezzo_continuo"))
                             {
                                 decimal prezzo;
-                                if (Decimal.TryParse(objDb["prezzo_continuo"].ToString(), out prezzo))
+                                if (NumeriSenzaCultura.TryLeggiDecimale(objDb["prezzo_continuo"].ToString(), out prezzo))
                                     objDb["prezzo_continuo"] = MathExt.DecimalRoundMidpoint(prezzo).ToString();
                             }
 
                             if (objDb.ContainsKey("prezzo_promo"))
                             {
                                 decimal prezzo_offerta;
-                                if (Decimal.TryParse(objDb["prezzo_promo"].ToString(), out prezzo_offerta))
+                                if (NumeriSenzaCultura.TryLeggiDecimale(objDb["prezzo_promo"].ToString(), out prezzo_offerta))
                                     objDb["prezzo_promo"] = MathExt.DecimalRoundMidpoint(prezzo_offerta).ToString();
                             }
 
@@ -651,21 +651,21 @@ namespace AgenziaLib
                     if (objDb.ContainsKey("prezzo_continuo"))
                     {
                         decimal prezzo;
-                        if (Decimal.TryParse(objDb["prezzo_continuo"].ToString(), out prezzo))
+                        if (NumeriSenzaCultura.TryLeggiDecimale(objDb["prezzo_continuo"].ToString(), out prezzo))
                             objDb["prezzo_continuo"] = MathExt.DecimalRoundMidpoint(prezzo).ToString();
                     }
 
                     if (objDb.ContainsKey("prezzo_promo"))
                     {
                         decimal prezzo_offerta;
-                        if (Decimal.TryParse(objDb["prezzo_promo"].ToString(), out prezzo_offerta))
+                        if (NumeriSenzaCultura.TryLeggiDecimale(objDb["prezzo_promo"].ToString(), out prezzo_offerta))
                             objDb["prezzo_promo"] = MathExt.DecimalRoundMidpoint(prezzo_offerta).ToString();
                     }
 
                     if (objDb.ContainsKey("prezzo_kgl"))
                     {
                         decimal prezzo_offerta;
-                        if (Decimal.TryParse(objDb["prezzo_kgl"].ToString(), out prezzo_offerta))
+                        if (NumeriSenzaCultura.TryLeggiDecimale(objDb["prezzo_kgl"].ToString(), out prezzo_offerta))
                             objDb["prezzo_kgl"] = MathExt.DecimalRoundMidpoint(prezzo_offerta).ToString();
                     }
 

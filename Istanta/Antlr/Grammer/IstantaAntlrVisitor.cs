@@ -1,4 +1,5 @@
 ﻿using Antlr4.Runtime.Misc;
+using Istanta.Models;
 
 namespace Istanta.Antlr.Grammer
 {
@@ -93,7 +94,7 @@ namespace Istanta.Antlr.Grammer
             string op = context.GetChild(1).GetText();
 
             string decimalText = context.GetChild(2).GetText();
-            decimal right = Decimal.Parse(decimalText.Replace(".",System.Globalization.CultureInfo.CurrentCulture.NumberFormat.CurrencyDecimalSeparator));
+            decimal right = NumeroDiRegola.ComeDecimale(decimalText);
 
             return eseguiComparison(left, op, right);
         }
@@ -134,14 +135,14 @@ namespace Istanta.Antlr.Grammer
                     if (typename=="double")
                         val = (double)valObj;
                     else
-                        val = Double.Parse(valObj.ToString()!);
+                        val = NumeroDiRegola.ComeDouble(valObj.ToString()!);
 
 
                     double valRight;
                     if (typeNumConfronto == "double")
                         valRight = (double)rightObj;
                     else
-                        valRight = Double.Parse(right!);
+                        valRight = NumeroDiRegola.ComeDouble(right!);
 
                     switch (op)
                     {
@@ -175,14 +176,14 @@ namespace Istanta.Antlr.Grammer
                     if (typename == "double")
                         val = (decimal)valObj;
                     else
-                        val = Decimal.Parse(valObj.ToString()!);
+                        val = NumeroDiRegola.ComeDecimale(valObj.ToString()!);
 
 
                     decimal valRight;
                     if (typeNumConfronto == "double")
                         valRight = (decimal)rightObj;
                     else
-                        valRight = Decimal.Parse(right!);
+                        valRight = NumeroDiRegola.ComeDecimale(right!);
 
                     switch (op)
                     {
@@ -298,7 +299,7 @@ namespace Istanta.Antlr.Grammer
                 else if (typename == "double")
                 {
                     double val = (double)valObj;
-                    double valRight = Double.Parse(right!);
+                    double valRight = NumeroDiRegola.ComeDouble(right!);
                     switch (op)
                     {
                         case ">":
@@ -326,7 +327,7 @@ namespace Istanta.Antlr.Grammer
                 else if (typename == "decimal")
                 {
                     decimal val = (decimal)valObj;
-                    decimal valRight = Decimal.Parse(right!);
+                    decimal valRight = NumeroDiRegola.ComeDecimale(right!);
                     switch (op)
                     {
                         case ">":

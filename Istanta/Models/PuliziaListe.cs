@@ -359,8 +359,9 @@ namespace Istanta.Models
 
         private static bool Numeri(string v, string atteso, out double a, out double b)
         {
-            bool primo = double.TryParse(v, NumberStyles.Any, CultureInfo.InvariantCulture, out a);
-            bool secondo = double.TryParse(atteso, NumberStyles.Any, CultureInfo.InvariantCulture, out b);
+            //TASK-13e871a5: NumberStyles.Any con la cultura invariante leggeva "0,25" come 25.
+            bool primo = NumeroDiRegola.TryLeggi(v, out a);
+            bool secondo = NumeroDiRegola.TryLeggi(atteso, out b);
             return primo && secondo;
         }
 
