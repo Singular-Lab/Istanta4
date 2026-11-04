@@ -6361,6 +6361,31 @@ const schedaRef = {
         return [];
     },
 
+    /// I20-1199: le differenze delle foto primarie e secondarie che si correggono scegliendo le foto
+    /// del box: su queste la finestra offre il passaggio a Foto P/S. Le diciture sono quelle della
+    /// preanalisi (confronti.js). Le foto extra cominciano con "foto extra" e hanno le loro azioni, il
+    /// collegamento rotto si ricollega dalla finestra e la foto assente dalla cartella si sincronizza.
+    FOTO_PS_DA_SCEGLIERE: ["foto mancante nel box:", "foto non corrispondente nel box:", "foto in più nel box:"],
+
+    portaAFotoPS(diff) {
+        if (diff == null || diff.difference == null) {
+            return false;
+        }
+        const testo = String(diff.difference);
+        return this.FOTO_PS_DA_SCEGLIERE.some(inizio => testo.startsWith(inizio));
+    },
+
+    /// I20-1199: chiude la finestra delle differenze con la sua X (che legge le caselle del
+    /// silenziamento e rifa' il segnalino) e porta la scheda su Foto P/S, come il clic sulla voce del
+    /// sottomenu.
+    async vaiAFotoPS() {
+        this.chiudiFinestraDifferenze();
+        const voceFotoPS = $(".subTab5").find('img[tab="Tab6"]');
+        jsIndexControls.openTab(null, "Tab6");
+        jsIndexControls.changeImage(voceFotoPS);
+        await this.selectSchedaRef(2);
+    },
+
     /// La richiesta per il server, da una differenza e dall'azione scelta. Null se l'azione
     /// non e' una decisione da registrare: usaServer tocca il box, non il dato.
     richiestaExtraLavorazione(diff, azione) {
@@ -6753,12 +6778,14 @@ const schedaRef = {
 
     /// I pulsanti delle azioni su una riga della finestra delle differenze.
     aggiungiAzioniDifferenza(riga, diff, dopoAzione) {
-        var azioni = this.azioniPerDifferenza(diff);
+        //I20-1199: sulle foto primarie e secondarie, prima delle decisioni, il passaggio a Foto P/S.
+        var azioni = (this.portaAFotoPS(diff) ? ["fotoPS"] : []).concat(this.azioniPerDifferenza(diff));
         if (azioni.length === 0) {
             return;
         }
         var me = this;
         var testi = {
+            fotoPS: ["Vai a Foto P/S", "La finestra si chiude e la scheda passa a Foto P/S, dove si scelgono le foto primarie e secondarie del box"],
             tieniBox: ["Tieni l'immagine del box", "Il box non cambia: per questa lavorazione il dato usa l'immagine che sta nel box"],
             usaServer: ["Usa l'immagine del server", "Ricollega il riquadro all'immagine del server, identica per contenuto: il risultato non cambia"],
             tieniLavorazione: ["Tieni solo per questa lavorazione", "La foto extra resta nel dato di questa sola lavorazione"],
@@ -6799,7 +6826,10 @@ const schedaRef = {
                 }
                 pulsante.prop("disabled", true);
                 try {
-                    if (azione === "usaServer") {
+                    if (azione === "fotoPS") {
+                        await me.vaiAFotoPS();
+                    }
+                    else if (azione === "usaServer") {
                         await me.ricollegaAllImmagineDelServer(diff, dopoAzione);
                     }
                     else if (azione === "ricollegaLinks") {
