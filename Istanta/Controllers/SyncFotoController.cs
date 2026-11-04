@@ -1665,6 +1665,7 @@ namespace Istanta.Controllers
         public async Task<IActionResult> updateFotoFromIndd([FromForm] FileIndd _file, int id_operazione=0)
         {
             ArticoliFoto result = new ArticoliFoto();
+            ArticoliFoto? fotoPerLaLavorazione = null;
             try
             {
                 Stopwatch stopwatch = Stopwatch.StartNew();
@@ -1774,7 +1775,12 @@ namespace Istanta.Controllers
                             nuovaFoto.GuidId = guidOlympo;
                             nuovaFoto.Tipo = (Byte)_file.tipo;
 
-                            result = nuovaFoto;
+                            //TASK-60aaf10d: la riga si salva, spenta: vedi RegistroFotoArticolo.PerLaSolaLavorazione.
+                            result = RegistroFotoArticolo.PerLaSolaLavorazione(articolo.ArticoliFotos!, nuovaFoto);
+                            if (codice == _file.codice)
+                            {
+                                fotoPerLaLavorazione = result;
+                            }
                         }
                         else
                         {
@@ -2020,7 +2026,9 @@ namespace Istanta.Controllers
 
                     Console.WriteLine($"5. updateFotoFromIndd {stopwatch.ElapsedMilliseconds}");
 
-                    registraAttivitaDiSyncFoto(id_operazione, _file.codice, "updateFotoFromIndd", tipoOperazione.updateFoto, new RevisioneFotoFromIndd() { codRef = _file.codice, nomeFoto = _file.nomeFile, tipo = _file.tipo, guidId=guidOlympo}, (_file.uploadMethod == FileInddUploadMethod.RelativoAllaLavorazione ? idLavorazioneRec : 0));
+                    //TASK-60aaf10d: il meta punta alla riga davvero registrata (puo' essere quella che
+                    //l'articolo aveva gia') e ricorda quale foto indicava la lista.
+                    registraAttivitaDiSyncFoto(id_operazione, _file.codice, "updateFotoFromIndd", tipoOperazione.updateFoto, new RevisioneFotoFromIndd() { codRef = _file.codice, nomeFoto = fotoPerLaLavorazione?.NomeReale ?? _file.nomeFile, tipo = _file.tipo, guidId = fotoPerLaLavorazione?.GuidId ?? guidOlympo, nomeFotoTracciato = _file.nomeFotoTracciato }, (_file.uploadMethod == FileInddUploadMethod.RelativoAllaLavorazione ? idLavorazioneRec : 0));
 
                     stopwatch.Stop();
                     Console.WriteLine($"6. updateFotoFromIndd FINE OPERAZIONE {stopwatch.ElapsedMilliseconds}");
@@ -2187,7 +2195,7 @@ namespace Istanta.Controllers
                     result.hash = fotoTarget != null ? fotoTarget.Hash : fotoCercata.Hash;
 
                     this.ctx.SaveChanges();
-                    registraAttivitaDiSyncFoto(id_operazione, data.Codice, "updateImmagineEsistente", tipoOperazione.updateFoto, new RevisioneFotoFromIndd() { codRef = data.Codice, nomeFoto = fotoCercata.NomeReale, tipo = (TipoFoto)fotoCercata.Tipo, guidId = fotoCercata.GuidId }, (data.validaSoloPerLavorazione ? idLavorazioneRec : 0));
+                    registraAttivitaDiSyncFoto(id_operazione, data.Codice, "updateImmagineEsistente", tipoOperazione.updateFoto, new RevisioneFotoFromIndd() { codRef = data.Codice, nomeFoto = fotoCercata.NomeReale, tipo = (TipoFoto)fotoCercata.Tipo, guidId = fotoCercata.GuidId, nomeFotoTracciato = data.nomeFotoTracciato }, (data.validaSoloPerLavorazione ? idLavorazioneRec : 0));
                     result.esito = true;
                 }
             }

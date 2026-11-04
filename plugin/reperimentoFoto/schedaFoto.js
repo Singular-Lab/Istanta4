@@ -69,6 +69,40 @@ const schedaFoto = {
         });
     },
 
+    /// TASK-60aaf10d: la foto che la lista indica per la referenza (Foto.NomeDaTracciato), da mandare
+    /// al server con una scelta solo per la lavorazione: se una lista nuova ne indica un'altra, la
+    /// scelta decade. Vuota quando il record non c'e' o la lista non indica foto.
+    nomeFotoDellaLista(element) {
+        const valore = element != null && element.recordInTracciato != null ? element.recordInTracciato["Foto.NomeDaTracciato"] : null;
+        return valore == null ? "" : String(valore).trim();
+    },
+
+    /// TASK-60aaf10d: cosa dice la schermata Cambia foto sulla foto della lista, dal record della
+    /// referenza (Foto.Origine e Foto.NomeDaTracciato, scritti dal server) e dalla configurazione del
+    /// cliente (pluginMiddleware.getFotoDaTracciato). Restituisce { soloLavorazione, avviso }:
+    /// - foto della lista: si cambia solo per questa lavorazione, se il cliente lo vuole;
+    /// - foto scelta per la lavorazione mentre la lista ne indica una: stesso limite, e l'avviso
+    ///   dice quale foto indica la lista (con una lista che ne indica un'altra la scelta decade);
+    /// - altrimenti (nessuna foto nella lista, o non trovata in archivio): tutti gli ambiti.
+    cambioFotoDallaLista(record, config) {
+        const nessuno = { soloLavorazione: false, avviso: null };
+        if (record == null || config == null || config.cambioSoloPerLavorazione !== true) {
+            return nessuno;
+        }
+        const origine = record["Foto.Origine"];
+        const nomeLista = record["Foto.NomeDaTracciato"] == null ? "" : String(record["Foto.NomeDaTracciato"]).trim();
+        if (nomeLista === "") {
+            return nessuno;
+        }
+        if (origine === "tracciato") {
+            return { soloLavorazione: true, avviso: "Foto della lista (" + nomeLista + "): si può cambiare solo per questa lavorazione." };
+        }
+        if (origine === "lavorazione") {
+            return { soloLavorazione: true, avviso: "Foto scelta solo per questa lavorazione. La lista indica " + nomeLista + "." };
+        }
+        return nessuno;
+    },
+
     /// Il cambio foto: l'elenco delle foto disponibili, l'anteprima, la
     /// scelta, lo scaricamento. 1.066 righe, ed e' il capofila delle 28 che vanno nel js nuovo.
     async openModalCambiaFoto(codice) {
@@ -159,6 +193,11 @@ const schedaFoto = {
                 //lo stesso nome in psd); la foto impostata per la referenza resta.
                 fotoList = me.fotoProponibiliNelCambioFoto(fotoList, pluginMiddleware.getRegoleEsclusioneCambioFoto(), { id: fotoAttuale, nome: nomeFotoImpaginata });
 
+                //TASK-60aaf10d: la foto della lista (Edro21) si cambia solo per questa lavorazione.
+                const fotoDallaLista = me.cambioFotoDallaLista(
+                    elementoCercato != null ? elementoCercato.recordInTracciato : null,
+                    pluginMiddleware.getFotoDaTracciato());
+
                 const state = {
                     selectedUploadFile: null,
                     selectedUploadPreviewUrl: null,
@@ -190,6 +229,9 @@ const schedaFoto = {
                 }
 
                 function getScopeOptionsHtml() {
+                    if (fotoDallaLista.soloLavorazione) {
+                        return `<option value="solo_lavorazione">Solo lavorazione</option>`;
+                    }
                     return `
                     <option value="globale">Globale</option>
                     <option value="canale_area">${canale} ${area}</option>
@@ -340,6 +382,7 @@ const schedaFoto = {
                 <select id="selectScopeCambiaFoto" style="width:100%; box-sizing:border-box;">
                     ${getScopeOptionsHtml()}
                 </select>
+                ${fotoDallaLista.avviso ? `<div id="avvisoFotoDallaLista" style="margin-top:6px; font-size:11px; color:#555;"></div>` : ''}
             </div>
 
             <div id="cambiaFotoScrollArea" style="
@@ -913,6 +956,9 @@ const schedaFoto = {
                 function resetInterface() {
                     resetState();
                     renderBaseLayout();
+                    if (fotoDallaLista.avviso) {
+                        $('#avvisoFotoDallaLista').text(fotoDallaLista.avviso);
+                    }
                     renderPhotoSections();
                     bindUiEvents();
                     updateConfirmButtonState();
@@ -2264,6 +2310,8 @@ const schedaFoto = {
             }
             formData.append("nomeFileOld", nomeFotoOld);
             formData.append("idRec", element != null ? element.idRec : 0);
+            //TASK-60aaf10d: la foto che la lista indica, per legarvi la scelta solo per la lavorazione.
+            formData.append("nomeFotoTracciato", me.nomeFotoDellaLista(element));
             console.log(obj);
             messaggioUtente("Code SRF-68: Richiesta inviata", "success", true, 3, true);
             showLoading("Caricamento immagine in corso...");
@@ -2332,6 +2380,8 @@ const schedaFoto = {
                             element.recordInTracciato["Foto.Id"] = data.id;
                             element.recordInTracciato["Foto.Hash"] = data.Hash || data.hash;
                             element.recordInTracciato["Foto.IsMeta"] = validaSoloPerLavorazione;
+                            //TASK-60aaf10d: da dove viene ora la foto, come la scriverebbe il server.
+                            element.recordInTracciato["Foto.Origine"] = validaSoloPerLavorazione ? "lavorazione" : "archivio";
                         }
                         await me.EditFotoPrimarieSecondarie(box);
 
@@ -2429,6 +2479,8 @@ const schedaFoto = {
             formData.append("tracciatoCanale", tracciatoCanale != null ? tracciatoCanale : "");
             formData.append("Id", id != null ? id : "");
             formData.append("validaSoloPerLavorazione", validaSoloPerLavorazione ? "true" : "false");
+            //TASK-60aaf10d: la foto che la lista indica, per legarvi la scelta solo per la lavorazione.
+            formData.append("nomeFotoTracciato", this.nomeFotoDellaLista(element));
             formData.append("idLavorazione", idKitLavorazione);
             formData.append("propaga", propaga ? "true" : "false");
             //I20-1088: il record del box, perche' il meta della foto vada nella riga di questa impaginazione.
@@ -2478,6 +2530,8 @@ const schedaFoto = {
                             element.recordInTracciato["Foto.Hash"] = objResult.Hash || objResult.hash;
 
                             element.recordInTracciato["Foto.IsMeta"] = validaSoloPerLavorazione;
+                            //TASK-60aaf10d: da dove viene ora la foto, come la scriverebbe il server.
+                            element.recordInTracciato["Foto.Origine"] = validaSoloPerLavorazione ? "lavorazione" : "archivio";
                         }
                         await me.EditFotoPrimarieSecondarie(box);
 

@@ -3603,21 +3603,40 @@ namespace Istanta.Controllers
                 //id, e la ref usciva senza immagine anche avendone una buona. Ora si segna che la
                 //selezione da tracciato e' stata messa da parte e si torna alla scelta normale, la
                 //stessa che gira quando la chiave non c'e' affatto.
-                bool selezioneDaTracciatoDichiarata = rec.recordInTracciato!.ContainsKey(GLOBAL_VARIABLES_FICO.keyFotoSelezioneDaTracciato);
+                //TASK-60aaf10d: l'agenzia puo' dire in quali campi il tracciato porta la foto e come
+                //sceglierla (Edro21: nome_foto, senza estensione, psd preferito). Senza configurazione
+                //vale la regola di I20-999 sulla sola Foto.SelezioneDaTracciato.
+                AgenziaCustomPlugin_FotoDaTracciato? configFotoDaTracciato = SingletonConfiguration.DbPluginAgenzia?.DB?.fotoDaTracciato;
+                string keyHashFoto = Enum.GetName(AddestramentoRuoli.Foto) + "." + GLOBAL_VARIABLES.keyFotoHash;
+                bool selezioneDaTracciatoDichiarata = Utility.FotoDaTracciato.LeggiNome(rec.recordInTracciato, configFotoDaTracciato, out string? nomeFotoSelezionata);
                 bool fotoDaTracciatoTrovata = false;
 
                 if (selezioneDaTracciatoDichiarata)
                 {
                     //A prescindere da come andrà la foto è quella indicata da tracciato e per chiave dichiarata MI FIDO del tracciato
-                    string? nomeFotoSelezionata = rec.recordInTracciato[GLOBAL_VARIABLES_FICO.keyFotoSelezioneDaTracciato].ToString();
-                    //Il nome si normalizza in un punto solo, che regge anche i valori inutilizzabili:
-                    //prima un nome vuoto faceva sollevare un'eccezione a FileInfo invece di
-                    //comportarsi come una foto che non si trova.
-                    string? nomeSenzaEstensione = Utility.FotoDaTracciato.NomeDaCercare(nomeFotoSelezionata);
+                    ArticoliFoto? artFotoSelezionatoDaLista;
 
-                    ArticoliFoto? artFotoSelezionatoDaLista = nomeSenzaEstensione == null
-                        ? null
-                        : this.ctx.ArticoliFotos.Where(f => f.IdArticolo == artItem.Id && f.NomeReale.Contains(nomeSenzaEstensione))/* NULL-ORDER 7/9/2026: su PostgreSQL i NULL vengono PRIMA in ORDER BY DESC, su SQL Server dopo. Senza HasValue una foto con data_modifica vuota risulterebbe "la piu recente" e finirebbe nel volantino al posto di quella giusta. Vedi migrazione-mssql-postgres.md §12. */ .OrderByDescending(o => o.DataModifica.HasValue).ThenByDescending(o => o.DataModifica).FirstOrDefault();
+                    if (configFotoDaTracciato != null)
+                    {
+                        //TASK-60aaf10d: stesso nome, non un "contiene": una versione nuova arrivata da IS2
+                        //con un altro nome non scavalca la foto della lista.
+                        artFotoSelezionatoDaLista = Utility.FotoDaTracciato.Scegli(
+                            //Tutte le foto dell'articolo, anche quelle spente: nel kit artItem porta
+                            //solo le attive, e la foto della lista vale anche se non e' l'attiva.
+                            this.ctx.ArticoliFotos.Where(f => f.IdArticolo == artItem.Id).ToList(),
+                            nomeFotoSelezionata, configFotoDaTracciato.estensioniPreferite);
+                    }
+                    else
+                    {
+                        //Il nome si normalizza in un punto solo, che regge anche i valori inutilizzabili:
+                        //prima un nome vuoto faceva sollevare un'eccezione a FileInfo invece di
+                        //comportarsi come una foto che non si trova.
+                        string? nomeSenzaEstensione = Utility.FotoDaTracciato.NomeDaCercare(nomeFotoSelezionata);
+
+                        artFotoSelezionatoDaLista = nomeSenzaEstensione == null
+                            ? null
+                            : this.ctx.ArticoliFotos.Where(f => f.IdArticolo == artItem.Id && f.NomeReale.Contains(nomeSenzaEstensione))/* NULL-ORDER 7/9/2026: su PostgreSQL i NULL vengono PRIMA in ORDER BY DESC, su SQL Server dopo. Senza HasValue una foto con data_modifica vuota risulterebbe "la piu recente" e finirebbe nel volantino al posto di quella giusta. Vedi migrazione-mssql-postgres.md §12. */ .OrderByDescending(o => o.DataModifica.HasValue).ThenByDescending(o => o.DataModifica).FirstOrDefault();
+                    }
 
                     if (artFotoSelezionatoDaLista != null)
                     {
@@ -3625,6 +3644,9 @@ namespace Istanta.Controllers
                         rec.recordInTracciato[_key_foto] = artFotoSelezionatoDaLista.NomeReale;
                         rec.recordInTracciato[keyGuidFoto] = artFotoSelezionatoDaLista.GuidId;
                         rec.recordInTracciato[keyIdFoto] = artFotoSelezionatoDaLista.Id;
+                        //TASK-60aaf10d: l'impronta e' quella della foto scelta. Prima restava quella
+                        //lasciata dal dato, e il Plugin segnalava "non corrispondente" la foto giusta.
+                        rec.recordInTracciato[keyHashFoto] = artFotoSelezionatoDaLista.Hash ?? "";
                         rec.hasFoto = 1;
                     }
                 }
@@ -3639,6 +3661,13 @@ namespace Istanta.Controllers
                 rec.recordInTracciato[GLOBAL_VARIABLES_FICO.keyFotoSelezioneDaTracciatoDisabled] =
                     Utility.FotoDaTracciato.SelezioneDisattivata(selezioneDaTracciatoDichiarata, fotoDaTracciatoTrovata);
 
+                //TASK-60aaf10d: il Plugin sa da dove viene la foto e quale indica la lista, per dirlo
+                //all'operatore, limitare il cambio alla lavorazione e legarvi la scelta. I meta della
+                //lavorazione, applicati dopo, la portano a "lavorazione".
+                rec.recordInTracciato[Utility.FotoDaTracciato.ChiaveOrigine] = fotoDaTracciatoTrovata
+                    ? Utility.FotoDaTracciato.OrigineTracciato
+                    : Utility.FotoDaTracciato.OrigineArchivio;
+                rec.recordInTracciato[Utility.FotoDaTracciato.ChiaveNomeDaTracciato] = Utility.FotoDaTracciato.NomeBase(nomeFotoSelezionata) ?? "";
                     //ArticoliFoto? af = artItem.ArticoliFotos!.Where(f => !f.Tipo.HasValue || f.Tipo == (Byte)TipoFoto.Foto).OrderByDescending(o => o.DataModifica).FirstOrDefault();
                     //if (af != null)
                     //{
@@ -4350,6 +4379,47 @@ namespace Istanta.Controllers
             sostituzioni.RemoveAll(st => st.tipo == tipo && st.codRef == codRef);
             sostituzioni.Add(new SostituzioneFotoDaMeta { tipo = tipo, codRef = codRef, originale = prima, modificato = dopo, ereditata = ereditata });
             record[GLOBAL_VARIABLES.keyMetaFoto] = sostituzioni;
+        }
+
+        /// <summary>
+        /// TASK-60aaf10d: mette nel record la foto scelta in un meta, della lavorazione o ereditata da
+        /// una passata. Prima i due punti ripetevano lo stesso codice e cambiavano nome e guid ma non
+        /// l'impronta: il Plugin confrontava il box con l'hash della foto di prima e segnalava "non
+        /// corrispondente" la foto scelta. Per l'agenzia in cui comanda il tracciato la scelta vale
+        /// solo finche' la lista indica la foto che indicava quando e' stata fatta.
+        /// </summary>
+        private void applicaFotoDaMeta(Dictionary<string, object> record, RevisioneFotoFromIndd fotoScelta, bool ereditata)
+        {
+            string keyNome = Enum.GetName(AddestramentoRuoli.Foto) + "." + GLOBAL_VARIABLES.keyFotoNome;
+            string keyGuid = Enum.GetName(AddestramentoRuoli.Foto) + "." + GLOBAL_VARIABLES.keyFotoGuidId;
+            string keyHash = Enum.GetName(AddestramentoRuoli.Foto) + "." + GLOBAL_VARIABLES.keyFotoHash;
+            string keyIsMeta = Enum.GetName(AddestramentoRuoli.Foto) + "." + GLOBAL_VARIABLES.keyFotoIsMeta;
+
+            record.TryGetValue(Utility.FotoDaTracciato.ChiaveNomeDaTracciato, out var nomeDellaListaOggi);
+            if (!Utility.FotoDaTracciato.SceltaDaApplicare(SingletonConfiguration.DbPluginAgenzia?.DB?.fotoDaTracciato, fotoScelta.nomeFotoTracciato, nomeDellaListaOggi?.ToString()))
+            {
+                //L'ultima lista comanda: indica un'altra foto, la scelta non vale piu'.
+                record[keyIsMeta] = false;
+                return;
+            }
+
+            var artFotoItem = this.ctx.ArticoliFotos.Include(f => f.IdArticoloNavigation).FirstOrDefault(f => f.IdArticoloNavigation.Codice == fotoScelta.codRef && f.NomeReale == fotoScelta.nomeFoto);
+            if (artFotoItem == null)
+            {
+                record[keyIsMeta] = false;
+                return;
+            }
+
+            record.TryGetValue(keyNome, out var fotoDelDato);
+            annotaSostituzioneFoto(record, "foto", fotoScelta.codRef, fotoDelDato, artFotoItem.NomeReale, ereditata);
+            record[keyGuid] = artFotoItem.GuidId;
+            record[keyNome] = artFotoItem.NomeReale;
+            record[keyHash] = artFotoItem.Hash ?? "";
+            record[keyIsMeta] = true;
+            if (!ereditata)
+            {
+                record[Utility.FotoDaTracciato.ChiaveOrigine] = Utility.FotoDaTracciato.OrigineLavorazione;
+            }
         }
 
         /// <summary>
@@ -5092,23 +5162,14 @@ namespace Istanta.Controllers
                                         }
                                     }
 
-                                    var fotoScelta = recPassato.foto?.FirstOrDefault(f => f.codRef == item.recordInTracciato[keyRefCodice].ToString() && f.tipo == TipoFoto.Foto);
+                                    //TASK-60aaf10d: l'agenzia per cui comanda il tracciato non eredita la foto
+                                    //dal passato (Edro21); le primarie/secondarie si', come prima.
+                                    var fotoScelta = !Utility.FotoDaTracciato.FotoEreditabile(SingletonConfiguration.DbPluginAgenzia?.DB?.fotoDaTracciato)
+                                        ? null
+                                        : recPassato.foto?.FirstOrDefault(f => f.codRef == item.recordInTracciato[keyRefCodice].ToString() && f.tipo == TipoFoto.Foto);
                                     if (fotoScelta != null)
                                     {
-                                        var artFotoItem = this.ctx.ArticoliFotos.Include(f => f.IdArticoloNavigation).FirstOrDefault(f => f.IdArticoloNavigation.Codice == fotoScelta.codRef && f.NomeReale == fotoScelta.nomeFoto);
-                                        if (artFotoItem != null)
-                                        {
-                                            item.recordInTracciato.TryGetValue(Enum.GetName(AddestramentoRuoli.Foto) + "." + GLOBAL_VARIABLES.keyFotoNome, out var fotoDelDato);
-                                            annotaSostituzioneFoto(item.recordInTracciato, "foto", fotoScelta.codRef, fotoDelDato, artFotoItem.NomeReale, true);
-                                            item.recordInTracciato[Enum.GetName(AddestramentoRuoli.Foto) + "." + GLOBAL_VARIABLES.keyFotoGuidId] = artFotoItem.GuidId;
-                                            item.recordInTracciato[Enum.GetName(AddestramentoRuoli.Foto) + "." + GLOBAL_VARIABLES.keyFotoNome] = artFotoItem.NomeReale;
-                                            item.recordInTracciato[Enum.GetName(AddestramentoRuoli.Foto) + "." + GLOBAL_VARIABLES.keyFotoIsMeta] = true;
-
-                                        }
-                                        else
-                                        {
-                                            item.recordInTracciato[Enum.GetName(AddestramentoRuoli.Foto) + "." + GLOBAL_VARIABLES.keyFotoIsMeta] = false;
-                                        }
+                                        applicaFotoDaMeta(item.recordInTracciato, fotoScelta, true);
                                     }
 
                                     //Accorpare foto extra ereditate dalla lavorazione precedente
@@ -5195,19 +5256,7 @@ namespace Istanta.Controllers
                         var fotoScelta = storeField.foto!.FirstOrDefault(f => f.codRef == item.recordInTracciato[keyRefCodice].ToString() && f.tipo == TipoFoto.Foto);
                         if (fotoScelta != null)
                         {
-                            var artFotoItem = this.ctx.ArticoliFotos.Include(f => f.IdArticoloNavigation).FirstOrDefault(f => f.IdArticoloNavigation.Codice == fotoScelta.codRef && f.NomeReale == fotoScelta.nomeFoto);
-                            if (artFotoItem != null)
-                            {
-                                item.recordInTracciato.TryGetValue(Enum.GetName(AddestramentoRuoli.Foto) + "." + GLOBAL_VARIABLES.keyFotoNome, out var fotoDelDato);
-                                annotaSostituzioneFoto(item.recordInTracciato, "foto", fotoScelta.codRef, fotoDelDato, artFotoItem.NomeReale, false);
-                                item.recordInTracciato[Enum.GetName(AddestramentoRuoli.Foto) + "." + GLOBAL_VARIABLES.keyFotoGuidId] = artFotoItem.GuidId;
-                                item.recordInTracciato[Enum.GetName(AddestramentoRuoli.Foto) + "." + GLOBAL_VARIABLES.keyFotoNome] = artFotoItem.NomeReale;
-                                item.recordInTracciato[Enum.GetName(AddestramentoRuoli.Foto) + "." + GLOBAL_VARIABLES.keyFotoIsMeta] = true;
-                            }
-                            else
-                            {
-                                item.recordInTracciato[Enum.GetName(AddestramentoRuoli.Foto) + "." + GLOBAL_VARIABLES.keyFotoIsMeta] = false;
-                            }
+                            applicaFotoDaMeta(item.recordInTracciato, fotoScelta, false);
                         }
                     }
                 }

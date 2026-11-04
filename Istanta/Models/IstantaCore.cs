@@ -1566,6 +1566,10 @@ namespace Istanta.Models
         public TipoFoto tipo { get; set; }
 
         public bool rimuoviFoto { get; set; } = false;
+        /// TASK-60aaf10d: la foto che il tracciato indicava quando l'operatore ha fatto la scelta,
+        /// senza estensione. Se una lista nuova ne indica un'altra la scelta decade. Null nelle
+        /// scelte fatte prima, che restano valide.
+        public string? nomeFotoTracciato { get; set; }
     }
 
     public class RevisioneSyncFoto
@@ -2258,6 +2262,9 @@ namespace Istanta.Models
         /// caricare come prima.
         /// </summary>
         public bool archiviaSenzaSelezionare { get; set; } = false;
+        /// TASK-60aaf10d: la foto che il tracciato indica per la referenza, senza estensione, per
+        /// legarvi una scelta fatta solo per la lavorazione. Null se il Plugin non la manda.
+        public string? nomeFotoTracciato { get; set; }
 
 
         public void Normalize()
@@ -2290,6 +2297,9 @@ namespace Istanta.Models
         public bool propaga { get; set; }
         //I20-1088: il record del box, per trovare la riga della lavorazione dei meta. 0 se il client non lo manda.
         public long idRec { get; set; } = 0;
+        /// TASK-60aaf10d: la foto che il tracciato indica per la referenza, senza estensione, per
+        /// legarvi una scelta fatta solo per la lavorazione. Null se il Plugin non la manda.
+        public string? nomeFotoTracciato { get; set; }
 
 
         public void Normalize()

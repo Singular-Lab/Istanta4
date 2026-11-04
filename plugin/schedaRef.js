@@ -6192,11 +6192,12 @@ const schedaRef = {
         return breve.charAt(0).toUpperCase() + breve.substring(1);
     },
 
-    /// I20-1075: le sezioni secondarie della finestra (risolte, impaginazione) si aprono da sole solo
-    /// quando non c'e' niente da risolvere; se l'operatore ne apre o chiude una, resta come l'ha
-    /// lasciata finche' la finestra e' aperta.
+    /// I20-1075: la sezione secondaria della finestra (le segnalazioni di impaginazione) e' aperta a
+    /// ogni apertura; se l'operatore la chiude o la riapre, resta come l'ha lasciata finche' la
+    /// finestra e' aperta. TASK-f0f86260: prima si apriva da sola solo quando non c'era niente da
+    /// risolvere, e con delle differenze andava aperta per vedere cosa conteneva.
     sezioneApertaAllInizio(daRisolvere) {
-        return !(daRisolvere > 0);
+        return true;
     },
 
     /// I20-1075: una sezione richiudibile della finestra: una testata col titolo, il numero e una

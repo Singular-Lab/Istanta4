@@ -64,6 +64,28 @@ namespace Istanta.Models
         /// Al posto di una riga nuova si aggiorna quella gia' registrata, con lo stato che la nuova
         /// avrebbe avuto. Nome e ambito restano quelli della riga esistente.
         /// </summary>
+        /// <summary>
+        /// TASK-60aaf10d: la foto caricata dal Plugin solo per una lavorazione. Prima si costruiva la
+        /// riga e non la si aggiungeva all'articolo: non veniva salvata, il meta della lavorazione non
+        /// la trovava alla lettura successiva e la scelta si perdeva. Ora si registra spenta e non
+        /// selezionata, cosi' la scelta automatica delle altre lavorazioni non la prende e solo il meta
+        /// la usa. Se l'articolo ha gia' la stessa immagine nello stesso ambito si usa quella riga
+        /// cosi' com'e', senza cambiarne lo stato: e' una foto dell'archivio, non della lavorazione.
+        /// </summary>
+        public static ArticoliFoto PerLaSolaLavorazione(ICollection<ArticoliFoto> fotoDellArticolo, ArticoliFoto nuova)
+        {
+            var esistente = GiaRegistrata(fotoDellArticolo, nuova.GuidId, nuova.Area, nuova.Canale);
+            if (esistente != null)
+            {
+                return esistente;
+            }
+
+            nuova.Attiva = false;
+            nuova.StatoSelezione = (byte)StatoSelezioneFoto.NonSelezionata;
+            fotoDellArticolo.Add(nuova);
+            return nuova;
+        }
+
         public static ArticoliFoto Riusa(ArticoliFoto esistente, ArticoliFoto nuova)
         {
             esistente.Attiva = nuova.Attiva;

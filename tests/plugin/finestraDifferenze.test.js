@@ -54,10 +54,20 @@ test("la riga di riepilogo dice quanto c'e' da risolvere e le segnalazioni di im
     assert.strictEqual(schedaRef.testoRiepilogoFinestra(0, 0), "Tutte le segnalazioni risolte");
 });
 
-test("le sezioni secondarie si aprono da sole solo quando non c'e' niente da risolvere", () => {
+test("la sezione delle segnalazioni di impaginazione si apre sempre aperta, anche con differenze da risolvere", () => {
+    //TASK-f0f86260: prima con delle differenze si apriva chiusa, e andava aperta per vederne il contenuto.
     assert.strictEqual(schedaRef.sezioneApertaAllInizio(0), true);
-    assert.strictEqual(schedaRef.sezioneApertaAllInizio(3), false);
+    assert.strictEqual(schedaRef.sezioneApertaAllInizio(3), true);
     assert.strictEqual(schedaRef.sezioneApertaAllInizio(undefined), true);
+});
+
+test("la scelta dell'operatore sulla sezione vale finche' la finestra e' aperta", () => {
+    const scheda = leggiFileDelPlugin("schedaRef.js").replace(/\r/g, "");
+    const sezione = scheda.substring(scheda.indexOf("    sezioneRichiudibile(sezione, chiave, titolo, quante) {"), scheda.indexOf("    aggiungiValoriDifferenza("));
+
+    //Lo stato scelto dall'operatore prevale sull'apertura iniziale, e si ricorda al clic.
+    assert.match(sezione, /let aperta = stato\[chiave\] != null \? stato\[chiave\] : this\.sezioneApertaAllInizio\(daRisolvere\);/);
+    assert.match(sezione, /aperta = !aperta;\n\s*stato\[chiave\] = aperta;/);
 });
 
 test("la finestra: riquadri per elemento, impaginazione richiudibile, nel box e sul server in grassetto", () => {
