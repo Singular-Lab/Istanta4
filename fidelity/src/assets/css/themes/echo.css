@@ -4,6 +4,11 @@
     @media only screen and (min-width: 1200px) {
       &--collapsed:not(.side-menu--on-hover) {
         .side-menu {
+          /* Il primo gruppo dell'area non fa da filo: sopra c'è già il selettore o il logo */
+          &__area + .side-menu__divider,
+          &__divider:first-child {
+            display: none;
+          }
           &__divider {
             height: theme("spacing.5");
             margin: theme("spacing.3") theme("spacing.3");
@@ -38,6 +43,18 @@
       }
     }
 
+    /* Selettore dell'area, sopra le voci dell'area mostrata */
+    &__area + .side-menu__divider {
+      margin-top: theme("spacing.2");
+    }
+    /* Nel menu del layout resta sotto il logo mentre le voci scorrono (non nell'anteprima dell'editor) */
+    .side-menu__area {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background-color: theme("colors.white");
+    }
+
     &__divider {
       position: relative;
       white-space: nowrap;
@@ -49,6 +66,9 @@
       margin-top: theme("spacing.5");
       margin-bottom: theme("spacing.2");
       padding: 0 theme("spacing.3");
+      &:first-child {
+        margin-top: theme("spacing.1");
+      }
       &__title {
         transition: opacity 150ms ease-out;
       }
@@ -209,6 +229,182 @@
   }
 }
 
+/* Selettore dell'area del menu laterale (SelettoreArea.tsx). Fuori da .echo .side-menu: l'elenco
+   si apre in un portale nel body e il selettore compare anche nell'anteprima dell'editor del menu. */
+.selettore-area {
+  padding-bottom: theme("spacing.3");
+
+  /* Riquadro navy con l'icona dell'area */
+  &__riquadro {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background-color: #03045e;
+    .selettore-area__icona {
+      width: 17px;
+      height: 17px;
+      color: theme("colors.white");
+      opacity: 1;
+    }
+  }
+
+  &__testo {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+    line-height: 1.25;
+  }
+  &__nome {
+    font-size: 13px;
+    font-weight: theme("fontWeight.semibold");
+    color: theme("colors.slate.900");
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  &__descrizione {
+    font-size: 11.5px;
+    color: #6b7280;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__pulsante {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: theme("spacing.2") 10px theme("spacing.2") theme("spacing.2");
+    border: 1px solid #e3e6eb;
+    border-radius: 10px;
+    background-color: theme("colors.white");
+    text-align: left;
+    cursor: pointer;
+    transition-property: background-color, border-color;
+    transition-timing-function: ease-out;
+    transition-duration: 150ms;
+    &:hover {
+      background-color: theme("colors.slate.50");
+      border-color: #d5dae2;
+    }
+    &:focus-visible {
+      outline: 2px solid rgb(var(--color-theme-1) / 0.5);
+      outline-offset: 2px;
+    }
+    .selettore-area__chevron {
+      flex: none;
+      width: 16px;
+      height: 16px;
+      color: theme("colors.slate.400");
+    }
+  }
+
+  /* Elenco delle aree, ancorato sotto il pulsante e largo quanto lui */
+  &__elenco {
+    z-index: 60;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: var(--button-width);
+    padding: 6px;
+    border: 1px solid #e3e6eb;
+    border-radius: 12px;
+    background-color: theme("colors.white");
+    box-shadow: 0 16px 36px -14px rgb(15 23 42 / 0.3);
+    &:focus {
+      outline: none;
+    }
+  }
+  &__gruppo {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  &__separatore {
+    padding: theme("spacing.2") theme("spacing.2") theme("spacing.1");
+    font-size: 10.5px;
+    font-weight: theme("fontWeight.semibold");
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #6b7280;
+  }
+
+  &__opzione {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 7px theme("spacing.2");
+    border-radius: 8px;
+    text-align: left;
+    cursor: pointer;
+    &:hover,
+    &[data-focus] {
+      background-color: theme("colors.slate.100");
+    }
+    .selettore-area__riquadro {
+      width: 28px;
+      height: 28px;
+      background-color: #e9edf7;
+    }
+    .selettore-area__icona {
+      width: 15px;
+      height: 15px;
+      color: #03045e;
+    }
+    /* L'area mostrata: riquadro navy e spunta al posto del numero di voci */
+    &--corrente {
+      .selettore-area__riquadro {
+        background-color: #03045e;
+      }
+      .selettore-area__icona {
+        color: theme("colors.white");
+      }
+    }
+    .selettore-area__spunta {
+      flex: none;
+      width: 15px;
+      height: 15px;
+      color: #03045e;
+    }
+  }
+  &__conta {
+    flex: none;
+    font-family: theme("fontFamily.mono");
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    color: #6b7280;
+  }
+}
+
+/* Menu compresso: resta il riquadro dell'area, l'elenco si apre più largo del menu */
+@media only screen and (min-width: 1200px) {
+  .selettore-area--compresso {
+    display: flex;
+    justify-content: center;
+    .selettore-area__pulsante {
+      justify-content: center;
+      width: 44px;
+      height: 44px;
+      padding: 0;
+      border-color: transparent;
+      background-color: transparent;
+    }
+    .selettore-area__testo,
+    .selettore-area__pulsante .selettore-area__chevron {
+      display: none;
+    }
+  }
+  .selettore-area__elenco--compresso {
+    width: 260px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .echo .side-menu {
     &__link,
@@ -216,5 +412,8 @@
     &__submenu {
       transition: none;
     }
+  }
+  .selettore-area__pulsante {
+    transition: none;
   }
 }

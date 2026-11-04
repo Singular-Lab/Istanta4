@@ -799,3 +799,21 @@ export const funzioneRedirectMaterialiPromo = async ({ params, request }: Loader
     return redirect(dettaglio);
   }
 };
+
+/** La pagina con cui si entra quando il server non ne indica una valida. */
+export const PAGINA_INIZIALE_PREDEFINITA = "/gdo/dashboard";
+
+/**
+ * Indirizzo principale: porta alla pagina iniziale del menu dell'utente (decisa dal server come per
+ * l'hub, solo fra le pagine che può aprire). Si accetta solo un percorso interno; con un menu vuoto
+ * o un errore, sessione scaduta compresa, si va alla panoramica dei volantini, che gestisce l'accesso da sé.
+ */
+export const funzioneRedirectPaginaIniziale = async () => {
+  try {
+    const { percorso } = await ServerCall.get<{ percorso: string | null }>("/menu/pagina-iniziale");
+    const interno = typeof percorso === "string" && /^\/(?![/\\])/.test(percorso);
+    return redirect(interno ? percorso : PAGINA_INIZIALE_PREDEFINITA);
+  } catch {
+    return redirect(PAGINA_INIZIALE_PREDEFINITA);
+  }
+};

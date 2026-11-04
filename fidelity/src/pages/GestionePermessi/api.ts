@@ -32,10 +32,12 @@ export const useRuoliGestibili = () =>
     staleTime: 5 * 60 * 1000,
   });
 
-export const useConfigurazione = (ambito: Ambito) =>
+/** Permessi di un ambito; `abilitata` false non la chiede (es. il Superadmin, che li ha tutti). */
+export const useConfigurazione = (ambito: Ambito, abilitata = true) =>
   useQuery({
     queryKey: [CHIAVE, 'configurazione', ambito.tipo, ambito.idRuoloGdo, ambito.idGdo],
     queryFn: () => ServerCall.get<ConfigurazioneServer>(`/permessi/configurazione?${parametri(ambito)}`),
+    enabled: abilitata,
   });
 
 export const useConfronto = (idGdo: string | null) =>

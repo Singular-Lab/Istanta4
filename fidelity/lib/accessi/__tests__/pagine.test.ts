@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CodicePermesso, PERMESSI } from '../catalogo';
-import { normalizzaPercorso, paginaPer, puoAprirePagina } from '../pagine';
+import { PAGINE, VOCI_DI_MENU, normalizzaPercorso, paginaPer, puoAprirePagina, sezioneDiPercorso, voceDiMenuPer } from '../pagine';
+import { SEZIONI } from '../sezioni';
 
 const con = (...codici: CodicePermesso[]) => {
   const insieme = new Set<string>(codici);
@@ -67,5 +68,56 @@ describe('puoAprirePagina', () => {
   it('le pagine di sistema richiedono il permesso di sistema', () => {
     expect(puoAprirePagina('/gestione-interna/gestione-permessi', con(PERMESSI.UTENTI.VISUALIZZA))).toBe(false);
     expect(puoAprirePagina('/gestione-interna/gestione-permessi', con(PERMESSI.SISTEMA.GESTISCI_ACCESSI))).toBe(true);
+  });
+});
+
+describe('sezione delle pagine', () => {
+  it('ogni pagina del catalogo dichiara una sezione del menu valida', () => {
+    const valide = new Set(SEZIONI.map(s => s.sezione));
+    expect(PAGINE.filter(p => !valide.has(p.sezione)).map(p => p.percorso)).toEqual([]);
+  });
+
+  it('le pagine operative stanno in Produzione', () => {
+    for (const percorso of ['/promozioni/nuova', '/promozioni/in-corso/dettagli/x/kits/y', '/nuovo-ods', '/ods-in-corso', '/impostazioni-di-produzione', '/webliant/impostazioni-webpliant', '/gestione-ricette'])
+      expect(sezioneDiPercorso(percorso), percorso).toBe('produzione');
+  });
+
+  it('le pagine di consultazione stanno in Visualizzazione', () => {
+    for (const percorso of ['/volantini/attivi', '/pop/storico', '/volantini/tutti_i_volantini', '/storico-volantini', '/category/dashboard', '/marketing/dashboard', '/punti-vendita/x/referenze/y', '/report/tracciati'])
+      expect(sezioneDiPercorso(percorso), percorso).toBe('visualizzazione');
+  });
+
+  it('WhatsApp sta in Comunicazione, anagrafiche e integrazioni in Gestione interna, il resto riservato in Sistema', () => {
+    expect(sezioneDiPercorso('/whatsapp/campagne-whatsapp')).toBe('comunicazione');
+    expect(sezioneDiPercorso('/whatsapp/gestione-whatsapp-superadmin/templates')).toBe('comunicazione');
+    expect(sezioneDiPercorso('/gestione-whatsapp-admin')).toBe('comunicazione');
+    expect(sezioneDiPercorso('/gestione-interna/punti-vendita/x')).toBe('gestione');
+    expect(sezioneDiPercorso('/gestione-api/keys')).toBe('gestione');
+    expect(sezioneDiPercorso('/gestione-interna/gestione-permessi')).toBe('sistema');
+    expect(sezioneDiPercorso('/superadmin/dashboard')).toBe('sistema');
+  });
+
+  it('una pagina senza rotta non è nel catalogo e non ha sezione', () => {
+    expect(paginaPer('/gestione-pagine-singular')).toBeUndefined();
+    expect(sezioneDiPercorso('/dashboard-overview-8')).toBeUndefined();
+  });
+});
+
+describe('pagine che si possono mettere nel menu', () => {
+  it('ogni voce apre una pagina del catalogo, di una sezione del menu', () => {
+    const senzaPagina = VOCI_DI_MENU.filter(v => !paginaPer(v.percorso)).map(v => v.percorso);
+    expect(senzaPagina).toEqual([]);
+    expect(VOCI_DI_MENU.filter(v => sezioneDiPercorso(v.percorso) === 'account').map(v => v.percorso)).toEqual([]);
+  });
+
+  it('percorsi e titoli sono unici, così l\'editor non propone due volte la stessa pagina', () => {
+    expect(new Set(VOCI_DI_MENU.map(v => v.percorso)).size).toBe(VOCI_DI_MENU.length);
+    expect(new Set(VOCI_DI_MENU.map(v => v.titolo)).size).toBe(VOCI_DI_MENU.length);
+  });
+
+  it('i redirect e i vecchi indirizzi non si possono scegliere', () => {
+    for (const percorso of ['/dashboard', '/materiali-attivi', '/nuova-promozione', '/promozioni'])
+      expect(voceDiMenuPer(percorso), percorso).toBeUndefined();
+    expect(voceDiMenuPer('promozioni/in-corso/')?.titolo).toBe('Promozioni in corso');
   });
 });

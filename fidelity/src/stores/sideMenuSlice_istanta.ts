@@ -1,5 +1,7 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import { ServerCall } from "../../lib/server_call";
+import { eSezioneMenu } from "../../lib/accessi/sezioni";
+import type { MenuSezione } from "../../lib/types";
 import { RootState } from "./store";
 
 export interface Menu {
@@ -18,8 +20,11 @@ export interface Menu {
   start_page?: boolean;
 }
 
+/** Una voce del menu laterale, l'intestazione di un gruppo (stringa) o di una sezione. */
+export type ElementoMenu = Menu | string | MenuSezione;
+
 export interface SideMenuState {
-  menu: Array<Menu | string>;
+  menu: ElementoMenu[];
   loading: boolean; // Stato di caricamento
   startPage: string | null;
   error: string | null; // valorizzato se /menu/me fallisce, per mostrare "Riprova" nel layout
@@ -32,11 +37,11 @@ const initialState: SideMenuState = {
   error: null,
 };
 
-const findStartPagePath = (items: Array<Menu | string>): string | null => {
+const findStartPagePath = (items: ElementoMenu[]): string | null => {
   let firstNavigablePath: string | null = null;
 
   for (const item of items) {
-    if (typeof item === "string") {
+    if (typeof item === "string" || eSezioneMenu(item)) {
       continue;
     }
 
@@ -61,7 +66,7 @@ const findStartPagePath = (items: Array<Menu | string>): string | null => {
 
 // Thunk per caricare il menu
 export const fetchSideMenu = createAsyncThunk("sideMenu/fetchMenu", async () => {
-  const response = await ServerCall.get<Array<Menu | string>>("/menu/me");
+  const response = await ServerCall.get<ElementoMenu[]>("/menu/me");
   return response; // Presumendo che l'API restituisca il menu in formato JSON
 });
 

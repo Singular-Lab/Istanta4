@@ -66,6 +66,7 @@ const funzioneDettagliLavorazioniInCorso = createLazyLoader("funzioneDettagliLav
 const funzioneGestionePuntoVendita = createLazyLoader("funzioneGestionePuntoVendita");
 const funzioneLavorazioniInCorso = createLazyLoader("funzioneLavorazioniInCorso");
 const funzioneRedirectMaterialiPromo = createLazyLoader("funzioneRedirectMaterialiPromo");
+const funzioneRedirectPaginaIniziale = createLazyLoader("funzioneRedirectPaginaIniziale");
 const throw404 = () => {
   throw new Response(null, { status: 404 });
 };
@@ -130,10 +131,10 @@ const routes: RouteObject[] = [
     },
   },
 
-  // INDEX: redirect con loader (niente <Navigate/>)
+  // INDEX: redirect con loader (niente <Navigate/>) alla pagina iniziale del menu dell'utente
   {
     index: true,
-    loader: () => redirect("/gdo/dashboard"),
+    loader: funzioneRedirectPaginaIniziale,
   },
 
   // ROOT LAYOUT
