@@ -1014,6 +1014,11 @@ namespace IstantaLib
         /// campo e' in noRender, e che la segnalazione del Plugin indica quando manca insieme al campo
         /// (Coop: txt_sconto -> box_sconto). Vuoto: nessun contenitore.
         public Dictionary<string, string> contenitoriNoRender { get; set; } = new Dictionary<string, string>();
+        /// TASK-16f63122: i campi che stanno dentro un gruppo del box, per gruppo (Edro21: range2,
+        /// tipo_punti2 e punti2 in Range_Punti_2). Quando il dato cancella il gruppo, AgenziaLib non
+        /// manda al Plugin i suoi campi compilati. La legge AgenziaLib dal JSON; qui sta perche' un
+        /// salvataggio dall'editor della configurazione non la perda. Vuota: nessun contenitore.
+        public Dictionary<string, List<string>> campiDeiContenitori { get; set; } = new Dictionary<string, List<string>>();
 
         public AgenziaCustomPlugin_GrandezzaBoxRevisione grandezzeBox { get; set; }//Definisce la grandezza dei box di revisione, in questo modo è possibile per le agenzie gestire la visualizzazione a piacimento
         
