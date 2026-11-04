@@ -101,7 +101,8 @@ public class PopCoopSingoliComeGruppoTests
 
         int copia = pop.IndexOf("ripetiIlCartelloDiGruppo(recItem, cartelloDiGruppo);", StringComparison.Ordinal);
         Assert.True(copia > creato);
-        Assert.Contains("singoliComeIlGruppo(recItem.GetValueOrDefault(\"codice_settore\"), recItem.GetValueOrDefault(\"codice_reparto\"))", pop);
+        // I20-1193: negli A3 sempre, negli A7 per i gruppi di singoliComeIlGruppo.
+        Assert.Contains("singoloCopiaDelGruppo(formatoKit, recItem.GetValueOrDefault(\"codice_settore\"), recItem.GetValueOrDefault(\"codice_reparto\"))", pop);
         //Dopo il ritorno a BOX_STD dei singoli delle linee, prima del nome del file e dell'uscita del record.
         Assert.True(copia > pop.IndexOf("recItem[GLOBAL_VARIABLES.codiceBox] = \"BOX_STD\";", StringComparison.Ordinal));
         Assert.True(copia < pop.IndexOf("result.liste[0].Records.Add(tracciato[i]);", StringComparison.Ordinal));
