@@ -803,6 +803,48 @@ const pluginMiddleware = {
             .filter(r => r.estensioni.length > 0);
     },
 
+    /// I20-1200: le segnalazioni di impaginazione decise dal cliente
+    /// (AgenziaCustomPlugin_SegnalazionePersonalizzata). Senza la chiave, o se non e' una lista,
+    /// nessuna. Una regola senza campo, deveContenere o testo non vale; la gravita' e' "error" solo
+    /// se lo dice, altrimenti "warning".
+    getSegnalazioniPersonalizzate() {
+        let me = this;
+
+        const valore = me.callCustom
+            ? (typeof customAgenzia !== "undefined" && customAgenzia != null ? customAgenzia.segnalazioniPersonalizzate : null)
+            : me.customPluginDB?.segnalazioniPersonalizzate;
+        if (!Array.isArray(valore)) {
+            return [];
+        }
+        const testo = (v) => typeof v === "string" ? v.trim() : "";
+        return valore
+            .filter(r => r != null && typeof r === "object")
+            .map(r => ({
+                campo: testo(r.campo),
+                deveContenere: testo(r.deveContenere),
+                gravita: testo(r.gravita).toLowerCase() === "error" ? "error" : "warning",
+                codice: testo(r.codice),
+                testo: testo(r.testo)
+            }))
+            .filter(r => r.campo !== "" && r.deveContenere !== "" && r.testo !== "");
+    },
+
+    /// I20-1200: le segnalazioni personalizzate che il valore di un campo fa scattare, come
+    /// [{ testo, gravita }] da passare ad addSegnalazione. Un valore vuoto non si controlla: per
+    /// nomeFoto e' la referenza senza foto, impaginata con la nofoto.
+    segnalazioniPersonalizzate(campo, valore) {
+        if (valore == null || String(valore).trim() === "") {
+            return [];
+        }
+        const valoreTesto = String(valore);
+        return this.getSegnalazioniPersonalizzate()
+            .filter(r => r.campo === campo && !valoreTesto.toLowerCase().includes(r.deveContenere.toLowerCase()))
+            .map(r => ({
+                testo: (r.codice !== "" ? "Code " + r.codice + " " : "") + r.testo.split("{valore}").join(valoreTesto),
+                gravita: r.gravita
+            }));
+    },
+
     /// I20-1088: se un meta dei testi del box non si segnala da verificare per la sola versione del
     /// record cambiata (la lista ricaricata con lo stesso valore). Come chiediAmbitoDecisioniLavorazione:
     /// la chiave sta nella configurazione del cliente sul server, e senza vale falso (si controlla).
