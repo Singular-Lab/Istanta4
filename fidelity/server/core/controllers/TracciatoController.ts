@@ -10,6 +10,8 @@ import { permissionGuard } from '../middleware/permissionGuard';
 import { ServerUtils } from '../utils/ServerUtils';
 import { AuditLogService } from '../services/AuditLogService';
 import { Promo } from '../models/promo';
+import { TracciatiInvioIstanta } from '../models/tracciati_invio_istanta';
+import { aggiornaContestoInAttesa, inviaPrenotata, prenotaTracciato } from '../services/AllineamentoIstanta';
 
 export class TracciatoController extends BaseController {
     constructor(private tracciatoService: ITracciatoService) {
@@ -46,6 +48,9 @@ export class TracciatoController extends BaseController {
         this.router.get('/tracciati/:idTracciato/parse', authMiddleware, this.parseTracciatoById.bind(this));
         this.router.get('/tracciati/:idTracciato/download', authMiddleware, this.scaricaTracciato.bind(this));
         this.router.put('/tracciati/:idTracciato/nome', authMiddleware, permissionGuard('file.upload_tracciato'), this.rinominaTracciato.bind(this));
+        // Tracciati salvati in FP e non ancora accettati da Istanta
+        this.router.post('/tracciati/:idTracciato/rimanda-istanta', authMiddleware, permissionGuard('file.upload_tracciato'), this.rimandaAIstanta.bind(this));
+        this.router.put('/tracciati/:idTracciato/contesto', authMiddleware, permissionGuard('file.upload_tracciato'), this.modificaContestoInAttesa.bind(this));
         this.router.get('/tracciati/:idTracciato', authMiddleware, this.getTracciatoById.bind(this));
         this.router.delete('/tracciati/:idTracciato', authMiddleware, permissionGuard('file.upload_tracciato'), this.deleteTracciato.bind(this));
     }
@@ -177,6 +182,65 @@ export class TracciatoController extends BaseController {
             res.status(HttpStatusCode.INTERNAL_SERVER_ERROR).json({
                 message: "Errore durante la rinomina del tracciato"
             });
+        }
+    }
+
+    /** "Rimanda a Istanta": invia subito il tracciato in coda e risponde con l'esito. */
+    private async rimandaAIstanta(req: Request<{ idTracciato: string }>, res: Response): Promise<void> {
+        try {
+            const idTracciato = req.params.idTracciato;
+            const prenotata = await prenotaTracciato(idTracciato);
+            if (!prenotata) {
+                const inCoda = await TracciatiInvioIstanta.findByPk(idTracciato, { attributes: ['id_tracciato'] });
+                res.status(HttpStatusCode.CONFLICT).json({
+                    message: inCoda ? "Il tracciato si sta gia' inviando a Istanta: riprova fra poco" : "Il tracciato e' gia' in Istanta",
+                });
+                return;
+            }
+            const esito = await inviaPrenotata(prenotata, req as unknown as Request);
+            if (esito.esito === 'sparita') {
+                res.status(HttpStatusCode.NOT_FOUND).json({ message: "Tracciato non trovato" });
+                return;
+            }
+            AuditLogService.getInstance().entityChanged(req, 'tracciato', 'rimanda_istanta', { type: 'Tracciato', id: idTracciato }, { esito: esito.esito });
+            res.status(HttpStatusCode.OK).json(esito);
+        } catch (error) {
+            log.error("Errore durante il rinvio del tracciato a Istanta", error as Error);
+            res.status(HttpStatusCode.INTERNAL_SERVER_ERROR).json({ message: "Errore durante il rinvio del tracciato a Istanta" });
+        }
+    }
+
+    /** Contesto di un tracciato ancora in coda per Istanta: quello che gli si mandera'. */
+    private async modificaContestoInAttesa(req: Request<{ idTracciato: string }>, res: Response): Promise<void> {
+        try {
+            const context = req.body?.context;
+            if (!Array.isArray(context)) {
+                res.status(HttpStatusCode.BAD_REQUEST).json({ message: "context: serve l'elenco dei campi del contesto" });
+                return;
+            }
+            const etichetta = (context as Array<{ nome_field?: unknown; user_value?: unknown }>).find((c) => c?.nome_field === 'idLabel');
+            if (typeof etichetta?.user_value === 'string' && etichetta.user_value.length > 40) {
+                res.status(HttpStatusCode.BAD_REQUEST).json({ message: "La label personalizzata non può superare i 40 caratteri" });
+                return;
+            }
+            const esito = await aggiornaContestoInAttesa(req.params.idTracciato, context);
+            if (esito === 'inesistente') {
+                res.status(HttpStatusCode.NOT_FOUND).json({ message: "Tracciato non trovato" });
+                return;
+            }
+            if (esito !== 'aggiornato') {
+                res.status(HttpStatusCode.CONFLICT).json({
+                    message: esito === 'inviato'
+                        ? "Il tracciato e' gia' in Istanta: il contesto non si puo' piu' modificare"
+                        : "Il tracciato si sta inviando a Istanta: riprova fra poco",
+                });
+                return;
+            }
+            AuditLogService.getInstance().entityChanged(req, 'tracciato', 'modifica_contesto', { type: 'Tracciato', id: req.params.idTracciato });
+            res.status(HttpStatusCode.OK).json({ esito });
+        } catch (error) {
+            log.error("Errore durante la modifica del contesto del tracciato", error as Error);
+            res.status(HttpStatusCode.INTERNAL_SERVER_ERROR).json({ message: "Errore durante la modifica del contesto del tracciato" });
         }
     }
 

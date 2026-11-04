@@ -205,6 +205,24 @@ export const uploadTracciati = multer({
   }
 });
 
+/** Liste dell'archivio storico in blocco (POST /api/tracciati/archivio). */
+export const LISTE_PER_LOTTO_ARCHIVIO = 50;
+export const BYTE_PER_LOTTO_ARCHIVIO = 100 * 1024 * 1024;
+
+/**
+ * Upload configuration for the historical archive lists
+ * - Memory storage
+ * - at most 50 files and 100 MB each (the total is checked by the controller)
+ */
+export const uploadTracciatiArchivio = multer({
+  storage: memoryStorage,
+  limits: {
+    files: LISTE_PER_LOTTO_ARCHIVIO,
+    fileSize: BYTE_PER_LOTTO_ARCHIVIO,
+    fieldSize: FILE_SIZE_LIMITS.MEDIUM
+  }
+});
+
 /**
  * Upload configuration for materiali pubblicazioni
  * - Disk storage (cartella dei temporanei)

@@ -40,6 +40,7 @@ import { isStessaPromo, normalizePromoModel } from '../utils/PromoModelUtils';
 import { ServerUtils } from '../utils/ServerUtils';
 import { verificaRisposta } from '../utils/rispostaServizi';
 import { statoAutomaticoPromo } from '../utils/statoAutomaticoPromo';
+import { statoIstantaTracciati } from './AllineamentoIstanta';
 import { OrdinamentoMerceologicoService } from './OrdinamentoMerceologicoService';
 import { normalizzaMeta } from './visibilitaPromoUtils';
 dayjs.extend(isBetween);
@@ -290,6 +291,7 @@ export class PromoService implements IPromoService {
         }) as unknown as Array<{ id_tracciati: string; id_promo_tracciati: string; filename_tracciati: string; nome_tracciati: string | null; md5: string }>
         : [];
 
+      const istanta = await statoIstantaTracciati(tracciati.map(t => t.id_tracciati));
       const perNome = new Map<string, VerificaArchivioPromoDTO[]>();
       for (const p of promo) {
         const voce: VerificaArchivioPromoDTO = {
@@ -303,6 +305,7 @@ export class PromoService implements IPromoService {
             filename: t.filename_tracciati,
             nome: t.nome_tracciati || t.filename_tracciati,
             md5: t.md5,
+            istanta: istanta.get(t.id_tracciati) ?? { stato: 'inviato', errore: null, tentativi: 0 },
           })),
         };
         perNome.set(chiave(p.nome_promo), [...(perNome.get(chiave(p.nome_promo)) ?? []), voce]);
@@ -673,7 +676,29 @@ export class PromoService implements IPromoService {
   }
 
 
-  async get_contesto_per_importazione(req: ExpressRequest): Promise<any> {
+  /**
+   * Contesto di importazione di piu' promo dell'archivio storico in una richiesta: le letture a
+   * Istanta restano una promo alla volta, ma qui dentro e quattro per volta. Una promo non letta
+   * ha il motivo e non ferma le altre.
+   */
+  async contestiImportazione(req: ExpressRequest, guidIds: string[]): Promise<Array<{ guidId: string; contesto?: unknown; errore?: string }>> {
+    const esiti: Array<{ guidId: string; contesto?: unknown; errore?: string }> = new Array(guidIds.length);
+    let prossimo = 0;
+    const lettore = async () => {
+      while (prossimo < guidIds.length) {
+        const i = prossimo++;
+        try {
+          esiti[i] = { guidId: guidIds[i], contesto: await this.get_contesto_per_importazione(req, guidIds[i]) };
+        } catch (error) {
+          esiti[i] = { guidId: guidIds[i], errore: error instanceof Error ? error.message : String(error) };
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(4, guidIds.length) }, lettore));
+    return esiti;
+  }
+
+  async get_contesto_per_importazione(req: ExpressRequest, guidId: string = String(req.query.guidId ?? '')): Promise<any> {
     try {
       console.log(Colorize.bgBlue(config.ISTANTA_IP_ADDRESS))
       const result = verificaRisposta<{ content: string, esito: boolean, error: string | null }>(
@@ -709,7 +734,7 @@ export class PromoService implements IPromoService {
           req,
           //NOTE abbiamo cambiato la dicitura aggiungendo l'ultimo parametro che è lo scope.
           //`${config.ISTANTA_IP_ADDRESS}/FicoProcess/getSourceFields/${req.query.guidId}/importInLavorazione`,
-          `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getSourceFields/${req.query.guidId}`,
+          `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getSourceFields/${guidId}`,
           "GET",
           undefined,
           undefined,

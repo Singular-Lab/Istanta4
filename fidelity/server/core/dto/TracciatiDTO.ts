@@ -37,6 +37,8 @@ export interface TracciatiResponseDTO {
   filesize?: number;
   createdat?: Date;
   updatedat: Date;
+  /** Se Istanta ha il tracciato: in coda (in attesa o dopo un errore, col motivo) finche' non lo accetta. */
+  istanta?: { stato: 'inviato' | 'in_attesa' | 'errore'; errore: string | null; tentativi: number };
 }
 
 /**

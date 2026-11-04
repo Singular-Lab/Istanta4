@@ -8930,6 +8930,90 @@
       ],
       "vincoliUnici": []
     },
+    "tracciati_invio_istanta": {
+      "colonne": {
+        "creato_il": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": false,
+          "riferimento": null,
+          "tipo": "timestamp with time zone",
+          "unico": false
+        },
+        "id_tracciato": {
+          "autoIncremento": false,
+          "chiavePrimaria": true,
+          "default": null,
+          "nullable": false,
+          "riferimento": {
+            "colonna": "id_tracciati",
+            "onDelete": "CASCADE",
+            "onUpdate": "CASCADE",
+            "tabella": "tracciati"
+          },
+          "tipo": "uuid",
+          "unico": false
+        },
+        "id_utente": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": false,
+          "riferimento": null,
+          "tipo": "character varying(255)",
+          "unico": false
+        },
+        "inviando_dal": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": true,
+          "riferimento": null,
+          "tipo": "timestamp with time zone",
+          "unico": false
+        },
+        "prossimo_tentativo": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": false,
+          "riferimento": null,
+          "tipo": "timestamp with time zone",
+          "unico": false
+        },
+        "tentativi": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": "0",
+          "nullable": false,
+          "riferimento": null,
+          "tipo": "integer",
+          "unico": false
+        },
+        "ultimo_errore": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": true,
+          "riferimento": null,
+          "tipo": "text",
+          "unico": false
+        }
+      },
+      "indici": [
+        {
+          "colonne": [
+            "prossimo_tentativo"
+          ],
+          "condizione": null,
+          "metodo": "btree",
+          "nome": "tracciati_invio_istanta_prossimo_tentativo",
+          "unico": false
+        }
+      ],
+      "vincoliUnici": []
+    },
     "tracciati_momento": {
       "colonne": {
         "confronti_ids": {

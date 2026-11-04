@@ -1,4 +1,5 @@
 import { log } from '../logger';
+import { avviaAllineamentoIstanta } from './AllineamentoIstanta';
 import { ChronService } from './ChronService';
 
 /**
@@ -37,6 +38,8 @@ export const initializeBackgroundServices = (): void => {
     return;
   }
   initializeScheduledJobs();
+  // Tracciati salvati in FP e non ancora in Istanta (archivio storico e upload rifiutati)
+  avviaAllineamentoIstanta();
   // I dati di default dell'hub (provider e servizi) li crea l'inizializzazione dell'installazione
   // (server/core/scripts/inizializza.ts), eseguita dal deploy prima del server.
 };
