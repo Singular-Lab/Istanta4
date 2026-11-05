@@ -22,6 +22,13 @@ export interface UpdateTracciatiDTO {
 }
 
 /**
+ * Contenuto del file Excel del tracciato letto foglio per foglio (GET /api/tracciati/:id/parse)
+ */
+export interface FogliTracciatoDTO {
+  sheets: { name: string; rows: (string | number | null)[][] }[];
+}
+
+/**
  * DTO per la risposta con i dati del tracciato
  */
 export interface TracciatiResponseDTO {
@@ -34,6 +41,8 @@ export interface TracciatiResponseDTO {
   nome: string;
   stato: string;
   blobfile?: Uint8Array;
+  /** File letto come fogli e righe, solo se richiesto (includeJson); null senza file o se illeggibile */
+  json?: FogliTracciatoDTO | null;
   filesize?: number;
   createdat?: Date;
   updatedat: Date;

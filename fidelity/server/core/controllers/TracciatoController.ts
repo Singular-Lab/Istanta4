@@ -85,7 +85,9 @@ export class TracciatoController extends BaseController {
                 return;
             }
             const includeBlob = req.query.includeBlob === 'true';
-            const tracciati = await this.tracciatoService.getTracciatiByPromoId(idPromo, includeBlob);
+            // Con includeJson ogni tracciato ha anche il file letto come fogli e righe, come in /parse
+            const includeJson = req.query.includeJson === 'true';
+            const tracciati = await this.tracciatoService.getTracciatiByPromoId(idPromo, includeBlob, includeJson);
             res.status(HttpStatusCode.OK).json(tracciati);
         } catch (error: any) {
             log.error("Errore durante il recupero dei tracciati", error);

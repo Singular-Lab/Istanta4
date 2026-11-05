@@ -9,6 +9,12 @@ vi.mock('../../logger', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+// Lo stato verso Istanta si legge dal database: qui ogni tracciato risulta già inviato
+vi.mock('../AllineamentoIstanta', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../AllineamentoIstanta')>()),
+  statoIstantaTracciati: vi.fn(async () => new Map()),
+}));
+
 /**
  * Anteprima del tracciato (GET /api/tracciati/:id/parse): l'Excel si crea in memoria con
  * SheetJS, come lo carica il marketing; nessun file binario nel repository.
@@ -170,6 +176,58 @@ describe('TracciatoService.parseTracciatoById: errori', () => {
     repository.findById.mockRejectedValueOnce(new Error('connessione persa'));
 
     await expect(service.parseTracciatoById('t1')).rejects.toBeInstanceOf(DatabaseError);
+  });
+});
+
+describe('TracciatoService.getTracciatiByPromoId: file letti con includeJson', () => {
+  const fogli: FoglioProva[] = [
+    { nome: 'PROMO', righe: [['Codice', 'Descrizione'], ['A1', 'Pasta']] },
+    { nome: 'NOTE', righe: [['Nota']] },
+  ];
+
+  function creaServicePerPromo(tracciati: Partial<TracciatiAttributes>[]) {
+    const repository = {
+      findById: vi.fn(async (id: string) => tracciati.find((t) => t.id_tracciati === id) ?? null),
+      findByPromoId: vi.fn(async () => tracciati),
+    };
+    return new TracciatoService(repository as unknown as ITracciatiRepository);
+  }
+
+  it('ogni tracciato ha il file letto come nell\'anteprima', async () => {
+    const service = creaServicePerPromo([tracciatoConFile(creaExcel(fogli))]);
+
+    const [tracciato] = await service.getTracciatiByPromoId('promo-1', false, true);
+
+    expect(tracciato.json).toEqual(await service.parseTracciatoById('t1'));
+    expect(tracciato.json?.sheets.map((s) => s.name)).toEqual(['PROMO', 'NOTE']);
+    expect(tracciato.blobfile).toBeUndefined();
+  });
+
+  it('senza includeJson il file non viene letto', async () => {
+    const service = creaServicePerPromo([tracciatoConFile(creaExcel(fogli))]);
+
+    const [tracciato] = await service.getTracciatiByPromoId('promo-1', true);
+
+    expect(tracciato).not.toHaveProperty('json');
+    expect(tracciato.blobfile).toBeDefined();
+  });
+
+  it('un tracciato senza file o illeggibile ha json null e non ferma gli altri', async () => {
+    // Intestazione ZIP senza il resto: SheetJS non riesce ad aprirlo
+    const zipRotto = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    const service = creaServicePerPromo([
+      { ...tracciatoConFile(), id_tracciati: 'senza-file' },
+      { ...tracciatoConFile(zipRotto), id_tracciati: 'rotto' },
+      tracciatoConFile(creaExcel(fogli)),
+    ]);
+
+    const tracciati = await service.getTracciatiByPromoId('promo-1', false, true);
+
+    expect(tracciati.map((t) => [t.id, t.json === null])).toEqual([
+      ['senza-file', true],
+      ['rotto', true],
+      ['t1', false],
+    ]);
   });
 });
 
