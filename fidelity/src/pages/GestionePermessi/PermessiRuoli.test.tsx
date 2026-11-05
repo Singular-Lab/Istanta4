@@ -21,6 +21,13 @@ vi.mock("./api", () => ({
 vi.mock("@/context/NotificationContext", () => ({ useNotification: () => ({ showNotification: vi.fn() }) }));
 vi.mock("@/components/Base/Tippy", () => ({ default: ({ children }: any) => <>{children}</> }));
 
+// jsdom non implementa ResizeObserver, usato da Headless UI per il menu dei preset
+globalThis.ResizeObserver ??= class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+} as unknown as typeof ResizeObserver;
+
 import PermessiRuoli from "./PermessiRuoli";
 
 const configurazione = (tipo: string, abilitati: string[]) => ({
@@ -104,13 +111,14 @@ describe("Gestione accessi: permessi dei ruoli", () => {
   it("l'interruttore d'area distingue parziale, tutto e niente", async () => {
     finti.configurazioni.Agenzia = configurazione("Agenzia", [
       PERMESSI.PROMO.VISUALIZZA, PERMESSI.PROMO.CREA, PERMESSI.PROMO.MODIFICA, PERMESSI.PROMO.ELIMINA,
+      PERMESSI.PROMO.GESTISCI_MOMENTI, PERMESSI.PROMO.GESTISCI_SCHEMI,
     ]);
     render(<PermessiRuoli />);
 
-    // GDO: solo "Consultare le promozioni" su 4 permessi dell'area
+    // GDO: solo "Consultare le promozioni" su 6 permessi dell'area
     const parziale = screen.getByRole("switch", { name: "Tutta l'area Promozioni" });
     expect(parziale).toHaveAttribute("aria-checked", "mixed");
-    expect(parziale).toHaveAttribute("title", "Parziale: 1 di 4");
+    expect(parziale).toHaveAttribute("title", "Parziale: 1 di 6");
     expect(screen.getByRole("switch", { name: "Tutta l'area Materiali" })).toHaveAttribute("aria-checked", "false");
 
     await userEvent.click(screen.getByRole("button", { name: /^Agenzia/ }));
@@ -150,6 +158,40 @@ describe("Gestione accessi: permessi dei ruoli", () => {
     expect(avviso).toHaveTextContent("Servizio non raggiungibile");
     await userEvent.click(within(avviso!).getByRole("button", { name: "Riprova" }));
     expect(finti.ruoli.refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("le aree dei permessi stanno sotto le aree del menu a cui portano", () => {
+    render(<PermessiRuoli />);
+
+    const produzione = screen.getByRole("region", { name: "Produzione" });
+    const visualizzazione = screen.getByRole("region", { name: "Visualizzazione" });
+    expect(within(produzione).getByRole("button", { name: /^Promozioni/ })).toBeInTheDocument();
+    expect(within(visualizzazione).getByRole("button", { name: /^Materiali/ })).toBeInTheDocument();
+    expect(within(visualizzazione).getByRole("button", { name: /^Report e analisi/ })).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Comunicazione" })).getByRole("button", { name: /^WhatsApp/ })).toBeInTheDocument();
+    expect(within(produzione).queryByRole("button", { name: /^Materiali/ })).not.toBeInTheDocument();
+  });
+
+  it("un preset prepara le modifiche, che si salvano solo dopo il riepilogo", async () => {
+    render(<PermessiRuoli />);
+
+    await userEvent.click(screen.getByRole("button", { name: /Applica un preset/ }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: /Solo visualizzazione/ }));
+    expect(finti.mutate).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole("button", { name: /Rivedi e salva/ }));
+    const dialogo = await screen.findByRole("dialog");
+    expect(within(dialogo).getByText("Consultare i materiali")).toBeInTheDocument();
+    // GDO consultava le promozioni: il preset la toglie
+    expect(within(dialogo).getByText("Consultare le promozioni")).toBeInTheDocument();
+    expect(within(dialogo).getByText("Si disabilitano (1)")).toBeInTheDocument();
+
+    await userEvent.click(within(dialogo).getByRole("button", { name: /Conferma e salva/ }));
+    const [{ modifiche }] = finti.mutate.mock.calls[0];
+    expect(modifiche).toEqual(expect.arrayContaining([
+      { codice: PERMESSI.PROMO.VISUALIZZA, abilitato: false },
+      { codice: PERMESSI.MATERIALI.SCARICA, abilitato: true },
+    ]));
   });
 
   it("le etichette dei permessi sono badge di stato", async () => {

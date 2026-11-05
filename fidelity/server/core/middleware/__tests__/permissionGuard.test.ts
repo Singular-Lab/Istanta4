@@ -40,6 +40,25 @@ describe('permissionGuard', () => {
     expect(puo).not.toHaveBeenCalled();
   });
 
+  it('con un elenco basta uno dei permessi; senza nessuno rifiuta nominandoli tutti', async () => {
+    const guardia = permissionGuard(['file.download', 'materiali.scarica']);
+    const prova = async () => {
+      const next = vi.fn();
+      await guardia({ session: { id_utente: 'u1', tipo_utente: TIPO_UTENTI.CATEGORY }, path: '/x' } as never, { locals: {} } as never, next);
+      return next.mock.calls[0]?.[0];
+    };
+
+    puo.mockImplementation(async (_contesto: unknown, codice: string) => codice === 'materiali.scarica');
+    expect(await prova()).toBeUndefined();
+    expect(puo.mock.calls.map(([, codice]) => codice)).toEqual(['file.download', 'materiali.scarica']);
+
+    puo.mockReset();
+    puo.mockResolvedValue(false);
+    const errore = await prova();
+    expect(errore).toBeInstanceOf(ForbiddenError);
+    expect(errore.details).toMatchObject({ codicePermesso: 'file.download o materiali.scarica' });
+  });
+
   it('le chiamate di servizio già autenticate non passano dal risolutore', async () => {
     expect(await esegui({}, { authVia: 'bearer' })).toBeUndefined();
     expect(await esegui({}, { authVia: 'internal' })).toBeUndefined();

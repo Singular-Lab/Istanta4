@@ -1,3 +1,5 @@
+import { PermissionGate } from "@/components/PermissionGate";
+import { PERMISSIONS } from "@/constants/permissions";
 import Button from "@/components/Base/Button";
 import { FormInput } from "@/components/Base/Form";
 import { Dialog } from "@/components/Base/Headless";
@@ -375,27 +377,31 @@ const MomentoCard: React.FC<MomentoCardProps> = ({
           </span>
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          <Button
-            type="button"
-            variant="outline-secondary"
-            size="xs"
-            title="Rinomina"
-            aria-label={`Rinomina ${momento.nome}`}
-            onClick={() => { setDraftName(momento.nome); setIsEditing(true); }}
-          >
-            <Lucide icon="Pencil" aria-hidden="true" className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            type="button"
-            variant="outline-danger"
-            size="xs"
-            title="Elimina momento"
-            aria-label={`Elimina ${momento.nome}`}
-            onClick={() => setShowConfirmDelete(true)}
-            loading={isDeleting}
-          >
-            {!isDeleting && <Lucide icon="Trash2" aria-hidden="true" className="h-3.5 w-3.5" />}
-          </Button>
+          <PermissionGate permission={PERMISSIONS.PROMO.GESTISCI_MOMENTI} mode="disable">
+            <Button
+              type="button"
+              variant="outline-secondary"
+              size="xs"
+              title="Rinomina"
+              aria-label={`Rinomina ${momento.nome}`}
+              onClick={() => { setDraftName(momento.nome); setIsEditing(true); }}
+            >
+              <Lucide icon="Pencil" aria-hidden="true" className="h-3.5 w-3.5" />
+            </Button>
+          </PermissionGate>
+          <PermissionGate permission={PERMISSIONS.PROMO.GESTISCI_MOMENTI} mode="disable">
+            <Button
+              type="button"
+              variant="outline-danger"
+              size="xs"
+              title="Elimina momento"
+              aria-label={`Elimina ${momento.nome}`}
+              onClick={() => setShowConfirmDelete(true)}
+              loading={isDeleting}
+            >
+              {!isDeleting && <Lucide icon="Trash2" aria-hidden="true" className="h-3.5 w-3.5" />}
+            </Button>
+          </PermissionGate>
         </div>
       </div>
       <ConfirmDialog
@@ -468,19 +474,21 @@ const MomentoCard: React.FC<MomentoCardProps> = ({
 
           {/* Add tracciato */}
           <div className="px-3 pb-3 relative" ref={dropdownRef}>
-            <Button
-              ref={addButtonRef}
-              type="button"
-              variant="outline-secondary"
-              size="sm"
-              className="w-full"
-              disabled={availableTracciati.length === 0 || isUpdating}
-              aria-expanded={showAddDropdown}
-              onClick={() => setShowAddDropdown((v) => !v)}
-            >
-              <Lucide icon="Plus" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
-              Aggiungi tracciato
-            </Button>
+            <PermissionGate permission={PERMISSIONS.PROMO.GESTISCI_MOMENTI} mode="disable">
+              <Button
+                ref={addButtonRef}
+                type="button"
+                variant="outline-secondary"
+                size="sm"
+                className="w-full"
+                disabled={availableTracciati.length === 0 || isUpdating}
+                aria-expanded={showAddDropdown}
+                onClick={() => setShowAddDropdown((v) => !v)}
+              >
+                <Lucide icon="Plus" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                Aggiungi tracciato
+              </Button>
+            </PermissionGate>
 
             {showAddDropdown && availableTracciati.length > 0 && addDropdownStyle && createPortal(
               <div
@@ -509,19 +517,21 @@ const MomentoCard: React.FC<MomentoCardProps> = ({
       {/* Collega non adiacente */}
       {momentiCollegabili.length > 0 && (
         <div className="px-3 pb-2 relative" ref={collegaDropdownRef}>
-          <Button
-            ref={collegaButtonRef}
-            type="button"
-            variant="outline-secondary"
-            size="sm"
-            className="w-full"
-            loading={isCollegando}
-            aria-expanded={showCollegaDropdown}
-            onClick={() => setShowCollegaDropdown((v) => !v)}
-          >
-            {!isCollegando && <Lucide icon="Link2" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />}
-            Collega non adiacente
-          </Button>
+          <PermissionGate permission={PERMISSIONS.PROMO.GESTISCI_MOMENTI} mode="disable">
+            <Button
+              ref={collegaButtonRef}
+              type="button"
+              variant="outline-secondary"
+              size="sm"
+              className="w-full"
+              loading={isCollegando}
+              aria-expanded={showCollegaDropdown}
+              onClick={() => setShowCollegaDropdown((v) => !v)}
+            >
+              {!isCollegando && <Lucide icon="Link2" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />}
+              Collega non adiacente
+            </Button>
+          </PermissionGate>
           {showCollegaDropdown && collegaDropdownStyle && createPortal(
             <div
               ref={collegaDropdownMenuRef}
@@ -555,30 +565,34 @@ const MomentoCard: React.FC<MomentoCardProps> = ({
               Risultato disponibile
             </div>
             {momento.avvisoVisibilita && <AvvisoVisibilita avviso={momento.avvisoVisibilita} />}
-            <Button
-              type="button"
-              variant="outline-secondary"
-              size="sm"
-              className="w-full"
-              onClick={() => setShowConfirmReset(true)}
-            >
-              <Lucide icon="RotateCcw" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
-              Rimuovi risultato
-            </Button>
+            <PermissionGate permission={PERMISSIONS.PROMO.GESTISCI_MOMENTI} mode="disable">
+              <Button
+                type="button"
+                variant="outline-secondary"
+                size="sm"
+                className="w-full"
+                onClick={() => setShowConfirmReset(true)}
+              >
+                <Lucide icon="RotateCcw" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                Rimuovi risultato
+              </Button>
+            </PermissionGate>
           </div>
         ) : (
-          <Button
-            type="button"
-            variant="primary"
-            size="sm"
-            className="w-full"
-            disabled={!canPlay}
-            loading={isPlaying}
-            onClick={() => onPlay(momento.id)}
-          >
-            {!isPlaying && <Lucide icon="Play" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />}
-            {isPlaying ? "In esecuzione…" : "Avvia analisi"}
-          </Button>
+          <PermissionGate permission={PERMISSIONS.PROMO.GESTISCI_MOMENTI} mode="disable">
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              className="w-full"
+              disabled={!canPlay}
+              loading={isPlaying}
+              onClick={() => onPlay(momento.id)}
+            >
+              {!isPlaying && <Lucide icon="Play" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />}
+              {isPlaying ? "In esecuzione…" : "Avvia analisi"}
+            </Button>
+          </PermissionGate>
         )}
       </div>
 
@@ -1632,28 +1646,32 @@ const GestioneMomenti: React.FC<GestioneMomentiProps> = ({ idPromo, tracciati })
           </div>
         ) : (
           <div className="flex items-center gap-2">
-            <Button variant="outline-secondary" size="sm" onClick={() => startCreating(true)}>
-              <Lucide icon="Camera" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
-              Nuovo snapshot
-            </Button>
+            <PermissionGate permission={PERMISSIONS.PROMO.GESTISCI_MOMENTI} mode="disable">
+              <Button variant="outline-secondary" size="sm" onClick={() => startCreating(true)}>
+                <Lucide icon="Camera" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                Nuovo snapshot
+              </Button>
+            </PermissionGate>
 
             {/* Dropdown applica schema */}
             <div className="relative" ref={schemaDropdownRef}>
-              <Button
-                type="button"
-                variant="outline-secondary"
-                size="sm"
-                disabled={schemi.length === 0}
-                loading={applyingSchemaId !== null}
-                aria-expanded={showSchemaDropdown}
-                onClick={() => setShowSchemaDropdown((v) => !v)}
-              >
-                {!applyingSchemaId && <Lucide icon="LayoutTemplate" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />}
-                {applyingSchemaId ? "Applicazione…" : "Applica schema"}
-                {!applyingSchemaId && (
-                  <Lucide icon="ChevronDown" aria-hidden="true" className="ml-1 h-3.5 w-3.5 text-slate-400" />
-                )}
-              </Button>
+              <PermissionGate permission={PERMISSIONS.PROMO.GESTISCI_SCHEMI} mode="disable">
+                <Button
+                  type="button"
+                  variant="outline-secondary"
+                  size="sm"
+                  disabled={schemi.length === 0}
+                  loading={applyingSchemaId !== null}
+                  aria-expanded={showSchemaDropdown}
+                  onClick={() => setShowSchemaDropdown((v) => !v)}
+                >
+                  {!applyingSchemaId && <Lucide icon="LayoutTemplate" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />}
+                  {applyingSchemaId ? "Applicazione…" : "Applica schema"}
+                  {!applyingSchemaId && (
+                    <Lucide icon="ChevronDown" aria-hidden="true" className="ml-1 h-3.5 w-3.5 text-slate-400" />
+                  )}
+                </Button>
+              </PermissionGate>
 
               {showSchemaDropdown && schemi.length > 0 && (
                 <div className="absolute right-0 top-full z-30 mt-1 min-w-52 overflow-hidden rounded-card border border-slate-200 bg-white shadow-overlay">
@@ -1703,18 +1721,20 @@ const GestioneMomenti: React.FC<GestioneMomentiProps> = ({ idPromo, tracciati })
                 })
               );
               return (
-                <Button
-                  type="button"
-                  variant="outline-secondary"
-                  size="sm"
-                  disabled={!canMassive}
-                  loading={isMassiveRunning}
-                  onClick={handleMassiveRun}
-                  title="Avvia analisi di tutti i momenti e genera report per tutti i confronti lineari"
-                >
-                  {!isMassiveRunning && <Lucide icon="Zap" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />}
-                  {isMassiveRunning ? "In esecuzione…" : "Analisi massiva"}
-                </Button>
+                <PermissionGate permission={PERMISSIONS.PROMO.GESTISCI_MOMENTI} mode="disable">
+                  <Button
+                    type="button"
+                    variant="outline-secondary"
+                    size="sm"
+                    disabled={!canMassive}
+                    loading={isMassiveRunning}
+                    onClick={handleMassiveRun}
+                    title="Avvia analisi di tutti i momenti e genera report per tutti i confronti lineari"
+                  >
+                    {!isMassiveRunning && <Lucide icon="Zap" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />}
+                    {isMassiveRunning ? "In esecuzione…" : "Analisi massiva"}
+                  </Button>
+                </PermissionGate>
               );
             })()}
 
@@ -1731,6 +1751,23 @@ const GestioneMomenti: React.FC<GestioneMomentiProps> = ({ idPromo, tracciati })
                   <Lucide icon="BarChart3" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
                   Analisi totale
                 </Button>
+                <PermissionGate permission={PERMISSIONS.PROMO.GESTISCI_MOMENTI} mode="disable">
+                  <Button
+                    type="button"
+                    variant="outline-secondary"
+                    size="sm"
+                    disabled={completedConfrontiKeys.size === 0}
+                    loading={isScoreboarding}
+                    onClick={handlePromoScoreboard}
+                    title="Ricalcola lo scoreboard con i dati attuali"
+                    aria-label="Ricalcola lo scoreboard con i dati attuali"
+                  >
+                    {!isScoreboarding && <Lucide aria-hidden="true" icon="RefreshCw" className="h-3.5 w-3.5" />}
+                  </Button>
+                </PermissionGate>
+              </div>
+            ) : (
+              <PermissionGate permission={PERMISSIONS.PROMO.GESTISCI_MOMENTI} mode="disable">
                 <Button
                   type="button"
                   variant="outline-secondary"
@@ -1738,31 +1775,20 @@ const GestioneMomenti: React.FC<GestioneMomentiProps> = ({ idPromo, tracciati })
                   disabled={completedConfrontiKeys.size === 0}
                   loading={isScoreboarding}
                   onClick={handlePromoScoreboard}
-                  title="Ricalcola lo scoreboard con i dati attuali"
-                  aria-label="Ricalcola lo scoreboard con i dati attuali"
+                  title={completedConfrontiKeys.size === 0 ? "Disponibile dopo aver completato almeno un confronto" : "Calcola lo scoreboard stabilità per reparto"}
                 >
-                  {!isScoreboarding && <Lucide aria-hidden="true" icon="RefreshCw" className="h-3.5 w-3.5" />}
+                  {!isScoreboarding && <Lucide icon="BarChart3" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />}
+                  {isScoreboarding ? "Calcolo…" : "Analisi totale"}
                 </Button>
-              </div>
-            ) : (
-              <Button
-                type="button"
-                variant="outline-secondary"
-                size="sm"
-                disabled={completedConfrontiKeys.size === 0}
-                loading={isScoreboarding}
-                onClick={handlePromoScoreboard}
-                title={completedConfrontiKeys.size === 0 ? "Disponibile dopo aver completato almeno un confronto" : "Calcola lo scoreboard stabilità per reparto"}
-              >
-                {!isScoreboarding && <Lucide icon="BarChart3" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />}
-                {isScoreboarding ? "Calcolo…" : "Analisi totale"}
-              </Button>
+              </PermissionGate>
             )}
 
-            <Button variant="primary" size="sm" onClick={() => startCreating(false)}>
-              <Lucide icon="Plus" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
-              Nuovo momento
-            </Button>
+            <PermissionGate permission={PERMISSIONS.PROMO.GESTISCI_MOMENTI} mode="disable">
+              <Button variant="primary" size="sm" onClick={() => startCreating(false)}>
+                <Lucide icon="Plus" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                Nuovo momento
+              </Button>
+            </PermissionGate>
           </div>
         )}
       </div>

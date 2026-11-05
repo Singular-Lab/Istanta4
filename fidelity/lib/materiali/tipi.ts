@@ -23,7 +23,7 @@ import { PeriodoMateriali } from './periodi';
  * - POST /api/materiali/pop/promozioni/:idPromo/zip      RichiestaZipPop con idFile -> application/zip dei file selezionati,
  *                                                         in streaming. Il corpo è JSON, oppure un form con il token CSRF
  *                                                         in `_csrf` e la RichiestaZipPop come testo JSON in `richiesta`
- * La verifica e i due download richiedono anche "file.download".
+ * La verifica e i due download richiedono anche "materiali.scarica".
  */
 
 /** Stato di un kit nelle viste: quello del runtime, o NON_AVVIATO per un kit previsto ma senza runtime. */

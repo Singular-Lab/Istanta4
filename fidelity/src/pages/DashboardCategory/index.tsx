@@ -42,6 +42,8 @@ type KitVolantino = {
     stato_lavorazione: string;
     nome_promo: string;
     id_promo?: string;
+    validita_dal?: string;
+    validita_al?: string;
 };
 
 type VolantiniInCorso = {
@@ -135,6 +137,8 @@ const CategorySkeleton: React.FC = () => (
 const DashboardCategory: React.FC = () => {
     // Il volantino si apre nella vista di consultazione, che chiede materiali.visualizza
     const puoConsultareVolantini = usePermission(PERMISSIONS.MATERIALI.VISUALIZZA);
+    // Le promozioni in corso sono dati della produzione: solo a chi le consulta (preset Solo visualizzazione no)
+    const puoVederePromo = usePermission(PERMISSIONS.PROMO.VISUALIZZA);
     const [selectedCanaleAreaKey, setSelectedCanaleAreaKey] = useState<string | null>(null);
     const [dateFrom, setDateFrom] = useState<string>("");
     const [dateTo, setDateTo] = useState<string>("");
@@ -158,6 +162,7 @@ const DashboardCategory: React.FC = () => {
         queryKey: ["categoryPromoInCorso"],
         queryFn: () => ServerCall.get<PromoResponseDTO[]>("/promo/in-corso"),
         placeholderData: (p) => p ?? [],
+        enabled: puoVederePromo,
     });
 
     const filters = filtersQuery.data;
@@ -342,9 +347,18 @@ const DashboardCategory: React.FC = () => {
     );
     const filteredVolantini = useMemo(() => {
         const kit = volantiniQuery.data?.kit ?? [];
-        if (!isDateRangeActive || promoQuery.isLoading) return kit;
+        if (!isDateRangeActive) return kit;
+        // Senza le promozioni vale la validita' del volantino stesso
+        if (!puoVederePromo) {
+            return kit.filter(item => promoOverlapsRange(
+                { validaDal: item.validita_dal ?? undefined, validaAl: item.validita_al ?? undefined },
+                dateFrom,
+                dateTo,
+            ));
+        }
+        if (promoQuery.isLoading) return kit;
         return kit.filter(item => (item.id_promo ? filteredPromoIds.has(item.id_promo) : true));
-    }, [filteredPromoIds, isDateRangeActive, promoQuery.isLoading, volantiniQuery.data]);
+    }, [dateFrom, dateTo, filteredPromoIds, isDateRangeActive, promoQuery.isLoading, puoVederePromo, volantiniQuery.data]);
 
     const canaleAreaChartData = useMemo(() => {
         if (!activeCanaleArea) return { labels: groupedChartLabels, datasets: [] };
@@ -488,7 +502,7 @@ const DashboardCategory: React.FC = () => {
                     onClick={() => {
                         categoryTimelineQuery.refetch();
                         volantiniQuery.refetch();
-                        promoQuery.refetch();
+                        if (puoVederePromo) promoQuery.refetch();
                     }}
                     loading={categoryTimelineQuery.isFetching}
                 >
@@ -579,9 +593,9 @@ const DashboardCategory: React.FC = () => {
             </StatCardGrid>
 
             <div className="grid grid-cols-12 gap-6">
-                {/* Volantini in corso */}
+                {/* Volantini in corso: da soli a tutta larghezza se le promozioni non si vedono */}
                 <Sezione
-                    className="col-span-12 xl:col-span-6"
+                    className={puoVederePromo ? "col-span-12 xl:col-span-6" : "col-span-12"}
                     icona="FileText"
                     titolo="Volantini in corso"
                     descrizione="Pubblicazioni attive nel sistema"
@@ -635,55 +649,57 @@ const DashboardCategory: React.FC = () => {
                     )}
                 </Sezione>
 
-                {/* Promozioni in corso */}
-                <Sezione
-                    className="col-span-12 xl:col-span-6"
-                    icona="Megaphone"
-                    titolo="Promozioni in corso"
-                    descrizione="Campagne attive non archiviate"
-                    azioni={promoQuery.data && (
-                        <Badge variant="primary" size="sm" className="tabular-nums">
-                            {formatNumero(filteredPromozioniInCorso.length)}
-                        </Badge>
-                    )}
-                >
-                    {promoQuery.isLoading ? (
-                        <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-9" />)}</div>
-                    ) : promoQuery.isError ? (
-                        <PageError
-                            compatta
-                            titolo="Promozioni non caricate"
-                            motivo="Il servizio non ha restituito le promozioni in corso."
-                            onRiprova={() => promoQuery.refetch()}
-                        />
-                    ) : !filteredPromozioniInCorso.length ? (
-                        <EmptyState
-                            compatta
-                            icon="Megaphone"
-                            title={isDateRangeActive ? "Nessuna promozione nel periodo" : "Nessuna promozione in corso"}
-                            description={isDateRangeActive ? "Modifica l'intervallo date per vedere altre promozioni." : ""}
-                        />
-                    ) : (
-                        <ul className="max-h-52 space-y-2 overflow-y-auto pr-1">
-                            {filteredPromozioniInCorso.slice(0, 10).map(promo => (
-                                <li key={promo.id} className="flex items-center gap-3 rounded-control border border-slate-100 bg-slate-50 px-3 py-2">
-                                    <Lucide icon="CalendarRange" aria-hidden="true" className="h-4 w-4 shrink-0 text-slate-400" />
-                                    <div className="min-w-0 flex-1">
-                                        <div className="truncate text-xs font-medium text-slate-700">
-                                            {promo.nome || VALORE_ASSENTE}
+                {/* Promozioni in corso, solo per chi consulta le promozioni */}
+                {puoVederePromo && (
+                    <Sezione
+                        className="col-span-12 xl:col-span-6"
+                        icona="Megaphone"
+                        titolo="Promozioni in corso"
+                        descrizione="Campagne attive non archiviate"
+                        azioni={promoQuery.data && (
+                            <Badge variant="primary" size="sm" className="tabular-nums">
+                                {formatNumero(filteredPromozioniInCorso.length)}
+                            </Badge>
+                        )}
+                    >
+                        {promoQuery.isLoading ? (
+                            <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-9" />)}</div>
+                        ) : promoQuery.isError ? (
+                            <PageError
+                                compatta
+                                titolo="Promozioni non caricate"
+                                motivo="Il servizio non ha restituito le promozioni in corso."
+                                onRiprova={() => promoQuery.refetch()}
+                            />
+                        ) : !filteredPromozioniInCorso.length ? (
+                            <EmptyState
+                                compatta
+                                icon="Megaphone"
+                                title={isDateRangeActive ? "Nessuna promozione nel periodo" : "Nessuna promozione in corso"}
+                                description={isDateRangeActive ? "Modifica l'intervallo date per vedere altre promozioni." : ""}
+                            />
+                        ) : (
+                            <ul className="max-h-52 space-y-2 overflow-y-auto pr-1">
+                                {filteredPromozioniInCorso.slice(0, 10).map(promo => (
+                                    <li key={promo.id} className="flex items-center gap-3 rounded-control border border-slate-100 bg-slate-50 px-3 py-2">
+                                        <Lucide icon="CalendarRange" aria-hidden="true" className="h-4 w-4 shrink-0 text-slate-400" />
+                                        <div className="min-w-0 flex-1">
+                                            <div className="truncate text-xs font-medium text-slate-700">
+                                                {promo.nome || VALORE_ASSENTE}
+                                            </div>
+                                            <div className="text-xs tabular-nums text-slate-500">
+                                                {formatData(promo.validita_dal)} — {formatData(promo.validita_al)}
+                                            </div>
                                         </div>
-                                        <div className="text-xs tabular-nums text-slate-500">
-                                            {formatData(promo.validita_dal)} — {formatData(promo.validita_al)}
-                                        </div>
-                                    </div>
-                                </li>
-                            ))}
-                            {filteredPromozioniInCorso.length > 10 && (
-                                <li className="text-center text-xs text-slate-500">+{formatNumero(filteredPromozioniInCorso.length - 10)} altre</li>
-                            )}
-                        </ul>
-                    )}
-                </Sezione>
+                                    </li>
+                                ))}
+                                {filteredPromozioniInCorso.length > 10 && (
+                                    <li className="text-center text-xs text-slate-500">+{formatNumero(filteredPromozioniInCorso.length - 10)} altre</li>
+                                )}
+                            </ul>
+                        )}
+                    </Sezione>
+                )}
 
                 {/* Grafico andamento + tabella + dettaglio */}
                 {timelinePromos.length === 0 ? (

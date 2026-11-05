@@ -79,16 +79,16 @@ describe("Dettaglio insight del volantino", () => {
     expect(screen.getByText("Referenze: Mozzarella Granarolo")).toBeInTheDocument();
   });
 
-  it("senza file.download lascia consultare gli insight e non abilita la richiesta dei file", () => {
+  it("senza materiali.scarica lascia consultare gli insight e non abilita la richiesta dei file", () => {
     apri();
 
     expect(finti.opzioniFile).toMatchObject({ enabled: false });
-    expect(screen.getByText(/Per scaricare i file serve il permesso di download/)).toBeInTheDocument();
+    expect(screen.getByText(/Per scaricare i file serve il permesso di scaricare volantini e POP/)).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "File del volantino" })).not.toBeInTheDocument();
   });
 
-  it("con file.download mostra e filtra i file pubblicati", () => {
-    finti.permessi.add("file.download");
+  it("con materiali.scarica mostra e filtra i file pubblicati", () => {
+    finti.permessi.add("materiali.scarica");
     finti.file = caricato({
       titolo: "Volantino ottobre",
       files: [

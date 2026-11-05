@@ -163,7 +163,7 @@ const linkCliccati: Array<{ indirizzo: string | null; download: string | null }>
 
 describe("POP per periodo", () => {
   beforeEach(() => {
-    finti.permessi = ["file.download", "promo.visualizza"];
+    finti.permessi = ["materiali.scarica", "promo.visualizza"];
     finti.notifica.mockReset();
     finti.verifica.mockReset();
     finti.verifica.mockResolvedValue({ file: 1, nomeFile: "Speciale Colazione - Cartello prezzi A5.zip" });
@@ -574,11 +574,11 @@ describe("POP per periodo", () => {
     expect(linkCliccati).toEqual([]);
   });
 
-  it("senza il permesso file.download i download sono disattivati e il motivo è scritto", async () => {
+  it("senza il permesso materiali.scarica i download sono disattivati e il motivo è scritto", async () => {
     finti.permessi = ["promo.visualizza"];
     await apri();
 
-    expect(screen.getAllByText("Manca il permesso di scaricare file").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Manca il permesso di scaricare volantini e POP").length).toBeGreaterThan(0);
     expect(screen.queryByRole("link", { name: /Scarica ZIP/ })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Scarica ZIP di Cartello prezzi A5" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Scarica CP_A5_PV031_0014823.pdf" })).toBeDisabled();
@@ -590,7 +590,7 @@ describe("POP per periodo", () => {
   });
 
   it("i kit POP non hanno collegamenti produttivi, qualunque sia il permesso promo", async () => {
-    finti.permessi = ["file.download"];
+    finti.permessi = ["materiali.scarica"];
     await apri();
 
     fireEvent.click(within(tabellaFormati()).getByRole("button", { name: "1 kit di Cartello prezzi A5" }));

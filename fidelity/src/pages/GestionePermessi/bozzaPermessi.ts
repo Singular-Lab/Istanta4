@@ -113,6 +113,24 @@ export const impostaArea = (config: ConfigurazioneServer, bozza: Bozza, area: De
   return ripulisci(config, prossima);
 };
 
+/**
+ * Porta i permessi assegnabili a quelli del preset: abilitati i suoi, disabilitati gli altri. Cambia
+ * solo i permessi il cui valore visto è diverso: in un ambito che eredita, un permesso già uguale
+ * resta ereditato. I permessi di sistema non cambiano.
+ */
+export const applicaPreset = (config: ConfigurazioneServer, bozza: Bozza, codici: ReadonlyArray<CodicePermesso>): Bozza => {
+  const nelPreset: Record<string, true> = {};
+  for (const codice of codici) nelPreset[codice] = true;
+  const prossima: Record<string, boolean | null> = { ...bozza };
+  for (const stato of config.permessi) {
+    const voce = voceDi(stato.codice);
+    if (!voce || voce.sistema) continue;
+    const voluto = !!nelPreset[stato.codice];
+    if (valoreVisto(config, bozza, stato.codice).abilitato !== voluto) prossima[stato.codice] = voluto;
+  }
+  return ripulisci(config, prossima);
+};
+
 /** Riporta un permesso al valore ereditato (solo negli ambiti che ereditano). */
 export const ripristinaEreditato = (config: ConfigurazioneServer, bozza: Bozza, codice: CodicePermesso): Bozza => {
   if (!config.eredita) return bozza;

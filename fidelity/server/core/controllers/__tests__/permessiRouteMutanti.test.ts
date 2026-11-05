@@ -72,9 +72,11 @@ describe('permessi sulle route che modificano dati', () => {
     expect(res.body.codice).toBe(permesso);
   });
 
-  it('i momenti di una promo restano aperti a ogni utente autenticato', async () => {
+  // Prima aperti a ogni utente autenticato: ora ogni funzione ha il suo permesso (spec ruoli-permessi)
+  it('i momenti di una promo chiedono promo.gestisci_momenti', async () => {
     const res = await request(createApp()).post('/api/tracciati/momenti').send({ id_promo: 'p1', nome: 'M1' });
 
-    expect(res.status).not.toBe(403);
+    expect(res.status).toBe(403);
+    expect(res.body.codice).toBe('promo.gestisci_momenti');
   });
 });

@@ -10,8 +10,14 @@
  * aggiungere qui un permesso lo rende disponibile ai guard, alla gestione accessi
  * e al catalogo nel database (sincronizzato all'avvio).
  *
+ * Ogni area dichiara anche l'area del menu (lib/accessi/sezioni.ts) a cui portano soprattutto i
+ * suoi permessi: la gestione accessi la usa per raggrupparle, i preset (lib/accessi/preset.ts)
+ * per comporsi.
+ *
  * Nota: il client compila con lib ES6, quindi qui niente Object.values/includes.
  */
+
+import type { SezionePagina } from './sezioni';
 
 export const PERMESSI = {
   PROMO: {
@@ -19,6 +25,8 @@ export const PERMESSI = {
     CREA: 'promo.crea',
     MODIFICA: 'promo.modifica',
     ELIMINA: 'promo.elimina',
+    GESTISCI_MOMENTI: 'promo.gestisci_momenti',
+    GESTISCI_SCHEMI: 'promo.gestisci_schemi',
   },
   KIT_RUNTIME: {
     VISUALIZZA: 'kit_runtime.visualizza',
@@ -55,9 +63,15 @@ export const PERMESSI = {
   },
   MATERIALI: {
     VISUALIZZA: 'materiali.visualizza',
+    SCARICA: 'materiali.scarica',
   },
   VOLANTINI: {
     VISUALIZZA: 'volantini.visualizza',
+  },
+  ANALISI: {
+    VISUALIZZA: 'analisi.visualizza',
+    DASHBOARD_CATEGORY: 'analisi.dashboard_category',
+    DASHBOARD_MARKETING: 'analisi.dashboard_marketing',
   },
   ORDINI_STAMPA: {
     VISUALIZZA: 'ordini_stampa.visualizza',
@@ -162,6 +176,8 @@ export type DefinizioneArea = {
   azioni: DefinizioneAzione[];
   /** Area riservata al Superadmin: i suoi permessi non sono assegnabili. */
   sistema?: boolean;
+  /** Area del menu a cui portano soprattutto i suoi permessi. */
+  sezione: SezionePagina;
 };
 
 const P = PERMESSI;
@@ -169,6 +185,7 @@ const P = PERMESSI;
 export const AREE: DefinizioneArea[] = [
   {
     id: 'promo',
+    sezione: 'produzione',
     nome: 'Promozioni',
     descrizione: 'Lavorazioni in corso e storico, menabò, tracciati e report di confronto.',
     icona: 'Megaphone',
@@ -176,11 +193,14 @@ export const AREE: DefinizioneArea[] = [
     azioni: [
       { codice: P.PROMO.CREA, nome: 'Creare promozioni', descrizione: 'Avviare una nuova lavorazione.' },
       { codice: P.PROMO.MODIFICA, nome: 'Modificare promozioni', descrizione: 'Cambiare dati, contesto e menabò di una promozione.' },
+      { codice: P.PROMO.GESTISCI_MOMENTI, nome: 'Gestire momenti e confronti', descrizione: 'Creare, modificare ed eliminare i momenti e i confronti dei tracciati, calcolarne i risultati e lo scoreboard.' },
+      { codice: P.PROMO.GESTISCI_SCHEMI, nome: 'Gestire gli schemi dei tracciati', descrizione: 'Creare, modificare, eliminare e applicare gli schemi dei tracciati.' },
       { codice: P.PROMO.ELIMINA, nome: 'Eliminare promozioni', descrizione: 'Cancellare una promozione con i suoi dati.', pericolosa: true },
     ],
   },
   {
     id: 'kit_runtime',
+    sezione: 'produzione',
     nome: 'Kit e pubblicazione',
     descrizione: 'Kit generati da Istanta: revisione, stati e pubblicazione.',
     icona: 'Boxes',
@@ -197,6 +217,7 @@ export const AREE: DefinizioneArea[] = [
   },
   {
     id: 'design_kit',
+    sezione: 'produzione',
     nome: 'Design dei kit',
     descrizione: 'Modelli grafici usati per comporre i kit.',
     icona: 'PenTool',
@@ -208,6 +229,7 @@ export const AREE: DefinizioneArea[] = [
   },
   {
     id: 'raccoglitore_kit',
+    sezione: 'produzione',
     nome: 'Raccoglitori di kit',
     descrizione: 'Raggruppamenti di kit con filtri e declinazioni.',
     icona: 'FolderKanban',
@@ -222,11 +244,12 @@ export const AREE: DefinizioneArea[] = [
   },
   {
     id: 'file',
+    sezione: 'produzione',
     nome: 'File e caricamenti',
-    descrizione: 'Caricamento, sostituzione e scaricamento dei file nelle diverse aree.',
+    descrizione: 'Caricamento, sostituzione e scaricamento dei file nelle pagine di produzione.',
     icona: 'FileUp',
     azioni: [
-      { codice: P.FILE.DOWNLOAD, nome: 'Scaricare file', descrizione: 'Scaricare materiali, tracciati e file dei kit.' },
+      { codice: P.FILE.DOWNLOAD, nome: 'Scaricare file', descrizione: 'Scaricare materiali, tracciati e file dei kit nelle pagine di produzione.' },
       { codice: P.FILE.UPLOAD_TRACCIATO, nome: 'Caricare tracciati', descrizione: 'Caricare e cancellare i tracciati di una promozione.' },
       { codice: P.FILE.UPLOAD_MATERIALE, nome: 'Caricare materiali', descrizione: 'Caricare materiali nei kit.' },
       { codice: P.FILE.UPLOAD_KIT_MANUALI, nome: 'Caricare kit manuali', descrizione: 'Caricare kit preparati a mano.' },
@@ -238,22 +261,39 @@ export const AREE: DefinizioneArea[] = [
   },
   {
     id: 'materiali',
+    sezione: 'visualizzazione',
     nome: 'Materiali',
     descrizione: 'Viste Volantini e POP (in corso, attivi, storico) e contenuti digitali.',
     icona: 'Images',
     accesso: { codice: P.MATERIALI.VISUALIZZA, nome: 'Consultare i materiali', descrizione: 'Aprire le pagine dei materiali e dei contenuti digitali.' },
-    azioni: [],
+    azioni: [
+      { codice: P.MATERIALI.SCARICA, nome: 'Scaricare volantini e POP', descrizione: 'Scaricare i PDF dei volantini e gli archivi ZIP dei POP dalle pagine di consultazione.' },
+    ],
   },
   {
     id: 'volantini',
+    sezione: 'visualizzazione',
     nome: 'Volantini',
     descrizione: 'Volantini pubblicati.',
     icona: 'Newspaper',
-    accesso: { codice: P.VOLANTINI.VISUALIZZA, nome: 'Consultare i volantini', descrizione: 'Aprire l\'elenco dei volantini.' },
+    accesso: { codice: P.VOLANTINI.VISUALIZZA, nome: 'Consultare i volantini', descrizione: 'Aprire la panoramica, l\'elenco e lo storico dei volantini.' },
     azioni: [],
   },
   {
+    id: 'analisi',
+    sezione: 'visualizzazione',
+    nome: 'Report e analisi',
+    descrizione: 'Report dei tracciati e analisi dei dati dei volantini.',
+    icona: 'ChartColumn',
+    accesso: { codice: P.ANALISI.VISUALIZZA, nome: 'Consultare report e analisi', descrizione: 'Aprire il report dei tracciati e calcolarne i risultati.' },
+    azioni: [
+      { codice: P.ANALISI.DASHBOARD_CATEGORY, nome: 'Aprire la dashboard Category', descrizione: 'Andamento dei reparti della propria categoria nelle promozioni.' },
+      { codice: P.ANALISI.DASHBOARD_MARKETING, nome: 'Aprire la dashboard Marketing', descrizione: 'Scoreboard delle promozioni per il marketing.' },
+    ],
+  },
+  {
     id: 'ordini_stampa',
+    sezione: 'produzione',
     nome: 'Ordini di stampa',
     descrizione: 'Ordini verso le tipografie, revisione e invio.',
     icona: 'Printer',
@@ -267,8 +307,9 @@ export const AREE: DefinizioneArea[] = [
   },
   {
     id: 'webpliant',
+    sezione: 'produzione',
     nome: 'WebPliant',
-    descrizione: 'Workspace di consultazione dei volantini digitali.',
+    descrizione: 'Configurazione dei workspace dei volantini digitali e consultazione dei WebPliant disponibili.',
     icona: 'MonitorSmartphone',
     accesso: { codice: P.WEBPLIANT.VISUALIZZA, nome: 'Consultare i WebPliant', descrizione: 'Vedere i WebPliant disponibili.' },
     azioni: [
@@ -279,6 +320,7 @@ export const AREE: DefinizioneArea[] = [
   },
   {
     id: 'referenze',
+    sezione: 'produzione',
     nome: 'Referenze',
     descrizione: 'Articoli importati e contenuti aggiuntivi.',
     icona: 'Tags',
@@ -291,6 +333,7 @@ export const AREE: DefinizioneArea[] = [
   },
   {
     id: 'gdo',
+    sezione: 'gestione',
     nome: 'GDO e punti vendita',
     descrizione: 'Punti vendita, aree, canali e identità della GDO.',
     icona: 'Store',
@@ -303,6 +346,7 @@ export const AREE: DefinizioneArea[] = [
   },
   {
     id: 'utenti',
+    sezione: 'gestione',
     nome: 'Utenti',
     descrizione: 'Anagrafica degli utenti della GDO.',
     icona: 'Users',
@@ -316,6 +360,7 @@ export const AREE: DefinizioneArea[] = [
   },
   {
     id: 'impostazioni',
+    sezione: 'produzione',
     nome: 'Impostazioni di produzione',
     descrizione: 'Tipografia, formati, export, naming e pagine Singular.',
     icona: 'SlidersHorizontal',
@@ -331,6 +376,7 @@ export const AREE: DefinizioneArea[] = [
   },
   {
     id: 'whatsapp',
+    sezione: 'comunicazione',
     nome: 'WhatsApp',
     descrizione: 'Campagne WhatsApp della GDO.',
     icona: 'MessageCircle',
@@ -344,6 +390,7 @@ export const AREE: DefinizioneArea[] = [
   },
   {
     id: 'api',
+    sezione: 'gestione',
     nome: 'API e integrazioni',
     descrizione: 'Chiavi API, plugin e statistiche di utilizzo.',
     icona: 'Plug',
@@ -356,6 +403,7 @@ export const AREE: DefinizioneArea[] = [
   },
   {
     id: 'webhook',
+    sezione: 'gestione',
     nome: 'Webhook',
     descrizione: 'Notifiche verso sistemi esterni.',
     icona: 'Webhook',
@@ -366,6 +414,7 @@ export const AREE: DefinizioneArea[] = [
   },
   {
     id: 'ai',
+    sezione: 'produzione',
     nome: 'Contenuti AI',
     descrizione: 'Ricette e approfondimenti sui vini generati con l\'AI.',
     icona: 'Sparkles',
@@ -376,6 +425,7 @@ export const AREE: DefinizioneArea[] = [
   },
   {
     id: 'strumenti',
+    sezione: 'visualizzazione',
     nome: 'Strumenti',
     descrizione: 'Lettore di codici a barre e analisi della concorrenza.',
     icona: 'ScanBarcode',
@@ -384,6 +434,7 @@ export const AREE: DefinizioneArea[] = [
   },
   {
     id: 'sistema',
+    sezione: 'sistema',
     nome: 'Sistema',
     descrizione: 'Amministrazione della piattaforma, riservata al Superadmin.',
     icona: 'ShieldCheck',

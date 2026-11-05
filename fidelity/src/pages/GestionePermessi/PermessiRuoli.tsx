@@ -4,7 +4,7 @@ import Button from '@/components/Base/Button';
 import CampoRicerca from '@/components/Base/CampoRicerca';
 import { FormSelect } from '@/components/Base/Form';
 import FormSwitch from '@/components/Base/Form/FormSwitch';
-import { Dialog } from '@/components/Base/Headless';
+import { Dialog, Menu } from '@/components/Base/Headless';
 import Lucide from '@/components/Base/Lucide';
 import PageError from '@/components/Base/PageError';
 import Segmenti, { type OpzioneSegmento } from '@/components/Base/Segmenti';
@@ -18,9 +18,12 @@ import { useNotification } from '@/context/NotificationContext';
 import clsx from 'clsx';
 import { useEffect, useMemo, useState } from 'react';
 import { AREE, CodicePermesso, DefinizioneArea, DefinizioneAzione, voceDi } from '../../../lib/accessi/catalogo';
+import { PRESET, type DefinizionePreset } from '../../../lib/accessi/preset';
+import { SEZIONI } from '../../../lib/accessi/sezioni';
 import { TIPO_UTENTI } from '../../../lib/enums';
 import { Ambito, useConfigurazione, useConfronto, useRipristinaOverride, useRuoliGestibili, useSalvaConfigurazione } from './api';
 import {
+  applicaPreset,
   azioniCheSiSpengono,
   Bozza,
   ConfigurazioneServer,
@@ -247,6 +250,20 @@ const RigaPermesso = ({
   );
 };
 
+/** Righe dell'area che passano ricerca e filtro; le aree di sistema mostrano sempre tutto (non si modificano). */
+const righeDellArea = (area: DefinizioneArea, config: ConfigurazioneServer, bozza: Bozza, filtro: FiltroPermessi, ricerca: string) => {
+  if (area.sistema && filtro !== 'tutti') return [];
+  return [
+    ...(area.accesso ? [{ azione: area.accesso, accesso: true }] : []),
+    ...area.azioni.map(azione => ({ azione, accesso: false })),
+  ].filter(r => passaFiltro(config, bozza, r.azione.codice, area.sistema ? 'tutti' : filtro, ricerca));
+};
+
+/** Le aree di permessi sotto le aree del menu a cui portano, nell'ordine del menu. */
+const GRUPPI_PER_SEZIONE = SEZIONI
+  .map(sezione => ({ sezione, aree: AREE.filter(area => area.sezione === sezione.sezione) }))
+  .filter(gruppo => gruppo.aree.length > 0);
+
 const CardArea = ({
   area,
   config,
@@ -270,12 +287,8 @@ const CardArea = ({
   onCambiaArea: (area: DefinizioneArea, valore: boolean) => void;
   onRipristina: (codice: CodicePermesso) => void;
 }) => {
-  const righe: Array<{ azione: DefinizioneAzione; accesso: boolean }> = [
-    ...(area.accesso ? [{ azione: area.accesso, accesso: true }] : []),
-    ...area.azioni.map(azione => ({ azione, accesso: false })),
-  ].filter(r => area.sistema ? passaFiltro(config, bozza, r.azione.codice, 'tutti', ricerca) : passaFiltro(config, bozza, r.azione.codice, filtro, ricerca));
+  const righe: Array<{ azione: DefinizioneAzione; accesso: boolean }> = righeDellArea(area, config, bozza, filtro, ricerca);
   if (righe.length === 0) return null;
-  if (area.sistema && filtro !== 'tutti') return null;
 
   const { stato, abilitati, totale } = statoArea(config, bozza, area);
   const inSospeso = righe.some(r => r.azione.codice in bozza);
@@ -520,6 +533,20 @@ const PermessiRuoli = () => {
     setBozza(b => ripristinaEreditato(config, b, codice));
   };
 
+  // Il preset prepara le modifiche: si salvano dalla barra in fondo, dopo il riepilogo
+  const onApplicaPreset = (preset: DefinizionePreset) => {
+    if (!config) return;
+    const prossima = applicaPreset(config, bozza, preset.permessi);
+    const cambiate = Object.keys(prossima).length;
+    setBozza(prossima);
+    showNotification(
+      cambiate > 0
+        ? `Preset "${preset.nome}" applicato a ${descrizioneAmbito}: rivedi le modifiche e salvale.`
+        : `${descrizioneAmbito} ha già i permessi del preset "${preset.nome}".`,
+      { variant: 'info' }
+    );
+  };
+
   const salvaModifiche = () => {
     salva.mutate(
       { ambito, modifiche: modificheDaInviare(bozza) },
@@ -610,18 +637,36 @@ const PermessiRuoli = () => {
             {inSospeso && (
               <StatusBadge tono="warning" icon="PencilLine" etichetta={`${numeroModifiche} non salvate`} />
             )}
-            {ambito.idGdo && personalizzati > 0 && (
-              <Button
-                variant="outline-secondary"
-                size="sm"
-                className="ml-auto"
-                onClick={() => setRipristinoOverride(true)}
-                disabled={inSospeso}
-              >
-                <Lucide icon="RotateCcw" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
-                Ripristina tutti gli override
-              </Button>
-            )}
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              {ambito.idGdo && personalizzati > 0 && (
+                <Button
+                  variant="outline-secondary"
+                  size="sm"
+                  onClick={() => setRipristinoOverride(true)}
+                  disabled={inSospeso}
+                >
+                  <Lucide icon="RotateCcw" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                  Ripristina tutti gli override
+                </Button>
+              )}
+              <Menu className="relative inline-block text-left">
+                <Menu.Button as={Button} size="sm" variant="outline-secondary" disabled={!config}>
+                  <Lucide icon="ListChecks" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                  Applica un preset
+                  <Lucide icon="ChevronDown" aria-hidden="true" className="ml-1.5 h-3.5 w-3.5" />
+                </Menu.Button>
+                <Menu.Items placement="bottom-end" className="w-80">
+                  {PRESET.map(preset => (
+                    <Menu.Item key={preset.id} onClick={() => onApplicaPreset(preset)} className="items-start">
+                      <span className="flex flex-col gap-0.5">
+                        <span className="font-medium text-slate-700 dark:text-slate-200">{preset.nome}</span>
+                        <span className="text-xs text-slate-500">{preset.descrizione}</span>
+                      </span>
+                    </Menu.Item>
+                  ))}
+                </Menu.Items>
+              </Menu>
+            </div>
           </div>
         </Sezione>
 
@@ -650,23 +695,39 @@ const PermessiRuoli = () => {
             </div>
           )
         ) : (
-          <div className="flex flex-col gap-3">
-            {AREE.map(area => (
-              <CardArea
-                key={area.id}
-                area={area}
-                config={config}
-                bozza={bozza}
-                filtro={filtro}
-                ricerca={ricerca}
-                aperta={!!aperte[area.id]}
-                onApri={() => setAperte(a => ({ ...a, [area.id]: !a[area.id] }))}
-                onCambia={onCambia}
-                onCambiaArea={onCambiaArea}
-                onRipristina={onRipristina}
-              />
-            ))}
-            {AREE.every(area => ![...(area.accesso ? [area.accesso] : []), ...area.azioni].some(a => passaFiltro(config, bozza, a.codice, filtro, ricerca))) && (
+          <div className="flex flex-col gap-6">
+            {/* Le aree di permessi sotto le aree del menu a cui portano: Produzione, Visualizzazione... */}
+            {GRUPPI_PER_SEZIONE.map(({ sezione, aree }) => {
+              if (aree.every(area => righeDellArea(area, config, bozza, filtro, ricerca).length === 0)) return null;
+              const idTitolo = `permessi-sezione-${sezione.sezione}`;
+              return (
+                <section key={sezione.sezione} aria-labelledby={idTitolo} className="flex flex-col gap-3">
+                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-1">
+                    <h3 id={idTitolo} className="title-eyebrow flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
+                      <Lucide icon={sezione.icona} aria-hidden="true" className="h-3.5 w-3.5" />
+                      {sezione.titolo}
+                    </h3>
+                    <span className="text-xs text-slate-500">{sezione.descrizione}</span>
+                  </div>
+                  {aree.map(area => (
+                    <CardArea
+                      key={area.id}
+                      area={area}
+                      config={config}
+                      bozza={bozza}
+                      filtro={filtro}
+                      ricerca={ricerca}
+                      aperta={!!aperte[area.id]}
+                      onApri={() => setAperte(a => ({ ...a, [area.id]: !a[area.id] }))}
+                      onCambia={onCambia}
+                      onCambiaArea={onCambiaArea}
+                      onRipristina={onRipristina}
+                    />
+                  ))}
+                </section>
+              );
+            })}
+            {AREE.every(area => righeDellArea(area, config, bozza, filtro, ricerca).length === 0) && (
               <Sezione compatta>
                 <EmptyState
                   compatta

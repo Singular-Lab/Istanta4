@@ -80,7 +80,8 @@ function richiestaZipDalCorpo(body: unknown): RichiestaZipPop {
 
 /**
  * Viste Volantini e POP per periodo (In corso, Attivi, Storico), in sola lettura. Contratto in
- * lib/materiali/tipi.ts. Tutto richiede "materiali.visualizza"; gli ZIP anche "file.download".
+ * lib/materiali/tipi.ts. Tutto richiede "materiali.visualizza"; gli ZIP anche "materiali.scarica", il
+ * permesso di consultazione per scaricare (non "file.download", che e' della produzione).
  */
 export class MaterialiController extends BaseController {
   constructor(private readonly materialiService: IMaterialiService) {
@@ -89,7 +90,7 @@ export class MaterialiController extends BaseController {
 
   protected setupRoutes(): void {
     const visualizza = [authMiddleware, permissionGuard('materiali.visualizza')];
-    const scarica = [...visualizza, permissionGuard('file.download')];
+    const scarica = [...visualizza, permissionGuard('materiali.scarica')];
 
     this.router.get('/volantini', ...visualizza, this.getVolantini.bind(this));
     this.router.get('/volantini/promozioni', ...visualizza, this.getPromozioniVolantini.bind(this));

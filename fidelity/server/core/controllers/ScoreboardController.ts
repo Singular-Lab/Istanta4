@@ -5,6 +5,7 @@ import { BaseController } from '../base/BaseController';
 import type { IScoreboardService } from '../interfaces/IScoreboardService';
 import type { IUserService } from '../interfaces/IUserService';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { permissionGuard } from '../middleware/permissionGuard';
 import { routeDeprecata } from '../middleware/routeDeprecata';
 import { ServerUtils } from '../utils/ServerUtils';
 
@@ -22,14 +23,15 @@ export class ScoreboardController extends BaseController {
     }
 
     public initializeRoutes(): void {
-        this.router.get('/scoreboard', authMiddleware, this.getAllPromoScoreboards.bind(this));
-        this.router.get('/scoreboard/category-timeline', authMiddleware, this.getCategoryScoreboardTimeline.bind(this));
-        this.router.get('/scoreboard/promo/:idPromo', authMiddleware, this.getPromoScoreboard.bind(this));
-        this.router.post('/scoreboard/promo/:idPromo', authMiddleware, this.calcolaPromoScoreboard.bind(this));
+        // Dashboard Marketing e Category, Report tracciati e scoreboard dei momenti della promozione
+        this.router.get('/scoreboard', authMiddleware, permissionGuard('analisi.dashboard_marketing'), this.getAllPromoScoreboards.bind(this));
+        this.router.get('/scoreboard/category-timeline', authMiddleware, permissionGuard('analisi.dashboard_category'), this.getCategoryScoreboardTimeline.bind(this));
+        this.router.get('/scoreboard/promo/:idPromo', authMiddleware, permissionGuard(['promo.visualizza', 'analisi.visualizza']), this.getPromoScoreboard.bind(this));
+        this.router.post('/scoreboard/promo/:idPromo', authMiddleware, permissionGuard('promo.gestisci_momenti'), this.calcolaPromoScoreboard.bind(this));
         this.router.post('/scoreboard/multi-promo', authMiddleware, routeDeprecata, this.calcolaMultiPromoScoreboard.bind(this));
         this.router.post('/scoreboard/query', authMiddleware, routeDeprecata, this.calcolaQueryScoreboard.bind(this));
-        this.router.get('/scoreboard/report-options', authMiddleware, this.getReportOptions.bind(this));
-        this.router.post('/scoreboard/opzione', authMiddleware, this.calcolaQueryDaOpzione.bind(this));
+        this.router.get('/scoreboard/report-options', authMiddleware, permissionGuard('analisi.visualizza'), this.getReportOptions.bind(this));
+        this.router.post('/scoreboard/opzione', authMiddleware, permissionGuard('analisi.visualizza'), this.calcolaQueryDaOpzione.bind(this));
     }
 
     private async getAllPromoScoreboards(_req: Request, res: Response): Promise<void> {

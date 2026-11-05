@@ -21,6 +21,13 @@ export class TracciatoController extends BaseController {
         this.initializeRoutes();
     }
     public initializeRoutes(): void {
+        // Tracciati, momenti e schemi sono della promozione (produzione); i risultati dei momenti e
+        // dei confronti si consultano anche dal Report tracciati
+        const promo = [authMiddleware, permissionGuard('promo.visualizza')];
+        const consulta = [authMiddleware, permissionGuard(['promo.visualizza', 'analisi.visualizza'])];
+        const momenti = [authMiddleware, permissionGuard('promo.gestisci_momenti')];
+        const schemi = [authMiddleware, permissionGuard('promo.gestisci_schemi')];
+
         this.router.get('/tracciati', authMiddleware, routeDeprecata, this.getAllTracciati.bind(this));
         // DB1 recupera questi tracciati con WebClient.DownloadString, senza una sessione Fidelity.
         this.router.get('/tracciati/promo/:idPromo', this.getAllTracciatiPerPromo.bind(this));
@@ -28,30 +35,30 @@ export class TracciatoController extends BaseController {
         this.router.get('/tracciati/confronto/reports', authMiddleware, routeDeprecata, this.getReportsConfronto.bind(this));
         this.router.get('/tracciati/confronto/reports/:id', authMiddleware, routeDeprecata, this.getReportConfrontoById.bind(this));
         // Momenti (prima delle route parametriche /:idTracciato)
-        this.router.get('/tracciati/momenti/promo/:idPromo', authMiddleware, this.getMomentiPerPromo.bind(this));
-        this.router.post('/tracciati/momenti', authMiddleware, this.createMomento.bind(this));
-        this.router.put('/tracciati/momenti/:idMomento', authMiddleware, this.updateMomento.bind(this));
-        this.router.delete('/tracciati/momenti/:idMomento', authMiddleware, this.deleteMomento.bind(this));
-        this.router.post('/tracciati/momenti/:idMomento/risultato', authMiddleware, this.calcolaRisultatoMomento.bind(this));
-        this.router.delete('/tracciati/momenti/:idMomento/risultato', authMiddleware, this.resetRisultatoMomento.bind(this));
-        this.router.post('/tracciati/momenti/confronti', authMiddleware, this.createMomentoConfronto.bind(this));
-        this.router.patch('/tracciati/momenti/confronti/:idConfronto', authMiddleware, this.updateConfrontoMeta.bind(this));
-        this.router.get('/tracciati/momenti/confronti/:idConfronto', authMiddleware, this.getMomentoConfrontoById.bind(this));
-        this.router.post('/tracciati/momenti/confronti/:idConfronto/risultato', authMiddleware, this.calcolaRisultatoMomentoConfronto.bind(this));
-        this.router.delete('/tracciati/momenti/confronti/:idConfronto/risultato', authMiddleware, this.resetRisultatoConfronto.bind(this));
+        this.router.get('/tracciati/momenti/promo/:idPromo', ...consulta, this.getMomentiPerPromo.bind(this));
+        this.router.post('/tracciati/momenti', ...momenti, this.createMomento.bind(this));
+        this.router.put('/tracciati/momenti/:idMomento', ...momenti, this.updateMomento.bind(this));
+        this.router.delete('/tracciati/momenti/:idMomento', ...momenti, this.deleteMomento.bind(this));
+        this.router.post('/tracciati/momenti/:idMomento/risultato', ...momenti, this.calcolaRisultatoMomento.bind(this));
+        this.router.delete('/tracciati/momenti/:idMomento/risultato', ...momenti, this.resetRisultatoMomento.bind(this));
+        this.router.post('/tracciati/momenti/confronti', ...momenti, this.createMomentoConfronto.bind(this));
+        this.router.patch('/tracciati/momenti/confronti/:idConfronto', ...momenti, this.updateConfrontoMeta.bind(this));
+        this.router.get('/tracciati/momenti/confronti/:idConfronto', ...consulta, this.getMomentoConfrontoById.bind(this));
+        this.router.post('/tracciati/momenti/confronti/:idConfronto/risultato', ...momenti, this.calcolaRisultatoMomentoConfronto.bind(this));
+        this.router.delete('/tracciati/momenti/confronti/:idConfronto/risultato', ...momenti, this.resetRisultatoConfronto.bind(this));
         // Schemi
-        this.router.get('/tracciati/schemi', authMiddleware, this.getAllSchemi.bind(this));
-        this.router.post('/tracciati/schemi', authMiddleware, this.createSchema.bind(this));
-        this.router.put('/tracciati/schemi/:idSchema', authMiddleware, this.updateSchema.bind(this));
-        this.router.delete('/tracciati/schemi/:idSchema', authMiddleware, this.deleteSchema.bind(this));
-        this.router.post('/tracciati/schemi/:idSchema/applica', authMiddleware, this.applicaSchema.bind(this));
-        this.router.get('/tracciati/:idTracciato/parse', authMiddleware, this.parseTracciatoById.bind(this));
-        this.router.get('/tracciati/:idTracciato/download', authMiddleware, this.scaricaTracciato.bind(this));
+        this.router.get('/tracciati/schemi', ...promo, this.getAllSchemi.bind(this));
+        this.router.post('/tracciati/schemi', ...schemi, this.createSchema.bind(this));
+        this.router.put('/tracciati/schemi/:idSchema', ...schemi, this.updateSchema.bind(this));
+        this.router.delete('/tracciati/schemi/:idSchema', ...schemi, this.deleteSchema.bind(this));
+        this.router.post('/tracciati/schemi/:idSchema/applica', ...schemi, this.applicaSchema.bind(this));
+        this.router.get('/tracciati/:idTracciato/parse', ...promo, this.parseTracciatoById.bind(this));
+        this.router.get('/tracciati/:idTracciato/download', ...promo, this.scaricaTracciato.bind(this));
         this.router.put('/tracciati/:idTracciato/nome', authMiddleware, permissionGuard('file.upload_tracciato'), this.rinominaTracciato.bind(this));
         // Tracciati salvati in FP e non ancora accettati da Istanta
         this.router.post('/tracciati/:idTracciato/rimanda-istanta', authMiddleware, permissionGuard('file.upload_tracciato'), this.rimandaAIstanta.bind(this));
         this.router.put('/tracciati/:idTracciato/contesto', authMiddleware, permissionGuard('file.upload_tracciato'), this.modificaContestoInAttesa.bind(this));
-        this.router.get('/tracciati/:idTracciato', authMiddleware, this.getTracciatoById.bind(this));
+        this.router.get('/tracciati/:idTracciato', ...promo, this.getTracciatoById.bind(this));
         this.router.delete('/tracciati/:idTracciato', authMiddleware, permissionGuard('file.upload_tracciato'), this.deleteTracciato.bind(this));
     }
 

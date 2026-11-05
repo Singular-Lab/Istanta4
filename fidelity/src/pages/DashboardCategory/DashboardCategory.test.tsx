@@ -93,6 +93,7 @@ describe("Dashboard Category", () => {
   });
 
   it("tra le promozioni in corso non mostra le promo eliminate", async () => {
+    permessi.concessi = new Set(["materiali.visualizza", "promo.visualizza"]);
     risposte["/promo/in-corso"] = () => Promise.resolve([
       { id: "p1", nome: "Promo autunno", stato: "VALIDA", validita_dal: "2026-10-01", validita_al: "2026-10-31" },
       { id: "p2", nome: "Promo cancellata", stato: "ELIMINATA", validita_dal: "2026-10-01", validita_al: "2026-10-31" },
@@ -108,6 +109,7 @@ describe("Dashboard Category", () => {
   });
 
   it("se tutte le promo in corso sono eliminate mostra che non ce ne sono", async () => {
+    permessi.concessi = new Set(["materiali.visualizza", "promo.visualizza"]);
     risposte["/promo/in-corso"] = () => Promise.resolve([
       { id: "p2", nome: "Promo cancellata", stato: "ELIMINATA", validita_dal: "2026-10-01", validita_al: "2026-10-31" },
     ]);
@@ -116,5 +118,20 @@ describe("Dashboard Category", () => {
     const sezione = await screen.findByRole("region", { name: "Promozioni in corso" });
     expect(await within(sezione).findByText("Nessuna promozione in corso")).toBeInTheDocument();
     expect(within(sezione).queryByText("Promo cancellata")).not.toBeInTheDocument();
+  });
+
+  it("senza promo.visualizza non chiede né mostra le promozioni in corso, e i volantini restano", async () => {
+    risposte["/dashboard/volantini-in-corso"] = () => Promise.resolve({
+      totale: 1,
+      inScadenza: 0,
+      kit: [{ id: "k1", titolo: "Volantino ottobre", nome_promo: "Promo ottobre", stato_lavorazione: "PUBBLICATO", validita_dal: "2026-10-01", validita_al: "2026-10-31" }],
+    });
+    apri();
+
+    const volantini = await screen.findByRole("region", { name: "Volantini in corso" });
+    expect(await within(volantini).findByText("Volantino ottobre")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Promozioni in corso" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Promozioni non caricate")).not.toBeInTheDocument();
+    expect(vi.mocked(ServerCall.get).mock.calls.map(([url]) => url)).not.toContain("/promo/in-corso");
   });
 });

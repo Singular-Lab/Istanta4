@@ -94,8 +94,8 @@ export class PromoController extends BaseController {
       this.deleteLavorazione.bind(this)
     );
     this.router.get('/ordinamento-merceologico', authMiddleware, permissionGuard('promo.visualizza'), this.getOrdinamentoMerceologico.bind(this));
-    this.router.get("/promo/menabo", authMiddleware, this.getDatoPerMenabo.bind(this))
-    this.router.get('/promo/:idPromo/menabo-layout', authMiddleware, this.getMenaboLayout.bind(this));
+    this.router.get("/promo/menabo", authMiddleware, permissionGuard('promo.visualizza'), this.getDatoPerMenabo.bind(this))
+    this.router.get('/promo/:idPromo/menabo-layout', authMiddleware, permissionGuard('promo.visualizza'), this.getMenaboLayout.bind(this));
     this.router.put('/promo/:idPromo/menabo-layout', authMiddleware, permissionGuard('promo.modifica'), this.saveMenaboLayout.bind(this));
     this.router.post('/promo/:idPromo/export/xlsx', authMiddleware, permissionGuard('promo.visualizza'), this.exportMenaboExcel.bind(this));
     this.router.post('/promo/:idPromo/export/indesign-json', authMiddleware, permissionGuard('promo.visualizza'), this.exportIndesignPluginJson.bind(this));

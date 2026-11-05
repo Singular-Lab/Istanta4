@@ -7,7 +7,7 @@ import type { FiltriFilePop, RichiestaZipPop, VerificaZipPop } from "../../../li
 import { ServerCall } from "../../../lib/server_call";
 
 /** Motivo per cui i comandi di download sono disattivati. */
-export const MOTIVO_SENZA_DOWNLOAD = "Manca il permesso di scaricare file";
+export const MOTIVO_SENZA_DOWNLOAD = "Manca il permesso di scaricare volantini e POP";
 /** Motivo per cui lo ZIP di un formato senza file è disattivato. */
 export const MOTIVO_SENZA_FILE = "Il formato non ha file da scaricare";
 

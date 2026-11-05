@@ -12,8 +12,12 @@ globalThis.ResizeObserver ??= class {
 };
 
 const finti = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), delete: vi.fn() }));
+const permessi = vi.hoisted(() => ({ concessi: new Set<string>(["promo.gestisci_schemi"]) }));
 
 vi.mock("../../../../lib/server_call", () => ({ ServerCall: finti }));
+vi.mock("@/context/PermissionContext", () => ({
+  usePermissionContext: () => ({ hasPermission: (codice: string) => permessi.concessi.has(codice), loading: false }),
+}));
 vi.mock("@/context/NotificationContext", () => ({ useNotification: () => ({ showNotification: vi.fn() }) }));
 
 import GestioneSchemi from "./GestioneSchemi";
@@ -29,6 +33,17 @@ describe("Gestione schemi", () => {
   beforeEach(() => {
     finti.get.mockReset();
     finti.delete.mockReset().mockResolvedValue(undefined);
+    permessi.concessi = new Set(["promo.gestisci_schemi"]);
+  });
+
+  it("senza promo.gestisci_schemi i comandi per creare ed eliminare gli schemi sono disattivati", async () => {
+    permessi.concessi = new Set();
+    finti.get.mockResolvedValue([{ id: "s1", nome: "Schema A", tipo: ["BUSINESS"], items: [], confronti: [] }]);
+    apri();
+
+    const elimina = await screen.findByRole("button", { name: "Elimina lo schema Schema A" });
+    expect(elimina.closest("[aria-disabled='true']")).not.toBeNull();
+    expect(screen.getByRole("button", { name: /Nuovo schema/ }).closest("[aria-disabled='true']")).not.toBeNull();
   });
 
   it("l'eliminazione di uno schema chiede conferma prima di chiamare il servizio", async () => {

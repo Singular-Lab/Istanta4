@@ -41,12 +41,41 @@ Fanno eccezione l'area `file` e l'area `ai`, che hanno solo azioni, e l'area `si
 (`sistema.gestisci_accessi`, `sistema.gestisci_metodi_accesso`, `sistema.log`, `sistema.audit`...)
 appartengono solo al Superadmin.
 
+Ogni area dichiara anche l'area del menu a cui portano soprattutto i suoi permessi (`sezione`:
+Produzione, Visualizzazione, Comunicazione, Gestione interna, Sistema). La consultazione ha permessi
+suoi, separati dalla produzione: `materiali.scarica` per scaricare volantini e POP dalle pagine di
+consultazione (non `file.download`, che è della produzione) e `analisi.visualizza` per il Report
+tracciati (non `promo.visualizza`).
+
+Ogni pagina e ogni chiamata che legge o modifica dati chiede un permesso: la panoramica e lo storico
+dei volantini `volantini.visualizza`, le dashboard Category e Marketing `analisi.dashboard_category` e
+`analisi.dashboard_marketing`, momenti, confronti e schemi dei tracciati `promo.gestisci_momenti` e
+`promo.gestisci_schemi` (consultarli `promo.visualizza`). Le sole route senza permesso sono elencate,
+con il motivo, in `server/core/middleware/routeSenzaPermesso.ts`: l'utente su sé stesso, i dati di
+riferimento, l'accesso, le pagine pubbliche e le integrazioni (Istanta, plugin, display, DB1, webhook),
+il cui nome è un contratto. Il censimento `__tests__/routeSenzaPermesso.test.ts` fallisce se una route
+nuova non chiede un permesso e non è nell'elenco.
+
+I **preset** (`lib/accessi/preset.ts`) sono insiemi pronti: "Solo visualizzazione" per chi consulta i
+dati (Category, Marketing) e "Agenzia" per Produzione e Gestione interna, senza Visualizzazione né
+Comunicazione.
+
 Il client usa le stesse costanti: `src/constants/permissions.ts` riesporta `PERMESSI` come `PERMISSIONS`
 e `CodicePermesso` come `PermissionCode`. Un codice scritto male è un errore di compilazione.
 
 All'avvio del server `preparaAccessiAllAvvio` (`server/core/accessi/migrazioneAccessi.ts`) allinea la
 tabella `permessi` al catalogo. Su un'installazione nuova scrive anche i permessi predefiniti per tipo
-(`server/core/accessi/predefiniti.ts`); su un'installazione esistente valgono quelli salvati.
+(`server/core/accessi/predefiniti.ts`, che per Agenzia, Category e Marketing usa i preset); su
+un'installazione esistente valgono quelli salvati, portati all'ultimo schema degli accessi un passo
+alla volta (versione in `accessi_stato.schema_accessi`):
+
+- schema 1: modello per aree, al posto dei vecchi permessi `pagina.*`;
+- schema 2 (`migrazioneConsultazione.ts`): chi aveva `file.download` riceve `materiali.scarica`, chi
+  aveva `promo.visualizza` riceve `analisi.visualizza`, `promo.gestisci_momenti` e
+  `promo.gestisci_schemi`; ogni tipo tranne l'Agenzia riceve `volantini.visualizza`; le dashboard
+  Category e Marketing vanno al loro tipo e ai ruoli che le hanno nel menu; l'Agenzia perde i permessi
+  di Visualizzazione e Comunicazione e i suoi menu salvati le voci di quelle aree. Il log dell'avvio elenca ogni modifica;
+  `yarn accessi:migra --dry-run` la mostra prima.
 
 ## Catalogo delle pagine
 
@@ -226,8 +255,9 @@ La pagina **Gestione accessi** (`/gestione-interna/gestione-permessi`, cartella
 schede, che restano montate: cambiare scheda non perde le modifiche in sospeso.
 
 - **Permessi dei ruoli** (`PermessiRuoli.tsx`): per tipo, sotto-ruolo, GDO e GDO + sotto-ruolo, con
-  aree comprimibili, stato ereditato o personalizzato, riepilogo delle modifiche e ripristino degli
-  override di una GDO.
+  aree comprimibili raggruppate per area del menu, stato ereditato o personalizzato, preset da applicare
+  (le modifiche restano da rivedere e salvare), riepilogo delle modifiche e ripristino degli override
+  di una GDO.
 - **Confronta ruoli** (`ConfrontoRuoli.tsx`): i permessi effettivi di più ruoli affiancati.
 - **Menu** (`MenuTab.tsx`): voci, separatori, sotto-menu, icone, ordine, pagina iniziale e flag
   `disabilitato`, per tipo e per sotto-ruolo; per ogni percorso mostra il permesso che la pagina

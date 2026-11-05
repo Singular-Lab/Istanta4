@@ -99,7 +99,8 @@ export class FileManagementController extends BaseController {
     this.router.post('/process-rejected-zip', authMiddleware, permissionGuard('file.upload_materiale'), processZipInMemory.single('file'), this.processRejectedZip.bind(this));
 
     // File listing and retrieval
-    this.router.get('/getAllFiles', authMiddleware, permissionGuard('file.download'), this.getAllFiles.bind(this));
+    // Usato dal kit in produzione e dal download in Tutti i volantini (consultazione)
+    this.router.get('/getAllFiles', authMiddleware, permissionGuard(['file.download', 'materiali.scarica']), this.getAllFiles.bind(this));
     this.router.put('/get_all_files_documentale', authMiddleware, permissionGuard('file.download'), routeDeprecata, this.getAllFilesDocumentale.bind(this));
     this.router.put('/get_all_contenuti_digitali', authMiddleware, permissionGuard('file.download'), this.getAllContenutiDigitali.bind(this));
     this.router.get('/getProprietaMetaFilesRuntime', authMiddleware, permissionGuard('file.download'), routeDeprecata, this.getProprietaMetaFilesRuntime.bind(this));

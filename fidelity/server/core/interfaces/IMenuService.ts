@@ -25,8 +25,8 @@ export interface IMenuService {
   getMenuConfigurato(tipoUtente: TIPO_UTENTI, idRuoloGdo?: string | null): Promise<MenuElement[]>;
   /** Menu dell'utente diviso in sezioni: solo le voci delle pagine che può aprire. */
   getMenuDiUtente(contesto: ContestoAccesso): Promise<MenuElement[]>;
-  /** La pagina con cui l'utente entra in Fidelity (hub e indirizzo principale); null se il menu è vuoto. */
-  getPaginaIniziale(contesto: ContestoAccesso): Promise<string | null>;
+  /** La pagina con cui l'utente entra in Fidelity (hub e indirizzo principale): senza pagine nel menu, la panoramica o il profilo. */
+  getPaginaIniziale(contesto: ContestoAccesso): Promise<string>;
   getMenuItemsPerUtente(tipoUtente: TIPO_UTENTI, idRuoloGdo?: string | null): Promise<MenuItemDTO[]>;
   saveMenu(tipoUtente: TIPO_UTENTI, idRuoloGdo: string | null, items: MenuItemDTO[]): Promise<void>;
   /** Riporta il solo menu del Superadmin a quello predefinito; restituisce il numero di voci. */

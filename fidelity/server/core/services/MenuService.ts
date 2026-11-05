@@ -54,6 +54,10 @@ const vociInOrdine = (menu: readonly MenuElement[]): VoceMenu[] =>
  * la prima voce attiva con una pagina, nell'ordine del menu salvato. Il menu va passato già
  * filtrato sui permessi e prima della divisione in sezioni, che cambierebbe la prima voce.
  */
+/** Pagine d'ingresso quando il menu dell'utente non ha pagine che può aprire. */
+export const PAGINA_PANORAMICA = '/gdo/dashboard';
+export const PAGINA_PROFILO = '/profilo-utente';
+
 export const paginaInizialeDi = (menu: readonly MenuElement[]): string | null => {
   const navigabili = vociInOrdine(menu).filter(voce => voce.pathname && !voce.disabled);
   return (navigabili.find(voce => voce.start_page) ?? navigabili[0])?.pathname ?? null;
@@ -118,9 +122,16 @@ export class MenuService implements IMenuService {
     return segnaPaginaIniziale(sezionaMenu(conPagina, sezioneDiPercorso), paginaInizialeDi(conPagina));
   }
 
-  /** La pagina con cui l'utente entra in Fidelity (hub e indirizzo principale); null se il menu è vuoto. */
-  async getPaginaIniziale(contesto: ContestoAccesso): Promise<string | null> {
-    return paginaInizialeDi(await this.getMenuDiUtente(contesto));
+  /**
+   * La pagina con cui l'utente entra in Fidelity (hub e indirizzo principale). Senza pagine nel menu:
+   * la panoramica dei volantini a chi può aprirla, altrimenti il profilo, che è di tutti.
+   */
+  async getPaginaIniziale(contesto: ContestoAccesso): Promise<string> {
+    const dalMenu = paginaInizialeDi(await this.getMenuDiUtente(contesto));
+    if (dalMenu) return dalMenu;
+    if (contesto.superadmin) return PAGINA_PANORAMICA;
+    const permessi = await this.risolutore.permessiDi(contesto);
+    return puoAprirePagina(PAGINA_PANORAMICA, (codice: CodicePermesso) => permessi.has(codice)) ? PAGINA_PANORAMICA : PAGINA_PROFILO;
   }
 
   async getMenuItemsPerUtente(tipoUtente: TIPO_UTENTI, idRuoloGdo?: string | null): Promise<MenuItemDTO[]> {
