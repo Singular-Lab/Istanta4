@@ -206,6 +206,7 @@ describe('TracciatoService.getTracciatiByPromoId: file letti con includeJson', (
     expect(contenuto).toEqual(await service.parseTracciatoById('t1'));
     expect(contenuto.sheets.map((s: { name: string }) => s.name)).toEqual(['PROMO', 'NOTE']);
     expect(tracciato.filesize).toBe(tracciato.blobfile?.length);
+    expect(tracciato.filename).toBe('ufi.json');
   });
 
   it('con includeBlob e includeJson il blobfile è il file JSON, non l\'xlsx', async () => {
@@ -226,6 +227,7 @@ describe('TracciatoService.getTracciatiByPromoId: file letti con includeJson', (
 
     expect(tracciato.blobfile).toBe(xlsx);
     expect(tracciato.filesize).toBe(xlsx.length);
+    expect(tracciato.filename).toBe('ufi.xlsx');
   });
 
   it('un tracciato senza file o illeggibile ha blobfile null e non ferma gli altri', async () => {
@@ -239,10 +241,11 @@ describe('TracciatoService.getTracciatiByPromoId: file letti con includeJson', (
 
     const tracciati = await service.getTracciatiByPromoId('promo-1', false, true);
 
-    expect(tracciati.map((t) => [t.id, t.blobfile === null])).toEqual([
-      ['senza-file', true],
-      ['rotto', true],
-      ['t1', false],
+    // Senza file JSON resta il nome dell'xlsx, per sapere quale non si è letto
+    expect(tracciati.map((t) => [t.id, t.blobfile === null, t.filename])).toEqual([
+      ['senza-file', true, 'ufi.xlsx'],
+      ['rotto', true, 'ufi.xlsx'],
+      ['t1', false, 'ufi.json'],
     ]);
   });
 });

@@ -828,17 +828,21 @@ export class TracciatoService implements ITracciatoService {
   }
 
   /**
-   * Con includeJson il blobfile e' il file JSON di /parse (UTF-8) al posto dell'xlsx, e filesize la sua dimensione.
-   * Nell'elenco dei tracciati un file mancante o illeggibile resta null e non fa fallire gli altri.
+   * Con includeJson il blobfile e' il file JSON di /parse (UTF-8) al posto dell'xlsx: filename ha estensione .json
+   * e filesize e' la sua dimensione. Nell'elenco dei tracciati un file mancante o illeggibile resta null, con il nome
+   * dell'xlsx, e non fa fallire gli altri.
    */
-  private fileJsonAlPostoDellXlsx(tracciato: TracciatiAttributes): Pick<TracciatiResponseDTO, 'blobfile' | 'filesize'> {
-    if (!tracciato.blobfile_tracciati) return { blobfile: null, filesize: undefined };
+  private fileJsonAlPostoDellXlsx(tracciato: TracciatiAttributes): Pick<TracciatiResponseDTO, 'blobfile' | 'filesize' | 'filename'> {
+    const senzaFileJson = { blobfile: null, filesize: undefined, filename: tracciato.filename_tracciati };
+    if (!tracciato.blobfile_tracciati) return senzaFileJson;
     try {
       const fileJson = Buffer.from(JSON.stringify(this.leggiFogli(tracciato.blobfile_tracciati)), 'utf8');
-      return { blobfile: fileJson, filesize: fileJson.length };
+      // Sostituisce solo l'ultima estensione: "01_SSCN.xlsx" -> "01_SSCN.json", senza estensione aggiunge .json
+      const filename = `${tracciato.filename_tracciati.replace(/\.[^./\\]+$/, '')}.json`;
+      return { blobfile: fileJson, filesize: fileJson.length, filename };
     } catch (error) {
       log.warn(`Tracciato ${tracciato.id_tracciati} non leggibile come Excel:`, { error });
-      return { blobfile: null, filesize: undefined };
+      return senzaFileJson;
     }
   }
 

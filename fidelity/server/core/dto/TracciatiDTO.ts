@@ -35,7 +35,10 @@ export interface TracciatiResponseDTO {
   id: string;
   id_promo: string;
   context: any;
-  /** Nome originale del file caricato: non cambia mai, e' quello usato al download */
+  /**
+   * Nome originale del file caricato: non cambia mai, e' quello usato al download. Nei tracciati della promo con
+   * includeJson, quando il blobfile e' il file JSON, ha estensione .json al posto di .xlsx.
+   */
   filename: string;
   /** Nome mostrato in FP, modificabile dall'operatore; se mai impostato coincide con filename */
   nome: string;
