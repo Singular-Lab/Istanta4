@@ -8,7 +8,7 @@ import type { CellaConfronto, IAgenziaLib, MatricePromo, PromoScoreboardInput, S
 import config from '../config';
 import { OrdinamentoMerceologicoService } from './OrdinamentoMerceologicoService';
 import { sequelize } from '../db/SequelizeConnector';
-import { CreateTracciatiDTO, TracciatiResponseDTO, UpdateTracciatiDTO } from '../dto';
+import { CreateTracciatiDTO, FogliTracciatoDTO, TracciatiResponseDTO, UpdateTracciatiDTO } from '../dto';
 import { ITracciatoService } from '../interfaces/ITracciatoService';
 import { log } from '../logger';
 import { statoIstantaTracciati } from './AllineamentoIstanta';
@@ -627,13 +627,14 @@ export class TracciatoService implements ITracciatoService {
 
 
 
-  async getTracciatiByPromoId(promoId: string, includeBlob = false): Promise<TracciatiResponseDTO[]> {
+  async getTracciatiByPromoId(promoId: string, includeBlob = false, includeJson = false): Promise<TracciatiResponseDTO[]> {
     try {
       const tracciati = await this.tracciatiRepository.findByPromoId(promoId);
       // Quelli salvati in FP e non ancora in Istanta (archivio storico, upload rifiutati)
       const istanta = await statoIstantaTracciati(tracciati.map((t: TracciatiAttributes) => t.id_tracciati as string));
       return tracciati.map((tracciato: TracciatiAttributes) => ({
         ...this.mapToDTO(tracciato, includeBlob),
+        ...(includeJson && this.fileJsonAlPostoDellXlsx(tracciato)),
         istanta: istanta.get(tracciato.id_tracciati as string),
       }));
     } catch (error) {
@@ -786,7 +787,66 @@ export class TracciatoService implements ITracciatoService {
     }
   }
 
-  async parseTracciatoById(id: string): Promise<{ sheets: { name: string; rows: (string | number | null)[][] }[] }> {
+  /** Legge il file Excel del tracciato come nell'anteprima: tutti i fogli, righe e colonne da A1 */
+  private leggiFogli(blob: Uint8Array): FogliTracciatoDTO {
+    // Converti il buffer in workbook
+    const buffer = Buffer.from(blob);
+    const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true, cellNF: false, cellText: false });
+
+    // Processa tutti i fogli
+    const sheets = workbook.SheetNames.map((sheetName) => {
+      const worksheet = workbook.Sheets[sheetName];
+
+      // L'area letta parte sempre da A1: se il file dichiara dati da B3, l'anteprima
+      // mostra comunque righe e colonne con il numero e la lettera di Excel
+      const ref = worksheet['!ref'];
+      const intervallo = ref ? XLSX.utils.decode_range(ref) : undefined;
+      if (intervallo) {
+        intervallo.s.r = 0;
+        intervallo.s.c = 0;
+      }
+      mostraTutteLeCifre(worksheet);
+
+      // Converti il foglio in array di array, mantenendo TUTTI i dati
+      const jsonData = XLSX.utils.sheet_to_json<(string | number | null)[]>(worksheet, {
+        header: 1,
+        defval: null,
+        blankrows: true,
+        raw: false, // Formatta i valori come stringhe
+        dateNF: 'dd/mm/yyyy', // Date come gg/mm/aaaa, non nel m/d/yy americano di SheetJS
+        ...(intervallo && { range: intervallo }),
+      });
+
+      return {
+        name: sheetName,
+        // Cella vuota sempre null: SheetJS dà null per la cella assente ma "" per quella con testo vuoto
+        rows: jsonData.map((riga) => riga.map((valore) => (valore === '' ? null : valore))),
+      };
+    });
+
+    return { sheets };
+  }
+
+  /**
+   * Con includeJson il blobfile e' il file JSON di /parse (UTF-8) al posto dell'xlsx: filename ha estensione .json
+   * e filesize e' la sua dimensione. Nell'elenco dei tracciati un file mancante o illeggibile resta null, con il nome
+   * dell'xlsx, e non fa fallire gli altri.
+   */
+  private fileJsonAlPostoDellXlsx(tracciato: TracciatiAttributes): Pick<TracciatiResponseDTO, 'blobfile' | 'filesize' | 'filename'> {
+    const senzaFileJson = { blobfile: null, filesize: undefined, filename: tracciato.filename_tracciati };
+    if (!tracciato.blobfile_tracciati) return senzaFileJson;
+    try {
+      const fileJson = Buffer.from(JSON.stringify(this.leggiFogli(tracciato.blobfile_tracciati)), 'utf8');
+      // Sostituisce solo l'ultima estensione: "01_SSCN.xlsx" -> "01_SSCN.json", senza estensione aggiunge .json
+      const filename = `${tracciato.filename_tracciati.replace(/\.[^./\\]+$/, '')}.json`;
+      return { blobfile: fileJson, filesize: fileJson.length, filename };
+    } catch (error) {
+      log.warn(`Tracciato ${tracciato.id_tracciati} non leggibile come Excel:`, { error });
+      return senzaFileJson;
+    }
+  }
+
+  async parseTracciatoById(id: string): Promise<FogliTracciatoDTO> {
     try {
       const tracciato = await this.tracciatiRepository.findById(id);
       if (!tracciato) {
@@ -805,40 +865,7 @@ export class TracciatoService implements ITracciatoService {
         });
       }
 
-      // Converti il buffer in workbook
-      const buffer = Buffer.from(tracciatoData.blobfile_tracciati);
-      const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true, cellNF: false, cellText: false });
-
-      // Processa tutti i fogli
-      const sheets = workbook.SheetNames.map((sheetName) => {
-        const worksheet = workbook.Sheets[sheetName];
-
-        // L'area letta parte sempre da A1: se il file dichiara dati da B3, l'anteprima
-        // mostra comunque righe e colonne con il numero e la lettera di Excel
-        const ref = worksheet['!ref'];
-        const intervallo = ref ? XLSX.utils.decode_range(ref) : undefined;
-        if (intervallo) {
-          intervallo.s.r = 0;
-          intervallo.s.c = 0;
-        }
-        mostraTutteLeCifre(worksheet);
-
-        // Converti il foglio in array di array, mantenendo TUTTI i dati
-        const jsonData = XLSX.utils.sheet_to_json<(string | number | null)[]>(worksheet, {
-          header: 1,
-          defval: null,
-          blankrows: true,
-          raw: false, // Formatta i valori come stringhe
-          dateNF: 'dd/mm/yyyy', // Date come gg/mm/aaaa, non nel m/d/yy americano di SheetJS
-          ...(intervallo && { range: intervallo }),
-        });
-
-        return {
-          name: sheetName,
-          // Cella vuota sempre null: SheetJS dà null per la cella assente ma "" per quella con testo vuoto
-          rows: jsonData.map((riga) => riga.map((valore) => (valore === '' ? null : valore))),
-        };
-      });
+      const { sheets } = this.leggiFogli(tracciatoData.blobfile_tracciati);
 
       log.info(`Parsed tracciato ${id}: ${sheets.length} sheets`);
 

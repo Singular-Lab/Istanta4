@@ -41,7 +41,18 @@ describe('GET /api/tracciati/promo/:idPromo per DB1', () => {
 
     expect(response.status).toBe(200);
     expect(response.body[0].blobfile).toBeDefined();
-    expect(service.getTracciatiByPromoId).toHaveBeenCalledWith('promo-1', true);
+    expect(service.getTracciatiByPromoId).toHaveBeenCalledWith('promo-1', true, false);
+  });
+
+  it('con includeJson chiede anche i file letti come fogli e righe, sempre senza sessione', async () => {
+    const { app, service } = createApp();
+
+    const response = await request(app)
+      .get('/api/tracciati/promo/promo-1?includeJson=true')
+      .set('Accept', 'application/json');
+
+    expect(response.status).toBe(200);
+    expect(service.getTracciatiByPromoId).toHaveBeenCalledWith('promo-1', false, true);
   });
 
   it('mantiene protette le altre API dei tracciati', async () => {

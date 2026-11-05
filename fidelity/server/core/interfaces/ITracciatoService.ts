@@ -1,5 +1,5 @@
 import type { CategoryScoreboardTimeline, ReportOptionDTO, SavedPromoScoreboard, SavedReportConfronto, SavedReportConfrontoSummary, TipoSchema, TracciatoQueryRequest, TracciatoQueryResult, TracciatoReport, TracciatiMomentoConfrontoResponseDTO, TracciatiMomentoResponseDTO, TracciatiSchemaConfronto, TracciatiSchemaItem, TracciatiSchemaResponseDTO } from '../../../lib/types';
-import { CreateTracciatiDTO, TracciatiResponseDTO, UpdateTracciatiDTO } from '../dto';
+import { CreateTracciatiDTO, FogliTracciatoDTO, TracciatiResponseDTO, UpdateTracciatiDTO } from '../dto';
 
 export interface ITracciatoService {
     // CRUD Operations
@@ -10,7 +10,7 @@ export interface ITracciatoService {
     deleteTracciato(id: string): Promise<boolean>;
 
     // Business Operations
-    getTracciatiByPromoId(promoId: string, includeBlob?: boolean): Promise<TracciatiResponseDTO[]>;
+    getTracciatiByPromoId(promoId: string, includeBlob?: boolean, includeJson?: boolean): Promise<TracciatiResponseDTO[]>;
     getTracciatiByDataCreazione(dataInizio: Date, dataFine: Date): Promise<TracciatiResponseDTO[]>;
     getTracciatiByDataModifica(dataInizio: Date, dataFine: Date): Promise<TracciatiResponseDTO[]>;
     searchTracciati(query: string): Promise<TracciatiResponseDTO[]>;
@@ -26,7 +26,7 @@ export interface ITracciatoService {
     }): Promise<TracciatiResponseDTO[]>;
     processTracciato(id: string): Promise<TracciatiResponseDTO | null>;
     validateTracciato(id: string): Promise<{ isValid: boolean; errors: string[] }>;
-    parseTracciatoById(id: string): Promise<{ sheets: { name: string; rows: (string | number | null)[][] }[] }>;
+    parseTracciatoById(id: string): Promise<FogliTracciatoDTO>;
     getContestoPerConfronto(idPromo: string, req: Express.Request): Promise<{
         list: {
             content: { titolo: string; valore: string }[],

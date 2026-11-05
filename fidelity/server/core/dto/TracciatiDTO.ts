@@ -22,18 +22,33 @@ export interface UpdateTracciatiDTO {
 }
 
 /**
+ * Contenuto del file Excel del tracciato letto foglio per foglio (GET /api/tracciati/:id/parse)
+ */
+export interface FogliTracciatoDTO {
+  sheets: { name: string; rows: (string | number | null)[][] }[];
+}
+
+/**
  * DTO per la risposta con i dati del tracciato
  */
 export interface TracciatiResponseDTO {
   id: string;
   id_promo: string;
   context: any;
-  /** Nome originale del file caricato: non cambia mai, e' quello usato al download */
+  /**
+   * Nome originale del file caricato: non cambia mai, e' quello usato al download. Nei tracciati della promo con
+   * includeJson, quando il blobfile e' il file JSON, ha estensione .json al posto di .xlsx.
+   */
   filename: string;
   /** Nome mostrato in FP, modificabile dall'operatore; se mai impostato coincide con filename */
   nome: string;
   stato: string;
-  blobfile?: Uint8Array;
+  /**
+   * File del tracciato (xlsx) con includeBlob. Nei tracciati della promo con includeJson e' invece il file JSON
+   * dell'xlsx letto come fogli e righe (FogliTracciatoDTO), null senza file o se illeggibile.
+   */
+  blobfile?: Uint8Array | null;
+  /** Dimensione in byte del file: con includeJson quella del file JSON */
   filesize?: number;
   createdat?: Date;
   updatedat: Date;
