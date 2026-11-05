@@ -448,13 +448,20 @@ describe('POST /api/external/sync_json_plugin: storico del cliente', () => {
     expect(res.body.message).toContain('non e coerente');
     nessunaScrittura(servizi);
   });
-  it.each(['versioneImport', 'reportStorico'])('senza %s rifiuta il vecchio contratto senza chiamate esterne', async (campo) => {
+  it('senza versioneImport usa direttamente referenze e report', async () => {
     const servizi = preparaServizi();
     const payload = payloadBase();
-    delete payload[campo];
+    delete payload.versioneImport;
     const res = await invia(payload);
-    expect(res.status).toBe(400);
-    expect(res.body.message).toContain('Import finale');
+    expect(res.status).toBe(200);
+    expect(servizi.referenze.sostituisciReferenzeKit).toHaveBeenCalledTimes(1);
+  });
+  it('senza reportStorico fallisce prima delle scritture', async () => {
+    const servizi = preparaServizi();
+    const payload = payloadBase();
+    delete payload.reportStorico;
+    const res = await invia(payload);
+    expect(res.status).toBe(500);
     nessunaScrittura(servizi);
   });
   it.each([null, 'scansione', { groupId: 1 }, { ...boxDaListino(1, '1'), foto: ['1.psd'] }])('rifiuta referenze finali non valide: %j', async (ref) => {
@@ -466,6 +473,27 @@ describe('POST /api/external/sync_json_plugin: storico del cliente', () => {
 });
 
 describe('POST /api/external/sync_json_plugin: salvataggio', () => {
+  it('accetta una referenza finale coerente col contratto anche con campi opzionali assenti', async () => {
+    const servizi = preparaServizi();
+    const dna = '$dna{\n4969665\n}';
+    const refCompatibile = {
+      dna,
+      foto: [{ nome: '4969665.psd', guidId: '', origineDb1: 'storico' }],
+      compiledFields: [{ label_name: 'descrizione', paragraph_name: 'desc', content: true }],
+      metadatoDb1: 'ignorato da Fidelity',
+    };
+
+    const res = await invia({ ...payloadBase(), refs: [refCompatibile, boxDaListino(9, '1404871')] });
+
+    expect(res.status).toBe(200);
+    const [, referenze] = servizi.referenze.sostituisciReferenzeKit.mock.calls[0];
+    expect(referenze[0]).toMatchObject({
+      codiceBox: dna,
+      dataFields: {},
+      foto: [{ nome: '4969665.psd', guidId: '', origineDb1: 'storico' }],
+    });
+  });
+
   it('salva le referenze del listino, registra l\'import e rimuove il file temporaneo', async () => {
     const servizi = preparaServizi();
     const rimozione = vi.spyOn(fs.promises, 'rm');
