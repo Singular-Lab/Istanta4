@@ -41,6 +41,8 @@ export const SCRIPT_DATI = {
   urlOlimpo: { nome: 'migrate-olimpo-urls', ripetibile: true, comando: 'yarn migrate:olimpo-urls' },
   accessi: { nome: 'migra-accessi', ripetibile: true, comando: 'yarn accessi:migra' },
   segretiProvider: { nome: 'cifra-segreti-provider', ripetibile: true, comando: 'yarn auth:segreti' },
+  // Non si lancia a mano: la esegue l'avvio del server, una volta sola (migrazioneMenuAvanzamento.ts)
+  menuAvanzamento: { nome: 'menu-avanzamento-produzione', ripetibile: false, comando: "l'avvio del server" },
 } as const satisfies Record<string, ScriptDati>;
 
 export interface OpzioniScriptDati {

@@ -181,7 +181,7 @@ export class DashboardService implements IDashboardService {
     /**
      * Recupera i volantini in lavorazione e quelli in attesa di approvazione
      */
-    async getVolantiniInLavorazione(filters?: DashboardFilterParams): Promise<VolantiniInLavorazioneDTO> {
+    async getVolantiniInLavorazione(filters?: DashboardFilterParams, idGdo?: string | null): Promise<VolantiniInLavorazioneDTO> {
         try {
             const [formatoIds, volExportId] = await Promise.all([
                 this.getFormatoVolantinoIds(),
@@ -197,8 +197,11 @@ export class DashboardService implements IDashboardService {
                 return { totale: 0, inAttesa: 0, kit: [] };
             }
 
-            const promoInCorso = await this.promoRepository.findByStato(STATO_PROMO.IN_LAVORAZIONE);
-            const promoInScadenza = await this.promoRepository.findByStato(STATO_PROMO.IN_SCADENZA);
+            const promoDelloStato = (stato: STATO_PROMO) => idGdo
+                ? this.promoRepository.findByGdoAndStato(idGdo, stato)
+                : this.promoRepository.findByStato(stato);
+            const promoInCorso = await promoDelloStato(STATO_PROMO.IN_LAVORAZIONE);
+            const promoInScadenza = await promoDelloStato(STATO_PROMO.IN_SCADENZA);
             const promoInCorsoIds = promoInCorso.map(p => p.getDataValue('id_promo'))
                 .concat(promoInScadenza.map(p => p.getDataValue('id_promo')));
 
@@ -223,6 +226,11 @@ export class DashboardService implements IDashboardService {
                 id_formato: { [Op.in]: formatoIds },
                 id: { [Op.in]: volKitIds }
             };
+            // I kit in revisione di qualunque promo, ma solo della GDO indicata
+            if (idGdo) {
+                const promoDellaGdo = await this.promoRepository.findByGdoId(idGdo);
+                whereRevisione.id_promo = { [Op.in]: promoDellaGdo.map(p => p.getDataValue('id_promo')) };
+            }
 
             if (filters?.id_area && filters.id_area.length > 0) {
                 whereLavorazione.id_area = { [Op.in]: filters.id_area };

@@ -1,8 +1,11 @@
 import { Request, Response } from 'express';
 import { HttpStatusCode } from '../../../lib/enums';
+import { gdoOperativaPerRichiesta, operaPerPiuGdo } from '../accessi/contestoAccesso';
 import { BaseController } from '../base/BaseController';
 import { DashboardFilterParams, IDashboardService } from '../interfaces/IDashboardService';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { permissionGuard } from '../middleware/permissionGuard';
+import { routeDeprecata } from '../middleware/routeDeprecata';
 export { uploadZip } from '../config/multerConfig';
 
 export class DashboardController extends BaseController {
@@ -12,7 +15,15 @@ export class DashboardController extends BaseController {
 
     protected setupRoutes(): void {
         this.router.get('/volantini-in-corso', authMiddleware, this.getVolantiniInCorso.bind(this));
-        this.router.get('/volantini-in-lavorazione', authMiddleware, this.getVolantiniInLavorazione.bind(this));
+        // Lo stato delle lavorazioni e' produzione: solo con il permesso sui kit e per la GDO della
+        // sessione. La panoramica non la chiama piu' (ora c'e' Avanzamento produzione).
+        this.router.get(
+            '/volantini-in-lavorazione',
+            authMiddleware,
+            permissionGuard('kit_runtime.visualizza'),
+            routeDeprecata,
+            this.getVolantiniInLavorazione.bind(this)
+        );
         this.router.get('/volantini-pubblicati-in-lavorazione', authMiddleware, this.getVolantiniPubblicatiInLavorazione.bind(this));
         this.router.get('/storico-volantini', authMiddleware, this.getStoricoVolantini.bind(this));
 
@@ -108,10 +119,16 @@ export class DashboardController extends BaseController {
         }
     }
 
+    /** GDO della sessione; senza GDO chi lavora per piu' GDO vede tutto, gli altri niente. */
     private async getVolantiniInLavorazione(req: Request, res: Response): Promise<void> {
         try {
+            const idGdo = await gdoOperativaPerRichiesta(req, res);
+            if (!idGdo && !operaPerPiuGdo(req.session?.tipo_utente)) {
+                this.sendResponse(res, HttpStatusCode.OK, { totale: 0, inAttesa: 0, kit: [] });
+                return;
+            }
             const filters = this.extractFilters(req);
-            const result = await this.dashboardService.getVolantiniInLavorazione(filters);
+            const result = await this.dashboardService.getVolantiniInLavorazione(filters, idGdo);
             this.sendResponse(res, HttpStatusCode.OK, result);
         } catch (error) {
             this.handleError(res, error);

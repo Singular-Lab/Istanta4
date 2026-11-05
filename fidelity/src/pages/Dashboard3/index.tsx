@@ -58,12 +58,6 @@ interface VolantiniInCorso {
     kit: KitVolantino[];
 }
 
-interface VolantiniInLavorazione {
-    totale: number;
-    inAttesa: number;
-    kit: KitVolantino[];
-}
-
 interface VolantiniPubblicatiInLavorazione {
     totale: number;
     kit: KitVolantino[];
@@ -76,7 +70,6 @@ interface StoricoVolantini {
 
 export interface Dashboard3LoaderData {
     volantiniInCorsoPromise: Promise<VolantiniInCorso>;
-    volantiniInLavorazionePromise: Promise<VolantiniInLavorazione>;
     volantiniPubblicatiInLavorazionePromise: Promise<VolantiniPubblicatiInLavorazione>;
     areePromise: Promise<AreaResponseDTO[]>;
     canaliPromise: Promise<CanaleResponseDTO[]>;
@@ -330,24 +323,26 @@ const KitCard: FC<{ kit: KitVolantino; showValidita?: boolean, routeClickable?: 
 
 const FILTRO_VUOTO: CardFilter = { id_area: "", id_canale: "" };
 
-// Elenco dei kit con caricamento progressivo, oppure lo stato vuoto
+// Elenco dei kit con caricamento progressivo, oppure lo stato vuoto. In una sezione larga quanto
+// la pagina i kit stanno su due colonne da xl, così le schede non si allungano sul vuoto.
 const ElencoKit: FC<{
     kits: KitVolantino[];
     showValidita?: boolean;
     vuoto: ReactNode;
-}> = ({ kits, showValidita, vuoto }) => {
+    dueColonne?: boolean;
+}> = ({ kits, showValidita, vuoto, dueColonne = false }) => {
     const { items, hasMore, registerSentinel } = useInfiniteKitScroll(kits);
 
     return (
         <div className="min-h-[18rem] flex-1">
             {kits.length > 0 ? (
-                <div className="max-h-[32rem] space-y-3 overflow-y-auto pb-1 pr-1">
+                <div className={clsx("max-h-[32rem] overflow-y-auto pb-1 pr-1", dueColonne ? "grid content-start gap-3 xl:grid-cols-2" : "space-y-3")}>
                     {items.map((kit) => (
                         <KitCard key={kit.id} kit={kit} showValidita={showValidita} routeClickable />
                     ))}
-                    <div ref={registerSentinel} />
+                    <div ref={registerSentinel} className={clsx(dueColonne && "xl:col-span-2")} />
                     {hasMore && (
-                        <div role="status" className="flex items-center justify-center gap-2 py-4 text-xs text-slate-500">
+                        <div role="status" className={clsx("flex items-center justify-center gap-2 py-4 text-xs text-slate-500", dueColonne && "xl:col-span-2")}>
                             <Spinner size="sm" decorativo /> Caricamento automatico…
                         </div>
                     )}
@@ -435,87 +430,6 @@ const VolantiniInCorsoContent: FC<VolantiniInCorsoContentProps> = ({
     );
 };
 
-interface VolantiniInLavorazioneContentProps {
-    data: VolantiniInLavorazione;
-    isLoading: boolean;
-    aree: AreaResponseDTO[];
-    canali: CanaleResponseDTO[];
-    filter: CardFilter;
-    onFilterChange: (filter: CardFilter) => void;
-}
-
-const VolantiniInLavorazioneContent: FC<VolantiniInLavorazioneContentProps> = ({
-    data,
-    isLoading,
-    aree,
-    canali,
-    filter: cardFilter,
-    onFilterChange
-}) => {
-    const [quickFilter, setQuickFilter] = useState<"all" | "review" | "error">("all");
-
-    const kitInRevisione = useMemo<KitVolantino[]>(
-        () => data.kit.filter((kit: KitVolantino) => kit.stato_lavorazione === "IN_REVISIONE"),
-        [data.kit]
-    );
-    const kitConErrori = useMemo<KitVolantino[]>(
-        () => data.kit.filter((kit: KitVolantino) => kit.stato_lavorazione?.includes("ERRORI")),
-        [data.kit]
-    );
-    const filteredKits = quickFilter === "review" ? kitInRevisione : quickFilter === "error" ? kitConErrori : data.kit;
-    const filtriAttivi = Boolean(cardFilter.id_area || cardFilter.id_canale) || quickFilter !== "all";
-
-    const azzeraFiltri = () => {
-        setQuickFilter("all");
-        if (cardFilter.id_area || cardFilter.id_canale) onFilterChange(FILTRO_VUOTO);
-    };
-
-    return (
-        <div className={clsx("flex h-full flex-col transition-opacity duration-150", isLoading && "pointer-events-none opacity-50")}>
-            <CardFilterSelect
-                aree={aree}
-                canali={canali}
-                filter={cardFilter}
-                onFilterChange={onFilterChange}
-                isLoading={isLoading}
-                cardId="in-lavorazione"
-                filtriRapidi={
-                    <Segmenti
-                        etichetta="Stato processo"
-                        valore={quickFilter}
-                        onChange={setQuickFilter}
-                        opzioni={[
-                            { valore: "all", etichetta: "Tutti", conteggio: data.kit.length },
-                            { valore: "review", etichetta: "In revisione", conteggio: kitInRevisione.length },
-                            { valore: "error", etichetta: "Con errori", conteggio: kitConErrori.length },
-                        ]}
-                    />
-                }
-            />
-
-            <ElencoKit
-                kits={filteredKits}
-                vuoto={
-                    filtriAttivi ? (
-                        <EmptyState
-                            compatta
-                            icon="SearchX"
-                            title="Nessun volantino per questi filtri"
-                            description="Modifica i filtri per vedere altri risultati."
-                            buttonText="Azzera filtri"
-                            buttonIcon="X"
-                            onButtonClick={azzeraFiltri}
-                        />
-                    ) : (
-                        <EmptyState compatta icon="Pencil" title="Nessun volantino in lavorazione" description="Non ci sono volantini in produzione o in revisione." />
-                    )
-                }
-            />
-        </div>
-    );
-};
-
-
 interface VolantiniPubblicatiInLavorazioneContentProps {
     data: VolantiniPubblicatiInLavorazione;
     isLoading: boolean;
@@ -602,6 +516,7 @@ const StoricoVolantiniContent: FC<StoricoVolantiniContentProps> = ({
                 <ElencoKit
                     kits={data?.kit || []}
                     showValidita
+                    dueColonne
                     vuoto={
                         filtriAttivi ? (
                             <EmptyState
@@ -710,12 +625,12 @@ const CardFilterSelect: FC<CardFilterSelectProps> = ({
     );
 };
 
-type IdCard = "inCorso" | "inLavorazione" | "pubblicatiInLavorazione" | "storico";
+type IdCard = "inCorso" | "pubblicatiInLavorazione" | "storico";
 
 const MOTIVO_ERRORE = "Il servizio non ha restituito i volantini. Riprova tra qualche istante.";
 
 const TITOLO_PAGINA = "Dashboard";
-const DESCRIZIONE_PAGINA = "Panoramica dei volantini attivi e in lavorazione.";
+const DESCRIZIONE_PAGINA = "Panoramica dei volantini in validità, di quelli pronti per le prossime promozioni e degli ultimi pubblicati.";
 
 // Le card restano in cache per poco: tornando subito sulla dashboard non si richiedono, ma i dati
 // pubblicati nel frattempo arrivano presto. Le promesse del loader le aggiornano a ogni navigazione.
@@ -769,16 +684,12 @@ const Dashboard3: FC<Dashboard3Props> = ({ embedded = false, loaderDataOverride 
 
     // Filtri indipendenti per ogni card
     const [filterInCorso, setFilterInCorso] = useState<CardFilter>({ id_area: "", id_canale: "" });
-    const [filterInLavorazione, setFilterInLavorazione] = useState<CardFilter>({ id_area: "", id_canale: "" });
     const [filterPubblicatiInLavorazione, setFilterPubblicatiInLavorazione] = useState<CardFilter>({ id_area: "", id_canale: "" });
     const [filterStorico, setFilterStorico] = useState<CardFilter>({ id_area: "", id_canale: "" });
 
     // Dati di ogni card, in React Query: tornando sulla dashboard si vedono subito
     const inCorsoQuery = useVolantiniCard<VolantiniInCorso>(
         "/dashboard/volantini-in-corso", filterInCorso, loaderData?.volantiniInCorsoPromise
-    );
-    const inLavorazioneQuery = useVolantiniCard<VolantiniInLavorazione>(
-        "/dashboard/volantini-in-lavorazione", filterInLavorazione, loaderData?.volantiniInLavorazionePromise
     );
     const pubblicatiInLavorazioneQuery = useVolantiniCard<VolantiniPubblicatiInLavorazione>(
         "/dashboard/volantini-pubblicati-in-lavorazione", filterPubblicatiInLavorazione, loaderData?.volantiniPubblicatiInLavorazionePromise
@@ -794,7 +705,7 @@ const Dashboard3: FC<Dashboard3Props> = ({ embedded = false, loaderDataOverride 
     const aree = areeQuery.data ?? [];
     const canali = canaliQuery.data ?? [];
 
-    const tutte = [inCorsoQuery, inLavorazioneQuery, pubblicatiInLavorazioneQuery, storicoQuery, areeQuery, canaliQuery];
+    const tutte = [inCorsoQuery, pubblicatiInLavorazioneQuery, storicoQuery, areeQuery, canaliQuery];
     // Come prima: lo scheletro finché ogni richiesta iniziale ha una risposta (o un errore)
     const initialLoading = tutte.some((q) => q.isPending);
 
@@ -815,26 +726,22 @@ const Dashboard3: FC<Dashboard3Props> = ({ embedded = false, loaderDataOverride 
     // Cambiando filtro la card resta attenuata finché arrivano i dati nuovi
     const inAggiornamento = (q: { isFetching: boolean; isPlaceholderData: boolean }) => q.isFetching && q.isPlaceholderData;
     const loadingInCorso = inAggiornamento(inCorsoQuery);
-    const loadingInLavorazione = inAggiornamento(inLavorazioneQuery);
     const loadingPubblicatiInLavorazione = inAggiornamento(pubblicatiInLavorazioneQuery);
     const loadingStorico = inAggiornamento(storicoQuery);
 
     const volantiniInCorso = inCorsoQuery.data ?? null;
-    const volantiniInLavorazione = inLavorazioneQuery.data ?? null;
     const volantiniPubblicatiInLavorazione = pubblicatiInLavorazioneQuery.data ?? null;
     const storicoVolantini = storicoQuery.data ?? null;
 
     // Card il cui ultimo caricamento è fallito: mostrano l'errore invece di dati vuoti o vecchi
     const errori: Partial<Record<IdCard, boolean>> = {
         inCorso: inCorsoQuery.isError,
-        inLavorazione: inLavorazioneQuery.isError,
         pubblicatiInLavorazione: pubblicatiInLavorazioneQuery.isError,
         storico: storicoQuery.isError,
     };
 
     // Handler per cambio filtri per ogni card: la query della nuova chiave parte da sola
     const handleFilterInCorsoChange = useCallback((filter: CardFilter) => setFilterInCorso(filter), []);
-    const handleFilterInLavorazioneChange = useCallback((filter: CardFilter) => setFilterInLavorazione(filter), []);
     const handleFilterPubblicatiInLavorazioneChange = useCallback((filter: CardFilter) => setFilterPubblicatiInLavorazione(filter), []);
     const handleFilterStoricoChange = useCallback((filter: CardFilter) => setFilterStorico(filter), []);
 
@@ -861,8 +768,8 @@ const Dashboard3: FC<Dashboard3Props> = ({ embedded = false, loaderDataOverride 
         return contenitore(
             <div role="status" className="grid grid-cols-12 gap-6">
                 <span className="sr-only">Caricamento dei volantini…</span>
-                {[1, 2, 3, 4].map((i) => (
-                    <div key={i} className="col-span-12 box box--stacked p-5 xl:col-span-6">
+                {[1, 2, 3].map((i) => (
+                    <div key={i} className={clsx("col-span-12 box box--stacked p-5", i < 3 && "xl:col-span-6")}>
                         <VolantiniSkeleton />
                     </div>
                 ))}
@@ -926,35 +833,9 @@ const Dashboard3: FC<Dashboard3Props> = ({ embedded = false, loaderDataOverride 
                 )}
             </Sezione>
 
+            {/* Lo stato delle lavorazioni non sta più qui: si segue in Avanzamento produzione */}
             <Sezione
-                className="col-span-12 xl:col-span-6"
-                icona="Pencil"
-                titolo="Volantini in lavorazione"
-                descrizione={
-                    <>
-                        Volantini in produzione e revisioni aperte
-                        <span className="block text-xs text-slate-400">Workflow creativo in tempo reale</span>
-                    </>
-                }
-            >
-                {errori.inLavorazione ? (
-                    errore(() => inLavorazioneQuery.refetch(), inLavorazioneQuery.isFetching)
-                ) : volantiniInLavorazione ? (
-                    <VolantiniInLavorazioneContent
-                        data={volantiniInLavorazione}
-                        isLoading={loadingInLavorazione}
-                        aree={aree}
-                        canali={canali}
-                        filter={filterInLavorazione}
-                        onFilterChange={handleFilterInLavorazioneChange}
-                    />
-                ) : (
-                    <VolantiniSkeleton />
-                )}
-            </Sezione>
-
-            <Sezione
-                className="col-span-12 xl:col-span-6"
+                className="col-span-12"
                 icona="History"
                 titolo="Storico volantini"
                 descrizione="Ultimi 10 volantini pubblicati"

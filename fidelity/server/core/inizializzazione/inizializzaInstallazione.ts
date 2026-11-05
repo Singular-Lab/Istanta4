@@ -1,4 +1,5 @@
 import bcrypt from 'bcrypt';
+import { aggiungiVoceAvanzamento } from '../../../lib/accessi/menuAvanzamento';
 import { convertiMenuMateriali } from '../../../lib/accessi/menuMateriali';
 import { RUOLO_UTENTE_GDO, STATO_UTENTI, TIPO_UTENTI } from '../../../lib/enums';
 import type { PeriodoMateriali } from '../../../lib/materiali/periodi';
@@ -68,17 +69,21 @@ export const ID_VOCI_POP_SUPERADMIN: Readonly<Record<PeriodoMateriali, string>> 
 /** Identificativo fisso dell'intestazione 'MATERIALI POP' del menu predefinito del Superadmin. */
 export const ID_INTESTAZIONE_POP_SUPERADMIN = '48bf27f7-ddb5-4fe8-873c-65506fadd405';
 
+/** Identificativo fisso della voce 'Avanzamento produzione' del menu predefinito del Superadmin. */
+export const ID_VOCE_AVANZAMENTO_SUPERADMIN = '13fbf15c-29c0-45d5-a54c-8a791677ef2d';
+
 /**
  * Le voci del menu predefinito del Superadmin, pronte per bulkCreate. MENU_SUPERADMIN resta
  * allineato a seed-fidelity.sh, con le pagine Materiali e l'intestazione 'MATERIALI': qui si
- * converte nelle sezioni 'MATERIALI VOLANTINO' e 'MATERIALI POP' come i menu salvati
- * (lib/accessi/menuMateriali.ts), così un'installazione nuova e il ripristino del menu nascono
- * già convertiti.
+ * converte nelle sezioni 'MATERIALI VOLANTINO' e 'MATERIALI POP' e riceve la voce 'Avanzamento
+ * produzione' come i menu salvati (lib/accessi/menuMateriali.ts, lib/accessi/menuAvanzamento.ts),
+ * così un'installazione nuova e il ripristino del menu nascono già convertiti.
  */
 export function vociMenuSuperadmin(adesso = new Date()) {
-  const { voci } = convertiMenuMateriali(MENU_SUPERADMIN, voce =>
+  const { voci: convertite } = convertiMenuMateriali(MENU_SUPERADMIN, voce =>
     voce === 'intestazione-pop' ? ID_INTESTAZIONE_POP_SUPERADMIN : ID_VOCI_POP_SUPERADMIN[voce]
   );
+  const { voci } = aggiungiVoceAvanzamento(convertite, () => ID_VOCE_AVANZAMENTO_SUPERADMIN);
   return voci.map(voce => ({
     ...voce,
     tipo_utente: TIPO_UTENTI.SUPERADMIN,

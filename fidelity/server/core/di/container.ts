@@ -142,6 +142,9 @@ import { VolantinoService } from "../services/VolantinoService";
 import { MaterialiService } from "../services/MaterialiService";
 import type { IMaterialiService } from "../interfaces/IMaterialiService";
 import { type IMaterialiRepository, MaterialiRepository } from "../repositories/MaterialiRepository";
+import { AvanzamentoProduzioneService } from "../services/AvanzamentoProduzioneService";
+import type { IAvanzamentoProduzioneService } from "../interfaces/IAvanzamentoProduzioneService";
+import { AvanzamentoProduzioneRepository, type IAvanzamentoProduzioneRepository } from "../repositories/AvanzamentoProduzioneRepository";
 import { ConsultazionePuntiVenditaService } from "../services/ConsultazionePuntiVenditaService";
 import type { IConsultazionePuntiVenditaService } from "../interfaces/IConsultazionePuntiVenditaService";
 import { ConsultazionePuntiVenditaRepository, type IConsultazionePuntiVenditaRepository } from "../repositories/ConsultazionePuntiVenditaRepository";
@@ -241,6 +244,7 @@ function bindRepositories() {
   container.bind<IPluginAnalyticsRepository>(TYPES.PluginAnalyticsRepository).toDynamicValue(() => new PluginAnalyticsRepository()).inSingletonScope();
   container.bind<IAuditLogRepository>(TYPES.AuditLogRepository).toDynamicValue(() => new AuditLogRepository()).inSingletonScope();
   container.bind<IMaterialiRepository>(TYPES.MaterialiRepository).toDynamicValue(() => new MaterialiRepository()).inSingletonScope();
+  container.bind<IAvanzamentoProduzioneRepository>(TYPES.AvanzamentoProduzioneRepository).toDynamicValue(() => new AvanzamentoProduzioneRepository()).inSingletonScope();
   container.bind<IConsultazionePuntiVenditaRepository>(TYPES.ConsultazionePuntiVenditaRepository).toDynamicValue(() => new ConsultazionePuntiVenditaRepository()).inSingletonScope();
   container.bind<IPuntiVenditaVolantinoRepository>(TYPES.PuntiVenditaVolantinoRepository).toDynamicValue(() => new PuntiVenditaVolantinoRepository()).inSingletonScope();
   container.bind<IAnalisiPuntiVenditaRepository>(TYPES.AnalisiPuntiVenditaRepository).toDynamicValue(() => new AnalisiPuntiVenditaRepository()).inSingletonScope();
@@ -471,6 +475,13 @@ function bindServices() {
       context.get<IFileManagementService>(TYPES.FileManagementService)
     )
   );
+  // Una sola istanza per processo: tiene per un minuto i kit non avviati chiesti a Istanta
+  container.bind<IAvanzamentoProduzioneService>(TYPES.AvanzamentoProduzioneService).toDynamicValue(
+    (context) => new AvanzamentoProduzioneService(
+      context.get<IAvanzamentoProduzioneRepository>(TYPES.AvanzamentoProduzioneRepository),
+      context.get<IKitRuntimeService>(TYPES.KitRuntimeService)
+    )
+  ).inSingletonScope();
   container.bind<IConsultazionePuntiVenditaService>(TYPES.ConsultazionePuntiVenditaService).toDynamicValue(
     (context) => new ConsultazionePuntiVenditaService(
       context.get<IConsultazionePuntiVenditaRepository>(TYPES.ConsultazionePuntiVenditaRepository),

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TIPO_UTENTI } from '../../../../lib/enums';
 import { sequelize } from '../../db/SequelizeConnector';
 import { MENU_SUPERADMIN } from '../../inizializzazione/datiPredefiniti';
-import { ID_INTESTAZIONE_POP_SUPERADMIN, ID_VOCI_POP_SUPERADMIN } from '../../inizializzazione/inizializzaInstallazione';
+import { ID_INTESTAZIONE_POP_SUPERADMIN, ID_VOCE_AVANZAMENTO_SUPERADMIN, ID_VOCI_POP_SUPERADMIN } from '../../inizializzazione/inizializzaInstallazione';
 import { MenuItem } from '../../models';
 import { MenuService } from '../MenuService';
 
@@ -57,16 +57,19 @@ describe('MenuService.ripristinaMenuPredefiniti', () => {
   it('sostituisce il solo menu del Superadmin con quello predefinito', async () => {
     const voci = await servizio().ripristinaMenuPredefiniti();
 
-    // MENU_SUPERADMIN convertito nelle viste Volantini e POP: dopo lo storico l'intestazione POP e le tre voci POP.
+    // MENU_SUPERADMIN convertito nelle viste Volantini e POP: dopo lo storico l'intestazione POP e le tre voci POP;
+    // prima di Promozioni in corso la voce Avanzamento produzione.
     const ids = MENU_SUPERADMIN.map(v => v.id_menu_item);
-    const storico = MENU_SUPERADMIN.findIndex(v => v.pathname === '/storico-materiali');
+    const inCorso = MENU_SUPERADMIN.findIndex(v => v.pathname === '/promozioni/in-corso');
+    ids.splice(inCorso, 0, ID_VOCE_AVANZAMENTO_SUPERADMIN);
+    const storico = ids.indexOf(MENU_SUPERADMIN.find(v => v.pathname === '/storico-materiali')!.id_menu_item);
     const pop = [
       ID_INTESTAZIONE_POP_SUPERADMIN,
       ID_VOCI_POP_SUPERADMIN.attivi,
       ID_VOCI_POP_SUPERADMIN['in-corso'],
       ID_VOCI_POP_SUPERADMIN.storico,
     ];
-    expect(voci).toBe(MENU_SUPERADMIN.length + 4);
+    expect(voci).toBe(MENU_SUPERADMIN.length + 5);
     const superadmin = tabella.filter(r => r.tipo_utente === TIPO_UTENTI.SUPERADMIN);
     expect(superadmin.map(r => r.id_menu_item)).toEqual([...ids.slice(0, storico + 1), ...pop, ...ids.slice(storico + 1)]);
     expect(tabella).toContainEqual({ tipo_utente: TIPO_UTENTI.AGENZIA, titolo: 'Menu Agenzia' });

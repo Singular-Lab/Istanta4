@@ -8,6 +8,8 @@
  *
  * Dopo il {@link RIMUOVIBILI_DAL}: le route con contatore a zero si rimuovono (route, gestore, metodi
  * del servizio usati solo da lei e la voce qui sotto); quelle chiamate vanno capite prima di decidere.
+ * Una route marcata dopo il primo inventario ha la sua data (`marcataIl`) e si toglie 30 giorni dopo
+ * quella ({@link rimuovibileDal}).
  *
  * Non marcare le route chiamate da altri sistemi anche se l'inventario non ne trova traccia
  * (Istanta, plugin /api/external/*, /api/auth/ephemeral/*, IdP, display, /health, /metrics, WebPliant
@@ -22,10 +24,15 @@ export interface RouteSenzaChiamanti {
   /** Pattern completo, come lo registra Express: base del controller + percorso della route. */
   percorso: string;
   motivo: string;
+  /** Per le route marcate dopo il primo inventario: da quando si osserva (YYYY-MM-DD). */
+  marcataIl?: string;
 }
 
 export const MARCATE_IL = '2026-10-29';
 export const RIMUOVIBILI_DAL = '2026-11-28';
+
+/** Una route marcata dopo il primo inventario si osserva anche lei per 30 giorni. */
+const GIORNI_DI_OSSERVAZIONE = 30;
 
 const LEGACY = 'Nessun chiamante nel frontend, nel plugin, nei sistemi esterni o nella documentazione pubblica (inventario T8)';
 const INDIRETTA = 'L\'unico chiamante (hook o loader del frontend mai usato) e\' stato rimosso in T8';
@@ -93,7 +100,28 @@ export const ROUTE_SENZA_CHIAMANTI: readonly RouteSenzaChiamanti[] = [
 
   // ─── Rimasta senza chiamanti: risposta 501, unione tolta dal frontend in T8 ─────
   { metodo: 'POST', percorso: '/api/mergeFiles', motivo: 'Risponde 501 (unione non implementata) e il confronto/unione dei file e\' stato tolto dal frontend in T8; il permesso file.merge resta nel catalogo' },
+
+  // ─── Sostituita: lo stato delle lavorazioni e' passato ad Avanzamento produzione (L12) ─
+  {
+    metodo: 'GET',
+    percorso: '/api/dashboard/volantini-in-lavorazione',
+    motivo: 'La sezione "Volantini in lavorazione" della panoramica (Dashboard3, anche nella scheda Superadmin) e\' stata tolta: lo stato dei kit si segue in Avanzamento produzione (GET /api/produzione/avanzamento)',
+    marcataIl: '2026-11-05',
+  },
 ];
+
+/** Da quando la route si osserva: la sua data, o quella del primo inventario. */
+export function marcataIl(route: Pick<RouteSenzaChiamanti, 'marcataIl'>): string {
+  return route.marcataIl ?? MARCATE_IL;
+}
+
+/** Da quando la route si può togliere, se nessuno l'ha chiamata: 30 giorni dopo la marcatura. */
+export function rimuovibileDal(route: Pick<RouteSenzaChiamanti, 'marcataIl'>): string {
+  if (!route.marcataIl) return RIMUOVIBILI_DAL;
+  const giorno = new Date(`${route.marcataIl}T00:00:00Z`);
+  giorno.setUTCDate(giorno.getUTCDate() + GIORNI_DI_OSSERVAZIONE);
+  return giorno.toISOString().slice(0, 10);
+}
 
 /** Chiave "METODO /pattern", la stessa che usa il middleware. */
 export function chiaveRoute(metodo: string, percorso: string): string {

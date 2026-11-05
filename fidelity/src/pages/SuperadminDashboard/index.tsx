@@ -402,7 +402,6 @@ const SuperadminDashboard: FC = () => {
         if (!gdoLoaderDataRef.current) {
             gdoLoaderDataRef.current = {
                 volantiniInCorsoPromise: ServerCall.get("/dashboard/volantini-in-corso"),
-                volantiniInLavorazionePromise: ServerCall.get("/dashboard/volantini-in-lavorazione"),
                 volantiniPubblicatiInLavorazionePromise: ServerCall.get("/dashboard/volantini-pubblicati-in-lavorazione"),
                 areePromise: ServerCall.get("/allAreeForGDO"),
                 canaliPromise: ServerCall.get("/allCanaliForGDO"),

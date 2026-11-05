@@ -11,6 +11,7 @@ import { paginaPer } from '../../../lib/accessi/pagine';
 import { sequelize } from '../db/SequelizeConnector';
 import { log } from '../logger';
 import { PermessiRepository } from '../repositories/PermessiRepository';
+import { migraMenuAvanzamento } from '../inizializzazione/migrazioneMenuAvanzamento';
 import { migraMenuMateriali } from '../inizializzazione/migrazioneMenuMateriali';
 import { migraPercorsiSpostati } from '../inizializzazione/migrazionePercorsi';
 import { PERMESSI_PREDEFINITI } from './predefiniti';
@@ -238,6 +239,7 @@ export const preparaAccessiAllAvvio = async (repository = new PermessiRepository
   // Prima del piano di migrazione, che legge i percorsi del menu nel catalogo delle pagine.
   await migraPercorsiSpostati();
   await migraMenuMateriali();
+  await migraMenuAvanzamento();
 
   await sequelize.transaction(async (transaction) => {
     await sequelize.query(`SELECT pg_advisory_xact_lock(hashtext('preparazione_accessi'))`, { transaction });
