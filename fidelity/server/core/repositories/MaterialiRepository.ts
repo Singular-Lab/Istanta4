@@ -209,8 +209,8 @@ type Sostituzioni = Record<string, unknown>;
 const testoMeta = (chiave: 'codice_referenza' | 'descrizione_uno' | 'reparto') =>
   `COALESCE(f.meta_olimpo_cloud -> '${chiave}' ->> 'content', f.meta_olimpo_cloud ->> '${chiave}')`;
 
-const NOME_AREA = `COALESCE(a.nome_aree, k.nome_area, '')`;
-const NOME_CANALE = `COALESCE(c.nome_canali, k.nome_canale, '')`;
+export const NOME_AREA = `COALESCE(a.nome_aree, k.nome_area, '')`;
+export const NOME_CANALE = `COALESCE(c.nome_canali, k.nome_canale, '')`;
 
 /** Il file e' dell'export indicato, per codice salvato o per tipo di export. Mai NULL: si puo' negare. */
 const fileDellExport = (sostituzione: string) => `(
@@ -222,9 +222,9 @@ const fileDellExport = (sostituzione: string) => `(
 )`;
 
 /** I file dell'export CORREGGO non compaiono nelle viste, come nelle vecchie pagine Materiali. */
-const FILE_NON_CORREGGO = `NOT ${fileDellExport('codiceCorreggo')}`;
+export const FILE_NON_CORREGGO = `NOT ${fileDellExport('codiceCorreggo')}`;
 
-const SOSTITUZIONI_FISSE: Sostituzioni = {
+export const SOSTITUZIONI_FISSE: Sostituzioni = {
   codiceCorreggo: EXPORT_DI_SISTEMA.CORREGGO,
   codiceVolantino: EXPORT_DI_SISTEMA.VOL,
   tipoManuale: TIPO_KIT_DESIGN.MANUALE,

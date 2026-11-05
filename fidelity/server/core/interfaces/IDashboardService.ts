@@ -51,7 +51,8 @@ export interface StoricoVolantiniDTO {
 
 export interface IDashboardService {
     getVolantiniInCorso(filters?: DashboardFilterParams): Promise<VolantiniInCorsoDTO>;
-    getVolantiniInLavorazione(filters?: DashboardFilterParams): Promise<VolantiniInLavorazioneDTO>;
+    /** Con idGdo solo i kit delle promo di quella GDO; senza, di tutte. */
+    getVolantiniInLavorazione(filters?: DashboardFilterParams, idGdo?: string | null): Promise<VolantiniInLavorazioneDTO>;
     getVolantiniPubblicatiInLavorazione(filters?: DashboardFilterParams): Promise<VolantiniPubblicatiInLavorazioneDTO>;
     getStoricoVolantini(filters?: DashboardFilterParams, limit?: number): Promise<StoricoVolantiniDTO>;
     // pubblicaVolPdf(

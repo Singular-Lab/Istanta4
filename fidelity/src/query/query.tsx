@@ -7,6 +7,7 @@ import type { AuditLogPaginatedResponse, AuditLogSummary } from "../../lib/audit
 import type { PeriodoMateriali } from "../../lib/materiali/periodi";
 import type { ElencoPromozioniPop, FiltriFilePop, FiltriKitVolantini, OpzioniFilePop, PaginaFilePop, PaginaKitVolantini, RiepilogoPop } from "../../lib/materiali/tipi";
 import type { FiltriPromozioniVolantini, PaginaPromozioniVolantini } from "../../lib/materiali/tipi";
+import type { AvanzamentoProduzione } from "../../lib/produzione/avanzamento";
 import { parametriMateriali } from "@/utils/materiali";
 import type { AreaResponseDTO, CanaleResponseDTO, CombinazioneCanaleAreaResponseDTO, DisplayContextResponseDTO, DispositivoPuntoVenditaResponseDTO, FormatiResponseDTO, GDOResponseDTO, PromoResponseDTO, PuntoVenditaResponseDTO, RuoloUtenteGDOResponseDTO, TipiDiExportResponseDTO, VolantinoAttivoDTO } from "../../server/core/dto";
 import type { PuntoVenditaConsultazione } from "../../lib/puntiVendita/consultazione";
@@ -695,6 +696,18 @@ export const useFetchPromozioniVolantini = (filtri: FiltriPromozioniVolantini) =
     placeholderData: (precedenti, queryPrecedente) =>
       (queryPrecedente?.queryKey[3] as FiltriPromozioniVolantini | undefined)?.periodo === filtri.periodo ? precedenti : undefined,
     staleTime: STALE_MATERIALI,
+  });
+
+/**
+ * Promo in corso della GDO con lo stato dei loro kit (pagina Avanzamento produzione). Si aggiorna
+ * da sola ogni minuto finché la pagina è aperta: è il tempo per cui il server tiene i kit non avviati.
+ */
+export const useFetchAvanzamentoProduzione = () =>
+  useQuery({
+    queryKey: ['produzione', 'avanzamento'],
+    queryFn: () => ServerCall.get<AvanzamentoProduzione>('/produzione/avanzamento'),
+    staleTime: STALE_MATERIALI,
+    refetchInterval: STALE_MATERIALI,
   });
 
 /** Promozioni del periodo che hanno file POP, con il loro conteggio. */

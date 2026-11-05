@@ -349,6 +349,13 @@ const routes: RouteObject[] = [
       //     return { Component: Documentale };
       //   },
       // },
+      {
+        path: "avanzamento-produzione",
+        lazy: async () => {
+          const { default: AvanzamentoProduzione } = await import("@/pages/AvanzamentoProduzione");
+          return { Component: AvanzamentoProduzione };
+        },
+      },
       // Viste Volantini e POP per periodo, al posto delle pagine Materiali: il loader dice il periodo
       ...PERIODI_MATERIALI.flatMap((periodo): RouteObject[] => [
         {

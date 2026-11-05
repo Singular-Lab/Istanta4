@@ -30,7 +30,7 @@ vi.mock('../permissionGuard', async (importOriginal) => {
 
 import { createControllers } from '../../routes';
 import { routeDeprecata } from '../routeDeprecata';
-import { chiaveRoute, MARCATE_IL, RIMUOVIBILI_DAL, ROUTE_SENZA_CHIAMANTI } from '../routeSenzaChiamanti';
+import { chiaveRoute, MARCATE_IL, marcataIl, RIMUOVIBILI_DAL, rimuovibileDal, ROUTE_SENZA_CHIAMANTI } from '../routeSenzaChiamanti';
 
 const MIDDLEWARE_DI_AUTENTICAZIONE = new Set([
   'authMiddleware',
@@ -120,6 +120,16 @@ describe('route senza chiamanti: censimento', () => {
     }
     expect(MARCATE_IL).toBe('2026-10-29');
     expect(new Date(RIMUOVIBILI_DAL).getTime() - new Date(MARCATE_IL).getTime()).toBe(30 * 24 * 60 * 60 * 1000);
+  });
+
+  it('una route marcata dopo il primo inventario si osserva 30 giorni dalla sua data', () => {
+    const lavorazione = ROUTE_SENZA_CHIAMANTI.find(r => r.percorso === '/api/dashboard/volantini-in-lavorazione');
+
+    expect(lavorazione && [marcataIl(lavorazione), rimuovibileDal(lavorazione)]).toEqual(['2026-11-05', '2026-12-05']);
+    expect([marcataIl({}), rimuovibileDal({})]).toEqual([MARCATE_IL, RIMUOVIBILI_DAL]);
+    for (const route of ROUTE_SENZA_CHIAMANTI) {
+      expect(new Date(rimuovibileDal(route)).getTime() - new Date(marcataIl(route)).getTime()).toBe(30 * 24 * 60 * 60 * 1000);
+    }
   });
 
   it('routeDeprecata viene dopo tutte le protezioni: l\'autenticazione delle route non cambia', async () => {

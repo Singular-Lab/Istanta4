@@ -745,12 +745,6 @@ interface VolantiniInCorsoResponse {
   kit: KitVolantino[];
 }
 
-interface VolantiniInLavorazioneResponse {
-  totale: number;
-  inAttesa: number;
-  kit: KitVolantino[];
-}
-
 interface VolantiniPubblicatiInLavorazioneResponse {
   totale: number;
   kit: KitVolantino[];
@@ -759,7 +753,6 @@ interface VolantiniPubblicatiInLavorazioneResponse {
 // Loader per Dashboard3 - Volantini
 export const dashboard3Loader = async () => {
   const volantiniInCorsoPromise = ServerCall.get<VolantiniInCorsoResponse>("/dashboard/volantini-in-corso");
-  const volantiniInLavorazionePromise = ServerCall.get<VolantiniInLavorazioneResponse>("/dashboard/volantini-in-lavorazione");
   const volantiniPubblicatiInLavorazionePromise = ServerCall.get<VolantiniPubblicatiInLavorazioneResponse>("/dashboard/volantini-pubblicati-in-lavorazione");
   const areePromise = ServerCall.get<AreaResponseDTO[]>("/allAreeForGDO");
   const canaliPromise = ServerCall.get<CanaleResponseDTO[]>("/allCanaliForGDO");
@@ -768,7 +761,6 @@ export const dashboard3Loader = async () => {
 
   return {
     volantiniInCorsoPromise,
-    volantiniInLavorazionePromise,
     volantiniPubblicatiInLavorazionePromise,
     areePromise,
     canaliPromise,

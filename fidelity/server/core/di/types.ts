@@ -60,6 +60,9 @@ export const TYPES = {
   // Viste Volantini e POP (ex Materiali)
   MaterialiService: Symbol.for('MaterialiService'),
 
+  // Pagina Avanzamento produzione
+  AvanzamentoProduzioneService: Symbol.for('AvanzamentoProduzioneService'),
+
   // Consultazione dei punti vendita (pagine /punti-vendita)
   ConsultazionePuntiVenditaService: Symbol.for('ConsultazionePuntiVenditaService'),
 
@@ -121,6 +124,7 @@ export const TYPES = {
   PermessiRepository: Symbol.for('PermessiRepository'),
   MenuItemRepository: Symbol.for('MenuItemRepository'),
   MaterialiRepository: Symbol.for('MaterialiRepository'),
+  AvanzamentoProduzioneRepository: Symbol.for('AvanzamentoProduzioneRepository'),
   ConsultazionePuntiVenditaRepository: Symbol.for('ConsultazionePuntiVenditaRepository'),
   PuntiVenditaVolantinoRepository: Symbol.for('PuntiVenditaVolantinoRepository'),
   AnalisiPuntiVenditaRepository: Symbol.for('AnalisiPuntiVenditaRepository'),

@@ -59,8 +59,12 @@ export async function creaKitRuntime(opzioni: {
   validitaAl?: Date;
   offsetVisibilita?: number;
   promo?: Pick<KitDiProva, 'idGdo' | 'idPromo'>;
+  /** GDO della promo nuova, se non se ne crea una apposta. */
+  idGdo?: string;
   statoPromo?: string;
   nomePromo?: string;
+  /** promo.data_scadenza: la scadenza della lavorazione. */
+  dataScadenza?: Date;
   stessaCombinazioneDi?: KitDiProva;
   /** tipo_lavorazione_formati del formato del kit: 1 volantino (predefinito), 2 POP. */
   tipoLavorazione?: number;
@@ -69,7 +73,7 @@ export async function creaKitRuntime(opzioni: {
   titolo?: string;
 } = {}): Promise<KitDiProva> {
   const base = opzioni.stessaCombinazioneDi;
-  const idGdo = opzioni.promo?.idGdo ?? base?.idGdo ?? await creaGdo();
+  const idGdo = opzioni.promo?.idGdo ?? opzioni.idGdo ?? base?.idGdo ?? await creaGdo();
   const idArea = base?.idArea ?? randomUUID();
   const idCanale = base?.idCanale ?? randomUUID();
   const idFormato = base?.idFormato ?? randomUUID();
@@ -103,6 +107,7 @@ export async function creaKitRuntime(opzioni: {
       validita_dal: opzioni.validitaDal ?? new Date(oggi.getTime() - 86_400_000),
       validita_al: opzioni.validitaAl ?? new Date(oggi.getTime() + 7 * 86_400_000),
       offset_visibilita: opzioni.offsetVisibilita ?? 0, stato: opzioni.statoPromo ?? 'VALIDA', gdo: idGdo,
+      data_scadenza: opzioni.dataScadenza ?? null,
       createdat: oggi, updatedat: oggi,
     });
   }

@@ -1,7 +1,7 @@
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import client, { type Counter } from 'prom-client';
 import { log } from '../logger';
-import { chiaveRoute, MARCATE_IL } from './routeSenzaChiamanti';
+import { chiaveRoute, marcataIl, ROUTE_SENZA_CHIAMANTI } from './routeSenzaChiamanti';
 
 /**
  * Segna le route che l'inventario non vede chiamare da nessuno (elenco e motivi in
@@ -44,6 +44,9 @@ interface OpzioniRouteDeprecata {
   ora?: () => number;
 }
 
+/** Data di marcatura per route ("METODO /pattern"), per il log. */
+const MARCATURE = new Map(ROUTE_SENZA_CHIAMANTI.map(route => [chiaveRoute(route.metodo, route.percorso), marcataIl(route)]));
+
 export function creaRouteDeprecata({ intervalloAvvisiMs = INTERVALLO_AVVISI_MS, ora = Date.now }: OpzioniRouteDeprecata = {}): RequestHandler {
   // Per route: quando e' partito l'ultimo avviso e quante chiamate da allora
   const avvisi = new Map<string, { ultimo: number; chiamateDallUltimoAvviso: number }>();
@@ -66,7 +69,7 @@ export function creaRouteDeprecata({ intervalloAvvisiMs = INTERVALLO_AVVISI_MS, 
         tipoUtente: req.session?.tipo_utente,
         idGdo: req.session?.id_gdo,
         chiamateNonRiportate: stato?.chiamateDallUltimoAvviso ?? 0,
-        marcataIl: MARCATE_IL,
+        marcataIl: MARCATURE.get(chiave) ?? marcataIl({}),
       });
       avvisi.set(chiave, { ultimo: adesso, chiamateDallUltimoAvviso: 0 });
     }

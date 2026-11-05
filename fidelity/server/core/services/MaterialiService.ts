@@ -483,7 +483,7 @@ const nienteDaScaricare = (idFormato: string): NotFoundError =>
   new NotFoundError({ message: 'Nessun file da scaricare per questa selezione.', entityType: 'FilePop', entityId: idFormato });
 
 /** Esegue `lavoro` su tutti gli elementi, al piu' `limite` alla volta; i risultati nell'ordine degli elementi. */
-async function mappaConLimite<T, R>(elementi: readonly T[], limite: number, lavoro: (elemento: T) => Promise<R>): Promise<R[]> {
+export async function mappaConLimite<T, R>(elementi: readonly T[], limite: number, lavoro: (elemento: T) => Promise<R>): Promise<R[]> {
   const risultati: R[] = new Array<R>(elementi.length);
   let prossimo = 0;
   const esecutore = async () => {

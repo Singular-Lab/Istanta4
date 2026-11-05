@@ -39,6 +39,7 @@ import { WebPliantController } from './controllers/WebPliantController';
 import { FileManagementController } from './controllers/FileManagementController';
 import { VolantinoController } from './controllers/VolantinoController';
 import { MaterialiController } from './controllers/MaterialiController';
+import { AvanzamentoProduzioneController } from './controllers/AvanzamentoProduzioneController';
 import { ConsultazionePuntiVenditaController } from './controllers/ConsultazionePuntiVenditaController';
 import { StoriaPuntoVenditaController } from './controllers/StoriaPuntoVenditaController';
 import { AnalisiPuntoVenditaController } from './controllers/AnalisiPuntoVenditaController';
@@ -82,6 +83,7 @@ import type { IWebPliantService } from './interfaces/IWebPliantService';
 import type { IFileManagementService } from './interfaces/IFileManagementService';
 import type { IVolantinoService } from './interfaces/IVolantinoService';
 import type { IMaterialiService } from './interfaces/IMaterialiService';
+import type { IAvanzamentoProduzioneService } from './interfaces/IAvanzamentoProduzioneService';
 import type { IConsultazionePuntiVenditaService } from './interfaces/IConsultazionePuntiVenditaService';
 import type { IStoriaPuntoVenditaService } from './interfaces/IStoriaPuntoVenditaService';
 import type { IAnalisiPuntoVenditaService } from './interfaces/IAnalisiPuntoVenditaService';
@@ -152,6 +154,7 @@ export async function createControllers(): Promise<IController[]> {
   const fileManagementService = container.get<IFileManagementService>(TYPES.FileManagementService);
   const volantinoService = container.get<IVolantinoService>(TYPES.VolantinoService);
   const materialiService = container.get<IMaterialiService>(TYPES.MaterialiService);
+  const avanzamentoProduzioneService = container.get<IAvanzamentoProduzioneService>(TYPES.AvanzamentoProduzioneService);
   const consultazionePuntiVenditaService = container.get<IConsultazionePuntiVenditaService>(TYPES.ConsultazionePuntiVenditaService);
   const storiaPuntoVenditaService = container.get<IStoriaPuntoVenditaService>(TYPES.StoriaPuntoVenditaService);
   const analisiPuntoVenditaService = container.get<IAnalisiPuntoVenditaService>(TYPES.AnalisiPuntoVenditaService);
@@ -181,6 +184,7 @@ export async function createControllers(): Promise<IController[]> {
     new FileManagementController(fileManagementService),
     new VolantinoController(volantinoService),
     new MaterialiController(materialiService),
+    new AvanzamentoProduzioneController(avanzamentoProduzioneService),
     // Prima della consultazione: '/rete/...' e '/gestione/...' non devono mai finire in un '/:id'
     new AnalisiPuntoVenditaController(analisiPuntoVenditaService),
     new ConsultazionePuntiVenditaController(consultazionePuntiVenditaService),

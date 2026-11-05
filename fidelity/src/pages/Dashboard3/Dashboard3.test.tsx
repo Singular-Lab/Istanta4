@@ -28,7 +28,6 @@ const rifiutata = () => {
 
 const datiLoader = (inCorso: Promise<any>): Dashboard3LoaderData => ({
   volantiniInCorsoPromise: inCorso,
-  volantiniInLavorazionePromise: Promise.resolve({ totale: 0, inAttesa: 0, kit: [] }),
   volantiniPubblicatiInLavorazionePromise: Promise.resolve({ totale: 0, kit: [] }),
   areePromise: Promise.resolve([]),
   canaliPromise: Promise.resolve([]),
@@ -71,8 +70,8 @@ describe("Dashboard GDO", () => {
     expect(within(card).queryByText("Nessun volantino attivo")).not.toBeInTheDocument();
 
     // Le altre card restano utilizzabili
-    const lavorazione = screen.getByRole("region", { name: "Volantini in lavorazione" });
-    expect(within(lavorazione).getByText("Nessun volantino in lavorazione")).toBeInTheDocument();
+    const prossimi = screen.getByRole("region", { name: "Prossimi volantini" });
+    expect(within(prossimi).getByText("Nessun volantino in attesa")).toBeInTheDocument();
 
     vi.mocked(ServerCall.get).mockResolvedValueOnce({ totale: 0, inScadenza: 0, kit: [] });
     await userEvent.click(within(card).getByRole("button", { name: "Riprova" }));
@@ -136,10 +135,20 @@ describe("Dashboard GDO", () => {
   it("i filtri rapidi sono un gruppo a scelta singola con i conteggi", async () => {
     apri(datiLoader(Promise.resolve({ totale: 0, inScadenza: 0, kit: [] })));
 
-    const card = await screen.findByRole("region", { name: "Volantini in lavorazione" });
-    const gruppo = within(card).getByRole("radiogroup", { name: "Stato processo" });
+    const card = await screen.findByRole("region", { name: "Volantini in validità" });
+    const gruppo = within(card).getByRole("radiogroup", { name: "Filtri rapidi" });
     expect(within(gruppo).getByRole("radio", { name: /Tutti/ })).toHaveAttribute("aria-checked", "true");
-    expect(within(gruppo).getAllByRole("radio")).toHaveLength(3);
+    expect(within(gruppo).getAllByRole("radio")).toHaveLength(2);
+  });
+
+  it("non mostra lo stato delle lavorazioni e non chiede i kit in lavorazione: si seguono in Avanzamento produzione", async () => {
+    apri(null);
+
+    await screen.findByRole("region", { name: "Storico volantini" });
+
+    const titoli = screen.getAllByRole("region").map((sezione) => within(sezione).getByRole("heading", { level: 2 }).textContent);
+    expect(titoli).toEqual(["Volantini in validità", "Prossimi volantini", "Storico volantini"]);
+    expect(chiamateA("/dashboard/volantini-in-lavorazione")).toBe(0);
   });
 
   it("con le promesse del loader non ripete le sue richieste: dalla pagina parte solo lo storico", async () => {
@@ -163,8 +172,8 @@ describe("Dashboard GDO", () => {
     const client = nuovoClient();
     const { unmount } = apri(null, true, client);
     await screen.findByRole("region", { name: "Storico volantini" });
-    // Senza loader le 6 chiamate le fa la pagina
-    expect(ServerCall.get).toHaveBeenCalledTimes(6);
+    // Senza loader le 5 chiamate le fa la pagina
+    expect(ServerCall.get).toHaveBeenCalledTimes(5);
     unmount();
     vi.mocked(ServerCall.get).mockClear();
 

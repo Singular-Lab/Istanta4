@@ -15,6 +15,7 @@ import { MENU_SUPERADMIN, SERVIZI_GESTITI, SERVIZI_HUB_PREDEFINITI } from '../da
 import {
   amministratoreDaAmbiente,
   ID_INTESTAZIONE_POP_SUPERADMIN,
+  ID_VOCE_AVANZAMENTO_SUPERADMIN,
   ID_VOCI_POP_SUPERADMIN,
   inizializzaInstallazione,
   VISTE_DA_AGGIORNARE,
@@ -120,10 +121,11 @@ describe('inizializzazione di un database vuoto', () => {
       expect.objectContaining({ id_utente_utentegdo: admin.id_utenti, id_gdo_utentegdo: 'g1', id_ruolo_utente_gdo: 'ruolo-admin' }),
     ]);
 
-    // MENU_SUPERADMIN convertito nelle viste Volantini e POP: tre voci POP e l'intestazione POP in piu'.
-    expect(stato.menu).toHaveLength(MENU_SUPERADMIN.length + 4);
+    // MENU_SUPERADMIN convertito nelle viste Volantini e POP (tre voci POP e l'intestazione POP in piu')
+    // e con la voce Avanzamento produzione.
+    expect(stato.menu).toHaveLength(MENU_SUPERADMIN.length + 5);
     expect(stato.menu.every(m => m.tipo_utente === TIPO_UTENTI.SUPERADMIN && m.ruolo_gdo === null)).toBe(true);
-    expect(esiti.find(e => e.passo === 'menu del superadmin')?.dettaglio).toBe(`${MENU_SUPERADMIN.length + 4} voci`);
+    expect(esiti.find(e => e.passo === 'menu del superadmin')?.dettaglio).toBe(`${MENU_SUPERADMIN.length + 5} voci`);
   });
 
   it('crea nell hub i servizi predefiniti e Istanta e Correggo per i tipi di utente concordati', async () => {
@@ -215,7 +217,7 @@ describe('configurazione mancante', () => {
     expect(esito(esiti, 'amministratore')).toBe('saltato');
     expect(esito(esiti, 'amministratore collegato alla gdo')).toBe('saltato');
     expect(stato.gdo).toHaveLength(1);
-    expect(stato.menu).toHaveLength(MENU_SUPERADMIN.length + 4);
+    expect(stato.menu).toHaveLength(MENU_SUPERADMIN.length + 5);
   });
 
   it.each(['', 'default', 'DEFAULT'])('con CLIENT_ID "%s" non crea GDO ne collegamento', async (clientId) => {
@@ -275,6 +277,16 @@ describe('menu predefinito del Superadmin', () => {
     expect(voci.filter(v => v.pathname?.startsWith('/pop/')).every(v => !v.disabilitato && !v.start_page)).toBe(true);
   });
 
+  it('ha Avanzamento produzione subito prima di Promozioni in corso, con il permesso sui kit', () => {
+    expect(sezione(vociMenuSuperadmin(), 'PROMOZIONI').map(([, titolo, percorso, permesso, icona]) => [titolo, percorso, permesso, icona])).toEqual([
+      ['PROMOZIONI', null, null, null],
+      ['Nuova promozione', '/promozioni/nuova', 'pagina.nuova_lavorazione', 'CirclePlus'],
+      ['Avanzamento produzione', '/avanzamento-produzione', PERMESSI.KIT_RUNTIME.VISUALIZZA, 'Gauge'],
+      ['Promozioni in corso', '/promozioni/in-corso', 'pagina.lavorazioni_in_corso', 'Activity'],
+      ['Storico promozioni', '/promozioni/storico', 'pagina.storico_lavorazioni', 'History'],
+    ]);
+  });
+
   it('ha identificativi fissi, tutti diversi, e un ordinamento senza buchi ne doppioni', () => {
     const voci = vociMenuSuperadmin();
     const ids = voci.map(v => v.id_menu_item);
@@ -283,7 +295,7 @@ describe('menu predefinito del Superadmin', () => {
     expect(new Set(ids).size).toBe(ids.length);
     expect(voci.map(v => v.ordinamento)).toEqual(voci.map((_, i) => i));
     // Le altre voci restano quelle di MENU_SUPERADMIN, nello stesso ordine.
-    const aggiunte = [...Object.values(ID_VOCI_POP_SUPERADMIN), ID_INTESTAZIONE_POP_SUPERADMIN];
+    const aggiunte = [...Object.values(ID_VOCI_POP_SUPERADMIN), ID_INTESTAZIONE_POP_SUPERADMIN, ID_VOCE_AVANZAMENTO_SUPERADMIN];
     expect(ids.filter(i => !aggiunte.includes(i))).toEqual(MENU_SUPERADMIN.map(v => v.id_menu_item));
     // La sezione 'VOLANTINI' delle promozioni del seed non c'entra con i materiali e resta com'e'.
     expect(voci.find(v => v.id_menu_item === MENU_SUPERADMIN[0].id_menu_item)?.titolo).toBe('VOLANTINI');

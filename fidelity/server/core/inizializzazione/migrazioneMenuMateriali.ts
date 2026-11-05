@@ -38,7 +38,8 @@ export type EsitoMigrazioneMenuMateriali = {
   inserite: number;
 };
 
-const menuDb = (transaction: Transaction): MenuInTransazione => ({
+/** I menu salvati dentro una transazione: anche per le altre migrazioni dei menu all'avvio. */
+export const menuDb = (transaction: Transaction): MenuInTransazione => ({
   leggiVoci: () => sequelize.query<RigaMenu>(
     `SELECT id_menu_item, tipo_utente, ruolo_gdo, id_ruolo_utente_gdo, id_parent, tipo, titolo, icona,
             pathname, codice_permesso, disabilitato, start_page, ordinamento
@@ -108,10 +109,10 @@ const fonteDb: FonteMenuMateriali = {
  * Un menu è l'insieme delle voci di un tipo di utente e di un sotto-ruolo; le righe storiche con la
  * sola chiave testuale ruolo_gdo, non ancora collegate a un sotto-ruolo, formano un menu a parte.
  */
-const chiaveMenu = (voce: RigaMenu): string =>
+export const chiaveMenu = (voce: RigaMenu): string =>
   `${voce.tipo_utente}|${voce.id_ruolo_utente_gdo ?? ''}|${voce.id_ruolo_utente_gdo ? '' : (voce.ruolo_gdo ?? '')}`;
 
-const nomeMenu = (voce: RigaMenu): string =>
+export const nomeMenu = (voce: RigaMenu): string =>
   voce.id_ruolo_utente_gdo
     ? `${voce.tipo_utente} · sotto-ruolo ${voce.id_ruolo_utente_gdo}`
     : voce.ruolo_gdo ? `${voce.tipo_utente} · ${voce.ruolo_gdo}` : voce.tipo_utente;

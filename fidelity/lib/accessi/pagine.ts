@@ -27,7 +27,7 @@ const P = PERMESSI;
 
 export const PAGINE: DefinizionePagina[] = [
   // Aperte a tutti gli utenti autenticati
-  // Panoramica dei volantini: resta in Visualizzazione; la parte di avanzamento passerà in Produzione
+  // Panoramica dei volantini: solo consultazione, lo stato delle lavorazioni è in Avanzamento produzione
   { percorso: '/dashboard', permesso: null, sezione: 'visualizzazione' },
   { percorso: '/gdo/dashboard', permesso: null, sezione: 'visualizzazione' },
   { percorso: '/marketing/dashboard', permesso: null, sezione: 'visualizzazione' },
@@ -39,6 +39,9 @@ export const PAGINE: DefinizionePagina[] = [
   { percorso: '/display/files', permesso: null, sezione: 'account' },
   { percorso: '/hub', permesso: null, sottopagine: true, sezione: 'account' },
   { percorso: '/auth', permesso: null, sottopagine: true, sezione: 'account' },
+
+  // Avanzamento delle lavorazioni: promo in corso e stato dei loro kit
+  { percorso: '/avanzamento-produzione', permesso: P.KIT_RUNTIME.VISUALIZZA, sezione: 'produzione' },
 
   // Promozioni
   { percorso: '/promozioni/nuova', permesso: P.PROMO.CREA, sezione: 'produzione' },
@@ -125,6 +128,7 @@ export type VoceDiMenu = { percorso: string; titolo: string; icona: string };
 
 export const VOCI_DI_MENU: readonly VoceDiMenu[] = [
   // Produzione
+  { percorso: '/avanzamento-produzione', titolo: 'Avanzamento produzione', icona: 'Gauge' },
   { percorso: '/promozioni/nuova', titolo: 'Nuova promozione', icona: 'CirclePlus' },
   { percorso: '/promozioni/in-corso', titolo: 'Promozioni in corso', icona: 'Activity' },
   { percorso: '/promozioni/storico', titolo: 'Storico promozioni', icona: 'History' },
