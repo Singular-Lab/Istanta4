@@ -69,6 +69,38 @@ const schedaFoto = {
         });
     },
 
+    /// I20-1202: le caselle P e S della scheda Foto P/S dopo un clic. stati e' { codice: stato } con
+    /// 1 = P, 2 = S, 3 = nessuna; casella e' "P" o "S". La stessa foto non e' mai P e S insieme, e
+    /// il gruppo ha al piu' una P: spuntando P, la foto che era P diventa S. Togliere una spunta
+    /// lascia la foto senza P e senza S. Restituisce gli stati nuovi, senza toccare quelli ricevuti;
+    /// un codice che non c'e' non cambia niente. Prima le due caselle erano indipendenti e gli
+    /// errori arrivavano solo con Applica.
+    selezionePsDopoClic(stati, codice, casella, spuntata) {
+        const nuovi = Object.assign({}, stati || {});
+        const chiave = codice == null ? "" : String(codice);
+        if (!Object.prototype.hasOwnProperty.call(nuovi, chiave)) {
+            return nuovi;
+        }
+        if (!spuntata) {
+            if ((casella === "P" && nuovi[chiave] === 1) || (casella === "S" && nuovi[chiave] === 2)) {
+                nuovi[chiave] = 3;
+            }
+            return nuovi;
+        }
+        if (casella === "P") {
+            Object.keys(nuovi).forEach(altro => {
+                if (altro !== chiave && nuovi[altro] === 1) {
+                    nuovi[altro] = 2;
+                }
+            });
+            nuovi[chiave] = 1;
+        }
+        else if (casella === "S") {
+            nuovi[chiave] = 2;
+        }
+        return nuovi;
+    },
+
     /// TASK-60aaf10d: la foto che la lista indica per la referenza (Foto.NomeDaTracciato), da mandare
     /// al server con una scelta solo per la lavorazione: se una lista nuova ne indica un'altra, la
     /// scelta decade. Vuota quando il record non c'e' o la lista non indica foto.
@@ -1501,6 +1533,31 @@ const schedaFoto = {
         }
 
         if (objItem["Scatto.CodiceGruppo"].split(",").length > 1) {
+            //I20-1202: a ogni clic le caselle P e S di tutto il gruppo si riallineano alla regola
+            //(una foto non e' P e S insieme, una sola P: la vecchia diventa S).
+            $("#cambiaPS").find("input.primary-check, input.secondary-check").on('change', function () {
+                var cliccata = this;
+                var caselle = $("#cambiaPS").find("input.primary-check, input.secondary-check");
+                //Gli stati di prima del clic: la casella cliccata ha gia' la spunta nuova, si conta la vecchia.
+                var stati = {};
+                caselle.each(function () {
+                    var cod = String($(this).attr('codice'));
+                    var spuntataPrima = this === cliccata ? !$(this).prop('checked') : $(this).prop('checked');
+                    if (stati[cod] == null) {
+                        stati[cod] = 3;
+                    }
+                    if (spuntataPrima) {
+                        stati[cod] = $(this).hasClass('primary-check') ? 1 : (stati[cod] === 1 ? 1 : 2);
+                    }
+                });
+                var nuovi = me.selezionePsDopoClic(stati, $(cliccata).attr('codice'),
+                    $(cliccata).hasClass('primary-check') ? "P" : "S", $(cliccata).prop('checked'));
+                caselle.each(function () {
+                    var stato = nuovi[String($(this).attr('codice'))];
+                    $(this).prop('checked', $(this).hasClass('primary-check') ? stato === 1 : stato === 2);
+                });
+            });
+
             var confermaButton = $('<sp-action-button id="confermaButton" style="color:lightgreen; margin-right:10px;">Applica</sp-action-button>');
             confermaButton.on('click', function () {
                 //Solo i checkbox di selezione: quello di rendering non concorre a primaria/secondaria
@@ -1561,7 +1618,10 @@ const schedaFoto = {
                     return item.StatoSelezione == 1;
                 });
                 if (!hasPrimary) {
+                    //I20-1202: una finestra da chiudere, non solo la riga dei messaggi. Modali.popup non
+                    //ritorna mai: non si aspetta.
                     messaggioUtente("Code SRF-35 Edit P/S: Nessun primario selezionato, impossibile procedere", "error");
+                    Modali.popup("Foto primaria mancante", "Imposta una foto P prima di applicare: il gruppo deve avere una foto primaria. (Code SRF-35)");
                     return;
                 }
 

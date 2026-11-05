@@ -17,6 +17,24 @@ namespace AgenziaLib
 
         fields currentFields = new fields();
 
+        /// TASK-16f63122: i campi che stanno dentro un gruppo del box, per gruppo (Edro21: range2,
+        /// tipo_punti2 e punti2 in Range_Punti_2). Cancellare il gruppo cancella anche loro: prima
+        /// restavano fra i campi compilati, e il Plugin li segnalava come mancanti nel box. Vuota:
+        /// conta solo l'etichetta cancellata, come prima.
+        public Dictionary<string, List<string>> campiDeiContenitori { get; set; } = new Dictionary<string, List<string>>();
+
+        /// Se il campo e' cancellato: lui stesso, o un gruppo dichiarato che lo contiene.
+        bool cancellato(string labelName)
+        {
+            if (currentFields.deletedFields.Contains(labelName))
+            {
+                return true;
+            }
+
+            return campiDeiContenitori != null && campiDeiContenitori.Any(c =>
+                c.Value != null && c.Value.Contains(labelName) && currentFields.deletedFields.Contains(c.Key));
+        }
+
         public void clearInterpreter()
         {
             currentFields.compiledFields = new List<CompiledField>(); 
@@ -72,7 +90,7 @@ namespace AgenziaLib
             var returnField = new fields();
             for (int i = 0; i < currentFields.compiledFields.Count; i++)
             {
-                if (!currentFields.deletedFields.Contains(currentFields.compiledFields[i].labelName))
+                if (!cancellato(currentFields.compiledFields[i].labelName))
                 {
                     returnField.compiledFields.Add(currentFields.compiledFields[i]);
                 }
@@ -84,7 +102,7 @@ namespace AgenziaLib
 
         public void finalizeFields()
         {
-            currentFields.compiledFields.RemoveAll(f => currentFields.deletedFields.Contains(f.labelName));
+            currentFields.compiledFields.RemoveAll(f => cancellato(f.labelName));
         }
         public CompiledField getFieldsValue(string labelName)
         {
@@ -95,6 +113,7 @@ namespace AgenziaLib
         public CompiledFieldInterpreter Clone()
         {
             CompiledFieldInterpreter clone = new CompiledFieldInterpreter();
+            clone.campiDeiContenitori = campiDeiContenitori;
             var validField = getFields();
             foreach (var field in validField.compiledFields)
             {

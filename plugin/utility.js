@@ -948,6 +948,27 @@ const Utility=
         }
     },
 
+    /// TASK-16f63122: se un campo resta nel box: visibile lui e ogni gruppo che lo contiene, fino al
+    /// box. Un gruppo fra i campi cancellati dal dato si nasconde durante l'impaginazione e si toglie
+    /// dopo, con tutto quello che contiene: un campo li' dentro e' visibile, ma sparira'. Prima
+    /// setCampoDNA guardava il solo campo, e il DNA finiva su prezzo_offerta dentro
+    /// prezzo_offerta_gruppo cancellato: il box restava senza DNA e la scheda ref non si apriva.
+    restaNelBox(field, box) {
+        var corrente = field;
+        for (var giri = 0; giri < 50 && corrente != null; giri++) {
+            if (!corrente.visible) {
+                return false;
+            }
+            var padre = corrente.parent;
+            //Arrivati al box, o fuori da un gruppo (pagina, spread, testo che lo ancora), basta.
+            if (padre == null || padre.visible === undefined || (box != null && padre.id != null && padre.id === box.id)) {
+                return true;
+            }
+            corrente = padre;
+        }
+        return true;
+    },
+
     setCampoDNA(listCampiDNA, box, itemRef) {
         //listaCampiDNA è un array di stringhe con i campi papabili per inserire il DNA, il primo che trova lo restituisce, altrimenti null
         //listCampiDNA se non contiene base viene aggiunto in coda
@@ -961,7 +982,7 @@ const Utility=
         for (var i = 0; i < listCampiDNA.length; i++) {
             var campo = listCampiDNA[i];
             var field = this.getFieldByLabel(campo, box, false);
-            if (field != null && field.isValid && field.visible) {
+            if (field != null && field.isValid && this.restaNelBox(field, box)) {
                 field.label += "$DNA$" + box.label + "$" + itemRef["Referenza.Codice"] + "$" + itemRef["Scatto.CodiceGruppo"] + "$" + itemRef["idRec"];
                 break;
             }

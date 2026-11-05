@@ -68,6 +68,7 @@ function middlewareEdro() {
 function utilityVera() {
     return new Function('Utility', 'return ({\n' + [
         corpoMembro(utility, 'getFieldByLabel:function(label, box, parseLabel = true)'),
+        corpoMembro(utility, 'restaNelBox(field, box) {'),
         corpoMembro(utility, 'setCampoDNA(listCampiDNA, box, itemRef) {')
     ].join(',\n') + '\n});')({ parseLabel: () => assert.fail('parseLabel non attesa') });
 }
@@ -142,4 +143,80 @@ test('un campo di prezzo piu\' in alto in graduatoria resta davanti a paghi_3_sc
     assert.deepStrictEqual(
         assegnaDna(box(['paghi_3_sc', 'prezzo_offerta', 'descrizione'])),
         ['prezzo_offerta' + DNA]);
+});
+
+/*
+ * TASK-16f63122: il DNA va su un campo che resta nel box. Un gruppo fra i campi cancellati dal
+ * dato si nasconde durante l'impaginazione e si toglie dopo con tutto quello che contiene: il
+ * campo li' dentro e' visibile, ma sparira'. Nel BOX14 di 7130202 (meccanica PUNTI) il DNA finiva
+ * su prezzo_offerta dentro prezzo_offerta_gruppo cancellato, e la scheda ref non si apriva.
+ */
+
+//Un box finto con gruppi: ogni voce e' [etichetta, gruppo che la contiene o null, visibile].
+function boxConGruppi(voci) {
+    const scatola = { id: 1, label: 'BOX14', isValid: true, visible: true, allPageItems: [] };
+    const perEtichetta = {};
+    voci.forEach(([etichetta, , visibile], i) => {
+        perEtichetta[etichetta] = { id: 100 + i, label: etichetta, isValid: true, visible: visibile !== false, parent: scatola };
+        scatola.allPageItems.push(perEtichetta[etichetta]);
+    });
+    voci.forEach(([etichetta, gruppo]) => {
+        if (gruppo != null) {
+            perEtichetta[etichetta].parent = perEtichetta[gruppo];
+        }
+    });
+    return scatola;
+}
+
+function assegnaDnaBox14(boxFinto) {
+    const campiDNA = middlewareEdro().getRegoleApplicazioneDNA({ codiceBox: 'BOX14', meccanicaAssegnata: 'PUNTI' });
+    utilityVera().setCampoDNA(campiDNA, boxFinto, { 'Referenza.Codice': '7130202', 'Scatto.CodiceGruppo': '7130202', idRec: 891039 });
+    return boxFinto.allPageItems.filter(campo => campo.label.includes('$DNA$')).map(campo => campo.label.split('$')[0]);
+}
+
+test('con il gruppo del prezzo cancellato il DNA va sulla descrizione, non su prezzo_offerta', () => {
+    //Come il BOX14 di 7130202: prezzo_offerta_gruppo e' nascosto perche' cancellato dal dato.
+    const scatola = boxConGruppi([
+        ['prezzo_offerta_gruppo', null, false],
+        ['sy_euro', 'prezzo_offerta_gruppo'],
+        ['prezzo_offerta', 'prezzo_offerta_gruppo'],
+        ['descrizione', null],
+        ['base', null]
+    ]);
+
+    assert.deepStrictEqual(assegnaDnaBox14(scatola), ['descrizione']);
+});
+
+test('con il gruppo del prezzo nel box il DNA resta su prezzo_offerta', () => {
+    //Come il BOX14 di 600810.
+    const scatola = boxConGruppi([
+        ['prezzo_offerta_gruppo', null],
+        ['sy_euro', 'prezzo_offerta_gruppo'],
+        ['prezzo_offerta', 'prezzo_offerta_gruppo'],
+        ['descrizione', null]
+    ]);
+
+    assert.deepStrictEqual(assegnaDnaBox14(scatola), ['prezzo_offerta']);
+});
+
+test('un gruppo nascosto piu\' in alto, non il diretto contenitore, esclude lo stesso il campo', () => {
+    const scatola = boxConGruppi([
+        ['gruppo_esterno', null, false],
+        ['prezzo_offerta_gruppo', 'gruppo_esterno'],
+        ['prezzo_offerta', 'prezzo_offerta_gruppo'],
+        ['descrizione', null]
+    ]);
+
+    assert.deepStrictEqual(assegnaDnaBox14(scatola), ['descrizione']);
+});
+
+test('senza campi della graduatoria che restano il DNA va sulla base', () => {
+    const scatola = boxConGruppi([
+        ['prezzo_offerta_gruppo', null, false],
+        ['prezzo_offerta', 'prezzo_offerta_gruppo'],
+        ['descrizione', null, false],
+        ['base', null]
+    ]);
+
+    assert.deepStrictEqual(assegnaDnaBox14(scatola), ['base']);
 });
