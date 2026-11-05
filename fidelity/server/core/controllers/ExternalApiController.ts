@@ -68,9 +68,12 @@ export class ExternalApiController extends BaseController {
     this.router.post("/refs-html", ephemeralTokenAuthMiddleware, this.getRefsHtml.bind(this));
     this.router.get("/css", ephemeralTokenAuthMiddleware, this.getCss.bind(this));
     this.router.post("/files", ephemeralTokenAuthMiddleware, this.getFiles.bind(this));
-    this.router.get("/files/metadata-fields", authMiddleware, this.getFilesMetadataFields.bind(this));
-    this.router.post("/refs/field-values", authMiddleware, this.getRefsFieldValues.bind(this));
-    this.router.post("/files/field-values", authMiddleware, this.getFilesFieldValues.bind(this));
+    // Campi dei metadati per i filtri, con la sessione (non sono API del plugin): li usano i display del
+    // punto vendita, la prova delle API, i filtri del plugin e i file degli ordini di stampa
+    const campiMetadati = [authMiddleware, permissionGuard(['gdo.gestisci_punti_vendita', 'api.test', 'api.gestisci_plugin', 'ordini_stampa.visualizza'])];
+    this.router.get("/files/metadata-fields", ...campiMetadati, this.getFilesMetadataFields.bind(this));
+    this.router.post("/refs/field-values", ...campiMetadati, this.getRefsFieldValues.bind(this));
+    this.router.post("/files/field-values", ...campiMetadati, this.getFilesFieldValues.bind(this));
 
     this.router.get("/promo", ephemeralTokenAuthMiddleware, this.getPromoValide.bind(this));
 

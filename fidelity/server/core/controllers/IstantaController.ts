@@ -17,7 +17,7 @@ export class IstantaController extends BaseController {
     protected setupRoutes(): void {
         this.router.get("/getCombinazioniDaIstanta/:id", authMiddleware, routeDeprecata, this.getCombinazioniDaIstanta.bind(this));
         this.router.post("/downloadKitsByTipoDiExport", authMiddleware, permissionGuard("file.download"), this.downloadKitsByTipoDiExport.bind(this));
-        this.router.get("/getStatusImportazione", authMiddleware, this.getStatusImportazione.bind(this));
+        this.router.get("/getStatusImportazione", authMiddleware, permissionGuard("promo.visualizza"), this.getStatusImportazione.bind(this));
     }
 
     private async getCombinazioniDaIstanta(req: Request<{ id: string }>, res: Response) {

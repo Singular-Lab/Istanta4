@@ -18,12 +18,12 @@ export class DisplayContextController extends BaseController {
 
     public initializeRoutes(): void {
         this.router.post('/display-contexts', authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), this.createDisplayContext.bind(this));
-        this.router.get('/display-contexts', authMiddleware, this.getAllDisplayContexts.bind(this));
+        this.router.get('/display-contexts', authMiddleware, permissionGuard('gdo.visualizza'), this.getAllDisplayContexts.bind(this));
         this.router.get('/display-contexts/:id', authMiddleware, routeDeprecata, this.getDisplayContextById.bind(this));
         this.router.put('/display-contexts/:id', authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), this.updateDisplayContext.bind(this));
         this.router.delete('/display-contexts/:id', authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), this.deleteDisplayContext.bind(this));
         this.router.get('/display-contexts/gdo/:id_gdo', authMiddleware, routeDeprecata, this.getDisplayContextsByGDO.bind(this));
-        this.router.get('/display-contexts/pv/:id_pv', authMiddleware, this.getDisplayContextsByPV.bind(this));
+        this.router.get('/display-contexts/pv/:id_pv', authMiddleware, permissionGuard('gdo.visualizza'), this.getDisplayContextsByPV.bind(this));
     }
 
     private async createDisplayContext(req: Request, res: Response): Promise<void> {

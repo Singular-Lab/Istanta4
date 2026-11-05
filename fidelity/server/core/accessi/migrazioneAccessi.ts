@@ -14,6 +14,11 @@ import { PermessiRepository } from '../repositories/PermessiRepository';
 import { migraMenuAvanzamento } from '../inizializzazione/migrazioneMenuAvanzamento';
 import { migraMenuMateriali } from '../inizializzazione/migrazioneMenuMateriali';
 import { migraPercorsiSpostati } from '../inizializzazione/migrazionePercorsi';
+import {
+  applicaPianoConsultazione,
+  descriviPianoConsultazione,
+  leggiPianoConsultazione,
+} from './migrazioneConsultazione';
 import { PERMESSI_PREDEFINITI } from './predefiniti';
 import {
   creaTabellaStatoAccessi,
@@ -26,14 +31,19 @@ import {
  *
  * 1. Allinea la tabella `permessi` al catalogo di lib/accessi.
  * 2. Su un'installazione nuova scrive i permessi predefiniti.
- * 3. Su un'installazione esistente (schema 0) migra al modello per aree:
- *    concede l'accesso all'area dove oggi la pagina compare nel menu del ruolo,
- *    o dove il ruolo ha già un'azione dell'area; collega il menu ai sotto-ruoli
- *    per id; toglie i vecchi permessi pagina.* e permessi.gestisci.
- * Ogni passo è idempotente; la migrazione gira in una transazione con lock.
+ * 3. Su un'installazione esistente porta gli accessi all'ultimo schema, un passo alla volta:
+ *    - schema 1, modello per aree: concede l'accesso all'area dove oggi la pagina compare nel
+ *      menu del ruolo, o dove il ruolo ha già un'azione dell'area; collega il menu ai sotto-ruoli
+ *      per id; toglie i vecchi permessi pagina.* e permessi.gestisci;
+ *    - schema 2, permessi di consultazione e Agenzia (migrazioneConsultazione.ts).
+ * Ogni passo si registra nella versione dello schema; la migrazione gira in una transazione con lock.
  */
 
-export const SCHEMA_ACCESSI = 1;
+/** Modello per aree. */
+export const SCHEMA_PER_AREE = 1;
+/** Permessi di consultazione separati dalla produzione e Agenzia senza Visualizzazione. */
+export const SCHEMA_CONSULTAZIONE = 2;
+export const SCHEMA_ACCESSI = SCHEMA_CONSULTAZIONE;
 
 export type Concessione = {
   tipo: TIPO_UTENTI;
@@ -257,16 +267,35 @@ export const preparaAccessiAllAvvio = async (repository = new PermessiRepository
       return;
     }
 
-    if (schema < SCHEMA_ACCESSI) {
+    if (schema < SCHEMA_PER_AREE) {
       // Il piano si calcola prima di allineare il catalogo: servono ancora i vecchi codici.
       const piano = await calcolaPianoMigrazione(transaction);
       const idPerCodice = await repository.allineaCatalogo(vociCatalogo(), transaction);
       await applicaPiano(piano, repository, idPerCodice, transaction);
-      await scriviSchemaAccessi(SCHEMA_ACCESSI, transaction);
-      log.info(`Accessi migrati al modello per aree (schema ${SCHEMA_ACCESSI})\n${descriviPiano(piano)}`);
-      return;
+      await scriviSchemaAccessi(SCHEMA_PER_AREE, transaction);
+      log.info(`Accessi migrati al modello per aree (schema ${SCHEMA_PER_AREE})\n${descriviPiano(piano)}`);
     }
 
-    await repository.allineaCatalogo(vociCatalogo(), transaction);
+    // I codici nuovi del catalogo servono anche al passo successivo
+    const idPerCodice = await repository.allineaCatalogo(vociCatalogo(), transaction);
+
+    if (schema < SCHEMA_CONSULTAZIONE) {
+      const piano = await leggiPianoConsultazione(transaction);
+      await applicaPianoConsultazione(piano, repository, idPerCodice, transaction);
+      await scriviSchemaAccessi(SCHEMA_CONSULTAZIONE, transaction);
+      const etichetta = await etichettaLivelli(transaction);
+      log.info(`Accessi: permessi di consultazione e Agenzia (schema ${SCHEMA_CONSULTAZIONE})\n${descriviPianoConsultazione(piano, etichetta)}`);
+    }
   });
+};
+
+/** Nome leggibile di un livello di permessi per il log: tipo, sotto-ruolo e GDO. */
+export const etichettaLivelli = async (transaction: Transaction) => {
+  const ruoli = await sequelize.query<{ id_ruolo_utente_gdo: string; ruolo_ruolo_utente_gdo: string }>(
+    `SELECT id_ruolo_utente_gdo, ruolo_ruolo_utente_gdo FROM ruolo_utente_gdo`,
+    { type: QueryTypes.SELECT, transaction }
+  );
+  const nomePerId = new Map(ruoli.map(r => [r.id_ruolo_utente_gdo, r.ruolo_ruolo_utente_gdo]));
+  return (tipo: string, idRuolo: string | null, idGdo: string | null) =>
+    `${tipo}${idRuolo ? ` · ${nomePerId.get(idRuolo) ?? idRuolo}` : ''}${idGdo ? ` · GDO ${idGdo}` : ''}`;
 };

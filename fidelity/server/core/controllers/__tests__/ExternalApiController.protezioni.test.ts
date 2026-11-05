@@ -12,7 +12,8 @@ vi.mock('../../middleware/permissionGuard', async (importOriginal) => {
     ...originale,
     permissionGuard: (codice: Parameters<typeof originale.permissionGuard>[0]) => {
       const guardiano = originale.permissionGuard(codice);
-      permessoDelGuardiano.set(guardiano, codice);
+      // Con un elenco basta uno dei permessi: li si riporta tutti
+      permessoDelGuardiano.set(guardiano, typeof codice === 'string' ? codice : codice.join(' | '));
       return guardiano;
     },
   };
@@ -39,6 +40,7 @@ import type { StatisticheApiService } from '../../services/StatisticheApiService
 import { ExternalApiController } from '../ExternalApiController';
 
 const BASE = '/api/external';
+const CAMPI_METADATI = 'gdo.gestisci_punti_vendita | api.test | api.gestisci_plugin | ordini_stampa.visualizza';
 
 /**
  * Tutte le route del controller, con le protezioni in testa alla catena.
@@ -56,10 +58,11 @@ const ROUTE_ATTESE: Record<string, string[]> = {
   [`GET ${BASE}/refs/today`]: ['ephemeralTokenAuthMiddleware'],
   [`GET ${BASE}/filter-templates/slug/:slug`]: ['ephemeralTokenAuthMiddleware'],
 
-  // Editor dei filtri in Fidelity: basta la sessione
-  [`GET ${BASE}/files/metadata-fields`]: ['authMiddleware'],
-  [`POST ${BASE}/refs/field-values`]: ['authMiddleware'],
-  [`POST ${BASE}/files/field-values`]: ['authMiddleware'],
+  // Campi dei metadati, dalla sessione: editor dei filtri del plugin, display del punto vendita, prova
+  // delle API, file degli ordini di stampa. Ogni funzione ha il suo permesso (spec ruoli-permessi)
+  [`GET ${BASE}/files/metadata-fields`]: ['authMiddleware', `permissionGuard(${CAMPI_METADATI})`],
+  [`POST ${BASE}/refs/field-values`]: ['authMiddleware', `permissionGuard(${CAMPI_METADATI})`],
+  [`POST ${BASE}/files/field-values`]: ['authMiddleware', `permissionGuard(${CAMPI_METADATI})`],
 
   // Chiavi API
   [`POST ${BASE}/generate-api-key`]: ['authMiddleware', 'permissionGuard(api.gestisci_chiavi)'],

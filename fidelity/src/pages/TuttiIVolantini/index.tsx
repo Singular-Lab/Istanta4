@@ -45,7 +45,7 @@ const TuttiIVolantini: React.FC = () => {
   const idKit = parametri.get("kit") ?? "";
   const pagina = numeroPagina(parametri.get("pagina"));
   const referenza = parametri.get("referenza") ?? "";
-  const puoScaricare = usePermission(PERMISSIONS.FILE.DOWNLOAD);
+  const puoScaricare = usePermission(PERMISSIONS.MATERIALI.SCARICA);
   const insights = useFetchFlyerInsights(idKit);
   const configurazione = useFetchFlyerInsightsConfig();
   const file = useQuery({
@@ -144,7 +144,7 @@ const TuttiIVolantini: React.FC = () => {
 
       {!puoScaricare ? (
         <Alert variant="soft-info" icona="Eye">
-          Gli insight sono disponibili in consultazione. Per scaricare i file serve il permesso di download.
+          Gli insight sono disponibili in consultazione. Per scaricare i file serve il permesso di scaricare volantini e POP.
         </Alert>
       ) : (
         <Sezione senzaPadding titolo="File del volantino" descrizione="File pubblicati disponibili per il download.">

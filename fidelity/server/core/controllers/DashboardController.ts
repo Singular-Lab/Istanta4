@@ -14,7 +14,9 @@ export class DashboardController extends BaseController {
     }
 
     protected setupRoutes(): void {
-        this.router.get('/volantini-in-corso', authMiddleware, this.getVolantiniInCorso.bind(this));
+        // Panoramica e storico dei volantini: consultazione, con "volantini.visualizza"
+        const volantini = [authMiddleware, permissionGuard('volantini.visualizza')];
+        this.router.get('/volantini-in-corso', ...volantini, this.getVolantiniInCorso.bind(this));
         // Lo stato delle lavorazioni e' produzione: solo con il permesso sui kit e per la GDO della
         // sessione. La panoramica non la chiama piu' (ora c'e' Avanzamento produzione).
         this.router.get(
@@ -24,8 +26,8 @@ export class DashboardController extends BaseController {
             routeDeprecata,
             this.getVolantiniInLavorazione.bind(this)
         );
-        this.router.get('/volantini-pubblicati-in-lavorazione', authMiddleware, this.getVolantiniPubblicatiInLavorazione.bind(this));
-        this.router.get('/storico-volantini', authMiddleware, this.getStoricoVolantini.bind(this));
+        this.router.get('/volantini-pubblicati-in-lavorazione', ...volantini, this.getVolantiniPubblicatiInLavorazione.bind(this));
+        this.router.get('/storico-volantini', ...volantini, this.getStoricoVolantini.bind(this));
 
 
         //Queste sono endpoint che dovranno eliminarsi.

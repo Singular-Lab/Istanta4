@@ -33,7 +33,7 @@ export class ImpostazioniController extends BaseController {
     // =========================
     // PROMOZIONI E TIMELINE
     // =========================
-    this.router.get('/getAllPromoForTimeline', authMiddleware, this.getAllPromoForTimeline.bind(this));
+    this.router.get('/getAllPromoForTimeline', authMiddleware, permissionGuard('promo.visualizza'), this.getAllPromoForTimeline.bind(this));
 
     // =========================
     // WEBPLIANT E REFERENZE (dipendono da webhookService/configService)

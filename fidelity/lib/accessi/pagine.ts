@@ -8,7 +8,8 @@ import type { SezionePagina } from './sezioni';
  * - `sottopagine: true` estende il permesso a ogni percorso che inizia con quello
  *   della pagina (dettagli, kit, menabò...). Il confronto è sempre per segmenti
  *   interi: "/promozioni" non copre "/promozioni-in-corso".
- * - `permesso: null` significa "basta essere autenticati".
+ * - `permesso: null` significa "basta essere autenticati": solo per le pagine dell'utente su sé
+ *   stesso e di servizio (profilo, hub, accesso, documentazione delle API, display).
  * - `sezione` è la sezione del menu della pagina, secondo la sua funzione principale
  *   (lib/accessi/sezioni.ts): decide dove compare la voce, qualunque gruppo abbia scelto
  *   l'amministratore.
@@ -26,16 +27,18 @@ export type DefinizionePagina = {
 const P = PERMESSI;
 
 export const PAGINE: DefinizionePagina[] = [
-  // Aperte a tutti gli utenti autenticati
-  // Panoramica dei volantini: solo consultazione, lo stato delle lavorazioni è in Avanzamento produzione
-  { percorso: '/dashboard', permesso: null, sezione: 'visualizzazione' },
-  { percorso: '/gdo/dashboard', permesso: null, sezione: 'visualizzazione' },
-  { percorso: '/marketing/dashboard', permesso: null, sezione: 'visualizzazione' },
-  { percorso: '/category/dashboard', permesso: null, sezione: 'visualizzazione' },
+  // Panoramica e storico dei volantini: solo consultazione, lo stato delle lavorazioni è in Avanzamento produzione
+  { percorso: '/dashboard', permesso: P.VOLANTINI.VISUALIZZA, sezione: 'visualizzazione' },
+  { percorso: '/gdo/dashboard', permesso: P.VOLANTINI.VISUALIZZA, sezione: 'visualizzazione' },
+  { percorso: '/storico-volantini', permesso: P.VOLANTINI.VISUALIZZA, sezione: 'visualizzazione' },
+  // Dashboard dei dati per Category e Marketing
+  { percorso: '/marketing/dashboard', permesso: P.ANALISI.DASHBOARD_MARKETING, sezione: 'visualizzazione' },
+  { percorso: '/category/dashboard', permesso: P.ANALISI.DASHBOARD_CATEGORY, sezione: 'visualizzazione' },
+
+  // Aperte a tutti gli utenti autenticati: le pagine dell'utente su sé stesso e di servizio
   { percorso: '/profilo-utente', permesso: null, sezione: 'account' },
   // Documentazione delle API, per chi integra
   { percorso: '/documentazione', permesso: null, sottopagine: true, sezione: 'gestione' },
-  { percorso: '/storico-volantini', permesso: null, sezione: 'visualizzazione' },
   { percorso: '/display/files', permesso: null, sezione: 'account' },
   { percorso: '/hub', permesso: null, sottopagine: true, sezione: 'account' },
   { percorso: '/auth', permesso: null, sottopagine: true, sezione: 'account' },
@@ -49,8 +52,8 @@ export const PAGINE: DefinizionePagina[] = [
   { percorso: '/promozioni', permesso: P.PROMO.VISUALIZZA, sottopagine: true, sezione: 'produzione' },
   { percorso: '/promozioni-in-corso', permesso: P.PROMO.VISUALIZZA, sezione: 'produzione' },
   { percorso: '/storico-promozioni', permesso: P.PROMO.VISUALIZZA, sezione: 'produzione' },
-  // Analisi dei tracciati: consultazione (il permesso resta quello delle promozioni per ora)
-  { percorso: '/report/tracciati', permesso: P.PROMO.VISUALIZZA, sottopagine: true, sezione: 'visualizzazione' },
+  // Analisi dei tracciati: consultazione, con il suo permesso (non quello delle promozioni)
+  { percorso: '/report/tracciati', permesso: P.ANALISI.VISUALIZZA, sottopagine: true, sezione: 'visualizzazione' },
 
   // Volantini e materiali
   { percorso: '/volantini/tutti_i_volantini', permesso: P.MATERIALI.VISUALIZZA, sezione: 'visualizzazione' },

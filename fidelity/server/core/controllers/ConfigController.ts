@@ -62,7 +62,8 @@ export class ConfigController extends BaseController {
     this.router.get('/avviso-manutenzione', authMiddleware, this.getAvvisoManutenzione.bind(this));
     this.router.post('/avviso-manutenzione', authMiddleware, permissionGuard(PERMESSI.SISTEMA.MANUTENZIONE), this.saveAvvisoManutenzione.bind(this));
     this.router.delete('/avviso-manutenzione', authMiddleware, permissionGuard(PERMESSI.SISTEMA.MANUTENZIONE), this.deleteAvvisoManutenzione.bind(this));
-    this.router.get('/regole-menabo', authMiddleware, this.getRegoleMenabo.bind(this));
+    // Le regole servono al menabò della promozione e alle impostazioni di produzione
+    this.router.get('/regole-menabo', authMiddleware, permissionGuard(['promo.visualizza', 'impostazioni.visualizza']), this.getRegoleMenabo.bind(this));
     this.router.post('/regole-menabo', authMiddleware, permissionGuard('impostazioni.modifica_generali'), this.saveRegoleMenabo.bind(this));
     this.router.delete('/regole-menabo', authMiddleware, permissionGuard('impostazioni.modifica_generali'), this.deleteRegoleMenabo.bind(this));
     // Funzioni opzionali della GDO operativa: Superadmin e Agenzia possono indicarne un'altra con ?gdo=

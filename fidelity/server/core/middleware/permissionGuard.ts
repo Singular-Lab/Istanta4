@@ -16,9 +16,14 @@ import { AuditLogService } from '../services/AuditLogService';
  * controllo pagine; il Superadmin li ha tutti, compresi quelli di sistema.
  * Le modifiche ai permessi valgono dalla richiesta successiva (versione nel DB).
  *
- * @param codicePermesso - Es. "promo.elimina", "sistema.gestisci_accessi"
+ * Con un elenco basta uno dei permessi: serve a un endpoint usato sia dalla produzione sia dalla
+ * consultazione (per esempio "file.download" o "materiali.scarica").
+ *
+ * @param permessi - Es. "promo.elimina", "sistema.gestisci_accessi", ["file.download", "materiali.scarica"]
  */
-export const permissionGuard = (codicePermesso: CodicePermesso) => {
+export const permissionGuard = (permessi: CodicePermesso | readonly CodicePermesso[]) => {
+  const codici: readonly CodicePermesso[] = typeof permessi === 'string' ? [permessi] : permessi;
+  const codicePermesso = codici.join(' o ');
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
       // Chiamate di servizio gia' autenticate da authMiddleware (bearer di integrazione
@@ -34,8 +39,8 @@ export const permissionGuard = (codicePermesso: CodicePermesso) => {
         }));
       }
 
-      if (await RisolutoreAccessi.get().puo(contesto, codicePermesso)) {
-        return next();
+      for (const codice of codici) {
+        if (await RisolutoreAccessi.get().puo(contesto, codice)) return next();
       }
 
       log.warn(`Permesso negato: ${codicePermesso} per utente ${contesto.idUtente} (${contesto.tipo})`);

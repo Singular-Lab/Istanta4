@@ -235,7 +235,7 @@ const statoHttp = (errore: unknown): number | undefined => (errore as { httpStat
 
 function ContenutoPop({ periodo }: { periodo: PeriodoMateriali }) {
   const navigate = useNavigate();
-  const puoScaricare = usePermission(PERMISSIONS.FILE.DOWNLOAD);
+  const puoScaricare = usePermission(PERMISSIONS.MATERIALI.SCARICA);
   const puoAprirePromo = usePermission(PERMISSIONS.PROMO.VISUALIZZA);
   const [parametri] = useSearchParams();
   const promoRichiesta = parametri.get("promo") ?? "";

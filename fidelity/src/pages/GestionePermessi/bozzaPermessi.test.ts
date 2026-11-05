@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { AREE, PERMESSI, TUTTI_I_PERMESSI } from '../../../lib/accessi/catalogo';
+import { presetDi } from '../../../lib/accessi/preset';
 import {
+  applicaPreset,
   ConfigurazioneServer,
   differenze,
   impostaArea,
@@ -97,3 +99,40 @@ describe('bozza dei permessi', () => {
     expect(passaFiltro(config, {}, PERMESSI.ORDINI_STAMPA.AVVIA_FTP, 'tutti', 'webhook')).toBe(false);
   });
 });
+
+describe('preset nella bozza', () => {
+  it('porta i permessi a quelli del preset: abilita i suoi, disabilita gli altri, lascia quelli di sistema', () => {
+    const config = configurazione([PERMESSI.PROMO.VISUALIZZA, PERMESSI.PROMO.CREA, PERMESSI.MATERIALI.VISUALIZZA, PERMESSI.SISTEMA.LOG]);
+    const preset = presetDi('solo-visualizzazione').permessi;
+
+    const bozza = applicaPreset(config, {}, preset);
+
+    expect(bozza[PERMESSI.PROMO.VISUALIZZA]).toBe(false);
+    expect(bozza[PERMESSI.PROMO.CREA]).toBe(false);
+    // Già abilitato: nessuna modifica
+    expect(PERMESSI.MATERIALI.VISUALIZZA in bozza).toBe(false);
+    expect(bozza[PERMESSI.MATERIALI.SCARICA]).toBe(true);
+    expect(PERMESSI.SISTEMA.LOG in bozza).toBe(false);
+    // Dopo il preset i permessi visti sono esattamente quelli del preset
+    const visti = TUTTI_I_PERMESSI.filter(p => !p.sistema && valoreVisto(config, bozza, p.codice).abilitato).map(p => p.codice);
+    expect(new Set(visti)).toEqual(new Set(preset));
+  });
+
+  it('in un ambito che eredita, i permessi già al valore del preset restano ereditati', () => {
+    const config = configurazione([PERMESSI.MATERIALI.VISUALIZZA], { eredita: true, ereditati: [PERMESSI.MATERIALI.VISUALIZZA] });
+
+    const bozza = applicaPreset(config, {}, presetDi('solo-visualizzazione').permessi);
+
+    expect(PERMESSI.MATERIALI.VISUALIZZA in bozza).toBe(false);
+    expect(bozza[PERMESSI.VOLANTINI.VISUALIZZA]).toBe(true);
+  });
+
+  it('riapplicare lo stesso preset non aggiunge modifiche', () => {
+    const config = configurazione([PERMESSI.PROMO.VISUALIZZA]);
+    const preset = presetDi('agenzia').permessi;
+    const una = applicaPreset(config, {}, preset);
+
+    expect(applicaPreset(config, una, preset)).toEqual(una);
+  });
+});
+

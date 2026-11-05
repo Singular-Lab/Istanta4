@@ -4,6 +4,8 @@ import Lucide from "@/components/Base/Lucide";
 import PageError from "@/components/Base/PageError";
 import Skeleton from "@/components/Base/Skeleton";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import { PermissionGate } from "@/components/PermissionGate";
+import { PERMISSIONS } from "@/constants/permissions";
 import EmptyState from "@/components/EmptyState";
 import { useNotification } from "@/context/NotificationContext";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -128,17 +130,19 @@ const SchemaCard: React.FC<SchemaCardProps> = ({ schema, onDelete, isDeleting })
             ) : null;
           })}
         </div>
-        <Button
-          type="button"
-          variant="outline-danger"
-          size="xs"
-          aria-label={`Elimina lo schema ${schema.nome}`}
-          title="Elimina schema"
-          onClick={() => setShowConfirmDelete(true)}
-          loading={isDeleting}
-        >
-          {!isDeleting && <Lucide icon="Trash2" aria-hidden="true" className="h-3.5 w-3.5" />}
-        </Button>
+        <PermissionGate permission={PERMISSIONS.PROMO.GESTISCI_SCHEMI} mode="disable">
+          <Button
+            type="button"
+            variant="outline-danger"
+            size="xs"
+            aria-label={`Elimina lo schema ${schema.nome}`}
+            title="Elimina schema"
+            onClick={() => setShowConfirmDelete(true)}
+            loading={isDeleting}
+          >
+            {!isDeleting && <Lucide icon="Trash2" aria-hidden="true" className="h-3.5 w-3.5" />}
+          </Button>
+        </PermissionGate>
       </div>
       <ConfirmDialog
         open={showConfirmDelete}
@@ -524,10 +528,12 @@ const GestioneSchemi: React.FC<GestioneSchemiProps> = () => {
           Gestisci i template di schema: definisci la struttura dei momenti e i confronti da eseguire
         </p>
         {!showCreating && (
-          <Button variant="primary" size="sm" onClick={() => setShowCreating(true)}>
-            <Lucide icon="Plus" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
-            Nuovo schema
-          </Button>
+          <PermissionGate permission={PERMISSIONS.PROMO.GESTISCI_SCHEMI} mode="disable">
+            <Button variant="primary" size="sm" onClick={() => setShowCreating(true)}>
+              <Lucide icon="Plus" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+              Nuovo schema
+            </Button>
+          </PermissionGate>
         )}
       </div>
 

@@ -61,7 +61,7 @@ function creaApp(servizio: IMaterialiService) {
 }
 
 beforeEach(() => {
-  permessi.concessi = new Set(['materiali.visualizza', 'file.download']);
+  permessi.concessi = new Set(['materiali.visualizza', 'materiali.scarica']);
 });
 
 describe('/api/materiali: parametri', () => {
@@ -221,6 +221,16 @@ describe('/api/materiali/volantini/promozioni', () => {
 });
 
 describe('/api/materiali: ZIP dei file POP', () => {
+  it('il permesso di scaricare della produzione non basta: serve quello della consultazione', async () => {
+    permessi.concessi = new Set(['materiali.visualizza', 'file.download']);
+    const servizio = servizioFinto();
+
+    const res = await request(creaApp(servizio)).get(`/api/materiali/pop/promozioni/p1/zip?periodo=attivi&idFormato=${FORMATO}`);
+
+    expect([res.status, res.body.codice]).toEqual([403, 'materiali.scarica']);
+    expect(servizio.preparaZipPop).not.toHaveBeenCalled();
+  });
+
   it('oltre a consultare i materiali serve il permesso di scaricare i file', async () => {
     permessi.concessi = new Set(['materiali.visualizza']);
     const servizio = servizioFinto();
@@ -229,13 +239,13 @@ describe('/api/materiali: ZIP dei file POP', () => {
     const get = await request(app).get(`/api/materiali/pop/promozioni/p1/zip?periodo=attivi&idFormato=${FORMATO}`);
     const post = await request(app).post('/api/materiali/pop/promozioni/p1/zip').send({ periodo: 'attivi', idFormato: FORMATO });
 
-    expect([get.status, get.body.codice]).toEqual([403, 'file.download']);
-    expect([post.status, post.body.codice]).toEqual([403, 'file.download']);
+    expect([get.status, get.body.codice]).toEqual([403, 'materiali.scarica']);
+    expect([post.status, post.body.codice]).toEqual([403, 'materiali.scarica']);
     expect(servizio.preparaZipPop).not.toHaveBeenCalled();
   });
 
   it('senza il permesso di consultare i materiali non si arriva al download', async () => {
-    permessi.concessi = new Set(['file.download']);
+    permessi.concessi = new Set(['materiali.scarica']);
 
     const res = await request(creaApp(servizioFinto())).get(`/api/materiali/pop/promozioni/p1/zip?periodo=attivi&idFormato=${FORMATO}`);
 
@@ -366,7 +376,7 @@ describe('/api/materiali: verifica prima del download POP', () => {
       .post('/api/materiali/pop/promozioni/p1/zip/verifica')
       .send({ periodo: 'attivi', idFormato: FORMATO });
 
-    expect([res.status, res.body.codice]).toEqual([403, 'file.download']);
+    expect([res.status, res.body.codice]).toEqual([403, 'materiali.scarica']);
     expect(servizio.verificaZipPop).not.toHaveBeenCalled();
   });
 });

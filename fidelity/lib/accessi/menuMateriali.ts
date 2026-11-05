@@ -92,7 +92,7 @@ const permessoDi = (percorso: string): string | null => paginaPer(percorso)?.per
 const stessoTesto = (a: string, b: string): boolean => a.trim().toLowerCase() === b.trim().toLowerCase();
 
 /** Le voci nell'ordine in cui compaiono nel menu: ogni voce seguita dalle sue sottovoci. */
-const ordineNelMenu = <V extends VoceMenuConvertibile>(voci: readonly V[]): V[] => {
+export const ordineNelMenu = <V extends VoceMenuConvertibile>(voci: readonly V[]): V[] => {
   const figli = new Map<string | null, V[]>();
   for (const voce of voci) {
     const padre = voce.id_parent ?? null;

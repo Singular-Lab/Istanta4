@@ -40,7 +40,7 @@ const MENU_CATEGORY: MenuElement[] = [
 
 describe('menu dell\'utente diviso in sezioni', () => {
   it('chi ha solo permessi di consultazione vede solo la sezione Visualizzazione', async () => {
-    const menu = await servizio(MENU_CATEGORY, [PERMESSI.MATERIALI.VISUALIZZA]).getMenuDiUtente(contesto(TIPO_UTENTI.CATEGORY));
+    const menu = await servizio(MENU_CATEGORY, [PERMESSI.MATERIALI.VISUALIZZA, PERMESSI.VOLANTINI.VISUALIZZA]).getMenuDiUtente(contesto(TIPO_UTENTI.CATEGORY));
 
     expect(struttura(menu)).toEqual([
       '== Visualizzazione',
@@ -50,7 +50,7 @@ describe('menu dell\'utente diviso in sezioni', () => {
   });
 
   it('con i permessi di produzione compaiono entrambe le sezioni, Produzione per prima', async () => {
-    const permessi = [PERMESSI.MATERIALI.VISUALIZZA, PERMESSI.PROMO.VISUALIZZA, PERMESSI.PROMO.CREA, PERMESSI.ORDINI_STAMPA.VISUALIZZA, PERMESSI.ORDINI_STAMPA.CREA];
+    const permessi = [PERMESSI.MATERIALI.VISUALIZZA, PERMESSI.VOLANTINI.VISUALIZZA, PERMESSI.PROMO.VISUALIZZA, PERMESSI.PROMO.CREA, PERMESSI.ORDINI_STAMPA.VISUALIZZA, PERMESSI.ORDINI_STAMPA.CREA];
     const menu = await servizio(MENU_CATEGORY, permessi).getMenuDiUtente(contesto(TIPO_UTENTI.CATEGORY));
 
     expect(struttura(menu)).toEqual([
@@ -83,7 +83,7 @@ describe('menu dell\'utente diviso in sezioni', () => {
 
 describe('pagina iniziale', () => {
   it('è la voce segnata come pagina iniziale, se l\'utente può aprirla', async () => {
-    const pagina = await servizio(MENU_CATEGORY, [PERMESSI.MATERIALI.VISUALIZZA]).getPaginaIniziale(contesto(TIPO_UTENTI.CATEGORY));
+    const pagina = await servizio(MENU_CATEGORY, [PERMESSI.MATERIALI.VISUALIZZA, PERMESSI.VOLANTINI.VISUALIZZA]).getPaginaIniziale(contesto(TIPO_UTENTI.CATEGORY));
     expect(pagina).toBe('/gdo/dashboard');
   });
 
@@ -96,9 +96,11 @@ describe('pagina iniziale', () => {
     expect(segnate).toEqual(['/ods-in-corso *']);
   });
 
-  it('la panoramica è aperta a tutti; un menu senza pagine consentite non ha pagina iniziale', async () => {
-    expect(await servizio(MENU_CATEGORY, []).getPaginaIniziale(contesto(TIPO_UTENTI.CATEGORY))).toBe('/gdo/dashboard');
-    expect(await servizio(['VUOTO'], []).getPaginaIniziale(contesto(TIPO_UTENTI.MARKETING))).toBeNull();
+  it('senza pagine consentite nel menu: la panoramica a chi la può aprire, altrimenti il profilo', async () => {
+    // La panoramica chiede "volantini.visualizza": senza permessi nessuna voce del menu Category si apre
+    expect(await servizio(MENU_CATEGORY, []).getPaginaIniziale(contesto(TIPO_UTENTI.CATEGORY))).toBe('/profilo-utente');
+    expect(await servizio(['VUOTO'], [PERMESSI.VOLANTINI.VISUALIZZA]).getPaginaIniziale(contesto(TIPO_UTENTI.MARKETING))).toBe('/gdo/dashboard');
+    expect(await servizio(['VUOTO'], []).getPaginaIniziale(contesto(TIPO_UTENTI.MARKETING))).toBe('/profilo-utente');
   });
 
   it('paginaInizialeDi salta le voci disattivate e cerca anche nelle sottovoci', () => {
