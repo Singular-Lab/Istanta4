@@ -85,7 +85,7 @@ export class TracciatoController extends BaseController {
                 return;
             }
             const includeBlob = req.query.includeBlob === 'true';
-            // Con includeJson ogni tracciato ha anche il file letto come fogli e righe, come in /parse
+            // Con includeJson il blobfile di ogni tracciato e' il file JSON di /parse al posto dell'xlsx
             const includeJson = req.query.includeJson === 'true';
             const tracciati = await this.tracciatoService.getTracciatiByPromoId(idPromo, includeBlob, includeJson);
             res.status(HttpStatusCode.OK).json(tracciati);

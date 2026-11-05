@@ -40,9 +40,12 @@ export interface TracciatiResponseDTO {
   /** Nome mostrato in FP, modificabile dall'operatore; se mai impostato coincide con filename */
   nome: string;
   stato: string;
-  blobfile?: Uint8Array;
-  /** File letto come fogli e righe, solo se richiesto (includeJson); null senza file o se illeggibile */
-  json?: FogliTracciatoDTO | null;
+  /**
+   * File del tracciato (xlsx) con includeBlob. Nei tracciati della promo con includeJson e' invece il file JSON
+   * dell'xlsx letto come fogli e righe (FogliTracciatoDTO), null senza file o se illeggibile.
+   */
+  blobfile?: Uint8Array | null;
+  /** Dimensione in byte del file: con includeJson quella del file JSON */
   filesize?: number;
   createdat?: Date;
   updatedat: Date;

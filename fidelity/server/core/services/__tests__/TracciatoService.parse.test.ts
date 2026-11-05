@@ -193,26 +193,42 @@ describe('TracciatoService.getTracciatiByPromoId: file letti con includeJson', (
     return new TracciatoService(repository as unknown as ITracciatiRepository);
   }
 
-  it('ogni tracciato ha il file letto come nell\'anteprima', async () => {
+  // Il file JSON arriva come byte nel blobfile, al posto dell'xlsx
+  const leggiFileJson = (file: Uint8Array) => JSON.parse(Buffer.from(file).toString('utf8'));
+
+  it('il blobfile di ogni tracciato è il file JSON con il contenuto dell\'anteprima', async () => {
     const service = creaServicePerPromo([tracciatoConFile(creaExcel(fogli))]);
 
     const [tracciato] = await service.getTracciatiByPromoId('promo-1', false, true);
 
-    expect(tracciato.json).toEqual(await service.parseTracciatoById('t1'));
-    expect(tracciato.json?.sheets.map((s) => s.name)).toEqual(['PROMO', 'NOTE']);
-    expect(tracciato.blobfile).toBeUndefined();
+    expect(tracciato.blobfile).toBeInstanceOf(Uint8Array);
+    const contenuto = leggiFileJson(tracciato.blobfile as Uint8Array);
+    expect(contenuto).toEqual(await service.parseTracciatoById('t1'));
+    expect(contenuto.sheets.map((s: { name: string }) => s.name)).toEqual(['PROMO', 'NOTE']);
+    expect(tracciato.filesize).toBe(tracciato.blobfile?.length);
   });
 
-  it('senza includeJson il file non viene letto', async () => {
-    const service = creaServicePerPromo([tracciatoConFile(creaExcel(fogli))]);
+  it('con includeBlob e includeJson il blobfile è il file JSON, non l\'xlsx', async () => {
+    const xlsx = creaExcel(fogli);
+    const service = creaServicePerPromo([tracciatoConFile(xlsx)]);
+
+    const [tracciato] = await service.getTracciatiByPromoId('promo-1', true, true);
+
+    expect(tracciato.blobfile).not.toBe(xlsx);
+    expect(leggiFileJson(tracciato.blobfile as Uint8Array).sheets).toHaveLength(2);
+  });
+
+  it('senza includeJson il blobfile resta l\'xlsx', async () => {
+    const xlsx = creaExcel(fogli);
+    const service = creaServicePerPromo([tracciatoConFile(xlsx)]);
 
     const [tracciato] = await service.getTracciatiByPromoId('promo-1', true);
 
-    expect(tracciato).not.toHaveProperty('json');
-    expect(tracciato.blobfile).toBeDefined();
+    expect(tracciato.blobfile).toBe(xlsx);
+    expect(tracciato.filesize).toBe(xlsx.length);
   });
 
-  it('un tracciato senza file o illeggibile ha json null e non ferma gli altri', async () => {
+  it('un tracciato senza file o illeggibile ha blobfile null e non ferma gli altri', async () => {
     // Intestazione ZIP senza il resto: SheetJS non riesce ad aprirlo
     const zipRotto = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
     const service = creaServicePerPromo([
@@ -223,7 +239,7 @@ describe('TracciatoService.getTracciatiByPromoId: file letti con includeJson', (
 
     const tracciati = await service.getTracciatiByPromoId('promo-1', false, true);
 
-    expect(tracciati.map((t) => [t.id, t.json === null])).toEqual([
+    expect(tracciati.map((t) => [t.id, t.blobfile === null])).toEqual([
       ['senza-file', true],
       ['rotto', true],
       ['t1', false],

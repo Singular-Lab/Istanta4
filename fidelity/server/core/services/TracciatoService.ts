@@ -634,7 +634,7 @@ export class TracciatoService implements ITracciatoService {
       const istanta = await statoIstantaTracciati(tracciati.map((t: TracciatiAttributes) => t.id_tracciati as string));
       return tracciati.map((tracciato: TracciatiAttributes) => ({
         ...this.mapToDTO(tracciato, includeBlob),
-        ...(includeJson && { json: this.leggiFogliSePossibile(tracciato) }),
+        ...(includeJson && this.fileJsonAlPostoDellXlsx(tracciato)),
         istanta: istanta.get(tracciato.id_tracciati as string),
       }));
     } catch (error) {
@@ -827,14 +827,18 @@ export class TracciatoService implements ITracciatoService {
     return { sheets };
   }
 
-  /** Nell'elenco dei tracciati un file mancante o illeggibile non deve far fallire gli altri */
-  private leggiFogliSePossibile(tracciato: TracciatiAttributes): FogliTracciatoDTO | null {
-    if (!tracciato.blobfile_tracciati) return null;
+  /**
+   * Con includeJson il blobfile e' il file JSON di /parse (UTF-8) al posto dell'xlsx, e filesize la sua dimensione.
+   * Nell'elenco dei tracciati un file mancante o illeggibile resta null e non fa fallire gli altri.
+   */
+  private fileJsonAlPostoDellXlsx(tracciato: TracciatiAttributes): Pick<TracciatiResponseDTO, 'blobfile' | 'filesize'> {
+    if (!tracciato.blobfile_tracciati) return { blobfile: null, filesize: undefined };
     try {
-      return this.leggiFogli(tracciato.blobfile_tracciati);
+      const fileJson = Buffer.from(JSON.stringify(this.leggiFogli(tracciato.blobfile_tracciati)), 'utf8');
+      return { blobfile: fileJson, filesize: fileJson.length };
     } catch (error) {
       log.warn(`Tracciato ${tracciato.id_tracciati} non leggibile come Excel:`, { error });
-      return null;
+      return { blobfile: null, filesize: undefined };
     }
   }
 
