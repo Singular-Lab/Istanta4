@@ -190,7 +190,7 @@ export async function createControllers(): Promise<IController[]> {
     new AvanzamentoProduzioneController(avanzamentoProduzioneService),
     new ConsultazioneController(consultazioneService),
     // Prima della consultazione: '/rete/...' e '/gestione/...' non devono mai finire in un '/:id'
-    new AnalisiPuntoVenditaController(analisiPuntoVenditaService),
+    new AnalisiPuntoVenditaController(analisiPuntoVenditaService, storiaPuntoVenditaService),
     new ConsultazionePuntiVenditaController(consultazionePuntiVenditaService),
     new StoriaPuntoVenditaController(storiaPuntoVenditaService),
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { type EdizioneConLista, raggruppaRigheNonAbbinate, righeDaRevisionare, type RigaSenzaPuntoVendita } from './gestionePuntiVendita';
+import { chiaviRigaVolantino } from './chiaviRigheVolantino';
+import { type EdizioneConLista, raggruppaRigheNonAbbinate, righeDaRevisionare, type RigaSenzaPuntoVendita, volantiniDelGruppo } from './gestionePuntiVendita';
 import { chiaveIndirizzo, chiaveTelefono } from './puntoVenditaNormalization';
 
 // Qualita' dei dati nella gestione dei PV: righe dell'import da rivedere e righe dei volantini senza PV
@@ -72,7 +73,10 @@ describe('raggruppaRigheNonAbbinate', () => {
 
   it('la riga piu\' recente, il telefono dell\'ultima che lo stampa, volantini, prima e ultima volta, insegna', () => {
     expect(gruppi[0]).toEqual({
+      // La chiave del gruppo: quella dell'indirizzo, comune alle due righe
+      chiave: chiaviRigaVolantino(RIGHE[4])[0],
       riga: 'ARMA DI TAGGIA - P.zza Chierotti 4',
+      varianti: ['ARMA DI TAGGIA - P.zza Chierotti 4', 'ARMA DI TAGGIA - P.zza Chierotti 4 - tel. 0184 999 0000'],
       localita: 'ARMA DI TAGGIA',
       indirizzo: 'P.zza Chierotti 4',
       telefono: '0184 999 0000',
@@ -81,7 +85,14 @@ describe('raggruppaRigheNonAbbinate', () => {
       ultimoVolantino: '2022-02-03',
       canale: { id: 'SS', nome: 'Conad Superstore' },
       suggerimento: { tipo: 'da_aggiungere' },
+      candidati: [],
     });
+  });
+
+  it('la chiave di ogni gruppo e\' una delle chiavi delle sue righe, e i gruppi hanno chiavi diverse', () => {
+    const sanremo = gruppi.find(gruppo => gruppo.riga.startsWith('SANREMO'));
+    expect(chiaviRigaVolantino(RIGHE[0])).toContain(sanremo?.chiave);
+    expect(new Set(gruppi.map(gruppo => gruppo.chiave)).size).toBe(gruppi.length);
   });
 
   it('suggerimenti: stesso telefono di un PV, forse chiuso dopo tre edizioni senza, altrimenti da aggiungere', () => {
@@ -96,5 +107,127 @@ describe('raggruppaRigheNonAbbinate', () => {
 
   it('nessuna riga, nessun gruppo', () => {
     expect(raggruppaRigheNonAbbinate([], EDIZIONI, PUNTI_VENDITA)).toEqual([]);
+  });
+});
+
+describe('raggruppaRigheNonAbbinate: punti vendita a cui collegare la riga', () => {
+  const rigaSanremo = (telefono: string | null): RigaSenzaPuntoVendita => ({
+    idKit: 'k1',
+    data: '2024-03-07',
+    idCanale: 'SS',
+    nomeCanale: 'Conad Superstore',
+    idArea: 'LI',
+    posizione: 1,
+    riga: `SANREMO - C.so Nazario Sauro 44${telefono ? ` - tel. ${telefono}` : ''}`,
+    localita: 'SANREMO',
+    indirizzo: 'C.so Nazario Sauro 44',
+    telefono,
+    chiaveIndirizzo: chiaveIndirizzo('C.so Nazario Sauro 44'),
+    chiaveTelefono: chiaveTelefono(telefono),
+  });
+
+  it('dal motivo piu\' forte: stesso telefono, stesso indirizzo altrove, indirizzo simile, stessa localita\'', () => {
+    const [gruppo] = raggruppaRigheNonAbbinate([rigaSanremo('0184 555 0001')], [], [
+      { id: 'pv-roma', nome: 'PV Via Roma', telefono: null, citta: 'Sanremo', indirizzo: 'Via Roma 3' },
+      { id: 'pv-46', nome: 'PV Corso 46', telefono: null, citta: 'Sanremo', indirizzo: 'Corso Nazario Sauro 46' },
+      { id: 'pv-taggia', nome: 'PV Taggia', telefono: null, citta: 'Taggia', indirizzo: 'Corso Nazario Sauro 44' },
+      { id: 'pv-centralino', nome: 'Centralino', telefono: '0184 5550001', citta: 'Sanremo', indirizzo: 'Via Matteotti 1' },
+      { id: 'pv-genova', nome: 'Genova', telefono: null, citta: 'Genova', indirizzo: 'Via XX Settembre 1' },
+    ]);
+
+    expect(gruppo.candidati.map(candidato => [candidato.puntoVendita.id, candidato.motivo])).toEqual([
+      ['pv-centralino', 'stesso_telefono'],
+      ['pv-taggia', 'stesso_indirizzo'],
+      ['pv-46', 'indirizzo_simile'],
+      ['pv-roma', 'stessa_localita'],
+    ]);
+    expect(gruppo.candidati[1].puntoVendita).toEqual({ id: 'pv-taggia', nome: 'PV Taggia', ragioneSociale: null, indirizzo: 'Corso Nazario Sauro 44', citta: 'Taggia' });
+  });
+
+  it('al massimo cinque, i piu\' vicini per indirizzo', () => {
+    const puntiVendita = Array.from({ length: 8 }, (_, indice) => ({
+      id: `pv-${indice}`, nome: `PV ${indice}`, telefono: null, citta: 'Sanremo', indirizzo: `Via Lontana ${'X'.repeat(indice)} 1`,
+    }));
+
+    const [gruppo] = raggruppaRigheNonAbbinate([rigaSanremo(null)], [], puntiVendita);
+
+    expect(gruppo.candidati).toHaveLength(5);
+    expect(gruppo.candidati.every(candidato => candidato.motivo === 'stessa_localita')).toBe(true);
+  });
+
+  it('nome o ragione sociale che contengono la localita\' o la via stampate, a parole intere', () => {
+    const riga: RigaSenzaPuntoVendita = {
+      ...rigaSanremo(null),
+      riga: 'PRA - Via Murtola 12/14',
+      localita: 'PRA',
+      indirizzo: 'Via Murtola 12/14',
+      chiaveIndirizzo: chiaveIndirizzo('Via Murtola 12/14'),
+    };
+
+    const [gruppo] = raggruppaRigheNonAbbinate([riga], [], [
+      { id: 'pv-pra', nome: 'Superstore Pra', telefono: null, citta: 'Genova', indirizzo: 'Via Novella 3' },
+      { id: 'pv-murtola', nome: 'Conad Genova', ragioneSociale: 'Murtola Market Srl', telefono: null, citta: 'Genova', indirizzo: 'Via Roma 1' },
+      // "PRATO" non e' "PRA"
+      { id: 'pv-prato', nome: 'Conad Prato', telefono: null, citta: 'Prato', indirizzo: 'Via Pistoiese 2' },
+    ]);
+
+    expect(gruppo.candidati.map(candidato => [candidato.puntoVendita.id, candidato.motivo])).toEqual([
+      ['pv-murtola', 'nome_simile'],
+      ['pv-pra', 'nome_simile'],
+    ]);
+    expect(gruppo.candidati[0].puntoVendita.ragioneSociale).toBe('Murtola Market Srl');
+  });
+
+  it('nessun PV della stessa localita\', telefono o indirizzo: nessun candidato', () => {
+    const [gruppo] = raggruppaRigheNonAbbinate([rigaSanremo('0184 555 0001')], [], [
+      { id: 'pv-genova', nome: 'Genova', telefono: '010 1234567', citta: 'Genova', indirizzo: 'Via XX Settembre 1' },
+    ]);
+    expect(gruppo.candidati).toEqual([]);
+  });
+});
+
+describe('volantiniDelGruppo', () => {
+  const riga = (idKit: string, data: string, testo: string, posizione = 1): RigaSenzaPuntoVendita => ({
+    idKit,
+    data,
+    idCanale: 'CC',
+    nomeCanale: 'Conad City',
+    idArea: 'LI',
+    nomeArea: 'Liguria',
+    titoloKit: `CC LI ${idKit}`,
+    idPromo: `promo-${idKit}`,
+    nomePromo: `Volantino ${idKit}`,
+    posizione,
+    riga: testo,
+    localita: 'SANREMO',
+    indirizzo: testo.includes('V. Roma') ? 'V. Roma 3' : 'Via Roma 3',
+    telefono: '0184 555 0143',
+    chiaveIndirizzo: chiaveIndirizzo(testo.includes('V. Roma') ? 'V. Roma 3' : 'Via Roma 3'),
+    chiaveTelefono: chiaveTelefono('0184 555 0143'),
+  });
+  const RIGHE = [
+    riga('k1', '2024-01-04', 'SANREMO - Via Roma 3 - tel. 0184 555 0143'),
+    riga('k2', '2024-02-01', 'SANREMO - V. Roma 3 - tel. 0184 555 0143'),
+    // Stampata due volte nello stesso volantino: il volantino conta una volta
+    riga('k2', '2024-02-01', 'SANREMO - V. Roma 3 - tel. 0184 555 0143', 9),
+  ];
+
+  it('uno per kit, dal piu\' recente, con la riga com\'era stampata in ciascuno', () => {
+    const chiave = chiaviRigaVolantino(RIGHE[0])[0];
+
+    expect(volantiniDelGruppo(RIGHE, chiave)).toEqual([
+      {
+        idKit: 'k2', titoloKit: 'CC LI k2', promo: { id: 'promo-k2', nome: 'Volantino k2' }, data: '2024-02-01',
+        canale: { id: 'CC', nome: 'Conad City' }, area: { id: 'LI', nome: 'Liguria' }, rigaStampata: 'SANREMO - V. Roma 3 - tel. 0184 555 0143',
+      },
+      {
+        idKit: 'k1', titoloKit: 'CC LI k1', promo: { id: 'promo-k1', nome: 'Volantino k1' }, data: '2024-01-04',
+        canale: { id: 'CC', nome: 'Conad City' }, area: { id: 'LI', nome: 'Liguria' }, rigaStampata: 'SANREMO - Via Roma 3 - tel. 0184 555 0143',
+      },
+    ]);
+  });
+
+  it('una chiave che nessun gruppo ha: null', () => {
+    expect(volantiniDelGruppo(RIGHE, 'tel:000000')).toBeNull();
   });
 });

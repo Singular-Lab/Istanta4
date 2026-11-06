@@ -4,6 +4,7 @@ import { BadRequestError, NotFoundError } from '../../../lib/errors';
 import { gdoOperativaPerRichiesta, operaPerPiuGdo } from '../accessi/contestoAccesso';
 import { BaseController } from '../base/BaseController';
 import type { IAnalisiPuntoVenditaService } from '../interfaces/IAnalisiPuntoVenditaService';
+import type { CollegamentiPuntiVenditaVolantino } from '../interfaces/IStoriaPuntoVenditaService';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { permissionGuard } from '../middleware/permissionGuard';
 
@@ -15,8 +16,8 @@ const numero = (valore: unknown): number | undefined => {
 
 /**
  * Le pagine del punto vendita costruite sulla timeline dei volantini (contratto in
- * lib/puntiVendita/analisi.ts). Letture con "gdo.visualizza"; la qualita' dei dati e le righe
- * dei volantini non abbinate con "gdo.gestisci_punti_vendita".
+ * lib/puntiVendita/analisi.ts). Letture con "gdo.visualizza"; la qualita' dei dati, le righe
+ * dei volantini non abbinate e i loro collegamenti fatti a mano con "gdo.gestisci_punti_vendita".
  *
  * Sullo stesso percorso base ci sono la consultazione ('/', '/:id', '/:id/volantini-attivi') e la
  * storia ('/:id/storia', '/:id/storia/volantini', '/storia/import-export'): nessuno dei loro
@@ -24,7 +25,10 @@ const numero = (valore: unknown): number | undefined => {
  * '/gestione/...' non finiscono mai in un '/:id'.
  */
 export class AnalisiPuntoVenditaController extends BaseController {
-  constructor(private readonly analisi: IAnalisiPuntoVenditaService) {
+  constructor(
+    private readonly analisi: IAnalisiPuntoVenditaService,
+    private readonly collegamenti: CollegamentiPuntiVenditaVolantino,
+  ) {
     super('/api/punti-vendita');
   }
 
@@ -35,6 +39,10 @@ export class AnalisiPuntoVenditaController extends BaseController {
     this.router.get('/rete/insegne', ...visualizza, this.getReteInsegne.bind(this));
     this.router.get('/gestione/qualita', ...gestisci, this.getQualita.bind(this));
     this.router.get('/gestione/righe-non-abbinate', ...gestisci, this.getRigheNonAbbinate.bind(this));
+    this.router.get('/gestione/righe-non-abbinate/volantini', ...gestisci, this.getVolantiniRiga.bind(this));
+    this.router.post('/gestione/righe-non-abbinate/collega', ...gestisci, this.postCollega.bind(this));
+    this.router.get('/gestione/collegamenti-manuali', ...gestisci, this.getCollegamenti.bind(this));
+    this.router.delete('/gestione/collegamenti-manuali/:idCollegamento', ...gestisci, this.deleteCollegamento.bind(this));
     this.router.get('/:id/analisi', ...visualizza, this.getAnalisi.bind(this));
     this.router.get('/:id/volantini/:idKit', ...visualizza, this.getVolantino.bind(this));
     this.router.get('/:id/referenze/:chiave', ...visualizza, this.getReferenza.bind(this));
@@ -109,6 +117,45 @@ export class AnalisiPuntoVenditaController extends BaseController {
       const pagina = numero(req.query.pagina);
       const dimensione = numero(req.query.dimensione);
       this.sendResponse(res, HttpStatusCode.OK, await this.analisi.righeNonAbbinate(idGdo, pagina, dimensione));
+    } catch (error) {
+      this.handleError(res, error);
+    }
+  }
+
+  private async getVolantiniRiga(req: Request, res: Response): Promise<void> {
+    try {
+      const idGdo = await this.gdoDellaSessione(req, res);
+      this.sendResponse(res, HttpStatusCode.OK, await this.analisi.volantiniRigaNonAbbinata(idGdo, req.query.chiave));
+    } catch (error) {
+      this.handleError(res, error);
+    }
+  }
+
+  private async postCollega(req: Request, res: Response): Promise<void> {
+    try {
+      const idGdo = await this.gdoDellaSessione(req, res);
+      const idUtente = req.session?.id_utente ? String(req.session.id_utente) : null;
+      this.sendResponse(res, HttpStatusCode.OK, await this.collegamenti.collega(idGdo, req.body, idUtente));
+    } catch (error) {
+      this.handleError(res, error);
+    }
+  }
+
+  private async getCollegamenti(req: Request, res: Response): Promise<void> {
+    try {
+      const idGdo = await this.gdoDellaSessione(req, res);
+      const pagina = numero(req.query.pagina);
+      const dimensione = numero(req.query.dimensione);
+      this.sendResponse(res, HttpStatusCode.OK, await this.collegamenti.collegamenti(idGdo, pagina, dimensione));
+    } catch (error) {
+      this.handleError(res, error);
+    }
+  }
+
+  private async deleteCollegamento(req: Request<{ idCollegamento: string }>, res: Response): Promise<void> {
+    try {
+      const idGdo = await this.gdoDellaSessione(req, res);
+      this.sendResponse(res, HttpStatusCode.OK, await this.collegamenti.scollega(idGdo, req.params.idCollegamento));
     } catch (error) {
       this.handleError(res, error);
     }

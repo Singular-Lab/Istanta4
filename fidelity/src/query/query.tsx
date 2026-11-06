@@ -8,7 +8,7 @@ import type { AvanzamentoProduzione } from "../../lib/produzione/avanzamento";
 import type { AreaResponseDTO, CanaleResponseDTO, CombinazioneCanaleAreaResponseDTO, DisplayContextResponseDTO, DispositivoPuntoVenditaResponseDTO, FormatiResponseDTO, GDOResponseDTO, PromoResponseDTO, PuntoVenditaResponseDTO, RuoloUtenteGDOResponseDTO, TipiDiExportResponseDTO, VolantinoAttivoDTO } from "../../server/core/dto";
 import type { PuntoVenditaConsultazione } from "../../lib/puntiVendita/consultazione";
 import type { PaginaVolantiniStoria, StoriaPuntoVendita } from "../../lib/puntiVendita/storia";
-import type { PaginaRigheNonAbbinate, QualitaPuntiVendita, ReteInsegne } from "../../lib/puntiVendita/analisi";
+import type { EsitoCollegamento, EsitoScollegamento, PaginaCollegamentiManuali, PaginaRigheNonAbbinate, QualitaPuntiVendita, ReteInsegne, RichiestaCollegamento, VolantiniRigaNonAbbinata } from "../../lib/puntiVendita/analisi";
 import type { AnalisiPuntoVendita, DettaglioReferenzaPv, DettaglioVolantinoPv } from "../../lib/puntiVendita/analisi";
 
 
@@ -571,6 +571,57 @@ export const useFetchRigheNonAbbinate = (pagina: number, dimensione: number) =>
     // Cambiando pagina restano le righe precedenti finché arrivano le nuove
     placeholderData: (precedenti) => precedenti,
   });
+
+/** I volantini in cui compare una riga non abbinata, dal più recente: si chiedono solo quando servono. */
+export const useFetchVolantiniRigaNonAbbinata = (chiave: string | null) =>
+  useQuery({
+    queryKey: ["puntiVendita", "gestione", "righe-non-abbinate", "volantini", chiave],
+    queryFn: () =>
+      ServerCall.get<VolantiniRigaNonAbbinata>(
+        `/punti-vendita/gestione/righe-non-abbinate/volantini?${new URLSearchParams({ chiave: chiave ?? "" })}`
+      ),
+    enabled: chiave !== null,
+  });
+
+/** Le righe collegate a mano, le schede di quei PV e i conteggi della gestione vanno riletti. */
+const invalidaDopoCollegamento = (queryClient: ReturnType<typeof useQueryClient>) => {
+  queryClient.invalidateQueries({ queryKey: ["puntiVendita", "gestione"] });
+  queryClient.invalidateQueries({ queryKey: ["puntiVendita", "storia"] });
+  queryClient.invalidateQueries({ queryKey: ["puntiVendita", "consultazione"] });
+  queryClient.invalidateQueries({ queryKey: ["puntiVendita", "rete"] });
+};
+
+/** I collegamenti fatti a mano fra righe dei volantini e punti vendita, dal più recente. */
+export const useFetchCollegamentiManuali = (pagina: number, dimensione: number, abilitata = true) =>
+  useQuery({
+    queryKey: ["puntiVendita", "gestione", "collegamenti-manuali", pagina, dimensione],
+    queryFn: () =>
+      ServerCall.get<PaginaCollegamentiManuali>(
+        `/punti-vendita/gestione/collegamenti-manuali?${new URLSearchParams({ pagina: String(pagina), dimensione: String(dimensione) })}`
+      ),
+    placeholderData: (precedenti) => precedenti,
+    enabled: abilitata,
+  });
+
+/** Collega le righe di un gruppo non abbinato a un punto vendita della GDO. */
+export const useCollegaRigaNonAbbinata = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (richiesta: RichiestaCollegamento) =>
+      ServerCall.post<EsitoCollegamento>("/punti-vendita/gestione/righe-non-abbinate/collega", richiesta),
+    onSuccess: () => invalidaDopoCollegamento(queryClient),
+  });
+};
+
+/** Annulla un collegamento fatto a mano: le sue righe tornano all'abbinamento automatico. */
+export const useScollegaCollegamentoManuale = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (idCollegamento: string) =>
+      ServerCall.delete<EsitoScollegamento>(`/punti-vendita/gestione/collegamenti-manuali/${encodeURIComponent(idCollegamento)}`),
+    onSuccess: () => invalidaDopoCollegamento(queryClient),
+  });
+};
 
 /**
  * Il punto vendita della gestione: parte da quello del loader e si rilegge dopo una modifica

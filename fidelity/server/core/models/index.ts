@@ -27,6 +27,7 @@ import { DisplayContextPuntoVendita } from './punto_vendita/display_context_punt
 import { DispositivoPuntoVendita } from "./punto_vendita/dispositivi_punto_vendita";
 import { PuntoVendita } from './punto_vendita/punti_vendita';
 import { PuntoVenditaUtenti } from './punto_vendita/punti_vendita_utenti';
+import { AbbinamentoManualePvVolantino } from './punto_vendita/abbinamenti_manuali_pv_volantino';
 import { PuntoVenditaVolantino } from './punto_vendita/punti_vendita_volantino';
 import { RaccoglitoreKit } from './raccoglitore_kit';
 import { Referenze } from './referenze';
@@ -105,6 +106,8 @@ export const MODELLI_SEQUELIZE = {
   DisplayContextPuntoVendita: { model: DisplayContextPuntoVendita, nome: 'DisplayContextPuntoVendita', tabella: 'display_context_punto_vendita' },
   // I PV stampati nelle liste dei volantini: la storia del punto vendita
   PuntoVenditaVolantino: { model: PuntoVenditaVolantino, nome: 'PuntoVenditaVolantino', tabella: 'punti_vendita_volantino' },
+  // Le righe dei volantini collegate a mano a un PV: regole della GDO
+  AbbinamentoManualePvVolantino: { model: AbbinamentoManualePvVolantino, nome: 'AbbinamentoManualePvVolantino', tabella: 'abbinamenti_manuali_pv_volantino' },
   // Riepilogo di ogni kit per le pagine dei punti vendita (cache)
   AnalisiKit: { model: AnalisiKit, nome: 'AnalisiKit', tabella: 'analisi_kit' },
   // Modelli export
@@ -346,7 +349,7 @@ export const modelliManager = ModelliManager.getInstance();
 
 // Esporta tutti i modelli per compatibilità
 export {
-  ApprofondimentoVino, Area, Attivita, Canale, CanaleInterazione, CombinazioneCanaleArea, Config, ContenutiAggiuntiviReferenza,
+  AbbinamentoManualePvVolantino, ApprofondimentoVino, Area, Attivita, Canale, CanaleInterazione, CombinazioneCanaleArea, Config, ContenutiAggiuntiviReferenza,
   ContrattoTipografia, DesignKit, DisplayContextPuntoVendita, DispositivoPuntoVendita, EphemeralAuditLog, EphemeralChallenge, EphemeralOriginsWhitelist, EphemeralToken, FilesRuntime, FilesRuntimeLog, Formati, GDO, NamingConvention,
   OrdiniDiStampa, OrdiniDiStampaInvii, PromoScoreboard, PuntoVendita, PuntoVenditaUtenti, PuntoVenditaVolantino, RaccoglitoreKit, Referenze, ReferenzeGruppo, Ricette, RuntimeKit, RuoloPuntoVendita, TentativoWebhook, TipiDiExport, Tracciati, TracciatiInvioIstanta, TracciatiMomentoConfronti,
   Utente, UtentiAnonimi, UtentiGDO, UtentiGuest, Webhook, WishlistWebpliant, WorkspaceWebpliant,

@@ -5,6 +5,7 @@ import type {
   PaginaRigheNonAbbinate,
   QualitaPuntiVendita,
   ReteInsegne,
+  VolantiniRigaNonAbbinata,
 } from '../../../lib/puntiVendita/analisi';
 
 /**
@@ -19,4 +20,9 @@ export interface IAnalisiPuntoVenditaService {
   reteInsegne(idGdo: string): Promise<ReteInsegne>;
   qualita(idGdo: string): Promise<QualitaPuntiVendita>;
   righeNonAbbinate(idGdo: string, pagina?: number, dimensione?: number): Promise<PaginaRigheNonAbbinate>;
+  /**
+   * I volantini in cui compare la riga non abbinata `chiave` (RigaNonAbbinata.chiave), dal piu'
+   * recente. BadRequestError senza chiave, NotFoundError se la riga non e' piu' fra le non abbinate.
+   */
+  volantiniRigaNonAbbinata(idGdo: string, chiave: unknown): Promise<VolantiniRigaNonAbbinata>;
 }

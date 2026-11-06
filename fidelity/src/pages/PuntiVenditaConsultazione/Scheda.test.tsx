@@ -628,6 +628,15 @@ describe("Scheda del punto vendita", () => {
     expect(within(voci[1]).queryByRole("link", { name: /PDF/ })).not.toBeInTheDocument();
   });
 
+  it("Tutti i volantini: una riga collegata a mano è indicata come tale, non come abbinamento probabile", () => {
+    finti.volantiniStoria = caricato({ ...PAGINA, volantini: [volantino({ abbinamento: "manuale" })], totale: 1 });
+    apri();
+
+    const [voce] = within(within(sezione("Tutti i volantini")).getByRole("list", { name: "Volantini della storia" })).getAllByRole("listitem");
+    expect(voce).toHaveTextContent("Collegato a mano");
+    expect(voce).not.toHaveTextContent("Abbinamento probabile");
+  });
+
   it("Tutti i volantini: l'anteprima del PDF usa le miniature dei materiali", async () => {
     apri();
 

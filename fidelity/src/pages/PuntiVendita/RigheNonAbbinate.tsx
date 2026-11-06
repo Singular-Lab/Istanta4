@@ -1,22 +1,28 @@
+import Alert from "@/components/Base/Alert";
 import Button from "@/components/Base/Button";
 import Lucide from "@/components/Base/Lucide";
 import PageError from "@/components/Base/PageError";
 import PaginazioneTabella from "@/components/Base/PaginazioneTabella";
+import Segmenti from "@/components/Base/Segmenti";
 import Sezione from "@/components/Base/Sezione";
 import Skeleton from "@/components/Base/Skeleton";
 import StatusBadge from "@/components/Base/StatusBadge";
 import Table from "@/components/Base/Table";
 import EmptyState from "@/components/EmptyState";
 import { PermissionGate } from "@/components/PermissionGate";
+import type { PuntoVenditaInElenco } from "@/components/PuntiVendita/elenco";
 import { useSchermoStretto } from "@/components/PuntiVendita/useSchermoStretto";
 import { PERMISSIONS } from "@/constants/permissions";
-import { useFetchRigheNonAbbinate } from "@/query/query";
+import { useFetchCollegamentiManuali, useFetchRigheNonAbbinate } from "@/query/query";
 import { formatData, formatNumero } from "@/utils/format";
 import dayjs from "dayjs";
 import "dayjs/locale/it";
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import type { RigaNonAbbinata } from "../../../lib/puntiVendita/analisi";
+import type { EsitoCollegamento, RigaNonAbbinata } from "../../../lib/puntiVendita/analisi";
+import { CollegaRigaDialog } from "./CollegaRigaDialog";
+import { CollegamentiManuali } from "./CollegamentiManuali";
+import { VolantiniRigaDialog } from "./VolantiniRiga";
 
 const DIMENSIONI_PAGINA = [10, 25, 50];
 
@@ -26,7 +32,7 @@ const meseBreve = (dataIso: string) => {
   return data.isValid() ? data.locale("it").format("MMM YYYY") : dataIso;
 };
 
-function Suggerimento({ riga, onAggiungi }: { riga: RigaNonAbbinata; onAggiungi: (riga: RigaNonAbbinata) => void }) {
+function Suggerimento({ riga }: { riga: RigaNonAbbinata }) {
   const { suggerimento } = riga;
   switch (suggerimento.tipo) {
     case "stesso_telefono":
@@ -42,18 +48,50 @@ function Suggerimento({ riga, onAggiungi }: { riga: RigaNonAbbinata; onAggiungi:
     case "forse_chiuso":
       return <StatusBadge tono="neutral" etichetta="Forse chiuso" />;
     case "da_aggiungere":
-      return (
-        <span className="inline-flex flex-wrap items-center gap-2">
-          <StatusBadge tono="warning" etichetta="Da aggiungere?" />
-          <PermissionGate permission={PERMISSIONS.GDO.GESTISCI_PUNTI_VENDITA} mode="disable">
-            <Button size="sm" variant="outline-secondary" onClick={() => onAggiungi(riga)} aria-label={`Aggiungi ${riga.riga}`}>
-              <Lucide icon="Plus" aria-hidden="true" className="mr-1 h-3.5 w-3.5" />
-              Aggiungi
-            </Button>
-          </PermissionGate>
-        </span>
-      );
+      return <StatusBadge tono="warning" etichetta="Da aggiungere?" />;
   }
+}
+
+/**
+ * Le azioni sulla riga: collegarla a un punto vendita già in anagrafica (con il PV dello stesso
+ * telefono già scelto, se c'è) o, se sembra un punto vendita nuovo, aggiungerlo.
+ */
+function Azioni({ riga, onCollega, onAggiungi }: { riga: RigaNonAbbinata; onCollega: (riga: RigaNonAbbinata, preselezionato: string | null) => void; onAggiungi: (riga: RigaNonAbbinata) => void }) {
+  const { suggerimento } = riga;
+  const preselezionato = suggerimento.tipo === "stesso_telefono" ? suggerimento.puntoVendita.id : null;
+  return (
+    <span className="inline-flex flex-wrap items-center gap-2">
+      <PermissionGate permission={PERMISSIONS.GDO.GESTISCI_PUNTI_VENDITA} mode="disable">
+        <Button size="sm" variant="outline-secondary" onClick={() => onCollega(riga, preselezionato)} aria-label={`Collega ${riga.riga}`}>
+          <Lucide icon="Link" aria-hidden="true" className="mr-1 h-3.5 w-3.5" />
+          {suggerimento.tipo === "stesso_telefono" ? `Collega a ${suggerimento.puntoVendita.nome}` : "Collega"}
+        </Button>
+      </PermissionGate>
+      {suggerimento.tipo === "da_aggiungere" && (
+        <PermissionGate permission={PERMISSIONS.GDO.GESTISCI_PUNTI_VENDITA} mode="disable">
+          <Button size="sm" variant="outline-secondary" onClick={() => onAggiungi(riga)} aria-label={`Aggiungi ${riga.riga}`}>
+            <Lucide icon="Plus" aria-hidden="true" className="mr-1 h-3.5 w-3.5" />
+            Aggiungi
+          </Button>
+        </PermissionGate>
+      )}
+    </span>
+  );
+}
+
+/** Il numero di volantini della riga: apre l'elenco dei volantini in cui compare. */
+function ApriVolantini({ riga, onApri, children }: { riga: RigaNonAbbinata; onApri: (riga: RigaNonAbbinata) => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onApri(riga)}
+      aria-label={`Volantini di ${riga.riga}`}
+      title="In quali volantini compare"
+      className="rounded tabular-nums text-theme-1 underline decoration-dotted underline-offset-2 hover:decoration-solid focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40"
+    >
+      {children}
+    </button>
+  );
 }
 
 interface RigheNonAbbinateProps {
@@ -61,7 +99,11 @@ interface RigheNonAbbinateProps {
   coloreDelCanale: (idCanale: string) => string;
   /** Apre "Nuovo punto vendita" con i dati della riga. */
   onAggiungi: (riga: RigaNonAbbinata) => void;
+  /** Tutti i punti vendita della GDO: la ricerca di "Collega". */
+  puntiVendita: PuntoVenditaInElenco[];
 }
+
+type Vista = "da_abbinare" | "collegate";
 
 /** L'insegna della riga col suo colore, o un trattino. */
 function Insegna({ riga, coloreDelCanale }: { riga: RigaNonAbbinata; coloreDelCanale: (idCanale: string) => string }) {
@@ -78,24 +120,48 @@ const periodo = (riga: RigaNonAbbinata) => `Dal ${formatData(riga.primoVolantino
 
 const TITOLO = "Righe dei volantini non abbinate";
 const DESCRIZIONE =
-  "Punti vendita stampati nei volantini che non corrispondono a nessuno dell'anagrafica: chiusi, trasferiti o da aggiungere.";
+  "Punti vendita stampati nei volantini che non corrispondono a nessuno dell'anagrafica: chiusi, trasferiti o da aggiungere. Collegali a un punto vendita che c'è già, o aggiungilo.";
+
+const righeCollegate = (righe: number) => (righe === 1 ? "1 riga" : `${formatNumero(righe)} righe`);
 
 /**
  * Righe delle liste dei volantini che non corrispondono a nessun punto vendita dell'anagrafica
  * (contratto in lib/puntiVendita/analisi.ts), paginate dal server: per ognuna come era stampata,
  * l'insegna, in quanti volantini e fino a quando, e un suggerimento (stesso telefono di un PV,
- * forse chiuso, da aggiungere). Senza righe da abbinare il riquadro si riduce a una riga; attesa
- * ed errore stanno fuori dalla tabella, a tutta larghezza; sotto sm ogni riga è una scheda.
+ * forse chiuso, da aggiungere). Ogni riga si collega a un punto vendita già in anagrafica
+ * (CollegaRigaDialog) o, se sembra nuovo, si aggiunge; i collegamenti fatti a mano stanno nella vista
+ * "Collegate a mano", da cui si annullano. Senza righe da abbinare né collegate il riquadro si
+ * riduce a una riga; attesa ed errore stanno fuori dalla tabella, a tutta larghezza; sotto sm ogni
+ * riga è una scheda.
  */
-export function RigheNonAbbinate({ coloreDelCanale, onAggiungi }: RigheNonAbbinateProps) {
+export function RigheNonAbbinate({ coloreDelCanale, onAggiungi, puntiVendita }: RigheNonAbbinateProps) {
+  const [vista, setVista] = useState<Vista>("da_abbinare");
   const [pagina, setPagina] = useState(1);
   const [dimensione, setDimensione] = useState(DIMENSIONI_PAGINA[0]);
+  const [paginaCollegate, setPaginaCollegate] = useState(1);
+  const [dimensioneCollegate, setDimensioneCollegate] = useState(DIMENSIONI_PAGINA[0]);
   const query = useFetchRigheNonAbbinate(pagina, dimensione);
+  const collegamentiQuery = useFetchCollegamentiManuali(paginaCollegate, dimensioneCollegate);
+  const [daCollegare, setDaCollegare] = useState<{ riga: RigaNonAbbinata; preselezionato: string | null } | null>(null);
+  const [volantiniDi, setVolantiniDi] = useState<RigaNonAbbinata | null>(null);
+  const [esito, setEsito] = useState<string | null>(null);
   const stretto = useSchermoStretto();
   const righe = query.data?.righe ?? [];
   const totale = query.data?.totale ?? 0;
+  const totaleCollegate = collegamentiQuery.data?.totale ?? 0;
 
-  if (!query.isLoading && !query.isError && totale === 0 && righe.length === 0) {
+  const collega = (riga: RigaNonAbbinata, preselezionato: string | null) => {
+    setEsito(null);
+    setDaCollegare({ riga, preselezionato });
+  };
+  const collegata = (risultato: EsitoCollegamento, puntoVendita: { nome: string }) => {
+    setDaCollegare(null);
+    setEsito(`${righeCollegate(risultato.righe)} dei volantini collegate a ${puntoVendita.nome}.`);
+  };
+
+  const nienteDaMostrare = !query.isLoading && !query.isError && totale === 0 && righe.length === 0
+    && !collegamentiQuery.isLoading && !collegamentiQuery.isError && totaleCollegate === 0;
+  if (nienteDaMostrare) {
     return (
       <Sezione compatta aria-label={TITOLO} className="py-3">
         <p className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
@@ -132,18 +198,21 @@ export function RigheNonAbbinate({ coloreDelCanale, onAggiungi }: RigheNonAbbina
   } else if (stretto) {
     contenuto = (
       <ul aria-label={TITOLO} className="divide-y divide-slate-200 border-y border-slate-200 dark:divide-darkmode-400 dark:border-darkmode-400">
-        {righe.map((riga, indice) => (
-          <li key={`${riga.riga}-${indice}`} className="px-5 py-3">
+        {righe.map(riga => (
+          <li key={riga.chiave} className="px-5 py-3">
             <div className="break-words font-mono text-xs text-slate-700 dark:text-slate-300">{riga.riga}</div>
             <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
               <Insegna riga={riga} coloreDelCanale={coloreDelCanale} />
-              <span className="tabular-nums">{riga.volantini === 1 ? "1 volantino" : `${formatNumero(riga.volantini)} volantini`}</span>
+              <ApriVolantini riga={riga} onApri={setVolantiniDi}>
+                {riga.volantini === 1 ? "1 volantino" : `${formatNumero(riga.volantini)} volantini`}
+              </ApriVolantini>
               <span className="tabular-nums" title={periodo(riga)}>
                 ultima volta {meseBreve(riga.ultimoVolantino)}
               </span>
             </div>
-            <div className="mt-2">
-              <Suggerimento riga={riga} onAggiungi={onAggiungi} />
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <Suggerimento riga={riga} />
+              <Azioni riga={riga} onCollega={collega} onAggiungi={onAggiungi} />
             </div>
           </li>
         ))}
@@ -160,23 +229,33 @@ export function RigheNonAbbinate({ coloreDelCanale, onAggiungi }: RigheNonAbbina
               <Table.Th className="text-right">Volantini</Table.Th>
               <Table.Th>Ultima volta</Table.Th>
               <Table.Th>Suggerimento</Table.Th>
+              <Table.Th>
+                <span className="sr-only">Azioni</span>
+              </Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody className="text-slate-700 dark:text-slate-300">
-            {righe.map((riga, indice) => (
-              <Table.Tr key={`${riga.riga}-${indice}`}>
+            {righe.map(riga => (
+              <Table.Tr key={riga.chiave}>
                 <Table.Td className="max-w-md">
                   <div className="break-words font-mono text-xs text-slate-700 dark:text-slate-300">{riga.riga}</div>
                 </Table.Td>
                 <Table.Td>
                   <Insegna riga={riga} coloreDelCanale={coloreDelCanale} />
                 </Table.Td>
-                <Table.Td className="text-right tabular-nums">{formatNumero(riga.volantini)}</Table.Td>
+                <Table.Td className="text-right tabular-nums">
+                  <ApriVolantini riga={riga} onApri={setVolantiniDi}>
+                    {formatNumero(riga.volantini)}
+                  </ApriVolantini>
+                </Table.Td>
                 <Table.Td className="whitespace-nowrap tabular-nums" title={periodo(riga)}>
                   {meseBreve(riga.ultimoVolantino)}
                 </Table.Td>
                 <Table.Td>
-                  <Suggerimento riga={riga} onAggiungi={onAggiungi} />
+                  <Suggerimento riga={riga} />
+                </Table.Td>
+                <Table.Td>
+                  <Azioni riga={riga} onCollega={collega} onAggiungi={onAggiungi} />
                 </Table.Td>
               </Table.Tr>
             ))}
@@ -186,20 +265,72 @@ export function RigheNonAbbinate({ coloreDelCanale, onAggiungi }: RigheNonAbbina
     );
   }
 
+  // Senza righe da abbinare resta solo la vista dei collegamenti fatti a mano
+  const vistaMostrata: Vista = totale === 0 && !query.isLoading && !query.isError && totaleCollegate > 0 ? "collegate" : vista;
+
   return (
-    <Sezione senzaPadding titolo={TITOLO} descrizione={DESCRIZIONE}>
-      {contenuto}
-      <PaginazioneTabella
-        totale={totale}
-        pagina={pagina}
-        dimensionePagina={dimensione}
-        opzioniDimensione={DIMENSIONI_PAGINA}
-        onCambiaPagina={setPagina}
-        onCambiaDimensione={nuova => {
-          setDimensione(nuova);
-          setPagina(1);
-        }}
-        unita="righe"
+    <Sezione
+      senzaPadding
+      titolo={TITOLO}
+      descrizione={DESCRIZIONE}
+      azioni={
+        <Segmenti<Vista>
+          etichetta="Righe da mostrare"
+          valore={vistaMostrata}
+          onChange={nuova => {
+            setVista(nuova);
+            setEsito(null);
+          }}
+          opzioni={[
+            { valore: "da_abbinare", etichetta: "Da abbinare", conteggio: query.data ? totale : undefined },
+            { valore: "collegate", etichetta: "Collegate a mano", conteggio: collegamentiQuery.data ? totaleCollegate : undefined },
+          ]}
+        />
+      }
+    >
+      {vistaMostrata === "collegate" ? (
+        <CollegamentiManuali
+          query={collegamentiQuery}
+          pagina={paginaCollegate}
+          dimensione={dimensioneCollegate}
+          onCambiaPagina={setPaginaCollegate}
+          onCambiaDimensione={nuova => {
+            setDimensioneCollegate(nuova);
+            setPaginaCollegate(1);
+          }}
+        />
+      ) : (
+        <>
+          {esito && (
+            <div className="px-5 pb-3">
+              <Alert variant="soft-success" icona="CircleCheck" className="px-3 py-2 text-sm" role="status">
+                {esito}
+              </Alert>
+            </div>
+          )}
+          {contenuto}
+          <PaginazioneTabella
+            totale={totale}
+            pagina={pagina}
+            dimensionePagina={dimensione}
+            opzioniDimensione={DIMENSIONI_PAGINA}
+            onCambiaPagina={setPagina}
+            onCambiaDimensione={nuova => {
+              setDimensione(nuova);
+              setPagina(1);
+            }}
+            unita="righe"
+          />
+        </>
+      )}
+      <VolantiniRigaDialog riga={volantiniDi} onClose={() => setVolantiniDi(null)} />
+      <CollegaRigaDialog
+        key={daCollegare?.riga.chiave ?? "chiuso"}
+        riga={daCollegare?.riga ?? null}
+        preselezionato={daCollegare?.preselezionato ?? null}
+        puntiVendita={puntiVendita}
+        onClose={() => setDaCollegare(null)}
+        onCollegata={collegata}
       />
     </Sezione>
   );
