@@ -397,6 +397,11 @@ const SchermataSegnalazioni = {
         try {
             const documento = SchermataSegnalazioni._documento();
             const lette = Array.isArray(pagine) ? Segnalazioni.leggiPagine(documento, pagine) : Segnalazioni.leggiDocumento(documento);
+            //I20-1204: le CSF-30 degli elementi gia' sistemati dall'operatore si tolgono prima di contarle,
+            //e le letture si rifanno al posto di quelle di prima.
+            if (SchermataSegnalazioni.ricontrollaElementiDaPosizionare(lette)) {
+                lette.splice(0, lette.length, ...(Array.isArray(pagine) ? Segnalazioni.leggiPagine(documento, pagine) : Segnalazioni.leggiDocumento(documento)));
+            }
             SchermataSegnalazioni.registraControllo(Segnalazioni._chiaveDocumento(documento), lette, pagine);
             SchermataSegnalazioni.aggiornaIcona();
             return lette;
@@ -405,6 +410,28 @@ const SchermataSegnalazioni = {
             console.error("Code SGN-01 Segnalazioni non lette dal documento:", e);
             return null;
         }
+    },
+
+    /// I20-1204: nelle letture, i box con una CSF-30 (elemento da posizionare a mano) si ricontrollano
+    /// con CssFramework.ricontrollaElementiDaPosizionare: se l'operatore ha gia' sistemato
+    /// l'elemento, la voce si toglie dal bollino. Un box selezionato e rigruppato resta selezionato,
+    /// come dopo "Risolvi". True se c'era da ricontrollare: le letture vanno rifatte.
+    ricontrollaElementiDaPosizionare(lette) {
+        if (!Array.isArray(lette) || typeof CssFramework === "undefined" || CssFramework == null ||
+            typeof CssFramework.ricontrollaElementiDaPosizionare !== "function" || typeof CssFramework.etichettaDaPosizionare !== "function") {
+            return false;
+        }
+        let ricontrollati = false;
+        lette.forEach(lettura => {
+            if (lettura == null || !Array.isArray(lettura.voci) || !lettura.voci.some(voce => CssFramework.etichettaDaPosizionare(voce) != null)) {
+                return;
+            }
+            const eraSelezionato = SchermataSegnalazioni.eSelezionato(lettura.box);
+            const dopo = CssFramework.ricontrollaElementiDaPosizionare(lettura.box);
+            SchermataSegnalazioni.seguiBoxRigruppato(lettura.box, dopo, eraSelezionato);
+            ricontrollati = true;
+        });
+        return ricontrollati;
     },
 
     /// I20-1056, lotto 3: un controllo senza schermata, per la sola icona: le pagine indicate

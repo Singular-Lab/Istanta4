@@ -143,6 +143,7 @@ const Segnalazioni = {
             return box;
         }
 
+        Segnalazioni._allaRisoluzione(box, [voci[indice]]);
         const restanti = etichettaSegnalazioni.senzaVoce(voci, indice);
         if (restanti.length === 0) {
             return Segnalazioni.togliDalBox(box);
@@ -152,7 +153,23 @@ const Segnalazioni = {
 
     /// Lotto 2, "Risolvi tutte": il box resta senza segnalazioni e senza bollino.
     risolviTutte(box) {
+        Segnalazioni._allaRisoluzione(box, null);
         return Segnalazioni.togliDalBox(box);
+    },
+
+    /// I20-1204: risolvere una CSF-30 vuol dire che l'elemento da posizionare a mano e' a posto, e
+    /// torna al 100% di opacita' (CssFramework.elementiPosizionati). voci null: tutte quelle del box.
+    /// Senza CssFramework (sotto Node) non fa niente, e un errore non ferma la risoluzione.
+    _allaRisoluzione(box, voci) {
+        try {
+            if (typeof CssFramework === "undefined" || CssFramework == null || typeof CssFramework.elementiPosizionati !== "function") {
+                return;
+            }
+            CssFramework.elementiPosizionati(box, voci != null ? voci : Segnalazioni.leggiDalBox(box));
+        }
+        catch (e) {
+            console.warn("Code SGN-16 Elementi da posizionare non riportati al 100%:", e);
+        }
     },
 
     /// I20-1126: nasconde (visibili false) o mostra i bollini di segnalazioni del documento, nuovi

@@ -5546,6 +5546,10 @@ async function callAllOperationFixBox(boxImpaginato, bounds, itemRef, garbageKey
     //adesso, sulle posizioni finali e col noRender applicato; il controllo dei conflitti vede l'esito.
     boxImpaginato = CssFramework.applicaEvitaElementiTesto(boxImpaginato);
 
+    //I20-1204: gli elementi da posizionare a mano (elementiDaPosizionare) escono al 40% di opacita',
+    //con il warning CSF-30 nel bollino, sulle posizioni finali e col noRender applicato.
+    boxImpaginato = CssFramework.applicaElementiDaPosizionare(boxImpaginato);
+
     CssFramework.controllaSegnalazioniConflittiPendenti(boxImpaginato);
     //I20-1042: gli spostamenti in griglia si segnalano solo ora, quando nessuno sposta piu' niente.
     CssFramework.controllaSpostamentiGrigliaPendenti(boxImpaginato);

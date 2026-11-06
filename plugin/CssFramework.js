@@ -8,6 +8,8 @@ const SistemazioneFoto = require('./sistemazioneFoto/sistemazioneFoto');
 const cssRegoleConflitti = require('./cssFramework/regoleConflitti');
 //I20-1178: per rimisurare le CSF-013 del bollino (ricontrollaConflittiDelBox).
 const Segnalazioni = require('./segnalazioni/segnalazioni');
+//I20-1204: per riconoscere i bollini fra gli elementi da posizionare a mano.
+const etichettaSegnalazioni = require('./segnalazioni/etichetta');
 //I20-1026: le sovrastrutture, le condizioni sulla ref e sulla forma del box, la regola disattiva.
 const sovrastrutture = require('./cssFramework/sovrastrutture');
 //I20-1102: il piano dei gruppi di allineamento a slot.
@@ -277,6 +279,64 @@ const CssFramework =
             voceDiDefault(contesto.DBallineamenti),
             voceDiDefault(contesto.DBDefault)
         ]);
+    },
+
+    /// I20-1204: gli elementi che il box dichiara da posizionare a mano (elementiDaPosizionare), dalle
+    /// stesse voci di getEvitaElementiTesto: quella del box, quella di default del kit e quella del kit
+    /// di default. Le etichette si sommano, ognuna una volta. Lista vuota se il contesto e' di un
+    /// altro box.
+    getElementiDaPosizionare(box) {
+        var contesto = this.contestoCss;
+        if (contesto == null || box == null || contesto.etichettaBox != box.label) {
+            return [];
+        }
+        return this.etichetteDaPosizionare(box, contesto.DBallineamenti, contesto.DBDefault);
+    },
+
+    /// I20-1204: le stesse etichette dalla copia delle regole scaricate (allineamenti.json), nel kit
+    /// della lavorazione corrente, come regoleConflittiDallaCopia: all'apertura della scheda ref il
+    /// contesto del CSS e' quello dell'ultimo box impaginato. Lista vuota se la copia o il kit non ci sono.
+    getElementiDaPosizionareDallaCopia(box) {
+        try {
+            var file = readFile(Utility.percorsoDati("allineamenti.json"));
+            if (!file || !Array.isArray(file.modificheCssPerKit)) {
+                return [];
+            }
+            var kit = this.kitDelleRegole(file);
+            if (kit == null) {
+                return [];
+            }
+            return this.etichetteDaPosizionare(box,
+                kit.fileModifiche ? kit.fileModifiche.operazioniPerBox : null,
+                kit.fileModificheDef ? kit.fileModificheDef.operazioniPerBox : null);
+        }
+        catch (e) {
+            return [];
+        }
+    },
+
+    /// I20-1204: le etichette elementiDaPosizionare delle voci del box: la sua, quella di default del
+    /// kit e quella del kit di default.
+    etichetteDaPosizionare(box, DBallineamenti, DBDefault) {
+        var voceDiDefault = function (db) {
+            return Array.isArray(db) ? db.find(el => el != null && Array.isArray(el.nomiBox) && el.nomiBox.length == 0) : null;
+        };
+        var etichette = [];
+        [
+            this.getElementoBoxDB(box, DBallineamenti, DBDefault),
+            voceDiDefault(DBallineamenti),
+            voceDiDefault(DBDefault)
+        ].forEach(voce => {
+            if (voce == null || !Array.isArray(voce.elementiDaPosizionare)) {
+                return;
+            }
+            voce.elementiDaPosizionare.forEach(etichetta => {
+                if (typeof etichetta === "string" && etichetta.trim() !== "" && etichette.indexOf(etichetta.trim()) < 0) {
+                    etichette.push(etichetta.trim());
+                }
+            });
+        });
+        return etichette;
     },
 
     /*
@@ -4050,6 +4110,184 @@ const CssFramework =
         return box;
     },
 
+    /// I20-1204: l'opacita' con cui escono gli elementi da posizionare a mano, e l'intervallo in cui la
+    /// loro segnalazione resta vera. Fuori dall'intervallo - anche a 100, rimesso a mano - l'operatore
+    /// l'ha gia' sistemato.
+    OPACITA_DA_POSIZIONARE: 40,
+    OPACITA_DA_VERIFICARE_MIN: 40,
+    OPACITA_DA_VERIFICARE_MAX: 50,
+
+    /// I20-1204: gli elementi che il CssFramework del box dichiara da posizionare a mano
+    /// (elementiDaPosizionare), come il logo attributo italiano di Edro21, escono al 40% di opacita'
+    /// con un warning nel bollino (CSF-30): la posizione automatica va verificata dall'operatore. La
+    /// voce del bollino porta l'etichetta dell'elemento (v.posizione): Risolvi lo riporta al 100%
+    /// (elementiPosizionati) e il ricontrollo toglie la segnalazione se l'operatore l'ha gia'
+    /// sistemato (ricontrollaElementiDaPosizionare). Gira a fine composizione, col noRender applicato:
+    /// un elemento nascosto non si tocca. Restituisce il box.
+    applicaElementiDaPosizionare(box) {
+        try {
+            if (box == null || !box.isValid) {
+                return box;
+            }
+
+            var etichette = this.getElementiDaPosizionare(box);
+            if (etichette.length == 0) {
+                return box;
+            }
+            var elementi = this.elementiDaPosizionareNelBox(box, etichette);
+            for (var i = 0; i < elementi.length; i++) {
+                elementi[i].item.transparencySettings.blendingSettings.opacity = this.OPACITA_DA_POSIZIONARE;
+                var segnalazione = this.segnalazioneDaPosizionare(elementi[i].label);
+                addSegnalazione(segnalazione.msg, segnalazione.typeMessage, 2, true, null, "CSF-30$" + elementi[i].label, segnalazione.verifica);
+            }
+        }
+        catch (error) {
+            console.error("Code CSF-30: elementi da posizionare a mano non applicati nel box " + (box && box.label ? box.label : "") + ": " + error);
+        }
+        return box;
+    },
+
+    /// I20-1204: gli elementi visibili del box con quelle etichette, cercati come per le segnalazioni
+    /// di conflitto, senza i bollini: la loro etichetta contiene il testo delle segnalazioni, e
+    /// "*logo_attributo_it*" ci si riconoscerebbe.
+    elementiDaPosizionareNelBox(box, etichette) {
+        return this.getElementiSegnalazioniConflitti(box, etichette)
+            .filter(e => !etichettaSegnalazioni.eDiSegnalazioni(e.item.label));
+    },
+
+    /// I20-1204: la CSF-30 di un elemento da posizionare a mano, come la vuole addSegnalazione: la scrive
+    /// l'impaginazione e, se l'operatore rimette l'elemento fra 40 e 50, la riaggiunge la scheda ref.
+    segnalazioneDaPosizionare(etichetta) {
+        return {
+            msg: "Code CSF-30: " + etichetta + " in posizione da verificare: spostalo se serve e risolvi la segnalazione",
+            typeMessage: "warning",
+            verifica: { posizione: etichetta }
+        };
+    },
+
+    /// I20-1204: l'etichetta dell'elemento di una voce CSF-30 del bollino; null per le altre voci.
+    etichettaDaPosizionare(voce) {
+        return voce != null && voce.v != null && typeof voce.v.posizione === "string" && voce.v.posizione !== "" ? voce.v.posizione : null;
+    },
+
+    /// I20-1204: se l'opacita' dell'elemento e' ancora quella di un elemento da verificare (40-50).
+    opacitaDaVerificare(item) {
+        var opacita = Number(item.transparencySettings.blendingSettings.opacity);
+        return isFinite(opacita) && opacita >= this.OPACITA_DA_VERIFICARE_MIN && opacita <= this.OPACITA_DA_VERIFICARE_MAX;
+    },
+
+    /// I20-1204: se nel box c'e' ancora, visibile, un elemento con quell'etichetta da verificare. Se
+    /// la lettura non riesce risponde di si', cosi' la segnalazione resta.
+    elementoAncoraDaVerificare(box, etichetta) {
+        try {
+            var me = this;
+            return this.elementiDaPosizionareNelBox(box, [etichetta]).some(e => me.opacitaDaVerificare(e.item));
+        }
+        catch (e) {
+            console.error("Code CSF-31: opacita' di " + etichetta + " non letta: " + e);
+            return true;
+        }
+    },
+
+    /// I20-1204: "Risolvi" su una CSF-30 (Segnalazioni.risolviVoce e risolviTutte) vuol dire che
+    /// l'elemento e' a posto: torna al 100%. Un elemento gia' fuori da 40-50 resta com'e'.
+    elementiPosizionati(box, voci) {
+        try {
+            var me = this;
+            (Array.isArray(voci) ? voci : []).forEach(voce => {
+                var etichetta = me.etichettaDaPosizionare(voce);
+                if (etichetta == null) {
+                    return;
+                }
+                me.elementiDaPosizionareNelBox(box, [etichetta]).forEach(e => {
+                    if (me.opacitaDaVerificare(e.item)) {
+                        e.item.transparencySettings.blendingSettings.opacity = 100;
+                    }
+                });
+            });
+        }
+        catch (error) {
+            console.error("Code CSF-31: opacita' non riportata al 100% nel box " + (box && box.label ? box.label : "") + ": " + error);
+        }
+    },
+
+    /// I20-1204: le CSF-30 del bollino si ricontrollano, come le CSF-013 (ricontrollaConflittiDelBox):
+    /// se l'operatore ha gia' sistemato l'elemento - l'opacita' non e' piu' fra 40 e 50, o l'elemento
+    /// non e' piu' visibile nel box - la voce si toglie e il registro lo dice (CSF-31). Gira
+    /// all'apertura della scheda ref e alla lettura delle segnalazioni del documento. Restituisce il
+    /// box, che riscrivere il bollino rigruppa: va usato quello restituito.
+    /// Con aggiungi (la scheda ref) vale anche al contrario: un elemento dichiarato nella copia delle
+    /// regole, visibile, fra 40 e 50 e senza la sua CSF-30 - l'operatore l'ha rimesso li' dopo averlo
+    /// sistemato - la riceve di nuovo, salvo con le segnalazioni disattivate. La lettura delle
+    /// segnalazioni non aggiunge: guarda solo i box con un bollino.
+    ricontrollaElementiDaPosizionare(box, aggiungi = false) {
+        try {
+            if (box == null || !box.isValid) {
+                return box;
+            }
+
+            var voci = Segnalazioni.leggiDalBox(box);
+            var restanti = [];
+            var tolte = 0;
+            for (var i = 0; i < voci.length; i++) {
+                var etichetta = this.etichettaDaPosizionare(voci[i]);
+                if (etichetta == null || this.elementoAncoraDaVerificare(box, etichetta)) {
+                    restanti.push(voci[i]);
+                    continue;
+                }
+
+                tolte++;
+                messaggioUtente("Code CSF-31: Segnalazione CSF-30 tolta dal box " + box.label + ": " + etichetta +
+                    " non e' piu' all'opacita' da verificare.", "success");
+            }
+
+            var aggiunte = aggiungi && !this.segnalazioniDisattivate() ? this.daPosizionareSenzaSegnalazione(box, restanti) : [];
+            for (var a = 0; a < aggiunte.length; a++) {
+                restanti.push(etichettaSegnalazioni.daSegnalazione(this.segnalazioneDaPosizionare(aggiunte[a])));
+                messaggioUtente("Code CSF-31: Segnalazione CSF-30 aggiunta al box " + box.label + ": " + aggiunte[a] +
+                    " e' all'opacita' da verificare.", "success");
+            }
+
+            if (tolte == 0 && aggiunte.length == 0) {
+                return box;
+            }
+            return restanti.length > 0 ? Segnalazioni.applicaAlBox(box, restanti) : Segnalazioni.togliDalBox(box);
+        }
+        catch (error) {
+            console.error("Code CSF-31: ricontrollo degli elementi da posizionare non riuscito per il box " + (box && box.label ? box.label : "") + ": " + error);
+            return box;
+        }
+    },
+
+    /// I20-1204: le etichette degli elementi dichiarati nella copia delle regole, visibili e fra 40 e 50,
+    /// che fra le voci non hanno la loro CSF-30. Ognuna una volta.
+    daPosizionareSenzaSegnalazione(box, voci) {
+        var me = this;
+        var segnalate = voci.map(voce => me.etichettaDaPosizionare(voce)).filter(e => e != null);
+        var etichette = this.getElementiDaPosizionareDallaCopia(box);
+        if (etichette.length == 0) {
+            return [];
+        }
+        var mancanti = [];
+        this.elementiDaPosizionareNelBox(box, etichette).forEach(e => {
+            if (segnalate.indexOf(e.label) < 0 && mancanti.indexOf(e.label) < 0 && me.opacitaDaVerificare(e.item)) {
+                mancanti.push(e.label);
+            }
+        });
+        return mancanti;
+    },
+
+    /// I20-1204: se le segnalazioni sono disattivate per la lavorazione (schermata delle segnalazioni).
+    segnalazioniDisattivate() {
+        try {
+            return typeof SchermataSegnalazioni !== "undefined" && SchermataSegnalazioni != null &&
+                typeof SchermataSegnalazioni.disattivate === "function" && SchermataSegnalazioni.disattivate() === true;
+        }
+        catch (e) {
+            return false;
+        }
+    },
+
     /// I20-1180: se una riga del testo tocca l'elemento allargato del margine, il bordo del riquadro
     /// rivolto verso l'elemento passa oltre di lui: le righe si accorciano e vanno a capo da sole, il
     /// testo non cambia. Se cosi' va in overflow il bordo alto sale verso quello del box, un passo
@@ -4429,6 +4667,10 @@ const CssFramework =
             if (box == null || !box.isValid) {
                 return box;
             }
+
+            //I20-1204: anche le CSF-30 degli elementi da posizionare a mano: la scheda ref passa da qui, e
+            //qui si riaggiungono quelle di un elemento rimesso fra 40 e 50.
+            box = this.ricontrollaElementiDaPosizionare(box, true);
 
             var me = this;
             var voci = Segnalazioni.leggiDalBox(box);

@@ -3451,6 +3451,12 @@ namespace Istanta.Models
         /// I20-1180: testi da tenere lontani da un elemento del box, come la descrizione dal tag
         /// quantitativi nel BOX4 di Edro21 (plugin/cssFramework/evitaElementiTesto.js).
         public List<EvitaElementiTestoObj> evitaElementiTesto { get; set; } = new();
+
+        /// I20-1204: elementi del box da posizionare a mano, come il logo attributo italiano di Edro21:
+        /// il Plugin li impagina al 40% di opacita' con un warning nel bollino (CSF-30), finche'
+        /// l'operatore non risolve la segnalazione o non cambia l'opacita'. Etichette, anche con
+        /// l'asterisco.
+        public List<string> elementiDaPosizionare { get; set; } = new();
     }
 
     /// I20-1180: se una riga di uno dei testi tocca uno degli elementi, allargato del margine in mm,

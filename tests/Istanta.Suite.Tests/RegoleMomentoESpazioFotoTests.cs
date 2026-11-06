@@ -201,6 +201,55 @@ public class RegoleMomentoESpazioFotoTests
         }
     }
 
+    /// <summary>
+    /// I20-1204: gli elementi da posizionare a mano. I file gia' in esercizio non li hanno.
+    /// </summary>
+    [Fact]
+    public void Un_box_senza_elementi_da_posizionare_non_ne_ha()
+    {
+        var box = JsonConvert.DeserializeObject<modificheCssBox>("{\"nomiBox\":[\"BOX1\"]}");
+
+        Assert.Empty(box!.elementiDaPosizionare);
+    }
+
+    [Fact]
+    public void Gli_elementi_da_posizionare_si_leggono_e_un_salvataggio_non_li_perde()
+    {
+        const string json = "{\"nomiBox\":[],\"elementiDaPosizionare\":[\"*logo_attributo_it*\"]}";
+
+        var box = JsonConvert.DeserializeObject<modificheCssBox>(json);
+        var riletto = JsonConvert.DeserializeObject<modificheCssBox>(JsonConvert.SerializeObject(box));
+
+        foreach (var letto in new[] { box!, riletto! })
+        {
+            Assert.Equal(new[] { "*logo_attributo_it*" }, letto.elementiDaPosizionare);
+        }
+    }
+
+    /// <summary>
+    /// I20-1204: nel Volantino di Edro21 il logo attributo italiano e' da posizionare a mano in tutti
+    /// e due i kit, dalla voce di default; il PoP non lo dichiara. Se la voce si perdesse passando da
+    /// Istanta, il logo tornerebbe a uscire al 100% senza segnalazione.
+    /// </summary>
+    [Fact]
+    public void Nel_volantino_di_Edro21_il_logo_attributo_italiano_e_da_posizionare_a_mano()
+    {
+        var percorso = TrovaSorgenteEdro21();
+        var root = JsonConvert.DeserializeObject<DbFrameworkCss>(File.ReadAllText(percorso));
+        var kit = root!.dbRidimensionamentiAllineamenti.modificheCssPerKit;
+
+        var volantino = kit.Where(m => m.kit.kitTipoLavorazioniValide.Contains(1)).ToList();
+        Assert.Equal(2, volantino.Count);
+        foreach (var k in volantino)
+        {
+            var predefinita = k.operazioniPerBox.Single(op => op.nomiBox.Count == 0);
+            Assert.Equal(new[] { "*logo_attributo_it*" }, predefinita.elementiDaPosizionare);
+        }
+
+        var pop = kit.Where(m => m.kit.kitTipoLavorazioniValide.Contains(2)).SelectMany(m => m.operazioniPerBox);
+        Assert.All(pop, box => Assert.Empty(box.elementiDaPosizionare));
+    }
+
     private static string TrovaSorgenteEdro21()
     {
         const string relativo = "Istanta/wwwroot/external_source/Edro21/SourceFrameworkCss.json";
