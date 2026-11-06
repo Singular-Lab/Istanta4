@@ -101,6 +101,28 @@ const schedaFoto = {
         return nuovi;
     },
 
+    /// I20-1205: la domanda prima di lasciare la scheda Foto P/S con spunte non applicate.
+    TESTO_MODIFICHE_FOTO_PS: "Modifiche non applicate, sei sicuro/a di voler uscire dalla schermata?",
+
+    /// I20-1205: quante foto hanno nelle caselle uno stato diverso da quello salvato. salvati e adesso
+    /// sono { codice: stato } con 1 = P, 2 = S, 3 = nessuna; un codice che il salvato non conosce
+    /// conta come nessuna. Una casella cambiata e poi rimessa com'era non conta: non c'e' niente da
+    /// perdere.
+    modificheFotoPsNonApplicate(salvati, adesso) {
+        const prima = salvati || {};
+        const dopo = adesso || {};
+        return Object.keys(dopo).filter(codice => {
+            const salvato = Object.prototype.hasOwnProperty.call(prima, codice) ? prima[codice] : 3;
+            return dopo[codice] !== salvato;
+        }).length;
+    },
+
+    /// I20-1205: lo stato P/S di un record della scheda, nella forma di selezionePsDopoClic.
+    statoFotoPsDelRecord(record) {
+        const stato = record != null ? Number(record.StatoSelezione) : 3;
+        return stato === 1 || stato === 2 ? stato : 3;
+    },
+
     /// TASK-60aaf10d: la foto che la lista indica per la referenza (Foto.NomeDaTracciato), da mandare
     /// al server con una scelta solo per la lavorazione: se una lista nuova ne indica un'altra, la
     /// scelta decade. Vuota quando il record non c'e' o la lista non indica foto.
@@ -1237,6 +1259,127 @@ const schedaFoto = {
         return true;
     },
 
+    /// I20-1205: gli stati P/S che le caselle della scheda mostrano adesso, { codice: stato }. Vuoto
+    /// se la scheda non ha caselle (gruppo di una referenza sola).
+    statiFotoPsDelleCaselle() {
+        var stati = {};
+        $("#cambiaPS").find("input.primary-check, input.secondary-check").each(function () {
+            var cod = String($(this).attr('codice'));
+            if (stati[cod] == null) {
+                stati[cod] = 3;
+            }
+            if ($(this).prop('checked') && stati[cod] !== 1) {
+                stati[cod] = $(this).hasClass('primary-check') ? 1 : 2;
+            }
+        });
+        return stati;
+    },
+
+    /// I20-1205: rimette le caselle sugli stati dati; i codici che non ci sono si saltano.
+    impostaCaselleFotoPs(stati) {
+        $("#cambiaPS").find("input.primary-check, input.secondary-check").each(function () {
+            var stato = stati[String($(this).attr('codice'))];
+            if (stato != null) {
+                $(this).prop('checked', $(this).hasClass('primary-check') ? stato === 1 : stato === 2);
+            }
+        });
+    },
+
+    /// I20-1205: le spunte non applicate della scheda Foto P/S del gruppo, da rimettere dopo un
+    /// ridisegno (Cambia foto, foto da impaginare o da scaricare), o null se non ce ne sono o se la
+    /// scheda mostrava un altro gruppo.
+    fotoPsInSospeso(codiceGruppo) {
+        if (this.fotoPsMostrate == null || this.fotoPsMostrate.codiceGruppo !== codiceGruppo) {
+            return null;
+        }
+        var adesso = this.statiFotoPsDelleCaselle();
+        return this.modificheFotoPsNonApplicate(this.fotoPsMostrate.salvati, adesso) > 0 ? adesso : null;
+    },
+
+    /// I20-1205: la domanda da fare prima di lasciare la scheda Foto P/S, o null se la scheda non e'
+    /// aperta o non ha spunte non applicate. La chiedono il menu' del pannello (jsIndexControls) e
+    /// il ciclo della selezione (indesignEvents).
+    avvisoModificheFotoPs() {
+        if (this.fotoPsMostrate == null || $("#Tab6").css("display") == "none") {
+            return null;
+        }
+        var diverse = this.modificheFotoPsNonApplicate(this.fotoPsMostrate.salvati, this.statiFotoPsDelleCaselle());
+        return diverse > 0 ? this.TESTO_MODIFICHE_FOTO_PS : null;
+    },
+
+    /// I20-1205: l'operatore esce senza applicare: le caselle tornano come sono salvate, cosi'
+    /// riaprendo la scheda le spunte abbandonate non ricompaiono.
+    scartaModificheFotoPs() {
+        if (this.fotoPsMostrate != null) {
+            this.impostaCaselleFotoPs(this.fotoPsMostrate.salvati);
+        }
+    },
+
+    /// I20-1205: un cambio di selezione in InDesign mentre la scheda Foto P/S ha spunte non applicate.
+    /// Lo chiama il ciclo della selezione prima di interpretarla; true vuol dire "questo giro e'
+    /// mio, non andare avanti". Il box torna selezionato e si chiede all'operatore: restando, le
+    /// spunte sono intatte; uscendo, si scartano e la selezione torna dove aveva cliccato. Se il box
+    /// non si puo' riselezionare (per esempio un altro documento davanti) la selezione si lascia
+    /// andare, come prima.
+    async trattieniSelezionePerFotoPs() {
+        var avviso = this.avvisoModificheFotoPs();
+        var box = this.refSelected != null ? this.refSelected.item : null;
+        if (avviso == null || box == null || !box.isValid) {
+            return false;
+        }
+        var nuovaSelezione = [];
+        try {
+            nuovaSelezione = Array.from(app.selection);
+        }
+        catch (e) {
+            nuovaSelezione = [];
+        }
+        if (!this.riselezionaBox(box)) {
+            return false;
+        }
+        indesignEvents.setBusy(true);
+        indesignEvents.accettaSelezione([box.id]);
+        try {
+            var esci = await Modali.confirm(avviso);
+            if (!esci) {
+                return true;
+            }
+            this.scartaModificheFotoPs();
+            try {
+                app.selection = nuovaSelezione.length > 0 ? nuovaSelezione : null;
+            }
+            catch (e) {
+                console.error("Code SRF-150 La selezione non si e' potuta rimettere dove l'operatore aveva cliccato: " + e);
+            }
+            return true;
+        }
+        finally {
+            indesignEvents.setBusy(false);
+        }
+    },
+
+    /// I20-1205: dopo un salvataggio che cambia le foto mostrate nel box, propone il Fix Foto con la
+    /// domanda data. Se la configurazione del cliente non ha una disposizione per le foto visibili
+    /// del box, non lo propone e dice di sistemarle a mano: il fix uscirebbe senza fare niente.
+    /// true se il fix e' stato applicato.
+    async proponiFixFoto(box, domanda) {
+        var avviso = SistemazioneFoto.avvisoFotoAMano(box);
+        if (avviso != null) {
+            //Modali.popup non ritorna mai: non si aspetta.
+            Modali.popup("Foto da sistemare a mano", avviso);
+            return false;
+        }
+        var procedi = await Modali.confirm(domanda);
+        if (!procedi) {
+            return false;
+        }
+        //il fix foto automatico posiziona tutte le foto primarie e secondarie al posto giusto in base alla meccanica
+        var obs = SistemazioneFoto.getSpazioImpaginazione(box);
+        SistemazioneFoto.fixFoto(box, obs.candidate, obs.obstacles);
+        messaggioUtente("Fix Foto automatico applicato", "success", false, 3);
+        return true;
+    },
+
     /// La schermata di primarie e secondarie.
     async EditFotoPrimarieSecondarie(box) {
         var messageDelivered = false;
@@ -1256,6 +1399,9 @@ const schedaFoto = {
             var membro = membriGruppoFoto.find(m => m.codRef == cod);
             return membro != null && membro.noRender === true;
         };
+        //I20-1205: le spunte non applicate sopravvivono al ridisegno della scheda (Cambia foto, foto
+        //da impaginare o da scaricare): si leggono prima di svuotarla e si rimettono dopo.
+        var spunteInSospeso = me.fotoPsInSospeso(codice_gruppo);
         me.resetFotoPS();
         var listFotoImpaginate = [];
         var listRectangles = [];
@@ -1532,7 +1678,18 @@ const schedaFoto = {
             }
         }
 
+        //I20-1205: gli stati salvati, per accorgersi delle spunte non applicate quando si lascia la scheda.
+        var statiSalvati = {};
+        schedaRef.forEach(f => {
+            statiSalvati[String(f.recordInTracciato["Referenza.Codice"])] = me.statoFotoPsDelRecord(f.recordInTracciato);
+        });
+        me.fotoPsMostrate = { codiceGruppo: codice_gruppo, salvati: statiSalvati };
+
         if (objItem["Scatto.CodiceGruppo"].split(",").length > 1) {
+            if (spunteInSospeso != null) {
+                me.impostaCaselleFotoPs(spunteInSospeso);
+            }
+
             //I20-1202: a ogni clic le caselle P e S di tutto il gruppo si riallineano alla regola
             //(una foto non e' P e S insieme, una sola P: la vecchia diventa S).
             $("#cambiaPS").find("input.primary-check, input.secondary-check").on('change', function () {
@@ -1726,6 +1883,9 @@ const schedaFoto = {
                         //I20-1069: la conferma solo con le primarie e secondarie registrate. Prima stava in
                         //onreadystatechange e compariva per ogni risposta 200, anche con il salvataggio fallito.
                         messaggioUtente("Edit P/S: Richiesta completata con successo", "success", false, 5);
+                        //I20-1205: le spunte appena registrate sono quelle salvate, anche se il box
+                        //viene rifatto e la scheda non si ridisegna da qui.
+                        me.fotoPsMostrate = { codiceGruppo: codice_gruppo, salvati: me.statiFotoPsDelleCaselle() };
 
                         try {
                             //aggiorniamo il dato in schedaRef
@@ -1809,13 +1969,9 @@ const schedaFoto = {
 
                         //Il fix foto viene dopo: una reimpaginazione rifa' il box e butterebbe via
                         //il fix appena applicato, oltre a chiedere due conferme per un lavoro solo.
-                        let res = await Modali.confirm("Modifiche salvate. Applicare il Fix Foto automatico?");
-                        if (res) {
-                            //applichiamo il fix foto automatico, che consiste nel posizionare tutte le foto primarie e secondarie al posto giusto in base alla meccanica
-                            var obs = SistemazioneFoto.getSpazioImpaginazione(box);
-                            SistemazioneFoto.fixFoto(box, obs.candidate, obs.obstacles);
-                            messaggioUtente("Fix Foto automatico applicato", "success", false, 3);
-                        }
+                        //I20-1205: con piu' foto di quante il fix ne sa disporre, invece della domanda
+                        //la finestra che dice di sistemarle a mano.
+                        await me.proponiFixFoto(box, "Modifiche salvate. Applicare il Fix Foto automatico?");
 
 
                         //Questa funzione fa un refresh della schermata lista PRIMARIE/SECONDARIE
@@ -3682,14 +3838,8 @@ const schedaFoto = {
         this.statoFotoAllApertura = NoRenderElementi.statoDelleFoto(this.elementiNoRenderDelBox);
 
         try {
-            var procedi = await Modali.confirm("Le foto mostrate nel box sono cambiate. Applicare il Fix Foto automatico?");
-            if (!procedi) {
-                return;
-            }
-
-            var obs = SistemazioneFoto.getSpazioImpaginazione(box);
-            SistemazioneFoto.fixFoto(box, obs.candidate, obs.obstacles);
-            messaggioUtente("Fix Foto automatico applicato", "success", false, 3);
+            //I20-1205: le foto ancora visibili si contano dal documento, dove il noRender e' gia' applicato.
+            await this.proponiFixFoto(box, "Le foto mostrate nel box sono cambiate. Applicare il Fix Foto automatico?");
         }
         catch (ex) {
             console.error(ex);

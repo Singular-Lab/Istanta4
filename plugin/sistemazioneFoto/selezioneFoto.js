@@ -1,4 +1,5 @@
-/// I20-1130: cosa prende "Seleziona tutte le foto".
+/// I20-1130: cosa prende "Seleziona tutte le foto". I20-1205: e quali foto dispone il fix foto, con
+/// l'avviso quando sono piu' di quante la configurazione del cliente ne sa disporre.
 ///
 /// Dal pannello, con una foto del box selezionata, l'operatore puo' portare nella selezione di
 /// InDesign tutte le foto del box per spostarle insieme. Edro21 ha chiesto che con le foto
@@ -71,6 +72,63 @@ const selezioneFoto = {
             }
         }
         return scelta;
+    },
+
+    /// I20-1205: le foto che il fix foto dispone, nell'ordine in cui le prende: le primarie in testa,
+    /// le secondarie dopo. configurazione.etichetta, se c'e', ricava l'etichetta dalla label (il fix
+    /// usa Utility.parseLabel). I20-978: una foto in noRender e' impaginata ma invisibile (visible
+    /// false) e non partecipa: contandola il fix sceglieva la disposizione per una foto in piu'.
+    fotoDelFix(elementi, configurazione) {
+        const lista = [];
+        if (elementi == null) {
+            return lista;
+        }
+        const conf = configurazione || {};
+        const etichetta = typeof conf.etichetta === "function" ? conf.etichetta : (label) => label;
+        const primaria = typeof conf.nomeFotoPrimaria === "string" && conf.nomeFotoPrimaria !== "" ? conf.nomeFotoPrimaria : "immagine";
+        for (let i = 0; i < elementi.length; i++) {
+            const elemento = elementi[i];
+            if (elemento == null || elemento.visible === false) {
+                continue;
+            }
+            const label = etichetta(elemento.label);
+            if (!selezioneFoto.eUnaFoto(label, conf.nomeFotoPrimaria, conf.nomeFotoSecondaria)) {
+                continue;
+            }
+            if (label.startsWith(primaria)) {
+                lista.unshift(elemento);
+            }
+            else {
+                lista.push(elemento);
+            }
+        }
+        return lista;
+    },
+
+    /// I20-1205: il numero piu' alto di foto per cui la configurazione di distanziamento del cliente
+    /// (calcoloDistanziamentoFoto) ha una disposizione. 0 senza configurazione.
+    fotoMassimeDelFix(configurazioni) {
+        if (!Array.isArray(configurazioni)) {
+            return 0;
+        }
+        return configurazioni.reduce((massimo, voce) =>
+            voce != null && typeof voce.foto === "number" && voce.foto > massimo ? voce.foto : massimo, 0);
+    },
+
+    /// I20-1205: il testo della finestra quando le foto del box vanno sistemate a mano, perche' la
+    /// configurazione non ha una disposizione per quel numero di foto, o null se il fix le sistema.
+    /// Senza foto non c'e' niente da dire. Prima il Plugin proponeva comunque il Fix Foto, che usciva
+    /// senza fare niente lasciando CSF-12 nella riga dei messaggi.
+    avvisoFotoAMano(numero, configurazioni) {
+        if (typeof numero !== "number" || numero <= 0) {
+            return null;
+        }
+        const voci = Array.isArray(configurazioni) ? configurazioni : [];
+        if (voci.some(voce => voce != null && voce.foto === numero)) {
+            return null;
+        }
+        const massimo = selezioneFoto.fotoMassimeDelFix(voci);
+        return "Il box ha " + numero + " foto: il Fix Foto automatico ne sistema fino a " + massimo + ". Sistema le foto a mano.";
     },
 };
 

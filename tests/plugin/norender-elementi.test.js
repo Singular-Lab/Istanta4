@@ -722,11 +722,17 @@ test("il fix foto si propone dopo aver salvato e applicato al documento", () => 
 // disposizione per una foto in piu' e ne spostava una che nessuno vede.
 test("il fix foto salta le foto invisibili", () => {
     //I20-1009: il fix foto sta in sistemazioneFoto.js, non piu' in CssFramework.js.
-    const sorgente = sorgentePlugin("sistemazioneFoto/sistemazioneFoto.js");
+    //I20-1205: le foto le raccoglie selezioneFoto.fotoDelFix, la stessa regola con cui si contano
+    //prima di proporre il fix; eseguiFixFoto la chiama.
+    const motore = sorgentePlugin("sistemazioneFoto/sistemazioneFoto.js");
+    const corpo = motore.indexOf("eseguiFixFoto(box, candidateRects, obstacles, projection) {");
+    assert.ok(corpo > 0 && motore.indexOf("var listFoto = this.fotoDelFix(box);", corpo) > corpo,
+        "il fix foto deve prendere le foto da fotoDelFix");
 
-    const raccolta = sorgente.indexOf("//cerchiamo nel box le foto");
-    const salto = sorgente.indexOf("if (rect.visible === false) {", raccolta);
-    const etichetta = sorgente.indexOf("nomeFotoPrimaria", raccolta);
+    const sorgente = sorgentePlugin("sistemazioneFoto/selezioneFoto.js");
+    const raccolta = sorgente.indexOf("fotoDelFix(elementi, configurazione) {");
+    const salto = sorgente.indexOf("elemento.visible === false", raccolta);
+    const etichetta = sorgente.indexOf("eUnaFoto(label", raccolta);
 
     assert.ok(raccolta > 0, "la raccolta delle foto deve esistere");
     assert.ok(salto > raccolta && salto < etichetta,
