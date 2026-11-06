@@ -100,9 +100,9 @@ export class FileManagementController extends BaseController {
 
     // File listing and retrieval
     // Usato dal kit in produzione e dal download in Tutti i volantini (consultazione)
-    this.router.get('/getAllFiles', authMiddleware, permissionGuard(['file.download', 'materiali.scarica']), this.getAllFiles.bind(this));
+    this.router.get('/getAllFiles', authMiddleware, permissionGuard(['file.download', 'materiali.scarica']), routeDeprecata, this.getAllFiles.bind(this));
     this.router.put('/get_all_files_documentale', authMiddleware, permissionGuard('file.download'), routeDeprecata, this.getAllFilesDocumentale.bind(this));
-    this.router.put('/get_all_contenuti_digitali', authMiddleware, permissionGuard('file.download'), this.getAllContenutiDigitali.bind(this));
+    this.router.put('/get_all_contenuti_digitali', authMiddleware, permissionGuard('file.download'), routeDeprecata, this.getAllContenutiDigitali.bind(this));
     this.router.get('/getProprietaMetaFilesRuntime', authMiddleware, permissionGuard('file.download'), routeDeprecata, this.getProprietaMetaFilesRuntime.bind(this));
     // Elenco della pagina Volantini: chi puo' aprire la pagina deve poterlo caricare
     this.router.get('/getAllCombinazioniRuntimePDF', authMiddleware, permissionGuard('volantini.visualizza'), this.getAllCombinazioniRuntimePDF.bind(this));

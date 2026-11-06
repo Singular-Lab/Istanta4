@@ -18,6 +18,19 @@ import DashboardCategory from ".";
 
 const risposte: Record<string, () => Promise<unknown>> = {};
 
+// I volantini in validità della GDO dalle API di consultazione: solo pubblicati, senza stato
+const URL_VOLANTINI = "/consultazione/volantini?periodo=attivi&dimensione=200";
+const pagina = (kit: unknown[] = []) => ({ totale: kit.length, pagina: 1, dimensione: 200, kit });
+const volantino = (validita: { validitaDal?: string; validitaAl?: string } = {}) => ({
+  id: "k1",
+  titolo: "Volantino ottobre",
+  promo: { id: "p1", nome: "Promo ottobre", validitaDal: validita.validitaDal ?? null, validitaAl: validita.validitaAl ?? null },
+  area: { id: "a1", nome: "Nord" },
+  canale: { id: "c1", nome: "Super" },
+  numeroFile: 1,
+  copertina: null,
+});
+
 const apri = () =>
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
@@ -32,44 +45,39 @@ describe("Dashboard Category", () => {
     permessi.concessi = new Set(["materiali.visualizza"]);
     risposte["/utenti/me/global-filters"] = () => Promise.resolve({ ruolo: "Category", settoriNomi: ["Freschi"] });
     risposte["/scoreboard/category-timeline"] = () => Promise.resolve({ promos: [], series: [], canaleAreaSeries: [] });
-    risposte["/dashboard/volantini-in-corso"] = () => Promise.resolve({ totale: 0, inScadenza: 0, kit: [] });
+    risposte[URL_VOLANTINI] = () => Promise.resolve(pagina());
     risposte["/promo/in-corso"] = () => Promise.resolve([]);
     vi.mocked(ServerCall.get).mockReset();
     vi.mocked(ServerCall.get).mockImplementation(((url: string) => risposte[url]()) as typeof ServerCall.get);
   });
 
   it("se i volantini non arrivano lo dice nella loro sezione, non mostra \"nessun volantino\", e Riprova li ricarica", async () => {
-    risposte["/dashboard/volantini-in-corso"] = () => Promise.reject(new Error("Servizio non raggiungibile"));
+    risposte[URL_VOLANTINI] = () => Promise.reject(new Error("Servizio non raggiungibile"));
     apri();
 
     const sezione = await screen.findByRole("region", { name: "Volantini in corso" });
     expect(await within(sezione).findByRole("alert")).toHaveTextContent("Volantini non caricati");
     expect(within(sezione).queryByText("Nessun volantino in corso")).not.toBeInTheDocument();
 
-    risposte["/dashboard/volantini-in-corso"] = () => Promise.resolve({ totale: 0, inScadenza: 0, kit: [] });
+    risposte[URL_VOLANTINI] = () => Promise.resolve(pagina());
     await userEvent.click(within(sezione).getByRole("button", { name: "Riprova" }));
     expect(await within(sezione).findByText("Nessun volantino in corso")).toBeInTheDocument();
   });
 
   it("un volantino in corso apre la sua consultazione, non la lavorazione del kit", async () => {
-    risposte["/dashboard/volantini-in-corso"] = () => Promise.resolve({
-      totale: 1,
-      inScadenza: 0,
-      kit: [{ id: "k1", titolo: "Volantino ottobre", nome_promo: "Promo ottobre", nome_area: "Nord", nome_canale: "Super", stato_lavorazione: "PUBBLICATO" }],
-    });
+    risposte[URL_VOLANTINI] = () => Promise.resolve(pagina([volantino()]));
     apri();
 
     const sezione = await screen.findByRole("region", { name: "Volantini in corso" });
     expect(await within(sezione).findByRole("link", { name: "Volantino ottobre" })).toHaveAttribute("href", "/volantini/tutti_i_volantini?kit=k1");
+    expect(within(sezione).getByText("Nord / Super")).toBeInTheDocument();
+    // Solo volantini pubblicati: lo stato del kit non si mostra
+    expect(within(sezione).queryByText("Pubblicato")).not.toBeInTheDocument();
   });
 
   it("senza materiali.visualizza il volantino in corso resta testo semplice", async () => {
     permessi.concessi = new Set();
-    risposte["/dashboard/volantini-in-corso"] = () => Promise.resolve({
-      totale: 1,
-      inScadenza: 0,
-      kit: [{ id: "k1", titolo: "Volantino ottobre", nome_promo: "Promo ottobre", stato_lavorazione: "PUBBLICATO" }],
-    });
+    risposte[URL_VOLANTINI] = () => Promise.resolve(pagina([volantino()]));
     apri();
 
     const sezione = await screen.findByRole("region", { name: "Volantini in corso" });
@@ -121,11 +129,7 @@ describe("Dashboard Category", () => {
   });
 
   it("senza promo.visualizza non chiede né mostra le promozioni in corso, e i volantini restano", async () => {
-    risposte["/dashboard/volantini-in-corso"] = () => Promise.resolve({
-      totale: 1,
-      inScadenza: 0,
-      kit: [{ id: "k1", titolo: "Volantino ottobre", nome_promo: "Promo ottobre", stato_lavorazione: "PUBBLICATO", validita_dal: "2026-10-01", validita_al: "2026-10-31" }],
-    });
+    risposte[URL_VOLANTINI] = () => Promise.resolve(pagina([volantino({ validitaDal: "2026-10-01", validitaAl: "2026-10-31" })]));
     apri();
 
     const volantini = await screen.findByRole("region", { name: "Volantini in corso" });

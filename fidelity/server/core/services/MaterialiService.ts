@@ -112,17 +112,17 @@ export function verificaPeriodo(valore: unknown): PeriodoMateriali {
   return valore;
 }
 
-const testoPulito = (valore: unknown): string | undefined =>
+export const testoPulito = (valore: unknown): string | undefined =>
   typeof valore === 'string' && valore.trim() !== '' ? valore.trim() : undefined;
 
-function uuidOpzionale(valore: unknown, campo: string): string | undefined {
+export function uuidOpzionale(valore: unknown, campo: string): string | undefined {
   const testo = testoPulito(valore);
   if (testo === undefined) return undefined;
   if (!UUID.test(testo)) throw new BadRequestError({ message: `${campo} non valido.` });
   return testo;
 }
 
-function formatoObbligatorio(valore: unknown): string {
+export function formatoObbligatorio(valore: unknown): string {
   const idFormato = uuidOpzionale(valore, 'Formato');
   if (!idFormato) throw new BadRequestError({ message: 'Formato mancante: indica idFormato.' });
   return idFormato;
@@ -195,7 +195,7 @@ export function criteriDelPeriodo(periodo: PeriodoMateriali, tipoLavorazione: TI
   };
 }
 
-function dataIso(valore: Date | string | null): string | null {
+export function dataIso(valore: Date | string | null): string | null {
   if (!valore) return null;
   const data = dayjs(valore);
   return data.isValid() ? data.tz(FUSO_PROMO).format('YYYY-MM-DD') : null;
@@ -209,7 +209,7 @@ const promoDa = (riga: RigaPromo): PromoMateriali => ({
   validitaAl: dataIso(riga.validita_al),
 });
 
-const confrontaTesto = (a: string, b: string): number => a.localeCompare(b, 'it', { sensitivity: 'base' });
+export const confrontaTesto = (a: string, b: string): number => a.localeCompare(b, 'it', { sensitivity: 'base' });
 
 /** Dalla validita' piu' recente (senza data in fondo), poi per nome. */
 function confrontaPromo(a: PromoMateriali, b: PromoMateriali): number {

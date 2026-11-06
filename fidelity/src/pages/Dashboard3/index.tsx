@@ -9,9 +9,7 @@ import Segmenti from "@/components/Base/Segmenti";
 import Sezione from "@/components/Base/Sezione";
 import Skeleton from "@/components/Base/Skeleton";
 import Spinner from "@/components/Base/Spinner";
-import StatusBadge from "@/components/Base/StatusBadge";
 import { PreviewImmaginePdf } from "@/components/PreviewImmaginePdf";
-import axios from "axios";
 import clsx from "clsx";
 import dayjs from "dayjs";
 import { keepPreviousData } from "@tanstack/react-query";
@@ -26,55 +24,22 @@ import { usePermission } from "../../context/PermissionContext";
 import { useNotification } from "@/context/NotificationContext";
 import { formatData } from "@/utils/format";
 import { percorsoDettaglioVolantino } from "../../../lib/materiali/periodi";
+import type { PeriodoConsultazione } from "../../../lib/consultazione/periodi";
+import type { PaginaVolantiniConsultazione, VolantinoConsultazione } from "../../../lib/consultazione/tipi";
+import { dimensioneSezionePanoramica, urlVolantiniConsultazione } from "../../query/consultazione";
+import { MOTIVO_SENZA_PERMESSO_SCARICA, useScaricaFileConsultazione } from "../../utils/scaricaFileConsultazione";
 
-interface FileAnteprima {
-    id: string;
-    nome: string;
-    nome_originale?: string;
-    tipo_export?: string;
-    id_olimpo_cloud?: string;
-    thumbnailUrl?: string;
-    mime?: string;
-    pages?: number;
-    url?: string;
-}
-
-interface KitVolantino {
-    id: string;
-    titolo: string;
-    nome_area?: string;
-    nome_canale?: string;
-    stato_lavorazione: string;
-    nome_promo: string;
-    id_promo?: string;
-    validita_dal?: string;
-    validita_al?: string;
-    files: FileAnteprima[];
-}
-
-interface VolantiniInCorso {
-    totale: number;
-    inScadenza: number;
-    kit: KitVolantino[];
-}
-
-interface VolantiniPubblicatiInLavorazione {
-    totale: number;
-    kit: KitVolantino[];
-}
-
-interface StoricoVolantini {
-    totale: number;
-    kit: KitVolantino[];
-}
+// Dati di consultazione: solo volantini pubblicati della GDO, senza stato di lavorazione
+type KitVolantino = VolantinoConsultazione;
+type PaginaVolantini = PaginaVolantiniConsultazione;
 
 export interface Dashboard3LoaderData {
-    volantiniInCorsoPromise: Promise<VolantiniInCorso>;
-    volantiniPubblicatiInLavorazionePromise: Promise<VolantiniPubblicatiInLavorazione>;
+    volantiniAttiviPromise: Promise<PaginaVolantini>;
+    volantiniProssimiPromise: Promise<PaginaVolantini>;
     areePromise: Promise<AreaResponseDTO[]>;
     canaliPromise: Promise<CanaleResponseDTO[]>;
     /** Ultimi 10 volantini senza filtri; se il loader non la avvia la chiede la pagina. */
-    storicoPromise?: Promise<StoricoVolantini>;
+    storicoPromise?: Promise<PaginaVolantini>;
 }
 
 interface Dashboard3Props {
@@ -156,35 +121,19 @@ const VolantiniSkeleton: FC = () => (
 const KitCard: FC<{ kit: KitVolantino; showValidita?: boolean, routeClickable?: boolean }> = ({ kit, showValidita, routeClickable = false }) => {
     const canAccessPromo = usePermission(PERMISSIONS.PROMO.VISUALIZZA);
     const canConsultVolantino = usePermission(PERMISSIONS.MATERIALI.VISUALIZZA);
+    const puoScaricare = usePermission(PERMISSIONS.MATERIALI.SCARICA);
+    const { inCorso, scarica } = useScaricaFileConsultazione();
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
-    const [isDownloading, setIsDownloading] = useState(false);
-    const file = kit.files?.[0];
-    const previewUrl = file?.url ?? file?.thumbnailUrl ?? "";
+    // La copertina è il PDF del volantino: si scarica dalla consultazione, con "materiali.scarica"
+    const file = kit.copertina;
+    const previewUrl = file?.anteprima ?? "";
     const hasPreview = Boolean(previewUrl);
-    const canDownload = Boolean(file?.id_olimpo_cloud);
-
-    const handleDownload = useCallback(async () => {
-        if (!file?.id_olimpo_cloud || isDownloading) return;
-        setIsDownloading(true);
-        try {
-            const url = ServerCall.getUrl();
-            const response = await axios.get(
-                `${url}/getFileFromOlimpo?id=${file.id_olimpo_cloud}`,
-                { responseType: "arraybuffer" }
-            );
-            const blob = new Blob([response.data], { type: "application/pdf" });
-            const blobUrl = window.URL.createObjectURL(blob);
-            const link = document.createElement("a");
-            link.href = blobUrl;
-            link.download = file.nome || "volantino.pdf";
-            link.click();
-            window.URL.revokeObjectURL(blobUrl);
-        } catch (error) {
-            console.error("Errore durante il download del file:", error);
-        } finally {
-            setIsDownloading(false);
-        }
-    }, [file, isDownloading]);
+    const isDownloading = Boolean(file && inCorso === file.id);
+    const motivoSenzaDownload = !puoScaricare
+        ? MOTIVO_SENZA_PERMESSO_SCARICA
+        : !file
+            ? "Il volantino non ha un PDF da scaricare"
+            : undefined;
 
     return (
         <>
@@ -231,45 +180,44 @@ const KitCard: FC<{ kit: KitVolantino; showValidita?: boolean, routeClickable?: 
                                 </h3>
                                 {canAccessPromo ? (
                                     <Link
-                                        to={`/promozioni/in-corso/dettagli/${kit.id_promo}`}
+                                        to={`/promozioni/in-corso/dettagli/${kit.promo.id}`}
                                         className="block truncate text-xs text-theme-1 decoration-theme-1/30 decoration-dotted hover:underline"
                                     >
-                                        Promo: {kit.nome_promo}
+                                        Promo: {kit.promo.nome}
                                     </Link>
                                 ) : (
-                                    <p className="block truncate text-xs text-slate-500">Promo: {kit.nome_promo}</p>
+                                    <p className="block truncate text-xs text-slate-500">Promo: {kit.promo.nome}</p>
                                 )}
-                                {(kit.nome_area || kit.nome_canale) && (
+                                {(kit.area.nome || kit.canale.nome) && (
                                     <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                                        {kit.nome_area && (
+                                        {kit.area.nome && (
                                             <Badge variant="secondary" size="sm">
                                                 <Lucide icon="MapPin" aria-hidden="true" className="h-3 w-3" />
-                                                {kit.nome_area}
+                                                {kit.area.nome}
                                             </Badge>
                                         )}
-                                        {kit.nome_canale && (
+                                        {kit.canale.nome && (
                                             <Badge variant="primary" size="sm">
                                                 <Lucide icon="Store" aria-hidden="true" className="h-3 w-3" />
-                                                {kit.nome_canale}
+                                                {kit.canale.nome}
                                             </Badge>
                                         )}
                                     </div>
                                 )}
                             </div>
-                            <StatusBadge dominio="kitRuntime" stato={kit.stato_lavorazione?.toUpperCase()} className="shrink-0" />
                         </div>
                         <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500">
-                            {showValidita && (kit.validita_dal || kit.validita_al) && (
+                            {showValidita && (kit.promo.validitaDal || kit.promo.validitaAl) && (
                                 <span className="inline-flex items-center gap-1 tabular-nums text-theme-1">
                                     <Lucide icon="Calendar" aria-hidden="true" className="h-3 w-3" />
-                                    {kit.validita_dal && kit.validita_al ? (
+                                    {kit.promo.validitaDal && kit.promo.validitaAl ? (
                                         <>
-                                            {formatData(kit.validita_dal)} - {formatData(kit.validita_al)}
+                                            {formatData(kit.promo.validitaDal)} - {formatData(kit.promo.validitaAl)}
                                         </>
-                                    ) : kit.validita_al ? (
-                                        <>fino al {formatData(kit.validita_al)}</>
-                                    ) : kit.validita_dal ? (
-                                        <>dal {formatData(kit.validita_dal)}</>
+                                    ) : kit.promo.validitaAl ? (
+                                        <>fino al {formatData(kit.promo.validitaAl)}</>
+                                    ) : kit.promo.validitaDal ? (
+                                        <>dal {formatData(kit.promo.validitaDal)}</>
                                     ) : null}
                                 </span>
                             )}
@@ -279,10 +227,10 @@ const KitCard: FC<{ kit: KitVolantino; showValidita?: boolean, routeClickable?: 
                                     {file.mime}
                                 </span>
                             )}
-                            {file?.pages && file.pages > 0 && (
+                            {file?.pagine && file.pagine > 0 && (
                                 <span className="inline-flex items-center gap-1">
                                     <Lucide icon="Book" aria-hidden="true" className="h-3 w-3" />
-                                    {file.pages} pp
+                                    {file.pagine} pp
                                 </span>
                             )}
                         </div>
@@ -290,9 +238,10 @@ const KitCard: FC<{ kit: KitVolantino; showValidita?: boolean, routeClickable?: 
                             <Button
                                 variant="outline-secondary"
                                 size="sm"
-                                onClick={handleDownload}
-                                disabled={!canDownload || isDownloading}
+                                onClick={() => file && scarica(file.id, file.nome)}
+                                disabled={Boolean(motivoSenzaDownload) || isDownloading}
                                 loading={isDownloading}
+                                title={motivoSenzaDownload}
                             >
                                 {!isDownloading && <Lucide icon="Download" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />}
                                 Scarica
@@ -313,7 +262,7 @@ const KitCard: FC<{ kit: KitVolantino; showValidita?: boolean, routeClickable?: 
             {isPreviewOpen && hasPreview && (
                 <PreviewImmaginePdf
                     imageUrl={previewUrl}
-                    totalPages={file?.pages ?? 1}
+                    totalPages={file?.pagine ?? 1}
                     onClose={() => setIsPreviewOpen(false)}
                 />
             )}
@@ -355,7 +304,7 @@ const ElencoKit: FC<{
 };
 
 interface VolantiniInCorsoContentProps {
-    data: VolantiniInCorso;
+    data: PaginaVolantini;
     isLoading: boolean;
     aree: AreaResponseDTO[];
     canali: CanaleResponseDTO[];
@@ -374,7 +323,7 @@ const VolantiniInCorsoContent: FC<VolantiniInCorsoContentProps> = ({
     const [quickFilter, setQuickFilter] = useState<"all" | "expiring">("all");
 
     const kitInScadenza = useMemo<KitVolantino[]>(
-        () => data.kit.filter((kit: KitVolantino) => kit.validita_al && dayjs(kit.validita_al).diff(dayjs(), "day") <= 7),
+        () => data.kit.filter((kit: KitVolantino) => kit.promo.validitaAl && dayjs(kit.promo.validitaAl).diff(dayjs(), "day") <= 7),
         [data.kit]
     );
     const filteredKits = quickFilter === "expiring" ? kitInScadenza : data.kit;
@@ -431,7 +380,7 @@ const VolantiniInCorsoContent: FC<VolantiniInCorsoContentProps> = ({
 };
 
 interface VolantiniPubblicatiInLavorazioneContentProps {
-    data: VolantiniPubblicatiInLavorazione;
+    data: PaginaVolantini;
     isLoading: boolean;
     aree: AreaResponseDTO[];
     canali: CanaleResponseDTO[];
@@ -483,7 +432,7 @@ const VolantiniPubblicatiInLavorazioneContent: FC<VolantiniPubblicatiInLavorazio
 };
 
 interface StoricoVolantiniContentProps {
-    data: StoricoVolantini | null;
+    data: PaginaVolantini | null;
     isLoading: boolean;
     aree: AreaResponseDTO[];
     canali: CanaleResponseDTO[];
@@ -640,35 +589,26 @@ const CHIAVE_DASHBOARD = "dashboardGdo";
 
 const senzaFiltri = (filtro: CardFilter) => !filtro.id_area && !filtro.id_canale;
 
-// Query string con i filtri della card e gli eventuali parametri fissi
-const buildQueryString = (filter: CardFilter, extraParams?: Record<string, string>) => {
-    const params = new URLSearchParams();
-    if (filter.id_area) params.set("id_area", filter.id_area);
-    if (filter.id_canale) params.set("id_canale", filter.id_canale);
-    if (extraParams) {
-        Object.entries(extraParams).forEach(([key, value]) => params.set(key, value));
-    }
-    const queryString = params.toString();
-    return queryString ? `?${queryString}` : "";
-};
-
 /**
- * Dati di una card: la chiave è l'indirizzo con i filtri. Senza filtri la prima lettura usa la
- * promessa del loader (o della dashboard Superadmin), se c'è. Cambiando filtro restano visibili i
- * dati precedenti, attenuati, finché arrivano i nuovi. Senza tentativi automatici: l'errore si
- * vede subito nella card, con Riprova, come prima.
+ * Volantini pubblicati di una sezione (periodo) dalle API di consultazione: la chiave è l'indirizzo
+ * con i filtri. Senza filtri la prima lettura usa la promessa del loader (o della dashboard
+ * Superadmin), se c'è. Cambiando filtro restano visibili i dati precedenti, attenuati, finché
+ * arrivano i nuovi. Senza tentativi automatici: l'errore si vede subito nella card, con Riprova.
  */
-const useVolantiniCard = <T,>(
-    endpoint: string,
+const useVolantiniCard = (
+    periodo: PeriodoConsultazione,
     filtro: CardFilter,
-    promessaLoader?: Promise<T>,
-    extraParams?: Record<string, string>
+    promessaLoader?: Promise<PaginaVolantini>
 ) => {
-    const url = `${endpoint}${buildQueryString(filtro, extraParams)}`;
+    const url = urlVolantiniConsultazione(
+        periodo,
+        { idArea: filtro.id_area, idCanale: filtro.id_canale },
+        { dimensione: dimensioneSezionePanoramica(periodo) }
+    );
     return useQueryConLoader(
         {
             queryKey: [CHIAVE_DASHBOARD, url],
-            queryFn: () => ServerCall.get<T>(url),
+            queryFn: () => ServerCall.get<PaginaVolantini>(url),
             placeholderData: keepPreviousData,
             staleTime: VOLANTINI_STALE_MS,
             retry: false,
@@ -688,16 +628,10 @@ const Dashboard3: FC<Dashboard3Props> = ({ embedded = false, loaderDataOverride 
     const [filterStorico, setFilterStorico] = useState<CardFilter>({ id_area: "", id_canale: "" });
 
     // Dati di ogni card, in React Query: tornando sulla dashboard si vedono subito
-    const inCorsoQuery = useVolantiniCard<VolantiniInCorso>(
-        "/dashboard/volantini-in-corso", filterInCorso, loaderData?.volantiniInCorsoPromise
-    );
-    const pubblicatiInLavorazioneQuery = useVolantiniCard<VolantiniPubblicatiInLavorazione>(
-        "/dashboard/volantini-pubblicati-in-lavorazione", filterPubblicatiInLavorazione, loaderData?.volantiniPubblicatiInLavorazionePromise
-    );
+    const inCorsoQuery = useVolantiniCard("attivi", filterInCorso, loaderData?.volantiniAttiviPromise);
+    const pubblicatiInLavorazioneQuery = useVolantiniCard("prossimi", filterPubblicatiInLavorazione, loaderData?.volantiniProssimiPromise);
     // Storico (ultimi 10)
-    const storicoQuery = useVolantiniCard<StoricoVolantini>(
-        "/dashboard/storico-volantini", filterStorico, loaderData?.storicoPromise, { limit: "10" }
-    );
+    const storicoQuery = useVolantiniCard("storico", filterStorico, loaderData?.storicoPromise);
 
     // Aree e canali (shared): cache comune con le altre pagine che li usano
     const areeQuery = useAreeGdo(loaderData?.areePromise);

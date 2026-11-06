@@ -1,3 +1,4 @@
+import type { Request, Response } from 'express';
 import { describe, expect, it, vi } from 'vitest';
 import { TIPO_UTENTI } from '../../../../lib/enums';
 
@@ -5,7 +6,8 @@ vi.mock('../../models', () => ({
   UtentiGDO: { findOne: vi.fn(async () => ({ id_gdo_utentegdo: 'coop-firenze', id_ruolo_utente_gdo: 'admin' })) },
 }));
 
-import { gdoOperativa, gdoOperativaPerRichiesta, leggiContestoAccesso } from '../contestoAccesso';
+import { UtentiGDO } from '../../models';
+import { ambitoGdoDellaRichiesta, gdoOperativa, gdoOperativaPerRichiesta, leggiContestoAccesso } from '../contestoAccesso';
 
 describe('gdoOperativa', () => {
   it('per un utente GDO vale sempre la GDO della sessione', () => {
@@ -42,5 +44,28 @@ describe('leggiContestoAccesso', () => {
 
   it('senza sessione non c\'è contesto', async () => {
     expect(await leggiContestoAccesso({ session: {} } as any)).toBeNull();
+  });
+});
+
+describe('ambitoGdoDellaRichiesta (dati di consultazione)', () => {
+  const senzaAssociazione = () => vi.mocked(UtentiGDO.findOne).mockResolvedValueOnce(null);
+  const richiesta = (idUtente: string, tipo: TIPO_UTENTI) =>
+    ({ session: { id_utente: idUtente, tipo_utente: tipo } }) as unknown as Request;
+  const risposta = () => ({ locals: {} }) as unknown as Response;
+
+  it('un utente GDO vede solo la sua GDO, qualunque GDO indichi', async () => {
+    expect(await ambitoGdoDellaRichiesta(richiesta('u1', TIPO_UTENTI.GDO), risposta(), 'altra-gdo')).toEqual({ idGdo: 'coop-firenze' });
+  });
+
+  it('Superadmin e Agenzia senza GDO vedono tutte le GDO, o quella che indicano', async () => {
+    senzaAssociazione();
+    expect(await ambitoGdoDellaRichiesta(richiesta('s1', TIPO_UTENTI.SUPERADMIN), risposta())).toBe('tutte');
+
+    expect(await ambitoGdoDellaRichiesta(richiesta('a1', TIPO_UTENTI.AGENZIA), risposta(), 'coop-firenze')).toEqual({ idGdo: 'coop-firenze' });
+  });
+
+  it('un utente senza GDO che non opera per più GDO non vede i dati di nessuna', async () => {
+    senzaAssociazione();
+    expect(await ambitoGdoDellaRichiesta(richiesta('m1', TIPO_UTENTI.MARKETING), risposta(), 'coop-firenze')).toBe('nessuna');
   });
 });

@@ -769,46 +769,6 @@ export const useFetchOpzioniFilePop = (idPromo: string | undefined, periodo: Per
     staleTime: STALE_OPZIONI_POP,
   });
 
-export const useFetchAllContenutiDigitali = (page: number, pageSize: number, filters: {
-  idArea: string;
-  idCanale: string;
-  nome: string;
-  idTipoExport: string;
-  idFormato: string;
-  idPuntoVendita: string;
-  idLavorazione: string;
-  idCombinazione: string;
-  idDeclinazione: string;
-}, metadataFilter?: { field: string; value: string }) => {
-  return useQuery({
-    queryKey: ['contenutiDigitali', page, pageSize, filters, metadataFilter],
-    queryFn: () => ServerCall.put<{
-      totalItems: number;
-      totalPages: number;
-      currentPage: number;
-      pageSize: number;
-      promos: {
-        id: string;
-        nome: string;
-        validita_dal: string;
-        validita_al: string;
-        stato: string;
-        kits: {
-          id: string;
-          nome: string;
-          files: FileItemKit[];
-        }[];
-      }[];
-    }>('/get_all_contenuti_digitali', {
-      page,
-      pageSize,
-      filters,
-      metadataFilter
-    }),
-    enabled: !!page && !!pageSize && !!filters,
-  });
-}
-
 /**
  * Tipo per la risposta delle attività con nuovi campi categoria e priorità
  */

@@ -62,6 +62,7 @@ export const TYPES = {
 
   // Pagina Avanzamento produzione
   AvanzamentoProduzioneService: Symbol.for('AvanzamentoProduzioneService'),
+  ConsultazioneService: Symbol.for('ConsultazioneService'),
 
   // Consultazione dei punti vendita (pagine /punti-vendita)
   ConsultazionePuntiVenditaService: Symbol.for('ConsultazionePuntiVenditaService'),
@@ -125,6 +126,7 @@ export const TYPES = {
   MenuItemRepository: Symbol.for('MenuItemRepository'),
   MaterialiRepository: Symbol.for('MaterialiRepository'),
   AvanzamentoProduzioneRepository: Symbol.for('AvanzamentoProduzioneRepository'),
+  ConsultazioneRepository: Symbol.for('ConsultazioneRepository'),
   ConsultazionePuntiVenditaRepository: Symbol.for('ConsultazionePuntiVenditaRepository'),
   PuntiVenditaVolantinoRepository: Symbol.for('PuntiVenditaVolantinoRepository'),
   AnalisiPuntiVenditaRepository: Symbol.for('AnalisiPuntiVenditaRepository'),

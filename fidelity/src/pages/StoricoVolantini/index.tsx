@@ -11,45 +11,17 @@ import TomSelect from "@/components/Base/TomSelect";
 import EmptyState from "@/components/EmptyState";
 import withSessionCheck from "@/components/SessionChecker";
 import clsx from "clsx";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ServerCall } from "../../../lib/server_call";
+import type { PaginaVolantiniConsultazione } from "../../../lib/consultazione/tipi";
 import { percorsoDettaglioVolantino } from "../../../lib/materiali/periodi";
+import { urlVolantiniConsultazione } from "../../query/consultazione";
 import { PERMISSIONS } from "../../constants/permissions";
 import { usePermission } from "../../context/PermissionContext";
 import CardVolantino from "../shared/CardVolantino";
 import { areeECanaliDaCombinazioni, type CombinazioneConNomi, type OpzioneFiltro } from "./filtriAreeCanali";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
-
-interface FileAnteprima {
-    id: string;
-    nome: string;
-    nome_originale?: string;
-    tipo_export?: string;
-    id_olimpo_cloud?: string;
-    thumbnailUrl?: string;
-    mime?: string;
-    pages?: number;
-    url?: string;
-}
-
-interface KitVolantino {
-    id: string;
-    titolo: string;
-    nome_area?: string;
-    nome_canale?: string;
-    stato_lavorazione: string;
-    nome_promo: string;
-    id_promo?: string;
-    validita_dal?: string;
-    validita_al?: string;
-    files: FileAnteprima[];
-}
-
-interface StoricoVolantiniResponse {
-    totale: number;
-    kit: KitVolantino[];
-}
 
 interface CardFilter {
     id_area: string;
@@ -58,8 +30,8 @@ interface CardFilter {
 
 // Componente principale
 const StoricoVolantiniPage = () => {
-    // Stato per i dati
-    const [data, setData] = useState<StoricoVolantiniResponse | null>(null);
+    // Una pagina dei volantini pubblicati dello storico (promo archiviate della GDO)
+    const [data, setData] = useState<PaginaVolantiniConsultazione | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     // Motivo dell'ultimo caricamento fallito, null se è andato a buon fine
     const [errore, setErrore] = useState<string | null>(null);
@@ -72,36 +44,35 @@ const StoricoVolantiniPage = () => {
     const [filter, setFilter] = useState<CardFilter>({ id_area: "", id_canale: "" });
     const [isFiltering, setIsFiltering] = useState(false);
 
-    // Stato paginazione
+    // Stato paginazione: le pagine le taglia il server
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize, setPageSize] = useState(20);
+    // Solo l'ultima richiesta aggiorna la pagina: una risposta lenta non sovrascrive quelle dopo
+    const ultimaRichiesta = useRef(0);
 
-    // Helper per costruire query string
-    const buildQueryString = useCallback((filter: CardFilter) => {
-        const params = new URLSearchParams();
-        if (filter.id_area) params.set("id_area", filter.id_area);
-        if (filter.id_canale) params.set("id_canale", filter.id_canale);
-        const queryString = params.toString();
-        return queryString ? `?${queryString}` : "";
-    }, []);
-
-    // Carica i dati iniziali
-    const fetchData = useCallback(async (currentFilter: CardFilter) => {
+    const fetchData = useCallback(async (currentFilter: CardFilter, pagina: number, dimensione: number) => {
+        const richiesta = ++ultimaRichiesta.current;
         setIsFiltering(true);
         try {
-            const response = await ServerCall.get<StoricoVolantiniResponse>(
-                `/dashboard/storico-volantini${buildQueryString(currentFilter)}`
-            );
+            const response = await ServerCall.get<PaginaVolantiniConsultazione>(urlVolantiniConsultazione(
+                "storico",
+                { idArea: currentFilter.id_area, idCanale: currentFilter.id_canale },
+                { pagina, dimensione }
+            ));
+            if (richiesta !== ultimaRichiesta.current) return;
             setData(response);
             setErrore(null);
         } catch (error) {
+            if (richiesta !== ultimaRichiesta.current) return;
             console.error("Errore caricamento storico volantini:", error);
             setErrore((error as Error)?.message || "Si è verificato un errore durante il caricamento dello storico.");
         } finally {
-            setIsFiltering(false);
-            setIsLoading(false);
+            if (richiesta === ultimaRichiesta.current) {
+                setIsFiltering(false);
+                setIsLoading(false);
+            }
         }
-    }, [buildQueryString]);
+    }, []);
 
     // Carica aree e canali dalle combinazioni area/canale: la rotta richiede solo il login,
     // come la pagina, e ogni combinazione porta nome e codice di area e canale
@@ -118,44 +89,42 @@ const StoricoVolantiniPage = () => {
         };
 
         loadInitialData();
-        fetchData(filter);
+        fetchData(filter, 1, pageSize);
     }, []);
+
+    const handlePageChange = useCallback((pagina: number) => {
+        setCurrentPage(pagina);
+        fetchData(filter, pagina, pageSize);
+    }, [fetchData, filter, pageSize]);
 
     // Cambiando le righe per pagina si riparte dalla prima pagina
     const handlePageSizeChange = useCallback((dimensione: number) => {
         setPageSize(dimensione);
         setCurrentPage(1);
-    }, []);
+        fetchData(filter, 1, dimensione);
+    }, [fetchData, filter]);
 
-    // Handler per cambio filtri
+    // Cambiando i filtri si riparte dalla prima pagina
     const handleFilterChange = useCallback((newFilter: CardFilter) => {
         setFilter(newFilter);
         setCurrentPage(1);
-        fetchData(newFilter);
-    }, [fetchData]);
+        fetchData(newFilter, 1, pageSize);
+    }, [fetchData, pageSize]);
 
-    // Refetch
     const refetch = useCallback(() => {
         setIsLoading(true);
-        fetchData(filter);
-    }, [filter, fetchData]);
+        fetchData(filter, currentPage, pageSize);
+    }, [filter, currentPage, pageSize, fetchData]);
 
-    // Paginazione client-side sui dati già ricevuti
-    const paginatedKits = useMemo(() => {
-        if (!data?.kit) return [];
-        const startIndex = (currentPage - 1) * pageSize;
-        return data.kit.slice(startIndex, startIndex + pageSize);
-    }, [data?.kit, currentPage, pageSize]);
-
-    const totalPages = useMemo(() => {
-        if (!data?.kit) return 0;
-        return Math.ceil(data.kit.length / pageSize);
-    }, [data?.kit, pageSize]);
+    const paginatedKits = data?.kit ?? [];
+    const totale = data?.totale ?? 0;
+    const totalPages = Math.ceil(totale / pageSize);
 
     const hasActiveFilters = filter.id_area || filter.id_canale;
 
     const canAccessPromo = usePermission(PERMISSIONS.PROMO.VISUALIZZA);
     const puoConsultareVolantini = usePermission(PERMISSIONS.MATERIALI.VISUALIZZA);
+    const puoScaricare = usePermission(PERMISSIONS.MATERIALI.SCARICA);
     const descrizione = "Panoramica completa di tutti i volantini pubblicati dalle promozioni scadute.";
 
     if (isLoading) {
@@ -179,7 +148,7 @@ const StoricoVolantiniPage = () => {
     return (
         <Pagina titolo="Storico volantini" descrizione={descrizione}>
             <StatCardGrid className="lg:grid-cols-3">
-                <StatCard densita="compatta" icona="History" tono="info" etichetta="Volantini totali" valore={data?.totale || 0} />
+                <StatCard densita="compatta" icona="History" tono="info" etichetta="Volantini totali" valore={totale} />
                 <StatCard densita="compatta" icona="FileStack" tono="brand" etichetta="In questa pagina" valore={paginatedKits.length} />
                 <StatCard densita="compatta" icona="BookOpen" tono="success" etichetta="Pagine totali" valore={totalPages} />
             </StatCardGrid>
@@ -246,7 +215,7 @@ const StoricoVolantiniPage = () => {
 
                 {/* Lista volantini */}
                 <div className={clsx("transition-opacity duration-150", isFiltering && "pointer-events-none opacity-50")}>
-                    {!data?.kit || data.kit.length === 0 ? (
+                    {paginatedKits.length === 0 ? (
                         <EmptyState
                             compatta
                             icon={hasActiveFilters ? "SearchX" : "Archive"}
@@ -259,31 +228,31 @@ const StoricoVolantiniPage = () => {
                     ) : (
                         <ul className="space-y-3 p-5">
                             {paginatedKits.map((kit) => {
-                                const file = kit.files?.[0];
+                                const file = kit.copertina;
                                 return (
                                     <li key={kit.id}>
                                         <CardVolantino
                                             titolo={kit.titolo}
-                                            stato={kit.stato_lavorazione}
-                                            nomeArea={kit.nome_area}
-                                            nomeCanale={kit.nome_canale}
+                                            nomeArea={kit.area.nome}
+                                            nomeCanale={kit.canale.nome}
                                             file={
-                                                file && {
+                                                file ? {
                                                     nome: file.nome,
-                                                    anteprima: file.url ?? file.thumbnailUrl,
-                                                    idOlimpoCloud: file.id_olimpo_cloud,
-                                                    tipoExport: file.tipo_export,
-                                                    mime: file.mime,
-                                                    pagine: file.pages,
-                                                }
+                                                    anteprima: file.anteprima ?? undefined,
+                                                    idFile: file.id,
+                                                    tipoExport: file.tipoExport ?? undefined,
+                                                    mime: file.mime ?? undefined,
+                                                    pagine: file.pagine ?? undefined,
+                                                } : undefined
                                             }
-                                            validitaDal={kit.validita_dal}
-                                            validitaAl={kit.validita_al}
+                                            validitaDal={kit.promo.validitaDal ?? undefined}
+                                            validitaAl={kit.promo.validitaAl ?? undefined}
                                             collegamento={puoConsultareVolantini ? percorsoDettaglioVolantino(kit.id) : undefined}
                                             promo={{
-                                                nome: kit.nome_promo,
-                                                collegamento: canAccessPromo ? `/promozioni/in-corso/dettagli/${kit.id_promo}` : undefined,
+                                                nome: kit.promo.nome,
+                                                collegamento: canAccessPromo ? `/promozioni/in-corso/dettagli/${kit.promo.id}` : undefined,
                                             }}
+                                            puoScaricare={puoScaricare}
                                         />
                                     </li>
                                 );
@@ -293,10 +262,10 @@ const StoricoVolantiniPage = () => {
                 </div>
 
                 <PaginazioneTabella
-                    totale={data?.kit?.length ?? 0}
+                    totale={totale}
                     pagina={currentPage}
                     dimensionePagina={pageSize}
-                    onCambiaPagina={setCurrentPage}
+                    onCambiaPagina={handlePageChange}
                     onCambiaDimensione={handlePageSizeChange}
                     opzioniDimensione={PAGE_SIZE_OPTIONS}
                 />
