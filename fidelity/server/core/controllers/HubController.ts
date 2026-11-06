@@ -68,6 +68,12 @@ function deriveAssetTitle(fileName: string): string {
 /** Istanta e Correggo li gestisce Fidelity: l'inizializzazione li ricreerebbe al deploy successivo. */
 const SERVIZIO_GESTITO_NON_ELIMINABILE =
   'Servizio gestito da Fidelity: non si può eliminare, disattivalo';
+/** Dei servizi gestiti si tolgono i destinatari, ma ne resta almeno uno. */
+const ULTIMA_VARIANTE_GESTITA_NON_ELIMINABILE =
+  'Ultima variante di un servizio gestito da Fidelity: non si può eliminare, disattivala';
+/** Il context non si prepara (di solito Olimpo non rilascia il passaporto): il servizio non si apre. */
+const CONTESTO_FICO_NON_PREPARATO =
+  "Accesso automatico al servizio non riuscito: Fidelity non ha potuto preparare l'accesso. Riprova o avvisa l'amministratore.";
 
 export class HubController extends BaseController {
   constructor(
@@ -617,8 +623,8 @@ export class HubController extends BaseController {
 
   private async deleteHubService(req: Request<{ id: string }>, res: Response): Promise<void> {
     try {
-      if (await this.hubServiceService.isServizioGestito(req.params.id)) {
-        this.sendResponse(res, HttpStatusCode.CONFLICT, { message: SERVIZIO_GESTITO_NON_ELIMINABILE });
+      if (await this.hubServiceService.isUltimaVarianteGestita(req.params.id)) {
+        this.sendResponse(res, HttpStatusCode.CONFLICT, { message: ULTIMA_VARIANTE_GESTITA_NON_ELIMINABILE });
         return;
       }
       const deleted = await this.hubServiceService.deleteService(req.params.id);
@@ -712,8 +718,20 @@ export class HubController extends BaseController {
    * Contiene: { publicKey, codicePosizione } cifrati con FICO_SECRET (3DES ECB).
    */
   private async getFicoContext(req: Request, res: Response): Promise<void> {
+    let publicKey: string;
     try {
-      const publicKey = await ServerUtils.getPassportFromOlympo(req);
+      publicKey = await ServerUtils.getPassportFromOlympo(req);
+    } catch (error) {
+      // Senza passaporto non c'e' context: il servizio non va aperto. Il motivo resta nel log, non al browser.
+      log.warn('[HubController] Context FICO non preparato: passaporto Olimpo non ottenuto', {
+        // getPassportFromOlympo lancia sia Error sia oggetti { message, code }.
+        motivo: (error as { message?: string } | null)?.message || String(error),
+        olimpo: config.OLYMPUS_IP_ADDRESS,
+      });
+      this.sendResponse(res, HttpStatusCode.BAD_GATEWAY, { message: CONTESTO_FICO_NON_PREPARATO });
+      return;
+    }
+    try {
       const codicePosizione = req.session.codice_posizione ?? '';
       const route = typeof req.query.route === 'string' ? req.query.route : undefined;
       const payload = JSON.stringify({ publicKey, codicePosizione, ...(route ? { route } : {}) });

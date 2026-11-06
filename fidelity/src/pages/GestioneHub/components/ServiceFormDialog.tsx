@@ -15,6 +15,7 @@ import {
   SERVICE_TIPO_URL_OPTIONS,
 } from "../utils";
 import IconInput from "./IconInput";
+import IndirizzoServizioGestito from "./IndirizzoServizioGestito";
 import ServiceSharedAssetsEditor from "./ServiceSharedAssetsEditor";
 
 interface ServiceFormDialogProps {
@@ -52,13 +53,12 @@ const ServiceFormDialog = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const targetOptions = useMemo(() => buildServiceTargetOptions(gdoRoleOptions), [gdoRoleOptions]);
-  // Istanta e Correggo: indirizzo, tipo e destinatari li decide Fidelity.
+  // Istanta e Correggo: l'indirizzo lo calcola Fidelity, finche' il Superadmin non ne sceglie uno suo.
   const gestito = sourceVariant?.gestito ?? group?.variants.find((v) => v.gestito)?.gestito;
+  const urlCalcolato = sourceVariant?.url_calcolato ?? group?.variants.find((v) => v.gestito)?.url_calcolato ?? null;
   const disabledTargetKeys = useMemo(
-    () => gestito
-      ? new Set(targetOptions.map((o) => o.key))
-      : mode === "edit-group" ? new Set<string>() : new Set(existingTargetKeys),
-    [existingTargetKeys, mode, gestito, targetOptions]
+    () => mode === "edit-group" ? new Set<string>() : new Set(existingTargetKeys),
+    [existingTargetKeys, mode]
   );
 
   useEffect(() => {
@@ -105,6 +105,16 @@ const ServiceFormDialog = ({
     }));
   };
 
+  /** Indirizzo manuale: parte da quello calcolato, con l'accesso automatico FICO. */
+  const scegliIndirizzoManuale = (manuale: boolean) => {
+    setValues((current) => ({
+      ...current,
+      indirizzo_manuale: manuale,
+      url: manuale && current.url.trim() ? current.url : (urlCalcolato ?? ""),
+      tipo_url: manuale ? current.tipo_url : "external_fico",
+    }));
+  };
+
   const toggleTarget = (target: ServiceTargetOption) => {
     setSelectedTargetKeys((current) => {
       if (current.includes(target.key)) {
@@ -118,7 +128,9 @@ const ServiceFormDialog = ({
   const validate = () => {
     if (!values.codice.trim()) return "Il codice del servizio è obbligatorio.";
     if (!values.nome.trim()) return "Il nome del servizio è obbligatorio.";
-    if (!gestito && values.tipo_url !== "internal" && !values.url.trim()) return "L'URL del servizio è obbligatorio.";
+    if ((!gestito || values.indirizzo_manuale) && values.tipo_url !== "internal" && !values.url.trim()) {
+      return "L'URL del servizio è obbligatorio.";
+    }
 
     if (selectedTargets.length === 0) {
       return "Seleziona almeno un target per la variante.";
@@ -213,7 +225,7 @@ const ServiceFormDialog = ({
                 <FormCheck.Label className="ml-0 flex-1">
                   <div className="text-sm font-medium text-slate-700">{target.label}</div>
                   {disabled && (
-                    <div className="text-xs text-slate-500">{gestito ? "Destinatari stabiliti da Fidelity" : "Variante già presente"}</div>
+                    <div className="text-xs text-slate-500">Variante già presente</div>
                   )}
                 </FormCheck.Label>
               </FormCheck>
@@ -326,17 +338,15 @@ const ServiceFormDialog = ({
 
                   <div className="space-y-4">
                     {gestito ? (
-                      <div>
-                        <FormLabel htmlFor="service-url">URL</FormLabel>
-                        <FormInput id="service-url" value={sourceVariant?.url ?? ""} readOnly className="mt-2" />
-                        <div className="mt-1 text-xs text-slate-500">
-                          {sourceVariant?.url_non_configurato
-                            ? gestito === "istanta"
-                              ? "Indirizzo non configurato: impostare FICO_BASE_URL o ISTANTA_IP_ADDRESS di Fidelity."
-                              : "Indirizzo non configurato: impostare CORREGGO_IP_ADDRESS di Fidelity."
-                            : "Calcolato da Fidelity dalla configurazione dell'installazione: non si modifica da qui."}
-                        </div>
-                      </div>
+                      <IndirizzoServizioGestito
+                        gestito={gestito}
+                        manuale={values.indirizzo_manuale}
+                        url={values.url}
+                        tipoUrl={values.tipo_url}
+                        urlCalcolato={urlCalcolato}
+                        onManualeChange={scegliIndirizzoManuale}
+                        onUrlChange={(url) => updateField("url", url)}
+                      />
                     ) : isInternalUrl ? (
                       <div className="rounded-control border border-info/20 bg-info/5 px-3 py-2 text-xs text-info">
                         Per i servizi con tipo URL <strong>Interno</strong>, l'apertura è automatica sulla start page dell'utente.
@@ -375,7 +385,8 @@ const ServiceFormDialog = ({
                           id="service-tipo-url"
                           value={values.tipo_url}
                           onChange={(event) => updateField("tipo_url", event.target.value as HubServiceDTO["tipo_url"])}
-                          disabled={!!gestito}
+                          disabled={!!gestito && !values.indirizzo_manuale}
+                          title={gestito && !values.indirizzo_manuale ? "Con l'indirizzo calcolato il tipo è Esterno FICO: scegli un indirizzo manuale per cambiarlo" : undefined}
                           className="mt-2"
                         >
                           {SERVICE_TIPO_URL_OPTIONS.map((option) => (

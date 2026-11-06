@@ -24,6 +24,8 @@ export interface CreateHubServiceInput {
   in_evidenza?: boolean;
   ordine?: number;
   meta?: Record<string, unknown>;
+  /** Solo per i servizi gestiti: true per l'indirizzo scelto dal Superadmin, false per quello calcolato. */
+  indirizzo_manuale?: boolean;
 }
 
 export interface BulkCreateHubServiceInput {
@@ -42,6 +44,8 @@ export interface BulkCreateHubServiceInput {
   in_evidenza?: boolean;
   ordine?: number;
   meta?: Record<string, unknown>;
+  /** Solo per i servizi gestiti: true per l'indirizzo scelto dal Superadmin, false per quello calcolato. */
+  indirizzo_manuale?: boolean;
   tipi_utente: Array<{ tipo_utente: string; ruolo_gdo?: string | null }>;
 }
 
@@ -55,7 +59,9 @@ export interface IHubServiceService {
   bulkUpdateServices(ids: string[], patch: BulkUpdateHubServicePatch): Promise<HubServiceDTO[]>;
   deleteService(id: string): Promise<boolean>;
   deleteServiceByCode(codice: string): Promise<number>;
-  /** Servizi gestiti da Fidelity (Istanta, Correggo): si disattivano, non si eliminano. */
+  /** Servizi gestiti da Fidelity (Istanta, Correggo): si disattivano, non si eliminano per intero. */
   isServizioGestito(id: string): Promise<boolean>;
+  /** Vero se la variante e' l'ultima del suo servizio gestito: non si elimina. */
+  isUltimaVarianteGestita(id: string): Promise<boolean>;
   isCodiceGestito(codice: string): Promise<boolean>;
 }

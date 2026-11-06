@@ -7,7 +7,16 @@ import { log } from '../logger';
 import type { HubService } from '../models/hub_service';
 import type { IHubServiceRepository } from '../repositories/HubServiceRepository';
 import { normalizeHubServiceRoleValue, type HubUserContext } from './hubRoleUtils';
-import { senzaCampiGestiti, senzaGestito, servizioGestito, urlServizioGestito } from './serviziGestiti';
+import {
+  datiServizioGestito,
+  indirizzoManuale,
+  senzaCodice,
+  senzaGestito,
+  senzaIndirizzoManuale,
+  servizioGestito,
+  urlServizioGestito,
+  type ServizioGestito,
+} from './serviziGestiti';
 
 function toDTO(service: HubService): HubServiceDTO {
   const meta = (service.meta as Record<string, unknown>) ?? undefined;
@@ -37,16 +46,28 @@ function toDTO(service: HubService): HubServiceDTO {
   };
   if (gestito) {
     dto.gestito = gestito;
-    dto.tipo_url = 'external_fico';
-    dto.url = urlGestito ?? '';
-    dto.url_non_configurato = urlGestito == null;
+    dto.url_calcolato = urlGestito;
+    dto.indirizzo_manuale = indirizzoManuale(meta);
+    if (dto.indirizzo_manuale) {
+      // Indirizzo e tipo scelti dal Superadmin: valgono quelli salvati.
+      dto.url_non_configurato = service.tipo_url !== 'internal' && !service.url;
+    } else {
+      dto.tipo_url = 'external_fico';
+      dto.url = urlGestito ?? '';
+      dto.url_non_configurato = urlGestito == null;
+    }
   }
   return dto;
 }
 
 function normalizeServiceInput<T extends Partial<CreateHubServiceInput> & Partial<HubServiceDTO>>(data: T): T {
   // Dalla gestione dell'hub un servizio non diventa ne' smette di essere gestito.
-  const { gestito: _gestito, url_non_configurato: _nonConfigurato, ...resto } = data as T & Partial<HubServiceDTO>;
+  const {
+    gestito: _gestito,
+    url_non_configurato: _nonConfigurato,
+    url_calcolato: _calcolato,
+    ...resto
+  } = data as T & Partial<HubServiceDTO>;
   const normalized = senzaGestito(resto as T);
 
   if (Object.prototype.hasOwnProperty.call(normalized, 'ruolo_gdo')) {
@@ -99,6 +120,34 @@ function selectServicesForSuperadmin(services: HubService[]): HubService[] {
       })[0];
     })
     .sort(compareServiceVariants);
+}
+
+/** Il servizio gestito a cui appartiene il codice, e se il Superadmin gli ha dato un indirizzo manuale. */
+interface GruppoGestito {
+  gestito: ServizioGestito;
+  manuale: boolean;
+}
+
+function gruppoGestito(varianti: Array<HubService | null | undefined>): GruppoGestito | null {
+  const gestite = varianti.filter((v): v is HubService => !!v && servizioGestito(v.meta) != null);
+  if (gestite.length === 0) return null;
+  return {
+    gestito: servizioGestito(gestite[0].meta)!,
+    manuale: gestite.some((v) => indirizzoManuale(v.meta)),
+  };
+}
+
+/** Una variante nuova di un servizio gestito resta gestita, con l'indirizzo scelto per il gruppo. */
+function datiNuovaVariante<T extends Record<string, unknown>>(data: T, gruppo: GruppoGestito | null): T {
+  if (!gruppo) return senzaIndirizzoManuale(data);
+  const dati = datiServizioGestito(data, gruppo.gestito, gruppo.manuale, { creazione: true });
+  return { ...dati, meta: { ...(dati.meta as Record<string, unknown>), gestito: gruppo.gestito } };
+}
+
+/** Le modifiche a varianti esistenti: per un servizio gestito il codice non cambia e l'indirizzo segue la scelta. */
+function datiModifica<T extends Record<string, unknown>>(data: T, gruppo: GruppoGestito | null): T {
+  if (!gruppo) return senzaIndirizzoManuale(data);
+  return datiServizioGestito(senzaCodice(data), gruppo.gestito, gruppo.manuale);
 }
 
 export class HubServiceService implements IHubServiceService {
@@ -158,13 +207,17 @@ export class HubServiceService implements IHubServiceService {
 
   async createService(data: CreateHubServiceInput): Promise<HubServiceDTO> {
     try {
-      const service = await this.repository.create(normalizeServiceInput(data) as any);
+      const gruppo = gruppoGestito(await this.repository.findAllByCode(data.codice));
+      const service = await this.repository.create(datiNuovaVariante(normalizeServiceInput(data) as any, gruppo));
 
       if (data.tipo_utente !== TIPO_UTENTI.SUPERADMIN) {
         const existingSuperadmin = await this.repository.findByCodeAndType(data.codice, TIPO_UTENTI.SUPERADMIN);
         if (!existingSuperadmin) {
           await this.repository.create(
-            normalizeServiceInput({ ...data, tipo_utente: TIPO_UTENTI.SUPERADMIN, ruolo_gdo: null }) as any
+            datiNuovaVariante(
+              normalizeServiceInput({ ...data, tipo_utente: TIPO_UTENTI.SUPERADMIN, ruolo_gdo: null }) as any,
+              gruppo
+            )
           );
         }
       }
@@ -190,7 +243,11 @@ export class HubServiceService implements IHubServiceService {
       }
 
       const normalizedTargets = targets.map((target) => normalizeServiceInput(target));
-      const services = await this.repository.bulkCreateForService(baseData, normalizedTargets);
+      const gruppo = gruppoGestito(await this.repository.findAllByCode(data.codice));
+      const services = await this.repository.bulkCreateForService(
+        datiNuovaVariante(normalizeServiceInput(baseData as any), gruppo),
+        normalizedTargets
+      );
       return services.map((service) => toDTO(service));
     } catch (error) {
       log.error('HubServiceService.bulkCreateService error:', error);
@@ -200,9 +257,9 @@ export class HubServiceService implements IHubServiceService {
 
   async updateService(id: string, data: Partial<HubServiceDTO>): Promise<HubServiceDTO | null> {
     try {
-      let dati = normalizeServiceInput(data);
-      if (servizioGestito((await this.repository.findById(id))?.meta)) dati = senzaCampiGestiti(dati as any);
-      const service = await this.repository.update(id, dati as any);
+      const gruppo = gruppoGestito([await this.repository.findById(id)]);
+      const dati = datiModifica(normalizeServiceInput(data) as any, gruppo);
+      const service = await this.repository.update(id, dati);
       return service ? toDTO(service) : null;
     } catch (error) {
       log.error('HubServiceService.updateService error:', error);
@@ -214,8 +271,7 @@ export class HubServiceService implements IHubServiceService {
     try {
       // Le varianti di un gruppo condividono il codice: se una e' gestita lo sono tutte.
       const correnti = await Promise.all(ids.map((id) => this.repository.findById(id)));
-      if (correnti.some((s) => servizioGestito(s?.meta))) patch = senzaCampiGestiti(patch as any) as BulkUpdateHubServicePatch;
-      patch = normalizeServiceInput(patch as any) as BulkUpdateHubServicePatch;
+      patch = datiModifica(normalizeServiceInput(patch as any), gruppoGestito(correnti)) as BulkUpdateHubServicePatch;
       const services = await this.repository.bulkUpdate(ids, patch as any);
 
       // Propaga le modifiche anche alle varianti Superadmin per ogni codice aggiornato,
@@ -245,9 +301,19 @@ export class HubServiceService implements IHubServiceService {
     }
   }
 
-  /** Vero se il servizio (per id) e' gestito da Fidelity e quindi non si elimina. */
+  /** Vero se il servizio (per id) e' gestito da Fidelity. */
   async isServizioGestito(id: string): Promise<boolean> {
     return servizioGestito((await this.repository.findById(id))?.meta) != null;
+  }
+
+  /**
+   * Vero se la variante e' l'ultima di un servizio gestito: le altre varianti (i destinatari) il
+   * Superadmin le toglie, ma il servizio gestito non si elimina per intero.
+   */
+  async isUltimaVarianteGestita(id: string): Promise<boolean> {
+    const servizio = await this.repository.findById(id);
+    if (!servizio || servizioGestito(servizio.meta) == null) return false;
+    return (await this.repository.findAllByCode(servizio.codice)).length <= 1;
   }
 
   /** Vero se il codice appartiene a servizi gestiti da Fidelity. */

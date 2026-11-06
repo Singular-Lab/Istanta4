@@ -30,7 +30,7 @@ function makeRepository(overrides: Record<string, any> = {}) {
     findAll: vi.fn().mockResolvedValue([]),
     findById: vi.fn(),
     findByCodeAndType: vi.fn(),
-    findAllByCode: vi.fn(),
+    findAllByCode: vi.fn().mockResolvedValue([]),
     create: vi.fn(),
     bulkCreateForService: vi.fn(),
     update: vi.fn(),
