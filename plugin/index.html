@@ -341,19 +341,19 @@
         <div class="col" style="display: flex; margin-left: 7px; margin-bottom: 0px; padding-bottom: 0px;">
           <div id="barraTab" class="tab" style="display: flex; margin-left: 0px; margin-bottom: 0px; padding-bottom: 0px;">
             <img id="homeImage" src="images/header_home_button_active.png" active="true" subTab="Tab7" style="cursor:pointer;"
-              onclick="jsIndexControls.changeImage($(this)), jsIndexControls.changeSubMenu('Tab7', true)">
+              onclick="jsIndexControls.clicVoce(null, () => { jsIndexControls.changeImage($(this)), jsIndexControls.changeSubMenu('Tab7', true) })">
             <img id="refImage" src="images/header_ref_button.png" active="false" subTab="Tab5" style="cursor:pointer; padding-left: 2px; display: none;"
-              onclick="jsIndexControls.changeImage($(this)), jsIndexControls.changeSubMenu('Tab5', true)">
+              onclick="jsIndexControls.clicVoce(null, () => { jsIndexControls.changeImage($(this)), jsIndexControls.changeSubMenu('Tab5', true) })">
               <img id="raggruppaImage" src="images/header_raggruppa_button.png" active="false" subTab="Tab10" style="cursor:pointer; padding-left: 2px; display: none;" 
-              onclick="jsIndexControls.changeImage($(this)), jsIndexControls.changeSubMenu('Tab10', true)">
+              onclick="jsIndexControls.clicVoce(null, () => { jsIndexControls.changeImage($(this)), jsIndexControls.changeSubMenu('Tab10', true) })">
             <img id="menaboTab" src="images/header_menabo_button.png" active="false" subTab="Tab1"
-                style="cursor:pointer; padding-left: 2px;" onclick="jsIndexControls.changeImage($(this)), jsIndexControls.changeSubMenu('Tab1', true)">
+                style="cursor:pointer; padding-left: 2px;" onclick="jsIndexControls.clicVoce(null, () => { jsIndexControls.changeImage($(this)), jsIndexControls.changeSubMenu('Tab1', true) })">
             <img id="grigliaTab" src="images/header_griglia_button.png" active="false" subTab="TabGriglia"
-              style="cursor:pointer; padding-left: 2px; display: none;" onclick="jsIndexControls.changeImage($(this)), jsIndexControls.changeSubMenu('TabGriglia', true)">
+              style="cursor:pointer; padding-left: 2px; display: none;" onclick="jsIndexControls.clicVoce(null, () => { jsIndexControls.changeImage($(this)), jsIndexControls.changeSubMenu('TabGriglia', true) })">
             <img id="utilityImage" src="images/header_utility_button.png" active="false" subTab="Tab12" style="cursor:pointer; padding-left: 2px;"
-              onclick="jsIndexControls.changeImage($(this)), jsIndexControls.changeSubMenu('Tab12', true)">
+              onclick="jsIndexControls.clicVoce(null, () => { jsIndexControls.changeImage($(this)), jsIndexControls.changeSubMenu('Tab12', true) })">
             <img id="artworkTab" src="images/header_artwork_button.png" active="false" subTab="Tab9" style="cursor:pointer; padding-left: 2px;  display: none;"
-              onclick="jsIndexControls.changeImage($(this)), jsIndexControls.changeSubMenu('Tab9', true)">
+              onclick="jsIndexControls.clicVoce(null, () => { jsIndexControls.changeImage($(this)), jsIndexControls.changeSubMenu('Tab9', true) })">
           </div>
         </div>
         <!--I20-1116: il segnalino delle segnalazioni di impaginazione, in fondo alla riga delle linguette e
@@ -400,18 +400,18 @@
           </div>
           <div class="subTab5" defaultTab="Tab5" style="display: none; margin-left: 0px; margin-top: 0px; padding-top: 0px; margin-bottom: 0px; padding-bottom: 0px;">
             <img src="images/SubMenu_Edit_active.png" tab="Tab5" style="cursor:pointer;"
-              onclick="jsIndexControls.openTab(event, 'Tab5'), jsIndexControls.changeImage($(this)), selectSchedaRef(1)">
+              onclick="jsIndexControls.clicVoce('Tab5', () => { jsIndexControls.openTab(event, 'Tab5'), jsIndexControls.changeImage($(this)), selectSchedaRef(1) })">
             <!-- I20-1063: data-selezione-multipla="nascosta" segna le voci che la selezione di piu' box non
                  offre (schedaRef.impostaVociSelezioneMultipla): nel sottomenu' le voci, nel piede i contenitori
                  delle icone, cosi' le icone che restano si avvicinano invece di lasciare il posto vuoto. -->
             <img src="images/SubMenu_Primariasecondaria.png" tab="Tab6" style="cursor:pointer;" data-selezione-multipla="nascosta"
-              onclick="jsIndexControls.openTab(event, 'Tab6'), jsIndexControls.changeImage($(this)), selectSchedaRef(2)">
+              onclick="jsIndexControls.clicVoce('Tab6', () => { jsIndexControls.openTab(event, 'Tab6'), jsIndexControls.changeImage($(this)), selectSchedaRef(2) })">
             <img src="images/SubMenu_Fotoextra.png" tab="Tab7" style="cursor:pointer;"
-              onclick="jsIndexControls.openTab(event, 'Tab7'), jsIndexControls.changeImage($(this)), selectSchedaRef(3)">
+              onclick="jsIndexControls.clicVoce('Tab7', () => { jsIndexControls.openTab(event, 'Tab7'), jsIndexControls.changeImage($(this)), selectSchedaRef(3) })">
             <img id="sgruppa" src="images/SubMenu_Sgruppa.png" tab="Tab8" style="cursor:pointer;" data-selezione-multipla="nascosta"
-              onclick="jsIndexControls.openTab(event, 'Tab8'), jsIndexControls.changeImage($(this)), selectSchedaRef(4)">
+              onclick="jsIndexControls.clicVoce('Tab8', () => { jsIndexControls.openTab(event, 'Tab8'), jsIndexControls.changeImage($(this)), selectSchedaRef(4) })">
             <img src="images/SubMenu_CambioStrutturale.png" tab="Tab13" style="cursor:pointer;" data-selezione-multipla="nascosta"
-              onclick="jsIndexControls.openTab(event, 'Tab13'), jsIndexControls.changeImage($(this)), selectSchedaRef(5)">
+              onclick="jsIndexControls.clicVoce('Tab13', () => { jsIndexControls.openTab(event, 'Tab13'), jsIndexControls.changeImage($(this)), selectSchedaRef(5) })">
           </div>
           <div class="subTab9" defaultTab="Tab9" style="display: none; margin-left: 0px; margin-top: 0px; padding-top: 0px;">
             <img src="images/SubMenu_Impostazioni_active.png" tab="Tab9" style="cursor:pointer;"

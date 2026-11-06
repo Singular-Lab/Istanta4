@@ -9,8 +9,8 @@
 /// data-method dell'immagine, e changeSubMenu le esegue solo se gli si dice che il click
 /// e' dell'operatore.
 ///
-/// Usa come globali $, document, onresizeWindow e, dentro metodiDaMarkup, filtriJs e
-/// mostraTracciato: le mette indexNew, e sotto Node le mette il test.
+/// Usa come globali $, document, onresizeWindow, Modali (I20-1205, in clicVoce) e, dentro
+/// metodiDaMarkup, filtriJs e mostraTracciato: le mette indexNew, e sotto Node le mette il test.
 
 const jsIndexControls = {
 
@@ -142,6 +142,57 @@ const jsIndexControls = {
             $(sender).attr('active', "true");
         }
 
+    },
+
+    /// I20-1205: chi puo' fermare un clic del menu': avviso() torna la domanda da fare prima di
+    /// lasciare la schermata aperta, o null se non c'e' niente da perdere; scarta() butta via le
+    /// modifiche quando l'operatore esce lo stesso. La registra indexNew (oggi la scheda Foto P/S).
+    guardiaUscita: null,
+
+    impostaGuardiaUscita(avviso, scarta = null) {
+        this.guardiaUscita = typeof avviso === "function"
+            ? { avviso: avviso, scarta: typeof scarta === "function" ? scarta : null }
+            : null;
+    },
+
+    /// I20-1205: la domanda della guardia, o null. Un errore della guardia non blocca il menu'.
+    avvisoDiUscita() {
+        if (this.guardiaUscita == null) {
+            return null;
+        }
+        try {
+            return this.guardiaUscita.avviso() || null;
+        }
+        catch (e) {
+            console.error("I20-1205: la guardia del menu' non ha risposto: " + e);
+            return null;
+        }
+    },
+
+    /// I20-1205: il clic dell'operatore su una voce del menu'; azione e' quello che l'onclick faceva
+    /// prima. Se la schermata aperta ha modifiche non applicate, prima la domanda: restando non
+    /// succede niente, uscendo le modifiche si scartano e il clic fa quello che doveva. Senza niente
+    /// da chiedere l'azione parte subito, come prima. tabName, se c'e', e' la scheda che la voce
+    /// apre: ricliccare la scheda gia' aperta non e' un'uscita.
+    clicVoce(tabName, azione) {
+        var aperta = tabName != null && typeof document !== "undefined" && document.getElementById(tabName) != null
+            && document.getElementById(tabName).style.display == "block";
+        var avviso = aperta ? null : this.avvisoDiUscita();
+        if (avviso == null) {
+            azione();
+            return Promise.resolve(true);
+        }
+        let me = this;
+        return Modali.confirm(avviso).then(function (esci) {
+            if (!esci) {
+                return false;
+            }
+            if (me.guardiaUscita != null && me.guardiaUscita.scarta != null) {
+                me.guardiaUscita.scarta();
+            }
+            azione();
+            return true;
+        });
     },
 
     /// Quale scheda e' accesa, letta dall'attributo active delle immagini della barra.

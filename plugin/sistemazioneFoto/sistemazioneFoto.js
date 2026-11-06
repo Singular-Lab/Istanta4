@@ -505,6 +505,39 @@ const SistemazioneFoto = {
         return sceltaSpazio.preferisciDisposizione(prima, seconda, cssFramework().getSceltaSpazioFoto(box));
     },
 
+    /// I20-1205: la configurazione di distanziamento in uso, quella del cliente se il suo custom.js
+    /// la dichiara.
+    configurazioneDistanziamento() {
+        if (customAgenzia.calcoloDistanziamentoFoto != null) {
+            this.calcoloDistanziamentoFoto = customAgenzia.calcoloDistanziamentoFoto;
+        }
+        return this.calcoloDistanziamentoFoto;
+    },
+
+    /// I20-1205: le foto del box che il fix dispone (selezioneFoto.fotoDelFix), fra i rettangoli
+    /// diretti del box come le ha sempre cercate.
+    fotoDelFix(box) {
+        var rettangoli = [];
+        for (let k = 0; k < box.rectangles.length; k++) {
+            rettangoli.push(box.rectangles.item(k));
+        }
+        //Senza rettangoli niente da chiedere al plugin di agenzia, come quando il ciclo stava nel fix.
+        if (rettangoli.length === 0) {
+            return [];
+        }
+        return selezioneFoto.fotoDelFix(rettangoli, {
+            nomeFotoPrimaria: pluginMiddleware.getCampo("nomeFotoPrimaria"),
+            nomeFotoSecondaria: pluginMiddleware.getCampo("nomeFotoSecondaria"),
+            etichetta: (label) => Utility.parseLabel(label),
+        });
+    },
+
+    /// I20-1205: il testo della finestra "Foto da sistemare a mano" se il fix non ha una disposizione
+    /// per le foto visibili del box, o null se proporre il fix ha senso.
+    avvisoFotoAMano(box) {
+        return selezioneFoto.avvisoFotoAMano(this.fotoDelFix(box).length, this.configurazioneDistanziamento());
+    },
+
     /// Il corpo di fixFoto. Si chiama solo da li': e' fixFoto a garantire il ripristino.
     eseguiFixFoto(box, candidateRects, obstacles, projection) {
 
@@ -513,34 +546,11 @@ const SistemazioneFoto = {
 
         var base = this.trovaBase(box);
 
-        if (customAgenzia.calcoloDistanziamentoFoto != null) {
-            this.calcoloDistanziamentoFoto = customAgenzia.calcoloDistanziamentoFoto;
-        }
+        this.configurazioneDistanziamento();
 
-        var listFoto = [];
-
-        //cerchiamo nel box le foto
-        for (let k = 0; k < box.rectangles.length; k++) {
-            let rect = box.rectangles.item(k);
-
-            //I20-978: una foto in noRender e' impaginata ma invisibile, e resta un rettangolo
-            //del box. Contandola, il fix foto sceglieva la disposizione per una foto in piu' e
-            //ne spostava una che nessuno vede: l'unica visibile finiva nel posto sbagliato e
-            //restava un buco. Le foto invisibili non partecipano.
-            if (rect.visible === false) {
-                continue;
-            }
-            if (Utility.parseLabel(rect.label).startsWith(pluginMiddleware.getCampo("nomeFotoPrimaria") !== null ? pluginMiddleware.getCampo("nomeFotoPrimaria") : "immagine") ||
-                Utility.parseLabel(rect.label).startsWith(pluginMiddleware.getCampo("nomeFotoSecondaria") !== null ? pluginMiddleware.getCampo("nomeFotoSecondaria") : "foto_secondaria")) {
-                //la mettiamo da parte, se è la primaria la mettiamo in testa
-                if (Utility.parseLabel(rect.label).startsWith(pluginMiddleware.getCampo("nomeFotoPrimaria") !== null ? pluginMiddleware.getCampo("nomeFotoPrimaria") : "immagine")) {
-                    listFoto.unshift(rect);
-                }
-                else {
-                    listFoto.push(rect);
-                }
-            }
-        }
+        //I20-1205: le foto le sceglie fotoDelFix, la stessa regola con cui si contano prima di
+        //proporre il fix (avvisoFotoAMano): primarie in testa, quelle in noRender fuori.
+        var listFoto = this.fotoDelFix(box);
 
         console.log(listFoto);
 

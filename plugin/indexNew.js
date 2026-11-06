@@ -447,6 +447,10 @@ function checkForLoghiCore(){
 // #region EVENTS
 
 let indesignEvents = new InddEvents();
+//I20-1205: la scheda Foto P/S con spunte non applicate trattiene la selezione e chiede prima di uscire.
+indesignEvents.impostaGuardiaSelezione(() => schedaRef.trattieniSelezionePerFotoPs());
+//I20-1205: e lo stesso chiede quando si cambia voce dal menu' del pannello.
+jsIndexControls.impostaGuardiaUscita(() => schedaRef.avvisoModificheFotoPs(), () => schedaRef.scartaModificheFotoPs());
 const gC = new garbageCollector();
 //I20-968: rende invisibili gli elementi del box che l'operatore ha messo in noRender.
 //L'elenco arriva dal record consegnato da Istanta, letto dai meta della lavorazione.

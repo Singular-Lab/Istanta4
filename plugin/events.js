@@ -51,6 +51,7 @@ class InddEvents {
 
     isBusy=false;
     asleep=false;
+    guardiaSelezione=null;
     avvisoAppMancante=false;
 
     //I20-981: il Report Integrita' tiene isBusy per tutto il tempo in cui resta aperto, e
@@ -240,6 +241,15 @@ class InddEvents {
                                 }
                             }
 
+
+                            //I20-1205: una schermata con modifiche non applicate trattiene la selezione e chiede
+                            //all'operatore prima di lasciarla: il giro, se lo prende lei, finisce qui. Sta qui,
+                            //subito prima di leggere la selezione, e non in cima al giro: fra la cima e la
+                            //lettura ci sono le attese del documento e della pagina, e un clic arrivato in
+                            //mezzo passava senza domanda (la deselezione chiudeva la scheda).
+                            if (await me.selezioneTrattenuta()) {
+                                return;
+                            }
 
                             //Andiamo ad ognimodo ad ascoltare la selzione dell'utente all'interno del documento
 
@@ -1096,6 +1106,41 @@ class InddEvents {
         }
         catch (e) {
             console.warn("TASK-325cdb29: il documento del lavoro non si e' potuto rimettere davanti: " + e);
+            return false;
+        }
+    }
+
+    /// I20-1205: chi puo' trattenere la selezione, una funzione asincrona che torna true quando il
+    /// cambio di selezione l'ha gestito lei (oggi la scheda Foto P/S con spunte non applicate).
+    /// La registra indexNew; null, nessuno.
+    impostaGuardiaSelezione(guardia) {
+        this.guardiaSelezione = typeof guardia === "function" ? guardia : null;
+    }
+
+    /// I20-1205: se la selezione di InDesign e' cambiata rispetto all'ultima presa per buona e la
+    /// guardia la trattiene. Senza guardia, o con la selezione di prima, false subito: il ciclo va
+    /// avanti come sempre. Un errore della guardia non ferma il ciclo.
+    async selezioneTrattenuta()
+    {
+        if (typeof this.guardiaSelezione !== "function") {
+            return false;
+        }
+        let ids = [];
+        try {
+            ids = Array.from(app.selection).map(elemento => elemento.id).sort();
+        }
+        catch (e) {
+            return false;
+        }
+        const ultima = this.lastSelectionID || [];
+        if (ids.length === ultima.length && ids.every((id, i) => id === ultima[i])) {
+            return false;
+        }
+        try {
+            return (await this.guardiaSelezione()) === true;
+        }
+        catch (e) {
+            console.error("I20-1205: la guardia della selezione non ha risposto: " + e);
             return false;
         }
     }
