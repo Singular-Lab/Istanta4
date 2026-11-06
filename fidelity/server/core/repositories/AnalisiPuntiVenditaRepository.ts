@@ -20,7 +20,7 @@ import {
   type RigaListaVolantino,
   type StatisticheProdotti,
 } from '../utils/analisiPuntoVendita';
-import type { EdizioneConLista, PuntoVenditaConTelefono, RigaSenzaPuntoVendita } from '../utils/gestionePuntiVendita';
+import type { EdizioneConLista, PuntoVenditaPerSuggerimenti, RigaSenzaPuntoVendita } from '../utils/gestionePuntiVendita';
 import type { RigaReferenza } from '../utils/referenzaStampata';
 import { DATA_EDIZIONE, KIT_VALIDI, PDF_VOLANTINO, SOSTITUZIONI_FISSE } from './PuntiVenditaVolantinoRepository';
 
@@ -116,7 +116,8 @@ export interface IAnalisiPuntiVenditaRepository {
   qualita(idGdo: string, chiaveMeta: string | null, minutiOffline: number): Promise<QualitaGrezza>;
   righeSenzaPuntoVendita(idGdo: string): Promise<RigaSenzaPuntoVendita[]>;
   edizioniConLista(idGdo: string): Promise<EdizioneConLista[]>;
-  puntiVenditaConTelefono(idGdo: string): Promise<PuntoVenditaConTelefono[]>;
+  /** Tutti i PV della GDO, con telefono, citta', indirizzo e ragione sociale: suggerimenti per le righe non abbinate. */
+  puntiVenditaPerSuggerimenti(idGdo: string): Promise<PuntoVenditaPerSuggerimenti[]>;
 }
 
 type Sostituzioni = Record<string, unknown>;
@@ -445,14 +446,17 @@ export class AnalisiPuntiVenditaRepository implements IAnalisiPuntiVenditaReposi
       id_kit: string; data: string; id_canale: string | null; nome_canale: string | null; id_area: string | null; posizione: number;
       riga: string; localita: string | null; indirizzo: string | null; telefono: string | null;
       chiave_indirizzo: string | null; chiave_telefono: string | null;
+      titolo_kit: string | null; id_promo: string; nome_promo: string | null; nome_area: string | null;
     }>(
       `SELECT k.id::text AS id_kit, ${DATA_EDIZIONE} AS data,
               k.id_canale::text AS id_canale, COALESCE(c.nome_canali, k.nome_canale) AS nome_canale, k.id_area::text AS id_area,
-              r.posizione, r.riga, r.localita, r.indirizzo, r.telefono, r.chiave_indirizzo, r.chiave_telefono
+              r.posizione, r.riga, r.localita, r.indirizzo, r.telefono, r.chiave_indirizzo, r.chiave_telefono,
+              k.titolo AS titolo_kit, p.id_promo, p.nome_promo, COALESCE(a.nome_aree, k.nome_area) AS nome_area
        FROM punti_vendita_volantino r
        JOIN runtime_kit k ON k.id = r.id_kit_runtime
        JOIN promo p ON p.id_promo = k.id_promo
        LEFT JOIN canali c ON c.id_canali = k.id_canale
+       LEFT JOIN aree a ON a.id_aree = k.id_area
        WHERE r.id_gdo = :idGdo AND r.id_punto_vendita IS NULL AND ${KIT_VALIDI}
        ORDER BY data, k.id, r.posizione`,
       { idGdo }
@@ -470,6 +474,10 @@ export class AnalisiPuntiVenditaRepository implements IAnalisiPuntiVenditaReposi
       telefono: riga.telefono,
       chiaveIndirizzo: riga.chiave_indirizzo,
       chiaveTelefono: riga.chiave_telefono,
+      titoloKit: riga.titolo_kit ?? '',
+      idPromo: riga.id_promo,
+      nomePromo: riga.nome_promo,
+      nomeArea: riga.nome_area,
     }));
   }
 
@@ -485,11 +493,12 @@ export class AnalisiPuntiVenditaRepository implements IAnalisiPuntiVenditaReposi
     return righe.map(riga => ({ idCanale: riga.id_canale, idArea: riga.id_area, data: riga.data }));
   }
 
-  async puntiVenditaConTelefono(idGdo: string): Promise<PuntoVenditaConTelefono[]> {
-    return this.seleziona<PuntoVenditaConTelefono>(
-      `SELECT id_puntivendita::text AS id, nome_puntivendita AS nome, telefono_puntivendita AS telefono
+  async puntiVenditaPerSuggerimenti(idGdo: string): Promise<PuntoVenditaPerSuggerimenti[]> {
+    return this.seleziona<PuntoVenditaPerSuggerimenti>(
+      `SELECT id_puntivendita::text AS id, nome_puntivendita AS nome, telefono_puntivendita AS telefono,
+              citta_puntivendita AS citta, indirizzo_puntivendita AS indirizzo, ragionesociale_puntivendita AS "ragioneSociale"
        FROM punti_vendita
-       WHERE id_gdo_puntivendita = :idGdo AND COALESCE(btrim(telefono_puntivendita), '') <> ''`,
+       WHERE id_gdo_puntivendita = :idGdo`,
       { idGdo }
     );
   }

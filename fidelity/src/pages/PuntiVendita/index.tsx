@@ -791,7 +791,7 @@ function Main() {
           )}
         </Sezione>
 
-        <RigheNonAbbinate coloreDelCanale={elenco.coloreDelCanale} onAggiungi={aggiungiDaRiga} />
+        <RigheNonAbbinate coloreDelCanale={elenco.coloreDelCanale} onAggiungi={aggiungiDaRiga} puntiVendita={tuttiPuntiVendita} />
       </Pagina>
     </>
   );

@@ -275,7 +275,11 @@ describeConDatabase('AnalisiPuntiVenditaRepository', () => {
       ['2022-01-06', 3, 'SESTRI'],
       ['2022-02-03', 2, 'STRUPPA'],
     ]);
-    expect(senza[0]).toMatchObject({ idKit: del2021.idRuntime, idCanale: del2021.idCanale, nomeCanale: 'Superstore', idArea: del2021.idArea, chiaveTelefono: '0108000001' });
+    expect(senza[0]).toMatchObject({
+      idKit: del2021.idRuntime, idCanale: del2021.idCanale, nomeCanale: 'Superstore', idArea: del2021.idArea, chiaveTelefono: '0108000001',
+      // Kit, promo e area: in quali volantini compare la riga
+      titoloKit: 'SS TO VOL', idPromo: del2021.idPromo, nomePromo: 'Promo di prova', nomeArea: 'Toscana',
+    });
 
     const edizioni = await repository.edizioniConLista(del2021.idGdo);
     expect(edizioni.map(e => e.data).sort()).toEqual(['2021-03-04', '2022-01-06', '2022-02-03']);
@@ -286,7 +290,9 @@ describeConDatabase('AnalisiPuntiVenditaRepository', () => {
       { posizione: 2, riga: 'STRUPPA - Via Trossarelli 1/F - tel. 010 8000001', regione: 'LIGURIA', provincia: 'GENOVA', idPuntoVendita: null, abbinamento: null },
       { posizione: 3, riga: 'SESTRI - Via Sestri 5', regione: 'LIGURIA', provincia: 'GENOVA', idPuntoVendita: null, abbinamento: null },
     ]);
-    expect(await repository.puntiVenditaConTelefono(del2021.idGdo)).toEqual([{ id: pra, nome: 'PV Genova', telefono: '010 6197180' }]);
+    expect(await repository.puntiVenditaPerSuggerimenti(del2021.idGdo)).toEqual([
+      { id: pra, nome: 'PV Genova', telefono: '010 6197180', citta: 'Genova', indirizzo: 'Via Murtola 12/14', ragioneSociale: null },
+    ]);
 
     const storie = await new ConsultazionePuntiVenditaRepository().storiaInElenco(del2021.idGdo);
     expect([...storie].sort((a, b) => a.anno - b.anno)).toEqual([

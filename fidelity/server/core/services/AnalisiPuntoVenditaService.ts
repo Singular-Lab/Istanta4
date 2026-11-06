@@ -5,9 +5,10 @@ import type {
   PaginaRigheNonAbbinate,
   QualitaPuntiVendita,
   ReteInsegne,
+  VolantiniRigaNonAbbinata,
 } from '../../../lib/puntiVendita/analisi';
 import { DIMENSIONI_PAGINA_STORIA } from '../../../lib/puntiVendita/storia';
-import { NotFoundError } from '../../../lib/errors';
+import { BadRequestError, NotFoundError } from '../../../lib/errors';
 import type { IAnalisiPuntoVenditaService } from '../interfaces/IAnalisiPuntoVenditaService';
 import { log } from '../logger';
 import type { IAnalisiPuntiVenditaRepository, RiepilogoDaSalvare, RigaReferenzaKit } from '../repositories/AnalisiPuntiVenditaRepository';
@@ -34,7 +35,7 @@ import {
   SOGLIA_PRODOTTO_FREQUENTE,
   spazioPerMeccanica,
 } from '../utils/analisiPuntoVendita';
-import { MINUTI_DISPOSITIVO_OFFLINE, raggruppaRigheNonAbbinate, righeDaRevisionare } from '../utils/gestionePuntiVendita';
+import { MINUTI_DISPOSITIVO_OFFLINE, raggruppaRigheNonAbbinate, righeDaRevisionare, volantiniDelGruppo } from '../utils/gestionePuntiVendita';
 import { leggiReferenza, type ReferenzaStampata } from '../utils/referenzaStampata';
 
 /**
@@ -253,13 +254,24 @@ export class AnalisiPuntoVenditaService implements IAnalisiPuntoVenditaService {
     };
   }
 
+  async volantiniRigaNonAbbinata(idGdo: string, chiave: unknown): Promise<VolantiniRigaNonAbbinata> {
+    if (typeof chiave !== 'string' || chiave.trim() === '' || chiave.length > 1000) {
+      throw new BadRequestError({ message: 'Riga non indicata (chiave)' });
+    }
+    const volantini = volantiniDelGruppo(await this.repository.righeSenzaPuntoVendita(idGdo), chiave);
+    if (!volantini) {
+      throw new NotFoundError({ message: "La riga non e' piu' fra quelle non abbinate", entityType: 'RigaNonAbbinata', entityId: chiave });
+    }
+    return { chiave, volantini };
+  }
+
   async righeNonAbbinate(idGdo: string, pagina = 1, dimensione = DIMENSIONI_PAGINA_STORIA[0]): Promise<PaginaRigheNonAbbinate> {
     const perPagina = DIMENSIONI_PAGINA_STORIA.includes(dimensione) ? dimensione : DIMENSIONI_PAGINA_STORIA[0];
     const numeroPagina = Number.isInteger(pagina) && pagina >= 1 ? pagina : 1;
     const [righe, edizioni, puntiVendita] = await Promise.all([
       this.repository.righeSenzaPuntoVendita(idGdo),
       this.repository.edizioniConLista(idGdo),
-      this.repository.puntiVenditaConTelefono(idGdo),
+      this.repository.puntiVenditaPerSuggerimenti(idGdo),
     ]);
     const gruppi = raggruppaRigheNonAbbinate(righe, edizioni, puntiVendita);
     return {

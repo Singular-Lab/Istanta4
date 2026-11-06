@@ -2,10 +2,10 @@ import express, { type NextFunction, type Request, type Response } from 'express
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TIPO_UTENTI } from '../../../../lib/enums';
-import { NotFoundError } from '../../../../lib/errors';
+import { ApplicationError, BadRequestError, NotFoundError } from '../../../../lib/errors';
 import type { IAnalisiPuntoVenditaService } from '../../interfaces/IAnalisiPuntoVenditaService';
 import type { IConsultazionePuntiVenditaService } from '../../interfaces/IConsultazionePuntiVenditaService';
-import type { IStoriaPuntoVenditaService } from '../../interfaces/IStoriaPuntoVenditaService';
+import type { CollegamentiPuntiVenditaVolantino, IStoriaPuntoVenditaService } from '../../interfaces/IStoriaPuntoVenditaService';
 
 // Le pagine del PV sulla timeline dei volantini: permessi, GDO della sessione e ordine delle route
 // sullo stesso percorso base della consultazione e della storia.
@@ -51,6 +51,7 @@ function servizioFinto() {
     reteInsegne: vi.fn(async (_idGdo: string) => ({ anni: [], insegne: [] })),
     qualita: vi.fn(async (_idGdo: string) => ({ totale: 1, senzaCoordinate: 0, senzaCodice: 0, righeDaRevisionare: 0, conStoria: 1, dispositiviOffline: 0 })),
     righeNonAbbinate: vi.fn(async (_idGdo: string, pagina?: number, dimensione?: number) => ({ righe: [], totale: 0, pagina: pagina ?? 1, dimensione: dimensione ?? 10 })),
+    volantiniRigaNonAbbinata: vi.fn(async (_idGdo: string, chiave: unknown) => ({ chiave: String(chiave), volantini: [] })),
   } satisfies IAnalisiPuntoVenditaService;
 }
 
@@ -61,18 +62,24 @@ function creaApp(opzioni: { tipo?: TIPO_UTENTI; consultazionePrima?: boolean } =
     dettaglio: vi.fn(async () => { throw new NotFoundError({ message: 'Punto vendita non trovato', entityType: 'PuntoVendita' }); }),
     volantiniAttivi: vi.fn(async () => []),
   } satisfies IConsultazionePuntiVenditaService;
+  const collegamenti = {
+    collega: vi.fn(async (_idGdo: string, _richiesta: unknown, _idUtente: string | null) => ({ idCollegamento: 'c1', righe: 40 })),
+    collegamenti: vi.fn(async (_idGdo: string, pagina?: number, dimensione?: number) => ({ collegamenti: [], totale: 0, pagina: pagina ?? 1, dimensione: dimensione ?? 10 })),
+    scollega: vi.fn(async (_idGdo: string, _idCollegamento: string) => ({ righe: 40 })),
+  } satisfies CollegamentiPuntiVenditaVolantino;
   const app = express();
+  app.use(express.json());
   app.use((req, _res, next) => {
     req.session = { id_utente: 'u1', tipo_utente: opzioni.tipo ?? TIPO_UTENTI.GDO } as Request['session'];
     next();
   });
-  const controllerAnalisi = new AnalisiPuntoVenditaController(analisi);
+  const controllerAnalisi = new AnalisiPuntoVenditaController(analisi, collegamenti);
   const controllerConsultazione = new ConsultazionePuntiVenditaController(consultazione);
   // Come in routes.ts: analisi, consultazione, storia; a richiesta la consultazione prima
   const ordine = opzioni.consultazionePrima ? [controllerConsultazione, controllerAnalisi] : [controllerAnalisi, controllerConsultazione];
   for (const controller of ordine) controller.registerRoutes(app);
   new StoriaPuntoVenditaController({} as IStoriaPuntoVenditaService).registerRoutes(app);
-  return { app, analisi, consultazione };
+  return { app, analisi, consultazione, collegamenti };
 }
 
 beforeEach(() => {
@@ -197,6 +204,85 @@ describe('GET /api/punti-vendita/gestione/...', () => {
 
     await request(app).get('/api/punti-vendita/gestione/righe-non-abbinate').query({ pagina: 'abc' });
     expect(analisi.righeNonAbbinate).toHaveBeenLastCalledWith('gdo-sessione', undefined, undefined);
+  });
+});
+
+describe('collegamenti fatti a mano: /api/punti-vendita/gestione/...', () => {
+  const ID_COLLEGAMENTO = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+
+  it('con la sola visualizzazione: 403 per collegare, elencare e scollegare, niente chiamato', async () => {
+    const { app, collegamenti } = creaApp();
+
+    const collega = await request(app).post('/api/punti-vendita/gestione/righe-non-abbinate/collega').send({ chiave: 'tel:0106197180', idPuntoVendita: ID_PV });
+    const elenco = await request(app).get('/api/punti-vendita/gestione/collegamenti-manuali');
+    const scollega = await request(app).delete(`/api/punti-vendita/gestione/collegamenti-manuali/${ID_COLLEGAMENTO}`);
+
+    expect([collega.status, elenco.status, scollega.status]).toEqual([403, 403, 403]);
+    expect(collega.body).toEqual({ codice: 'gdo.gestisci_punti_vendita' });
+    expect(collegamenti.collega).not.toHaveBeenCalled();
+    expect(collegamenti.collegamenti).not.toHaveBeenCalled();
+    expect(collegamenti.scollega).not.toHaveBeenCalled();
+  });
+
+  it('con "gdo.gestisci_punti_vendita": collega nella GDO della sessione, a nome dell\'utente', async () => {
+    permessi.concessi = new Set(['gdo.gestisci_punti_vendita']);
+    const { app, collegamenti } = creaApp({ tipo: TIPO_UTENTI.AGENZIA });
+    const corpo = { chiave: 'tel:0106197180', idPuntoVendita: ID_PV };
+
+    const res = await request(app).post('/api/punti-vendita/gestione/righe-non-abbinate/collega').query({ idGdo: 'altra-gdo' }).send(corpo);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ idCollegamento: 'c1', righe: 40 });
+    expect(collegamenti.collega).toHaveBeenCalledWith('gdo-sessione', corpo, 'u1');
+  });
+
+  it('richiesta non valida 400, PV di un\'altra GDO 404, riga gia\' abbinata 409', async () => {
+    permessi.concessi = new Set(['gdo.gestisci_punti_vendita']);
+    const { app, collegamenti } = creaApp();
+    collegamenti.collega
+      .mockRejectedValueOnce(new BadRequestError({ message: 'Riga da collegare non indicata (chiave)' }))
+      .mockRejectedValueOnce(new NotFoundError({ message: 'Punto vendita non trovato', entityType: 'PuntoVendita', entityId: ID_PV }))
+      .mockRejectedValueOnce(new ApplicationError({ name: 'RigaGiaAbbinataError', code: 'RIGA_VOLANTINO_GIA_ABBINATA', message: 'gia\' abbinata', httpStatus: 409 }));
+    const invia = () => request(app).post('/api/punti-vendita/gestione/righe-non-abbinate/collega').send({ chiave: 'x', idPuntoVendita: ID_PV });
+
+    expect((await invia()).status).toBe(400);
+    expect((await invia()).status).toBe(404);
+    expect((await invia()).status).toBe(409);
+  });
+
+  it('volantini di una riga: con la sola visualizzazione 403; con la gestione, la chiave nella GDO della sessione', async () => {
+    const vietato = creaApp();
+    expect((await request(vietato.app).get('/api/punti-vendita/gestione/righe-non-abbinate/volantini').query({ chiave: 'tel:0106197180' })).status).toBe(403);
+    expect(vietato.analisi.volantiniRigaNonAbbinata).not.toHaveBeenCalled();
+
+    permessi.concessi = new Set(['gdo.gestisci_punti_vendita']);
+    const { app, analisi, consultazione } = creaApp();
+    const res = await request(app).get('/api/punti-vendita/gestione/righe-non-abbinate/volantini').query({ chiave: 'tel:0106197180', idGdo: 'altra-gdo' });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ chiave: 'tel:0106197180', volantini: [] });
+    expect(analisi.volantiniRigaNonAbbinata).toHaveBeenCalledWith('gdo-sessione', 'tel:0106197180');
+    // Non finisce nel "/:id" della consultazione
+    expect(consultazione.dettaglio).not.toHaveBeenCalled();
+
+    analisi.volantiniRigaNonAbbinata.mockRejectedValueOnce(new NotFoundError({ message: "La riga non e' piu' fra quelle non abbinate", entityType: 'RigaNonAbbinata' }));
+    expect((await request(app).get('/api/punti-vendita/gestione/righe-non-abbinate/volantini').query({ chiave: 'x' })).status).toBe(404);
+  });
+
+  it('elenco con pagina e dimensione, scollegamento per id, sempre nella GDO della sessione', async () => {
+    permessi.concessi = new Set(['gdo.gestisci_punti_vendita']);
+    const { app, collegamenti } = creaApp();
+
+    const elenco = await request(app).get('/api/punti-vendita/gestione/collegamenti-manuali').query({ pagina: '2', dimensione: '25' });
+    expect(elenco.body).toEqual({ collegamenti: [], totale: 0, pagina: 2, dimensione: 25 });
+    expect(collegamenti.collegamenti).toHaveBeenCalledWith('gdo-sessione', 2, 25);
+
+    const scollega = await request(app).delete(`/api/punti-vendita/gestione/collegamenti-manuali/${ID_COLLEGAMENTO}`);
+    expect(scollega.body).toEqual({ righe: 40 });
+    expect(collegamenti.scollega).toHaveBeenCalledWith('gdo-sessione', ID_COLLEGAMENTO);
+
+    collegamenti.scollega.mockRejectedValueOnce(new NotFoundError({ message: 'Collegamento non trovato', entityType: 'CollegamentoPuntoVendita' }));
+    expect((await request(app).delete(`/api/punti-vendita/gestione/collegamenti-manuali/${ID_COLLEGAMENTO}`)).status).toBe(404);
   });
 });
 

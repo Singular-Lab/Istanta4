@@ -1,3 +1,4 @@
+import type { EsitoCollegamento, EsitoScollegamento, PaginaCollegamentiManuali } from '../../../lib/puntiVendita/analisi';
 import type { EsitoImportExport, PaginaVolantiniStoria, StoriaPuntoVendita } from '../../../lib/puntiVendita/storia';
 
 /** Lista dei punti vendita di un volantino da registrare: dal sync del Plugin o da un suo export. */
@@ -40,7 +41,7 @@ export interface RiabbinamentoPuntiVenditaVolantino {
   pianificaRiabbinamento(idGdo: string): void;
 }
 
-export interface IStoriaPuntoVenditaService extends RiabbinamentoPuntiVenditaVolantino {
+export interface IStoriaPuntoVenditaService extends RiabbinamentoPuntiVenditaVolantino, CollegamentiPuntiVenditaVolantino {
   /**
    * Registra la lista di un volantino: sostituisce le righe del kit e le abbina all'anagrafica.
    * Una lista vuota (o senza voci riconosciute) non tocca le righe gia' registrate.
@@ -57,4 +58,17 @@ export interface IStoriaPuntoVenditaService extends RiabbinamentoPuntiVenditaVol
   getVolantini(idPuntoVendita: string, idGdo: string | null, pagina?: number, dimensione?: number): Promise<PaginaVolantiniStoria>;
   /** Registra le liste degli export JSON del Plugin: mai referenze, PDF o anagrafica. */
   importaExport(file: readonly FileExportPlugin[], idGdo: string): Promise<EsitoImportExport>;
+}
+
+/** I collegamenti fatti a mano fra righe dei volantini non abbinate e PV della GDO. */
+export interface CollegamentiPuntiVenditaVolantino {
+  /**
+   * Collega al PV le righe senza PV del gruppo `chiave` (RichiestaCollegamento) e salva il
+   * collegamento come regola della GDO. BadRequestError per una richiesta non valida,
+   * NotFoundError se il PV non e' della GDO, 409 se il gruppo non e' piu' fra i non abbinati.
+   */
+  collega(idGdo: string, richiesta: unknown, idUtente: string | null): Promise<EsitoCollegamento>;
+  collegamenti(idGdo: string, pagina?: number, dimensione?: number): Promise<PaginaCollegamentiManuali>;
+  /** Toglie il collegamento e riabbina le sue righe. NotFoundError se non e' della GDO. */
+  scollega(idGdo: string, idCollegamento: string): Promise<EsitoScollegamento>;
 }

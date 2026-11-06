@@ -1,5 +1,11 @@
-import { STATO_LAVORAZIONE_KIT_RUNTIME } from '../../../lib/enums';
-import { BadRequestError, NotFoundError } from '../../../lib/errors';
+import { HttpStatusCode, STATO_LAVORAZIONE_KIT_RUNTIME } from '../../../lib/enums';
+import { ApplicationError, BadRequestError, NotFoundError } from '../../../lib/errors';
+import type {
+  EsitoCollegamento,
+  EsitoScollegamento,
+  PaginaCollegamentiManuali,
+  RichiestaCollegamento,
+} from '../../../lib/puntiVendita/analisi';
 import {
   DIMENSIONI_PAGINA_STORIA,
   type EsitoFileExport,
@@ -21,8 +27,10 @@ import type {
   IPuntiVenditaVolantinoRepository,
   KitVolantino,
   PuntoVenditaDellaStoria,
+  RigaDaRiabbinare,
 } from '../repositories/PuntiVenditaVolantinoRepository';
 import { AbbinatorePuntiVendita } from '../utils/abbinamentoPuntiVendita';
+import { raggruppaPerChiavi, type RegolaCollegamento, RegoleCollegamento, type RigaConChiavi } from '../utils/chiaviRigheVolantino';
 import { type VoceListaPuntiVendita, vociDelVolantino } from '../utils/listaPuntiVenditaVolantino';
 import { chiaveIndirizzo, chiaveTelefono } from '../utils/puntoVenditaNormalization';
 import { calcolaStoria, ultimaApparizione } from '../utils/storiaPuntoVendita';
@@ -39,9 +47,17 @@ import { importPuntiVenditaJobs } from './ImportPuntiVenditaJob';
  * indirizzo, telefono o insegna: e' proprio la sua storia. Si scollegano solo se il PV si elimina
  * (ON DELETE SET NULL), e il riabbinamento successivo le puo' collegare a un altro.
  * Un riabbinamento che fallisce si scrive nel log e basta.
+ *
+ * Dalla gestione dei punti vendita si collegano a mano le righe non abbinate (collega): il
+ * collegamento si salva come regola della GDO (abbinamenti_manuali_pv_volantino) e il
+ * riabbinamento la applica prima delle regole automatiche, anche alle righe riscritte da una nuova
+ * sincronizzazione del kit. Annullato il collegamento (scollega), le sue righe si riabbinano.
  */
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Una chiave di RigaNonAbbinata e' corta: oltre questa lunghezza la richiesta non e' valida. */
+const MASSIMA_LUNGHEZZA_CHIAVE = 1000;
 
 /** Attesa prima di un riabbinamento pianificato: i salvataggi che arrivano intanto si uniscono. */
 export const ATTESA_RIABBINAMENTO_MS = 2000;
@@ -177,14 +193,19 @@ export class StoriaPuntoVenditaService implements IStoriaPuntoVenditaService {
     // Solo righe senza PV: quelle collegate restano al loro PV
     const righe = await this.repository.righeDaRiabbinare(idGdo, soloKit);
     if (righe.length === 0) return { esaminate: 0, cambiate: 0 };
-    const abbinatore = new AbbinatorePuntiVendita(await this.repository.puntiVenditaGdo(idGdo));
+    const [puntiVendita, regoleSalvate] = await Promise.all([
+      this.repository.puntiVenditaGdo(idGdo),
+      this.repository.regoleCollegamento(idGdo),
+    ]);
+    const abbinatore = new AbbinatorePuntiVendita(puntiVendita);
+    const chiaviDi = (riga: RigaDaRiabbinare) => ({
+      riga: riga.riga, localita: riga.localita, chiaveIndirizzo: riga.chiave_indirizzo, chiaveTelefono: riga.chiave_telefono,
+    });
+    const { manuali, imparate } = this.applicaCollegamenti(righe.map(riga => ({ id: riga.id, chiavi: chiaviDi(riga) })), regoleSalvate);
     const cambi: CambioAbbinamento[] = [];
     for (const riga of righe) {
-      const trovato = abbinatore.abbina({
-        localita: riga.localita,
-        chiaveIndirizzo: riga.chiave_indirizzo,
-        chiaveTelefono: riga.chiave_telefono,
-      });
+      // I collegamenti fatti a mano vengono prima delle regole automatiche
+      const trovato = manuali.get(riga.id) ?? abbinatore.abbina(chiaviDi(riga));
       const idPuntoVendita = trovato?.idPuntoVendita ?? null;
       const abbinamento = trovato?.tipo ?? null;
       if (idPuntoVendita !== riga.id_punto_vendita || abbinamento !== riga.abbinamento) {
@@ -192,8 +213,45 @@ export class StoriaPuntoVenditaService implements IStoriaPuntoVenditaService {
       }
     }
     await this.repository.aggiornaAbbinamenti(cambi);
+    for (const [idCollegamento, chiavi] of imparate) await this.repository.aggiungiChiaviCollegamento(idCollegamento, chiavi);
     if (cambi.length > 0) log.info('Storia PV: righe dei volantini riabbinate', { idGdo, esaminate: righe.length, cambiate: cambi.length });
     return { esaminate: righe.length, cambiate: cambi.length };
+  }
+
+  /**
+   * Le righe che i collegamenti fatti a mano riconoscono, e le chiavi nuove che i collegamenti
+   * imparano da quelle righe. Si ripete finche' una chiave imparata riconosce altre righe: un
+   * negozio stampato col vecchio telefono e il nuovo indirizzo collega anche le righe col solo
+   * indirizzo nuovo, in qualunque ordine arrivino.
+   */
+  private applicaCollegamenti(
+    righe: ReadonlyArray<{ id: string; chiavi: RigaConChiavi }>,
+    regoleSalvate: readonly RegolaCollegamento[],
+  ): { manuali: Map<string, { idPuntoVendita: string; tipo: 'manuale' }>; imparate: Map<string, string[]> } {
+    const manuali = new Map<string, { idPuntoVendita: string; tipo: 'manuale' }>();
+    const imparate = new Map<string, string[]>();
+    const regole = new RegoleCollegamento(regoleSalvate);
+    let daEsaminare = [...righe];
+    let ancora = !regole.vuote;
+    while (ancora) {
+      ancora = false;
+      const restanti: typeof daEsaminare = [];
+      for (const riga of daEsaminare) {
+        const regola = regole.per(riga.chiavi);
+        if (!regola) {
+          restanti.push(riga);
+          continue;
+        }
+        manuali.set(riga.id, { idPuntoVendita: regola.idPuntoVendita, tipo: 'manuale' });
+        const nuove = regole.impara(regola, riga.chiavi);
+        if (nuove.length > 0) {
+          imparate.set(regola.id, [...(imparate.get(regola.id) ?? []), ...nuove]);
+          ancora = true;
+        }
+      }
+      daEsaminare = restanti;
+    }
+    return { manuali, imparate };
   }
 
   // ─── Letture ───────────────────────────────────────────────────────
@@ -229,6 +287,100 @@ export class StoriaPuntoVenditaService implements IStoriaPuntoVenditaService {
     const numeroPagina = Number.isInteger(pagina) && pagina >= 1 ? pagina : 1;
     const { volantini, totale } = await this.repository.paginaVolantini(puntoVendita.id, perPagina, (numeroPagina - 1) * perPagina);
     return { volantini, totale, pagina: numeroPagina, dimensione: perPagina };
+  }
+
+  // ─── Collegamenti fatti a mano ─────────────────────────────────────
+
+  async collega(idGdo: string, richiesta: unknown, idUtente: string | null): Promise<EsitoCollegamento> {
+    const { chiave, idPuntoVendita } = (richiesta ?? {}) as Partial<Record<keyof RichiestaCollegamento, unknown>>;
+    if (typeof chiave !== 'string' || chiave.trim() === '' || chiave.length > MASSIMA_LUNGHEZZA_CHIAVE) {
+      throw new BadRequestError({ message: 'Riga da collegare non indicata (chiave)' });
+    }
+    if (typeof idPuntoVendita !== 'string' || !UUID.test(idPuntoVendita)) {
+      throw new BadRequestError({ message: 'Punto vendita da collegare non indicato (idPuntoVendita)' });
+    }
+    const puntoVendita = await this.puntoVenditaDellaGdo(idPuntoVendita, idGdo);
+
+    // Il gruppo di righe senza PV che ha quella chiave, come nell'elenco delle righe non abbinate
+    const righe = await this.repository.righeDaRiabbinare(idGdo);
+    const gruppo = raggruppaPerChiavi(righe.map(riga => ({
+      riga: riga.riga,
+      localita: riga.localita,
+      chiaveIndirizzo: riga.chiave_indirizzo,
+      chiaveTelefono: riga.chiave_telefono,
+    }))).find(candidato => candidato.chiavi.includes(chiave));
+    if (!gruppo) {
+      throw new ApplicationError({
+        name: 'RigaGiaAbbinataError',
+        code: 'RIGA_VOLANTINO_GIA_ABBINATA',
+        message: "La riga non e' piu' fra quelle non abbinate: ricarica l'elenco",
+        httpStatus: HttpStatusCode.CONFLICT,
+        details: { chiave },
+      });
+    }
+
+    const idCollegamento = await this.repository.creaCollegamento({
+      idGdo,
+      idPuntoVendita: puntoVendita.id,
+      chiavi: gruppo.chiavi,
+      riga: gruppo.righe[gruppo.righe.length - 1].riga,
+      creatoDa: idUtente,
+    });
+    log.info('Storia PV: righe dei volantini collegate a mano', { idGdo, idPuntoVendita: puntoVendita.id, idCollegamento, righe: gruppo.righe.length });
+    // Il riabbinamento applica il collegamento a tutte le righe senza PV con quelle chiavi
+    await this.riabbina(idGdo);
+    // Con le chiavi che il collegamento ha imparato riabbinando
+    const salvato = await this.repository.trovaCollegamento(idCollegamento);
+    const regola = new RegoleCollegamento([salvato ?? { id: idCollegamento, idPuntoVendita: puntoVendita.id, chiavi: gruppo.chiavi, creatoIl: new Date() }]);
+    const collegate = await this.repository.righeCollegateAMano(idGdo, puntoVendita.id);
+    return { idCollegamento, righe: collegate.filter(riga => regola.per(riga)).length };
+  }
+
+  async collegamenti(idGdo: string, pagina = 1, dimensione = DIMENSIONI_PAGINA_STORIA[0]): Promise<PaginaCollegamentiManuali> {
+    const perPagina = DIMENSIONI_PAGINA_STORIA.includes(dimensione) ? dimensione : DIMENSIONI_PAGINA_STORIA[0];
+    const numeroPagina = Number.isInteger(pagina) && pagina >= 1 ? pagina : 1;
+    const [{ collegamenti, totale }, regole, collegate] = await Promise.all([
+      this.repository.paginaCollegamenti(idGdo, perPagina, (numeroPagina - 1) * perPagina),
+      this.repository.regoleCollegamento(idGdo),
+      this.repository.righeCollegateAMano(idGdo),
+    ]);
+    // Ogni riga collegata a mano conta sotto il collegamento che oggi la riconosce
+    const indice = new RegoleCollegamento(regole);
+    const righePerCollegamento = new Map<string, number>();
+    for (const riga of collegate) {
+      const regola = indice.per(riga);
+      if (regola && regola.idPuntoVendita === riga.idPuntoVendita) {
+        righePerCollegamento.set(regola.id, (righePerCollegamento.get(regola.id) ?? 0) + 1);
+      }
+    }
+    return {
+      collegamenti: collegamenti.map(collegamento => ({
+        id: collegamento.id,
+        riga: collegamento.riga,
+        puntoVendita: collegamento.puntoVendita,
+        righe: righePerCollegamento.get(collegamento.id) ?? 0,
+        creatoIl: collegamento.creatoIl,
+      })),
+      totale,
+      pagina: numeroPagina,
+      dimensione: perPagina,
+    };
+  }
+
+  async scollega(idGdo: string, idCollegamento: string): Promise<EsitoScollegamento> {
+    const collegamento = UUID.test(idCollegamento) ? await this.repository.trovaCollegamento(idCollegamento) : null;
+    if (!collegamento || collegamento.idGdo !== idGdo) {
+      throw new NotFoundError({ message: 'Collegamento non trovato', entityType: 'CollegamentoPuntoVendita', entityId: idCollegamento });
+    }
+    await this.repository.eliminaCollegamento(collegamento.id);
+    // Le righe di quel PV collegate a mano con le chiavi del collegamento tornano senza PV...
+    const regola = new RegoleCollegamento([collegamento]);
+    const daScollegare = (await this.repository.righeCollegateAMano(idGdo, collegamento.idPuntoVendita)).filter(riga => regola.per(riga));
+    await this.repository.aggiornaAbbinamenti(daScollegare.map(riga => ({ id: riga.id, idPuntoVendita: null, abbinamento: null })));
+    log.info('Storia PV: collegamento fatto a mano annullato', { idGdo, idCollegamento: collegamento.id, righe: daScollegare.length });
+    // ...e il riabbinamento le ricollega con gli altri collegamenti o con le regole automatiche
+    await this.riabbina(idGdo);
+    return { righe: daScollegare.length };
   }
 
   // ─── Export JSON del Plugin ────────────────────────────────────────

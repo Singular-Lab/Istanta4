@@ -13,7 +13,7 @@ describeConDatabase('PuntiVenditaVolantinoRepository', () => {
   const repository = new PuntiVenditaVolantinoRepository();
 
   beforeEach(async () => {
-    await svuotaTabelle('punti_vendita_volantino', 'gdo', 'promo', 'formati', 'tipi_export');
+    await svuotaTabelle('abbinamenti_manuali_pv_volantino', 'punti_vendita_volantino', 'gdo', 'promo', 'formati', 'tipi_export');
   });
 
   /** La combinazione canale/area del kit: da li' viene la GDO della lista. */
@@ -121,6 +121,65 @@ describeConDatabase('PuntiVenditaVolantinoRepository', () => {
       [prima.id, null, null],
       [seconda.id, null, null],
     ]);
+  });
+
+  it('collegamenti fatti a mano: si salvano, si elencano dal piu\' recente, si eliminano; eliminato il PV se ne vanno', async () => {
+    const kit = await creaKitRuntime();
+    const combinazione = await creaCombinazione(kit);
+    const pra = await creaPuntoVendita(kit, combinazione, { citta: 'Genova', indirizzo: 'Via Novella 3', telefono: '010 0000001' });
+    const sestri = await creaPuntoVendita(kit, combinazione, { citta: 'Genova', indirizzo: 'Via Sestri 5' });
+    await repository.sostituisciRigheKit(kit.idRuntime, [
+      riga(kit, 1, { localita: 'PRA', indirizzo: 'Via Murtola 12/14', telefono: '010 6197180' }),
+      riga(kit, 2, { localita: 'SESTRI', indirizzo: 'Via Sestri 5' }),
+    ]);
+
+    const primo = await repository.creaCollegamento({
+      idGdo: kit.idGdo, idPuntoVendita: pra, chiavi: ['tel:0106197180', 'ind:PRA|VIA MURTOLA 12 14'], riga: 'PRA - Via Murtola 12/14', creatoDa: 'u1',
+    });
+    const secondo = await repository.creaCollegamento({
+      idGdo: kit.idGdo, idPuntoVendita: sestri, chiavi: ['ind:SESTRI|VIA SESTRI 5'], riga: 'SESTRI - Via Sestri 5', creatoDa: null,
+    });
+    await sequelize.query(`UPDATE abbinamenti_manuali_pv_volantino SET creato_il = NOW() - INTERVAL '1 day' WHERE id = :id`, { replacements: { id: primo } });
+
+    expect((await repository.regoleCollegamento(kit.idGdo)).map(r => [r.id, r.idPuntoVendita, r.chiavi]).sort()).toEqual([
+      [primo, pra, ['tel:0106197180', 'ind:PRA|VIA MURTOLA 12 14']],
+      [secondo, sestri, ['ind:SESTRI|VIA SESTRI 5']],
+    ].sort());
+    expect(await repository.regoleCollegamento(randomUUID())).toEqual([]);
+
+    const pagina = await repository.paginaCollegamenti(kit.idGdo, 1, 0);
+    expect(pagina.totale).toBe(2);
+    expect(pagina.collegamenti).toEqual([expect.objectContaining({
+      id: secondo, idGdo: kit.idGdo, idPuntoVendita: sestri, riga: 'SESTRI - Via Sestri 5',
+      puntoVendita: { id: sestri, nome: 'PV Genova', indirizzo: 'Via Sestri 5', citta: 'Genova' },
+    })]);
+    expect((await repository.paginaCollegamenti(kit.idGdo, 1, 1)).collegamenti.map(c => c.id)).toEqual([primo]);
+    expect(await repository.trovaCollegamento(primo)).toMatchObject({ id: primo, idGdo: kit.idGdo, idPuntoVendita: pra });
+
+    // Le chiavi imparate si aggiungono senza doppioni
+    await repository.aggiungiChiaviCollegamento(primo, ['ind:PRA|VIA NOVELLA 3', 'tel:0106197180']);
+    await repository.aggiungiChiaviCollegamento(primo, []);
+    expect((await repository.trovaCollegamento(primo))?.chiavi).toEqual(['ind:PRA|VIA MURTOLA 12 14', 'ind:PRA|VIA NOVELLA 3', 'tel:0106197180']);
+
+    // Le righe collegate a mano, di tutta la GDO o di un PV
+    const [rigaPra, rigaSestri] = await repository.righeDaRiabbinare(kit.idGdo);
+    await repository.aggiornaAbbinamenti([
+      { id: rigaPra.id, idPuntoVendita: pra, abbinamento: 'manuale' },
+      { id: rigaSestri.id, idPuntoVendita: sestri, abbinamento: 'indirizzo' },
+    ]);
+    expect(await repository.righeCollegateAMano(kit.idGdo)).toEqual([{
+      id: rigaPra.id, idPuntoVendita: pra, riga: 'PRA - Via Murtola 12/14', localita: 'PRA',
+      chiaveIndirizzo: chiaveIndirizzo('Via Murtola 12/14'), chiaveTelefono: chiaveTelefono('010 6197180'),
+    }]);
+    expect(await repository.righeCollegateAMano(kit.idGdo, sestri)).toEqual([]);
+
+    await repository.eliminaCollegamento(secondo);
+    expect(await repository.trovaCollegamento(secondo)).toBeNull();
+
+    // Eliminato il PV, il suo collegamento se ne va e la riga resta senza PV
+    await sequelize.query('DELETE FROM punti_vendita WHERE id_puntivendita = :pra', { replacements: { pra } });
+    expect(await repository.regoleCollegamento(kit.idGdo)).toEqual([]);
+    expect((await repository.righeDaRiabbinare(kit.idGdo)).map(r => [r.riga, r.id_punto_vendita])).toEqual([['PRA - Via Murtola 12/14', null]]);
   });
 
   it('eliminato il kit, le sue righe se ne vanno', async () => {

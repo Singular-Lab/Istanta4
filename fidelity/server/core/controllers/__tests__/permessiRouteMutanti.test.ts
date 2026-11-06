@@ -19,12 +19,14 @@ vi.mock('../../logger', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+import { AnalisiPuntoVenditaController } from '../AnalisiPuntoVenditaController';
 import { DisplayContextController } from '../DisplayContextController';
 import { IstantaController } from '../IstantaController';
 import { KitRuntimeController } from '../KitRuntimeController';
 import { PromoController } from '../PromoController';
 import { PuntoVenditaController } from '../PuntoVenditaController';
 import { StoriaPuntoVenditaController } from '../StoriaPuntoVenditaController';
+import type { IAnalisiPuntoVenditaService } from '../../interfaces/IAnalisiPuntoVenditaService';
 import type { IStoriaPuntoVenditaService } from '../../interfaces/IStoriaPuntoVenditaService';
 import { TracciatoController } from '../TracciatoController';
 
@@ -42,6 +44,7 @@ function createApp() {
   new IstantaController({} as any).registerRoutes(app);
   new PuntoVenditaController({} as any, {} as any, {} as any).registerRoutes(app);
   new StoriaPuntoVenditaController({} as IStoriaPuntoVenditaService).registerRoutes(app);
+  new AnalisiPuntoVenditaController({} as IAnalisiPuntoVenditaService, {} as IStoriaPuntoVenditaService).registerRoutes(app);
   return app;
 }
 
@@ -58,6 +61,8 @@ describe('permessi sulle route che modificano dati', () => {
     ['annullamento dell\'import dei punti vendita', 'post', '/api/ACPV/importaPV/j1/annulla', 'gdo.gestisci_punti_vendita'],
     ['decisione sulla riga dell\'import in attesa', 'post', '/api/ACPV/importaPV/j1/decisione', 'gdo.gestisci_punti_vendita'],
     ['import degli export del Plugin nella storia dei PV', 'post', '/api/punti-vendita/storia/import-export', 'gdo.gestisci_punti_vendita'],
+    ['collegamento a mano di una riga dei volantini a un PV', 'post', '/api/punti-vendita/gestione/righe-non-abbinate/collega', 'gdo.gestisci_punti_vendita'],
+    ['annullamento di un collegamento fatto a mano', 'delete', '/api/punti-vendita/gestione/collegamenti-manuali/c1', 'gdo.gestisci_punti_vendita'],
     ['verifica dell\'archivio storico del volantino-analyzer', 'post', '/api/promo/verifica-archivio', 'promo.visualizza'],
     ['creazione in blocco delle promo dell\'archivio', 'post', '/api/promo/archivio', 'promo.crea'],
     ['contesti in blocco delle promo dell\'archivio', 'post', '/api/promo/contesto-importazione/archivio', 'promo.crea'],

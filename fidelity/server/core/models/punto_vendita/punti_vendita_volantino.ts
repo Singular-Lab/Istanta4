@@ -10,7 +10,7 @@ import { sequelize } from '../../db/SequelizeConnector';
  * Un nuovo invio dello stesso kit sostituisce tutte le sue righe.
  */
 
-export const TIPI_ABBINAMENTO: readonly TipoAbbinamento[] = ['telefono', 'indirizzo', 'probabile'];
+export const TIPI_ABBINAMENTO: readonly TipoAbbinamento[] = ['telefono', 'indirizzo', 'probabile', 'manuale'];
 
 export interface PuntoVenditaVolantinoAttributes {
   id: string;

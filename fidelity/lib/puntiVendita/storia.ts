@@ -18,8 +18,11 @@ import { STATO_PROMO } from '../enums';
  * Un punto vendita di un'altra GDO risponde come inesistente (404).
  */
 
-/** Come una riga del volantino e' stata collegata al punto vendita dell'anagrafica. */
-export type TipoAbbinamento = 'telefono' | 'indirizzo' | 'probabile';
+/**
+ * Come una riga del volantino e' stata collegata al punto vendita dell'anagrafica: dalle regole
+ * automatiche (telefono, indirizzo, probabile) o a mano, dalla gestione dei punti vendita (manuale).
+ */
+export type TipoAbbinamento = 'telefono' | 'indirizzo' | 'probabile' | 'manuale';
 
 export interface RiferimentoStoria {
   id: string;

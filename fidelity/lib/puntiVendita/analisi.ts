@@ -19,6 +19,12 @@ import type { PromoStoria, RiferimentoStoria, TipoAbbinamento } from './storia';
  * - GET /api/punti-vendita/rete/insegne                        -> ReteInsegne
  * - GET /api/punti-vendita/gestione/qualita                    "gdo.gestisci_punti_vendita" -> QualitaPuntiVendita
  * - GET /api/punti-vendita/gestione/righe-non-abbinate         "gdo.gestisci_punti_vendita" pagina, dimensione -> PaginaRigheNonAbbinate
+ * - GET /api/punti-vendita/gestione/righe-non-abbinate/volantini "gdo.gestisci_punti_vendita" chiave -> VolantiniRigaNonAbbinata
+ *        (404 se la riga non e' piu' fra le non abbinate)
+ * - POST /api/punti-vendita/gestione/righe-non-abbinate/collega "gdo.gestisci_punti_vendita" RichiestaCollegamento -> EsitoCollegamento
+ *        (404 se il PV non e' della GDO, 409 se la riga non e' piu' fra le non abbinate)
+ * - GET /api/punti-vendita/gestione/collegamenti-manuali        "gdo.gestisci_punti_vendita" pagina, dimensione -> PaginaCollegamentiManuali
+ * - DELETE /api/punti-vendita/gestione/collegamenti-manuali/:id "gdo.gestisci_punti_vendita" -> EsitoScollegamento (404 se non c'e')
  */
 
 /** Meccanica promozionale di una referenza, ricavata dai campi del box e dalla meccanica DB1/Istanta. */
@@ -281,9 +287,32 @@ export type SuggerimentoRiga =
   | { tipo: 'forse_chiuso' }
   | { tipo: 'da_aggiungere' };
 
+/**
+ * Perché un punto vendita dell'anagrafica è suggerito per una riga non abbinata, dal motivo più
+ * forte. 'nome_simile': il nome o la ragione sociale del PV contiene la località o la via stampate.
+ */
+export type MotivoCandidato = 'stesso_telefono' | 'stesso_indirizzo' | 'indirizzo_simile' | 'nome_simile' | 'stessa_localita';
+
+/** Un punto vendita dell'anagrafica a cui collegare una riga non abbinata. */
+export interface CandidatoCollegamento {
+  puntoVendita: { id: string; nome: string; ragioneSociale: string | null; indirizzo: string | null; citta: string | null };
+  motivo: MotivoCandidato;
+}
+
+/** Al massimo tanti candidati e tante varianti stampate per riga non abbinata. */
+export const MASSIMO_CANDIDATI = 5;
+export const MASSIMO_VARIANTI = 5;
+
 export interface RigaNonAbbinata {
+  /**
+   * Identifica il gruppo di righe (stesso telefono, stessa località e indirizzo, o stesso testo):
+   * si rimanda a .../collega per collegarle tutte a un punto vendita.
+   */
+  chiave: string;
   /** Una riga com'era stampata, la più recente. */
   riga: string;
+  /** Le righe stampate diverse del gruppo, dalla più recente: un centralino può unire più negozi. */
+  varianti: string[];
   localita: string | null;
   indirizzo: string | null;
   telefono: string | null;
@@ -292,6 +321,8 @@ export interface RigaNonAbbinata {
   ultimoVolantino: string;
   canale: RiferimentoStoria | null;
   suggerimento: SuggerimentoRiga;
+  /** Punti vendita dell'anagrafica a cui collegarla, dal motivo più forte. */
+  candidati: CandidatoCollegamento[];
 }
 
 export interface PaginaRigheNonAbbinate {
@@ -299,4 +330,59 @@ export interface PaginaRigheNonAbbinate {
   totale: number;
   pagina: number;
   dimensione: number;
+}
+
+/** Un volantino in cui compare una riga non abbinata, con la riga com'era stampata lì. */
+export interface VolantinoDellaRiga {
+  idKit: string;
+  titoloKit: string;
+  promo: { id: string; nome: string } | null;
+  /** Giorno dell'edizione (YYYY-MM-DD). */
+  data: string;
+  canale: RiferimentoStoria | null;
+  area: RiferimentoStoria | null;
+  rigaStampata: string;
+}
+
+export interface VolantiniRigaNonAbbinata {
+  chiave: string;
+  /** Dal più recente, uno per kit: gli stessi contati in RigaNonAbbinata.volantini. */
+  volantini: VolantinoDellaRiga[];
+}
+
+/** Collega le righe del gruppo `chiave` (RigaNonAbbinata.chiave) a un punto vendita della GDO. */
+export interface RichiestaCollegamento {
+  chiave: string;
+  idPuntoVendita: string;
+}
+
+export interface EsitoCollegamento {
+  /** Il collegamento salvato: vale anche per i volantini sincronizzati di nuovo o futuri. */
+  idCollegamento: string;
+  /** Righe dei volantini ora collegate a mano al punto vendita. */
+  righe: number;
+}
+
+/** Un collegamento fatto a mano: una regola della GDO, non una modifica dell'anagrafica. */
+export interface CollegamentoManuale {
+  id: string;
+  /** La riga com'era stampata quando è stata collegata. */
+  riga: string;
+  puntoVendita: { id: string; nome: string; indirizzo: string | null; citta: string | null };
+  /** Righe dei volantini collegate oggi grazie a questo collegamento. */
+  righe: number;
+  /** Data e ora ISO. */
+  creatoIl: string;
+}
+
+export interface PaginaCollegamentiManuali {
+  collegamenti: CollegamentoManuale[];
+  totale: number;
+  pagina: number;
+  dimensione: number;
+}
+
+export interface EsitoScollegamento {
+  /** Righe tolte al punto vendita: tornano all'abbinamento automatico. */
+  righe: number;
 }

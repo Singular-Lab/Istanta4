@@ -55,6 +55,9 @@ function servizioFinto() {
       registraListaVolantino: vi.fn(),
       riabbina: vi.fn(),
       pianificaRiabbinamento: vi.fn(),
+      collega: vi.fn(),
+      collegamenti: vi.fn(),
+      scollega: vi.fn(),
     } satisfies IStoriaPuntoVenditaService,
   };
 }

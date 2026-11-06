@@ -2,8 +2,10 @@ import { QueryTypes } from 'sequelize';
 import { EXPORT_DI_SISTEMA, STATO_LAVORAZIONE_KIT_RUNTIME, STATO_PROMO } from '../../../lib/enums';
 import type { TipoAbbinamento, VolantinoNellaStoria } from '../../../lib/puntiVendita/storia';
 import { sequelize } from '../db';
+import { AbbinamentoManualePvVolantino } from '../models/punto_vendita/abbinamenti_manuali_pv_volantino';
 import { PuntoVenditaVolantino, type PuntoVenditaVolantinoAttributes } from '../models/punto_vendita/punti_vendita_volantino';
 import type { PuntoVenditaAnagrafica } from '../utils/abbinamentoPuntiVendita';
+import type { RegolaCollegamento } from '../utils/chiaviRigheVolantino';
 import type { ApparizioneStoria, VolantinoSenzaPuntoVendita } from '../utils/storiaPuntoVendita';
 
 /**
@@ -32,6 +34,8 @@ export type NuovaRigaVolantino = Omit<PuntoVenditaVolantinoAttributes, 'id' | 'c
 
 export interface RigaDaRiabbinare {
   id: string;
+  /** Il testo stampato: chiave di una riga senza telefono ne' indirizzo. */
+  riga: string;
   localita: string | null;
   chiave_indirizzo: string | null;
   chiave_telefono: string | null;
@@ -49,6 +53,32 @@ export interface PuntoVenditaDellaStoria extends PuntoVenditaAnagrafica {
   idGdo: string;
 }
 
+/** Un collegamento fatto a mano (abbinamenti_manuali_pv_volantino), con il nome del suo PV. */
+export interface CollegamentoSalvato extends RegolaCollegamento {
+  idGdo: string;
+  riga: string;
+  puntoVendita: { id: string; nome: string; indirizzo: string | null; citta: string | null };
+  creatoIl: string;
+}
+
+export interface NuovoCollegamento {
+  idGdo: string;
+  idPuntoVendita: string;
+  chiavi: readonly string[];
+  riga: string;
+  creatoDa: string | null;
+}
+
+/** Una riga collegata a mano: per contarla sotto il suo collegamento o per scollegarla. */
+export interface RigaCollegataAMano {
+  id: string;
+  idPuntoVendita: string;
+  riga: string;
+  localita: string | null;
+  chiaveIndirizzo: string | null;
+  chiaveTelefono: string | null;
+}
+
 export interface IPuntiVenditaVolantinoRepository {
   trovaKit(idKit: string): Promise<KitVolantino | null>;
   /** Toglie le righe del kit e scrive quelle nuove, in una transazione. */
@@ -61,6 +91,18 @@ export interface IPuntiVenditaVolantinoRepository {
    */
   righeDaRiabbinare(idGdo: string, soloKit?: readonly string[]): Promise<RigaDaRiabbinare[]>;
   aggiornaAbbinamenti(cambi: readonly CambioAbbinamento[]): Promise<void>;
+  /** I collegamenti fatti a mano della GDO: le regole che il riabbinamento applica per prime. */
+  regoleCollegamento(idGdo: string): Promise<RegolaCollegamento[]>;
+  /** Salva un collegamento fatto a mano e ne restituisce l'id. */
+  creaCollegamento(collegamento: NuovoCollegamento): Promise<string>;
+  /** I collegamenti della GDO, dal piu' recente. */
+  paginaCollegamenti(idGdo: string, limite: number, scarto: number): Promise<{ collegamenti: CollegamentoSalvato[]; totale: number }>;
+  trovaCollegamento(id: string): Promise<CollegamentoSalvato | null>;
+  eliminaCollegamento(id: string): Promise<void>;
+  /** Aggiunge al collegamento le chiavi imparate dalle righe che ha collegato, senza doppioni. */
+  aggiungiChiaviCollegamento(id: string, chiavi: readonly string[]): Promise<void>;
+  /** Le righe della GDO collegate a mano; con idPuntoVendita, solo quelle di quel PV. */
+  righeCollegateAMano(idGdo: string, idPuntoVendita?: string): Promise<RigaCollegataAMano[]>;
   trovaPuntoVendita(id: string): Promise<PuntoVenditaDellaStoria | null>;
   /** Le apparizioni del PV nei volantini, dalla piu' vecchia. */
   apparizioni(idPuntoVendita: string): Promise<ApparizioneStoria[]>;
@@ -199,6 +241,18 @@ const volantinoDa = (riga: RigaVolantino): VolantinoNellaStoria => {
   };
 };
 
+interface RigaCollegamento {
+  id: string;
+  id_gdo: string;
+  id_punto_vendita: string;
+  chiavi: string[] | null;
+  riga: string;
+  creato_il: Date | string;
+  nome: string | null;
+  indirizzo: string | null;
+  citta: string | null;
+}
+
 const blocchi = <T>(elenco: readonly T[]): T[][] => {
   const risultato: T[][] = [];
   for (let inizio = 0; inizio < elenco.length; inizio += BLOCCO) risultato.push(elenco.slice(inizio, inizio + BLOCCO));
@@ -282,7 +336,7 @@ export class PuntiVenditaVolantinoRepository implements IPuntiVenditaVolantinoRe
     // Dall'indice parziale delle righe senza PV della GDO. Il tipo di abbinamento di una riga il cui
     // PV è stato eliminato (la chiave esterna azzera solo id_punto_vendita) non vale più: niente PV, niente abbinamento.
     return this.seleziona<RigaDaRiabbinare>(
-      `SELECT r.id::text AS id, r.localita, r.chiave_indirizzo, r.chiave_telefono,
+      `SELECT r.id::text AS id, r.riga, r.localita, r.chiave_indirizzo, r.chiave_telefono,
               r.id_punto_vendita::text AS id_punto_vendita, NULL::text AS abbinamento
        FROM punti_vendita_volantino r
        WHERE r.id_gdo = :idGdo AND r.id_punto_vendita IS NULL
@@ -311,6 +365,108 @@ export class PuntiVenditaVolantinoRepository implements IPuntiVenditaVolantinoRe
         }
       }
     });
+  }
+
+  async regoleCollegamento(idGdo: string): Promise<RegolaCollegamento[]> {
+    const righe = await this.seleziona<{ id: string; id_punto_vendita: string; chiavi: string[] | null; creato_il: Date | string }>(
+      `SELECT id::text AS id, id_punto_vendita::text AS id_punto_vendita, chiavi, creato_il
+       FROM abbinamenti_manuali_pv_volantino
+       WHERE id_gdo = :idGdo`,
+      { idGdo }
+    );
+    return righe.map(riga => ({ id: riga.id, idPuntoVendita: riga.id_punto_vendita, chiavi: riga.chiavi ?? [], creatoIl: riga.creato_il }));
+  }
+
+  async creaCollegamento(collegamento: NuovoCollegamento): Promise<string> {
+    const creato = await AbbinamentoManualePvVolantino.create({
+      id_gdo: collegamento.idGdo,
+      id_punto_vendita: collegamento.idPuntoVendita,
+      chiavi: [...collegamento.chiavi],
+      riga: collegamento.riga,
+      creato_da: collegamento.creatoDa,
+    });
+    return creato.id;
+  }
+
+  private static readonly COLONNE_COLLEGAMENTO = `a.id::text AS id, a.id_gdo::text AS id_gdo, a.id_punto_vendita::text AS id_punto_vendita,
+              a.chiavi, a.riga, a.creato_il, p.nome_puntivendita AS nome, p.indirizzo_puntivendita AS indirizzo,
+              p.citta_puntivendita AS citta`;
+
+  private static collegamentoDa(riga: RigaCollegamento): CollegamentoSalvato {
+    return {
+      id: riga.id,
+      idGdo: riga.id_gdo,
+      idPuntoVendita: riga.id_punto_vendita,
+      chiavi: riga.chiavi ?? [],
+      riga: riga.riga,
+      puntoVendita: { id: riga.id_punto_vendita, nome: riga.nome ?? '', indirizzo: riga.indirizzo, citta: riga.citta },
+      creatoIl: new Date(riga.creato_il).toISOString(),
+    };
+  }
+
+  async paginaCollegamenti(idGdo: string, limite: number, scarto: number): Promise<{ collegamenti: CollegamentoSalvato[]; totale: number }> {
+    const [righe, [conteggio]] = await Promise.all([
+      this.seleziona<RigaCollegamento>(
+        `SELECT ${PuntiVenditaVolantinoRepository.COLONNE_COLLEGAMENTO}
+         FROM abbinamenti_manuali_pv_volantino a
+         JOIN punti_vendita p ON p.id_puntivendita = a.id_punto_vendita
+         WHERE a.id_gdo = :idGdo
+         ORDER BY a.creato_il DESC, a.id
+         LIMIT :limite OFFSET :scarto`,
+        { idGdo, limite, scarto }
+      ),
+      this.seleziona<{ totale: number }>(
+        `SELECT COUNT(*)::int AS totale FROM abbinamenti_manuali_pv_volantino WHERE id_gdo = :idGdo`,
+        { idGdo }
+      ),
+    ]);
+    return { collegamenti: righe.map(PuntiVenditaVolantinoRepository.collegamentoDa), totale: Number(conteggio?.totale ?? 0) };
+  }
+
+  async trovaCollegamento(id: string): Promise<CollegamentoSalvato | null> {
+    const [riga] = await this.seleziona<RigaCollegamento>(
+      `SELECT ${PuntiVenditaVolantinoRepository.COLONNE_COLLEGAMENTO}
+       FROM abbinamenti_manuali_pv_volantino a
+       JOIN punti_vendita p ON p.id_puntivendita = a.id_punto_vendita
+       WHERE a.id = :id`,
+      { id }
+    );
+    return riga ? PuntiVenditaVolantinoRepository.collegamentoDa(riga) : null;
+  }
+
+  async eliminaCollegamento(id: string): Promise<void> {
+    await AbbinamentoManualePvVolantino.destroy({ where: { id } });
+  }
+
+  async aggiungiChiaviCollegamento(id: string, chiavi: readonly string[]): Promise<void> {
+    if (chiavi.length === 0) return;
+    await sequelize.query(
+      `UPDATE abbinamenti_manuali_pv_volantino
+       SET chiavi = ARRAY(SELECT DISTINCT unnest(chiavi || ARRAY[:chiavi]::text[]) ORDER BY 1)
+       WHERE id = :id`,
+      { replacements: { id, chiavi: [...chiavi] }, type: QueryTypes.UPDATE }
+    );
+  }
+
+  async righeCollegateAMano(idGdo: string, idPuntoVendita?: string): Promise<RigaCollegataAMano[]> {
+    const delPuntoVendita = idPuntoVendita ? 'AND r.id_punto_vendita = :idPuntoVendita' : '';
+    const righe = await this.seleziona<{
+      id: string; id_punto_vendita: string; riga: string; localita: string | null; chiave_indirizzo: string | null; chiave_telefono: string | null;
+    }>(
+      `SELECT r.id::text AS id, r.id_punto_vendita::text AS id_punto_vendita, r.riga, r.localita, r.chiave_indirizzo, r.chiave_telefono
+       FROM punti_vendita_volantino r
+       WHERE r.id_gdo = :idGdo AND r.abbinamento = :manuale AND r.id_punto_vendita IS NOT NULL
+         ${delPuntoVendita}`,
+      { idGdo, idPuntoVendita: idPuntoVendita ?? null, manuale: 'manuale' }
+    );
+    return righe.map(riga => ({
+      id: riga.id,
+      idPuntoVendita: riga.id_punto_vendita,
+      riga: riga.riga,
+      localita: riga.localita,
+      chiaveIndirizzo: riga.chiave_indirizzo,
+      chiaveTelefono: riga.chiave_telefono,
+    }));
   }
 
   async trovaPuntoVendita(id: string): Promise<PuntoVenditaDellaStoria | null> {

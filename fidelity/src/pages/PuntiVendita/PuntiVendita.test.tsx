@@ -19,6 +19,12 @@ const finti = vi.hoisted(() => ({
   qualita: {} as Record<string, unknown>,
   righe: {} as Record<string, unknown>,
   richiesteRighe: [] as Array<[number, number]>,
+  collegamenti: {} as Record<string, unknown>,
+  volantiniRiga: {} as Record<string, unknown>,
+  richiesteVolantini: [] as Array<string | null>,
+  puoConsultareVolantini: true,
+  collega: { mutate: vi.fn(), isPending: false, isError: false, error: null, reset: vi.fn() },
+  scollega: { mutate: vi.fn(), isPending: false, isError: false, error: null, reset: vi.fn() },
   importJob: {} as Record<string, unknown>,
   put: vi.fn(),
   combinazioni: {
@@ -50,8 +56,19 @@ vi.mock("@/query/query", () => ({
     finti.richiesteRighe.push([pagina, dimensione]);
     return finti.righe;
   },
+  useFetchCollegamentiManuali: () => finti.collegamenti,
+  useFetchVolantiniRigaNonAbbinata: (chiave: string | null) => {
+    finti.richiesteVolantini.push(chiave);
+    return finti.volantiniRiga;
+  },
+  useCollegaRigaNonAbbinata: () => finti.collega,
+  useScollegaCollegamentoManuale: () => finti.scollega,
 }));
 vi.mock("./useImportPuntiVendita", () => ({ useImportPuntiVendita: () => finti.importJob }));
+vi.mock("@/context/PermissionContext", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  usePermission: () => finti.puoConsultareVolantini,
+}));
 
 import PuntiVendita from ".";
 
@@ -117,7 +134,9 @@ const statoImport = (dati: Record<string, unknown> = {}) => ({
 
 const RIGHE_NON_ABBINATE = [
   {
+    chiave: "tel:01845550143",
     riga: "SANREMO - Via Roma 3 - tel. 0184 555 0143",
+    varianti: ["SANREMO - Via Roma 3 - tel. 0184 555 0143", "SANREMO - V. Roma 3 - tel. 0184 555 0143"],
     localita: "Sanremo",
     indirizzo: "Via Roma 3",
     telefono: "0184 555 0143",
@@ -126,9 +145,15 @@ const RIGHE_NON_ABBINATE = [
     ultimoVolantino: "2022-08-12",
     canale: { id: "c1", nome: "Super" },
     suggerimento: { tipo: "stesso_telefono", puntoVendita: { id: "pv7", nome: "Punto vendita 7" } },
+    candidati: [
+      { puntoVendita: { id: "pv7", nome: "Punto vendita 7", indirizzo: "Via Roma 7", citta: "Firenze" }, motivo: "stesso_telefono" },
+      { puntoVendita: { id: "pv3", nome: "Punto vendita 3", indirizzo: "Via Roma 3", citta: "Firenze" }, motivo: "indirizzo_simile" },
+    ],
   },
   {
+    chiave: "ind:ALASSIO|VIA DANTE 88",
     riga: "ALASSIO - Via Dante 88",
+    varianti: ["ALASSIO - Via Dante 88"],
     localita: "Alassio",
     indirizzo: "Via Dante 88",
     telefono: null,
@@ -137,9 +162,12 @@ const RIGHE_NON_ABBINATE = [
     ultimoVolantino: "2025-03-14",
     canale: null,
     suggerimento: { tipo: "forse_chiuso" },
+    candidati: [],
   },
   {
+    chiave: "ind:ARMA DI TAGGIA|PIAZZA CHIEROTTI 4",
     riga: "ARMA DI TAGGIA - P.zza Chierotti 4",
+    varianti: ["ARMA DI TAGGIA - P.zza Chierotti 4"],
     localita: "Arma di Taggia",
     indirizzo: "P.zza Chierotti 4",
     telefono: "0184 000 111",
@@ -148,8 +176,32 @@ const RIGHE_NON_ABBINATE = [
     ultimoVolantino: "2026-10-23",
     canale: { id: "c1", nome: "Super" },
     suggerimento: { tipo: "da_aggiungere" },
+    candidati: [],
   },
 ];
+
+const VOLANTINI_ALASSIO = [
+  {
+    idKit: "k131",
+    titoloKit: "CC LI 11",
+    promo: { id: "p131", nome: "Volantino marzo" },
+    data: "2025-03-14",
+    canale: { id: "c1", nome: "Super" },
+    area: { id: "a1", nome: "Nord" },
+    rigaStampata: "ALASSIO - Via Dante 88",
+  },
+  {
+    idKit: "k130",
+    titoloKit: "CC LI 10",
+    promo: { id: "p130", nome: "Volantino febbraio" },
+    data: "2025-02-27",
+    canale: { id: "c1", nome: "Super" },
+    area: { id: "a1", nome: "Nord" },
+    rigaStampata: "ALASSIO - V. Dante 88",
+  },
+];
+
+const COLLEGAMENTI_VUOTI = { data: { collegamenti: [], totale: 0, pagina: 1, dimensione: 10 }, isLoading: false, isError: false, refetch: vi.fn() };
 
 const regione = (nome: string) => screen.getByRole("region", { name: nome });
 const rigaDi = (nome: string) => screen.getByRole("link", { name: nome }).closest("tr")!;
@@ -170,6 +222,12 @@ describe("Gestione punti vendita", () => {
     finti.qualita = { data: QUALITA, isLoading: false, isError: false, refetch: vi.fn() };
     finti.righe = { data: { righe: [], totale: 0, pagina: 1, dimensione: 10 }, isLoading: false, isError: false, refetch: vi.fn() };
     finti.richiesteRighe = [];
+    finti.collegamenti = COLLEGAMENTI_VUOTI;
+    finti.volantiniRiga = { data: { chiave: "ind:ALASSIO|VIA DANTE 88", volantini: VOLANTINI_ALASSIO }, isLoading: false, isError: false, refetch: vi.fn() };
+    finti.richiesteVolantini = [];
+    finti.puoConsultareVolantini = true;
+    finti.collega.mutate = vi.fn();
+    finti.scollega.mutate = vi.fn();
     finti.importJob = { ...JOB_FERMO };
     finti.put.mockReset();
   });
@@ -455,6 +513,165 @@ describe("Gestione punti vendita", () => {
     expect(within(dialogo).getByLabelText("Indirizzo")).toHaveValue("P.zza Chierotti 4");
     expect(within(dialogo).getByLabelText("Città")).toHaveValue("Arma di Taggia");
     expect(within(dialogo).getByLabelText("Telefono")).toHaveValue("0184 000 111");
+  });
+
+  it("Collega sulla riga con lo stesso telefono apre il dialogo con quel punto vendita già scelto e collega tutto il gruppo", async () => {
+    finti.righe = { data: { righe: RIGHE_NON_ABBINATE, totale: 3, pagina: 1, dimensione: 10 }, isLoading: false, isError: false, refetch: vi.fn() };
+    finti.collega.mutate = vi.fn((_richiesta, opzioni) => opzioni?.onSuccess?.({ idCollegamento: "c1", righe: 40 }));
+    apri();
+    const sezione = regione("Righe dei volantini non abbinate");
+
+    const pulsante = within(sezione).getByRole("button", { name: "Collega SANREMO - Via Roma 3 - tel. 0184 555 0143" });
+    expect(pulsante).toHaveTextContent("Collega a Punto vendita 7");
+    await userEvent.click(pulsante);
+
+    const dialogo = await screen.findByRole("dialog");
+    expect(dialogo).toHaveAccessibleName("Collega a un punto vendita");
+    // Le varianti stampate del gruppo: verranno collegate tutte
+    expect(within(dialogo).getByText("SANREMO - V. Roma 3 - tel. 0184 555 0143")).toBeInTheDocument();
+    const suggeriti = within(dialogo).getByRole("list", { name: "Punti vendita suggeriti" });
+    expect(within(suggeriti).getByRole("radio", { name: /Punto vendita 7/ })).toBeChecked();
+    expect(within(suggeriti).getByText("Indirizzo simile")).toBeInTheDocument();
+
+    await userEvent.click(within(dialogo).getByRole("button", { name: "Collega" }));
+
+    expect(finti.collega.mutate).toHaveBeenCalledWith({ chiave: "tel:01845550143", idPuntoVendita: "pv7" }, expect.anything());
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(within(sezione).getByText("40 righe dei volantini collegate a Punto vendita 7.")).toBeInTheDocument();
+  });
+
+  it("senza suggerimenti il punto vendita si cerca fra tutti quelli della GDO; Collega resta spento finché non se ne sceglie uno", async () => {
+    finti.righe = { data: { righe: RIGHE_NON_ABBINATE, totale: 3, pagina: 1, dimensione: 10 }, isLoading: false, isError: false, refetch: vi.fn() };
+    apri();
+
+    await userEvent.click(within(regione("Righe dei volantini non abbinate")).getByRole("button", { name: "Collega ALASSIO - Via Dante 88" }));
+    const dialogo = await screen.findByRole("dialog");
+    expect(dialogo).toHaveTextContent("Nessun punto vendita con lo stesso telefono, indirizzo o località");
+    const collega = within(dialogo).getByRole("button", { name: "Collega" });
+    expect(collega).toBeDisabled();
+
+    await userEvent.type(within(dialogo).getByLabelText("Cerca il punto vendita da collegare"), "vendita 12");
+    await userEvent.click(within(within(dialogo).getByRole("list", { name: "Punti vendita trovati" })).getByRole("radio", { name: /Punto vendita 12/ }));
+    await userEvent.click(collega);
+
+    expect(finti.collega.mutate).toHaveBeenCalledWith({ chiave: "ind:ALASSIO|VIA DANTE 88", idPuntoVendita: "pv12" }, expect.anything());
+  });
+
+  it("il numero di volantini apre i volantini in cui compare la riga, ognuno con la riga stampata e il volantino da aprire", async () => {
+    finti.righe = { data: { righe: RIGHE_NON_ABBINATE, totale: 3, pagina: 1, dimensione: 10 }, isLoading: false, isError: false, refetch: vi.fn() };
+    apri();
+    // Finché non si chiedono, i volantini non si caricano
+    expect(finti.richiesteVolantini).toEqual([]);
+
+    await userEvent.click(within(regione("Righe dei volantini non abbinate")).getByRole("button", { name: "Volantini di ALASSIO - Via Dante 88" }));
+
+    const dialogo = await screen.findByRole("dialog");
+    expect(dialogo).toHaveAccessibleName("Volantini con questa riga");
+    expect(finti.richiesteVolantini).toContain("ind:ALASSIO|VIA DANTE 88");
+    const voci = within(within(dialogo).getByRole("list", { name: "Volantini della riga" })).getAllByRole("listitem");
+    expect(voci).toHaveLength(2);
+    expect(voci[0]).toHaveTextContent("CC LI 11");
+    expect(voci[0]).toHaveTextContent("Volantino marzo");
+    expect(voci[0]).toHaveTextContent("Super · Nord");
+    expect(voci[1]).toHaveTextContent("«ALASSIO - V. Dante 88»");
+    expect(within(voci[0]).getByRole("link", { name: /Apri volantino/ })).toHaveAttribute("href", "/volantini/tutti_i_volantini?kit=k131");
+  });
+
+  it("senza il permesso dei materiali i volantini della riga si vedono ma non si aprono", async () => {
+    finti.righe = { data: { righe: RIGHE_NON_ABBINATE, totale: 3, pagina: 1, dimensione: 10 }, isLoading: false, isError: false, refetch: vi.fn() };
+    finti.puoConsultareVolantini = false;
+    apri();
+
+    await userEvent.click(within(regione("Righe dei volantini non abbinate")).getByRole("button", { name: "Volantini di ALASSIO - Via Dante 88" }));
+
+    const dialogo = await screen.findByRole("dialog");
+    expect(within(dialogo).getAllByRole("listitem")).toHaveLength(2);
+    expect(within(dialogo).queryByRole("link", { name: /Apri volantino/ })).not.toBeInTheDocument();
+  });
+
+  it("nel dialogo Collega: i volantini della riga a richiesta, la ragione sociale dei suggeriti e la ricerca per ragione sociale", async () => {
+    finti.puntiVendita = {
+      ...finti.puntiVendita,
+      data: [puntoVendita(1), puntoVendita(2, { nome: "Conad Lucca", ragionesociale: "Lucca Market Srl" })],
+    };
+    finti.righe = {
+      data: {
+        righe: [{
+          ...RIGHE_NON_ABBINATE[1],
+          candidati: [{ puntoVendita: { id: "pv1", nome: "Superstore Alassio", ragioneSociale: "Dante Market Srl", indirizzo: "Via Roma 1", citta: "Alassio" }, motivo: "nome_simile" }],
+        }],
+        totale: 1,
+        pagina: 1,
+        dimensione: 10,
+      },
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    };
+    apri();
+
+    await userEvent.click(within(regione("Righe dei volantini non abbinate")).getByRole("button", { name: "Collega ALASSIO - Via Dante 88" }));
+    const dialogo = await screen.findByRole("dialog");
+
+    const suggeriti = within(dialogo).getByRole("list", { name: "Punti vendita suggeriti" });
+    expect(suggeriti).toHaveTextContent("Dante Market Srl");
+    expect(suggeriti).toHaveTextContent("Nome o ragione sociale");
+
+    expect(within(dialogo).queryByRole("list", { name: "Volantini della riga" })).not.toBeInTheDocument();
+    await userEvent.click(within(dialogo).getByRole("button", { name: "In quali volantini" }));
+    expect(within(within(dialogo).getByRole("list", { name: "Volantini della riga" })).getAllByRole("listitem")).toHaveLength(2);
+
+    await userEvent.type(within(dialogo).getByLabelText("Cerca il punto vendita da collegare"), "lucca market");
+    expect(within(within(dialogo).getByRole("list", { name: "Punti vendita trovati" })).getByRole("radio", { name: /Conad Lucca/ })).toBeInTheDocument();
+  });
+
+  it("Collegate a mano elenca i collegamenti; Scollega chiede conferma nella riga prima di annullare", async () => {
+    finti.righe = { data: { righe: RIGHE_NON_ABBINATE, totale: 3, pagina: 1, dimensione: 10 }, isLoading: false, isError: false, refetch: vi.fn() };
+    finti.collegamenti = {
+      data: {
+        collegamenti: [{
+          id: "c1",
+          riga: "PRA - Via Murtola 12/14 - tel. 010 6197180",
+          puntoVendita: { id: "pv3", nome: "Punto vendita 3", indirizzo: "Via Roma 3", citta: "Firenze" },
+          righe: 40,
+          creatoIl: "2026-11-06T10:00:00Z",
+        }],
+        totale: 1,
+        pagina: 1,
+        dimensione: 10,
+      },
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    };
+    apri();
+    const sezione = regione("Righe dei volantini non abbinate");
+
+    await userEvent.click(within(sezione).getByRole("radio", { name: /Collegate a mano/ }));
+
+    expect(within(sezione).getByText("PRA - Via Murtola 12/14 - tel. 010 6197180")).toBeInTheDocument();
+    expect(within(sezione).getByRole("link", { name: "Punto vendita 3" })).toHaveAttribute("href", "/gestione-interna/punti-vendita/pv3");
+    await userEvent.click(within(sezione).getByRole("button", { name: "Scollega PRA - Via Murtola 12/14 - tel. 010 6197180" }));
+    expect(finti.scollega.mutate).not.toHaveBeenCalled();
+    await userEvent.click(within(sezione).getByRole("button", { name: "Conferma" }));
+    expect(finti.scollega.mutate).toHaveBeenCalledWith("c1", expect.anything());
+  });
+
+  it("senza righe da abbinare ma con collegamenti fatti a mano il riquadro mostra i collegamenti", () => {
+    finti.collegamenti = {
+      ...COLLEGAMENTI_VUOTI,
+      data: {
+        collegamenti: [{ id: "c1", riga: "PRA - Via Murtola 12/14", puntoVendita: { id: "pv3", nome: "Punto vendita 3", indirizzo: null, citta: null }, righe: 2, creatoIl: "2026-11-06T10:00:00Z" }],
+        totale: 1,
+        pagina: 1,
+        dimensione: 10,
+      },
+    };
+    apri();
+
+    const riquadro = regione("Righe dei volantini non abbinate");
+    expect(within(riquadro).getByRole("radio", { name: /Collegate a mano/ })).toHaveAttribute("aria-checked", "true");
+    expect(within(riquadro).getByText("PRA - Via Murtola 12/14")).toBeInTheDocument();
   });
 
   it("senza righe da abbinare il riquadro si riduce a una riga, senza tabella vuota", () => {

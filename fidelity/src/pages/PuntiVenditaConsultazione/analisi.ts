@@ -405,6 +405,7 @@ export const ETICHETTA_ABBINAMENTO: Readonly<Record<TipoAbbinamento, string>> = 
   telefono: "per telefono",
   indirizzo: "per indirizzo",
   probabile: "abbinamento probabile",
+  manuale: "collegato a mano",
 };
 
 export const ETICHETTA_FONTE: Readonly<Record<"db1" | "istanta" | "testo", string>> = {

@@ -275,6 +275,99 @@
   },
   "formato": 1,
   "tabelle": {
+    "abbinamenti_manuali_pv_volantino": {
+      "colonne": {
+        "chiavi": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": false,
+          "riferimento": null,
+          "tipo": "text[]",
+          "unico": false
+        },
+        "creato_da": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": true,
+          "riferimento": null,
+          "tipo": "character varying(255)",
+          "unico": false
+        },
+        "creato_il": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": false,
+          "riferimento": null,
+          "tipo": "timestamp with time zone",
+          "unico": false
+        },
+        "id": {
+          "autoIncremento": false,
+          "chiavePrimaria": true,
+          "default": null,
+          "nullable": false,
+          "riferimento": null,
+          "tipo": "uuid",
+          "unico": false
+        },
+        "id_gdo": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": false,
+          "riferimento": null,
+          "tipo": "uuid",
+          "unico": false
+        },
+        "id_punto_vendita": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": false,
+          "riferimento": {
+            "colonna": "id_puntivendita",
+            "onDelete": "CASCADE",
+            "onUpdate": "CASCADE",
+            "tabella": "punti_vendita"
+          },
+          "tipo": "uuid",
+          "unico": false
+        },
+        "riga": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": false,
+          "riferimento": null,
+          "tipo": "text",
+          "unico": false
+        }
+      },
+      "indici": [
+        {
+          "colonne": [
+            "id_gdo"
+          ],
+          "condizione": null,
+          "metodo": "btree",
+          "nome": "idx_abbinamenti_manuali_pv_volantino_id_gdo",
+          "unico": false
+        },
+        {
+          "colonne": [
+            "id_punto_vendita"
+          ],
+          "condizione": null,
+          "metodo": "btree",
+          "nome": "idx_abbinamenti_manuali_pv_volantino_id_punto_vendita",
+          "unico": false
+        }
+      ],
+      "vincoliUnici": []
+    },
     "analisi_kit": {
       "colonne": {
         "aggiornato_il": {

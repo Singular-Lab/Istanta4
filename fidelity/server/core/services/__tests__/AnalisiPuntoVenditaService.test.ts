@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { STATO_PROMO } from '../../../../lib/enums';
 import { MECCANICHE } from '../../../../lib/puntiVendita/analisi';
-import { NotFoundError } from '../../../../lib/errors';
+import { BadRequestError, NotFoundError } from '../../../../lib/errors';
 import type {
   EdizionePerStatistiche,
   IAnalisiPuntiVenditaRepository,
@@ -202,7 +202,7 @@ function creaServizio(opzioni: { salvati?: Map<string, RiepilogoKit>; puntoVendi
       chiaveIndirizzo: `VIA ${indice}`, chiaveTelefono: null,
     }))),
     edizioniConLista: vi.fn(async () => []),
-    puntiVenditaConTelefono: vi.fn(async () => []),
+    puntiVenditaPerSuggerimenti: vi.fn(async () => []),
   } satisfies IAnalisiPuntiVenditaRepository;
   const storia = {
     trovaPuntoVendita: vi.fn(async (id: string) => (opzioni.puntoVendita === undefined ? (id === PV ? PUNTO_VENDITA : null) : opzioni.puntoVendita)),
@@ -453,6 +453,26 @@ describe('rete e gestione', () => {
     const fuoriMisura = await servizio.righeNonAbbinate(GDO, 0, 7);
     expect(fuoriMisura).toMatchObject({ pagina: 1, dimensione: 10 });
     expect(fuoriMisura.righe).toHaveLength(10);
+  });
+});
+
+describe('AnalisiPuntoVenditaService.volantiniRigaNonAbbinata', () => {
+  it('i volantini del gruppo con quella chiave, nella GDO indicata', async () => {
+    const { servizio, repository } = creaServizio();
+
+    const esito = await servizio.volantiniRigaNonAbbinata(GDO, 'ind:LOCALITA 3|VIA 3');
+
+    expect(repository.righeSenzaPuntoVendita).toHaveBeenCalledWith(GDO);
+    expect(esito.chiave).toBe('ind:LOCALITA 3|VIA 3');
+    expect(esito.volantini).toEqual([expect.objectContaining({ idKit: 'kit-3', rigaStampata: 'LOCALITA 3 - Via 3' })]);
+  });
+
+  it('riga non piu\' fra le non abbinate: NotFoundError; senza chiave: BadRequestError', async () => {
+    const { servizio } = creaServizio();
+
+    await expect(servizio.volantiniRigaNonAbbinata(GDO, 'tel:000000')).rejects.toBeInstanceOf(NotFoundError);
+    await expect(servizio.volantiniRigaNonAbbinata(GDO, '')).rejects.toBeInstanceOf(BadRequestError);
+    await expect(servizio.volantiniRigaNonAbbinata(GDO, undefined)).rejects.toBeInstanceOf(BadRequestError);
   });
 });
 

@@ -451,6 +451,9 @@ function VoceVolantino({ volantino }: { volantino: VolantinoNellaStoria }) {
           {volantino.abbinamento === "probabile" && (
             <StatusBadge tono="warning" etichetta="Abbinamento probabile" icon="Info" />
           )}
+          {volantino.abbinamento === "manuale" && (
+            <StatusBadge tono="info" etichetta="Collegato a mano" icon="Link" />
+          )}
         </div>
         <p className="mt-2 break-words text-sm text-slate-600 dark:text-slate-400">
           <span className="sr-only">Riga stampata: </span>«{volantino.rigaStampata}»
