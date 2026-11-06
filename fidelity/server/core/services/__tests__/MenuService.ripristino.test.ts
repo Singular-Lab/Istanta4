@@ -66,7 +66,7 @@ describe('MenuService.ripristinaMenuPredefiniti', () => {
     const pop = [
       ID_INTESTAZIONE_POP_SUPERADMIN,
       ID_VOCI_POP_SUPERADMIN.attivi,
-      ID_VOCI_POP_SUPERADMIN['in-corso'],
+      ID_VOCI_POP_SUPERADMIN.prossimi,
       ID_VOCI_POP_SUPERADMIN.storico,
     ];
     expect(voci).toBe(MENU_SUPERADMIN.length + 5);
@@ -81,10 +81,10 @@ describe('MenuService.ripristinaMenuPredefiniti', () => {
     const superadmin = tabella.filter(r => r.tipo_utente === TIPO_UTENTI.SUPERADMIN);
     expect(superadmin.filter(r => /^\/(volantini|pop)\//.test(r.pathname ?? '')).map(r => [r.titolo, r.pathname])).toEqual([
       ['Volantini attivi', '/volantini/attivi'],
-      ['Volantini in corso', '/volantini/in-corso'],
+      ['Volantini prossimi', '/volantini/prossimi'],
       ['Volantini storico', '/volantini/storico'],
       ['POP attivi', '/pop/attivi'],
-      ['POP in corso', '/pop/in-corso'],
+      ['POP prossimi', '/pop/prossimi'],
       ['POP storico', '/pop/storico'],
     ]);
     expect(superadmin.map(r => r.titolo)).toContain('MATERIALI VOLANTINO');

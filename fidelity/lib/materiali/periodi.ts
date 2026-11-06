@@ -1,7 +1,8 @@
 import { STATO_PROMO } from '../enums';
 
 /**
- * Periodi delle viste Volantini e POP, che hanno sostituito le pagine Materiali.
+ * Periodi delle API /api/materiali (deprecate: le viste Volantini e POP leggono le API di
+ * consultazione, con i periodi di lib/consultazione/periodi.ts) e indirizzi delle pagine dei kit.
  * Il periodo dipende solo dallo stato della promo; le promo eliminate non stanno in nessun periodo.
  */
 export type PeriodoMateriali = 'in-corso' | 'attivi' | 'storico';
@@ -29,24 +30,11 @@ export const STATI_PROMO_PER_PERIODO: Readonly<Record<PeriodoMateriali, readonly
 export const isPeriodoMateriali = (valore: unknown): valore is PeriodoMateriali =>
   typeof valore === 'string' && (PERIODI_MATERIALI as readonly string[]).includes(valore);
 
-/** Periodo in cui compare una promo, o undefined per una promo eliminata o con stato sconosciuto. */
-export const periodoDellaPromo = (stato: string | null | undefined): PeriodoMateriali | undefined =>
-  PERIODI_MATERIALI.find(periodo => (STATI_PROMO_PER_PERIODO[periodo] as readonly string[]).includes(stato ?? ''));
-
 /**
  * Nei periodi Attivi e Storico compaiono solo i kit pubblicati; In corso compare ogni kit non
  * eliminato, compresi quelli non ancora avviati.
  */
 export const soloKitPubblicati = (periodo: PeriodoMateriali): boolean => periodo !== 'in-corso';
-
-const conPromo = (percorso: string, idPromo?: string): string =>
-  idPromo ? `${percorso}?promo=${encodeURIComponent(idPromo)}` : percorso;
-
-export const percorsoVolantini = (periodo: PeriodoMateriali, idPromo?: string): string =>
-  conPromo(`/volantini/${periodo}`, idPromo);
-
-export const percorsoPop = (periodo: PeriodoMateriali, idPromo?: string): string =>
-  conPromo(`/pop/${periodo}`, idPromo);
 
 /**
  * Dettaglio di consultazione del volantino, indipendente dalla lavorazione e dal punto vendita.

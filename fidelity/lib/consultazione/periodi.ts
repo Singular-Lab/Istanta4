@@ -12,8 +12,9 @@ export type PeriodoConsultazione = 'attivi' | 'prossimi' | 'storico';
 
 export const PERIODI_CONSULTAZIONE: readonly PeriodoConsultazione[] = ['attivi', 'prossimi', 'storico'];
 
+/** Nome del periodo nei titoli delle viste Volantini e POP ("Volantini Prossimi"). */
 export const ETICHETTA_PERIODO_CONSULTAZIONE: Readonly<Record<PeriodoConsultazione, string>> = {
-  attivi: 'In validità',
+  attivi: 'Attivi',
   prossimi: 'Prossimi',
   storico: 'Storico',
 };
@@ -37,6 +38,21 @@ export const STATI_PROMO_CONSULTABILI: readonly STATO_PROMO[] = PERIODI_CONSULTA
 
 export const isPeriodoConsultazione = (valore: unknown): valore is PeriodoConsultazione =>
   typeof valore === 'string' && (PERIODI_CONSULTAZIONE as readonly string[]).includes(valore);
+
+/** Periodo in cui si consulta una promo, o undefined per una promo eliminata o con stato sconosciuto. */
+export const periodoConsultazioneDellaPromo = (stato: string | null | undefined): PeriodoConsultazione | undefined =>
+  PERIODI_CONSULTAZIONE.find(periodo => (STATI_PROMO_CONSULTAZIONE[periodo] as readonly string[]).includes(stato ?? ''));
+
+const conPromo = (percorso: string, idPromo?: string): string =>
+  idPromo ? `${percorso}?promo=${encodeURIComponent(idPromo)}` : percorso;
+
+/** Vista Volantini del periodo, eventualmente filtrata su una promo. */
+export const percorsoVolantini = (periodo: PeriodoConsultazione, idPromo?: string): string =>
+  conPromo(`/volantini/${periodo}`, idPromo);
+
+/** Vista POP del periodo, eventualmente aperta su una promo. */
+export const percorsoPop = (periodo: PeriodoConsultazione, idPromo?: string): string =>
+  conPromo(`/pop/${periodo}`, idPromo);
 
 /** Base delle API di consultazione, relativa all'indirizzo delle API (ServerCall.getUrl()). */
 export const PERCORSO_CONSULTAZIONE = '/consultazione';

@@ -2,10 +2,17 @@ import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { PERCORSO_CONSULTAZIONE, percorsoVolantinoConsultazione, type PeriodoConsultazione } from "../../lib/consultazione/periodi";
 import type {
   DettaglioVolantinoConsultazione,
+  ElencoPromozioniPopConsultazione,
   FiltriContenutiDigitali,
+  FiltriFilePopConsultazione,
+  FiltriPromozioniVolantiniConsultazione,
   OpzioniContenutiDigitali,
+  OpzioniFilePopConsultazione,
   PaginaContenutiDigitali,
+  PaginaFilePopConsultazione,
+  PaginaPromozioniVolantiniConsultazione,
   PaginaVolantiniConsultazione,
+  RiepilogoPopConsultazione,
 } from "../../lib/consultazione/tipi";
 import { ServerCall } from "../../lib/server_call";
 import { parametriMateriali } from "../utils/materiali";
@@ -90,3 +97,86 @@ export const richiesteVolantiniPanoramica = () => ({
   volantiniProssimiPromise: leggiVolantiniConsultazione("prossimi", {}, { dimensione: dimensioneSezionePanoramica("prossimi") }),
   storicoPromise: leggiVolantiniConsultazione("storico", {}, { dimensione: dimensioneSezionePanoramica("storico") }),
 });
+
+/* ---------- Viste Volantini e POP ---------- */
+
+// Le pubblicazioni arrivano durante il giorno: più fresche del predefinito di 5 minuti
+const STALE_VISTE = 60 * 1000;
+
+/** Promozione di un materiale pubblicato nei percorsi: l'id codificato. */
+const percorsoPromoPop = (idPromo: string | undefined) =>
+  `${PERCORSO_CONSULTAZIONE}/pop/promozioni/${encodeURIComponent(idPromo ?? "")}`;
+
+/** Volantini pubblicati del periodo per promozione, filtrati e paginati dal server. */
+export const usePromozioniVolantiniConsultazione = (filtri: FiltriPromozioniVolantiniConsultazione) =>
+  useQuery({
+    queryKey: [CHIAVE_CONSULTAZIONE, "volantini", "promozioni", filtri],
+    queryFn: () => ServerCall.get<PaginaPromozioniVolantiniConsultazione>(
+      `${PERCORSO_CONSULTAZIONE}/volantini/promozioni?${parametriMateriali({ ...filtri })}`
+    ),
+    // Cambiando pagina o filtro restano le promo precedenti finché arrivano le nuove; mai quelle di un altro periodo
+    placeholderData: (precedenti, queryPrecedente) =>
+      (queryPrecedente?.queryKey[3] as FiltriPromozioniVolantiniConsultazione | undefined)?.periodo === filtri.periodo
+        ? precedenti
+        : undefined,
+    staleTime: STALE_VISTE,
+  });
+
+/** Promozioni del periodo con file POP pubblicati, con il loro conteggio. */
+export const usePromozioniPopConsultazione = (periodo: PeriodoConsultazione) =>
+  useQuery({
+    queryKey: [CHIAVE_CONSULTAZIONE, "pop", "promozioni", periodo],
+    queryFn: () => ServerCall.get<ElencoPromozioniPopConsultazione>(
+      `${PERCORSO_CONSULTAZIONE}/pop/promozioni?${parametriMateriali({ periodo })}`
+    ),
+    staleTime: STALE_VISTE,
+  });
+
+/** Totali e formati POP pubblicati di una promozione. */
+export const useRiepilogoPopConsultazione = (idPromo: string | undefined, periodo: PeriodoConsultazione) =>
+  useQuery({
+    queryKey: [CHIAVE_CONSULTAZIONE, "pop", "riepilogo", idPromo, periodo],
+    queryFn: () => ServerCall.get<RiepilogoPopConsultazione>(`${percorsoPromoPop(idPromo)}?${parametriMateriali({ periodo })}`),
+    enabled: Boolean(idPromo),
+    staleTime: STALE_VISTE,
+  });
+
+/** File POP pubblicati di un formato della promozione, filtrati e paginati dal server. */
+export const useFilePopConsultazione = (idPromo: string | undefined, filtri: FiltriFilePopConsultazione) =>
+  useQuery({
+    queryKey: [CHIAVE_CONSULTAZIONE, "pop", "file", idPromo, filtri],
+    queryFn: () => ServerCall.get<PaginaFilePopConsultazione>(
+      `${percorsoPromoPop(idPromo)}/file?${parametriMateriali({ ...filtri })}`
+    ),
+    enabled: Boolean(idPromo) && Boolean(filtri.idFormato),
+    // Restano i file precedenti solo cambiando pagina o filtri dello stesso formato, mai di un altro
+    placeholderData: (precedenti, queryPrecedente) => {
+      const [, , , promoPrecedente, filtriPrecedenti] = (queryPrecedente?.queryKey ?? []) as [
+        unknown, unknown, unknown, string | undefined, FiltriFilePopConsultazione | undefined
+      ];
+      return promoPrecedente === idPromo &&
+        filtriPrecedenti?.periodo === filtri.periodo &&
+        filtriPrecedenti?.idFormato === filtri.idFormato
+        ? precedenti
+        : undefined;
+    },
+    staleTime: STALE_VISTE,
+  });
+
+// Aree, canali e reparti di un formato cambiano solo quando si pubblicano file nuovi
+const STALE_OPZIONI_POP = 5 * 60 * 1000;
+
+/** Valori delle tendine dei file di un formato: una richiesta per formato, non a ogni pagina o filtro. */
+export const useOpzioniFilePopConsultazione = (
+  idPromo: string | undefined,
+  periodo: PeriodoConsultazione,
+  idFormato: string | undefined
+) =>
+  useQuery({
+    queryKey: [CHIAVE_CONSULTAZIONE, "pop", "opzioni-file", idPromo, periodo, idFormato],
+    queryFn: () => ServerCall.get<OpzioniFilePopConsultazione>(
+      `${percorsoPromoPop(idPromo)}/file/opzioni?${parametriMateriali({ periodo, idFormato })}`
+    ),
+    enabled: Boolean(idPromo) && Boolean(idFormato),
+    staleTime: STALE_OPZIONI_POP,
+  });

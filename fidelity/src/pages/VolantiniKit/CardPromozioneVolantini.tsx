@@ -3,20 +3,21 @@ import Lucide from "@/components/Base/Lucide";
 import StatusBadge from "@/components/Base/StatusBadge";
 import { PreviewImmaginePdf } from "@/components/PreviewImmaginePdf";
 import { formatData, formatNumero } from "@/utils/format";
-import { testoValidita, urlAnteprimaMateriale } from "@/utils/materiali";
+import { testoValidita } from "@/utils/materiali";
 import { twMerge } from "@/utils/twMerge";
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { percorsoDettaglioVolantino, percorsoPromo } from "../../../lib/materiali/periodi";
-import type { PromozioneVolantini, VarianteVolantino } from "../../../lib/materiali/tipi";
-import { GIORNI_SCADENZA_VICINA, giorniAllaScadenza, testoScadenza } from "./scadenza";
+import type { PromozioneVolantiniConsultazione, VarianteConsultazione } from "../../../lib/consultazione/tipi";
+import { percorsoDettaglioVolantino } from "../../../lib/materiali/periodi";
+import { GIORNI_SCADENZA_VICINA, giorniAllaScadenza, giorniAllInizio, testoInizio, testoScadenza } from "./scadenza";
+
+/** Data della validità di cui la card dice quanto manca: la fine in Attivi, l'inizio in Prossimi. */
+export type ConteggioValidita = "fine" | "inizio";
 
 export interface CardPromozioneVolantiniProps {
-  promozione: PromozioneVolantini;
-  /** In Attivi la card dice quanto manca alla fine della validità. */
-  conScadenza?: boolean;
-  /** Senza il permesso di vedere le promozioni, soltanto il nome della promo è testo semplice. */
-  conCollegamenti?: boolean;
+  promozione: PromozioneVolantiniConsultazione;
+  /** Senza, la card non dice quanto manca (Storico). */
+  conteggio?: ConteggioValidita;
   className?: string;
 }
 
@@ -36,7 +37,18 @@ function Scadenza({ validitaAl }: { validitaAl: string | null }) {
   );
 }
 
-function Variante({ variante, collegamento }: { variante: VarianteVolantino; collegamento?: string }) {
+/** Giorni all'inizio della validità, finché non è cominciata. */
+function Inizio({ validitaDal }: { validitaDal: string | null }) {
+  const giorni = giorniAllInizio(validitaDal);
+  if (giorni === null || giorni < 0) return null;
+  return (
+    <span title={validitaDal ? `Valida dal ${formatData(validitaDal)}` : undefined}>
+      <StatusBadge tono="info" etichetta={testoInizio(giorni)} icon="CalendarClock" />
+    </span>
+  );
+}
+
+function Variante({ variante, collegamento }: { variante: VarianteConsultazione; collegamento?: string }) {
   const contenuto = (
     <>
       <span className="flex min-w-0 flex-col sm:flex-row sm:items-baseline sm:gap-2">
@@ -82,19 +94,14 @@ function Variante({ variante, collegamento }: { variante: VarianteVolantino; col
 /**
  * Una promozione con i suoi volantini pubblicati: copertina, validità, e i kit come varianti per
  * canale e area, ciascuno con i suoi file e i punti vendita stampati. Ogni variante apre i suoi
- * insight; la promo resta un collegamento separato, quando consentito.
+ * insight; la promo non porta al suo dettaglio, che è della produzione.
  */
-function CardPromozioneVolantini({
-  promozione,
-  conScadenza = false,
-  conCollegamenti = false,
-  className,
-}: CardPromozioneVolantiniProps) {
+function CardPromozioneVolantini({ promozione, conteggio, className }: CardPromozioneVolantiniProps) {
   const [anteprimaAperta, setAnteprimaAperta] = useState(false);
   const [tutteVisibili, setTutteVisibili] = useState(false);
   const { promo, copertina, kit, numeroKit } = promozione;
 
-  const anteprima = copertina ? urlAnteprimaMateriale(copertina.idOlimpoCloud) : "";
+  const anteprima = copertina?.anteprima ?? "";
   const validita = testoValidita(promo.validitaDal, promo.validitaAl);
   const visibili = tutteVisibili ? kit : kit.slice(0, VARIANTI_VISIBILI);
   // Con i filtri la promo mostra solo una parte dei suoi kit: lo dice
@@ -134,16 +141,9 @@ function CardPromozioneVolantini({
 
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-start justify-between gap-2">
-              <h3 className="title-card min-w-0 [overflow-wrap:anywhere]">
-                {conCollegamenti ? (
-                  <Link to={percorsoPromo(promo.id, promo.stato)} className="hover:text-theme-1">
-                    {promo.nome}
-                  </Link>
-                ) : (
-                  promo.nome
-                )}
-              </h3>
-              {conScadenza && <Scadenza validitaAl={promo.validitaAl} />}
+              <h3 className="title-card min-w-0 [overflow-wrap:anywhere]">{promo.nome}</h3>
+              {conteggio === "fine" && <Scadenza validitaAl={promo.validitaAl} />}
+              {conteggio === "inizio" && <Inizio validitaDal={promo.validitaDal} />}
             </div>
             <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs text-slate-500">
               {validita && (

@@ -108,11 +108,11 @@ describe('migrazione dei menu salvati alle viste Volantini e POP', () => {
     expect(menuDi(tabella(), SUPERADMIN)).toEqual([
       ['MATERIALI VOLANTINO', null, null, null],
       ['Volantini attivi', '/volantini/attivi', M, 'FolderOpen'],
-      ['Volantini in corso', '/volantini/in-corso', M, 'Clock'],
+      ['Volantini prossimi', '/volantini/prossimi', M, 'Clock'],
       ['Volantini storico', '/volantini/storico', M, 'Archive'],
       ['MATERIALI POP', null, null, null],
       ['POP attivi', '/pop/attivi', M, 'FolderOpen'],
-      ['POP in corso', '/pop/in-corso', M, 'Clock'],
+      ['POP prossimi', '/pop/prossimi', M, 'Clock'],
       ['POP storico', '/pop/storico', M, 'Archive'],
       ['Ordini in corso', '/ods-in-corso', null, 'Circle'],
     ]);
@@ -164,6 +164,30 @@ describe('migrazione dei menu salvati alle viste Volantini e POP', () => {
       'MATERIALI VOLANTINO', 'Volantini attivi', 'MATERIALI POP', 'POP attivi', 'Ordini in corso',
     ]);
     expect(prima).toEqual({ menu: 1, aggiornate: 3, inserite: 1 });
+    expect(seconda).toEqual({ menu: 0, aggiornate: 0, inserite: 0 });
+    expect(menu.incrementaVersione).toHaveBeenCalledTimes(1);
+  });
+
+  it('porta alle viste Prossimi le voci in corso dei menu già convertiti, una volta sola', async () => {
+    const { fonte, menu, tabella } = creaFonte([
+      riga('sep', GDO_ADMIN, 'MATERIALI VOLANTINO', null, 0),
+      riga('v-in-corso', GDO_ADMIN, 'Volantini in corso', '/volantini/in-corso', 1, { icona: 'Clock', codice_permesso: PERMESSI.MATERIALI.VISUALIZZA }),
+      riga('sep-pop', GDO_ADMIN, 'MATERIALI POP', null, 2),
+      riga('p-in-corso', GDO_ADMIN, 'I POP da stampare', '/pop/in-corso', 3, { icona: 'Clock', codice_permesso: PERMESSI.MATERIALI.VISUALIZZA }),
+    ]);
+
+    const prima = await migraMenuMateriali(fonte, nuovoId);
+    const seconda = await migraMenuMateriali(fonte, nuovoId);
+
+    const M = PERMESSI.MATERIALI.VISUALIZZA;
+    expect(menuDi(tabella(), GDO_ADMIN)).toEqual([
+      ['MATERIALI VOLANTINO', null, null, null],
+      ['Volantini prossimi', '/volantini/prossimi', M, 'Clock'],
+      ['MATERIALI POP', null, null, null],
+      // Il titolo scelto dall'amministratore resta
+      ['I POP da stampare', '/pop/prossimi', M, 'Clock'],
+    ]);
+    expect(prima).toEqual({ menu: 1, aggiornate: 2, inserite: 0 });
     expect(seconda).toEqual({ menu: 0, aggiornate: 0, inserite: 0 });
     expect(menu.incrementaVersione).toHaveBeenCalledTimes(1);
   });

@@ -263,16 +263,17 @@ describe('menu predefinito del Superadmin', () => {
     expect(sezione(voci, 'MATERIALI VOLANTINO')).toEqual([
       [id('MATERIALI'), 'MATERIALI VOLANTINO', null, null, null],
       [id('Materiali attivi'), 'Volantini attivi', '/volantini/attivi', M, 'FolderOpen'],
-      [id('Materiali in corso'), 'Volantini in corso', '/volantini/in-corso', M, 'Clock'],
+      [id('Materiali in corso'), 'Volantini prossimi', '/volantini/prossimi', M, 'Clock'],
       [id('Storico materiali'), 'Volantini storico', '/volantini/storico', M, 'Archive'],
     ]);
     expect(sezione(voci, 'MATERIALI POP')).toEqual([
       [ID_INTESTAZIONE_POP_SUPERADMIN, 'MATERIALI POP', null, null, null],
       [ID_VOCI_POP_SUPERADMIN.attivi, 'POP attivi', '/pop/attivi', M, 'FolderOpen'],
-      [ID_VOCI_POP_SUPERADMIN['in-corso'], 'POP in corso', '/pop/in-corso', M, 'Clock'],
+      [ID_VOCI_POP_SUPERADMIN.prossimi, 'POP prossimi', '/pop/prossimi', M, 'Clock'],
       [ID_VOCI_POP_SUPERADMIN.storico, 'POP storico', '/pop/storico', M, 'Archive'],
     ]);
     expect(voci.some(v => ['/materiali-attivi', '/materiali-in-corso', '/storico-materiali'].includes(v.pathname ?? ''))).toBe(false);
+    expect(voci.some(v => v.pathname?.endsWith('/in-corso') && /^\/(volantini|pop)\//.test(v.pathname))).toBe(false);
     expect(voci.every(v => v.id_parent === null && v.tipo_utente === TIPO_UTENTI.SUPERADMIN)).toBe(true);
     expect(voci.filter(v => v.pathname?.startsWith('/pop/')).every(v => !v.disabilitato && !v.start_page)).toBe(true);
   });

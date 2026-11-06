@@ -1,8 +1,7 @@
 import dayjs from "dayjs";
-import type { PeriodoMateriali } from "../../lib/materiali/periodi";
 
 /**
- * Supporto comune alle viste Volantini e POP (contratto in lib/materiali/tipi.ts).
+ * Supporto comune alle viste Volantini e POP e alle altre pagine dei materiali.
  */
 
 type ValoreParametro = string | number | null | undefined;
@@ -38,13 +37,6 @@ export const testoValidita = (dal: string | null | undefined, al: string | null 
   if (valida(fine)) return `fino al ${fine.format("DD/MM/YYYY")}`;
   if (valida(inizio)) return `dal ${inizio.format("DD/MM/YYYY")}`;
   return null;
-};
-
-/** Elenco delle promozioni in cui nascono i kit del periodo: le valide stanno nello storico promozioni. */
-export const PROMOZIONI_DEL_PERIODO: Readonly<Record<PeriodoMateriali, { etichetta: string; percorso: string }>> = {
-  "in-corso": { etichetta: "Vai alle promozioni in corso", percorso: "/promozioni/in-corso" },
-  attivi: { etichetta: "Vai allo storico promozioni", percorso: "/promozioni/storico" },
-  storico: { etichetta: "Vai allo storico promozioni", percorso: "/promozioni/storico" },
 };
 
 /**

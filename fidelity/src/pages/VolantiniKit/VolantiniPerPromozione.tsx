@@ -8,33 +8,38 @@ import PaginazioneTabella from "@/components/Base/PaginazioneTabella";
 import Sezione from "@/components/Base/Sezione";
 import Skeleton from "@/components/Base/Skeleton";
 import EmptyState from "@/components/EmptyState";
-import { PERMISSIONS } from "@/constants/permissions";
-import { usePermission } from "@/context/PermissionContext";
 import { useParametriUrl } from "@/hooks/useParametriUrl";
 import { useRicercaDifferita } from "@/hooks/useRicercaDifferita";
-import { useFetchPromozioniVolantini } from "@/query/query";
+import { usePromozioniVolantiniConsultazione } from "@/query/consultazione";
 import { formatNumero } from "@/utils/format";
-import { PROMOZIONI_DEL_PERIODO } from "@/utils/materiali";
 import { twMerge } from "@/utils/twMerge";
 import { useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
-import {
-  DIMENSIONI_PAGINA_PROMOZIONI_VOLANTINI,
-  type PaginaPromozioniVolantini,
-} from "../../../lib/materiali/tipi";
-import CardPromozioneVolantini from "./CardPromozioneVolantini";
+import type { PeriodoConsultazione } from "../../../lib/consultazione/periodi";
+import type { PaginaPromozioniVolantiniConsultazione } from "../../../lib/consultazione/tipi";
+import { DIMENSIONI_PAGINA_PROMOZIONI_VOLANTINI } from "../../../lib/materiali/tipi";
+import CardPromozioneVolantini, { type ConteggioValidita } from "./CardPromozioneVolantini";
 
-export type PeriodoPerPromozione = "attivi" | "storico";
-
-const PERIODO_VUOTO: Readonly<Record<PeriodoPerPromozione, { titolo: string; descrizione: string }>> = {
+const PERIODO_VUOTO: Readonly<Record<PeriodoConsultazione, { titolo: string; descrizione: string }>> = {
   attivi: {
     titolo: "Nessun volantino pubblicato nelle promozioni valide",
     descrizione: "Le promozioni compaiono qui quando un loro kit volantino viene pubblicato.",
+  },
+  prossimi: {
+    titolo: "Nessun volantino pubblicato nelle prossime promozioni",
+    descrizione:
+      "Le promozioni non ancora valide compaiono qui quando un loro kit volantino viene pubblicato. La lavorazione dei kit non si vede da questa pagina.",
   },
   storico: {
     titolo: "Nessun volantino nelle promozioni concluse",
     descrizione: "Le promozioni con volantini pubblicati compaiono qui quando vengono archiviate.",
   },
+};
+
+/** Quanto manca, nella card: la fine della validità in Attivi, l'inizio in Prossimi, niente nello Storico. */
+const CONTEGGIO: Readonly<Record<PeriodoConsultazione, ConteggioValidita | undefined>> = {
+  attivi: "fine",
+  prossimi: "inizio",
+  storico: undefined,
 };
 
 const DIMENSIONI_PAGINA = [...DIMENSIONI_PAGINA_PROMOZIONI_VOLANTINI];
@@ -74,29 +79,29 @@ function SchedeInCaricamento() {
 }
 
 /** Nome della promo filtrata con ?promo=: dalle tendine, dai risultati, o un nome generico. */
-const nomePromoFiltrata = (dati: PaginaPromozioniVolantini | undefined, idPromo: string): string =>
+const nomePromoFiltrata = (dati: PaginaPromozioniVolantiniConsultazione | undefined, idPromo: string): string =>
   dati?.opzioni.promozioni.find((promo) => promo.id === idPromo)?.nome ??
   dati?.promozioni.find((promozione) => promozione.promo.id === idPromo)?.promo.nome ??
   "Promozione selezionata";
 
 /**
- * Volantini di Attivi e Storico: una card per promozione, dalla più recente, con i kit pubblicati
- * come varianti. Nello Storico, con anni di promozioni, si cerca per nome e si filtra per anno.
+ * Volantini pubblicati di un periodo: una card per promozione, dalla più recente, con i kit
+ * pubblicati come varianti. Solo materiali pubblicati della GDO, senza stati di lavorazione né
+ * collegamenti alla produzione. Nello Storico, con anni di promozioni, si cerca per nome e si
+ * filtra per anno; in Attivi e Prossimi la promozione si sceglie da una tendina.
  */
-function VolantiniPerPromozione({ periodo }: { periodo: PeriodoPerPromozione }) {
-  const navigate = useNavigate();
-  const puoAprirePromo = usePermission(PERMISSIONS.PROMO.VISUALIZZA);
+function VolantiniPerPromozione({ periodo }: { periodo: PeriodoConsultazione }) {
   const [parametri, aggiorna] = useParametriUrl();
 
   const idPromo = parametri.get("promo") ?? "";
   const idArea = parametri.get("area") ?? "";
   const idCanale = parametri.get("canale") ?? "";
   const cerca = parametri.get("cerca") ?? "";
-  // L'anno filtra solo lo Storico: le promo attive sono quelle valide adesso
+  // L'anno filtra solo lo Storico: le promo attive e prossime sono quelle di adesso
   const conFiltroAnno = periodo === "storico";
   const anno = conFiltroAnno ? annoDa(parametri.get("anno")) : undefined;
-  // Le promo attive sono poche e si scelgono da una tendina; nello Storico si cercano
-  const conTendinaPromo = periodo === "attivi";
+  // Le promo attive e prossime sono poche e si scelgono da una tendina; nello Storico si cercano
+  const conTendinaPromo = periodo !== "storico";
   const pagina = Math.max(1, Math.trunc(Number(parametri.get("pagina"))) || 1);
   const dimensioneLetta = Number(parametri.get("dimensione"));
   const dimensione = DIMENSIONI_PAGINA.includes(dimensioneLetta) ? dimensioneLetta : DIMENSIONE_PREDEFINITA;
@@ -112,7 +117,7 @@ function VolantiniPerPromozione({ periodo }: { periodo: PeriodoPerPromozione }) 
     aggiorna({ ...Object.fromEntries(PARAMETRI_FILTRO.map((chiave) => [chiave, null])), pagina: null });
   };
 
-  const query = useFetchPromozioniVolantini({
+  const query = usePromozioniVolantiniConsultazione({
     periodo,
     cerca: cerca || undefined,
     idPromo: idPromo || undefined,
@@ -144,8 +149,6 @@ function VolantiniPerPromozione({ periodo }: { periodo: PeriodoPerPromozione }) 
     return anno !== undefined && !anni.includes(anno) ? [...anni, anno].sort((a, b) => b - a) : anni;
   }, [dati?.opzioni.anni, anno]);
 
-  const promozioniDelPeriodo = PROMOZIONI_DEL_PERIODO[periodo];
-
   const conteggio = (() => {
     if (!dati) return query.isError ? null : "Caricamento delle promozioni…";
     if (dati.totale === 0) {
@@ -176,9 +179,6 @@ function VolantiniPerPromozione({ periodo }: { periodo: PeriodoPerPromozione }) 
           icon="Newspaper"
           title={vuoto.titolo}
           description={vuoto.descrizione}
-          buttonText={puoAprirePromo ? promozioniDelPeriodo.etichetta : undefined}
-          buttonIcon="ArrowRight"
-          onButtonClick={() => navigate(promozioniDelPeriodo.percorso)}
         />
       );
     }
@@ -213,8 +213,7 @@ function VolantiniPerPromozione({ periodo }: { periodo: PeriodoPerPromozione }) 
             <CardPromozioneVolantini
               className="h-full"
               promozione={promozione}
-              conScadenza={periodo === "attivi"}
-              conCollegamenti={puoAprirePromo}
+              conteggio={CONTEGGIO[periodo]}
             />
           </li>
         ))}

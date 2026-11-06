@@ -4,11 +4,7 @@ import { TIPO_ATTIVITA } from "../../lib/enums";
 import { ServerCall } from "../../lib/server_call";
 import type { AuthProviderAdminDTO, AvvisoManutenzione, Config, DESIGN_KIT, DimensioneVisibilitaPromo, FileItemKit, FormatiAttributes, Funzionalita, HubNewsAdminDTO, HubServiceDTO, MenaboLayoutSalvato, MenaboRisultato, PuntiVenditaAttributes, RaccoglitoreKit, RegoleMenabo, ReportOptionDTO, Ricette, SaveMenaboLayoutRequest, TimelinePromoItem, TipiDiExportAttributes, TracciatoQueryResult } from "../../lib/types";
 import type { AuditLogPaginatedResponse, AuditLogSummary } from "../../lib/auditTypes";
-import type { PeriodoMateriali } from "../../lib/materiali/periodi";
-import type { ElencoPromozioniPop, FiltriFilePop, FiltriKitVolantini, OpzioniFilePop, PaginaFilePop, PaginaKitVolantini, RiepilogoPop } from "../../lib/materiali/tipi";
-import type { FiltriPromozioniVolantini, PaginaPromozioniVolantini } from "../../lib/materiali/tipi";
 import type { AvanzamentoProduzione } from "../../lib/produzione/avanzamento";
-import { parametriMateriali } from "@/utils/materiali";
 import type { AreaResponseDTO, CanaleResponseDTO, CombinazioneCanaleAreaResponseDTO, DisplayContextResponseDTO, DispositivoPuntoVenditaResponseDTO, FormatiResponseDTO, GDOResponseDTO, PromoResponseDTO, PuntoVenditaResponseDTO, RuoloUtenteGDOResponseDTO, TipiDiExportResponseDTO, VolantinoAttivoDTO } from "../../server/core/dto";
 import type { PuntoVenditaConsultazione } from "../../lib/puntiVendita/consultazione";
 import type { PaginaVolantiniStoria, StoriaPuntoVendita } from "../../lib/puntiVendita/storia";
@@ -669,34 +665,10 @@ export const useFetchAllPuntiVendita = (idGDO: string) => {
   });
 };
 
-/* ---------- Viste Volantini e POP (contratto in lib/materiali/tipi.ts) ---------- */
+/* ---------- Avanzamento produzione (contratto in lib/produzione/avanzamento.ts) ---------- */
 
 // I dati della lavorazione cambiano spesso: più freschi del predefinito di 5 minuti
-const STALE_MATERIALI = 60 * 1000;
-
-/** Kit volantino di un periodo, filtrati e paginati dal server. */
-export const useFetchKitVolantini = (filtri: FiltriKitVolantini) =>
-  useQuery({
-    queryKey: ['materiali', 'volantini', filtri],
-    queryFn: () =>
-      ServerCall.get<PaginaKitVolantini>(`/materiali/volantini?${parametriMateriali({ ...filtri })}`),
-    // Cambiando pagina o filtro restano i kit precedenti finché arrivano i nuovi; mai quelli di un altro periodo
-    placeholderData: (precedenti, queryPrecedente) =>
-      (queryPrecedente?.queryKey[2] as FiltriKitVolantini | undefined)?.periodo === filtri.periodo ? precedenti : undefined,
-    staleTime: STALE_MATERIALI,
-  });
-
-/** Volantini di Attivi e Storico per promozione, filtrati e paginati dal server. */
-export const useFetchPromozioniVolantini = (filtri: FiltriPromozioniVolantini) =>
-  useQuery({
-    queryKey: ['materiali', 'volantini', 'promozioni', filtri],
-    queryFn: () =>
-      ServerCall.get<PaginaPromozioniVolantini>(`/materiali/volantini/promozioni?${parametriMateriali({ ...filtri })}`),
-    // Cambiando pagina o filtro restano le promo precedenti finché arrivano le nuove; mai quelle di un altro periodo
-    placeholderData: (precedenti, queryPrecedente) =>
-      (queryPrecedente?.queryKey[3] as FiltriPromozioniVolantini | undefined)?.periodo === filtri.periodo ? precedenti : undefined,
-    staleTime: STALE_MATERIALI,
-  });
+const STALE_PRODUZIONE = 60 * 1000;
 
 /**
  * Promo in corso della GDO con lo stato dei loro kit (pagina Avanzamento produzione). Si aggiorna
@@ -706,67 +678,8 @@ export const useFetchAvanzamentoProduzione = () =>
   useQuery({
     queryKey: ['produzione', 'avanzamento'],
     queryFn: () => ServerCall.get<AvanzamentoProduzione>('/produzione/avanzamento'),
-    staleTime: STALE_MATERIALI,
-    refetchInterval: STALE_MATERIALI,
-  });
-
-/** Promozioni del periodo che hanno file POP, con il loro conteggio. */
-export const useFetchPromozioniPop = (periodo: PeriodoMateriali) =>
-  useQuery({
-    queryKey: ['materiali', 'pop', 'promozioni', periodo],
-    queryFn: () =>
-      ServerCall.get<ElencoPromozioniPop>(`/materiali/pop/promozioni?${parametriMateriali({ periodo })}`),
-    staleTime: STALE_MATERIALI,
-  });
-
-/** Totali e formati POP di una promozione. */
-export const useFetchRiepilogoPop = (idPromo: string | undefined, periodo: PeriodoMateriali) =>
-  useQuery({
-    queryKey: ['materiali', 'pop', 'riepilogo', idPromo, periodo],
-    queryFn: () =>
-      ServerCall.get<RiepilogoPop>(
-        `/materiali/pop/promozioni/${encodeURIComponent(idPromo ?? '')}/formati?${parametriMateriali({ periodo })}`
-      ),
-    enabled: !!idPromo,
-    staleTime: STALE_MATERIALI,
-  });
-
-/** File POP di un formato della promozione, filtrati e paginati dal server. */
-export const useFetchFilePop = (idPromo: string | undefined, filtri: FiltriFilePop) =>
-  useQuery({
-    queryKey: ['materiali', 'pop', 'file', idPromo, filtri],
-    queryFn: () =>
-      ServerCall.get<PaginaFilePop>(
-        `/materiali/pop/promozioni/${encodeURIComponent(idPromo ?? '')}/file?${parametriMateriali({ ...filtri })}`
-      ),
-    enabled: !!idPromo && !!filtri.idFormato,
-    // Restano i file precedenti solo cambiando pagina o filtri dello stesso formato, mai di un altro
-    placeholderData: (precedenti, queryPrecedente) => {
-      const [, , , promoPrecedente, filtriPrecedenti] = (queryPrecedente?.queryKey ?? []) as [
-        unknown, unknown, unknown, string | undefined, FiltriFilePop | undefined
-      ];
-      return promoPrecedente === idPromo &&
-        filtriPrecedenti?.periodo === filtri.periodo &&
-        filtriPrecedenti?.idFormato === filtri.idFormato
-        ? precedenti
-        : undefined;
-    },
-    staleTime: STALE_MATERIALI,
-  });
-
-// Aree, canali e reparti di un formato cambiano solo quando arrivano file nuovi
-const STALE_OPZIONI_POP = 5 * 60 * 1000;
-
-/** Valori delle tendine dei file di un formato: una richiesta per formato, non a ogni pagina o filtro. */
-export const useFetchOpzioniFilePop = (idPromo: string | undefined, periodo: PeriodoMateriali, idFormato: string | undefined) =>
-  useQuery({
-    queryKey: ['materiali', 'pop', 'opzioni-file', idPromo, periodo, idFormato],
-    queryFn: () =>
-      ServerCall.get<OpzioniFilePop>(
-        `/materiali/pop/promozioni/${encodeURIComponent(idPromo ?? '')}/file/opzioni?${parametriMateriali({ periodo, idFormato })}`
-      ),
-    enabled: !!idPromo && !!idFormato,
-    staleTime: STALE_OPZIONI_POP,
+    staleTime: STALE_PRODUZIONE,
+    refetchInterval: STALE_PRODUZIONE,
   });
 
 /**

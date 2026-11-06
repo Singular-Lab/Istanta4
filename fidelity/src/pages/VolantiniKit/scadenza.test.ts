@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { giorniAllaScadenza, testoScadenza } from "./scadenza";
+import { giorniAllaScadenza, giorniAllInizio, testoInizio, testoScadenza } from "./scadenza";
 
 // La scadenza dei volantini attivi si conta in giorni del calendario italiano, qualunque sia il
 // fuso del browser: a mezzanotte di Roma il giorno cambia anche se in UTC è ancora ieri.
@@ -36,5 +36,31 @@ describe("giorni alla scadenza di una promo", () => {
     expect(testoScadenza(1)).toBe("Scade domani");
     expect(testoScadenza(12)).toBe("Scade tra 12 giorni");
     expect(testoScadenza(-2)).toBe("Scaduta");
+  });
+});
+
+// I volantini Prossimi dicono quanto manca all'inizio della validità, con lo stesso calendario.
+describe("giorni all'inizio di una promo", () => {
+  it("conta i giorni del calendario di Roma fino al primo giorno di validità", () => {
+    const adesso = new Date("2026-11-06T10:00:00+01:00");
+
+    expect(giorniAllInizio("2026-11-06", adesso)).toBe(0);
+    expect(giorniAllInizio("2026-11-07", adesso)).toBe(1);
+    expect(giorniAllInizio("2026-11-20", adesso)).toBe(14);
+    expect(giorniAllInizio("2026-11-05", adesso)).toBe(-1);
+    // Alle 23:30 UTC del 6 in Italia è già il 7
+    expect(giorniAllInizio("2026-11-07", new Date("2026-11-06T23:30:00Z"))).toBe(0);
+  });
+
+  it("senza una data valida non c'è inizio", () => {
+    expect(giorniAllInizio(undefined)).toBeNull();
+    expect(giorniAllInizio("2026-13-01")).toBeNull();
+  });
+
+  it("descrive l'inizio in italiano", () => {
+    expect(testoInizio(0)).toBe("Inizia oggi");
+    expect(testoInizio(1)).toBe("Inizia domani");
+    expect(testoInizio(14)).toBe("Inizia tra 14 giorni");
+    expect(testoInizio(-3)).toBe("Già iniziata");
   });
 });
