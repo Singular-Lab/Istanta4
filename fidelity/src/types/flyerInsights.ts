@@ -136,9 +136,21 @@ export interface GroupByConfig {
   descriptionField?: string;
 }
 
+/** Un reparto dell'anagrafica dell'installazione: lo stesso per i kit di Istanta e dello storico. */
+export interface RepartoAnagraficaConfig {
+  codice: string;
+  descrizione: string;
+}
+
 export interface DataMappingConfig {
-  referenzaFields: Record<string, string>;
+  /** Percorso del campo nella referenza; con più percorsi vale il primo non vuoto. */
+  referenzaFields: Record<string, string | string[]>;
   referenzaDescriptionFields?: string[];
+  /**
+   * Anagrafica dei reparti: il server riconduce ogni referenza al suo reparto, dal codice con o
+   * senza zeri iniziali ("1" e "01") o dalla descrizione, e ne usa codice e descrizione.
+   */
+  reparti?: RepartoAnagraficaConfig[];
 }
 
 export interface RiepilogoSectionConfig {

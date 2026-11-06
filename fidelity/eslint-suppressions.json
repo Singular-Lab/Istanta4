@@ -1613,7 +1613,7 @@
   },
   "server/core/services/VolantinoService.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 12
+      "count": 9
     }
   },
   "server/core/services/WebPliantService.ts": {

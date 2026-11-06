@@ -2,7 +2,7 @@
 import "@testing-library/jest-dom/vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import type { ReferenzaPosizione } from "@/types/flyerInsights";
+import type { MappaConfig, ReferenzaPosizione } from "@/types/flyerInsights";
 import FlyerPageMap, { geometriaBox, ingombroPercentuale } from "./FlyerPageMap";
 
 // Un box a metà larghezza della pagina A4 (210 × 297), al 10% dal bordo sinistro della sua pagina
@@ -46,6 +46,37 @@ describe("FlyerPageMap: geometria dei kit di Istanta e dello storico", () => {
   it("l'ingombro in percentuale: frazione per Istanta, già percentuale per lo storico", () => {
     expect(ingombroPercentuale(0.125, false)).toBe(12.5);
     expect(ingombroPercentuale(12.5, true)).toBe(12.5);
+  });
+});
+
+// Mappa della config dell'installazione: un colore per codice reparto, con il nome in legenda.
+// Il server riconduce già ogni referenza al codice dell'anagrafica ("1" dello storico diventa "01").
+const MAPPA: MappaConfig = {
+  title: "Mappa Visiva",
+  colorField: "reparto",
+  colorStrategy: {
+    type: "static",
+    map: { "01": { hex: "#f97316", label: "Drogheria alimentare" } },
+    default: { hex: "#64748b", label: "Altro" },
+  },
+  emptyState: { icon: "MapPinOff", message: "Nessuna referenza" },
+};
+
+describe("FlyerPageMap: colori per reparto dalla config", () => {
+  it("ogni box ha il colore del suo reparto, quello fuori mappa il colore di default; la legenda dice il nome", () => {
+    const drogheria = { ...referenza(1, 21, 4), id: "r1", reparto: "01", descrizioneReparto: "DROGHERIA ALIMENTARE" };
+    const fuori = { ...referenza(1, 21, 4), id: "r2", reparto: "99" };
+    render(
+      <FlyerPageMap referenze={[drogheria, fuori]} paginaCorrente={1} onChangePage={vi.fn()} totalePagine={1} config={MAPPA} origineStorico />
+    );
+
+    expect(screen.getByTestId("box-r1").style.backgroundColor).toBe("rgb(249, 115, 22)");
+    expect(screen.getByTestId("box-r2").style.backgroundColor).toBe("rgb(100, 116, 139)");
+    expect(screen.getByText("Drogheria alimentare")).toBeInTheDocument();
+    expect(screen.queryByText("Latticini")).not.toBeInTheDocument();
+
+    fireEvent.mouseEnter(screen.getByTestId("box-r1"));
+    expect(screen.getByText("01 - DROGHERIA ALIMENTARE")).toBeInTheDocument();
   });
 });
 
