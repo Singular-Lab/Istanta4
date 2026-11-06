@@ -1,4 +1,5 @@
 import { RUOLO_UTENTE_GDO, TIPO_UTENTI } from '../../../lib/enums';
+import { INGRESSO_SERVIZIO_GESTITO, type ServizioGestito } from '../../../lib/hubServiziGestiti';
 
 /**
  * I dati con cui nasce un'installazione di Fidelity, gli stessi che inserisce a mano
@@ -72,20 +73,15 @@ export const MENU_SUPERADMIN: readonly VoceMenuPredefinita[] = [
   { id_menu_item: '0b8f277c-bd3f-40d4-bf4c-f3b7b907b906', titolo: 'Gestione Webhook', tipo: 'item', icona: 'Zap', pathname: '/gestione-webhook', codice_permesso: 'pagina.gestione_webhook', disabilitato: false, start_page: false, ordinamento: 32 },
 ];
 
-/** Codici dei servizi dell'hub che Fidelity gestisce da se' (meta.gestito). */
-export type ServizioGestito = 'istanta' | 'correggo';
-
-/** Il percorso di ingresso di ciascun servizio gestito, dopo l'indirizzo pubblico dell'applicazione. */
-export const INGRESSO_SERVIZIO_GESTITO: Record<ServizioGestito, string> = {
-  istanta: '/LoginController/oauth/landed',
-  correggo: '/OAuthLanded.ashx',
-};
+// Codici e ingressi dei servizi gestiti: in lib, perche' li usa anche la gestione dell'hub.
+export { INGRESSO_SERVIZIO_GESTITO, type ServizioGestito };
 
 /**
- * I servizi Istanta e Correggo dell'hub, con i tipi di utente che li vedono. L'inizializzazione li crea
- * a ogni deploy se mancano (anche in un hub gia' configurato), uno per tipo di utente; l'indirizzo lo
- * ricava Fidelity dalla configurazione (server/core/services/serviziGestiti.ts) e non si modifica ne'
- * si elimina dalla gestione dell'hub.
+ * I servizi Istanta e Correggo dell'hub, con i tipi di utente che li vedono. L'inizializzazione crea un
+ * servizio, uno per tipo di utente, solo se l'hub non ha ancora nessuna variante con il suo codice
+ * (anche in un hub gia' configurato); poi i destinatari li decide il Superadmin. L'indirizzo lo ricava
+ * Fidelity dalla configurazione (server/core/services/serviziGestiti.ts), finche' il Superadmin non ne
+ * sceglie uno suo dalla gestione dell'hub; il servizio non si elimina per intero.
  */
 export const SERVIZI_GESTITI: readonly {
   codice: ServizioGestito;

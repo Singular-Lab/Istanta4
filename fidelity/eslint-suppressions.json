@@ -1481,7 +1481,7 @@
   },
   "server/core/services/HubServiceService.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 8
+      "count": 7
     }
   },
   "server/core/services/ImpostazioniService.ts": {

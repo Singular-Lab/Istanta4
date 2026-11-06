@@ -15,7 +15,10 @@ vi.mock('../../middleware/permissionGuard', () => ({
 
 import { HubController } from '../HubController';
 
-/** Istanta e Correggo li gestisce Fidelity: dalla gestione dell'hub si disattivano, non si eliminano. */
+/**
+ * Istanta e Correggo li gestisce Fidelity: dalla gestione dell'hub se ne tolgono i destinatari, ma non si
+ * eliminano per intero (si disattivano).
+ */
 function createApp() {
   const app = express();
   app.use(express.json());
@@ -25,7 +28,7 @@ function createApp() {
   });
 
   const hubServiceService = {
-    isServizioGestito: vi.fn().mockImplementation(async (id: string) => id === 'gestito'),
+    isUltimaVarianteGestita: vi.fn().mockImplementation(async (id: string) => id === 'ultima-gestita'),
     isCodiceGestito: vi.fn().mockImplementation(async (codice: string) => codice === 'correggo'),
     deleteService: vi.fn().mockResolvedValue(true),
     deleteServiceByCode: vi.fn().mockResolvedValue(2),
@@ -37,14 +40,23 @@ function createApp() {
 }
 
 describe('HubController: eliminazione dei servizi gestiti', () => {
-  it('rifiuta con 409 l eliminazione di una variante gestita', async () => {
+  it('rifiuta con 409 l eliminazione dell ultima variante di un servizio gestito', async () => {
     const { app, hubServiceService } = createApp();
 
-    const res = await request(app).delete('/api/hub-services/gestito');
+    const res = await request(app).delete('/api/hub-services/ultima-gestita');
 
     expect(res.status).toBe(409);
-    expect(res.body.message).toContain('disattivalo');
+    expect(res.body.message).toContain('disattivala');
     expect(hubServiceService.deleteService).not.toHaveBeenCalled();
+  });
+
+  it('elimina una variante di un servizio gestito che ne ha altre: il Superadmin toglie un destinatario', async () => {
+    const { app, hubServiceService } = createApp();
+
+    const res = await request(app).delete('/api/hub-services/gestita-con-altre');
+
+    expect(res.status).toBe(200);
+    expect(hubServiceService.deleteService).toHaveBeenCalledWith('gestita-con-altre');
   });
 
   it('rifiuta con 409 l eliminazione del gruppo di un servizio gestito', async () => {

@@ -154,6 +154,7 @@ export function getInitialServiceFormValues(service?: Partial<HubServiceDTO>): S
     url: service?.url ?? "",
     redirect_page: service?.redirect_page ?? readHubServiceRedirectPage(service?.meta, service?.url) ?? "",
     tipo_url: service?.tipo_url ?? "internal",
+    indirizzo_manuale: service?.indirizzo_manuale ?? false,
     ordine: service?.ordine ?? 0,
     attivo: service?.attivo ?? true,
     in_manutenzione: service?.in_manutenzione ?? false,

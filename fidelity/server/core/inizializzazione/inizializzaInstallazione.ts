@@ -207,11 +207,10 @@ export async function inizializzaInstallazione(opzioni: OpzioniInizializzazione)
   await passo('servizi gestiti istanta e correggo', async () => {
     const creati: string[] = [];
     for (const servizio of SERVIZI_GESTITI) {
+      // Una volta sola: se l'hub ha gia' il servizio, i suoi destinatari li decide il Superadmin e una
+      // variante tolta non torna al deploy successivo.
+      if (await HubService.findOne({ where: { codice: servizio.codice } })) continue;
       for (const tipoUtente of servizio.tipiUtente) {
-        const esistente = await HubService.findOne({
-          where: { codice: servizio.codice, tipo_utente: tipoUtente, ruolo_gdo: null },
-        });
-        if (esistente) continue;
         await HubService.create({
           codice: servizio.codice,
           nome: servizio.nome,
@@ -227,7 +226,7 @@ export async function inizializzaInstallazione(opzioni: OpzioniInizializzazione)
           ordine: servizio.ordine,
           tipo_utente: tipoUtente,
           ruolo_gdo: null,
-          meta: { gestito: servizio.codice },
+          meta: { gestito: servizio.codice, indirizzo_manuale: false },
         } as any);
         creati.push(`${servizio.codice}/${tipoUtente}`);
       }

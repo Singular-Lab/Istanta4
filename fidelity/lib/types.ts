@@ -175,6 +175,10 @@ export interface HubServiceDTO {
   gestito?: 'istanta' | 'correggo';
   /** Servizio gestito senza indirizzo pubblico configurato: non compare agli utenti. */
   url_non_configurato?: boolean;
+  /** Servizio gestito con l'indirizzo scelto dal Superadmin al posto di quello calcolato. */
+  indirizzo_manuale?: boolean;
+  /** Servizio gestito: l'indirizzo che Fidelity ricava dalla configurazione, null se non configurato. */
+  url_calcolato?: string | null;
   redirect_page?: string;
   documents: HubServiceDocumentAsset[];
   videos: HubServiceVideoAsset[];
@@ -216,6 +220,8 @@ export interface BulkUpdateHubServicePatch {
   attivo?: boolean;
   in_manutenzione?: boolean;
   in_evidenza?: boolean;
+  /** Solo per i servizi gestiti: true per l'indirizzo scelto dal Superadmin, false per quello calcolato. */
+  indirizzo_manuale?: boolean;
 }
 
 // ===========================

@@ -197,15 +197,19 @@ describe('inizializzazione ripetuta e installazioni gia in uso', () => {
     expect(stato.menu).toEqual([{ tipo_utente: TIPO_UTENTI.SUPERADMIN, ruolo_gdo: null, titolo: 'Personalizzata' }]);
   });
 
-  it('con un hub gia configurato aggiunge solo i servizi gestiti mancanti', async () => {
+  it('con un hub gia configurato crea solo i servizi gestiti assenti e non ricrea i destinatari tolti', async () => {
     stato.hub.push({ codice: 'mio_servizio', tipo_utente: TIPO_UTENTI.AGENZIA, ruolo_gdo: null });
+    // Il Superadmin ha tolto a Correggo tutti i destinatari tranne il tipo GDO.
     stato.hub.push({ codice: 'correggo', tipo_utente: TIPO_UTENTI.GDO, ruolo_gdo: null, meta: { gestito: 'correggo' } });
 
-    await inizializzaInstallazione(OPZIONI);
+    const esiti = await inizializzaInstallazione(OPZIONI);
 
     expect(stato.hub.some(s => s.codice === 'fidelity_promotion')).toBe(false);
-    const attesi = SERVIZI_GESTITI.reduce((n, s) => n + s.tipiUtente.length, 0);
-    expect(stato.hub.filter(s => s.meta?.gestito)).toHaveLength(attesi);
+    expect(stato.hub.filter(s => s.codice === 'correggo').map(s => s.tipo_utente)).toEqual([TIPO_UTENTI.GDO]);
+    const istanta = SERVIZI_GESTITI.find(s => s.codice === 'istanta')!;
+    expect(stato.hub.filter(s => s.codice === 'istanta').map(s => s.tipo_utente).sort())
+      .toEqual([...istanta.tipiUtente].sort());
+    expect(esiti.find(e => e.passo === 'servizi gestiti istanta e correggo')?.dettaglio).not.toContain('correggo/');
   });
 });
 

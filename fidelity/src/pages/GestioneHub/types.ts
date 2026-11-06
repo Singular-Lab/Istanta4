@@ -45,6 +45,8 @@ export interface ServiceFormValues {
   url: string;
   redirect_page: string;
   tipo_url: HubServiceDTO["tipo_url"];
+  /** Solo per i servizi gestiti (Istanta, Correggo): indirizzo scelto dal Superadmin invece di quello calcolato. */
+  indirizzo_manuale: boolean;
   ordine: number;
   attivo: boolean;
   in_manutenzione: boolean;

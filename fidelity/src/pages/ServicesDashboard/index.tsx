@@ -1,4 +1,5 @@
 import IstantaLogo from "@/assets/images/logo_ext.png";
+import Alert from "@/components/Base/Alert";
 import Badge from "@/components/Base/Badge";
 import Lucide from "@/components/Base/Lucide";
 import Skeleton from "@/components/Base/Skeleton";
@@ -6,10 +7,6 @@ import EmptyState from "@/components/EmptyState";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  isHubServiceAbsoluteUrl,
-  normalizeHubServiceRedirectPage,
-} from "../../../lib/hubServiceRedirect";
 import { ServerCall } from "../../../lib/server_call";
 import type { HubNewsDTO, HubServiceDTO } from "../../../lib/types";
 import FeaturedServiceCard from "./components/FeaturedServiceCard";
@@ -19,6 +16,7 @@ import ServiceCard from "./components/ServiceCard";
 import ServiceCardSkeleton from "./components/ServiceCardSkeleton";
 import ServiceDetailsModal from "./components/ServiceDetailsModal";
 import UserWelcome from "./components/UserWelcome";
+import { indirizzoServizioFico } from "./aperturaFico";
 
 interface HubUserInfo {
   id: string;
@@ -32,6 +30,8 @@ const ServicesDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [openingServiceId, setOpeningServiceId] = useState<string | null>(null);
   const [selectedService, setSelectedService] = useState<HubServiceDTO | null>(null);
+  /** Servizio Esterno FICO che non si e' aperto: il motivo resta sopra i servizi finche' non lo si chiude. */
+  const [erroreApertura, setErroreApertura] = useState<{ servizio: string; messaggio: string } | null>(null);
   const loadingResetTimerRef = useRef<number | null>(null);
   // Fetch user info
   const { data: userInfo, isLoading: loadingUser, isError: userError } = useQuery({
@@ -106,24 +106,14 @@ const ServicesDashboard: React.FC = () => {
     let shouldResetInFinally = true;
 
     if (service.tipo_url === 'external_fico') {
+      setErroreApertura(null);
       try {
-        const urlServer = ServerCall.getUrl();
-        const contextEndpoint = new URL(`${urlServer}/hub-services/fico-context`);
-        const route = normalizeHubServiceRedirectPage(service.redirect_page);
-
-        if (route) {
-          contextEndpoint.searchParams.set('route', route);
+        const esito = await indirizzoServizioFico(service, ServerCall.getUrl());
+        if ('url' in esito) {
+          window.open(esito.url, '_blank');
+        } else {
+          setErroreApertura({ servizio: service.nome, messaggio: esito.errore });
         }
-
-        const res = await fetch(contextEndpoint.toString(), { credentials: 'include' });
-        const { context, base_url } = await res.json() as { context: string; base_url: string | null };
-        const targetUrl = new URL(
-          isHubServiceAbsoluteUrl(service.url) ? service.url : (base_url ?? service.url)
-        );
-        targetUrl.searchParams.set('context', context);
-        window.open(targetUrl.toString(), '_blank');
-      } catch {
-        window.open(service.url, '_blank');
       } finally {
         if (shouldResetInFinally) {
           scheduleLoadingReset(service.id, 250);
@@ -226,6 +216,19 @@ const ServicesDashboard: React.FC = () => {
             ruoloGDO={userInfo.ruolo_gdo_key}
           />
         ) : null}
+
+        {erroreApertura && (
+          <Alert
+            variant="soft-danger"
+            icona="CircleAlert"
+            titolo={`${erroreApertura.servizio} non si è aperto`}
+            onChiudi={() => setErroreApertura(null)}
+            className="mt-6"
+            role="alert"
+          >
+            {erroreApertura.messaggio}
+          </Alert>
+        )}
 
         {/* ═══ Sezione In Evidenza ═══ */}
         {!loadingServices && featuredServices.length > 0 && (

@@ -200,6 +200,8 @@ const ServicesTab = () => {
         documents: values.documents,
         videos: values.videos,
         tipo_url: values.tipo_url,
+        // Il server lo usa solo per i servizi gestiti (Istanta, Correggo) e lo scarta per gli altri.
+        indirizzo_manuale: values.indirizzo_manuale,
         ordine: values.ordine,
         attivo: values.attivo,
         in_manutenzione: values.in_manutenzione,
@@ -379,6 +381,8 @@ const ServicesTab = () => {
         documents: values.documents,
         videos: values.videos,
         tipo_url: values.tipo_url,
+        // Il server lo usa solo per i servizi gestiti (Istanta, Correggo) e lo scarta per gli altri.
+        indirizzo_manuale: values.indirizzo_manuale,
         ordine: values.ordine,
         attivo: values.attivo,
         in_manutenzione: values.in_manutenzione,
@@ -561,6 +565,7 @@ const ServicesTab = () => {
           const activeCount = group.variants.filter((v) => v.attivo).length;
           const maintenanceCount = group.variants.filter((v) => v.in_manutenzione).length;
           const gestito = group.variants.some((v) => v.gestito);
+          const indirizzoManuale = group.variants.some((v) => v.indirizzo_manuale);
 
           return (
             <div
@@ -603,6 +608,9 @@ const ServicesTab = () => {
                         {gestito && (
                           <StatusBadge tono="info" icon="ShieldCheck" etichetta="Gestito da Fidelity" />
                         )}
+                        {indirizzoManuale && (
+                          <StatusBadge tono="neutral" icon="PencilLine" etichetta="Indirizzo manuale" />
+                        )}
                         {group.variants.some((v) => v.url_non_configurato) && (
                           <StatusBadge tono="warning" icon="TriangleAlert" etichetta="Indirizzo non configurato: non visibile agli utenti" />
                         )}
@@ -627,29 +635,29 @@ const ServicesTab = () => {
                       <Lucide icon="PencilLine" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
                       Modifica
                     </Button>
-                    {/* Istanta e Correggo li gestisce Fidelity: varianti fisse, si disattivano invece di eliminarli */}
-                    {!gestito && (
-                      <Menu className="inline-block text-left">
-                        <Menu.Button
-                          as={Button}
-                          variant="outline-secondary"
-                          size="sm"
-                          aria-label={`Altre azioni per ${group.nome}`}
-                        >
-                          <Lucide icon="EllipsisVertical" aria-hidden="true" className="h-3.5 w-3.5" />
-                        </Menu.Button>
-                        <Menu.Items className="w-52">
-                          <Menu.Item onClick={() => openAddVariantDialog(group.codice)}>
-                            <Lucide icon="Plus" aria-hidden="true" className="mr-2 h-4 w-4" />
-                            Aggiungi variante
-                          </Menu.Item>
+                    <Menu className="inline-block text-left">
+                      <Menu.Button
+                        as={Button}
+                        variant="outline-secondary"
+                        size="sm"
+                        aria-label={`Altre azioni per ${group.nome}`}
+                      >
+                        <Lucide icon="EllipsisVertical" aria-hidden="true" className="h-3.5 w-3.5" />
+                      </Menu.Button>
+                      <Menu.Items className="w-52">
+                        <Menu.Item onClick={() => openAddVariantDialog(group.codice)}>
+                          <Lucide icon="Plus" aria-hidden="true" className="mr-2 h-4 w-4" />
+                          Aggiungi variante
+                        </Menu.Item>
+                        {/* Istanta e Correggo li gestisce Fidelity: si disattivano, non si eliminano per intero */}
+                        {!gestito && (
                           <Menu.Item className="text-danger" onClick={() => requestGroupDeletion(group.codice, group.nome)}>
                             <Lucide icon="Trash2" aria-hidden="true" className="mr-2 h-4 w-4" />
                             Elimina servizio
                           </Menu.Item>
-                        </Menu.Items>
-                      </Menu>
-                    )}
+                        )}
+                      </Menu.Items>
+                    </Menu>
                   </div>
                 </div>
               </div>
@@ -676,7 +684,8 @@ const ServicesTab = () => {
                               <span>ord. {variant.ordine}</span>
                             </div>
                           </div>
-                          {!variant.gestito && (
+                          {/* Di un servizio gestito si tolgono i destinatari, ma ne resta almeno uno */}
+                          {(!variant.gestito || group.variants.length > 1) && (
                             <Button
                               variant="outline-danger"
                               size="sm"
