@@ -23,8 +23,9 @@ describe("collegamenti dal dettaglio della promo a Volantini e POP", () => {
   });
 
   it.each([
-    ["IN_LAVORAZIONE", "in-corso"],
-    ["PIANIFICATA", "in-corso"],
+    ["IN_LAVORAZIONE", "prossimi"],
+    ["PIANIFICATA", "prossimi"],
+    ["IN_RITARDO", "prossimi"],
     ["VALIDA", "attivi"],
     ["VALIDA_CON_ERRORI", "attivi"],
     ["ARCHIVIATA", "storico"],
@@ -34,6 +35,12 @@ describe("collegamenti dal dettaglio della promo a Volantini e POP", () => {
     expect(screen.getByRole("heading", { name: "Materiali della promozione" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Volantini" })).toHaveAttribute("href", `/volantini/${periodo}?promo=p1`);
     expect(screen.getByRole("link", { name: "POP" })).toHaveAttribute("href", `/pop/${periodo}?promo=p1`);
+  });
+
+  it("dice che le viste mostrano solo i materiali pubblicati, nel periodo della promo", () => {
+    apri("IN_LAVORAZIONE");
+
+    expect(screen.getByText("Volantini e file POP pubblicati della promozione, nelle viste Prossimi.")).toBeInTheDocument();
   });
 
   it.each(["ELIMINATA", "STATO_INVENTATO", null, undefined])("una promo senza periodo (%s) non ha i collegamenti", (stato) => {

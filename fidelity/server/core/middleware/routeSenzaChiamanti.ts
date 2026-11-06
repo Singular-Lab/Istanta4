@@ -139,6 +139,23 @@ export const ROUTE_SENZA_CHIAMANTI: readonly RouteSenzaChiamanti[] = [
     motivo: 'Contenuti digitali legge GET /api/consultazione/contenuti-digitali e /contenuti-digitali/opzioni',
     marcataIl: '2026-11-05',
   },
+  // ─── Viste Volantini e POP passate alle API di consultazione (L6): solo materiali pubblicati ───
+  ...([
+    ['GET', '/api/materiali/volantini', 'GET /api/consultazione/volantini'],
+    ['GET', '/api/materiali/volantini/promozioni', 'GET /api/consultazione/volantini/promozioni'],
+    ['GET', '/api/materiali/pop/promozioni', 'GET /api/consultazione/pop/promozioni'],
+    ['GET', '/api/materiali/pop/promozioni/:idPromo/formati', 'GET /api/consultazione/pop/promozioni/:idPromo'],
+    ['GET', '/api/materiali/pop/promozioni/:idPromo/file', 'GET /api/consultazione/pop/promozioni/:idPromo/file'],
+    ['GET', '/api/materiali/pop/promozioni/:idPromo/file/opzioni', 'GET /api/consultazione/pop/promozioni/:idPromo/file/opzioni'],
+    ['POST', '/api/materiali/pop/promozioni/:idPromo/zip/verifica', 'POST /api/consultazione/pop/promozioni/:idPromo/zip/verifica'],
+    ['GET', '/api/materiali/pop/promozioni/:idPromo/zip', 'GET /api/consultazione/pop/promozioni/:idPromo/zip'],
+    ['POST', '/api/materiali/pop/promozioni/:idPromo/zip', 'POST /api/consultazione/pop/promozioni/:idPromo/zip'],
+  ] as const).map(([metodo, percorso, sostituta]): RouteSenzaChiamanti => ({
+    metodo,
+    percorso,
+    motivo: `Le viste Volantini e POP leggono ${sostituta}`,
+    marcataIl: '2026-11-06',
+  })),
 ];
 
 /** Da quando la route si osserva: la sua data, o quella del primo inventario. */

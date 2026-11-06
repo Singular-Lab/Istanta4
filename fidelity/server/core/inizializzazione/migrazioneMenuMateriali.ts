@@ -120,8 +120,8 @@ export const nomeMenu = (voce: RigaMenu): string =>
 /**
  * Converte nei menu salvati, Superadmin compreso, le voci delle pagine Materiali nelle viste
  * Volantini, aggiunge le voci POP e divide la sezione in 'MATERIALI VOLANTINO' e 'MATERIALI POP',
- * anche nei menu già convertiti con l'intestazione unica 'VOLANTINI E POP' (regole in
- * lib/accessi/menuMateriali.ts). Tutto in una transazione: se una scrittura fallisce nessun menu
+ * anche nei menu già convertiti con l'intestazione unica 'VOLANTINI E POP', e porta le voci delle
+ * viste "in corso" alle viste Prossimi (regole in lib/accessi/menuMateriali.ts). Tutto in una transazione: se una scrittura fallisce nessun menu
  * cambia. Si può rieseguire: un menu già convertito non cambia, e la versione dei permessi sale
  * solo se qualcosa è cambiato.
  */

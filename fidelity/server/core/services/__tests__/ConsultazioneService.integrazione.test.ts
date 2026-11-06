@@ -86,6 +86,36 @@ describeConDatabase('ConsultazioneService', () => {
     expect(await nomi('storico')).toEqual(['Archiviata']);
   });
 
+  it('prossimi: solo i kit già pubblicati delle promo non ancora valide; i kit in lavorazione non compaiono', async () => {
+    const pubblicato = await creaKitRuntime({ statoPromo: 'IN_LAVORAZIONE', nomePromo: 'Natale', titolo: 'SS TO VOL' });
+    const ambito = della(pubblicato);
+    await creaKitRuntime({ promo: { idGdo: pubblicato.idGdo, idPromo: pubblicato.idPromo }, titolo: 'IPER TO VOL', statoLavorazione: 'IN_LAVORAZIONE' });
+    await creaKitRuntime({ idGdo: pubblicato.idGdo, statoPromo: 'PIANIFICATA', nomePromo: 'Solo in lavorazione', statoLavorazione: 'IN_REVISIONE' });
+    const pop = await creaKitRuntime({
+      idGdo: pubblicato.idGdo, statoPromo: 'IN_ATTESA_DI_VALIDITA', nomePromo: 'Pasqua', tipoLavorazione: 2, nomeFormato: 'Cartello A5', titolo: 'A5 TO',
+    });
+    const inRevisione = await creaKitRuntime({
+      promo: { idGdo: pop.idGdo, idPromo: pop.idPromo }, stessaCombinazioneDi: pop, titolo: 'A5 in revisione', statoLavorazione: 'IN_REVISIONE',
+    });
+    await creaFile({ nome: 'cartello.pdf', idRuntime: pop.idRuntime, idOlimpoCloud: 'o1' });
+    await creaFile({ nome: 'bozza.pdf', idRuntime: inRevisione.idRuntime, idOlimpoCloud: 'o2' });
+
+    const volantini = await service.getPromozioniVolantini({ periodo: 'prossimi' }, ambito);
+    expect(volantini.promozioni.map(p => [p.promo.nome, p.numeroKit, p.kit.map(kit => kit.titolo)])).toEqual([['Natale', 1, ['SS TO VOL']]]);
+
+    const elencoPop = await service.getPromozioniPop('prossimi', ambito);
+    expect(elencoPop.promozioni.map(p => [p.nome, p.numeroFile, p.numeroFormati])).toEqual([['Pasqua', 1, 1]]);
+    const riepilogo = await service.getRiepilogoPop(pop.idPromo, 'prossimi', ambito);
+    expect(riepilogo.formati.map(formato => [formato.nome, formato.numeroFile, formato.kit.map(kit => kit.titolo)])).toEqual([
+      ['Cartello A5', 1, ['A5 TO']],
+    ]);
+    const file = await service.getFilePop(pop.idPromo, { periodo: 'prossimi', idFormato: pop.idFormato }, ambito);
+    expect(file.file.map(voce => voce.nome)).toEqual(['cartello.pdf']);
+    senzaDatiDiLavorazione([volantini, elencoPop, riepilogo, file]);
+    // La promo non ancora valida non sta fra le attive
+    await expect(service.getRiepilogoPop(pop.idPromo, 'attivi', ambito)).rejects.toBeInstanceOf(NotFoundError);
+  });
+
   it('ambito: tutte le GDO per chi opera per più GDO, nessuna per chi non ne ha', async () => {
     const a = await creaKitRuntime({ nomePromo: 'A' });
     await creaKitRuntime({ nomePromo: 'B' });

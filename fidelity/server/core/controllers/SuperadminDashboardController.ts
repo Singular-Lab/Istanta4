@@ -5,10 +5,12 @@ import { sequelize } from '../db/SequelizeConnector';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { permissionGuard } from '../middleware/permissionGuard';
 import { PERMESSI } from '../../../lib/accessi/catalogo';
-import { percorsoVolantini } from '../../../lib/materiali/periodi';
 import { getConnectionMonitor } from '../monitoring';
 import { AuditLogService, AuditSeverity } from '../services/AuditLogService';
 import { getIO, isIOInitialized } from '../../ws-server';
+
+/** Lo stato delle lavorazioni (kit in revisione, con errori, non avviati) si segue da qui, non dalle viste Volantini. */
+const PERCORSO_AVANZAMENTO_PRODUZIONE = '/avanzamento-produzione';
 
 type DashboardAlertSeverity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
 type DashboardAlertStatus = 'NUOVO' | 'ACK' | 'RISOLTO';
@@ -224,7 +226,7 @@ export class SuperadminDashboardController extends BaseController {
                 threshold: 1500,
                 actions: [
                     { label: 'Apri stato sistema', href: '/superadmin/dashboard', variant: 'danger' },
-                    { label: 'Controlla volantini in corso', href: percorsoVolantini('in-corso'), variant: 'secondary' },
+                    { label: 'Controlla avanzamento produzione', href: PERCORSO_AVANZAMENTO_PRODUZIONE, variant: 'secondary' },
                 ],
             });
         } else if (responseTimeMs >= 800) {
@@ -314,7 +316,7 @@ export class SuperadminDashboardController extends BaseController {
                 threshold: 3,
                 actions: [
                     { label: 'Apri ultimi errori', href: '/superadmin/dashboard', variant: 'primary' },
-                    { label: 'Vai ai volantini in corso', href: percorsoVolantini('in-corso'), variant: 'secondary' },
+                    { label: 'Vai all\'avanzamento produzione', href: PERCORSO_AVANZAMENTO_PRODUZIONE, variant: 'secondary' },
                 ],
             });
         }

@@ -1,5 +1,5 @@
 import { TIPO_MENU_ITEM } from '../enums';
-import { PERIODI_MATERIALI, PeriodoMateriali, percorsoPop, percorsoVolantini } from '../materiali/periodi';
+import { PERIODI_CONSULTAZIONE, type PeriodoConsultazione, percorsoPop, percorsoVolantini } from '../consultazione/periodi';
 import { paginaPer } from './pagine';
 
 /**
@@ -15,14 +15,17 @@ import { paginaPer } from './pagine';
  *   subito prima della prima voce POP che la segue (stesso padre, prima dell'intestazione
  *   successiva) arriva l'intestazione 'MATERIALI POP'. Lo stesso vale per i menu già convertiti
  *   con l'intestazione unica 'VOLANTINI E POP'. Un menu senza intestazioni resta senza, e
- *   un'intestazione rinominata dall'amministratore resta com'è.
+ *   un'intestazione rinominata dall'amministratore resta com'è;
+ * - il periodo "in corso" è diventato "prossimi": le voci delle viste Volantini e POP in corso
+ *   puntano alle viste Prossimi, con il permesso del catalogo; il titolo cambia solo se è ancora
+ *   quello predefinito, l'icona resta.
  *
  * La conversione si può ripetere: su un menu già convertito non cambia nulla.
  */
 
 /** Le pagine Materiali sostituite: periodo e titolo con cui le seminava il menu predefinito. */
-const PAGINE_MATERIALI: Readonly<Record<string, { periodo: PeriodoMateriali; titoloPredefinito: string }>> = {
-  '/materiali-in-corso': { periodo: 'in-corso', titoloPredefinito: 'Materiali in corso' },
+const PAGINE_MATERIALI: Readonly<Record<string, { periodo: PeriodoConsultazione; titoloPredefinito: string }>> = {
+  '/materiali-in-corso': { periodo: 'prossimi', titoloPredefinito: 'Materiali in corso' },
   '/materiali-attivi': { periodo: 'attivi', titoloPredefinito: 'Materiali attivi' },
   '/storico-materiali': { periodo: 'storico', titoloPredefinito: 'Storico materiali' },
 };
@@ -32,17 +35,32 @@ export const PERCORSI_MATERIALI: Readonly<Record<string, string>> = Object.fromE
   Object.entries(PAGINE_MATERIALI).map(([vecchio, { periodo }]) => [vecchio, percorsoVolantini(periodo)])
 );
 
-export const TITOLO_VOLANTINI: Readonly<Record<PeriodoMateriali, string>> = {
-  'in-corso': 'Volantini in corso',
+export const TITOLO_VOLANTINI: Readonly<Record<PeriodoConsultazione, string>> = {
   attivi: 'Volantini attivi',
+  prossimi: 'Volantini prossimi',
   storico: 'Volantini storico',
 };
 
-export const TITOLO_POP: Readonly<Record<PeriodoMateriali, string>> = {
-  'in-corso': 'POP in corso',
+export const TITOLO_POP: Readonly<Record<PeriodoConsultazione, string>> = {
   attivi: 'POP attivi',
+  prossimi: 'POP prossimi',
   storico: 'POP storico',
 };
+
+/** Le viste del periodo "in corso", sostituite da Prossimi: percorso e titolo nuovi, titolo predefinito di prima. */
+const VISTE_IN_CORSO: Readonly<Record<string, { percorso: string; titolo: string; titoloPredefinito: string }>> = {
+  '/volantini/in-corso': {
+    percorso: percorsoVolantini('prossimi'),
+    titolo: TITOLO_VOLANTINI.prossimi,
+    titoloPredefinito: 'Volantini in corso',
+  },
+  '/pop/in-corso': { percorso: percorsoPop('prossimi'), titolo: TITOLO_POP.prossimi, titoloPredefinito: 'POP in corso' },
+};
+
+/** Vecchio percorso di una vista "in corso" → la vista Prossimi. */
+export const PERCORSI_IN_CORSO: Readonly<Record<string, string>> = Object.fromEntries(
+  Object.entries(VISTE_IN_CORSO).map(([vecchio, { percorso }]) => [vecchio, percorso])
+);
 
 export const SEPARATORE_MATERIALI = 'MATERIALI';
 /** L'intestazione unica delle prime conversioni: ora si divide in due sezioni, come 'MATERIALI'. */
@@ -53,10 +71,10 @@ export const SEPARATORE_POP = 'MATERIALI POP';
 /** Intestazioni che la conversione rinomina in SEPARATORE_VOLANTINI e divide. */
 const INTESTAZIONI_DA_DIVIDERE: readonly string[] = [SEPARATORE_MATERIALI, SEPARATORE_VOLANTINI_E_POP];
 
-const PERCORSI_POP: ReadonlySet<string> = new Set(PERIODI_MATERIALI.map(periodo => percorsoPop(periodo)));
+const PERCORSI_POP: ReadonlySet<string> = new Set(PERIODI_CONSULTAZIONE.map(periodo => percorsoPop(periodo)));
 
 /** Le voci che la conversione può aggiungere: la voce POP di un periodo o l'intestazione POP. */
-export type VoceNuovaMenu = PeriodoMateriali | 'intestazione-pop';
+export type VoceNuovaMenu = PeriodoConsultazione | 'intestazione-pop';
 
 /**
  * I campi di una voce di menu che la conversione legge e scrive: li hanno sia le righe di
@@ -121,7 +139,7 @@ export const ordineNelMenu = <V extends VoceMenuConvertibile>(voci: readonly V[]
  */
 const aggiungiVociPop = <V extends VoceMenuConvertibile>(
   voci: V[],
-  convertite: Array<{ voce: V; periodo: PeriodoMateriali }>,
+  convertite: Array<{ voce: V; periodo: PeriodoConsultazione }>,
   cambiate: Set<V>,
   nuovoId: (voce: VoceNuovaMenu) => string
 ): V[] => {
@@ -132,10 +150,10 @@ const aggiungiVociPop = <V extends VoceMenuConvertibile>(
   convertite.sort((a, b) => ordine.indexOf(a.voce) - ordine.indexOf(b.voce));
   const ultima = convertite[convertite.length - 1].voce;
   const percorsiPresenti = new Set(voci.map(voce => voce.pathname));
-  const daAggiungere = PERIODI_MATERIALI
+  const daAggiungere = PERIODI_CONSULTAZIONE
     .filter(periodo => !percorsiPresenti.has(percorsoPop(periodo)))
     .map(periodo => convertite.find(c => c.periodo === periodo))
-    .filter((c): c is { voce: V; periodo: PeriodoMateriali } => c !== undefined)
+    .filter((c): c is { voce: V; periodo: PeriodoConsultazione } => c !== undefined)
     .sort((a, b) => ordine.indexOf(a.voce) - ordine.indexOf(b.voce));
   if (daAggiungere.length === 0) return [];
 
@@ -220,7 +238,7 @@ export const convertiMenuMateriali = <V extends VoceMenuConvertibile>(
 ): EsitoConversioneMenu<V> => {
   const voci = vociMenu.map(voce => ({ ...voce }));
   const cambiate = new Set<V>();
-  const convertite: Array<{ voce: V; periodo: PeriodoMateriali }> = [];
+  const convertite: Array<{ voce: V; periodo: PeriodoConsultazione }> = [];
   const intestazioni: V[] = [];
 
   for (const voce of voci) {
@@ -228,6 +246,15 @@ export const convertiMenuMateriali = <V extends VoceMenuConvertibile>(
       voce.titolo = SEPARATORE_VOLANTINI;
       cambiate.add(voce);
       intestazioni.push(voce);
+      continue;
+    }
+    const inCorso = voce.pathname ? VISTE_IN_CORSO[voce.pathname] : undefined;
+    if (inCorso) {
+      voce.pathname = inCorso.percorso;
+      voce.codice_permesso = permessoDi(voce.pathname);
+      // Un titolo scelto dall'amministratore resta com'è.
+      if (stessoTesto(voce.titolo, inCorso.titoloPredefinito)) voce.titolo = inCorso.titolo;
+      cambiate.add(voce);
       continue;
     }
     const materiali = voce.pathname ? PAGINE_MATERIALI[voce.pathname] : undefined;

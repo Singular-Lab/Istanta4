@@ -1,26 +1,30 @@
 import { useNotification } from "@/context/NotificationContext";
 import { formatNumero } from "@/utils/format";
 import { parametriMateriali } from "@/utils/materiali";
+import { MOTIVO_SENZA_PERMESSO_SCARICA } from "@/utils/scaricaFileConsultazione";
 import { useState } from "react";
-import type { PeriodoMateriali } from "../../../lib/materiali/periodi";
-import type { FiltriFilePop, RichiestaZipPop, VerificaZipPop } from "../../../lib/materiali/tipi";
+import { PERCORSO_CONSULTAZIONE, type PeriodoConsultazione } from "../../../lib/consultazione/periodi";
+import type {
+  FiltriZipPopConsultazione,
+  RichiestaZipPopConsultazione,
+  VerificaZipPopConsultazione,
+} from "../../../lib/consultazione/tipi";
 import { ServerCall } from "../../../lib/server_call";
 
-/** Motivo per cui i comandi di download sono disattivati. */
-export const MOTIVO_SENZA_DOWNLOAD = "Manca il permesso di scaricare volantini e POP";
+/** Motivo per cui i comandi di download sono disattivati: manca "materiali.scarica". */
+export const MOTIVO_SENZA_DOWNLOAD = MOTIVO_SENZA_PERMESSO_SCARICA;
 /** Motivo per cui lo ZIP di un formato senza file è disattivato. */
 export const MOTIVO_SENZA_FILE = "Il formato non ha file da scaricare";
 
-export type FiltriZipPop = NonNullable<RichiestaZipPop["filtri"]>;
+const percorsoZip = (idPromo: string): string =>
+  `${PERCORSO_CONSULTAZIONE}/pop/promozioni/${encodeURIComponent(idPromo)}/zip`;
 
-const percorsoZip = (idPromo: string): string => `/materiali/pop/promozioni/${encodeURIComponent(idPromo)}/zip`;
-
-/** ZIP dei file di un formato che corrispondono ai filtri (nessun filtro = tutto il formato). */
+/** ZIP dei file pubblicati di un formato che corrispondono ai filtri (nessun filtro = tutto il formato). */
 export const urlZipFormato = (
   idPromo: string,
-  periodo: PeriodoMateriali,
+  periodo: PeriodoConsultazione,
   idFormato: string,
-  filtri: FiltriZipPop = {}
+  filtri: FiltriZipPopConsultazione = {}
 ): string =>
   `${ServerCall.getUrl()}${percorsoZip(idPromo)}?${parametriMateriali({
     periodo,
@@ -29,19 +33,14 @@ export const urlZipFormato = (
   })}`;
 
 /** Filtri dei file da passare allo ZIP: solo quelli impostati. */
-export const filtriPerZip = (filtri: Omit<FiltriFilePop, "periodo" | "idFormato" | "pagina" | "dimensione">): FiltriZipPop => {
-  const usati: FiltriZipPop = {};
+export const filtriPerZip = (filtri: FiltriZipPopConsultazione): FiltriZipPopConsultazione => {
+  const usati: FiltriZipPopConsultazione = {};
   if (filtri.cerca) usati.cerca = filtri.cerca;
-  if (filtri.stato) usati.stato = filtri.stato;
   if (filtri.idArea) usati.idArea = filtri.idArea;
   if (filtri.idCanale) usati.idCanale = filtri.idCanale;
   if (filtri.reparto) usati.reparto = filtri.reparto;
   return usati;
 };
-
-/** Singolo file, con il nome originale (stesso endpoint delle altre pagine dei materiali). */
-export const urlFileSingolo = (idOlimpoCloud: string, nome: string): string =>
-  `${ServerCall.getUrl()}/downloadPDFVolantino/${encodeURIComponent(idOlimpoCloud)}?fileName=${encodeURIComponent(nome)}`;
 
 // Niente iframe nascosti: la CSP del sito (frame-src 'none') li blocca. Lo ZIP arriva come allegato
 // (Content-Disposition: attachment), quindi il browser lo scarica e la pagina resta dov'è
@@ -76,15 +75,18 @@ function inviaModulo(azione: string, campi: Readonly<Record<string, string>>) {
 }
 
 /**
- * ZIP dei file POP in due passi. Prima la verifica, una POST JSON con il token CSRF (ritentata se il
- * token è scaduto): se non c'è niente da scaricare, la sessione è scaduta o la promo non è più nel
- * periodo lancia l'errore con il motivo del server, da mostrare nella pagina, e il download non parte.
- * Poi il download vero, che il browser riceve in streaming senza tenerlo in memoria: i file
- * selezionati con un form POST (la lista degli id nel corpo, il token CSRF in `_csrf`), tutti i file
- * del formato o dei filtri in GET.
+ * ZIP dei file POP pubblicati in due passi. Prima la verifica, una POST JSON con il token CSRF
+ * (ritentata se il token è scaduto): se non c'è niente da scaricare, la sessione è scaduta o la
+ * promo non è più nel periodo lancia l'errore con il motivo del server, da mostrare nella pagina, e
+ * il download non parte. Poi il download vero, che il browser riceve in streaming senza tenerlo in
+ * memoria: i file selezionati con un form POST (la lista degli id nel corpo, il token CSRF in
+ * `_csrf`), tutti i file del formato o dei filtri in GET.
  */
-export async function scaricaZipPop(idPromo: string, richiesta: RichiestaZipPop): Promise<VerificaZipPop> {
-  const verifica = await ServerCall.post<VerificaZipPop>(`${percorsoZip(idPromo)}/verifica`, richiesta);
+export async function scaricaZipPop(
+  idPromo: string,
+  richiesta: RichiestaZipPopConsultazione
+): Promise<VerificaZipPopConsultazione> {
+  const verifica = await ServerCall.post<VerificaZipPopConsultazione>(`${percorsoZip(idPromo)}/verifica`, richiesta);
   if (richiesta.idFile && richiesta.idFile.length > 0) {
     // Il token si legge dopo la verifica, che lo ha rinnovato se era scaduto
     inviaModulo(`${ServerCall.getUrl()}${percorsoZip(idPromo)}`, {
@@ -105,7 +107,7 @@ export function useScaricaZipPop(idPromo: string) {
   const { showNotification } = useNotification();
   const [inPreparazione, setInPreparazione] = useState<string | null>(null);
 
-  const scarica = async (chiave: string, richiesta: RichiestaZipPop) => {
+  const scarica = async (chiave: string, richiesta: RichiestaZipPopConsultazione) => {
     if (inPreparazione) return;
     setInPreparazione(chiave);
     try {

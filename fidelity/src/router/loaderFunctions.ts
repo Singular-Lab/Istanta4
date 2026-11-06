@@ -21,7 +21,7 @@ import { getColor } from "@/utils/colors";
 import { richiesteVolantiniPanoramica } from "@/query/consultazione";
 import { redirect, type LoaderFunction, type LoaderFunctionArgs, type Params } from "react-router-dom";
 import { STATO_LAVORAZIONE_KIT_RUNTIME } from "../../lib/enums";
-import { percorsoVolantini, periodoDellaPromo } from "../../lib/materiali/periodi";
+import { percorsoVolantini, periodoConsultazioneDellaPromo } from "../../lib/consultazione/periodi";
 import type { AreaResponseDTO, CanaleResponseDTO, ContrattoTipografiaResponseDTO, GDOResponseDTO, OrdiniDiStampaResponseDTO, PromoResponseDTO, TracciatiResponseDTO } from "../../server/core/dto";
 
 /**
@@ -746,7 +746,7 @@ export const funzioneRedirectMaterialiPromo = async ({ params, request }: Loader
   const dettaglio = `/promozioni/${sezione}/dettagli/${idPromo}`;
   try {
     const promo = await ServerCall.get<PromoResponseDTO>(`/promo/${encodeURIComponent(idPromo)}`);
-    const periodo = periodoDellaPromo(promo?.stato);
+    const periodo = periodoConsultazioneDellaPromo(promo?.stato);
     return redirect(periodo ? percorsoVolantini(periodo, idPromo) : dettaglio);
   } catch {
     return redirect(dettaglio);

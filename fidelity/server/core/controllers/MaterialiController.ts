@@ -14,6 +14,7 @@ import type { IMaterialiService } from '../interfaces/IMaterialiService';
 import { log } from '../logger';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { permissionGuard } from '../middleware/permissionGuard';
+import { routeDeprecata } from '../middleware/routeDeprecata';
 
 /** Testo di un parametro (query o body); i parametri ripetuti e i valori vuoti non contano. */
 const testo = (valore: unknown): string | undefined =>
@@ -82,6 +83,9 @@ function richiestaZipDalCorpo(body: unknown): RichiestaZipPop {
  * Viste Volantini e POP per periodo (In corso, Attivi, Storico), in sola lettura. Contratto in
  * lib/materiali/tipi.ts. Tutto richiede "materiali.visualizza"; gli ZIP anche "materiali.scarica", il
  * permesso di consultazione per scaricare (non "file.download", che e' della produzione).
+ *
+ * Deprecate (L6, 2026-11-06): le pagine Volantini e POP leggono /api/consultazione (solo materiali
+ * pubblicati, senza dati di lavorazione). Le route sono nell'inventario delle route senza chiamanti.
  */
 export class MaterialiController extends BaseController {
   constructor(private readonly materialiService: IMaterialiService) {
@@ -89,8 +93,9 @@ export class MaterialiController extends BaseController {
   }
 
   protected setupRoutes(): void {
-    const visualizza = [authMiddleware, permissionGuard('materiali.visualizza')];
-    const scarica = [...visualizza, permissionGuard('materiali.scarica')];
+    // routeDeprecata dopo le protezioni: conta solo chi entra davvero
+    const visualizza = [authMiddleware, permissionGuard('materiali.visualizza'), routeDeprecata];
+    const scarica = [authMiddleware, permissionGuard('materiali.visualizza'), permissionGuard('materiali.scarica'), routeDeprecata];
 
     this.router.get('/volantini', ...visualizza, this.getVolantini.bind(this));
     this.router.get('/volantini/promozioni', ...visualizza, this.getPromozioniVolantini.bind(this));

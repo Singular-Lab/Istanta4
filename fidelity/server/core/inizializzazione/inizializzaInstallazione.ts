@@ -2,7 +2,7 @@ import bcrypt from 'bcrypt';
 import { aggiungiVoceAvanzamento } from '../../../lib/accessi/menuAvanzamento';
 import { convertiMenuMateriali } from '../../../lib/accessi/menuMateriali';
 import { RUOLO_UTENTE_GDO, STATO_UTENTI, TIPO_UTENTI } from '../../../lib/enums';
-import type { PeriodoMateriali } from '../../../lib/materiali/periodi';
+import type { PeriodoConsultazione } from '../../../lib/consultazione/periodi';
 import { sequelize } from '../db/SequelizeConnector';
 import { AuthProvider } from '../models/auth_provider';
 import { GDO } from '../models/gdo';
@@ -58,10 +58,11 @@ export const VISTE_DA_AGGIORNARE = [
 
 /**
  * Identificativi fissi delle voci POP del menu predefinito del Superadmin: come quelli di
- * MENU_SUPERADMIN sono dati di riferimento, uguali su tutte le installazioni.
+ * MENU_SUPERADMIN sono dati di riferimento, uguali su tutte le installazioni. La voce Prossimi
+ * tiene l'identificativo della voce "POP in corso" che ha sostituito.
  */
-export const ID_VOCI_POP_SUPERADMIN: Readonly<Record<PeriodoMateriali, string>> = {
-  'in-corso': '34d3d518-132b-455b-ab99-0ca9a1543582',
+export const ID_VOCI_POP_SUPERADMIN: Readonly<Record<PeriodoConsultazione, string>> = {
+  prossimi: '34d3d518-132b-455b-ab99-0ca9a1543582',
   attivi: 'd0a71ecc-9478-4897-9985-72e2da21c6bf',
   storico: '5451e8a5-9613-4b22-909b-16c951b7c46c',
 };

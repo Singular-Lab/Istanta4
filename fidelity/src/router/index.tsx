@@ -19,7 +19,7 @@ import { RouteErrorFallback } from "@/components/AppErrorFallback";
 import ErrorPage from "@/components/ErrorPage";
 import NotFoundPage from "@/components/NotFoundPage";
 import { PERCORSI_SPOSTATI } from "../../lib/accessi/gestioneInterna";
-import { PERIODI_MATERIALI, percorsoPop, percorsoVolantini } from "../../lib/materiali/periodi";
+import { PERIODI_CONSULTAZIONE, percorsoPop, percorsoVolantini } from "../../lib/consultazione/periodi";
 import { ID_LAYOUT_WEBPLIANT, ID_VOLANTINO_WEBPLIANT } from '../ssr/webpliant';
 
 type LoaderFunctionsModule = typeof import("./loaderFunctions");
@@ -357,7 +357,7 @@ const routes: RouteObject[] = [
         },
       },
       // Viste Volantini e POP per periodo, al posto delle pagine Materiali: il loader dice il periodo
-      ...PERIODI_MATERIALI.flatMap((periodo): RouteObject[] => [
+      ...PERIODI_CONSULTAZIONE.flatMap((periodo): RouteObject[] => [
         {
           path: `volantini/${periodo}`,
           loader: () => ({ periodo }),
@@ -376,14 +376,23 @@ const routes: RouteObject[] = [
         },
       ]),
       {
-        // "/pop" da solo (per esempio dal breadcrumb) apre il periodo in corso
+        // "/pop" da solo (per esempio dal breadcrumb) apre i POP delle promozioni valide
         path: "pop",
-        loader: () => redirect(percorsoPop("in-corso")),
+        loader: () => redirect(percorsoPop("attivi")),
+      },
+      // Il periodo "in corso" è diventato Prossimi: i vecchi indirizzi (segnalibri, link salvati) ci portano, con ?promo=
+      {
+        path: "volantini/in-corso",
+        loader: ({ request }) => redirect(`${percorsoVolantini("prossimi")}${new URL(request.url).search}`),
+      },
+      {
+        path: "pop/in-corso",
+        loader: ({ request }) => redirect(`${percorsoPop("prossimi")}${new URL(request.url).search}`),
       },
       // Vecchi indirizzi delle pagine Materiali (menu salvati, segnalibri): la vista Volantini dello stesso periodo
       {
         path: "materiali-in-corso",
-        loader: () => redirect(percorsoVolantini("in-corso")),
+        loader: () => redirect(percorsoVolantini("prossimi")),
       },
       {
         path: "materiali-attivi",

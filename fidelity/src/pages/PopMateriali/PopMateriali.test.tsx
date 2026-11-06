@@ -3,7 +3,13 @@ import "@testing-library/jest-dom/vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { FilePop, OpzioniFilePop, PaginaFilePop, PromoPop, RiepilogoPop } from "../../../lib/materiali/tipi";
+import type {
+  FilePopConsultazione,
+  OpzioniFilePopConsultazione,
+  PaginaFilePopConsultazione,
+  PromoPopConsultazione,
+  RiepilogoPopConsultazione,
+} from "../../../lib/consultazione/tipi";
 
 const finti = vi.hoisted(() => ({
   permessi: [] as string[],
@@ -17,14 +23,16 @@ const finti = vi.hoisted(() => ({
   promoRiepilogo: [] as unknown[],
   filtriFile: [] as unknown[],
   richiesteOpzioni: [] as unknown[][],
-  anteprime: [] as Array<{ totalPages: number }>,
+  anteprime: [] as Array<{ totalPages: number; imageUrl: string }>,
+  /** Download del singolo file, da GET /api/consultazione/file/:id. */
+  scaricaFile: vi.fn(),
   /** Schermo sotto sm: formati e file diventano schede. */
   stretto: false,
 }));
 
 vi.mock("@/components/SessionChecker", () => ({ default: (Componente: unknown) => Componente }));
 vi.mock("@/components/PreviewImmaginePdf", () => ({
-  PreviewImmaginePdf: (props: { totalPages: number }) => {
+  PreviewImmaginePdf: (props: { totalPages: number; imageUrl: string }) => {
     finti.anteprime.push(props);
     return null;
   },
@@ -40,93 +48,72 @@ vi.mock("../../../lib/server_call", () => ({
   },
 }));
 vi.mock("@/components/PuntiVendita/useSchermoStretto", () => ({ useSchermoStretto: () => finti.stretto }));
-vi.mock("@/query/query", () => ({
-  useFetchPromozioniPop: (periodo: unknown) => {
+vi.mock("@/query/consultazione", () => ({
+  usePromozioniPopConsultazione: (periodo: unknown) => {
     finti.periodiPromozioni.push(periodo);
     return finti.promozioni;
   },
-  useFetchRiepilogoPop: (idPromo: unknown) => {
+  useRiepilogoPopConsultazione: (idPromo: unknown) => {
     finti.promoRiepilogo.push(idPromo);
     return finti.riepilogo;
   },
-  useFetchFilePop: (_idPromo: unknown, filtri: unknown) => {
+  useFilePopConsultazione: (_idPromo: unknown, filtri: unknown) => {
     finti.filtriFile.push(filtri);
     return finti.file;
   },
-  useFetchOpzioniFilePop: (...argomenti: unknown[]) => {
+  useOpzioniFilePopConsultazione: (...argomenti: unknown[]) => {
     finti.richiesteOpzioni.push(argomenti);
     return finti.opzioni;
   },
+}));
+vi.mock("@/utils/scaricaFileConsultazione", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/utils/scaricaFileConsultazione")>()),
+  useScaricaFileConsultazione: () => ({ inCorso: null, scarica: finti.scaricaFile }),
 }));
 
 import PopMateriali from ".";
 
 const ok = <T,>(data: T) => ({ data, isError: false, error: null, isPlaceholderData: false, refetch: vi.fn() });
 
-const promozioni: PromoPop[] = [
-  {
-    id: "p1",
-    nome: "Speciale Colazione",
-    stato: "IN_LAVORAZIONE",
-    validitaDal: "2026-10-16",
-    validitaAl: "2026-10-29",
-    numeroFile: 3828,
-    numeroFormati: 2,
-  } as PromoPop,
-  {
-    id: "p2",
-    nome: "Pet Week",
-    stato: "IN_LAVORAZIONE",
-    validitaDal: "2026-10-23",
-    validitaAl: "2026-11-05",
-    numeroFile: 2410,
-    numeroFormati: 1,
-  } as PromoPop,
+const promozioni: PromoPopConsultazione[] = [
+  { id: "p1", nome: "Speciale Colazione", validitaDal: "2026-10-16", validitaAl: "2026-10-29", numeroFile: 3828, numeroFormati: 2 },
+  { id: "p2", nome: "Pet Week", validitaDal: "2026-10-23", validitaAl: "2026-11-05", numeroFile: 2410, numeroFormati: 1 },
 ];
 
-const riepilogo: RiepilogoPop = {
-  promo: { id: "p1", nome: "Speciale Colazione", stato: "IN_LAVORAZIONE", validitaDal: "2026-10-16", validitaAl: "2026-10-29" } as RiepilogoPop["promo"],
-  totali: { file: 3828, formati: 2, pubblicati: 0, inRevisione: 1700, conErrori: 90 },
+const riepilogo: RiepilogoPopConsultazione = {
+  promo: { id: "p1", nome: "Speciale Colazione", validitaDal: "2026-10-16", validitaAl: "2026-10-29" },
+  totali: { file: 3828, formati: 2 },
   formati: [
     {
       id: "f1",
       nome: "Cartello prezzi A5",
       numeroFile: 1842,
-      filePerStatoKit: { NON_AVVIATO: 0, IN_LAVORAZIONE: 1200, IN_LAVORAZIONE_CON_ERRORI: 90, IN_REVISIONE: 552, PUBBLICATO: 0 },
-      kit: [
-        { id: "k1", idDesign: "d1", titolo: "Cartello Nord", stato: "IN_LAVORAZIONE", area: { id: "a1", nome: "Nord" }, canale: { id: "c1", nome: "Supermercati" }, numeroFile: 1842 },
-      ],
+      kit: [{ id: "k1", titolo: "Cartello Nord", area: { id: "a1", nome: "Nord" }, canale: { id: "c1", nome: "Supermercati" }, numeroFile: 1842 }],
     },
     {
       id: "f2",
       nome: "Totem ingresso 70×200",
       numeroFile: 0,
-      filePerStatoKit: { NON_AVVIATO: 0, IN_LAVORAZIONE: 0, IN_LAVORAZIONE_CON_ERRORI: 0, IN_REVISIONE: 0, PUBBLICATO: 0 },
-      kit: [
-        { id: null, idDesign: "d2", titolo: "Totem Sud", stato: "NON_AVVIATO", area: { id: "a2", nome: "Sud" }, canale: { id: "c2", nome: "Ipermercati" }, numeroFile: 0 },
-      ],
+      kit: [{ id: "k2", titolo: "Totem Sud", area: { id: "a2", nome: "Sud" }, canale: { id: "c2", nome: "Ipermercati" }, numeroFile: 0 }],
     },
   ],
-  avvisi: [],
-} as RiepilogoPop;
+};
 
-const unFile = (id: string, nome: string): FilePop =>
-  ({
-    id,
-    nome,
-    idOlimpoCloud: `olimpo-${id}`,
-    mime: "application/pdf",
-    pagine: 3,
-    kit: { id: "k1", titolo: "Cartello Nord", stato: "IN_LAVORAZIONE" },
-    area: { id: "a1", nome: "Nord" },
-    canale: { id: "c1", nome: "Supermercati" },
-    referenza: { codice: "0014823", descrizione: "Caffè Lavazza Qualità Oro 250 g" },
-    reparto: "Colazione",
-    stato: "IN_REVISIONE",
-    versione: 2,
-  }) as FilePop;
+const unFile = (id: string, nome: string): FilePopConsultazione => ({
+  id,
+  nome,
+  tipoExport: "POP",
+  mime: "application/pdf",
+  pagine: 3,
+  anteprima: `/olimpo/materiali/getThumbnailMaterialePdfs?id=olimpo-${id}`,
+  kit: { id: "k1", titolo: "Cartello Nord" },
+  area: { id: "a1", nome: "Nord" },
+  canale: { id: "c1", nome: "Supermercati" },
+  referenza: { codice: "0014823", descrizione: "Caffè Lavazza Qualità Oro 250 g" },
+  reparto: "Colazione",
+});
 
-const paginaFile = (modifiche: Partial<PaginaFilePop> = {}): PaginaFilePop => ({
+const paginaFile = (modifiche: Partial<PaginaFilePopConsultazione> = {}): PaginaFilePopConsultazione => ({
   file: [unFile("fi1", "CP_A5_PV031_0014823.pdf"), unFile("fi2", "CP_A5_PV031_0021407.pdf")],
   totale: 1842,
   pagina: 1,
@@ -134,13 +121,13 @@ const paginaFile = (modifiche: Partial<PaginaFilePop> = {}): PaginaFilePop => ({
   ...modifiche,
 });
 
-const opzioniFile: OpzioniFilePop = {
+const opzioniFile: OpzioniFilePopConsultazione = {
   aree: [{ id: "a1", nome: "Nord" }],
   canali: [{ id: "c1", nome: "Supermercati" }],
   reparti: ["Colazione", "Freschi"],
 };
 
-const apri = async (indirizzo = "/pop/in-corso") => {
+const apri = async (indirizzo = "/pop/prossimi") => {
   const router = createMemoryRouter(
     [{ path: "/pop/:periodo", loader: ({ params }) => ({ periodo: params.periodo }), element: <PopMateriali /> }],
     { initialEntries: [indirizzo] }
@@ -163,11 +150,12 @@ const linkCliccati: Array<{ indirizzo: string | null; download: string | null }>
 
 describe("POP per periodo", () => {
   beforeEach(() => {
-    finti.permessi = ["materiali.scarica", "promo.visualizza"];
+    finti.permessi = ["materiali.scarica"];
+    finti.scaricaFile.mockReset();
     finti.notifica.mockReset();
     finti.verifica.mockReset();
     finti.verifica.mockResolvedValue({ file: 1, nomeFile: "Speciale Colazione - Cartello prezzi A5.zip" });
-    finti.promozioni = ok({ promozioni, avvisi: [] });
+    finti.promozioni = ok({ promozioni });
     finti.riepilogo = ok(riepilogo);
     finti.file = ok(paginaFile());
     finti.opzioni = ok(opzioniFile);
@@ -202,8 +190,8 @@ describe("POP per periodo", () => {
   it("elenca le promozioni del periodo con i file e apre la prima, con i suoi totali", async () => {
     await apri();
 
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("POP In corso");
-    expect(finti.periodiPromozioni.at(-1)).toBe("in-corso");
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("POP Prossimi");
+    expect(finti.periodiPromozioni.at(-1)).toBe("prossimi");
     const elenco = screen.getByRole("complementary", { name: "Promozioni" });
     const prima = within(elenco).getByRole("link", { name: /Speciale Colazione/ });
     expect(prima).toHaveAttribute("aria-current", "true");
@@ -212,21 +200,18 @@ describe("POP per periodo", () => {
     expect(finti.promoRiepilogo.at(-1)).toBe("p1");
 
     expect(screen.getByRole("heading", { level: 2, name: "Speciale Colazione" })).toBeInTheDocument();
-    expect(screen.getByText("POP · In corso · validità 16/10 – 29/10/2026")).toBeInTheDocument();
+    expect(screen.getByText("POP · Prossimi · validità 16/10 – 29/10/2026")).toBeInTheDocument();
     for (const [etichetta, valore] of [
       ["File POP", "3.828"],
       ["Formati", "2"],
-      ["Pubblicati", "0"],
-      ["In revisione", "1.700"],
-      ["Con errori", "90"],
     ]) {
       expect(screen.getByText(etichetta, { selector: "dt" }).nextElementSibling).toHaveTextContent(valore);
     }
   });
 
   it.each([
-    ["in-corso", "In corso"],
     ["attivi", "Attivi"],
+    ["prossimi", "Prossimi"],
     ["storico", "Storico"],
   ])("la pagina %s mostra il periodo nel titolo senza separatore e non mostra il selettore", async (periodo, etichetta) => {
     await apri(`/pop/${periodo}`);
@@ -238,41 +223,26 @@ describe("POP per periodo", () => {
     expect(screen.queryByRole("link", { name: /volantin/i })).not.toBeInTheDocument();
   });
 
-  it.each([
-    ["attivi", "POP Attivi"],
-    ["storico", "POP Storico"],
-  ])("%s: solo kit pubblicati, quindi niente file in revisione o con errori né stati di lavorazione", async (periodo, titolo) => {
-    finti.riepilogo = ok({
-      ...riepilogo,
-      promo: { ...riepilogo.promo, stato: periodo === "storico" ? "ARCHIVIATA" : "VALIDA" },
-      totali: { file: 1842, formati: 1, pubblicati: 1842, inRevisione: 0, conErrori: 0 },
-      formati: [{ ...riepilogo.formati[0], filePerStatoKit: { ...riepilogo.formati[0].filePerStatoKit, IN_LAVORAZIONE: 0, IN_LAVORAZIONE_CON_ERRORI: 0, IN_REVISIONE: 0, PUBBLICATO: 1842 } }],
-    });
-    await apri(`/pop/${periodo}`);
+  it.each(["attivi", "prossimi", "storico"])(
+    "%s: solo file pubblicati, quindi niente conteggi, avanzamento o stati della lavorazione",
+    async (periodo) => {
+      await apri(`/pop/${periodo}`);
 
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(titolo);
-    expect(finti.periodiPromozioni.at(-1)).toBe(periodo);
-    expect(screen.getByText("Pubblicati", { selector: "dt" }).nextElementSibling).toHaveTextContent("1.842");
-    expect(screen.queryByText("In revisione", { selector: "dt" })).not.toBeInTheDocument();
-    expect(screen.queryByText("Con errori", { selector: "dt" })).not.toBeInTheDocument();
-    const legenda = screen.getByRole("list", { name: "Legenda dell'avanzamento" });
-    expect(within(legenda).getAllByRole("listitem").map((voce) => voce.textContent)).toEqual(["Pubblicati"]);
-    expect(finti.filtriFile.at(-1)).toMatchObject({ periodo, idFormato: "f1" });
-  });
-
-  it("le promozioni di cui Istanta non ha dato i kit non avviati sono segnalate", async () => {
-    finti.promozioni = ok({ promozioni, avvisi: [{ promo: { id: "p9", nome: "Back to school" }, motivo: "Istanta non ha risposto." }] });
-    finti.riepilogo = ok({ ...riepilogo, avvisi: [{ promo: { id: "p9", nome: "Back to school" }, motivo: "Istanta non ha risposto." }] });
-    await apri();
-
-    const avviso = screen.getByText(/Back to school/).closest("li");
-    expect(avviso).toHaveTextContent("I kit POP non ancora avviati di Back to school non sono disponibili: Istanta non ha risposto.");
-    // Lo stesso avviso dall'elenco e dal riepilogo compare una volta sola
-    expect(screen.getAllByText("Back to school")).toHaveLength(1);
-  });
+      expect(finti.periodiPromozioni.at(-1)).toBe(periodo);
+      expect(finti.filtriFile.at(-1)).toMatchObject({ periodo, idFormato: "f1" });
+      for (const etichetta of ["Pubblicati", "In revisione", "Con errori"]) {
+        expect(screen.queryByText(etichetta, { selector: "dt" }), etichetta).not.toBeInTheDocument();
+      }
+      expect(screen.queryByRole("list", { name: "Legenda dell'avanzamento" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("img", { name: /File per stato del kit/ })).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("Stato file")).not.toBeInTheDocument();
+      // Niente avvisi sui kit non avviati: la pagina non legge Istanta
+      expect(screen.queryByText("Elenco incompleto")).not.toBeInTheDocument();
+    }
+  );
 
   it("?promo= sceglie la promozione e la cerca filtra l'elenco", async () => {
-    await apri("/pop/in-corso?promo=p2");
+    await apri("/pop/prossimi?promo=p2");
 
     const elenco = screen.getByRole("complementary", { name: "Promozioni" });
     expect(within(elenco).getByRole("link", { name: /Pet Week/ })).toHaveAttribute("aria-current", "true");
@@ -282,19 +252,19 @@ describe("POP per periodo", () => {
 
     fireEvent.change(within(elenco).getByRole("searchbox", { name: "Cerca promozione" }), { target: { value: "colazione" } });
     expect(within(elenco).queryByRole("link", { name: /Pet Week/ })).not.toBeInTheDocument();
-    expect(within(elenco).getByRole("link", { name: /Speciale Colazione/ })).toHaveAttribute("href", "/pop/in-corso?promo=p1");
+    expect(within(elenco).getByRole("link", { name: /Speciale Colazione/ })).toHaveAttribute("href", "/pop/prossimi?promo=p1");
   });
 
-  it("la tabella dei formati mostra file, avanzamento, i kit a richiesta senza accessi produttivi e lo ZIP del formato", async () => {
+  it("la tabella dei formati mostra file, i kit a richiesta senza stati né accessi produttivi e lo ZIP del formato", async () => {
     await apri();
 
+    expect(within(tabellaFormati()).getAllByRole("columnheader").map((cella) => cella.textContent)).toEqual([
+      "Formato", "File", "Kit", "Azioni",
+    ]);
     const [, riga1, riga2] = within(tabellaFormati()).getAllByRole("row");
 
     expect(within(riga1).getByRole("link", { name: "Cartello prezzi A5" })).toHaveAttribute("aria-current", "true");
-    expect(within(riga1).getByText("1.842")).toBeInTheDocument();
-    expect(within(riga1).getByRole("img")).toHaveAccessibleName(
-      "File per stato del kit: 1.200 in lavorazione, 90 con errori, 552 in revisione"
-    );
+    expect(within(riga1).getAllByText("1.842")[0]).toBeInTheDocument();
     // I kit del formato si contano; l'elenco si apre a richiesta, così la riga resta bassa
     const kitRiga1 = within(riga1).getByRole("button", { name: "1 kit di Cartello prezzi A5" });
     expect(kitRiga1).toHaveAttribute("aria-expanded", "false");
@@ -302,39 +272,31 @@ describe("POP per periodo", () => {
     fireEvent.click(kitRiga1);
     expect(kitRiga1).toHaveAttribute("aria-expanded", "true");
     expect(within(riga1).getByText("Nord · Supermercati")).toBeInTheDocument();
+    expect(within(riga1).getByText("1.842 file")).toBeInTheDocument();
     expect(within(riga1).queryByRole("link", { name: /Apri kit/ })).not.toBeInTheDocument();
     expect(within(riga1).getByRole("button", { name: "Scarica ZIP di Cartello prezzi A5" })).toBeEnabled();
 
-    // Anche un kit non avviato resta informativo; scegliere il formato resta sulla promo.
+    // I kit sono tutti pubblicati: nessuno stato; scegliere il formato resta sulla promo.
     fireEvent.click(within(riga2).getByRole("button", { name: "1 kit di Totem ingresso 70×200" }));
-    expect(within(riga2).getByTitle("Non avviato")).toBeInTheDocument();
+    expect(within(riga2).getByText("Sud · Ipermercati")).toBeInTheDocument();
+    expect(within(riga2).queryByTitle(/Non avviato|Pubblicato|In lavorazione/)).not.toBeInTheDocument();
     expect(within(riga2).queryByRole("link", { name: /Apri kit/ })).not.toBeInTheDocument();
     expect(within(riga2).getByRole("link", { name: "Totem ingresso 70×200" })).toHaveAttribute(
       "href",
-      "/pop/in-corso?promo=p1&formato=f2"
+      "/pop/prossimi?promo=p1&formato=f2"
     );
-    expect(within(riga2).getByRole("img")).toHaveAccessibleName("Nessun file");
     // Un formato senza file non ha niente da scaricare: il comando è spento e dice perché
     const zipVuoto = within(riga2).getByRole("button", { name: "Scarica ZIP di Totem ingresso 70×200" });
     expect(zipVuoto).toBeDisabled();
     expect(zipVuoto).toHaveAttribute("title", "Il formato non ha file da scaricare");
-
-    const legenda = screen.getByRole("list", { name: "Legenda dell'avanzamento" });
-    expect(within(legenda).getAllByRole("listitem").map((voce) => voce.textContent)).toEqual([
-      "Non avviati",
-      "In lavorazione",
-      "Con errori",
-      "In revisione",
-      "Pubblicati",
-    ]);
   });
 
   it("?formato= apre i file di quel formato", async () => {
     finti.file = ok(paginaFile({ file: [], totale: 0 }));
-    await apri("/pop/in-corso?promo=p1&formato=f2");
+    await apri("/pop/prossimi?promo=p1&formato=f2");
 
     expect(screen.getByRole("heading", { level: 2, name: "File del formato Totem ingresso 70×200 · 0 file" })).toBeInTheDocument();
-    expect(finti.filtriFile.at(-1)).toMatchObject({ periodo: "in-corso", idFormato: "f2", pagina: 1, dimensione: 100 });
+    expect(finti.filtriFile.at(-1)).toMatchObject({ periodo: "prossimi", idFormato: "f2", pagina: 1, dimensione: 100 });
     expect(screen.getByRole("heading", { name: "Nessun file in questo formato" })).toBeInTheDocument();
   });
 
@@ -343,19 +305,17 @@ describe("POP per periodo", () => {
 
     expect(screen.getByRole("heading", { level: 2, name: "File del formato Cartello prezzi A5 · 1.842 file" })).toBeInTheDocument();
     const intestazioni = within(tabellaFile()).getAllByRole("columnheader").map((cella) => cella.textContent);
-    expect(intestazioni).toEqual(["", "File", "Referenza", "Reparto", "Stato", "Ver.", "Azioni"]);
+    // Solo file pubblicati: niente stato né versione, area e canale nelle loro colonne
+    expect(intestazioni).toEqual(["", "File", "Referenza", "Reparto", "Area", "Canale", "Azioni"]);
     const righe = within(tabellaFile()).getAllByRole("row");
     expect(righe).toHaveLength(3);
     const celle = within(righe[1]).getAllByRole("cell");
+    expect(celle[1]).toHaveTextContent(/^CP_A5_PV031_0014823\.pdf$/);
     expect(celle[2]).toHaveTextContent("Caffè Lavazza Qualità Oro 250 g0014823");
-    // Il reparto ha la sua colonna, non sta più sotto il codice
     expect(celle[3]).toHaveTextContent("Colazione");
-    expect(within(righe[1]).getByTitle("In revisione")).toBeInTheDocument();
-    expect(within(righe[1]).getByText("v2")).toBeInTheDocument();
-    expect(within(righe[1]).getByRole("link", { name: "Scarica CP_A5_PV031_0014823.pdf" })).toHaveAttribute(
-      "href",
-      "/api/downloadPDFVolantino/olimpo-fi1?fileName=CP_A5_PV031_0014823.pdf"
-    );
+    expect(celle[4]).toHaveTextContent("Nord");
+    expect(celle[5]).toHaveTextContent("Supermercati");
+    expect(within(righe[1]).queryByText("v2")).not.toBeInTheDocument();
 
     expect(screen.getByText("Mostrati 1–100 di 1.842 file")).toBeInTheDocument();
     const righePerPagina = screen.getByLabelText("Righe per pagina");
@@ -366,12 +326,35 @@ describe("POP per periodo", () => {
     expect(parametri(router)).toEqual({ promo: "p1", formato: "f1", dimensione: "250" });
   });
 
-  it("l'anteprima mostra tutte le pagine del PDF", async () => {
+  it("l'anteprima mostra tutte le pagine del PDF, dall'indirizzo dato dalle API di consultazione", async () => {
     await apri();
 
     fireEvent.click(screen.getByRole("button", { name: "Anteprima CP_A5_PV031_0014823.pdf" }));
 
-    expect(finti.anteprime.at(-1)).toMatchObject({ totalPages: 3 });
+    expect(finti.anteprime.at(-1)).toEqual({
+      totalPages: 3,
+      imageUrl: "/olimpo/materiali/getThumbnailMaterialePdfs?id=olimpo-fi1",
+      onClose: expect.any(Function),
+    });
+  });
+
+  it("un file senza anteprima ha il comando spento", async () => {
+    finti.file = ok(paginaFile({ file: [{ ...unFile("fi1", "CP_A5_PV031_0014823.pdf"), anteprima: null }] }));
+    await apri();
+
+    expect(screen.getByRole("button", { name: "Anteprima CP_A5_PV031_0014823.pdf" })).toBeDisabled();
+  });
+
+  it("il singolo file si scarica dalla consultazione, con il suo id e il suo nome", async () => {
+    await apri();
+
+    const scarica = screen.getByRole("button", { name: "Scarica CP_A5_PV031_0014823.pdf" });
+    expect(scarica).toBeEnabled();
+    fireEvent.click(scarica);
+
+    expect(finti.scaricaFile).toHaveBeenCalledWith("fi1", "CP_A5_PV031_0014823.pdf");
+    // Niente link al vecchio download dei PDF, che chiede il permesso della produzione
+    expect(document.querySelector('a[href*="downloadPDFVolantino"]')).toBeNull();
   });
 
   it("un filtro dei file arriva alla richiesta, resta nell'indirizzo e riparte dalla prima pagina", async () => {
@@ -383,9 +366,9 @@ describe("POP per periodo", () => {
     // La pagina nuova si legge dall'inizio della tabella
     expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
 
-    fireEvent.change(screen.getByLabelText("Stato file"), { target: { value: "ERRORE" } });
-    await waitFor(() => expect(finti.filtriFile.at(-1)).toMatchObject({ stato: "ERRORE", pagina: 1 }));
-    expect(parametri(router)).toEqual({ promo: "p1", formato: "f1", stato: "ERRORE" });
+    fireEvent.change(screen.getByLabelText("Area"), { target: { value: "a1" } });
+    await waitFor(() => expect(finti.filtriFile.at(-1)).toMatchObject({ idArea: "a1", pagina: 1 }));
+    expect(parametri(router)).toEqual({ promo: "p1", formato: "f1", area: "a1" });
     expect(within(screen.getByLabelText("Reparto")).getByRole("option", { name: "Freschi" })).toBeInTheDocument();
   });
 
@@ -399,18 +382,18 @@ describe("POP per periodo", () => {
 
     // Stessa chiave a ogni richiesta: React Query non la ripete finché è fresca
     expect(new Set(finti.richiesteOpzioni.map((argomenti) => JSON.stringify(argomenti)))).toEqual(
-      new Set([JSON.stringify(["p1", "in-corso", "f1"])])
+      new Set([JSON.stringify(["p1", "prossimi", "f1"])])
     );
   });
 
   it("filtri, pagina e righe per pagina si leggono dall'indirizzo: ricaricando o tornando indietro restano", async () => {
-    await apri("/pop/in-corso?promo=p1&formato=f1&cerca=caffe&stato=ERRORE&area=a1&canale=c1&reparto=Colazione&pagina=3&dimensione=250");
+    // Uno stato in un indirizzo vecchio non filtra: i file sono tutti pubblicati
+    await apri("/pop/prossimi?promo=p1&formato=f1&cerca=caffe&stato=ERRORE&area=a1&canale=c1&reparto=Colazione&pagina=3&dimensione=250");
 
     expect(finti.filtriFile.at(-1)).toEqual({
-      periodo: "in-corso",
+      periodo: "prossimi",
       idFormato: "f1",
       cerca: "caffe",
-      stato: "ERRORE",
       idArea: "a1",
       idCanale: "c1",
       reparto: "Colazione",
@@ -418,20 +401,11 @@ describe("POP per periodo", () => {
       dimensione: 250,
     });
     expect(screen.getByRole("searchbox", { name: "Cerca" })).toHaveValue("caffe");
-    expect(screen.getByLabelText("Stato file")).toHaveValue("ERRORE");
     expect(screen.getByLabelText("Area")).toHaveValue("a1");
     expect(screen.getByLabelText("Reparto")).toHaveValue("Colazione");
     expect(screen.getByLabelText("Righe per pagina")).toHaveValue("250");
   });
 
-  it("il filtro per stato propone solo gli stati che un file POP può avere", async () => {
-    await apri("/pop/in-corso?promo=p1&formato=f1&stato=CORREGGO_ERRORE");
-
-    const stati = within(screen.getByLabelText("Stato file")).getAllByRole("option").map((opzione) => opzione.getAttribute("value"));
-    expect(stati).toEqual(["", "IN_ATTESA", "IN_REVISIONE", "ACCETTATO", "ERRORE", "PUBBLICATO"]);
-    // Uno stato di Correggo dall'indirizzo non filtra
-    expect((finti.filtriFile.at(-1) as { stato?: string }).stato).toBeUndefined();
-  });
 
   it("senza ?formato= si apre il primo formato che ha file, non il primo in ordine alfabetico", async () => {
     const [cartello, totem] = riepilogo.formati;
@@ -494,14 +468,14 @@ describe("POP per periodo", () => {
     fireEvent.click(within(screen.getByRole("status")).getByRole("button", { name: "Scarica ZIP" }));
 
     await waitFor(() => expect(linkCliccati).toHaveLength(1));
-    expect(finti.verifica).toHaveBeenCalledWith("/materiali/pop/promozioni/p1/zip/verifica", {
-      periodo: "in-corso",
+    expect(finti.verifica).toHaveBeenCalledWith("/consultazione/pop/promozioni/p1/zip/verifica", {
+      periodo: "prossimi",
       idFormato: "f1",
       filtri: { reparto: "Colazione" },
     });
     // Il browser scarica lo ZIP da un link con download: niente blob in memoria, niente iframe (la CSP li blocca)
     expect(linkCliccati[0]).toEqual({
-      indirizzo: "/api/materiali/pop/promozioni/p1/zip?periodo=in-corso&idFormato=f1&reparto=Colazione",
+      indirizzo: "/api/consultazione/pop/promozioni/p1/zip?periodo=prossimi&idFormato=f1&reparto=Colazione",
       download: "",
     });
     expect(document.querySelector("iframe")).toBeNull();
@@ -514,15 +488,15 @@ describe("POP per periodo", () => {
     fireEvent.click(within(tabellaFormati()).getByRole("button", { name: "Scarica ZIP di Cartello prezzi A5" }));
 
     await waitFor(() => expect(linkCliccati).toHaveLength(1));
-    expect(finti.verifica).toHaveBeenCalledWith("/materiali/pop/promozioni/p1/zip/verifica", { periodo: "in-corso", idFormato: "f1" });
-    expect(linkCliccati[0].indirizzo).toBe("/api/materiali/pop/promozioni/p1/zip?periodo=in-corso&idFormato=f1");
+    expect(finti.verifica).toHaveBeenCalledWith("/consultazione/pop/promozioni/p1/zip/verifica", { periodo: "prossimi", idFormato: "f1" });
+    expect(linkCliccati[0].indirizzo).toBe("/api/consultazione/pop/promozioni/p1/zip?periodo=prossimi&idFormato=f1");
     // Il link temporaneo non resta nella pagina
     expect(document.querySelector('a[href$="idFormato=f1"]')).toBeNull();
   });
 
   it.each([
     ["sessione scaduta", "Sessione scaduta: accedi di nuovo"],
-    ["promo fuori dal periodo", "Promozione non trovata tra quelle del periodo \"In corso\"."],
+    ["promo fuori dal periodo", "Promozione non trovata fra quelle consultabili nel periodo."],
     ["errore del server", "Si è verificato un errore imprevisto"],
   ])("se la verifica dello ZIP del formato fallisce (%s) lo dice nella pagina e non scarica niente", async (_caso, motivo) => {
     finti.verifica.mockRejectedValue(new Error(motivo));
@@ -545,16 +519,16 @@ describe("POP per periodo", () => {
 
     await waitFor(() => expect(moduliInviati).toHaveLength(1));
     // La verifica passa da ServerCall.post, che manda il token CSRF e riprova se è scaduto
-    expect(finti.verifica).toHaveBeenCalledWith("/materiali/pop/promozioni/p1/zip/verifica", {
-      periodo: "in-corso",
+    expect(finti.verifica).toHaveBeenCalledWith("/consultazione/pop/promozioni/p1/zip/verifica", {
+      periodo: "prossimi",
       idFormato: "f1",
       idFile: ["fi2"],
     });
     const [modulo] = moduliInviati;
     // Nella pagina stessa: lo ZIP arriva come allegato, il browser lo scarica e la pagina resta
-    expect(modulo).toMatchObject({ metodo: "post", azione: "/api/materiali/pop/promozioni/p1/zip", destinazione: "" });
+    expect(modulo).toMatchObject({ metodo: "post", azione: "/api/consultazione/pop/promozioni/p1/zip", destinazione: "" });
     expect(modulo.campi._csrf).toBe("token-csrf");
-    expect(JSON.parse(String(modulo.campi.richiesta))).toEqual({ periodo: "in-corso", idFormato: "f1", idFile: ["fi2"] });
+    expect(JSON.parse(String(modulo.campi.richiesta))).toEqual({ periodo: "prossimi", idFormato: "f1", idFile: ["fi2"] });
     // Il form non resta nella pagina
     expect(document.querySelector('form[action$="/zip"]')).toBeNull();
     expect(finti.notifica).toHaveBeenCalledWith("Download avviato: 1 file nello ZIP", { variant: "info" });
@@ -575,13 +549,18 @@ describe("POP per periodo", () => {
   });
 
   it("senza il permesso materiali.scarica i download sono disattivati e il motivo è scritto", async () => {
-    finti.permessi = ["promo.visualizza"];
+    finti.permessi = ["promo.visualizza", "file.download"];
     await apri();
 
     expect(screen.getAllByText("Manca il permesso di scaricare volantini e POP").length).toBeGreaterThan(0);
-    expect(screen.queryByRole("link", { name: /Scarica ZIP/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Scarica/ })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Scarica ZIP di Cartello prezzi A5" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Scarica CP_A5_PV031_0014823.pdf" })).toBeDisabled();
+    // Il singolo file chiede anche lui materiali.scarica, non il file.download della produzione
+    const singolo = screen.getByRole("button", { name: "Scarica CP_A5_PV031_0014823.pdf" });
+    expect(singolo).toBeDisabled();
+    expect(singolo).toHaveAttribute("title", "Manca il permesso di scaricare volantini e POP");
+    fireEvent.click(singolo);
+    expect(finti.scaricaFile).not.toHaveBeenCalled();
     // L'anteprima non è un download
     expect(screen.getByRole("button", { name: "Anteprima CP_A5_PV031_0014823.pdf" })).toBeEnabled();
 
@@ -600,12 +579,14 @@ describe("POP per periodo", () => {
   });
 
   it("senza promozioni con kit POP mostra lo stato vuoto del periodo senza il selettore dei periodi", async () => {
-    finti.promozioni = ok({ promozioni: [], avvisi: [] });
+    finti.promozioni = ok({ promozioni: [] });
     finti.riepilogo = { data: undefined, isError: false, error: null, refetch: vi.fn() };
     await apri();
 
-    expect(screen.getByRole("heading", { name: "Nessun kit POP nelle promozioni in corso" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Vai alle promozioni in corso" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Nessun file POP pubblicato nelle prossime promozioni" })).toBeInTheDocument();
+    // Nessun rimando alla produzione: i kit si creano e si seguono altrove
+    expect(screen.queryByRole("button", { name: /Vai a/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Puoi crearli/)).not.toBeInTheDocument();
     expect(screen.queryByRole("complementary", { name: "Promozioni" })).not.toBeInTheDocument();
     expect(screen.queryByRole("radiogroup", { name: "Periodo" })).not.toBeInTheDocument();
     // Nessuna promo da aprire: il riepilogo non si chiede
@@ -613,7 +594,7 @@ describe("POP per periodo", () => {
   });
 
   it("una ?promo= che non è fra quelle del periodo lo dice e propone la prima, senza Riprova", async () => {
-    const router = await apri("/pop/in-corso?promo=sconosciuta");
+    const router = await apri("/pop/prossimi?promo=sconosciuta");
 
     expect(screen.getByRole("heading", { name: "Promozione non disponibile" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Riprova" })).not.toBeInTheDocument();
@@ -631,14 +612,14 @@ describe("POP per periodo", () => {
     const router = await apri();
     finti.file = ok(paginaFile({ file: [], totale: 0 }));
 
-    fireEvent.change(screen.getByLabelText("Stato file"), { target: { value: "ERRORE" } });
+    fireEvent.change(screen.getByLabelText("Area"), { target: { value: "a1" } });
 
     expect(await screen.findByRole("heading", { name: "Nessun file corrisponde ai filtri" })).toBeInTheDocument();
-    expect(screen.getByText("Stato «Errore»")).toBeInTheDocument();
+    expect(screen.getByText("Area «Nord»")).toBeInTheDocument();
     const azzera = screen.getAllByRole("button", { name: "Azzera filtri" });
     fireEvent.click(azzera[azzera.length - 1]);
-    await waitFor(() => expect(screen.getByLabelText("Stato file")).toHaveValue(""));
-    expect((finti.filtriFile.at(-1) as { stato?: string }).stato).toBeUndefined();
+    await waitFor(() => expect(screen.getByLabelText("Area")).toHaveValue(""));
+    expect((finti.filtriFile.at(-1) as { idArea?: string }).idArea).toBeUndefined();
     expect(parametri(router)).toEqual({ promo: "p1", formato: "f1" });
   });
 
@@ -649,7 +630,7 @@ describe("POP per periodo", () => {
     await apri();
 
     expect(screen.getByRole("alert")).toHaveTextContent("Servizio non raggiungibile");
-    expect(screen.queryByText("Nessun kit POP nelle promozioni in corso")).not.toBeInTheDocument();
+    expect(screen.queryByText("Nessun file POP pubblicato nelle prossime promozioni")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Riprova" }));
     expect(refetch).toHaveBeenCalledTimes(1);
   });
@@ -695,7 +676,7 @@ describe("POP per periodo", () => {
     const [scheda1] = within(formati).getAllByRole("listitem");
     expect(within(scheda1).getByRole("link", { name: "Cartello prezzi A5" })).toHaveAttribute("aria-current", "true");
     expect(scheda1).toHaveTextContent("1.842 file");
-    expect(within(scheda1).getByRole("img")).toHaveAccessibleName("File per stato del kit: 1.200 in lavorazione, 90 con errori, 552 in revisione");
+    expect(within(scheda1).queryByRole("img")).not.toBeInTheDocument();
     expect(within(scheda1).getByRole("button", { name: "Scarica ZIP di Cartello prezzi A5" })).toBeEnabled();
     fireEvent.click(within(scheda1).getByRole("button", { name: "1 kit di Cartello prezzi A5" }));
     expect(within(scheda1).queryByRole("link", { name: /Apri kit/ })).not.toBeInTheDocument();
@@ -705,10 +686,12 @@ describe("POP per periodo", () => {
     expect(primoFile).toHaveTextContent("CP_A5_PV031_0014823.pdf");
     expect(primoFile).toHaveTextContent("Caffè Lavazza Qualità Oro 250 g");
     expect(primoFile).toHaveTextContent("Colazione");
-    expect(primoFile).toHaveTextContent("v2");
+    expect(primoFile).toHaveTextContent("Nord · Supermercati");
+    expect(primoFile).not.toHaveTextContent("v2");
     fireEvent.click(within(primoFile).getByRole("checkbox", { name: "Seleziona CP_A5_PV031_0014823.pdf" }));
     expect(screen.getByRole("status")).toHaveTextContent("1 file selezionato");
-    expect(within(primoFile).getByRole("link", { name: "Scarica CP_A5_PV031_0014823.pdf" })).toHaveAttribute("download", "CP_A5_PV031_0014823.pdf");
+    fireEvent.click(within(primoFile).getByRole("button", { name: "Scarica CP_A5_PV031_0014823.pdf" }));
+    expect(finti.scaricaFile).toHaveBeenCalledWith("fi1", "CP_A5_PV031_0014823.pdf");
     // La casella della pagina resta, sopra le schede
     expect(screen.getByRole("checkbox", { name: "Seleziona la pagina" })).toBeInTheDocument();
   });

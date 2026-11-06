@@ -7,41 +7,39 @@ import PageError from "@/components/Base/PageError";
 import PaginazioneTabella from "@/components/Base/PaginazioneTabella";
 import Sezione from "@/components/Base/Sezione";
 import Skeleton from "@/components/Base/Skeleton";
-import StatusBadge from "@/components/Base/StatusBadge";
 import Table from "@/components/Base/Table";
 import EmptyState from "@/components/EmptyState";
 import { useSchermoStretto } from "@/components/PuntiVendita/useSchermoStretto";
 import { PreviewImmaginePdf } from "@/components/PreviewImmaginePdf";
-import { descriviStato } from "@/constants/stati";
 import { useParametriUrl } from "@/hooks/useParametriUrl";
 import { useRicercaDifferita } from "@/hooks/useRicercaDifferita";
-import { useFetchFilePop, useFetchOpzioniFilePop } from "@/query/query";
+import { useFilePopConsultazione, useOpzioniFilePopConsultazione } from "@/query/consultazione";
 import { formatNumero, VALORE_ASSENTE } from "@/utils/format";
-import { articoloPlurale, urlAnteprimaMateriale } from "@/utils/materiali";
+import { articoloPlurale } from "@/utils/materiali";
+import { useScaricaFileConsultazione } from "@/utils/scaricaFileConsultazione";
 import { twMerge } from "@/utils/twMerge";
 import { useEffect, useId, useRef, useState } from "react";
-import type { STATO_LOG_FILE } from "../../../lib/enums";
-import type { PeriodoMateriali } from "../../../lib/materiali/periodi";
-import { DIMENSIONI_PAGINA_POP, STATI_FILE_POP, type FilePop, type FormatoPop, type PromoMateriali } from "../../../lib/materiali/tipi";
-import { filtriPerZip, MOTIVO_SENZA_DOWNLOAD, urlFileSingolo, useScaricaZipPop } from "./scaricamenti";
+import type { PeriodoConsultazione } from "../../../lib/consultazione/periodi";
+import type { FilePopConsultazione, FormatoPopConsultazione, PromoConsultazione } from "../../../lib/consultazione/tipi";
+import { DIMENSIONI_PAGINA_POP } from "../../../lib/materiali/tipi";
+import { filtriPerZip, MOTIVO_SENZA_DOWNLOAD, useScaricaZipPop } from "./scaricamenti";
 
 /**
  * Filtri dei file nell'indirizzo, accanto a promo e formato: restano ricaricando la pagina e
  * tornando indietro; scegliendo un'altra promo o un altro formato si perdono. Vuoti = tolti.
+ * Niente stato: i file mostrati sono tutti pubblicati.
  */
-const SENZA_FILTRI = { cerca: "", stato: "", area: "", canale: "", reparto: "" } as const;
+const SENZA_FILTRI = { cerca: "", area: "", canale: "", reparto: "" } as const;
 type ParametroFiltro = keyof typeof SENZA_FILTRI;
 
 const OPZIONI_DIMENSIONE = [...DIMENSIONI_PAGINA_POP];
 const DIMENSIONE_PREDEFINITA = OPZIONI_DIMENSIONE[0];
 
 // Filtri: da sm una riga sola, con la ricerca che prende lo spazio libero e le tendine strette
-// (le scritte "Tutti gli stati", "Tutte le aree"… stanno in 7rem); sotto sm la ricerca e due
-// tendine per riga
+// (le scritte "Tutte le aree", "Tutti i reparti"… stanno in 7rem); sotto sm la ricerca e tre
+// tendine, l'ultima su tutta la riga
 const CLASSI_RICERCA = "sm:w-auto sm:min-w-0 sm:flex-[1_1_9rem]";
 const CLASSI_TENDINA = "sm:min-w-0 sm:max-w-[8.5rem] sm:flex-[1_1_6.75rem]";
-
-const isStatoFile = (valore: string): valore is STATO_LOG_FILE => (STATI_FILE_POP as readonly string[]).includes(valore);
 
 /** Casella "seleziona la pagina": anche indeterminata, quando solo una parte della pagina è scelta. */
 function CasellaPagina({
@@ -86,17 +84,18 @@ function FileInCaricamento() {
 }
 
 interface FileFormatoProps {
-  promo: PromoMateriali;
-  periodo: PeriodoMateriali;
-  formato: FormatoPop;
+  promo: PromoConsultazione;
+  periodo: PeriodoConsultazione;
+  formato: FormatoPopConsultazione;
   puoScaricare: boolean;
   /** Cresce a ogni scelta di un formato (0 = nessuna): la sezione viene in vista e prende il focus. */
   richiesteInVista: number;
 }
 
 /**
- * File di un formato POP, caricati a pagine dal server: filtri, selezione per lo ZIP (i file
- * scelti, oppure tutti quelli che corrispondono ai filtri), anteprima e download del singolo file.
+ * File pubblicati di un formato POP, caricati a pagine dal server: filtri, selezione per lo ZIP (i
+ * file scelti, oppure tutti quelli che corrispondono ai filtri), anteprima e download del singolo
+ * file. Ogni download chiede "materiali.scarica".
  */
 function FileFormato({ promo, periodo, formato, puoScaricare, richiesteInVista }: FileFormatoProps) {
   const idSezione = useId();
@@ -105,15 +104,13 @@ function FileFormato({ promo, periodo, formato, puoScaricare, richiesteInVista }
   const [selezionati, setSelezionati] = useState<ReadonlySet<string>>(new Set());
   // Tutti i file che corrispondono ai filtri, anche quelli delle altre pagine
   const [tuttiSelezionati, setTuttiSelezionati] = useState(false);
-  const [anteprima, setAnteprima] = useState<FilePop | null>(null);
+  const [anteprima, setAnteprima] = useState<FilePopConsultazione | null>(null);
   const { inPreparazione, scarica } = useScaricaZipPop(promo.id);
-  // Sotto sm i file sono schede: la tabella a sette colonne taglierebbe stato e comandi
+  const fileSingolo = useScaricaFileConsultazione();
+  // Sotto sm i file sono schede: la tabella a sette colonne taglierebbe area, canale e comandi
   const stretto = useSchermoStretto();
 
   const cerca = parametri.get("cerca") ?? "";
-  const statoLetto = parametri.get("stato") ?? "";
-  // Uno stato che i file POP non hanno (indirizzo vecchio o scritto a mano) non filtra
-  const stato = isStatoFile(statoLetto) ? statoLetto : "";
   const idArea = parametri.get("area") ?? "";
   const idCanale = parametri.get("canale") ?? "";
   const reparto = parametri.get("reparto") ?? "";
@@ -149,16 +146,15 @@ function FileFormato({ promo, periodo, formato, puoScaricare, richiesteInVista }
 
   const filtriAttivi = {
     cerca: cerca || undefined,
-    stato: stato || undefined,
     idArea: idArea || undefined,
     idCanale: idCanale || undefined,
     reparto: reparto || undefined,
   };
   const conFiltri = Object.values(filtriAttivi).some(Boolean);
 
-  const query = useFetchFilePop(promo.id, { periodo, idFormato: formato.id, ...filtriAttivi, pagina, dimensione });
+  const query = useFilePopConsultazione(promo.id, { periodo, idFormato: formato.id, ...filtriAttivi, pagina, dimensione });
   // Le tendine si chiedono una volta per formato, non a ogni pagina o filtro
-  const opzioni = useFetchOpzioniFilePop(promo.id, periodo, formato.id).data;
+  const opzioni = useOpzioniFilePopConsultazione(promo.id, periodo, formato.id).data;
   const dati = query.data;
   const file = dati?.file ?? [];
   const totale = dati?.totale ?? 0;
@@ -212,10 +208,9 @@ function FileFormato({ promo, periodo, formato, puoScaricare, richiesteInVista }
   const nomeDi = (elenco: { id: string; nome: string }[] | undefined, id: string) =>
     elenco?.find((voce) => voce.id === id)?.nome ?? id;
 
-  // Riepilogo dei filtri nello stato vuoto: Ricerca «…» · Stato «…» · Area «…»
+  // Riepilogo dei filtri nello stato vuoto: Ricerca «…» · Area «…» · Canale «…»
   const riepilogoFiltri = [
     cerca && `Ricerca «${cerca}»`,
-    stato && `Stato «${descriviStato("fileKit", stato).etichetta}»`,
     idArea && `Area «${nomeDi(opzioni?.aree, idArea)}»`,
     idCanale && `Canale «${nomeDi(opzioni?.canali, idCanale)}»`,
     reparto && `Reparto «${reparto}»`,
@@ -325,7 +320,7 @@ function FileFormato({ promo, periodo, formato, puoScaricare, richiesteInVista }
           compatta
           icon="FileX"
           title="Nessun file in questo formato"
-          description="I file compaiono qui quando i kit del formato li producono."
+          description="I file compaiono qui quando i kit del formato vengono pubblicati."
         />
       );
     }
@@ -333,7 +328,7 @@ function FileFormato({ promo, periodo, formato, puoScaricare, richiesteInVista }
   })();
 
   // I pezzi di un file, uguali nella riga della tabella e nella scheda
-  const casellaFile = (voce: FilePop) => (
+  const casellaFile = (voce: FilePopConsultazione) => (
     <FormCheck.Input
       type="checkbox"
       aria-label={`Seleziona ${voce.nome}`}
@@ -342,47 +337,37 @@ function FileFormato({ promo, periodo, formato, puoScaricare, richiesteInVista }
       onChange={(evento) => selezionaFile(voce.id, evento.target.checked)}
     />
   );
-  const versioneFile = (voce: FilePop) =>
-    voce.versione !== null && voce.versione !== undefined ? `v${voce.versione}` : VALORE_ASSENTE;
-  const comandiFile = (voce: FilePop) => (
-    <>
-      <Button
-        type="button"
-        size="sm"
-        variant="outline-secondary"
-        aria-label={`Anteprima ${voce.nome}`}
-        title="Anteprima"
-        disabled={!voce.idOlimpoCloud}
-        onClick={() => setAnteprima(voce)}
-      >
-        <Lucide icon="Eye" aria-hidden="true" className="h-3.5 w-3.5" />
-      </Button>
-      {puoScaricare && voce.idOlimpoCloud ? (
+  const comandiFile = (voce: FilePopConsultazione) => {
+    const inDownload = fileSingolo.inCorso === voce.id;
+    return (
+      <>
         <Button
-          as="a"
-          href={urlFileSingolo(voce.idOlimpoCloud, voce.nome)}
-          download={voce.nome}
+          type="button"
           size="sm"
           variant="outline-secondary"
-          aria-label={`Scarica ${voce.nome}`}
-          title="Scarica"
+          aria-label={`Anteprima ${voce.nome}`}
+          title={voce.anteprima ? "Anteprima" : "Anteprima non disponibile"}
+          disabled={!voce.anteprima}
+          onClick={() => setAnteprima(voce)}
         >
-          <Lucide icon="Download" aria-hidden="true" className="h-3.5 w-3.5" />
+          <Lucide icon="Eye" aria-hidden="true" className="h-3.5 w-3.5" />
         </Button>
-      ) : (
+        {/* Il file arriva da GET /api/consultazione/file/:id: se il server rifiuta, il motivo è una notifica */}
         <Button
           type="button"
           size="sm"
           variant="outline-secondary"
           aria-label={`Scarica ${voce.nome}`}
-          title={puoScaricare ? "File non disponibile" : MOTIVO_SENZA_DOWNLOAD}
-          disabled
+          title={puoScaricare ? "Scarica" : MOTIVO_SENZA_DOWNLOAD}
+          disabled={!puoScaricare || (fileSingolo.inCorso !== null && !inDownload)}
+          loading={inDownload}
+          onClick={() => void fileSingolo.scarica(voce.id, voce.nome)}
         >
-          <Lucide icon="Download" aria-hidden="true" className="h-3.5 w-3.5" />
+          {!inDownload && <Lucide icon="Download" aria-hidden="true" className="h-3.5 w-3.5" />}
         </Button>
-      )}
-    </>
-  );
+      </>
+    );
+  };
 
   const casellaPagina = (
     <CasellaPagina
@@ -414,11 +399,7 @@ function FileFormato({ promo, periodo, formato, puoScaricare, richiesteInVista }
                   {voce.referenza?.codice && <span className="ml-1.5 text-xs tabular-nums text-slate-500">{voce.referenza.codice}</span>}
                 </div>
               )}
-              <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
-                {voce.stato && <StatusBadge dominio="fileKit" stato={voce.stato} />}
-                {voce.reparto && <span>{voce.reparto}</span>}
-                <span className="tabular-nums">{versioneFile(voce)}</span>
-              </div>
+              {voce.reparto && <div className="mt-2 text-xs text-slate-500">{voce.reparto}</div>}
             </div>
             <div className="flex flex-none flex-col gap-1.5">{comandiFile(voce)}</div>
           </li>
@@ -436,8 +417,8 @@ function FileFormato({ promo, periodo, formato, puoScaricare, richiesteInVista }
             <Table.Th>File</Table.Th>
             <Table.Th>Referenza</Table.Th>
             <Table.Th>Reparto</Table.Th>
-            <Table.Th>Stato</Table.Th>
-            <Table.Th>Ver.</Table.Th>
+            <Table.Th>Area</Table.Th>
+            <Table.Th>Canale</Table.Th>
             <Table.Th className="text-right">
               <span className="sr-only">Azioni</span>
             </Table.Th>
@@ -449,9 +430,6 @@ function FileFormato({ promo, periodo, formato, puoScaricare, richiesteInVista }
               <Table.Td className="w-10">{casellaFile(voce)}</Table.Td>
               <Table.Td className="min-w-48">
                 <div className="break-all font-medium text-slate-700 dark:text-slate-200">{voce.nome}</div>
-                <div className="mt-0.5 text-xs text-slate-500">
-                  {voce.area.nome} · {voce.canale.nome}
-                </div>
               </Table.Td>
               <Table.Td className="min-w-48">
                 <div className="text-slate-700 dark:text-slate-200">{voce.referenza?.descrizione || VALORE_ASSENTE}</div>
@@ -464,14 +442,8 @@ function FileFormato({ promo, periodo, formato, puoScaricare, richiesteInVista }
                   <span className="text-slate-400">{VALORE_ASSENTE}</span>
                 )}
               </Table.Td>
-              <Table.Td>
-                {voce.stato ? (
-                  <StatusBadge dominio="fileKit" stato={voce.stato} />
-                ) : (
-                  <span className="text-slate-400">{VALORE_ASSENTE}</span>
-                )}
-              </Table.Td>
-              <Table.Td className="tabular-nums text-slate-600 dark:text-slate-300">{versioneFile(voce)}</Table.Td>
+              <Table.Td className="whitespace-nowrap text-slate-700 dark:text-slate-200">{voce.area.nome}</Table.Td>
+              <Table.Td className="whitespace-nowrap text-slate-700 dark:text-slate-200">{voce.canale.nome}</Table.Td>
               <Table.Td className="text-right">
                 <div className="flex justify-end gap-1.5">{comandiFile(voce)}</div>
               </Table.Td>
@@ -511,22 +483,8 @@ function FileFormato({ promo, periodo, formato, puoScaricare, richiesteInVista }
           onChange={setTestoRicerca}
           className={CLASSI_RICERCA}
         />
-        {/* Sotto sm due tendine per riga; da sm "contents" le rimette nella riga dei filtri */}
-        <div className="grid grid-cols-2 gap-2 sm:contents">
-          <FormSelect
-            formSelectSize="sm"
-            aria-label="Stato file"
-            className={CLASSI_TENDINA}
-            value={stato}
-            onChange={(evento) => filtra({ stato: isStatoFile(evento.target.value) ? evento.target.value : "" })}
-          >
-            <option value="">Tutti gli stati</option>
-            {STATI_FILE_POP.map((voce) => (
-              <option key={voce} value={voce}>
-                {descriviStato("fileKit", voce).etichetta}
-              </option>
-            ))}
-          </FormSelect>
+        {/* Sotto sm due tendine per riga, il reparto su tutta la riga; da sm "contents" le rimette nella riga dei filtri */}
+        <div className="grid grid-cols-2 gap-2 sm:contents [&>*:last-child]:col-span-2">
           <FormSelect
             formSelectSize="sm"
             aria-label="Area"
@@ -597,9 +555,9 @@ function FileFormato({ promo, periodo, formato, puoScaricare, richiesteInVista }
         />
       )}
 
-      {anteprima?.idOlimpoCloud && (
+      {anteprima?.anteprima && (
         <PreviewImmaginePdf
-          imageUrl={urlAnteprimaMateriale(anteprima.idOlimpoCloud)}
+          imageUrl={anteprima.anteprima}
           totalPages={anteprima.pagine ?? 1}
           onClose={() => setAnteprima(null)}
         />

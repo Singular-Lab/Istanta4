@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { PERMESSI } from '../catalogo';
 import {
   convertiMenuMateriali,
+  PERCORSI_IN_CORSO,
   PERCORSI_MATERIALI,
   SEPARATORE_POP,
   SEPARATORE_VOLANTINI,
@@ -54,7 +55,7 @@ describe('conversione delle voci Materiali nei menu salvati', () => {
     const volantini = voci.filter(v => ['attivi', 'in-corso', 'storico'].includes(v.id_menu_item));
     expect(volantini.map(v => [v.titolo, v.pathname, v.codice_permesso, v.icona])).toEqual([
       ['Volantini attivi', '/volantini/attivi', PERMESSI.MATERIALI.VISUALIZZA, 'FolderOpen'],
-      ['Volantini in corso', '/volantini/in-corso', PERMESSI.MATERIALI.VISUALIZZA, 'Clock'],
+      ['Volantini prossimi', '/volantini/prossimi', PERMESSI.MATERIALI.VISUALIZZA, 'Clock'],
       ['Volantini storico', '/volantini/storico', PERMESSI.MATERIALI.VISUALIZZA, 'Archive'],
     ]);
   });
@@ -95,18 +96,18 @@ describe('conversione delle voci Materiali nei menu salvati', () => {
       ['Promozioni in corso', '/promozioni/in-corso', 1],
       ['MATERIALI VOLANTINO', null, 2],
       ['Volantini attivi', '/volantini/attivi', 3],
-      ['Volantini in corso', '/volantini/in-corso', 4],
+      ['Volantini prossimi', '/volantini/prossimi', 4],
       ['Volantini storico', '/volantini/storico', 5],
       ['MATERIALI POP', null, 6],
       ['POP attivi', '/pop/attivi', 7],
-      ['POP in corso', '/pop/in-corso', 8],
+      ['POP prossimi', '/pop/prossimi', 8],
       ['POP storico', '/pop/storico', 9],
       ['ORDINI DI STAMPA', null, 10],
       ['Ordini in corso', '/ods-in-corso', 11],
     ]);
     expect(inserite.map(v => [v.id_menu_item, v.tipo, v.icona, v.codice_permesso, v.disabilitato, v.start_page, v.id_parent])).toEqual([
       ['pop-attivi', 'item', 'FolderOpen', PERMESSI.MATERIALI.VISUALIZZA, false, false, null],
-      ['pop-in-corso', 'item', 'Clock', PERMESSI.MATERIALI.VISUALIZZA, false, false, null],
+      ['pop-prossimi', 'item', 'Clock', PERMESSI.MATERIALI.VISUALIZZA, false, false, null],
       ['pop-storico', 'item', 'Archive', PERMESSI.MATERIALI.VISUALIZZA, false, false, null],
       ['pop-intestazione-pop', 'separator', null, null, false, false, null],
     ]);
@@ -141,7 +142,7 @@ describe('conversione delle voci Materiali nei menu salvati', () => {
     ], idPop);
 
     expect(inserite.map(v => [v.titolo, v.id_parent, v.ordinamento])).toEqual([
-      ['POP in corso', 'padre', 2],
+      ['POP prossimi', 'padre', 2],
       ['POP attivi', 'padre', 3],
     ]);
     expect(voci.find(v => v.id_menu_item === 'altra')?.ordinamento).toBe(4);
@@ -202,11 +203,81 @@ describe('conversione delle voci Materiali nei menu salvati', () => {
 
   it('i percorsi nuovi stanno nel catalogo delle pagine con il permesso dei materiali, come i vecchi redirect', () => {
     expect(PERCORSI_MATERIALI).toEqual({
-      '/materiali-in-corso': '/volantini/in-corso',
+      '/materiali-in-corso': '/volantini/prossimi',
       '/materiali-attivi': '/volantini/attivi',
       '/storico-materiali': '/volantini/storico',
     });
     for (const [vecchio, nuovo] of Object.entries(PERCORSI_MATERIALI)) {
+      expect(paginaPer(nuovo)?.percorso).toBe(nuovo);
+      expect(paginaPer(nuovo)?.permesso).toBe(PERMESSI.MATERIALI.VISUALIZZA);
+      expect(paginaPer(vecchio)?.permesso).toBe(PERMESSI.MATERIALI.VISUALIZZA);
+    }
+  });
+});
+
+describe('voci delle viste in corso, diventate Prossimi', () => {
+  /** Un menu già convertito prima di Prossimi: le viste Volantini e POP con il periodo "in corso". */
+  const menuInCorso = (): Voce[] => [
+    separatore('s-volantini', SEPARATORE_VOLANTINI, 0),
+    voce('v-attivi', 'Volantini attivi', '/volantini/attivi', 1, { icona: 'FolderOpen', codice_permesso: PERMESSI.MATERIALI.VISUALIZZA }),
+    voce('v-in-corso', 'Volantini in corso', '/volantini/in-corso', 2, { icona: 'Clock', codice_permesso: PERMESSI.MATERIALI.VISUALIZZA }),
+    separatore('s-pop', SEPARATORE_POP, 3),
+    voce('p-in-corso', 'POP in corso', '/pop/in-corso', 4, { icona: 'Clock', codice_permesso: null }),
+    voce('p-storico', 'POP storico', '/pop/storico', 5, { icona: 'Archive' }),
+  ];
+
+  it('portano alle viste Prossimi con il titolo nuovo e il permesso del catalogo, icona e posizione invariate', () => {
+    const { voci, aggiornate, inserite } = convertiMenuMateriali(menuInCorso(), idPop);
+
+    expect(voci.map(v => [v.id_menu_item, v.titolo, v.pathname, v.codice_permesso, v.icona, v.ordinamento])).toEqual([
+      ['s-volantini', SEPARATORE_VOLANTINI, null, null, null, 0],
+      ['v-attivi', 'Volantini attivi', '/volantini/attivi', PERMESSI.MATERIALI.VISUALIZZA, 'FolderOpen', 1],
+      ['v-in-corso', 'Volantini prossimi', '/volantini/prossimi', PERMESSI.MATERIALI.VISUALIZZA, 'Clock', 2],
+      ['s-pop', SEPARATORE_POP, null, null, null, 3],
+      ['p-in-corso', 'POP prossimi', '/pop/prossimi', PERMESSI.MATERIALI.VISUALIZZA, 'Clock', 4],
+      ['p-storico', 'POP storico', '/pop/storico', null, 'Archive', 5],
+    ]);
+    expect(aggiornate.map(v => v.id_menu_item)).toEqual(['v-in-corso', 'p-in-corso']);
+    // Non sono pagine Materiali: nessuna voce POP né intestazione nuova
+    expect(inserite).toEqual([]);
+  });
+
+  it('un titolo scelto dall amministratore resta com e; quello predefinito si riconosce senza badare a maiuscole e spazi', () => {
+    const { voci } = convertiMenuMateriali([
+      voce('v', 'Volantini da pubblicare', '/volantini/in-corso', 0),
+      voce('p', '  pop IN CORSO ', '/pop/in-corso', 1),
+    ], idPop);
+
+    expect(voci.map(v => [v.titolo, v.pathname])).toEqual([
+      ['Volantini da pubblicare', '/volantini/prossimi'],
+      ['POP prossimi', '/pop/prossimi'],
+    ]);
+  });
+
+  it('una voce disattivata o pagina iniziale resta tale', () => {
+    const { voci } = convertiMenuMateriali([
+      voce('v', 'Volantini in corso', '/volantini/in-corso', 0, { disabilitato: true, start_page: true }),
+    ], idPop);
+
+    expect([voci[0].pathname, voci[0].disabilitato, voci[0].start_page]).toEqual(['/volantini/prossimi', true, true]);
+  });
+
+  it('una seconda conversione non cambia nulla', () => {
+    const prima = convertiMenuMateriali(menuInCorso(), idPop);
+
+    const seconda = convertiMenuMateriali(prima.voci, idPop);
+
+    expect(seconda.aggiornate).toEqual([]);
+    expect(seconda.inserite).toEqual([]);
+    expect(seconda.voci).toEqual(prima.voci);
+  });
+
+  it('i percorsi nuovi stanno nel catalogo delle pagine con il permesso dei materiali, come i vecchi redirect', () => {
+    expect(PERCORSI_IN_CORSO).toEqual({
+      '/volantini/in-corso': '/volantini/prossimi',
+      '/pop/in-corso': '/pop/prossimi',
+    });
+    for (const [vecchio, nuovo] of Object.entries(PERCORSI_IN_CORSO)) {
       expect(paginaPer(nuovo)?.percorso).toBe(nuovo);
       expect(paginaPer(nuovo)?.permesso).toBe(PERMESSI.MATERIALI.VISUALIZZA);
       expect(paginaPer(vecchio)?.permesso).toBe(PERMESSI.MATERIALI.VISUALIZZA);

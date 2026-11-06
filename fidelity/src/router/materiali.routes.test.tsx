@@ -31,10 +31,10 @@ describe("viste Volantini e POP", () => {
   });
 
   it.each([
-    ["/volantini/in-corso", "in-corso", "VolantiniKit"],
+    ["/volantini/prossimi", "prossimi", "VolantiniKit"],
     ["/volantini/attivi", "attivi", "VolantiniKit"],
     ["/volantini/storico", "storico", "VolantiniKit"],
-    ["/pop/in-corso", "in-corso", "PopMateriali"],
+    ["/pop/prossimi", "prossimi", "PopMateriali"],
     ["/pop/attivi", "attivi", "PopMateriali"],
     ["/pop/storico", "storico", "PopMateriali"],
   ])("%s apre la sua pagina con il periodo %s, con il permesso dei materiali", async (percorso, periodo, pagina) => {
@@ -59,15 +59,28 @@ describe("viste Volantini e POP", () => {
     expect(rotta("/pop/futuri").path).toBe("*");
   });
 
-  it("/pop da solo apre il periodo in corso", async () => {
+  it("/pop da solo apre i POP delle promozioni valide", async () => {
     const risposta = await vaiA("http://localhost/pop");
 
     expect(risposta.status).toBe(302);
-    expect(risposta.headers.get("Location")).toBe("/pop/in-corso");
+    expect(risposta.headers.get("Location")).toBe("/pop/attivi");
   });
 
   it.each([
-    ["/materiali-in-corso", "/volantini/in-corso"],
+    ["/volantini/in-corso", "/volantini/prossimi"],
+    ["/volantini/in-corso?promo=p%201", "/volantini/prossimi?promo=p%201"],
+    ["/pop/in-corso", "/pop/prossimi"],
+    ["/pop/in-corso?promo=p1&formato=f1", "/pop/prossimi?promo=p1&formato=f1"],
+  ])("il vecchio periodo in corso %s porta a %s, con la promo dell'indirizzo", async (vecchio, nuovo) => {
+    const risposta = await vaiA(`http://localhost${vecchio}`);
+
+    expect(rotta(new URL(vecchio, "http://localhost").pathname).lazy).toBeUndefined();
+    expect(risposta.status).toBe(302);
+    expect(risposta.headers.get("Location")).toBe(nuovo);
+  });
+
+  it.each([
+    ["/materiali-in-corso", "/volantini/prossimi"],
     ["/materiali-attivi", "/volantini/attivi"],
     ["/storico-materiali", "/volantini/storico"],
   ])("il vecchio indirizzo %s porta a %s", async (vecchio, nuovo) => {
@@ -79,7 +92,7 @@ describe("viste Volantini e POP", () => {
   });
 
   it.each([
-    ["in-corso", "IN_LAVORAZIONE", "/volantini/in-corso?promo=p1"],
+    ["in-corso", "IN_LAVORAZIONE", "/volantini/prossimi?promo=p1"],
     ["in-corso", "VALIDA", "/volantini/attivi?promo=p1"],
     ["storico", "VALIDA_CON_ERRORI", "/volantini/attivi?promo=p1"],
     ["storico", "ARCHIVIATA", "/volantini/storico?promo=p1"],

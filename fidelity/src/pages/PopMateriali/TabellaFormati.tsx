@@ -1,85 +1,20 @@
 import Button from "@/components/Base/Button";
 import Lucide from "@/components/Base/Lucide";
 import Sezione from "@/components/Base/Sezione";
-import StatusBadge from "@/components/Base/StatusBadge";
 import Table from "@/components/Base/Table";
 import { useSchermoStretto } from "@/components/PuntiVendita/useSchermoStretto";
 import { formatNumero } from "@/utils/format";
 import { twMerge } from "@/utils/twMerge";
 import { useId, useState } from "react";
 import { Link } from "react-router-dom";
-import { STATO_LAVORAZIONE_KIT_RUNTIME } from "../../../lib/enums";
-import { soloKitPubblicati, type PeriodoMateriali } from "../../../lib/materiali/periodi";
-import { STATI_KIT_MATERIALI, type FormatoPop, type PromoMateriali, type StatoKitMateriali } from "../../../lib/materiali/tipi";
+import type { PeriodoConsultazione } from "../../../lib/consultazione/periodi";
+import type { FormatoPopConsultazione, PromoConsultazione } from "../../../lib/consultazione/tipi";
 import { MOTIVO_SENZA_DOWNLOAD, MOTIVO_SENZA_FILE, useScaricaZipPop } from "./scaricamenti";
 
-/** Segmenti della barra e legenda, nell'ordine della lavorazione; stessi colori dei pallini di StatusBadge. */
-const SEGMENTI: Readonly<Record<StatoKitMateriali, { legenda: string; colore: string }>> = {
-  NON_AVVIATO: { legenda: "Non avviati", colore: "bg-slate-400" },
-  IN_LAVORAZIONE: { legenda: "In lavorazione", colore: "bg-sky-500" },
-  IN_LAVORAZIONE_CON_ERRORI: { legenda: "Con errori", colore: "bg-amber-500" },
-  IN_REVISIONE: { legenda: "In revisione", colore: "bg-theme-1" },
-  PUBBLICATO: { legenda: "Pubblicati", colore: "bg-teal-500" },
-};
-
-/** Testo equivalente della barra, per le tecnologie assistive. */
-export const descriviAvanzamento = (filePerStato: Partial<Record<StatoKitMateriali, number>>): string => {
-  const parti = STATI_KIT_MATERIALI.filter((stato) => (filePerStato[stato] ?? 0) > 0).map(
-    (stato) => `${formatNumero(filePerStato[stato])} ${SEGMENTI[stato].legenda.toLowerCase()}`
-  );
-  return parti.length > 0 ? `File per stato del kit: ${parti.join(", ")}` : "Nessun file";
-};
-
-function BarraAvanzamento({
-  filePerStato,
-  className,
-}: {
-  filePerStato: Partial<Record<StatoKitMateriali, number>>;
-  className?: string;
-}) {
-  const totale = STATI_KIT_MATERIALI.reduce((somma, stato) => somma + (filePerStato[stato] ?? 0), 0);
-  // Binario slate-200: resta visibile anche sul fondo della riga scelta
-  return (
-    <span
-      role="img"
-      aria-label={descriviAvanzamento(filePerStato)}
-      className={twMerge("flex h-2 w-32 overflow-hidden rounded-full bg-slate-200 dark:bg-darkmode-400", className)}
-    >
-      {totale > 0 &&
-        STATI_KIT_MATERIALI.filter((stato) => (filePerStato[stato] ?? 0) > 0).map((stato) => (
-          <span
-            key={stato}
-            className={twMerge("h-full", SEGMENTI[stato].colore)}
-            style={{ width: `${((filePerStato[stato] ?? 0) / totale) * 100}%` }}
-          />
-        ))}
-    </span>
-  );
-}
-
-/** Stati che un kit può avere nel periodo: in Attivi e Storico ci sono solo kit pubblicati. */
-export const statiKitDelPeriodo = (periodo: PeriodoMateriali): readonly StatoKitMateriali[] =>
-  soloKitPubblicati(periodo)
-    ? STATI_KIT_MATERIALI.filter((stato) => stato === STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO)
-    : STATI_KIT_MATERIALI;
-
-function LegendaAvanzamento({ stati }: { stati: readonly StatoKitMateriali[] }) {
-  return (
-    <ul aria-label="Legenda dell'avanzamento" className="flex flex-wrap gap-x-4 gap-y-1 px-5 py-3 text-xs text-slate-500">
-      {stati.map((stato) => (
-        <li key={stato} className="inline-flex items-center gap-1.5">
-          <span aria-hidden="true" className={twMerge("h-2 w-2 rounded-full", SEGMENTI[stato].colore)} />
-          {SEGMENTI[stato].legenda}
-        </li>
-      ))}
-    </ul>
-  );
-}
-
 interface TabellaFormatiProps {
-  promo: PromoMateriali;
-  periodo: PeriodoMateriali;
-  formati: FormatoPop[];
+  promo: PromoConsultazione;
+  periodo: PeriodoConsultazione;
+  formati: FormatoPopConsultazione[];
   idFormatoSelezionato: string;
   /** Indirizzo che seleziona un formato (resta sulla stessa promo). */
   percorsoFormato: (idFormato: string) => string;
@@ -89,8 +24,8 @@ interface TabellaFormatiProps {
 }
 
 /**
- * Formati POP della promo: file, avanzamento per stato del kit, kit che li contengono (si espandono
- * a richiesta, così le righe restano basse) e ZIP del formato.
+ * Formati POP pubblicati della promo: file, kit che li contengono (si espandono a richiesta, così
+ * le righe restano basse) e ZIP del formato. Niente stati di lavorazione: i kit sono tutti pubblicati.
  */
 function TabellaFormati({
   promo,
@@ -116,7 +51,7 @@ function TabellaFormati({
     });
 
   // I pezzi di un formato, uguali nella riga della tabella e nella scheda
-  const pezzi = (formato: FormatoPop, indice: number) => {
+  const pezzi = (formato: FormatoPopConsultazione, indice: number) => {
     const selezionato = formato.id === idFormatoSelezionato;
     const kitAperto = kitAperti.has(formato.id);
     const idKit = `${idTabella}-kit-${indice}`;
@@ -157,12 +92,12 @@ function TabellaFormati({
       ),
       elencoKit: (
         <ul id={idKit} hidden={!kitAperto} className="mt-2 space-y-1.5">
-          {formato.kit.map((kit, indiceKit) => (
-            <li key={kit.id ?? `${kit.idDesign ?? indiceKit}-${kit.area.id}-${kit.canale.id}`} className="flex flex-wrap items-center gap-2 text-sm">
+          {formato.kit.map((kit) => (
+            <li key={kit.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
               <span className="text-slate-700 dark:text-slate-200">
                 {kit.area.nome} · {kit.canale.nome}
               </span>
-              <StatusBadge dominio="kitRuntime" stato={kit.stato} />
+              <span className="text-xs tabular-nums text-slate-500 dark:text-slate-400">{formatNumero(kit.numeroFile)} file</span>
             </li>
           ))}
         </ul>
@@ -190,7 +125,7 @@ function TabellaFormati({
     <Sezione
       senzaPadding
       titolo="File per formato"
-      descrizione="Scegli un formato per vederne i file qui sotto; espandi la riga per vedere area, canale e stato dei kit."
+      descrizione="Scegli un formato per vederne i file qui sotto; espandi la riga per vedere area e canale dei kit."
     >
       {!puoScaricare && (
         <p className="flex items-center gap-1.5 px-5 pb-3 text-xs text-slate-500">
@@ -210,7 +145,6 @@ function TabellaFormati({
                     {formatNumero(formato.numeroFile)} file
                   </span>
                 </div>
-                <BarraAvanzamento filePerStato={formato.filePerStatoKit} className="w-full" />
                 <div className="flex items-center justify-between gap-3">
                   {pulsanteKit}
                   {zip}
@@ -227,7 +161,6 @@ function TabellaFormati({
               <Table.Tr>
                 <Table.Th>Formato</Table.Th>
                 <Table.Th className="text-right">File</Table.Th>
-                <Table.Th>Avanzamento</Table.Th>
                 <Table.Th>Kit</Table.Th>
                 <Table.Th className="text-right">
                   <span className="sr-only">Azioni</span>
@@ -242,9 +175,6 @@ function TabellaFormati({
                     <Table.Td className="min-w-40">{nome}</Table.Td>
                     <Table.Td className="text-right tabular-nums dark:text-slate-200">{formatNumero(formato.numeroFile)}</Table.Td>
                     <Table.Td>
-                      <BarraAvanzamento filePerStato={formato.filePerStatoKit} className="mt-1.5" />
-                    </Table.Td>
-                    <Table.Td>
                       {pulsanteKit}
                       {elencoKit}
                     </Table.Td>
@@ -256,7 +186,6 @@ function TabellaFormati({
           </Table>
         </div>
       )}
-      <LegendaAvanzamento stati={statiKitDelPeriodo(periodo)} />
     </Sezione>
   );
 }

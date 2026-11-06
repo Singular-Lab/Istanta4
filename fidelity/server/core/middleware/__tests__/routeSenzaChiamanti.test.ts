@@ -127,6 +127,10 @@ describe('route senza chiamanti: censimento', () => {
 
     expect(lavorazione && [marcataIl(lavorazione), rimuovibileDal(lavorazione)]).toEqual(['2026-11-05', '2026-12-05']);
     expect([marcataIl({}), rimuovibileDal({})]).toEqual([MARCATE_IL, RIMUOVIBILI_DAL]);
+    // Le API /api/materiali delle viste Volantini e POP, sostituite da /api/consultazione (L6): tutte e nove
+    const materiali = ROUTE_SENZA_CHIAMANTI.filter(r => r.percorso.startsWith('/api/materiali/'));
+    expect(materiali).toHaveLength(9);
+    expect(new Set(materiali.map(r => `${marcataIl(r)} ${rimuovibileDal(r)}`))).toEqual(new Set(['2026-11-06 2026-12-06']));
     for (const route of ROUTE_SENZA_CHIAMANTI) {
       expect(new Date(rimuovibileDal(route)).getTime() - new Date(marcataIl(route)).getTime()).toBe(30 * 24 * 60 * 60 * 1000);
     }

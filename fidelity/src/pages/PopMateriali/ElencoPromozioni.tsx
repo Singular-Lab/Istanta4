@@ -6,10 +6,10 @@ import { testoValidita } from "@/utils/materiali";
 import { twMerge } from "@/utils/twMerge";
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import type { PromoPop } from "../../../lib/materiali/tipi";
+import type { PromoPopConsultazione } from "../../../lib/consultazione/tipi";
 
 interface ElencoPromozioniProps {
-  promozioni: PromoPop[];
+  promozioni: PromoPopConsultazione[];
   /** Promo mostrata a destra. */
   idSelezionata: string;
   className?: string;
