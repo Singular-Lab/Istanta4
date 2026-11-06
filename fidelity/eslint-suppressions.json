@@ -2529,20 +2529,6 @@
       "count": 1
     }
   },
-  "src/pages/ContenutiDigitali/index.tsx": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-explicit-any": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    },
-    "no-console": {
-      "count": 3
-    }
-  },
   "src/pages/CreaTemplatesWhatsappSuperAdmin/index.tsx": {
     "@typescript-eslint/no-explicit-any": {
       "count": 1
@@ -2706,7 +2692,7 @@
   },
   "src/pages/Dashboard3/index.tsx": {
     "no-console": {
-      "count": 2
+      "count": 1
     }
   },
   "src/pages/DashboardCategory/index.tsx": {

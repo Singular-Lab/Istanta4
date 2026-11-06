@@ -7,11 +7,15 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ServerCall } from "../../../lib/server_call";
 
-const finti = vi.hoisted(() => ({ showNotification: vi.fn(), permessiNegati: new Set<string>() }));
+const finti = vi.hoisted(() => ({ showNotification: vi.fn(), permessiNegati: new Set<string>(), scarica: vi.fn() }));
 
 vi.mock("../../../lib/server_call", () => ({ ServerCall: { get: vi.fn(), getUrl: vi.fn(() => "") } }));
 vi.mock("@/context/NotificationContext", () => ({ useNotification: () => ({ showNotification: finti.showNotification }) }));
 vi.mock("@/context/PermissionContext", () => ({ usePermission: (codice: string) => !finti.permessiNegati.has(codice) }));
+vi.mock("@/utils/scaricaFileConsultazione", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/utils/scaricaFileConsultazione")>()),
+  useScaricaFileConsultazione: () => ({ inCorso: null, scarica: finti.scarica }),
+}));
 vi.mock("react-router-dom", async (importOriginal) => ({
   ...(await importOriginal<typeof import("react-router-dom")>()),
   useLoaderData: () => null,
@@ -26,9 +30,14 @@ const rifiutata = () => {
   return promessa;
 };
 
+// Le sezioni leggono le API di consultazione: solo volantini pubblicati della GDO
+const URL_ATTIVI = "/consultazione/volantini?periodo=attivi&dimensione=200";
+const URL_STORICO = "/consultazione/volantini?periodo=storico&dimensione=10";
+const paginaVuota = () => ({ kit: [], totale: 0, pagina: 1, dimensione: 200 });
+
 const datiLoader = (inCorso: Promise<any>): Dashboard3LoaderData => ({
-  volantiniInCorsoPromise: inCorso,
-  volantiniPubblicatiInLavorazionePromise: Promise.resolve({ totale: 0, kit: [] }),
+  volantiniAttiviPromise: inCorso,
+  volantiniProssimiPromise: Promise.resolve(paginaVuota()),
   areePromise: Promise.resolve([]),
   canaliPromise: Promise.resolve([]),
 });
@@ -45,10 +54,10 @@ const apri = (loader: Dashboard3LoaderData | null, embedded = true, client = nuo
     </QueryClientProvider>
   );
 
-// Il servizio finto: aree e canali sono elenchi, i volantini hanno totale e kit
+// Il servizio finto: aree e canali sono elenchi, i volantini una pagina con totale e kit
 const rispostaPer = async (url: string) => {
   if (url === "/allAreeForGDO" || url === "/allCanaliForGDO") return [];
-  return { totale: 0, inScadenza: 0, inAttesa: 0, kit: [] };
+  return paginaVuota();
 };
 
 const chiamateA = (prefisso: string) =>
@@ -73,10 +82,10 @@ describe("Dashboard GDO", () => {
     const prossimi = screen.getByRole("region", { name: "Prossimi volantini" });
     expect(within(prossimi).getByText("Nessun volantino in attesa")).toBeInTheDocument();
 
-    vi.mocked(ServerCall.get).mockResolvedValueOnce({ totale: 0, inScadenza: 0, kit: [] });
+    vi.mocked(ServerCall.get).mockResolvedValueOnce(paginaVuota());
     await userEvent.click(within(card).getByRole("button", { name: "Riprova" }));
 
-    expect(ServerCall.get).toHaveBeenCalledWith("/dashboard/volantini-in-corso");
+    expect(ServerCall.get).toHaveBeenCalledWith(URL_ATTIVI);
     expect(await within(card).findByText("Nessun volantino attivo")).toBeInTheDocument();
     expect(within(card).queryByRole("alert")).not.toBeInTheDocument();
   });
@@ -85,12 +94,16 @@ describe("Dashboard GDO", () => {
     const kitInValidita = {
       id: "k1",
       titolo: "Volantino ottobre",
-      stato_lavorazione: "PUBBLICATO",
-      nome_promo: "Promo ottobre",
-      id_promo: "p1",
-      files: [],
+      promo: { id: "p1", nome: "Promo ottobre", validitaDal: "2026-10-16", validitaAl: "2026-10-29" },
+      area: { id: "a1", nome: "Toscana" },
+      canale: { id: "c1", nome: "Superstore" },
+      numeroFile: 1,
+      copertina: {
+        id: "f1", nome: "volantino.pdf", tipoExport: "VOL", mime: "application/pdf", pagine: 12,
+        anteprima: "/olimpo/materiali/getThumbnailMaterialePdfs?id=o1",
+      },
     };
-    const conKit = () => datiLoader(Promise.resolve({ totale: 1, inScadenza: 0, kit: [kitInValidita] }));
+    const conKit = () => datiLoader(Promise.resolve({ totale: 1, pagina: 1, dimensione: 200, kit: [kitInValidita] }));
 
     beforeEach(() => {
       vi.stubGlobal("IntersectionObserver", class {
@@ -119,10 +132,32 @@ describe("Dashboard GDO", () => {
       expect(await within(card).findByRole("heading", { name: "Volantino ottobre" })).toBeInTheDocument();
       expect(within(card).queryByRole("link", { name: "Volantino ottobre" })).not.toBeInTheDocument();
     });
+
+    it("la scheda non mostra lo stato del kit e Scarica prende il PDF dalla consultazione", async () => {
+      apri(conKit());
+
+      const card = await screen.findByRole("region", { name: "Volantini in validità" });
+      await within(card).findByRole("link", { name: "Volantino ottobre" });
+      expect(within(card).queryByText("Pubblicato")).not.toBeInTheDocument();
+
+      await userEvent.click(within(card).getByRole("button", { name: "Scarica" }));
+      expect(finti.scarica).toHaveBeenCalledWith("f1", "volantino.pdf");
+    });
+
+    it("senza materiali.scarica il comando Scarica è disattivato e dice perché", async () => {
+      finti.permessiNegati = new Set(["materiali.scarica"]);
+      apri(conKit());
+
+      const card = await screen.findByRole("region", { name: "Volantini in validità" });
+      await within(card).findByRole("link", { name: "Volantino ottobre" });
+      const scarica = within(card).getByRole("button", { name: "Scarica" });
+      expect(scarica).toBeDisabled();
+      expect(scarica).toHaveAttribute("title", "Manca il permesso di scaricare volantini e POP");
+    });
   });
 
   it("incorporata nella dashboard Superadmin non ha un'intestazione di pagina, da sola sì", async () => {
-    const dati = datiLoader(Promise.resolve({ totale: 0, inScadenza: 0, kit: [] }));
+    const dati = datiLoader(Promise.resolve(paginaVuota()));
     const { unmount } = apri(dati);
     await screen.findByRole("region", { name: "Volantini in validità" });
     expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
@@ -133,7 +168,7 @@ describe("Dashboard GDO", () => {
   });
 
   it("i filtri rapidi sono un gruppo a scelta singola con i conteggi", async () => {
-    apri(datiLoader(Promise.resolve({ totale: 0, inScadenza: 0, kit: [] })));
+    apri(datiLoader(Promise.resolve(paginaVuota())));
 
     const card = await screen.findByRole("region", { name: "Volantini in validità" });
     const gruppo = within(card).getByRole("radiogroup", { name: "Filtri rapidi" });
@@ -152,16 +187,16 @@ describe("Dashboard GDO", () => {
   });
 
   it("con le promesse del loader non ripete le sue richieste: dalla pagina parte solo lo storico", async () => {
-    apri(datiLoader(Promise.resolve({ totale: 0, inScadenza: 0, kit: [] })));
+    apri(datiLoader(Promise.resolve(paginaVuota())));
 
     await screen.findByRole("region", { name: "Storico volantini" });
 
     expect(ServerCall.get).toHaveBeenCalledTimes(1);
-    expect(ServerCall.get).toHaveBeenCalledWith("/dashboard/storico-volantini?limit=10");
+    expect(ServerCall.get).toHaveBeenCalledWith(URL_STORICO);
   });
 
   it("se il loader avvia anche lo storico, la pagina non chiede nulla", async () => {
-    apri({ ...datiLoader(Promise.resolve({ totale: 0, inScadenza: 0, kit: [] })), storicoPromise: Promise.resolve({ totale: 0, kit: [] }) });
+    apri({ ...datiLoader(Promise.resolve(paginaVuota())), storicoPromise: Promise.resolve(paginaVuota()) });
 
     await screen.findByRole("region", { name: "Storico volantini" });
 
@@ -197,7 +232,7 @@ describe("Dashboard GDO", () => {
   it("cambiando filtro chiede la card con il filtro e, se fallisce, Riprova rifà quella richiesta", async () => {
     vi.mocked(ServerCall.get).mockImplementation(async (url: string) => {
       if (url === "/allAreeForGDO") return [{ id: "a1", nome: "Nord" }];
-      if (url === "/dashboard/volantini-in-corso?id_area=a1") throw new Error("Servizio non raggiungibile");
+      if (url === "/consultazione/volantini?periodo=attivi&idArea=a1&dimensione=200") throw new Error("Servizio non raggiungibile");
       return rispostaPer(url);
     });
     apri(null);
@@ -208,10 +243,10 @@ describe("Dashboard GDO", () => {
 
     expect(await within(card).findByRole("alert")).toHaveTextContent("Volantini non caricati");
     vi.mocked(ServerCall.get).mockClear();
-    vi.mocked(ServerCall.get).mockResolvedValueOnce({ totale: 0, inScadenza: 0, kit: [] });
+    vi.mocked(ServerCall.get).mockResolvedValueOnce(paginaVuota());
     await userEvent.click(within(card).getByRole("button", { name: "Riprova" }));
 
-    expect(ServerCall.get).toHaveBeenCalledWith("/dashboard/volantini-in-corso?id_area=a1");
+    expect(ServerCall.get).toHaveBeenCalledWith("/consultazione/volantini?periodo=attivi&idArea=a1&dimensione=200");
     expect(await within(card).findByText("Nessun volantino per questi filtri")).toBeInTheDocument();
   });
 });

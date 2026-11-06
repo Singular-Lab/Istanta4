@@ -17,18 +17,19 @@ vi.mock("@/components/Base/TomSelect", () => ({
 import StoricoVolantini from ".";
 import { areeECanaliDaCombinazioni } from "./filtriAreeCanali";
 
+// Un volantino pubblicato dalle API di consultazione: niente stato del kit
 const kit = {
   id: "k1",
   titolo: "Volantino Nord",
-  nome_area: "Nord",
-  nome_canale: "Super",
-  stato_lavorazione: "PUBBLICATO",
-  nome_promo: "Promo ottobre",
-  id_promo: "p1",
-  validita_dal: "2026-10-05",
-  validita_al: "2026-10-20",
-  files: [{ id: "f1", nome: "volantino.pdf", id_olimpo_cloud: "o1", pages: 8 }],
+  promo: { id: "p1", nome: "Promo ottobre", validitaDal: "2026-10-05", validitaAl: "2026-10-20" },
+  area: { id: "a-nord", nome: "Nord" },
+  canale: { id: "ch-super", nome: "Super" },
+  numeroFile: 1,
+  copertina: { id: "f1", nome: "volantino.pdf", tipoExport: "VOL", mime: "application/pdf", pagine: 8, anteprima: "/olimpo/x?id=o1" },
 };
+
+const URL_STORICO = "/consultazione/volantini?periodo=storico";
+const pagina = (kitDellaPagina: unknown[], totale = kitDellaPagina.length) => ({ kit: kitDellaPagina, totale, pagina: 1, dimensione: 20 });
 
 const apri = () =>
   render(
@@ -45,7 +46,7 @@ describe("Storico volantini", () => {
 
   it("mostra i KPI sopra l'elenco e i volantini con le date nel formato DD/MM/YYYY", async () => {
     finti.get.mockImplementation((url: string) =>
-      Promise.resolve(url.startsWith("/dashboard/storico-volantini") ? { totale: 1, kit: [kit] } : [])
+      Promise.resolve(url.startsWith(URL_STORICO) ? pagina([kit]) : [])
     );
     apri();
 
@@ -58,7 +59,7 @@ describe("Storico volantini", () => {
   it("senza materiali.visualizza il titolo del volantino resta testo semplice", async () => {
     finti.permessiNegati = new Set(["materiali.visualizza"]);
     finti.get.mockImplementation((url: string) =>
-      Promise.resolve(url.startsWith("/dashboard/storico-volantini") ? { totale: 1, kit: [kit] } : [])
+      Promise.resolve(url.startsWith(URL_STORICO) ? pagina([kit]) : [])
     );
     apri();
 
@@ -68,7 +69,7 @@ describe("Storico volantini", () => {
 
   it("se lo storico non arriva mostra il motivo e Riprova", async () => {
     finti.get.mockImplementation((url: string) =>
-      url.startsWith("/dashboard/storico-volantini") ? Promise.reject(new Error("Servizio non raggiungibile")) : Promise.resolve([])
+      url.startsWith(URL_STORICO) ? Promise.reject(new Error("Servizio non raggiungibile")) : Promise.resolve([])
     );
     apri();
 
@@ -78,7 +79,7 @@ describe("Storico volantini", () => {
 
   it("popola i filtri Area e Canale dalle combinazioni area/canale e filtra lo storico per l'area scelta", async () => {
     finti.get.mockImplementation((url: string) => {
-      if (url.startsWith("/dashboard/storico-volantini")) return Promise.resolve({ totale: 1, kit: [kit] });
+      if (url.startsWith(URL_STORICO)) return Promise.resolve(pagina([kit]));
       if (url === "/get_all_combinazioni_canale_area") {
         return Promise.resolve([
           { id: "c1", id_area: "a-nord", id_canale: "ch-super", area_nome: "Nord", area_codice: "N", canale_nome: "Super", canale_codice: "S", stato: "ATTIVO" },
@@ -101,7 +102,19 @@ describe("Storico volantini", () => {
 
     fireEvent.change(area, { target: { value: "a-nord" } });
 
-    await vi.waitFor(() => expect(finti.get).toHaveBeenCalledWith("/dashboard/storico-volantini?id_area=a-nord"));
+    await vi.waitFor(() => expect(finti.get).toHaveBeenCalledWith(`${URL_STORICO}&idArea=a-nord&pagina=1&dimensione=20`));
+  });
+
+  it("chiede al server una pagina alla volta", async () => {
+    finti.get.mockImplementation((url: string) =>
+      Promise.resolve(url.startsWith(URL_STORICO) ? pagina([kit], 45) : [])
+    );
+    apri();
+
+    expect(await screen.findByRole("heading", { name: "Volantino Nord" })).toBeInTheDocument();
+    expect(finti.get).toHaveBeenCalledWith(`${URL_STORICO}&pagina=1&dimensione=20`);
+    // Solo volantini pubblicati: la scheda non mostra lo stato del kit
+    expect(screen.queryByText("Pubblicato")).not.toBeInTheDocument();
   });
 });
 

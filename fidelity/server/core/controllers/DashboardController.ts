@@ -14,8 +14,10 @@ export class DashboardController extends BaseController {
     }
 
     protected setupRoutes(): void {
-        // Panoramica e storico dei volantini: consultazione, con "volantini.visualizza"
-        const volantini = [authMiddleware, permissionGuard('volantini.visualizza')];
+        // Panoramica e storico dei volantini: consultazione, con "volantini.visualizza". Le pagine
+        // leggono ora /api/consultazione/volantini (solo pubblicati della GDO): queste si osservano
+        // per 30 giorni prima di toglierle (routeSenzaChiamanti.ts)
+        const volantini = [authMiddleware, permissionGuard('volantini.visualizza'), routeDeprecata];
         this.router.get('/volantini-in-corso', ...volantini, this.getVolantiniInCorso.bind(this));
         // Lo stato delle lavorazioni e' produzione: solo con il permesso sui kit e per la GDO della
         // sessione. La panoramica non la chiama piu' (ora c'e' Avanzamento produzione).

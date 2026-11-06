@@ -2,6 +2,7 @@
 import "@testing-library/jest-dom/vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { FiltriContenutiDigitali } from "../../../lib/consultazione/tipi";
 
 // jsdom non implementa ResizeObserver, usato da Headless UI all'apertura di Dialog e Popover
 globalThis.ResizeObserver ??= class {
@@ -9,8 +10,6 @@ globalThis.ResizeObserver ??= class {
   unobserve() {}
   disconnect() {}
 };
-
-type Filtri = { nome: string; idArea: string };
 
 const finti = vi.hoisted(() => ({
   query: {
@@ -20,64 +19,80 @@ const finti = vi.hoisted(() => ({
     error: null as Error | null,
     refetch: vi.fn(),
   },
-  chiamate: [] as { page: number; filters: Filtri }[],
+  chiamate: [] as FiltriContenutiDigitali[],
+  permessiNegati: new Set<string>(),
+  scarica: vi.fn(),
 }));
 
 vi.mock("@/components/SessionChecker", () => ({ default: (Componente: unknown) => Componente }));
-vi.mock("@/query/query", () => ({
-  useFetchAllContenutiDigitali: (page: number, _pageSize: number, filters: Filtri) => {
-    finti.chiamate.push({ page, filters });
+vi.mock("../../../lib/server_call", () => ({ ServerCall: { getUrl: () => "" } }));
+vi.mock("@/context/PermissionContext", () => ({ usePermission: (codice: string) => !finti.permessiNegati.has(codice) }));
+// Elenco e filtri dalle API di consultazione: niente endpoint di gestione né "file.download"
+vi.mock("@/query/consultazione", () => ({
+  useContenutiDigitali: (filtri: FiltriContenutiDigitali) => {
+    finti.chiamate.push(filtri);
     return finti.query;
   },
-  useFetchLavorazioni: () => ({ data: [] }),
-  useFetchAree: () => ({ data: [{ id: "a1", nome: "Nord" }] }),
-  useFetchCanali: () => ({ data: [] }),
-  useFetchTipiExport: () => ({ data: [] }),
-  useFetchFormati: () => ({ data: [] }),
+  useOpzioniContenutiDigitali: () => ({
+    data: { promozioni: [], tipiExport: [], formati: [], aree: [{ id: "a1", nome: "Nord" }], canali: [] },
+  }),
 }));
-vi.mock("../../../lib/server_call", () => ({ ServerCall: { getUrl: () => "" } }));
+vi.mock("@/utils/scaricaFileConsultazione", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/utils/scaricaFileConsultazione")>()),
+  useScaricaFileConsultazione: () => ({ inCorso: null, scarica: finti.scarica }),
+}));
 
 import ContenutiDigitali from ".";
 
 const ultimaChiamata = () => finti.chiamate.at(-1)!;
 
-// Come il servizio: totalItems conta i file, totalPages = totalItems / pageSize
-const conPagine = (totalPages: number) => ({
-  totalItems: totalPages * 10,
-  totalPages,
-  currentPage: 1,
-  pageSize: 10,
-  promos: [{ id: "p1", nome: "Promo", validita_dal: "", validita_al: "", stato: "VALIDA", kits: [{ id: "k1", nome: "Kit", files: [{ nome: "volantino.pdf" }] }] }],
-});
+const contenuto = {
+  id: "f1",
+  nome: "volantino.pdf",
+  tipoExport: "PDF",
+  mime: "application/pdf",
+  pagine: 2,
+  anteprima: null,
+  kit: { id: "k1", titolo: "Kit" },
+  promo: { id: "p1", nome: "Promo", validitaDal: null, validitaAl: null },
+  area: { id: "a1", nome: "Nord" },
+  canale: { id: "c1", nome: "Super" },
+  formato: { id: "fo1", nome: "Cartello" },
+};
+
+// Come il servizio: una pagina di file e il totale dei file che corrispondono
+const conTotale = (totale: number) => ({ file: [contenuto], totale, pagina: 1, dimensione: 10 });
 
 describe("Contenuti digitali", () => {
   beforeEach(() => {
     finti.chiamate = [];
-    finti.query = { data: conPagine(3), isLoading: false, isError: false, error: null, refetch: vi.fn() };
+    finti.permessiNegati = new Set();
+    finti.scarica.mockReset();
+    finti.query = { data: conTotale(30), isLoading: false, isError: false, error: null, refetch: vi.fn() };
   });
 
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  it("la ricerca filtra per nome dopo 300 ms dall'ultima battuta e torna alla prima pagina", () => {
+  it("la ricerca parte dopo 300 ms dall'ultima battuta e torna alla prima pagina", () => {
     vi.useFakeTimers();
     render(<ContenutiDigitali />);
 
     fireEvent.click(screen.getByText("2"));
-    expect(ultimaChiamata().page).toBe(2);
+    expect(ultimaChiamata().pagina).toBe(2);
 
     fireEvent.change(screen.getByLabelText("Cerca contenuti"), { target: { value: "  volantino " } });
     act(() => {
       vi.advanceTimersByTime(299);
     });
-    expect(ultimaChiamata().filters.nome).toBe("");
+    expect(ultimaChiamata().cerca).toBe("");
 
     act(() => {
       vi.advanceTimersByTime(1);
     });
-    expect(ultimaChiamata().filters.nome).toBe("volantino");
-    expect(ultimaChiamata().page).toBe(1);
+    expect(ultimaChiamata().cerca).toBe("volantino");
+    expect(ultimaChiamata().pagina).toBe(1);
   });
 
   it("Reset svuota anche il testo della ricerca", async () => {
@@ -85,13 +100,13 @@ describe("Contenuti digitali", () => {
     const cerca = screen.getByLabelText("Cerca contenuti");
 
     fireEvent.change(cerca, { target: { value: "locandina" } });
-    await vi.waitFor(() => expect(ultimaChiamata().filters.nome).toBe("locandina"));
+    await vi.waitFor(() => expect(ultimaChiamata().cerca).toBe("locandina"));
 
     fireEvent.click(screen.getByRole("button", { name: /Filtra/ }));
     fireEvent.click(await screen.findByRole("button", { name: /Reset/ }));
 
     expect(cerca).toHaveValue("");
-    expect(ultimaChiamata().filters.nome).toBe("");
+    expect(ultimaChiamata().cerca).toBe("");
   });
 
   it("se il caricamento fallisce mostra il motivo e Riprova ricarica", () => {
@@ -112,23 +127,33 @@ describe("Contenuti digitali", () => {
     }
   });
 
-  it("non mostra il menu Scarica vuoto e il contatore dei filtri conta quelli scelti", async () => {
+  it("i filtri propongono i valori dei contenuti consultabili e il contatore conta quelli scelti", async () => {
     render(<ContenutiDigitali />);
 
-    expect(screen.queryByRole("button", { name: /^Scarica\b(?! volantino)/ })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Filtra" })).not.toHaveTextContent(/X|\d/);
 
     fireEvent.click(screen.getByRole("button", { name: "Filtra" }));
     fireEvent.change(await screen.findByLabelText("Area"), { target: { value: "a1" } });
 
-    expect(ultimaChiamata().filters.idArea).toBe("a1");
+    expect(ultimaChiamata().idArea).toBe("a1");
+    expect(ultimaChiamata().pagina).toBe(1);
     expect(screen.getByRole("button", { name: /^Filtra\s*1 filtri attivi$/ })).toBeInTheDocument();
   });
 
-  it("i contenuti si scaricano con un comando che ne dice il nome", () => {
+  it("i contenuti si scaricano dalla consultazione con un comando che ne dice il nome", () => {
     render(<ContenutiDigitali />);
 
-    expect(screen.getByRole("button", { name: "Scarica volantino.pdf" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Scarica volantino.pdf" }));
+    expect(finti.scarica).toHaveBeenCalledWith("f1", "volantino.pdf");
     expect(screen.getByText("Mostrati 1–10 di 30")).toBeInTheDocument();
+  });
+
+  it("senza materiali.scarica il download è disattivato e dice perché", () => {
+    finti.permessiNegati = new Set(["materiali.scarica"]);
+    render(<ContenutiDigitali />);
+
+    const scarica = screen.getByRole("button", { name: "Scarica volantino.pdf" });
+    expect(scarica).toBeDisabled();
+    expect(scarica).toHaveAttribute("title", "Manca il permesso di scaricare volantini e POP");
   });
 });

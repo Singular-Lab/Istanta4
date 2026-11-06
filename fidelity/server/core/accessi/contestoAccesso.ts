@@ -74,3 +74,17 @@ export const gdoOperativaPerRichiesta = async (req: Request, res: Response, gdoR
   const contesto = await leggiContestoAccesso(req, res);
   return contesto?.idGdo ?? null;
 };
+
+/**
+ * GDO dei dati di consultazione (/api/consultazione):
+ * - `{ idGdo }`: la GDO della sessione, o quella indicata da chi opera per più GDO;
+ * - `'tutte'`: chi opera per più GDO (Superadmin, Agenzia) senza indicarne una;
+ * - `'nessuna'`: un utente senza GDO, che non vede i dati di nessuna GDO.
+ */
+export type AmbitoGdo = 'tutte' | 'nessuna' | { idGdo: string };
+
+export const ambitoGdoDellaRichiesta = async (req: Request, res: Response, gdoRichiesta?: unknown): Promise<AmbitoGdo> => {
+  const idGdo = await gdoOperativaPerRichiesta(req, res, gdoRichiesta);
+  if (idGdo) return { idGdo };
+  return operaPerPiuGdo(req.session?.tipo_utente as TIPO_UTENTI | undefined) ? 'tutte' : 'nessuna';
+};

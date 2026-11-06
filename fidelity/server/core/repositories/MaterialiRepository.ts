@@ -1,5 +1,6 @@
 import { QueryTypes } from 'sequelize';
 import { EXPORT_DI_SISTEMA, TIPO_KIT_DESIGN, TIPO_LAVORAZIONE } from '../../../lib/enums';
+import type { AmbitoGdo } from '../accessi/contestoAccesso';
 import { sequelize } from '../db';
 
 /**
@@ -23,6 +24,8 @@ export interface CriteriKit {
   tipoLavorazione: TIPO_LAVORAZIONE;
   idPromo?: string;
   idFormato?: string;
+  /** GDO delle promo (consultazione); senza, tutte le GDO, come nelle viste /api/materiali. */
+  ambitoGdo?: AmbitoGdo;
 }
 
 /** Filtri dell'utente sui kit (vista Volantini). */
@@ -83,6 +86,8 @@ export interface RigaKit extends RigaPromo {
   id_formato: string;
   nome_formato: string;
   numero_file: number;
+  /** Id del file della copertina (files_runtime): lo usa il download della consultazione. */
+  copertina_id_file?: string | null;
   copertina_id_olimpo: string | null;
   copertina_nome: string | null;
   copertina_mime: string | null;
@@ -115,6 +120,7 @@ export interface RigaVarianteVolantino {
   numero_file: number;
   /** Righe della lista dei punti vendita stampata nel volantino (punti_vendita_volantino). */
   numero_punti_vendita: number;
+  copertina_id_file?: string | null;
   copertina_id_olimpo: string | null;
   copertina_nome: string | null;
   copertina_mime: string | null;
@@ -253,6 +259,17 @@ const ULTIMO_LOG = `
 /** Testo cercato dentro un ILIKE: % e _ dell'utente valgono come caratteri. */
 export const comeRicercaParziale = (testo: string): string => `%${testo.replace(/[\\%_]/g, '\\$&')}%`;
 
+/**
+ * Promo della GDO dell'ambito: nessuna condizione per 'tutte', nessuna promo per 'nessuna'.
+ * `colonna` e' la colonna della GDO della promo (sempre un testo fisso, mai un valore dell'utente).
+ */
+export function condizioneAmbitoGdo(ambito: AmbitoGdo | undefined, sostituzioni: Sostituzioni, colonna = 'p.gdo'): string | null {
+  if (ambito === undefined || ambito === 'tutte') return null;
+  if (ambito === 'nessuna') return 'FALSE';
+  sostituzioni.ambitoGdo = ambito.idGdo;
+  return `${colonna} = :ambitoGdo`;
+}
+
 function condizioniKit(criteri: CriteriKit, sostituzioni: Sostituzioni): string[] {
   sostituzioni.statiPromo = [...criteri.statiPromo];
   sostituzioni.statiKit = [...criteri.statiKit];
@@ -271,6 +288,8 @@ function condizioniKit(criteri: CriteriKit, sostituzioni: Sostituzioni): string[
     condizioni.push('k.id_formato = :criterioFormato');
     sostituzioni.criterioFormato = criteri.idFormato;
   }
+  const gdo = condizioneAmbitoGdo(criteri.ambitoGdo, sostituzioni);
+  if (gdo) condizioni.push(gdo);
   return condizioni;
 }
 
@@ -318,7 +337,7 @@ const NOME_O_CODICE_CANALE = `COALESCE(NULLIF(c.nome_canali, ''), NULLIF(k.nome_
 /** Copertina del kit: il primo file dell'export volantino che sta su Olimpo, meglio se PDF. */
 const COPERTINA_VOLANTINO = `
   LEFT JOIN LATERAL (
-    SELECT f.id_olimpo_cloud, f.nome, f.mime, f.pages
+    SELECT f.id, f.id_olimpo_cloud, f.nome, f.mime, f.pages
     FROM files_runtime f
     WHERE f.id_runtime = k.id
       AND COALESCE(f.id_olimpo_cloud, '') <> ''
@@ -420,7 +439,7 @@ export class MaterialiRepository implements IMaterialiRepository {
     // Copertina: il primo file dell'export volantino che sta su Olimpo, meglio se PDF
     const copertina = opzioni.conCopertina
       ? `LEFT JOIN LATERAL (
-          SELECT f.id_olimpo_cloud, f.nome, f.mime, f.pages
+          SELECT f.id, f.id_olimpo_cloud, f.nome, f.mime, f.pages
           FROM files_runtime f
           WHERE f.id_runtime = k.id
             AND COALESCE(f.id_olimpo_cloud, '') <> ''
@@ -430,8 +449,8 @@ export class MaterialiRepository implements IMaterialiRepository {
         ) cop ON TRUE`
       : '';
     const colonneCopertina = opzioni.conCopertina
-      ? 'cop.id_olimpo_cloud AS copertina_id_olimpo, cop.nome AS copertina_nome, cop.mime AS copertina_mime, cop.pages AS copertina_pagine'
-      : 'NULL AS copertina_id_olimpo, NULL AS copertina_nome, NULL AS copertina_mime, NULL AS copertina_pagine';
+      ? 'cop.id::text AS copertina_id_file, cop.id_olimpo_cloud AS copertina_id_olimpo, cop.nome AS copertina_nome, cop.mime AS copertina_mime, cop.pages AS copertina_pagine'
+      : 'NULL AS copertina_id_file, NULL AS copertina_id_olimpo, NULL AS copertina_nome, NULL AS copertina_mime, NULL AS copertina_pagine';
     let pagina = '';
     if (opzioni.limite !== undefined) {
       pagina = 'LIMIT :limite OFFSET :scarto';
@@ -544,7 +563,7 @@ export class MaterialiRepository implements IMaterialiRepository {
          k.id_canale::text AS id_canale, ${NOME_O_CODICE_CANALE} AS nome_canale,
          (SELECT COUNT(*) FROM files_runtime f WHERE f.id_runtime = k.id AND ${FILE_NON_CORREGGO})::int AS numero_file,
          (SELECT COUNT(*) FROM punti_vendita_volantino pvv WHERE pvv.id_kit_runtime = k.id)::int AS numero_punti_vendita,
-         cop.id_olimpo_cloud AS copertina_id_olimpo, cop.nome AS copertina_nome,
+         cop.id::text AS copertina_id_file, cop.id_olimpo_cloud AS copertina_id_olimpo, cop.nome AS copertina_nome,
          cop.mime AS copertina_mime, cop.pages AS copertina_pagine,
          (${corrisponde}) AS corrisponde
        ${DA_KIT}
@@ -558,6 +577,7 @@ export class MaterialiRepository implements IMaterialiRepository {
   async elencaAreeCanaliVolantini(criteri: CriteriKit, combinazioniGdo: boolean): Promise<RigaAreaCanale[]> {
     const sostituzioni: Sostituzioni = {};
     const condizioni = condizioniKit(criteri, sostituzioni);
+    const gdoCombinazioni = condizioneAmbitoGdo(criteri.ambitoGdo, sostituzioni, 'pg.gdo');
     // Le combinazioni della GDO, anche disattivate: nello Storico un volantino puo' essere di una
     // combinazione che oggi non c'e' piu'. Le GDO sono quelle delle promo del periodo
     const combinazioni = combinazioniGdo
@@ -570,6 +590,7 @@ export class MaterialiRepository implements IMaterialiRepository {
          LEFT JOIN canali c ON c.id_canali = cca.id_canale_combinazione_canale_area
          WHERE cca.id_gdo_combinazione_canale_area::text IN (
            SELECT lower(pg.gdo) FROM promo pg WHERE pg.stato IN (:statiPromo)
+             ${gdoCombinazioni ? `AND ${gdoCombinazioni}` : ''}
          )`
       : '';
     return this.seleziona<RigaAreaCanale>(

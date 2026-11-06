@@ -9,12 +9,18 @@ import axios from "axios";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { ServerCall } from "../../../lib/server_call";
+import { MOTIVO_SENZA_PERMESSO_SCARICA, scaricaFileConsultazione } from "@/utils/scaricaFileConsultazione";
 
 /** File principale del kit (il volantino), con i campi già normalizzati dalla pagina. */
 export interface FileVolantino {
   nome?: string;
   /** Immagine di anteprima (url o miniatura). */
   anteprima?: string;
+  /**
+   * Id del file pubblicato (files_runtime): si scarica dalla consultazione con "materiali.scarica".
+   * Senza, lo scaricamento passa da Olimpo con idOlimpoCloud (pagine della produzione).
+   */
+  idFile?: string;
   idOlimpoCloud?: string;
   tipoExport?: string;
   mime?: string;
@@ -23,8 +29,11 @@ export interface FileVolantino {
 
 export interface CardVolantinoProps {
   titolo: string;
-  /** Stato di lavorazione del kit runtime, o NON_AVVIATO per un kit previsto ma senza runtime. */
-  stato: string;
+  /**
+   * Stato di lavorazione del kit runtime, o NON_AVVIATO per un kit previsto ma senza runtime. Le
+   * pagine di consultazione non lo indicano: mostrano solo volantini pubblicati.
+   */
+  stato?: string;
   nomeArea?: string;
   nomeCanale?: string;
   file?: FileVolantino;
@@ -36,6 +45,8 @@ export interface CardVolantinoProps {
   promo?: { nome: string; collegamento?: string };
   /** File del kit; se indicato la card mostra quanti sono ("Nessun file" con 0). */
   numeroFile?: number;
+  /** Falso senza il permesso di scaricare: il comando Scarica è disattivato e dice perché. */
+  puoScaricare?: boolean;
   className?: string;
 }
 
@@ -61,19 +72,34 @@ function CardVolantino({
   collegamento,
   promo,
   numeroFile,
+  puoScaricare = true,
   className,
 }: CardVolantinoProps) {
   const [anteprimaAperta, setAnteprimaAperta] = useState(false);
   const [scaricamento, setScaricamento] = useState(false);
+  // Motivo dell'ultimo download non riuscito dalla consultazione, mostrato nella scheda
+  const [erroreDownload, setErroreDownload] = useState<string | null>(null);
 
   const anteprima = file?.anteprima ?? "";
   const conAnteprima = Boolean(anteprima);
-  const scaricabile = Boolean(file?.idOlimpoCloud);
+  const scaricabile = puoScaricare && Boolean(file?.idFile || file?.idOlimpoCloud);
   const periodo = periodoValidita(validitaDal, validitaAl);
 
   const scarica = async () => {
-    if (!file?.idOlimpoCloud || scaricamento) return;
+    if (!scaricabile || !file || scaricamento) return;
     setScaricamento(true);
+    // Consultazione: il server controlla che il file sia pubblicato e della GDO, e un errore si mostra
+    if (file.idFile) {
+      setErroreDownload(null);
+      try {
+        await scaricaFileConsultazione(file.idFile, file.nome);
+      } catch (errore) {
+        setErroreDownload((errore as Error)?.message || "Download del file non riuscito");
+      } finally {
+        setScaricamento(false);
+      }
+      return;
+    }
     try {
       const response = await axios.get(`${ServerCall.getUrl()}/getFileFromOlimpo?id=${file.idOlimpoCloud}`, {
         responseType: "arraybuffer",
@@ -170,7 +196,7 @@ function CardVolantino({
                   </div>
                 )}
               </div>
-              <StatusBadge dominio="kitRuntime" stato={stato} />
+              {stato && <StatusBadge dominio="kitRuntime" stato={stato} />}
             </div>
 
             <div className="mt-3 flex flex-wrap items-center gap-3 text-2xs text-slate-500">
@@ -214,6 +240,7 @@ function CardVolantino({
                 onClick={scarica}
                 disabled={!scaricabile}
                 loading={scaricamento}
+                title={!puoScaricare ? MOTIVO_SENZA_PERMESSO_SCARICA : undefined}
               >
                 {!scaricamento && <Lucide icon="Download" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />}
                 {scaricamento ? "Download…" : "Scarica"}
@@ -229,6 +256,11 @@ function CardVolantino({
                 Anteprima
               </Button>
             </div>
+            {erroreDownload && (
+              <p role="alert" className="mt-2 text-right text-xs text-danger">
+                {erroreDownload}
+              </p>
+            )}
           </div>
         </div>
       </article>

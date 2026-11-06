@@ -18,6 +18,7 @@ import type {
 // Extend ImportMeta interface to include 'env'
 // Rimosso vecchio sistema IndexedDB - ora uso il nuovo sistema centralizzato
 import { getColor } from "@/utils/colors";
+import { richiesteVolantiniPanoramica } from "@/query/consultazione";
 import { redirect, type LoaderFunction, type LoaderFunctionArgs, type Params } from "react-router-dom";
 import { STATO_LAVORAZIONE_KIT_RUNTIME } from "../../lib/enums";
 import { percorsoVolantini, periodoDellaPromo } from "../../lib/materiali/periodi";
@@ -716,55 +717,15 @@ export const funzioneCaricamentoInvioCampagnaWhatsapp = async ({ request }: { re
   };
 }
 
-// Tipi per Dashboard3
-interface FileAnteprima {
-  id: string;
-  nome: string;
-  nome_originale?: string;
-  tipo_export?: string;
-  id_olimpo_cloud?: string;
-  thumbnailUrl?: string;
-  mime?: string;
-  pages?: number;
-}
-
-interface KitVolantino {
-  guidId: string;
-  titolo: string;
-  nomeArea?: string;
-  nomeCanale?: string;
-  stato_lavorazione: string;
-  idPromo: string;
-  validita_al?: string;
-  files: FileAnteprima[];
-}
-
-interface VolantiniInCorsoResponse {
-  totale: number;
-  inScadenza: number;
-  kit: KitVolantino[];
-}
-
-interface VolantiniPubblicatiInLavorazioneResponse {
-  totale: number;
-  kit: KitVolantino[];
-}
-
-// Loader per Dashboard3 - Volantini
+// Loader per Dashboard3 - Volantini: le tre sezioni dalle API di consultazione (solo pubblicati della GDO)
 export const dashboard3Loader = async () => {
-  const volantiniInCorsoPromise = ServerCall.get<VolantiniInCorsoResponse>("/dashboard/volantini-in-corso");
-  const volantiniPubblicatiInLavorazionePromise = ServerCall.get<VolantiniPubblicatiInLavorazioneResponse>("/dashboard/volantini-pubblicati-in-lavorazione");
   const areePromise = ServerCall.get<AreaResponseDTO[]>("/allAreeForGDO");
   const canaliPromise = ServerCall.get<CanaleResponseDTO[]>("/allCanaliForGDO");
-  // Lo storico parte con la navigazione insieme alle altre card, non dopo il render della pagina
-  const storicoPromise = ServerCall.get<VolantiniPubblicatiInLavorazioneResponse>("/dashboard/storico-volantini?limit=10");
 
   return {
-    volantiniInCorsoPromise,
-    volantiniPubblicatiInLavorazionePromise,
+    ...richiesteVolantiniPanoramica(),
     areePromise,
     canaliPromise,
-    storicoPromise
   };
 };
 

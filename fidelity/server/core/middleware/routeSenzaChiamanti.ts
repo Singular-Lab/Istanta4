@@ -108,6 +108,37 @@ export const ROUTE_SENZA_CHIAMANTI: readonly RouteSenzaChiamanti[] = [
     motivo: 'La sezione "Volantini in lavorazione" della panoramica (Dashboard3, anche nella scheda Superadmin) e\' stata tolta: lo stato dei kit si segue in Avanzamento produzione (GET /api/produzione/avanzamento)',
     marcataIl: '2026-11-05',
   },
+  // ─── Pagine di Visualizzazione passate alle API di consultazione (L3, /api/consultazione) ───
+  {
+    metodo: 'GET',
+    percorso: '/api/dashboard/volantini-in-corso',
+    motivo: 'Panoramica (anche nella scheda Superadmin) e dashboard Category leggono GET /api/consultazione/volantini?periodo=attivi',
+    marcataIl: '2026-11-05',
+  },
+  {
+    metodo: 'GET',
+    percorso: '/api/dashboard/volantini-pubblicati-in-lavorazione',
+    motivo: 'La sezione "Prossimi volantini" della panoramica legge GET /api/consultazione/volantini?periodo=prossimi',
+    marcataIl: '2026-11-05',
+  },
+  {
+    metodo: 'GET',
+    percorso: '/api/dashboard/storico-volantini',
+    motivo: 'Panoramica e Storico volantini leggono GET /api/consultazione/volantini?periodo=storico',
+    marcataIl: '2026-11-05',
+  },
+  {
+    metodo: 'GET',
+    percorso: '/api/getAllFiles',
+    motivo: 'Il dettaglio del volantino legge GET /api/consultazione/volantini/:idKit e scarica da GET /api/consultazione/file/:idFile',
+    marcataIl: '2026-11-05',
+  },
+  {
+    metodo: 'PUT',
+    percorso: '/api/get_all_contenuti_digitali',
+    motivo: 'Contenuti digitali legge GET /api/consultazione/contenuti-digitali e /contenuti-digitali/opzioni',
+    marcataIl: '2026-11-05',
+  },
 ];
 
 /** Da quando la route si osserva: la sua data, o quella del primo inventario. */

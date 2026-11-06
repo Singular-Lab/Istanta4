@@ -9,8 +9,9 @@ const finti = vi.hoisted(() => ({
   insights: {} as Record<string, unknown>,
   configurazione: {} as Record<string, unknown>,
   file: {} as Record<string, unknown>,
-  opzioniFile: null as Record<string, unknown> | null,
+  richiestaFile: null as { idKit: string; abilitata?: boolean } | null,
   idKitRichiesti: [] as string[],
+  scarica: vi.fn(),
 }));
 
 vi.mock("@/components/SessionChecker", () => ({ default: (Componente: unknown) => Componente }));
@@ -22,11 +23,15 @@ vi.mock("@/query/query", () => ({
   },
   useFetchFlyerInsightsConfig: () => finti.configurazione,
 }));
-vi.mock("@tanstack/react-query", () => ({
-  useQuery: (opzioni: Record<string, unknown>) => {
-    finti.opzioniFile = opzioni;
+// I file arrivano dalle API di consultazione: solo quelli del kit pubblicato della GDO
+vi.mock("@/query/consultazione", () => ({
+  useVolantinoConsultazione: (idKit: string, abilitata?: boolean) => {
+    finti.richiestaFile = { idKit, abilitata };
     return finti.file;
   },
+}));
+vi.mock("@/utils/scaricaFileConsultazione", () => ({
+  useScaricaFileConsultazione: () => ({ inCorso: null, scarica: finti.scarica }),
 }));
 vi.mock("@/components/FlyerInsights", () => ({
   FlyerInsights: ({ insights, paginaSelezionata }: { insights: { guidIdKitRuntime: string } | null; paginaSelezionata?: number }) => (
@@ -64,9 +69,10 @@ describe("Dettaglio insight del volantino", () => {
     finti.permessi = new Set(["materiali.visualizza"]);
     finti.insights = caricato(datiInsight);
     finti.configurazione = caricato({});
-    finti.file = caricato({ titolo: "Volantino ottobre", files: [] });
-    finti.opzioniFile = null;
+    finti.file = caricato({ id: "k1", titolo: "Volantino ottobre", file: [] });
+    finti.richiestaFile = null;
     finti.idKitRichiesti = [];
+    finti.scarica.mockReset();
   });
 
   it("usa il kit dell'indirizzo e mostra contesto, pagina e referenza negli insight condivisi", () => {
@@ -82,26 +88,30 @@ describe("Dettaglio insight del volantino", () => {
   it("senza materiali.scarica lascia consultare gli insight e non abilita la richiesta dei file", () => {
     apri();
 
-    expect(finti.opzioniFile).toMatchObject({ enabled: false });
+    expect(finti.richiestaFile).toEqual({ idKit: "k1", abilitata: false });
     expect(screen.getByText(/Per scaricare i file serve il permesso di scaricare volantini e POP/)).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "File del volantino" })).not.toBeInTheDocument();
   });
 
-  it("con materiali.scarica mostra e filtra i file pubblicati", () => {
+  it("con materiali.scarica mostra, filtra e scarica dalla consultazione i file pubblicati", () => {
     finti.permessi.add("materiali.scarica");
     finti.file = caricato({
+      id: "k1",
       titolo: "Volantino ottobre",
-      files: [
-        { nome: "Roma.pdf", url: "/mini/roma", url_download: "/pdf/roma" },
-        { nome: "Locandina.pdf", nome_originale: "MILANO.pdf", url: "/mini/milano", url_download: "/pdf/milano" },
+      file: [
+        { id: "f1", nome: "Roma.pdf", tipoExport: "VOL", mime: "application/pdf", pagine: 8, anteprima: "/mini/roma" },
+        { id: "f2", nome: "MILANO.pdf", tipoExport: "VOL", mime: "application/pdf", pagine: 8, anteprima: null },
       ],
     });
     apri();
 
-    expect(finti.opzioniFile).toMatchObject({ enabled: true });
+    expect(finti.richiestaFile).toEqual({ idKit: "k1", abilitata: true });
     fireEvent.change(screen.getByRole("searchbox", { name: "Cerca file" }), { target: { value: "milano" } });
-    expect(screen.getByText("Locandina.pdf")).toBeInTheDocument();
+    expect(screen.getByText("MILANO.pdf")).toBeInTheDocument();
     expect(screen.queryByText("Roma.pdf")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Scarica PDF" }));
+    expect(finti.scarica).toHaveBeenCalledWith("f2", "MILANO.pdf");
   });
 
   it("senza parametro kit segnala l'indirizzo incompleto", () => {

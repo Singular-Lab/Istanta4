@@ -25,6 +25,8 @@ import React, { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { STATO_PROMO } from "../../../lib/enums";
 import { percorsoDettaglioVolantino } from "../../../lib/materiali/periodi";
+import type { PaginaVolantiniConsultazione } from "../../../lib/consultazione/tipi";
+import { urlVolantiniConsultazione } from "../../query/consultazione";
 import { ServerCall } from "../../../lib/server_call";
 import type {
     CategoryScoreboardTimeline,
@@ -34,23 +36,8 @@ import type { PromoResponseDTO } from "../../../server/core/dto";
 
 dayjs.locale("it");
 
-type KitVolantino = {
-    id: string;
-    titolo: string;
-    nome_area?: string;
-    nome_canale?: string;
-    stato_lavorazione: string;
-    nome_promo: string;
-    id_promo?: string;
-    validita_dal?: string;
-    validita_al?: string;
-};
-
-type VolantiniInCorso = {
-    totale: number;
-    inScadenza: number;
-    kit: KitVolantino[];
-};
+/** Volantini in validità della GDO dalle API di consultazione: solo pubblicati, senza stato. */
+const DIMENSIONE_VOLANTINI_IN_CORSO = 200;
 
 const clampScore = (v: number) => Math.max(0, Math.min(100, Math.round(v)));
 
@@ -155,7 +142,9 @@ const DashboardCategory: React.FC = () => {
 
     const volantiniQuery = useQuery({
         queryKey: ["categoryVolantiniInCorso"],
-        queryFn: () => ServerCall.get<VolantiniInCorso>("/dashboard/volantini-in-corso"),
+        queryFn: () => ServerCall.get<PaginaVolantiniConsultazione>(
+            urlVolantiniConsultazione("attivi", {}, { dimensione: DIMENSIONE_VOLANTINI_IN_CORSO })
+        ),
     });
 
     const promoQuery = useQuery({
@@ -351,13 +340,13 @@ const DashboardCategory: React.FC = () => {
         // Senza le promozioni vale la validita' del volantino stesso
         if (!puoVederePromo) {
             return kit.filter(item => promoOverlapsRange(
-                { validaDal: item.validita_dal ?? undefined, validaAl: item.validita_al ?? undefined },
+                { validaDal: item.promo.validitaDal ?? undefined, validaAl: item.promo.validitaAl ?? undefined },
                 dateFrom,
                 dateTo,
             ));
         }
         if (promoQuery.isLoading) return kit;
-        return kit.filter(item => (item.id_promo ? filteredPromoIds.has(item.id_promo) : true));
+        return kit.filter(item => filteredPromoIds.has(item.promo.id));
     }, [dateFrom, dateTo, filteredPromoIds, isDateRangeActive, promoQuery.isLoading, puoVederePromo, volantiniQuery.data]);
 
     const canaleAreaChartData = useMemo(() => {
@@ -632,14 +621,13 @@ const DashboardCategory: React.FC = () => {
                                                 to={percorsoDettaglioVolantino(kit.id)}
                                                 className="block truncate text-xs font-medium text-slate-700 hover:text-primary hover:underline"
                                             >
-                                                {kit.titolo || kit.nome_promo}
+                                                {kit.titolo || kit.promo.nome}
                                             </Link>
                                         ) : (
-                                            <div className="truncate text-xs font-medium text-slate-700">{kit.titolo || kit.nome_promo}</div>
+                                            <div className="truncate text-xs font-medium text-slate-700">{kit.titolo || kit.promo.nome}</div>
                                         )}
-                                        <div className="text-xs text-slate-500">{[kit.nome_area, kit.nome_canale].filter(Boolean).join(" / ")}</div>
+                                        <div className="text-xs text-slate-500">{[kit.area.nome, kit.canale.nome].filter(Boolean).join(" / ")}</div>
                                     </div>
-                                    <StatusBadge dominio="kitRuntime" stato={kit.stato_lavorazione} className="shrink-0" />
                                 </li>
                             ))}
                             {filteredVolantini.length > 10 && (

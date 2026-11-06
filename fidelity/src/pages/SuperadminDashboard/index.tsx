@@ -31,6 +31,7 @@ import { Link, useLoaderData, useSearchParams } from "react-router-dom";
 import { ServerCall } from "../../../lib/server_call";
 import withSessionCheck from "../../components/SessionChecker";
 import { SeverityBadge } from "../AuditLogDashboard/statiAudit";
+import { richiesteVolantiniPanoramica } from "../../query/consultazione";
 import Dashboard3, { Dashboard3LoaderData } from "../Dashboard3";
 
 const AuditLogDashboard = lazy(() => import("../AuditLogDashboard"));
@@ -401,8 +402,7 @@ const SuperadminDashboard: FC = () => {
 
         if (!gdoLoaderDataRef.current) {
             gdoLoaderDataRef.current = {
-                volantiniInCorsoPromise: ServerCall.get("/dashboard/volantini-in-corso"),
-                volantiniPubblicatiInLavorazionePromise: ServerCall.get("/dashboard/volantini-pubblicati-in-lavorazione"),
+                ...richiesteVolantiniPanoramica(),
                 areePromise: ServerCall.get("/allAreeForGDO"),
                 canaliPromise: ServerCall.get("/allCanaliForGDO"),
             } as Dashboard3LoaderData;
