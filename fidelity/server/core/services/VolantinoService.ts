@@ -16,6 +16,7 @@ import { FilesRuntime } from '../models/files_runtime';
 import { Referenze } from '../models/referenze';
 import { RuntimeKit } from '../models/runtime_kit';
 import { ReferenzeGruppo } from '../models/referenze_gruppo';
+import { applicaAnagraficaReparti, leggiAnagraficaReparti, valoreCampo, type PercorsoCampo } from '../utils/campiInsights';
 import { origineStoricoPerReport } from '../utils/origineStorico';
 import { percentualeIngombro } from '../utils/referenzaStampata';
 
@@ -145,25 +146,19 @@ export class VolantinoService implements IVolantinoService {
 
       // 2. Mappa referenze in DTO usando la config per i campi dinamici
       const insightsConfig = await this.configService.getFlyerInsightsConfig();
-      const fieldMapping: Record<string, string> = insightsConfig.dataMapping?.referenzaFields ?? {};
+      const fieldMapping: Record<string, PercorsoCampo> = insightsConfig.dataMapping?.referenzaFields ?? {};
+      const anagraficaReparti = leggiAnagraficaReparti(insightsConfig.dataMapping?.reparti);
 
-      const resolveFieldValue = (source: any, path: string): any => {
-        const parts = path.split('.');
-        let value: any = source;
-        for (const part of parts) {
-          value = value?.[part];
-          if (value === undefined || value === null) return '';
-        }
-        // Return arrays and objects as-is, only stringify primitives
-        if (Array.isArray(value) || typeof value === 'object') {
-          return value;
-        }
-        return String(value);
-      };
+      // Config per groupBy
+      const repartiGroupBy = insightsConfig.reparti?.groupBy ?? { field: 'reparto', descriptionField: 'descrizioneReparto' };
+      const meccanicheGroupBy = insightsConfig.meccaniche?.groupBy ?? { field: 'meccanica' };
+      const repartiField = repartiGroupBy.field;
+      const repartiDescField = repartiGroupBy.descriptionField;
+      const meccanicheField = meccanicheGroupBy.field;
 
       const referenzeDTO: ReferenzaPosizioneDTO[] = referenze.map(ref => {
         // PG raw: true restituisce data_fields (snake_case), ma il config usa dataFields (camelCase).
-        // Aggiunge l'alias in modo che resolveFieldValue possa seguire entrambi i path.
+        // Aggiunge l'alias in modo che valoreCampo possa seguire entrambi i path.
         // fotoGruppo non è colonna del modello PG: lo risolviamo dalla tabella ReferenzeGruppo.
         const codRef = ref.data_fields?.codice_referenza;
         const fotoGruppoGuid = codRef ? fotoGruppoMap.get(codRef) : undefined;
@@ -190,8 +185,10 @@ export class VolantinoService implements IVolantinoService {
           mapped.origine = codiciBoxFuoriListino.has(String(ref.codice_box)) ? 'fuori_listino' : 'listino';
         }
         for (const [dtoField, sourcePath] of Object.entries(fieldMapping)) {
-          mapped[dtoField] = resolveFieldValue(normalizedRef, sourcePath);
+          mapped[dtoField] = valoreCampo(normalizedRef, sourcePath);
         }
+        // Stesso reparto per Istanta ("01") e storico ("1", senza descrizione): quello dell'anagrafica
+        applicaAnagraficaReparti(mapped, anagraficaReparti, repartiField, repartiDescField);
 
         // Normalizza stringhe numeriche in formato italiano (es. "0,85" → 0.85)
         // Il componente usa Number(ref.prezzo) che non gestisce la virgola come separatore decimale
@@ -232,13 +229,6 @@ export class VolantinoService implements IVolantinoService {
         pagineMap.get(pag)!.refs.push(ref);
         pagineMap.get(pag)!.ingombro += percentualeIngombro(referenze[indice]);
       });
-
-      // Config per groupBy
-      const repartiGroupBy = insightsConfig.reparti?.groupBy ?? { field: 'reparto', descriptionField: 'descrizioneReparto' };
-      const meccanicheGroupBy = insightsConfig.meccaniche?.groupBy ?? { field: 'meccanica' };
-      const repartiField = repartiGroupBy.field;
-      const repartiDescField = repartiGroupBy.descriptionField;
-      const meccanicheField = meccanicheGroupBy.field;
 
       const riepilogoPagine: RiepilogoPaginaDTO[] = Array.from(pagineMap.entries())
         .sort((a, b) => a[0] - b[0])
