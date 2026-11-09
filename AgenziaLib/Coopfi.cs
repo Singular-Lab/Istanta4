@@ -440,6 +440,35 @@ namespace AgenziaLib
             return formatoA3(formato) || singoliComeIlGruppo(codiceSettore, codiceReparto);
         }
 
+        /// <summary>TASK-2c279c12: come escono i cartelli di un gruppo negli A7 del PoP Coop (gli stopper).</summary>
+        public enum CartelliDelGruppoA7
+        {
+            /// <summary>Le regole di prima: fuori dagli A7, referenze singole, linee da 10 in su, gruppi con vari/varie, settori 58/56.</summary>
+            ComePrima,
+            /// <summary>Un cartello per referenza, ognuno per intero il cartello di gruppo, e nessun cartello di gruppo in piu'.</summary>
+            SoloCopieDelGruppo,
+            /// <summary>Solo i cartelli singoli, con la propria descrizione, senza cartello di gruppo o linea.</summary>
+            SoloSingoli
+        }
+
+        /// <summary>
+        /// TASK-2c279c12: le regole degli stopper (A7) chieste da Coop. Le linee (BOX_LINEA) sotto le 10 referenze escono solo a
+        /// singoli, senza cartello linea; da 10 in su come prima (CartelliDellaLinea). I gruppi normali con prezzo promo e grammatura
+        /// uguali escono con una copia del cartello di gruppo per referenza; con prezzi o grammature diversi solo a singoli. Restano
+        /// come prima, per decisione dell'utente, i gruppi con "vari"/"varie" nella descrizione di gruppo, a qualunque prezzo, e quelli
+        /// di singoliComeIlGruppo. Gli A3 non passano di qui.
+        /// </summary>
+        public static CartelliDelGruppoA7 cartelliDelGruppoNegliA7(string formato, bool inGruppo, bool linea, bool lineaDa10InSu, bool prezziDiversi, bool pesiDiversi, bool descrizioneDiGruppoConVari, bool singoliComeIlGruppo)
+        {
+            if (formato != "A7" || !inGruppo)
+                return CartelliDelGruppoA7.ComePrima;
+            if (linea)
+                return lineaDa10InSu ? CartelliDelGruppoA7.ComePrima : CartelliDelGruppoA7.SoloSingoli;
+            if (descrizioneDiGruppoConVari || singoliComeIlGruppo)
+                return CartelliDelGruppoA7.ComePrima;
+            return prezziDiversi || pesiDiversi ? CartelliDelGruppoA7.SoloSingoli : CartelliDelGruppoA7.SoloCopieDelGruppo;
+        }
+
         /// <summary>
         /// I20-1193: le diciture dei separatori di reparto negli A3. Piu' reparti della lista finiscono sotto
         /// un solo separatore. Il reparto si confronta senza maiuscole e senza spazi ai bordi.
@@ -1078,6 +1107,13 @@ namespace AgenziaLib
                     {
                         continue;
                     }
+
+                    //TASK-2c279c12: negli A7 (gli stopper) il gruppo esce a sole copie del cartello di gruppo, a soli singoli, o come prima.
+                    //Il box e' ancora quello della lista: la forzatura delle linee a BOX_STD vale solo per codiceBox.
+                    CartelliDelGruppoA7 cartelliDelGruppoA7 = cartelliDelGruppoNegliA7(formatoKit, codice_referenza != codice_gruppo,
+                        recItem[key_codiceBox].ToString() == "BOX_LINEA", isLineaMaggioreUguale10, prezziDiversiInGruppo, pesiDiversiInGruppo,
+                        recItem.ContainsKey(GLOBAL_VARIABLES.keyXMLDescrizioneGruppo) && descrizioneDiGruppoConGustiVari(recItem[GLOBAL_VARIABLES.keyXMLDescrizioneGruppo] as Dictionary<string, object>),
+                        singoliComeIlGruppo(recItem.GetValueOrDefault("codice_settore"), recItem.GetValueOrDefault("codice_reparto")));
 
                     //I20-1193: negli A3 del gruppo escono solo il cartello di gruppo e la sua copia.
                     if (altroMembroDelGruppoNegliA3(formatoKit, codice_referenza != codice_gruppo, isLineaMaggioreUguale10, _cacheSottogruppi.Contains(codice_gruppo)))
@@ -2495,7 +2531,8 @@ namespace AgenziaLib
                     //CREAZIONE DEI GRUPPI (COMMENTA PER POP)
                     bool BOXLINEA_xSingoliBOXSTD = recItem[key_codiceBox].ToString() == "BOX_LINEA" && codiceBox != "BOX_LINEA";
 
-                    bool eludi = false;
+                    //TASK-2c279c12: con i soli singoli degli stopper il cartello di gruppo (o linea) non nasce.
+                    bool eludi = cartelliDelGruppoA7 == CartelliDelGruppoA7.SoloSingoli;
                     //I20-1099: i gruppi con "vari"/"varie" a prezzo unico non hanno il cartello di gruppo.
                     if (!eludi && codice_gruppo != codice_referenza && !isLineaMaggioreUguale10 && !gruppoConGustiVari) // (recItem.ContainsKey(keySottogruppo))
                     {
@@ -2753,6 +2790,10 @@ namespace AgenziaLib
                             _cacheSottogruppi.Add(codice_gruppo);
                             _cartelliDiGruppo[codice_gruppo] = artInKit.sottogruppo;
 
+                            //TASK-2c279c12: nelle copie degli stopper il cartello di gruppo fa solo da modello, non esce.
+                            if (cartelliDelGruppoA7 == CartelliDelGruppoA7.SoloCopieDelGruppo)
+                                artInKit.sottogruppo = null;
+
                         }
                         else if (inCache)
                         {
@@ -2761,6 +2802,10 @@ namespace AgenziaLib
                                 recItem.Remove(GLOBAL_VARIABLES.keyXMLDescrizioneGruppo);
                         }
                     }
+
+                    //TASK-2c279c12: senza un cartello di gruppo che esce, la copia non vi si lega (come i gruppi con vari/varie).
+                    if (cartelliDelGruppoA7 == CartelliDelGruppoA7.SoloCopieDelGruppo)
+                        recItem.Remove(keySottogruppo);
 
                     //Questo lo posso richiamare a prescindere anche se gia richiamato sopra secondo casistica
                     interprete.clearInterpreter();
@@ -2781,8 +2826,10 @@ namespace AgenziaLib
 
                     //Nei gruppi di singoliComeIlGruppo il singolo e' per intero il cartello di gruppo, anche il primo
                     //membro da cui il cartello e' nato. Dopo tutte le altre regole, cosi' niente lo cambia piu'.
+                    //TASK-2c279c12: anche nelle copie degli stopper.
                     if (codice_referenza != codice_gruppo
-                        && singoloCopiaDelGruppo(formatoKit, recItem.GetValueOrDefault("codice_settore"), recItem.GetValueOrDefault("codice_reparto"))
+                        && (singoloCopiaDelGruppo(formatoKit, recItem.GetValueOrDefault("codice_settore"), recItem.GetValueOrDefault("codice_reparto"))
+                            || cartelliDelGruppoA7 == CartelliDelGruppoA7.SoloCopieDelGruppo)
                         && _cartelliDiGruppo.TryGetValue(codice_gruppo, out Dictionary<string, object> cartelloDiGruppo))
                     {
                         ripetiIlCartelloDiGruppo(recItem, cartelloDiGruppo);
