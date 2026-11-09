@@ -71,7 +71,7 @@ const dettagliDelPercorso = (segmenti: string[]): { puntoVendita: Dettaglio | nu
 };
 
 /** Lo stato della query della pagina, senza crearla: la crea e la chiede la pagina. */
-function useStatoQuery(chiave: QueryKey | null): QueryState | undefined {
+export function useStatoQuery(chiave: QueryKey | null): QueryState | undefined {
   const client = useQueryClient();
   // Gli avvisi della cache arrivano anche mentre la pagina crea la sua query, cioè durante il suo
   // render: come useQuery, li si rimanda a dopo, per non aggiornare il breadcrumb in quel momento

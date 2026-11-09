@@ -1,4 +1,3 @@
-import Pagina from "@/components/Base/Pagina";
 import withSessionCheck from "@/components/SessionChecker";
 import { useLoaderData } from "react-router-dom";
 import {
@@ -14,26 +13,30 @@ export interface VolantiniKitLoaderData {
 
 const DESCRIZIONE: Readonly<Record<PeriodoConsultazione, string>> = {
   attivi:
-    "Volantini pubblicati nelle promozioni ancora valide, una scheda per promozione con le varianti per canale e area. Ogni variante apre i suoi insight.",
+    "Le promozioni valide adesso, con i loro volantini pubblicati. Apri una promozione per vedere i suoi volantini, dove arrivano e cosa promuovono.",
   prossimi:
-    "Volantini già pubblicati delle promozioni non ancora valide, una scheda per promozione con le varianti per canale e area. Ogni variante apre i suoi insight.",
+    "Le promozioni che devono ancora iniziare e hanno già volantini pubblicati. Apri una promozione per vedere i suoi volantini, dove arrivano e cosa promuovono.",
   storico:
-    "Volantini pubblicati nelle promozioni concluse, una scheda per promozione con le varianti per canale e area. Ogni variante apre i suoi insight.",
+    "Le promozioni concluse con i loro volantini pubblicati, dalla più recente. Apri una promozione per vedere i suoi volantini, dove sono arrivati e cosa hanno promosso.",
 };
 
 /**
  * Volantini pubblicati di un periodo (attivi, prossimi, storico): il periodo arriva dal loader
- * della rotta. Solo materiali pubblicati della GDO, dalle API di consultazione: la lavorazione dei
- * kit si segue da Avanzamento produzione. I materiali POP sono una vista a parte.
+ * della rotta. Solo promozioni con materiali pubblicati della GDO, dalle API di consultazione:
+ * ognuna apre il suo dettaglio di consultazione, la lavorazione dei kit si segue da Avanzamento
+ * produzione. I materiali POP sono una vista a parte.
  */
 function VolantiniKit() {
   const letto = (useLoaderData() as Partial<VolantiniKitLoaderData> | undefined)?.periodo;
   const periodo = isPeriodoConsultazione(letto) ? letto : "attivi";
   return (
-    <Pagina titolo={`Volantini ${ETICHETTA_PERIODO_CONSULTAZIONE[periodo]}`} descrizione={DESCRIZIONE[periodo]}>
-      {/* Cambiando periodo la vista riparte da zero: stesso componente, rotte diverse */}
-      <VolantiniPerPromozione key={periodo} periodo={periodo} />
-    </Pagina>
+    // Cambiando periodo la vista riparte da zero: stesso componente, rotte diverse
+    <VolantiniPerPromozione
+      key={periodo}
+      periodo={periodo}
+      titolo={`Volantini ${ETICHETTA_PERIODO_CONSULTAZIONE[periodo]}`}
+      descrizione={DESCRIZIONE[periodo]}
+    />
   );
 }
 

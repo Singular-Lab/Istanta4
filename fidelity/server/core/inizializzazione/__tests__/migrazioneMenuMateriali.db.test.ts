@@ -49,7 +49,7 @@ describe('migrazione dei menu Materiali sul database', () => {
   it('prende il lock, legge, aggiorna e inserisce nella stessa transazione e alza la versione dei permessi', async () => {
     const esito = await migraMenuMateriali();
 
-    expect(esito).toEqual({ menu: 1, aggiornate: 1, inserite: 1 });
+    expect(esito).toEqual({ menu: 1, aggiornate: 1, inserite: 1, rimosse: 0 });
     expect(query.mock.calls[0][0]).toContain('pg_advisory_xact_lock');
     for (const [, opzioni] of query.mock.calls) expect(opzioni.transaction).toBe(transazione);
 
@@ -90,7 +90,7 @@ describe('migrazione dei menu Materiali sul database', () => {
         : []
     );
 
-    expect(await migraMenuMateriali()).toEqual({ menu: 0, aggiornate: 0, inserite: 0 });
+    expect(await migraMenuMateriali()).toEqual({ menu: 0, aggiornate: 0, inserite: 0, rimosse: 0 });
     expect(chiamate('UPDATE menu_items')).toHaveLength(0);
     expect(chiamate('INSERT INTO menu_items')).toHaveLength(0);
     expect(incrementaVersionePermessi).not.toHaveBeenCalled();

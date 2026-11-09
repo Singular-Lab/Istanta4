@@ -61,6 +61,17 @@ export const PERCORSO_CONSULTAZIONE = '/consultazione';
 export const percorsoFileConsultazione = (idFile: string): string =>
   `${PERCORSO_CONSULTAZIONE}/file/${encodeURIComponent(idFile)}`;
 
+/**
+ * Pagina del dettaglio di consultazione di una promozione (spec volantini-pop): non dipende dal
+ * periodo, che puo' cambiare con lo stato della promo, ne' dalla produzione.
+ */
+export const percorsoPromozioneVolantini = (idPromo: string): string =>
+  `/volantini/promozioni/${encodeURIComponent(idPromo)}`;
+
+/** API del dettaglio di consultazione di una promozione, relativa all'indirizzo delle API. */
+export const percorsoPromozioneVolantiniConsultazione = (idPromo: string): string =>
+  `${PERCORSO_CONSULTAZIONE}/volantini/promozioni/${encodeURIComponent(idPromo)}`;
+
 /** Dettaglio di un kit volantino pubblicato, relativo all'indirizzo delle API. */
 export const percorsoVolantinoConsultazione = (idKit: string): string =>
   `${PERCORSO_CONSULTAZIONE}/volantini/${encodeURIComponent(idKit)}`;

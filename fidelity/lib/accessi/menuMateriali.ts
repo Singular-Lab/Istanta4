@@ -19,6 +19,9 @@ import { paginaPer } from './pagine';
  * - il periodo "in corso" è diventato "prossimi": le voci delle viste Volantini e POP in corso
  *   puntano alle viste Prossimi, con il permesso del catalogo; il titolo cambia solo se è ancora
  *   quello predefinito, l'icona resta.
+ * - la pagina Volantini (/volantini) non c'è più: la sua voce sparisce se il menu ha già Volantini
+ *   attivi e la voce non ha sottovoci né è la pagina iniziale; altrimenti apre Volantini attivi, con il permesso del catalogo, e si
+ *   chiama "Volantini attivi" solo se aveva ancora il titolo predefinito "Volantini".
  *
  * La conversione si può ripetere: su un menu già convertito non cambia nulla.
  */
@@ -62,6 +65,10 @@ export const PERCORSI_IN_CORSO: Readonly<Record<string, string>> = Object.fromEn
   Object.entries(VISTE_IN_CORSO).map(([vecchio, { percorso }]) => [vecchio, percorso])
 );
 
+/** La vecchia pagina Volantini: ora l'indirizzo porta a Volantini attivi. */
+export const PERCORSO_PAGINA_VOLANTINI = '/volantini';
+const TITOLO_PAGINA_VOLANTINI = 'Volantini';
+
 export const SEPARATORE_MATERIALI = 'MATERIALI';
 /** L'intestazione unica delle prime conversioni: ora si divide in due sezioni, come 'MATERIALI'. */
 export const SEPARATORE_VOLANTINI_E_POP = 'VOLANTINI E POP';
@@ -103,6 +110,8 @@ export interface EsitoConversioneMenu<V> {
   aggiornate: V[];
   /** Voci da aggiungere: le voci POP e le intestazioni 'MATERIALI POP'. */
   inserite: V[];
+  /** Voci da togliere: la voce della pagina Volantini quando il menu ha già Volantini attivi. Non sono in `voci`. */
+  rimosse?: V[];
 }
 
 const permessoDi = (percorso: string): string | null => paginaPer(percorso)?.permesso ?? null;
@@ -240,8 +249,25 @@ export const convertiMenuMateriali = <V extends VoceMenuConvertibile>(
   const cambiate = new Set<V>();
   const convertite: Array<{ voce: V; periodo: PeriodoConsultazione }> = [];
   const intestazioni: V[] = [];
+  const rimosse: V[] = [];
+  const attiviPresenti = voci.some(voce => voce.pathname === percorsoVolantini('attivi'));
+  const conSottovoci = new Set(voci.map(voce => voce.id_parent).filter((id): id is string => Boolean(id)));
 
   for (const voce of voci) {
+    if (voce.pathname === PERCORSO_PAGINA_VOLANTINI) {
+      // Volantini attivi c'è già: la voce sarebbe un doppione. Resta se ha sottovoci, per non lasciarle
+      // senza padre, o se è la pagina iniziale del menu, che non deve sparire.
+      if (attiviPresenti && !conSottovoci.has(voce.id_menu_item) && !voce.start_page) {
+        rimosse.push(voce);
+        continue;
+      }
+      voce.pathname = percorsoVolantini('attivi');
+      voce.codice_permesso = permessoDi(voce.pathname);
+      // Un titolo scelto dall'amministratore resta com'è.
+      if (stessoTesto(voce.titolo, TITOLO_PAGINA_VOLANTINI)) voce.titolo = TITOLO_VOLANTINI.attivi;
+      cambiate.add(voce);
+      continue;
+    }
     if (voce.tipo === TIPO_MENU_ITEM.SEPARATOR && INTESTAZIONI_DA_DIVIDERE.includes(voce.titolo.trim())) {
       voce.titolo = SEPARATORE_VOLANTINI;
       cambiate.add(voce);
@@ -268,6 +294,8 @@ export const convertiMenuMateriali = <V extends VoceMenuConvertibile>(
     convertite.push({ voce, periodo });
   }
 
+  for (const voce of rimosse) voci.splice(voci.indexOf(voce), 1);
+
   // Prima le voci POP, poi le intestazioni: la sezione POP comincia dalla prima voce POP.
   const vociPop = aggiungiVociPop(voci, convertite, cambiate, nuovoId);
   const intestazioniPop = dividiSezioni(voci, intestazioni, cambiate, new Set(vociPop), nuovoId);
@@ -275,5 +303,6 @@ export const convertiMenuMateriali = <V extends VoceMenuConvertibile>(
     voci,
     aggiornate: voci.filter(voce => cambiate.has(voce)),
     inserite: [...vociPop, ...intestazioniPop],
+    rimosse,
   };
 };

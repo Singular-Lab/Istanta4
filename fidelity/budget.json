@@ -5,12 +5,12 @@
     "comune": {
       "moduli": [],
       "js": {
-        "gzip": 219,
-        "brotli": 181
+        "gzip": 221,
+        "brotli": 182
       },
       "css": {
-        "gzip": 32,
-        "brotli": 24
+        "gzip": 34,
+        "brotli": 26
       }
     },
     "webpliant-volantino": {
@@ -20,12 +20,12 @@
         "src/router/loaderFunctions.ts"
       ],
       "js": {
-        "gzip": 430,
-        "brotli": 362
+        "gzip": 433,
+        "brotli": 364
       },
       "css": {
-        "gzip": 96,
-        "brotli": 73
+        "gzip": 98,
+        "brotli": 74
       }
     },
     "login": {
@@ -33,12 +33,12 @@
         "src/pages/HubLogin/index.tsx"
       ],
       "js": {
-        "gzip": 313,
-        "brotli": 263
+        "gzip": 318,
+        "brotli": 267
       },
       "css": {
-        "gzip": 32,
-        "brotli": 24
+        "gzip": 34,
+        "brotli": 26
       }
     },
     "dashboard": {
@@ -48,12 +48,12 @@
         "src/pages/Dashboard3/index.tsx"
       ],
       "js": {
-        "gzip": 432,
-        "brotli": 370
+        "gzip": 438,
+        "brotli": 374
       },
       "css": {
-        "gzip": 34,
-        "brotli": 26
+        "gzip": 37,
+        "brotli": 29
       }
     },
     "promo-in-corso": {
@@ -63,12 +63,12 @@
         "src/pages/LavorazioniInCorso/index.tsx"
       ],
       "js": {
-        "gzip": 394,
-        "brotli": 336
+        "gzip": 399,
+        "brotli": 339
       },
       "css": {
-        "gzip": 35,
-        "brotli": 27
+        "gzip": 38,
+        "brotli": 30
       }
     },
     "dettaglio-promo": {
@@ -78,12 +78,12 @@
         "src/pages/LavorazioniInCorso/DettagliLavorazioneInCorso/index.tsx"
       ],
       "js": {
-        "gzip": 480,
-        "brotli": 413
+        "gzip": 487,
+        "brotli": 418
       },
       "css": {
-        "gzip": 36,
-        "brotli": 28
+        "gzip": 39,
+        "brotli": 31
       }
     },
     "menabo": {
@@ -91,12 +91,12 @@
         "src/pages/MenaboPromo/index.tsx"
       ],
       "js": {
-        "gzip": 342,
-        "brotli": 289
+        "gzip": 347,
+        "brotli": 292
       },
       "css": {
-        "gzip": 32,
-        "brotli": 24
+        "gzip": 34,
+        "brotli": 26
       }
     }
   }

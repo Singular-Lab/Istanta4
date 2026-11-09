@@ -2,10 +2,13 @@ import type { Writable } from 'stream';
 import {
   isPeriodoConsultazione,
   PeriodoConsultazione,
+  periodoConsultazioneDellaPromo,
+  STATI_PROMO_CONSULTABILI,
   STATI_PROMO_CONSULTAZIONE,
 } from '../../../lib/consultazione/periodi';
 import {
   ContenutoDigitale,
+  DettaglioPromozioneVolantiniConsultazione,
   DettaglioVolantinoConsultazione,
   DIMENSIONE_MASSIMA_CONTENUTI_DIGITALI,
   DIMENSIONE_MASSIMA_VOLANTINI_CONSULTAZIONE,
@@ -20,6 +23,7 @@ import {
   FiltriVolantiniConsultazione,
   FiltriZipPopConsultazione,
   FormatoPopConsultazione,
+  MOTIVO_VETRINA_DEL_PERIODO,
   OpzioniContenutiDigitali,
   OpzioniFilePopConsultazione,
   PaginaContenutiDigitali,
@@ -33,6 +37,7 @@ import {
   RiepilogoPopConsultazione,
   VarianteConsultazione,
   VerificaZipPopConsultazione,
+  VetrinaVolantiniConsultazione,
   VolantinoConsultazione,
 } from '../../../lib/consultazione/tipi';
 import { EXPORT_DI_SISTEMA, STATO_LAVORAZIONE_KIT_RUNTIME, TIPO_LAVORAZIONE } from '../../../lib/enums';
@@ -40,6 +45,7 @@ import { BadRequestError, NotFoundError, ServiceUnavailableError } from '../../.
 import { urlOlimpo } from '../../../lib/olimpo/url';
 import type { AmbitoGdo } from '../accessi/contestoAccesso';
 import { ErroreRispostaOlimpo, motivoFileNonScaricato, scaricaMaterialePdf } from '../http/olimpo';
+import type { IConfigService } from '../interfaces/IConfigService';
 import type { IConsultazioneService, FileScaricato } from '../interfaces/IConsultazioneService';
 import type { EsitoZipOlimpo } from '../interfaces/IFileManagementService';
 import type { ZipPop } from '../interfaces/IMaterialiService';
@@ -50,6 +56,7 @@ import type {
   RigaFileConsultazione,
   RigaOpzioneContenutoDigitale,
 } from '../repositories/ConsultazioneRepository';
+import { kitNellAmbito, pdfDelKit, righeDelKit } from '../repositories/InsightVolantinoRepository';
 import type {
   CriteriKit,
   FiltriSqlFile,
@@ -62,7 +69,12 @@ import type {
   RigaPromo,
   RigaVarianteVolantino,
 } from '../repositories/MaterialiRepository';
+import { boxDelKit } from '../utils/analisiKit';
+import { sezioniInsight } from '../utils/insightVolantino';
+import { aggregaPromozioneVolantini, type KitConInsight } from '../utils/promozioneVolantini';
+import { leggiReferenza } from '../utils/referenzaStampata';
 import { trovaConfigInstallazione } from './configPerGdo';
+import { type ContestoConfig, contestoDallaConfig, type LettureKitInsight, opzioniDelKit } from './InsightConfrontiService';
 import {
   annoOpzionale,
   confrontaTesto,
@@ -94,6 +106,36 @@ export const campiRicercaDaConfigurazione: FonteCampiRicerca = async () => {
   return Array.isArray(campi) ? campi.filter((campo): campo is string => typeof campo === 'string') : [];
 };
 
+/** La config degli insight del volantino (ConfigService): reparti, meccanica e marche del distributore. */
+export type FonteConfigInsight = Pick<IConfigService, 'getFlyerInsightsConfig'>;
+
+/**
+ * Senza config valgono la lettura generica delle referenze e i campi predefiniti, come negli insight
+ * quando la config manca: il container passa il ConfigService, i test possono non farlo.
+ */
+const SENZA_CONFIG_INSIGHT: FonteConfigInsight = { getFlyerInsightsConfig: async () => ({}) };
+
+/** Le stesse letture del kit degli insight del volantino (InsightVolantinoRepository). */
+const LETTURE_KIT_INSIGHT: LettureKitInsight = { kitNellAmbito, pdfDelKit, righeDelKit };
+
+/** Kit letti insieme per gli insight del dettaglio della promozione: ognuno sono due query sulle referenze. */
+const KIT_INSIGHT_IN_PARALLELO = 4;
+
+/** Il lavoro su ogni voce, al massimo `limite` alla volta; i risultati nell'ordine delle voci. */
+async function aGruppi<T, R>(voci: readonly T[], limite: number, lavoro: (voce: T) => Promise<R>): Promise<R[]> {
+  const risultati: R[] = new Array<R>(voci.length);
+  let prossima = 0;
+  const lavoratore = async (): Promise<void> => {
+    while (prossima < voci.length) {
+      const indice = prossima;
+      prossima += 1;
+      risultati[indice] = await lavoro(voci[indice]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limite, voci.length) }, lavoratore));
+  return risultati;
+}
+
 /* ---------- Validazione ---------- */
 
 export function verificaPeriodoConsultazione(valore: unknown): PeriodoConsultazione {
@@ -118,6 +160,28 @@ function idEsistente(valore: string, entityType: string, message: string): strin
 const VOLANTINO_NON_DISPONIBILE = 'Volantino non disponibile: non è pubblicato o non è della tua GDO.';
 const PROMO_NON_DISPONIBILE = 'Promozione non disponibile tra quelle del periodo.';
 const FILE_NON_DISPONIBILE = 'File non disponibile: non è di un materiale pubblicato della tua GDO.';
+const PROMOZIONE_VOLANTINI_NON_DISPONIBILE = 'Promozione non disponibile: non ha volantini pubblicati o non è della tua GDO.';
+
+/** promo.id_promo e' un VARCHAR(255). */
+const LUNGHEZZA_MASSIMA_ID_PROMO = 255;
+
+const carattereStampabile = (carattere: string): boolean => {
+  const codice = carattere.charCodeAt(0);
+  return codice >= 32 && codice !== 127;
+};
+
+/**
+ * Gli id delle promo sono testo, non sempre UUID (le promo arrivano anche da Istanta): basta un testo
+ * non vuoto, non piu' lungo della colonna, senza caratteri di controllo. Un id che non lo e' non
+ * esiste: 404, come una promo di un'altra GDO.
+ */
+function idPromoEsistente(valore: unknown): string {
+  const id = typeof valore === 'string' ? valore : '';
+  if (id.trim() === '' || id.length > LUNGHEZZA_MASSIMA_ID_PROMO || ![...id].every(carattereStampabile)) {
+    throw new NotFoundError({ message: PROMOZIONE_VOLANTINI_NON_DISPONIBILE, entityType: 'Promo', entityId: id.slice(0, LUNGHEZZA_MASSIMA_ID_PROMO) });
+  }
+  return id;
+}
 
 /* ---------- Conversioni ---------- */
 
@@ -299,7 +363,9 @@ export class ConsultazioneService implements IConsultazioneService {
     private readonly repository: IConsultazioneRepository,
     private readonly scrittoreZip: ScrittoreZipOlimpo,
     private readonly leggiFileOlimpo: LettoreFileOlimpo = scaricaMaterialePdf,
-    private readonly campiRicerca: FonteCampiRicerca = campiRicercaDaConfigurazione
+    private readonly campiRicerca: FonteCampiRicerca = campiRicercaDaConfigurazione,
+    private readonly configInsight: FonteConfigInsight = SENZA_CONFIG_INSIGHT,
+    private readonly lettureInsight: LettureKitInsight = LETTURE_KIT_INSIGHT
   ) { }
 
   /** Solo kit pubblicati del tipo indicato, nelle promo del periodo e della GDO dell'ambito. */
@@ -347,24 +413,38 @@ export class ConsultazioneService implements IConsultazioneService {
     const criteri = this.criteri(periodo, TIPO_LAVORAZIONE.VOLANTINO, ambito);
     const conFiltri = Object.values(filtriPromo).some(valore => valore !== undefined);
 
-    const [righePromo, totali, totaliSenzaFiltri, righeAreeCanali, anni, promozioni] = await Promise.all([
-      this.materiali.elencaPromoVolantini(criteri, filtriPromo, { limite: dimensione, scarto: (pagina - 1) * dimensione }),
-      this.materiali.contaPromoVolantini(criteri, filtriPromo),
-      conFiltri ? this.materiali.contaPromoVolantini(criteri) : Promise.resolve(undefined),
+    // La promo in vetrina solo senza filtri: sta fuori dall'elenco e dai totali della paginazione
+    const motivo = MOTIVO_VETRINA_DEL_PERIODO[periodo];
+    const rigaVetrina = conFiltri ? null : await this.materiali.trovaPromoInVetrina(criteri, motivo);
+    const criteriElenco: CriteriKit = rigaVetrina ? { ...criteri, escludiPromo: rigaVetrina.id_promo } : criteri;
+
+    const [righePromo, totali, riepilogo, righeAreeCanali, anni, promozioni] = await Promise.all([
+      this.materiali.elencaPromoVolantini(criteriElenco, filtriPromo, { limite: dimensione, scarto: (pagina - 1) * dimensione }),
+      this.materiali.contaPromoVolantini(criteriElenco, filtriPromo),
+      // Il riepilogo e' sempre del periodo intero, vetrina compresa: le promo sono anche il totale senza filtri
+      this.materiali.riepilogoPromoVolantini(criteri),
       this.materiali.elencaAreeCanaliVolantini(criteri, periodo === 'storico'),
       this.materiali.elencaAnniPromoVolantini(criteri),
       // Nello Storico le promo sono centinaia: si cercano per nome e anno, non da una tendina
       periodo === 'storico' ? Promise.resolve([] as RigaPromo[]) : this.materiali.elencaPromoVolantini(criteri),
     ]);
-    const righeKit = await this.materiali.elencaVariantiVolantini(criteri, righePromo.map(riga => riga.id_promo), filtriPromo);
+    // Senza filtri ogni kit corrisponde: la vetrina ha tutti i suoi kit volantino pubblicati
+    const idPromoKit = righePromo.map(riga => riga.id_promo);
+    if (rigaVetrina) idPromoKit.push(rigaVetrina.id_promo);
+    const righeKit = await this.materiali.elencaVariantiVolantini(criteri, idPromoKit, filtriPromo);
+    const vetrina: VetrinaVolantiniConsultazione | null = rigaVetrina
+      ? { motivo, promozione: promozioniConVarianti([rigaVetrina], righeKit)[0] }
+      : null;
 
     return {
       promozioni: promozioniConVarianti(righePromo, righeKit),
       totale: totali.promozioni,
       totaleKit: totali.kit,
-      totaleSenzaFiltri: (totaliSenzaFiltri ?? totali).promozioni,
+      totaleSenzaFiltri: riepilogo.promozioni,
       pagina,
       dimensione,
+      vetrina,
+      riepilogo: { promozioni: riepilogo.promozioni, kit: riepilogo.kit, puntiVendita: riepilogo.puntiVendita },
       opzioni: {
         promozioni: promozioni.map(riga => ({ id: riga.id_promo, nome: riga.nome_promo })),
         ...areeECanali(righeAreeCanali),
@@ -386,6 +466,63 @@ export class ConsultazioneService implements IConsultazioneService {
       canale: { id: kit.id_canale, nome: kit.nome_canale },
       file: file.map(fileDa),
     };
+  }
+
+  /**
+   * Il dettaglio di consultazione della promozione (spec volantini-pop): i suoi kit volantino
+   * pubblicati, nella GDO dell'ambito, con i numeri dei loro insight e le righe dei punti vendita
+   * stampate. Il periodo viene dallo stato della promo, non dalla richiesta.
+   */
+  async getPromozioneVolantini(idPromo: string, ambito: AmbitoGdo): Promise<DettaglioPromozioneVolantiniConsultazione> {
+    const id = idPromoEsistente(idPromo);
+    const nonDisponibile = () => new NotFoundError({ message: PROMOZIONE_VOLANTINI_NON_DISPONIBILE, entityType: 'Promo', entityId: id });
+    const rigaPromo = await this.repository.trovaPromo(id, STATI_PROMO_CONSULTABILI, ambito);
+    const periodo = periodoConsultazioneDellaPromo(rigaPromo?.stato_promo);
+    if (!rigaPromo || !periodo) throw nonDisponibile();
+
+    // Gli stessi kit dell'elenco Volantini: pubblicati, dei formati volantino, non manuali
+    const criteri = this.criteri(periodo, TIPO_LAVORAZIONE.VOLANTINO, ambito);
+    const righeKit = await this.materiali.elencaVariantiVolantini(criteri, [rigaPromo.id_promo]);
+    if (righeKit.length === 0) throw nonDisponibile();
+    const varianti = righeKit.map(varianteDa).sort(confrontaVarianti);
+
+    const [righePuntiVendita, kit] = await Promise.all([
+      this.materiali.elencaPuntiVenditaVolantini(criteri, rigaPromo.id_promo),
+      this.contestoInsight().then(contesto =>
+        aGruppi(varianti, KIT_INSIGHT_IN_PARALLELO, variante => this.insightDelKit(variante, ambito, contesto))),
+    ]);
+    const { kit: kitConNumeri, numeri, puntiVendita, assortimento } = aggregaPromozioneVolantini(kit, righePuntiVendita);
+    return { promo: promoDa(rigaPromo), periodo, kit: kitConNumeri, numeri, puntiVendita, assortimento };
+  }
+
+  /** La config degli insight; se manca o non si legge, il dettaglio vale lo stesso con la lettura generica. */
+  private async contestoInsight(): Promise<ContestoConfig> {
+    try {
+      return contestoDallaConfig(await this.configInsight.getFlyerInsightsConfig());
+    } catch (error) {
+      log.warn('Dettaglio della promozione: config degli insight non disponibile, numeri con la sola lettura generica', {
+        context: 'Consultazione',
+        errore: error instanceof Error ? error.message : String(error),
+      });
+      return contestoDallaConfig(null);
+    }
+  }
+
+  /**
+   * Le sezioni degli insight di un kit, lette come negli insight del volantino (InsightConfrontiService):
+   * un kit senza referenze ha zero box. Un kit che non si trova piu' fra l'elenco e questa lettura
+   * vale come un kit senza referenze.
+   */
+  private async insightDelKit(variante: VarianteConsultazione, ambito: AmbitoGdo, contesto: ContestoConfig): Promise<KitConInsight> {
+    const kit = await this.lettureInsight.kitNellAmbito(variante.id, ambito);
+    if (!kit) {
+      const { sintesi, box } = sezioniInsight([], { totalePagine: 0, anagraficaReparti: [], marcheDistributore: [], urlFoto: guid => guid });
+      return { variante, sintesi, box };
+    }
+    const [righe, pdf] = await Promise.all([this.lettureInsight.righeDelKit(kit.id), this.lettureInsight.pdfDelKit(kit.id)]);
+    const boxKit = boxDelKit(righe.map(riga => leggiReferenza(riga, { storico: kit.storico })));
+    const { sintesi, box } = sezioniInsight(boxKit, opzioniDelKit(kit, righe, boxKit, pdf, contesto));
+    return { variante, sintesi, box };
   }
 
   async getPromozioniPop(periodo: PeriodoConsultazione, ambito: AmbitoGdo): Promise<ElencoPromozioniPopConsultazione> {

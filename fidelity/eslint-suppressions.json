@@ -726,7 +726,7 @@
   },
   "server/core/interfaces/IFileManagementService.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 21
+      "count": 20
     }
   },
   "server/core/interfaces/IFormatoService.ts": {
@@ -3578,13 +3578,13 @@
   },
   "src/router/loaderFunctions.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 20
+      "count": 17
     },
     "@typescript-eslint/no-unused-vars": {
-      "count": 20
+      "count": 19
     },
     "no-console": {
-      "count": 29
+      "count": 28
     }
   },
   "src/router/pagineRimosse.routes.test.tsx": {

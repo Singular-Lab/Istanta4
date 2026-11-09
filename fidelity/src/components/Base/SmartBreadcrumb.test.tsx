@@ -17,6 +17,7 @@ import {
   useFetchPuntoVenditaGestione,
   useFetchReferenzaPuntoVendita,
 } from "@/query/query";
+import { useDettaglioPromozioneVolantini } from "@/query/consultazione";
 import type { PuntoVenditaResponseDTO } from "../../../server/core/dto";
 import SmartBreadcrumb from "./SmartBreadcrumb";
 
@@ -213,6 +214,53 @@ describe("SmartBreadcrumb nelle pagine dei punti vendita", () => {
     apriPv(`/punti-vendita/${PV}`, null);
 
     expect(screen.getByText(`${PV.substring(0, 8)}...`)).toBeInTheDocument();
+    await waitFor(() => expect(finti.get).not.toHaveBeenCalled());
+  });
+});
+
+describe("SmartBreadcrumb nel dettaglio di consultazione della promozione", () => {
+  // L'id della promo e' testo, non sempre un UUID
+  const ID = "P2622_VOL_05-11-26";
+
+  const PaginaPromozione = () => {
+    useDettaglioPromozioneVolantini(ID);
+    return null;
+  };
+
+  const apriPromozione = (pagina: ReactNode) =>
+    render(
+      <QueryClientProvider client={nuovoClient()}>
+        <MemoryRouter initialEntries={[`/volantini/promozioni/${encodeURIComponent(ID)}`]}>
+          <SmartBreadcrumb />
+          {pagina}
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+
+  const voci = () => screen.getAllByRole("listitem").map(voce => voce.textContent);
+
+  beforeEach(() => {
+    finti.get.mockReset();
+    finti.get.mockImplementation(async (url: string) => {
+      if (url === `/consultazione/volantini/promozioni/${encodeURIComponent(ID)}`) {
+        return { promo: { id: ID, nome: "Volantino 5-18 novembre", validitaDal: "2026-11-05", validitaAl: "2026-11-18" }, periodo: "attivi" };
+      }
+      throw Object.assign(new Error("Not found"), { httpStatus: 404 });
+    });
+  });
+
+  it("mostra la vista Volantini del periodo e il nome della promo, non Promozioni né l'id", async () => {
+    apriPromozione(<PaginaPromozione />);
+
+    await waitFor(() => expect(voci()).toEqual(["FP", "Volantini Attivi", "Volantino 5-18 novembre"]));
+    expect(screen.getByRole("link", { name: "Volantini Attivi" })).toHaveAttribute("href", "/volantini/attivi");
+    expect(finti.get).toHaveBeenCalledTimes(1);
+  });
+
+  it("senza i dati della pagina porta a Volantini e non chiede nulla", async () => {
+    apriPromozione(null);
+
+    expect(voci()).toEqual(["FP", "Volantini", "Promozione"]);
     await waitFor(() => expect(finti.get).not.toHaveBeenCalled());
   });
 });

@@ -57,7 +57,8 @@ export const PAGINE: DefinizionePagina[] = [
 
   // Volantini e materiali
   { percorso: '/volantini/tutti_i_volantini', permesso: P.MATERIALI.VISUALIZZA, sezione: 'visualizzazione' },
-  { percorso: '/volantini', permesso: P.VOLANTINI.VISUALIZZA, sottopagine: true, sezione: 'visualizzazione' },
+  // La vecchia pagina Volantini non c'è più: l'indirizzo porta a Volantini attivi, con il suo permesso
+  { percorso: '/volantini', permesso: P.MATERIALI.VISUALIZZA, sezione: 'visualizzazione' },
   // Viste Volantini e POP per periodo, al posto delle pagine Materiali: stesso permesso
   { percorso: '/volantini/attivi', permesso: P.MATERIALI.VISUALIZZA, sezione: 'visualizzazione' },
   { percorso: '/volantini/prossimi', permesso: P.MATERIALI.VISUALIZZA, sezione: 'visualizzazione' },
@@ -65,6 +66,8 @@ export const PAGINE: DefinizionePagina[] = [
   { percorso: '/pop/attivi', permesso: P.MATERIALI.VISUALIZZA, sezione: 'visualizzazione' },
   { percorso: '/pop/prossimi', permesso: P.MATERIALI.VISUALIZZA, sezione: 'visualizzazione' },
   { percorso: '/pop/storico', permesso: P.MATERIALI.VISUALIZZA, sezione: 'visualizzazione' },
+  // Consultazione di una promozione, aperta dalle schede delle viste Volantini: pagina di dettaglio, non nel menu
+  { percorso: '/volantini/promozioni/:idPromo', permesso: P.MATERIALI.VISUALIZZA, sezione: 'visualizzazione' },
   // Vecchi indirizzi del periodo "in corso", ora redirect verso Prossimi
   { percorso: '/volantini/in-corso', permesso: P.MATERIALI.VISUALIZZA, sezione: 'visualizzazione' },
   { percorso: '/pop/in-corso', permesso: P.MATERIALI.VISUALIZZA, sezione: 'visualizzazione' },
@@ -151,7 +154,6 @@ export const VOCI_DI_MENU: readonly VoceDiMenu[] = [
   { percorso: '/category/dashboard', titolo: 'Dashboard Category', icona: 'ChartColumn' },
   { percorso: '/marketing/dashboard', titolo: 'Dashboard Marketing', icona: 'ChartLine' },
   { percorso: '/punti-vendita', titolo: 'Punti vendita', icona: 'Store' },
-  { percorso: '/volantini', titolo: 'Volantini', icona: 'Newspaper' },
   { percorso: '/volantini/attivi', titolo: 'Volantini attivi', icona: 'FolderOpen' },
   { percorso: '/volantini/prossimi', titolo: 'Volantini prossimi', icona: 'CalendarClock' },
   { percorso: '/volantini/storico', titolo: 'Volantini storico', icona: 'Archive' },

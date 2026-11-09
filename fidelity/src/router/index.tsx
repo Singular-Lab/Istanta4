@@ -55,7 +55,6 @@ const funzioneCaricamentoODSInCorso = createLazyLoader("funzioneCaricamentoODSIn
 const funzioneCaricamentoRicetta = createLazyLoader("funzioneCaricamentoRicetta");
 const funzioneCaricamentoStoricoLavorazioni = createLazyLoader("funzioneCaricamentoStoricoLavorazioni");
 const funzioneCaricamentoTuttiIfFilesOrdiniDiStampa = createLazyLoader("funzioneCaricamentoTuttiIfFilesOrdiniDiStampa");
-const funzioneCaricamentoVolantiniPDF = createLazyLoader("funzioneCaricamentoVolantiniPDF");
 const funzioneCaricamentoVolantinoWebPliant = createLazyLoader("funzioneCaricamentoVolantinoWebPliant");
 const funzioneCaricamentoWebpliant = createLazyLoader("funzioneCaricamentoWebpliant");
 const funzioneCaricamentoWebpliantLayout = createLazyLoader("funzioneCaricamentoWebpliantLayout");
@@ -313,14 +312,9 @@ const routes: RouteObject[] = [
         },
       },
       {
+        // La vecchia pagina Volantini non c'è più: segnalibri, breadcrumb e menu salvati vanno a Volantini attivi
         path: "volantini",
-        lazy: async () => {
-          const { default: Volantini } = await import("../pages/Volantini");
-          return {
-            Component: Volantini,
-            loader: funzioneCaricamentoVolantiniPDF,
-          };
-        },
+        loader: () => redirect(percorsoVolantini("attivi")),
       },
       {
         path: "volantini/tutti_i_volantini",
@@ -375,6 +369,15 @@ const routes: RouteObject[] = [
           },
         },
       ]),
+      // Consultazione di una promozione, dalle schede delle viste Volantini: non dipende dal periodo.
+      // Tre segmenti: non si confonde con volantini/:periodo né con volantini/tutti_i_volantini
+      {
+        path: "volantini/promozioni/:idPromo",
+        lazy: async () => {
+          const { default: PromozioneVolantini } = await import("@/pages/PromozioneVolantini");
+          return { Component: PromozioneVolantini };
+        },
+      },
       {
         // "/pop" da solo (per esempio dal breadcrumb) apre i POP delle promozioni valide
         path: "pop",

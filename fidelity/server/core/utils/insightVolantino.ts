@@ -217,14 +217,18 @@ function scontoPerGruppo(gruppi: readonly Gruppo[]): ScontoPerGruppo[] {
     .sort((a, b) => b.box - a.box || perEtichetta(a, b));
 }
 
-function prezziScontiDi(box: readonly BoxInsight[]): PrezziSconti {
-  const fasce: FasciaSconto[] = FASCE_SCONTO.map((da, indice) => {
+/** I box per fascia di sconto (FASCE_SCONTO): anche sui box di piu' volantini (dettaglio della promozione). */
+export function fasceSconto(box: readonly BoxInsight[]): FasciaSconto[] {
+  return FASCE_SCONTO.map((da, indice) => {
     const a = indice + 1 < FASCE_SCONTO.length ? FASCE_SCONTO[indice + 1] : null;
     const nellaFascia = box.filter(singolo => singolo.sconto !== null && singolo.sconto >= da && (a === null || singolo.sconto < a));
     return { da, a, box: nellaFascia.length };
   });
+}
+
+function prezziScontiDi(box: readonly BoxInsight[]): PrezziSconti {
   return {
-    fasce,
+    fasce: fasceSconto(box),
     perReparto: scontoPerGruppo(raggruppa(box, perReparto)),
     perMeccanica: scontoPerGruppo(raggruppa(box, perMeccanica)),
     sottocosto: box.filter(singolo => singolo.sottocosto).map(singolo => singolo.id),
@@ -249,6 +253,11 @@ function quoteSpazio(gruppi: readonly Gruppo[], totaleReferenze: number, totaleS
     .sort((a, b) => b.spazio - a.spazio || b.referenze - a.referenze || perEtichetta(a, b));
 }
 
+/** Lo spazio per reparto, ordinato per spazio: anche sui box di piu' volantini (dettaglio della promozione). */
+export function spazioPerReparto(box: readonly BoxInsight[]): QuotaSpazio[] {
+  return quoteSpazio(raggruppa(box, perReparto), referenzeDi(box), spazioDi(box));
+}
+
 function usoSpazioDi(box: readonly BoxInsight[], pagine: number): UsoSpazio {
   const totaleReferenze = referenzeDi(box);
   const totaleSpazio = spazioDi(box);
@@ -258,14 +267,18 @@ function usoSpazioDi(box: readonly BoxInsight[], pagine: number): UsoSpazio {
     return { pagina: indice + 1, box: nellaPagina.length, spazioOccupato: Math.min(100, arrotonda(spazioDi(nellaPagina), 2)) };
   });
   return {
-    perReparto: quoteSpazio(raggruppa(box, perReparto), totaleReferenze, totaleSpazio),
+    perReparto: spazioPerReparto(box),
     perMeccanica: quoteSpazio(raggruppa(box, perMeccanica), totaleReferenze, totaleSpazio),
     perMarca: quoteSpazio(raggruppa(box, perMarca), totaleReferenze, totaleSpazio),
     perPagina,
   };
 }
 
-function marcheDi(box: readonly BoxInsight[], marcheDistributore: readonly string[]): MarcheVolantino {
+/**
+ * Le marche dei box, per spazio, senza i box che non ne indicano una (la quota resta sullo spazio di
+ * tutti i box): anche sui box di piu' volantini (dettaglio della promozione).
+ */
+export function marcheDi(box: readonly BoxInsight[], marcheDistributore: readonly string[]): MarcheVolantino {
   const totaleSpazio = spazioDi(box);
   const delDistributore = marcheDistributore.map(chiaveMarca).filter(valore => valore !== '');
   const eDelDistributore = (marca: string | null): boolean => {

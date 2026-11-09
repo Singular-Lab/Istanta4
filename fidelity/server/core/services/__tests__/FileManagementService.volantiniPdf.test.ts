@@ -82,7 +82,11 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('FileManagementService.getAllCombinazioniRuntimePDF: pagina Volantini', () => {
+// La pagina Volantini e la sua API non ci sono piu': la composizione dei volantini PDF resta per il
+// visualizzatore WebPliant, e qui si provano le sue regole attraverso quella strada.
+describe('FileManagementService: composizione dei volantini PDF', () => {
+  const webpliant = (service: FileManagementService) => service.getAllCombinazioniRuntimePDFWebPliant('a1', 'c1', [], ['tipo-vol']);
+
   it('mostra solo i kit pubblicati di promo non eliminate', async () => {
     preparaDb(
       [kit('k-ok'), kit('k-lavorazione', 'p-valida', { stato: IN_LAVORAZIONE }), kit('k-promo-eliminata', 'p-eliminata'), kit('k-promo-cancellata', 'p-cancellata')],
@@ -90,11 +94,11 @@ describe('FileManagementService.getAllCombinazioniRuntimePDF: pagina Volantini',
     );
     const { service } = creaService();
 
-    expect(idKit(await service.getAllCombinazioniRuntimePDF())).toEqual(['k-ok']);
+    expect(idKit(await webpliant(service))).toEqual(['k-ok']);
   });
 
-  it('restituisce un solo elemento per kit, con tutti i suoi file del tipo richiesto', async () => {
-    preparaDb([kit('k1')], [file('k1', 'A.pdf'), file('k1', 'B.pdf'), file('k1', 'C.pdf', 'tipo-dig')]);
+  it('restituisce un solo elemento per kit, con area, canale e i link di anteprima e download', async () => {
+    preparaDb([kit('k1')], [file('k1', 'A.pdf'), file('k1', 'B.pdf')]);
     const { service } = creaService();
 
     const volantino = (nome: string) => ({
@@ -106,7 +110,7 @@ describe('FileManagementService.getAllCombinazioniRuntimePDF: pagina Volantini',
       url: `/olimpo/materiali/getThumbnailMaterialePdfs?id=olimpo-${nome}`,
       url_download: `/olimpo/materiali/getMaterialePDF?id=olimpo-${nome}`,
     });
-    expect(await service.getAllCombinazioniRuntimePDF()).toEqual([{
+    expect(await webpliant(service)).toEqual([{
       idKit: 'k1',
       idArea: 'a1',
       idCanale: 'c1',
@@ -123,29 +127,27 @@ describe('FileManagementService.getAllCombinazioniRuntimePDF: pagina Volantini',
     );
     const { service } = creaService();
 
-    expect(idKit(await service.getAllCombinazioniRuntimePDF())).toEqual(['k-con-file']);
+    expect(idKit(await webpliant(service))).toEqual(['k-con-file']);
   });
 
   it('un canale mancante esclude solo il suo kit, senza far fallire l elenco', async () => {
-    preparaDb([kit('k1'), kit('k2', 'p-valida', { canale: 'c-cancellato' })], [file('k1', 'A.pdf'), file('k2', 'B.pdf')]);
+    preparaDb([kit('k2', 'p-valida', { canale: 'c-cancellato' })], [file('k2', 'B.pdf')]);
     const { service } = creaService();
 
-    expect(idKit(await service.getAllCombinazioniRuntimePDF())).toEqual(['k1']);
+    expect(await service.getAllCombinazioniRuntimePDFWebPliant('a1', 'c-cancellato', [], ['tipo-vol'])).toEqual([]);
     expect(log.warn).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ idKit: 'k2', idCanale: 'c-cancellato' }));
   });
 
-  it('legge tipi di export, promo, file, aree e canali una volta sola, non per kit o per file', async () => {
+  it('legge promo, file, aree e canali una volta sola, non per kit o per file', async () => {
     const db = preparaDb(
       [kit('k1'), kit('k2'), kit('k3')],
       [file('k1', 'A.pdf'), file('k1', 'B.pdf'), file('k2', 'C.pdf'), file('k3', 'D.pdf')]
     );
     const { service, tipoExportService } = creaService();
 
-    expect(await service.getAllCombinazioniRuntimePDF()).toHaveLength(3);
-    expect(db.tipi).toHaveBeenCalledTimes(1);
-    expect(db.tipi.mock.calls[0][0]).toMatchObject({ where: { codice_tipiexport: EXPORT_DI_SISTEMA.VOL } });
+    expect(await webpliant(service)).toHaveLength(3);
     expect(tipoExportService.getTipoExportById).not.toHaveBeenCalled();
-    for (const spia of [db.kit, db.promo, db.files, db.aree, db.canali]) {
+    for (const spia of [db.kit, db.tipi, db.promo, db.files, db.aree, db.canali]) {
       expect(spia).toHaveBeenCalledTimes(1);
     }
   });

@@ -41,18 +41,6 @@ import type { AreaResponseDTO, CanaleResponseDTO, ContrattoTipografiaResponseDTO
 
 
 
-export const funzioneCaricamentoVolantiniPDF = async ({ request }: { request: any }) => {
-  let files: any[] | null = null;
-
-  try {
-    files = await ServerCall.get<any[]>("/getAllCombinazioniRuntimePDF");
-  } catch (error) {
-    console.error("Errore durante la chiamata:", error);
-  }
-
-
-  return { files };
-};
 
 
 

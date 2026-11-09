@@ -1,6 +1,12 @@
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
-import { PERCORSO_CONSULTAZIONE, percorsoVolantinoConsultazione, type PeriodoConsultazione } from "../../lib/consultazione/periodi";
+import {
+  PERCORSO_CONSULTAZIONE,
+  percorsoPromozioneVolantiniConsultazione,
+  percorsoVolantinoConsultazione,
+  type PeriodoConsultazione,
+} from "../../lib/consultazione/periodi";
 import type {
+  DettaglioPromozioneVolantiniConsultazione,
   DettaglioVolantinoConsultazione,
   ElencoPromozioniPopConsultazione,
   FiltriContenutiDigitali,
@@ -119,6 +125,21 @@ export const usePromozioniVolantiniConsultazione = (filtri: FiltriPromozioniVola
       (queryPrecedente?.queryKey[3] as FiltriPromozioniVolantiniConsultazione | undefined)?.periodo === filtri.periodo
         ? precedenti
         : undefined,
+    staleTime: STALE_VISTE,
+  });
+
+/**
+ * Dettaglio di consultazione di una promozione: i suoi kit volantino pubblicati con i numeri degli
+ * insight, le righe dei punti vendita stampate e l'assortimento. Una promo di un'altra GDO,
+ * eliminata o senza volantini pubblicati risponde 404, che non si ritenta (predefinito per i 4xx).
+ */
+export const useDettaglioPromozioneVolantini = (idPromo: string | undefined) =>
+  useQuery({
+    queryKey: [CHIAVE_CONSULTAZIONE, "volantini", "promozione", idPromo],
+    queryFn: () => ServerCall.get<DettaglioPromozioneVolantiniConsultazione>(
+      percorsoPromozioneVolantiniConsultazione(idPromo ?? "")
+    ),
+    enabled: Boolean(idPromo),
     staleTime: STALE_VISTE,
   });
 

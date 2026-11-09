@@ -664,25 +664,6 @@ export class FileManagementService implements IFileManagementService {
     }
   }
 
-  async getAllCombinazioniRuntimePDF(codice?: string): Promise<VolantinoPdfKit[]> {
-    try {
-      const codiceExport = codice || EXPORT_DI_SISTEMA.VOL;
-      // Solo kit pubblicati: un kit in lavorazione, in revisione o eliminato non e' un volantino da consultare
-      const [kits, tipiExport] = await Promise.all([
-        RuntimeKit.findAll({ where: { stato_lavorazione: STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO }, raw: true }),
-        TipiDiExport.findAll({ where: { codice_tipiexport: codiceExport }, raw: true }),
-      ]);
-      return await this.componiVolantiniPdf(kits, tipiExport);
-    } catch (error) {
-      throw wrapDatabaseError(new Error("Errore durante il recupero delle combinazioni runtime PDF"), {
-        message: "Errore durante il recupero delle combinazioni runtime PDF",
-        operation: 'get',
-        entity: 'CombinazioniRuntime',
-        details: { error }
-      });
-    }
-  }
-
   async getAllCombinazioniRuntimePDFWebPliant(idArea: string, idCanale: string, idsKitDesign: string[], idsTipiDiExport: string[]): Promise<VolantinoPdfKit[]> {
     try {
       if (!idsTipiDiExport || idsTipiDiExport.length === 0) {
@@ -691,7 +672,7 @@ export class FileManagementService implements IFileManagementService {
       const whereClause: any = {
         id_area: idArea,
         id_canale: idCanale,
-        // Il visualizzatore WebPliant mostra solo volantini pubblicati, come la pagina Volantini
+        // Il visualizzatore WebPliant mostra solo volantini pubblicati
         stato_lavorazione: STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO,
       };
 

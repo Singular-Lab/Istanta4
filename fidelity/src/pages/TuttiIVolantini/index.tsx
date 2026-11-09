@@ -24,6 +24,7 @@ import { useVolantinoConsultazione } from "@/query/consultazione";
 import { useScaricaFileConsultazione } from "@/utils/scaricaFileConsultazione";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { percorsoVolantini } from "../../../lib/consultazione/periodi";
 import { EXPORT_DI_SISTEMA } from "../../../lib/enums";
 import type { BoxInsight } from "../../../lib/insightVolantino/tipi";
 
@@ -37,7 +38,7 @@ const DifferenzeVarianti = lazy(() => caricaConfronti().then(modulo => ({ defaul
 
 type GruppoReferenze = { sigla: string; descrizione: string; referenze: ReferenzaPosizione[] };
 
-const INDIETRO = { to: "/volantini", etichetta: "Torna ai volantini" };
+const INDIETRO = { to: percorsoVolantini("attivi"), etichetta: "Torna ai volantini attivi" };
 
 const numeroPagina = (valore: string | null): number | undefined => {
   const numero = Number(valore);

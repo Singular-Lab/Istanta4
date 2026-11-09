@@ -1,6 +1,7 @@
 import type { Writable } from 'stream';
 import type { PeriodoConsultazione } from '../../../lib/consultazione/periodi';
 import type {
+  DettaglioPromozioneVolantiniConsultazione,
   DettaglioVolantinoConsultazione,
   ElencoPromozioniPopConsultazione,
   FiltriContenutiDigitali,
@@ -36,6 +37,8 @@ export interface FileScaricato {
 export interface IConsultazioneService {
   getVolantini(filtri: FiltriVolantiniConsultazione, ambito: AmbitoGdo): Promise<PaginaVolantiniConsultazione>;
   getPromozioniVolantini(filtri: FiltriPromozioniVolantiniConsultazione, ambito: AmbitoGdo): Promise<PaginaPromozioniVolantiniConsultazione>;
+  /** Una promo di un'altra GDO, eliminata o senza kit volantino pubblicati risponde 404. */
+  getPromozioneVolantini(idPromo: string, ambito: AmbitoGdo): Promise<DettaglioPromozioneVolantiniConsultazione>;
   getVolantino(idKit: string, ambito: AmbitoGdo): Promise<DettaglioVolantinoConsultazione>;
 
   getPromozioniPop(periodo: PeriodoConsultazione, ambito: AmbitoGdo): Promise<ElencoPromozioniPopConsultazione>;
