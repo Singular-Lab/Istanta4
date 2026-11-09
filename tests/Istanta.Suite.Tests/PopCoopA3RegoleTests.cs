@@ -66,9 +66,13 @@ public class PopCoopA3RegoleTests
     }
 
     [Fact]
-    public void Negli_A7_il_gruppo_esce_ancora_con_tutti_i_singoli()
+    public void Negli_A7_il_gruppo_segue_le_regole_degli_stopper()
     {
-        Assert.Equal(new[] { "gruppo G", "G-1", "G-2", "G-3" }, Cartelli(A7, Gruppo("G", 3)));
+        //TASK-2c279c12: negli A7 un gruppo a prezzo unico non esce piu' con il cartello di gruppo e tutti i singoli, ma con una
+        //copia del cartello di gruppo per referenza (PopCoopStopperTests). Negli A3 la regola degli stopper non vale.
+        Assert.Equal(Coopfi.CartelliDelGruppoA7.SoloCopieDelGruppo, Coopfi.cartelliDelGruppoNegliA7(A7, true, false, false, false, false, false, false));
+        Assert.Equal(Coopfi.CartelliDelGruppoA7.ComePrima, Coopfi.cartelliDelGruppoNegliA7(A3V, true, false, false, false, false, false, false));
+        Assert.Equal(Coopfi.CartelliDelGruppoA7.ComePrima, Coopfi.cartelliDelGruppoNegliA7(A3O, true, false, false, true, false, false, false));
     }
 
     [Fact]
