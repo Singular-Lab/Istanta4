@@ -7,6 +7,7 @@ import type {
   OrigineStorico,
   ReferenzaReportStorico
 } from '../../../lib/types';
+import type { EstensioneInsight } from '../../../lib/insightVolantino/tipi';
 
 export interface ReferenzaPosizioneDTO {
   id: string;
@@ -69,7 +70,8 @@ export interface ContestoFlyerInsightsDTO {
   idPromo: string;
 }
 
-export interface FlyerInsightsDTO {
+/** Campi di sempre più le sezioni nuove (lib/insightVolantino/tipi.ts). */
+export interface FlyerInsightsDTO extends EstensioneInsight {
   guidIdKitRuntime: string;
   contesto: ContestoFlyerInsightsDTO;
   /** Assente sulle lavorazioni normali: la scheda resta identica a prima. */

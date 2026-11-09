@@ -1,5 +1,5 @@
 // File generato da scripts/generaIconeLucide.mjs: non modificarlo a mano.
-// Icone Lucide nominate come stringa nel codice (368): <Lucide> le risolve senza caricare la
+// Icone Lucide nominate come stringa nel codice (365): <Lucide> le risolve senza caricare la
 // mappa completa di lucide-react. Rigenera con `node scripts/generaIconeLucide.mjs`.
 export {
   Activity,
@@ -20,7 +20,6 @@ export {
   Ban,
   BarChart2,
   BarChart3,
-  Barcode,
   Bell,
   BellDot,
   BellOff,
@@ -208,7 +207,6 @@ export {
   LogOut,
   Mail,
   MailCheck,
-  Map,
   MapPin,
   MapPinOff,
   Maximize2,
@@ -312,7 +310,6 @@ export {
   SquareFunction,
   SquareMousePointer,
   SquareSplitVertical,
-  SquareStack,
   Stamp,
   Star,
   Stethoscope,

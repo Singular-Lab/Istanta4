@@ -3,13 +3,18 @@ import type { ImportStorico } from '../../../../lib/types';
 import type { IConfigService } from '../../interfaces/IConfigService';
 import { TipiDiExport } from '../../models';
 import { FilesRuntime } from '../../models/files_runtime';
-import { Referenze } from '../../models/referenze';
 import { ReferenzeGruppo } from '../../models/referenze_gruppo';
-import { RuntimeKit } from '../../models/runtime_kit';
+import { kitNellAmbito, pdfDelKit, righeDelKit } from '../../repositories/InsightVolantinoRepository';
 import { VolantinoService } from '../VolantinoService';
 
 vi.mock('../../logger', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
+
+vi.mock('../../repositories/InsightVolantinoRepository', () => ({
+  kitNellAmbito: vi.fn(),
+  pdfDelKit: vi.fn(),
+  righeDelKit: vi.fn(),
 }));
 
 // Reparti e meccaniche di /api/flyer-insights uguali per Istanta e storico (spec insight-volantino).
@@ -62,21 +67,33 @@ const referenza = (id: string, dati: Record<string, unknown>) => ({
 function creaServizio(referenze: Array<Record<string, unknown>>, config: Record<string, unknown>, importStorico: ImportStorico | null = null) {
   vi.spyOn(TipiDiExport, 'findOne').mockResolvedValue({ id_tipiexport: 'tipo-vol' } as never);
   vi.spyOn(FilesRuntime, 'findAll').mockResolvedValue([]);
-  vi.spyOn(Referenze, 'findAll').mockResolvedValue(referenze as never);
   vi.spyOn(ReferenzeGruppo, 'findAll').mockResolvedValue([] as never);
-  vi.spyOn(RuntimeKit, 'findOne').mockResolvedValue({
-    titolo: 'Volantino Edro21',
-    nome_area: 'Liguria',
-    nome_canale: 'Conad',
-    id_promo: 'promo-1',
-    import_storico: importStorico,
-  } as never);
+  vi.mocked(kitNellAmbito).mockResolvedValue({
+    id: 'kit-1',
+    titolo: 'Volantino di novembre',
+    idPromo: 'promo-1',
+    nomePromo: 'Promo di novembre',
+    idArea: 'area-1',
+    idCanale: 'canale-1',
+    area: 'Nord',
+    canale: 'Super',
+    validitaDal: '2026-11-01',
+    validitaAl: '2026-11-14',
+    data: '2026-11-01',
+    storico: importStorico !== null,
+    importStorico,
+    gdo: 'gdo-1',
+  });
+  // Il repository le restituisce gia' ordinate per pagina e posizione
+  vi.mocked(righeDelKit).mockResolvedValue(referenze as never);
+  vi.mocked(pdfDelKit).mockResolvedValue(null);
   const configService = { getFlyerInsightsConfig: vi.fn(async () => config) } as unknown as IConfigService;
   return new VolantinoService(configService);
 }
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.clearAllMocks();
 });
 
 describe('VolantinoService.getFlyerInsights: reparti e meccaniche per ogni fonte', () => {
@@ -144,5 +161,63 @@ describe('VolantinoService.getFlyerInsights: reparti e meccaniche per ogni fonte
       ['1', ''],
     ]);
     expect(insights.riepilogoMeccaniche.map(m => m.meccanica).sort()).toEqual(['', 'TP_MM']);
+  });
+});
+
+describe('VolantinoService.getFlyerInsights: sezioni nuove con la config dell\'installazione', () => {
+  it('storico: il box prende reparto e meccanica come li mappa la config, e l\'origine dal report dell\'import', async () => {
+    const servizio = creaServizio([
+      referenza('s1', { codice_box: '11', data_fields: { codice_referenza: 'A1', descrizione_uno: 'Pasta', reparto: '1', meccanica: 'TP_FID_KgL' } }),
+      referenza('s2', { codice_box: '12', x: 100, data_fields: { codice_referenza: 'A2', descrizione_uno: 'Yogurt', reparto: '24', meccanica: 'PERCENTO_FID_ALL' } }),
+    ], CONFIG_EDRO21, { ...STORICO, fuoriListino: [{ codiceBox: '12' }] });
+
+    const insights = await servizio.getFlyerInsights('kit-storico');
+    const box = new Map(insights.box.map(singolo => [singolo.id, singolo]));
+
+    expect(box.get('s1')).toMatchObject({
+      reparto: { codice: '01', descrizione: 'DROGHERIA ALIMENTARE' },
+      meccanicaOriginale: 'TP_FID_KgL',
+      origine: 'listino',
+    });
+    expect(box.get('s2')).toMatchObject({
+      reparto: { codice: '24', descrizione: 'DEPERIBILI LIBERO SERVIZIO' },
+      meccanicaOriginale: 'PERCENTO_FID_ALL',
+      origine: 'fuori_listino',
+    });
+    // Stessi codici dei riepiloghi di sempre: i colori della config valgono anche qui
+    expect(insights.spazio.perReparto.map(voce => voce.chiave).sort()).toEqual(insights.riepilogoReparti.map(voce => voce.sigla).sort());
+    expect(insights.referenze.map(ref => ref.origine)).toEqual(['listino', 'fuori_listino']);
+  });
+
+  it('Istanta: meccanica dalla colonna, nessuna origine; senza config il reparto e\' quello letto dai dati', async () => {
+    const conConfig = creaServizio([
+      referenza('i1', { meccanica: 'TP_MM', data_fields: { codice_referenza: 'B1', descrizione_uno: 'Caffe', reparto: '01', descrizione_reparto: 'DROGHERIA ALIMENTARE' } }),
+    ], CONFIG_EDRO21);
+    const [istanta] = (await conConfig.getFlyerInsights('kit-istanta')).box;
+
+    expect(istanta).toMatchObject({ reparto: { codice: '01', descrizione: 'DROGHERIA ALIMENTARE' }, meccanicaOriginale: 'TP_MM' });
+    expect(istanta).not.toHaveProperty('origine');
+
+    const senzaConfig = creaServizio([
+      referenza('i1', { meccanica: 'TP_MM', data_fields: { codice_referenza: 'B1', descrizione_uno: 'Caffe', descrizione_reparto: 'DROGHERIA ALIMENTARE' } }),
+    ], {});
+    const [letto] = (await senzaConfig.getFlyerInsights('kit-istanta')).box;
+
+    expect(letto).toMatchObject({ reparto: { codice: 'Drogheria alimentare', descrizione: 'Drogheria alimentare' }, meccanicaOriginale: null });
+  });
+
+  it('marche del distributore dalla config (marche.distributore); senza, la quota non c\'e\'', async () => {
+    const righe = [
+      referenza('m1', { x: 0, data_fields: { descrizione_uno: 'Pasta', descrizione_due: 'Insegna' } }),
+      referenza('m2', { x: 100, data_fields: { descrizione_uno: 'Latte', descrizione_due: 'Granarolo' } }),
+    ];
+
+    const conMarche = await creaServizio(righe, { ...CONFIG_EDRO21, marche: { distributore: ['insegna', 42] } }).getFlyerInsights('kit-1');
+    const senzaMarche = await creaServizio(righe, CONFIG_EDRO21).getFlyerInsights('kit-1');
+
+    // Stesso spazio e stessi box: in ordine di nome
+    expect(conMarche.marche.elenco.map(marca => [marca.nome, marca.distributore])).toEqual([['Granarolo', false], ['Insegna', true]]);
+    expect(conMarche.marche.quotaDistributore).toEqual({ quotaSpazio: 50, quotaBox: 50 });
+    expect(senzaMarche.marche.quotaDistributore).toBeNull();
   });
 });
