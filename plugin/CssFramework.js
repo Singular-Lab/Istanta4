@@ -4384,6 +4384,33 @@ const CssFramework =
         }
     },
 
+    /// TASK-b2d612d7: il rettangolo con cui un elemento entra nel controllo dei conflitti. Prima
+    /// era sempre la cornice (o il testo, con useTextBounds), anche per un'immagine: due loghi
+    /// le cui cornici si sovrapponevano erano in conflitto anche se le immagini no. Una cornice
+    /// con un'immagine piazzata si misura sulla parte visibile dell'immagine.
+    rettangoloPerConflitti(item, useTextBounds = false) {
+        var cornice = useTextBounds ? this.getRealBounds(item) : item.geometricBounds;
+        return cssRegoleConflitti.rettangoloVisibile(cornice, this.boundsImmaginePiazzata(item));
+    },
+
+    /// TASK-b2d612d7: i bounds dell'immagine piazzata in una cornice, null se la cornice non ne
+    /// ha o non si leggono. Solo l'immagine diretta: testi e gruppi si misurano come prima.
+    boundsImmaginePiazzata(item) {
+        try {
+            if (item == null || item.constructorName == "TextFrame" || item.constructorName == "Group" || !item.graphics || item.graphics.length == 0) {
+                return null;
+            }
+            var immagine = item.graphics.item(0);
+            if (immagine == null || immagine.isValid === false) {
+                return null;
+            }
+            return immagine.geometricBounds;
+        }
+        catch (e) {
+            return null;
+        }
+    },
+
     /// I20-1178: le misure del contatto fra due elementi, prese come le prende elementsTouching,
     /// per il messaggio della CSF-013 nel registro del Plugin. Stringa vuota se non si leggono.
     misureContatto(item1, item2, useTextBounds = false) {
@@ -4391,9 +4418,9 @@ const CssFramework =
             var me = this;
             var parte = function (item) {
                 if (!useTextBounds) {
-                    return { rettangolo: item.geometricBounds, righe: [], testi: [] };
+                    return { rettangolo: me.rettangoloPerConflitti(item, false), righe: [], testi: [] };
                 }
-                return { rettangolo: me.getRealBounds(item), righe: me.righeDiTesto(item), testi: me.testiDelleRighe(item) };
+                return { rettangolo: me.rettangoloPerConflitti(item, true), righe: me.righeDiTesto(item), testi: me.testiDelleRighe(item) };
             };
             return cssRegoleConflitti.descriviContatto(parte(item1), parte(item2));
         }
@@ -4407,9 +4434,9 @@ const CssFramework =
     /// larghezza alla fascia dove c'e' solo una riga corta, e lo spazio fra le righe
     /// conterebbe come testo.
     elementsTouching(item1, item2, useTextBounds = false) {
-        //controlliamo se i due item si toccano
-        var b1 = useTextBounds ? this.getRealBounds(item1) : item1.geometricBounds;
-        var b2 = useTextBounds ? this.getRealBounds(item2) : item2.geometricBounds;
+        //controlliamo se i due item si toccano. TASK-b2d612d7: un'immagine con la parte che si vede.
+        var b1 = this.rettangoloPerConflitti(item1, useTextBounds);
+        var b2 = this.rettangoloPerConflitti(item2, useTextBounds);
 
         if (!useTextBounds) {
             return cssRegoleConflitti.rettangoliInContatto(b1, b2);
@@ -4773,7 +4800,7 @@ const CssFramework =
                     return etichetta + " non visibile nel box";
                 }
                 var item = trovati[0].item;
-                return etichetta + " " + cssRegoleConflitti.scriviRettangolo(useTextBounds ? me.getRealBounds(item) : item.geometricBounds);
+                return etichetta + " " + cssRegoleConflitti.scriviRettangolo(me.rettangoloPerConflitti(item, useTextBounds));
             };
             return "Misure in mm [alto, sinistra, basso, destra]: " + posizione(etichettaA) + "; " + posizione(etichettaB) + ".";
         }

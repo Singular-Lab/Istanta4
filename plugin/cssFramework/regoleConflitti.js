@@ -152,6 +152,33 @@ var CssRegoleConflitti = (function () {
         return false;
     }
 
+    /// TASK-b2d612d7: il rettangolo di una cornice con un'immagine piazzata e' la parte
+    /// dell'immagine che si vede, cioe' l'intersezione fra cornice e immagine. Due loghi
+    /// adattati in proporzione hanno cornici piu' larghe delle immagini, e le cornici si
+    /// sovrapponevano dove le immagini no. Il bianco dentro il file conta come immagine: qui
+    /// non si guardano i pixel. Senza immagine leggibile, o se l'immagine sta tutta fuori dalla
+    /// cornice, resta la cornice: nel dubbio la misura non si stringe.
+    function rettangoloVisibile(cornice, immagine) {
+        if (!Array.isArray(immagine) || immagine.length < 4) {
+            return cornice;
+        }
+        if (!Array.isArray(cornice) || cornice.length < 4) {
+            return cornice;
+        }
+
+        var visibile = [
+            Math.max(cornice[0], immagine[0]),
+            Math.max(cornice[1], immagine[1]),
+            Math.min(cornice[2], immagine[2]),
+            Math.min(cornice[3], immagine[3])
+        ];
+        if (!(visibile[0] < visibile[2] && visibile[1] < visibile[3])) {
+            return cornice;
+        }
+
+        return visibile;
+    }
+
     /// Un rettangolo in mm con due decimali, per i messaggi.
     function scriviRettangolo(r) {
         return "[" + r.map(function (v) { return Number(v).toFixed(2); }).join(", ") + "]";
@@ -268,6 +295,7 @@ var CssRegoleConflitti = (function () {
         getListaRegole: getListaRegole,
         rettangoloDiRiga: rettangoloDiRiga,
         rettangoliInContatto: rettangoliInContatto,
+        rettangoloVisibile: rettangoloVisibile,
         contattoConLeRighe: contattoConLeRighe,
         descriviContatto: descriviContatto,
         scriviRettangolo: scriviRettangolo,
