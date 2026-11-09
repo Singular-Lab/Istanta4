@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { indirizzoServizioFico, MESSAGGIO_ACCESSO_FICO_NON_RIUSCITO } from "./aperturaFico";
 
 const API = "https://fidelity.esempio.it/api";
@@ -8,6 +8,25 @@ const risposta = (status: number, corpo: unknown) =>
   vi.fn().mockResolvedValue(new Response(JSON.stringify(corpo), { status, headers: { "Content-Type": "application/json" } }));
 
 describe("indirizzoServizioFico", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("con l indirizzo API relativo di produzione chiede il context all origine della pagina", async () => {
+    // In produzione VITE_API_URL vale "/api": senza base `new URL` lanciava e Correggo non si apriva.
+    vi.stubGlobal("location", { href: "https://192.168.1.30:8085/servizi" });
+    const chiedi = risposta(200, { context: "ctx", base_url: null });
+
+    const esito = await indirizzoServizioFico(
+      { url: "https://correggo.esempio.it/OAuthLanded.ashx", redirect_page: "/promo" },
+      "/api",
+      chiedi,
+    );
+
+    expect(esito).toEqual({ url: "https://correggo.esempio.it/OAuthLanded.ashx?context=ctx" });
+    expect(chiedi.mock.calls[0][0]).toBe("https://192.168.1.30:8085/api/hub-services/fico-context?route=%2Fpromo");
+  });
+
   it("aggiunge il context all indirizzo assoluto del servizio e passa la pagina di arrivo", async () => {
     const chiedi = risposta(200, { context: "abc+/=", base_url: "https://fico.esempio.it" });
 
