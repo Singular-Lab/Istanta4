@@ -36,6 +36,17 @@ var CssRegoleConflitti = (function () {
         return regola.useTextBounds === true;
     }
 
+    /// I20-1208: con useContornoImmagini un'immagine si misura sul contorno della sua parte non
+    /// trasparente, non sulla cornice. Il margine trasparente di un logo (il 5% per lato di
+    /// Logo_SDB) faceva toccare due loghi i cui disegni stavano accanto.
+    function leggiUseContornoImmagini(regola) {
+        if (regola == null || Array.isArray(regola)) {
+            return false;
+        }
+
+        return regola.useContornoImmagini === true;
+    }
+
     /// Porta una regola alla forma con cui il controllo lavora: i due lati e la scelta dei
     /// bounds. Torna null quando non c'e' nulla da controllare.
     function normalizzaRegola(regola) {
@@ -72,7 +83,8 @@ var CssRegoleConflitti = (function () {
         return {
             latoA: latoA,
             latoB: latoB,
-            useTextBounds: leggiUseTextBounds(regola)
+            useTextBounds: leggiUseTextBounds(regola),
+            useContornoImmagini: leggiUseContornoImmagini(regola)
         };
     }
 
@@ -158,7 +170,8 @@ var CssRegoleConflitti = (function () {
     }
 
     /// I pezzi di un elemento con cui si cerca il contatto, come in elementsTouching: le righe
-    /// del testo se ci sono, altrimenti il rettangolo intero.
+    /// del testo se ci sono, altrimenti il rettangolo intero. I20-1208: il rettangolo puo' avere
+    /// un nome suo, "contorno" quando e' l'ingombro della parte non trasparente di un'immagine.
     function pezziDelContatto(elemento) {
         var righe = (elemento && elemento.righe) || [];
         if (righe.length > 0) {
@@ -167,7 +180,179 @@ var CssRegoleConflitti = (function () {
                 return { rettangolo: riga, nome: "riga " + (i + 1) + (testo !== "" ? " «" + testo + "»" : "") };
             });
         }
-        return [{ rettangolo: elemento ? elemento.rettangolo : null, nome: "riquadro" }];
+        return [{ rettangolo: elemento ? elemento.rettangolo : null, nome: elemento && elemento.nome ? elemento.nome : "riquadro" }];
+    }
+
+    /// I20-1208: il canale alfa della trasparenza fra quelli che InDesign elenca per un'immagine
+    /// (alphaChannelPathNames). InDesign in italiano lo chiama "Trasparenza"; se nessun nome lo
+    /// ricorda vale il primo canale. Null se l'immagine non ne ha.
+    function canaleDellaTrasparenza(nomi) {
+        var elenco = Array.isArray(nomi) ? nomi.filter(function (n) { return typeof n === "string" && n !== ""; }) : [];
+        if (elenco.length === 0) {
+            return null;
+        }
+        var trasparenza = elenco.find(function (n) { return /traspar|transpar/i.test(n); });
+        return trasparenza != null ? trasparenza : elenco[0];
+    }
+
+    /// I20-1208: un punto [x, y] della forma di InDesign, o null.
+    function punto(p) {
+        return Array.isArray(p) && p.length === 2 && typeof p[0] === "number" && typeof p[1] === "number" ? p : null;
+    }
+
+    /// I20-1208: i vertici di un tracciato di InDesign (entirePath, coordinate [x, y]). Un tracciato
+    /// di soli segmenti elenca i punti; uno con curve elenca terne [maniglia sinistra, ancoraggio,
+    /// maniglia destra], e ogni curva fra due ancoraggi diventa passi segmenti, cosi' la sua pancia
+    /// non resta fuori dal contorno.
+    function verticiDelTracciato(entirePath, passi) {
+        var n = passi || 4;
+        var nodi = [];
+        (Array.isArray(entirePath) ? entirePath : []).forEach(function (e) {
+            if (punto(e)) {
+                nodi.push({ sinistra: e, ancoraggio: e, destra: e });
+            }
+            else if (Array.isArray(e) && e.length === 3 && punto(e[0]) && punto(e[1]) && punto(e[2])) {
+                nodi.push({ sinistra: e[0], ancoraggio: e[1], destra: e[2] });
+            }
+        });
+
+        var vertici = [];
+        for (var i = 0; i < nodi.length; i++) {
+            var a = nodi[i];
+            var b = nodi[(i + 1) % nodi.length];
+            vertici.push(a.ancoraggio);
+            var retto = a.destra[0] === a.ancoraggio[0] && a.destra[1] === a.ancoraggio[1] &&
+                b.sinistra[0] === b.ancoraggio[0] && b.sinistra[1] === b.ancoraggio[1];
+            if (retto || nodi.length < 2) {
+                continue;
+            }
+            for (var k = 1; k < n; k++) {
+                var t = k / n, u = 1 - t;
+                var c0 = u * u * u, c1 = 3 * u * u * t, c2 = 3 * u * t * t, c3 = t * t * t;
+                vertici.push([
+                    c0 * a.ancoraggio[0] + c1 * a.destra[0] + c2 * b.sinistra[0] + c3 * b.ancoraggio[0],
+                    c0 * a.ancoraggio[1] + c1 * a.destra[1] + c2 * b.sinistra[1] + c3 * b.ancoraggio[1]
+                ]);
+            }
+        }
+        return vertici;
+    }
+
+    /// I20-1208: il poligono [x, y] ritagliato su un rettangolo [alto, sinistra, basso, destra]
+    /// (Sutherland-Hodgman): di un'immagine conta solo quello che la cornice lascia vedere.
+    function ritagliaPoligono(vertici, rettangolo) {
+        var lati = [
+            { dentro: function (p) { return p[0] >= rettangolo[1]; }, taglio: function (p, q) { return incrocio(p, q, 0, rettangolo[1]); } },
+            { dentro: function (p) { return p[0] <= rettangolo[3]; }, taglio: function (p, q) { return incrocio(p, q, 0, rettangolo[3]); } },
+            { dentro: function (p) { return p[1] >= rettangolo[0]; }, taglio: function (p, q) { return incrocio(p, q, 1, rettangolo[0]); } },
+            { dentro: function (p) { return p[1] <= rettangolo[2]; }, taglio: function (p, q) { return incrocio(p, q, 1, rettangolo[2]); } }
+        ];
+        function incrocio(p, q, asse, valore) {
+            var t = (valore - p[asse]) / (q[asse] - p[asse]);
+            return asse === 0 ? [valore, p[1] + t * (q[1] - p[1])] : [p[0] + t * (q[0] - p[0]), valore];
+        }
+
+        var risultato = vertici.slice();
+        lati.forEach(function (lato) {
+            var entrata = risultato;
+            risultato = [];
+            for (var i = 0; i < entrata.length; i++) {
+                var p = entrata[i];
+                var q = entrata[(i + 1) % entrata.length];
+                if (lato.dentro(p)) {
+                    risultato.push(p);
+                    if (!lato.dentro(q)) {
+                        risultato.push(lato.taglio(p, q));
+                    }
+                }
+                else if (lato.dentro(q)) {
+                    risultato.push(lato.taglio(p, q));
+                }
+            }
+        });
+        return risultato;
+    }
+
+    /// I20-1208: i poligoni della parte visibile di un'immagine, dai tracciati del suo scontorno
+    /// (un entirePath per tracciato) ritagliati sulla cornice. Lista vuota se non ne resta niente.
+    function poligoniDelContorno(tracciati, cornice) {
+        var poligoni = [];
+        (Array.isArray(tracciati) ? tracciati : []).forEach(function (entirePath) {
+            var vertici = verticiDelTracciato(entirePath);
+            if (Array.isArray(cornice) && cornice.length >= 4) {
+                vertici = ritagliaPoligono(vertici, cornice);
+            }
+            if (vertici.length >= 3) {
+                poligoni.push(vertici);
+            }
+        });
+        return poligoni;
+    }
+
+    /// I20-1208: un rettangolo [alto, sinistra, basso, destra] come poligono [x, y].
+    function poligonoDelRettangolo(r) {
+        return [[r[1], r[0]], [r[3], r[0]], [r[3], r[2]], [r[1], r[2]]];
+    }
+
+    /// I20-1208: il rettangolo [alto, sinistra, basso, destra] che contiene i poligoni, o null.
+    function riquadroDeiPoligoni(poligoni) {
+        var punti = [].concat.apply([], poligoni || []);
+        if (punti.length === 0) {
+            return null;
+        }
+        var xs = punti.map(function (p) { return p[0]; });
+        var ys = punti.map(function (p) { return p[1]; });
+        return [Math.min.apply(null, ys), Math.min.apply(null, xs), Math.max.apply(null, ys), Math.max.apply(null, xs)];
+    }
+
+    function orientamento(a, b, c) {
+        return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+    }
+
+    /// Due segmenti che si attraversano davvero: toccarsi in un estremo o correre affiancati
+    /// non conta, come per i rettangoli che si sfiorano al bordo.
+    function segmentiSiIncrociano(p1, p2, q1, q2) {
+        var d1 = orientamento(q1, q2, p1), d2 = orientamento(q1, q2, p2);
+        var d3 = orientamento(p1, p2, q1), d4 = orientamento(p1, p2, q2);
+        return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
+    }
+
+    function puntoNelPoligono(p, poligono) {
+        var dentro = false;
+        for (var i = 0, j = poligono.length - 1; i < poligono.length; j = i++) {
+            var a = poligono[i], b = poligono[j];
+            if ((a[1] > p[1]) !== (b[1] > p[1]) && p[0] < (b[0] - a[0]) * (p[1] - a[1]) / (b[1] - a[1]) + a[0]) {
+                dentro = !dentro;
+            }
+        }
+        return dentro;
+    }
+
+    /// I20-1208: due forme fatte di poligoni [x, y] si toccano se un lato dell'una attraversa un
+    /// lato dell'altra o se una sta dentro l'altra. Prima si scartano le coppie i cui rettangoli
+    /// non si sovrappongono, con la regola di rettangoliInContatto.
+    function poligoniInContatto(poligoniA, poligoniB) {
+        var a = poligoniA || [], b = poligoniB || [];
+        for (var i = 0; i < a.length; i++) {
+            var ra = riquadroDeiPoligoni([a[i]]);
+            for (var j = 0; j < b.length; j++) {
+                if (!rettangoliInContatto(ra, riquadroDeiPoligoni([b[j]]))) {
+                    continue;
+                }
+                var pa = a[i], pb = b[j];
+                for (var x = 0; x < pa.length; x++) {
+                    for (var y = 0; y < pb.length; y++) {
+                        if (segmentiSiIncrociano(pa[x], pa[(x + 1) % pa.length], pb[y], pb[(y + 1) % pb.length])) {
+                            return true;
+                        }
+                    }
+                }
+                if (pa.some(function (p) { return puntoNelPoligono(p, pb); }) || pb.some(function (p) { return puntoNelPoligono(p, pa); })) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /// I20-1178: le misure di un contatto, per il registro del Plugin. Una CSF-013 segnalata in
@@ -193,9 +378,14 @@ var CssRegoleConflitti = (function () {
     }
 
     /// I20-1178: i dati con cui una CSF-013 si potra' rimisurare, salvati nella voce del bollino
-    /// (campo v): le etichette dei due elementi e se la regola misura sul testo.
-    function datiDiVerifica(etichettaA, etichettaB, useTextBounds) {
-        return { a: String(etichettaA), b: String(etichettaB), tb: useTextBounds === true };
+    /// (campo v): le etichette dei due elementi e se la regola misura sul testo. I20-1208: e, solo
+    /// se e' cosi', che misura le immagini sul contorno (ci).
+    function datiDiVerifica(etichettaA, etichettaB, useTextBounds, useContornoImmagini) {
+        var dati = { a: String(etichettaA), b: String(etichettaB), tb: useTextBounds === true };
+        if (useContornoImmagini === true) {
+            dati.ci = true;
+        }
+        return dati;
     }
 
     //Il testo della CSF-013, come lo scrive CssFramework.segnalaConflittoElementi.
@@ -215,8 +405,13 @@ var CssRegoleConflitti = (function () {
         }
 
         var v = voce.v;
+        //I20-1208: useContornoImmagini c'e' solo se la regola di allora misurava le immagini sul contorno.
         if (v != null && typeof v === "object" && typeof v.a === "string" && v.a !== "" && typeof v.b === "string" && v.b !== "") {
-            return { a: v.a, b: v.b, useTextBounds: typeof v.tb === "boolean" ? v.tb : null };
+            var dati = { a: v.a, b: v.b, useTextBounds: typeof v.tb === "boolean" ? v.tb : null };
+            if (v.ci === true) {
+                dati.useContornoImmagini = true;
+            }
+            return dati;
         }
 
         var trovato = TESTO_CONFLITTO.exec(testo);
@@ -259,7 +454,8 @@ var CssRegoleConflitti = (function () {
             return "";
         }
 
-        return regola.latoA.join(",") + "|" + regola.latoB.join(",") + "|" + (regola.useTextBounds ? "text" : "geom");
+        return regola.latoA.join(",") + "|" + regola.latoB.join(",") + "|" + (regola.useTextBounds ? "text" : "geom") +
+            (regola.useContornoImmagini ? "|contorno" : "");
     }
 
     return {
@@ -269,6 +465,13 @@ var CssRegoleConflitti = (function () {
         rettangoloDiRiga: rettangoloDiRiga,
         rettangoliInContatto: rettangoliInContatto,
         contattoConLeRighe: contattoConLeRighe,
+        canaleDellaTrasparenza: canaleDellaTrasparenza,
+        verticiDelTracciato: verticiDelTracciato,
+        ritagliaPoligono: ritagliaPoligono,
+        poligoniDelContorno: poligoniDelContorno,
+        poligonoDelRettangolo: poligonoDelRettangolo,
+        riquadroDeiPoligoni: riquadroDeiPoligoni,
+        poligoniInContatto: poligoniInContatto,
         descriviContatto: descriviContatto,
         scriviRettangolo: scriviRettangolo,
         datiDiVerifica: datiDiVerifica,

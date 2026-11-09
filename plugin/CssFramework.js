@@ -4386,10 +4386,15 @@ const CssFramework =
 
     /// I20-1178: le misure del contatto fra due elementi, prese come le prende elementsTouching,
     /// per il messaggio della CSF-013 nel registro del Plugin. Stringa vuota se non si leggono.
-    misureContatto(item1, item2, useTextBounds = false) {
+    misureContatto(item1, item2, useTextBounds = false, useContornoImmagini = false, contorni = null) {
         try {
             var me = this;
             var parte = function (item) {
+                //I20-1208: un'immagine misurata sul contorno si descrive col rettangolo del contorno.
+                if (useContornoImmagini) {
+                    var forma = me.formaPerContatto(item, useTextBounds, contorni);
+                    return { rettangolo: forma.rettangolo, righe: [], testi: [], nome: forma.nome };
+                }
                 if (!useTextBounds) {
                     return { rettangolo: item.geometricBounds, righe: [], testi: [] };
                 }
@@ -4406,7 +4411,17 @@ const CssFramework =
     /// rettangolo unico ingloba tutte le righe, quindi una riga lunga presterebbe la sua
     /// larghezza alla fascia dove c'e' solo una riga corta, e lo spazio fra le righe
     /// conterebbe come testo.
-    elementsTouching(item1, item2, useTextBounds = false) {
+    /// I20-1208: con useContornoImmagini le immagini si misurano sul contorno della parte non
+    /// trasparente (contornoVisibileImmagine) e tutto si confronta come poligoni; quello che non e'
+    /// un'immagine, o di cui il contorno non si legge, resta misurato come prima. contorni e' la
+    /// cache dei contorni gia' letti nello stesso controllo.
+    elementsTouching(item1, item2, useTextBounds = false, useContornoImmagini = false, contorni = null) {
+        if (useContornoImmagini) {
+            return cssRegoleConflitti.poligoniInContatto(
+                this.formaPerContatto(item1, useTextBounds, contorni).poligoni,
+                this.formaPerContatto(item2, useTextBounds, contorni).poligoni);
+        }
+
         //controlliamo se i due item si toccano
         var b1 = useTextBounds ? this.getRealBounds(item1) : item1.geometricBounds;
         var b2 = useTextBounds ? this.getRealBounds(item2) : item2.geometricBounds;
@@ -4438,6 +4453,83 @@ const CssFramework =
         return righe1.length > 0
             ? cssRegoleConflitti.contattoConLeRighe(b2, righe1, b1)
             : cssRegoleConflitti.contattoConLeRighe(b1, righe2, b2);
+    },
+
+    /// I20-1208: un elemento come forma da confrontare: { poligoni [x, y], rettangolo, nome }.
+    /// Un'immagine con il contorno della parte non trasparente; un testo, con useTextBounds, con le
+    /// sue righe; il resto con il riquadro.
+    formaPerContatto(item, useTextBounds, contorni) {
+        var contorno = this.contornoVisibileImmagine(item, contorni);
+        if (contorno != null && contorno.length > 0) {
+            return { poligoni: contorno, rettangolo: cssRegoleConflitti.riquadroDeiPoligoni(contorno), nome: "contorno" };
+        }
+
+        var rettangolo = useTextBounds ? this.getRealBounds(item) : item.geometricBounds;
+        var righe = useTextBounds ? this.righeDiTesto(item) : [];
+        var rettangoli = righe.length > 0 ? righe : [rettangolo];
+        return { poligoni: rettangoli.map(r => cssRegoleConflitti.poligonoDelRettangolo(r)), rettangolo: rettangolo, nome: "riquadro" };
+    },
+
+    /// I20-1208: i poligoni [x, y] della parte non trasparente di un'immagine, ritagliati sulla
+    /// cornice, o null se l'elemento non e' un'immagine o il contorno non si legge. Il contorno lo
+    /// calcola InDesign: se l'immagine ha gia' uno scontorno vale quello; se non ne ha, le si mette
+    /// per un momento lo scontorno sul canale alfa della trasparenza, se ne leggono i tracciati e
+    /// lo scontorno torna com'era. Provato su Logo_SDB.psd: circa 30-50 ms per logo, e il logo resta
+    /// identico. contorni (facoltativo) e' la cache per id dell'elemento.
+    contornoVisibileImmagine(item, contorni = null) {
+        var chiave = null;
+        try {
+            if (item == null || !item.isValid || item.constructorName == "TextFrame" || item.constructorName == "Group") {
+                return null;
+            }
+            chiave = item.id != null ? item.id.toString() : null;
+            if (contorni != null && chiave != null && contorni.hasOwnProperty(chiave)) {
+                return contorni[chiave];
+            }
+        }
+        catch (e) {
+            return null;
+        }
+
+        var poligoni = null;
+        try {
+            var grafiche = item.allGraphics;
+            if (grafiche != null && grafiche.length > 0) {
+                var scontorno = grafiche[0].clippingPath;
+                var tipoPrima = scontorno.clippingType;
+                var tracciati = [];
+                var leggi = function () {
+                    for (var k = 0; k < scontorno.paths.length; k++) {
+                        tracciati.push(scontorno.paths.item(k).entirePath);
+                    }
+                };
+                if (String(tipoPrima) != "NONE") {
+                    leggi();
+                }
+                else {
+                    var canale = cssRegoleConflitti.canaleDellaTrasparenza(scontorno.alphaChannelPathNames);
+                    if (canale != null) {
+                        try {
+                            scontorno.properties = { clippingType: ClippingPathType.ALPHA_CHANNEL, appliedPathName: canale };
+                            leggi();
+                        }
+                        finally {
+                            scontorno.clippingType = tipoPrima;
+                        }
+                    }
+                }
+                poligoni = tracciati.length > 0 ? cssRegoleConflitti.poligoniDelContorno(tracciati, item.geometricBounds) : null;
+            }
+        }
+        catch (e) {
+            console.error("Contorno dell'immagine " + (item.label || "") + " non letto: " + e);
+            poligoni = null;
+        }
+
+        if (contorni != null && chiave != null) {
+            contorni[chiave] = poligoni;
+        }
+        return poligoni;
     },
 
     segnalazioniConflittiPendenti: null,
@@ -4584,7 +4676,7 @@ const CssFramework =
 
     /// I20-1178: nel registro del Plugin la CSF-013 porta anche le misure del contatto, cosi' un
     /// caso visto solo in produzione si capisce dal file di log. Il bollino resta com'era.
-    segnalaConflittoElementi(box, elementoA, elementoB, pendente, useTextBounds = false) {
+    segnalaConflittoElementi(box, elementoA, elementoB, pendente, useTextBounds = false, useContornoImmagini = false, contorni = null) {
         var labels = [elementoA.label, elementoB.label].sort();
         var pairKey = labels[0] + "|" + labels[1] + "|" + [elementoA.key, elementoB.key].sort().join("|");
         if (pendente.chiaviSegnalate.indexOf(pairKey) >= 0) {
@@ -4595,9 +4687,9 @@ const CssFramework =
 
         var boxLabel = box && box.label ? box.label : "senza etichetta";
         var msg = "Code CSF-013: Conflitto tra elementi nel box " + boxLabel + ": " + elementoA.label + " non dovrebbe toccare " + elementoB.label + ".";
-        var misure = this.misureContatto(elementoA.item, elementoB.item, useTextBounds);
+        var misure = this.misureContatto(elementoA.item, elementoB.item, useTextBounds, useContornoImmagini, contorni);
         messaggioUtente(misure != "" ? msg + " " + misure : msg, "warning");
-        addSegnalazione(msg, "warning", 2, true, ["CSF-013", "yellow"], null, cssRegoleConflitti.datiDiVerifica(elementoA.label, elementoB.label, useTextBounds));
+        addSegnalazione(msg, "warning", 2, true, ["CSF-013", "yellow"], null, cssRegoleConflitti.datiDiVerifica(elementoA.label, elementoB.label, useTextBounds, useContornoImmagini));
     },
 
     /// Il controllo finale: guarda se gli elementi che non dovevano toccarsi si toccano, e
@@ -4614,6 +4706,8 @@ const CssFramework =
                 return;
             }
 
+            //I20-1208: i contorni delle immagini si leggono una volta per controllo.
+            var contorni = {};
             for (var i = 0; i < pendente.regole.length; i++) {
                 var regola = pendente.regole[i];
                 var elementiA = this.getElementiSegnalazioniConflitti(box, regola.latoA);
@@ -4621,8 +4715,8 @@ const CssFramework =
                 if (regola.latoB.length == 0) {
                     for (var a = 0; a < elementiA.length; a++) {
                         for (var b = a + 1; b < elementiA.length; b++) {
-                            if (this.elementsTouching(elementiA[a].item, elementiA[b].item, regola.useTextBounds)) {
-                                this.segnalaConflittoElementi(box, elementiA[a], elementiA[b], pendente, regola.useTextBounds);
+                            if (this.elementsTouching(elementiA[a].item, elementiA[b].item, regola.useTextBounds, regola.useContornoImmagini, contorni)) {
+                                this.segnalaConflittoElementi(box, elementiA[a], elementiA[b], pendente, regola.useTextBounds, regola.useContornoImmagini, contorni);
                             }
                         }
                     }
@@ -4636,8 +4730,8 @@ const CssFramework =
                             continue;
                         }
 
-                        if (this.elementsTouching(elementiA[a].item, elementiB[b].item, regola.useTextBounds)) {
-                            this.segnalaConflittoElementi(box, elementiA[a], elementiB[b], pendente, regola.useTextBounds);
+                        if (this.elementsTouching(elementiA[a].item, elementiB[b].item, regola.useTextBounds, regola.useContornoImmagini, contorni)) {
+                            this.segnalaConflittoElementi(box, elementiA[a], elementiB[b], pendente, regola.useTextBounds, regola.useContornoImmagini, contorni);
                         }
                     }
                 }
@@ -4674,6 +4768,7 @@ const CssFramework =
 
             var me = this;
             var voci = Segnalazioni.leggiDalBox(box);
+            var contorni = {};
             var regoleDellaCopia;
             var restanti = [];
             var tolte = 0;
@@ -4694,14 +4789,15 @@ const CssFramework =
                         (motivo, etichetta) => me.makeRegexFromGroupName(motivo).test(etichetta));
                 }
 
-                if (useTextBounds == null || this.conflittoAncoraPresente(box, dati.a, dati.b, useTextBounds)) {
+                //I20-1208: e misurate sul contorno delle immagini, se la regola di allora lo faceva.
+                if (useTextBounds == null || this.conflittoAncoraPresente(box, dati.a, dati.b, useTextBounds, dati.useContornoImmagini, contorni)) {
                     restanti.push(voce);
                     continue;
                 }
 
                 tolte++;
                 messaggioUtente("Code CSF-28: Segnalazione CSF-013 tolta dal box " + box.label + ": " + dati.a + " e " + dati.b +
-                    " non si toccano piu'. " + this.posizioniPerConflitto(box, dati.a, dati.b, useTextBounds), "success");
+                    " non si toccano piu'. " + this.posizioniPerConflitto(box, dati.a, dati.b, useTextBounds, dati.useContornoImmagini, contorni), "success");
             }
 
             if (tolte == 0) {
@@ -4740,7 +4836,7 @@ const CssFramework =
     /// I20-1178: se nel box un elemento con etichetta a tocca ancora uno con etichetta b, misurati
     /// come li misura il controllo dei conflitti: elementi visibili, e lo stesso useTextBounds.
     /// Se la misura non riesce risponde di si', cosi' la segnalazione resta.
-    conflittoAncoraPresente(box, etichettaA, etichettaB, useTextBounds) {
+    conflittoAncoraPresente(box, etichettaA, etichettaB, useTextBounds, useContornoImmagini = false, contorni = null) {
         try {
             var elementiA = this.getElementiSegnalazioniConflitti(box, [etichettaA]);
             var elementiB = this.getElementiSegnalazioniConflitti(box, [etichettaB]);
@@ -4749,7 +4845,7 @@ const CssFramework =
                     if (elementiA[a].key == elementiB[b].key) {
                         continue;
                     }
-                    if (this.elementsTouching(elementiA[a].item, elementiB[b].item, useTextBounds)) {
+                    if (this.elementsTouching(elementiA[a].item, elementiB[b].item, useTextBounds, useContornoImmagini, contorni)) {
                         return true;
                     }
                 }
@@ -4764,7 +4860,7 @@ const CssFramework =
 
     /// I20-1178: dove stanno i due elementi di una CSF-013 tolta, per il registro: il primo con
     /// ciascuna etichetta, misurato come nel controllo. Stringa vuota se non si leggono.
-    posizioniPerConflitto(box, etichettaA, etichettaB, useTextBounds) {
+    posizioniPerConflitto(box, etichettaA, etichettaB, useTextBounds, useContornoImmagini = false, contorni = null) {
         try {
             var me = this;
             var posizione = function (etichetta) {
@@ -4773,6 +4869,11 @@ const CssFramework =
                     return etichetta + " non visibile nel box";
                 }
                 var item = trovati[0].item;
+                //I20-1208: di un'immagine misurata sul contorno si scrive il rettangolo del contorno.
+                if (useContornoImmagini) {
+                    var forma = me.formaPerContatto(item, useTextBounds, contorni);
+                    return etichetta + " (" + forma.nome + ") " + cssRegoleConflitti.scriviRettangolo(forma.rettangolo);
+                }
                 return etichetta + " " + cssRegoleConflitti.scriviRettangolo(useTextBounds ? me.getRealBounds(item) : item.geometricBounds);
             };
             return "Misure in mm [alto, sinistra, basso, destra]: " + posizione(etichettaA) + "; " + posizione(etichettaB) + ".";

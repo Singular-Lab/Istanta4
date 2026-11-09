@@ -3763,6 +3763,14 @@ namespace Istanta.Models
         /// veniva scartata qui, nel passaggio verso il Plugin.
         /// </summary>
         public bool useTextBounds { get; set; } = false;
+
+        /// <summary>
+        /// I20-1208: con true il Plugin misura le immagini sul contorno della loro parte non
+        /// trasparente, non sulla cornice: il margine trasparente di un logo non fa piu' nascere
+        /// un conflitto con il logo accanto. Senza questa proprieta' la scelta si perderebbe qui,
+        /// come era successo a useTextBounds.
+        /// </summary>
+        public bool useContornoImmagini { get; set; } = false;
     }
     /// Come reagiscono X e Y al ridimensionamento.
     public class Ridimensionamento

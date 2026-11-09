@@ -212,7 +212,8 @@ test('rettangoli malformati non producono contatti inventati', () => {
 
 test('il confronto sul testo passa dalle righe reali', () => {
     const framework = sorgente('plugin/CssFramework.js');
-    const inizio = framework.indexOf('elementsTouching(item1, item2, useTextBounds = false) {');
+    const inizio = framework.indexOf('elementsTouching(item1, item2, useTextBounds = false, useContornoImmagini = false, contorni = null) {');
+    assert.ok(inizio > 0, 'elementsTouching non trovata');
     const blocco = framework.slice(inizio, inizio + 2000);
 
     assert.ok(blocco.includes('righeDiTesto('),
@@ -370,15 +371,16 @@ test('una riga senza parole leggibili si nomina col solo numero', () => {
 
 test('la CSF-013 porta le misure nel registro, non nel bollino', () => {
     const css = sorgente('plugin/CssFramework.js').replace(/\r/g, '');
-    const corpo = css.substring(css.indexOf('    segnalaConflittoElementi(box, elementoA, elementoB, pendente, useTextBounds = false) {'));
+    const corpo = css.substring(css.indexOf('    segnalaConflittoElementi(box, elementoA, elementoB, pendente, useTextBounds = false, useContornoImmagini = false, contorni = null) {'));
     const segnala = corpo.substring(0, corpo.indexOf('\n    },\n'));
 
-    assert.match(segnala, /var misure = this\.misureContatto\(elementoA\.item, elementoB\.item, useTextBounds\);/);
+    assert.match(segnala, /var misure = this\.misureContatto\(elementoA\.item, elementoB\.item, useTextBounds, useContornoImmagini, contorni\);/);
     assert.match(segnala, /messaggioUtente\(misure != "" \? msg \+ " " \+ misure : msg, "warning"\);/);
     //Il bollino ha il testo di sempre; dal secondo giro di I20-1178 porta anche i dati per rimisurarla.
-    assert.match(segnala, /addSegnalazione\(msg, "warning", 2, true, \["CSF-013", "yellow"\], null, cssRegoleConflitti\.datiDiVerifica\(elementoA\.label, elementoB\.label, useTextBounds\)\);/);
-    //Le misure si prendono come il controllo prende il contatto: stessa scelta dei bounds.
-    assert.strictEqual((css.match(/this\.segnalaConflittoElementi\([^)]*, pendente, regola\.useTextBounds\);/g) || []).length, 2);
+    assert.match(segnala, /addSegnalazione\(msg, "warning", 2, true, \["CSF-013", "yellow"\], null, cssRegoleConflitti\.datiDiVerifica\(elementoA\.label, elementoB\.label, useTextBounds, useContornoImmagini\)\);/);
+    //Le misure si prendono come il controllo prende il contatto: stessa scelta dei bounds, e
+    //(I20-1208) dello stesso modo di misurare le immagini.
+    assert.strictEqual((css.match(/this\.segnalaConflittoElementi\([^)]*, pendente, regola\.useTextBounds, regola\.useContornoImmagini, contorni\);/g) || []).length, 2);
 });
 
 test('il noRender del record si applica prima del controllo dei conflitti', () => {
@@ -478,8 +480,9 @@ test('la voce del bollino porta i dati di verifica solo se la segnalazione li ha
 function caricaCssFramework() {
     const Module = require('node:module');
     const originale = Module._load;
+    //I20-1208: lo scontorno sul canale alfa si chiede con l'enumerazione di InDesign.
     Module._load = function (richiesta) {
-        return richiesta === 'indesign' ? {} : originale.apply(this, arguments);
+        return richiesta === 'indesign' ? { ClippingPathType: { NONE: 'NONE', ALPHA_CHANNEL: 'ALPHA_CHANNEL' } } : originale.apply(this, arguments);
     };
     try {
         return require('../../plugin/CssFramework.js');
@@ -598,4 +601,211 @@ test('la scheda ref rimisura le CSF-013 prima di leggere il bollino, e segue il 
     assert.match(funzione, /const eraSelezionato = SchermataSegnalazioni\.eSelezionato\(box\);\s*const dopo = CssFramework\.ricontrollaConflittiDelBox\(box\);/);
     assert.match(funzione, /this\.refSelected\.item = dopo;/);
     assert.match(funzione, /SchermataSegnalazioni\.seguiBoxRigruppato\(box, dopo, eraSelezionato\);/);
+});
+
+/* ---- I20-1208: i loghi misurati sul contorno della parte non trasparente ----
+ * Nel BOX12 di Edro21 le cornici di conad_piacersi e di Logo_SDB si sovrapponevano, ma i loghi no:
+ * Logo_SDB.psd ha il 5% di margine trasparente per lato. Con useContornoImmagini la regola misura
+ * le immagini sul contorno che InDesign ricava dal canale alfa della trasparenza. Le misure sono
+ * quelle lette in InDesign con la sonda del task sul logo SDB: cornice [232.5, 433.5, 243.08, 474.82],
+ * contorno [235.94, 435.3, 243.08, 472.7].
+ */
+
+const CORNICE_SDB = [232.5, 433.5, 243.08, 474.82];
+//Il contorno del disegno di SDB come entirePath di InDesign: punti [x, y].
+const TRACCIATO_SDB = [[435.3, 235.94], [472.7, 235.94], [472.7, 243.08], [435.3, 243.08]];
+
+test('I20-1208: la regola dice se misurare le immagini sul contorno, e senza dirlo resta sulla cornice', () => {
+    const conContorno = cssRegoleConflitti.normalizzaRegola({ segnalazioni: ['foto_extra*tipo_3'], useContornoImmagini: true });
+    const senza = cssRegoleConflitti.normalizzaRegola({ segnalazioni: ['foto_extra*tipo_3'] });
+
+    assert.strictEqual(conContorno.useContornoImmagini, true);
+    assert.strictEqual(senza.useContornoImmagini, false);
+    assert.strictEqual(cssRegoleConflitti.getListaRegole(['descrizione', '*foto_extra*'])[0].useContornoImmagini, false);
+    assert.notStrictEqual(cssRegoleConflitti.chiaveRegola(conContorno), cssRegoleConflitti.chiaveRegola(senza));
+    //La chiave delle regole di sempre non cambia.
+    assert.strictEqual(cssRegoleConflitti.chiaveRegola(senza), 'foto_extra*tipo_3||geom');
+});
+
+test('I20-1208: la CSF-013 misurata sul contorno lo porta nei dati di verifica, e la rimisura lo ritrova', () => {
+    assert.deepStrictEqual(cssRegoleConflitti.datiDiVerifica('a', 'b', false, true), { a: 'a', b: 'b', tb: false, ci: true });
+    assert.deepStrictEqual(cssRegoleConflitti.datiDiVerifica('a', 'b', false, false), { a: 'a', b: 'b', tb: false });
+
+    const voce = { g: 'warning', c: 'CSF-013', t: TESTO_CSF013, v: { a: 'x', b: 'y', tb: false, ci: true } };
+    assert.deepStrictEqual(cssRegoleConflitti.voceDiConflitto(voce), { a: 'x', b: 'y', useTextBounds: false, useContornoImmagini: true });
+});
+
+test('I20-1208: il canale della trasparenza si riconosce dal nome, altrimenti vale il primo', () => {
+    assert.strictEqual(cssRegoleConflitti.canaleDellaTrasparenza(['Trasparenza']), 'Trasparenza');
+    assert.strictEqual(cssRegoleConflitti.canaleDellaTrasparenza(['Alfa 1', 'Transparency']), 'Transparency');
+    assert.strictEqual(cssRegoleConflitti.canaleDellaTrasparenza(['Alfa 1']), 'Alfa 1');
+    assert.strictEqual(cssRegoleConflitti.canaleDellaTrasparenza([]), null);
+    assert.strictEqual(cssRegoleConflitti.canaleDellaTrasparenza(undefined), null);
+});
+
+test('I20-1208: un tracciato con curve diventa segmenti che seguono la pancia della curva', () => {
+    //Due ancoraggi con le maniglie tirate in alto: la curva sale sopra la retta fra i due.
+    const curva = [[[0, 0], [0, 10], [0, 0]], [[10, 0], [10, 10], [10, 0]]];
+    const vertici = cssRegoleConflitti.verticiDelTracciato(curva);
+
+    assert.ok(vertici.length > 2);
+    assert.ok(Math.min(...vertici.map(p => p[1])) < 10, 'i punti della curva stanno sopra gli ancoraggi');
+    //Un tracciato di soli segmenti resta i suoi punti.
+    assert.deepStrictEqual(cssRegoleConflitti.verticiDelTracciato(TRACCIATO_SDB), TRACCIATO_SDB);
+});
+
+test('I20-1208: del contorno conta solo quello che la cornice lascia vedere', () => {
+    const poligoni = cssRegoleConflitti.poligoniDelContorno([[[0, 0], [20, 0], [20, 10], [0, 10]]], [0, 0, 10, 15]);
+
+    assert.strictEqual(poligoni.length, 1);
+    assert.deepStrictEqual(cssRegoleConflitti.riquadroDeiPoligoni(poligoni), [0, 0, 10, 15]);
+    //Un tracciato tutto fuori dalla cornice non lascia niente.
+    assert.deepStrictEqual(cssRegoleConflitti.poligoniDelContorno([[[30, 0], [40, 0], [40, 10]]], [0, 0, 10, 15]), []);
+});
+
+test('I20-1208: cornici sovrapposte, disegni accanto: nessun contatto; disegni sovrapposti: contatto', () => {
+    const sdb = cssRegoleConflitti.poligoniDelContorno([TRACCIATO_SDB], CORNICE_SDB);
+    //Piacersi non ha margini laterali: il suo disegno comincia dove comincia la sua cornice.
+    const piacersiAccanto = [cssRegoleConflitti.poligonoDelRettangolo([232.5, 472.9, 245, 500])];
+    const piacersiSopra = [cssRegoleConflitti.poligonoDelRettangolo([232.5, 471, 245, 500])];
+
+    assert.ok(cssRegoleConflitti.rettangoliInContatto(CORNICE_SDB, [232.5, 472.9, 245, 500]), 'le cornici si sovrappongono');
+    assert.strictEqual(cssRegoleConflitti.poligoniInContatto(sdb, piacersiAccanto), false);
+    assert.strictEqual(cssRegoleConflitti.poligoniInContatto(sdb, piacersiSopra), true);
+});
+
+test('I20-1208: il contatto fra forme guarda la forma, non il rettangolo che la contiene', () => {
+    //Una L e un quadrato nel suo angolo vuoto: i rettangoli si sovrappongono, le forme no.
+    const elle = [[[0, 0], [2, 0], [2, 8], [10, 8], [10, 10], [0, 10]]];
+    const nellAngolo = [cssRegoleConflitti.poligonoDelRettangolo([1, 4, 6, 9])];
+    const dentro = [cssRegoleConflitti.poligonoDelRettangolo([8.5, 0.5, 9.5, 1.5])];
+
+    assert.strictEqual(cssRegoleConflitti.poligoniInContatto(elle, nellAngolo), false);
+    assert.strictEqual(cssRegoleConflitti.poligoniInContatto(elle, dentro), true, 'una forma dentro l\'altra le tocca');
+    assert.strictEqual(cssRegoleConflitti.poligoniInContatto([], dentro), false);
+});
+
+//Un logo finto come lo vede il Plugin: la cornice e un'immagine il cui scontorno, finche' non lo si
+//mette sul canale alfa, non ha tracciati. Tiene conto di com'e' rimasto lo scontorno.
+function logoFinto(id, label, cornice, tracciato, canali = ['Trasparenza']) {
+    const scontorno = {
+        clippingType: 'NONE',
+        appliedPathName: '',
+        alphaChannelPathNames: canali,
+        impostazioni: [],
+        set properties(p) {
+            this.impostazioni.push(p);
+            this.clippingType = 'ALPHA_CHANNEL';
+            this.appliedPathName = p.appliedPathName;
+        },
+        get paths() {
+            const tracciati = this.clippingType === 'NONE' ? [] : [tracciato];
+            return { length: tracciati.length, item: k => ({ entirePath: tracciati[k] }) };
+        }
+    };
+    return {
+        id, label, constructorName: 'Rectangle', isValid: true, visible: true, parent: null,
+        geometricBounds: cornice, allGraphics: [{ clippingPath: scontorno }], scontorno
+    };
+}
+
+const CORNICE_PIACERSI = [232.5, 472.9, 245, 500];
+const TRACCIATO_PIACERSI = [[472.9, 232.5], [500, 232.5], [500, 241], [472.9, 241]];
+
+test('I20-1208: con il contorno i due loghi del BOX12 non si toccano, e lo scontorno torna com\'era', () => {
+    conAmbienteFinto((CssFramework) => {
+        const sdb = logoFinto(1, 'foto_extra$Logo_SDB$tipo_3', CORNICE_SDB, TRACCIATO_SDB);
+        const piacersi = logoFinto(2, 'foto_extra$conad_piacersi$tipo_3', CORNICE_PIACERSI, TRACCIATO_PIACERSI);
+
+        assert.strictEqual(CssFramework.elementsTouching(sdb, piacersi, false, true, {}), false);
+        assert.strictEqual(sdb.scontorno.clippingType, 'NONE');
+        assert.deepStrictEqual(sdb.scontorno.impostazioni[0], { clippingType: 'ALPHA_CHANNEL', appliedPathName: 'Trasparenza' });
+        //Senza l'opzione si misura la cornice, come prima: e le cornici si toccano.
+        assert.strictEqual(CssFramework.elementsTouching(sdb, piacersi, false), true);
+    });
+});
+
+test('I20-1208: un\'immagine senza canale alfa, o un testo, si misura come prima', () => {
+    conAmbienteFinto((CssFramework) => {
+        const senzaCanale = logoFinto(1, 'foto_extra$A$tipo_3', CORNICE_SDB, TRACCIATO_SDB, []);
+        const piacersi = logoFinto(2, 'foto_extra$conad_piacersi$tipo_3', CORNICE_PIACERSI, TRACCIATO_PIACERSI);
+
+        assert.strictEqual(CssFramework.contornoVisibileImmagine(senzaCanale), null);
+        assert.strictEqual(senzaCanale.scontorno.impostazioni.length, 0, 'lo scontorno non si tocca');
+        assert.strictEqual(CssFramework.elementsTouching(senzaCanale, piacersi, false, true, {}), true, 'vale la cornice');
+        assert.strictEqual(CssFramework.contornoVisibileImmagine({ id: 3, isValid: true, constructorName: 'TextFrame' }), null);
+    });
+});
+
+test('I20-1208: il contorno di un logo si legge una volta sola per controllo', () => {
+    conAmbienteFinto((CssFramework) => {
+        const sdb = logoFinto(1, 'foto_extra$Logo_SDB$tipo_3', CORNICE_SDB, TRACCIATO_SDB);
+        const contorni = {};
+
+        CssFramework.contornoVisibileImmagine(sdb, contorni);
+        CssFramework.contornoVisibileImmagine(sdb, contorni);
+
+        assert.strictEqual(sdb.scontorno.impostazioni.length, 1);
+    });
+});
+
+test('I20-1208: aprendo la scheda ref una CSF-013 fra due loghi che si toccano solo nelle cornici si toglie', () => {
+    conAmbienteFinto((CssFramework, messaggi) => {
+        const sdb = logoFinto(11, 'foto_extra$Logo_SDB$tipo_3', CORNICE_SDB, TRACCIATO_SDB);
+        const piacersi = logoFinto(12, 'foto_extra$conad_piacersi$tipo_3', CORNICE_PIACERSI, TRACCIATO_PIACERSI);
+        const voce = {
+            g: 'warning', c: 'CSF-013',
+            t: 'Code CSF-013: Conflitto tra elementi nel box BOX12: foto_extra$conad_piacersi$tipo_3 non dovrebbe toccare foto_extra$Logo_SDB$tipo_3.',
+            v: { a: 'foto_extra$conad_piacersi$tipo_3', b: 'foto_extra$Logo_SDB$tipo_3', tb: false, ci: true }
+        };
+        const box = { label: 'BOX12', isValid: true, id: 1, allPageItems: [sdb, piacersi], ovals: null };
+        const bollino = { id: 20, label: etichettaBollino.scrivi([voce]), constructorName: 'Rectangle', isValid: true, visible: true, parent: null, geometricBounds: [0, 0, 5, 5] };
+        bollino.remove = function () { box.allPageItems = box.allPageItems.filter(e => e !== bollino); };
+        box.allPageItems.push(bollino);
+
+        CssFramework.ricontrollaConflittiDelBox(box);
+
+        assert.strictEqual(Segnalazioni().bolliniDelBox(box).length, 0);
+        assert.strictEqual(messaggi.length, 1);
+        assert.match(messaggi[0].testo, /^Code CSF-28: .* non si toccano piu'\. Misure in mm .*\(contorno\)/);
+    });
+});
+
+test('I20-1208: aprendo la scheda ref la stessa CSF-013 misurata sulle cornici resta', () => {
+    conAmbienteFinto((CssFramework, messaggi) => {
+        const sdb = logoFinto(11, 'foto_extra$Logo_SDB$tipo_3', CORNICE_SDB, TRACCIATO_SDB);
+        const piacersi = logoFinto(12, 'foto_extra$conad_piacersi$tipo_3', CORNICE_PIACERSI, TRACCIATO_PIACERSI);
+        const voce = {
+            g: 'warning', c: 'CSF-013',
+            t: 'Code CSF-013: Conflitto tra elementi nel box BOX12: foto_extra$conad_piacersi$tipo_3 non dovrebbe toccare foto_extra$Logo_SDB$tipo_3.',
+            v: { a: 'foto_extra$conad_piacersi$tipo_3', b: 'foto_extra$Logo_SDB$tipo_3', tb: false }
+        };
+        const box = { label: 'BOX12', isValid: true, id: 1, allPageItems: [sdb, piacersi], ovals: null };
+        const bollino = { id: 20, label: etichettaBollino.scrivi([voce]), constructorName: 'Rectangle', isValid: true, visible: true, parent: null, geometricBounds: [0, 0, 5, 5] };
+        box.allPageItems.push(bollino);
+
+        CssFramework.ricontrollaConflittiDelBox(box);
+
+        assert.deepStrictEqual(Segnalazioni().leggiDalBox(box).map(v => v.c), ['CSF-013']);
+        assert.strictEqual(messaggi.length, 0);
+        assert.strictEqual(sdb.scontorno.impostazioni.length, 0, 'senza ci lo scontorno non si tocca');
+    });
+});
+
+test('I20-1208: Edro21 misura sul contorno i loghi tipo_3 fra loro, nei due kit volantino', () => {
+    const config = JSON.parse(sorgente('Istanta/wwwroot/external_source/Edro21/SourceFrameworkCss.json'));
+    const kitVolantino = config.dbRidimensionamentiAllineamenti.modificheCssPerKit
+        .filter(k => (k.kit.kitTipoLavorazioniValide || []).includes(1));
+    assert.strictEqual(kitVolantino.length, 2);
+
+    for (const kit of kitVolantino) {
+        const voce = kit.operazioniPerBox.find(op => Array.isArray(op.nomiBox) && op.nomiBox.length === 0);
+        const regole = cssRegoleConflitti.getListaRegole(voce.segnalazioniConflitti);
+        const loghi = regole.filter(r => r.latoA.length === 1 && r.latoA[0] === 'foto_extra*tipo_3' && r.latoB.length === 0);
+        assert.strictEqual(loghi.length, 1);
+        assert.strictEqual(loghi[0].useContornoImmagini, true);
+        assert.strictEqual(loghi[0].useTextBounds, false);
+        //La descrizione contro le foto extra resta misurata come prima.
+        assert.ok(regole.filter(r => r.latoB.includes('*foto_extra*')).every(r => r.useContornoImmagini === false));
+    }
 });

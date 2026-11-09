@@ -62,4 +62,25 @@ public class SegnalazioniConflittiBoundsTests
         Assert.False(riletto.segnalazioniConflitti[0].useTextBounds);
         Assert.True(riletto.segnalazioniConflitti[1].useTextBounds);
     }
+
+    [Fact]
+    public void I20_1208_la_misura_sul_contorno_delle_immagini_sopravvive_al_viaggio_verso_il_Plugin()
+    {
+        // La regola dei loghi tipo_3 di Edro21: le immagini si misurano sulla parte non trasparente.
+        var regola = JsonConvert.DeserializeObject<SegnalazioniConflitti>(
+            "{\"segnalazioni\":[\"foto_extra*tipo_3\"],\"useTextBounds\":false,\"useContornoImmagini\":true}")!;
+        var rilettura = JsonConvert.DeserializeObject<SegnalazioniConflitti>(JsonConvert.SerializeObject(regola))!;
+
+        Assert.True(rilettura.useContornoImmagini);
+        Assert.False(rilettura.useTextBounds);
+    }
+
+    [Fact]
+    public void I20_1208_una_regola_senza_la_scelta_misura_le_immagini_sulla_cornice()
+    {
+        var regola = JsonConvert.DeserializeObject<SegnalazioniConflitti>(
+            "{\"segnalazioni\":[\"*foto_extra*\"]}")!;
+
+        Assert.False(regola.useContornoImmagini);
+    }
 }
