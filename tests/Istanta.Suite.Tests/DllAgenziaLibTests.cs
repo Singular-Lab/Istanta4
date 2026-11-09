@@ -44,6 +44,17 @@ public class DllAgenziaLibTests
         Assert.Equal(new[] { "records", "utente", "pathCustomPlugin" }, parametri);
     }
 
+    [Fact]
+    public void La_dll_committata_sceglie_il_logo_Armomia()
+    {
+        // I20-1209: Istanta carica la DLL committata, non il sorgente: senza ricompilarla il logo
+        // Armomia non uscirebbe.
+        var metodi = MetodiDelTipoNellaDll(
+            TrovaFile("Istanta/wwwroot/external_lib/AgenziaLib.dll"), "AgenziaLib", "LogoArmomiaEdro21");
+
+        Assert.Contains("ConLogo", metodi);
+    }
+
     private static List<string> ParametriDelMetodoNellaDll(string percorsoDll, string spazioDeiNomi, string nomeTipo, string nomeMetodo)
     {
         using var flusso = File.OpenRead(percorsoDll);
