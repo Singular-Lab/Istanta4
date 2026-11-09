@@ -78,6 +78,11 @@ const CampiARiposo = {
 
     CLASSE_RIQUADRO: "campoARiposo",
 
+    /// TASK-4b0592eb: il bordo dell'anteprima (mostraAnteprima). Uno spessore solo per tutte le
+    /// caselle: il riquadro ha larghezza e altezza fisse e box-sizing border-box, quindi il bordo
+    /// cambia colore e spessore dentro le stesse misure, e niente nella pagina si sposta.
+    BORDO_ANTEPRIMA: "2px solid #2e9e4f",
+
     /// Il segno sul campo spento da noi. Una schermata copiata (cloneElementWithEvents) copia anche
     /// lo stile del campo spento: col segno si sa che quello non e' lo stile suo.
     ATTRIBUTO_SPENTO: "data-a-riposo",
@@ -275,6 +280,8 @@ const CampiARiposo = {
             posizione: campo.hasAttribute(CampiARiposo.ATTRIBUTO_SPENTO) ? "" : campo.style.position,
             ultimo: null,
             inModifica: false,
+            //TASK-4b0592eb: il testo da mostrare al posto del valore, o null (mostraAnteprima).
+            anteprima: null,
             alPassaggio: () => CampiARiposo.mostra(campo),
             allUscita: () => CampiARiposo.aRiposo(campo)
         };
@@ -357,7 +364,9 @@ const CampiARiposo = {
         imposta("height", campo.style.height || stato.altezzaMisurata);
         imposta("backgroundColor", campo.style.backgroundColor || CampiARiposo.SFONDO_NATIVO);
         //Il bordo dello stile; senza, quello chiaro di sopra e sotto dei campi di una riga.
-        const bordoStile = campo.style.border;
+        //TASK-4b0592eb: in anteprima quello verde, al posto di quello dello stile.
+        const anteprima = stato.anteprima;
+        const bordoStile = anteprima != null ? CampiARiposo.BORDO_ANTEPRIMA : campo.style.border;
         const unaRiga = CampiARiposo.unaRiga(campo);
         imposta("borderTop", bordoStile || (unaRiga ? CampiARiposo.BORDO_RIGA_FUORI : "none"));
         imposta("borderBottom", bordoStile || (unaRiga ? CampiARiposo.BORDO_RIGA_FUORI : "none"));
@@ -366,8 +375,10 @@ const CampiARiposo = {
 
         const disattivo = campo.disabled === true;
         const etichetta = CampiARiposo._etichetta(campo);
-        const mostrato = CampiARiposo.testoDaMostrare(campo.value, campo.placeholder || campo.getAttribute("placeholder"));
-        const chiave = [mostrato.testo, mostrato.segnaposto, disattivo, etichetta, campo.style.color].join("\u0001");
+        const mostrato = anteprima != null
+            ? { testo: anteprima, segnaposto: false }
+            : CampiARiposo.testoDaMostrare(campo.value, campo.placeholder || campo.getAttribute("placeholder"));
+        const chiave = [mostrato.testo, mostrato.segnaposto, disattivo, etichetta, campo.style.color, anteprima != null].join("\u0001");
         if (chiave === stato.ultimo) {
             return;
         }
@@ -375,7 +386,8 @@ const CampiARiposo = {
 
         const interno = stato.interno;
         stile.cursor = disattivo ? "default" : "text";
-        interno.style.color = disattivo || mostrato.segnaposto ? CampiARiposo.TESTO_SPENTO : (campo.style.color || CampiARiposo.TESTO_NATIVO);
+        //L'anteprima si legge anche su una casella disattivata: il testo non si spegne.
+        interno.style.color = (disattivo && anteprima == null) || mostrato.segnaposto ? CampiARiposo.TESTO_SPENTO : (campo.style.color || CampiARiposo.TESTO_NATIVO);
         //Gli spazi come nel campo nativo, anche iniziali e ripetuti: con "normal" e "nowrap" il riquadro
         //li perdeva, e il testo si spostava al passaggio del mouse (I20-1139: " OSELLA", 3px a destra).
         interno.style.whiteSpace = String(campo.tagName).toLowerCase() === "textarea" ? "pre-wrap" : "pre";
@@ -446,7 +458,8 @@ const CampiARiposo = {
     /// Un campo disattivato resta a riposo.
     mostra(campo) {
         const stato = campo != null ? campo.__riposo : null;
-        if (stato == null || stato.inModifica || campo.disabled === true) {
+        //TASK-4b0592eb: in anteprima la casella e' in sola lettura: resta il riquadro.
+        if (stato == null || stato.inModifica || stato.anteprima != null || campo.disabled === true) {
             return false;
         }
         CampiARiposo._mostrati.slice().forEach(altro => {
@@ -501,6 +514,47 @@ const CampiARiposo = {
         stato.inModifica = false;
         CampiARiposo._mostrati = CampiARiposo._mostrati.filter(c => c !== campo);
         CampiARiposo._spegniCampo(campo);
+        stato.ultimo = null;
+        CampiARiposo._allinea(campo);
+        return true;
+    },
+
+    /* ---- l'anteprima ---- */
+
+    /// TASK-4b0592eb: il riquadro mostra un altro testo, in sola lettura e col bordo verde, finche'
+    /// non si toglie: la scheda ref ci fa vedere la descrizione del server al passaggio del mouse su
+    /// un'icona. Cambia solo il riquadro, che ha gia' le misure del campo: il valore del campo, che
+    /// salvataggio e confronti leggono, resta quello. Un campo mostrato torna prima a riposo, e uno in
+    /// cui si sta scrivendo ne esce. Falso per un campo che non e' a riposo (non ancora visto dal giro).
+    mostraAnteprima(campo, testo) {
+        const stato = campo != null ? campo.__riposo : null;
+        if (stato == null) {
+            return false;
+        }
+        if (stato.inModifica) {
+            if (CampiARiposo._attivo(campo)) {
+                try {
+                    campo.blur();
+                }
+                catch (err) {
+                    //si mette a riposo comunque, qui sotto
+                }
+            }
+            CampiARiposo.aRiposo(campo);
+        }
+        stato.anteprima = testo == null ? "" : String(testo);
+        stato.ultimo = null;
+        CampiARiposo._allinea(campo);
+        return true;
+    },
+
+    /// TASK-4b0592eb: il riquadro torna a mostrare il valore del campo, col bordo del suo stile.
+    togliAnteprima(campo) {
+        const stato = campo != null ? campo.__riposo : null;
+        if (stato == null || stato.anteprima == null) {
+            return false;
+        }
+        stato.anteprima = null;
         stato.ultimo = null;
         CampiARiposo._allinea(campo);
         return true;

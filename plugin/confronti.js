@@ -461,8 +461,10 @@ const confronti = {
                         let contentCompiled = compiledField.content.replace(/<br\s*\/?>|\s+|\n/gi, '');
                         if (contentBox1 != contentCompiled) {
                             //I20-1071: i due valori, leggibili, per chi guarda la differenza.
+                            //TASK-4b0592eb: e a righe, con i loro a capo, per le colonne della finestra.
                             differenze.push({ label: Utility.parseLabel(compiledField.labelName), difference: "contenuto",
-                                valoreLocale: confronti.testoLeggibile(campoBox1.contents), valoreServer: confronti.testoLeggibile(compiledField.content) });
+                                valoreLocale: confronti.testoLeggibile(campoBox1.contents), valoreServer: confronti.testoLeggibile(compiledField.content),
+                                righeLocale: confronti.righeLeggibili(campoBox1.contents), righeServer: confronti.righeLeggibili(compiledField.content) });
                         }
                     }
                     //controlliamo lo stile di paragrafo/carattere
@@ -581,6 +583,8 @@ const confronti = {
                             //proprio quelli, con lo stesso verdetto che accende "Applica descrizione da server".
                             differenze.push({ label: compiledField.labelName, difference: "contenuto",
                                 valoreLocale: confronti.testoLeggibile(campoBox1.contents), valoreServer: confronti.testoLeggibile(compiledField.content),
+                                //TASK-4b0592eb: a righe, con i loro a capo, per le colonne della finestra.
+                                righeLocale: confronti.righeLeggibili(campoBox1.contents), righeServer: confronti.righeLeggibili(compiledField.content),
                                 blocchi: confronti.blocchiDescrizioneDiversi(trattiDelCampo, compiledField.content, function (tag) {
                                     let stile = TestoTag.parseStile(tag);
                                     return stile != null && stile.isValid ? stile.name : tag;
@@ -1368,6 +1372,46 @@ const confronti = {
         return leggibile.replace(/\s+/g, " ").trim();
     },
 
+    /// TASK-4b0592eb: come testoLeggibile, ma a righe: gli a capo restano. Vanno a capo <br>, il
+    /// ritorno di paragrafo e l'a capo forzato di InDesign; dentro ogni riga gli spazi si compattano,
+    /// e le righe vuote non ci sono. Lista vuota per un testo vuoto.
+    righeLeggibili(testo) {
+        if (testo == null) {
+            return [];
+        }
+        let leggibile = String(testo);
+        leggibile = leggibile.replace(/<([^>]*_\$Hidden)>[\s\S]*?<\/\1>/g, "");
+        leggibile = leggibile.replace(/<br\s*\/?>/gi, "\n");
+        leggibile = leggibile.replace(/<\/[^>]+>/g, " ");
+        leggibile = leggibile.replace(/<[^>]+>/g, "");
+        leggibile = leggibile.replace(/\r\n|\r|\u2028|\u2029/g, "\n");
+        leggibile = leggibile.replace(/[\u0000-\u0009\u000b-\u001f]/g, " ");
+        return leggibile.split("\n").map(r => r.replace(/\s+/g, " ").trim()).filter(r => r !== "");
+    },
+
+    /// TASK-4b0592eb: i due valori di una differenza in colonne, Box e Server, riga per riga:
+    /// [[box, server], ...], con "" dove un valore ha meno righe dell'altro. Le righe sono quelle
+    /// della differenza (righeLocale, righeServer) o, se non le porta, il valore su una riga; un valore
+    /// vuoto e' "(vuoto)". Null se la differenza non ha valori (non presente, eliminato, foto).
+    righeAConfronto(diff) {
+        if (diff == null || (diff.valoreLocale == null && diff.valoreServer == null)) {
+            return null;
+        }
+        const righe = function (elenco, valore) {
+            let lista = Array.isArray(elenco)
+                ? elenco.map(r => String(r))
+                : (valore == null || String(valore) === "" ? [] : [String(valore)]);
+            return lista.length > 0 ? lista : ["(vuoto)"];
+        };
+        const box = righe(diff.righeLocale, diff.valoreLocale);
+        const server = righe(diff.righeServer, diff.valoreServer);
+        const coppie = [];
+        for (let i = 0; i < Math.max(box.length, server.length); i++) {
+            coppie.push([i < box.length ? box[i] : "", i < server.length ? server[i] : ""]);
+        }
+        return coppie;
+    },
+
     /// I20-1071: i due valori di una differenza, pronti per la riga: null se la differenza non
     /// li porta (non presente, eliminato, foto). Oltre massimo caratteri il testo si abbrevia con
     /// i puntini, e l'intero va nel suggerimento.
@@ -1541,6 +1585,39 @@ const confronti = {
             blocchi.push({ stile: stile, testo: trovato[2] });
         }
         return blocchi;
+    },
+
+    /// TASK-4b0592eb: il testo di un blocco del server come lo mostra una casella della scheda: <br>
+    /// e gli a capo di InDesign come a capo, senza tag.
+    testoDelBlocco(testo) {
+        return String(testo == null ? "" : testo)
+            .replace(/<br\s*\/?>/gi, "\n")
+            .replace(/<[^>]+>/g, "")
+            .replace(/\r\n|\r|\u2028|\u2029/g, "\n");
+    },
+
+    /// TASK-4b0592eb: per l'anteprima della descrizione del server nella scheda ref: dato lo stile di
+    /// ogni casella, nell'ordine (con o senza cartella), il testo che il server compone per quello
+    /// stile. La k-esima casella di uno stile prende il k-esimo blocco di quello stile; "" se il
+    /// server non ne ha. Gli stili si confrontano senza cartella, come nel giallo delle caselle.
+    testiDelServerPerCaselle(stili, contenutoServer) {
+        const senzaCartella = function (stile) {
+            const parti = String(stile == null ? "" : stile).split(".");
+            return parti[parti.length - 1];
+        };
+        const perStile = {};
+        confronti.blocchiDelContenuto(contenutoServer).forEach(function (blocco) {
+            const nome = senzaCartella(blocco.stile);
+            (perStile[nome] = perStile[nome] || []).push(confronti.testoDelBlocco(blocco.testo));
+        });
+        const usati = {};
+        return (stili || []).map(function (stile) {
+            const nome = senzaCartella(stile);
+            const quale = usati[nome] || 0;
+            usati[nome] = quale + 1;
+            const blocchi = perStile[nome] || [];
+            return quale < blocchi.length ? blocchi[quale] : "";
+        });
     },
 
     /// I20-1143: quali blocchi della descrizione del box non corrispondono a quelli del server,

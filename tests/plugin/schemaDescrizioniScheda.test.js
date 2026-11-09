@@ -252,6 +252,27 @@ test("l'etichetta sta su una riga larga quanto la colonna, col perche' della sol
     assert.match(protetta, /^<label title="A&lt;b&gt;&quot; &middot; x&amp;y" /);
 });
 
+test("la casella gialla ha l'icona dell'anteprima prima del nome, senza suggerimento suo e alta quanto il testo", () => {
+    //TASK-4b0592eb: data-tooltip vuoto, cosi' il Tooltip (l'elemento piu' interno vince) non mostra
+    //il title dell'etichetta sopra le caselle mentre il mouse e' sull'icona.
+    const gialla = schedaRef.etichettaDellaCasella("A.DES_descr_tipo", "gold", null, true);
+    assert.match(gialla, /^<label title="DES_descr_tipo" [^>]*color:gold;[^>]*><img class="iconaAnteprimaServer" data-tooltip="" src="images\/swap\.png" alt="" style="width: 14px; height: 11px; [^"]*">DES_descr_tipo<\/label>$/);
+    //Senza anteprima, l'etichetta di sempre.
+    assert.doesNotMatch(schedaRef.etichettaDellaCasella("A.DES_descr_tipo", "gold", null), /iconaAnteprimaServer/);
+    assert.doesNotMatch(schedaRef.etichettaDellaCasella("A.DES_descr_tipo", null, null, false), /<img/);
+});
+
+test("l'icona mostra e toglie l'anteprima di tutte le caselle della descrizione, non dei tratti nascosti", () => {
+    const scheda = leggiFileDelPlugin("schedaRef.js").replace(/\r/g, "");
+    assert.match(scheda, /me\.mostraGialloDescrizione\(gialloDescrizione\.righe\);\s*\/\/TASK-4b0592eb[^\n]*\n\s*me\.attivaAnteprimaDelServer\(campoDescrizioneDelPrimario != null \? campoDescrizioneDelPrimario\.content : ""\);/);
+    const attiva = scheda.substring(scheda.indexOf("    attivaAnteprimaDelServer(contenutoServer) {"), scheda.indexOf("    togliAnteprimaDelServer() {"));
+    assert.match(attiva, /\.on\("mouseenter", function \(\) \{\s*me\.mostraAnteprimaDelServer\(contenutoServer\);/);
+    assert.match(attiva, /\.on\("mouseleave", function \(\) \{\s*me\.togliAnteprimaDelServer\(\);/);
+    assert.match(attiva, /\.filter\(casella => \$\(casella\)\.attr\("trattonascosto"\) !== "1"\)/);
+    assert.match(attiva, /confronti\.testiDelServerPerCaselle\(caselle\.map\(casella => \$\(casella\)\.attr\("currentcharacterstyle"\)\), contenutoServer\);/);
+    assert.match(attiva, /caselle\.forEach\(\(casella, i\) => CampiARiposo\.mostraAnteprima\(casella, testi\[i\]\)\);/);
+});
+
 test("le misure delle caselle vengono dalla configurazione dell'agenzia, e senza si usano quelle di prima", () => {
     //Edro21: due per riga, alte 100, 10 di spazio. La larghezza in pixel non conta piu'.
     assert.deepStrictEqual(schedaRef.misureDelleCaselle(pluginEdro.grandezzeBox), { perRiga: 2, altezza: 100, spazio: 10 });
@@ -326,7 +347,8 @@ test("le tre caselle della schermata usano l'etichetta nuova e si segnano disatt
     for (const nome of ["nome_schema", "elSchema\\[1\\]"]) {
         assert.match(schermata, new RegExp("label = me\\.etichettaDellaCasella\\(" + nome + ", null, me\\.indicazioneSolaLettura\\(notaSolaLettura, isEditable, descrizioniAlterate\\)\\);\\s*column\\.append\\(label\\)\\.append\\(textarea\\);\\s*me\\.segnaCasellaInSolaLettura\\(textarea, notaSolaLettura\\);\\s*if \\(!\\(isEditable && refEditabile\\)\\) \\{\\s*me\\.segnaCasellaDisattivata\\(textarea\\);"));
     }
-    assert.match(schermata, /label = me\.etichettaDellaCasella\(currentCharacterStyle, stileInMismatch \? 'gold' : null, me\.indicazioneSolaLettura\(notaSolaLettura, isEditable, descrizioniAlterate\)\);/);
+    //TASK-4b0592eb: la casella gialla porta anche l'icona dell'anteprima del server.
+    assert.match(schermata, /label = me\.etichettaDellaCasella\(currentCharacterStyle, stileInMismatch \? 'gold' : null, me\.indicazioneSolaLettura\(notaSolaLettura, isEditable, descrizioniAlterate\), stileInMismatch\);/);
     assert.match(schermata, /me\.segnaCasellaDisattivata\(textarea, stileInMismatch\);/);
 });
 

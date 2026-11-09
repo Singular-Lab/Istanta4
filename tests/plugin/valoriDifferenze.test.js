@@ -87,12 +87,24 @@ test("la preanalisi allega i due valori alle differenze di contenuto e di paragr
 
 test("la finestra della scheda e il report mostrano i valori, col testo intero nel suggerimento", () => {
     const scheda = sorgente("schedaRef.js");
-    //I20-1075: nel riquadro dell'elemento i valori stanno sotto il problema, e i pulsanti sotto i valori.
-    assert.match(scheda, /\/\/I20-1071[^\n]*\n\s*me\.aggiungiValoriDifferenza\(riga, diff\);\s*\/\/I20-1070[^\n]*\n\s*me\.aggiungiAzioniDifferenza\(riga, diff, dopoAzione\);/);
+    //I20-1075: nel riquadro dell'elemento i valori stanno sotto il problema.
+    //TASK-4b0592eb: i pulsanti sulla riga del problema, nella sua testata, non sotto i valori.
+    assert.match(scheda, /testata\.append\(sinistra\);\s*riga\.append\(testata\);\s*\/\/I20-1071[^\n]*\n\s*me\.aggiungiValoriDifferenza\(riga, diff\);\s*\/\/I20-1070[^\n]*\n\s*me\.aggiungiAzioniDifferenza\(riga, diff, dopoAzione\);/);
+    assert.match(scheda, /const testata = \$\('<div class="testataDifferenza"><\/div>'\);\s*testata\.css\(\{ "display": "flex", "align-items": "flex-start", "gap": "8px" \}\);/);
+    //A sinistra il titolo (sulla prima differenza) e il problema, che vanno a capo; il titolo non sta piu' sopra la testata.
+    assert.match(scheda, /sinistra\.css\(\{ "flex": "1 1 auto", "min-width": "0" \}\);\s*if \(indice === 0\) \{\s*sinistra\.append\(titolo\);\s*\}\s*sinistra\.append\(problema\);/);
+    assert.doesNotMatch(scheda, /riquadro\.append\(titolo\);/);
+    const azioni = scheda.substring(scheda.indexOf("    aggiungiAzioniDifferenza(riga, diff, dopoAzione) {"), scheda.indexOf("    spegniSceltaDelBox("));
+    assert.match(azioni, /var testata = riga\.children\("\.testataDifferenza"\)\.first\(\);/);
+    assert.match(azioni, /\(testata\.length > 0 \? testata : riga\)\.append\(barra\);/);
+    //A destra i pulsanti in colonna, vicini, con lo spazio che chiedono e senza il margine nativo.
+    assert.match(azioni, /if \(testata\.length > 0\) \{\s*barra\.css\(\{ "display": "flex", "flex-direction": "column", "align-items": "stretch", "gap": "4px", "flex": "0 0 auto" \}\);/);
+    assert.match(azioni, /if \(testata\.length > 0\) \{\s*barra\.children\(\)\.css\("margin", "0"\);\s*\}/);
+    assert.doesNotMatch(azioni, /^\s*riga\.append\(barra\);/m);
     const membroScheda = scheda.substring(scheda.indexOf("    aggiungiValoriDifferenza(riga, diff) {"), scheda.indexOf("/* ---------- I20-1070"));
     assert.match(membroScheda, /const valori = confronti\.valoriDifferenza\(diff\);/);
-    //I20-1075: le etichette in grassetto.
-    assert.match(membroScheda, /\[\["Nel box", valori\.locale\], \["Sul server", valori\.server\]\]/);
+    //TASK-4b0592eb: box e server in due colonne, con gli a capo; le etichette dei meta restano in grassetto.
+    assert.match(membroScheda, /if \(valoriMeta\.length === 0\) \{\s*this\.aggiungiColonneBoxServer\(riga, confronti\.righeAConfronto\(diff\)\);\s*return;/);
     assert.match(membroScheda, /etichetta\.css\(\{ "font-weight": "700"/);
     //I valori partono dallo stesso punto: le etichette stanno in una colonna di larghezza fissa.
     assert.match(membroScheda, /etichetta\.css\(\{ "font-weight": "700", "color": "#2c2c2c", "flex": "0 0 76px" \}\);/);
@@ -106,4 +118,59 @@ test("la finestra della scheda e il report mostrano i valori, col testo intero n
     assert.match(membroReport, /const valori = confronti\.valoriDifferenza\(diff\);/);
     assert.match(membroReport, /if \(coppia\[1\]\.abbreviato\) \{\s*Tooltip\.impostaTooltip\(valore, coppia\[1\]\.intero\);/);
     assert.doesNotMatch(membroReport, /\.title\s*=/);
+});
+
+/* ---- TASK-4b0592eb: box e server in colonne, con gli a capo ---- */
+
+test("i valori a righe tengono gli a capo del box e del dato, senza tag", () => {
+    //Il box: ritorni di paragrafo e a capo forzati di InDesign.
+    assert.deepStrictEqual(confronti.righeLeggibili("Mele melinda\r250g\u2028a conf."), ["Mele melinda", "250g", "a conf."]);
+    assert.deepStrictEqual(confronti.righeLeggibili("Mele melinda\n250g"), ["Mele melinda", "250g"]);
+    //Il dato: i <br>, i tag tolti, i tratti nascosti fuori, gli spazi compattati, niente righe vuote.
+    assert.deepStrictEqual(
+        confronti.righeLeggibili("<A.DES_descr_nome>Mele   melinda</A.DES_descr_nome><br><A.X_$Hidden>interno</A.X_$Hidden><A.DES_descr_gr>250g a conf.</A.DES_descr_gr><br/>"),
+        ["Mele melinda", "250g a conf."]);
+    assert.deepStrictEqual(confronti.righeLeggibili(""), []);
+    assert.deepStrictEqual(confronti.righeLeggibili(null), []);
+});
+
+test("in colonne le righe del box e del server si affiancano una per una", () => {
+    const diff = { label: "descrizione", difference: "contenuto", valoreLocale: "Mele melinda 250g a conf.", valoreServer: "Mele melinda 250g a conf.",
+        righeLocale: ["Mele melinda", "250g", "a conf."], righeServer: ["Mele melinda", "250g a conf."] };
+    assert.deepStrictEqual(confronti.righeAConfronto(diff), [["Mele melinda", "Mele melinda"], ["250g", "250g a conf."], ["a conf.", ""]]);
+});
+
+test("in colonne una differenza senza righe sta su una riga, e un valore vuoto si dice", () => {
+    assert.deepStrictEqual(confronti.righeAConfronto({ difference: "paragrafo", valoreLocale: "DES_A", valoreServer: "DES_B" }), [["DES_A", "DES_B"]]);
+    assert.deepStrictEqual(confronti.righeAConfronto({ difference: "contenuto", valoreLocale: "", valoreServer: "x", righeLocale: [], righeServer: ["x"] }), [["(vuoto)", "x"]]);
+    assert.strictEqual(confronti.righeAConfronto({ difference: "non presente" }), null);
+    assert.strictEqual(confronti.righeAConfronto(null), null);
+});
+
+test("le differenze di contenuto portano le righe, per le colonne della finestra", () => {
+    const corpo = sorgente("confronti.js").replace(/\r/g, "");
+    assert.strictEqual((corpo.match(/righeLocale: confronti\.righeLeggibili\(campoBox1\.contents\), righeServer: confronti\.righeLeggibili\(compiledField\.content\)/g) || []).length, 2);
+});
+
+test("la finestra della scheda mette Box e Server in due colonne, e un testo lungo va a capo senza puntini", () => {
+    const scheda = sorgente("schedaRef.js").replace(/\r/g, "");
+    const colonne = scheda.substring(scheda.indexOf("    aggiungiColonneBoxServer(riga, righe) {"), scheda.indexOf("/* ---------- I20-1070"));
+    assert.match(colonne, /colonne\.append\(rigaDiColonne\("Box:", "Server:", true\)\);/);
+    assert.match(colonne, /righe\.forEach\(function \(coppia\) \{\s*colonne\.append\(rigaDiColonne\(coppia\[0\], coppia\[1\], false\)\);/);
+    assert.match(colonne, /"white-space": "normal", "overflow-wrap": "anywhere"/);
+    assert.doesNotMatch(colonne, /…|abbreviato/);
+});
+
+test("l'anteprima del server: a ogni casella il testo del suo stile, nell'ordine, vuoto se il server non lo compone", () => {
+    const server = "<A.DES_descr_nome>Kaki</A.DES_descr_nome><A.DES_descr_marca>CONAD<br>Percorso Qualità</A.DES_descr_marca>" +
+        "<A.DES_descr_tipo>Origine Italia</A.DES_descr_tipo><A.DES_descr_gr_$Hidden>al kg</A.DES_descr_gr_$Hidden>";
+    assert.deepStrictEqual(
+        confronti.testiDelServerPerCaselle(["A.DES_descr_nome", "DES_descr_marca", "A.DES_descr_tipo", "A.DES_descr_gr"], server),
+        ["Kaki", "CONAD\nPercorso Qualità", "Origine Italia", ""]);
+    //Lo stesso stile due volte: la seconda casella prende il secondo blocco, la terza niente.
+    assert.deepStrictEqual(
+        confronti.testiDelServerPerCaselle(["A.T", "A.T", "A.T"], "<A.T>uno</A.T><A.B>marca</A.B><A.T>due</A.T>"),
+        ["uno", "due", ""]);
+    assert.deepStrictEqual(confronti.testiDelServerPerCaselle(["A.T"], null), [""]);
+    assert.deepStrictEqual(confronti.testiDelServerPerCaselle(null, "<A.T>uno</A.T>"), []);
 });

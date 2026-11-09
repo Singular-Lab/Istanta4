@@ -660,3 +660,99 @@ test("un valore scritto da codice con lo spazio, e quello scritto dall'operatore
     assert.strictEqual(testoDi(riquadro), " OSELLA  ");
     assert.strictEqual(internoDi(riquadro).style.whiteSpace, "pre-wrap");
 });
+
+/* ---- TASK-4b0592eb: l'anteprima ---- */
+
+function casellaGialla() {
+    return campo("textarea", { larghezza: 100, altezza: 50, valore: "Origine Italia,\ncategoria I",
+        stile: { width: "100%", height: "100px", backgroundColor: "white", color: "black", border: "2px solid gold" } });
+}
+
+test("l'anteprima mostra un altro testo col bordo verde, nelle stesse misure, senza toccare il valore", () => {
+    nuovoDocumento();
+    const casella = casellaGialla();
+    const bianca = campo("textarea", { valore: "al kg", stile: { width: "100%", height: "100px", backgroundColor: "white", color: "black" } });
+    CampiARiposo.giro();
+    const riquadro = riquadroDi(casella);
+    const misure = [riquadro.style.width, riquadro.style.height, riquadro.style.display, riquadro.style.marginTop];
+
+    assert.strictEqual(CampiARiposo.mostraAnteprima(casella, "Origine Italia"), true);
+    assert.strictEqual(CampiARiposo.mostraAnteprima(bianca, ""), true);
+
+    assert.strictEqual(testoDi(riquadro), "Origine Italia");
+    assert.strictEqual(testoDi(riquadroDi(bianca)), "");
+    ["borderTop", "borderBottom", "borderLeft", "borderRight"].forEach(lato => {
+        assert.strictEqual(riquadro.style[lato], "2px solid #2e9e4f", lato);
+        //Anche la casella senza bordo: stesso spessore per tutte, dentro le stesse misure.
+        assert.strictEqual(riquadroDi(bianca).style[lato], "2px solid #2e9e4f", lato);
+    });
+    assert.deepStrictEqual([riquadro.style.width, riquadro.style.height, riquadro.style.display, riquadro.style.marginTop], misure);
+    assert.strictEqual(riquadro.style.boxSizing, "border-box");
+    //Il campo vero resta com'era: valore e bordo del suo stile.
+    assert.strictEqual(casella.value, "Origine Italia,\ncategoria I");
+    assert.strictEqual(casella.style.border, "2px solid gold");
+});
+
+test("il giro non cancella l'anteprima, e togliendola torna il testo della casella col suo bordo", () => {
+    nuovoDocumento();
+    const casella = casellaGialla();
+    CampiARiposo.giro();
+    CampiARiposo.mostraAnteprima(casella, "Origine Italia");
+    CampiARiposo.giro();
+    CampiARiposo.giro();
+    assert.strictEqual(testoDi(riquadroDi(casella)), "Origine Italia");
+
+    assert.strictEqual(CampiARiposo.togliAnteprima(casella), true);
+    assert.strictEqual(testoDi(riquadroDi(casella)), "Origine Italia,\ncategoria I");
+    assert.strictEqual(riquadroDi(casella).style.borderTop, "2px solid gold");
+    //Due volte non fa niente.
+    assert.strictEqual(CampiARiposo.togliAnteprima(casella), false);
+});
+
+test("in anteprima la casella e' in sola lettura: il passaggio del mouse non apre il campo vero", () => {
+    nuovoDocumento();
+    const casella = casellaGialla();
+    CampiARiposo.giro();
+    CampiARiposo.mostraAnteprima(casella, "Origine Italia");
+
+    riquadroDi(casella).manda("mouseenter");
+    assert.strictEqual(casella.__riposo.inModifica, false);
+    assert.strictEqual(casella.style.visibility, "hidden");
+    assert.strictEqual(riquadroDi(casella).style.display, "inline-block");
+
+    CampiARiposo.togliAnteprima(casella);
+    riquadroDi(casella).manda("mouseenter");
+    assert.strictEqual(casella.__riposo.inModifica, true);
+});
+
+test("un campo mostrato, o in cui si sta scrivendo, torna a riposo per l'anteprima", () => {
+    nuovoDocumento();
+    const casella = casellaGialla();
+    CampiARiposo.giro();
+    CampiARiposo.mostra(casella);
+    casella.focus();
+    casella.value = "Origine Italia, cat. I";
+
+    assert.strictEqual(CampiARiposo.mostraAnteprima(casella, "Origine Italia"), true);
+    assert.strictEqual(documento.activeElement, null);
+    assert.strictEqual(casella.__riposo.inModifica, false);
+    assert.strictEqual(testoDi(riquadroDi(casella)), "Origine Italia");
+    //Quello che l'operatore aveva scritto resta nel campo.
+    CampiARiposo.togliAnteprima(casella);
+    assert.strictEqual(testoDi(riquadroDi(casella)), "Origine Italia, cat. I");
+});
+
+test("una casella disattivata in anteprima si legge, e un campo non ancora a riposo non ne riceve", () => {
+    nuovoDocumento();
+    const spenta = casellaGialla();
+    spenta.disabled = true;
+    CampiARiposo.giro();
+    CampiARiposo.mostraAnteprima(spenta, "Origine Italia");
+    assert.strictEqual(internoDi(riquadroDi(spenta)).style.color, "black");
+    CampiARiposo.togliAnteprima(spenta);
+    assert.strictEqual(internoDi(riquadroDi(spenta)).style.color, CampiARiposo.TESTO_SPENTO);
+
+    const nascosta = campo("textarea", { larghezza: 0, altezza: 0 });
+    assert.strictEqual(CampiARiposo.mostraAnteprima(nascosta, "x"), false);
+    assert.strictEqual(CampiARiposo.togliAnteprima(nascosta), false);
+});
