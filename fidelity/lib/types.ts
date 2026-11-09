@@ -270,11 +270,6 @@ export interface Config {
 export interface Funzionalita {
   momenti: boolean;
   menabo: boolean;
-  /**
-   * "Vendite e previsioni": pagina Vendite (import del sell-out) e, negli insight del volantino,
-   * rendimento dalle vendite, mappa prevista, previsione per box e simulazione.
-   */
-  vendite: boolean;
 }
 
 // Dashboard per singolo ruolo

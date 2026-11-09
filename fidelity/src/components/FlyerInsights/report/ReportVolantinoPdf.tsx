@@ -4,19 +4,19 @@ import { Copertina } from "./Copertina";
 import { FAMIGLIA_REPORT } from "./misure";
 import { SezioneGrafici } from "./SezioneGrafici";
 import { SezioneMetodo } from "./SezioneMetodo";
-import { SezionePagine } from "./SezionePagine";
 import { SezioneSintesi } from "./SezioneSintesi";
 import { SezioneTabella } from "./SezioneTabella";
 import { creaTema, type TemaReport } from "./stili";
 import type { ImmaginiReport } from "./tipiReport";
 
 /**
- * Il documento del report PDF di un volantino: copertina, poi le sezioni nell'ordine in cui le manda
- * il server (le decide la libreria agenzia del cliente), ognuna dalla sua pagina. Testata e piè di
- * pagina sono su tutte le pagine tranne la copertina.
+ * Il documento del report PDF di un volantino: copertina (con la miniatura della prima pagina), poi
+ * le sezioni nell'ordine in cui le manda il server (le decide la libreria agenzia del cliente), ognuna
+ * dalla sua pagina. Testata e piè di pagina sono su tutte le pagine tranne la copertina. Le pagine
+ * del volantino non entrano nel report.
  */
 
-type ColoreSingolo = Exclude<keyof PaletteReport, "categorie" | "calore">;
+type ColoreSingolo = Exclude<keyof PaletteReport, "categorie">;
 
 /** La palette ricevuta, con quella standard per i colori che mancassero (vuoti o null). */
 export function paletteCompleta(palette: Partial<PaletteReport> | null | undefined): PaletteReport {
@@ -37,7 +37,6 @@ export function paletteCompleta(palette: Partial<PaletteReport> | null | undefin
     positivo: colore("positivo"),
     negativo: colore("negativo"),
     categorie: elenco(palette?.categorie, 1, PALETTE_REPORT_STANDARD.categorie),
-    calore: elenco(palette?.calore, 2, PALETTE_REPORT_STANDARD.calore),
   };
 }
 
@@ -46,23 +45,20 @@ interface ProprietaSezione {
   report: ReportVolantino;
   sezione: SezioneReport;
   indice: number;
-  immagini: ImmaginiReport;
 }
 
-function Sezione({ tema, report, sezione, indice, immagini }: ProprietaSezione) {
+function Sezione({ tema, report, sezione, indice }: ProprietaSezione) {
   switch (sezione.tipo) {
     case "sintesi":
       return <SezioneSintesi tema={tema} report={report} sezione={sezione} indice={indice} />;
     case "grafici":
       return <SezioneGrafici tema={tema} report={report} sezione={sezione} indice={indice} />;
-    case "pagine":
-      return <SezionePagine tema={tema} report={report} sezione={sezione} indice={indice} immagini={immagini} />;
     case "tabella":
       return <SezioneTabella tema={tema} report={report} sezione={sezione} indice={indice} />;
     case "metodo":
       return <SezioneMetodo tema={tema} report={report} sezione={sezione} indice={indice} />;
     default:
-      // Un tipo di sezione che questo client non conosce ancora: si salta
+      // Un tipo di sezione che questo client non conosce (o non mostra piu', come le vecchie 'pagine'): si salta
       return null;
   }
 }
@@ -87,9 +83,9 @@ export function ReportVolantinoPdf({ report, immagini, famiglia = FAMIGLIA_REPOR
       producer="Fidelity"
       language="it-IT"
     >
-      <Copertina tema={tema} report={completo} immagine={immagini.pagine.get(1) ?? null} />
+      <Copertina tema={tema} report={completo} immagine={immagini.copertina} />
       {report.sezioni.map((sezione, indice) => (
-        <Sezione key={`${indice}-${sezione.tipo}`} tema={tema} report={completo} sezione={sezione} indice={indice} immagini={immagini} />
+        <Sezione key={`${indice}-${sezione.tipo}`} tema={tema} report={completo} sezione={sezione} indice={indice} />
       ))}
     </Document>
   );

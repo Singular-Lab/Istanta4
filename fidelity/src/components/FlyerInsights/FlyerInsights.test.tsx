@@ -4,7 +4,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { FlyerInsights as DatiFlyerInsights, FlyerInsightsConfig } from "@/types/flyerInsights";
-import { PESI_VISIBILITA, type BoxInsight } from "../../../lib/insightVolantino/tipi";
+import type { BoxInsight } from "../../../lib/insightVolantino/tipi";
 import { EXPORT_DI_SISTEMA } from "../../../lib/enums";
 
 const finti = vi.hoisted(() => ({
@@ -56,7 +56,6 @@ const box = (id: string, campi: Partial<BoxInsight> = {}): BoxInsight => ({
   foto: [],
   prodotti: 1,
   idReferenze: [id],
-  visibilita: 100,
   ...campi,
 });
 
@@ -99,13 +98,6 @@ const insights = (campi: Partial<DatiFlyerInsights> = {}): DatiFlyerInsights => 
     elenco: [{ chiave: "MARCA A", nome: "Marca A", box: 2, referenze: 2, quotaSpazio: 100, scontoMedio: 25, distributore: false }],
     quotaDistributore: null,
   },
-  zoneCalde: {
-    boxPiuVisibili: ["b1", "b2"],
-    perReparto: [{ chiave: "01", etichetta: "Drogheria", quotaVisibilita: 100, quotaSpazio: 100 }],
-    perMarca: [],
-    calore: [],
-    pesi: PESI_VISIBILITA,
-  },
   ...campi,
 });
 
@@ -116,11 +108,12 @@ describe("FlyerInsights", () => {
     finti.config = { data: CONFIG, isError: false };
   });
 
-  it("mette le analisi nuove prima dei riepiloghi di sempre, in sentence case e senza la mappa visiva", () => {
+  it("mette le analisi nuove prima dei riepiloghi di sempre, in sentence case, senza la mappa visiva né le zone calde", () => {
     render(<FlyerInsights insights={insights()} exportCodes={[EXPORT_DI_SISTEMA.VOL]} />);
 
-    expect(nomiSchede()).toEqual(["Prezzi e sconti", "Spazio", "Marche", "Zone calde", "Reparti", "Meccaniche", "Pagine"]);
+    expect(nomiSchede()).toEqual(["Prezzi e sconti", "Spazio", "Marche", "Reparti", "Meccaniche", "Pagine"]);
     expect(screen.queryByRole("tab", { name: /mappa/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: /zone calde/i })).not.toBeInTheDocument();
   });
 
   it("si apre su Prezzi e sconti, senza la riga di StatCard che ora è della sintesi nella pagina", () => {
@@ -133,7 +126,7 @@ describe("FlyerInsights", () => {
     expect(container.querySelector("[data-tono]")).toBeNull();
   });
 
-  it("passa da una scheda all'altra: marche, spazio e zone calde", async () => {
+  it("passa da una scheda all'altra: marche, spazio e reparti", async () => {
     render(<FlyerInsights insights={insights()} />);
 
     await userEvent.click(screen.getByRole("tab", { name: "Marche" }));
@@ -141,9 +134,6 @@ describe("FlyerInsights", () => {
 
     await userEvent.click(screen.getByRole("tab", { name: "Spazio" }));
     expect(screen.getByRole("table", { name: "Spazio e referenze per reparto" })).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole("tab", { name: "Zone calde" }));
-    expect(screen.getByRole("region", { name: "I box più visibili" })).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("tab", { name: "Reparti" }));
     expect(screen.getByText("Riepilogo reparti")).toBeInTheDocument();
@@ -160,7 +150,7 @@ describe("FlyerInsights", () => {
     finti.config = { data: undefined, isError: true };
     render(<FlyerInsights insights={insights()} paginaSelezionata={3} />);
 
-    expect(nomiSchede()).toEqual(["Prezzi e sconti", "Spazio", "Marche", "Zone calde"]);
+    expect(nomiSchede()).toEqual(["Prezzi e sconti", "Spazio", "Marche"]);
     // La pagina chiesta non ha la sua scheda: si apre la prima analisi
     expect(screen.getByRole("tab", { name: "Prezzi e sconti" })).toHaveAttribute("aria-selected", "true");
   });
@@ -169,7 +159,7 @@ describe("FlyerInsights", () => {
     finti.config = { data: { ...CONFIG, reparti: sezione(false), meccaniche: undefined }, isError: false };
     render(<FlyerInsights insights={insights()} />);
 
-    expect(nomiSchede()).toEqual(["Prezzi e sconti", "Spazio", "Marche", "Zone calde", "Pagine"]);
+    expect(nomiSchede()).toEqual(["Prezzi e sconti", "Spazio", "Marche", "Pagine"]);
   });
 
   it("mentre la config si carica i riepiloghi ci sono, con lo spinner", async () => {
@@ -190,7 +180,7 @@ describe("FlyerInsights", () => {
       />
     );
 
-    expect(nomiSchede()).toHaveLength(7);
+    expect(nomiSchede()).toHaveLength(6); // come un kit normale: senza la scheda Zone calde
     expect(within(screen.getByRole("tabpanel")).getByText("Zucchero")).toBeInTheDocument();
   });
 

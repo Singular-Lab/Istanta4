@@ -8,7 +8,7 @@ import { BarraQuota, MostraTutte, RIGHE_INIZIALI, SCARTO_RILEVANTE } from "./com
 export interface VoceAppaiata {
   id: string;
   etichetta: string;
-  /** Quota della serie principale (spazio, visibilita'), in %. */
+  /** Quota della serie principale (per esempio lo spazio), in %. */
   principale: number;
   /** Quota con cui si confronta (referenze, spazio), in %. */
   confronto: number;

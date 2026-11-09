@@ -1,5 +1,5 @@
 import { Path, Svg, View } from "@react-pdf/renderer";
-import { formattaValore, type UnitaMisura } from "../../../../lib/insightVolantino/calore";
+import { formattaValore, type UnitaMisura } from "../../../../lib/insightVolantino/formato";
 import type { GraficoReport, GraficoSezione } from "../../../../lib/insightVolantino/report";
 import { Testo } from "./componenti";
 import { coloriConfronto, fetteCiambella, lunghezzaBarra, righeNelloSpazio, scalaAsse, settoreAnulare, type ScalaAsse } from "./grafici";

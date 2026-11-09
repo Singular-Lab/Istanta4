@@ -4,7 +4,6 @@ import { program } from 'commander';
 import { Colorize } from '../../../lib/Colorize';
 import { calcolaPianoMigrazione, descriviPiano, etichettaLivelli, preparaAccessiAllAvvio } from '../accessi/migrazioneAccessi';
 import { descriviPianoConsultazione, leggiPianoConsultazione } from '../accessi/migrazioneConsultazione';
-import { descriviPianoVendite, leggiPianoVendite } from '../accessi/migrazioneVendite';
 import { initializeDatabase, sequelize } from '../db';
 import { eseguiScriptDati, SCRIPT_DATI } from '../db/migrazioni/scriptDati';
 
@@ -14,8 +13,7 @@ program
     'Porta i permessi al modello per aree: concede l\'accesso alle aree dove oggi le pagine ' +
     'compaiono nel menu dei ruoli, collega i menu ai sotto-ruoli GDO per id e toglie i vecchi ' +
     'permessi pagina.*; poi separa i permessi di consultazione da quelli di produzione e toglie ' +
-    'all\'Agenzia Visualizzazione e Comunicazione; infine concede l\'import delle vendite all\'ADMIN ' +
-    'della GDO. Gira anche da sola all\'avvio del server; qui ' +
+    'all\'Agenzia Visualizzazione e Comunicazione. Gira anche da sola all\'avvio del server; qui ' +
     'serve a vedere prima cosa cambia.'
   )
   .option('--dry-run', 'Mostra il report senza applicare nulla')
@@ -31,7 +29,6 @@ program
           // Nessuna scrittura: il piano si legge nella transazione del registro, annullata in dry-run.
           console.log(descriviPiano(await calcolaPianoMigrazione(transaction)));
           console.log(descriviPianoConsultazione(await leggiPianoConsultazione(transaction), await etichettaLivelli(transaction)));
-          console.log(descriviPianoVendite(await leggiPianoVendite(transaction)));
           return { dryRun };
         }
         await preparaAccessiAllAvvio();

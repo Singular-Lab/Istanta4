@@ -29,7 +29,6 @@ export const boxDiProva = (id: string, campi: Partial<BoxInsight> = {}): BoxInsi
   foto: [],
   prodotti: 1,
   idReferenze: [id],
-  visibilita: 50,
   ...campi,
 });
 
@@ -42,14 +41,12 @@ export const reportDiProva = (campi: Partial<ReportVolantino> = {}): ReportVolan
   palette: PALETTE_REPORT_STANDARD,
   pdf: { idOlimpoCloud: "o1", pagine: 3 },
   box: [
-    boxDiProva("b1", { pagina: 1, sconto: 30, visibilita: 100 }),
+    boxDiProva("b1", { pagina: 1, sconto: 30 }),
     boxDiProva("b2", { pagina: 1, sconto: 10, geometria: { x: 0.5, y: 0.5, w: 0.3, h: 0.3 } }),
     boxDiProva("b3", { pagina: 2, sconto: 20 }),
     boxDiProva("b4", { pagina: 3, sconto: null }),
   ],
   totalePagine: 3,
-  rendimento: null,
-  previsione: null,
   sezioni: [],
   ...campi,
 });

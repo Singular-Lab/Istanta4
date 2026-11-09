@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { PrevisioneVolantino, RendimentoVolantino } from '../../../lib/insightVolantino/rendimento';
 import { PALETTE_REPORT_STANDARD, type DatiReportVolantino, type SezioneReport } from '../../../lib/insightVolantino/report';
-import { PESI_VISIBILITA, type BoxInsight, type ConfrontoEdizione } from '../../../lib/insightVolantino/tipi';
+import type { BoxInsight, ConfrontoEdizione } from '../../../lib/insightVolantino/tipi';
 import {
   chiaveSezione,
   conArticolo,
@@ -16,7 +15,11 @@ import {
 } from './reportVolantino';
 
 // Sezioni standard del report PDF del volantino (spec insight-volantino): solo quelle con dati,
-// nell'ordine standard, con indicatori, variazioni e frasi in italiano e numeri all'italiana.
+// nell'ordine standard, con indicatori, variazioni e frasi in italiano e numeri all'italiana. Per
+// decisione della direzione niente pagine del volantino, mappe, visibilita', vendite ne' previsioni.
+
+/** Le parole che il report non deve piu' usare. */
+const FUORI_DAL_REPORT = /visibilit|vendit|previs|calore|zone calde|mappa|rendiment|investimento|stim[ae]\b/i;
 
 const DROGHERIA = { codice: '01', descrizione: 'DROGHERIA ALIMENTARE' };
 const BEVANDE = { codice: '03', descrizione: 'BEVANDE' };
@@ -44,18 +47,17 @@ const box = (id: string, altro: Partial<BoxInsight> = {}): BoxInsight => ({
   foto: [],
   prodotti: 1,
   idReferenze: [id],
-  visibilita: 50,
   ...altro,
 });
 
 const BOX: BoxInsight[] = [
-  box('b1', { pagina: 1, sconto: 40, meccanica: 'fidelity', visibilita: 100 }),
+  box('b1', { pagina: 1, sconto: 40, meccanica: 'fidelity' }),
   box('b2', { pagina: 2, sconto: 20 }),
-  box('b3', { pagina: 2, geometria: null, spazio: 0, sconto: null, reparto: BEVANDE, marca: 'Beta', visibilita: 0 }),
+  box('b3', { pagina: 2, geometria: null, spazio: 0, sconto: null, reparto: BEVANDE, marca: 'Beta' }),
   box('b4', { pagina: 3, sconto: 10, nome: 'Acqua', marca: 'Gamma', reparto: BEVANDE }),
 ];
 
-/** Un volantino con i dati del solo impaginato: niente vendite, previsione o edizione precedente. */
+/** Un volantino con i dati del solo impaginato, senza edizione precedente. */
 function dati(altro: Partial<DatiReportVolantino> = {}): DatiReportVolantino {
   return {
     contesto: {
@@ -117,54 +119,14 @@ function dati(altro: Partial<DatiReportVolantino> = {}): DatiReportVolantino {
         ],
         quotaDistributore: { quotaSpazio: 15, quotaBox: 16 },
       },
-      zoneCalde: {
-        boxPiuVisibili: ['b1', 'b2', 'b4'],
-        perReparto: [{ chiave: '03', etichetta: 'BEVANDE', quotaVisibilita: 28, quotaSpazio: 20 }],
-        perMarca: [],
-        calore: [],
-        pesi: PESI_VISIBILITA,
-      },
       totalePagine: 4,
       totaleReferenze: 60,
     },
     confronto: null,
-    rendimento: null,
-    previsione: null,
     palette: PALETTE_REPORT_STANDARD,
     ...altro,
   };
 }
-
-const RENDIMENTO: RendimentoVolantino = {
-  periodo: { dal: '2026-11-03', al: '2026-11-16' },
-  puntiVendita: 42,
-  misura: 'valore',
-  totalePezzi: 12500,
-  totaleValore: 48250.4,
-  perBox: [
-    { idBox: 'b2', pezzi: 300, valore: 900, quota: 25, quotaSpazio: 25, indiceSpazio: 1, prodotti: 1, prodottiSenzaVendite: 0 },
-    { idBox: 'b1', pezzi: 800, valore: 2400, quota: 50, quotaSpazio: 25, indiceSpazio: 2, prodotti: 1, prodottiSenzaVendite: 0 },
-    { idBox: 'b4', pezzi: 100, valore: 300, quota: 12.5, quotaSpazio: 25, indiceSpazio: 0.5, prodotti: 1, prodottiSenzaVendite: 0 },
-  ],
-  prodotti: 60,
-  prodottiSenzaVendite: 3,
-  sopraSpazio: ['b1'],
-  sottoSpazio: ['b4'],
-};
-
-const PREVISIONE: PrevisioneVolantino = {
-  tipo: 'vendite',
-  unita: 'pezzi',
-  promoValida: false,
-  edizioniStoriche: 26,
-  perBox: [
-    { idBox: 'b1', valore: 500, casiStorici: 12, affidabilita: 'alta', reale: null },
-    { idBox: 'b2', valore: 1200, casiStorici: 4, affidabilita: 'media', reale: null },
-    { idBox: 'b4', valore: 80, casiStorici: 1, affidabilita: 'bassa', reale: null },
-  ],
-  scartoMedio: null,
-  nota: 'Previsione dalle vendite delle edizioni precedenti',
-};
 
 const CONFRONTO: ConfrontoEdizione = {
   edizione: {
@@ -209,25 +171,26 @@ function sezioneDi<T extends SezioneReport['tipo']>(sezioni: readonly SezioneRep
 }
 
 describe('sezioniStandard: quali sezioni e in che ordine', () => {
-  it('con il solo impaginato: sintesi, mappa dell\'investimento, grafici e metodo', () => {
+  it('con il solo impaginato: sintesi, grafici e metodo', () => {
     const sezioni = sezioniStandard(dati());
 
-    expect(chiavi(sezioni)).toEqual(['sintesi', 'mappa', 'assortimento', 'prezziMarche', 'metodo']);
-    expect(sezioneDi<'pagine'>(sezioni, 'mappa')).toMatchObject({
-      misura: 'investimento',
-      titolo: "Dove si concentra l'investimento promozionale",
-      boxInEvidenza: 3,
-    });
+    expect(chiavi(sezioni)).toEqual(['sintesi', 'assortimento', 'prezziMarche', 'metodo']);
   });
 
-  it('con vendite, previsione prima della promo ed edizione precedente: tutte, nell\'ordine standard; la mappa e\' delle vendite', () => {
-    const sezioni = sezioniStandard(dati({ rendimento: RENDIMENTO, previsione: PREVISIONE, confronto: CONFRONTO }));
+  it('con l\'edizione precedente: tutte, nell\'ordine standard', () => {
+    const sezioni = sezioniStandard(dati({ confronto: CONFRONTO }));
 
+    expect(ORDINE_SEZIONI_STANDARD).toEqual(['sintesi', 'assortimento', 'prezziMarche', 'confronto', 'entratiUsciti', 'metodo']);
     expect(chiavi(sezioni)).toEqual([...ORDINE_SEZIONI_STANDARD]);
     // Ogni sezione standard porta la sua chiave stabile
     expect(sezioni.map(sezione => sezione.chiave)).toEqual([...ORDINE_SEZIONI_STANDARD]);
-    expect(sezioneDi<'pagine'>(sezioni, 'mappa').misura).toBe('vendite');
-    expect(sezioneDi<'pagine'>(sezioni, 'mappaPrevisione').misura).toBe('previsione');
+  });
+
+  it('niente pagine del volantino, mappe, visibilita\', vendite ne\' previsioni, in nessun testo', () => {
+    const sezioni = sezioniStandard(dati({ confronto: CONFRONTO }));
+
+    expect(sezioni.map(sezione => sezione.tipo)).not.toContain('pagine');
+    expect(JSON.stringify(sezioni)).not.toMatch(FUORI_DAL_REPORT);
   });
 
   it('un volantino senza box ha solo il metodo: nessuna sezione vuota', () => {
@@ -239,7 +202,6 @@ describe('sezioniStandard: quali sezioni e in che ordine', () => {
       prezziSconti: { ...vuoto.insight.prezziSconti, fasce: vuoto.insight.prezziSconti.fasce.map(fascia => ({ ...fascia, box: 0 })), perMeccanica: [] },
       spazio: { ...vuoto.insight.spazio, perReparto: [] },
       marche: { elenco: [], quotaDistributore: null },
-      zoneCalde: { ...vuoto.insight.zoneCalde, perReparto: [] },
     };
 
     const sezioni = sezioniStandard(vuoto);
@@ -247,13 +209,6 @@ describe('sezioniStandard: quali sezioni e in che ordine', () => {
     expect(chiavi(sezioni)).toEqual(['metodo']);
     // Senza box niente copertura dei dati
     expect(sezioneDi<'metodo'>(sezioni, 'metodo').paragrafi.some(paragrafo => paragrafo.startsWith('Dati presenti'))).toBe(false);
-  });
-
-  it('senza sconti e senza vendite la mappa e\' quella della visibilita\'', () => {
-    const senzaSconti = dati();
-    senzaSconti.insight = { ...senzaSconti.insight, box: BOX.map(singolo => ({ ...singolo, sconto: null })) };
-
-    expect(sezioneDi<'pagine'>(sezioniStandard(senzaSconti), 'mappa')).toMatchObject({ misura: 'visibilita', titolo: 'Zone calde del volantino' });
   });
 });
 
@@ -278,39 +233,33 @@ describe('sezioniStandard: sintesi', () => {
       .toEqual(['Referenze', 'Box', 'Pagine', 'Sconto medio', 'Marche']);
   });
 
-  it('con l\'edizione precedente ogni indicatore ha la variazione, neutra; con le vendite un indicatore in piu\'', () => {
-    const { indicatori } = sezioneDi<'sintesi'>(sezioniStandard(dati({ confronto: CONFRONTO, rendimento: RENDIMENTO })), 'sintesi');
+  it('con l\'edizione precedente ogni indicatore ha la variazione, neutra; nessun indicatore delle vendite', () => {
+    const { indicatori } = sezioneDi<'sintesi'>(sezioniStandard(dati({ confronto: CONFRONTO })), 'sintesi');
     const perEtichetta = new Map(indicatori.map(indicatore => [indicatore.etichetta, indicatore]));
 
-    expect(indicatori).toHaveLength(8);
+    expect(indicatori).toHaveLength(7);
     expect(perEtichetta.get('Referenze')?.variazione).toEqual({ testo: '+5 sulla precedente', verso: 'su', positiva: null });
     expect(perEtichetta.get('Box')?.variazione).toEqual({ testo: 'Pari alla precedente', verso: 'pari', positiva: null });
     expect(perEtichetta.get('Sconto medio')?.variazione).toEqual({ testo: '-2 punti sulla precedente', verso: 'giu', positiva: null });
     expect(perEtichetta.get('Quota Fidelity')?.variazione?.testo).toBe('+6 punti sulla precedente');
     expect(perEtichetta.get('Marche')?.variazione).toMatchObject({ testo: '-2 sulla precedente', verso: 'giu' });
-    expect(perEtichetta.get('Vendite')).toEqual({
-      etichetta: 'Vendite',
-      valore: '48.250 €',
-      dettaglio: '42 punti vendita, dal 3 al 16 novembre 2026',
-      variazione: null,
-    });
+    expect(perEtichetta.has('Vendite')).toBe(false);
   });
 
-  it('frasi chiave dai dati: spazio, sconto, visibilita\' e marche del distributore', () => {
+  it('frasi chiave dai dati: spazio, sconto e marche del distributore', () => {
     expect(frasiChiave(dati())).toEqual([
       'Il 42% dello spazio va al reparto Drogheria alimentare, che porta il 31% delle referenze.',
       'Lo sconto medio è del 24% sui 40 box con sconto; 12 superano il 30%.',
-      'Il reparto Bevande raccoglie il 28% della visibilità con il 20% dello spazio.',
       'Le marche del distributore occupano il 15% dello spazio.',
     ]);
   });
 
-  it('con vendite ed edizione precedente le frasi su rendimento e prodotti entrati e usciti passano avanti', () => {
-    expect(frasiChiave(dati({ rendimento: RENDIMENTO, confronto: CONFRONTO }))).toEqual([
+  it('con l\'edizione precedente la frase sui prodotti entrati e usciti viene prima delle marche', () => {
+    expect(frasiChiave(dati({ confronto: CONFRONTO }))).toEqual([
       'Il 42% dello spazio va al reparto Drogheria alimentare, che porta il 31% delle referenze.',
       'Lo sconto medio è del 24% sui 40 box con sconto; 12 superano il 30%.',
-      'Un box rende più dello spazio che occupa, uno meno.',
       "Rispetto all'edizione precedente entra un prodotto e ne escono 2.",
+      'Le marche del distributore occupano il 15% dello spazio.',
     ]);
   });
 });
@@ -365,84 +314,6 @@ describe('sezioniStandard: grafici', () => {
   });
 });
 
-describe('sezioniStandard: rendimento', () => {
-  it('box dal migliore al peggiore rispetto allo spazio, con l\'esito e i prodotti senza vendite', () => {
-    const tabella = sezioneDi<'tabella'>(sezioniStandard(dati({ rendimento: RENDIMENTO })), 'rendimento');
-
-    expect(tabella.colonne.map(colonna => colonna.titolo)).toEqual(['Prodotto', 'Pag.', 'Quota spazio', 'Quota vendite', 'Indice', 'Esito']);
-    expect(tabella.righe).toEqual([
-      ['Prodotto b1 (Alfa)', '1', '25%', '50%', '2,00', 'Rende più dello spazio'],
-      ['Prodotto b2 (Alfa)', '2', '25%', '25%', '1,00', 'In linea con lo spazio'],
-      ['Acqua (Gamma)', '3', '25%', '13%', '0,50', 'Rende meno dello spazio'],
-    ]);
-    expect(tabella.introduzione).toContain('Vendite dal 3 al 16 novembre 2026 in 42 punti vendita');
-    expect(tabella.nota).toBe('3 prodotti su 60 non hanno vendite nel periodo.');
-  });
-
-  it('con molti box solo i cinque migliori e i cinque peggiori', () => {
-    const molti = Array.from({ length: 12 }, (_, indice) => box(`m${indice}`, { pagina: 1 }));
-    const rendimento: RendimentoVolantino = {
-      ...RENDIMENTO,
-      perBox: molti.map((singolo, indice) => ({ ...RENDIMENTO.perBox[0], idBox: singolo.id, indiceSpazio: indice / 4 })),
-      prodottiSenzaVendite: 0,
-    };
-    const conMolti = dati({ rendimento });
-    conMolti.insight = { ...conMolti.insight, box: molti };
-
-    const tabella = sezioneDi<'tabella'>(sezioniStandard(conMolti), 'rendimento');
-
-    expect(tabella.righe.map(riga => riga[0])).toEqual(['m11', 'm10', 'm9', 'm8', 'm7', 'm4', 'm3', 'm2', 'm1', 'm0'].map(id => `Prodotto ${id} (Alfa)`));
-    expect(tabella.nota).toBe('I 5 box migliori e i 5 peggiori, su 12.');
-  });
-});
-
-describe('sezioniStandard: previsione', () => {
-  it('prima della promo: mappa e tabella della previsione, dal box con piu\' pezzi previsti', () => {
-    const sezioni = sezioniStandard(dati({ previsione: PREVISIONE }));
-    const tabella = sezioneDi<'tabella'>(sezioni, 'previsione');
-
-    expect(chiavi(sezioni)).toContain('mappaPrevisione');
-    expect(tabella.titolo).toBe(TITOLI_REPORT.previsione);
-    expect(tabella.righe).toEqual([
-      ['Prodotto b2 (Alfa)', '2', '1.200', 'Media', '4'],
-      ['Prodotto b1 (Alfa)', '1', '500', 'Alta', '12'],
-      ['Acqua (Gamma)', '3', '80', 'Bassa', '1'],
-    ]);
-    expect(tabella.introduzione).toBe('Previsione dalle vendite delle edizioni precedenti. Si basa sulle ultime 26 edizioni della stessa area e canale.');
-  });
-
-  it('a promo iniziata con le vendite: solo il confronto fra previsto e reale', () => {
-    const previsione: PrevisioneVolantino = {
-      ...PREVISIONE,
-      promoValida: true,
-      scartoMedio: 22,
-      perBox: [
-        { ...PREVISIONE.perBox[0], reale: 600 },
-        { ...PREVISIONE.perBox[1], reale: 900 },
-        PREVISIONE.perBox[2],
-      ],
-    };
-
-    const sezioni = sezioniStandard(dati({ previsione }));
-    const tabella = sezioneDi<'tabella'>(sezioni, 'previsione');
-
-    expect(chiavi(sezioni)).not.toContain('mappaPrevisione');
-    expect(tabella.titolo).toBe(TITOLI_REPORT.previstoReale);
-    expect(tabella.righe).toEqual([
-      ['Prodotto b2 (Alfa)', '2', '1.200', '900', '-25%'],
-      ['Prodotto b1 (Alfa)', '1', '500', '600', '+20%'],
-    ]);
-    expect(tabella.introduzione).toMatch(/^Lo scarto medio fra previsto e reale è del 22%\./);
-  });
-
-  it('a promo iniziata senza vendite la previsione non si riporta', () => {
-    const sezioni = sezioniStandard(dati({ previsione: { ...PREVISIONE, promoValida: true } }));
-
-    expect(chiavi(sezioni)).not.toContain('previsione');
-    expect(chiavi(sezioni)).not.toContain('mappaPrevisione');
-  });
-});
-
 describe('sezioniStandard: confronto con l\'edizione precedente', () => {
   it('indicatori nelle due edizioni e reparti che cambiano di almeno un punto', () => {
     const tabella = sezioneDi<'tabella'>(sezioniStandard(dati({ confronto: CONFRONTO })), 'confronto');
@@ -480,26 +351,28 @@ describe('sezioniStandard: confronto con l\'edizione precedente', () => {
 });
 
 describe('sezioniStandard: metodo', () => {
-  it('spiega visibilita\' con i pesi usati, investimento, rendimento, previsione, copertura e limiti', () => {
-    const pesi = { ...PESI_VISIBILITA, altre: 0.4 };
-    const conPesi = dati({ rendimento: RENDIMENTO, previsione: PREVISIONE });
-    conPesi.insight = { ...conPesi.insight, zoneCalde: { ...conPesi.insight.zoneCalde, pesi } };
+  it('spiega fonti, spazio, copertura dei dati e limiti, senza visibilita\', vendite ne\' previsioni', () => {
+    const { paragrafi } = sezioneDi<'metodo'>(sezioniStandard(dati({ confronto: CONFRONTO })), 'metodo');
 
-    const { paragrafi } = sezioneDi<'metodo'>(sezioniStandard(conPesi), 'metodo');
-
-    expect(paragrafi).toHaveLength(7);
-    expect(paragrafi[1]).toContain('copertina 1, pagine 2 e 3 0,7, ultima pagina 0,8, altre 0,4');
-    expect(paragrafi[1]).toContain('in cima 1, in fondo 0,6');
-    expect(paragrafi.join(' ')).toContain('42 punti vendita della stessa area e canale, dal 3 al 16 novembre 2026');
-    expect(paragrafi.join(' ')).toContain('ultime 26 edizioni');
-    expect(paragrafi[5]).toContain('posizione sulla pagina 98%');
-    expect(paragrafi[5]).toContain('I box senza posizione contano nei totali ma non compaiono nelle mappe.');
+    expect(paragrafi).toHaveLength(4);
+    expect(paragrafi[0]).toMatch(/^I dati vengono dal volantino impaginato/);
+    expect(paragrafi[1]).toContain('quote di spazio');
+    expect(paragrafi[2]).toContain('posizione sulla pagina 98%');
+    expect(paragrafi[2]).toContain('I box senza posizione contano nei totali ma non nello spazio.');
+    expect(paragrafi[3]).toContain('stagionalità');
+    expect(paragrafi.join(' ')).not.toMatch(FUORI_DAL_REPORT);
   });
 
-  it('con la sola previsione teorica lo dice', () => {
-    const { paragrafi } = sezioneDi<'metodo'>(sezioniStandard(dati({ previsione: { ...PREVISIONE, tipo: 'teorica', unita: 'indice' } })), 'metodo');
+  it('con tutti i box posizionati non serve la nota sui box senza posizione', () => {
+    const tuttiPosizionati = dati();
+    tuttiPosizionati.insight = {
+      ...tuttiPosizionati.insight,
+      sintesi: { ...tuttiPosizionati.insight.sintesi, copertura: { ...tuttiPosizionati.insight.sintesi.copertura, geometria: 100 } },
+    };
 
-    expect(paragrafi.join(' ')).toContain('Senza vendite importate la previsione è teorica');
+    const { paragrafi } = sezioneDi<'metodo'>(sezioniStandard(tuttiPosizionati), 'metodo');
+
+    expect(paragrafi.join(' ')).not.toContain('senza posizione');
   });
 });
 
@@ -510,12 +383,12 @@ describe('riordinaSezioni', () => {
 
     const riordinate = riordinaSezioni([...standard, delCliente], ['confronto', 'sintesi']);
 
-    expect(chiavi(riordinate)).toEqual(['confronto', 'sintesi', 'mappa', 'assortimento', 'prezziMarche', 'entratiUsciti', 'metodo', null]);
+    expect(chiavi(riordinate)).toEqual(['confronto', 'sintesi', 'assortimento', 'prezziMarche', 'entratiUsciti', 'metodo', null]);
     expect(riordinate).toHaveLength(standard.length + 1);
   });
 
   it('riconosce le sezioni dalla chiave anche con il titolo cambiato dal cliente; senza chiave, dal titolo', () => {
-    const standard = sezioniStandard(dati({ rendimento: RENDIMENTO, confronto: CONFRONTO }));
+    const standard = sezioniStandard(dati({ confronto: CONFRONTO }));
     const rinominate = standard.map(sezione => ({ ...sezione, titolo: `Titolo del cliente: ${sezione.titolo}` }));
     const senzaChiave = standard.map((sezione) => {
       const copia = { ...sezione };
@@ -529,8 +402,8 @@ describe('riordinaSezioni', () => {
     // Una chiave che non e' standard e' del cliente, anche con il titolo e il tipo di una sezione standard
     expect(chiaveSezione(delCliente)).toBeNull();
     // Quelle che l'ordine non nomina restano nell'ordine ricevuto: la sezione del cliente era la prima
-    expect(chiavi(riordinaSezioni([delCliente, ...rinominate], ['metodo', 'rendimento']))).toEqual([
-      'metodo', 'rendimento', null, 'sintesi', 'mappa', 'assortimento', 'prezziMarche', 'confronto', 'entratiUsciti',
+    expect(chiavi(riordinaSezioni([delCliente, ...rinominate], ['metodo', 'confronto']))).toEqual([
+      'metodo', 'confronto', null, 'sintesi', 'assortimento', 'prezziMarche', 'entratiUsciti',
     ]);
   });
 });

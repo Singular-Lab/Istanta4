@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BadRequestError, NotFoundError } from '../../../../lib/errors';
-import { type BoxInsight, MAX_TAPPE_VIAGGIO, type PdfVolantino, type PesiVisibilita, type TappaProdotto } from '../../../../lib/insightVolantino/tipi';
+import { type BoxInsight, MAX_TAPPE_VIAGGIO, type PdfVolantino, type TappaProdotto } from '../../../../lib/insightVolantino/tipi';
 import type { ImportStorico } from '../../../../lib/types';
 import type { AmbitoGdo } from '../../accessi/contestoAccesso';
 import type { RiepilogoDaSalvare, RigaReferenzaKit } from '../../repositories/AnalisiPuntiVenditaRepository';
@@ -79,7 +79,6 @@ const insight = vi.hoisted(() => {
           perPagina: [],
         },
         marche: { elenco: [], quotaDistributore: null },
-        zoneCalde: { boxPiuVisibili: [], perReparto: [], perMarca: [], calore: [], pesi: {} },
       } as never;
     }),
   };
@@ -184,12 +183,7 @@ const CONFIG = {
   marche: { distributore: ['Marca del distributore', ' '] },
 };
 
-function creaServizio(opzioni: {
-  salvati?: Map<string, RiepilogoKit>;
-  config?: () => Promise<Record<string, unknown>>;
-  /** Pesi della visibilita' della libreria agenzia del cliente; senza, il servizio non riceve la libreria. */
-  pesiVisibilita?: PesiVisibilita;
-} = {}) {
+function creaServizio(opzioni: { salvati?: Map<string, RiepilogoKit>; config?: () => Promise<Record<string, unknown>> } = {}) {
   const salvati = opzioni.salvati ?? new Map<string, RiepilogoKit>();
   const letture = {
     kitNellAmbito: vi.fn(async (idKit: string, _ambito: AmbitoGdo) => KIT_PER_ID.get(idKit.toLowerCase()) ?? null),
@@ -223,8 +217,7 @@ function creaServizio(opzioni: {
   } satisfies RepositoryAnalisiViaggio;
   const leggiConfig: () => Promise<Record<string, unknown>> = opzioni.config ?? (async () => CONFIG);
   const config = { getFlyerInsightsConfig: vi.fn(leggiConfig) };
-  const agenziaLib = opzioni.pesiVisibilita ? { insightVolantino: { pesiVisibilita: opzioni.pesiVisibilita } } : undefined;
-  const servizio = new InsightConfrontiService(repository, analisi, config, letture, agenziaLib);
+  const servizio = new InsightConfrontiService(repository, analisi, config, letture);
   return { servizio, letture, repository, analisi, config, salvati };
 }
 
@@ -347,31 +340,6 @@ describe('edizione precedente e varianti', () => {
     expect(opzioni.marcheDistributore).toEqual([]);
     expect(opzioni.repartoConfigurato?.('k-a')).toBeNull();
     expect(opzioni.meccanicaOriginale?.('k-b')).toBeNull();
-  });
-});
-
-describe('pesi della visibilita\' del cliente', () => {
-  const PESI_CLIENTE: PesiVisibilita = { copertina: 1, ultima: 0.9, primaDoppia: 0.8, altre: 0.4, alto: 1, basso: 0.5 };
-
-  it('confronti e differenze fra varianti usano i pesi della libreria agenzia, come la scheda', async () => {
-    const { servizio } = creaServizio({ pesiVisibilita: PESI_CLIENTE });
-
-    await servizio.confronti(ID_KIT, AMBITO);
-    await servizio.differenzeVarianti(ID_KIT, ID_VARIANTE, AMBITO);
-
-    expect(opzioniDelleSezioni('k-a').pesi).toEqual(PESI_CLIENTE);
-    expect(opzioniDelleSezioni('p-a').pesi).toEqual(PESI_CLIENTE);
-    const opzioniBox = insight.boxInsight.mock.calls.map(([, opzioni]) => opzioni.pesi);
-    expect(opzioniBox.length).toBeGreaterThan(0);
-    expect(opzioniBox.every(pesi => pesi === PESI_CLIENTE)).toBe(true);
-  });
-
-  it('senza libreria agenzia, o senza pesi propri, nessun peso: valgono gli standard', async () => {
-    const { servizio } = creaServizio();
-
-    await servizio.confronti(ID_KIT, AMBITO);
-
-    expect(opzioniDelleSezioni('k-a').pesi).toBeUndefined();
   });
 });
 

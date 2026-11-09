@@ -53,7 +53,7 @@
       },
       "css": {
         "gzip": 34,
-        "brotli": 27
+        "brotli": 26
       }
     },
     "promo-in-corso": {
@@ -82,7 +82,7 @@
         "brotli": 413
       },
       "css": {
-        "gzip": 37,
+        "gzip": 36,
         "brotli": 28
       }
     },

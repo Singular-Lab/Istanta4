@@ -46,14 +46,6 @@ describe('catalogo dei permessi', () => {
     expect(esistePermesso('promo.crea')).toBe(true);
   });
 
-  it('importare le vendite e\' un\'azione dell\'area Report e analisi, in Visualizzazione', () => {
-    expect(PERMESSI.ANALISI.IMPORTA_VENDITE).toBe('analisi.importa_vendite');
-    const voce = TUTTI_I_PERMESSI.find(p => p.codice === PERMESSI.ANALISI.IMPORTA_VENDITE);
-    expect(voce).toMatchObject({ nome: 'Importare le vendite', accesso: false, sistema: false, area: { id: 'analisi', sezione: 'visualizzazione' } });
-    expect(accessoRichiestoDa(PERMESSI.ANALISI.IMPORTA_VENDITE)).toBe(PERMESSI.ANALISI.VISUALIZZA);
-    expect(applicaRegoleArea([PERMESSI.ANALISI.IMPORTA_VENDITE])).toEqual([]);
-  });
-
   it('un\'azione richiede l\'accesso alla sua area, l\'accesso non richiede nulla', () => {
     expect(accessoRichiestoDa(PERMESSI.KIT_RUNTIME.PUBBLICA)).toBe(PERMESSI.KIT_RUNTIME.VISUALIZZA);
     expect(accessoRichiestoDa(PERMESSI.KIT_RUNTIME.VISUALIZZA)).toBeNull();

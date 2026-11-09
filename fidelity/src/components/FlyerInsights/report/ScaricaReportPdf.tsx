@@ -8,7 +8,7 @@ import { ETICHETTA_IN_CORSO, inCorso, messaggioErrore, testoAvanzamento, type Fa
 /**
  * Bottone del report PDF di un volantino. Al click: dati e sezioni dal server, poi il generatore
  * (@react-pdf e il documento, caricati solo adesso: fuori dal codice della pagina e dal suo budget),
- * poi le immagini delle pagine, l'impaginazione e il download.
+ * poi la miniatura della prima pagina per la copertina, l'impaginazione e il download.
  */
 
 type ModuloReport = typeof import("./creaReportPdf");
@@ -90,10 +90,8 @@ export function ScaricaReportPdf({ idKit, titolo, disabled = false }: ScaricaRep
       const report = await passo("dati", () => caricaReportVolantino(idKit));
       aggiorna({ fase: "generatore" });
       const modulo = await passo("generatore", caricaModuloReport);
-      aggiorna({ fase: "pagine", fatte: 0, totale: 0 });
-      const immagini = await passo("pagine", () =>
-        modulo.preparaImmagini(report, ({ fatte, totale }) => aggiorna({ fase: "pagine", fatte, totale }))
-      );
+      aggiorna({ fase: "copertina" });
+      const immagini = await passo("copertina", () => modulo.preparaImmagini(report));
       aggiorna({ fase: "impaginazione" });
       const blob = await passo("impaginazione", () => modulo.creaBlobReport(report, immagini));
       salvaFile(blob, nomeFileReport(report.titolo || titolo, report.generatoIl));

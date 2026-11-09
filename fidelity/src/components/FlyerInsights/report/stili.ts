@@ -180,27 +180,9 @@ export function creaStili(p: PaletteReport, famiglia: string) {
     ciambellaVoceValore: { width: 70, fontSize: 8.5, lineHeight: INTERLINEA.stretta, fontWeight: 600, color: p.inchiostro, textAlign: "right" },
     ciambellaVoceQuota: { width: 44, fontSize: 8, lineHeight: INTERLINEA.stretta, color: p.inchiostroTenue, textAlign: "right" },
 
-    // ─── Pagine del volantino ────────────────────────────────────────
-    paginaTitolo: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 12 },
-    paginaNumero: { fontSize: 13, lineHeight: INTERLINEA.stretta, fontWeight: 600, color: p.inchiostro },
-    paginaDi: { fontSize: CORPO.corpo, lineHeight: INTERLINEA.stretta, color: p.inchiostroTenue },
-    paginaCorpo: { flexDirection: "row", justifyContent: "space-between" },
-    paginaCorpoOrizzontale: { flexDirection: "column" },
+    // ─── Miniatura della prima pagina in copertina ───────────────────
     paginaFoglio: { position: "relative", backgroundColor: p.carta, overflow: "hidden" },
     paginaRiempi: { position: "absolute", left: 0, top: 0 },
-    paginaDidascalia: { fontSize: CORPO.etichetta, lineHeight: INTERLINEA.stretta, color: p.inchiostroTenue, marginTop: 6 },
-    paginaLaterale: { flexDirection: "column" },
-    paginaLateraleOrizzontale: { flexDirection: "row", justifyContent: "space-between", marginTop: 16 },
-    misuraTitolo: { fontSize: CORPO.titoloGrafico, lineHeight: INTERLINEA.stretta, fontWeight: 600, color: p.inchiostro, marginTop: 4 },
-    misuraDescrizione: { fontSize: CORPO.nota, lineHeight: INTERLINEA.normale, color: p.inchiostroTenue, marginTop: 4 },
-    scalaTacche: { flexDirection: "row", justifyContent: "space-between", marginTop: 3 },
-    evidenzaVoce: { flexDirection: "row", alignItems: "flex-start", paddingVertical: 5, borderBottomWidth: 0.5, borderBottomColor: p.linee },
-    evidenzaTesti: { flex: 1, marginLeft: 7, marginRight: 6 },
-    evidenzaNome: { fontSize: 8, lineHeight: INTERLINEA.stretta, fontWeight: 600, color: p.inchiostro, maxLines: 1, textOverflow: "ellipsis" },
-    evidenzaDettaglio: { fontSize: 6.8, lineHeight: INTERLINEA.stretta, color: p.inchiostroTenue, marginTop: 1.5, maxLines: 1, textOverflow: "ellipsis" },
-    evidenzaValore: { fontSize: 8, lineHeight: INTERLINEA.stretta, fontWeight: 600, color: p.inchiostro, textAlign: "right" },
-    numeroBox: { width: 13, height: 13, borderRadius: 6.5, justifyContent: "center", alignItems: "center" },
-    numeroBoxTesto: { fontSize: 6.5, lineHeight: 1, fontWeight: 600, color: "#ffffff", textAlign: "center" },
 
     // ─── Tabella ─────────────────────────────────────────────────────
     tabellaTesta: { flexDirection: "row", borderBottomWidth: 0.75, borderBottomColor: p.inchiostro },

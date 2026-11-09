@@ -50,6 +50,3 @@ export const ALTEZZA_INTESTAZIONE_SEGUE = 30;
 
 /** Riga di tabella: padding verticale e orizzontale delle celle. */
 export const CELLA = { paddingVerticale: 4.5, paddingOrizzontale: 6 } as const;
-
-/** Colonna laterale delle pagine del volantino (legenda e box in evidenza). */
-export const COLONNA_LEGENDA = 168;

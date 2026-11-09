@@ -1,10 +1,9 @@
 import { Image, Page, View } from "@react-pdf/renderer";
 import type { ReportVolantino } from "../../../../lib/insightVolantino/report";
-import { boxPerPagina } from "../volantino/geometria";
+import type { BoxInsight } from "../../../../lib/insightVolantino/tipi";
+import { boxPerPagina, pagineDaSfogliare, riquadroBox } from "../volantino/geometria";
 import { Testo } from "./componenti";
-import { FoglioVolantino } from "./FoglioVolantino";
-import { misuraNelRiquadro } from "./impaginazione";
-import { pagineDelReport, proporzioniPagine } from "./pagineVolantino";
+import { misuraNelRiquadro, proporzioneCopertina } from "./impaginazione";
 import type { TemaReport } from "./stili";
 import { dataEstesa, numeroSezione } from "./testi";
 
@@ -18,6 +17,49 @@ interface ProprietaCopertina {
   report: ReportVolantino;
   /** JPEG della prima pagina; null: pagina bianca con i riquadri. */
   immagine: string | null;
+}
+
+interface ProprietaMiniatura {
+  tema: TemaReport;
+  larghezza: number;
+  altezza: number;
+  /** JPEG della prima pagina rifilata; null: pagina bianca con i riquadri dei box. */
+  immagine: string | null;
+  /** I box disegnabili della prima pagina: si vedono solo sulla pagina bianca. */
+  box: readonly BoxInsight[];
+}
+
+/** La miniatura della prima pagina: l'immagine o, senza, la pagina bianca con i riquadri dei box. */
+function MiniaturaPagina({ tema, larghezza, altezza, immagine, box }: ProprietaMiniatura) {
+  const { s, palette } = tema;
+  const riempi = [s.paginaRiempi, { width: larghezza, height: altezza }];
+  return (
+    <View style={[s.paginaFoglio, { width: larghezza, height: altezza }]}>
+      {immagine ? <Image src={immagine} style={riempi} /> : null}
+      {!immagine &&
+        box.map((voce) => {
+          const riquadro = riquadroBox(voce.geometria);
+          if (!riquadro) return null;
+          return (
+            <View
+              key={voce.id}
+              style={{
+                position: "absolute",
+                left: riquadro.x * larghezza,
+                top: riquadro.y * altezza,
+                width: riquadro.w * larghezza,
+                height: riquadro.h * altezza,
+                backgroundColor: palette.superficie,
+                borderWidth: 0.5,
+                borderColor: palette.linee,
+              }}
+            />
+          );
+        })}
+      {/* Bordo sopra a tutto: la pagina bianca resta riconoscibile sul foglio bianco */}
+      <View style={[s.paginaRiempi, { width: larghezza, height: altezza, borderWidth: 0.5, borderColor: palette.linee }]} />
+    </View>
+  );
 }
 
 function Dato({ tema, etichetta, valore }: { tema: TemaReport; etichetta: string; valore: string }) {
@@ -38,7 +80,7 @@ function Dato({ tema, etichetta, valore }: { tema: TemaReport; etichetta: string
 export function Copertina({ tema, report, immagine }: ProprietaCopertina) {
   const { s } = tema;
   const { intestazione } = report;
-  const foglio = misuraNelRiquadro(proporzioniPagine(report.box)(1), FOGLIO.larghezza, FOGLIO.altezza);
+  const foglio = misuraNelRiquadro(proporzioneCopertina(report), FOGLIO.larghezza, FOGLIO.altezza);
   const prodotti = report.box.reduce((somma, box) => somma + Math.max(1, box.prodotti || 0), 0);
 
   return (
@@ -62,13 +104,13 @@ export function Copertina({ tema, report, immagine }: ProprietaCopertina) {
           {report.sottotitolo ? <Testo style={s.copertinaSottotitolo}>{report.sottotitolo}</Testo> : null}
           {intestazione.sottotitolo ? <Testo style={s.copertinaSottotitoloCliente}>{intestazione.sottotitolo}</Testo> : null}
           <View style={s.copertinaDati}>
-            <Dato tema={tema} etichetta="Pagine" valore={NUMERI.format(pagineDelReport(report).length)} />
+            <Dato tema={tema} etichetta="Pagine" valore={NUMERI.format(pagineDaSfogliare(report.totalePagine, report.box))} />
             <Dato tema={tema} etichetta="Box" valore={NUMERI.format(report.box.length)} />
             <Dato tema={tema} etichetta="Prodotti" valore={NUMERI.format(prodotti)} />
           </View>
         </View>
         <View style={s.copertinaImmagine}>
-          <FoglioVolantino
+          <MiniaturaPagina
             tema={tema}
             larghezza={foglio.larghezza}
             altezza={foglio.altezza}

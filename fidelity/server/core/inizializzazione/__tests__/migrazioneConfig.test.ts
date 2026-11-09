@@ -44,10 +44,10 @@ describe('migraConfig', () => {
     const esito = await migraConfig({ ambiente: { VITE_MOMENTI_ATTIVI: 'true', VITE_MENABO_ATTIVO: 'true' } });
 
     expect(modello.update).toHaveBeenCalledWith(
-      { funzionalita: { momenti: true, menabo: true, vendite: false } },
+      { funzionalita: { momenti: true, menabo: true } },
       { where: { funzionalita: null }, transaction: 'tx', validate: false }
     );
-    expect(esito.funzionalita).toEqual({ momenti: true, menabo: true, vendite: false });
+    expect(esito.funzionalita).toEqual({ momenti: true, menabo: true });
   });
 
   it('senza GDO del cliente non collega nulla ma inizializza le funzionalita', async () => {
@@ -57,7 +57,7 @@ describe('migraConfig', () => {
 
     expect(modello.update).toHaveBeenCalledTimes(1);
     expect(modello.update).toHaveBeenCalledWith(
-      { funzionalita: { momenti: false, menabo: false, vendite: false } },
+      { funzionalita: { momenti: false, menabo: false } },
       { where: { funzionalita: null }, transaction: 'tx', validate: false }
     );
     expect(esito.idGdo).toBeNull();
@@ -74,9 +74,9 @@ describe('migraConfig', () => {
 
 describe('funzionalitaDaAmbiente', () => {
   it('solo true accende', () => {
-    expect(funzionalitaDaAmbiente({ VITE_MOMENTI_ATTIVI: 'true', VITE_MENABO_ATTIVO: 'false' })).toEqual({ momenti: true, menabo: false, vendite: false });
-    expect(funzionalitaDaAmbiente({ VITE_MOMENTI_ATTIVI: 'TRUE', VITE_MENABO_ATTIVO: '1' })).toEqual({ momenti: false, menabo: false, vendite: false });
-    expect(funzionalitaDaAmbiente({})).toEqual({ momenti: false, menabo: false, vendite: false });
+    expect(funzionalitaDaAmbiente({ VITE_MOMENTI_ATTIVI: 'true', VITE_MENABO_ATTIVO: 'false' })).toEqual({ momenti: true, menabo: false });
+    expect(funzionalitaDaAmbiente({ VITE_MOMENTI_ATTIVI: 'TRUE', VITE_MENABO_ATTIVO: '1' })).toEqual({ momenti: false, menabo: false });
+    expect(funzionalitaDaAmbiente({})).toEqual({ momenti: false, menabo: false });
   });
 });
 

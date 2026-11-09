@@ -78,8 +78,6 @@ import { AuthProvider } from './auth_provider';
 import { HubService } from './hub_service';
 import { HubNews } from './hub_news';
 import { LavoroInBackground } from './lavori_in_background';
-import { ImportazioneVendite } from './importazioni_vendite';
-import { VenditaProdotto } from './vendite_prodotti';
 
 // Elenco di tutti i modelli con metadata
 export const MODELLI_SEQUELIZE = {
@@ -112,9 +110,6 @@ export const MODELLI_SEQUELIZE = {
   AbbinamentoManualePvVolantino: { model: AbbinamentoManualePvVolantino, nome: 'AbbinamentoManualePvVolantino', tabella: 'abbinamenti_manuali_pv_volantino' },
   // Riepilogo di ogni kit per le pagine dei punti vendita (cache)
   AnalisiKit: { model: AnalisiKit, nome: 'AnalisiKit', tabella: 'analisi_kit' },
-  // Vendite del cliente per gli insight del volantino, e i loro import
-  VenditaProdotto: { model: VenditaProdotto, nome: 'VenditaProdotto', tabella: 'vendite_prodotti' },
-  ImportazioneVendite: { model: ImportazioneVendite, nome: 'ImportazioneVendite', tabella: 'importazioni_vendite' },
   // Modelli export
   TipiDiExport: { model: TipiDiExport, nome: 'TipiDiExport', tabella: 'tipi_export' },
   TipoUtentePuntoVendita: { model: RuoloPuntoVendita, nome: 'RuoloPuntoVendita', tabella: 'ruolo_punto_vendita' },

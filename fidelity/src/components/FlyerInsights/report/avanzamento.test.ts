@@ -4,8 +4,9 @@ import { inCorso, messaggioErrore, motivoErrore, testoAvanzamento } from "./avan
 describe("avanzamento del report PDF", () => {
   it("dice a che punto e' la preparazione", () => {
     expect(testoAvanzamento({ fase: "dati" })).toBe("Dati del volantino");
-    expect(testoAvanzamento({ fase: "pagine", fatte: 3, totale: 12 })).toBe("Pagine del volantino: 3 di 12");
-    expect(testoAvanzamento({ fase: "pagine", fatte: 0, totale: 0 })).toBe("Pagine del volantino");
+    expect(testoAvanzamento({ fase: "generatore" })).toBe("Avvio del generatore PDF");
+    // Del volantino si prepara solo la miniatura della prima pagina, per la copertina
+    expect(testoAvanzamento({ fase: "copertina" })).toBe("Copertina");
     expect(testoAvanzamento({ fase: "impaginazione" })).toBe("Impaginazione del PDF");
     expect(testoAvanzamento({ fase: "inattivo" })).toBeNull();
     expect(testoAvanzamento({ fase: "errore", messaggio: "x" })).toBeNull();

@@ -72,7 +72,6 @@ export const PERMESSI = {
     VISUALIZZA: 'analisi.visualizza',
     DASHBOARD_CATEGORY: 'analisi.dashboard_category',
     DASHBOARD_MARKETING: 'analisi.dashboard_marketing',
-    IMPORTA_VENDITE: 'analisi.importa_vendite',
   },
   ORDINI_STAMPA: {
     VISUALIZZA: 'ordini_stampa.visualizza',
@@ -284,13 +283,12 @@ export const AREE: DefinizioneArea[] = [
     id: 'analisi',
     sezione: 'visualizzazione',
     nome: 'Report e analisi',
-    descrizione: 'Report dei tracciati, analisi dei dati dei volantini e vendite della GDO.',
+    descrizione: 'Report dei tracciati e analisi dei dati dei volantini.',
     icona: 'ChartColumn',
     accesso: { codice: P.ANALISI.VISUALIZZA, nome: 'Consultare report e analisi', descrizione: 'Aprire il report dei tracciati e calcolarne i risultati.' },
     azioni: [
       { codice: P.ANALISI.DASHBOARD_CATEGORY, nome: 'Aprire la dashboard Category', descrizione: 'Andamento dei reparti della propria categoria nelle promozioni.' },
       { codice: P.ANALISI.DASHBOARD_MARKETING, nome: 'Aprire la dashboard Marketing', descrizione: 'Scoreboard delle promozioni per il marketing.' },
-      { codice: P.ANALISI.IMPORTA_VENDITE, nome: 'Importare le vendite', descrizione: 'Caricare i file delle vendite della GDO (pezzi e valore per prodotto, punto vendita e periodo) e consultarne il riepilogo: reimportare lo stesso periodo sostituisce i dati.' },
     ],
   },
   {

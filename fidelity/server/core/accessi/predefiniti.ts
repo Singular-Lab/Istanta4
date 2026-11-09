@@ -1,4 +1,4 @@
-import { RUOLO_UTENTE_GDO, TIPO_UTENTI } from '../../../lib/enums';
+import { TIPO_UTENTI } from '../../../lib/enums';
 import { CodicePermesso, PERMESSI as P } from '../../../lib/accessi/catalogo';
 import { presetDi } from '../../../lib/accessi/preset';
 
@@ -46,20 +46,3 @@ export const PERMESSI_PREDEFINITI: Partial<Record<TIPO_UTENTI, CodicePermesso[]>
     P.VOLANTINI.VISUALIZZA,
   ],
 };
-
-/**
- * Permessi in piu' per un sotto-ruolo GDO, oltre a quelli del tipo GDO: l'import delle vendite del
- * cliente all'ADMIN della GDO. Su un'installazione nuova li scrive scriviPredefiniti; a quelle
- * esistenti li concede una volta la preparazione degli accessi (migrazioneVendite.ts, schema 3).
- * Il Superadmin non compare: ha sempre tutti i permessi.
- */
-export const PERMESSI_PREDEFINITI_SOTTORUOLO_GDO: Partial<Record<RUOLO_UTENTE_GDO, CodicePermesso[]>> = {
-  [RUOLO_UTENTE_GDO.ADMIN]: [P.ANALISI.IMPORTA_VENDITE],
-};
-
-/** "GDO_ADMIN", " admin " e "ADMIN" sono lo stesso sotto-ruolo, come nella migrazione del menu. */
-export const normalizzaNomeSottoRuolo = (nome: string): string => (nome ?? '').trim().toUpperCase().replace(/^GDO_/, '');
-
-/** I permessi in piu' di un sotto-ruolo GDO dal suo nome in ruolo_utente_gdo; nessuno se non ne ha. */
-export const permessiPredefinitiDelSottoRuolo = (nome: string): CodicePermesso[] =>
-  PERMESSI_PREDEFINITI_SOTTORUOLO_GDO[normalizzaNomeSottoRuolo(nome) as RUOLO_UTENTE_GDO] ?? [];

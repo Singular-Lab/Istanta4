@@ -1,12 +1,4 @@
-import { formattaValore, misureDisponibili, type MisuraCalore } from '../../../lib/insightVolantino/calore';
-import {
-  SOGLIA_INDICE_SPAZIO,
-  type Affidabilita,
-  type PrevisioneBox,
-  type PrevisioneVolantino,
-  type RendimentoBox,
-  type RendimentoVolantino,
-} from '../../../lib/insightVolantino/rendimento';
+import { formattaValore } from '../../../lib/insightVolantino/formato';
 import type {
   DatiReportVolantino,
   GraficoSezione,
@@ -14,7 +6,7 @@ import type {
   SezioneReport,
   VoceGrafico,
 } from '../../../lib/insightVolantino/report';
-import type { BoxInsight, ConfrontoEdizione, PesiVisibilita, Variazione } from '../../../lib/insightVolantino/tipi';
+import type { ConfrontoEdizione, Variazione } from '../../../lib/insightVolantino/tipi';
 
 /**
  * Sezioni standard del report PDF del volantino (spec insight-volantino, contratto in
@@ -24,21 +16,16 @@ import type { BoxInsight, ConfrontoEdizione, PesiVisibilita, Variazione } from '
  *
  * Regole di scrittura: solo sezioni con dati (una sezione vuota non c'e'); numeri all'italiana;
  * frasi brevi, senza gergo tecnico; le variazioni sull'edizione precedente sono neutre (positiva
- * null): il report descrive le scelte commerciali, non le giudica.
+ * null): il report descrive le scelte commerciali, non le giudica. Per decisione della direzione il
+ * report non ha le pagine del volantino ne' stime: solo quello che il volantino impaginato dice.
  */
 
 // ─── Costanti ───────────────────────────────────────────────────────
 
-/** Box in evidenza nelle pagine delle mappe. */
-export const BOX_IN_EVIDENZA = 3;
 /** Voci al massimo nei grafici a barre e nel confronto dei reparti. */
 export const MAX_VOCI_GRAFICO = 8;
 /** Frasi chiave al massimo nella sintesi. */
 export const MAX_FRASI_SINTESI = 4;
-/** Box migliori e peggiori nella tabella del rendimento. */
-export const MAX_RIGHE_RENDIMENTO = 5;
-/** Righe della tabella della previsione e del confronto previsto/reale. */
-export const MAX_RIGHE_PREVISIONE = 10;
 /** Prodotti entrati e prodotti usciti al massimo nella tabella del confronto. */
 export const MAX_PRODOTTI_MOVIMENTO = 8;
 /** Reparti con lo spostamento di spazio piu' grande nel confronto con l'edizione precedente. */
@@ -51,12 +38,8 @@ export const MAX_REPARTI_CONFRONTO = 5;
  */
 export type ChiaveSezioneReport =
   | 'sintesi'
-  | 'mappa'
   | 'assortimento'
   | 'prezziMarche'
-  | 'rendimento'
-  | 'mappaPrevisione'
-  | 'previsione'
   | 'confronto'
   | 'entratiUsciti'
   | 'metodo';
@@ -64,12 +47,8 @@ export type ChiaveSezioneReport =
 /** L'ordine delle sezioni standard. */
 export const ORDINE_SEZIONI_STANDARD: readonly ChiaveSezioneReport[] = [
   'sintesi',
-  'mappa',
   'assortimento',
   'prezziMarche',
-  'rendimento',
-  'mappaPrevisione',
-  'previsione',
   'confronto',
   'entratiUsciti',
   'metodo',
@@ -79,21 +58,10 @@ export const TITOLI_REPORT = {
   sintesi: 'Sintesi',
   assortimento: 'Reparti e meccaniche',
   prezziMarche: 'Sconti e marche',
-  rendimento: 'Rendimento rispetto allo spazio',
-  previsione: 'Previsione per box',
-  previstoReale: 'Previsto e reale',
   confronto: "Confronto con l'edizione precedente",
   entratiUsciti: 'Prodotti entrati e usciti',
   metodo: 'Metodo e fonti dei dati',
 } as const;
-
-/** Titoli delle pagine con la mappa, per misura. */
-export const TITOLI_MAPPA: Readonly<Partial<Record<MisuraCalore, string>>> = {
-  investimento: "Dove si concentra l'investimento promozionale",
-  vendite: 'Dove si concentrano le vendite',
-  visibilita: 'Zone calde del volantino',
-  previsione: 'Previsione per pagina',
-};
 
 const NON_DISPONIBILE = 'N/D';
 
@@ -205,18 +173,6 @@ export function sottotitoloReport(contesto: DatiReportVolantino['contesto']): st
     .join(' · ');
 }
 
-/** Il prodotto pilota del box, con la marca: "Mozzarella (Granarolo)". */
-function nomeProdotto(box: BoxInsight | undefined): string {
-  if (!box) return NON_DISPONIBILE;
-  const nome = box.nome.trim() || NON_DISPONIBILE;
-  const marca = box.marca?.trim();
-  return marca && !nome.toLocaleLowerCase('it-IT').includes(marca.toLocaleLowerCase('it-IT')) ? `${nome} (${marca})` : nome;
-}
-
-const paginaDi = (box: BoxInsight | undefined): string => (box?.pagina ? String(box.pagina) : NON_DISPONIBILE);
-
-const boxPerId = (dati: DatiReportVolantino): Map<string, BoxInsight> => new Map(dati.insight.box.map(singolo => [singolo.id, singolo]));
-
 // ─── Variazioni ─────────────────────────────────────────────────────
 
 type FormatoVariazione = 'conteggio' | 'punti';
@@ -241,16 +197,7 @@ function variazioneIndicatore(voce: Variazione | undefined, formato: FormatoVari
 
 // ─── Sintesi ────────────────────────────────────────────────────────
 
-function indicatoreVendite(rendimento: RendimentoVolantino): IndicatoreReport {
-  const valore = rendimento.misura === 'valore' && rendimento.totaleValore !== null
-    ? euro(rendimento.totaleValore)
-    : `${numero(rendimento.totalePezzi)} pezzi`;
-  const puntiVendita = `${numero(rendimento.puntiVendita)} ${rendimento.puntiVendita === 1 ? 'punto vendita' : 'punti vendita'}`;
-  const periodo = periodoInItaliano(rendimento.periodo.dal, rendimento.periodo.al);
-  return { etichetta: 'Vendite', valore, dettaglio: periodo ? `${puntiVendita}, ${periodo}` : puntiVendita, variazione: null };
-}
-
-/** Da 3 a 8 indicatori: i conteggi sempre, gli altri quando il volantino (o il precedente) ne ha. */
+/** Da 3 a 7 indicatori: i conteggi sempre, gli altri quando il volantino (o il precedente) ne ha. */
 function indicatoriSintesi(dati: DatiReportVolantino): IndicatoreReport[] {
   const { sintesi, marche } = dati.insight;
   const confronto = dati.confronto?.sintesi;
@@ -310,7 +257,6 @@ function indicatoriSintesi(dati: DatiReportVolantino): IndicatoreReport[] {
       variazione: variazioneIndicatore(confronto?.marche, 'conteggio'),
     });
   }
-  if (dati.rendimento) indicatori.push(indicatoreVendite(dati.rendimento));
   return indicatori;
 }
 
@@ -329,19 +275,6 @@ function fraseSconto(dati: DatiReportVolantino): string | null {
   return `${base}; ${oltre30 === 1 ? 'uno supera' : `${numero(oltre30)} superano`} il 30%.`;
 }
 
-function fraseRendimento(dati: DatiReportVolantino): string | null {
-  const rendimento = dati.rendimento;
-  if (!rendimento || rendimento.perBox.length === 0) return null;
-  const sopra = rendimento.sopraSpazio.length;
-  const sotto = rendimento.sottoSpazio.length;
-  const soggetto = (box: number) => (box === 1 ? 'Un box rende' : `${numero(box)} box rendono`);
-  const occupa = (box: number) => (box === 1 ? 'occupa' : 'occupano');
-  const altri = sotto === 0 ? '' : sotto === 1 ? ', uno meno' : `, ${numero(sotto)} meno`;
-  if (sopra > 0) return `${soggetto(sopra)} più dello spazio che ${occupa(sopra)}${altri}.`;
-  if (sotto > 0) return `${soggetto(sotto)} meno dello spazio che ${occupa(sotto)}.`;
-  return 'Le vendite dei box sono in linea con lo spazio che occupano.';
-}
-
 /** "entrano 34 prodotti e ne escono 28", al singolare e senza movimenti quando serve. */
 function movimentiProdotti(entrati: number, usciti: number): string | null {
   if (entrati === 0 && usciti === 0) return null;
@@ -357,12 +290,6 @@ function fraseConfronto(dati: DatiReportVolantino): string | null {
   return movimenti ? `Rispetto all'edizione precedente ${movimenti}.` : "Rispetto all'edizione precedente i prodotti sono gli stessi.";
 }
 
-function fraseVisibilita(dati: DatiReportVolantino): string | null {
-  const primo = dati.insight.zoneCalde.perReparto.find(voce => voce.chiave !== '' && voce.quotaVisibilita > 0);
-  if (!primo) return null;
-  return `Il reparto ${nomeLeggibile(primo.etichetta)} raccoglie ${conArticolo(percento(primo.quotaVisibilita))} della visibilità con ${conArticolo(percento(primo.quotaSpazio))} dello spazio.`;
-}
-
 function fraseDistributore(dati: DatiReportVolantino): string | null {
   const distributore = dati.insight.marche.quotaDistributore;
   if (distributore && distributore.quotaSpazio > 0) {
@@ -374,7 +301,7 @@ function fraseDistributore(dati: DatiReportVolantino): string | null {
 
 /** Le frasi chiave, al massimo MAX_FRASI_SINTESI, nell'ordine di importanza. */
 export function frasiChiave(dati: DatiReportVolantino): string[] {
-  return [fraseSpazio, fraseSconto, fraseRendimento, fraseConfronto, fraseVisibilita, fraseDistributore]
+  return [fraseSpazio, fraseSconto, fraseConfronto, fraseDistributore]
     .map(calcola => calcola(dati))
     .filter((testo): testo is string => testo !== null)
     .slice(0, MAX_FRASI_SINTESI);
@@ -383,48 +310,6 @@ export function frasiChiave(dati: DatiReportVolantino): string[] {
 function sezioneSintesi(dati: DatiReportVolantino): SezioneReport | null {
   if (dati.insight.sintesi.box === 0) return null;
   return { chiave: 'sintesi', tipo: 'sintesi', titolo: TITOLI_REPORT.sintesi, indicatori: indicatoriSintesi(dati), frasi: frasiChiave(dati) };
-}
-
-// ─── Mappe ──────────────────────────────────────────────────────────
-
-const disponibili = (dati: DatiReportVolantino): MisuraCalore[] =>
-  misureDisponibili(dati.insight.box, { rendimento: dati.rendimento, previsione: dati.previsione });
-
-function introduzioneMappa(misura: MisuraCalore, dati: DatiReportVolantino): string | null {
-  if (misura === 'vendite' && dati.rendimento) {
-    const periodo = periodoInItaliano(dati.rendimento.periodo.dal, dati.rendimento.periodo.al);
-    return unisciFrasi(
-      `Il colore segue le vendite dei prodotti di ogni box${periodo ? ` ${periodo}` : ''}, in ${numero(dati.rendimento.puntiVendita)} punti vendita della stessa area e canale`,
-      'In evidenza i box che vendono di più',
-    );
-  }
-  if (misura === 'investimento') {
-    return unisciFrasi(
-      'Il colore segue lo spazio di ogni box moltiplicato per il suo sconto: più è intenso, più il volantino concentra lì la spinta promozionale',
-      'In evidenza i box con l\'investimento più alto',
-    );
-  }
-  if (misura === 'previsione' && dati.previsione) {
-    return dati.previsione.tipo === 'vendite'
-      ? unisciFrasi('Il colore segue i pezzi previsti per ogni box dallo storico della stessa area e canale', 'In evidenza i box con la previsione più alta')
-      : unisciFrasi('Il colore segue la previsione teorica di ogni box, da posizione, spazio e sconto: non ci sono vendite importate su cui basarla', 'In evidenza i box con la previsione più alta');
-  }
-  return unisciFrasi('Il colore segue la visibilità stimata di ogni box, da spazio, pagina e posizione', 'In evidenza i box più visibili');
-}
-
-/** Le pagine con la mappa: vendite se ci sono, altrimenti l'investimento, altrimenti la visibilita'. */
-function sezioneMappa(dati: DatiReportVolantino): SezioneReport | null {
-  const misure = disponibili(dati);
-  const misura = (['vendite', 'investimento', 'visibilita'] as const).find(voce => misure.includes(voce));
-  if (!misura) return null;
-  return {
-    chiave: 'mappa',
-    tipo: 'pagine',
-    titolo: TITOLI_MAPPA[misura] ?? 'Mappa del volantino',
-    misura,
-    introduzione: introduzioneMappa(misura, dati),
-    boxInEvidenza: BOX_IN_EVIDENZA,
-  };
 }
 
 // ─── Grafici ────────────────────────────────────────────────────────
@@ -532,158 +417,6 @@ function sezioneGrafici(
   return conDati.length > 0 ? { chiave, tipo: 'grafici', titolo, introduzione, grafici: conDati } : null;
 }
 
-// ─── Rendimento ─────────────────────────────────────────────────────
-
-function esitoRendimento(indice: number): string {
-  if (indice >= SOGLIA_INDICE_SPAZIO) return 'Rende più dello spazio';
-  if (indice <= 1 / SOGLIA_INDICE_SPAZIO) return 'Rende meno dello spazio';
-  return 'In linea con lo spazio';
-}
-
-function sezioneRendimento(dati: DatiReportVolantino): SezioneReport | null {
-  const rendimento = dati.rendimento;
-  if (!rendimento) return null;
-  const ordinati = rendimento.perBox
-    .filter((voce): voce is RendimentoBox & { indiceSpazio: number } => voce.indiceSpazio !== null)
-    .sort((a, b) => b.indiceSpazio - a.indiceSpazio);
-  if (ordinati.length === 0) return null;
-  const tagliati = ordinati.length > MAX_RIGHE_RENDIMENTO * 2;
-  const righe = tagliati ? [...ordinati.slice(0, MAX_RIGHE_RENDIMENTO), ...ordinati.slice(-MAX_RIGHE_RENDIMENTO)] : ordinati;
-  const perId = boxPerId(dati);
-  const periodo = periodoInItaliano(rendimento.periodo.dal, rendimento.periodo.al);
-  return {
-    chiave: 'rendimento',
-    tipo: 'tabella',
-    titolo: TITOLI_REPORT.rendimento,
-    introduzione: unisciFrasi(
-      `Vendite${periodo ? ` ${periodo}` : ''} in ${numero(rendimento.puntiVendita)} punti vendita della stessa area e canale`,
-      "L'indice divide la quota delle vendite del box per la quota di spazio che occupa: 1 vuol dire che vende in proporzione al suo spazio",
-    ),
-    colonne: [
-      { titolo: 'Prodotto', allinea: 'sinistra' },
-      { titolo: 'Pag.', allinea: 'destra' },
-      { titolo: 'Quota spazio', allinea: 'destra' },
-      { titolo: 'Quota vendite', allinea: 'destra' },
-      { titolo: 'Indice', allinea: 'destra' },
-      { titolo: 'Esito', allinea: 'sinistra' },
-    ],
-    righe: righe.map(voce => {
-      const box = perId.get(voce.idBox);
-      return [nomeProdotto(box), paginaDi(box), percento(voce.quotaSpazio), percento(voce.quota), numero(voce.indiceSpazio, 2, true), esitoRendimento(voce.indiceSpazio)];
-    }),
-    nota: unisciFrasi(
-      tagliati ? `I ${MAX_RIGHE_RENDIMENTO} box migliori e i ${MAX_RIGHE_RENDIMENTO} peggiori, su ${numero(ordinati.length)}` : null,
-      rendimento.prodottiSenzaVendite > 0
-        ? `${numero(rendimento.prodottiSenzaVendite)} prodotti su ${numero(rendimento.prodotti)} non hanno vendite nel periodo`
-        : null,
-    ),
-  };
-}
-
-// ─── Previsione ─────────────────────────────────────────────────────
-
-const AFFIDABILITA: Record<Affidabilita, string> = { alta: 'Alta', media: 'Media', bassa: 'Bassa' };
-
-const valorePrevisto = (valore: number, previsione: PrevisioneVolantino): string =>
-  previsione.unita === 'pezzi' ? numero(Math.round(valore)) : numero(valore, 1);
-
-function scarto(voce: PrevisioneBox): string {
-  if (voce.reale === null || !(voce.valore > 0)) return NON_DISPONIBILE;
-  const differenza = Math.round(((voce.reale - voce.valore) / voce.valore) * 1000) / 10;
-  if (differenza === 0) return '0%';
-  return `${differenza > 0 ? '+' : '-'}${percento(Math.abs(differenza))}`;
-}
-
-function tabellaPrevisione(dati: DatiReportVolantino, previsione: PrevisioneVolantino): SezioneReport {
-  const perId = boxPerId(dati);
-  const ordinati = [...previsione.perBox].sort((a, b) => b.valore - a.valore);
-  const righe = ordinati.slice(0, MAX_RIGHE_PREVISIONE);
-  return {
-    chiave: 'previsione',
-    tipo: 'tabella',
-    titolo: TITOLI_REPORT.previsione,
-    introduzione: unisciFrasi(
-      previsione.nota,
-      previsione.tipo === 'vendite' ? `Si basa sulle ultime ${numero(previsione.edizioniStoriche)} edizioni della stessa area e canale` : null,
-    ),
-    colonne: [
-      { titolo: 'Prodotto', allinea: 'sinistra' },
-      { titolo: 'Pag.', allinea: 'destra' },
-      { titolo: previsione.unita === 'pezzi' ? 'Pezzi previsti' : 'Indice previsto', allinea: 'destra' },
-      { titolo: 'Affidabilità', allinea: 'sinistra' },
-      { titolo: 'Casi storici', allinea: 'destra' },
-    ],
-    righe: righe.map(voce => {
-      const box = perId.get(voce.idBox);
-      return [nomeProdotto(box), paginaDi(box), valorePrevisto(voce.valore, previsione), AFFIDABILITA[voce.affidabilita], numero(voce.casiStorici)];
-    }),
-    nota: unisciFrasi(
-      ordinati.length > righe.length ? `I ${righe.length} box con la previsione più alta, su ${numero(ordinati.length)}` : null,
-      "L'affidabilità dipende da quanti casi simili ci sono nello storico",
-    ),
-  };
-}
-
-function tabellaPrevistoReale(dati: DatiReportVolantino, previsione: PrevisioneVolantino, conReale: PrevisioneBox[]): SezioneReport {
-  const perId = boxPerId(dati);
-  const ordinati = [...conReale].sort((a, b) => (b.reale ?? 0) - (a.reale ?? 0));
-  const righe = ordinati.slice(0, MAX_RIGHE_PREVISIONE);
-  return {
-    // Prima della promo la previsione, dopo il confronto con il reale: e' la stessa sezione
-    chiave: 'previsione',
-    tipo: 'tabella',
-    titolo: TITOLI_REPORT.previstoReale,
-    introduzione: unisciFrasi(
-      previsione.scartoMedio !== null ? `Lo scarto medio fra previsto e reale è ${delPercento(percento(previsione.scartoMedio))}` : null,
-      previsione.nota,
-    ),
-    colonne: [
-      { titolo: 'Prodotto', allinea: 'sinistra' },
-      { titolo: 'Pag.', allinea: 'destra' },
-      { titolo: 'Previsto', allinea: 'destra' },
-      { titolo: 'Reale', allinea: 'destra' },
-      { titolo: 'Scarto', allinea: 'destra' },
-    ],
-    righe: righe.map(voce => {
-      const box = perId.get(voce.idBox);
-      return [
-        nomeProdotto(box),
-        paginaDi(box),
-        valorePrevisto(voce.valore, previsione),
-        voce.reale === null ? NON_DISPONIBILE : valorePrevisto(voce.reale, previsione),
-        scarto(voce),
-      ];
-    }),
-    nota: ordinati.length > righe.length ? `I ${righe.length} box che hanno venduto di più, su ${numero(ordinati.length)}.` : null,
-  };
-}
-
-/**
- * Prima della promo la previsione (mappa e tabella); a promo iniziata, se ci sono le vendite, il
- * confronto fra previsto e reale. A promo iniziata senza vendite la previsione non si riporta.
- */
-function sezioniPrevisione(dati: DatiReportVolantino): SezioneReport[] {
-  const previsione = dati.previsione;
-  if (!previsione || previsione.perBox.length === 0) return [];
-  if (!previsione.promoValida) {
-    const sezioni: SezioneReport[] = [];
-    if (disponibili(dati).includes('previsione')) {
-      sezioni.push({
-        chiave: 'mappaPrevisione',
-        tipo: 'pagine',
-        titolo: TITOLI_MAPPA.previsione ?? TITOLI_REPORT.previsione,
-        misura: 'previsione',
-        introduzione: introduzioneMappa('previsione', dati),
-        boxInEvidenza: BOX_IN_EVIDENZA,
-      });
-    }
-    sezioni.push(tabellaPrevisione(dati, previsione));
-    return sezioni;
-  }
-  const conReale = previsione.perBox.filter(voce => voce.reale !== null);
-  return conReale.length > 0 ? [tabellaPrevistoReale(dati, previsione, conReale)] : [];
-}
-
 // ─── Confronto con l'edizione precedente ────────────────────────────
 
 function rigaVariazione(etichetta: string, voce: Variazione, formato: FormatoVariazione): string[] {
@@ -774,58 +507,32 @@ function sezioniConfronto(dati: DatiReportVolantino): SezioneReport[] {
 
 // ─── Metodo ─────────────────────────────────────────────────────────
 
-const peso = (valore: number): string => numero(valore, 2);
-
-function paragrafoVisibilita(pesi: PesiVisibilita): string {
-  return 'La visibilità stimata di un box combina lo spazio che occupa, la pagina e la posizione sulla pagina. '
-    + `Pesi della pagina: copertina ${peso(pesi.copertina)}, pagine 2 e 3 ${peso(pesi.primaDoppia)}, ultima pagina ${peso(pesi.ultima)}, altre ${peso(pesi.altre)}; `
-    + `pesi della posizione: in cima ${peso(pesi.alto)}, in fondo ${peso(pesi.basso)}. Il box più visibile del volantino vale 100.`;
-}
-
 function sezioneMetodo(dati: DatiReportVolantino): SezioneReport {
-  const { sintesi, zoneCalde } = dati.insight;
+  const { sintesi } = dati.insight;
   const paragrafi = [
     "I dati vengono dal volantino impaginato: posizione e dimensione di ogni box, prezzi, sconti, marca e meccanica delle referenze. Reparti e marche del distributore seguono la configurazione del cliente.",
-    paragrafoVisibilita(zoneCalde.pesi),
-    "L'investimento promozionale di un box è lo spazio che occupa moltiplicato per il suo sconto: indica dove il volantino concentra la spinta promozionale.",
+    'Lo spazio di un box è la parte della pagina che occupa; le quote di spazio di reparti, meccaniche e marche sommano lo spazio dei loro box.',
   ];
-  const rendimento = dati.rendimento;
-  if (rendimento) {
-    const periodo = periodoInItaliano(rendimento.periodo.dal, rendimento.periodo.al);
-    paragrafi.push(
-      'Il rendimento confronta la quota delle vendite di ogni box con la quota di spazio che occupa. '
-      + `Le vendite sono quelle importate per ${numero(rendimento.puntiVendita)} punti vendita della stessa area e canale${periodo ? `, ${periodo}` : ''}, sommate su tutti i prodotti del box. `
-      + `Un indice di ${numero(SOGLIA_INDICE_SPAZIO, 2)} o più indica un box che rende più dello spazio che occupa, uno di ${numero(1 / SOGLIA_INDICE_SPAZIO, 2)} o meno un box che rende meno.`,
-    );
-  }
-  const previsione = dati.previsione;
-  if (previsione) {
-    paragrafi.push(previsione.tipo === 'vendite'
-      ? `La previsione stima i pezzi di ogni box dalle vendite delle ultime ${numero(previsione.edizioniStoriche)} edizioni della stessa area e canale, unendo lo storico del prodotto a quello del suo reparto. L'affidabilità dipende da quanti casi storici ci sono.`
-      : 'Senza vendite importate la previsione è teorica: un indice da 0 a 100 basato solo su posizione, spazio e sconto.');
-  }
   if (sintesi.box > 0) {
     const copertura = sintesi.copertura;
-    const senzaPosizione = copertura.geometria < 100 ? ' I box senza posizione contano nei totali ma non compaiono nelle mappe.' : '';
+    const senzaPosizione = copertura.geometria < 100 ? ' I box senza posizione contano nei totali ma non nello spazio.' : '';
     paragrafi.push(
       `Dati presenti sui box del volantino: prezzo ${percento(copertura.prezzo)}, marca ${percento(copertura.marca)}, reparto ${percento(copertura.reparto)}, posizione sulla pagina ${percento(copertura.geometria)}.${senzaPosizione}`,
     );
   }
-  paragrafi.push('Le stime descrivono il volantino e non tengono conto di fattori esterni come stagionalità, meteo o iniziative della concorrenza.');
+  paragrafi.push("I numeri descrivono il volantino così com'è impaginato e non tengono conto di fattori esterni come stagionalità, meteo o iniziative della concorrenza.");
   return { chiave: 'metodo', tipo: 'metodo', titolo: TITOLI_REPORT.metodo, paragrafi };
 }
 
 // ─── Sezioni ────────────────────────────────────────────────────────
 
 /**
- * Le sezioni standard nell'ordine di ORDINE_SEZIONI_STANDARD, solo quelle con dati: sintesi, mappa
- * (vendite, investimento o visibilita'), reparti e meccaniche, sconti e marche, rendimento, previsione
- * (o previsto e reale), confronto con l'edizione precedente e prodotti entrati e usciti, metodo.
+ * Le sezioni standard nell'ordine di ORDINE_SEZIONI_STANDARD, solo quelle con dati: sintesi, reparti
+ * e meccaniche, sconti e marche, confronto con l'edizione precedente e prodotti entrati e usciti, metodo.
  */
 export function sezioniStandard(dati: DatiReportVolantino): SezioneReport[] {
   const sezioni: Array<SezioneReport | null> = [
     sezioneSintesi(dati),
-    sezioneMappa(dati),
     sezioneGrafici('assortimento', TITOLI_REPORT.assortimento, 'Come si distribuiscono referenze, spazio e box fra reparti e meccaniche.', [
       graficoReparti(dati),
       graficoMeccaniche(dati),
@@ -834,8 +541,6 @@ export function sezioniStandard(dati: DatiReportVolantino): SezioneReport[] {
       graficoFasceSconto(dati),
       graficoMarche(dati),
     ]),
-    sezioneRendimento(dati),
-    ...sezioniPrevisione(dati),
     ...sezioniConfronto(dati),
     sezioneMetodo(dati),
   ];
@@ -846,8 +551,8 @@ export function sezioniStandard(dati: DatiReportVolantino): SezioneReport[] {
 
 /**
  * Quale sezione standard e': dalla sua chiave (SezioneReport.chiave) o, per una sezione senza chiave,
- * dal tipo, dalla misura o dal titolo; null per una sezione del cliente. Una sezione con una chiave
- * che non e' standard e' del cliente, qualunque sia il titolo.
+ * dal tipo o dal titolo; null per una sezione del cliente. Una sezione con una chiave che non e'
+ * standard e' del cliente, qualunque sia il titolo.
  */
 export function chiaveSezione(sezione: SezioneReport): ChiaveSezioneReport | null {
   const { chiave } = sezione;
@@ -857,14 +562,10 @@ export function chiaveSezione(sezione: SezioneReport): ChiaveSezioneReport | nul
       return 'sintesi';
     case 'metodo':
       return 'metodo';
-    case 'pagine':
-      return sezione.misura === 'previsione' ? 'mappaPrevisione' : 'mappa';
     case 'grafici':
       if (sezione.titolo === TITOLI_REPORT.assortimento) return 'assortimento';
       return sezione.titolo === TITOLI_REPORT.prezziMarche ? 'prezziMarche' : null;
     case 'tabella':
-      if (sezione.titolo === TITOLI_REPORT.rendimento) return 'rendimento';
-      if (sezione.titolo === TITOLI_REPORT.previsione || sezione.titolo === TITOLI_REPORT.previstoReale) return 'previsione';
       if (sezione.titolo === TITOLI_REPORT.confronto) return 'confronto';
       return sezione.titolo === TITOLI_REPORT.entratiUsciti ? 'entratiUsciti' : null;
   }

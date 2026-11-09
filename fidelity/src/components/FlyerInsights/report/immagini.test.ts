@@ -5,8 +5,6 @@ import { paginaNellImmagine } from "../volantino/geometria";
 import { reportDiProva } from "./datiDiProva";
 import {
   disegnaPagina,
-  eseguiConLimite,
-  LARGHEZZA_CALORE,
   LATO_MASSIMO,
   misuraRidotta,
   preparaImmagini,
@@ -16,19 +14,14 @@ import {
 } from "./immagini";
 
 interface CanvasFinto extends CanvasReport {
-  ctx: ContestoReport & { drawImage: ReturnType<typeof vi.fn>; putImageData: ReturnType<typeof vi.fn> };
+  ctx: ContestoReport & { drawImage: ReturnType<typeof vi.fn> };
 }
 
 /** Canvas e immagini finti: le pagine rispondono con le misure date, o falliscono. */
 function ambienteFinto(pagine: Record<number, { larghezza: number; altezza: number } | Error>) {
   const canvas: CanvasFinto[] = [];
-  let inCorso = 0;
-  let massimoInCorso = 0;
   const caricaImmagine = vi.fn(async (url: string) => {
-    inCorso += 1;
-    massimoInCorso = Math.max(massimoInCorso, inCorso);
     await new Promise((risolvi) => setTimeout(risolvi, 1));
-    inCorso -= 1;
     const pagina = Number(new URL(url, "http://fidelity.test").searchParams.get("page"));
     const esito = pagine[pagina];
     if (!esito) throw new Error("404");
@@ -42,9 +35,6 @@ function ambienteFinto(pagine: Record<number, { larghezza: number; altezza: numb
       imageSmoothingQuality: "low" as ImageSmoothingQuality,
       fillRect: vi.fn(),
       drawImage: vi.fn(),
-      createImageData: (larghezza: number, altezza: number) =>
-        ({ data: new Uint8ClampedArray(larghezza * altezza * 4), width: larghezza, height: altezza }) as unknown as ImageData,
-      putImageData: vi.fn(),
     };
     const nuovo: CanvasFinto = {
       width: 0,
@@ -57,30 +47,15 @@ function ambienteFinto(pagine: Record<number, { larghezza: number; altezza: numb
     return nuovo;
   };
   const ambiente: AmbienteImmagini = { caricaImmagine, creaCanvas };
-  return { ambiente, canvas, caricaImmagine, massimoInCorso: () => massimoInCorso };
+  return { ambiente, canvas, caricaImmagine };
 }
 
-const sezionePagine: SezioneReport = { tipo: "pagine", titolo: "Mappa dello sconto", misura: "sconto", introduzione: null, boxInEvidenza: 5 };
 const sintesi: SezioneReport = { tipo: "sintesi", titolo: "Sintesi", indicatori: [], frasi: [] };
 
-describe("misure e concorrenza", () => {
+describe("misure", () => {
   it("riduce perche' il lato lungo non superi il massimo, senza mai ingrandire", () => {
     expect(misuraRidotta(2800, 3960)).toEqual({ larghezza: 990, altezza: LATO_MASSIMO });
     expect(misuraRidotta(600, 800)).toEqual({ larghezza: 600, altezza: 800 });
-  });
-
-  it("non supera il limite di compiti insieme e tiene l'ordine dei risultati", async () => {
-    let inCorso = 0;
-    let massimo = 0;
-    const risultati = await eseguiConLimite([5, 1, 4, 2, 3], 2, async (valore) => {
-      inCorso += 1;
-      massimo = Math.max(massimo, inCorso);
-      await new Promise((risolvi) => setTimeout(risolvi, valore));
-      inCorso -= 1;
-      return valore * 10;
-    });
-    expect(risultati).toEqual([50, 10, 40, 20, 30]);
-    expect(massimo).toBe(2);
   });
 });
 
@@ -107,53 +82,44 @@ describe("immagine di una pagina", () => {
   });
 });
 
-describe("preparazione delle immagini del report", () => {
-  it("scarica da Olimpo le pagine del PDF; quelle che mancano restano bianche", async () => {
-    const { ambiente, caricaImmagine, massimoInCorso } = ambienteFinto({
+describe("preparazione della miniatura della copertina", () => {
+  it("scarica da Olimpo solo la prima pagina del PDF e la rifila come JPEG", async () => {
+    const { ambiente, caricaImmagine } = ambienteFinto({
       1: { larghezza: 2800, altezza: 3960 },
-      2: { larghezza: 800, altezza: 800 },
-      3: new Error("Olimpo non risponde"),
+      2: { larghezza: 2800, altezza: 3960 },
+      3: { larghezza: 2800, altezza: 3960 },
     });
-    const avanzamento = vi.fn();
-    const report = reportDiProva({ sezioni: [sintesi, sezionePagine] });
+    const report = reportDiProva({ sezioni: [sintesi] });
 
-    const immagini = await preparaImmagini(report, avanzamento, ambiente);
+    const immagini = await preparaImmagini(report, ambiente);
 
-    expect(caricaImmagine.mock.calls.map(([url]) => url)).toEqual([1, 2, 3].map((pagina) => urlPaginaMateriale("o1", pagina)));
-    expect(immagini.pagine.get(1)).toBe(`data:image/jpeg;base64,990x${LATO_MASSIMO}`);
-    expect(immagini.pagine.get(2)).toBeNull();
-    expect(immagini.pagine.get(3)).toBeNull();
-    expect(massimoInCorso()).toBeLessThanOrEqual(3);
-    expect(avanzamento).toHaveBeenNthCalledWith(1, { fatte: 0, totale: 3 });
-    expect(avanzamento).toHaveBeenLastCalledWith({ fatte: 3, totale: 3 });
+    // Le altre pagine del volantino non entrano nel report: non si scaricano
+    expect(caricaImmagine.mock.calls.map(([url]) => url)).toEqual([urlPaginaMateriale("o1", 1)]);
+    expect(immagini).toEqual({ copertina: `data:image/jpeg;base64,990x${LATO_MASSIMO}` });
   });
 
-  it("la mappa di calore e' un PNG per ogni pagina con valori, sotto l'indice della sua sezione", async () => {
-    const { ambiente, canvas } = ambienteFinto({});
-    const report = reportDiProva({ sezioni: [sintesi, sezionePagine] });
+  it("se la prima pagina non arriva, o e' il segnaposto di Olimpo, la copertina resta con la pagina bianca", async () => {
+    const nonArriva = ambienteFinto({ 1: new Error("Olimpo non risponde") });
+    expect(await preparaImmagini(reportDiProva(), nonArriva.ambiente)).toEqual({ copertina: null });
+    expect(nonArriva.caricaImmagine).toHaveBeenCalledTimes(1);
 
-    const immagini = await preparaImmagini(report, undefined, ambiente);
-
-    const calore = immagini.calore.get(1);
-    // Pagina 3: il suo unico box non ha sconto
-    expect([...(calore?.keys() ?? [])].sort()).toEqual([1, 2]);
-    expect(calore?.get(1)).toMatch(/^data:image\/png;base64,/);
-    expect(immagini.calore.has(0)).toBe(false);
-    const grandi = canvas.filter((voce) => voce.width === LARGHEZZA_CALORE);
-    expect(grandi).toHaveLength(2);
-    expect(grandi[0].ctx.drawImage).toHaveBeenCalledTimes(1);
+    const segnaposto = ambienteFinto({ 1: { larghezza: 800, altezza: 800 } });
+    expect(await preparaImmagini(reportDiProva(), segnaposto.ambiente)).toEqual({ copertina: null });
   });
 
-  it("senza sezioni di pagine scarica solo la copertina; senza PDF non scarica niente", async () => {
-    const primo = ambienteFinto({ 1: { larghezza: 707, altezza: 1000 } });
-    const soloCopertina = await preparaImmagini(reportDiProva({ sezioni: [sintesi] }), undefined, primo.ambiente);
-    expect(primo.caricaImmagine).toHaveBeenCalledTimes(1);
-    expect(soloCopertina.pagine.get(1)).toMatch(/^data:image\/jpeg;/);
-    expect(soloCopertina.calore.size).toBe(0);
+  it("se il browser non da' il contesto del canvas la copertina resta con la pagina bianca, senza errori", async () => {
+    const { ambiente } = ambienteFinto({ 1: { larghezza: 707, altezza: 1000 } });
+    const senzaContesto: AmbienteImmagini = {
+      ...ambiente,
+      creaCanvas: () => ({ ...ambiente.creaCanvas(), getContext: () => null }),
+    };
+    expect(await preparaImmagini(reportDiProva(), senzaContesto)).toEqual({ copertina: null });
+  });
 
-    const secondo = ambienteFinto({});
-    const senzaPdf = await preparaImmagini(reportDiProva({ sezioni: [sezionePagine], pdf: null }), undefined, secondo.ambiente);
-    expect(secondo.caricaImmagine).not.toHaveBeenCalled();
-    expect(senzaPdf.pagine.size).toBe(0);
+  it("senza PDF non scarica niente", async () => {
+    const { ambiente, caricaImmagine } = ambienteFinto({});
+    const senzaPdf = await preparaImmagini(reportDiProva({ pdf: null }), ambiente);
+    expect(caricaImmagine).not.toHaveBeenCalled();
+    expect(senzaPdf).toEqual({ copertina: null });
   });
 });

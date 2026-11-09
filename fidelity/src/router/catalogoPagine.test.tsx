@@ -50,11 +50,6 @@ describe("catalogo delle pagine", () => {
     expect(paginaPer("/gestione-interna/punti-vendita/x")?.permesso).toBe("gdo.gestisci_punti_vendita");
   });
 
-  it("la pagina delle vendite è nel layout e chiede l'import delle vendite", () => {
-    expect(percorsi).toContain("/analisi/vendite");
-    expect(paginaPer("/analisi/vendite")?.permesso).toBe("analisi.importa_vendite");
-  });
-
   it("le rotte fuori dal layout esistono davvero nel router", () => {
     const radici = routes.map((r) => r.path);
     for (const p of PROTETTE_FUORI_DAL_LAYOUT) expect(radici).toContain(p);

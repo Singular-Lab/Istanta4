@@ -33,7 +33,7 @@ import { ConfigController } from '../ConfigController';
 
 function createApp(session: Record<string, unknown>) {
   const configService = {
-    getFunzionalita: vi.fn().mockResolvedValue({ momenti: true, menabo: false, vendite: false }),
+    getFunzionalita: vi.fn().mockResolvedValue({ momenti: true, menabo: false }),
     saveFunzionalita: vi.fn(async (_idGdo: string, f: unknown) => f),
     getFlyerInsightsConfig: vi.fn().mockResolvedValue({ reparti: {} }),
   };
@@ -61,7 +61,7 @@ describe('GET /api/funzionalita', () => {
     const res = await request(app).get('/api/funzionalita');
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ momenti: true, menabo: false, vendite: false });
+    expect(res.body).toEqual({ momenti: true, menabo: false });
     expect(configService.getFunzionalita).toHaveBeenCalledWith('coop-firenze');
   });
 
@@ -108,30 +108,11 @@ describe('PUT /api/funzionalita', () => {
   it('salva le funzionalita sulla GDO dell utente', async () => {
     const { app, configService } = createApp(adminGdo);
 
-    const res = await request(app).put('/api/funzionalita').send({ momenti: true, menabo: true, vendite: true, gdo: 'altra-gdo' });
+    const res = await request(app).put('/api/funzionalita').send({ momenti: true, menabo: true, gdo: 'altra-gdo' });
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ momenti: true, menabo: true, vendite: true });
-    expect(configService.saveFunzionalita).toHaveBeenCalledWith('coop-firenze', { momenti: true, menabo: true, vendite: true });
-  });
-
-  it('un client che non manda vendite non la cambia: resta quella salvata', async () => {
-    const { app, configService } = createApp(adminGdo);
-    configService.getFunzionalita.mockResolvedValue({ momenti: false, menabo: false, vendite: true });
-
-    const res = await request(app).put('/api/funzionalita').send({ momenti: true, menabo: false });
-
-    expect(res.status).toBe(200);
-    expect(configService.saveFunzionalita).toHaveBeenCalledWith('coop-firenze', { momenti: true, menabo: false, vendite: true });
-  });
-
-  it('vendite non booleana e rifiutata', async () => {
-    const { app, configService } = createApp(adminGdo);
-
-    const res = await request(app).put('/api/funzionalita').send({ momenti: true, menabo: true, vendite: 'si' });
-
-    expect(res.status).toBe(400);
-    expect(configService.saveFunzionalita).not.toHaveBeenCalled();
+    expect(res.body).toEqual({ momenti: true, menabo: true });
+    expect(configService.saveFunzionalita).toHaveBeenCalledWith('coop-firenze', { momenti: true, menabo: true });
   });
 
   it('senza permesso la richiesta e rifiutata e nulla cambia', async () => {

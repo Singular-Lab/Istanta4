@@ -331,20 +331,15 @@ export class ConfigController extends BaseController {
 
   private async saveFunzionalita(req: Request, res: Response): Promise<void> {
     try {
-      const { momenti, menabo, vendite, gdo } = (req.body ?? {}) as Partial<Funzionalita> & { gdo?: string };
+      const { momenti, menabo, gdo } = (req.body ?? {}) as Partial<Funzionalita> & { gdo?: string };
       if (typeof momenti !== 'boolean' || typeof menabo !== 'boolean') {
         throw new BadRequestError({ message: 'momenti e menabo devono essere true o false' });
-      }
-      if (vendite !== undefined && typeof vendite !== 'boolean') {
-        throw new BadRequestError({ message: 'vendite deve essere true o false' });
       }
       const idGdo = await gdoOperativaPerRichiesta(req, res, gdo);
       if (!idGdo) {
         throw new BadRequestError({ message: 'Nessuna GDO su cui salvare le funzionalità' });
       }
-      // Un client che non conosce "vendite" non la spegne: resta quella salvata
-      const venditeSalvate = vendite ?? (await this.configService.getFunzionalita(idGdo)).vendite;
-      const funzionalita = await this.configService.saveFunzionalita(idGdo, { momenti, menabo, vendite: venditeSalvate });
+      const funzionalita = await this.configService.saveFunzionalita(idGdo, { momenti, menabo });
       AuditLogService.getInstance().configurationChanged(req, 'funzionalita', 'set', { idGdo, ...funzionalita });
       this.sendResponse(res, HttpStatusCode.OK, funzionalita);
     } catch (error: any) {

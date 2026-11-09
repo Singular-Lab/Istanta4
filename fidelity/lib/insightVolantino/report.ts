@@ -1,5 +1,4 @@
-import { SCALA_CALORE_STANDARD, type MisuraCalore, type UnitaMisura } from './calore';
-import type { PrevisioneVolantino, RendimentoVolantino } from './rendimento';
+import type { UnitaMisura } from './formato';
 import type { BoxInsight, ConfrontoEdizione, EstensioneInsight, PdfVolantino } from './tipi';
 
 /**
@@ -11,6 +10,9 @@ import type { BoxInsight, ConfrontoEdizione, EstensioneInsight, PdfVolantino } f
  * (insightVolantino.sezioniReport, che riceve anche le sezioni standard); il browser disegna il PDF
  * con @react-pdf: copertina, testata e piè di pagina sono sempre presenti, le sezioni seguono
  * l'ordine ricevuto. Una sezione senza dati non arriva: il server non la mette.
+ *
+ * Per decisione della direzione il report non contiene le pagine del volantino, mappe di calore,
+ * indici di visibilita' ne' dati di vendita o previsioni.
  */
 
 export const percorsoReport = (idKit: string): string => `/flyer-insights/${encodeURIComponent(idKit)}/report`;
@@ -40,8 +42,6 @@ export interface PaletteReport {
   negativo: string;
   /** Colori per categorie (reparti, meccaniche, marche), distinguibili anche da chi non vede i colori. */
   categorie: string[];
-  /** Scala della mappa di calore, dal freddo al caldo. */
-  calore: string[];
 }
 
 export const PALETTE_REPORT_STANDARD: PaletteReport = {
@@ -55,7 +55,6 @@ export const PALETTE_REPORT_STANDARD: PaletteReport = {
   positivo: '#1d7a4c',
   negativo: '#b42d22',
   categorie: ['#1f3b5c', '#3f7cac', '#7fb3d5', '#c4561c', '#e3a33b', '#5b8c5a', '#8e6c8a', '#9aa5b1'],
-  calore: [...SCALA_CALORE_STANDARD],
 };
 
 export interface IntestazioneReport {
@@ -106,15 +105,13 @@ export interface GraficoSezione {
 }
 
 /**
- * Ogni sezione puo' avere una chiave stabile (es. 'sintesi', 'mappa', 'rendimento'): la libreria
+ * Ogni sezione puo' avere una chiave stabile (es. 'sintesi', 'assortimento', 'confronto'): la libreria
  * agenzia la usa per riconoscere e riordinare le sezioni standard senza dipendere dai titoli.
  */
 export type SezioneReport = { chiave?: string } & (
   | { tipo: 'sintesi'; titolo: string; indicatori: IndicatoreReport[]; frasi: string[] }
   /** Uno o due grafici per pagina. */
   | { tipo: 'grafici'; titolo: string; introduzione: string | null; grafici: GraficoSezione[] }
-  /** Una pagina del PDF per ogni pagina del volantino, con la mappa della misura e i box in evidenza. */
-  | { tipo: 'pagine'; titolo: string; misura: MisuraCalore; introduzione: string | null; boxInEvidenza: number }
   | {
       tipo: 'tabella';
       titolo: string;
@@ -135,11 +132,11 @@ export interface ReportVolantino {
   sottotitolo: string;
   intestazione: IntestazioneReport;
   palette: PaletteReport;
+  /** Solo per la miniatura della prima pagina in copertina. */
   pdf: PdfVolantino | null;
+  /** Solo per i numeri della copertina (box e prodotti). */
   box: BoxInsight[];
   totalePagine: number;
-  rendimento: RendimentoVolantino | null;
-  previsione: PrevisioneVolantino | null;
   sezioni: SezioneReport[];
 }
 
@@ -157,7 +154,5 @@ export interface DatiReportVolantino {
   };
   insight: EstensioneInsight & { totalePagine: number; totaleReferenze: number };
   confronto: ConfrontoEdizione | null;
-  rendimento: RendimentoVolantino | null;
-  previsione: PrevisioneVolantino | null;
   palette: PaletteReport;
 }

@@ -1,19 +1,17 @@
-import type { GraficoSezione, SezioneReport } from "../../../../lib/insightVolantino/report";
+import type { GraficoSezione, ReportVolantino, SezioneReport } from "../../../../lib/insightVolantino/report";
+import { proporzioneDelVolantino, proporzioneDellaPagina } from "../volantino/geometria";
 import {
   ALTEZZA_INTESTAZIONE_SEGUE,
   ALTEZZA_INTESTAZIONE_SEZIONE,
   ALTEZZA_UTILE,
   CELLA,
-  COLONNA_LEGENDA,
   CORPO,
   INTERLINEA,
-  LARGHEZZA_UTILE,
-  SPAZIO_COLONNE,
 } from "./misure";
 
 /**
  * Impaginazione del report PDF: quante righe di tabella per pagina, quali grafici stanno insieme,
- * quanto spazio prende un testo. @react-pdf va a capo da solo, ma non ripete l'intestazione di una
+ * quanto spazio prende un testo, quanto e' grande la miniatura della copertina. @react-pdf va a capo da solo, ma non ripete l'intestazione di una
  * tabella: le pagine delle tabelle le decidiamo qui, con una stima prudente dell'altezza delle righe.
  * Funzioni pure.
  */
@@ -203,7 +201,7 @@ export function indicatoriPerRiga(quanti: number): number {
   return 4;
 }
 
-// ─── Pagine del volantino ───────────────────────────────────────────
+// ─── Miniatura della copertina ──────────────────────────────────────
 
 /** La pagina del volantino piu' grande che entra nel riquadro, con le sue proporzioni. */
 export function misuraNelRiquadro(proporzione: number, larghezzaMassima: number, altezzaMassima: number): { larghezza: number; altezza: number } {
@@ -217,42 +215,6 @@ export function misuraNelRiquadro(proporzione: number, larghezzaMassima: number,
   return { larghezza: Math.round(larghezza * 100) / 100, altezza: Math.round(altezza * 100) / 100 };
 }
 
-/** Riga con il numero della pagina sopra il foglio e didascalia sotto. */
-const RIGA_NUMERO_PAGINA = 30;
-const DIDASCALIA_FOGLIO = 18;
-/** Spazio sotto il foglio per legenda e box in evidenza quando la pagina e' orizzontale. */
-export const SPAZIO_SOTTO_ORIZZONTALE = 230;
-
-export interface RiquadroPagina {
-  larghezza: number;
-  altezza: number;
-  /** Pagina piu' larga che alta: legenda ed elenco vanno sotto invece che a lato. */
-  orizzontale: boolean;
-}
-
-/**
- * Misura della pagina del volantino in una pagina del report, dopo l'intestazione: verticale accanto
- * alla colonna della legenda, orizzontale a tutta larghezza con la legenda sotto.
- */
-export function riquadroPaginaVolantino(proporzione: number, altezzaIntestazione: number): RiquadroPagina {
-  const disponibile = ALTEZZA_UTILE - altezzaIntestazione - RIGA_NUMERO_PAGINA - DIDASCALIA_FOGLIO;
-  const orizzontale = proporzione > 1.05;
-  if (orizzontale) {
-    return { ...misuraNelRiquadro(proporzione, LARGHEZZA_UTILE, disponibile - SPAZIO_SOTTO_ORIZZONTALE), orizzontale };
-  }
-  return { ...misuraNelRiquadro(proporzione, LARGHEZZA_UTILE - COLONNA_LEGENDA - SPAZIO_COLONNE, disponibile), orizzontale };
-}
-
-/** Riga dell'elenco dei box in evidenza (nome e dettaglio su una riga ciascuno). */
-export const RIGA_EVIDENZA = 30;
-/** Misura, descrizione, scala e titoli dell'elenco nella colonna accanto alla pagina. */
-const INGOMBRO_MISURA = 196;
-
-/**
- * Quanti box in evidenza entrano nell'elenco accanto (o sotto) alla pagina: lo stesso numero si
- * disegna sul foglio, cosi' i numeri restano uno per riga. Almeno tre.
- */
-export function capienzaEvidenza(riquadro: RiquadroPagina): number {
-  const spazio = riquadro.orizzontale ? SPAZIO_SOTTO_ORIZZONTALE - 46 : riquadro.altezza + DIDASCALIA_FOGLIO - INGOMBRO_MISURA;
-  return Math.max(3, Math.floor(spazio / RIGA_EVIDENZA));
-}
+/** Proporzione (larghezza/altezza) della prima pagina: quella dei suoi box, o quella del volantino. */
+export const proporzioneCopertina = (report: Pick<ReportVolantino, "box">): number =>
+  proporzioneDellaPagina(report.box, 1, proporzioneDelVolantino(report.box));

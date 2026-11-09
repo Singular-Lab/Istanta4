@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { conteggio, dataEstesa, numeroSezione, segmentiFrase, testoQuota } from "./testi";
+import { dataEstesa, numeroSezione, segmentiFrase, testoQuota } from "./testi";
 
 describe("testi del report PDF", () => {
   it("la data di generazione si scrive per esteso all'italiana", () => {
@@ -41,10 +41,8 @@ describe("testi del report PDF", () => {
     ]);
   });
 
-  it("quota sul totale e conteggi", () => {
+  it("quota sul totale", () => {
     expect(testoQuota(25, 200)).toBe("12,5%");
     expect(testoQuota(5, 0)).toBe("—");
-    expect(conteggio(1, "pagina", "pagine")).toBe("1 pagina");
-    expect(conteggio(12500, "box", "box")).toBe("12.500 box");
   });
 });

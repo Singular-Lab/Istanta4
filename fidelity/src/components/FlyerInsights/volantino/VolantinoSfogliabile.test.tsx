@@ -2,13 +2,11 @@
 import "@testing-library/jest-dom/vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { altezzaFoglio, tintaCategoria } from "@/components/Grafici";
 import type { FlyerInsightsConfig } from "@/types/flyerInsights";
 import { urlPaginaMateriale } from "@/utils/materiali";
-import { legendaCalore, MISURE_CALORE } from "../../../../lib/insightVolantino/calore";
-import type { PrevisioneVolantino, RendimentoVolantino } from "../../../../lib/insightVolantino/rendimento";
-import { PESI_VISIBILITA, type BoxInsight, type TappaProdotto, type ViaggioProdotto } from "../../../../lib/insightVolantino/tipi";
+import type { BoxInsight, TappaProdotto, ViaggioProdotto } from "../../../../lib/insightVolantino/tipi";
 import { percorsoDettaglioVolantino } from "../../../../lib/materiali/periodi";
 import { STATI_DIFFERENZA } from "../confronti/supporto";
 
@@ -62,7 +60,6 @@ const boxDi = (id: string, dati: Partial<BoxInsight> = {}): BoxInsight => ({
   foto: [],
   prodotti: 1,
   idReferenze: [`r-${id}`],
-  visibilita: 50,
   ...dati,
 });
 
@@ -80,37 +77,9 @@ const pagina = (numero: number) => screen.getByRole("group", { name: `Pagina ${n
 
 const caricato = (data: unknown) => ({ data, isLoading: false, isError: false, error: null, refetch: vi.fn() });
 
-/** Il contesto 2D finto di un canvas: jsdom non disegna, qui si registra cosa si disegna. */
-interface ContestoFinto {
-  canvas: HTMLCanvasElement;
-  createImageData: Mock;
-  putImageData: Mock;
-  drawImage: Mock;
-  clearRect: Mock;
-  imageSmoothingEnabled: boolean;
-  imageSmoothingQuality: string;
-}
-
-let contesti: ContestoFinto[] = [];
-
 beforeEach(() => {
   finti.viaggio = caricato(undefined);
   finti.richiesteViaggio = [];
-  contesti = [];
-  // Ripristinato dopo ogni test (vi.restoreAllMocks nel setup)
-  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(function (this: HTMLCanvasElement) {
-    const contesto: ContestoFinto = {
-      canvas: this,
-      createImageData: vi.fn((larghezza: number, altezza: number) => ({ width: larghezza, height: altezza, data: new Uint8ClampedArray(larghezza * altezza * 4) })),
-      putImageData: vi.fn(),
-      drawImage: vi.fn(),
-      clearRect: vi.fn(),
-      imageSmoothingEnabled: false,
-      imageSmoothingQuality: "low",
-    };
-    contesti.push(contesto);
-    return contesto as unknown as CanvasRenderingContext2D;
-  } as unknown as HTMLCanvasElement["getContext"]);
 });
 
 describe("VolantinoSfogliabile: geometria dei kit di Istanta e dello storico", () => {
@@ -294,26 +263,19 @@ describe("VolantinoSfogliabile: colori dei riquadri", () => {
     expect(riquadro("a")).toHaveAttribute("fill", tintaCategoria(1).colore);
   });
 
-  it("\"Colora per\" cambia colori e legenda; la visibilità dichiara i pesi standard", () => {
+  it("\"Colora per\" cambia colori e legenda: reparto, meccanica e sconto, senza visibilità né mappa di calore", () => {
     disegna({ box: [boxDi("a", { sconto: 55 })] });
+
+    const opzioni = within(screen.getByRole("radiogroup", { name: "Colora per" })).getAllByRole("radio");
+    expect(opzioni.map(opzione => opzione.textContent)).toEqual(["Reparto", "Meccanica", "Sconto"]);
 
     fireEvent.click(screen.getByRole("radio", { name: "Sconto" }));
     expect(within(screen.getByRole("list", { name: "Sconto" })).getByText("≥ 50%")).toBeInTheDocument();
-    expect(screen.queryByText(/Visibilità stimata, uguale per tutti i volantini/)).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("radio", { name: "Visibilità" }));
-    expect(screen.getByText(/Visibilità stimata, uguale per tutti i volantini/)).toBeInTheDocument();
-    expect(within(screen.getByRole("list", { name: "Visibilità stimata" })).getByText("80–100")).toBeInTheDocument();
-    // La griglia a celle non c'è più: il calore è nella vista "Mappa di calore"
+    expect(screen.queryByRole("radio", { name: "Visibilità" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Visibilità stimata/)).not.toBeInTheDocument();
     expect(screen.queryByTestId("calore-1")).not.toBeInTheDocument();
-  });
-
-  it("con i pesi della libreria del cliente la visibilità lo dice e scrive i suoi pesi", () => {
-    disegna({ box: [boxDi("a")], pesi: { ...PESI_VISIBILITA, altre: 0.4 } });
-
-    fireEvent.click(screen.getByRole("radio", { name: "Visibilità" }));
-    const spiegazione = screen.getByText(/Visibilità stimata, con i pesi del cliente/);
-    expect(spiegazione).toHaveTextContent("altre 0,4");
+    expect(screen.queryByText(/Mappa di calore/)).not.toBeInTheDocument();
   });
 
   it("con statoBox i riquadri sono colorati per differenza e \"Colora per\" non c'è", () => {
@@ -335,226 +297,6 @@ describe("VolantinoSfogliabile: colori dei riquadri", () => {
   });
 });
 
-// Due box con misure "opposte": il primo ha più spazio, il secondo più sconto
-const BOX_CALORE = [
-  boxDi("a", { nome: "Pasta", sconto: 10, spazio: 12.5 }),
-  boxDi("b", { nome: "Caffè", sconto: 50, spazio: 4, geometria: { x: 0.1, y: 0.6, w: 0.2, h: 0.2 } }),
-];
-
-const RENDIMENTO: RendimentoVolantino = {
-  periodo: { dal: "2026-10-01", al: "2026-10-14" },
-  puntiVendita: 12,
-  misura: "valore",
-  totalePezzi: 300,
-  totaleValore: 900,
-  perBox: [
-    { idBox: "a", pezzi: 100, valore: 250, quota: 27.8, quotaSpazio: 75.8, indiceSpazio: 0.37, prodotti: 1, prodottiSenzaVendite: 0 },
-    { idBox: "b", pezzi: 200, valore: 650, quota: 72.2, quotaSpazio: 24.2, indiceSpazio: 2.98, prodotti: 2, prodottiSenzaVendite: 1 },
-  ],
-  prodotti: 3,
-  prodottiSenzaVendite: 1,
-  sopraSpazio: ["b"],
-  sottoSpazio: ["a"],
-};
-
-const PREVISIONE: PrevisioneVolantino = {
-  tipo: "vendite",
-  unita: "pezzi",
-  promoValida: true,
-  edizioniStoriche: 8,
-  perBox: [
-    { idBox: "a", valore: 120, casiStorici: 10, affidabilita: "alta", reale: 100 },
-    { idBox: "b", valore: 150, casiStorici: 2, affidabilita: "bassa", reale: 200 },
-  ],
-  scartoMedio: 25,
-  nota: "Previsione dallo storico di 8 edizioni.",
-};
-
-/** I contesti dei canvas della mappa (quelli visibili, non quelli d'appoggio). */
-const contestiMappa = () => contesti.filter(contesto => contesto.canvas.hasAttribute("data-testid"));
-const disegni = () => contestiMappa().reduce((totale, contesto) => totale + contesto.drawImage.mock.calls.length, 0);
-/** I pixel messi nell'ImageData piccolo, disegno dopo disegno. */
-const pixelDisegnati = () =>
-  contesti.flatMap(contesto => contesto.putImageData.mock.calls.map(([immagine]) => Array.from((immagine as { data: Uint8ClampedArray }).data)));
-const misura = () => screen.getByRole("combobox", { name: "Misura della mappa di calore" }) as HTMLSelectElement;
-const opzioniMisura = () => within(misura()).getAllByRole("option").map(opzione => opzione.textContent);
-const accendiMappa = () => fireEvent.click(screen.getByRole("radio", { name: "Mappa di calore" }));
-
-describe("VolantinoSfogliabile: mappa di calore continua", () => {
-  it("senza vendite né previsione offre solo le misure del volantino", () => {
-    disegna({ box: BOX_CALORE });
-
-    expect(screen.getByRole("radio", { name: "Colori dei box" })).toHaveAttribute("aria-checked", "true");
-    expect(screen.queryByTestId("calore-1")).not.toBeInTheDocument();
-
-    accendiMappa();
-    expect(opzioniMisura()).toEqual(["Investimento promozionale", "Sconto", "Spazio", "Visibilità"]);
-    expect(misura().value).toBe("investimento");
-  });
-
-  it("con rendimento e previsione aggiunge vendite, vendite per spazio e previsione, e parte dalle vendite in euro", () => {
-    disegna({ box: BOX_CALORE, rendimento: RENDIMENTO, previsione: PREVISIONE });
-
-    accendiMappa();
-    expect(opzioniMisura()).toEqual([
-      "Investimento promozionale",
-      "Sconto",
-      "Spazio",
-      "Visibilità",
-      "Vendite",
-      "Vendite per spazio",
-      "Previsione",
-    ]);
-    expect(misura().value).toBe("vendite");
-    const legenda = screen.getByRole("figure", { name: "Legenda della mappa di calore: Vendite" });
-    expect(within(legenda).getByText("in euro")).toBeInTheDocument();
-    expect(within(legenda).getByRole("list", { name: "Scala di Vendite" })).toHaveTextContent("650 €");
-    // Il periodo e i punti vendita delle vendite sotto la legenda
-    expect(legenda).toHaveTextContent("in 12 punti vendita della stessa area e canale");
-  });
-
-  it("la legenda è continua, nell'unità della misura, con le tacche di legendaCalore e la descrizione", () => {
-    disegna({ box: BOX_CALORE });
-    accendiMappa();
-
-    fireEvent.change(misura(), { target: { value: "sconto" } });
-
-    const legenda = screen.getByRole("figure", { name: "Legenda della mappa di calore: Sconto" });
-    const tacche = within(within(legenda).getByRole("list", { name: "Scala di Sconto" })).getAllByRole("listitem");
-    expect(tacche.map(tacca => tacca.textContent)).toEqual(legendaCalore(50, "percentuale").map(voce => voce.testo));
-    expect(within(legenda).getByText("in percentuale")).toBeInTheDocument();
-    expect(legenda).toHaveTextContent(MISURE_CALORE.sconto.descrizione);
-    expect(within(legenda).getByTestId("gradiente-calore")).toBeInTheDocument();
-    // Al posto della legenda dei colori dei box
-    expect(screen.queryByRole("list", { name: "Reparto" })).not.toBeInTheDocument();
-  });
-
-  it("disegna il calore in un canvas sopra la pagina, sfumato, e lo ridisegna al cambio di misura", () => {
-    disegna({ box: BOX_CALORE });
-    accendiMappa();
-
-    const tela = within(pagina(1)).getByTestId("calore-1");
-    expect(tela.tagName).toBe("CANVAS");
-    expect(tela).toHaveAttribute("data-disegnata", "true");
-    expect(disegni()).toBe(1);
-    const [contesto] = contestiMappa();
-    expect(contesto.imageSmoothingEnabled).toBe(true);
-    expect(contesto.imageSmoothingQuality).toBe("high");
-    // Una cella della griglia per pixel (96 colonne, righe dalla proporzione della pagina), poi ingrandita di 4
-    const righe = Math.round(96 / A4);
-    expect(contesti[0].createImageData).toHaveBeenCalledWith(96, righe);
-    expect(contesto.drawImage.mock.calls[0].slice(1)).toEqual([0, 0, 96 * 4, righe * 4]);
-
-    fireEvent.change(misura(), { target: { value: "sconto" } });
-    expect(disegni()).toBe(2);
-    fireEvent.change(misura(), { target: { value: "spazio" } });
-    expect(disegni()).toBe(3);
-    const [, sconto, spazio] = pixelDisegnati();
-    // Lo sconto scalda il secondo box, lo spazio il primo: immagini diverse
-    expect(sconto).not.toEqual(spazio);
-  });
-
-  it("i riquadri restano contorni cliccabili sopra il calore; tornando ai colori dei box il calore sparisce", () => {
-    disegna({ box: BOX_CALORE });
-    accendiMappa();
-
-    expect(screen.queryByRole("radiogroup", { name: "Colora per" })).not.toBeInTheDocument();
-    // Area attiva trasparente sopra il canvas, nello stesso posto del riquadro colorato
-    expect(riquadro("a")).toHaveAttribute("fill", "transparent");
-    expect(attributo(riquadro("a"), "width")).toBe(500);
-    expect(screen.getByRole("button", { name: /^Caffè/ })).toBe(screen.getByTestId("box-b"));
-    expect(within(pagina(1)).getByTestId("calore-1").compareDocumentPosition(screen.getByTestId("box-a")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("radio", { name: "Colori dei box" }));
-    expect(screen.queryByTestId("calore-1")).not.toBeInTheDocument();
-    expect(riquadro("a")).not.toHaveAttribute("fill", "transparent");
-    expect(screen.getByRole("radiogroup", { name: "Colora per" })).toBeInTheDocument();
-  });
-
-  it("il tooltip e la scheda del box dicono il valore della misura accesa", async () => {
-    disegna({ box: BOX_CALORE });
-    accendiMappa();
-    fireEvent.change(misura(), { target: { value: "sconto" } });
-
-    fireEvent.mouseMove(screen.getByTestId("box-b"), { clientX: 10, clientY: 10 });
-    const tooltip = screen.getByRole("tooltip");
-    expect(tooltip).toHaveTextContent("Sconto");
-    expect(tooltip).toHaveTextContent("50%");
-
-    fireEvent.click(screen.getByTestId("box-b"));
-    const dati = await screen.findByLabelText("Dati del box");
-    expect(within(dati).getByText("Sconto (mappa di calore)")).toBeInTheDocument();
-    expect(within(dati).getByText("50%")).toBeInTheDocument();
-  });
-
-  it("senza posizioni dei box, o nel confronto fra varianti, la mappa di calore non si offre", () => {
-    const { unmount } = disegna({ box: [boxDi("a", { geometria: null, sconto: 30 })] });
-    expect(screen.queryByRole("radiogroup", { name: "Vista del volantino" })).not.toBeInTheDocument();
-    unmount();
-
-    disegna({ box: BOX_CALORE, statoBox: { a: "solo-qui", b: "uguale" }, rendimento: RENDIMENTO });
-    expect(screen.queryByRole("radiogroup", { name: "Vista del volantino" })).not.toBeInTheDocument();
-  });
-
-  it("se il browser non dà il contesto del canvas la pagina resta senza calore, senza errori", () => {
-    vi.mocked(HTMLCanvasElement.prototype.getContext).mockReturnValue(null);
-    disegna({ box: BOX_CALORE });
-    accendiMappa();
-
-    expect(screen.getByTestId("calore-1")).not.toHaveAttribute("data-disegnata");
-    expect(screen.getByTestId("box-a")).toBeInTheDocument();
-  });
-});
-
-describe("VolantinoSfogliabile: vendite e previsione nella scheda del box", () => {
-  it("la scheda mostra vendite, quote, indice, previsione con affidabilità e scarto dal reale", async () => {
-    disegna({ box: BOX_CALORE, rendimento: RENDIMENTO, previsione: PREVISIONE });
-
-    fireEvent.click(screen.getByTestId("box-b"));
-
-    const dati = await screen.findByLabelText("Vendite e previsione");
-    expect(within(dati).getByText("€ 650,00 · 200 pezzi")).toBeInTheDocument();
-    expect(within(dati).getByText("72,2%")).toBeInTheDocument();
-    expect(within(dati).getByText("2,98: rende più dello spazio che occupa")).toBeInTheDocument();
-    expect(within(dati).getByText("1 su 2")).toBeInTheDocument();
-    expect(within(dati).getByText("150 pezzi")).toBeInTheDocument();
-    expect(within(dati).getByText("Bassa")).toBeInTheDocument();
-    expect(within(dati).getByText("2 casi storici")).toBeInTheDocument();
-    expect(within(dati).getByText("200 pezzi")).toBeInTheDocument();
-    expect(within(dati).getByText("+33%")).toBeInTheDocument();
-  });
-
-  it("con la stima teorica la previsione è un indice e lo dice; senza vendite non c'è il blocco delle vendite", async () => {
-    const teorica: PrevisioneVolantino = {
-      ...PREVISIONE,
-      tipo: "teorica",
-      unita: "indice",
-      promoValida: false,
-      perBox: [{ idBox: "a", valore: 64, casiStorici: 0, affidabilita: "bassa", reale: null }],
-      scartoMedio: null,
-      nota: "Stima teorica: nessuna vendita importata.",
-    };
-    disegna({ box: BOX_CALORE, previsione: teorica });
-
-    fireEvent.click(screen.getByTestId("box-a"));
-
-    const dati = await screen.findByLabelText("Vendite e previsione");
-    expect(within(dati).getByText(/indice 64 su 100/)).toBeInTheDocument();
-    expect(within(dati).getByText("(stima teorica)")).toBeInTheDocument();
-    expect(within(dati).queryByText("Vendite nella promo")).not.toBeInTheDocument();
-    expect(within(dati).queryByText("Reale")).not.toBeInTheDocument();
-  });
-
-  it("senza vendite né previsione la scheda resta quella di sempre", async () => {
-    disegna({ box: BOX_CALORE });
-
-    fireEvent.click(screen.getByTestId("box-a"));
-
-    expect(await screen.findByLabelText("Dati del box")).toBeInTheDocument();
-    expect(screen.queryByLabelText("Vendite e previsione")).not.toBeInTheDocument();
-  });
-});
-
 const MOZZARELLA = boxDi("a", {
   nome: "Mozzarella",
   marca: "Granarolo",
@@ -565,7 +307,6 @@ const MOZZARELLA = boxDi("a", {
   meccanica: "sconto",
   meccanicaOriginale: "TP_PERCENTO",
   reparto: { codice: "24", descrizione: "LATTICINI" },
-  visibilita: 64,
   prodotti: 3,
 });
 
@@ -604,7 +345,9 @@ describe("VolantinoSfogliabile: scheda del box", () => {
     expect(within(dati).getByText("1 di 5")).toBeInTheDocument();
     // Lo spazio arriva già in percentuale della pagina, per Istanta e per lo storico
     expect(within(dati).getByText("12,5% della pagina")).toBeInTheDocument();
-    expect(within(dati).getByText("64 su 100")).toBeInTheDocument();
+    // Niente indici di visibilità stimata, vendite o previsioni
+    expect(within(dati).queryByText("Visibilità stimata")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Vendite e previsione")).not.toBeInTheDocument();
     expect(screen.getByText("€ 1,69")).toBeInTheDocument();
   });
 

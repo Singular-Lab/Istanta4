@@ -31,7 +31,6 @@ const box = (id: string, campi: Partial<BoxInsight> = {}): BoxInsight => ({
   foto: [],
   prodotti: 1,
   idReferenze: [id],
-  visibilita: 50,
   ...campi,
 });
 

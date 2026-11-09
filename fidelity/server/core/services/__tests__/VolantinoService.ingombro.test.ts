@@ -175,9 +175,23 @@ describe('VolantinoService.getFlyerInsights: GDO e PDF del volantino', () => {
 
     expect(insights.pdf).toBeNull();
     expect(insights.box).toHaveLength(1);
-    expect(insights.box[0]).toMatchObject({ id: 'a', pagina: 1, visibilita: 100 });
+    expect(insights.box[0]).toMatchObject({ id: 'a', pagina: 1 });
     expect(insights.sintesi).toMatchObject({ referenze: 1, box: 1, pagine: 1 });
     expect(insights.spazio.perPagina).toEqual([{ pagina: 1, box: 1, spazioOccupato: 6.43 }]);
+  });
+
+  it('la risposta non ha zone calde, mappe di calore ne\' visibilita\' stimata dei box', async () => {
+    const servizio = creaServizio([
+      referenza('a', { pag: 1, x: 15, y: 20, w: 63, h: 61.5, w_page: 210, h_page: 287 }),
+      referenza('b', { pag: 2, x: 15, y: 120, w: 63, h: 61.5, w_page: 210, h_page: 287 }),
+    ]);
+
+    const insights = await servizio.getFlyerInsights('kit-1');
+
+    expect(insights.box).toHaveLength(2);
+    expect(insights).not.toHaveProperty('zoneCalde');
+    for (const singolo of insights.box) expect(singolo).not.toHaveProperty('visibilita');
+    expect(JSON.stringify(insights)).not.toMatch(/"(zoneCalde|visibilita|calore)"/);
   });
 
   it('volantino senza referenze: riepiloghi di sempre vuoti e sezioni nuove vuote', async () => {
@@ -196,6 +210,6 @@ describe('VolantinoService.getFlyerInsights: GDO e PDF del volantino', () => {
       box: [],
     });
     expect(insights.sintesi).toMatchObject({ referenze: 0, box: 0, scontoMedio: null });
-    expect(insights.zoneCalde.calore).toEqual([]);
+    expect(insights).not.toHaveProperty('zoneCalde');
   });
 });

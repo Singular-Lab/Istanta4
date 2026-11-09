@@ -1,8 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NotFoundError } from '../../../../lib/errors';
-import type { PrevisioneVolantino, RendimentoVolantino } from '../../../../lib/insightVolantino/rendimento';
 import { PALETTE_REPORT_STANDARD, type SezioneReport } from '../../../../lib/insightVolantino/report';
-import { PESI_VISIBILITA, type BoxInsight, type ConfrontoEdizione } from '../../../../lib/insightVolantino/tipi';
+import type { BoxInsight, ConfrontoEdizione } from '../../../../lib/insightVolantino/tipi';
 import type { AmbitoGdo } from '../../accessi/contestoAccesso';
 import type { IAgenziaLib } from '../../agenzia_lib/types';
 import type { FlyerInsightsDTO } from '../../dto';
@@ -23,8 +22,9 @@ vi.mock('../../repositories/InsightVolantinoRepository', () => ({
   righeDelKit: vi.fn(),
 }));
 
-// Report PDF del volantino (spec insight-volantino): ambito GDO, parti facoltative che non fermano
-// il report, palette e intestazione del cliente, sezioni composte dalla libreria agenzia.
+// Report PDF del volantino (spec insight-volantino): ambito GDO, confronto facoltativo che non ferma
+// il report, palette e intestazione del cliente, sezioni composte dalla libreria agenzia. Per
+// decisione della direzione niente pagine del volantino, vendite, previsioni ne' visibilita'.
 
 const ID_KIT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const AMBITO: AmbitoGdo = { idGdo: 'gdo-1' };
@@ -51,7 +51,7 @@ const BOX: BoxInsight = {
   id: 'b1', codiceBox: 'b1', pagina: 1, geometria: { x: 0, y: 0, w: 0.5, h: 0.5 }, spazio: 25, proporzionePagina: 0.7,
   chiave: 'c-1', nome: 'Mozzarella', marca: 'Alfa', formato: null, prezzo: 1.5, barrato: 2, sconto: 25, prezzoAlKg: null,
   punti: null, sottocosto: false, meccanica: 'sconto', meccanicaOriginale: null, reparto: { codice: '01', descrizione: 'DROGHERIA ALIMENTARE' },
-  foto: [], prodotti: 1, idReferenze: ['r1'], visibilita: 100,
+  foto: [], prodotti: 1, idReferenze: ['r1'],
 };
 
 const INSIGHT = {
@@ -83,31 +83,7 @@ const INSIGHT = {
     perPagina: [],
   },
   marche: { elenco: [{ chiave: 'ALFA', nome: 'Alfa', box: 1, referenze: 1, quotaSpazio: 100, scontoMedio: 25, distributore: false }], quotaDistributore: null },
-  zoneCalde: { boxPiuVisibili: ['b1'], perReparto: [], perMarca: [], calore: [], pesi: PESI_VISIBILITA },
 } as FlyerInsightsDTO;
-
-const RENDIMENTO: RendimentoVolantino = {
-  periodo: { dal: '2026-11-03', al: '2026-11-16' },
-  puntiVendita: 12,
-  misura: 'pezzi',
-  totalePezzi: 400,
-  totaleValore: null,
-  perBox: [{ idBox: 'b1', pezzi: 400, valore: null, quota: 100, quotaSpazio: 100, indiceSpazio: 1, prodotti: 1, prodottiSenzaVendite: 0 }],
-  prodotti: 1,
-  prodottiSenzaVendite: 0,
-  sopraSpazio: [],
-  sottoSpazio: [],
-};
-
-const PREVISIONE: PrevisioneVolantino = {
-  tipo: 'vendite',
-  unita: 'pezzi',
-  promoValida: false,
-  edizioniStoriche: 26,
-  perBox: [{ idBox: 'b1', valore: 350, casiStorici: 9, affidabilita: 'alta', reale: null }],
-  scartoMedio: null,
-  nota: 'Previsione dalle vendite delle edizioni precedenti',
-};
 
 const CONFRONTO = {
   edizione: { idKit: 'kit-0', titolo: 'Volantino 20', idPromo: 'promo-0', nomePromo: null, area: 'Toscana', canale: 'Conad City', validitaDal: '2026-10-20', validitaAl: '2026-11-02', storico: false },
@@ -129,17 +105,12 @@ function creaServizio(agenziaLib: Pick<IAgenziaLib, 'insightVolantino'> = {}) {
   const dipendenze = {
     volantino: { getFlyerInsights: vi.fn(async (_idKit: string, _ambito?: AmbitoGdo) => INSIGHT) },
     confronti: { confronti: vi.fn(async (_idKit: string, _ambito: AmbitoGdo) => ({ edizionePrecedente: CONFRONTO as ConfrontoEdizione | null, varianti: [] })) },
-    vendite: {
-      rendimento: vi.fn(async (_idKit: string, _ambito: AmbitoGdo): Promise<RendimentoVolantino | null> => RENDIMENTO),
-      previsione: vi.fn(async (_idKit: string, _ambito: AmbitoGdo): Promise<PrevisioneVolantino | null> => PREVISIONE),
-    },
     gdo: { getGDOById: vi.fn(async (id: string) => ({ id, nome: ' GDO di prova ', updatedat: new Date(0) })) },
     letture: { kitNellAmbito: vi.fn(async (_idKit: string, _ambito: AmbitoGdo): Promise<KitInsight | null> => KIT) },
   };
   const servizio = new ReportVolantinoService(
     dipendenze.volantino,
     dipendenze.confronti,
-    dipendenze.vendite,
     dipendenze.gdo,
     agenziaLib,
     dipendenze.letture,
@@ -153,16 +124,14 @@ beforeEach(() => {
 });
 
 describe('ReportVolantinoService.report: dati e intestazione', () => {
-  it('raccoglie insight, confronto, vendite e previsione nell\'ambito della richiesta e compone il report', async () => {
-    const { servizio, volantino, confronti, vendite, gdo, letture } = creaServizio();
+  it('raccoglie insight e confronto nell\'ambito della richiesta e compone il report', async () => {
+    const { servizio, volantino, confronti, gdo, letture } = creaServizio();
 
     const report = await servizio.report(ID_KIT, AMBITO);
 
     expect(letture.kitNellAmbito).toHaveBeenCalledWith(ID_KIT, AMBITO);
     expect(volantino.getFlyerInsights).toHaveBeenCalledWith(ID_KIT, AMBITO);
     expect(confronti.confronti).toHaveBeenCalledWith(ID_KIT, AMBITO);
-    expect(vendite.rendimento).toHaveBeenCalledWith(ID_KIT, AMBITO);
-    expect(vendite.previsione).toHaveBeenCalledWith(ID_KIT, AMBITO);
     expect(gdo.getGDOById).toHaveBeenCalledWith('gdo-1');
     expect(report).toMatchObject({
       generatoIl: '2026-11-09T08:30:00.000Z',
@@ -172,12 +141,19 @@ describe('ReportVolantinoService.report: dati e intestazione', () => {
       pdf: { idOlimpoCloud: 'pdf-1', pagine: 4 },
       box: [BOX],
       totalePagine: 4,
-      rendimento: RENDIMENTO,
-      previsione: PREVISIONE,
     });
-    expect(report.sezioni.map(chiaveSezione)).toEqual([
-      'sintesi', 'mappa', 'assortimento', 'prezziMarche', 'rendimento', 'mappaPrevisione', 'previsione', 'confronto', 'entratiUsciti', 'metodo',
-    ]);
+    expect(report.sezioni.map(chiaveSezione)).toEqual(['sintesi', 'assortimento', 'prezziMarche', 'confronto', 'entratiUsciti', 'metodo']);
+  });
+
+  it('niente pagine del volantino, vendite, previsione ne\' visibilita\' nel report', async () => {
+    const { servizio } = creaServizio();
+
+    const report = await servizio.report(ID_KIT, AMBITO);
+
+    expect(Object.keys(report).sort()).toEqual(['box', 'generatoIl', 'idKit', 'intestazione', 'palette', 'pdf', 'sezioni', 'sottotitolo', 'titolo', 'totalePagine']);
+    expect(report.sezioni.map(sezione => sezione.tipo)).not.toContain('pagine');
+    expect(report.palette).not.toHaveProperty('calore');
+    expect(JSON.stringify(report)).not.toMatch(/"(zoneCalde|visibilita|calore|rendimento|previsione)"/);
   });
 
   it('senza regole del cliente: palette standard e intestazione col nome della GDO', async () => {
@@ -219,10 +195,10 @@ describe('ReportVolantinoService.report: dati e intestazione', () => {
       contesto: { idKit: ID_KIT, titolo: 'Volantino 21', nomeGdo: 'GDO di prova', area: 'Toscana', canale: 'Conad City', validitaDal: '2026-11-03', validitaAl: '2026-11-16' },
       insight: { totalePagine: 4, totaleReferenze: 1, box: [BOX] },
       confronto: CONFRONTO,
-      rendimento: RENDIMENTO,
-      previsione: PREVISIONE,
       palette: PALETTE_REPORT_STANDARD,
     });
+    expect(Object.keys(dati).sort()).toEqual(['confronto', 'contesto', 'insight', 'palette']);
+    expect(dati.insight).not.toHaveProperty('zoneCalde');
     expect(standard.map(chiaveSezione)).toContain('sintesi');
   });
 
@@ -246,30 +222,14 @@ describe('ReportVolantinoService.report: dati e intestazione', () => {
   });
 });
 
-describe('ReportVolantinoService.report: ambito e parti facoltative', () => {
+describe('ReportVolantinoService.report: ambito e confronto facoltativo', () => {
   it('un kit fuori ambito o inesistente e\' 404, senza leggere altro', async () => {
-    const { servizio, letture, volantino, vendite } = creaServizio();
+    const { servizio, letture, volantino, confronti } = creaServizio();
     letture.kitNellAmbito.mockResolvedValueOnce(null);
 
     await expect(servizio.report(ID_KIT, { idGdo: 'altra-gdo' })).rejects.toBeInstanceOf(NotFoundError);
     expect(volantino.getFlyerInsights).not.toHaveBeenCalled();
-    expect(vendite.rendimento).not.toHaveBeenCalled();
-  });
-
-  it('vendite e previsione in errore: il report esce senza le loro sezioni, con un avviso per ciascuna', async () => {
-    const { servizio, vendite } = creaServizio();
-    vendite.rendimento.mockRejectedValueOnce(new Error('tabella vendite non raggiungibile'));
-    vendite.previsione.mockRejectedValueOnce(new Error('storico non leggibile'));
-
-    const report = await servizio.report(ID_KIT, AMBITO);
-
-    expect(report.rendimento).toBeNull();
-    expect(report.previsione).toBeNull();
-    expect(report.sezioni.map(chiaveSezione)).toEqual(['sintesi', 'mappa', 'assortimento', 'prezziMarche', 'confronto', 'entratiUsciti', 'metodo']);
-    // Senza vendite la mappa e' quella dell'investimento
-    expect(report.sezioni.find(sezione => sezione.tipo === 'pagine')).toMatchObject({ misura: 'investimento' });
-    expect(log.warn).toHaveBeenCalledTimes(2);
-    expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('rendimento'), expect.objectContaining({ idKit: ID_KIT, errore: 'tabella vendite non raggiungibile' }));
+    expect(confronti.confronti).not.toHaveBeenCalled();
   });
 
   it('confronto in errore: il report esce senza le sezioni del confronto', async () => {
@@ -278,27 +238,25 @@ describe('ReportVolantinoService.report: ambito e parti facoltative', () => {
 
     const report = await servizio.report(ID_KIT, AMBITO);
 
-    expect(report.sezioni.map(chiaveSezione)).not.toContain('confronto');
-    expect(report.sezioni.map(chiaveSezione)).toContain('rendimento');
+    expect(report.sezioni.map(chiaveSezione)).toEqual(['sintesi', 'assortimento', 'prezziMarche', 'metodo']);
     expect(log.warn).toHaveBeenCalledTimes(1);
+    expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('confronto'), expect.objectContaining({ idKit: ID_KIT, errore: 'edizione precedente non leggibile' }));
   });
 
-  it('un 404 dalle vendite vale per tutto il report', async () => {
-    const { servizio, vendite } = creaServizio();
-    vendite.rendimento.mockRejectedValueOnce(new NotFoundError({ message: 'Volantino non trovato', entityType: 'RuntimeKit', entityId: ID_KIT }));
+  it('un 404 dal confronto vale per tutto il report', async () => {
+    const { servizio, confronti } = creaServizio();
+    confronti.confronti.mockRejectedValueOnce(new NotFoundError({ message: 'Volantino non trovato', entityType: 'RuntimeKit', entityId: ID_KIT }));
 
     await expect(servizio.report(ID_KIT, AMBITO)).rejects.toBeInstanceOf(NotFoundError);
   });
 
-  it('senza vendite importate, previsione e prima edizione: il report ha solo le sezioni dell\'impaginato', async () => {
-    const { servizio, vendite, confronti } = creaServizio();
-    vendite.rendimento.mockResolvedValueOnce(null);
-    vendite.previsione.mockResolvedValueOnce(null);
+  it('prima edizione: il report ha solo le sezioni dell\'impaginato', async () => {
+    const { servizio, confronti } = creaServizio();
     confronti.confronti.mockResolvedValueOnce({ edizionePrecedente: null, varianti: [] });
 
     const report = await servizio.report(ID_KIT, AMBITO);
 
-    expect(report.sezioni.map(chiaveSezione)).toEqual(['sintesi', 'mappa', 'assortimento', 'prezziMarche', 'metodo']);
+    expect(report.sezioni.map(chiaveSezione)).toEqual(['sintesi', 'assortimento', 'prezziMarche', 'metodo']);
     expect(log.warn).not.toHaveBeenCalled();
   });
 });

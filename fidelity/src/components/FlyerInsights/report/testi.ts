@@ -1,5 +1,3 @@
-import type { UnitaMisura } from "../../../../lib/insightVolantino/calore";
-
 /**
  * Testi e formati del report PDF del volantino. Funzioni pure.
  */
@@ -67,15 +65,3 @@ export function testoQuota(valore: number, totale: number): string {
   if (!(totale > 0)) return "—";
   return `${QUOTA.format((Math.max(0, valore) / totale) * 100)}%`;
 }
-
-/** "1 box" / "12 box", "1 pagina" / "3 pagine". */
-export const conteggio = (numero: number, singolare: string, plurale: string): string =>
-  `${new Intl.NumberFormat("it-IT").format(numero)} ${numero === 1 ? singolare : plurale}`;
-
-/** Unita' della misura scritta per la legenda. */
-export const TESTO_UNITA: Record<UnitaMisura, string> = {
-  percentuale: "valori in percentuale",
-  euro: "valori in euro",
-  pezzi: "valori in pezzi",
-  indice: "valori come indice",
-};

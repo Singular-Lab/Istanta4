@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import type { GraficoSezione, SezioneReport } from "../../../../lib/insightVolantino/report";
 import {
   altezzaRigaTabella,
-  capienzaEvidenza,
   graficoGrande,
   gruppiGrafici,
   impaginaTabella,
@@ -10,10 +9,9 @@ import {
   larghezzeColonne,
   misuraNelRiquadro,
   righeTesto,
-  riquadroPaginaVolantino,
   spazioTabella,
 } from "./impaginazione";
-import { ALTEZZA_UTILE, COLONNA_LEGENDA, LARGHEZZA_UTILE, SPAZIO_COLONNE } from "./misure";
+import { ALTEZZA_UTILE, LARGHEZZA_UTILE } from "./misure";
 
 const barre = (titolo: string, voci: number): GraficoSezione => ({
   titolo,
@@ -133,27 +131,14 @@ describe("grafici per pagina", () => {
   });
 });
 
-describe("pagine del volantino nel report", () => {
+describe("miniatura della prima pagina in copertina", () => {
   it("la pagina entra nel riquadro con le sue proporzioni", () => {
     expect(misuraNelRiquadro(0.5, 300, 400)).toEqual({ larghezza: 200, altezza: 400 });
     expect(misuraNelRiquadro(2, 300, 400)).toEqual({ larghezza: 300, altezza: 150 });
   });
 
-  it("una pagina verticale sta accanto alla colonna della legenda, una orizzontale a tutta larghezza", () => {
-    const verticale = riquadroPaginaVolantino(0.707, 30);
-    expect(verticale.orizzontale).toBe(false);
-    expect(verticale.larghezza).toBeLessThanOrEqual(LARGHEZZA_UTILE - COLONNA_LEGENDA - SPAZIO_COLONNE + 0.01);
-    expect(verticale.altezza).toBeLessThan(ALTEZZA_UTILE);
-
-    const orizzontale = riquadroPaginaVolantino(1.414, 30);
-    expect(orizzontale.orizzontale).toBe(true);
-    expect(orizzontale.larghezza).toBeCloseTo(LARGHEZZA_UTILE, 1);
-  });
-
-  it("l'elenco dei box in evidenza prende solo le righe che entrano accanto alla pagina", () => {
-    const grande = capienzaEvidenza(riquadroPaginaVolantino(0.707, 30));
-    const piccola = capienzaEvidenza({ larghezza: 100, altezza: 150, orizzontale: false });
-    expect(grande).toBeGreaterThan(piccola);
-    expect(piccola).toBe(3);
+  it("una proporzione non valida vale come un A4 verticale", () => {
+    expect(misuraNelRiquadro(Number.NaN, 210, 400)).toEqual({ larghezza: 210, altezza: 297 });
+    expect(misuraNelRiquadro(0, 210, 400)).toEqual(misuraNelRiquadro(210 / 297, 210, 400));
   });
 });

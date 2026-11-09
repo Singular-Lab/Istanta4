@@ -20,12 +20,6 @@ const VOCI: Array<{ chiave: keyof Funzionalita; titolo: string; descrizione: str
     titolo: "Gestisci Menabò",
     descrizione: "Mostra la sezione del menabò nel dettaglio di una lavorazione in corso.",
   },
-  {
-    chiave: "vendite",
-    titolo: "Vendite e previsioni",
-    descrizione:
-      "Attiva la pagina Vendite per importare il sell-out e, negli insight dei volantini, il rendimento dei box dalle vendite, la mappa di calore prevista, la previsione e la simulazione, anche nel report PDF.",
-  },
 ];
 
 /** Funzioni opzionali della GDO dell'utente, salvate nella sua configurazione. */
@@ -37,13 +31,11 @@ export default function PanelFunzionalita() {
   const { data, isLoading, isError, error, refetch } = useFetchFunzionalita();
   const { mutate: salva, isPending: isSaving } = useSaveFunzionalita();
 
-  const [valori, setValori] = useState<Funzionalita>({ momenti: false, menabo: false, vendite: false });
+  const [valori, setValori] = useState<Funzionalita>({ momenti: false, menabo: false });
   const [isDirty, setIsDirty] = useState(false);
 
   useEffect(() => {
-    if (data && !isDirty) {
-      setValori({ momenti: data.momenti === true, menabo: data.menabo === true, vendite: data.vendite === true });
-    }
+    if (data && !isDirty) setValori({ momenti: data.momenti === true, menabo: data.menabo === true });
   }, [data, isDirty]);
 
   const cambia = (chiave: keyof Funzionalita, attiva: boolean) => {

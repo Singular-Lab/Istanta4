@@ -2,14 +2,17 @@
  * Stati del bottone del report PDF e testi per l'utente. Funzioni pure.
  */
 
-/** Passo in corso: i dati dal server, il generatore del PDF, le pagine da Olimpo, l'impaginazione. */
-export type FaseReport = "dati" | "generatore" | "pagine" | "impaginazione";
+/**
+ * Passo in corso: i dati dal server, il generatore del PDF, la miniatura della prima pagina da Olimpo
+ * per la copertina, l'impaginazione.
+ */
+export type FaseReport = "dati" | "generatore" | "copertina" | "impaginazione";
 
 export type StatoReport =
   | { fase: "inattivo" }
   | { fase: "dati" }
   | { fase: "generatore" }
-  | { fase: "pagine"; fatte: number; totale: number }
+  | { fase: "copertina" }
   | { fase: "impaginazione" }
   | { fase: "errore"; messaggio: string };
 
@@ -24,8 +27,8 @@ export function testoAvanzamento(stato: StatoReport): string | null {
       return "Dati del volantino";
     case "generatore":
       return "Avvio del generatore PDF";
-    case "pagine":
-      return stato.totale > 0 ? `Pagine del volantino: ${stato.fatte} di ${stato.totale}` : "Pagine del volantino";
+    case "copertina":
+      return "Copertina";
     case "impaginazione":
       return "Impaginazione del PDF";
     default:
@@ -50,7 +53,7 @@ export function motivoErrore(errore: unknown): string | null {
 const PREFISSI: Record<FaseReport, string> = {
   dati: "Dati del report non disponibili",
   generatore: "Generatore del PDF non caricato: controlla la connessione",
-  pagine: "Pagine del volantino non preparate",
+  copertina: "Copertina del report non preparata",
   impaginazione: "Impaginazione del PDF non riuscita",
 };
 

@@ -3,7 +3,6 @@ import { isAppError, wrapDatabaseError, wrapNotFoundError } from '../../../lib/e
 import type { RepartoInsight } from '../../../lib/insightVolantino/tipi';
 import { FileItemKit } from '../../../lib/types';
 import type { AmbitoGdo } from '../accessi/contestoAccesso';
-import type { IAgenziaLib } from '../agenzia_lib/types';
 import { urlFotoOlimpo } from '../utils/urlOlimpo';
 import {
   FlyerInsightsDTO,
@@ -49,14 +48,10 @@ function marcheDelDistributore(valore: unknown): string[] {
 /**
  * Autonomous VolantinoService with its own implementation.
  * Manages volantino (flyer) file queries and insights.
- *
- * Della libreria agenzia del cliente servono solo i pesi della visibilita'
- * (insightVolantino.pesiVisibilita): senza la libreria, o senza pesi propri, valgono gli standard.
  */
 export class VolantinoService implements IVolantinoService {
   constructor(
-    private readonly configService: IConfigService,
-    private readonly agenziaLib?: Pick<IAgenziaLib, 'insightVolantino'>
+    private readonly configService: IConfigService
   ) { }
 
   async prendiIVolantiniCaricatiDaDB(): Promise<any> {
@@ -302,7 +297,7 @@ export class VolantinoService implements IVolantinoService {
       const maxPageFromRefs = Math.max(...Array.from(pagineMap.keys()), 0);
       const actualTotalePagine = totalePaginePdf > 0 ? totalePaginePdf : maxPageFromRefs;
 
-      // 6. Le sezioni nuove (box sulle pagine, sintesi, prezzi, spazio, marche, zone calde): lettura
+      // 6. Le sezioni nuove (box sulle pagine, sintesi, prezzi, spazio, marche): lettura
       // generica delle referenze, uguale per ogni GDO e per Istanta e storico. Dalla config solo
       // reparto e meccanica gia' mappati qui sopra, cosi' codici e colori restano quelli dei riepiloghi.
       const dtoPerId = new Map(referenzeDTO.map(ref => [String(ref.id), ref] as const));
@@ -321,9 +316,7 @@ export class VolantinoService implements IVolantinoService {
           urlFoto: (guid) => urlFotoOlimpo(guid, { performante: true }),
           origine: origineStorico
             ? (codiceBox) => (codiciFuoriListino.has(codiceBox) ? 'fuori_listino' : 'listino')
-            : undefined,
-          // Visibilita' e zone calde con i pesi del cliente, se la sua libreria agenzia li dichiara
-          pesi: this.agenziaLib?.insightVolantino?.pesiVisibilita
+            : undefined
         }
       );
 

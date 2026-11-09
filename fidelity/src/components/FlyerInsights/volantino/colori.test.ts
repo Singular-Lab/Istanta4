@@ -8,26 +8,23 @@ import { STATI_DIFFERENZA } from "../confronti/supporto";
 import {
   coloriReparti,
   fasciaSconto,
-  fasciaVisibilita,
   legendaDifferenze,
   legendaModo,
   stileBox,
   stileDifferenza,
   tintaSconto,
-  tintaVisibilita,
 } from "./colori";
 
-// Colori dei riquadri del volantino: reparti dalla config o automatici, meccaniche, fasce di sconto
-// e di visibilità, differenze fra varianti
+// Colori dei riquadri del volantino: reparti dalla config o automatici, meccaniche, fasce di sconto,
+// differenze fra varianti
 
-type BoxColori = Pick<BoxInsight, "id" | "reparto" | "spazio" | "meccanica" | "sconto" | "visibilita">;
+type BoxColori = Pick<BoxInsight, "id" | "reparto" | "spazio" | "meccanica" | "sconto">;
 const box = (id: string, dati: Partial<BoxColori> = {}): BoxColori => ({
   id,
   reparto: null,
   spazio: 5,
   meccanica: null,
   sconto: null,
-  visibilita: 50,
   ...dati,
 });
 const reparto = (codice: string, descrizione: string): RepartoInsight => ({ codice, descrizione });
@@ -110,17 +107,12 @@ describe("colori dei reparti", () => {
   });
 });
 
-describe("fasce di sconto e di visibilità", () => {
+describe("fasce di sconto", () => {
   it("lo sconto cade nella sua fascia di 10 punti, l'ultima da 50% in su; senza sconto è neutro", () => {
     expect([0, 9.9, 10, 35, 50, 80].map(fasciaSconto)).toEqual([0, 0, 1, 3, 5, 5]);
     expect(fasciaSconto(null)).toBe(-1);
     expect(tintaSconto(35)).toEqual(tintaSequenziale(4));
     expect(tintaSconto(null)).toBe(TINTA_NEUTRA);
-  });
-
-  it("la visibilità va a fasce di 20 su 100", () => {
-    expect([0, 19, 20, 79, 80, 100].map(fasciaVisibilita)).toEqual([0, 0, 1, 3, 4, 4]);
-    expect(tintaVisibilita(100)).toEqual(tintaSequenziale(6));
   });
 });
 
@@ -146,7 +138,6 @@ describe("stile e legenda nel modo scelto", () => {
     const conSconto = legendaModo("sconto", [box("a", { sconto: 20 })], reparti).map(v => v.etichetta);
     expect(conSconto).toEqual(["0–10%", "10–20%", "20–30%", "30–40%", "40–50%", "≥ 50%"]);
     expect(legendaModo("sconto", [box("a")], reparti).at(-1)?.etichetta).toBe("Senza sconto");
-    expect(legendaModo("visibilita", [box("a")], reparti).map(v => v.etichetta)).toEqual(["0–20", "20–40", "40–60", "60–80", "80–100"]);
   });
 });
 

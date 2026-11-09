@@ -12,6 +12,9 @@ import type { MeccanicaReferenza } from '../puntiVendita/analisi';
  * un'altra GDO risponde 404 come un kit inesistente. Valgono per ogni GDO e per i kit di Istanta e
  * dello storico: prezzi, sconti, marca e meccanica vengono dalla lettura generica delle referenze
  * (server/core/utils/referenzaStampata.ts), non dalla configurazione del cliente.
+ *
+ * Per decisione della direzione gli insight non contengono mappe di calore, zone calde, indici di
+ * visibilita' stimata ne' dati di vendita (spec insight-volantino).
  */
 
 // ─── Percorsi ───────────────────────────────────────────────────────
@@ -27,57 +30,11 @@ export const percorsoViaggio = (idKit: string, chiave: string): string =>
 
 // ─── Costanti ───────────────────────────────────────────────────────
 
-/**
- * Pesi della visibilita' stimata di un box: spazio × peso della pagina × peso della posizione.
- * La libreria agenzia del cliente puo' dichiararne di propri (insightVolantino.pesiVisibilita);
- * senza, valgono questi. La pagina li dichiara all'utente.
- */
-export interface PesiVisibilita {
-  copertina: number;
-  ultima: number;
-  primaDoppia: number;
-  altre: number;
-  alto: number;
-  basso: number;
-}
-
-export const PESI_VISIBILITA: PesiVisibilita = {
-  /** Pagina 1 */
-  copertina: 1,
-  /** Ultima pagina, se diversa dalla copertina */
-  ultima: 0.8,
-  /** Pagine 2 e 3, la prima doppia pagina */
-  primaDoppia: 0.7,
-  /** Tutte le altre */
-  altre: 0.5,
-  /** Peso della posizione con il centro del box in cima alla pagina... */
-  alto: 1,
-  /** ...e in fondo: in mezzo varia in modo lineare */
-  basso: 0.6,
-};
-
-/** Griglia della mappa di calore di ogni pagina. */
-export const GRIGLIA_CALORE = { righe: 6, colonne: 4 } as const;
-
 /** Limiti inferiori delle fasce di sconto in %: [0,10) [10,20) ... [50, oltre). */
 export const FASCE_SCONTO: readonly number[] = [0, 10, 20, 30, 40, 50];
 
 /** Tappe massime del viaggio di un prodotto. */
 export const MAX_TAPPE_VIAGGIO = 60;
-
-/** Peso della pagina nella visibilita' (pagine contate da 1). */
-export function pesoPagina(pagina: number, totalePagine: number, pesi: PesiVisibilita = PESI_VISIBILITA): number {
-  if (pagina === 1) return pesi.copertina;
-  if (totalePagine > 1 && pagina === totalePagine) return pesi.ultima;
-  if (pagina === 2 || pagina === 3) return pesi.primaDoppia;
-  return pesi.altre;
-}
-
-/** Peso della posizione dal centro verticale del box, 0 = in cima, 1 = in fondo alla pagina. */
-export function pesoPosizione(centroY: number, pesi: PesiVisibilita = PESI_VISIBILITA): number {
-  const y = Math.min(1, Math.max(0, centroY));
-  return pesi.alto + (pesi.basso - pesi.alto) * y;
-}
 
 // ─── Volantino ──────────────────────────────────────────────────────
 
@@ -132,8 +89,6 @@ export interface BoxInsight {
   /** Prodotti nel box (pilota compreso). */
   prodotti: number;
   idReferenze: string[];
-  /** Visibilita' stimata 0-100: 100 = il box piu' visibile di questo volantino. */
-  visibilita: number;
   /** Solo nei kit dello storico. */
   origine?: 'listino' | 'fuori_listino';
 }
@@ -229,29 +184,6 @@ export interface MarcheVolantino {
   quotaDistributore: { quotaSpazio: number; quotaBox: number } | null;
 }
 
-export interface QuotaVisibilita {
-  chiave: string;
-  etichetta: string;
-  quotaVisibilita: number;
-  quotaSpazio: number;
-}
-
-export interface CalorePagina {
-  pagina: number;
-  /** GRIGLIA_CALORE.righe × GRIGLIA_CALORE.colonne, valori 0-1 (1 = cella piu' calda del volantino). */
-  celle: number[][];
-}
-
-export interface ZoneCalde {
-  /** Id dei box piu' visibili, al massimo 10, dal piu' visibile. */
-  boxPiuVisibili: string[];
-  perReparto: QuotaVisibilita[];
-  perMarca: QuotaVisibilita[];
-  calore: CalorePagina[];
-  /** I pesi usati: quelli della libreria agenzia del cliente o PESI_VISIBILITA. */
-  pesi: PesiVisibilita;
-}
-
 /** Le sezioni nuove di GET /api/flyer-insights/:idKit, accanto ai campi di sempre. */
 export interface EstensioneInsight {
   pdf: PdfVolantino | null;
@@ -260,7 +192,6 @@ export interface EstensioneInsight {
   prezziSconti: PrezziSconti;
   spazio: UsoSpazio;
   marche: MarcheVolantino;
-  zoneCalde: ZoneCalde;
 }
 
 // ─── Confronti ──────────────────────────────────────────────────────

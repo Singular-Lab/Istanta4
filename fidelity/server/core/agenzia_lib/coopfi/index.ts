@@ -23,12 +23,11 @@ import { AuditLogService } from "../../services/AuditLogService";
 import { removeSinglesIncludedInGroups, resolveGroupMembersFromScattoCodice } from "../../services/TracciatoScoreboardUtils.js";
 import { TracciatoService } from "../../services/TracciatoService.js";
 import { ServerUtils } from "../../utils/ServerUtils";
-import type { AgenziaLibScoreRules, AzioniRule, CellaConfronto, FieldChange, IAgenziaLib, ImportVenditeAgenzia, InsightVolantinoAgenzia, MatricePromo, ModificaRule, ParsedOIDCUtente, PromoScoreboardInput } from "../types.js";
+import type { AgenziaLibScoreRules, AzioniRule, CellaConfronto, FieldChange, IAgenziaLib, InsightVolantinoAgenzia, MatricePromo, ModificaRule, ParsedOIDCUtente, PromoScoreboardInput } from "../types.js";
 import { insightVolantinoCoopFirenze } from "./insight-volantino.js";
 import { buildCoopfiPolicyFromCodeV2 } from "./utility/coopfi-policy-v2";
 import { COOPFI_TRACKED_FIELD_MAP, createCoopfiNormalizer } from "./utility/coopfi-referenza";
 import { resolveRepartoNamesForSettoriFinali } from "./utility/coopfi-settore-finale-map";
-import { importVenditeCoopFirenze } from "./vendite.js";
 
 const _require = createRequire(import.meta.url);
 const scoreRules: AgenziaLibScoreRules = _require('./utility/data/coopfi-score-rules.json');
@@ -178,10 +177,7 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
     /** La lista soci contiene tutti i canali/aree: ogni promo tiene solo i suoi (I20-958). */
     public visibilitaPromo: DimensioneVisibilitaPromo[] = ["canale", "area"];
 
-    /** Tracciato del file delle vendite: per ora il generico col nome del cliente (vendite.ts). */
-    public importVendite: ImportVenditeAgenzia = importVenditeCoopFirenze;
-
-    /** Palette, intestazione e ordine delle sezioni del report PDF del volantino (insight-volantino.ts). */
+    /** Palette e intestazione del report PDF del volantino; sezioni nell'ordine standard (insight-volantino.ts). */
     public insightVolantino: InsightVolantinoAgenzia = insightVolantinoCoopFirenze;
 
     /**

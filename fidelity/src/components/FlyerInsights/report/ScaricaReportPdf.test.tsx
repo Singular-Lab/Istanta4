@@ -4,7 +4,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { nomeFileReport } from "../../../../lib/insightVolantino/report";
 import { reportDiProva } from "./datiDiProva";
-import type { AlAvanzamento, ImmaginiReport } from "./tipiReport";
+import type { ImmaginiReport } from "./tipiReport";
 
 const finti = vi.hoisted(() => ({
   caricaReportVolantino: vi.fn(),
@@ -18,7 +18,7 @@ vi.mock("./creaReportPdf", () => ({ preparaImmagini: finti.preparaImmagini, crea
 
 import { caricaModuloReport, ScaricaReportPdf } from "./ScaricaReportPdf";
 
-const IMMAGINI: ImmaginiReport = { pagine: new Map(), calore: new Map() };
+const IMMAGINI: ImmaginiReport = { copertina: "data:image/jpeg;base64,copertina" };
 const PDF = new Blob(["%PDF-1.7"], { type: "application/pdf" });
 
 function rinviato<T>() {
@@ -56,7 +56,7 @@ afterEach(() => {
 });
 
 describe("ScaricaReportPdf", () => {
-  it("chiede il report, prepara le immagini, impagina e scarica il file con il nome del report", async () => {
+  it("chiede il report, prepara la copertina, impagina e scarica il file con il nome del report", async () => {
     const report = reportDiProva({ titolo: "Volantino 3/16 novembre" });
     finti.caricaReportVolantino.mockResolvedValue(report);
     finti.preparaImmagini.mockResolvedValue(IMMAGINI);
@@ -68,7 +68,7 @@ describe("ScaricaReportPdf", () => {
     await waitFor(() => expect(scaricati).toEqual([nomeFileReport(report.titolo, report.generatoIl)]));
     expect(scaricati[0]).toBe("Report volantino - Volantino 3 16 novembre - 2026-11-09.pdf");
     expect(finti.caricaReportVolantino).toHaveBeenCalledWith("k1");
-    expect(finti.preparaImmagini).toHaveBeenCalledWith(report, expect.any(Function));
+    expect(finti.preparaImmagini).toHaveBeenCalledWith(report);
     expect(finti.creaBlobReport).toHaveBeenCalledWith(report, IMMAGINI);
     expect(creaUrl).toHaveBeenCalledWith(PDF);
     expect(liberaUrl).toHaveBeenCalledWith("blob:report");
@@ -80,16 +80,15 @@ describe("ScaricaReportPdf", () => {
     const immagini = rinviato<ImmaginiReport>();
     const impaginazione = rinviato<Blob>();
     finti.caricaReportVolantino.mockResolvedValue(reportDiProva());
-    finti.preparaImmagini.mockImplementation((_report: unknown, alAvanzamento: AlAvanzamento) => {
-      alAvanzamento({ fatte: 2, totale: 5 });
-      return immagini.promessa;
-    });
+    finti.preparaImmagini.mockReturnValue(immagini.promessa);
     finti.creaBlobReport.mockReturnValue(impaginazione.promessa);
 
     render(<ScaricaReportPdf idKit="k1" titolo="Volantino" />);
     fireEvent.click(screen.getByRole("button", { name: "Report PDF" }));
 
-    expect(await screen.findByText("Pagine del volantino: 2 di 5")).toBeInTheDocument();
+    // Del volantino si prepara solo la miniatura della prima pagina: niente conteggio delle pagine
+    expect(await screen.findByText("Copertina")).toBeInTheDocument();
+    expect(screen.queryByText(/Pagine del volantino/)).not.toBeInTheDocument();
     const bottone = screen.getByRole("button", { name: "Preparazione del report…" });
     expect(bottone).toBeDisabled();
     expect(bottone).toHaveAttribute("aria-busy", "true");

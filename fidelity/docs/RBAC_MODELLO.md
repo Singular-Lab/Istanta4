@@ -74,13 +74,8 @@ alla volta (versione in `accessi_stato.schema_accessi`):
   aveva `promo.visualizza` riceve `analisi.visualizza`, `promo.gestisci_momenti` e
   `promo.gestisci_schemi`; ogni tipo tranne l'Agenzia riceve `volantini.visualizza`; le dashboard
   Category e Marketing vanno al loro tipo e ai ruoli che le hanno nel menu; l'Agenzia perde i permessi
-  di Visualizzazione e Comunicazione e i suoi menu salvati le voci di quelle aree;
-- schema 3 (`migrazioneVendite.ts`): l'import delle vendite del cliente (`analisi.importa_vendite`)
-  va ai sotto-ruoli GDO che lo hanno fra i permessi predefiniti (l'ADMIN,
-  `PERMESSI_PREDEFINITI_SOTTORUOLO_GDO` in `predefiniti.ts`), dove nessuno lo ha ancora impostato;
-  un'installazione nuova lo scrive già con i predefiniti.
-
-Il log dell'avvio elenca ogni modifica; `yarn accessi:migra --dry-run` la mostra prima.
+  di Visualizzazione e Comunicazione e i suoi menu salvati le voci di quelle aree. Il log dell'avvio elenca ogni modifica;
+  `yarn accessi:migra --dry-run` la mostra prima.
 
 ## Catalogo delle pagine
 

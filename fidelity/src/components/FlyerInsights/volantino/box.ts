@@ -40,9 +40,6 @@ export const testoReparto = (reparto: RepartoInsight | null): string | null => {
   return reparto.descrizione || reparto.codice || null;
 };
 
-/** "64 su 100". */
-export const testoVisibilita = (visibilita: number): string => `${formatNumero(Math.round(visibilita))} su 100`;
-
 /** Nome del riquadro per le tecnologie assistive: "Mozzarella, Granarolo, € 1,69, sconto 30%". */
 export const descrizioneBox = (box: Pick<BoxInsight, "nome" | "marca" | "prezzo" | "sconto">): string =>
   [
@@ -54,7 +51,7 @@ export const descrizioneBox = (box: Pick<BoxInsight, "nome" | "marca" | "prezzo"
     .filter(Boolean)
     .join(", ");
 
-/** Il tooltip del riquadro: prezzo, sconto, meccanica, reparto e visibilità, quelli che ci sono. */
+/** Il tooltip del riquadro: prezzo, sconto, meccanica e reparto, quelli che ci sono. */
 export const tooltipBox = (box: BoxInsight): ContenutoTooltip => {
   const righe: RigaTooltip[] = [];
   if (box.prezzo !== null) {
@@ -64,7 +61,6 @@ export const tooltipBox = (box: BoxInsight): ContenutoTooltip => {
   if (box.meccanica) righe.push({ etichetta: "Meccanica", valore: ETICHETTA_MECCANICA[box.meccanica] });
   const reparto = testoReparto(box.reparto);
   if (reparto) righe.push({ etichetta: "Reparto", valore: reparto });
-  righe.push({ etichetta: "Visibilità stimata", valore: testoVisibilita(box.visibilita) });
   if (box.prodotti > 1) righe.push({ etichetta: "Prodotti nel box", valore: formatNumero(box.prodotti) });
   return { titolo: box.nome || "Box senza nome", sottotitolo: marcaFormato(box) || undefined, righe };
 };

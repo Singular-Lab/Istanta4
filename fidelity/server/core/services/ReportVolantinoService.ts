@@ -11,7 +11,6 @@ import type { AmbitoGdo } from '../accessi/contestoAccesso';
 import type { IAgenziaLib } from '../agenzia_lib/types';
 import type { IGdoService } from '../interfaces/IGdoService';
 import type { IInsightConfrontiService } from '../interfaces/IInsightConfrontiService';
-import type { IInsightVenditeService } from '../interfaces/IInsightVenditeService';
 import type { IReportVolantinoService } from '../interfaces/IReportVolantinoService';
 import type { IVolantinoService } from '../interfaces/IVolantinoService';
 import { log } from '../logger';
@@ -20,13 +19,13 @@ import { sezioniStandard, sottotitoloReport } from '../utils/reportVolantino';
 
 /**
  * Report PDF del volantino (spec insight-volantino, contratto in lib/insightVolantino/report.ts):
- * raccoglie insight, confronto con l'edizione precedente, rendimento dalle vendite e previsione,
- * compone le sezioni standard e le passa alla libreria agenzia del cliente, che puo' riordinarle o
- * cambiarle; palette e intestazione sono quelle standard con le voci del cliente sopra.
+ * raccoglie insight e confronto con l'edizione precedente, compone le sezioni standard e le passa
+ * alla libreria agenzia del cliente, che puo' riordinarle o cambiarle; palette e intestazione sono
+ * quelle standard con le voci del cliente sopra.
  *
  * Stesso ambito GDO degli insight: un kit di un'altra GDO, o inesistente, risponde 404. Il
- * confronto, le vendite e la previsione sono parti facoltative: se il loro servizio fallisce per un
- * motivo diverso da un 404 il report esce lo stesso senza quelle sezioni, con un avviso nel log.
+ * confronto e' una parte facoltativa: se il suo servizio fallisce per un motivo diverso da un 404
+ * il report esce lo stesso senza quelle sezioni, con un avviso nel log.
  */
 
 const RISERVATEZZA_STANDARD = 'Riservato - uso interno';
@@ -55,7 +54,6 @@ export class ReportVolantinoService implements IReportVolantinoService {
   constructor(
     private readonly volantino: Pick<IVolantinoService, 'getFlyerInsights'>,
     private readonly confronti: Pick<IInsightConfrontiService, 'confronti'>,
-    private readonly vendite: Pick<IInsightVenditeService, 'rendimento' | 'previsione'>,
     private readonly gdo: Pick<IGdoService, 'getGDOById'>,
     private readonly agenziaLib: Pick<IAgenziaLib, 'insightVolantino'>,
     private readonly letture: LettureKitReport = LETTURE_PREDEFINITE,
@@ -67,11 +65,9 @@ export class ReportVolantinoService implements IReportVolantinoService {
     const kit = await this.letture.kitNellAmbito(idKit, ambito);
     if (!kit) throw new NotFoundError({ message: 'Volantino non trovato', entityType: 'RuntimeKit', entityId: idKit });
 
-    const [insight, confronto, rendimento, previsione, nomeGdo] = await Promise.all([
+    const [insight, confronto, nomeGdo] = await Promise.all([
       this.volantino.getFlyerInsights(idKit, ambito),
       this.facoltativo("il confronto con l'edizione precedente", idKit, async () => (await this.confronti.confronti(idKit, ambito)).edizionePrecedente),
-      this.facoltativo('il rendimento dalle vendite', idKit, () => this.vendite.rendimento(idKit, ambito)),
-      this.facoltativo('la previsione', idKit, () => this.vendite.previsione(idKit, ambito)),
       this.nomeGdo(kit, idKit),
     ]);
 
@@ -101,13 +97,10 @@ export class ReportVolantinoService implements IReportVolantinoService {
         prezziSconti: insight.prezziSconti,
         spazio: insight.spazio,
         marche: insight.marche,
-        zoneCalde: insight.zoneCalde,
         totalePagine,
         totaleReferenze: insight.totaleReferenze,
       },
       confronto,
-      rendimento,
-      previsione,
       palette,
     };
 
@@ -121,8 +114,6 @@ export class ReportVolantinoService implements IReportVolantinoService {
       pdf: insight.pdf,
       box: insight.box,
       totalePagine,
-      rendimento,
-      previsione,
       sezioni: this.sezioni(dati, idKit),
     };
   }

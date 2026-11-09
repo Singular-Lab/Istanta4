@@ -32,7 +32,7 @@ vi.mock("@react-pdf/renderer", () => ({
 
 import { paletteCompleta, ReportVolantinoPdf } from "./ReportVolantinoPdf";
 
-const TITOLI = ["Sintesi del volantino", "Spazio e reparti", "Mappa dello sconto", "Dettaglio reparti", "Nota di metodo"];
+const TITOLI = ["Sintesi del volantino", "Spazio e reparti", "Dettaglio reparti", "Nota di metodo"];
 
 const SEZIONI: SezioneReport[] = [
   {
@@ -85,10 +85,9 @@ const SEZIONI: SezioneReport[] = [
       },
     ],
   },
-  { tipo: "pagine", titolo: TITOLI[2], misura: "sconto", introduzione: "Dove si concentra lo sconto.", boxInEvidenza: 3 },
   {
     tipo: "tabella",
-    titolo: TITOLI[3],
+    titolo: TITOLI[2],
     introduzione: null,
     colonne: [
       { titolo: "Reparto", allinea: "sinistra" },
@@ -97,16 +96,10 @@ const SEZIONI: SezioneReport[] = [
     righe: Array.from({ length: 80 }, (_, indice) => [`Reparto ${indice}`, String(indice)]),
     nota: "Fonte: anagrafica dei reparti.",
   },
-  { tipo: "metodo", titolo: TITOLI[4], paragrafi: ["Primo paragrafo del metodo.", "Secondo paragrafo del metodo."] },
+  { tipo: "metodo", titolo: TITOLI[3], paragrafi: ["Primo paragrafo del metodo.", "Secondo paragrafo del metodo."] },
 ];
 
-const IMMAGINI: ImmaginiReport = {
-  pagine: new Map([
-    [1, "data:image/jpeg;base64,pagina1"],
-    [2, null],
-  ]),
-  calore: new Map([[2, new Map([[1, "data:image/png;base64,calore1"]])]]),
-};
+const IMMAGINI: ImmaginiReport = { copertina: "data:image/jpeg;base64,pagina1" };
 
 const report = (campi: Partial<ReportVolantino> = {}) =>
   reportDiProva({
@@ -136,6 +129,7 @@ describe("documento del report PDF", () => {
     expect(copertina).toHaveTextContent("Riservato - uso interno");
     for (const titolo of TITOLI) expect(copertina).toHaveTextContent(titolo);
     expect(copertina.querySelector('img[src="data:image/jpeg;base64,pagina1"]')).not.toBeNull();
+    expect(copertina).toHaveTextContent("Prima pagina del volantino");
     expect(copertina).not.toHaveTextContent("Pagina 2 di 9");
     expect(container.querySelector('[data-pdf="documento"]')).toHaveAttribute("data-titolo", "Report volantino - Volantino di novembre");
   });
@@ -190,30 +184,29 @@ describe("documento del report PDF", () => {
     expect(grafici[1]).toHaveTextContent("Quota spazio");
   });
 
-  it("pagine del volantino: una per pagina, con immagine, calore, box in evidenza e scala", () => {
+  it("le pagine del volantino non entrano nel report: la prima pagina e' solo la miniatura in copertina", () => {
     const { container } = render(<ReportVolantinoPdf report={report()} immagini={IMMAGINI} />);
-    const pagine = pagineDellaSezione(container, TITOLI[2]);
-    expect(pagine).toHaveLength(3);
+    const [copertina, ...altre] = pagineDelDocumento(container);
 
-    const [prima, seconda, terza] = pagine;
-    expect(prima).toHaveTextContent("Dove si concentra lo sconto.");
-    expect(prima.querySelector('img[src="data:image/jpeg;base64,pagina1"]')).not.toBeNull();
-    expect(prima.querySelector('img[src="data:image/png;base64,calore1"]')).not.toBeNull();
-    expect(prima).toHaveTextContent("Prodotto b1");
-    expect(prima).toHaveTextContent("Prodotto b2");
-    expect(prima).toHaveTextContent("30%");
-    expect(prima).toHaveTextContent("Il valore più alto del volantino");
-    expect(prima).toHaveTextContent("Valori in percentuale; scala comune a tutte le pagine.");
+    expect(copertina.querySelectorAll("img")).toHaveLength(1);
+    for (const pagina of altre) {
+      expect(pagina.querySelector("img")).toBeNull();
+      expect(pagina).not.toHaveTextContent(/Pagina \d+ del volantino|mappa di calore|visibilit/i);
+    }
+  });
 
-    expect(seconda).toHaveTextContent("Immagine della pagina non disponibile");
-    expect(seconda).toHaveTextContent("Prodotto b3");
-    expect(seconda).not.toHaveTextContent("Il valore più alto del volantino");
-    expect(terza).toHaveTextContent("Nessun box con un valore in questa pagina.");
+  it("senza l'immagine della prima pagina la copertina lo dice e disegna la pagina bianca", () => {
+    const { container } = render(<ReportVolantinoPdf report={report()} immagini={{ copertina: null }} />);
+    const copertina = pagineDelDocumento(container)[0];
+
+    expect(copertina.querySelector("img")).toBeNull();
+    expect(copertina).toHaveTextContent("Prima pagina: immagine non disponibile");
+    expect(copertina).toHaveTextContent("Volantino di novembre");
   });
 
   it("tabella: l'intestazione si ripete su ogni pagina e la nota chiude l'ultima", () => {
     const { container } = render(<ReportVolantinoPdf report={report()} immagini={IMMAGINI} />);
-    const pagine = pagineDellaSezione(container, TITOLI[3]);
+    const pagine = pagineDellaSezione(container, TITOLI[2]);
     expect(pagine.length).toBeGreaterThanOrEqual(2);
     pagine.forEach((pagina, indice) => {
       expect(within(pagina).getByText("Reparto")).toBeInTheDocument();
@@ -235,8 +228,12 @@ describe("documento del report PDF", () => {
     expect(metodo).toHaveTextContent("Secondo paragrafo del metodo.");
   });
 
-  it("una sezione di un tipo sconosciuto si salta", () => {
-    const sezioni = [{ tipo: "futura", titolo: "Sezione futura" } as unknown as SezioneReport, SEZIONI[4]];
+  it("una sezione di un tipo sconosciuto (o non piu' mostrato, come le vecchie pagine del volantino) si salta", () => {
+    const sezioni = [
+      { tipo: "futura", titolo: "Sezione futura" } as unknown as SezioneReport,
+      { tipo: "pagine", titolo: "Mappa dello sconto", misura: "sconto", introduzione: null, boxInEvidenza: 3 } as unknown as SezioneReport,
+      SEZIONI[3],
+    ];
     const { container } = render(<ReportVolantinoPdf report={report({ sezioni })} immagini={IMMAGINI} />);
     const pagine = pagineDelDocumento(container);
     expect(pagine).toHaveLength(2);
@@ -246,11 +243,11 @@ describe("documento del report PDF", () => {
 
 describe("palette del report", () => {
   it("completa i colori mancanti con quelli standard", () => {
-    const palette = paletteCompleta({ primario: "#004b87", accento: "", categorie: [], calore: ["#ffffff"] });
+    const palette = paletteCompleta({ primario: "#004b87", accento: "", categorie: [] });
     expect(palette.primario).toBe("#004b87");
     expect(palette.accento).toBe(PALETTE_REPORT_STANDARD.accento);
     expect(palette.categorie).toEqual(PALETTE_REPORT_STANDARD.categorie);
-    expect(palette.calore).toEqual(PALETTE_REPORT_STANDARD.calore);
+    expect(palette).not.toHaveProperty("calore");
     expect(paletteCompleta(null)).toEqual(PALETTE_REPORT_STANDARD);
   });
 });
