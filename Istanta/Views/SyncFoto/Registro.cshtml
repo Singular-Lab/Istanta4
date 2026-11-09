@@ -6,7 +6,7 @@
 <h5>Registro delle sincronizzazoini</h5>
 
 <nav class="navbar navbar-light bg-light">
-    <form class="container-fluid justify-content-start">
+    <form class="container-fluid justify-content-start" id="formRicercaRegistro">
         <div class="container" id="commandBar">
             <div class="row" id="stepScan">
                 <div class="col-3" id="div_titolo">
@@ -28,7 +28,7 @@
                     </div>
                 </div>
                 <div class="col-3">                    
-                    <button class="btn btn-outline-success me-2" id="bSearch" type="button">Cerca</button>
+                    <button class="btn btn-outline-success me-2" id="bSearch" type="submit">Cerca</button>
                 </div>
             </div>
         </div>
@@ -102,13 +102,15 @@
     {
         syncInstance = new SyncFoto();
 
-        $("#bSearch").on("click", function(){
+        //I20-1214: la ricerca parte dall'invio del modulo, cosi' vale sia Cerca sia Invio in un campo; senza ricaricare la pagina.
+        $("#formRicercaRegistro").on("submit", function(e){
+            e.preventDefault();
             let nomeCartella = $("#nome_cartella").val();
             let dataDa = $("#data_da").val();
             let dataA = $("#data_a").val();
             //syncInstance.cercaNelRegistro(nomeCartella, dataDa, dataA);
             let obj = {
-                nomeCartella: nomeCartella,
+                nome: nomeCartella,
                 dataDa: dataDa,
                 dataA: dataA
             }

@@ -3450,7 +3450,9 @@ namespace Istanta.Controllers
                                 TipoOperazione = s.TipoOperazione,
                                 Url=s.Url!,
                                 Meta=JsonConvert.DeserializeObject<RevisioneSyncFoto>(s.FormData!)!
-                            }).ToListAsync();                        
+                            }).ToListAsync();
+                        //I20-1214: la cartella sta nel JSON registrato, quindi il Nome filtra qui, sulle sincronizzazioni dell'intervallo.
+                        result.list = result.list.Where(r => req.CartellaCorrisponde(r.Meta?.dir)).ToList();
                     }
                 }
                     

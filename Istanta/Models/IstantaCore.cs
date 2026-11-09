@@ -866,6 +866,19 @@ namespace Istanta.Models
         public string nome { get; set; } = "";
         public DateTime? dataDa { get; set; }
         public DateTime? dataA { get; set; }
+
+        /// I20-1214: il Nome del registro delle sincronizzazioni non filtrava niente. Una cartella
+        /// corrisponde se contiene il testo scritto, senza distinguere le maiuscole; un Nome vuoto
+        /// non restringe la ricerca.
+        public bool CartellaCorrisponde(string? dir)
+        {
+            var cercato = (nome ?? "").Trim();
+            if (cercato == "")
+            {
+                return true;
+            }
+            return (dir ?? "").Contains(cercato, StringComparison.OrdinalIgnoreCase);
+        }
     }
     public interface IRecordRicercaRegitroResponse
     {
