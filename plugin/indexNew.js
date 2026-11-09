@@ -4044,7 +4044,7 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                             docInLavorazione.activeLayer = docInLavorazione.layers.itemByName("InPagina");
                             var filtroResult = objResult.result[$r];
                             itemRef = null; //I20-1038: il contesto di IDX-27 non deve mostrare la ref della pagina prima
-                            showLoading("Impaginazione di pagina: " + filtroResult.pag);
+                            showLoading("Impaginazione di pagina: " + filtroResult.pag, nomeDocumentoImpaginazione); //I20-1210: sopra, il nome del documento
                             await Utility.sleep(10);
                             var XoffsetElementiConfronto = 0; //offset usato solo in caso di confronto per sfalzare i record impaginati in alto a sinistra
                             var YoffsetElementiConfronto = 0; //offset usato solo in caso di confronto per sfalzare i record impaginati in alto a sinistra
@@ -4740,7 +4740,7 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
 
                         }
 
-                        showLoading("Impaginazione di pagina: " + filtroResult.pag);
+                        showLoading("Impaginazione di pagina: " + filtroResult.pag, nomeDocumentoImpaginazione); //I20-1210: sopra, il nome del documento
                         await Utility.sleep(10);
                         //TASK-16def236: se l'operatore ha chiuso il documento ci si ferma qui (IDX-201).
                         InddEvents.fermaSeDocumentoChiuso(docInLavorazione, nomeDocumentoImpaginazione);
@@ -7209,11 +7209,23 @@ function kitPromoCmb_changed()
 ///
 /// I20-1123: il campo in cui si sta scrivendo torna a riposo, perche' in UXP un campo nativo
 /// resterebbe visibile sopra l'attesa; gli altri sono gia' a riposo e l'attesa li copre.
-function showLoading(msg)//Facoltativo
+///
+/// I20-1210: sopra, facoltativo, scrive il testo sopra il messaggio, come il nome del documento
+/// durante l'impaginazione. Senza, la riga si svuota e si nasconde: non resta da un'attesa all'altra.
+function showLoading(msg, sopra = null)//Facoltativo
 {
 
     $("#loadingPanel").show();
-    
+
+    if (sopra != null && String(sopra) != "")
+    {
+        $("#loadingPanel").find(".loadingSopra").text(String(sopra)).show();
+    }
+    else
+    {
+        $("#loadingPanel").find(".loadingSopra").text("").hide();
+    }
+
     if (msg!=null)
     {
         $("#loadingPanel").find("h1").text(msg);
