@@ -599,3 +599,86 @@ test('la scheda ref rimisura le CSF-013 prima di leggere il bollino, e segue il 
     assert.match(funzione, /this\.refSelected\.item = dopo;/);
     assert.match(funzione, /SchermataSegnalazioni\.seguiBoxRigruppato\(box, dopo, eraSelezionato\);/);
 });
+
+/* ---- TASK-b2d612d7: le immagini si misurano sulla parte che si vede ---- */
+
+//I due loghi del BOX12 di Edro21: cornici piu' larghe delle immagini adattate in proporzione,
+//che si sovrappongono fra 30 e 31.5 mm mentre le immagini si fermano a 29.8 e ripartono da 30.5.
+const LOGO_SDB = { cornice: [20, 1, 27.8, 31.5], immagine: [21, 1, 26.8, 29.8] };
+const LOGO_PIACERSI = { cornice: [20, 30, 26.2, 45.7], immagine: [20, 30.5, 25.5, 45.7] };
+
+test('la parte visibile di un\'immagine piu\' piccola della cornice e\' l\'immagine', () => {
+    assert.deepStrictEqual(cssRegoleConflitti.rettangoloVisibile(LOGO_SDB.cornice, LOGO_SDB.immagine), LOGO_SDB.immagine);
+});
+
+test('un\'immagine ritagliata dalla cornice si misura fin dove la cornice la mostra', () => {
+    assert.deepStrictEqual(cssRegoleConflitti.rettangoloVisibile([10, 10, 20, 20], [5, 12, 25, 18]), [10, 12, 20, 18]);
+});
+
+test('senza immagine leggibile, o con l\'immagine tutta fuori, resta la cornice', () => {
+    const cornice = [10, 10, 20, 20];
+    assert.deepStrictEqual(cssRegoleConflitti.rettangoloVisibile(cornice, null), cornice);
+    assert.deepStrictEqual(cssRegoleConflitti.rettangoloVisibile(cornice, [1, 2]), cornice);
+    assert.deepStrictEqual(cssRegoleConflitti.rettangoloVisibile(cornice, [30, 30, 40, 40]), cornice);
+});
+
+test('due loghi con le cornici sovrapposte e le immagini separate non si toccano', () => {
+    assert.ok(cssRegoleConflitti.rettangoliInContatto(LOGO_SDB.cornice, LOGO_PIACERSI.cornice), 'le cornici si toccano');
+    assert.strictEqual(cssRegoleConflitti.rettangoliInContatto(
+        cssRegoleConflitti.rettangoloVisibile(LOGO_SDB.cornice, LOGO_SDB.immagine),
+        cssRegoleConflitti.rettangoloVisibile(LOGO_PIACERSI.cornice, LOGO_PIACERSI.immagine)), false);
+});
+
+test('il bianco dentro il file conta come immagine: immagini sovrapposte si toccano, senza tolleranza', () => {
+    //L'immagine di SDB arriva a 30.6 col suo margine bianco: 0.1 mm dentro quella di Piacersi.
+    assert.ok(cssRegoleConflitti.rettangoliInContatto(
+        cssRegoleConflitti.rettangoloVisibile(LOGO_SDB.cornice, [21, 1, 26.8, 30.6]),
+        cssRegoleConflitti.rettangoloVisibile(LOGO_PIACERSI.cornice, LOGO_PIACERSI.immagine)));
+});
+
+//Una cornice finta con un'immagine piazzata, come la espone il DOM: graphics.length e graphics.item(0).
+function corniceConImmagine(id, label, logo) {
+    return {
+        id: id, label: label, constructorName: 'Rectangle', isValid: true, visible: true, parent: null,
+        geometricBounds: logo.cornice,
+        graphics: { length: logo.immagine ? 1 : 0, item: () => ({ isValid: true, geometricBounds: logo.immagine }) }
+    };
+}
+
+test('elementsTouching misura i loghi sulle immagini, sui riquadri e sul testo', () => {
+    conAmbienteFinto((CssFramework) => {
+        const sdb = corniceConImmagine(1, 'foto_extra$Logo_SDB$tipo_3', LOGO_SDB);
+        const piacersi = corniceConImmagine(2, 'foto_extra$conad_piacersi$tipo_3', LOGO_PIACERSI);
+
+        assert.strictEqual(CssFramework.elementsTouching(sdb, piacersi, false), false);
+        assert.strictEqual(CssFramework.elementsTouching(sdb, piacersi, true), false);
+    });
+});
+
+test('elementsTouching: una cornice senza immagine si misura ancora sulla cornice', () => {
+    conAmbienteFinto((CssFramework) => {
+        const sdb = corniceConImmagine(1, 'foto_extra$Logo_SDB$tipo_3', { cornice: LOGO_SDB.cornice, immagine: null });
+        const piacersi = corniceConImmagine(2, 'foto_extra$conad_piacersi$tipo_3', LOGO_PIACERSI);
+
+        assert.strictEqual(CssFramework.elementsTouching(sdb, piacersi, false), true);
+    });
+});
+
+test('una CSF-013 fra loghi le cui immagini non si toccano si toglie all\'apertura della scheda', () => {
+    conAmbienteFinto((CssFramework, messaggi) => {
+        const a = 'foto_extra$Logo_SDB$tipo_3';
+        const b = 'foto_extra$conad_piacersi$tipo_3';
+        const voce = { g: 'warning', c: 'CSF-013', t: 'Code CSF-013: Conflitto tra elementi nel box BOX12: ' + a + ' non dovrebbe toccare ' + b + '.', v: { a: a, b: b, tb: false } };
+        const box = { label: 'BOX12', isValid: true, id: 1, allPageItems: [], ovals: null };
+        box.allPageItems.push(corniceConImmagine(10, a, LOGO_SDB), corniceConImmagine(11, b, LOGO_PIACERSI));
+        const bollino = { id: 12, label: etichettaBollino.scrivi([voce]), isValid: true, visible: true, parent: null, geometricBounds: [0, 0, 5, 5] };
+        bollino.remove = function () { box.allPageItems = box.allPageItems.filter(e => e !== bollino); };
+        box.allPageItems.push(bollino);
+
+        CssFramework.ricontrollaConflittiDelBox(box);
+
+        assert.strictEqual(Segnalazioni().bolliniDelBox(box).length, 0);
+        assert.strictEqual(messaggi.length, 1);
+        assert.match(messaggi[0].testo, /^Code CSF-28: Segnalazione CSF-013 tolta dal box BOX12: .* Misure in mm \[alto, sinistra, basso, destra\]: foto_extra\$Logo_SDB\$tipo_3 \[21\.00, 1\.00, 26\.80, 29\.80\]/);
+    });
+});
