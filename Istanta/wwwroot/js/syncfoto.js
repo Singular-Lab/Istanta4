@@ -533,6 +533,9 @@ class SyncFoto {
                     let item = lista_file[i];                    
                     let idRec = item.idRecView;
 
+                    //I20-1212: l'elenco della scansione segue il sync, per ConsolidaSelezione a fine giro.
+                    SyncFoto.aggiornaFileDellaScansione(me.syncOp.files, item);
+
                     if (item.stato == SyncFileStato.Synced) {
                         let olUri = $("#ipOlympus").val() +"/foto/getThumbNailOnDemand?guidId=" + item.guidid + "&width=30&height=0";
 
@@ -576,25 +579,45 @@ class SyncFoto {
         }
         else
         {
-            hideLoading();
-            if (this.pingInterval != null) {
-                clearInterval(this.pingInterval);
-            }
+            //I20-1212: finiti i blocchi, la foto in uscita di ogni articolo si decide sul pacchetto intero.
+            this.consolidaSelezione(this.syncOp.files, () => this.fineSync());
+        }
+    }
+
+    /// I20-1212: a sync finito, Istanta sceglie per ogni articolo con foto registrate la foto del pacchetto
+    /// che resta in uscita (la post prodotta, o l'ultima dello zip). Una chiamata sola, con i soli campi che
+    /// servono. Se non riesce le foto restano registrate e lo si dice: la selezione va controllata.
+    consolidaSelezione(files, fine) {
+        let obj = { files: SyncFoto.fileDaConsolidare(files) };
+        if (obj.files.length == 0) {
+            fine();
+            return;
+        }
+        showLoading("Scelta delle foto in uscita...");
+        Call.do("SyncFoto", "ConsolidaSelezione", "PUT", obj, this, function () {
+            fine();
+        }, function (err) {
+            console.error("Selezione delle foto in uscita non riuscita", err);
+            mostraMessaggio("Foto sincronizzate, ma non è stato possibile scegliere la foto in uscita degli articoli: controllala in Archivio.", "warning");
+            fine();
+        });
+    }
+
+    fineSync() {
+        hideLoading();
+        if (this.pingInterval != null) {
+            clearInterval(this.pingInterval);
+        }
 
 
-            if (this.firstJob) {
-                //$("#commandBar").css("display", "none");
-                $("#bFirstSync").css("display", "none");
-                $("#commandBarPostJob").css("display", "block");
-            }
-            else {
-                //$("#div_rescan").css("display", "block");
-                //$("#div_resync").css("display", "none");
-            }
-            
-            
-
-
+        if (this.firstJob) {
+            //$("#commandBar").css("display", "none");
+            $("#bFirstSync").css("display", "none");
+            $("#commandBarPostJob").css("display", "block");
+        }
+        else {
+            //$("#div_rescan").css("display", "block");
+            //$("#div_resync").css("display", "none");
         }
     }
 
@@ -1247,6 +1270,26 @@ class SyncFoto {
     /// che SyncFoto/ricercaNelRegistro scrive in error: prima si leggeva err.message.error, una
     /// proprieta' di una stringa, e l'utente vedeva "undefined". Un errore imprevisto porta con se'
     /// lo stack trace del server, che resta nella console.
+    /// I20-1212: dell'elenco della scansione, per ConsolidaSelezione, le sole foto abbinate a un articolo e i
+    /// soli campi che servono, nell'ordine della scansione (lo zip).
+    static fileDaConsolidare(files) {
+        return (files || [])
+            .filter(f => f != null && f.idArticolo > 0)
+            .map(f => ({ filename: f.filename, stato: f.stato, id: f.id, idArticolo: f.idArticolo, tipo: f.tipo }));
+    }
+
+    /// I20-1212: lo stato e l'id che il sync di un blocco ha dato a un file, riportati sulla sua riga
+    /// dell'elenco della scansione (stessa riga della tabella, idRecView).
+    static aggiornaFileDellaScansione(files, item) {
+        let rec = (files || []).find(f => f != null && item != null && f.idRecView == item.idRecView);
+        if (rec == null) {
+            return false;
+        }
+        rec.stato = item.stato;
+        rec.id = item.id;
+        return true;
+    }
+
     static messaggioRicercaRegistroNonRiuscita(err) {
         var codice = err ? err.message : undefined;
         if (codice === "not_more_40") {

@@ -1273,8 +1273,14 @@ namespace Istanta.Controllers
                     //Qui ciclo i dati per poter fare l'update dei dati su Istanta (in teoria perchè in pratica aimè li ho gia fatti MA non andrebbe bene
                     //e assegnare il guidID di olympus
                     List<ShortSyncFile> _listRegistro = new List<ShortSyncFile>();
-                    foreach(FileOlympoSync f in dataOlympo!.lista!)
+                    //I20-1212: piu' foto dello stesso articolo nel pacchetto (un jpg e un psd) si registrano tutte,
+                    //in un ordine definito e con date di modifica crescenti: in uscita va la piu' recente, e prima
+                    //era l'ultima dello zip. Ora le post prodotte vanno per ultime, le altre nell'ordine dello zip.
+                    DateTime inizioRegistrazione = DateTime.Now;
+                    int posizioneRegistrazione = 0;
+                    foreach(FileOlympoSync f in OrdineDiRegistrazione(dataOlympo!.lista!, EstensioniPostProduzione(ext_post_lavorazione)))
                     {
+                        DateTime orarioRegistrazione = OrarioDiRegistrazione(inizioRegistrazione, posizioneRegistrazione++);
                         //result.error += " -> Olympus file " + f.FileName + "  ID " + f.Id + " ID REF " + f.IdRef;
 
                         if (f.Id != "")
@@ -1297,7 +1303,7 @@ namespace Istanta.Controllers
                                         fotoIstanta!.GuidId = f.Id!;
                                         fotoIstanta.PathFoto= f.FileName!;
                                         fotoIstanta.NomeReale = f.FileName!;
-                                        fotoIstanta.DataModifica = DateTime.Now;
+                                        fotoIstanta.DataModifica = orarioRegistrazione;
                                         fotoIstanta.Hash = f.FileHash;
                                         fotoIstanta.Attiva = true;
                                         fotoIstanta.StatoSelezione = (Byte)StatoSelezioneFoto.Primaria;
@@ -1318,8 +1324,8 @@ namespace Istanta.Controllers
                                         fotoIstanta.Attiva = true;
                                         fotoIstanta.PathFoto = f.FileName!;
                                         fotoIstanta.NomeReale = f.FileName!;
-                                        fotoIstanta.DataInserimento = DateTime.Now;
-                                        fotoIstanta.DataModifica = DateTime.Now;
+                                        fotoIstanta.DataInserimento = orarioRegistrazione;
+                                        fotoIstanta.DataModifica = orarioRegistrazione;
                                         fotoIstanta.StatoSelezione = (Byte)StatoSelezioneFoto.Primaria;
                                         fotoIstanta.IdArticolo = syncDetail.idArticolo;
                                         fotoIstanta.Hash = f.FileHash;
@@ -1442,6 +1448,133 @@ namespace Istanta.Controllers
             }
 
             return Ok(result);
+        }
+
+        /// <summary>
+        /// I20-1212: le estensioni dei file post prodotti, per l'ordine di registrazione del sync: quelle
+        /// configurate (sync_options.extPostLavorazione), qualunque siano, con il punto davanti; .psd se
+        /// l'installazione non ne configura nessuna. Le indicazioni della scansione restano sulla sola
+        /// configurazione.
+        /// </summary>
+        public static string[] EstensioniPostProduzione(IEnumerable<string>? configurate)
+        {
+            string[] estensioni = (configurate ?? Enumerable.Empty<string>())
+                .Where(e => !string.IsNullOrWhiteSpace(e))
+                .Select(e => e.Trim())
+                .Select(e => e.StartsWith(".") ? e : "." + e)
+                .ToArray();
+            return estensioni.Length > 0 ? estensioni : new[] { ".psd" };
+        }
+
+        /// <summary>
+        /// I20-1212: in che ordine il sync registra le foto restituite da Olimpo. Olimpo le restituisce
+        /// nell'ordine dello zip, e la registrazione da' a ciascuna la data di modifica del momento: in
+        /// uscita andava l'ultima dello zip, il jpg o il psd a seconda di come era fatto il pacchetto.
+        /// Qui le post prodotte (estensione fra quelle date, senza distinguere le maiuscole) vanno per
+        /// ultime, cioe' piu' recenti; per il resto vale l'ordine dello zip.
+        /// </summary>
+        public static List<FileOlympoSync> OrdineDiRegistrazione(IEnumerable<FileOlympoSync> foto, IEnumerable<string> estensioniPostProduzione)
+        {
+            if (foto == null)
+            {
+                throw new ArgumentNullException(nameof(foto));
+            }
+            string[] post = (estensioniPostProduzione ?? Enumerable.Empty<string>()).ToArray();
+            bool postProdotta(FileOlympoSync f) => post.Any(e => string.Equals(Path.GetExtension(f.FileName ?? ""), e, StringComparison.OrdinalIgnoreCase));
+
+            //OrderBy e' stabile: a parita' di tipo resta l'ordine dello zip.
+            return foto.Where(f => f != null).OrderBy(f => postProdotta(f) ? 1 : 0).ToList();
+        }
+
+        /// <summary>
+        /// I20-1212: per ogni articolo di cui il sync ha registrato almeno una foto (Synced), la foto del
+        /// pacchetto che deve restare in uscita: fra quelle che sono nell'archivio (registrate ora, gia'
+        /// selezionate, gia' presenti non selezionate, o cambiate e non risincronizzate) la post prodotta
+        /// (estensione fra quelle date), altrimenti l'ultima nello zip. Le foto arrivano nell'ordine dello
+        /// zip, tutte quelle della scansione: la pagina le sincronizza a blocchi di 20 e solo quelle
+        /// selezionabili, e nessun blocco vede l'articolo intero. Gli articoli senza foto registrate non ci sono.
+        /// </summary>
+        public static List<SyncFile> FotoCheDevonoPrevalere(IEnumerable<SyncFile> files, IEnumerable<string> estensioniPostProduzione)
+        {
+            string[] post = (estensioniPostProduzione ?? Enumerable.Empty<string>()).ToArray();
+            bool postProdotta(SyncFile f) => post.Any(e => string.Equals(Path.GetExtension(f.filename ?? ""), e, StringComparison.OrdinalIgnoreCase));
+            bool inArchivio(SyncFile f) => f.id > 0 && (f.stato == StatoSyncFile.Synced || f.stato == StatoSyncFile.AlreadyExist
+                || f.stato == StatoSyncFile.AlreadyExistButNotSelected || f.stato == StatoSyncFile.SyncableAsOverwrite);
+
+            var risultato = new List<SyncFile>();
+            var fotoDegliArticoli = (files ?? Enumerable.Empty<SyncFile>())
+                .Where(f => f != null && f.idArticolo > 0 && f.tipo == TipoFoto.Foto)
+                .GroupBy(f => f.idArticolo);
+            foreach (var articolo in fotoDegliArticoli)
+            {
+                if (!articolo.Any(f => f.stato == StatoSyncFile.Synced))
+                {
+                    continue;
+                }
+                List<SyncFile> candidate = articolo.Where(inArchivio).ToList();
+                if (candidate.Count == 0)
+                {
+                    continue;
+                }
+                risultato.Add(candidate.LastOrDefault(postProdotta) ?? candidate.Last());
+            }
+            return risultato;
+        }
+
+        /// <summary>
+        /// I20-1212: la data di modifica della foto registrata alla posizione data: un microsecondo dopo
+        /// la precedente (data_modifica e' un timestamp di PostgreSQL, al microsecondo), cosi' l'ordine
+        /// di registrazione decide la foto in uscita senza dipendere dai tempi del server.
+        /// </summary>
+        public static DateTime OrarioDiRegistrazione(DateTime inizio, int posizione)
+        {
+            return inizio.AddTicks(posizione * 10L);
+        }
+
+        /// <summary>
+        /// I20-1212: a sync finito la pagina manda l'elenco della scansione (nell'ordine dello zip, con lo
+        /// stato dopo i blocchi) e per ogni articolo la foto che deve prevalere (FotoCheDevonoPrevalere)
+        /// torna la foto in uscita: data di modifica adesso, attiva e primaria. Senza Olimpo e senza file:
+        /// una query sulle righe coinvolte e un salvataggio. Una riga si tocca solo se e' dell'articolo indicato.
+        /// </summary>
+        [HttpPut]
+        [Route("SyncFoto/ConsolidaSelezione")]
+        public async Task<IActionResult> ConsolidaSelezione(SyncFileOperation op)
+        {
+            try
+            {
+                List<SyncFile> prevalenti = FotoCheDevonoPrevalere(op?.files ?? new List<SyncFile>(), EstensioniPostProduzione(ext_post_lavorazione));
+                if (prevalenti.Count == 0)
+                {
+                    return Ok(new { consolidate = 0 });
+                }
+
+                List<Int64> ids = prevalenti.Select(p => p.id).ToList();
+                List<ArticoliFoto> righe = await this.ctx.ArticoliFotos.Where(f => ids.Contains(f.Id)).ToListAsync();
+
+                DateTime adesso = DateTime.Now;
+                int consolidate = 0;
+                foreach (SyncFile prevale in prevalenti)
+                {
+                    ArticoliFoto? riga = righe.FirstOrDefault(r => r.Id == prevale.id && r.IdArticolo == prevale.idArticolo);
+                    if (riga == null)
+                    {
+                        continue;
+                    }
+                    riga.DataModifica = OrarioDiRegistrazione(adesso, consolidate);
+                    riga.Attiva = true;
+                    riga.StatoSelezione = (Byte)StatoSelezioneFoto.Primaria;
+                    consolidate++;
+                }
+                await this.ctx.SaveChangesAsync();
+
+                return Ok(new { consolidate = consolidate });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "ConsolidaSelezione non riuscita");
+                return StatusCode(500, new { error = "Selezione delle foto in uscita non riuscita" });
+            }
         }
 
         /// <summary>
