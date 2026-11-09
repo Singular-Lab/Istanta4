@@ -845,6 +845,32 @@ const pluginMiddleware = {
             }));
     },
 
+    /// I20-1211: i filtri della schermata delle segnalazioni decisi dal cliente
+    /// (AgenziaCustomPlugin_FiltroSegnalazioni), come [{ nome, condizioni: [{ codice, testoContiene }] }].
+    /// Senza la chiave, o se non e' una lista, nessuno. Una condizione senza codice non vale, e un
+    /// filtro senza nome o senza condizioni valide nemmeno.
+    getFiltriSegnalazioni() {
+        let me = this;
+
+        const valore = me.callCustom
+            ? (typeof customAgenzia !== "undefined" && customAgenzia != null ? customAgenzia.filtriSegnalazioni : null)
+            : me.customPluginDB?.filtriSegnalazioni;
+        if (!Array.isArray(valore)) {
+            return [];
+        }
+        const testo = (v) => typeof v === "string" ? v.trim() : "";
+        return valore
+            .filter(f => f != null && typeof f === "object")
+            .map(f => ({
+                nome: testo(f.nome),
+                condizioni: (Array.isArray(f.condizioni) ? f.condizioni : [])
+                    .filter(c => c != null && typeof c === "object")
+                    .map(c => ({ codice: testo(c.codice), testoContiene: testo(c.testoContiene) }))
+                    .filter(c => c.codice !== "")
+            }))
+            .filter(f => f.nome !== "" && f.condizioni.length > 0);
+    },
+
     /// TASK-60aaf10d: come il cliente usa la foto indicata dal tracciato
     /// (AgenziaCustomPlugin_FotoDaTracciato). Per il Plugin conta solo se la foto della lista si
     /// cambia solo per la lavorazione. Senza la chiave, o se non e' un oggetto, null: tutto come prima.

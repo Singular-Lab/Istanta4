@@ -59,6 +59,10 @@ const COLORE_CSS = { error: "#c62828", warning: "#ef6c00", notifica: "#1565c0" }
 const COLORE_NESSUNA = "#2e7d32";
 const COLORE_DISATTIVATE = "#9e9e9e";
 
+//I20-1211: il viola delle segnalazioni che cadono in un filtro del cliente: il loro pallino nella
+//schermata e il tondino accanto al segnalino. Nessun altro colore del Plugin e' viola.
+const COLORE_FILTRI = "#7b1fa2";
+
 const SchermataSegnalazioni = {
 
     ID_ELENCO: "elencoSegnalazioniImpaginazione",
@@ -81,6 +85,10 @@ const SchermataSegnalazioni = {
     ID_SEGNALINO: "segnalinoSegnalazioni",
     ID_TESTO_SEGNALINO: "testoSegnalinoSegnalazioni",
 
+    /// I20-1211: il tondino viola a sinistra del segnalibro.
+    ID_TONDINO_SEGNALINO: "tondinoSegnalazioni",
+    COLORE_FILTRI: COLORE_FILTRI,
+
     /// I20-1126: il campo della voce della lavorazione (lavorazioni.json) che dice se le segnalazioni
     /// sono disattivate.
     CAMPO_DISATTIVATE: "segnalazioniDisattivate",
@@ -101,6 +109,53 @@ const SchermataSegnalazioni = {
     /// Il colore di una gravita' sulla schermata.
     coloreCss(gravita) {
         return COLORE_CSS[gravita] || COLORE_CSS.notifica;
+    },
+
+    /// I20-1211: i filtri della schermata dichiarati dal cliente (pluginMiddleware.getFiltriSegnalazioni):
+    /// [{ nome, condizioni: [{ codice, testoContiene }] }]. Nessuno se non si sanno leggere: la
+    /// schermata resta com'era.
+    filtriDelCliente() {
+        try {
+            if (typeof pluginMiddleware !== "undefined" && pluginMiddleware != null && typeof pluginMiddleware.getFiltriSegnalazioni === "function") {
+                const filtri = pluginMiddleware.getFiltriSegnalazioni();
+                return Array.isArray(filtri) ? filtri : [];
+            }
+        }
+        catch (e) {
+            console.error("Code SGN-08 Filtri delle segnalazioni non letti:", e);
+        }
+        return [];
+    },
+
+    /// I20-1211: se una segnalazione cade in un filtro: ha il codice di una sua condizione e, se la
+    /// condizione lo chiede, il testo lo contiene, senza distinguere maiuscole (CSF-013 solo quando
+    /// nomina una foto). Una segnalazione senza codice non cade in nessun filtro.
+    voceNelFiltro(voce, filtro) {
+        if (voce == null || !voce.c || filtro == null || !Array.isArray(filtro.condizioni)) {
+            return false;
+        }
+        const codice = String(voce.c).toUpperCase();
+        const testo = String(voce.t || "").toLowerCase();
+        return filtro.condizioni.some(condizione => condizione != null
+            && String(condizione.codice || "").toUpperCase() === codice
+            && (!condizione.testoContiene || testo.indexOf(String(condizione.testoContiene).toLowerCase()) >= 0));
+    },
+
+    /// I20-1211: se una segnalazione cade in almeno uno dei filtri: e' una di quelle viola.
+    voceDeiFiltri(voce, filtri) {
+        return (Array.isArray(filtri) ? filtri : []).some(filtro => SchermataSegnalazioni.voceNelFiltro(voce, filtro));
+    },
+
+    /// I20-1211: le letture viste col filtro scelto: per contarle, ciascuna con le sole segnalazioni
+    /// del filtro, senza i box che ne restano senza. Senza filtro le letture come sono.
+    letturePerFiltro(lette, filtro) {
+        const elenco = Array.isArray(lette) ? lette : [];
+        if (filtro == null) {
+            return elenco;
+        }
+        return elenco
+            .map(lettura => Object.assign({}, lettura, { voci: (Array.isArray(lettura.voci) ? lettura.voci : []).filter(voce => SchermataSegnalazioni.voceNelFiltro(voce, filtro)) }))
+            .filter(lettura => lettura.voci.length > 0);
     },
 
     /// Le letture di Segnalazioni.leggiDocumento raggruppate per pagina, nell'ordine in cui
@@ -457,15 +512,18 @@ const SchermataSegnalazioni = {
         if (controllo == null || controllo.chiave !== chiaveDocumento || !Array.isArray(pagine)) {
             controllo = { chiave: chiaveDocumento, pagine: {} };
         }
+        //I20-1211: per ogni pagina anche quante segnalazioni cadono nei filtri del cliente.
+        const filtri = SchermataSegnalazioni.filtriDelCliente();
         if (Array.isArray(pagine)) {
-            pagine.forEach(nome => { controllo.pagine[String(nome)] = { segnalazioni: 0, errori: 0, gravita: null }; });
+            pagine.forEach(nome => { controllo.pagine[String(nome)] = { segnalazioni: 0, errori: 0, gravita: null, deiFiltri: 0 }; });
         }
         (Array.isArray(lette) ? lette : []).forEach(lettura => {
             const nome = String(lettura.pagina);
-            const pagina = controllo.pagine[nome] || (controllo.pagine[nome] = { segnalazioni: 0, errori: 0, gravita: null });
+            const pagina = controllo.pagine[nome] || (controllo.pagine[nome] = { segnalazioni: 0, errori: 0, gravita: null, deiFiltri: 0 });
             const voci = Array.isArray(lettura.voci) ? lettura.voci : [];
             pagina.segnalazioni += voci.length;
             pagina.errori += voci.filter(voce => etichettaSegnalazioni.gravita(voce.g) === "error").length;
+            pagina.deiFiltri += voci.filter(voce => SchermataSegnalazioni.voceDeiFiltri(voce, filtri)).length;
             pagina.gravita = etichettaSegnalazioni.gravitaPeggiore((pagina.gravita != null ? [{ g: pagina.gravita }] : []).concat(voci));
         });
         SchermataSegnalazioni._ultimoControllo = controllo;
@@ -492,6 +550,29 @@ const SchermataSegnalazioni = {
             }
         });
         return riepilogo;
+    },
+
+    /// I20-1211: quante segnalazioni dell'ultimo controllo del documento cadono nei filtri del
+    /// cliente. Zero se il controllo e' di un altro documento.
+    segnalazioniDeiFiltri(chiaveDocumento) {
+        const controllo = SchermataSegnalazioni._ultimoControllo;
+        if (controllo == null || chiaveDocumento == null || controllo.chiave !== chiaveDocumento) {
+            return 0;
+        }
+        return Object.keys(controllo.pagine).reduce((totale, nome) => totale + (controllo.pagine[nome].deiFiltri || 0), 0);
+    },
+
+    /// I20-1211: il tondino viola accanto al segnalino: { visibile, suggerimento }. Si vede solo con
+    /// il segnalino, segnalazioni attive e almeno una segnalazione che cade nei filtri del cliente.
+    statoTondino(deiFiltri, statoSegnalino, disattivate = false, filtri = []) {
+        if (statoSegnalino == null || !statoSegnalino.visibile || disattivate === true || !(deiFiltri > 0)) {
+            return { visibile: false, suggerimento: "" };
+        }
+        const nomi = (Array.isArray(filtri) ? filtri : []).map(filtro => filtro.nome).filter(nome => nome);
+        return {
+            visibile: true,
+            suggerimento: deiFiltri + (deiFiltri === 1 ? " segnalazione" : " segnalazioni") + (nomi.length > 0 ? " in " + nomi.join(", ") : " nei filtri")
+        };
     },
 
     /// Il suggerimento dell'icona: "3 segnalazioni irrisolte (1 errore) all'ultimo controllo".
@@ -543,8 +624,9 @@ const SchermataSegnalazioni = {
     /// Un documento diverso da quello controllato (o nessun documento) li nasconde entrambi.
     aggiornaIcona() {
         try {
-            const riepilogo = SchermataSegnalazioni.riepilogoControllo(Segnalazioni._chiaveDocumento(SchermataSegnalazioni._documento()));
-            SchermataSegnalazioni._aggiornaSegnalino(riepilogo);
+            const chiave = Segnalazioni._chiaveDocumento(SchermataSegnalazioni._documento());
+            const riepilogo = SchermataSegnalazioni.riepilogoControllo(chiave);
+            SchermataSegnalazioni._aggiornaSegnalino(riepilogo, SchermataSegnalazioni.segnalazioniDeiFiltri(chiave));
             const icona = $("#" + SchermataSegnalazioni.ID_ICONA);
             if (icona.length === 0) {
                 return;
@@ -563,12 +645,19 @@ const SchermataSegnalazioni = {
     },
 
     /// I20-1116: il segnalino a segnalibro, una linguetta col testo colorata con la gravita'.
-    _aggiornaSegnalino(riepilogo) {
+    _aggiornaSegnalino(riepilogo, deiFiltri = 0) {
         const segnalino = $("#" + SchermataSegnalazioni.ID_SEGNALINO);
         if (segnalino.length === 0) {
             return;
         }
-        const stato = SchermataSegnalazioni.statoSegnalino(riepilogo, SchermataSegnalazioni.disattivate());
+        const disattivate = SchermataSegnalazioni.disattivate();
+        const stato = SchermataSegnalazioni.statoSegnalino(riepilogo, disattivate);
+        //I20-1211: il tondino viola, dentro il segnalino a sinistra del segnalibro.
+        const tondino = $("#" + SchermataSegnalazioni.ID_TONDINO_SEGNALINO);
+        if (tondino != null && tondino.length > 0) {
+            const statoTondino = SchermataSegnalazioni.statoTondino(deiFiltri, stato, disattivate, SchermataSegnalazioni.filtriDelCliente());
+            tondino.attr('title', statoTondino.suggerimento).css({ display: statoTondino.visibile ? 'inline-block' : 'none' });
+        }
         if (!stato.visibile) {
             segnalino.attr('title', "").css({ display: 'none' });
             return;
@@ -643,6 +732,14 @@ const SchermataSegnalazioni = {
         //I20-1056, lotto 2: il conteggio e' accanto al titolo del popup, e si aggiorna a ogni giro.
         //I20-1126: con le segnalazioni disattivate la schermata e' "pulita": solo la barra con
         //"Riattiva", niente conteggio e niente elenco. I bollini nel documento restano dove sono.
+        //I20-1211: il filtro scelto nella barra; senza, tutte le segnalazioni. Da qui lette sono quelle
+        //del filtro, per contarle; i box si disegnano da tutte, perche' "Risolvi" usa l'indice del
+        //bollino, e le righe fuori dal filtro le salta _bloccoBox.
+        const filtri = SchermataSegnalazioni.filtriDelCliente();
+        const filtro = filtri.find(f => f.nome === elenco.data('filtro')) || null;
+        const tutte = Array.isArray(lette) ? lette : [];
+        lette = SchermataSegnalazioni.letturePerFiltro(tutte, filtro);
+
         const disattivate = SchermataSegnalazioni.disattivate();
         const conteggio = elenco.data('conteggio');
         if (conteggio != null) {
@@ -652,15 +749,21 @@ const SchermataSegnalazioni = {
             return;
         }
 
-        const perPagina = SchermataSegnalazioni.perPagina(lette);
+        const perPagina = SchermataSegnalazioni.perPagina(filtro == null ? tutte : tutte.filter(lettura => lette.some(l => l.box === lettura.box)));
         if (perPagina.length === 0) {
+            if (filtro != null) {
+                elenco.append($('<div></div>').text("Nessuna segnalazione in " + filtro.nome + ".").css({ padding: '8px' }));
+                return;
+            }
             elenco.append($('<div></div>').text(Array.isArray(pagine) ? "Nessuna segnalazione nelle pagine impaginate." : "Nessuna segnalazione nel documento.").css({ padding: '8px' }));
             return;
         }
 
         const contesto = {
             traduzioni: SchermataSegnalazioni._traduzioni(),
-            records: SchermataSegnalazioni._recordsDellaLavorazione()
+            records: SchermataSegnalazioni._recordsDellaLavorazione(),
+            filtri: filtri,
+            filtro: filtro
         };
 
         perPagina.forEach((pagina, indice) => {
@@ -689,11 +792,36 @@ const SchermataSegnalazioni = {
             }));
         }
         else {
+            //I20-1211: a sinistra i filtri del cliente, solo se ne ha almeno uno.
+            const filtri = SchermataSegnalazioni.filtriDelCliente();
+            if (filtri.length > 0) {
+                barra.append(SchermataSegnalazioni._sceltaFiltro(elenco, filtri));
+            }
             barra.append($('<button type="button"></button>').text("Disattiva segnalazioni").on('click', () => {
                 SchermataSegnalazioni.chiediDisattivazione(elenco);
             }));
         }
         return barra;
+    },
+
+    /// I20-1211: la scelta del filtro: "Tutte" e un pulsante per filtro del cliente, quello scelto
+    /// in evidenza. Il filtro scelto sta nell'elenco (data 'filtro') e la schermata si ridisegna.
+    _sceltaFiltro(elenco, filtri) {
+        const scelta = $('<span></span>').css({ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px', marginRight: 'auto' });
+        const attuale = elenco.data('filtro') || "";
+        const pulsante = (testo, nome) => {
+            const scelto = nome === attuale;
+            return $('<button type="button"></button>').text(testo)
+                .css({ fontWeight: scelto ? 'bold' : 'normal', borderBottom: scelto ? '2px solid ' + (nome === "" ? '#555' : COLORE_FILTRI) : '2px solid transparent' })
+                .on('click', () => {
+                    elenco.data('filtro', nome);
+                    SchermataSegnalazioni.riempi(elenco);
+                });
+        };
+        scelta.append($('<span></span>').text("Mostra:").css({ color: '#555' }));
+        scelta.append(pulsante("Tutte", ""));
+        filtri.forEach(filtro => scelta.append(pulsante(filtro.nome, filtro.nome)));
+        return scelta;
     },
 
     /// I20-1126: le tre scelte: "Disattiva", "Risolvi tutto e disattiva" (prima toglie tutti i bollini
@@ -1044,6 +1172,14 @@ const SchermataSegnalazioni = {
         });
     },
 
+    /// I20-1211: il pallino di una segnalazione: viola se cade in un filtro del cliente, altrimenti il
+    /// colore della gravita'.
+    _pallinoVoce(voce, contesto) {
+        const filtri = contesto != null && Array.isArray(contesto.filtri) ? contesto.filtri : SchermataSegnalazioni.filtriDelCliente();
+        const pallino = SchermataSegnalazioni._pallino(voce.g);
+        return SchermataSegnalazioni.voceDeiFiltri(voce, filtri) ? pallino.css({ backgroundColor: COLORE_FILTRI }) : pallino;
+    },
+
     /// Il box sulla schermata: la meccanica (l'etichetta del box) e, se il DNA si legge, il codice
     /// gruppo e l'idRec della referenza.
     _datiBox(box) {
@@ -1081,7 +1217,9 @@ const SchermataSegnalazioni = {
 
         //I20-1044: se non c'e' spazio, i pulsanti vanno a capo sotto il nome invece di uscire a destra.
         const testata = $('<div></div>').css({ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px' });
-        testata.append(SchermataSegnalazioni._pallino(etichettaSegnalazioni.gravitaPeggiore(lettura.voci)));
+        //I20-1211: con un filtro scelto, la gravita' delle sole segnalazioni mostrate.
+        const mostrate = contesto.filtro == null ? lettura.voci : lettura.voci.filter(voce => SchermataSegnalazioni.voceNelFiltro(voce, contesto.filtro));
+        testata.append(SchermataSegnalazioni._pallino(etichettaSegnalazioni.gravitaPeggiore(mostrate)));
         const nome = SchermataSegnalazioni._testoCheSiRestringe($('<span></span>')).css({ fontWeight: 'bold', flexBasis: '120px' });
         nome.append($('<span></span>').text("Box " + datiBox.meccanica));
         if (datiBox.codiceGruppo) {
@@ -1123,7 +1261,12 @@ const SchermataSegnalazioni = {
             blocco.append(riga);
         }
 
-        lettura.voci.forEach((voce, indice) => blocco.append(SchermataSegnalazioni._rigaVoce(lettura.box, voce, indice, contesto, ridisegna)));
+        //I20-1211: fuori dal filtro scelto la riga non c'e'; l'indice resta quello del bollino.
+        lettura.voci.forEach((voce, indice) => {
+            if (contesto.filtro == null || SchermataSegnalazioni.voceNelFiltro(voce, contesto.filtro)) {
+                blocco.append(SchermataSegnalazioni._rigaVoce(lettura.box, voce, indice, contesto, ridisegna));
+            }
+        });
 
         return blocco;
     },
@@ -1152,7 +1295,7 @@ const SchermataSegnalazioni = {
     /// (I20-1056, lotto 4): si risolve allo stesso modo da tutte e due.
     _rigaVoce(box, voce, indice, contesto, alCambio) {
         const riga = $('<div></div>').css({ display: 'flex', alignItems: 'flex-start', gap: '6px', marginTop: '4px', paddingLeft: '16px' });
-        riga.append(SchermataSegnalazioni._pallino(voce.g).css({ marginTop: '3px' }));
+        riga.append(SchermataSegnalazioni._pallinoVoce(voce, contesto).css({ marginTop: '3px' }));
         const testo = SchermataSegnalazioni._testoCheSiRestringe($('<span></span>'));
         if (voce.c) {
             testo.append($('<b></b>').text(voce.c + " "));
@@ -1215,7 +1358,8 @@ const SchermataSegnalazioni = {
     /// I20-1056, lotto 4: le segnalazioni di un box per la scheda ref: "Risolvi tutte" e le righe,
     /// come nella schermata. alCambio rilegge e ridisegna dopo ogni risoluzione.
     elencoVociDelBox(box, voci, alCambio) {
-        const contesto = { traduzioni: SchermataSegnalazioni._traduzioni() };
+        //I20-1211: anche nella scheda ref le segnalazioni dei filtri del cliente sono viola.
+        const contesto = { traduzioni: SchermataSegnalazioni._traduzioni(), filtri: SchermataSegnalazioni.filtriDelCliente() };
         const elenco = $('<div></div>');
         const azioni = $('<div></div>').css({ display: 'flex', justifyContent: 'flex-end' });
         azioni.append(SchermataSegnalazioni._azioniTutte(box, alCambio));

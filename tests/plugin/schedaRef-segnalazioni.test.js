@@ -395,7 +395,8 @@ test('nella finestra le segnalazioni stanno nella loro sezione e si risolvono co
     assert.match(scheda, /me\.leggiVociBollino\(box\);\s*me\.aggiornaPulsanteSegnalazioni\(\);[\s\S]{0,300}?me\.deveAprirsiDaSola\(segnalazioniDellaScheda, codice, me\.vociBollinoInMemoria\(\)\)/);
 
     //Schermata e scheda usano le stesse righe e lo stesso "Risolvi tutte".
-    assert.match(schermata, /lettura\.voci\.forEach\(\(voce, indice\) => blocco\.append\(SchermataSegnalazioni\._rigaVoce\(lettura\.box, voce, indice, contesto, ridisegna\)\)\);/);
+    //I20-1211: con un filtro scelto le righe fuori dal filtro si saltano, sempre con l'indice del bollino.
+    assert.match(schermata, /lettura\.voci\.forEach\(\(voce, indice\) => \{\s*if \(contesto\.filtro == null \|\| SchermataSegnalazioni\.voceNelFiltro\(voce, contesto\.filtro\)\) \{\s*blocco\.append\(SchermataSegnalazioni\._rigaVoce\(lettura\.box, voce, indice, contesto, ridisegna\)\);/);
     assert.match(schermata, /testata\.append\(SchermataSegnalazioni\._azioniTutte\(lettura\.box, ridisegna\)\);/);
     assert.match(schermata, /elencoVociDelBox\(box, voci, alCambio\) \{[\s\S]*?SchermataSegnalazioni\._azioniTutte\(box, alCambio\)[\s\S]*?SchermataSegnalazioni\._rigaVoce\(box, voce, indice, contesto, alCambio\)/);
 });
