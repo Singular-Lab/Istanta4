@@ -25,6 +25,8 @@ const customAgenzia={
         //I20-1177: il confronto distingue le maiuscole, e la sigla e' LOGO_filiera: scritto
         //con la L sola maiuscola il logo non faceva da ostacolo e la foto gli finiva sopra.
         "*Marinou*","*Carne_Chianina*","*LOGO_filiera*","*Logo_BDP*","*Logo_SDB*",
+        //I20-1209: il logo Armomia non deve finire sotto le foto; la sigla e' tutta minuscola.
+        "*conad_armomia*",
         //I20-1026: payoff e testi del Parmigiano stanno in basso a sinistra, dove la foto non deve
         //finire. I20-1131: anche le caratteristiche, che nei box alti e larghi stanno in alto a
         //sinistra; nel box standard sono spente.

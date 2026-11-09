@@ -132,3 +132,27 @@ test("ogni eccezione del fix foto di Edro21 trova almeno un logo, maiuscole comp
     });
     assert.deepStrictEqual(senzaLogo, []);
 });
+
+/* ---- I20-1209: il logo CONAD Armomia non deve sovrapporsi alle foto ---- */
+
+test("I20-1209: il logo Armomia e' fra le eccezioni con la sua sigla, tutta minuscola", () => {
+    assert.ok(ECCEZIONI.includes("*conad_armomia*"));
+    assert.ok(!ECCEZIONI.some(e => e.includes("ArmoMia")), "la sigla registrata e' conad_armomia");
+});
+
+test("I20-1209: il logo Armomia in alto a destra fa da ostacolo al fix foto di Edro21", () => {
+    const box = {
+        label: "BOX1",
+        allPageItems: [
+            elemento("base", [0, 0, 80, 100]),
+            elemento("foto_extra$conad_armomia$tipo_3", [1, 77.58, 6.33, 99]),
+            elemento("immagine", [15, 10, 75, 50])
+        ],
+        geometricBounds: [0, 0, 80, 100],
+        rectangles: { length: 0, item: () => null }
+    };
+
+    const ostacoli = SistemazioneFoto.getObstacles(box).map(o => o.label);
+
+    assert.ok(ostacoli.includes("foto_extra$conad_armomia$tipo_3"), ostacoli.join(", "));
+});

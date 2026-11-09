@@ -372,6 +372,26 @@ namespace AgenziaLib
         }
     }
 
+    /// I20-1209: il logo CONAD della linea Armomia (conad_ArmoMia.psd, sigla conad_armomia). Esce solo
+    /// se il brand contiene CONAD e la parola "armomia" sta fra le colonne del controllo: brand,
+    /// descrizione 1 e gusto, come per gli altri loghi CONAD di linea. Nella scelta di prodotto_conad
+    /// viene per primo: una ref Armomia che nomina anche un'altra linea prende Armomia.
+    public static class LogoArmomiaEdro21
+    {
+        /// La sigla del logo in SourceLoghiBolli.json: il server la cerca uguale, maiuscole comprese.
+        public const string Sigla = "conad_armomia";
+
+        public static bool ConLogo(string brand, string desc1, string gusto)
+        {
+            string b = (brand ?? "").ToLower();
+            if (!b.Contains("conad"))
+            {
+                return false;
+            }
+            return b.Contains("armomia") || (desc1 ?? "").ToLower().Contains("armomia") || (gusto ?? "").ToLower().Contains("armomia");
+        }
+    }
+
     /// I20-1127: la resa "sconto linea" delle meccaniche % MM ALL e % FID ALL (nomi tradotti
     /// PERCENTO_MM_ALL e PERCENTO_FID_ALL): niente prezzo barrato ne' prezzo offerta, solo lo sconto.
     /// Esce da sola per il reparto 9, cura persona, senza prezzo offerta; l'operatore la forza con
@@ -11639,7 +11659,10 @@ Descrizione3.EndsWith("\r\n");
 
                 if (brand.Contains("conad"))
                 {
-                    if (gusto.ToNoSpacing().Contains("ilbiologico") || desc1.ToNoSpacing().Contains("ilbiologico") || brand.ToNoSpacing().Contains("ilbiologico"))
+                    //I20-1209: Armomia per primo, anche se la ref nomina un'altra linea.
+                    if (LogoArmomiaEdro21.ConLogo(brand, desc1, gusto))
+                        prodotto_conad = LogoArmomiaEdro21.Sigla;
+                    else if (gusto.ToNoSpacing().Contains("ilbiologico") || desc1.ToNoSpacing().Contains("ilbiologico") || brand.ToNoSpacing().Contains("ilbiologico"))
                         prodotto_conad = "conad_bio";
                     else if ((gusto.Contains("sapori&dintorni") || desc1.Contains("sapori&dintorni") || brand.Contains("sapori&dintorni")) &&
                         (gusto.Contains("percorso qualità") || desc1.Contains("percorso qualità") || brand.Contains("percorso qualità")))
