@@ -12,6 +12,9 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
+const fs = require('fs');
+const path = require('path');
+
 const SyncFoto = require('../../Istanta/wwwroot/js/syncfoto.js');
 
 /* L'oggetto che Call.do passa alla callback d'errore (call.js). */
@@ -83,4 +86,23 @@ test('dalla pagina, un intervallo troppo lungo mostra il limite e non "undefined
     } finally {
         for (const k of Object.keys(prima)) { global[k] = prima[k]; }
     }
+});
+
+/* ---- il Nome della cartella (I20-1214) ---- */
+
+test('la pagina manda il Nome come "nome", la chiave che il server legge', () => {
+    const pagina = fs.readFileSync(path.join(__dirname, '..', '..', 'Istanta', 'Views', 'SyncFoto', 'Registro.cshtml'), 'utf8');
+
+    assert.match(pagina, /nome: nomeCartella,/);
+    assert.doesNotMatch(pagina, /nomeCartella: nomeCartella/);
+});
+
+test('la ricerca parte anche con Invio: Cerca invia il modulo e la pagina non si ricarica', () => {
+    const pagina = fs.readFileSync(path.join(__dirname, '..', '..', 'Istanta', 'Views', 'SyncFoto', 'Registro.cshtml'), 'utf8');
+
+    assert.match(pagina, /<form [^>]*id="formRicercaRegistro"/);
+    assert.match(pagina, /id="bSearch" type="submit"/);
+    assert.match(pagina, /\$\("#formRicercaRegistro"\)\.on\("submit", function\(e\)\{\s*e\.preventDefault\(\);/);
+    //Il clic sul pulsante non ha piu' un gestore suo: passerebbe due volte.
+    assert.doesNotMatch(pagina, /\$\("#bSearch"\)\.on\("click"/);
 });
