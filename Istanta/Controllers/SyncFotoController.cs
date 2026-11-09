@@ -144,6 +144,9 @@ namespace Istanta.Controllers
                 str.ReadExactly(arrBytes, 0, (int)str.Length);
 
                 string filename = DateTime.Now.ToString("dd_MM_yyyy_HH_mm_ss") + "_" + Guid.NewGuid();
+                //TASK-10858197: la cartella delle estrazioni si crea se manca: prima il salvataggio falliva e la
+                //pagina, che non guardava l'errore, lanciava comunque la scansione di un pacchetto inesistente.
+                Directory.CreateDirectory(extract_sync_path);
                 string pathToExtract = Path.Combine(extract_sync_path, filename + ".zip");
 
                 using (var stream = new FileStream(pathToExtract, FileMode.Create))
@@ -157,8 +160,8 @@ namespace Istanta.Controllers
             }
             catch (Exception ex)
             {
-                result.error = ex.ToString();
-
+                _logger.LogError(ex, "UploadFileZip: pacchetto non salvato");
+                result.error = "Non è stato possibile salvare il pacchetto sul server";
             }
 
 
@@ -177,8 +180,11 @@ namespace Istanta.Controllers
             // Volutamente NON atteso: il client riceve subito il guid e poi interroga lo stato.
             // Senza questo ContinueWith, un'eccezione dentro il lavoro in background sparirebbe.
             _ = ScanPacchettoFoto_do(req, result.guidid).ContinueWith(t =>
-                _logger.LogError(t.Exception, "ScanPacchettoFoto_do fallita, guid {Guid}", result.guidid),
-                TaskContinuationOptions.OnlyOnFaulted);
+            {
+                _logger.LogError(t.Exception, "ScanPacchettoFoto_do fallita, guid {Guid}", result.guidid);
+                //TASK-10858197: senza risultato su disco la pagina restava in attesa per sempre (404).
+                RegistraScansioneNonRiuscita(result.guidid, "La scansione del pacchetto non è riuscita");
+            }, TaskContinuationOptions.OnlyOnFaulted);
 
             return Ok(result);
         }
@@ -225,6 +231,9 @@ namespace Istanta.Controllers
             {
 
                 List<SyncFile> scan_result = new List<SyncFile>();
+
+                //TASK-10858197: il risultato si scrive in questa cartella, nel finally: deve esserci.
+                Directory.CreateDirectory(extract_sync_path);
 
                 //string staticFolderTest = packageName;// "";
                 List<SyncFile> fileProcessatiDict = new List<SyncFile>();
@@ -727,7 +736,7 @@ namespace Istanta.Controllers
                                         {
                                             file.stato = StatoSyncFile.AlreadyExistButNotSelected;
                                             //file.isGrezzo = true;//Questo comanda al processo di SYNC che a dover andare in selezione è la verisone PP di questo grezzo
-                                            file.details = $"Foto post prodotta ({afPP.NomeReale}) -> grezzo {file.filename} non più selezionata. Articolo: " + artArchivio.Codice + $"<br>Sincronizzando questo grezzo si seleziona automaticamente la post produzione {afPP.NomeReale}";
+                                            file.details = $"Foto post prodotta ({afPP.NomeReale}) -> grezzo {file.filename} non selezionata. Articolo: " + artArchivio.Codice + $"<br>Sincronizzando questo grezzo si seleziona automaticamente la post produzione {afPP.NomeReale}";
 
                                         }
                                         else
@@ -751,7 +760,7 @@ namespace Istanta.Controllers
                                     if (afPPNotSelected)
                                     {
                                         file.stato = StatoSyncFile.AlreadyExistButNotSelected;
-                                        file.details = $"Foto grezza (non ancora post prodotta) {file.filename} non più selezionata. Articolo: " + artArchivio.Codice;
+                                        file.details = $"Foto grezza (non ancora post prodotta) {file.filename} non selezionata. Articolo: " + artArchivio.Codice;
 
                                     }
                                     else
@@ -771,7 +780,7 @@ namespace Istanta.Controllers
                                 if (afPPNotSelected)
                                 {
                                     file.stato = StatoSyncFile.AlreadyExistButNotSelected;
-                                    file.details = $"Foto {file.filename} non più selezionata. Articolo: " + artArchivio.Codice;
+                                    file.details = $"Foto {file.filename} non selezionata. Articolo: " + artArchivio.Codice;
 
                                 }
                                 else
@@ -789,7 +798,7 @@ namespace Istanta.Controllers
                             if (afPPNotSelected)
                             {
                                 file.stato = StatoSyncFile.AlreadyExistButNotSelected;
-                                file.details = $"Foto {file.filename} non più selezionata. Articolo: " + artArchivio.Codice;
+                                file.details = $"Foto {file.filename} non selezionata. Articolo: " + artArchivio.Codice;
 
                             }
                             else
@@ -821,7 +830,7 @@ namespace Istanta.Controllers
                                         bool afPPNotSelected = (artArchivio.ArticoliFotos!.Where(af => af.DataModifica > afPP.DataModifica).Count() > 0);
                                         if (afPPNotSelected)
                                         {
-                                            file.details = $"Nuovo grezzo del file post prodotto: {afPP.NomeReale}, non più selezionato. Articolo: " + artArchivio.Codice;
+                                            file.details = $"Nuovo grezzo del file post prodotto: {afPP.NomeReale}, non selezionato. Articolo: " + artArchivio.Codice;
 
                                         }
                                         else
@@ -861,8 +870,17 @@ namespace Istanta.Controllers
             finally
             {
                 //A prescindere salvo il risultato in un file JSON per poterlo recuperare poi nella fase di SYNC
-                string jsonFilePath = System.IO.Path.Combine(extract_sync_path, guidid + ".json");
-                System.IO.File.WriteAllText(jsonFilePath, JsonConvert.SerializeObject(result));
+                //TASK-10858197: se nemmeno questo riesce, lo dice il registro delle scansioni non riuscite.
+                try
+                {
+                    string jsonFilePath = System.IO.Path.Combine(extract_sync_path, guidid + ".json");
+                    System.IO.File.WriteAllText(jsonFilePath, JsonConvert.SerializeObject(result));
+                }
+                catch (Exception exScrittura)
+                {
+                    _logger.LogError(exScrittura, "ScanPacchettoFoto: risultato non salvato, guid {Guid}", guidid);
+                    RegistraScansioneNonRiuscita(guidid, "Non è stato possibile salvare il risultato della scansione");
+                }
             }
             
 
@@ -878,10 +896,15 @@ namespace Istanta.Controllers
                 SyncFileOperation result = JsonConvert.DeserializeObject<SyncFileOperation>(System.IO.File.ReadAllText(jsonFilePath))!;
                 return Ok(result);
             }
-            else
+
+            //TASK-10858197: una scansione morta senza risultato risponde con il suo errore; il 404 resta
+            //soltanto per quella ancora in corso.
+            string? errore = ScansioneNonRiuscita(guidid);
+            if (errore != null)
             {
-                return NotFound();
+                return Ok(new SyncFileOperation { guidid = guidid, error = errore, files = new List<SyncFile>() });
             }
+            return NotFound();
 
         }
 
@@ -1529,6 +1552,101 @@ namespace Istanta.Controllers
         public static DateTime OrarioDiRegistrazione(DateTime inizio, int posizione)
         {
             return inizio.AddTicks(posizione * 10L);
+        }
+
+        /// <summary>
+        /// TASK-10858197: le scansioni morte senza scrivere il loro risultato, guid -> messaggio per la pagina.
+        /// In memoria: servono solo alla pagina che sta aspettando, e una voce vecchia di un giorno si toglie.
+        /// </summary>
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (string messaggio, DateTime quando)> scansioniNonRiuscite = new();
+
+        public static void RegistraScansioneNonRiuscita(string guidid, string messaggio)
+        {
+            DateTime adesso = DateTime.Now;
+            foreach (var voce in scansioniNonRiuscite)
+            {
+                if (adesso - voce.Value.quando > TimeSpan.FromDays(1))
+                {
+                    scansioniNonRiuscite.TryRemove(voce.Key, out _);
+                }
+            }
+            scansioniNonRiuscite[guidid] = (messaggio, adesso);
+        }
+
+        public static string? ScansioneNonRiuscita(string guidid)
+        {
+            return guidid != null && scansioniNonRiuscite.TryGetValue(guidid, out var voce) ? voce.messaggio : null;
+        }
+
+        /// <summary>
+        /// TASK-10858197: l'esito che il sync avra' su ogni foto del report, con le scelte correnti della pagina
+        /// (sincronizza: la riga partira'). Simula il sync - le foto che partono diventano registrate - e chiede
+        /// a FotoCheDevonoPrevalere quale foto restera' in uscita per ogni articolo: la stessa regola di
+        /// ConsolidaSelezione, cosi' l'anteprima non dice una cosa e il sync ne fa un'altra. Gli esiti sono
+        /// nell'ordine delle foto. Pura: niente database.
+        /// </summary>
+        public static List<string> EsitiDopoSync(IList<FotoInAnteprima> files, IEnumerable<string> estensioniPostProduzione)
+        {
+            var elenco = files ?? new List<FotoInAnteprima>();
+            //Le foto nuove che partono non hanno ancora un id, e FotoCheDevonoPrevalere considera in archivio
+            //solo le foto con un id: uno finto e diverso per ognuna, solo per la simulazione.
+            var simulate = elenco.Select((f, i) => new SyncFile
+            {
+                filename = f?.filename ?? "",
+                idArticolo = f?.idArticolo ?? 0,
+                tipo = f?.tipo ?? TipoFoto.Foto,
+                id = f == null ? 0 : (f.id > 0 ? f.id : (f.sincronizza ? long.MaxValue - i : 0)),
+                stato = f == null ? StatoSyncFile.None : (f.sincronizza ? StatoSyncFile.Synced : f.stato)
+            }).ToList();
+            var prevalenti = FotoCheDevonoPrevalere(simulate, estensioniPostProduzione);
+            var articoliCoinvolti = prevalenti.Select(p => p.idArticolo).ToHashSet();
+
+            bool nuova(StatoSyncFile s) => s == StatoSyncFile.Syncable || s == StatoSyncFile.SyncableAsNew;
+            var esiti = new List<string>();
+            for (int i = 0; i < elenco.Count; i++)
+            {
+                FotoInAnteprima? f = elenco[i];
+                if (f == null || f.idArticolo <= 0 || f.stato == StatoSyncFile.NoMatch || f.stato == StatoSyncFile.NotInTracciato)
+                {
+                    esiti.Add("Non sincronizzata");
+                    continue;
+                }
+                if (prevalenti.Any(p => ReferenceEquals(p, simulate[i])))
+                {
+                    esiti.Add(f.stato == StatoSyncFile.AlreadyExist ? "Resta selezionata" : "Diverrà selezionata");
+                    continue;
+                }
+                if (f.sincronizza)
+                {
+                    esiti.Add(nuova(f.stato) ? "Nuova, non selezionata"
+                        : f.stato == StatoSyncFile.SyncableAsOverwrite ? "Aggiornata, non selezionata"
+                        : "Non selezionata");
+                    continue;
+                }
+                if (nuova(f.stato))
+                {
+                    esiti.Add("Non sincronizzata");
+                    continue;
+                }
+                if (f.stato == StatoSyncFile.AlreadyExist && f.tipo == TipoFoto.Foto && articoliCoinvolti.Contains(f.idArticolo))
+                {
+                    esiti.Add("Non più selezionata");
+                    continue;
+                }
+                esiti.Add("Nessuna modifica");
+            }
+            return esiti;
+        }
+
+        /// <summary>
+        /// TASK-10858197: l'anteprima del report: gli esiti di EsitiDopoSync, nell'ordine delle foto ricevute.
+        /// Niente database e niente Olimpo: la pagina la chiede quando cambiano le scelte.
+        /// </summary>
+        [HttpPut]
+        [Route("SyncFoto/AnteprimaSync")]
+        public IActionResult AnteprimaSync(AnteprimaSyncRequest req)
+        {
+            return Ok(new { esiti = EsitiDopoSync(req?.files ?? new List<FotoInAnteprima>(), EstensioniPostProduzione(ext_post_lavorazione)) });
         }
 
         /// <summary>

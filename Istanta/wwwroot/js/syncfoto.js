@@ -89,6 +89,18 @@ class SyncFoto {
             if (xhr.status === 200) {
                 var obj = JSON.parse(xhr.response);
 
+                //TASK-10858197: un pacchetto non salvato non si scansiona: prima la pagina ignorava l'errore e
+                //lanciava la scansione di un file inesistente, che restava in attesa per sempre.
+                let erroreCaricamento = SyncFoto.erroreDelCaricamento(obj);
+                if (erroreCaricamento != null) {
+                    if (me.pingInterval != null) {
+                        clearInterval(me.pingInterval);
+                    }
+                    hideLoading();
+                    mostraMessaggio(erroreCaricamento, "danger");
+                    return;
+                }
+
                 fileImpacchettato.response = obj;
 
                 procObj.zipProgress++;
@@ -404,9 +416,17 @@ class SyncFoto {
                         if (ciSonoPP) {
                             $("#alertPP").css("display", "block");
                         }
+
+                        //TASK-10858197: la colonna "Dopo il sync" con le scelte appena disegnate; le righe nuove
+                        //seguono la scelta dell'operatore di vederla o no.
+                        SyncFoto.applicaColonnaDopoSync(SyncFoto.colonnaDopoSyncVisibile());
+                        me.aggiornaAnteprima(true);
                     }
                     else {
                         mostraMessaggio(result.error, "danger");
+                        //TASK-10858197: con una scansione non riuscita il sync diretto non parte.
+                        hideLoading();
+                        return;
                     }
 
                     if (me.firstJob) {
@@ -581,6 +601,47 @@ class SyncFoto {
         {
             //I20-1212: finiti i blocchi, la foto in uscita di ogni articolo si decide sul pacchetto intero.
             this.consolidaSelezione(this.syncOp.files, () => this.fineSync());
+        }
+    }
+
+    /// TASK-10858197: la colonna "Dopo il sync" del report: l'esito che il sync avra' su ogni foto con le scelte
+    /// correnti (righe spuntate e sovrascrittura), calcolato da Istanta con la stessa regola del sync. Una
+    /// chiamata leggera, senza database: subito se richiesto, altrimenti dopo 300 ms dall'ultimo cambio.
+    aggiornaAnteprima(subito = false) {
+        let me = this;
+        if (me._timerAnteprima != null) {
+            clearTimeout(me._timerAnteprima);
+            me._timerAnteprima = null;
+        }
+        let esegui = function () {
+            let righe = [];
+            $("#tblResult > tbody").children().each(function () {
+                let riga = $(this);
+                let rec = (me.syncOp && me.syncOp.files ? me.syncOp.files : []).find(f => f.idRecView == riga.attr("id"));
+                if (rec == null) {
+                    return;
+                }
+                let ch = riga.find("#chSync");
+                //Come startSyncZip: parte la riga selezionata, spuntata, visibile e non gia' sincronizzata.
+                let sincronizza = riga.attr("selezionato") == "1" && riga.attr("synced") != "1"
+                    && riga.css("display") != "none" && ch.is(":checked") && !ch.is(":disabled");
+                righe.push({ riga: riga, rec: rec, sincronizza: sincronizza });
+            });
+            if (righe.length == 0) {
+                return;
+            }
+            Call.do("SyncFoto", "AnteprimaSync", "PUT", { files: SyncFoto.fotoPerAnteprima(righe) }, me, function (result) {
+                let esiti = result && result.esiti ? result.esiti : [];
+                righe.forEach((r, i) => r.riga.find("#lab_dopo").text(esiti[i] != null ? esiti[i] : ""));
+            }, function (err) {
+                console.error("Anteprima del sync non riuscita", err);
+            });
+        };
+        if (subito) {
+            esegui();
+        }
+        else {
+            me._timerAnteprima = setTimeout(esegui, 300);
         }
     }
 
@@ -1270,6 +1331,60 @@ class SyncFoto {
     /// che SyncFoto/ricercaNelRegistro scrive in error: prima si leggeva err.message.error, una
     /// proprieta' di una stringa, e l'utente vedeva "undefined". Un errore imprevisto porta con se'
     /// lo stack trace del server, che resta nella console.
+    /// TASK-10858197: il nome del pulsante di avvio: con "Esegui Sync diretto" la scansione e' seguita dal sync.
+    static testoPulsanteScan(diretto) {
+        return diretto ? "Scan & Sync" : "Scan";
+    }
+
+    /// TASK-10858197: il messaggio per un caricamento non riuscito (UploadFileZip risponde con error), o null.
+    static erroreDelCaricamento(obj) {
+        if (obj == null || typeof obj !== "object") {
+            return "Caricamento del pacchetto non riuscito: risposta non valida dal server.";
+        }
+        if (obj.error != null && String(obj.error).trim() !== "") {
+            return "Caricamento del pacchetto non riuscito: " + obj.error;
+        }
+        if (obj.filename == null || String(obj.filename).trim() === "") {
+            return "Caricamento del pacchetto non riuscito: il server non ha restituito il pacchetto salvato.";
+        }
+        return null;
+    }
+
+    /// TASK-10858197: le foto del report per SyncFoto/AnteprimaSync, nell'ordine delle righe, con i soli campi
+    /// che servono e se partiranno nel sync. righe: { rec, sincronizza }.
+    static fotoPerAnteprima(righe) {
+        return (righe || []).map(r => ({
+            filename: r.rec.filename, stato: r.rec.stato, id: r.rec.id, idArticolo: r.rec.idArticolo, tipo: r.rec.tipo,
+            sincronizza: r.sincronizza === true
+        }));
+    }
+
+    /// TASK-10858197: mostra o nasconde la colonna "Dopo il sync" e ricorda la scelta nel browser. Senza
+    /// memoria del browser (anteprima, finestra privata) la colonna si vede.
+    static mostraColonnaDopoSync(visibile) {
+        SyncFoto.applicaColonnaDopoSync(visibile);
+        try {
+            localStorage.setItem(SyncFoto.CHIAVE_DOPO_SYNC, visibile ? "1" : "0");
+        }
+        catch (e) {
+            //la scelta vale solo per questa pagina
+        }
+    }
+
+    static applicaColonnaDopoSync(visibile) {
+        $(".colDopoSync").css("display", visibile ? "" : "none");
+        $("#btnColonnaDopoSync").text(visibile ? "Nascondi esito dopo il sync" : "Mostra esito dopo il sync");
+    }
+
+    static colonnaDopoSyncVisibile() {
+        try {
+            return localStorage.getItem(SyncFoto.CHIAVE_DOPO_SYNC) !== "0";
+        }
+        catch (e) {
+            return true;
+        }
+    }
+
     /// I20-1212: dell'elenco della scansione, per ConsolidaSelezione, le sole foto abbinate a un articolo e i
     /// soli campi che servono, nell'ordine della scansione (lo zip).
     static fileDaConsolidare(files) {
@@ -1306,6 +1421,9 @@ class SyncFoto {
     }
 
 }
+
+//TASK-10858197: dove il browser ricorda se la colonna "Dopo il sync" si vede.
+SyncFoto.CHIAVE_DOPO_SYNC = "syncfoto.colonnaDopoSync";
 
 //Pulizia estrazioni: in Node si esporta per i test (tests/istanta-web). Nella pagina module
 //non esiste e questa riga non fa nulla.

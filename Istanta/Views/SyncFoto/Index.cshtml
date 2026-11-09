@@ -77,12 +77,13 @@
     </form>
 </nav>
 <div class="container">
-    <div class="row" id="headerResult" style="visibility:hidden;">
-        <div class="col p-2">
-            <h5>Risultato della scansione</h5>
+    @*TASK-10858197: il titolo a sinistra, i comandi del report tutti insieme a destra, alla stessa altezza.*@
+    <div class="row align-items-center" id="headerResult" style="visibility:hidden;">
+        <div class="col-auto p-2">
+            <h5 class="mb-0">Risultato della scansione</h5>
         </div>
-        <div class="col mt-4" style="text-align:right;">
-            <select id="cmbFiltroStato">
+        <div class="col d-flex justify-content-end align-items-center gap-2 p-2">
+            <select id="cmbFiltroStato" class="form-select form-select-sm w-auto">
                 <option value="0">Mostra tutto</option>
                 <option value="1">Foto nuove</option>
                 <option value="2">Foto cambiate</option>
@@ -90,12 +91,9 @@
                 <option value="4">Non corrispondenti</option>
                 <option value="5">Ancora da post produrre</option>
             </select>
-        </div>
-        <div class="col mt-4" style="text-align:right;">
-            <button id="btnDownloadPerStato" class="btn btn-primary">Scarica pacchetto</button>
-        </div>
-        <div class="col mt-4" style="text-align:right;display:none">
-            <button id="btnDownloadPerPP" class="btn btn-warning">Scarica pacchetto da post produrre</button>
+            <button id="btnColonnaDopoSync" class="btn btn-sm btn-outline-secondary" type="button">Nascondi esito dopo il sync</button>
+            <button id="btnDownloadPerStato" class="btn btn-sm btn-primary">Scarica pacchetto</button>
+            <button id="btnDownloadPerPP" class="btn btn-sm btn-warning" style="display:none;">Scarica pacchetto da post produrre</button>
         </div>
     </div>
     <div class="row" id="countResult" style="visibility:hidden;background: beige;border-radius: 8px;padding: 7px;margin-top: 10px;">
@@ -114,9 +112,10 @@
             <tr>
                 <th scope="col" style="width:5%;">Seleziona<br /><input type="checkbox" id="chAll" checked></th>
                 <th scope="col" style="width:10%;"></th>
-                <th scope="col" style="width:35%;">Nome file</th>
-                <th scope="col" style="width:35%;">Dettagli</th>
-                <th scope="col" style="width:15%;"></th>
+                <th scope="col" style="width:30%;">Nome file</th>
+                <th scope="col" style="width:25%;">Prima del sync</th>
+                <th scope="col" class="colDopoSync" style="width:20%;">Dopo il sync</th>
+                <th scope="col" style="width:10%;"></th>
             </tr>
         </thead>
         <tbody>
@@ -131,6 +130,7 @@
         <td class="text-center" scope="row" id="colIcon"><img id="preview" src="~/images/download_ico.png" style="width:30px;" /></td>
         <td><span id="lab_filename"></span></td>
         <td><span id="lab_result"></span></td>
+        <td class="colDopoSync"><span id="lab_dopo"></span></td>
         <td>
             <div class="container">
                 <div class="row">
@@ -152,21 +152,37 @@
     function documentReady() {
         syncInstance = new SyncFoto();
 
+        //TASK-10858197: la colonna "Dopo il sync" segue le scelte: spunte, sovrascrittura, filtro.
         $("#chAll").on("change", function(){
             syncInstance.selezionaDeselezionaTutti();
+            syncInstance.aggiornaAnteprima();
         });
 
 
         $("#ChOverwrite").on("change", function(){
             syncInstance.selezionataOpzioneSovrascrittura($(this));
+            syncInstance.aggiornaAnteprima();
         });
 
         $("#cmbFiltroStato").on("change", function(){
             syncInstance.filtraPerStato();
+            syncInstance.aggiornaAnteprima();
         });
 
+        $("#tblResult").on("change", "#chSync", function(){
+            syncInstance.aggiornaAnteprima();
+        });
+
+        $("#btnColonnaDopoSync").on("click", function(){
+            SyncFoto.mostraColonnaDopoSync(!SyncFoto.colonnaDopoSyncVisibile());
+        });
+        SyncFoto.applicaColonnaDopoSync(SyncFoto.colonnaDopoSyncVisibile());
+
+        //TASK-10858197: con il sync diretto il pulsante fa scansione e sync.
+        $("#btnCreaZip").text(SyncFoto.testoPulsanteScan($("#ChBypassCheck").prop("checked")));
         $("#ChBypassCheck").on("click", function(){
             $(this).prop('checked')?$('#stepSceltaOverwrite').css('display','block'):$('#stepSceltaOverwrite').css('display','none');
+            $("#btnCreaZip").text(SyncFoto.testoPulsanteScan($(this).prop('checked')));
         });
 
         $("#btnCreaZip").on("click", function(){
