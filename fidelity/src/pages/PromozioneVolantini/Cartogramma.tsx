@@ -92,8 +92,8 @@ export function Cartogramma({ conteggio, regione, onRegione }: CartogrammaProps)
           <Lucide icon="CircleHelp" aria-hidden="true" className="mt-px h-3.5 w-3.5 flex-none" />
           <span>
             {conteggio.senzaRegione === 1
-              ? "1 riga ha la regione non indicata: non è nel cartogramma."
-              : `${formatNumero(conteggio.senzaRegione)} righe hanno la regione non indicata: non sono nel cartogramma.`}
+              ? "1 punto vendita ha la regione non indicata: non è nel cartogramma."
+              : `${formatNumero(conteggio.senzaRegione)} punti vendita hanno la regione non indicata: non sono nel cartogramma.`}
           </span>
         </p>
       )}

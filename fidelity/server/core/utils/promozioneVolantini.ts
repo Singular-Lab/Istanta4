@@ -1,3 +1,4 @@
+import { chiavePuntoVenditaStampato } from '../../../lib/consultazione/puntiVenditaStampati';
 import { regioneDa, testoNormalizzato } from '../../../lib/consultazione/regioni';
 import {
   type AssortimentoPromozioneConsultazione,
@@ -64,7 +65,7 @@ export interface PromozioneAggregata {
   /** Nell'ordine in cui arrivano i kit. */
   kit: KitPromozioneConsultazione[];
   numeri: NumeriPromozioneConsultazione;
-  /** Nell'ordine dei kit, poi per posizione nella lista stampata. */
+  /** Un elemento per punto vendita, nell'ordine dei kit e poi della posizione della sua prima riga. */
   puntiVendita: PuntoVenditaPromozioneConsultazione[];
   assortimento: AssortimentoPromozioneConsultazione;
 }
@@ -102,7 +103,7 @@ export function puntoVenditaDa(riga: RigaPuntoVenditaPromozione): PuntoVenditaPr
   const lon = coordinata(riga.lon);
   return {
     id: riga.id,
-    idKit: riga.id_kit,
+    idKit: [riga.id_kit],
     riga: riga.riga,
     localita: testo(riga.localita),
     indirizzo: testo(riga.indirizzo),
@@ -123,17 +124,37 @@ export function puntoVenditaDa(riga: RigaPuntoVenditaPromozione): PuntoVenditaPr
   };
 }
 
-/** Le righe nell'ordine dei kit e per posizione; quelle di un kit che non e' fra i kit non si mostrano. */
+/**
+ * I punti vendita delle righe, una volta sola anche se li stampano piu' kit (chiavePuntoVenditaStampato),
+ * con i kit che li stampano. Nell'ordine dei kit e per posizione: un punto vendita sta dove compare la
+ * sua prima riga, che ne da' testo e indirizzo. Le righe di un kit che non e' fra i kit non contano.
+ */
 function puntiVenditaNellOrdine(
   righe: readonly RigaPuntoVenditaPromozione[],
   kit: readonly KitConInsight[]
 ): PuntoVenditaPromozioneConsultazione[] {
   const ordineKit = new Map(kit.map((voce, indice) => [chiaveId(voce.variante.id), indice] as const));
   const indiceKit = (riga: RigaPuntoVenditaPromozione): number => ordineKit.get(chiaveId(riga.id_kit)) ?? -1;
-  return righe
+  const perChiave = new Map<string, PuntoVenditaPromozioneConsultazione>();
+  const ordinate = righe
     .filter(riga => indiceKit(riga) >= 0)
-    .sort((a, b) => indiceKit(a) - indiceKit(b) || Number(a.posizione) - Number(b.posizione) || a.id.localeCompare(b.id))
-    .map(puntoVenditaDa);
+    .sort((a, b) => indiceKit(a) - indiceKit(b) || Number(a.posizione) - Number(b.posizione) || a.id.localeCompare(b.id));
+  for (const riga of ordinate) {
+    const chiave = chiavePuntoVenditaStampato(riga);
+    const giaVisto = perChiave.get(chiave);
+    if (!giaVisto) {
+      perChiave.set(chiave, puntoVenditaDa(riga));
+      continue;
+    }
+    if (!giaVisto.idKit.some(id => chiaveId(id) === chiaveId(riga.id_kit))) giaVisto.idKit.push(riga.id_kit);
+    // Regione e anagrafica dalla prima riga che le ha: la stessa riga puo' essere abbinata in un kit e non in un altro
+    if (!giaVisto.regione || !giaVisto.puntoVendita) {
+      const altra = puntoVenditaDa(riga);
+      giaVisto.regione ??= altra.regione;
+      giaVisto.puntoVendita ??= altra.puntoVendita;
+    }
+  }
+  return [...perChiave.values()];
 }
 
 // ─── Assortimento ───────────────────────────────────────────────────
@@ -200,7 +221,7 @@ function marchePromozione(box: readonly BoxInsight[]): MarcaPromozione[] {
 
 // ─── Dettaglio ──────────────────────────────────────────────────────
 
-/** Kit con i numeri dei loro insight, numeri e assortimento della promozione, righe dei punti vendita. */
+/** Kit con i numeri dei loro insight, numeri e assortimento della promozione, punti vendita stampati, una volta sola ciascuno. */
 export function aggregaPromozioneVolantini(
   kit: readonly KitConInsight[],
   righePuntiVendita: readonly RigaPuntoVenditaPromozione[]

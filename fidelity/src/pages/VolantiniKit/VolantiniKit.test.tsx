@@ -70,6 +70,7 @@ const promozione = (modifiche: Partial<PromozioneVolantiniConsultazione> = {}): 
   copertina: copertina("k1"),
   numeroKit: 2,
   kit: [variante("k1"), variante("k2", { area: LAZIO, canale: IPER, numeroFile: 0, numeroPuntiVendita: 0 })],
+  numeroPuntiVendita: 24,
   ...modifiche,
 });
 
@@ -88,6 +89,7 @@ const vetrina = (
     copertina: copertina("v-c1-a1"),
     numeroKit: noveKit.length,
     kit: noveKit,
+    numeroPuntiVendita: 216,
   }),
 });
 
@@ -223,7 +225,7 @@ describe("Schede delle promozioni", () => {
     // Da GIORNI_SCADENZA_VICINA (3) in giù la scadenza è in evidenza
     expect(within(scheda()).getByTitle("Scade tra 2 giorni")).toHaveAttribute("data-tono", "warning");
     expect(within(scheda()).getByText("2 volantini")).toBeInTheDocument();
-    // Solo il primo kit ha la lista dei punti vendita: la somma è dei kit con il dato
+    // I punti vendita diversi dei kit mostrati, contati dal server
     expect(within(scheda()).getByText("24 punti vendita")).toBeInTheDocument();
     expect(within(scheda()).getByText("2 insegne")).toBeInTheDocument();
 
@@ -291,9 +293,30 @@ describe("Schede delle promozioni", () => {
     expect(within(scheda()).getByText("Superstore · Toscana")).toBeInTheDocument();
   });
 
+  it("i punti vendita della scheda sono quelli diversi contati dal server, non la somma dei kit", async () => {
+    // A2623: due volantini da 38 punti vendita che sono gli stessi 38
+    finti.risultato = caricato(
+      pagina({
+        promozioni: [promozione({
+          kit: [variante("k1", { numeroPuntiVendita: 38 }), variante("k2", { area: LAZIO, numeroPuntiVendita: 38 })],
+          numeroPuntiVendita: 38,
+        })],
+      })
+    );
+    await apri("/volantini/attivi");
+
+    expect(within(scheda()).getByText("38 punti vendita")).toBeInTheDocument();
+    expect(within(scheda()).queryByText("76 punti vendita")).not.toBeInTheDocument();
+  });
+
   it("senza le liste dei punti vendita la scheda non mostra il numero", async () => {
     finti.risultato = caricato(
-      pagina({ promozioni: [promozione({ kit: [variante("k1", { numeroPuntiVendita: 0 }), variante("k2", { numeroPuntiVendita: 0 })] })] })
+      pagina({
+        promozioni: [promozione({
+          kit: [variante("k1", { numeroPuntiVendita: 0 }), variante("k2", { numeroPuntiVendita: 0 })],
+          numeroPuntiVendita: 0,
+        })],
+      })
     );
     await apri("/volantini/attivi");
 
@@ -427,14 +450,14 @@ describe("Riepilogo del periodo", () => {
       .getAllByRole("listitem")
       .map((voce) => voce.textContent);
 
-  it("sotto il titolo dice promozioni, volantini e righe di punti vendita del periodo, anche con i filtri", async () => {
+  it("sotto il titolo dice promozioni, volantini e punti vendita del periodo, anche con i filtri", async () => {
     finti.risultato = caricato(pagina({ riepilogo: { promozioni: 12, kit: 48, puntiVendita: 1234 } }));
     await apri("/volantini/attivi?area=a1");
 
-    expect(numeriDelPeriodo()).toEqual(["12 promozioni", "48 volantini", "1.234 righe di punti vendita stampate"]);
+    expect(numeriDelPeriodo()).toEqual(["12 promozioni", "48 volantini", "1.234 punti vendita"]);
   });
 
-  it("al singolare, e senza le righe dei punti vendita quando le liste non sono arrivate", async () => {
+  it("al singolare, e senza i punti vendita quando le liste non sono arrivate", async () => {
     finti.risultato = caricato(pagina({ riepilogo: { promozioni: 1, kit: 1, puntiVendita: 0 } }));
     await apri("/volantini/prossimi");
 

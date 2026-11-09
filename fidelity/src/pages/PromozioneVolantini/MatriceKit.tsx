@@ -5,7 +5,7 @@ import { formatNumero } from "@/utils/format";
 import { twMerge } from "@/utils/twMerge";
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import type { KitPromozioneConsultazione } from "../../../lib/consultazione/tipi";
+import type { KitPromozioneConsultazione, PuntoVenditaPromozioneConsultazione } from "../../../lib/consultazione/tipi";
 import { percorsoDettaglioVolantino } from "../../../lib/materiali/periodi";
 import { chiaveCella, grigliaKit, nomeKit, plurale } from "./analisi";
 import { Copertina } from "./Copertina";
@@ -53,11 +53,20 @@ function Totale({ valore, allineamento = "destra" }: { valore: number; allineame
 /**
  * "I volantini della promozione": una riga per canale e una colonna per area, in ogni cella il
  * kit con la copertina, i punti vendita stampati e le referenze; le combinazioni senza kit restano
- * vuote. In fondo a righe e colonne i punti vendita sommati. Ogni kit apre i suoi insight. Su
- * schermi stretti la griglia scorre nel suo riquadro.
+ * vuote. In fondo a righe e colonne i punti vendita diversi del canale, dell'area e della promozione:
+ * uno stampato da più kit conta una volta, quindi i totali non sono la somma delle celle. Ogni kit
+ * apre i suoi insight. Su schermi stretti la griglia scorre nel suo riquadro.
  */
-export function MatriceKit({ kit, tinta }: { kit: readonly KitPromozioneConsultazione[]; tinta: (idCanale: string) => Tinta }) {
-  const griglia = useMemo(() => grigliaKit(kit), [kit]);
+export function MatriceKit({
+  kit,
+  puntiVendita,
+  tinta,
+}: {
+  kit: readonly KitPromozioneConsultazione[];
+  puntiVendita: readonly PuntoVenditaPromozioneConsultazione[];
+  tinta: (idCanale: string) => Tinta;
+}) {
+  const griglia = useMemo(() => grigliaKit(kit, puntiVendita), [kit, puntiVendita]);
 
   return (
     <Sezione

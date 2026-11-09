@@ -16,20 +16,21 @@ import { nomeKit } from "./analisi";
 export const RIGHE_PER_VOLTA = 25;
 
 export interface ElencoRigheProps {
-  /** Le righe che passano regione e ricerca. */
+  /** I punti vendita che passano regione e ricerca, una volta sola ciascuno. */
   righe: readonly PuntoVenditaPromozioneConsultazione[];
   kitPerId: ReadonlyMap<string, KitPromozioneConsultazione>;
   tinta: (idCanale: string) => Tinta;
   /** Con "gdo.visualizza" i punti vendita riconosciuti portano alla loro scheda. */
   conScheda: boolean;
-  /** Testo dello stato vuoto, quando regione e ricerca non lasciano righe. */
+  /** Testo dello stato vuoto, quando regione e ricerca non lasciano punti vendita. */
   vuoto: string;
 }
 
 /**
- * L'elenco delle righe dei punti vendita stampate nei volantini: località (con la regione), indirizzo
- * come stampato, volantino e se la riga è riconosciuta nell'anagrafica. Paginato qui, a blocchi di
- * RIGHE_PER_VOLTA: la pagina lo rimonta (key) quando cambiano regione o ricerca, e riparte dall'inizio.
+ * L'elenco dei punti vendita stampati nei volantini, uno per riga anche se lo stampano più kit:
+ * località (con la regione), indirizzo come stampato, i volantini che lo stampano e se è riconosciuto
+ * nell'anagrafica. Paginato qui, a blocchi di RIGHE_PER_VOLTA: la pagina lo rimonta (key) quando
+ * cambiano regione o ricerca, e riparte dall'inizio.
  */
 export function ElencoRighe({ righe, kitPerId, tinta, conScheda, vuoto }: ElencoRigheProps) {
   const [mostrate, setMostrate] = useState(RIGHE_PER_VOLTA);
@@ -45,7 +46,7 @@ export function ElencoRighe({ righe, kitPerId, tinta, conScheda, vuoto }: Elenco
             <Table.Tr>
               <Table.Th>Località</Table.Th>
               <Table.Th>Indirizzo stampato</Table.Th>
-              <Table.Th>Volantino</Table.Th>
+              <Table.Th>Volantini</Table.Th>
               <Table.Th>Anagrafica</Table.Th>
             </Table.Tr>
           </Table.Thead>
@@ -58,7 +59,7 @@ export function ElencoRighe({ righe, kitPerId, tinta, conScheda, vuoto }: Elenco
               </Table.Tr>
             ) : (
               visibili.map(riga => {
-                const kit = kitPerId.get(riga.idKit);
+                const kit = riga.idKit.flatMap(id => kitPerId.get(id) ?? []);
                 const pv = riga.puntoVendita;
                 return (
                   <Table.Tr key={riga.id}>
@@ -73,11 +74,16 @@ export function ElencoRighe({ righe, kitPerId, tinta, conScheda, vuoto }: Elenco
                       {riga.indirizzo ?? riga.riga}
                     </Table.Td>
                     <Table.Td className="align-top">
-                      {kit ? (
-                        <span className="inline-flex items-center gap-2 whitespace-nowrap text-sm font-medium text-slate-700 dark:text-slate-200">
-                          <PuntoInsegna tinta={tinta(kit.canale.id)} />
-                          {nomeKit(kit)}
-                        </span>
+                      {kit.length > 0 ? (
+                        // Un punto vendita stampato da più volantini li elenca tutti, uno sotto l'altro
+                        <ul aria-label={`Volantini che stampano ${riga.localita ?? riga.riga}`} className="flex flex-col gap-1">
+                          {kit.map(k => (
+                            <li key={k.id} className="inline-flex items-center gap-2 whitespace-nowrap text-sm font-medium text-slate-700 dark:text-slate-200">
+                              <PuntoInsegna tinta={tinta(k.canale.id)} />
+                              {nomeKit(k)}
+                            </li>
+                          ))}
+                        </ul>
                       ) : (
                         "—"
                       )}

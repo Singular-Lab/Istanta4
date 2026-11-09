@@ -43,18 +43,19 @@ describeConDatabase('ConsultazioneService', () => {
   async function creaRighePuntiVendita(kit: KitDiProva, righe: Array<{
     riga: string;
     localita?: string;
+    indirizzo?: string;
     regione?: string;
     provincia?: string;
     idPuntoVendita?: string;
   }>): Promise<void> {
     for (const [indice, dati] of righe.entries()) {
       await sequelize.query(
-        `INSERT INTO punti_vendita_volantino (id, id_gdo, id_kit_runtime, id_promo, posizione, riga, localita, regione, provincia, id_punto_vendita)
-         VALUES (:id, :idGdo, :idKit, :idPromo, :posizione, :riga, :localita, :regione, :provincia, :idPuntoVendita)`,
+        `INSERT INTO punti_vendita_volantino (id, id_gdo, id_kit_runtime, id_promo, posizione, riga, localita, indirizzo, regione, provincia, id_punto_vendita)
+         VALUES (:id, :idGdo, :idKit, :idPromo, :posizione, :riga, :localita, :indirizzo, :regione, :provincia, :idPuntoVendita)`,
         {
           replacements: {
             id: randomUUID(), idGdo: kit.idGdo, idKit: kit.idRuntime, idPromo: kit.idPromo, posizione: indice + 1, riga: dati.riga,
-            localita: dati.localita ?? null, regione: dati.regione ?? null, provincia: dati.provincia ?? null,
+            localita: dati.localita ?? null, indirizzo: dati.indirizzo ?? null, regione: dati.regione ?? null, provincia: dati.provincia ?? null,
             idPuntoVendita: dati.idPuntoVendita ?? null,
           },
         }
@@ -62,8 +63,14 @@ describeConDatabase('ConsultazioneService', () => {
     }
   }
 
-  /** N righe qualunque nella lista del kit: per la vetrina conta solo quante sono. */
-  const righeQualunque = (numero: number) => Array.from({ length: numero }, (_, indice) => ({ riga: `PV ${indice + 1}` }));
+  /**
+   * N righe qualunque nella lista del kit, ciascuna di un punto vendita diverso da tutti gli altri:
+   * per la vetrina conta solo quanti sono. Righe uguali sarebbero lo stesso punto vendita.
+   */
+  const righeQualunque = (numero: number) => {
+    const lista = randomUUID().slice(0, 8);
+    return Array.from({ length: numero }, (_, indice) => ({ riga: `PV ${lista} ${indice + 1}` }));
+  };
 
   /** Un punto vendita dell'anagrafica nella GDO del kit, sulla sua combinazione canale/area. */
   async function creaPuntoVendita(kit: KitDiProva, dati: { nome: string; citta: string; regione?: string; lat?: number; lon?: number }): Promise<string> {
@@ -317,11 +324,11 @@ describeConDatabase('ConsultazioneService', () => {
     expect(zip.nomeFile).toBe('Sottocosto - Cartello A5.zip');
   });
 
-  it('vetrina degli Attivi: la promo con piu\' righe dei punti vendita nei volantini pubblicati, a parita\' la validita\' piu\' recente', async () => {
+  it('vetrina degli Attivi: la promo con piu\' punti vendita nei volantini pubblicati, a parita\' la validita\' piu\' recente', async () => {
     const ottobre = await creaKitRuntime({ nomePromo: 'Ottobre', titolo: 'SS TO 40', validitaDal: giorno('2026-10-01T00:00:00+02:00') });
     const ambito = della(ottobre);
     await creaRighePuntiVendita(ottobre, righeQualunque(3));
-    // Tre righe anche qui, su due volantini, e la validita' piu' recente: e' lei in vetrina
+    // Tre punti vendita anche qui, su due volantini, e la validita' piu' recente: e' lei in vetrina
     const metaOttobre = await creaKitRuntime({ idGdo: ottobre.idGdo, nomePromo: 'Metà ottobre', titolo: 'SS TO 42', validitaDal: giorno('2026-10-15T00:00:00+02:00') });
     await creaRighePuntiVendita(metaOttobre, righeQualunque(2));
     const ipermercati = await creaKitRuntime({ promo: { idGdo: metaOttobre.idGdo, idPromo: metaOttobre.idPromo }, titolo: 'IPER TO 42' });
@@ -335,7 +342,7 @@ describeConDatabase('ConsultazioneService', () => {
     const pagina = await service.getPromozioniVolantini({ periodo: 'attivi' }, ambito);
 
     expect(pagina.vetrina?.motivo).toBe('piu_punti_vendita');
-    expect(pagina.vetrina?.promozione).toMatchObject({ promo: { nome: 'Metà ottobre' }, numeroKit: 2 });
+    expect(pagina.vetrina?.promozione).toMatchObject({ promo: { nome: 'Metà ottobre' }, numeroKit: 2, numeroPuntiVendita: 3 });
     expect(pagina.vetrina?.promozione.kit.map(kit => [kit.titolo, kit.numeroPuntiVendita]).sort()).toEqual([['IPER TO 42', 1], ['SS TO 42', 2]]);
     // Fuori dall'elenco e dai suoi totali, non dal totale senza filtri ne' dal riepilogo
     expect(pagina.promozioni.map(p => p.promo.nome)).toEqual(['Novembre', 'Ottobre']);
@@ -430,22 +437,66 @@ describeConDatabase('ConsultazioneService', () => {
     expect(dettaglio.assortimento.meccanichePerCanale.map(voce => [voce.canale.nome, voce.box])).toEqual([['Ipermercati', 2], ['Superstore', 1]]);
     expect(dettaglio.puntiVendita).toEqual([
       {
-        id: expect.any(String), idKit: ipermercati.idRuntime, riga: 'Firenze - Viale Italia 3', localita: 'FIRENZE', indirizzo: null,
+        id: expect.any(String), idKit: [ipermercati.idRuntime], riga: 'Firenze - Viale Italia 3', localita: 'FIRENZE', indirizzo: null,
         // Ne' regione ne' provincia stampate: la regione dell'anagrafica
         regione: 'TOS', puntoVendita: { id: firenze, nome: 'Iper Firenze', coordinate: null },
       },
       {
-        id: expect.any(String), idKit: superstore.idRuntime, riga: 'GROSSETO - Via Roma 1', localita: 'GROSSETO', indirizzo: null,
+        id: expect.any(String), idKit: [superstore.idRuntime], riga: 'GROSSETO - Via Roma 1', localita: 'GROSSETO', indirizzo: null,
         regione: 'TOS', puntoVendita: { id: grosseto, nome: 'Superstore Grosseto', coordinate: { lat: 42.76, lon: 11.11 } },
       },
       {
-        id: expect.any(String), idKit: superstore.idRuntime, riga: 'Modena - Via Emilia 2', localita: 'Modena', indirizzo: null,
+        id: expect.any(String), idKit: [superstore.idRuntime], riga: 'Modena - Via Emilia 2', localita: 'Modena', indirizzo: null,
         regione: 'EMR', puntoVendita: null,
       },
     ]);
     senzaDatiDiLavorazione(dettaglio);
     // Superadmin e Agenzia: tutte le GDO
     expect((await service.getPromozioneVolantini(superstore.idPromo, 'tutte')).kit).toHaveLength(2);
+  });
+
+  it('un punto vendita stampato in piu\' volantini conta una volta: nei kit, nella scheda, nella vetrina, nel riepilogo e nel dettaglio', async () => {
+    // Il caso di A2623: i volantini Emilia e Liguria stampano la stessa lista, con maiuscole e spazi diversi
+    const emilia = await creaKitRuntime({ nomePromo: 'Sottocosto', titolo: 'CY EM' });
+    const ambito = della(emilia);
+    const liguria = await creaKitRuntime({ promo: { idGdo: emilia.idGdo, idPromo: emilia.idPromo }, titolo: 'CY LI' });
+    await creaRighePuntiVendita(emilia, [
+      { riga: 'AREZZO - VIA CHIARINI 23/A', localita: 'AREZZO', indirizzo: 'VIA CHIARINI 23/A', regione: 'TOSCANA' },
+      { riga: 'BARGA - VIA CANIPAIA', localita: 'BARGA', indirizzo: 'VIA CANIPAIA', regione: 'TOSCANA' },
+    ]);
+    await creaRighePuntiVendita(liguria, [
+      { riga: 'Arezzo - Via Chiarini 23/A - tel. 0575 1', localita: ' Arezzo ', indirizzo: 'Via  Chiarini\t23/A', regione: 'TOSCANA' },
+      { riga: 'BARGA - VIA CANIPAIA', localita: 'BARGA', indirizzo: 'VIA CANIPAIA', regione: 'TOSCANA' },
+      { riga: 'LA SPEZIA - Via Roma 1', localita: 'LA SPEZIA', indirizzo: 'Via Roma 1', regione: 'LIGURIA' },
+      // Senza indirizzo letto vale la riga intera: non diventa uno con Barga
+      { riga: 'BARGA - Piazza Garibaldi', localita: 'BARGA' },
+    ]);
+    // Meno righe del Sottocosto (5 contro 6) ma piu' punti vendita diversi (5 contro 4): e' lei in vetrina
+    const volantone = await creaKitRuntime({ idGdo: emilia.idGdo, nomePromo: 'Volantone', titolo: 'SS TO' });
+    await creaRighePuntiVendita(volantone, righeQualunque(5));
+
+    const pagina = await service.getPromozioniVolantini({ periodo: 'attivi' }, ambito);
+
+    expect(pagina.vetrina?.promozione).toMatchObject({ promo: { nome: 'Volantone' }, numeroPuntiVendita: 5 });
+    expect(pagina.promozioni).toEqual([expect.objectContaining({ promo: expect.objectContaining({ nome: 'Sottocosto' }), numeroPuntiVendita: 4 })]);
+    expect(pagina.promozioni[0].kit.map(kit => [kit.titolo, kit.numeroPuntiVendita])).toEqual([['CY EM', 2], ['CY LI', 4]]);
+    expect(pagina.riepilogo).toEqual({ promozioni: 2, kit: 3, puntiVendita: 9 });
+
+    // Con un filtro la scheda conta solo i kit mostrati
+    const soloEmilia = await service.getPromozioniVolantini({ periodo: 'attivi', idArea: emilia.idArea }, ambito);
+    expect(soloEmilia.promozioni).toEqual([expect.objectContaining({ numeroKit: 2, numeroPuntiVendita: 2 })]);
+    const soloLiguria = await service.getPromozioniVolantini({ periodo: 'attivi', idArea: liguria.idArea }, ambito);
+    expect(soloLiguria.promozioni).toEqual([expect.objectContaining({ numeroKit: 2, numeroPuntiVendita: 4 })]);
+
+    // Il dettaglio (regola in TypeScript) dice gli stessi numeri della scheda (regola in SQL)
+    const dettaglio = await service.getPromozioneVolantini(emilia.idPromo, ambito);
+    expect(dettaglio.numeri).toMatchObject({ puntiVendita: 4, localita: 3, regioni: 2 });
+    expect(dettaglio.puntiVendita.map(pv => [pv.localita, pv.indirizzo, pv.idKit])).toEqual([
+      ['AREZZO', 'VIA CHIARINI 23/A', [emilia.idRuntime, liguria.idRuntime]],
+      ['BARGA', 'VIA CANIPAIA', [emilia.idRuntime, liguria.idRuntime]],
+      ['LA SPEZIA', 'Via Roma 1', [liguria.idRuntime]],
+      ['BARGA', null, [liguria.idRuntime]],
+    ]);
   });
 
   it('dettaglio della promozione: l\'id e\' testo, non sempre un UUID; il periodo viene dallo stato della promo', async () => {

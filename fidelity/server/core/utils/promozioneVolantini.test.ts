@@ -274,7 +274,7 @@ describe('aggregaPromozioneVolantini: punti vendita', () => {
       lon: '10.92500000',
     }))).toEqual({
       id: 'r1',
-      idKit: 'k1',
+      idKit: ['k1'],
       riga: 'MODENA - Via Emilia 12',
       localita: 'Modena',
       indirizzo: 'Via Emilia 12',
@@ -290,5 +290,66 @@ describe('aggregaPromozioneVolantini: punti vendita', () => {
 
     const senzaAbbinamento = puntoVenditaDa(riga('r3', 'k1', 3, { regione: 'Atlantide', localita: '' }));
     expect(senzaAbbinamento).toMatchObject({ regione: null, localita: null, puntoVendita: null });
+  });
+});
+
+describe('aggregaPromozioneVolantini: un punto vendita stampato in piu\' kit', () => {
+  // Il caso di A2623: i volantini Emilia e Liguria stampano la stessa lista di punti vendita
+  const arezzo = { localita: 'AREZZO', indirizzo: 'VIA CHIARINI 23/A', regione: 'TOSCANA', provincia: 'AR' };
+  const barga = { localita: 'BARGA', indirizzo: 'VIA CANIPAIA', regione: 'TOSCANA', provincia: 'LU' };
+
+  it('compare una volta, con i kit che lo stampano nell\'ordine dei kit, e conta una volta nei numeri', () => {
+    const dettaglio = aggregaPromozioneVolantini([kit('emilia', []), kit('liguria', [])], [
+      riga('l26', 'liguria', 26, arezzo),
+      riga('l31', 'liguria', 31, barga),
+      riga('e26', 'emilia', 26, arezzo),
+      riga('e31', 'emilia', 31, { ...barga, localita: ' Barga ', indirizzo: 'Via  Canipaia' }),
+    ]);
+
+    expect(dettaglio.puntiVendita.map(pv => [pv.id, pv.localita, pv.idKit])).toEqual([
+      ['e26', 'AREZZO', ['emilia', 'liguria']],
+      ['e31', 'Barga', ['emilia', 'liguria']],
+    ]);
+    expect(dettaglio.numeri).toMatchObject({ puntiVendita: 2, localita: 2, regioni: 1 });
+  });
+
+  it('l\'anagrafica e la regione vengono dalla prima riga che le ha', () => {
+    const dettaglio = aggregaPromozioneVolantini([kit('emilia', []), kit('liguria', [])], [
+      riga('e26', 'emilia', 26, { localita: 'AREZZO', indirizzo: 'VIA CHIARINI 23/A' }),
+      riga('l26', 'liguria', 26, {
+        ...arezzo, id_punto_vendita: 'pv-arezzo', nome_punto_vendita: 'Conad Arezzo', lat: 43.46, lon: 11.88,
+      }),
+    ]);
+
+    expect(dettaglio.puntiVendita).toEqual([expect.objectContaining({
+      id: 'e26',
+      idKit: ['emilia', 'liguria'],
+      regione: 'TOS',
+      puntoVendita: { id: 'pv-arezzo', nome: 'Conad Arezzo', coordinate: { lat: 43.46, lon: 11.88 } },
+    })]);
+  });
+
+  it('ripetuto nello stesso kit resta un punto vendita con quel kit una volta', () => {
+    const dettaglio = aggregaPromozioneVolantini([kit('emilia', [])], [
+      riga('e1', 'emilia', 1, arezzo),
+      riga('e2', 'emilia', 2, arezzo),
+    ]);
+
+    expect(dettaglio.puntiVendita.map(pv => pv.idKit)).toEqual([['emilia']]);
+    expect(dettaglio.numeri.puntiVendita).toBe(1);
+  });
+
+  it('righe diverse abbinate per errore allo stesso punto vendita dell\'anagrafica restano due', () => {
+    const abbinata = { id_punto_vendita: 'pv-massa', nome_punto_vendita: 'Conad Massa' };
+    const dettaglio = aggregaPromozioneVolantini([kit('cy', []), kit('cn', [])], [
+      riga('r1', 'cy', 60, { localita: 'MARINA DI MASSA', indirizzo: 'Via S. Leonardo 350', ...abbinata }),
+      riga('r2', 'cn', 19, { localita: 'MASSA MARITTIMA', indirizzo: 'Via Don Luigi Rossi 5', ...abbinata }),
+    ]);
+
+    expect(dettaglio.puntiVendita.map(pv => [pv.localita, pv.idKit])).toEqual([
+      ['MARINA DI MASSA', ['cy']],
+      ['MASSA MARITTIMA', ['cn']],
+    ]);
+    expect(dettaglio.numeri.puntiVendita).toBe(2);
   });
 });

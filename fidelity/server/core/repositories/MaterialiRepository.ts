@@ -112,9 +112,15 @@ export interface RigaTotaliPromoVolantini {
   kit: number;
 }
 
-/** Il periodo della vista Volantini: promo, kit e righe delle liste dei punti vendita stampate nei volantini. */
+/** Il periodo della vista Volantini: promo, kit e punti vendita diversi stampati nei volantini. */
 export interface RiepilogoPromoVolantini extends RigaTotaliPromoVolantini {
   puntiVendita: number;
+}
+
+/** Punti vendita diversi stampati nei kit di una promo che corrispondono ai filtri. */
+export interface RigaPuntiVenditaPromo {
+  id_promo: string;
+  punti_vendita: number;
 }
 
 /** Kit di una promo della pagina (vista Volantini per promozione), con o senza corrispondenza ai filtri. */
@@ -127,7 +133,7 @@ export interface RigaVarianteVolantino {
   id_canale: string;
   nome_canale: string;
   numero_file: number;
-  /** Righe della lista dei punti vendita stampata nel volantino (punti_vendita_volantino). */
+  /** Punti vendita diversi della lista stampata nel volantino (punti_vendita_volantino, chiavePuntoVenditaStampatoSql). */
   numero_punti_vendita: number;
   copertina_id_file?: string | null;
   copertina_id_olimpo: string | null;
@@ -201,14 +207,23 @@ export interface IMaterialiRepository {
     filtri?: FiltriSqlPromoVolantini
   ): Promise<RigaVarianteVolantino[]>;
   /**
+   * Per ciascuna promo indicata, i punti vendita diversi stampati nei suoi kit ammessi che
+   * corrispondono ai filtri: uno stampato in piu' kit conta una volta. Le promo senza righe non ci sono.
+   */
+  contaPuntiVenditaPromoVolantini(
+    criteri: CriteriKit,
+    idPromo: readonly string[],
+    filtri?: FiltriSqlPromoVolantini
+  ): Promise<RigaPuntiVenditaPromo[]>;
+  /**
    * La promo in vetrina fra quelle con kit ammessi (spec volantini-pop, "Promozione in vetrina"):
-   * - piu_punti_vendita: piu' righe dei punti vendita nei suoi kit, a parita' la validita' piu' recente;
+   * - piu_punti_vendita: piu' punti vendita diversi nei suoi kit, a parita' la validita' piu' recente;
    * - prima_a_partire: l'inizio di validita' piu' vicino;
    * - ultima_conclusa: la fine di validita' piu' recente.
    * Poi per nome e id. null senza promo.
    */
   trovaPromoInVetrina(criteri: CriteriKit, motivo: MotivoVetrina): Promise<RigaPromo | null>;
-  /** Promo, kit ammessi e righe dei punti vendita stampate nei loro volantini, senza filtri. */
+  /** Promo, kit ammessi e punti vendita diversi stampati nei loro volantini, senza filtri. */
   riepilogoPromoVolantini(criteri: CriteriKit): Promise<RiepilogoPromoVolantini>;
   /**
    * Le righe delle liste dei punti vendita stampate nei kit ammessi della promo, per kit e posizione,
@@ -375,12 +390,30 @@ const COPERTINA_VOLANTINO = `
   ) cop ON TRUE`;
 
 /**
+ * Il punto vendita di una riga stampata (punti_vendita_volantino `alias`): la regola di
+ * chiavePuntoVenditaStampato (lib/consultazione/puntiVenditaStampati.ts) in SQL. Stessa localita' e
+ * stesso indirizzo senza distinguere maiuscole e spazi; se ne manca uno, la riga intera. NULL
+ * quando la riga manca (LEFT JOIN), cosi' COUNT(DISTINCT ...) non la conta. Testo fisso.
+ */
+const chiavePuntoVenditaStampatoSql = (alias: string): string => `
+  CASE
+    WHEN ${alias}.id IS NULL THEN NULL
+    WHEN regexp_replace(COALESCE(${alias}.localita, ''), '\\s', '', 'g') <> ''
+      AND regexp_replace(COALESCE(${alias}.indirizzo, ''), '\\s', '', 'g') <> ''
+      THEN lower(btrim(regexp_replace(${alias}.localita || ' | ' || ${alias}.indirizzo, '\\s+', ' ', 'g')))
+    ELSE 'riga:' || lower(btrim(regexp_replace(COALESCE(${alias}.riga, ''), '\\s+', ' ', 'g')))
+  END`;
+
+/** Punti vendita diversi fra le righe pvv: uno stampato in piu' kit conta una volta. */
+const PUNTI_VENDITA_DIVERSI = `COUNT(DISTINCT ${chiavePuntoVenditaStampatoSql('pvv')})`;
+
+/**
  * Ordine della promo in vetrina per motivo, sui kit della promo con le loro righe dei punti vendita
  * (pvv). Testi fissi, mai valori dell'utente; nome e id rendono la scelta stabile a parita'.
  */
 const ORDINE_VETRINA: Readonly<Record<MotivoVetrina, string>> = {
-  // A parita' di righe, la validita' piu' recente: come l'ordine dell'elenco
-  piu_punti_vendita: 'COUNT(pvv.id) DESC, p.validita_dal DESC NULLS LAST, p.validita_al DESC NULLS LAST, p.nome_promo, p.id_promo',
+  // A parita' di punti vendita, la validita' piu' recente: come l'ordine dell'elenco
+  piu_punti_vendita: `${PUNTI_VENDITA_DIVERSI} DESC, p.validita_dal DESC NULLS LAST, p.validita_al DESC NULLS LAST, p.nome_promo, p.id_promo`,
   prima_a_partire: 'p.validita_dal ASC NULLS LAST, p.nome_promo, p.id_promo',
   ultima_conclusa: 'p.validita_al DESC NULLS LAST, p.nome_promo, p.id_promo',
 };
@@ -601,7 +634,7 @@ export class MaterialiRepository implements IMaterialiRepository {
          k.id_area::text AS id_area, ${NOME_O_CODICE_AREA} AS nome_area,
          k.id_canale::text AS id_canale, ${NOME_O_CODICE_CANALE} AS nome_canale,
          (SELECT COUNT(*) FROM files_runtime f WHERE f.id_runtime = k.id AND ${FILE_NON_CORREGGO})::int AS numero_file,
-         (SELECT COUNT(*) FROM punti_vendita_volantino pvv WHERE pvv.id_kit_runtime = k.id)::int AS numero_punti_vendita,
+         (SELECT ${PUNTI_VENDITA_DIVERSI} FROM punti_vendita_volantino pvv WHERE pvv.id_kit_runtime = k.id)::int AS numero_punti_vendita,
          cop.id::text AS copertina_id_file, cop.id_olimpo_cloud AS copertina_id_olimpo, cop.nome AS copertina_nome,
          cop.mime AS copertina_mime, cop.pages AS copertina_pagine,
          (${corrisponde}) AS corrisponde
@@ -613,10 +646,31 @@ export class MaterialiRepository implements IMaterialiRepository {
     );
   }
 
+  async contaPuntiVenditaPromoVolantini(
+    criteri: CriteriKit,
+    idPromo: readonly string[],
+    filtri?: FiltriSqlPromoVolantini
+  ): Promise<RigaPuntiVenditaPromo[]> {
+    if (idPromo.length === 0) return [];
+    const sostituzioni: Sostituzioni = { idPromoPagina: [...idPromo] };
+    // Qui i filtri escludono: contano solo i kit che la scheda mostra
+    const condizioni = [...condizioniKit(criteri, sostituzioni), ...condizioniFiltriPromoVolantini(filtri, sostituzioni)];
+    return this.seleziona<RigaPuntiVenditaPromo>(
+      `SELECT k.id_promo, ${PUNTI_VENDITA_DIVERSI}::int AS punti_vendita
+       FROM runtime_kit k
+       JOIN promo p ON p.id_promo = k.id_promo
+       JOIN formati fo ON fo.id_formati = k.id_formato
+       JOIN punti_vendita_volantino pvv ON pvv.id_kit_runtime = k.id
+       WHERE ${condizioni.join(' AND ')} AND k.id_promo IN (:idPromoPagina)
+       GROUP BY k.id_promo`,
+      sostituzioni
+    );
+  }
+
   async trovaPromoInVetrina(criteri: CriteriKit, motivo: MotivoVetrina): Promise<RigaPromo | null> {
     const sostituzioni: Sostituzioni = {};
     const condizioni = condizioniKit(criteri, sostituzioni);
-    // Le righe dei punti vendita contano su tutti i kit ammessi della promo; agli altri motivi non servono
+    // I punti vendita contano su tutti i kit ammessi della promo; agli altri motivi non servono
     const righe = await this.seleziona<RigaPromo>(
       `SELECT ${COLONNE_PROMO}
        FROM runtime_kit k
@@ -635,15 +689,15 @@ export class MaterialiRepository implements IMaterialiRepository {
   async riepilogoPromoVolantini(criteri: CriteriKit): Promise<RiepilogoPromoVolantini> {
     const sostituzioni: Sostituzioni = {};
     const condizioni = condizioniKit(criteri, sostituzioni);
+    // Un punto vendita stampato in piu' kit o in piu' promo del periodo conta una volta; con piu' GDO
+    // (Superadmin) lo stesso indirizzo di due GDO resta due punti vendita
     const [riga] = await this.seleziona<{ promozioni: number; kit: number; punti_vendita: number }>(
-      `SELECT COUNT(DISTINCT k.id_promo)::int AS promozioni, COUNT(*)::int AS kit,
-         COALESCE(SUM(npv.numero), 0)::int AS punti_vendita
+      `SELECT COUNT(DISTINCT k.id_promo)::int AS promozioni, COUNT(DISTINCT k.id)::int AS kit,
+         COUNT(DISTINCT pvv.id_gdo::text || '|' || ${chiavePuntoVenditaStampatoSql('pvv')})::int AS punti_vendita
        FROM runtime_kit k
        JOIN promo p ON p.id_promo = k.id_promo
        JOIN formati fo ON fo.id_formati = k.id_formato
-       LEFT JOIN LATERAL (
-         SELECT COUNT(*) AS numero FROM punti_vendita_volantino pvv WHERE pvv.id_kit_runtime = k.id
-       ) npv ON TRUE
+       LEFT JOIN punti_vendita_volantino pvv ON pvv.id_kit_runtime = k.id
        WHERE ${condizioni.join(' AND ')}`,
       sostituzioni
     );

@@ -79,7 +79,7 @@ export interface VarianteConsultazione {
   area: Riferimento;
   canale: Riferimento;
   numeroFile: number;
-  /** Righe della lista dei punti vendita stampata nel volantino. */
+  /** Punti vendita diversi della lista stampata nel volantino (chiavePuntoVenditaStampato). */
   numeroPuntiVendita: number;
   copertina: FileConsultazione | null;
 }
@@ -92,6 +92,11 @@ export interface PromozioneVolantiniConsultazione {
   numeroKit: number;
   /** Solo i kit che corrispondono ai filtri. */
   kit: VarianteConsultazione[];
+  /**
+   * Punti vendita diversi stampati nei kit mostrati: uno stampato in piu' kit conta una volta
+   * (chiavePuntoVenditaStampato). 0 quando le liste non sono arrivate.
+   */
+  numeroPuntiVendita: number;
 }
 
 export interface FiltriPromozioniVolantiniConsultazione {
@@ -109,7 +114,7 @@ export interface FiltriPromozioniVolantiniConsultazione {
 
 /**
  * Perche' una promozione e' in vetrina (spec volantini-pop, "Promozione in vetrina"):
- * - piu_punti_vendita: negli Attivi, la promo con piu' righe di punti vendita stampate nei volantini;
+ * - piu_punti_vendita: negli Attivi, la promo con piu' punti vendita diversi stampati nei volantini;
  * - prima_a_partire: nei Prossimi, la promo con l'inizio di validita' piu' vicino;
  * - ultima_conclusa: nello Storico, la promo con la fine di validita' piu' recente.
  */
@@ -127,7 +132,10 @@ export interface VetrinaVolantiniConsultazione {
   promozione: PromozioneVolantiniConsultazione;
 }
 
-/** Il periodo senza filtri: promozioni, kit volantino pubblicati e righe dei punti vendita stampate. */
+/**
+ * Il periodo senza filtri: promozioni, kit volantino pubblicati e punti vendita diversi stampati nei
+ * volantini; uno stampato in piu' kit o in piu' promozioni conta una volta.
+ */
 export interface RiepilogoPeriodoVolantiniConsultazione {
   promozioni: number;
   kit: number;
@@ -184,11 +192,11 @@ export interface NumeriPromozioneConsultazione {
   kit: number;
   /** Pagine sommate sui kit. */
   pagine: number;
-  /** Righe delle liste dei punti vendita stampate nei volantini. */
+  /** Punti vendita diversi stampati nei volantini: uno stampato in piu' kit conta una volta. */
   puntiVendita: number;
-  /** Localita' diverse delle righe, senza distinguere maiuscole e spazi. */
+  /** Localita' diverse dei punti vendita, senza distinguere maiuscole e spazi. */
   localita: number;
-  /** Regioni diverse delle righe con la regione nota. */
+  /** Regioni diverse dei punti vendita con la regione nota. */
   regioni: number;
   /** Prodotti diversi: chiavi dei prodotti pilota dei box, su tutti i kit. */
   prodotti: number;
@@ -200,18 +208,23 @@ export interface NumeriPromozioneConsultazione {
   sottocosto: number;
 }
 
-/** Una riga della lista dei punti vendita stampata in un volantino della promozione. */
+/**
+ * Un punto vendita stampato nelle liste dei volantini della promozione, una volta sola anche se lo
+ * stampano piu' kit (chiavePuntoVenditaStampato, lib/consultazione/puntiVenditaStampati.ts). Testo,
+ * localita' e indirizzo sono quelli della sua prima riga.
+ */
 export interface PuntoVenditaPromozioneConsultazione {
-  /** Id della riga (punti_vendita_volantino.id). */
+  /** Id della prima riga del punto vendita (punti_vendita_volantino.id). */
   id: string;
-  idKit: string;
+  /** I kit che lo stampano, nell'ordine dei kit del dettaglio. */
+  idKit: string[];
   /** La riga come era stampata. */
   riga: string;
   localita: string | null;
   indirizzo: string | null;
   /** Regione normalizzata (lib/consultazione/regioni.ts); null quando non si ricava. */
   regione: CodiceRegione | null;
-  /** Il punto vendita dell'anagrafica a cui la riga e' abbinata, se c'e'. */
+  /** Il punto vendita dell'anagrafica a cui e' abbinata la prima riga che ne ha uno, se c'e'. */
   puntoVendita: {
     id: string;
     nome: string;
@@ -274,7 +287,7 @@ export interface DettaglioPromozioneVolantiniConsultazione {
   /** Ordinati per nome del canale, poi dell'area, poi titolo. */
   kit: KitPromozioneConsultazione[];
   numeri: NumeriPromozioneConsultazione;
-  /** Tutte le righe, ordinate per kit (come `kit`) e posizione nella lista stampata. */
+  /** Un elemento per punto vendita, nell'ordine in cui compare per primo: per kit (come `kit`) e posizione nella lista stampata. */
   puntiVendita: PuntoVenditaPromozioneConsultazione[];
   assortimento: AssortimentoPromozioneConsultazione;
 }

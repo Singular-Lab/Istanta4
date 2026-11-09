@@ -67,6 +67,7 @@ import type {
   RigaFile,
   RigaKit,
   RigaPromo,
+  RigaPuntiVenditaPromo,
   RigaVarianteVolantino,
 } from '../repositories/MaterialiRepository';
 import { boxDelKit } from '../utils/analisiKit';
@@ -256,8 +257,15 @@ function confrontaVarianti(a: VarianteConsultazione, b: VarianteConsultazione): 
 /**
  * Le promo della pagina, nel loro ordine, ciascuna con i kit che corrispondono ai filtri. Gli
  * altri contano nel totale della promo e, se nessun kit mostrato ne ha una, danno la copertina.
+ * I punti vendita diversi dei kit mostrati arrivano gia' contati per promo (contaPuntiVenditaPromoVolantini):
+ * non sono la somma di quelli dei kit, perche' un punto vendita stampato in piu' kit conta una volta.
  */
-export function promozioniConVarianti(righePromo: RigaPromo[], righeKit: RigaVarianteVolantino[]): PromozioneVolantiniConsultazione[] {
+export function promozioniConVarianti(
+  righePromo: RigaPromo[],
+  righeKit: RigaVarianteVolantino[],
+  righePuntiVendita: readonly RigaPuntiVenditaPromo[] = []
+): PromozioneVolantiniConsultazione[] {
+  const puntiVenditaPerPromo = new Map(righePuntiVendita.map(riga => [riga.id_promo, Number(riga.punti_vendita) || 0]));
   const kitPerPromo = new Map<string, RigaVarianteVolantino[]>();
   for (const riga of righeKit) {
     const dellaPromo = kitPerPromo.get(riga.id_promo);
@@ -272,7 +280,13 @@ export function promozioniConVarianti(righePromo: RigaPromo[], righeKit: RigaVar
     const copertina = mostrati.find(kit => kit.copertina)?.copertina
       ?? tutti.find(kit => kit.variante.copertina)?.variante.copertina
       ?? null;
-    return { promo: promoDa(rigaPromo), copertina, numeroKit: tutti.length, kit: mostrati };
+    return {
+      promo: promoDa(rigaPromo),
+      copertina,
+      numeroKit: tutti.length,
+      kit: mostrati,
+      numeroPuntiVendita: puntiVenditaPerPromo.get(rigaPromo.id_promo) ?? 0,
+    };
   });
 }
 
@@ -431,13 +445,16 @@ export class ConsultazioneService implements IConsultazioneService {
     // Senza filtri ogni kit corrisponde: la vetrina ha tutti i suoi kit volantino pubblicati
     const idPromoKit = righePromo.map(riga => riga.id_promo);
     if (rigaVetrina) idPromoKit.push(rigaVetrina.id_promo);
-    const righeKit = await this.materiali.elencaVariantiVolantini(criteri, idPromoKit, filtriPromo);
+    const [righeKit, righePuntiVendita] = await Promise.all([
+      this.materiali.elencaVariantiVolantini(criteri, idPromoKit, filtriPromo),
+      this.materiali.contaPuntiVenditaPromoVolantini(criteri, idPromoKit, filtriPromo),
+    ]);
     const vetrina: VetrinaVolantiniConsultazione | null = rigaVetrina
-      ? { motivo, promozione: promozioniConVarianti([rigaVetrina], righeKit)[0] }
+      ? { motivo, promozione: promozioniConVarianti([rigaVetrina], righeKit, righePuntiVendita)[0] }
       : null;
 
     return {
-      promozioni: promozioniConVarianti(righePromo, righeKit),
+      promozioni: promozioniConVarianti(righePromo, righeKit, righePuntiVendita),
       totale: totali.promozioni,
       totaleKit: totali.kit,
       totaleSenzaFiltri: riepilogo.promozioni,
