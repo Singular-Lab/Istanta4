@@ -243,3 +243,62 @@ test("a documento chiuso la schermata delle segnalazioni non si apre sul documen
     assert.match(motore, /if \(impagina && !InddEvents\.documentoChiuso\(docInLavorazione\)\) \{\s*SchermataSegnalazioni\.apriSeCiSono\(/);
     assert.match(motore, /if \(!InddEvents\.documentoChiuso\(docInLavorazione\)\) \{\s*SchermataSegnalazioni\.apriSeCiSono\(reportImpaginazioneObj, SchermataSegnalazioni\.pagineDelRisultato\(objResult, restartFromIndexPoP\)\);/);
 });
+
+/* ---- I20-1210: il nome del documento sopra "Impaginazione di pagina: N" ---- */
+
+//showLoading del pannello, eseguita con un $ finto che ricorda testo e visibilita' di ogni elemento.
+function attesaFinta() {
+    const elementi = {};
+    const elemento = nome => elementi[nome] || (elementi[nome] = {
+        testo: null,
+        visibile: null,
+        text(t) { this.testo = t; return this; },
+        show() { this.visibile = true; return this; },
+        hide() { this.visibile = false; return this; }
+    });
+    const $ = selettore => ({
+        show() { elemento(selettore).show(); return this; },
+        find: figlio => elemento(selettore + " " + figlio)
+    });
+    const showLoading = new Function("$", "CampiARiposo",
+        corpoFunzione(sorgente("indexNew.js"), "function showLoading(") + "\n}\nreturn showLoading;")($, { tuttiARiposo() { } });
+    return { showLoading, sopra: () => elemento("#loadingPanel .loadingSopra"), titolo: () => elemento("#loadingPanel h1") };
+}
+
+test("I20-1210: durante l'impaginazione il nome del documento sta sopra la pagina in corso", () => {
+    const attesa = attesaFinta();
+
+    attesa.showLoading("Impaginazione di pagina: 9", "P2624_VOL_19-11-26_SSSA.indd");
+
+    assert.strictEqual(attesa.titolo().testo, "Impaginazione di pagina: 9");
+    assert.strictEqual(attesa.sopra().testo, "P2624_VOL_19-11-26_SSSA.indd");
+    assert.strictEqual(attesa.sopra().visibile, true);
+});
+
+test("I20-1210: le altre attese non mostrano il nome, nemmeno dopo un'impaginazione", () => {
+    const attesa = attesaFinta();
+
+    attesa.showLoading("Impaginazione di pagina: 9", "P2624_VOL_19-11-26_SSSA.indd");
+    attesa.showLoading("Scaricamento lista...");
+
+    assert.strictEqual(attesa.titolo().testo, "Scaricamento lista...");
+    assert.strictEqual(attesa.sopra().testo, "");
+    assert.strictEqual(attesa.sopra().visibile, false);
+
+    //Un documento chiuso prima di leggerne il nome: niente riga vuota sopra il messaggio.
+    attesa.showLoading("Impaginazione di pagina: 3", "");
+    assert.strictEqual(attesa.sopra().visibile, false);
+});
+
+test("I20-1210: le due attese dell'impaginazione passano il nome del documento, e il pannello ha la riga", () => {
+    const motore = corpoFunzione(sorgente("indexNew.js"), "async function _conteggiaImpaginaConContesto(");
+    const pagina = motore.match(/showLoading\("Impaginazione di pagina: " \+ filtroResult\.pag[^)]*\)/g);
+
+    assert.strictEqual(pagina.length, 2);
+    pagina.forEach(p => assert.strictEqual(p, 'showLoading("Impaginazione di pagina: " + filtroResult.pag, nomeDocumentoImpaginazione)'));
+
+    const html = sorgente("index.html");
+    const pannello = html.substring(html.indexOf('<div id="loadingPanel"'), html.indexOf("</div>", html.indexOf('<div id="loadingPanel"')));
+    assert.ok(pannello.indexOf('class="loadingSopra"') > 0 && pannello.indexOf('class="loadingSopra"') < pannello.indexOf("<h1>"),
+        "la riga del nome sta sopra il messaggio");
+});

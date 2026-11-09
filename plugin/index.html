@@ -280,6 +280,9 @@
      border-box lo fa stare dentro invece di allungare il riquadro.-->
 <div id="loadingPanel"
   style="position: fixed; top: -8px; left: -8px; right: -8px; bottom: -8px; box-sizing: border-box; background-color: rgba(0,0,0,0.7); z-index: 9999; display: none; justify-content: center; align-items: center; color:white; margin: 0px; padding-top: 200px; text-align:center;">
+  <!--I20-1210: sopra il messaggio, il nome del documento che si sta impaginando. Si vede solo
+       quando showLoading riceve il secondo testo; i nomi lunghi vanno a capo.-->
+  <h3 class="loadingSopra" style="display: none; font-size: 13px; font-weight: normal; margin: 0 16px 8px 16px; word-wrap: break-word;"></h3>
   <h1>Messaggio</h1>
 </div>
 <!--I20-987: il riquadro di blocco copre esattamente il pannello e tiene il testo al centro.
