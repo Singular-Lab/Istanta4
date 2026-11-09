@@ -180,3 +180,66 @@ test("ogni box impaginato rimette davanti il documento dell'operazione", () => {
     //Prima del corpo del box.
     assert.ok(impagina.indexOf("InddEvents.riportaDavanti(") < impagina.indexOf("await impaginaBoxNelContesto("));
 });
+
+/* ---- TASK-16def236: documento chiuso durante l'impaginazione ---- */
+//L'operatore chiude il documento (Cmd+W) mentre il Plugin impagina: la schermata di attesa restava
+//su "Leggo i filtri per l'impaginazione" e il Plugin occupato per sempre.
+
+test("un documento chiuso si riconosce senza lanciare", () => {
+    assert.strictEqual(InddEvents.documentoChiuso(salvato(1, "/Lavori/CN_TO_05-11-26.indd")), false);
+    assert.strictEqual(InddEvents.documentoChiuso({ id: 1, isValid: false }), true);
+    assert.strictEqual(InddEvents.documentoChiuso(null), true);
+    assert.strictEqual(InddEvents.documentoChiuso({ get isValid() { throw new Error("Object is invalid"); } }), true);
+});
+
+test("il messaggio di documento chiuso ha il codice, il nome e il lavoro fermato", () => {
+    assert.strictEqual(InddEvents.messaggioDocumentoChiuso("CN_TO_05-11-26.indd", true),
+        "Code IDX-201 Il documento CN_TO_05-11-26.indd è stato chiuso durante l'impaginazione: l'impaginazione si è fermata");
+    assert.strictEqual(InddEvents.messaggioDocumentoChiuso("CN_TO_05-11-26.indd", false),
+        "Code IDX-201 Il documento CN_TO_05-11-26.indd è stato chiuso durante il conteggio: il conteggio si è fermato");
+    //Senza nome il messaggio resta leggibile.
+    assert.strictEqual(InddEvents.messaggioDocumentoChiuso("", true),
+        "Code IDX-201 Il documento è stato chiuso durante l'impaginazione: l'impaginazione si è fermata");
+});
+
+test("l'impaginazione si ferma solo se il documento e' chiuso", () => {
+    assert.doesNotThrow(() => InddEvents.fermaSeDocumentoChiuso(salvato(1, "/a.indd"), "a.indd"));
+    assert.throws(() => InddEvents.fermaSeDocumentoChiuso({ isValid: false }, "a.indd"), /^Error: Code IDX-201 Il documento a\.indd è stato chiuso/);
+});
+
+test("le letture del documento dopo \"Leggo i filtri\" stanno dentro il try", () => {
+    const motore = corpoFunzione(sorgente("indexNew.js"), "async function _conteggiaImpaginaConContesto(");
+    const leggo = motore.indexOf("showLoading(impagina ? \"Leggo i filtri per l'impaginazione\"");
+    assert.ok(leggo > 0);
+    const prova = motore.indexOf("try {", leggo);
+    assert.ok(prova > leggo);
+    //Il Plugin si dichiara occupato e legge le pagine solo dentro il try, il cui catch toglie l'attesa.
+    assert.ok(prova < motore.indexOf("indesignEvents.setBusy(true);", leggo));
+    assert.ok(prova < motore.indexOf("docInLavorazione.pages.everyItem()", leggo));
+});
+
+test("ogni pagina e ogni box del motore controllano prima il documento", () => {
+    const motore = corpoFunzione(sorgente("indexNew.js"), "async function _conteggiaImpaginaConContesto(");
+    const box = motore.match(/[^\n]*\n[^\n]*res = await impaginaBox\(/g);
+    assert.strictEqual(box.length, 3);
+    box.forEach(b => assert.match(b, /InddEvents\.fermaSeDocumentoChiuso\(docInLavorazione, nomeDocumentoImpaginazione\);/));
+    //Uno per ogni box, uno per le pagine del volantino e uno per quelle del PoP.
+    assert.strictEqual(motore.split("InddEvents.fermaSeDocumentoChiuso(").length - 1, 5);
+});
+
+test("i catch del motore dicono che il documento e' stato chiuso", () => {
+    const motore = corpoFunzione(sorgente("indexNew.js"), "async function _conteggiaImpaginaConContesto(");
+    //IDX-27 del volantino e i tre IDX-32 (volantino, risposta del PoP, PoP).
+    const avvisi = motore.match(/if \(InddEvents\.documentoChiuso\(docInLavorazione\)\) \{\s*messaggioUtente\(InddEvents\.messaggioDocumentoChiuso\(nomeDocumentoImpaginazione, impagina\), "warning"\);\s*\}\s*else (if \(!\(ex != null && ex\.giaSegnalato === true\)\) \{\s*messaggioUtente\("Code IDX-27|\{\s*messaggioUtente\("Code IDX-32)/g);
+    assert.strictEqual(avvisi.length, 4);
+    //Il nome si legge all'avvio, prima che il documento si possa chiudere.
+    assert.ok(motore.indexOf("nomeDocumentoImpaginazione = docInLavorazione.name;") < motore.indexOf("showLoading("));
+});
+
+test("a documento chiuso la schermata delle segnalazioni non si apre sul documento rimasto davanti", () => {
+    const motore = corpoFunzione(sorgente("indexNew.js"), "async function _conteggiaImpaginaConContesto(");
+    //Volantino e PoP: le due aperture automatiche del motore.
+    assert.strictEqual((motore.match(/SchermataSegnalazioni\.apriSeCiSono\(/g) || []).length, 2);
+    assert.match(motore, /if \(impagina && !InddEvents\.documentoChiuso\(docInLavorazione\)\) \{\s*SchermataSegnalazioni\.apriSeCiSono\(/);
+    assert.match(motore, /if \(!InddEvents\.documentoChiuso\(docInLavorazione\)\) \{\s*SchermataSegnalazioni\.apriSeCiSono\(reportImpaginazioneObj, SchermataSegnalazioni\.pagineDelRisultato\(objResult, restartFromIndexPoP\)\);/);
+});
