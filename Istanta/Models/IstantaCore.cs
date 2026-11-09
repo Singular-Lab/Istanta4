@@ -2553,6 +2553,25 @@ namespace Istanta.Models
         public string? originDir { get; set; }
     }
 
+    /// <summary>
+    /// TASK-10858197: una foto del report della scansione per l'anteprima del sync (SyncFoto/AnteprimaSync):
+    /// i campi della scansione che servono e se, con le scelte correnti della pagina, partira' nel sync.
+    /// </summary>
+    public class FotoInAnteprima
+    {
+        public string? filename { get; set; }
+        public StatoSyncFile stato { get; set; }
+        public Int64 id { get; set; }
+        public Int64 idArticolo { get; set; }
+        public TipoFoto tipo { get; set; } = TipoFoto.Foto;
+        public bool sincronizza { get; set; }
+    }
+
+    public class AnteprimaSyncRequest
+    {
+        public List<FotoInAnteprima>? files { get; set; }
+    }
+
     public class SyncFileDownloadRequest
     {
         public string? jobName { get; set; }
