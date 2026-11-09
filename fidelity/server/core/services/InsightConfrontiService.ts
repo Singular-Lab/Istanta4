@@ -5,12 +5,14 @@ import {
   type DifferenzeVarianti,
   MAX_TAPPE_VIAGGIO,
   type PdfVolantino,
+  type PesiVisibilita,
   type RepartoInsight,
   type TappaProdotto,
   type ViaggioProdotto,
   type VolantinoDiRiferimento,
 } from '../../../lib/insightVolantino/tipi';
 import type { AmbitoGdo } from '../accessi/contestoAccesso';
+import type { IAgenziaLib } from '../agenzia_lib/types';
 import type { IConfigService } from '../interfaces/IConfigService';
 import type { IInsightConfrontiService } from '../interfaces/IInsightConfrontiService';
 import { log } from '../logger';
@@ -45,6 +47,9 @@ import { AnalisiKitService, CHIAVE_PRODOTTO, type RepositoryRiepiloghiKit } from
  *
  * Il viaggio legge i riepiloghi dei kit in analisi_kit (gli stessi delle pagine del punto vendita):
  * quelli che mancano si calcolano e si salvano alla prima apertura, che per questo puo' essere lenta.
+ *
+ * Visibilita' dei box (differenze fra varianti) e sezioni dei confronti usano i pesi della visibilita'
+ * della libreria agenzia del cliente (insightVolantino.pesiVisibilita), come la scheda degli insight.
  */
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -162,12 +167,17 @@ export function pagineDelKit(pdf: PdfVolantino | null, box: readonly BoxKit[]): 
   return box.reduce((massimo, singolo) => Math.max(massimo, singolo.pagina ?? 0), 0);
 }
 
+/**
+ * Le opzioni degli insight del kit, come nella scheda (VolantinoService). `pesi`: i pesi della
+ * visibilita' della libreria agenzia del cliente; senza, gli standard (PESI_VISIBILITA).
+ */
 export function opzioniDelKit(
   kit: KitInsight,
   righe: readonly RigaReferenza[],
   box: readonly BoxKit[],
   pdf: PdfVolantino | null,
   contesto: ContestoConfig,
+  pesi?: PesiVisibilita,
 ): OpzioniInsight {
   const reparti = new Map(righe.map(riga => [riga.id, repartoConfigurato(riga, contesto)] as const));
   const meccaniche = new Map(righe.map(riga => [riga.id, meccanicaOriginale(riga, contesto)] as const));
@@ -180,6 +190,7 @@ export function opzioniDelKit(
     meccanicaOriginale: idReferenza => meccaniche.get(idReferenza) ?? null,
     urlFoto: guid => urlFotoOlimpo(guid, { performante: true }),
     origine: kit.storico ? codiceBox => (fuoriListino.has(codiceBox) ? 'fuori_listino' : 'listino') : undefined,
+    pesi,
   };
 }
 
@@ -227,6 +238,8 @@ export class InsightConfrontiService implements IInsightConfrontiService {
     private readonly analisi: RepositoryAnalisiViaggio,
     private readonly config: Pick<IConfigService, 'getFlyerInsightsConfig'>,
     private readonly letture: LettureKitInsight = LETTURE_PREDEFINITE,
+    /** Della libreria agenzia del cliente servono solo i pesi della visibilita'; senza, gli standard. */
+    private readonly agenziaLib?: Pick<IAgenziaLib, 'insightVolantino'>,
   ) {
     this.riepiloghi = new AnalisiKitService(analisi, 'Insight volantino');
   }
@@ -256,7 +269,8 @@ export class InsightConfrontiService implements IInsightConfrontiService {
   private async leggiKit(kit: KitInsight, contesto: ContestoConfig): Promise<KitLetto> {
     const [righe, pdf] = await Promise.all([this.letture.righeDelKit(kit.id), this.letture.pdfDelKit(kit.id)]);
     const box = boxDelKit(righe.map(riga => leggiReferenza(riga, { storico: kit.storico })));
-    return { kit, pdf, box, opzioni: opzioniDelKit(kit, righe, box, pdf, contesto) };
+    const pesi = this.agenziaLib?.insightVolantino?.pesiVisibilita;
+    return { kit, pdf, box, opzioni: opzioniDelKit(kit, righe, box, pdf, contesto, pesi) };
   }
 
   // ─── Edizione precedente e varianti ────────────────────────────────

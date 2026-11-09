@@ -33,6 +33,8 @@ export interface OpzioniMigrazioneConfig {
 export const funzionalitaDaAmbiente = (ambiente: NodeJS.ProcessEnv): Funzionalita => ({
   momenti: ambiente.VITE_MOMENTI_ATTIVI === 'true',
   menabo: ambiente.VITE_MENABO_ATTIVO === 'true',
+  // Funzione nuova, senza variabile di build: parte spenta
+  vendite: false,
 });
 
 export const migraConfig = async (opzioni: OpzioniMigrazioneConfig = {}): Promise<EsitoMigrazioneConfig> => {

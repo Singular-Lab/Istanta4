@@ -3,6 +3,7 @@ import Lucide from "@/components/Base/Lucide";
 import { formatNumero } from "@/utils/format";
 import { twMerge } from "@/utils/twMerge";
 import { useId, type ReactNode } from "react";
+import { PESI_VISIBILITA, type PesiVisibilita } from "../../../../lib/insightVolantino/tipi";
 
 /*
  * Pezzi comuni alle schede di analisi del volantino (sintesi, prezzi e sconti, spazio, marche,
@@ -18,6 +19,11 @@ export const SCARTO_RILEVANTE = 2;
 
 /** Righe mostrate prima di "Mostra tutte" negli elenchi lunghi (marche, sottocosto). */
 export const RIGHE_INIZIALI = 10;
+
+const CHIAVI_PESI: ReadonlyArray<keyof PesiVisibilita> = ["copertina", "ultima", "primaDoppia", "altre", "alto", "basso"];
+
+/** Vero se i pesi della visibilità sono quelli standard; falso se la libreria agenzia del cliente ne dichiara di propri. */
+export const pesiStandard = (pesi: PesiVisibilita): boolean => CHIAVI_PESI.every(chiave => pesi[chiave] === PESI_VISIBILITA[chiave]);
 
 /** Un blocco titolato dentro una scheda: titolo h3, descrizione breve e, se servono, azioni a destra. */
 export function Blocco({

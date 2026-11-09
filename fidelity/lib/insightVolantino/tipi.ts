@@ -29,9 +29,19 @@ export const percorsoViaggio = (idKit: string, chiave: string): string =>
 
 /**
  * Pesi della visibilita' stimata di un box: spazio × peso della pagina × peso della posizione.
- * Fissi e uguali per tutte le GDO; la pagina li dichiara all'utente.
+ * La libreria agenzia del cliente puo' dichiararne di propri (insightVolantino.pesiVisibilita);
+ * senza, valgono questi. La pagina li dichiara all'utente.
  */
-export const PESI_VISIBILITA = {
+export interface PesiVisibilita {
+  copertina: number;
+  ultima: number;
+  primaDoppia: number;
+  altre: number;
+  alto: number;
+  basso: number;
+}
+
+export const PESI_VISIBILITA: PesiVisibilita = {
   /** Pagina 1 */
   copertina: 1,
   /** Ultima pagina, se diversa dalla copertina */
@@ -44,7 +54,7 @@ export const PESI_VISIBILITA = {
   alto: 1,
   /** ...e in fondo: in mezzo varia in modo lineare */
   basso: 0.6,
-} as const;
+};
 
 /** Griglia della mappa di calore di ogni pagina. */
 export const GRIGLIA_CALORE = { righe: 6, colonne: 4 } as const;
@@ -56,17 +66,17 @@ export const FASCE_SCONTO: readonly number[] = [0, 10, 20, 30, 40, 50];
 export const MAX_TAPPE_VIAGGIO = 60;
 
 /** Peso della pagina nella visibilita' (pagine contate da 1). */
-export function pesoPagina(pagina: number, totalePagine: number): number {
-  if (pagina === 1) return PESI_VISIBILITA.copertina;
-  if (totalePagine > 1 && pagina === totalePagine) return PESI_VISIBILITA.ultima;
-  if (pagina === 2 || pagina === 3) return PESI_VISIBILITA.primaDoppia;
-  return PESI_VISIBILITA.altre;
+export function pesoPagina(pagina: number, totalePagine: number, pesi: PesiVisibilita = PESI_VISIBILITA): number {
+  if (pagina === 1) return pesi.copertina;
+  if (totalePagine > 1 && pagina === totalePagine) return pesi.ultima;
+  if (pagina === 2 || pagina === 3) return pesi.primaDoppia;
+  return pesi.altre;
 }
 
 /** Peso della posizione dal centro verticale del box, 0 = in cima, 1 = in fondo alla pagina. */
-export function pesoPosizione(centroY: number): number {
+export function pesoPosizione(centroY: number, pesi: PesiVisibilita = PESI_VISIBILITA): number {
   const y = Math.min(1, Math.max(0, centroY));
-  return PESI_VISIBILITA.alto + (PESI_VISIBILITA.basso - PESI_VISIBILITA.alto) * y;
+  return pesi.alto + (pesi.basso - pesi.alto) * y;
 }
 
 // ─── Volantino ──────────────────────────────────────────────────────
@@ -238,7 +248,8 @@ export interface ZoneCalde {
   perReparto: QuotaVisibilita[];
   perMarca: QuotaVisibilita[];
   calore: CalorePagina[];
-  pesi: typeof PESI_VISIBILITA;
+  /** I pesi usati: quelli della libreria agenzia del cliente o PESI_VISIBILITA. */
+  pesi: PesiVisibilita;
 }
 
 /** Le sezioni nuove di GET /api/flyer-insights/:idKit, accanto ai campi di sempre. */

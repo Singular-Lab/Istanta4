@@ -65,6 +65,16 @@ describe('puoAprirePagina', () => {
     expect(puoAprirePagina('/punti-vendita', con(PERMESSI.PROMO.VISUALIZZA))).toBe(false);
   });
 
+  it('vendite: consultarle e importarle chiede analisi.importa_vendite, non il solo accesso a Report e analisi', () => {
+    expect(paginaPer('/analisi/vendite')).toMatchObject({ permesso: PERMESSI.ANALISI.IMPORTA_VENDITE, sezione: 'visualizzazione' });
+    expect(puoAprirePagina('/analisi/vendite', con(PERMESSI.ANALISI.VISUALIZZA))).toBe(false);
+    expect(puoAprirePagina('/analisi/vendite', con(PERMESSI.ANALISI.VISUALIZZA, PERMESSI.ANALISI.IMPORTA_VENDITE))).toBe(true);
+    expect(puoAprirePagina('/analisi/vendite', con(), true)).toBe(true);
+    // Nessuna sottopagina: l'import si fa nella pagina stessa
+    expect(paginaPer('/analisi/vendite/altro')).toBeUndefined();
+    expect(voceDiMenuPer('/analisi/vendite')).toEqual({ percorso: '/analisi/vendite', titolo: 'Vendite', icona: 'ShoppingCart' });
+  });
+
   it('le pagine di sistema richiedono il permesso di sistema', () => {
     expect(puoAprirePagina('/gestione-interna/gestione-permessi', con(PERMESSI.UTENTI.VISUALIZZA))).toBe(false);
     expect(puoAprirePagina('/gestione-interna/gestione-permessi', con(PERMESSI.SISTEMA.GESTISCI_ACCESSI))).toBe(true);

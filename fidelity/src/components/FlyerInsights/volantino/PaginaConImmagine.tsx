@@ -1,11 +1,13 @@
-import { altezzaFoglio, CLASSI_TESTO, useTooltip } from "@/components/Grafici";
+import { altezzaFoglio, CLASSI_TESTO, useTooltip, type ContenutoTooltip } from "@/components/Grafici";
 import { formatNumero } from "@/utils/format";
 import { twMerge } from "@/utils/twMerge";
 import { useState, type KeyboardEvent, type SyntheticEvent } from "react";
+import type { DensitaPagina } from "../../../../lib/insightVolantino/calore";
 import type { BoxInsight } from "../../../../lib/insightVolantino/tipi";
 import { descrizioneBox, tooltipBox } from "./box";
-import { TINTA_CALORE, type StileRiquadro } from "./colori";
+import type { StileRiquadro } from "./colori";
 import { paginaNellImmagine, riquadroBox, stileImmagine, type PaginaNellImmagine } from "./geometria";
+import { LivelloCalore } from "./LivelloCalore";
 
 export interface PaginaConImmagineProps {
   numero: number;
@@ -20,14 +22,20 @@ export interface PaginaConImmagineProps {
   stile: (box: BoxInsight) => StileRiquadro;
   selezionato: string | null;
   onSeleziona: (box: BoxInsight) => void;
-  /** Mappa di calore della pagina (righe × colonne, valori 0-1), sotto i riquadri. */
-  calore?: readonly (readonly number[])[] | null;
+  /** Densità della mappa di calore della pagina, disegnata in un canvas sotto i riquadri. */
+  densita?: DensitaPagina | null;
+  /** Riquadri come contorni sottili, senza colore: si legge il calore sotto (vista "Mappa di calore"). */
+  soloContorni?: boolean;
+  /** Contenuto del tooltip di un box; predefinito tooltipBox. */
+  tooltip?: (box: BoxInsight) => ContenutoTooltip;
 }
 
 /** Larghezza della pagina nelle coordinate del disegno: l'altezza segue la proporzione. */
 const LARGHEZZA = 1000;
 /** Spessore della cornice colorata dei riquadri. */
 const CORNICE = 6;
+/** Contorni sopra la mappa di calore, in pixel dello schermo (non-scaling-stroke): alone scuro e filo chiaro. */
+const CONTORNO = { alone: 3, filo: 1.25, aloneScelto: 6, filoScelto: 2.5 } as const;
 
 const arrotonda = (valore: number): number => Number(valore.toFixed(2));
 
@@ -43,8 +51,23 @@ type EsitoImmagine = { url: string; pagina: PaginaNellImmagine | null };
  * Una pagina del volantino: l'immagine vera da Olimpo, allineata alla pagina rifilata
  * (compensando l'abbondanza), con sopra i riquadri dei box. Senza immagine, o se Olimpo risponde
  * con il segnaposto, la pagina resta bianca con le sue proporzioni e i riquadri al loro posto.
+ *
+ * Con la mappa di calore il canvas sta fra immagine e riquadri, nelle stesse coordinate dei
+ * riquadri (la pagina rifilata), e i riquadri diventano contorni sottili: restano cliccabili.
  */
-export function PaginaConImmagine({ numero, lato, proporzione, immagine, box, stile, selezionato, onSeleziona, calore }: PaginaConImmagineProps) {
+export function PaginaConImmagine({
+  numero,
+  lato,
+  proporzione,
+  immagine,
+  box,
+  stile,
+  selezionato,
+  onSeleziona,
+  densita,
+  soloContorni = false,
+  tooltip: contenutoTooltip = tooltipBox,
+}: PaginaConImmagineProps) {
   const { conTooltip, tooltip } = useTooltip();
   const [esito, setEsito] = useState<EsitoImmagine | null>(null);
   const altezza = altezzaFoglio(proporzione);
@@ -71,7 +94,6 @@ export function PaginaConImmagine({ numero, lato, proporzione, immagine, box, st
 
   // Il box scelto si disegna per ultimo, perché il contorno resti sopra i vicini
   const ordinati = [...box].sort((a, b) => Number(a.id === selezionato) - Number(b.id === selezionato));
-  const righeCalore = calore?.length ?? 0;
 
   return (
     <div
@@ -102,27 +124,8 @@ export function PaginaConImmagine({ numero, lato, proporzione, immagine, box, st
           style={allineamento ? stileImmagine(allineamento) : { left: 0, top: 0, width: "100%", height: "100%" }}
         />
       )}
+      {densita && <LivelloCalore numero={numero} densita={densita} />}
       <svg viewBox={`0 0 ${LARGHEZZA} ${altezza}`} preserveAspectRatio="none" focusable="false" className="absolute inset-0 block h-full w-full">
-        {righeCalore > 0 && (
-          <g data-testid={`calore-${numero}`} aria-hidden="true" className="pointer-events-none">
-            {calore!.map((riga, r) =>
-              riga.map((valore, c) => {
-                const colonne = riga.length || 1;
-                return (
-                  <rect
-                    key={`${r}-${c}`}
-                    x={arrotonda((c * LARGHEZZA) / colonne)}
-                    y={arrotonda((r * altezza) / righeCalore)}
-                    width={arrotonda(LARGHEZZA / colonne)}
-                    height={arrotonda(altezza / righeCalore)}
-                    fillOpacity={Math.max(0, Math.min(1, valore)) * 0.55}
-                    className={TINTA_CALORE.classe}
-                  />
-                );
-              })
-            )}
-          </g>
-        )}
         {ordinati.map(voce => {
           const riquadro = riquadroBox(voce.geometria);
           if (!riquadro) return null;
@@ -143,28 +146,60 @@ export function PaginaConImmagine({ numero, lato, proporzione, immagine, box, st
               onClick={() => onSeleziona(voce)}
               onKeyDown={evento => tasto(evento, voce)}
               className="group cursor-pointer outline-none"
-              {...conTooltip(tooltipBox(voce))}
+              {...conTooltip(contenutoTooltip(voce))}
             >
-              {/* Velo leggero sopra il prodotto: si schiarisce al passaggio, per vedere cosa c'è sotto */}
-              <rect
-                data-riquadro=""
-                x={x}
-                y={y}
-                width={w}
-                height={h}
-                fill={tinta.colore}
-                className={twMerge(
-                  tinta.classe,
-                  "transition-opacity group-hover:opacity-10 group-focus-visible:opacity-10",
-                  attenuato ? "opacity-10" : "opacity-35"
-                )}
-              />
-              <path
-                d={percorsoCornice(x, y, w, h, scelto ? CORNICE * 2 : CORNICE)}
-                fillRule="evenodd"
-                fill={tinta.colore}
-                className={twMerge(tinta.classe, attenuato && !scelto && "opacity-50")}
-              />
+              {soloContorni ? (
+                <>
+                  {/* Area attiva trasparente: il calore sotto resta visibile */}
+                  <rect data-riquadro="" x={x} y={y} width={w} height={h} fill="transparent" />
+                  <rect
+                    x={x}
+                    y={y}
+                    width={w}
+                    height={h}
+                    fill="none"
+                    vectorEffect="non-scaling-stroke"
+                    strokeWidth={scelto ? CONTORNO.aloneScelto : CONTORNO.alone}
+                    className="stroke-slate-900/45 dark:stroke-slate-950/60"
+                  />
+                  <rect
+                    x={x}
+                    y={y}
+                    width={w}
+                    height={h}
+                    fill="none"
+                    vectorEffect="non-scaling-stroke"
+                    strokeWidth={scelto ? CONTORNO.filoScelto : CONTORNO.filo}
+                    className={twMerge(
+                      "stroke-white transition-opacity",
+                      scelto ? "opacity-100" : "opacity-80 group-hover:opacity-100 group-focus-visible:opacity-100"
+                    )}
+                  />
+                </>
+              ) : (
+                <>
+                  {/* Velo leggero sopra il prodotto: si schiarisce al passaggio, per vedere cosa c'è sotto */}
+                  <rect
+                    data-riquadro=""
+                    x={x}
+                    y={y}
+                    width={w}
+                    height={h}
+                    fill={tinta.colore}
+                    className={twMerge(
+                      tinta.classe,
+                      "transition-opacity group-hover:opacity-10 group-focus-visible:opacity-10",
+                      attenuato ? "opacity-10" : "opacity-35"
+                    )}
+                  />
+                  <path
+                    d={percorsoCornice(x, y, w, h, scelto ? CORNICE * 2 : CORNICE)}
+                    fillRule="evenodd"
+                    fill={tinta.colore}
+                    className={twMerge(tinta.classe, attenuato && !scelto && "opacity-50")}
+                  />
+                </>
+              )}
               <rect
                 x={x}
                 y={y}
@@ -174,7 +209,9 @@ export function PaginaConImmagine({ numero, lato, proporzione, immagine, box, st
                 strokeWidth={scelto ? 5 : 3}
                 className={twMerge(
                   "stroke-slate-900 dark:stroke-white",
-                  scelto ? "opacity-100" : "opacity-0 group-hover:opacity-60 group-focus-visible:opacity-100"
+                  scelto && !soloContorni ? "opacity-100" : "opacity-0",
+                  !scelto && !soloContorni && "group-hover:opacity-60",
+                  "group-focus-visible:opacity-100"
                 )}
               />
             </g>

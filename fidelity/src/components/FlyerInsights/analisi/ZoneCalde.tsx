@@ -7,16 +7,18 @@ import {
   PESI_VISIBILITA,
   type BoxInsight,
   type CoperturaDati,
+  type PesiVisibilita,
   type QuotaVisibilita,
   type ZoneCalde as DatiZoneCalde,
 } from "../../../../lib/insightVolantino/tipi";
 import { BarreAppaiate, type VoceAppaiata } from "./BarreAppaiate";
-import { BarraQuota, Blocco, Nota } from "./comuni";
+import { BarraQuota, Blocco, Nota, pesiStandard } from "./comuni";
 
 /**
- * Scheda "Zone calde": dove cade l'occhio di chi sfoglia. La visibilita' e' una stima con pesi fissi
- * (PESI_VISIBILITA in lib/insightVolantino/tipi.ts), uguali per tutte le GDO: la scheda la dichiara e
- * ne scrive i pesi leggendoli dai dati, cosi' testo e calcolo non possono divergere.
+ * Scheda "Zone calde": dove cade l'occhio di chi sfoglia. La visibilita' e' una stima con i pesi
+ * standard (PESI_VISIBILITA in lib/insightVolantino/tipi.ts) o con quelli della libreria agenzia del
+ * cliente: la scheda la dichiara e ne scrive i pesi leggendoli dai dati, cosi' testo e calcolo non
+ * possono divergere.
  */
 
 export interface ZoneCaldeProps {
@@ -31,9 +33,11 @@ export interface ZoneCaldeProps {
 const peso = (valore: number): string => formatNumero(valore);
 
 /** La spiegazione della stima, con i pesi usati dal server. */
-export const spiegazioneVisibilita = (pesi: typeof PESI_VISIBILITA = PESI_VISIBILITA): string =>
+export const spiegazioneVisibilita = (pesi: PesiVisibilita = PESI_VISIBILITA): string =>
   [
-    "La visibilità è una stima: spazio del box × peso della pagina × peso della posizione, con pesi fissi uguali per tutti i volantini.",
+    `La visibilità è una stima: spazio del box × peso della pagina × peso della posizione, ${
+      pesiStandard(pesi) ? "con pesi fissi uguali per tutti i volantini" : "con i pesi propri del cliente"
+    }.`,
     `Pagina: copertina ${peso(pesi.copertina)}, pagine 2 e 3 ${peso(pesi.primaDoppia)}, ultima pagina ${peso(pesi.ultima)}, altre ${peso(pesi.altre)}.`,
     `Posizione: in cima ${peso(pesi.alto)}, in fondo ${peso(pesi.basso)}, in mezzo in proporzione.`,
     "100 è il box più visibile di questo volantino.",

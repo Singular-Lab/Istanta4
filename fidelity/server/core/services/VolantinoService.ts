@@ -3,6 +3,7 @@ import { isAppError, wrapDatabaseError, wrapNotFoundError } from '../../../lib/e
 import type { RepartoInsight } from '../../../lib/insightVolantino/tipi';
 import { FileItemKit } from '../../../lib/types';
 import type { AmbitoGdo } from '../accessi/contestoAccesso';
+import type { IAgenziaLib } from '../agenzia_lib/types';
 import { urlFotoOlimpo } from '../utils/urlOlimpo';
 import {
   FlyerInsightsDTO,
@@ -48,10 +49,14 @@ function marcheDelDistributore(valore: unknown): string[] {
 /**
  * Autonomous VolantinoService with its own implementation.
  * Manages volantino (flyer) file queries and insights.
+ *
+ * Della libreria agenzia del cliente servono solo i pesi della visibilita'
+ * (insightVolantino.pesiVisibilita): senza la libreria, o senza pesi propri, valgono gli standard.
  */
 export class VolantinoService implements IVolantinoService {
   constructor(
-    private readonly configService: IConfigService
+    private readonly configService: IConfigService,
+    private readonly agenziaLib?: Pick<IAgenziaLib, 'insightVolantino'>
   ) { }
 
   async prendiIVolantiniCaricatiDaDB(): Promise<any> {
@@ -316,7 +321,9 @@ export class VolantinoService implements IVolantinoService {
           urlFoto: (guid) => urlFotoOlimpo(guid, { performante: true }),
           origine: origineStorico
             ? (codiceBox) => (codiciFuoriListino.has(codiceBox) ? 'fuori_listino' : 'listino')
-            : undefined
+            : undefined,
+          // Visibilita' e zone calde con i pesi del cliente, se la sua libreria agenzia li dichiara
+          pesi: this.agenziaLib?.insightVolantino?.pesiVisibilita
         }
       );
 

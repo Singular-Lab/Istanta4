@@ -9,14 +9,15 @@ import Sezione from "@/components/Base/Sezione";
 import Skeleton from "@/components/Base/Skeleton";
 import EmptyState from "@/components/EmptyState";
 import { FlyerInsights as FlyerInsightsComponent } from "@/components/FlyerInsights";
-import { SintesiInsight } from "@/components/FlyerInsights/analisi";
+import { Previsione, Rendimento, SintesiInsight } from "@/components/FlyerInsights/analisi";
+import { ScaricaReportPdf } from "@/components/FlyerInsights/report";
 import { VolantinoSfogliabile } from "@/components/FlyerInsights/volantino";
 import ReferenzeInVolantinoBox from "@/components/ReferenzeInVolantinoBox";
 import withSessionCheck from "@/components/SessionChecker";
 import { PERMISSIONS } from "@/constants/permissions";
 import { usePermission } from "@/context/PermissionContext";
-import { useConfrontiVolantino } from "@/query/flyerInsights";
-import { useFetchFlyerInsights, useFetchFlyerInsightsConfig } from "@/query/query";
+import { useConfrontiVolantino, usePrevisioneVolantino, useRendimentoVolantino } from "@/query/flyerInsights";
+import { useFetchFlyerInsights, useFetchFlyerInsightsConfig, useFetchFunzionalita } from "@/query/query";
 import type { ReferenzaPosizione } from "@/types/flyerInsights";
 import { resolveColor } from "@/utils/flyerInsightsHelpers";
 import { useVolantinoConsultazione } from "@/query/consultazione";
@@ -34,9 +35,17 @@ const caricaConfronti = () => (caricamentoConfronti ??= import("@/components/Fly
 const ConfrontoEdizione = lazy(() => caricaConfronti().then(modulo => ({ default: modulo.ConfrontoEdizione })));
 const DifferenzeVarianti = lazy(() => caricaConfronti().then(modulo => ({ default: modulo.DifferenzeVarianti })));
 
+// Il simulatore serve a pochi e pesa: anche lui a parte, con un solo caricamento come i confronti
+let caricamentoSimulazione: Promise<typeof import("@/components/FlyerInsights/simulazione")> | undefined;
+const caricaSimulazione = () => (caricamentoSimulazione ??= import("@/components/FlyerInsights/simulazione"));
+const SimulatoreProdotto = lazy(() => caricaSimulazione().then(modulo => ({ default: modulo.SimulatoreProdotto })));
+
 type GruppoReferenze = { sigla: string; descrizione: string; referenze: ReferenzaPosizione[] };
 
 const INDIETRO = { to: "/volantini", etichetta: "Torna ai volantini" };
+
+/** La pagina dove si importano le vendite del cliente: il rendimento vuoto ci rimanda chi può aprirla. */
+const PERCORSO_VENDITE = "/analisi/vendite";
 
 const numeroPagina = (valore: string | null): number | undefined => {
   const numero = Number(valore);
@@ -59,9 +68,11 @@ const boxDellaReferenza = (box: readonly BoxInsight[], referenza: string): BoxIn
 };
 
 /**
- * Dettaglio di sola consultazione del volantino: sintesi, pagine con i box, insight, confronti e,
- * se autorizzati, file pubblicati. Il kit è nella chiave: aprendo un altro volantino da questa
- * pagina (l'edizione precedente, un'altra variante) pagina, scelte e filtri ripartono da capo.
+ * Dettaglio di sola consultazione del volantino: sintesi, pagine con i box (e la mappa di calore),
+ * rendimento dalle vendite e previsione, simulazione di un prodotto, insight, confronti e, se
+ * autorizzati, file pubblicati; nell'intestazione il report PDF. Il kit è nella chiave: aprendo un
+ * altro volantino da questa pagina (l'edizione precedente, un'altra variante) pagina, scelte e
+ * filtri ripartono da capo.
  */
 const TuttiIVolantini: React.FC = () => {
   const [parametri] = useSearchParams();
@@ -74,10 +85,18 @@ function DettaglioVolantino({ idKit }: { idKit: string }) {
   const pagina = numeroPagina(parametri.get("pagina"));
   const referenza = parametri.get("referenza") ?? "";
   const puoScaricare = usePermission(PERMISSIONS.MATERIALI.SCARICA);
+  const puoImportareVendite = usePermission(PERMISSIONS.ANALISI.IMPORTA_VENDITE);
   const insights = useFetchFlyerInsights(idKit);
   const configurazione = useFetchFlyerInsightsConfig();
   // Edizione precedente e varianti: partono subito, ma la pagina non le aspetta
   const confronti = useConfrontiVolantino(idKit || undefined);
+  // Rendimento dalle vendite e previsione: come i confronti, ognuno con il suo stato nel suo blocco
+  // "Vendite e previsioni" è una funzione da attivare per GDO: spenta, niente rendimento, previsione
+  // né simulazione, e le loro richieste non partono nemmeno (il server le rifiuterebbe comunque)
+  const funzionalita = useFetchFunzionalita();
+  const venditeAttive = funzionalita.data?.vendite === true;
+  const rendimento = useRendimentoVolantino(idKit || undefined, venditeAttive);
+  const previsione = usePrevisioneVolantino(idKit || undefined, venditeAttive);
   // File pubblicati del kit dalla consultazione: solo se è pubblicato e della GDO dell'utente
   const file = useVolantinoConsultazione(idKit, puoScaricare);
   const { inCorso, scarica } = useScaricaFileConsultazione();
@@ -141,14 +160,24 @@ function DettaglioVolantino({ idKit }: { idKit: string }) {
   }
 
   const contesto = dati?.contesto;
+  const titolo = contesto?.titolo || "Dettaglio volantino";
   const descrizione = [contesto?.nomeArea, contesto?.nomeCanale].filter(Boolean).join(" · ");
   const conPagine = Boolean(dati && (dati.pdf || (dati.box?.length ?? 0) > 0));
+  // Rendimento, previsione e simulazione sono per box: senza box non c'è niente da dire
+  const conBox = (dati?.box?.length ?? 0) > 0;
+  const totalePagineVolantino = dati ? (dati.sintesi?.pagine ?? dati.totalePagine) : 0;
+  // Senza previsione (funzione spenta o nessun box con geometria) il blocco non compare; in
+  // caricamento o in errore resta, con il suo stato
+  const conPrevisione = venditeAttive && (previsione.isLoading || previsione.isError || previsione.data != null);
+  const erroreDi = (stato: { isError: boolean; error: Error | null }, predefinito: string): string | null =>
+    stato.isError ? stato.error?.message || predefinito : null;
 
   return (
     <Pagina
-      titolo={contesto?.titolo || "Dettaglio volantino"}
+      titolo={titolo}
       descrizione={descrizione || "Insight e materiali del volantino"}
       indietro={INDIETRO}
+      azioni={<ScaricaReportPdf idKit={idKit} titolo={titolo} disabled={!dati} />}
     >
       {insights.isLoading ? (
         <div aria-busy="true" className="space-y-6">
@@ -178,13 +207,66 @@ function DettaglioVolantino({ idKit }: { idKit: string }) {
                 pdf={dati.pdf ?? null}
                 box={dati.box ?? []}
                 // Le pagine della sintesi (PDF in Olimpo, o fino all'ultimo box): le stesse delle card e dei confronti
-                totalePagine={dati.sintesi?.pagine ?? dati.totalePagine}
+                totalePagine={totalePagineVolantino}
                 configurazione={configurazione.data}
-                calore={dati.zoneCalde?.calore}
+                // Vendite e previsione aggiungono le loro misure alla mappa di calore quando arrivano
+                rendimento={venditeAttive ? (rendimento.data ?? null) : null}
+                previsione={venditeAttive ? (previsione.data ?? null) : null}
+                pesi={dati.zoneCalde?.pesi}
                 pagina={paginaVolantino}
                 onCambiaPagina={setPaginaSfogliata}
                 idBoxIniziale={boxIniziale?.id ?? null}
               />
+            </Sezione>
+          )}
+
+          {dati && conBox && venditeAttive && (
+            <Sezione
+              titolo={conPrevisione ? "Rendimento e previsione" : "Rendimento"}
+              descrizione={
+                conPrevisione
+                  ? "Quanto hanno venduto i box rispetto allo spazio che occupano, e cosa ci si aspetta dallo storico."
+                  : "Quanto hanno venduto i box rispetto allo spazio che occupano."
+              }
+            >
+              <div className="space-y-8">
+                <Rendimento
+                  rendimento={rendimento.data}
+                  box={dati.box ?? []}
+                  caricamento={rendimento.isLoading}
+                  errore={erroreDi(rendimento, "Non è stato possibile caricare le vendite del volantino.")}
+                  onRiprova={() => rendimento.refetch()}
+                  percorsoVendite={puoImportareVendite ? PERCORSO_VENDITE : undefined}
+                />
+                {conPrevisione && (
+                  <div className="border-t border-dashed border-slate-200 pt-6 dark:border-darkmode-400">
+                    <Previsione
+                      previsione={previsione.data}
+                      box={dati.box ?? []}
+                      caricamento={previsione.isLoading}
+                      errore={erroreDi(previsione, "Non è stato possibile caricare la previsione del volantino.")}
+                      onRiprova={() => previsione.refetch()}
+                    />
+                  </div>
+                )}
+              </div>
+            </Sezione>
+          )}
+
+          {dati && conBox && venditeAttive && previsione.data != null && (
+            <Sezione
+              titolo="Simulazione"
+              descrizione="Come renderebbe un prodotto del volantino in un'altra pagina o zona, con un altro spazio o un altro sconto."
+            >
+              <Suspense
+                fallback={
+                  <div aria-busy="true" className="space-y-4">
+                    <Skeleton className="h-48" />
+                  </div>
+                }
+              >
+                <SimulatoreProdotto idKit={idKit} box={dati.box ?? []} pdf={dati.pdf ?? null} totalePagine={totalePagineVolantino} />
+              </Suspense>
             </Sezione>
           )}
         </>

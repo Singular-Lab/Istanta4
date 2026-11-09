@@ -2,6 +2,10 @@ import type { TIPO_UTENTI } from "../../../lib/enums.js";
 import type { AnalisiMomentoTracciato, CompiledField, DataFields, DimensioneVisibilitaPromo, GlobalUserFilter, IndesignPluginExport, MenaboDivisioneParams, MenaboLayoutDivisioneSalvata, MenaboRisultato, OrigineStorico, RisultatoConfrontoMomento, TracciatoQueryRequest, TracciatoReport, TracciatoReportWidget, UtentiMeta } from "../../../lib/types.js";
 import type { PromoContextValue, PuntoVenditaDaImportareDTO } from "../dto/index.js";
 import type { OidcUserClaims } from "../interfaces/IOidcService.js";
+import type { RegolePrevisione } from "../../../lib/insightVolantino/rendimento.js";
+import type { DatiReportVolantino, IntestazioneReport, PaletteReport, SezioneReport } from "../../../lib/insightVolantino/report.js";
+import type { PesiVisibilita } from "../../../lib/insightVolantino/tipi.js";
+import type { RigaVendita } from "../../../lib/vendite/tipi.js";
 
 // ── Tipi di base ──────────────────────────────────────────────────────────────
 
@@ -291,6 +295,49 @@ export interface ImportPuntiVenditaAgenzia {
   leggiRiga(riga: Record<string, unknown>): PuntoVenditaDaImportareDTO | string;
 }
 
+// ── Import delle vendite (spec vendite-volantino) ─────────────────────────────
+
+/**
+ * Come si legge il file delle vendite di una GDO. Anteprima, riconoscimento del punto vendita,
+ * scritture e avanzamento sono di FP e uguali per tutti; la lib dice come tradurre le colonne.
+ * Senza, FP usa TRACCIATO_VENDITE_GENERICO (server/core/vendite/tracciatoGenerico.ts).
+ */
+export interface ImportVenditeAgenzia {
+  /** Nome del tracciato mostrato nell'anteprima (es. "CONAD CNO - sell-out settimanale"). */
+  nome: string;
+  /** Intestazioni attese, mostrate nell'anteprima e nel messaggio di file non riconosciuto. */
+  colonne: string[];
+  /**
+   * Campo dei meta del punto vendita da confrontare con RigaVendita.puntoVendita. Senza, vale
+   * importPuntiVendita.chiaveMeta (poi chiaveMetaRiserva), e in mancanza il nome del PV.
+   */
+  chiaveMetaPuntoVendita?: string;
+  /** Righe da importare a partire da tutti i fogli; senza, quelle del primo foglio. */
+  leggiFile?(fogli: Record<string, Record<string, unknown>[]>): Record<string, unknown>[];
+  /** Da riga del foglio a vendita; una stringa e' il motivo dello scarto. */
+  leggiRiga(riga: Record<string, unknown>): RigaVendita | string;
+}
+
+// ── Insight e report del volantino (spec insight-volantino) ───────────────────
+
+/**
+ * Regole del cliente per mappa di calore, previsione e report PDF. Tutto facoltativo: quello che
+ * manca prende i valori standard (PESI_VISIBILITA, REGOLE_PREVISIONE_STANDARD,
+ * PALETTE_REPORT_STANDARD, sezioni standard).
+ */
+export interface InsightVolantinoAgenzia {
+  palette?: Partial<PaletteReport>;
+  /** cliente di default: il nome della GDO del volantino. */
+  intestazione?: Partial<IntestazioneReport>;
+  pesiVisibilita?: PesiVisibilita;
+  previsione?: Partial<RegolePrevisione>;
+  /**
+   * Sezioni del report di questo cliente. Riceve i dati e le sezioni standard, gia' senza quelle
+   * vuote: puo' riordinarle, toglierle, cambiarne i testi o aggiungerne di proprie.
+   */
+  sezioniReport?(dati: DatiReportVolantino, standard: SezioneReport[]): SezioneReport[];
+}
+
 // ── Interfaccia AgenziaLib ────────────────────────────────────────────────────
 
 export interface IAgenziaLib {
@@ -384,4 +431,10 @@ export interface IAgenziaLib {
    * tracciato generico (colonne nome, indirizzo, citta, cap, canaleArea).
    */
   importPuntiVendita?: ImportPuntiVenditaAgenzia;
+
+  /** Tracciato del file delle vendite della GDO. Opzionale: senza, FP usa il tracciato generico. */
+  importVendite?: ImportVenditeAgenzia;
+
+  /** Regole del cliente per mappa di calore, previsione e report PDF del volantino. Opzionale. */
+  insightVolantino?: InsightVolantinoAgenzia;
 }

@@ -20,6 +20,12 @@ const TIPI_CON_GDO = [
 /**
  * Implementazione default di AgenziaLib.
  * Cerca l'utente per email, risolve tipo e id_gdo.
+ *
+ * Insight e report del volantino (insightVolantino) e tracciato delle vendite (importVendite) non
+ * sono dichiarati, di proposito: senza, FP usa gli standard (PESI_VISIBILITA,
+ * REGOLE_PREVISIONE_STANDARD, PALETTE_REPORT_STANDARD, sezioni standard, intestazione col nome della
+ * GDO) e il tracciato generico delle vendite. Cosi' un cambio agli standard vale subito per ogni
+ * installazione senza libreria propria, e un cliente dichiara solo quello che ha di diverso.
  */
 export class DefaultAgenziaLib implements IAgenziaLib {
   constructor(private userService: IUserService) {

@@ -90,9 +90,15 @@ describe('trovaConfigPerGdo', () => {
 
 describe('funzionalitaDa', () => {
   it('una funzione mai attivata e spenta', () => {
-    expect(funzionalitaDa(null)).toEqual({ momenti: false, menabo: false });
-    expect(funzionalitaDa({ funzionalita: null })).toEqual({ momenti: false, menabo: false });
-    expect(funzionalitaDa({ funzionalita: { menabo: true } })).toEqual({ momenti: false, menabo: true });
+    expect(funzionalitaDa(null)).toEqual({ momenti: false, menabo: false, vendite: false });
+    expect(funzionalitaDa({ funzionalita: null })).toEqual({ momenti: false, menabo: false, vendite: false });
+    expect(funzionalitaDa({ funzionalita: { menabo: true } })).toEqual({ momenti: false, menabo: true, vendite: false });
+  });
+
+  it('le previsioni di vendita sono accese solo con true, anche nelle righe salvate prima', () => {
+    expect(funzionalitaDa({ funzionalita: { momenti: true, menabo: true } }).vendite).toBe(false);
+    expect(funzionalitaDa({ funzionalita: { vendite: true } }).vendite).toBe(true);
+    expect(funzionalitaDa({ funzionalita: { vendite: 'true' as unknown as boolean } }).vendite).toBe(false);
   });
 });
 
@@ -100,16 +106,16 @@ describe('ConfigService funzionalita', () => {
   it('legge le funzionalita della GDO con ripiego sull installazione', async () => {
     stato.righe = [{ id: 'firenze', id_gdo_config: 'gdo-firenze', funzionalita: { momenti: true, menabo: false } }];
 
-    expect(await new ConfigService().getFunzionalita('gdo-lazio')).toEqual({ momenti: true, menabo: false });
+    expect(await new ConfigService().getFunzionalita('gdo-lazio')).toEqual({ momenti: true, menabo: false, vendite: false });
   });
 
   it('salva sulla riga della GDO se esiste', async () => {
     const update = vi.fn();
     stato.righe = [{ id: 'firenze', id_gdo_config: 'gdo-firenze', update }];
 
-    await new ConfigService().saveFunzionalita('gdo-firenze', { momenti: true, menabo: true });
+    await new ConfigService().saveFunzionalita('gdo-firenze', { momenti: true, menabo: true, vendite: true });
 
-    expect(update).toHaveBeenCalledWith({ funzionalita: { momenti: true, menabo: true } });
+    expect(update).toHaveBeenCalledWith({ funzionalita: { momenti: true, menabo: true, vendite: true } });
     expect(modello.create).not.toHaveBeenCalled();
   });
 
@@ -117,12 +123,12 @@ describe('ConfigService funzionalita', () => {
     const update = vi.fn();
     stato.righe = [{ id: 'firenze', id_gdo_config: 'gdo-firenze', update }];
 
-    await new ConfigService().saveFunzionalita('gdo-lazio', { momenti: false, menabo: true });
+    await new ConfigService().saveFunzionalita('gdo-lazio', { momenti: false, menabo: true, vendite: false });
 
     expect(update).not.toHaveBeenCalled();
     expect(modello.create).toHaveBeenCalledWith(expect.objectContaining({
       id_gdo_config: 'gdo-lazio',
-      funzionalita: { momenti: false, menabo: true },
+      funzionalita: { momenti: false, menabo: true, vendite: false },
       webpliant: {},
     }));
   });

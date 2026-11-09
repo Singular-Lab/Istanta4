@@ -23,6 +23,8 @@ import { ORDINE_STATI, STATI_DIFFERENZA } from "../confronti/supporto";
  * - sconto e visibilità: la scala sequenziale, a fasce;
  * - differenze fra varianti: le tinte dei confronti (STATI_DIFFERENZA), perché legenda, elenco e
  *   pagine dicano la stessa cosa.
+ *
+ * La mappa di calore continua non usa questi colori: ha la sua scala (mappaCalore.ts).
  */
 
 export type ModoColore = "reparto" | "meccanica" | "sconto" | "visibilita";
@@ -46,9 +48,6 @@ export interface StileRiquadro {
   tinta: Tinta;
   attenuato: boolean;
 }
-
-/** Tinta della mappa di calore sopra la pagina: arancio, distinto dalla scala dei box. */
-export const TINTA_CALORE: Tinta = { classe: "fill-orange-500 dark:fill-orange-400", classeTesto: "fill-slate-900" };
 
 const stile = (tinta: Tinta, attenuato = false): StileRiquadro => ({ tinta, attenuato });
 

@@ -69,4 +69,5 @@ export const trovaConfigPerGdo = async (idGdo: string | null | undefined, opzion
 export const funzionalitaDa = (riga: { funzionalita?: Partial<Funzionalita> | null } | null | undefined): Funzionalita => ({
   momenti: riga?.funzionalita?.momenti === true,
   menabo: riga?.funzionalita?.menabo === true,
+  vendite: riga?.funzionalita?.vendite === true,
 });

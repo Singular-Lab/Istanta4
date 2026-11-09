@@ -439,6 +439,14 @@ const routes: RouteObject[] = [
         },
       },
       {
+        // Vendite della GDO: riepilogo e import dei file del cliente ("analisi.importa_vendite")
+        path: "analisi/vendite",
+        lazy: async () => {
+          const { default: Vendite } = await import("@/pages/Vendite");
+          return { Component: Vendite };
+        },
+      },
+      {
         path: "nuova-promozione",
         loader: () => redirect("/promozioni/nuova"),
       },

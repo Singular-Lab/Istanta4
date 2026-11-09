@@ -54,6 +54,8 @@ export const PAGINE: DefinizionePagina[] = [
   { percorso: '/storico-promozioni', permesso: P.PROMO.VISUALIZZA, sezione: 'produzione' },
   // Analisi dei tracciati: consultazione, con il suo permesso (non quello delle promozioni)
   { percorso: '/report/tracciati', permesso: P.ANALISI.VISUALIZZA, sottopagine: true, sezione: 'visualizzazione' },
+  // Vendite della GDO: riepilogo e import dei file del cliente, con le stesse API dell'import
+  { percorso: '/analisi/vendite', permesso: P.ANALISI.IMPORTA_VENDITE, sezione: 'visualizzazione' },
 
   // Volantini e materiali
   { percorso: '/volantini/tutti_i_volantini', permesso: P.MATERIALI.VISUALIZZA, sezione: 'visualizzazione' },
@@ -162,6 +164,7 @@ export const VOCI_DI_MENU: readonly VoceDiMenu[] = [
   { percorso: '/contenuti-digitali', titolo: 'Contenuti digitali', icona: 'MonitorPlay' },
   { percorso: '/webliant/webpliant-disponibili', titolo: 'Webpliant disponibili', icona: 'Wallpaper' },
   { percorso: '/report/tracciati', titolo: 'Report tracciati', icona: 'FileChartColumn' },
+  { percorso: '/analisi/vendite', titolo: 'Vendite', icona: 'ShoppingCart' },
   { percorso: '/barcode-reader', titolo: 'Lettore codici a barre', icona: 'ScanBarcode' },
   { percorso: '/competitor-analyzer', titolo: 'Analisi concorrenza', icona: 'ScanSearch' },
   // Comunicazione

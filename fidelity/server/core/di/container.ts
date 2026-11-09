@@ -160,6 +160,14 @@ import { AnalisiPuntiVenditaRepository, type IAnalisiPuntiVenditaRepository } fr
 import { InsightConfrontiService } from "../services/InsightConfrontiService";
 import type { IInsightConfrontiService } from "../interfaces/IInsightConfrontiService";
 import { InsightConfrontiRepository, type IInsightConfrontiRepository } from "../repositories/InsightConfrontiRepository";
+import { InsightVenditeService } from "../services/InsightVenditeService";
+import type { IInsightVenditeService } from "../interfaces/IInsightVenditeService";
+import { InsightVenditeRepository, type IInsightVenditeRepository } from "../repositories/InsightVenditeRepository";
+import { ReportVolantinoService } from "../services/ReportVolantinoService";
+import type { IReportVolantinoService } from "../interfaces/IReportVolantinoService";
+import { ImportVenditeService } from "../services/ImportVenditeService";
+import type { IImportVenditeService } from "../interfaces/IImportVenditeService";
+import { type IVenditeRepository, VenditeRepository } from "../repositories/VenditeRepository";
 import { WebPliantService } from "../services/WebPliantService";
 import { WebhookService } from "../services/WebhookService";
 import { WhatsAppService } from "../services/WhatsAppService";
@@ -256,6 +264,8 @@ function bindRepositories() {
   container.bind<IPuntiVenditaVolantinoRepository>(TYPES.PuntiVenditaVolantinoRepository).toDynamicValue(() => new PuntiVenditaVolantinoRepository()).inSingletonScope();
   container.bind<IAnalisiPuntiVenditaRepository>(TYPES.AnalisiPuntiVenditaRepository).toDynamicValue(() => new AnalisiPuntiVenditaRepository()).inSingletonScope();
   container.bind<IInsightConfrontiRepository>(TYPES.InsightConfrontiRepository).toDynamicValue(() => new InsightConfrontiRepository()).inSingletonScope();
+  container.bind<IInsightVenditeRepository>(TYPES.InsightVenditeRepository).toDynamicValue(() => new InsightVenditeRepository()).inSingletonScope();
+  container.bind<IVenditeRepository>(TYPES.VenditeRepository).toDynamicValue(() => new VenditeRepository()).inSingletonScope();
 
   // Hub
   container.bind<IAuthProviderRepository>(TYPES.AuthProviderRepository).toDynamicValue(() => new AuthProviderRepository()).inSingletonScope();
@@ -471,19 +481,51 @@ function bindServices() {
       context.get<IPromoRepository>(TYPES.PromoRepository)
     )
   );
+  // Visibilita' e zone calde con i pesi della libreria agenzia del cliente (insightVolantino)
   container.bind<IVolantinoService>(TYPES.VolantinoService).toDynamicValue(
     (context) => new VolantinoService(
-      context.get<IConfigService>(TYPES.ConfigService)
+      context.get<IConfigService>(TYPES.ConfigService),
+      context.get<IAgenziaLib>(TYPES.AgenziaLib)
     )
   );
-  // Il viaggio del prodotto usa i riepiloghi dei kit in analisi_kit, gli stessi delle pagine del PV
+  // Il viaggio del prodotto usa i riepiloghi dei kit in analisi_kit, gli stessi delle pagine del PV;
+  // varianti e confronti con i pesi della visibilita' della libreria agenzia, come la scheda
   container.bind<IInsightConfrontiService>(TYPES.InsightConfrontiService).toDynamicValue(
     (context) => new InsightConfrontiService(
       context.get<IInsightConfrontiRepository>(TYPES.InsightConfrontiRepository),
       context.get<IAnalisiPuntiVenditaRepository>(TYPES.AnalisiPuntiVenditaRepository),
-      context.get<IConfigService>(TYPES.ConfigService)
+      context.get<IConfigService>(TYPES.ConfigService),
+      undefined, // letture del kit predefinite (InsightVolantinoRepository)
+      context.get<IAgenziaLib>(TYPES.AgenziaLib)
     )
   );
+  // Una sola istanza per processo: tiene in memoria per qualche minuto volantino, vendite e storico
+  // della previsione (la simulazione chiede molte posizioni di fila per lo stesso volantino)
+  container.bind<IInsightVenditeService>(TYPES.InsightVenditeService).toDynamicValue(
+    (context) => new InsightVenditeService(
+      context.get<IInsightVenditeRepository>(TYPES.InsightVenditeRepository),
+      context.get<IAnalisiPuntiVenditaRepository>(TYPES.AnalisiPuntiVenditaRepository),
+      context.get<IConfigService>(TYPES.ConfigService),
+      context.get<IAgenziaLib>(TYPES.AgenziaLib)
+    )
+  ).inSingletonScope();
+  // Report PDF: insight, confronto, vendite e previsione, con palette e sezioni della libreria agenzia
+  container.bind<IReportVolantinoService>(TYPES.ReportVolantinoService).toDynamicValue(
+    (context) => new ReportVolantinoService(
+      context.get<IVolantinoService>(TYPES.VolantinoService),
+      context.get<IInsightConfrontiService>(TYPES.InsightConfrontiService),
+      context.get<IInsightVenditeService>(TYPES.InsightVenditeService),
+      context.get<IGdoService>(TYPES.GdoService),
+      context.get<IAgenziaLib>(TYPES.AgenziaLib)
+    )
+  );
+  // Import delle vendite: tracciato della libreria agenzia (importVendite) o generico
+  container.bind<IImportVenditeService>(TYPES.ImportVenditeService).toDynamicValue(
+    (context) => new ImportVenditeService(
+      context.get<IVenditeRepository>(TYPES.VenditeRepository),
+      context.get<IAgenziaLib>(TYPES.AgenziaLib)
+    )
+  ).inSingletonScope();
   container.bind<IMaterialiService>(TYPES.MaterialiService).toDynamicValue(
     (context) => new MaterialiService(
       context.get<IMaterialiRepository>(TYPES.MaterialiRepository),

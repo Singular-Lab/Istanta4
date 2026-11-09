@@ -114,6 +114,13 @@ describe("spiegazioneVisibilita e vociVisibilita", () => {
     expect(spiegazioneVisibilita(pesi)).toContain(`altre ${formatNumero(0.4)}`);
   });
 
+  it("dice se i pesi sono quelli standard o quelli propri del cliente (libreria agenzia)", () => {
+    expect(spiegazioneVisibilita(PESI_VISIBILITA)).toContain("con pesi fissi uguali per tutti i volantini");
+    const delCliente = spiegazioneVisibilita({ ...PESI_VISIBILITA, copertina: 1.2 });
+    expect(delCliente).toContain("con i pesi propri del cliente");
+    expect(delCliente).not.toContain("uguali per tutti i volantini");
+  });
+
   it("ordina dalla visibilità più alta", () => {
     expect(
       vociVisibilita([

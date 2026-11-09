@@ -1,21 +1,27 @@
 import Button from "@/components/Base/Button";
+import FormSelect from "@/components/Base/Form/FormSelect";
 import { Dialog, Slideover } from "@/components/Base/Headless";
 import Lucide from "@/components/Base/Lucide";
 import Segmenti from "@/components/Base/Segmenti";
-import { Legenda, type VoceLegenda } from "@/components/Grafici";
+import { Legenda, type ContenutoTooltip, type VoceLegenda } from "@/components/Grafici";
+import { periodoValidita } from "@/pages/PuntiVenditaConsultazione/analisi";
 import type { FlyerInsightsConfig } from "@/types/flyerInsights";
 import { formatNumero } from "@/utils/format";
 import { urlPaginaMateriale } from "@/utils/materiali";
 import { twMerge } from "@/utils/twMerge";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { MISURE_CALORE, misureDisponibili, type DatiMisure, type MisuraCalore } from "../../../../lib/insightVolantino/calore";
+import type { PrevisioneVolantino, RendimentoVolantino } from "../../../../lib/insightVolantino/rendimento";
 import {
   PESI_VISIBILITA,
   type BoxInsight,
-  type CalorePagina,
   type PdfVolantino,
+  type PesiVisibilita,
   type StatoDifferenza,
 } from "../../../../lib/insightVolantino/tipi";
-import { marcaFormato, trovaBoxIniziale } from "./box";
+import { ETICHETTE_AFFIDABILITA, testoCasi } from "../analisi/affidabilita";
+import { pesiStandard } from "../analisi/comuni";
+import { marcaFormato, tooltipBox, trovaBoxIniziale } from "./box";
 import {
   coloriReparti,
   legendaDifferenze,
@@ -23,7 +29,6 @@ import {
   OPZIONI_COLORE,
   stileBox,
   stileDifferenza,
-  TINTA_CALORE,
   TITOLI_LEGENDA,
   type ModoColore,
   type StileRiquadro,
@@ -42,6 +47,8 @@ import {
   totaleDoppie,
   type DoppiaPagina,
 } from "./geometria";
+import { LegendaCalore } from "./LegendaCalore";
+import { creaCalcolatoreMappe, misuraEffettiva, OPZIONI_VISTA, rigaMisura, testoValoreMisura, type VistaVolantino } from "./mappaCalore";
 import { PaginaConImmagine } from "./PaginaConImmagine";
 import { SchedaBox } from "./SchedaBox";
 import { ViaggioProdotto } from "./ViaggioProdotto";
@@ -52,10 +59,14 @@ export interface VolantinoSfogliabileProps {
   box: BoxInsight[];
   totalePagine: number;
   configurazione?: FlyerInsightsConfig;
-  /** Colora per differenza fra varianti e nasconde "Colora per". */
+  /** Colora per differenza fra varianti e nasconde "Colora per" e la mappa di calore. */
   statoBox?: Record<string, StatoDifferenza>;
-  /** Mappa di calore (zone calde) da mostrare nella modalità visibilità. */
-  calore?: CalorePagina[];
+  /** Rendimento dalle vendite importate: aggiunge le misure Vendite e Vendite per spazio e i dati nella scheda. */
+  rendimento?: RendimentoVolantino | null;
+  /** Previsione per box: aggiunge la misura Previsione e la previsione nella scheda. */
+  previsione?: PrevisioneVolantino | null;
+  /** Pesi della visibilità usati dal server (zoneCalde.pesi): la pagina li dichiara. */
+  pesi?: PesiVisibilita;
   /** Pagina controllata (opzionale): due visualizzatori affiancati restano sulla stessa doppia pagina. */
   pagina?: number;
   onCambiaPagina?: (pagina: number) => void;
@@ -68,14 +79,25 @@ export interface VolantinoSfogliabileProps {
 /** Livelli dell'ingrandimento a tutto schermo. */
 export const LIVELLI_ZOOM: readonly number[] = [1, 1.5, 2, 3];
 
-/** I pesi della visibilità come si leggono ("0,8"), dal contratto: la pagina li dichiara. */
-const PESI_TESTO = {
-  copertina: formatNumero(PESI_VISIBILITA.copertina),
-  ultima: formatNumero(PESI_VISIBILITA.ultima),
-  primaDoppia: formatNumero(PESI_VISIBILITA.primaDoppia),
-  altre: formatNumero(PESI_VISIBILITA.altre),
-  alto: formatNumero(PESI_VISIBILITA.alto),
-  basso: formatNumero(PESI_VISIBILITA.basso),
+/** La stima della visibilità con i pesi come si leggono ("0,8"): quelli usati dal server. */
+export const spiegazionePesi = (pesi: PesiVisibilita = PESI_VISIBILITA): string => {
+  const peso = (chiave: keyof PesiVisibilita) => formatNumero(pesi[chiave]);
+  const origine = pesiStandard(pesi) ? "uguale per tutti i volantini" : "con i pesi del cliente";
+  return (
+    `Visibilità stimata, ${origine}: spazio del box × peso della pagina (copertina ${peso("copertina")}, ultima ${peso("ultima")}, ` +
+    `pagine 2-3 ${peso("primaDoppia")}, altre ${peso("altre")}) × posizione (da ${peso("alto")} in cima a ${peso("basso")} in fondo). ` +
+    "100 è il box più visibile di questo volantino."
+  );
+};
+
+/** La frase sotto la legenda del calore: periodo delle vendite o come è fatta la previsione. */
+const notaMisura = (misura: MisuraCalore, dati: DatiMisure): string | null => {
+  if ((misura === "vendite" || misura === "venditePerSpazio") && dati.rendimento) {
+    const { periodo, puntiVendita } = dati.rendimento;
+    return `Vendite ${periodoValidita(periodo.dal, periodo.al)} in ${formatNumero(puntiVendita)} ${puntiVendita === 1 ? "punto vendita" : "punti vendita"} della stessa area e canale.`;
+  }
+  if (misura === "previsione" && dati.previsione) return dati.previsione.nota;
+  return null;
 };
 
 /** Precedente e successiva, con la posizione nel volantino. */
@@ -116,6 +138,10 @@ function Navigazione({ doppia, doppie, onVai }: { doppia: DoppiaPagina; doppie: 
  * pagine) con sopra i riquadri dei box, colorati per reparto, meccanica, sconto o visibilità, o per
  * differenza con un'altra variante. Un clic (o Invio) su un riquadro apre la scheda del box, e da lì
  * il viaggio del prodotto nei volantini della GDO. Senza PDF le pagine sono bianche.
+ *
+ * Due viste, una alla volta: "Colori dei box" (con "Colora per") e "Mappa di calore", dove i
+ * riquadri restano contorni sottili e sotto si dipinge, continuo, il calore della misura scelta fra
+ * quelle disponibili (le vendite e la previsione solo quando ci sono).
  */
 export function VolantinoSfogliabile(props: VolantinoSfogliabileProps) {
   // Un altro volantino riparte da capo: pagina, box scelto, scheda e ingrandimento
@@ -129,7 +155,9 @@ function Sfogliabile({
   totalePagine,
   configurazione,
   statoBox,
-  calore,
+  rendimento = null,
+  previsione = null,
+  pesi = PESI_VISIBILITA,
   pagina,
   onCambiaPagina,
   idBoxIniziale,
@@ -143,7 +171,10 @@ function Sfogliabile({
   const [viaggioAperto, setViaggioAperto] = useState(false);
   /** Indice in LIVELLI_ZOOM; null a ingrandimento chiuso. */
   const [zoom, setZoom] = useState<number | null>(null);
-  const [mostraCalore, setMostraCalore] = useState(true);
+  const [vista, setVista] = useState<VistaVolantino>("box");
+  /** La misura scelta dall'utente; finché non sceglie vale la predefinita (le vendite, se ci sono). */
+  const [misuraScelta, setMisuraScelta] = useState<MisuraCalore | null>(null);
+  const idMisura = useId();
 
   const controllata = pagina !== undefined;
   const totale = pagineDaSfogliare(totalePagine, box);
@@ -183,20 +214,44 @@ function Sfogliabile({
   const perPagina = useMemo(() => boxPerPagina(box), [box]);
   const proporzioneBase = useMemo(() => proporzioneDelVolantino(box), [box]);
   const reparti = useMemo(() => coloriReparti(box, configurazione), [box, configurazione]);
-  const calorePerPagina = useMemo(() => new Map((calore ?? []).map(voce => [voce.pagina, voce.celle])), [calore]);
   const senzaPosizione = useMemo(() => box.filter(voce => voce.pagina === null || !riquadroBox(voce.geometria)).length, [box]);
 
   const confronto = statoBox !== undefined;
-  const conCalore = !confronto && modo === "visibilita" && calorePerPagina.size > 0;
+  const datiMisure = useMemo<DatiMisure>(() => ({ rendimento, previsione }), [rendimento, previsione]);
+  // Nel confronto fra varianti i colori dicono le differenze: niente mappa di calore
+  const disponibili = useMemo(() => (confronto ? [] : misureDisponibili(box, datiMisure)), [confronto, box, datiMisure]);
+  const misura = misuraEffettiva(misuraScelta, disponibili);
+  const conCalore = !confronto && vista === "calore" && misura !== null;
+  // Densità di tutte le pagine (normalizzate sul volantino), calcolate una volta per misura
+  const calcolaMappa = useMemo(() => creaCalcolatoreMappe(box, datiMisure, proporzioneBase), [box, datiMisure, proporzioneBase]);
+  const mappa = useMemo(() => (conCalore && misura ? calcolaMappa(misura) : null), [conCalore, misura, calcolaMappa]);
+
   const stile = useCallback(
     (voce: BoxInsight): StileRiquadro => (statoBox ? stileDifferenza(statoBox[voce.id]) : stileBox(voce, modo, reparti)),
     [statoBox, modo, reparti]
   );
-  const voci = useMemo<VoceLegenda[]>(() => {
-    if (statoBox) return legendaDifferenze(box, statoBox);
-    const base = legendaModo(modo, box, reparti);
-    return conCalore && mostraCalore ? [...base, { id: "calore", etichetta: "Zona calda", forma: "quadrato" as const, tinta: TINTA_CALORE }] : base;
-  }, [statoBox, box, modo, reparti, conCalore, mostraCalore]);
+  const voci = useMemo<VoceLegenda[]>(
+    () => (statoBox ? legendaDifferenze(box, statoBox) : legendaModo(modo, box, reparti)),
+    [statoBox, box, modo, reparti]
+  );
+
+  const venditePerBox = useMemo(() => new Map((rendimento?.perBox ?? []).map(voce => [voce.idBox, voce])), [rendimento]);
+  const previstiPerBox = useMemo(() => new Map((previsione?.perBox ?? []).map(voce => [voce.idBox, voce])), [previsione]);
+
+  // Con la mappa accesa il tooltip dice anche il valore della misura (e per la previsione quanto è affidabile)
+  const tooltip = useCallback(
+    (voce: BoxInsight): ContenutoTooltip => {
+      const base = tooltipBox(voce);
+      if (!mappa) return base;
+      const valore = rigaMisura(mappa, voce.id);
+      // La misura in testa; una riga omonima del tooltip di sempre (es. "Sconto") non si ripete
+      const righe = [valore, ...(base.righe ?? []).filter(riga => riga.etichetta !== valore.etichetta)];
+      const previsto = mappa.misura === "previsione" ? previstiPerBox.get(voce.id) : undefined;
+      if (previsto) righe.splice(1, 0, { etichetta: "Affidabilità", valore: `${ETICHETTE_AFFIDABILITA[previsto.affidabilita]}, ${testoCasi(previsto.casiStorici)}` });
+      return { ...base, righe };
+    },
+    [mappa, previstiPerBox]
+  );
 
   // Le pagine oltre quelle del PDF restano bianche; pagine 0 vuol dire che Olimpo non le ha contate
   const immagine = (numero: number): string | null =>
@@ -215,7 +270,9 @@ function Sfogliabile({
       stile={stile}
       selezionato={selezionato}
       onSeleziona={apriBox}
-      calore={conCalore && mostraCalore ? calorePerPagina.get(numero) : null}
+      densita={mappa?.densita.get(numero) ?? null}
+      soloContorni={mappa !== null}
+      tooltip={tooltip}
     />
   );
 
@@ -275,7 +332,18 @@ function Sfogliabile({
               {viaggioAperto ? (
                 <ViaggioProdotto idKit={idKit} chiave={boxScelto.chiave} onIndietro={() => setViaggioAperto(false)} />
               ) : (
-                <SchedaBox box={boxScelto} totalePagine={totale} onViaggio={() => setViaggioAperto(true)} />
+                <SchedaBox
+                  box={boxScelto}
+                  totalePagine={totale}
+                  onViaggio={() => setViaggioAperto(true)}
+                  vendite={rendimento && venditePerBox.has(boxScelto.id) ? { box: venditePerBox.get(boxScelto.id)!, misura: rendimento.misura } : null}
+                  previsione={
+                    previsione && previstiPerBox.has(boxScelto.id)
+                      ? { box: previstiPerBox.get(boxScelto.id)!, tipo: previsione.tipo, unita: previsione.unita }
+                      : null
+                  }
+                  misuraCalore={mappa ? { etichetta: MISURE_CALORE[mappa.misura].etichetta, testo: testoValoreMisura(mappa, boxScelto.id) } : null}
+                />
               )}
             </div>
           </>
@@ -284,7 +352,12 @@ function Sfogliabile({
     </Slideover>
   );
 
-  const legenda = <Legenda voci={voci} titolo={confronto ? "Differenze" : TITOLI_LEGENDA[modo]} />;
+  const legenda = mappa ? (
+    <LegendaCalore misura={mappa.misura} unita={mappa.unita} massimo={mappa.massimo} nota={notaMisura(mappa.misura, datiMisure)} />
+  ) : (
+    <Legenda voci={voci} titolo={confronto ? "Differenze" : TITOLI_LEGENDA[modo]} />
+  );
+  const conVisibilita = !confronto && (mappa ? mappa.misura === "visibilita" : modo === "visibilita");
 
   return (
     <section aria-label={titolo} className={twMerge("flex min-w-0 flex-col gap-4", compatto && "gap-3")}>
@@ -296,14 +369,6 @@ function Sfogliabile({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {!confronto && (
-            <div className="flex items-center gap-2">
-              <span aria-hidden="true" className="text-xs text-slate-500 dark:text-slate-400">
-                Colora per
-              </span>
-              <Segmenti<ModoColore> etichetta="Colora per" opzioni={OPZIONI_COLORE} valore={modo} onChange={setModo} />
-            </div>
-          )}
           <Navigazione doppia={doppia} doppie={doppie} onVai={vaiAllaDoppia} />
           <Button type="button" variant="outline-secondary" size="sm" aria-label="Ingrandisci il volantino" title="Ingrandisci" onClick={() => setZoom(0)}>
             <Lucide icon="Maximize2" aria-hidden="true" className="h-4 w-4" />
@@ -311,23 +376,49 @@ function Sfogliabile({
         </div>
       </div>
 
+      {!confronto && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          {disponibili.length > 0 && (
+            <Segmenti<VistaVolantino> etichetta="Vista del volantino" opzioni={OPZIONI_VISTA} valore={vista} onChange={setVista} />
+          )}
+          {mappa ? (
+            <div className="flex items-center gap-2">
+              <label htmlFor={idMisura} className="inline-flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                <Lucide icon="Layers" aria-hidden="true" className="h-3.5 w-3.5" />
+                Misura<span className="sr-only"> della mappa di calore</span>
+              </label>
+              <FormSelect
+                id={idMisura}
+                // Nome esplicito: lo span nascosto perderebbe lo spazio dopo "Misura" nel nome accessibile
+                aria-label="Misura della mappa di calore"
+                formSelectSize="sm"
+                className="w-auto min-w-48"
+                value={mappa.misura}
+                onChange={evento => setMisuraScelta(evento.target.value as MisuraCalore)}
+              >
+                {disponibili.map(voce => (
+                  <option key={voce} value={voce}>
+                    {MISURE_CALORE[voce].etichetta}
+                  </option>
+                ))}
+              </FormSelect>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span aria-hidden="true" className="text-xs text-slate-500 dark:text-slate-400">
+                Colora per
+              </span>
+              <Segmenti<ModoColore> etichetta="Colora per" opzioni={OPZIONI_COLORE} valore={modo} onChange={setModo} />
+            </div>
+          )}
+        </div>
+      )}
+
       <div className={twMerge("mx-auto w-full", compatto ? "max-w-xl" : "max-w-3xl")}>{pagineDoppia}</div>
 
       {legenda}
 
-      {conCalore && (
-        <label className="inline-flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
-          <input type="checkbox" checked={mostraCalore} onChange={evento => setMostraCalore(evento.target.checked)} className="rounded border-slate-300" />
-          Mappa di calore delle zone più viste
-        </label>
-      )}
-      {!confronto && modo === "visibilita" && (
-        <p className="text-xs text-slate-500 dark:text-slate-400">
-          Visibilità stimata, uguale per tutti i volantini: spazio del box × peso della pagina (copertina {PESI_TESTO.copertina}, ultima {PESI_TESTO.ultima},
-          pagine 2-3 {PESI_TESTO.primaDoppia}, altre {PESI_TESTO.altre}) × posizione (da {PESI_TESTO.alto} in cima a {PESI_TESTO.basso} in fondo). 100 è il box più
-          visibile di questo volantino.
-        </p>
-      )}
+      {conVisibilita && <p className="text-xs text-slate-500 dark:text-slate-400">{spiegazionePesi(pesi)}</p>}
       {(!pdf || senzaPosizione > 0) && (
         <p className="text-xs text-slate-500 dark:text-slate-400">
           {!pdf && "Il PDF del volantino non è disponibile: i box sono disegnati su pagine bianche. "}

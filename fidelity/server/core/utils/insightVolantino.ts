@@ -11,6 +11,7 @@ import {
   type FasciaSconto,
   type MarcaInsight,
   type MarcheVolantino,
+  type PesiVisibilita,
   type PrezziSconti,
   type QuotaSpazio,
   type QuotaVisibilita,
@@ -31,7 +32,8 @@ import type { ReferenzaStampata } from './referenzaStampata';
  * meccanica e geometria vengono dalla lettura generica delle referenze (referenzaStampata.ts).
  * Della configurazione del cliente servono solo l'anagrafica dei reparti, il reparto e la
  * meccanica gia' mappati (per gli stessi codici e colori dei riepiloghi di sempre) e le marche
- * del distributore, e arrivano come opzioni: qui niente database e niente lettura della config.
+ * del distributore; della libreria agenzia del cliente i pesi della visibilita'. Arrivano come
+ * opzioni: qui niente database, niente lettura della config e niente libreria agenzia.
  *
  * Ogni box conta nei conteggi; un box senza geometria ha spazio e visibilita' 0.
  */
@@ -46,6 +48,8 @@ export interface OpzioniInsight {
   meccanicaOriginale?: (idReferenza: string) => string | null;
   urlFoto: (guid: string) => string;
   origine?: (codiceBox: string) => 'listino' | 'fuori_listino' | undefined;
+  /** Pesi della visibilita' della libreria agenzia del cliente (insightVolantino.pesiVisibilita); senza, PESI_VISIBILITA. */
+  pesi?: PesiVisibilita;
 }
 
 /** Quanti box mostrano le zone calde come i piu' visibili. */
@@ -90,11 +94,14 @@ function pagineDelVolantino(box: readonly BoxKit[], totalePagine: number): numbe
 
 // ─── Box ────────────────────────────────────────────────────────────
 
+/** I pesi della visibilita' con cui si calcola: quelli del cliente o gli standard. */
+const pesiDi = (opzioni: Pick<OpzioniInsight, 'pesi'>): PesiVisibilita => opzioni.pesi ?? PESI_VISIBILITA;
+
 /** Visibilita' prima della normalizzazione: spazio × peso della pagina × peso della posizione del centro. */
-function visibilitaGrezza(singolo: BoxKit, pagine: number): number {
+function visibilitaGrezza(singolo: BoxKit, pagine: number, pesi: PesiVisibilita): number {
   const geometria = singolo.geometria;
   if (!geometria) return 0;
-  return geometria.spazio * pesoPagina(geometria.pagina, pagine) * pesoPosizione(geometria.y + geometria.h / 2);
+  return geometria.spazio * pesoPagina(geometria.pagina, pagine, pesi) * pesoPosizione(geometria.y + geometria.h / 2, pesi);
 }
 
 /** Il primo valore presente fra le referenze del box, dalla pilota in giu'. */
@@ -165,7 +172,8 @@ function insightDelBox(singolo: BoxKit, opzioni: OpzioniInsight, visibilita: num
 /** I box del volantino per gli insight; la visibilita' e' 100 sul box piu' visibile di questo volantino. */
 export function boxInsight(box: readonly BoxKit[], opzioni: OpzioniInsight): BoxInsight[] {
   const pagine = pagineDelVolantino(box, opzioni.totalePagine);
-  const grezze = box.map(singolo => visibilitaGrezza(singolo, pagine));
+  const pesi = pesiDi(opzioni);
+  const grezze = box.map(singolo => visibilitaGrezza(singolo, pagine, pesi));
   const massima = grezze.reduce((max, valore) => Math.max(max, valore), 0);
   return box.map((singolo, indice) =>
     insightDelBox(singolo, opzioni, massima > 0 ? arrotonda((grezze[indice] / massima) * 100) : 0));
@@ -382,7 +390,7 @@ function caloreDi(box: readonly BoxInsight[], pagine: number): CalorePagina[] {
     }));
 }
 
-function zoneCaldeDi(box: readonly BoxInsight[], pagine: number): ZoneCalde {
+function zoneCaldeDi(box: readonly BoxInsight[], pagine: number, pesi: PesiVisibilita): ZoneCalde {
   const totaleVisibilita = somma(box.map(singolo => singolo.visibilita));
   const totaleSpazio = spazioDi(box);
   return {
@@ -395,7 +403,7 @@ function zoneCaldeDi(box: readonly BoxInsight[], pagine: number): ZoneCalde {
     perReparto: quoteVisibilita(raggruppa(box, perReparto), totaleVisibilita, totaleSpazio),
     perMarca: quoteVisibilita(raggruppa(box, perMarca), totaleVisibilita, totaleSpazio),
     calore: caloreDi(box, pagine),
-    pesi: PESI_VISIBILITA,
+    pesi,
   };
 }
 
@@ -409,6 +417,7 @@ export function sezioniInsight(box: readonly BoxKit[], opzioni: OpzioniInsight):
     prezziSconti: prezziScontiDi(insight),
     spazio: usoSpazioDi(insight, pagine),
     marche: marcheDi(insight, opzioni.marcheDistributore),
-    zoneCalde: zoneCaldeDi(insight, pagine),
+    // Gli stessi pesi della visibilita' dei box: la scheda li dichiara all'utente
+    zoneCalde: zoneCaldeDi(insight, pagine, pesiDi(opzioni)),
   };
 }

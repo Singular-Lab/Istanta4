@@ -19,7 +19,8 @@ import {
   descriviPianoConsultazione,
   leggiPianoConsultazione,
 } from './migrazioneConsultazione';
-import { PERMESSI_PREDEFINITI } from './predefiniti';
+import { applicaPianoVendite, descriviPianoVendite, leggiPianoVendite } from './migrazioneVendite';
+import { PERMESSI_PREDEFINITI, permessiPredefinitiDelSottoRuolo } from './predefiniti';
 import {
   creaTabellaStatoAccessi,
   leggiSchemaAccessi,
@@ -35,7 +36,8 @@ import {
  *    - schema 1, modello per aree: concede l'accesso all'area dove oggi la pagina compare nel
  *      menu del ruolo, o dove il ruolo ha già un'azione dell'area; collega il menu ai sotto-ruoli
  *      per id; toglie i vecchi permessi pagina.* e permessi.gestisci;
- *    - schema 2, permessi di consultazione e Agenzia (migrazioneConsultazione.ts).
+ *    - schema 2, permessi di consultazione e Agenzia (migrazioneConsultazione.ts);
+ *    - schema 3, l'import delle vendite ai sotto-ruoli GDO che lo hanno di default (migrazioneVendite.ts).
  * Ogni passo si registra nella versione dello schema; la migrazione gira in una transazione con lock.
  */
 
@@ -43,7 +45,9 @@ import {
 export const SCHEMA_PER_AREE = 1;
 /** Permessi di consultazione separati dalla produzione e Agenzia senza Visualizzazione. */
 export const SCHEMA_CONSULTAZIONE = 2;
-export const SCHEMA_ACCESSI = SCHEMA_CONSULTAZIONE;
+/** Import delle vendite del cliente: il permesso nuovo all'ADMIN della GDO. */
+export const SCHEMA_VENDITE = 3;
+export const SCHEMA_ACCESSI = SCHEMA_VENDITE;
 
 export type Concessione = {
   tipo: TIPO_UTENTI;
@@ -192,8 +196,8 @@ export const descriviPiano = (piano: PianoMigrazione): string => {
 };
 
 const scriviPredefiniti = async (repository: PermessiRepository, idPerCodice: Map<string, string>, transaction: Transaction) => {
-  const ruoliGdo = await sequelize.query<{ id_ruolo_utente_gdo: string }>(
-    `SELECT id_ruolo_utente_gdo FROM ruolo_utente_gdo`,
+  const ruoliGdo = await sequelize.query<{ id_ruolo_utente_gdo: string; ruolo_ruolo_utente_gdo: string }>(
+    `SELECT id_ruolo_utente_gdo, ruolo_ruolo_utente_gdo FROM ruolo_utente_gdo`,
     { type: QueryTypes.SELECT, transaction }
   );
   const valoriPer = (codici: CodicePermesso[]) => {
@@ -209,8 +213,10 @@ const scriviPredefiniti = async (repository: PermessiRepository, idPerCodice: Ma
     await repository.scriviLivello({ tipo }, valoriPer(PERMESSI_PREDEFINITI[tipo] ?? []), transaction);
   }
   const gdo = PERMESSI_PREDEFINITI[TIPO_UTENTI.GDO] ?? [];
+  // Ogni sotto-ruolo nasce con i permessi del tipo GDO, piu' i suoi (l'ADMIN importa le vendite)
   for (const r of ruoliGdo) {
-    await repository.scriviLivello({ tipo: TIPO_UTENTI.GDO, idRuoloGdo: r.id_ruolo_utente_gdo }, valoriPer(gdo), transaction);
+    const codici = [...gdo, ...permessiPredefinitiDelSottoRuolo(r.ruolo_ruolo_utente_gdo)];
+    await repository.scriviLivello({ tipo: TIPO_UTENTI.GDO, idRuoloGdo: r.id_ruolo_utente_gdo }, valoriPer(codici), transaction);
   }
 };
 
@@ -285,6 +291,13 @@ export const preparaAccessiAllAvvio = async (repository = new PermessiRepository
       await scriviSchemaAccessi(SCHEMA_CONSULTAZIONE, transaction);
       const etichetta = await etichettaLivelli(transaction);
       log.info(`Accessi: permessi di consultazione e Agenzia (schema ${SCHEMA_CONSULTAZIONE})\n${descriviPianoConsultazione(piano, etichetta)}`);
+    }
+
+    if (schema < SCHEMA_VENDITE) {
+      const piano = await leggiPianoVendite(transaction);
+      await applicaPianoVendite(piano, repository, idPerCodice, transaction);
+      await scriviSchemaAccessi(SCHEMA_VENDITE, transaction);
+      log.info(`Accessi: import delle vendite (schema ${SCHEMA_VENDITE})\n${descriviPianoVendite(piano)}`);
     }
   });
 };

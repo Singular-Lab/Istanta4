@@ -291,6 +291,26 @@ describe('boxInsight: visibilita\' e zone calde', () => {
     expect(zoneCalde.boxPiuVisibili).not.toContain('b10');
     expect(zoneCalde.boxPiuVisibili).not.toContain('b11');
   });
+
+  it('con i pesi della libreria agenzia del cliente visibilita\' e mappa di calore usano quelli, e le zone calde li dichiarano', () => {
+    // Un cliente che pesa allo stesso modo tutte le pagine e tutte le posizioni
+    const pesi = { copertina: 1, ultima: 1, primaDoppia: 1, altre: 1, alto: 1, basso: 1 };
+    const opzioniCliente = opzioni({ totalePagine: 8, pesi });
+
+    const box = perId(boxInsight(boxDi(righe), opzioniCliente));
+    const { zoneCalde } = sezioniInsight(boxDi(righe), opzioniCliente);
+    const calore = new Map(zoneCalde.calore.map(voce => [voce.pagina, voce.celle]));
+
+    // Stesso box in copertina e a pagina 5: con gli standard 100 e 50, qui pari
+    expect(box.get('copertina')?.visibilita).toBe(100);
+    expect(box.get('interna')?.visibilita).toBe(100);
+    expect(box.get('inCima')?.visibilita).toBe(30);
+    expect(box.get('inFondo')?.visibilita).toBe(30);
+    expect(calore.get(1)![0][0]).toBe(1);
+    expect(calore.get(5)![0][0]).toBe(1);
+    expect(zoneCalde.pesi).toEqual(pesi);
+    expect(zoneCalde.pesi).not.toEqual(PESI_VISIBILITA);
+  });
 });
 
 describe('boxInsight: il box come lo vede la scheda', () => {

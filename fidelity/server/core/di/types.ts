@@ -76,6 +76,15 @@ export const TYPES = {
   // Confronti degli insight del volantino (edizione precedente, varianti, viaggio del prodotto)
   InsightConfrontiService: Symbol.for('InsightConfrontiService'),
 
+  // Rendimento dalle vendite, previsione e simulazione degli insight del volantino
+  InsightVenditeService: Symbol.for('InsightVenditeService'),
+
+  // Report PDF del volantino (dati e sezioni; il PDF lo disegna il browser)
+  ReportVolantinoService: Symbol.for('ReportVolantinoService'),
+
+  // Import delle vendite del cliente (pagina Vendite)
+  ImportVenditeService: Symbol.for('ImportVenditeService'),
+
   // Permessi
   PermessiService: Symbol.for('PermessiService'),
 
@@ -134,6 +143,8 @@ export const TYPES = {
   PuntiVenditaVolantinoRepository: Symbol.for('PuntiVenditaVolantinoRepository'),
   AnalisiPuntiVenditaRepository: Symbol.for('AnalisiPuntiVenditaRepository'),
   InsightConfrontiRepository: Symbol.for('InsightConfrontiRepository'),
+  InsightVenditeRepository: Symbol.for('InsightVenditeRepository'),
+  VenditeRepository: Symbol.for('VenditeRepository'),
 
   // Agenzia Lib — logiche custom per cliente
   AgenziaLib: Symbol.for('AgenziaLib'),

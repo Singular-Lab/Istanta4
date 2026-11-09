@@ -7,6 +7,16 @@ import {
   type DifferenzeVarianti,
   type ViaggioProdotto,
 } from "../../lib/insightVolantino/tipi";
+import {
+  percorsoPrevisione,
+  percorsoRendimento,
+  percorsoSimulazione,
+  type PrevisioneVolantino,
+  type RendimentoVolantino,
+  type RichiestaSimulazione,
+  type SimulazioneProdotto,
+} from "../../lib/insightVolantino/rendimento";
+import { percorsoReport, type ReportVolantino } from "../../lib/insightVolantino/report";
 import { ServerCall } from "../../lib/server_call";
 
 /*
@@ -33,6 +43,37 @@ export const useDifferenzeVarianti = (idKit: string | undefined, idAltra: string
     enabled: !!idKit && !!idAltra,
     staleTime: CINQUE_MINUTI,
   });
+
+/** Rendimento dei box dalle vendite importate; null senza vendite nel periodo della promo. */
+export const useRendimentoVolantino = (idKit: string | undefined, attiva = true) =>
+  useQuery({
+    queryKey: ["flyerInsights", idKit, "vendite"],
+    queryFn: () => ServerCall.get<RendimentoVolantino | null>(percorsoRendimento(idKit!)),
+    enabled: !!idKit && attiva,
+    staleTime: CINQUE_MINUTI,
+  });
+
+/** Previsione per box (vendite o stima teorica); null senza box con geometria. */
+export const usePrevisioneVolantino = (idKit: string | undefined, attiva = true) =>
+  useQuery({
+    queryKey: ["flyerInsights", idKit, "previsione"],
+    queryFn: () => ServerCall.get<PrevisioneVolantino | null>(percorsoPrevisione(idKit!)),
+    enabled: !!idKit && attiva,
+    staleTime: CINQUE_MINUTI,
+  });
+
+/** Simulazione di un prodotto in una posizione; parte solo con una richiesta. */
+export const useSimulazioneProdotto = (idKit: string | undefined, richiesta: RichiestaSimulazione | null) =>
+  useQuery({
+    queryKey: ["flyerInsights", idKit, "simulazione", richiesta],
+    queryFn: () => ServerCall.get<SimulazioneProdotto>(percorsoSimulazione(idKit!, richiesta!)),
+    enabled: !!idKit && !!richiesta,
+    staleTime: CINQUE_MINUTI,
+  });
+
+/** Dati e sezioni del report PDF: si chiedono al click, non al caricamento della pagina. */
+export const caricaReportVolantino = (idKit: string): Promise<ReportVolantino> =>
+  ServerCall.get<ReportVolantino>(percorsoReport(idKit));
 
 /** I volantini della GDO in cui compare il prodotto, dal piu' recente. */
 export const useViaggioProdotto = (idKit: string | undefined, chiave: string | null | undefined) =>
