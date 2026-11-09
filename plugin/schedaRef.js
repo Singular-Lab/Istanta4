@@ -3015,7 +3015,8 @@ const schedaRef = {
                             //e il secondo non e' mai valso. Toglierlo del tutto avrebbe acceso il secondo, e cambiato il salvataggio.
                             var textarea = $('<textarea ' + (isEditable && refEditabile ? '' : 'readonly') + ' class="" labelCorrispondente="descrizione" currentCharacterStyle="' + currentCharacterStyle + '" class="textArea nonCancellareSeVuoto' + (stileInMismatch ? ' mismatchInImpaginato' : '') + '" name="myTextarea" style="height: ' + misureCaselle.altezza + 'px; width: 100%; margin: 0; background-color:white; color:black;' + (stileInMismatch ? ' border: 2px solid gold;' : '') + '"></textarea><br>');
                             //TASK-5d3fea89: il nome senza cartella e, in sola lettura, il perche' accanto (intero al passaggio del mouse); sfondo e bordo propri.
-                            label = me.etichettaDellaCasella(currentCharacterStyle, stileInMismatch ? 'gold' : null, me.indicazioneSolaLettura(notaSolaLettura, isEditable, descrizioniAlterate));
+                            //TASK-4b0592eb: sulle caselle gialle l'icona dell'anteprima della descrizione del server.
+                            label = me.etichettaDellaCasella(currentCharacterStyle, stileInMismatch ? 'gold' : null, me.indicazioneSolaLettura(notaSolaLettura, isEditable, descrizioniAlterate), stileInMismatch);
                             var column = $('<div class="column" style="' + me.stileDellaColonna(grandezzeBox) + '"></div>').append(label).append(textarea);
                             me.segnaCasellaInSolaLettura(textarea, notaSolaLettura);
                             if (!(isEditable && refEditabile)) {
@@ -3079,6 +3080,8 @@ const schedaRef = {
                     //I20-1143: in giallo, sotto i campi e le note, le differenze col server che non
                     //stanno su una casella: un blocco che nel box manca, l'ordine, lo stile di paragrafo.
                     me.mostraGialloDescrizione(gialloDescrizione.righe);
+                    //TASK-4b0592eb: le icone delle caselle gialle mostrano la descrizione del server.
+                    me.attivaAnteprimaDelServer(campoDescrizioneDelPrimario != null ? campoDescrizioneDelPrimario.content : "");
 
                     break;
                 }
@@ -5476,7 +5479,11 @@ const schedaRef = {
     /// disallineava. Il testo intero sta nel title, che il Tooltip del Plugin mostra al passaggio del
     /// mouse. Vicina alla sua casella, lontana da quella sopra. colore: null il grigio chiaro di
     /// sempre, 'gold' per una differenza col server. Pura: restituisce l'HTML.
-    etichettaDellaCasella(nomeStile, colore, indicazione) {
+    /// TASK-4b0592eb: conAnteprima mette prima del nome l'icona dell'anteprima della descrizione del
+    /// server (attivaAnteprimaDelServer). L'icona ha un data-tooltip vuoto: il Tooltip vale per
+    /// l'elemento piu' interno, e cosi' il title dell'etichetta non compare sopra le caselle mentre
+    /// il mouse e' sull'icona. Alta quanto il testo, perche' l'etichetta resti alta come le altre.
+    etichettaDellaCasella(nomeStile, colore, indicazione, conAnteprima = false) {
         var proteggi = function (testo) {
             return String(testo == null ? "" : testo).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
         };
@@ -5486,8 +5493,56 @@ const schedaRef = {
             ? ' <span class="indicazioneSolaLettura" style="font-size: 10px; color: #a8a8a8;">&middot; ' + proteggi(indicazione) + '</span>'
             : '';
         var intero = nome + (conIndicazione ? ' &middot; ' + proteggi(indicazione) : '');
+        var icona = conAnteprima
+            ? '<img class="iconaAnteprimaServer" data-tooltip="" src="images/swap.png" alt="" style="width: 14px; height: 11px; vertical-align: middle; margin: 0 4px 0 0; cursor: help;">'
+            : '';
         return '<label title="' + intero + '" style="display: block; margin: 8px 0 4px 0; font-size: 11px; color:' + (colore || "#e0e0e0")
-            + '; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">' + nome + accanto + '</label>';
+            + '; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">' + icona + nome + accanto + '</label>';
+    },
+
+    /// TASK-4b0592eb: l'anteprima della descrizione del server. Finche' il mouse resta sull'icona di una
+    /// casella gialla, tutte le caselle della descrizione - non solo quella - mostrano il testo che il
+    /// server compone per il loro stile, in sola lettura e col bordo verde; all'uscita tornano il loro.
+    /// Lo mostra il riquadro a riposo di ogni casella (CampiARiposo.mostraAnteprima), che ha gia' le misure
+    /// della casella: niente si sposta, e il testo delle caselle e del box non cambia.
+    attivaAnteprimaDelServer(contenutoServer) {
+        const me = this;
+        $("#editReferenza").find(".iconaAnteprimaServer").each(function () {
+            $(this).on("mouseenter", function () {
+                me.mostraAnteprimaDelServer(contenutoServer);
+            });
+            $(this).on("mouseleave", function () {
+                me.togliAnteprimaDelServer();
+            });
+        });
+    },
+
+    /// TASK-4b0592eb: le caselle della descrizione che l'anteprima riguarda: non quelle dei tratti
+    /// nascosti dall'esportazione (trattonascosto), che restano come sono.
+    caselleDellAnteprima() {
+        return $("#editReferenza").find('textarea[labelCorrispondente="descrizione"]').toArray()
+            .filter(casella => $(casella).attr("trattonascosto") !== "1");
+    },
+
+    mostraAnteprimaDelServer(contenutoServer) {
+        try {
+            const caselle = this.caselleDellAnteprima();
+            const testi = confronti.testiDelServerPerCaselle(caselle.map(casella => $(casella).attr("currentcharacterstyle")), contenutoServer);
+            caselle.forEach((casella, i) => CampiARiposo.mostraAnteprima(casella, testi[i]));
+        }
+        catch (error) {
+            console.error("Code SRF-151 Anteprima della descrizione del server non mostrata: " + error);
+        }
+    },
+
+    togliAnteprimaDelServer() {
+        try {
+            $("#editReferenza").find('textarea[labelCorrispondente="descrizione"]').toArray()
+                .forEach(casella => CampiARiposo.togliAnteprima(casella));
+        }
+        catch (error) {
+            console.error("Code SRF-152 Anteprima della descrizione del server non tolta: " + error);
+        }
     },
 
     /// TASK-5d3fea89: perche' una casella della descrizione e' in sola lettura, in breve, per accanto al
@@ -6105,14 +6160,26 @@ const schedaRef = {
             titolo.css(grave
                 ? { "font-size": "13px", "font-weight": "700", "color": "#b21d1d" }
                 : { "font-size": "12px", "font-weight": "700", "color": "#2c2c2c" });
-            riquadro.append(titolo);
 
             gruppo.differenze.forEach(function (diff, indice) {
                 const riga = $('<div></div>');
-                riga.css({ "padding": "4px 0 2px 0", "border-top": indice === 0 ? "none" : "1px dashed #e3e3e3" });
+                riga.css({ "padding": indice === 0 ? "0 0 2px 0" : "4px 0 2px 0", "border-top": indice === 0 ? "none" : "1px dashed #e3e3e3" });
                 const problema = $('<div></div>').text(me.testoDifferenza(diff));
                 problema.css({ "font-size": "12px", "color": "#555555" });
-                riga.append(problema);
+                //TASK-4b0592eb: la testata in due colonne, senza separatori: a sinistra il titolo
+                //dell'elemento (sulla prima differenza) e il problema, che vanno a capo se serve; a
+                //destra i pulsanti (aggiungiAzioniDifferenza), che hanno lo spazio che chiedono. Sotto,
+                //i valori. Con i pulsanti in fondo restavano staccati dal problema.
+                const sinistra = $('<div class="testiDifferenza"></div>');
+                sinistra.css({ "flex": "1 1 auto", "min-width": "0" });
+                if (indice === 0) {
+                    sinistra.append(titolo);
+                }
+                sinistra.append(problema);
+                const testata = $('<div class="testataDifferenza"></div>');
+                testata.css({ "display": "flex", "align-items": "flex-start", "gap": "8px" });
+                testata.append(sinistra);
+                riga.append(testata);
                 //I20-1071: sotto una differenza di contenuto, il valore nel box e quello del dato.
                 me.aggiungiValoriDifferenza(riga, diff);
                 //I20-1070: le decisioni si prendono da qui, senza toccare il box.
@@ -6238,9 +6305,12 @@ const schedaRef = {
         if (valoriMeta.length === 0 && valori == null) {
             return;
         }
-        const coppie = valoriMeta.length > 0
-            ? valoriMeta.map(v => [v.etichetta, v])
-            : [["Nel box", valori.locale], ["Sul server", valori.server]];
+        //TASK-4b0592eb: il box e il server in due colonne, con i loro a capo.
+        if (valoriMeta.length === 0) {
+            this.aggiungiColonneBoxServer(riga, confronti.righeAConfronto(diff));
+            return;
+        }
+        const coppie = valoriMeta.map(v => [v.etichetta, v]);
         //I20-1075: le etichette in grassetto, i valori normali. Le etichette stanno in una colonna larga
         //quanto la piu' lunga, cosi' i due valori partono dallo stesso punto, e un valore che va a capo
         //resta allineato sotto se stesso.
@@ -6257,6 +6327,37 @@ const schedaRef = {
             r.append(etichetta).append(valore);
             riga.append(r);
         });
+    },
+
+    /// TASK-4b0592eb: i due valori di una differenza in due colonne, Box e Server, sotto una riga di
+    /// separazione: una riga per ogni riga del testo, allineate (confronti.righeAConfronto). Un testo
+    /// lungo va a capo dentro la sua colonna, senza puntini.
+    aggiungiColonneBoxServer(riga, righe) {
+        if (righe == null) {
+            return;
+        }
+        const colonne = $('<div class="valoreDifferenza"></div>');
+        colonne.css({ "border-top": "1px solid #d0d0d0", "margin-top": "4px", "padding-top": "2px", "font-size": "12px", "color": "#2c2c2c" });
+        const rigaDiColonne = function (sinistra, destra, intestazione) {
+            const r = $('<div></div>');
+            r.css({ "display": "flex", "align-items": "flex-start" });
+            [sinistra, destra].forEach(function (testo, i) {
+                const cella = $('<span></span>').text(testo);
+                cella.css({
+                    "flex": "1 1 0px", "min-width": "0", "white-space": "normal", "overflow-wrap": "anywhere",
+                    "padding": i === 0 ? "1px 6px 1px 8px" : "1px 0 1px 6px",
+                    "border-right": i === 0 ? "1px solid #d0d0d0" : "none",
+                    "font-weight": intestazione ? "700" : "400"
+                });
+                r.append(cella);
+            });
+            return r;
+        };
+        colonne.append(rigaDiColonne("Box:", "Server:", true));
+        righe.forEach(function (coppia) {
+            colonne.append(rigaDiColonne(coppia[0], coppia[1], false));
+        });
+        riga.append(colonne);
     },
 
     /* ---------- I20-1070: le foto extra decise per questa lavorazione ---------- */
@@ -6806,8 +6907,17 @@ const schedaRef = {
             ricollegaLinks: ["Ricollega alla cartella Links", "Il riquadro resta dov'e': cambia solo il file a cui punta, quello della cartella Links della lavorazione"]
         };
         //I20-1075: i pulsanti a destra, sotto il problema a cui servono.
-        var barra = $('<div></div>');
-        barra.css({ "display": "flex", "gap": "6px", "margin-top": "4px", "flex-wrap": "wrap", "justify-content": "flex-end" });
+        //TASK-4b0592eb: accanto al problema, nella testata della riga, se c'e'.
+        //Li', in colonna, larghi uguali e vicini, con lo spazio che chiedono: e' il testo a sinistra
+        //che va a capo. Senza il margine nativo dei pulsanti di UXP, che li staccava fra loro e dalla cima.
+        var testata = riga.children(".testataDifferenza").first();
+        var barra = $('<div class="barraAzioniDifferenza"></div>');
+        if (testata.length > 0) {
+            barra.css({ "display": "flex", "flex-direction": "column", "align-items": "stretch", "gap": "4px", "flex": "0 0 auto" });
+        }
+        else {
+            barra.css({ "display": "flex", "gap": "6px", "margin-top": "4px", "flex-wrap": "wrap", "justify-content": "flex-end" });
+        }
 
         azioni.forEach(function (azione) {
             var pulsante = me.pulsanteFinestra(testi[azione][0], testi[azione][1]);
@@ -6909,7 +7019,10 @@ const schedaRef = {
                 });
             }
         });
-        riga.append(barra);
+        if (testata.length > 0) {
+            barra.children().css("margin", "0");
+        }
+        (testata.length > 0 ? testata : riga).append(barra);
     },
 
     /* ---------- I20-1088: i meta dei testi del box da verificare ---------- */

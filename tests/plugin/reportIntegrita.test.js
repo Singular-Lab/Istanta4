@@ -41,7 +41,10 @@ const MOTORE = ["confrontoBox", "confrontoBoxCompiledFieldPreAnalisi", "mappatur
     "differenzaTestoLogo", "testoDelLogoNelBox", "testoLogoConfrontabile", "testoLogoInRiga",
     //I20-1143: i blocchi della descrizione per il giallo della scheda, e le fondamentali alterate
     //dall'esportazione con il testo che il server compone per ciascuna.
-    "blocchiDelContenuto", "blocchiDescrizioneDiversi", "testiDelleFondamentali", "fondamentaliAlterateDaEsportazione"
+    "blocchiDelContenuto", "blocchiDescrizioneDiversi", "testiDelleFondamentali", "fondamentaliAlterateDaEsportazione",
+    //TASK-4b0592eb: i valori a righe per le colonne Box e Server, e i testi del server per
+    //l'anteprima delle caselle della descrizione.
+    "righeLeggibili", "righeAConfronto", "testoDelBlocco", "testiDelServerPerCaselle"
 ];
 const DA_INDEXNEW = ["avviaReportIntegrita", "applicaConfronto", "preAnalisiBoxMappato",
     "nomiPagineDelDocumento", "boxDellElementoMappa"];
