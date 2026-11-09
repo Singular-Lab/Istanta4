@@ -54,7 +54,6 @@ export interface IFileManagementService {
     nome?: string;
   }, metadataFilter?: { field: string; value: string }): Promise<any>;
   getProprietaMetaFilesRuntime(idKitRuntime: string): Promise<string[]>;
-  getAllCombinazioniRuntimePDF(codice?: string): Promise<any[]>;
   getAllCombinazioniRuntimePDFWebPliant(idArea: string, idCanale: string, idsKitDesign: string[], idsTipiDiExport: string[]): Promise<any[]>;
   getContenutoDigitali(): Promise<any>;
 

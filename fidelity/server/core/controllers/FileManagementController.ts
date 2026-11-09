@@ -104,8 +104,6 @@ export class FileManagementController extends BaseController {
     this.router.put('/get_all_files_documentale', authMiddleware, permissionGuard('file.download'), routeDeprecata, this.getAllFilesDocumentale.bind(this));
     this.router.put('/get_all_contenuti_digitali', authMiddleware, permissionGuard('file.download'), routeDeprecata, this.getAllContenutiDigitali.bind(this));
     this.router.get('/getProprietaMetaFilesRuntime', authMiddleware, permissionGuard('file.download'), routeDeprecata, this.getProprietaMetaFilesRuntime.bind(this));
-    // Elenco della pagina Volantini: chi puo' aprire la pagina deve poterlo caricare
-    this.router.get('/getAllCombinazioniRuntimePDF', authMiddleware, permissionGuard('volantini.visualizza'), this.getAllCombinazioniRuntimePDF.bind(this));
     this.router.put('/getAllCombinazioniRuntimePDFWebPliant', authMiddleware, permissionGuard('file.download'), this.getAllCombinazioniRuntimePDFWebPliant.bind(this));
     this.router.get('/getContenutoDigitali', authMiddleware, permissionGuard('file.download'), routeDeprecata, this.getContenutoDigitali.bind(this));
 
@@ -500,16 +498,6 @@ export class FileManagementController extends BaseController {
   private async getProprietaMetaFilesRuntime(req: Request, res: Response): Promise<void> {
     try {
       const result = await this.fileManagementService.getProprietaMetaFilesRuntime(req.query.id as string);
-      this.sendResponse(res, HttpStatusCode.OK, result);
-    } catch (error) {
-      this.handleError(res, error as Error);
-    }
-  }
-
-  private async getAllCombinazioniRuntimePDF(req: Request, res: Response): Promise<void> {
-    try {
-      const codice = req.query.codice as string;
-      const result = await this.fileManagementService.getAllCombinazioniRuntimePDF(codice);
       this.sendResponse(res, HttpStatusCode.OK, result);
     } catch (error) {
       this.handleError(res, error as Error);

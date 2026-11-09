@@ -89,8 +89,9 @@ const nomeAllegato = (nome: string): string =>
  * vedono tutte le GDO; un utente senza GDO non vede nulla.
  *
  * Permessi: i volantini con uno fra "volantini.visualizza" (panoramica e storico),
- * "materiali.visualizza" (viste Volantini) e "analisi.dashboard_category" (dashboard Category); POP e
- * contenuti digitali con "materiali.visualizza"; ogni download con "materiali.scarica".
+ * "materiali.visualizza" (viste Volantini) e "analisi.dashboard_category" (dashboard Category); il
+ * dettaglio di una promozione, che riassume gli insight dei suoi volantini, POP e contenuti digitali
+ * con "materiali.visualizza"; ogni download con "materiali.scarica".
  */
 export class ConsultazioneController extends BaseController {
   constructor(private readonly consultazione: IConsultazioneService) {
@@ -107,6 +108,8 @@ export class ConsultazioneController extends BaseController {
 
     this.router.get('/volantini', ...volantini, this.getVolantini.bind(this));
     this.router.get('/volantini/promozioni', ...volantini, this.getPromozioniVolantini.bind(this));
+    // Come gli insight del volantino, che riassume: con "materiali.visualizza" (contratto in lib/consultazione/tipi.ts)
+    this.router.get('/volantini/promozioni/:idPromo', ...materiali, this.getPromozioneVolantini.bind(this));
     this.router.get('/volantini/:idKit', ...volantini, this.getVolantino.bind(this));
 
     this.router.get('/pop/promozioni', ...materiali, this.getPromozioniPop.bind(this));
@@ -165,6 +168,10 @@ export class ConsultazioneController extends BaseController {
       };
       return this.consultazione.getPromozioniVolantini(filtri, ambito);
     });
+  }
+
+  private getPromozioneVolantini(req: Request<{ idPromo: string }>, res: Response): Promise<void> {
+    return this.rispondi(req, res, ambito => this.consultazione.getPromozioneVolantini(req.params.idPromo, ambito));
   }
 
   private getVolantino(req: Request<{ idKit: string }>, res: Response): Promise<void> {

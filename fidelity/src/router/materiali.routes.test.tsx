@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { matchRoutes, type RouteObject } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { paginaPer } from "../../lib/accessi/pagine";
+import { paginaPer, voceDiMenuPer } from "../../lib/accessi/pagine";
 
 const finti = vi.hoisted(() => ({ get: vi.fn() }));
 
@@ -12,6 +12,7 @@ vi.mock("../../lib/server_call", () => ({ ServerCall: { get: finti.get, getUrl: 
 // Basta l'identità dei componenti, non serve caricare le pagine vere
 vi.mock("@/pages/VolantiniKit", () => ({ default: function VolantiniKit() { return null; } }));
 vi.mock("@/pages/PopMateriali", () => ({ default: function PopMateriali() { return null; } }));
+vi.mock("@/pages/PromozioneVolantini", () => ({ default: function PromozioneVolantini() { return null; } }));
 
 import routes from ".";
 
@@ -48,10 +49,30 @@ describe("viste Volantini e POP", () => {
   });
 
   it("le pagine dei volantini che c'erano già restano le stesse", () => {
-    expect(rotta("/volantini").path).toBe("volantini");
     expect(rotta("/volantini/tutti_i_volantini").path).toBe("volantini/tutti_i_volantini");
     expect(paginaPer("/volantini/tutti_i_volantini?kit=k1")?.permesso).toBe("materiali.visualizza");
     expect(rotta("/storico-volantini").path).toBe("storico-volantini");
+  });
+
+  it("la consultazione di una promozione ha la sua pagina, con il permesso dei materiali", async () => {
+    const corrispondenza = corrispondenze("/volantini/promozioni/p1").at(-1)!;
+    const { Component } = await (corrispondenza.route.lazy as () => Promise<Partial<RouteObject>>)();
+
+    expect(corrispondenza.route.path).toBe("volantini/promozioni/:idPromo");
+    expect(corrispondenza.params.idPromo).toBe("p1");
+    expect(Component?.name).toBe("PromozioneVolantini");
+    // La voce del dettaglio ha la sua voce nel catalogo, non quella dell'indirizzo /volantini
+    expect(paginaPer("/volantini/promozioni/abc")?.percorso).toBe("/volantini/promozioni/:idPromo");
+    expect(paginaPer("/volantini/promozioni/abc")?.permesso).toBe("materiali.visualizza");
+    expect(paginaPer("/volantini/promozioni/abc")?.sezione).toBe("visualizzazione");
+    expect(voceDiMenuPer("/volantini/promozioni/:idPromo")).toBeUndefined();
+  });
+
+  it("le viste del periodo restano le loro anche accanto al dettaglio della promozione", () => {
+    expect(rotta("/volantini/attivi").path).toBe("volantini/attivi");
+    expect(rotta("/volantini/tutti_i_volantini").path).toBe("volantini/tutti_i_volantini");
+    // Senza id non è una pagina
+    expect(rotta("/volantini/promozioni").path).toBe("*");
   });
 
   it("un periodo inesistente non apre nessuna vista", () => {
@@ -77,6 +98,16 @@ describe("viste Volantini e POP", () => {
     expect(rotta(new URL(vecchio, "http://localhost").pathname).lazy).toBeUndefined();
     expect(risposta.status).toBe(302);
     expect(risposta.headers.get("Location")).toBe(nuovo);
+  });
+
+  it("la vecchia pagina Volantini non c'è più: il suo indirizzo porta a Volantini attivi, fuori dal menu", async () => {
+    const risposta = await vaiA("http://localhost/volantini");
+
+    expect(rotta("/volantini").lazy).toBeUndefined();
+    expect(risposta.status).toBe(302);
+    expect(risposta.headers.get("Location")).toBe("/volantini/attivi");
+    expect(paginaPer("/volantini")?.permesso).toBe("materiali.visualizza");
+    expect(voceDiMenuPer("/volantini")).toBeUndefined();
   });
 
   it.each([

@@ -1,5 +1,8 @@
+import type { FasciaSconto, QuotaSpazio } from '../insightVolantino/tipi';
 import type { Riferimento } from '../materiali/tipi';
+import type { MeccanicaReferenza } from '../puntiVendita/analisi';
 import type { PeriodoConsultazione } from './periodi';
+import type { CodiceRegione } from './regioni';
 
 /**
  * Contratto delle API di consultazione (/api/consultazione), usate dalle pagine di Visualizzazione.
@@ -104,19 +107,176 @@ export interface FiltriPromozioniVolantiniConsultazione {
   dimensione?: number;
 }
 
+/**
+ * Perche' una promozione e' in vetrina (spec volantini-pop, "Promozione in vetrina"):
+ * - piu_punti_vendita: negli Attivi, la promo con piu' righe di punti vendita stampate nei volantini;
+ * - prima_a_partire: nei Prossimi, la promo con l'inizio di validita' piu' vicino;
+ * - ultima_conclusa: nello Storico, la promo con la fine di validita' piu' recente.
+ */
+export type MotivoVetrina = 'piu_punti_vendita' | 'prima_a_partire' | 'ultima_conclusa';
+
+export const MOTIVO_VETRINA_DEL_PERIODO: Readonly<Record<PeriodoConsultazione, MotivoVetrina>> = {
+  attivi: 'piu_punti_vendita',
+  prossimi: 'prima_a_partire',
+  storico: 'ultima_conclusa',
+};
+
+/** La promozione in vetrina, con tutti i suoi kit volantino pubblicati. */
+export interface VetrinaVolantiniConsultazione {
+  motivo: MotivoVetrina;
+  promozione: PromozioneVolantiniConsultazione;
+}
+
+/** Il periodo senza filtri: promozioni, kit volantino pubblicati e righe dei punti vendita stampate. */
+export interface RiepilogoPeriodoVolantiniConsultazione {
+  promozioni: number;
+  kit: number;
+  puntiVendita: number;
+}
+
 export interface PaginaPromozioniVolantiniConsultazione {
+  /** Senza la promozione in vetrina, quando c'e'. */
   promozioni: PromozioneVolantiniConsultazione[];
+  /** Promozioni che corrispondono ai filtri, senza quella in vetrina: e' il totale della paginazione. */
   totale: number;
   totaleKit: number;
+  /** Promozioni del periodo senza filtri, compresa quella in vetrina: 0 vuol dire periodo vuoto. */
   totaleSenzaFiltri: number;
   pagina: number;
   dimensione: number;
+  /** Solo senza filtri (ne' cerca, ne' promo, area, canale, anno); null altrimenti o con il periodo vuoto. */
+  vetrina: VetrinaVolantiniConsultazione | null;
+  /** Sempre senza filtri. */
+  riepilogo: RiepilogoPeriodoVolantiniConsultazione;
   opzioni: {
     promozioni: Riferimento[];
     aree: Riferimento[];
     canali: Riferimento[];
     anni: number[];
   };
+}
+
+/* ---------- Dettaglio di consultazione della promozione ---------- */
+
+/**
+ * GET /api/consultazione/volantini/promozioni/:idPromo con "materiali.visualizza".
+ * Spec volantini-pop, "Dettaglio di consultazione della promozione": solo i kit volantino PUBBLICATI
+ * della promo, della GDO della sessione (Superadmin e Agenzia: tutte). Una promo di un'altra GDO,
+ * eliminata o senza kit volantino pubblicati risponde 404. Niente stato di lavorazione, file,
+ * vendite, previsioni, calore o visibilita' stimata. Nessuna chiamata a Istanta.
+ */
+
+/** Un kit volantino pubblicato della promozione, con i numeri dei suoi insight. */
+export interface KitPromozioneConsultazione extends VarianteConsultazione {
+  /** Referenze stampate (sintesi degli insight del kit). */
+  referenze: number;
+  box: number;
+  pagine: number;
+  /** Media degli sconti dei box che ne hanno uno, in %. */
+  scontoMedio: number | null;
+  /** % dei box con meccanica fidelity. */
+  quotaFidelity: number;
+  /** Box in sottocosto. */
+  sottocosto: number;
+}
+
+export interface NumeriPromozioneConsultazione {
+  kit: number;
+  /** Pagine sommate sui kit. */
+  pagine: number;
+  /** Righe delle liste dei punti vendita stampate nei volantini. */
+  puntiVendita: number;
+  /** Localita' diverse delle righe, senza distinguere maiuscole e spazi. */
+  localita: number;
+  /** Regioni diverse delle righe con la regione nota. */
+  regioni: number;
+  /** Prodotti diversi: chiavi dei prodotti pilota dei box, su tutti i kit. */
+  prodotti: number;
+  /** Referenze stampate sommate sui kit. */
+  referenze: number;
+  /** Media degli sconti di tutti i box che ne hanno uno, in %. */
+  scontoMedio: number | null;
+  /** Box in sottocosto sommati sui kit. */
+  sottocosto: number;
+}
+
+/** Una riga della lista dei punti vendita stampata in un volantino della promozione. */
+export interface PuntoVenditaPromozioneConsultazione {
+  /** Id della riga (punti_vendita_volantino.id). */
+  id: string;
+  idKit: string;
+  /** La riga come era stampata. */
+  riga: string;
+  localita: string | null;
+  indirizzo: string | null;
+  /** Regione normalizzata (lib/consultazione/regioni.ts); null quando non si ricava. */
+  regione: CodiceRegione | null;
+  /** Il punto vendita dell'anagrafica a cui la riga e' abbinata, se c'e'. */
+  puntoVendita: {
+    id: string;
+    nome: string;
+    coordinate: { lat: number; lon: number } | null;
+  } | null;
+}
+
+/** Prodotti diversi della promozione secondo in quanti kit compaiono. */
+export interface ProdottiComuniLocali {
+  /** In tutti i kit; 0 con un solo kit. */
+  inTutti: number;
+  /** In piu' di un kit ma non in tutti. */
+  inAlcuni: number;
+  /** In un solo kit (con un solo kit: tutti). */
+  inUnoSolo: number;
+}
+
+export interface QuotaMeccanica {
+  /** null: meccanica non riconosciuta. */
+  meccanica: MeccanicaReferenza | null;
+  etichetta: string;
+  box: number;
+  /** % dei box del canale. */
+  quota: number;
+}
+
+export interface MeccanichePerCanale {
+  canale: Riferimento;
+  box: number;
+  /** Nell'ordine di MECCANICHE, poi la meccanica non riconosciuta; solo quelle con box. */
+  quote: QuotaMeccanica[];
+}
+
+export interface MarcaPromozione {
+  nome: string;
+  box: number;
+  /** % dello spazio di tutti i box della promozione. */
+  quotaSpazio: number;
+  scontoMedio: number | null;
+}
+
+export interface AssortimentoPromozioneConsultazione {
+  prodotti: ProdottiComuniLocali;
+  /** Box di tutti i kit per fascia di sconto (FASCE_SCONTO). */
+  fasceSconto: FasciaSconto[];
+  /** Per reparto, su tutti i box dei kit; ordinati per spazio. */
+  reparti: QuotaSpazio[];
+  /** Nell'ordine dei canali dei kit. */
+  meccanichePerCanale: MeccanichePerCanale[];
+  /** Le marche con piu' spazio, al massimo MAX_MARCHE_PROMOZIONE, senza "marca non indicata". */
+  marche: MarcaPromozione[];
+}
+
+export const MAX_MARCHE_PROMOZIONE = 8;
+
+export interface DettaglioPromozioneVolantiniConsultazione {
+  promo: PromoConsultazione;
+  /** Periodo in cui si consulta la promo, dal suo stato. */
+  periodo: PeriodoConsultazione;
+  /** Ordinati per nome del canale, poi dell'area, poi titolo. */
+  kit: KitPromozioneConsultazione[];
+  numeri: NumeriPromozioneConsultazione;
+  /** Tutte le righe, ordinate per kit (come `kit`) e posizione nella lista stampata. */
+  puntiVendita: PuntoVenditaPromozioneConsultazione[];
+  assortimento: AssortimentoPromozioneConsultazione;
 }
 
 /** Dettaglio di un kit pubblicato, con i suoi file (senza quelli dell'export Correggo). */

@@ -1,7 +1,9 @@
 import { QueryTypes } from 'sequelize';
+import type { MotivoVetrina } from '../../../lib/consultazione/tipi';
 import { EXPORT_DI_SISTEMA, TIPO_KIT_DESIGN, TIPO_LAVORAZIONE } from '../../../lib/enums';
 import type { AmbitoGdo } from '../accessi/contestoAccesso';
 import { sequelize } from '../db';
+import type { RigaPuntoVenditaPromozione } from '../utils/promozioneVolantini';
 
 /**
  * Letture delle viste Volantini e POP (/api/materiali), in SQL: paginazione, conteggi e ultimo
@@ -26,6 +28,8 @@ export interface CriteriKit {
   idFormato?: string;
   /** GDO delle promo (consultazione); senza, tutte le GDO, come nelle viste /api/materiali. */
   ambitoGdo?: AmbitoGdo;
+  /** Kit di tutte le promo tranne questa: la promo in vetrina sta fuori dall'elenco e dai suoi totali. */
+  escludiPromo?: string;
 }
 
 /** Filtri dell'utente sui kit (vista Volantini). */
@@ -106,6 +110,11 @@ export interface RigaCombinazioneKit extends RigaPromo {
 export interface RigaTotaliPromoVolantini {
   promozioni: number;
   kit: number;
+}
+
+/** Il periodo della vista Volantini: promo, kit e righe delle liste dei punti vendita stampate nei volantini. */
+export interface RiepilogoPromoVolantini extends RigaTotaliPromoVolantini {
+  puntiVendita: number;
 }
 
 /** Kit di una promo della pagina (vista Volantini per promozione), con o senza corrispondenza ai filtri. */
@@ -191,6 +200,21 @@ export interface IMaterialiRepository {
     idPromo: readonly string[],
     filtri?: FiltriSqlPromoVolantini
   ): Promise<RigaVarianteVolantino[]>;
+  /**
+   * La promo in vetrina fra quelle con kit ammessi (spec volantini-pop, "Promozione in vetrina"):
+   * - piu_punti_vendita: piu' righe dei punti vendita nei suoi kit, a parita' la validita' piu' recente;
+   * - prima_a_partire: l'inizio di validita' piu' vicino;
+   * - ultima_conclusa: la fine di validita' piu' recente.
+   * Poi per nome e id. null senza promo.
+   */
+  trovaPromoInVetrina(criteri: CriteriKit, motivo: MotivoVetrina): Promise<RigaPromo | null>;
+  /** Promo, kit ammessi e righe dei punti vendita stampate nei loro volantini, senza filtri. */
+  riepilogoPromoVolantini(criteri: CriteriKit): Promise<RiepilogoPromoVolantini>;
+  /**
+   * Le righe delle liste dei punti vendita stampate nei kit ammessi della promo, per kit e posizione,
+   * con l'anagrafica del PV abbinato della stessa GDO della lista.
+   */
+  elencaPuntiVenditaVolantini(criteri: CriteriKit, idPromo: string): Promise<RigaPuntoVenditaPromozione[]>;
   /**
    * Aree e canali dei kit ammessi; con combinazioniGdo anche quelli delle combinazioni canale/area
    * delle GDO che hanno promo nel periodo, comprese le disattivate. Senza nome vale il codice.
@@ -288,6 +312,10 @@ function condizioniKit(criteri: CriteriKit, sostituzioni: Sostituzioni): string[
     condizioni.push('k.id_formato = :criterioFormato');
     sostituzioni.criterioFormato = criteri.idFormato;
   }
+  if (criteri.escludiPromo !== undefined) {
+    condizioni.push('k.id_promo <> :criterioEscludiPromo');
+    sostituzioni.criterioEscludiPromo = criteri.escludiPromo;
+  }
   const gdo = condizioneAmbitoGdo(criteri.ambitoGdo, sostituzioni);
   if (gdo) condizioni.push(gdo);
   return condizioni;
@@ -345,6 +373,17 @@ const COPERTINA_VOLANTINO = `
     ORDER BY (COALESCE(f.mime, '') ILIKE '%pdf%') DESC, f.nome, f."createdAt"
     LIMIT 1
   ) cop ON TRUE`;
+
+/**
+ * Ordine della promo in vetrina per motivo, sui kit della promo con le loro righe dei punti vendita
+ * (pvv). Testi fissi, mai valori dell'utente; nome e id rendono la scelta stabile a parita'.
+ */
+const ORDINE_VETRINA: Readonly<Record<MotivoVetrina, string>> = {
+  // A parita' di righe, la validita' piu' recente: come l'ordine dell'elenco
+  piu_punti_vendita: 'COUNT(pvv.id) DESC, p.validita_dal DESC NULLS LAST, p.validita_al DESC NULLS LAST, p.nome_promo, p.id_promo',
+  prima_a_partire: 'p.validita_dal ASC NULLS LAST, p.nome_promo, p.id_promo',
+  ultima_conclusa: 'p.validita_al DESC NULLS LAST, p.nome_promo, p.id_promo',
+};
 
 function condizioniFiltriFile(filtri: FiltriSqlFile | undefined, sostituzioni: Sostituzioni): string[] {
   const condizioni: string[] = [];
@@ -570,6 +609,69 @@ export class MaterialiRepository implements IMaterialiRepository {
        ${COPERTINA_VOLANTINO}
        WHERE ${condizioni.join(' AND ')} AND k.id_promo IN (:idPromoPagina)
        ORDER BY k.id_promo, k.titolo, k.id`,
+      sostituzioni
+    );
+  }
+
+  async trovaPromoInVetrina(criteri: CriteriKit, motivo: MotivoVetrina): Promise<RigaPromo | null> {
+    const sostituzioni: Sostituzioni = {};
+    const condizioni = condizioniKit(criteri, sostituzioni);
+    // Le righe dei punti vendita contano su tutti i kit ammessi della promo; agli altri motivi non servono
+    const righe = await this.seleziona<RigaPromo>(
+      `SELECT ${COLONNE_PROMO}
+       FROM runtime_kit k
+       JOIN promo p ON p.id_promo = k.id_promo
+       JOIN formati fo ON fo.id_formati = k.id_formato
+       LEFT JOIN punti_vendita_volantino pvv ON pvv.id_kit_runtime = k.id
+       WHERE ${condizioni.join(' AND ')}
+       GROUP BY p.id_promo, p.nome_promo, p.stato, p.validita_dal, p.validita_al
+       ORDER BY ${ORDINE_VETRINA[motivo]}
+       LIMIT 1`,
+      sostituzioni
+    );
+    return righe[0] ?? null;
+  }
+
+  async riepilogoPromoVolantini(criteri: CriteriKit): Promise<RiepilogoPromoVolantini> {
+    const sostituzioni: Sostituzioni = {};
+    const condizioni = condizioniKit(criteri, sostituzioni);
+    const [riga] = await this.seleziona<{ promozioni: number; kit: number; punti_vendita: number }>(
+      `SELECT COUNT(DISTINCT k.id_promo)::int AS promozioni, COUNT(*)::int AS kit,
+         COALESCE(SUM(npv.numero), 0)::int AS punti_vendita
+       FROM runtime_kit k
+       JOIN promo p ON p.id_promo = k.id_promo
+       JOIN formati fo ON fo.id_formati = k.id_formato
+       LEFT JOIN LATERAL (
+         SELECT COUNT(*) AS numero FROM punti_vendita_volantino pvv WHERE pvv.id_kit_runtime = k.id
+       ) npv ON TRUE
+       WHERE ${condizioni.join(' AND ')}`,
+      sostituzioni
+    );
+    return {
+      promozioni: Number(riga?.promozioni ?? 0),
+      kit: Number(riga?.kit ?? 0),
+      puntiVendita: Number(riga?.punti_vendita ?? 0),
+    };
+  }
+
+  async elencaPuntiVenditaVolantini(criteri: CriteriKit, idPromo: string): Promise<RigaPuntoVenditaPromozione[]> {
+    const sostituzioni: Sostituzioni = {};
+    const condizioni = condizioniKit({ ...criteri, idPromo }, sostituzioni);
+    // Solo l'anagrafica della GDO della lista: un punto vendita di un'altra GDO non esce mai
+    return this.seleziona<RigaPuntoVenditaPromozione>(
+      `SELECT
+         pvv.id::text AS id, pvv.id_kit_runtime::text AS id_kit, pvv.posizione, pvv.riga,
+         pvv.localita, pvv.indirizzo, pvv.regione, pvv.provincia,
+         pv.id_puntivendita::text AS id_punto_vendita, pv.nome_puntivendita AS nome_punto_vendita,
+         pv.lat_puntivendita AS lat, pv.lon_puntivendita AS lon,
+         pv.regione_puntivendita AS regione_anagrafica, pv.provincia_puntivendita AS provincia_anagrafica
+       FROM punti_vendita_volantino pvv
+       JOIN runtime_kit k ON k.id = pvv.id_kit_runtime
+       JOIN promo p ON p.id_promo = k.id_promo
+       JOIN formati fo ON fo.id_formati = k.id_formato
+       LEFT JOIN punti_vendita pv ON pv.id_puntivendita = pvv.id_punto_vendita AND pv.id_gdo_puntivendita = pvv.id_gdo
+       WHERE ${condizioni.join(' AND ')}
+       ORDER BY k.id, pvv.posizione, pvv.id`,
       sostituzioni
     );
   }

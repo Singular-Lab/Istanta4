@@ -1,6 +1,7 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { DettaglioPromozioneVolantiniConsultazione } from '../../../../lib/consultazione/tipi';
 import { TIPO_UTENTI } from '../../../../lib/enums';
 import { NotFoundError } from '../../../../lib/errors';
 import type { IConsultazioneService } from '../../interfaces/IConsultazioneService';
@@ -39,11 +40,21 @@ import { ConsultazioneController } from '../ConsultazioneController';
 
 const ID = '7f4c2b1e-1d2a-4c3b-9e8f-0a1b2c3d4e5f';
 
+const DETTAGLIO_PROMOZIONE: DettaglioPromozioneVolantiniConsultazione = {
+  promo: { id: 'PROMO-2026-45', nome: 'Volantino 45', validitaDal: '2026-11-05', validitaAl: '2026-11-18' },
+  periodo: 'attivi',
+  kit: [],
+  numeri: { kit: 0, pagine: 0, puntiVendita: 0, localita: 0, regioni: 0, prodotti: 0, referenze: 0, scontoMedio: null, sottocosto: 0 },
+  puntiVendita: [],
+  assortimento: { prodotti: { inTutti: 0, inAlcuni: 0, inUnoSolo: 0 }, fasceSconto: [], reparti: [], meccanichePerCanale: [], marche: [] },
+};
+
 function creaApp(tipo: TIPO_UTENTI = TIPO_UTENTI.GDO) {
   const vuota = { kit: [], totale: 0, pagina: 1, dimensione: 24 };
   const servizio = {
     getVolantini: vi.fn(async () => vuota),
     getPromozioniVolantini: vi.fn(),
+    getPromozioneVolantini: vi.fn(async () => DETTAGLIO_PROMOZIONE),
     getVolantino: vi.fn(async () => ({
       id: ID,
       titolo: 'Volantino',
@@ -90,6 +101,24 @@ describe('permessi delle API di consultazione', () => {
 
     permessi.concessi = new Set(['promo.visualizza', 'file.download']);
     expect((await request(creaApp().app).get('/api/consultazione/volantini?periodo=attivi')).status).toBe(403);
+  });
+
+  it('il dettaglio di una promozione chiede materiali.visualizza, come gli insight che riassume', async () => {
+    for (const permesso of ['volantini.visualizza', 'analisi.dashboard_category']) {
+      permessi.concessi = new Set([permesso]);
+      const { app, servizio } = creaApp();
+      const risposta = await request(app).get('/api/consultazione/volantini/promozioni/PROMO-2026-45');
+      expect([risposta.status, risposta.body.codici], permesso).toEqual([403, ['materiali.visualizza']]);
+      expect(servizio.getPromozioneVolantini).not.toHaveBeenCalled();
+    }
+
+    permessi.concessi = new Set(['materiali.visualizza']);
+    const { app, servizio } = creaApp();
+    const risposta = await request(app).get('/api/consultazione/volantini/promozioni/PROMO-2026-45');
+    expect(risposta.status).toBe(200);
+    expect(risposta.body).toEqual(DETTAGLIO_PROMOZIONE);
+    // La rotta del dettaglio di un kit non la intercetta
+    expect(servizio.getVolantino).not.toHaveBeenCalled();
   });
 
   it('POP e contenuti digitali chiedono materiali.visualizza; lo ZIP e il download materiali.scarica', async () => {
@@ -149,6 +178,37 @@ describe('GDO dei dati di consultazione', () => {
     const risposta = await request(app).get('/api/consultazione/volantini?periodo=in-corso');
     expect(risposta.status).toBe(400);
     expect(servizio.getVolantini).not.toHaveBeenCalled();
+  });
+});
+
+describe('dettaglio di consultazione della promozione', () => {
+  beforeEach(() => {
+    permessi.concessi = new Set(['materiali.visualizza']);
+  });
+
+  it('passa al servizio l\'id della promo, anche se non e\' un UUID, e la GDO della sessione', async () => {
+    const { app, servizio } = creaApp(TIPO_UTENTI.GDO);
+    await request(app).get(`/api/consultazione/volantini/promozioni/${encodeURIComponent('PROMO/2026 45')}?gdo=altra-gdo`);
+    expect(servizio.getPromozioneVolantini).toHaveBeenCalledWith('PROMO/2026 45', { idGdo: 'gdo-sessione' });
+  });
+
+  it('il Superadmin senza GDO legge tutte le GDO, o quella che indica', async () => {
+    anagrafica.idGdo = null;
+    const { app, servizio } = creaApp(TIPO_UTENTI.SUPERADMIN);
+    await request(app).get(`/api/consultazione/volantini/promozioni/${ID}`);
+    await request(app).get(`/api/consultazione/volantini/promozioni/${ID}?gdo=coop-firenze`);
+    expect(servizio.getPromozioneVolantini.mock.calls.map(chiamata => (chiamata as unknown[])[1])).toEqual(['tutte', { idGdo: 'coop-firenze' }]);
+  });
+
+  it('una promozione non disponibile risponde 404 in JSON, con il motivo', async () => {
+    const { app, servizio } = creaApp();
+    servizio.getPromozioneVolantini.mockRejectedValueOnce(
+      new NotFoundError({ message: 'Promozione non disponibile', entityType: 'Promo', entityId: 'PROMO-2026-45' })
+    );
+    const risposta = await request(app).get('/api/consultazione/volantini/promozioni/PROMO-2026-45');
+
+    expect(risposta.status).toBe(404);
+    expect(risposta.body.message).toBe('Promozione non disponibile');
   });
 });
 

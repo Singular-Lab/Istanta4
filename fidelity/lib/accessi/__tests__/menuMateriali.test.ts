@@ -403,3 +403,60 @@ function menuSuperadminRidotto(intestazione: string): Voce[] {
     separatore('s-ods', 'ORDINI DI STAMPA', 3),
   ];
 }
+
+describe('voce della vecchia pagina Volantini', () => {
+  it('sparisce dal menu che ha già Volantini attivi, senza toccare le altre voci', () => {
+    const menu = [
+      voce('vecchia', 'Volantini', '/volantini', 0, { icona: 'Newspaper' }),
+      voce('attivi', 'Volantini attivi', '/volantini/attivi', 1, { codice_permesso: PERMESSI.MATERIALI.VISUALIZZA }),
+    ];
+
+    const { voci, aggiornate, inserite, rimosse } = convertiMenuMateriali(menu, idPop);
+
+    expect(rimosse?.map(v => v.id_menu_item)).toEqual(['vecchia']);
+    expect(voci.map(v => v.id_menu_item)).toEqual(['attivi']);
+    expect(aggiornate).toEqual([]);
+    expect(inserite).toEqual([]);
+  });
+
+  it('senza Volantini attivi apre Volantini attivi e prende il titolo nuovo, solo se era quello predefinito', () => {
+    const predefinito = convertiMenuMateriali([voce('vecchia', 'Volantini', '/volantini', 0)], idPop);
+    const rinominata = convertiMenuMateriali([voce('vecchia', 'Tutti i volantini', '/volantini', 0)], idPop);
+
+    expect(predefinito.voci.map(v => [v.titolo, v.pathname, v.codice_permesso])).toEqual([
+      ['Volantini attivi', '/volantini/attivi', PERMESSI.MATERIALI.VISUALIZZA],
+    ]);
+    expect(rinominata.voci.map(v => [v.titolo, v.pathname])).toEqual([['Tutti i volantini', '/volantini/attivi']]);
+    expect(predefinito.rimosse).toEqual([]);
+  });
+
+  it('resta, aperta su Volantini attivi, quando ha sottovoci o è la pagina iniziale', () => {
+    const conSottovoci = convertiMenuMateriali([
+      voce('vecchia', 'Volantini', '/volantini', 0),
+      voce('figlia', 'Storico', '/storico-volantini', 0, { id_parent: 'vecchia' }),
+      voce('attivi', 'Volantini attivi', '/volantini/attivi', 1),
+    ], idPop);
+    const iniziale = convertiMenuMateriali([
+      voce('vecchia', 'Volantini', '/volantini', 0, { start_page: true }),
+      voce('attivi', 'Volantini attivi', '/volantini/attivi', 1),
+    ], idPop);
+
+    for (const esito of [conSottovoci, iniziale]) {
+      expect(esito.rimosse).toEqual([]);
+      expect(esito.voci.find(v => v.id_menu_item === 'vecchia')?.pathname).toBe('/volantini/attivi');
+    }
+  });
+
+  it('su un menu già convertito non cambia nulla', () => {
+    const prima = convertiMenuMateriali([voce('vecchia', 'Volantini', '/volantini', 0)], idPop);
+    const seconda = convertiMenuMateriali(prima.voci, idPop);
+
+    expect(seconda.aggiornate).toEqual([]);
+    expect(seconda.inserite).toEqual([]);
+    expect(seconda.rimosse).toEqual([]);
+  });
+
+  it('la pagina Volantini non è più fra le pagine del menu e il suo indirizzo chiede i permessi di Volantini attivi', () => {
+    expect(paginaPer('/volantini')?.permesso).toBe(PERMESSI.MATERIALI.VISUALIZZA);
+  });
+});

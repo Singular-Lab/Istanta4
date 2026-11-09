@@ -1,3 +1,4 @@
+import { useBreadcrumbPromozioneVolantini } from '@/components/Base/breadcrumbPromozioneVolantini';
 import { useEtichettePercorsoPuntoVendita } from '@/components/PuntiVendita/breadcrumb';
 import { idPromoDalPercorso, useNomePromo } from '@/hooks/usePromoName';
 import { isUUID } from '@/utils/validation';
@@ -48,9 +49,14 @@ const SmartBreadcrumb: React.FC<SmartBreadcrumbProps> = ({
   const nomePromo = useNomePromo(idPromo);
   // Punti vendita: il nome al posto dell'id, la promo del volantino e il nome della referenza
   const percorsoPuntoVendita = useEtichettePercorsoPuntoVendita(pathnames);
+  // Dettaglio di consultazione della promozione: la vista Volantini del suo periodo e il suo nome
+  const vociPromozioneVolantini = useBreadcrumbPromozioneVolantini(pathnames);
 
   // Funzione per formattare il breadcrumb con nomi delle promo
   const getBreadcrumbItems = (): BreadcrumbItem[] => {
+    if (vociPromozioneVolantini) {
+      return vociPromozioneVolantini.map((voce, index) => ({ ...voce, isLast: index === vociPromozioneVolantini.length - 1 }));
+    }
     const items: BreadcrumbItem[] = [];
     let currentPath = '';
 

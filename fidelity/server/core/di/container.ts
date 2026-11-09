@@ -145,7 +145,8 @@ import { type IMaterialiRepository, MaterialiRepository } from "../repositories/
 import { AvanzamentoProduzioneService } from "../services/AvanzamentoProduzioneService";
 import type { IAvanzamentoProduzioneService } from "../interfaces/IAvanzamentoProduzioneService";
 import { AvanzamentoProduzioneRepository, type IAvanzamentoProduzioneRepository } from "../repositories/AvanzamentoProduzioneRepository";
-import { ConsultazioneService } from "../services/ConsultazioneService";
+import { campiRicercaDaConfigurazione, ConsultazioneService } from "../services/ConsultazioneService";
+import { scaricaMaterialePdf } from "../http/olimpo";
 import type { IConsultazioneService } from "../interfaces/IConsultazioneService";
 import { ConsultazioneRepository, type IConsultazioneRepository } from "../repositories/ConsultazioneRepository";
 import { ConsultazionePuntiVenditaService } from "../services/ConsultazionePuntiVenditaService";
@@ -509,12 +510,16 @@ function bindServices() {
       context.get<IKitRuntimeService>(TYPES.KitRuntimeService)
     )
   ).inSingletonScope();
-  // Dati delle pagine di Visualizzazione: solo pubblicati della GDO, senza Istanta
+  // Dati delle pagine di Visualizzazione: solo pubblicati della GDO, senza Istanta. La config degli
+  // insight serve al dettaglio della promozione (reparti, meccanica e marche come negli insight)
   container.bind<IConsultazioneService>(TYPES.ConsultazioneService).toDynamicValue(
     (context) => new ConsultazioneService(
       context.get<IMaterialiRepository>(TYPES.MaterialiRepository),
       context.get<IConsultazioneRepository>(TYPES.ConsultazioneRepository),
-      context.get<IFileManagementService>(TYPES.FileManagementService)
+      context.get<IFileManagementService>(TYPES.FileManagementService),
+      scaricaMaterialePdf,
+      campiRicercaDaConfigurazione,
+      context.get<IConfigService>(TYPES.ConfigService)
     )
   );
   container.bind<IConsultazionePuntiVenditaService>(TYPES.ConsultazionePuntiVenditaService).toDynamicValue(

@@ -57,6 +57,7 @@ const creaFonte = (righe: RigaMenu[], registrata = false) => {
       if (tabella.has(voce.id_menu_item)) throw new Error(`id duplicato: ${voce.id_menu_item}`);
       tabella.set(voce.id_menu_item, { ...voce });
     }),
+    eliminaVoce: vi.fn(async (idMenuItem: string) => { tabella.delete(idMenuItem); }),
     incrementaVersione: vi.fn(async () => { }),
   };
   // Una transazione finta: se il lavoro fallisce, tabella e registro tornano com'erano.

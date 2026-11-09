@@ -23,6 +23,8 @@ export type MenuInTransazione = {
   leggiVoci(): Promise<RigaMenu[]>;
   aggiornaVoce(voce: RigaMenu): Promise<void>;
   inserisciVoce(voce: RigaMenu): Promise<void>;
+  /** Toglie una voce senza sottovoci (la conversione non toglie mai una voce che ne ha). */
+  eliminaVoce(idMenuItem: string): Promise<void>;
   /** Fa ricaricare il menu a ogni worker, come ogni altro salvataggio di un menu. */
   incrementaVersione(): Promise<void>;
 };
@@ -36,6 +38,8 @@ export type EsitoMigrazioneMenuMateriali = {
   menu: number;
   aggiornate: number;
   inserite: number;
+  /** Voci della pagina Volantini tolte perché il menu aveva già Volantini attivi. */
+  rimosse: number;
 };
 
 /** I menu salvati dentro una transazione: anche per le altre migrazioni dei menu all'avvio. */
@@ -92,6 +96,12 @@ export const menuDb = (transaction: Transaction): MenuInTransazione => ({
       }
     );
   },
+  eliminaVoce: async (idMenuItem) => {
+    await sequelize.query(
+      `DELETE FROM menu_items WHERE id_menu_item = :idMenuItem`,
+      { replacements: { idMenuItem }, transaction }
+    );
+  },
   incrementaVersione: async () => {
     await incrementaVersionePermessi(transaction);
   },
@@ -121,7 +131,8 @@ export const nomeMenu = (voce: RigaMenu): string =>
  * Converte nei menu salvati, Superadmin compreso, le voci delle pagine Materiali nelle viste
  * Volantini, aggiunge le voci POP e divide la sezione in 'MATERIALI VOLANTINO' e 'MATERIALI POP',
  * anche nei menu già convertiti con l'intestazione unica 'VOLANTINI E POP', e porta le voci delle
- * viste "in corso" alle viste Prossimi (regole in lib/accessi/menuMateriali.ts). Tutto in una transazione: se una scrittura fallisce nessun menu
+ * viste "in corso" alle viste Prossimi; la voce della vecchia pagina Volantini apre Volantini attivi,
+ * o sparisce se il menu l'ha già (regole in lib/accessi/menuMateriali.ts). Tutto in una transazione: se una scrittura fallisce nessun menu
  * cambia. Si può rieseguire: un menu già convertito non cambia, e la versione dei permessi sale
  * solo se qualcosa è cambiato.
  */
@@ -138,17 +149,20 @@ export const migraMenuMateriali = async (
       else perMenu.set(chiave, [voce]);
     }
 
-    const esito: EsitoMigrazioneMenuMateriali = { menu: 0, aggiornate: 0, inserite: 0 };
+    const esito: EsitoMigrazioneMenuMateriali = { menu: 0, aggiornate: 0, inserite: 0, rimosse: 0 };
     const righe: string[] = [];
     for (const voci of perMenu.values()) {
-      const { aggiornate, inserite } = convertiMenuMateriali(voci, nuovoId);
-      if (aggiornate.length === 0 && inserite.length === 0) continue;
+      const { aggiornate, inserite, rimosse = [] } = convertiMenuMateriali(voci, nuovoId);
+      if (aggiornate.length === 0 && inserite.length === 0 && rimosse.length === 0) continue;
+      for (const voce of rimosse) await menu.eliminaVoce(voce.id_menu_item);
       for (const voce of aggiornate) await menu.aggiornaVoce(voce);
       for (const voce of inserite) await menu.inserisciVoce(voce);
       esito.menu++;
       esito.aggiornate += aggiornate.length;
       esito.inserite += inserite.length;
-      righe.push(`  ${nomeMenu(voci[0])}: ${aggiornate.length} voci aggiornate, ${inserite.length} voci aggiunte (POP e intestazioni)`);
+      esito.rimosse += rimosse.length;
+      const tolte = rimosse.length ? `, ${rimosse.length} voci Volantini tolte (doppioni di Volantini attivi)` : '';
+      righe.push(`  ${nomeMenu(voci[0])}: ${aggiornate.length} voci aggiornate, ${inserite.length} voci aggiunte (POP e intestazioni)${tolte}`);
     }
     if (esito.menu > 0) await menu.incrementaVersione();
     return { esito, righe };

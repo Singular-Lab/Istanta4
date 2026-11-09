@@ -66,6 +66,7 @@ const creaFonte = (righe: RigaMenu[]) => {
       if (tabella.has(voce.id_menu_item)) throw new Error(`id duplicato: ${voce.id_menu_item}`);
       tabella.set(voce.id_menu_item, { ...voce });
     }),
+    eliminaVoce: vi.fn(async (idMenuItem: string) => { tabella.delete(idMenuItem); }),
     incrementaVersione: vi.fn(async () => { }),
   };
   // Una transazione finta: se il lavoro fallisce, la tabella torna com'era.
@@ -128,7 +129,7 @@ describe('migrazione dei menu salvati alle viste Volantini e POP', () => {
     expect(menuDi(tabella(), AGENZIA)).toEqual([['Promozioni', '/promozioni/in-corso', null, 'Circle']]);
     expect(vi.mocked(menu.aggiornaVoce).mock.calls.map(([v]) => v.id_menu_item)).not.toContain('ag-promo');
     // Inserite: tre voci POP e l'intestazione POP del Superadmin, due voci POP del sotto-ruolo (senza intestazioni)
-    expect(esito).toEqual({ menu: 2, aggiornate: 8, inserite: 6 });
+    expect(esito).toEqual({ menu: 2, aggiornate: 8, inserite: 6, rimosse: 0 });
   });
 
   it('le voci POP nascono nel menu giusto, con un id nuovo, attive e senza pagina iniziale', async () => {
@@ -163,8 +164,8 @@ describe('migrazione dei menu salvati alle viste Volantini e POP', () => {
     expect(menuDi(tabella(), SUPERADMIN).map(([titolo]) => titolo)).toEqual([
       'MATERIALI VOLANTINO', 'Volantini attivi', 'MATERIALI POP', 'POP attivi', 'Ordini in corso',
     ]);
-    expect(prima).toEqual({ menu: 1, aggiornate: 3, inserite: 1 });
-    expect(seconda).toEqual({ menu: 0, aggiornate: 0, inserite: 0 });
+    expect(prima).toEqual({ menu: 1, aggiornate: 3, inserite: 1, rimosse: 0 });
+    expect(seconda).toEqual({ menu: 0, aggiornate: 0, inserite: 0, rimosse: 0 });
     expect(menu.incrementaVersione).toHaveBeenCalledTimes(1);
   });
 
@@ -187,8 +188,8 @@ describe('migrazione dei menu salvati alle viste Volantini e POP', () => {
       // Il titolo scelto dall'amministratore resta
       ['I POP da stampare', '/pop/prossimi', M, 'Clock'],
     ]);
-    expect(prima).toEqual({ menu: 1, aggiornate: 2, inserite: 0 });
-    expect(seconda).toEqual({ menu: 0, aggiornate: 0, inserite: 0 });
+    expect(prima).toEqual({ menu: 1, aggiornate: 2, inserite: 0, rimosse: 0 });
+    expect(seconda).toEqual({ menu: 0, aggiornate: 0, inserite: 0, rimosse: 0 });
     expect(menu.incrementaVersione).toHaveBeenCalledTimes(1);
   });
 
@@ -226,7 +227,7 @@ describe('migrazione dei menu salvati alle viste Volantini e POP', () => {
 
     const esito = await migraMenuMateriali(fonte, nuovoId);
 
-    expect(esito).toEqual({ menu: 0, aggiornate: 0, inserite: 0 });
+    expect(esito).toEqual({ menu: 0, aggiornate: 0, inserite: 0, rimosse: 0 });
     expect(Array.from(tabella().values())).toEqual(dopoLaPrima);
     expect(menu.aggiornaVoce).not.toHaveBeenCalled();
     expect(menu.inserisciVoce).not.toHaveBeenCalled();
@@ -237,7 +238,7 @@ describe('migrazione dei menu salvati alle viste Volantini e POP', () => {
   it('senza menu da convertire non scrive nulla e non tocca la versione', async () => {
     const { fonte, menu } = creaFonte([riga('ag-promo', AGENZIA, 'Promozioni', '/promozioni/in-corso', 0)]);
 
-    expect(await migraMenuMateriali(fonte, nuovoId)).toEqual({ menu: 0, aggiornate: 0, inserite: 0 });
+    expect(await migraMenuMateriali(fonte, nuovoId)).toEqual({ menu: 0, aggiornate: 0, inserite: 0, rimosse: 0 });
     expect(menu.aggiornaVoce).not.toHaveBeenCalled();
     expect(menu.incrementaVersione).not.toHaveBeenCalled();
   });
@@ -250,7 +251,7 @@ describe('migrazione dei menu salvati alle viste Volantini e POP', () => {
 
     const esito = await migraMenuMateriali(fonte, nuovoId);
 
-    expect(esito).toEqual({ menu: 2, aggiornate: 2, inserite: 2 });
+    expect(esito).toEqual({ menu: 2, aggiornate: 2, inserite: 2, rimosse: 0 });
     const pop = Array.from(tabella().values()).filter(r => r.pathname === '/pop/attivi');
     expect(pop.map(r => r.ruolo_gdo).sort()).toEqual(['GDO_MARKETING', null].sort());
   });
@@ -264,5 +265,23 @@ describe('migrazione dei menu salvati alle viste Volantini e POP', () => {
     expect(Array.from(tabella().values())).toEqual(prima);
     expect(menu.incrementaVersione).not.toHaveBeenCalled();
     expect(log.info).not.toHaveBeenCalled();
+  });
+
+  it('toglie la voce della vecchia pagina Volantini dove c\'è già Volantini attivi e la riporta su Volantini attivi altrove', async () => {
+    const GUEST = { tipo_utente: TIPO_UTENTI.GUEST, id_ruolo_utente_gdo: null, ruolo_gdo: null };
+    const { fonte, menu, tabella } = creaFonte([
+      riga('gdo-vecchia', GDO_BASE, 'Volantini', '/volantini', 0),
+      riga('gdo-attivi', GDO_BASE, 'Volantini attivi', '/volantini/attivi', 1),
+      riga('guest-vecchia', GUEST, 'Volantini', '/volantini', 0),
+    ]);
+
+    const esito = await migraMenuMateriali(fonte, nuovoId);
+
+    expect(esito).toEqual({ menu: 2, aggiornate: 1, inserite: 0, rimosse: 1 });
+    expect(menu.eliminaVoce).toHaveBeenCalledWith('gdo-vecchia');
+    expect(tabella().has('gdo-vecchia')).toBe(false);
+    expect(tabella().get('guest-vecchia')).toMatchObject({ titolo: 'Volantini attivi', pathname: '/volantini/attivi' });
+    expect(menu.incrementaVersione).toHaveBeenCalledTimes(1);
+    expect(await migraMenuMateriali(fonte, nuovoId)).toEqual({ menu: 0, aggiornate: 0, inserite: 0, rimosse: 0 });
   });
 });
