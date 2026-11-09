@@ -1033,6 +1033,7 @@ namespace IstantaLib
         public List<string> elementiConnessiAlleFoto { get; set; } = new List<string>();//I20-1130: etichette (con * come jolly) degli elementi del box che "Seleziona tutte le foto" del Plugin prende insieme alle foto, per esempio le ombre sy_ombra*
         public List<AgenziaCustomPlugin_RegolaEsclusioneCambioFoto> regoleEsclusioneCambioFoto { get; set; } = new List<AgenziaCustomPlugin_RegolaEsclusioneCambioFoto>();//Regole che tolgono alcune foto dalle proposte della schermata Cambia foto del Plugin; vuota = tutte le foto, come prima
         public List<AgenziaCustomPlugin_SegnalazionePersonalizzata> segnalazioniPersonalizzate { get; set; } = new List<AgenziaCustomPlugin_SegnalazionePersonalizzata>();//I20-1200: segnalazioni di impaginazione decise dal cliente (Edro21: le foto che non sono psd); vuota = nessuna, come prima
+        public List<AgenziaCustomPlugin_FiltroSegnalazioni> filtriSegnalazioni { get; set; } = new List<AgenziaCustomPlugin_FiltroSegnalazioni>();//I20-1211: filtri della schermata delle segnalazioni del Plugin (Edro21: "Solo foto"); vuota = nessun filtro, come prima
         /// TASK-60aaf10d: la foto della referenza indicata dal tracciato, quando l'agenzia la fa
         /// comandare. Assente: tutto come prima, vale solo Foto.SelezioneDaTracciato.
         public AgenziaCustomPlugin_FotoDaTracciato fotoDaTracciato { get; set; }
@@ -1377,6 +1378,27 @@ namespace IstantaLib
         public string gravita { get; set; } = "warning";
         public string codice { get; set; } = "";
         public string testo { get; set; } = "";
+    }
+
+    /// <summary>
+    /// I20-1211: un filtro della schermata delle segnalazioni del Plugin. Una segnalazione cade nel
+    /// filtro se soddisfa almeno una delle condizioni. Le segnalazioni che cadono in un filtro hanno
+    /// nel Plugin un colore loro, e il segnalino le indica con un tondino. Edro21: "Solo foto".
+    /// </summary>
+    public class AgenziaCustomPlugin_FiltroSegnalazioni
+    {
+        public string nome { get; set; } = "";
+        public List<AgenziaCustomPlugin_CondizioneFiltroSegnalazioni> condizioni { get; set; } = new List<AgenziaCustomPlugin_CondizioneFiltroSegnalazioni>();
+    }
+
+    /// <summary>
+    /// I20-1211: la segnalazione ha il codice indicato (per esempio PSD-01) e, se testoContiene c'e',
+    /// il suo testo lo contiene, senza distinguere maiuscole: CSF-013 solo quando nomina una foto.
+    /// </summary>
+    public class AgenziaCustomPlugin_CondizioneFiltroSegnalazioni
+    {
+        public string codice { get; set; } = "";
+        public string testoContiene { get; set; } = "";
     }
 
     /// TASK-60aaf10d: come l'agenzia usa la foto indicata dal tracciato (Edro21: NOME_FOTO, scritto

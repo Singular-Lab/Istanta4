@@ -912,7 +912,8 @@ test("I20-1116: il segnalino sta in fondo alla riga delle linguette, centrato co
     assert.match(righe, /<div id="appoggioSegnalino" style="position: relative; width: 0px; margin-left: auto; align-self: stretch;">/);
     //Fisso con right 0: al bordo del pannello lo aggancia il motore grafico. Alto quanto le linguette,
     //con il testo centrato: allineato a Home, Menabo', Utility.
-    assert.match(righe, /<div id="segnalinoSegnalazioni" style="display: none; position: fixed; right: 0px; height: 27px; align-items: center;[^"]*"\s*onclick="SchermataSegnalazioni\.apriDalSegnalino\(\)">\s*<span id="testoSegnalinoSegnalazioni"/);
+    //I20-1211: fra l'apertura e il testo c'e' solo il tondino viola, a sinistra del segnalibro.
+    assert.match(righe, /<div id="segnalinoSegnalazioni" style="display: none; position: fixed; right: 0px; height: 27px; align-items: center;[^"]*"\s*onclick="SchermataSegnalazioni\.apriDalSegnalino\(\)">\s*(?:<!--[\s\S]*?-->\s*)?<span id="tondinoSegnalazioni" [^>]*><\/span>\s*<span id="testoSegnalinoSegnalazioni"/);
     //Esce dal bordo destro e lo avvolge: arrotondato a sinistra, piega scura a destra, niente parte piatta a sinistra.
     const testo = righe.substring(righe.indexOf('<span id="testoSegnalinoSegnalazioni"'));
     assert.match(testo, /border-right: 3px solid rgba\(0, 0, 0, 0\.35\); border-radius: 8px 0 0 8px;/);
@@ -1433,4 +1434,196 @@ test("la scheda ref rilegge le segnalazioni dal box che \"Risolvi\" le passa, e 
     const scheda = leggiFileDelPlugin("schedaRef.js").replace(/\r/g, "");
     assert.match(scheda, /SchermataSegnalazioni\.elencoVociDelBox\(box, voci, function \(dopo\) \{\s*const attuale = dopo != null && dopo\.isValid \? dopo : box;[\s\S]{0,300}?me\.refSelected\.item = attuale;[\s\S]{0,40}?me\.leggiVociBollino\(attuale\);/);
     assert.match(scheda, /SchermataSegnalazioni\.controllaPagine\(\[attuale\.parentPage\.name\]\);/);
+});
+
+/* ---- I20-1211: i filtri delle segnalazioni decisi dal cliente ---- */
+
+//Il filtro di Edro21 com'e' nella sua configurazione.
+const FILTRI_EDRO21 = JSON.parse(require("node:fs").readFileSync(require("node:path").join(__dirname, "..", "..",
+    "Istanta/wwwroot/external_source/Edro21/SourceCustomPlugin.json"), "utf8")).filtriSegnalazioni;
+const SOLO_FOTO = FILTRI_EDRO21[0];
+
+const VOCE_PSD = { g: "warning", c: "PSD-01", t: "Code PSD-01 La foto 6149843_1_T5.jpg non e' un psd" };
+const VOCE_LOGHI = { g: "warning", c: "CSF-013", t: "Code CSF-013: Conflitto tra elementi nel box BOX12: foto_extra$conad_piacersi$tipo_3 non dovrebbe toccare foto_extra$Logo_SDB$tipo_3." };
+const VOCE_TESTI = { g: "warning", c: "CSF-013", t: "Code CSF-013: Conflitto tra elementi nel box BOX4: quantitativi non dovrebbe toccare descrizione." };
+const VOCE_ERRORE = { g: "error", c: "CSF-009", t: "Code CSF-009: L'elemento prezzo eccede il box" };
+
+/// Con i filtri del cliente dati, come li darebbe pluginMiddleware.
+function conFiltri(filtri, fn) {
+    const prima = global.pluginMiddleware;
+    global.pluginMiddleware = { getFiltriSegnalazioni: () => filtri };
+    try {
+        return fn();
+    }
+    finally {
+        if (prima === undefined) { delete global.pluginMiddleware; } else { global.pluginMiddleware = prima; }
+        SchermataSegnalazioni._ultimoControllo = null;
+    }
+}
+
+test("I20-1211: nel filtro Solo foto di Edro21 cadono le foto, e CSF-013 solo quando nomina una foto", () => {
+    assert.strictEqual(SchermataSegnalazioni.voceNelFiltro(VOCE_PSD, SOLO_FOTO), true);
+    assert.strictEqual(SchermataSegnalazioni.voceNelFiltro(VOCE_LOGHI, SOLO_FOTO), true);
+    assert.strictEqual(SchermataSegnalazioni.voceNelFiltro(VOCE_TESTI, SOLO_FOTO), false);
+    assert.strictEqual(SchermataSegnalazioni.voceNelFiltro(VOCE_ERRORE, SOLO_FOTO), false);
+    for (const codice of ["CSF-12", "CSF-27", "CSF-19"]) {
+        assert.strictEqual(SchermataSegnalazioni.voceNelFiltro({ g: "warning", c: codice, t: "Code " + codice + ": ..." }, SOLO_FOTO), true, codice);
+    }
+    //Senza codice, o senza filtro, niente.
+    assert.strictEqual(SchermataSegnalazioni.voceNelFiltro({ g: "warning", c: null, t: "Descrizione spostata poichè uscita dai limiti del box" }, SOLO_FOTO), false);
+    assert.strictEqual(SchermataSegnalazioni.voceNelFiltro(VOCE_PSD, null), false);
+    assert.strictEqual(SchermataSegnalazioni.voceDeiFiltri(VOCE_PSD, []), false);
+    assert.strictEqual(SchermataSegnalazioni.voceDeiFiltri(VOCE_PSD, FILTRI_EDRO21), true);
+    //Le maiuscole non contano.
+    assert.strictEqual(SchermataSegnalazioni.voceNelFiltro({ g: "warning", c: "CSF-013", t: "... FOTO_EXTRA$x ..." }, SOLO_FOTO), true);
+});
+
+test("I20-1211: col filtro si contano solo le sue segnalazioni, senza i box che ne restano senza", () => {
+    const boxFoto = { nome: "foto" }, boxTesti = { nome: "testi" };
+    const lette = [
+        { pagina: "3", box: boxFoto, voci: [VOCE_ERRORE, VOCE_PSD] },
+        { pagina: "5", box: boxTesti, voci: [VOCE_TESTI] }
+    ];
+
+    const filtrate = SchermataSegnalazioni.letturePerFiltro(lette, SOLO_FOTO);
+    assert.strictEqual(filtrate.length, 1);
+    assert.strictEqual(filtrate[0].box, boxFoto);
+    assert.deepStrictEqual(filtrate[0].voci, [VOCE_PSD]);
+    //La lettura del documento resta intera: "Risolvi" usa l'indice del bollino.
+    assert.deepStrictEqual(lette[0].voci, [VOCE_ERRORE, VOCE_PSD]);
+    assert.strictEqual(SchermataSegnalazioni.letturePerFiltro(lette, null), lette);
+    assert.strictEqual(SchermataSegnalazioni.testoConteggio(filtrate), "1 segnalazione in 1 box");
+});
+
+test("I20-1211: il controllo dei bollini conta le segnalazioni dei filtri, e il riepilogo resta com'era", () => {
+    conFiltri(FILTRI_EDRO21, () => {
+        SchermataSegnalazioni._ultimoControllo = null;
+        SchermataSegnalazioni.registraControllo("id:1", [
+            { pagina: "3", box: {}, voci: [VOCE_ERRORE, VOCE_PSD] },
+            { pagina: "5", box: {}, voci: [VOCE_LOGHI, VOCE_TESTI] }
+        ]);
+        assert.strictEqual(SchermataSegnalazioni.segnalazioniDeiFiltri("id:1"), 2);
+        assert.deepStrictEqual(SchermataSegnalazioni.riepilogoControllo("id:1"), { segnalazioni: 4, errori: 1, gravita: "error", controllato: true });
+        //Un altro documento non ne ha.
+        assert.strictEqual(SchermataSegnalazioni.segnalazioniDeiFiltri("id:2"), 0);
+        //Rilette le pagine, quelle risolte non contano piu'.
+        SchermataSegnalazioni.registraControllo("id:1", [{ pagina: "3", box: {}, voci: [VOCE_ERRORE] }], ["3"]);
+        assert.strictEqual(SchermataSegnalazioni.segnalazioniDeiFiltri("id:1"), 1);
+    });
+    //Un cliente senza filtri: nessuna.
+    conFiltri([], () => {
+        SchermataSegnalazioni.registraControllo("id:1", [{ pagina: "3", box: {}, voci: [VOCE_PSD] }]);
+        assert.strictEqual(SchermataSegnalazioni.segnalazioniDeiFiltri("id:1"), 0);
+    });
+});
+
+test("I20-1211: il tondino si vede solo col segnalino, segnalazioni attive e segnalazioni dei filtri", () => {
+    const visibile = { visibile: true };
+    assert.deepStrictEqual(SchermataSegnalazioni.statoTondino(2, visibile, false, FILTRI_EDRO21), { visibile: true, suggerimento: "2 segnalazioni in Solo foto" });
+    assert.deepStrictEqual(SchermataSegnalazioni.statoTondino(1, visibile, false, FILTRI_EDRO21), { visibile: true, suggerimento: "1 segnalazione in Solo foto" });
+    assert.strictEqual(SchermataSegnalazioni.statoTondino(0, visibile, false, FILTRI_EDRO21).visibile, false);
+    assert.strictEqual(SchermataSegnalazioni.statoTondino(2, { visibile: false }, false, FILTRI_EDRO21).visibile, false);
+    assert.strictEqual(SchermataSegnalazioni.statoTondino(2, visibile, true, FILTRI_EDRO21).visibile, false);
+});
+
+test("I20-1211: il tondino viola compare accanto al segnalino con le segnalazioni foto, e sparisce senza", () => {
+    conFiltri(FILTRI_EDRO21, () => conTestata({ id: 7 }, (el) => {
+        const tondino = { length: 1, stile: {}, attributi: {} };
+        tondino.css = (s) => { Object.assign(tondino.stile, s); return tondino; };
+        tondino.attr = (n, v) => { tondino.attributi[n] = v; return tondino; };
+        const $prima = global.$;
+        global.$ = (sel) => sel === "#tondinoSegnalazioni" ? tondino : $prima(sel);
+
+        SchermataSegnalazioni.registraControllo("id:7", [{ pagina: "3", box: {}, voci: [VOCE_PSD, VOCE_TESTI] }]);
+        SchermataSegnalazioni.aggiornaIcona();
+        assert.strictEqual(el["#testoSegnalinoSegnalazioni"].testo, "2 segnalazioni");
+        assert.strictEqual(tondino.stile.display, "inline-block");
+        assert.strictEqual(tondino.attributi.title, "1 segnalazione in Solo foto");
+
+        SchermataSegnalazioni.registraControllo("id:7", [{ pagina: "3", box: {}, voci: [VOCE_TESTI] }], ["3"]);
+        SchermataSegnalazioni.aggiornaIcona();
+        assert.strictEqual(tondino.stile.display, "none");
+    }));
+});
+
+test("I20-1211: nella testata il tondino sta dentro il segnalino, viola col bordino bianco", () => {
+    const html = leggiFileDelPlugin("index.html").replace(/\r/g, "");
+    const segnalino = html.substring(html.indexOf('<div id="segnalinoSegnalazioni"'), html.indexOf('<span id="testoSegnalinoSegnalazioni"'));
+    //Secondo giro: abbastanza grande da vedersi nella riga delle linguette.
+    assert.match(segnalino, /<span id="tondinoSegnalazioni" style="display: none; width: 12px; height: 12px;[^"]*border: 2px solid white; border-radius: 50%; background-color: #7b1fa2;"><\/span>/);
+    assert.strictEqual(SchermataSegnalazioni.COLORE_FILTRI, "#7b1fa2");
+    //Nessun altro colore della schermata e' viola.
+    assert.ok(![SchermataSegnalazioni.coloreCss("error"), SchermataSegnalazioni.coloreCss("warning"), SchermataSegnalazioni.coloreCss("notifica")].includes("#7b1fa2"));
+});
+
+test("I20-1211: nella schermata le segnalazioni dei filtri hanno il pallino viola, le altre quello della gravita'", () => {
+    const prima = global.$;
+    global.$ = () => {
+        const el = { stile: {} };
+        el.css = (s) => { Object.assign(el.stile, s); return el; };
+        return el;
+    };
+    try {
+        assert.strictEqual(SchermataSegnalazioni._pallinoVoce(VOCE_PSD, { filtri: FILTRI_EDRO21 }).stile.backgroundColor, "#7b1fa2");
+        assert.strictEqual(SchermataSegnalazioni._pallinoVoce(VOCE_TESTI, { filtri: FILTRI_EDRO21 }).stile.backgroundColor, "#ef6c00");
+        assert.strictEqual(SchermataSegnalazioni._pallinoVoce(VOCE_ERRORE, { filtri: FILTRI_EDRO21 }).stile.backgroundColor, "#c62828");
+        //Un cliente senza filtri: tutto come prima.
+        assert.strictEqual(SchermataSegnalazioni._pallinoVoce(VOCE_PSD, { filtri: [] }).stile.backgroundColor, "#ef6c00");
+    }
+    finally {
+        global.$ = prima;
+    }
+    //La riga della schermata e quella della scheda ref usano il pallino della segnalazione.
+    const schermata = leggiFileDelPlugin("segnalazioni/schermata.js").replace(/\r/g, "");
+    assert.match(schermata, /riga\.append\(SchermataSegnalazioni\._pallinoVoce\(voce, contesto\)\.css\(\{ marginTop: '3px' \}\)\);/);
+    assert.match(schermata, /const contesto = \{ traduzioni: SchermataSegnalazioni\._traduzioni\(\), filtri: SchermataSegnalazioni\.filtriDelCliente\(\) \};/);
+});
+
+test("I20-1211: la scelta del filtro c'e' solo se il cliente ne ha; scelto Solo foto, restano le foto", () => {
+    const prima = { blocco: SchermataSegnalazioni._bloccoBox, traduzioni: SchermataSegnalazioni._traduzioni, records: SchermataSegnalazioni._recordsDellaLavorazione };
+    const disegnati = [];
+    SchermataSegnalazioni._bloccoBox = (lettura, elenco, contesto) => { disegnati.push({ box: lettura.box.nome, voci: lettura.voci.length, filtro: contesto.filtro ? contesto.filtro.nome : null }); return elementoFinto("box " + lettura.box.nome); };
+    SchermataSegnalazioni._traduzioni = () => ({});
+    SchermataSegnalazioni._recordsDellaLavorazione = () => [];
+    const lette = [{ pagina: "3", box: { nome: "A" }, voci: [VOCE_ERRORE, VOCE_PSD] }, { pagina: "5", box: { nome: "B" }, voci: [VOCE_TESTI] }];
+    const disegna = (filtro) => {
+        const elenco = elementoFinto();
+        const conteggio = elementoFinto();
+        elenco.data('conteggio', conteggio);
+        if (filtro != null) {
+            elenco.data('filtro', filtro);
+        }
+        disegnati.length = 0;
+        SchermataSegnalazioni._disegna(elenco, lette, null);
+        return { elenco, conteggio };
+    };
+    const testi = (el) => [el.testo].concat(el.figli.flatMap(testi)).filter(t => t !== "");
+    try {
+        conLavorazione({ file: "VOL_P2623.indd", segnalazioniDisattivate: false }, () => {
+            global.$ = (html) => elementoFinto(html);
+            //Senza filtri del cliente la barra e' quella di prima.
+            conFiltri([], () => {
+                const { elenco } = disegna();
+                assert.deepStrictEqual(testi(elenco.figli[0]), ["Disattiva segnalazioni"]);
+            });
+            conFiltri(FILTRI_EDRO21, () => {
+                global.$ = (html) => elementoFinto(html);
+                let { elenco, conteggio } = disegna();
+                assert.deepStrictEqual(testi(elenco.figli[0]), ["Mostra:", "Tutte", "Solo foto", "Disattiva segnalazioni"]);
+                assert.deepStrictEqual(disegnati, [{ box: "A", voci: 2, filtro: null }, { box: "B", voci: 1, filtro: null }]);
+                assert.strictEqual(conteggio.testo, "3 segnalazioni in 2 box");
+
+                ({ elenco, conteggio } = disegna("Solo foto"));
+                //Il box si disegna dalla lettura intera, col filtro: le righe fuori le salta _bloccoBox.
+                assert.deepStrictEqual(disegnati, [{ box: "A", voci: 2, filtro: "Solo foto" }]);
+                assert.deepStrictEqual(elenco.figli.slice(1).map(f => f.testo || f.html), ["Pagina 3", "box A"]);
+                assert.strictEqual(conteggio.testo, "1 segnalazione in 1 box");
+            });
+        });
+    }
+    finally {
+        SchermataSegnalazioni._bloccoBox = prima.blocco;
+        SchermataSegnalazioni._traduzioni = prima.traduzioni;
+        SchermataSegnalazioni._recordsDellaLavorazione = prima.records;
+    }
 });

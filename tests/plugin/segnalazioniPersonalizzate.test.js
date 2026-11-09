@@ -97,3 +97,49 @@ test("impaginaBox valuta le segnalazioni sulla primaria e su ogni secondaria, se
     assert.match(indice, /FotoPlacer\.applicaNoRender\(photo, elemento\.noRender\);\n\s*segnalazioniPersonalizzateFoto\(nomeFoto\);/);
     assert.match(indice, /FotoPlacer\.applicaNoRender\(field, membroPrimaria != null && membroPrimaria\.noRender\);\n\s*segnalazioniPersonalizzateFoto\(nomeFoto\);/);
 });
+
+/* ---- I20-1211: i filtri della schermata delle segnalazioni decisi dal cliente ---- */
+
+/// Un middleware finto con il solo getFiltriSegnalazioni vero.
+function middlewareFiltri(configurazione, custom = null) {
+    const sorgente = leggiFileDelPlugin("pluginMiddleware.js").replace(/\r/g, "");
+    const me = new Function("customAgenzia", "return {" + metodo(sorgente, "getFiltriSegnalazioni()") + "};")(custom);
+    me.callCustom = custom != null;
+    me.customPluginDB = configurazione;
+    return me;
+}
+
+test("I20-1211: Edro21 dichiara il filtro Solo foto, con CSF-013 e CSF-008 solo sulle foto", () => {
+    const filtri = middlewareFiltri(customEdro21).getFiltriSegnalazioni();
+
+    assert.strictEqual(filtri.length, 1);
+    assert.strictEqual(filtri[0].nome, "Solo foto");
+    assert.deepStrictEqual(filtri[0].condizioni, [
+        { codice: "PSD-01", testoContiene: "" },
+        { codice: "CSF-12", testoContiene: "" },
+        { codice: "CSF-27", testoContiene: "" },
+        { codice: "CSF-19", testoContiene: "" },
+        { codice: "CSF-013", testoContiene: "foto" },
+        { codice: "CSF-008", testoContiene: "foto" }
+    ]);
+});
+
+test("I20-1211: un cliente senza filtri non ne ha, e i filtri incompleti non valgono", () => {
+    assert.deepStrictEqual(middlewareFiltri({}).getFiltriSegnalazioni(), []);
+    assert.deepStrictEqual(middlewareFiltri(null).getFiltriSegnalazioni(), []);
+    assert.deepStrictEqual(middlewareFiltri({ filtriSegnalazioni: "Solo foto" }).getFiltriSegnalazioni(), []);
+    assert.deepStrictEqual(middlewareFiltri({
+        filtriSegnalazioni: [
+            { nome: "", condizioni: [{ codice: "PSD-01" }] },
+            { nome: "Senza condizioni", condizioni: [] },
+            { nome: "Condizioni senza codice", condizioni: [{ codice: " ", testoContiene: "foto" }, null] },
+            null,
+            { nome: " Loghi ", condizioni: [{ codice: "CSF-013", testoContiene: " foto_extra " }] }
+        ]
+    }).getFiltriSegnalazioni(), [{ nome: "Loghi", condizioni: [{ codice: "CSF-013", testoContiene: "foto_extra" }] }]);
+});
+
+test("I20-1211: un cliente che usa il custom.js li dichiara li'", () => {
+    const filtri = middlewareFiltri(null, { filtriSegnalazioni: [{ nome: "Solo foto", condizioni: [{ codice: "PSD-01" }] }] }).getFiltriSegnalazioni();
+    assert.deepStrictEqual(filtri, [{ nome: "Solo foto", condizioni: [{ codice: "PSD-01", testoContiene: "" }] }]);
+});
