@@ -1145,9 +1145,6 @@ namespace Istanta.Controllers
                 var tempFile = Path.Combine(pathToRead, upload_file);
                 List<FileOlympoSync> olympoJson = new List<FileOlympoSync>();
 
-                //I20-1212: la foto dell'articolo che deve prevalere (la post prodotta, o l'ultima dello zip) se e'
-                //gia' selezionata non entrava nel sync, e le altre foto dell'articolo riselezionate la scavalcavano.
-                List<SyncFile> daRiselezionare = DaRiselezionare(result.files!, overwriteOption, EstensioniPostProduzione(ext_post_lavorazione));
               
                 using (var zipFile = System.IO.File.Create(tempFile))
                 {
@@ -1234,23 +1231,6 @@ namespace Istanta.Controllers
 
                                     //registraAttivitaDiSyncFoto(0, fotoIstanta.IdArticoloNavigation.Codice, "SyncPacchettoFoto_overwrite", tipoOperazione.syncPacchettoFoto);
                                 }
-                            }
-                            else if (daRiselezionare.Contains(syF))
-                            {
-                                //I20-1212: gia' selezionata, ma un'altra foto dello stesso articolo si registra in questo sync:
-                                //si riseleziona, e l'ordine di registrazione la mette dopo le altre.
-                                string pathFile = Path.Combine(extract_sync_path, syF.zipDirOrigin);
-                                var filepath = Path.Combine(pathFile, syF.filename);
-                                zipArchive.CreateEntryFromFile(filepath, syF.filename);
-
-                                olympoJson.Add(new FileOlympoSync()
-                                {
-                                    Id = "0",
-                                    FileHash = syF.md5,
-                                    FileName = syF.filename,
-                                    IdRef = syF.id.ToString(),
-                                    Size = 0
-                                });
                             }
                             else
                             {
@@ -1507,34 +1487,36 @@ namespace Istanta.Controllers
         }
 
         /// <summary>
-        /// I20-1212: le foto gia' selezionate (AlreadyExist) che il sync deve riselezionare. Per ogni
-        /// articolo con foto prodotto nel pacchetto prevale la post prodotta (estensione fra quelle date),
-        /// altrimenti l'ultima nello zip; se quella e' gia' selezionata e nello stesso sync un'altra foto
-        /// dell'articolo si registra o si riseleziona, va riselezionata anche lei, o la scavalcherebbe la
-        /// data di modifica dell'altra. Le foto arrivano nell'ordine dello zip.
+        /// I20-1212: per ogni articolo di cui il sync ha registrato almeno una foto (Synced), la foto del
+        /// pacchetto che deve restare in uscita: fra quelle che sono nell'archivio (registrate ora, gia'
+        /// selezionate, gia' presenti non selezionate, o cambiate e non risincronizzate) la post prodotta
+        /// (estensione fra quelle date), altrimenti l'ultima nello zip. Le foto arrivano nell'ordine dello
+        /// zip, tutte quelle della scansione: la pagina le sincronizza a blocchi di 20 e solo quelle
+        /// selezionabili, e nessun blocco vede l'articolo intero. Gli articoli senza foto registrate non ci sono.
         /// </summary>
-        public static List<SyncFile> DaRiselezionare(IEnumerable<SyncFile> files, bool overwriteOption, IEnumerable<string> estensioniPostProduzione)
+        public static List<SyncFile> FotoCheDevonoPrevalere(IEnumerable<SyncFile> files, IEnumerable<string> estensioniPostProduzione)
         {
             string[] post = (estensioniPostProduzione ?? Enumerable.Empty<string>()).ToArray();
             bool postProdotta(SyncFile f) => post.Any(e => string.Equals(Path.GetExtension(f.filename ?? ""), e, StringComparison.OrdinalIgnoreCase));
-            //Come decide SyncPacchettoFoto chi entra nel pacchetto per Olimpo.
-            bool siRegistra(SyncFile f) => f.stato == StatoSyncFile.Syncable || f.stato == StatoSyncFile.SyncableAsNew
-                || (overwriteOption && (f.stato == StatoSyncFile.SyncableAsOverwrite || f.stato == StatoSyncFile.AlreadyExistButNotSelected));
+            bool inArchivio(SyncFile f) => f.id > 0 && (f.stato == StatoSyncFile.Synced || f.stato == StatoSyncFile.AlreadyExist
+                || f.stato == StatoSyncFile.AlreadyExistButNotSelected || f.stato == StatoSyncFile.SyncableAsOverwrite);
 
             var risultato = new List<SyncFile>();
             var fotoDegliArticoli = (files ?? Enumerable.Empty<SyncFile>())
                 .Where(f => f != null && f.idArticolo > 0 && f.tipo == TipoFoto.Foto)
-                .Where(f => f.stato == StatoSyncFile.AlreadyExist || f.stato == StatoSyncFile.AlreadyExistButNotSelected
-                         || f.stato == StatoSyncFile.Syncable || f.stato == StatoSyncFile.SyncableAsNew || f.stato == StatoSyncFile.SyncableAsOverwrite)
                 .GroupBy(f => f.idArticolo);
             foreach (var articolo in fotoDegliArticoli)
             {
-                List<SyncFile> foto = articolo.ToList();
-                SyncFile prevale = foto.LastOrDefault(postProdotta) ?? foto.Last();
-                if (prevale.stato == StatoSyncFile.AlreadyExist && foto.Any(f => !ReferenceEquals(f, prevale) && siRegistra(f)))
+                if (!articolo.Any(f => f.stato == StatoSyncFile.Synced))
                 {
-                    risultato.Add(prevale);
+                    continue;
                 }
+                List<SyncFile> candidate = articolo.Where(inArchivio).ToList();
+                if (candidate.Count == 0)
+                {
+                    continue;
+                }
+                risultato.Add(candidate.LastOrDefault(postProdotta) ?? candidate.Last());
             }
             return risultato;
         }
@@ -1547,6 +1529,52 @@ namespace Istanta.Controllers
         public static DateTime OrarioDiRegistrazione(DateTime inizio, int posizione)
         {
             return inizio.AddTicks(posizione * 10L);
+        }
+
+        /// <summary>
+        /// I20-1212: a sync finito la pagina manda l'elenco della scansione (nell'ordine dello zip, con lo
+        /// stato dopo i blocchi) e per ogni articolo la foto che deve prevalere (FotoCheDevonoPrevalere)
+        /// torna la foto in uscita: data di modifica adesso, attiva e primaria. Senza Olimpo e senza file:
+        /// una query sulle righe coinvolte e un salvataggio. Una riga si tocca solo se e' dell'articolo indicato.
+        /// </summary>
+        [HttpPut]
+        [Route("SyncFoto/ConsolidaSelezione")]
+        public async Task<IActionResult> ConsolidaSelezione(SyncFileOperation op)
+        {
+            try
+            {
+                List<SyncFile> prevalenti = FotoCheDevonoPrevalere(op?.files ?? new List<SyncFile>(), EstensioniPostProduzione(ext_post_lavorazione));
+                if (prevalenti.Count == 0)
+                {
+                    return Ok(new { consolidate = 0 });
+                }
+
+                List<Int64> ids = prevalenti.Select(p => p.id).ToList();
+                List<ArticoliFoto> righe = await this.ctx.ArticoliFotos.Where(f => ids.Contains(f.Id)).ToListAsync();
+
+                DateTime adesso = DateTime.Now;
+                int consolidate = 0;
+                foreach (SyncFile prevale in prevalenti)
+                {
+                    ArticoliFoto? riga = righe.FirstOrDefault(r => r.Id == prevale.id && r.IdArticolo == prevale.idArticolo);
+                    if (riga == null)
+                    {
+                        continue;
+                    }
+                    riga.DataModifica = OrarioDiRegistrazione(adesso, consolidate);
+                    riga.Attiva = true;
+                    riga.StatoSelezione = (Byte)StatoSelezioneFoto.Primaria;
+                    consolidate++;
+                }
+                await this.ctx.SaveChangesAsync();
+
+                return Ok(new { consolidate = consolidate });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "ConsolidaSelezione non riuscita");
+                return StatusCode(500, new { error = "Selezione delle foto in uscita non riuscita" });
+            }
         }
 
         /// <summary>

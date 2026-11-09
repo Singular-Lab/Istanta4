@@ -117,72 +117,92 @@ public class SyncFotoMultipleTests
         Assert.Empty(SyncFotoController.OrdineDiRegistrazione(Array.Empty<FileOlympoSync>(), new[] { ".psd" }));
         Assert.Throws<ArgumentNullException>(() => SyncFotoController.OrdineDiRegistrazione(null!, new[] { ".psd" }));
     }
-    /* ---- la foto che prevale, gia' selezionata, si riseleziona ---- */
+    /* ---- a sync finito, la foto che prevale per ogni articolo (ConsolidaSelezione) ---- */
 
     private static SyncFile File(string nome, StatoSyncFile stato, long idArticolo = 1633, long id = 0, TipoFoto tipo = TipoFoto.Foto) =>
         new SyncFile { filename = nome, stato = stato, idArticolo = idArticolo, id = id, tipo = tipo, md5 = "h-" + nome, zipDirOrigin = "pacchetto" };
 
-    private static string[] Riselezionate(IEnumerable<SyncFile> files, bool overwrite, params string[] estensioni) =>
-        SyncFotoController.DaRiselezionare(files, overwrite, SyncFotoController.EstensioniPostProduzione(estensioni)).Select(f => f.filename).ToArray();
+    private static string[] Prevalenti(IEnumerable<SyncFile> files, params string[] estensioni) =>
+        SyncFotoController.FotoCheDevonoPrevalere(files, SyncFotoController.EstensioniPostProduzione(estensioni)).Select(f => f.filename).ToArray();
 
     [Fact]
-    public void Pacchetto_risincronizzato_il_psd_gia_selezionato_si_riseleziona_insieme_a_jpeg_e_png()
+    public void Pacchetto_risincronizzato_prevale_il_psd_gia_selezionato()
     {
-        //Il collaudo: jpeg e png gia' in archivio e non selezionati, il psd gia' selezionato. Con la
-        //sovrascrittura jpeg e png si riselezionano: senza riselezionare anche il psd vinceva il png.
+        //Il collaudo: jpeg e png riselezionati dal sync, il psd gia' selezionato e mai mandato dalla pagina.
         var files = new[]
         {
-            File("1001297_1_AD.jpeg", StatoSyncFile.AlreadyExistButNotSelected, id: 6),
-            File("1001297_1_T5.png", StatoSyncFile.AlreadyExistButNotSelected, id: 7),
+            File("1001297_1_AD.jpeg", StatoSyncFile.Synced, id: 6),
+            File("1001297_1_T5.png", StatoSyncFile.Synced, id: 7),
             File("1001297_1_T5.psd", StatoSyncFile.AlreadyExist, id: 8)
         };
 
-        Assert.Equal(new[] { "1001297_1_T5.psd" }, Riselezionate(files, true));
+        Assert.Equal(new[] { "1001297_1_T5.psd" }, Prevalenti(files));
     }
 
     [Fact]
-    public void Senza_sovrascrittura_non_si_riseleziona_niente_e_il_psd_resta_com_e()
+    public void Un_jpg_nuovo_accanto_al_psd_gia_selezionato_lascia_in_uscita_il_psd()
     {
-        var files = new[]
-        {
-            File("1001297_1_AD.jpeg", StatoSyncFile.AlreadyExistButNotSelected, id: 6),
-            File("1001297_1_T5.png", StatoSyncFile.AlreadyExistButNotSelected, id: 7),
-            File("1001297_1_T5.psd", StatoSyncFile.AlreadyExist, id: 8)
-        };
-
-        Assert.Empty(Riselezionate(files, false));
-    }
-
-    [Fact]
-    public void Un_jpg_nuovo_accanto_al_psd_gia_in_archivio_riseleziona_il_psd()
-    {
-        //Il psd per primo nello zip: prevale comunque, perche' e' post prodotto.
         var files = new[]
         {
             File("6149843_1_T5.psd", StatoSyncFile.AlreadyExist, id: 8),
-            File("6149843_1_T5.jpg", StatoSyncFile.SyncableAsNew)
+            File("6149843_1_T5.jpg", StatoSyncFile.Synced, id: 9)
         };
 
-        Assert.Equal(new[] { "6149843_1_T5.psd" }, Riselezionate(files, false));
+        Assert.Equal(new[] { "6149843_1_T5.psd" }, Prevalenti(files));
     }
 
     [Fact]
-    public void Il_psd_da_solo_gia_selezionato_non_si_tocca()
+    public void Senza_sovrascrittura_il_psd_gia_in_archivio_e_non_selezionato_prevale_sul_jpg_nuovo()
     {
-        Assert.Empty(Riselezionate(new[] { File("6149843_1_T5.psd", StatoSyncFile.AlreadyExist, id: 8) }, true));
-    }
-
-    [Fact]
-    public void Se_a_prevalere_e_una_foto_che_si_registra_comunque_non_serve_riselezionare_niente()
-    {
-        //Il psd nuovo si registra, e l'ordine di registrazione lo mette dopo il jpg.
+        //Regola confermata: il psd non si ricarica, si seleziona.
         var files = new[]
         {
-            File("6149843_1_T5.jpg", StatoSyncFile.AlreadyExist, id: 3),
+            File("6149843_1_T5.psd", StatoSyncFile.AlreadyExistButNotSelected, id: 8),
+            File("6149843_1_T5.jpg", StatoSyncFile.Synced, id: 9)
+        };
+
+        Assert.Equal(new[] { "6149843_1_T5.psd" }, Prevalenti(files));
+    }
+
+    [Fact]
+    public void Un_articolo_senza_foto_registrate_non_si_tocca()
+    {
+        var files = new[]
+        {
+            File("6149843_1_T5.jpg", StatoSyncFile.AlreadyExistButNotSelected, id: 3),
+            File("6149843_1_T5.psd", StatoSyncFile.AlreadyExist, id: 8)
+        };
+
+        Assert.Empty(Prevalenti(files));
+    }
+
+    [Fact]
+    public void Una_foto_nuova_non_registrata_non_puo_prevalere()
+    {
+        //Il psd nuovo deselezionato dall'operatore non e' in archivio: prevale il jpg registrato.
+        var files = new[]
+        {
+            File("6149843_1_T5.jpg", StatoSyncFile.Synced, id: 9),
             File("6149843_1_T5.psd", StatoSyncFile.SyncableAsNew)
         };
 
-        Assert.Empty(Riselezionate(files, true));
+        Assert.Equal(new[] { "6149843_1_T5.jpg" }, Prevalenti(files));
+    }
+
+    [Fact]
+    public void Pacchetto_di_30_foto_il_psd_in_testa_prevale_sul_jpg_in_coda()
+    {
+        //La pagina sincronizza a blocchi di 20: qui conta solo l'elenco intero.
+        var files = new List<SyncFile> { File("6149843_1_T5.psd", StatoSyncFile.Synced, id: 1) };
+        for (int i = 0; i < 28; i++)
+        {
+            files.Add(File($"altro_{i}.jpg", StatoSyncFile.Synced, idArticolo: 5000 + i, id: 100 + i));
+        }
+        files.Add(File("6149843_1_T5.jpg", StatoSyncFile.Synced, id: 2));
+
+        var prevalenti = SyncFotoController.FotoCheDevonoPrevalere(files, new[] { ".psd" });
+
+        Assert.Equal("6149843_1_T5.psd", prevalenti.Single(f => f.idArticolo == 1633).filename);
     }
 
     [Fact]
@@ -190,11 +210,11 @@ public class SyncFotoMultipleTests
     {
         var files = new[]
         {
-            File("6149843_2_T5.jpg", StatoSyncFile.SyncableAsNew),
+            File("6149843_2_T5.jpg", StatoSyncFile.Synced, id: 4),
             File("6149843_1_T5.jpg", StatoSyncFile.AlreadyExist, id: 3)
         };
 
-        Assert.Equal(new[] { "6149843_1_T5.jpg" }, Riselezionate(files, false));
+        Assert.Equal(new[] { "6149843_1_T5.jpg" }, Prevalenti(files));
     }
 
     [Fact]
@@ -203,10 +223,10 @@ public class SyncFotoMultipleTests
         var files = new[]
         {
             File("6149843_1_T5.tif", StatoSyncFile.AlreadyExist, id: 4),
-            File("6149843_1_T5.psd", StatoSyncFile.SyncableAsNew)
+            File("6149843_1_T5.psd", StatoSyncFile.Synced, id: 5)
         };
 
-        Assert.Equal(new[] { "6149843_1_T5.tif" }, Riselezionate(files, false, ".tif"));
+        Assert.Equal(new[] { "6149843_1_T5.tif" }, Prevalenti(files, ".tif"));
     }
 
     [Fact]
@@ -214,16 +234,16 @@ public class SyncFotoMultipleTests
     {
         var files = new[]
         {
-            //A: psd gia' selezionato e un jpg nuovo -> si riseleziona.
+            //A: psd gia' selezionato e un jpg registrato -> psd.
             File("A_1.psd", StatoSyncFile.AlreadyExist, idArticolo: 1, id: 10),
-            File("A_1.jpg", StatoSyncFile.SyncableAsNew, idArticolo: 1),
-            //B: psd gia' selezionato, e solo un logo nuovo dello stesso articolo -> niente.
+            File("A_1.jpg", StatoSyncFile.Synced, idArticolo: 1, id: 11),
+            //B: solo un logo registrato -> l'articolo non si tocca.
             File("B_1.psd", StatoSyncFile.AlreadyExist, idArticolo: 2, id: 20),
-            File("B_logo.ai", StatoSyncFile.SyncableAsNew, idArticolo: 2, tipo: TipoFoto.Logo),
-            //Senza articolo (nessuna corrispondenza) -> niente.
+            File("B_logo.ai", StatoSyncFile.Synced, idArticolo: 2, id: 21, tipo: TipoFoto.Logo),
+            //Senza articolo -> niente.
             File("X_1.psd", StatoSyncFile.NoMatch, idArticolo: 0)
         };
 
-        Assert.Equal(new[] { "A_1.psd" }, Riselezionate(files, true));
+        Assert.Equal(new[] { "A_1.psd" }, Prevalenti(files));
     }
 }
