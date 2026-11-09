@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GRIGLIA_CALORE, PESI_VISIBILITA, type BoxInsight, type RepartoInsight } from '../../../lib/insightVolantino/tipi';
+import type { BoxInsight, RepartoInsight } from '../../../lib/insightVolantino/tipi';
 import { boxDelKit } from './analisiKit';
 import { boxInsight, chiaveMarca, sezioniInsight, type OpzioniInsight } from './insightVolantino';
 import { leggiReferenza, type RigaReferenza } from './referenzaStampata';
@@ -91,19 +91,16 @@ describe('sezioniInsight: sintesi per la Direzione', () => {
     expect(sezioni.sintesi.copertura).toEqual({ prezzo: 0, marca: 0, reparto: 0, geometria: 0 });
     expect(sezioni.prezziSconti.fasce.map(fascia => fascia.box)).toEqual([0, 0, 0, 0, 0, 0]);
     expect(sezioni.marche).toEqual({ elenco: [], quotaDistributore: { quotaSpazio: 0, quotaBox: 0 } });
-    expect(sezioni.zoneCalde).toEqual({ boxPiuVisibili: [], perReparto: [], perMarca: [], calore: [], pesi: PESI_VISIBILITA });
     expect(sezioni.spazio.perPagina).toEqual([]);
   });
 
-  it('con le pagine del PDF ma senza box ogni pagina ha densita\' e calore a zero', () => {
+  it('con le pagine del PDF ma senza box ogni pagina ha densita\' a zero', () => {
     const sezioni = sezioniInsight([], opzioni({ totalePagine: 2 }));
 
     expect(sezioni.spazio.perPagina).toEqual([
       { pagina: 1, box: 0, spazioOccupato: 0 },
       { pagina: 2, box: 0, spazioOccupato: 0 },
     ]);
-    expect(sezioni.zoneCalde.calore.map(pagina => pagina.pagina)).toEqual([1, 2]);
-    expect(sezioni.zoneCalde.calore.flatMap(pagina => pagina.celle.flat()).every(valore => valore === 0)).toBe(true);
   });
 });
 
@@ -186,18 +183,6 @@ describe('sezioniInsight: uso dello spazio', () => {
       { pagina: 3, box: 2, spazioOccupato: 10 },
     ]);
   });
-
-  it('zone calde per reparto: quota di visibilita\' accanto a quota di spazio, senza i box che non hanno posizione', () => {
-    const { zoneCalde } = sezioniInsight(boxDi(righe), opzioni({ totalePagine: 3, repartoConfigurato: reparti }));
-
-    // s1 100, s2 66.7 (stessa pagina, piu' piccolo), s3 26.7 (ultima pagina): 01 = 126.7 / 193.4
-    expect(zoneCalde.perReparto).toEqual([
-      { chiave: '01', etichetta: 'DROGHERIA ALIMENTARE', quotaVisibilita: 65.5, quotaSpazio: 66.7 },
-      { chiave: '03', etichetta: 'BEVANDE', quotaVisibilita: 34.5, quotaSpazio: 33.3 },
-    ]);
-    expect(zoneCalde.perMarca.map(voce => voce.chiave)).toEqual(['ALFA', 'BETA']);
-    expect(zoneCalde.pesi).toEqual(PESI_VISIBILITA);
-  });
 });
 
 describe('sezioniInsight: marche', () => {
@@ -237,59 +222,29 @@ describe('sezioniInsight: marche', () => {
   });
 });
 
-describe('boxInsight: visibilita\' e zone calde', () => {
-  // Pagine 200×300 di un volantino di 8 pagine
+describe('niente visibilita\' stimata ne\' zone calde', () => {
+  // Per decisione della direzione gli insight non stimano la visibilita' e non hanno mappe di calore
   const pagina = { w_page: 200, h_page: 300 };
   const righe = [
     riga('copertina', { ...pagina, pag: 1, x: 0, y: 0, w: 100, h: 100 }),
     riga('interna', { ...pagina, pag: 5, x: 0, y: 0, w: 100, h: 100 }),
     riga('senzaPosizione', { ...pagina, ...SENZA_GEOMETRIA, pag: 2 }),
-    riga('inCima', { ...pagina, pag: 4, x: 100, y: 0, w: 100, h: 30 }),
-    riga('inFondo', { ...pagina, pag: 4, x: 100, y: 270, w: 100, h: 30 }),
   ];
 
-  it('100 sul box piu\' visibile; la copertina pesa il doppio di una pagina interna; senza posizione 0', () => {
+  it('le sezioni non hanno zone calde e nessun box ha la visibilita\'', () => {
+    const sezioni = sezioniInsight(boxDi(righe), opzioni({ totalePagine: 8 }));
+
+    expect(Object.keys(sezioni).sort()).toEqual(['box', 'marche', 'prezziSconti', 'sintesi', 'spazio']);
+    expect(sezioni).not.toHaveProperty('zoneCalde');
+    expect(sezioni.box).toHaveLength(3);
+    for (const singolo of sezioni.box) expect(singolo).not.toHaveProperty('visibilita');
+  });
+
+  it('il box senza posizione conta ma non occupa spazio', () => {
     const box = perId(boxInsight(boxDi(righe), opzioni({ totalePagine: 8 })));
 
-    expect(box.get('copertina')?.visibilita).toBe(100);
-    expect(box.get('interna')?.visibilita).toBe(50);
-    expect(box.get('senzaPosizione')).toMatchObject({ visibilita: 0, spazio: 0, geometria: null, proporzionePagina: null });
-    // In cima alla pagina si vede piu' che in fondo
-    expect(box.get('inCima')!.visibilita).toBeGreaterThan(box.get('inFondo')!.visibilita);
-  });
-
-  it('i box piu\' visibili dal primo, senza quelli che non hanno posizione', () => {
-    const { zoneCalde } = sezioniInsight(boxDi(righe), opzioni({ totalePagine: 8 }));
-
-    expect(zoneCalde.boxPiuVisibili).toEqual(['copertina', 'interna', 'inCima', 'inFondo']);
-  });
-
-  it('mappa di calore di ogni pagina: la copertina e\' piu\' calda di una pagina interna con lo stesso box', () => {
-    const { zoneCalde } = sezioniInsight(boxDi(righe), opzioni({ totalePagine: 8 }));
-    const calore = new Map(zoneCalde.calore.map(voce => [voce.pagina, voce.celle]));
-
-    expect([...calore.keys()]).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
-    for (const celle of calore.values()) {
-      expect(celle).toHaveLength(GRIGLIA_CALORE.righe);
-      for (const rigaCelle of celle) expect(rigaCelle).toHaveLength(GRIGLIA_CALORE.colonne);
-    }
-    expect(calore.get(1)![0][0]).toBe(1);
-    expect(calore.get(5)![0][0]).toBe(0.5);
-    // Il box copre solo la meta' sinistra del primo terzo della pagina
-    expect(calore.get(1)![0][3]).toBe(0);
-    expect(calore.get(1)![5][0]).toBe(0);
-    // Il box senza posizione non scalda la sua pagina
-    expect(calore.get(2)!.flat().every(valore => valore === 0)).toBe(true);
-  });
-
-  it('i dieci box piu\' visibili al massimo', () => {
-    const molte = Array.from({ length: 12 }, (_, indice) => riga(`b${indice}`, { pag: 2, x: (indice % 10) * 10, y: indice < 10 ? 0 : 50, w: 10, h: 10 }));
-    const { zoneCalde } = sezioniInsight(boxDi(molte), opzioni({ totalePagine: 4 }));
-
-    expect(zoneCalde.boxPiuVisibili).toHaveLength(10);
-    // A parita' di visibilita' resta l'ordine del volantino; i due piu' in basso restano fuori
-    expect(zoneCalde.boxPiuVisibili).not.toContain('b10');
-    expect(zoneCalde.boxPiuVisibili).not.toContain('b11');
+    expect(box.get('senzaPosizione')).toMatchObject({ spazio: 0, geometria: null, proporzionePagina: null });
+    expect(box.get('copertina')!.spazio).toBe(box.get('interna')!.spazio);
   });
 });
 
@@ -332,7 +287,6 @@ describe('boxInsight: il box come lo vede la scheda', () => {
       idReferenze: ['r1', 'r1b'],
       foto: ['/foto/g1', '/foto/g2'],
       origine: 'fuori_listino',
-      visibilita: 100,
     });
     expect(box.chiave).toMatch(/^d-/);
     expect(box.proporzionePagina).toBeCloseTo(210 / 287, 3);

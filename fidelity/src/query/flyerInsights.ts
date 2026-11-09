@@ -7,6 +7,7 @@ import {
   type DifferenzeVarianti,
   type ViaggioProdotto,
 } from "../../lib/insightVolantino/tipi";
+import { percorsoReport, type ReportVolantino } from "../../lib/insightVolantino/report";
 import { ServerCall } from "../../lib/server_call";
 
 /*
@@ -33,6 +34,10 @@ export const useDifferenzeVarianti = (idKit: string | undefined, idAltra: string
     enabled: !!idKit && !!idAltra,
     staleTime: CINQUE_MINUTI,
   });
+
+/** Dati e sezioni del report PDF: si chiedono al click, non al caricamento della pagina. */
+export const caricaReportVolantino = (idKit: string): Promise<ReportVolantino> =>
+  ServerCall.get<ReportVolantino>(percorsoReport(idKit));
 
 /** I volantini della GDO in cui compare il prodotto, dal piu' recente. */
 export const useViaggioProdotto = (idKit: string | undefined, chiave: string | null | undefined) =>

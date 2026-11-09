@@ -6,11 +6,10 @@ export { default, VolantinoSfogliabile, LIVELLI_ZOOM, type VolantinoSfogliabileP
 export { PaginaConImmagine, type PaginaConImmagineProps } from "./PaginaConImmagine";
 export { SchedaBox, type SchedaBoxProps } from "./SchedaBox";
 export { ViaggioProdotto, type ViaggioProdottoProps } from "./ViaggioProdotto";
-export { descrizioneBox, marcaFormato, testoReparto, testoVisibilita, tooltipBox, trovaBoxIniziale } from "./box";
+export { descrizioneBox, marcaFormato, testoReparto, tooltipBox, trovaBoxIniziale } from "./box";
 export {
   coloriReparti,
   fasciaSconto,
-  fasciaVisibilita,
   legendaDifferenze,
   legendaModo,
   OPZIONI_COLORE,
@@ -18,7 +17,6 @@ export {
   stileDifferenza,
   tintaMeccanica,
   tintaSconto,
-  tintaVisibilita,
   type ColoriReparti,
   type ModoColore,
   type StileRiquadro,

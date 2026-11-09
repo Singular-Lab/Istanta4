@@ -79,7 +79,6 @@ const insight = vi.hoisted(() => {
           perPagina: [],
         },
         marche: { elenco: [], quotaDistributore: null },
-        zoneCalde: { boxPiuVisibili: [], perReparto: [], perMarca: [], calore: [], pesi: {} },
       } as never;
     }),
   };

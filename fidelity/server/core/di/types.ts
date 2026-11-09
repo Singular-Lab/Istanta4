@@ -76,6 +76,9 @@ export const TYPES = {
   // Confronti degli insight del volantino (edizione precedente, varianti, viaggio del prodotto)
   InsightConfrontiService: Symbol.for('InsightConfrontiService'),
 
+  // Report PDF del volantino (dati e sezioni; il PDF lo disegna il browser)
+  ReportVolantinoService: Symbol.for('ReportVolantinoService'),
+
   // Permessi
   PermessiService: Symbol.for('PermessiService'),
 

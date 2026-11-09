@@ -31,7 +31,6 @@ const boxDi = (id: string, dati: Partial<BoxInsight> = {}): BoxInsight => ({
   foto: [],
   prodotti: 1,
   idReferenze: [`r-${id}`],
-  visibilita: 40,
   ...dati,
 });
 
@@ -64,9 +63,9 @@ describe("testi del box", () => {
     expect(testoReparto(null)).toBeNull();
   });
 
-  it("il tooltip ha solo le righe dei dati presenti, con la visibilità stimata", () => {
+  it("il tooltip ha solo le righe dei dati presenti, senza indici di visibilità", () => {
     const tooltip = tooltipBox(boxDi("a", { prezzo: 2, barrato: 2.5, meccanica: "fidelity", prodotti: 3 }));
-    expect(tooltip.righe?.map(riga => riga.etichetta)).toEqual(["Prezzo", "Meccanica", "Visibilità stimata", "Prodotti nel box"]);
+    expect(tooltip.righe?.map(riga => riga.etichetta)).toEqual(["Prezzo", "Meccanica", "Prodotti nel box"]);
     expect(tooltip.righe?.[0].valore).toBe("€ 2,00 invece di € 2,50");
   });
 });

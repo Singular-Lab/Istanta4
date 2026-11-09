@@ -5,8 +5,8 @@ import { twMerge } from "@/utils/twMerge";
 import { useId, type ReactNode } from "react";
 
 /*
- * Pezzi comuni alle schede di analisi del volantino (sintesi, prezzi e sconti, spazio, marche,
- * zone calde). Le schede stanno dentro la Sezione della pagina: niente Sezione annidata, solo
+ * Pezzi comuni alle schede di analisi del volantino (sintesi, prezzi e sconti, spazio, marche).
+ * Le schede stanno dentro la Sezione della pagina: niente Sezione annidata, solo
  * blocchi con un titolo h3.
  */
 

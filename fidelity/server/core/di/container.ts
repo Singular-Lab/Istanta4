@@ -160,6 +160,8 @@ import { AnalisiPuntiVenditaRepository, type IAnalisiPuntiVenditaRepository } fr
 import { InsightConfrontiService } from "../services/InsightConfrontiService";
 import type { IInsightConfrontiService } from "../interfaces/IInsightConfrontiService";
 import { InsightConfrontiRepository, type IInsightConfrontiRepository } from "../repositories/InsightConfrontiRepository";
+import { ReportVolantinoService } from "../services/ReportVolantinoService";
+import type { IReportVolantinoService } from "../interfaces/IReportVolantinoService";
 import { WebPliantService } from "../services/WebPliantService";
 import { WebhookService } from "../services/WebhookService";
 import { WhatsAppService } from "../services/WhatsAppService";
@@ -482,6 +484,15 @@ function bindServices() {
       context.get<IInsightConfrontiRepository>(TYPES.InsightConfrontiRepository),
       context.get<IAnalisiPuntiVenditaRepository>(TYPES.AnalisiPuntiVenditaRepository),
       context.get<IConfigService>(TYPES.ConfigService)
+    )
+  );
+  // Report PDF: insight e confronto, con palette e sezioni della libreria agenzia
+  container.bind<IReportVolantinoService>(TYPES.ReportVolantinoService).toDynamicValue(
+    (context) => new ReportVolantinoService(
+      context.get<IVolantinoService>(TYPES.VolantinoService),
+      context.get<IInsightConfrontiService>(TYPES.InsightConfrontiService),
+      context.get<IGdoService>(TYPES.GdoService),
+      context.get<IAgenziaLib>(TYPES.AgenziaLib)
     )
   );
   container.bind<IMaterialiService>(TYPES.MaterialiService).toDynamicValue(

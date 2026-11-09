@@ -2,6 +2,7 @@ import type { TIPO_UTENTI } from "../../../lib/enums.js";
 import type { AnalisiMomentoTracciato, CompiledField, DataFields, DimensioneVisibilitaPromo, GlobalUserFilter, IndesignPluginExport, MenaboDivisioneParams, MenaboLayoutDivisioneSalvata, MenaboRisultato, OrigineStorico, RisultatoConfrontoMomento, TracciatoQueryRequest, TracciatoReport, TracciatoReportWidget, UtentiMeta } from "../../../lib/types.js";
 import type { PromoContextValue, PuntoVenditaDaImportareDTO } from "../dto/index.js";
 import type { OidcUserClaims } from "../interfaces/IOidcService.js";
+import type { DatiReportVolantino, IntestazioneReport, PaletteReport, SezioneReport } from "../../../lib/insightVolantino/report.js";
 
 // ── Tipi di base ──────────────────────────────────────────────────────────────
 
@@ -291,6 +292,23 @@ export interface ImportPuntiVenditaAgenzia {
   leggiRiga(riga: Record<string, unknown>): PuntoVenditaDaImportareDTO | string;
 }
 
+// ── Report del volantino (spec insight-volantino) ─────────────────────────────
+
+/**
+ * Regole del cliente per il report PDF del volantino. Tutto facoltativo: quello che manca prende i
+ * valori standard (PALETTE_REPORT_STANDARD, intestazione col nome della GDO, sezioni standard).
+ */
+export interface InsightVolantinoAgenzia {
+  palette?: Partial<PaletteReport>;
+  /** cliente di default: il nome della GDO del volantino. */
+  intestazione?: Partial<IntestazioneReport>;
+  /**
+   * Sezioni del report di questo cliente. Riceve i dati e le sezioni standard, gia' senza quelle
+   * vuote: puo' riordinarle, toglierle, cambiarne i testi o aggiungerne di proprie.
+   */
+  sezioniReport?(dati: DatiReportVolantino, standard: SezioneReport[]): SezioneReport[];
+}
+
 // ── Interfaccia AgenziaLib ────────────────────────────────────────────────────
 
 export interface IAgenziaLib {
@@ -384,4 +402,7 @@ export interface IAgenziaLib {
    * tracciato generico (colonne nome, indirizzo, citta, cap, canaleArea).
    */
   importPuntiVendita?: ImportPuntiVenditaAgenzia;
+
+  /** Regole del cliente per il report PDF del volantino (palette, intestazione, sezioni). Opzionale. */
+  insightVolantino?: InsightVolantinoAgenzia;
 }

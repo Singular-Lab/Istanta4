@@ -20,25 +20,23 @@ import { ORDINE_STATI, STATI_DIFFERENZA } from "../confronti/supporto";
  * - reparto: i colori della config dell'installazione (mappa o reparti), altrimenti la palette
  *   automatica, per nome, ai reparti con più spazio;
  * - meccanica: la meccanica riconosciuta dalla lettura generica, uguale per tutte le GDO;
- * - sconto e visibilità: la scala sequenziale, a fasce;
+ * - sconto: la scala sequenziale, a fasce;
  * - differenze fra varianti: le tinte dei confronti (STATI_DIFFERENZA), perché legenda, elenco e
  *   pagine dicano la stessa cosa.
  */
 
-export type ModoColore = "reparto" | "meccanica" | "sconto" | "visibilita";
+export type ModoColore = "reparto" | "meccanica" | "sconto";
 
 export const OPZIONI_COLORE: Array<{ valore: ModoColore; etichetta: string }> = [
   { valore: "reparto", etichetta: "Reparto" },
   { valore: "meccanica", etichetta: "Meccanica" },
   { valore: "sconto", etichetta: "Sconto" },
-  { valore: "visibilita", etichetta: "Visibilità" },
 ];
 
 export const TITOLI_LEGENDA: Readonly<Record<ModoColore, string>> = {
   reparto: "Reparto",
   meccanica: "Meccanica",
   sconto: "Sconto",
-  visibilita: "Visibilità stimata",
 };
 
 /** Come si disegna un riquadro: la tinta del riempimento e della cornice; attenuato se non dice nulla. */
@@ -46,9 +44,6 @@ export interface StileRiquadro {
   tinta: Tinta;
   attenuato: boolean;
 }
-
-/** Tinta della mappa di calore sopra la pagina: arancio, distinto dalla scala dei box. */
-export const TINTA_CALORE: Tinta = { classe: "fill-orange-500 dark:fill-orange-400", classeTesto: "fill-slate-900" };
 
 const stile = (tinta: Tinta, attenuato = false): StileRiquadro => ({ tinta, attenuato });
 
@@ -174,7 +169,7 @@ export function coloriReparti(box: readonly Pick<BoxInsight, "reparto" | "spazio
 export const tintaMeccanica = (meccanica: MeccanicaReferenza | null): Tinta =>
   meccanica ? tintaCategoria(MECCANICHE.indexOf(meccanica)) : TINTA_NEUTRA;
 
-/* ---------- Sconto e visibilità ---------- */
+/* ---------- Sconto ---------- */
 
 /** Fascia dello sconto (indice di FASCE_SCONTO); -1 senza sconto. */
 export const fasciaSconto = (sconto: number | null): number => {
@@ -192,27 +187,10 @@ export const tintaSconto = (sconto: number | null): Tinta => {
   return fascia < 0 ? TINTA_NEUTRA : tintaSequenziale(fascia + 1);
 };
 
-/** Limiti inferiori delle fasce di visibilità (0-100). */
-export const FASCE_VISIBILITA: readonly number[] = [0, 20, 40, 60, 80];
-
-export const fasciaVisibilita = (visibilita: number): number => {
-  if (!Number.isFinite(visibilita)) return -1;
-  let indice = 0;
-  FASCE_VISIBILITA.forEach((limite, i) => {
-    if (visibilita >= limite) indice = i;
-  });
-  return indice;
-};
-
-export const tintaVisibilita = (visibilita: number): Tinta => {
-  const fascia = fasciaVisibilita(visibilita);
-  return fascia < 0 ? TINTA_NEUTRA : tintaSequenziale(fascia + 2);
-};
-
 /** "0–10%", "10–20%"... "≥ 50%": le etichette di fasce contigue, l'ultima aperta. */
-const etichetteFasce = (limiti: readonly number[], unita: string, finale?: number): string[] =>
+const etichetteFasce = (limiti: readonly number[], unita: string): string[] =>
   limiti.map((da, i) => {
-    const a = limiti[i + 1] ?? finale;
+    const a = limiti[i + 1];
     return a === undefined ? `≥ ${formatNumero(da)}${unita}` : `${formatNumero(da)}–${formatNumero(a)}${unita}`;
   });
 
@@ -220,7 +198,7 @@ const etichetteFasce = (limiti: readonly number[], unita: string, finale?: numbe
 
 /** Lo stile del riquadro di un box nel modo scelto. */
 export const stileBox = (
-  box: Pick<BoxInsight, "reparto" | "meccanica" | "sconto" | "visibilita">,
+  box: Pick<BoxInsight, "reparto" | "meccanica" | "sconto">,
   modo: ModoColore,
   reparti: ColoriReparti
 ): StileRiquadro => {
@@ -231,8 +209,6 @@ export const stileBox = (
       return stile(tintaMeccanica(box.meccanica), !box.meccanica);
     case "sconto":
       return stile(tintaSconto(box.sconto), box.sconto === null);
-    case "visibilita":
-      return stile(tintaVisibilita(box.visibilita));
   }
 };
 
@@ -267,13 +243,6 @@ export const legendaModo = (
         })),
         ...(box.some(voce => voce.sconto === null) ? [{ id: "senza", etichetta: "Senza sconto", forma: "quadrato" as const, tinta: TINTA_NEUTRA }] : []),
       ];
-    case "visibilita":
-      return etichetteFasce(FASCE_VISIBILITA, "", 100).map((etichetta, i) => ({
-        id: `visibilita-${i}`,
-        etichetta,
-        forma: "quadrato" as const,
-        tinta: tintaSequenziale(i + 2),
-      }));
   }
 };
 

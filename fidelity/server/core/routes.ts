@@ -39,6 +39,7 @@ import { WebPliantController } from './controllers/WebPliantController';
 import { FileManagementController } from './controllers/FileManagementController';
 import { VolantinoController } from './controllers/VolantinoController';
 import { InsightConfrontiController } from './controllers/InsightConfrontiController';
+import { InsightReportController } from './controllers/InsightReportController';
 import { MaterialiController } from './controllers/MaterialiController';
 import { AvanzamentoProduzioneController } from './controllers/AvanzamentoProduzioneController';
 import { ConsultazioneController } from './controllers/ConsultazioneController';
@@ -85,6 +86,7 @@ import type { IWebPliantService } from './interfaces/IWebPliantService';
 import type { IFileManagementService } from './interfaces/IFileManagementService';
 import type { IVolantinoService } from './interfaces/IVolantinoService';
 import type { IInsightConfrontiService } from './interfaces/IInsightConfrontiService';
+import type { IReportVolantinoService } from './interfaces/IReportVolantinoService';
 import type { IMaterialiService } from './interfaces/IMaterialiService';
 import type { IAvanzamentoProduzioneService } from './interfaces/IAvanzamentoProduzioneService';
 import type { IConsultazioneService } from './interfaces/IConsultazioneService';
@@ -158,6 +160,7 @@ export async function createControllers(): Promise<IController[]> {
   const fileManagementService = container.get<IFileManagementService>(TYPES.FileManagementService);
   const volantinoService = container.get<IVolantinoService>(TYPES.VolantinoService);
   const insightConfrontiService = container.get<IInsightConfrontiService>(TYPES.InsightConfrontiService);
+  const reportVolantinoService = container.get<IReportVolantinoService>(TYPES.ReportVolantinoService);
   const materialiService = container.get<IMaterialiService>(TYPES.MaterialiService);
   const avanzamentoProduzioneService = container.get<IAvanzamentoProduzioneService>(TYPES.AvanzamentoProduzioneService);
   const consultazioneService = container.get<IConsultazioneService>(TYPES.ConsultazioneService);
@@ -191,6 +194,8 @@ export async function createControllers(): Promise<IController[]> {
     new VolantinoController(volantinoService),
     // '/flyer-insights/:idKit/...' (due o tre segmenti) non si sovrappone alla scheda '/flyer-insights/:id'
     new InsightConfrontiController(insightConfrontiService),
+    // '/flyer-insights/:idKit/report': due segmenti con il secondo fisso
+    new InsightReportController(reportVolantinoService),
     new MaterialiController(materialiService),
     new AvanzamentoProduzioneController(avanzamentoProduzioneService),
     new ConsultazioneController(consultazioneService),

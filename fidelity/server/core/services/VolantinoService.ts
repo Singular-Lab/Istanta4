@@ -297,7 +297,7 @@ export class VolantinoService implements IVolantinoService {
       const maxPageFromRefs = Math.max(...Array.from(pagineMap.keys()), 0);
       const actualTotalePagine = totalePaginePdf > 0 ? totalePaginePdf : maxPageFromRefs;
 
-      // 6. Le sezioni nuove (box sulle pagine, sintesi, prezzi, spazio, marche, zone calde): lettura
+      // 6. Le sezioni nuove (box sulle pagine, sintesi, prezzi, spazio, marche): lettura
       // generica delle referenze, uguale per ogni GDO e per Istanta e storico. Dalla config solo
       // reparto e meccanica gia' mappati qui sopra, cosi' codici e colori restano quelli dei riepiloghi.
       const dtoPerId = new Map(referenzeDTO.map(ref => [String(ref.id), ref] as const));

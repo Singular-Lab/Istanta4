@@ -60,7 +60,6 @@ const boxDi = (id: string, dati: Partial<BoxInsight> = {}): BoxInsight => ({
   foto: [],
   prodotti: 1,
   idReferenze: [`r-${id}`],
-  visibilita: 50,
   ...dati,
 });
 
@@ -264,21 +263,19 @@ describe("VolantinoSfogliabile: colori dei riquadri", () => {
     expect(riquadro("a")).toHaveAttribute("fill", tintaCategoria(1).colore);
   });
 
-  it("\"Colora per\" cambia colori e legenda; la visibilità dichiara i pesi e mostra la mappa di calore", () => {
-    const celle = Array.from({ length: 6 }, () => [0, 0.5, 1, 0.2]);
-    disegna({ box: [boxDi("a", { sconto: 55 })], calore: [{ pagina: 1, celle }] });
+  it("\"Colora per\" cambia colori e legenda: reparto, meccanica e sconto, senza visibilità né mappa di calore", () => {
+    disegna({ box: [boxDi("a", { sconto: 55 })] });
+
+    const opzioni = within(screen.getByRole("radiogroup", { name: "Colora per" })).getAllByRole("radio");
+    expect(opzioni.map(opzione => opzione.textContent)).toEqual(["Reparto", "Meccanica", "Sconto"]);
 
     fireEvent.click(screen.getByRole("radio", { name: "Sconto" }));
     expect(within(screen.getByRole("list", { name: "Sconto" })).getByText("≥ 50%")).toBeInTheDocument();
-    expect(screen.queryByTestId("calore-1")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("radio", { name: "Visibilità" }));
-    expect(screen.getByText(/Visibilità stimata, uguale per tutti i volantini/)).toBeInTheDocument();
-    expect(screen.getByTestId("calore-1").querySelectorAll("rect")).toHaveLength(24);
-    expect(within(screen.getByRole("list", { name: "Visibilità stimata" })).getByText("Zona calda")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("checkbox", { name: "Mappa di calore delle zone più viste" }));
+    expect(screen.queryByRole("radio", { name: "Visibilità" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Visibilità stimata/)).not.toBeInTheDocument();
     expect(screen.queryByTestId("calore-1")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Mappa di calore/)).not.toBeInTheDocument();
   });
 
   it("con statoBox i riquadri sono colorati per differenza e \"Colora per\" non c'è", () => {
@@ -310,7 +307,6 @@ const MOZZARELLA = boxDi("a", {
   meccanica: "sconto",
   meccanicaOriginale: "TP_PERCENTO",
   reparto: { codice: "24", descrizione: "LATTICINI" },
-  visibilita: 64,
   prodotti: 3,
 });
 
@@ -349,7 +345,9 @@ describe("VolantinoSfogliabile: scheda del box", () => {
     expect(within(dati).getByText("1 di 5")).toBeInTheDocument();
     // Lo spazio arriva già in percentuale della pagina, per Istanta e per lo storico
     expect(within(dati).getByText("12,5% della pagina")).toBeInTheDocument();
-    expect(within(dati).getByText("64 su 100")).toBeInTheDocument();
+    // Niente indici di visibilità stimata, vendite o previsioni
+    expect(within(dati).queryByText("Visibilità stimata")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Vendite e previsione")).not.toBeInTheDocument();
     expect(screen.getByText("€ 1,69")).toBeInTheDocument();
   });
 

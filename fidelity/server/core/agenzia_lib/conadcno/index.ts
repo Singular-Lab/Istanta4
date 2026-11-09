@@ -6,6 +6,7 @@ import { GDO } from "../../models/gdo.js";
 import { UtentiGDO } from "../../models/utenti_gdo.js";
 import { DefaultAgenziaLib } from "../default/index.js";
 import type { ExternalAuthContext, ParsedOIDCUtente } from "../types.js";
+import { insightVolantinoConadCno } from "./insight-volantino.js";
 import { importPuntiVenditaConadCno } from "./punti-vendita.js";
 
 const DEFAULT_BIRTH_DATE = "1970-01-01";
@@ -80,8 +81,9 @@ function userNames(claims: OidcUserClaims, email: string): { nome: string; cogno
 
 /**
  * CONAD CNO. Per tutto il resto vale il comportamento di default, che e quello
- * che il loader usava gia per questo cliente; in piu abilita l'import dei volantini
- * e il proprio tracciato del file punti vendita.
+ * che il loader usava gia per questo cliente; in piu abilita l'import dei volantini,
+ * il proprio tracciato del file punti vendita e le regole del report PDF del volantino
+ * (palette, intestazione, ordine delle sezioni).
  */
 export class ConadcnoAgenziaLib extends DefaultAgenziaLib {
   constructor(private readonly conadcnoUserService: IUserService) {
@@ -90,6 +92,7 @@ export class ConadcnoAgenziaLib extends DefaultAgenziaLib {
 
   supportaImportStorico = true;
   importPuntiVendita = importPuntiVenditaConadCno;
+  insightVolantino = insightVolantinoConadCno;
 
   async parseUtenteOIDC(
     email: string,

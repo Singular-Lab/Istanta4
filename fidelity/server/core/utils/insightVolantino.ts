@@ -1,11 +1,6 @@
 import {
   FASCE_SCONTO,
-  GRIGLIA_CALORE,
-  PESI_VISIBILITA,
-  pesoPagina,
-  pesoPosizione,
   type BoxInsight,
-  type CalorePagina,
   type DensitaPagina,
   type EstensioneInsight,
   type FasciaSconto,
@@ -13,12 +8,10 @@ import {
   type MarcheVolantino,
   type PrezziSconti,
   type QuotaSpazio,
-  type QuotaVisibilita,
   type RepartoInsight,
   type ScontoPerGruppo,
   type SintesiVolantino,
   type UsoSpazio,
-  type ZoneCalde,
 } from '../../../lib/insightVolantino/tipi';
 import { ETICHETTA_MECCANICA } from '../../../lib/puntiVendita/analisi';
 import type { BoxKit } from './analisiKit';
@@ -33,7 +26,8 @@ import type { ReferenzaStampata } from './referenzaStampata';
  * meccanica gia' mappati (per gli stessi codici e colori dei riepiloghi di sempre) e le marche
  * del distributore, e arrivano come opzioni: qui niente database e niente lettura della config.
  *
- * Ogni box conta nei conteggi; un box senza geometria ha spazio e visibilita' 0.
+ * Ogni box conta nei conteggi; un box senza geometria ha spazio 0. Per decisione della direzione
+ * niente visibilita' stimata, mappe di calore ne' zone calde.
  */
 
 export interface OpzioniInsight {
@@ -47,9 +41,6 @@ export interface OpzioniInsight {
   urlFoto: (guid: string) => string;
   origine?: (codiceBox: string) => 'listino' | 'fuori_listino' | undefined;
 }
-
-/** Quanti box mostrano le zone calde come i piu' visibili. */
-export const BOX_PIU_VISIBILI = 10;
 
 /** I gruppi dei box che non hanno il dato: chiave vuota, cosi' non si confondono con un valore vero. */
 export const SENZA_REPARTO = { chiave: '', etichetta: 'Reparto non indicato' } as const;
@@ -90,13 +81,6 @@ function pagineDelVolantino(box: readonly BoxKit[], totalePagine: number): numbe
 
 // ─── Box ────────────────────────────────────────────────────────────
 
-/** Visibilita' prima della normalizzazione: spazio × peso della pagina × peso della posizione del centro. */
-function visibilitaGrezza(singolo: BoxKit, pagine: number): number {
-  const geometria = singolo.geometria;
-  if (!geometria) return 0;
-  return geometria.spazio * pesoPagina(geometria.pagina, pagine) * pesoPosizione(geometria.y + geometria.h / 2);
-}
-
 /** Il primo valore presente fra le referenze del box, dalla pilota in giu'. */
 function primo<T>(referenze: readonly ReferenzaStampata[], valore: (referenza: ReferenzaStampata) => T | null | undefined): T | null {
   for (const referenza of referenze) {
@@ -126,7 +110,7 @@ function repartoDelBox(singolo: BoxKit, opzioni: OpzioniInsight): RepartoInsight
   return { codice: letto, descrizione: letto };
 }
 
-function insightDelBox(singolo: BoxKit, opzioni: OpzioniInsight, visibilita: number): BoxInsight {
+function insightDelBox(singolo: BoxKit, opzioni: OpzioniInsight): BoxInsight {
   const referenze = singolo.referenze;
   const pilota = referenze[0];
   const geometria = singolo.geometria;
@@ -155,20 +139,15 @@ function insightDelBox(singolo: BoxKit, opzioni: OpzioniInsight, visibilita: num
     foto: [...new Set(referenze.flatMap(referenza => referenza.foto))].map(guid => opzioni.urlFoto(guid)),
     prodotti: singolo.prodotti.length,
     idReferenze: referenze.map(referenza => referenza.id),
-    visibilita,
   };
   const origine = opzioni.origine?.(singolo.codiceBox);
   if (origine) insight.origine = origine;
   return insight;
 }
 
-/** I box del volantino per gli insight; la visibilita' e' 100 sul box piu' visibile di questo volantino. */
+/** I box del volantino per gli insight, nell'ordine del kit. */
 export function boxInsight(box: readonly BoxKit[], opzioni: OpzioniInsight): BoxInsight[] {
-  const pagine = pagineDelVolantino(box, opzioni.totalePagine);
-  const grezze = box.map(singolo => visibilitaGrezza(singolo, pagine));
-  const massima = grezze.reduce((max, valore) => Math.max(max, valore), 0);
-  return box.map((singolo, indice) =>
-    insightDelBox(singolo, opzioni, massima > 0 ? arrotonda((grezze[indice] / massima) * 100) : 0));
+  return box.map(singolo => insightDelBox(singolo, opzioni));
 }
 
 // ─── Gruppi ─────────────────────────────────────────────────────────
@@ -318,87 +297,6 @@ function marcheDi(box: readonly BoxInsight[], marcheDistributore: readonly strin
   };
 }
 
-function quoteVisibilita(gruppi: readonly Gruppo[], totaleVisibilita: number, totaleSpazio: number): QuotaVisibilita[] {
-  return gruppi
-    .map(gruppo => ({
-      gruppo,
-      visibilita: somma(gruppo.box.map(singolo => singolo.visibilita)),
-      spazio: spazioDi(gruppo.box),
-    }))
-    // I gruppi fatti solo di box senza posizione non hanno niente da dire sulle zone calde
-    .filter(voce => voce.visibilita > 0 || voce.spazio > 0)
-    .sort((a, b) => b.visibilita - a.visibilita || b.spazio - a.spazio || perEtichetta(a.gruppo, b.gruppo))
-    .map(voce => ({
-      chiave: voce.gruppo.chiave,
-      etichetta: voce.gruppo.etichetta,
-      quotaVisibilita: quota(voce.visibilita, totaleVisibilita),
-      quotaSpazio: quota(voce.spazio, totaleSpazio),
-    }));
-}
-
-/**
- * La mappa di calore di ogni pagina: ogni box distribuisce la sua visibilita' sulle celle della
- * griglia che copre, in proporzione all'area coperta; poi tutto si divide per la cella piu' calda
- * del volantino, cosi' le pagine si confrontano fra loro (la copertina e' piu' calda di una
- * pagina interna con gli stessi box).
- */
-function caloreDi(box: readonly BoxInsight[], pagine: number): CalorePagina[] {
-  const { righe, colonne } = GRIGLIA_CALORE;
-  const griglie = new Map<number, number[][]>();
-  const grigliaDi = (pagina: number): number[][] => {
-    let griglia = griglie.get(pagina);
-    if (!griglia) {
-      griglia = Array.from({ length: righe }, () => new Array<number>(colonne).fill(0));
-      griglie.set(pagina, griglia);
-    }
-    return griglia;
-  };
-  for (let pagina = 1; pagina <= pagine; pagina++) grigliaDi(pagina);
-
-  for (const singolo of box) {
-    const geometria = singolo.geometria;
-    if (!geometria || singolo.pagina === null || singolo.visibilita <= 0) continue;
-    const area = geometria.w * geometria.h;
-    if (area <= 0) continue;
-    const griglia = grigliaDi(singolo.pagina);
-    for (let riga = 0; riga < righe; riga++) {
-      const altezza = Math.min(geometria.y + geometria.h, (riga + 1) / righe) - Math.max(geometria.y, riga / righe);
-      if (altezza <= 0) continue;
-      for (let colonna = 0; colonna < colonne; colonna++) {
-        const larghezza = Math.min(geometria.x + geometria.w, (colonna + 1) / colonne) - Math.max(geometria.x, colonna / colonne);
-        if (larghezza <= 0) continue;
-        griglia[riga][colonna] += (singolo.visibilita * altezza * larghezza) / area;
-      }
-    }
-  }
-
-  let massima = 0;
-  for (const griglia of griglie.values()) for (const riga of griglia) for (const valore of riga) massima = Math.max(massima, valore);
-  return [...griglie.entries()]
-    .sort(([a], [b]) => a - b)
-    .map(([pagina, griglia]) => ({
-      pagina,
-      celle: griglia.map(riga => riga.map(valore => (massima > 0 ? arrotonda(valore / massima, 3) : 0))),
-    }));
-}
-
-function zoneCaldeDi(box: readonly BoxInsight[], pagine: number): ZoneCalde {
-  const totaleVisibilita = somma(box.map(singolo => singolo.visibilita));
-  const totaleSpazio = spazioDi(box);
-  return {
-    // Ordinamento stabile: a parita' di visibilita' resta l'ordine del volantino
-    boxPiuVisibili: box
-      .filter(singolo => singolo.visibilita > 0)
-      .sort((a, b) => b.visibilita - a.visibilita)
-      .slice(0, BOX_PIU_VISIBILI)
-      .map(singolo => singolo.id),
-    perReparto: quoteVisibilita(raggruppa(box, perReparto), totaleVisibilita, totaleSpazio),
-    perMarca: quoteVisibilita(raggruppa(box, perMarca), totaleVisibilita, totaleSpazio),
-    calore: caloreDi(box, pagine),
-    pesi: PESI_VISIBILITA,
-  };
-}
-
 /** Box e sezioni degli insight del volantino; il PDF lo aggiunge chi conosce il kit. */
 export function sezioniInsight(box: readonly BoxKit[], opzioni: OpzioniInsight): Omit<EstensioneInsight, 'pdf'> {
   const pagine = pagineDelVolantino(box, opzioni.totalePagine);
@@ -409,6 +307,5 @@ export function sezioniInsight(box: readonly BoxKit[], opzioni: OpzioniInsight):
     prezziSconti: prezziScontiDi(insight),
     spazio: usoSpazioDi(insight, pagine),
     marche: marcheDi(insight, opzioni.marcheDistributore),
-    zoneCalde: zoneCaldeDi(insight, pagine),
   };
 }

@@ -6,7 +6,7 @@ import { useFetchFlyerInsightsConfig } from "@/query/query";
 import { FlyerInsights as FlyerInsightsType } from "@/types/flyerInsights";
 import clsx from "clsx";
 import { FC, useMemo, useState } from "react";
-import { MarcheVolantino, PrezziSconti, UsoSpazio, ZoneCalde } from "./analisi";
+import { MarcheVolantino, PrezziSconti, UsoSpazio } from "./analisi";
 import RiepilogoMeccaniche from "./RiepilogoMeccaniche";
 import RiepilogoPagine from "./RiepilogoPagine";
 import RiepilogoReparti from "./RiepilogoReparti";
@@ -20,7 +20,7 @@ interface FlyerInsightsProps {
   exportCodes?: string[];
 }
 
-type IdScheda = "prezzi" | "spazio" | "marche" | "zone" | "reparti" | "meccaniche" | "pagine";
+type IdScheda = "prezzi" | "spazio" | "marche" | "reparti" | "meccaniche" | "pagine";
 
 interface Scheda {
   id: IdScheda;
@@ -36,7 +36,6 @@ const SCHEDE_ANALISI: readonly Scheda[] = [
   { id: "prezzi", etichetta: "Prezzi e sconti", icona: "Euro" },
   { id: "spazio", etichetta: "Spazio", icona: "LayoutTemplate" },
   { id: "marche", etichetta: "Marche", icona: "Award" },
-  { id: "zone", etichetta: "Zone calde", icona: "Eye" },
 ];
 
 /** I riepiloghi di sempre: grafici e colori vengono dalla config, che puo' spegnerli (enabled: false). */
@@ -139,8 +138,6 @@ const FlyerInsights: FC<FlyerInsightsProps> = ({
         return insights.spazio ? <UsoSpazio spazio={insights.spazio} copertura={copertura} /> : nonDisponibile;
       case "marche":
         return insights.marche ? <MarcheVolantino marche={insights.marche} copertura={copertura} /> : nonDisponibile;
-      case "zone":
-        return insights.zoneCalde ? <ZoneCalde zoneCalde={insights.zoneCalde} box={box} copertura={copertura} /> : nonDisponibile;
       case "pagine":
         return insightsConfig ? (
           <RiepilogoPagine

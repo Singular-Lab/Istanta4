@@ -23,7 +23,8 @@ import { AuditLogService } from "../../services/AuditLogService";
 import { removeSinglesIncludedInGroups, resolveGroupMembersFromScattoCodice } from "../../services/TracciatoScoreboardUtils.js";
 import { TracciatoService } from "../../services/TracciatoService.js";
 import { ServerUtils } from "../../utils/ServerUtils";
-import type { AgenziaLibScoreRules, AzioniRule, CellaConfronto, FieldChange, IAgenziaLib, MatricePromo, ModificaRule, ParsedOIDCUtente, PromoScoreboardInput } from "../types.js";
+import type { AgenziaLibScoreRules, AzioniRule, CellaConfronto, FieldChange, IAgenziaLib, InsightVolantinoAgenzia, MatricePromo, ModificaRule, ParsedOIDCUtente, PromoScoreboardInput } from "../types.js";
+import { insightVolantinoCoopFirenze } from "./insight-volantino.js";
 import { buildCoopfiPolicyFromCodeV2 } from "./utility/coopfi-policy-v2";
 import { COOPFI_TRACKED_FIELD_MAP, createCoopfiNormalizer } from "./utility/coopfi-referenza";
 import { resolveRepartoNamesForSettoriFinali } from "./utility/coopfi-settore-finale-map";
@@ -175,6 +176,9 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
 
     /** La lista soci contiene tutti i canali/aree: ogni promo tiene solo i suoi (I20-958). */
     public visibilitaPromo: DimensioneVisibilitaPromo[] = ["canale", "area"];
+
+    /** Palette e intestazione del report PDF del volantino; sezioni nell'ordine standard (insight-volantino.ts). */
+    public insightVolantino: InsightVolantinoAgenzia = insightVolantinoCoopFirenze;
 
     /**
      * Campi della referenza mostrati nell'anteprima del menabò, nell'ordine indicato.

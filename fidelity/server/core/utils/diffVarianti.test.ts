@@ -77,7 +77,6 @@ const insight = (singolo: BoxKit, spazio: number): BoxInsight => ({
   foto: [],
   prodotti: singolo.prodotti.length,
   idReferenze: [singolo.id],
-  visibilita: 0,
 });
 
 const insightDi = (elenco: BoxKit[]): BoxInsight[] => elenco.map(singolo => insight(singolo, singolo.geometria?.spazio ?? 0));

@@ -6,7 +6,7 @@ import { formatNumero, VALORE_ASSENTE } from "@/utils/format";
 import { useState, type ReactNode } from "react";
 import type { BoxInsight } from "../../../../lib/insightVolantino/tipi";
 import { ETICHETTA_MECCANICA } from "../../../../lib/puntiVendita/analisi";
-import { marcaFormato, testoReparto, testoVisibilita } from "./box";
+import { marcaFormato, testoReparto } from "./box";
 
 /** Una riga dell'elenco dei dati: etichetta tenue, valore in evidenza. */
 function Dato({ etichetta, children }: { etichetta: string; children: ReactNode }) {
@@ -96,7 +96,7 @@ export interface SchedaBoxProps {
 
 /**
  * La scheda di un box del volantino: il prodotto pilota (foto, prezzi, meccanica, reparto) e dove
- * sta nel volantino (pagina, spazio, visibilità stimata), con il pulsante del viaggio del prodotto.
+ * sta nel volantino (pagina, spazio), con il pulsante del viaggio del prodotto.
  */
 export function SchedaBox({ box, totalePagine, onViaggio }: SchedaBoxProps) {
   const sottotitolo = marcaFormato(box);
@@ -126,7 +126,6 @@ export function SchedaBox({ box, totalePagine, onViaggio }: SchedaBoxProps) {
         <Dato etichetta="Reparto">{reparto ?? VALORE_ASSENTE}</Dato>
         <Dato etichetta="Pagina">{box.pagina !== null ? `${formatNumero(box.pagina)} di ${formatNumero(totalePagine)}` : VALORE_ASSENTE}</Dato>
         <Dato etichetta="Spazio">{box.geometria ? `${formatPercentuale(box.spazio)} della pagina` : VALORE_ASSENTE}</Dato>
-        <Dato etichetta="Visibilità stimata">{testoVisibilita(box.visibilita)}</Dato>
         <Dato etichetta="Prodotti nel box">{formatNumero(box.prodotti)}</Dato>
         {box.codiceBox && <Dato etichetta="Codice box">{box.codiceBox}</Dato>}
       </dl>

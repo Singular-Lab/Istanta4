@@ -10,6 +10,7 @@ import Skeleton from "@/components/Base/Skeleton";
 import EmptyState from "@/components/EmptyState";
 import { FlyerInsights as FlyerInsightsComponent } from "@/components/FlyerInsights";
 import { SintesiInsight } from "@/components/FlyerInsights/analisi";
+import { ScaricaReportPdf } from "@/components/FlyerInsights/report";
 import { VolantinoSfogliabile } from "@/components/FlyerInsights/volantino";
 import ReferenzeInVolantinoBox from "@/components/ReferenzeInVolantinoBox";
 import withSessionCheck from "@/components/SessionChecker";
@@ -60,8 +61,9 @@ const boxDellaReferenza = (box: readonly BoxInsight[], referenza: string): BoxIn
 
 /**
  * Dettaglio di sola consultazione del volantino: sintesi, pagine con i box, insight, confronti e,
- * se autorizzati, file pubblicati. Il kit è nella chiave: aprendo un altro volantino da questa
- * pagina (l'edizione precedente, un'altra variante) pagina, scelte e filtri ripartono da capo.
+ * se autorizzati, file pubblicati; nell'intestazione il report PDF. Il kit è nella chiave: aprendo
+ * un altro volantino da questa pagina (l'edizione precedente, un'altra variante) pagina, scelte e
+ * filtri ripartono da capo.
  */
 const TuttiIVolantini: React.FC = () => {
   const [parametri] = useSearchParams();
@@ -141,14 +143,16 @@ function DettaglioVolantino({ idKit }: { idKit: string }) {
   }
 
   const contesto = dati?.contesto;
+  const titolo = contesto?.titolo || "Dettaglio volantino";
   const descrizione = [contesto?.nomeArea, contesto?.nomeCanale].filter(Boolean).join(" · ");
   const conPagine = Boolean(dati && (dati.pdf || (dati.box?.length ?? 0) > 0));
 
   return (
     <Pagina
-      titolo={contesto?.titolo || "Dettaglio volantino"}
+      titolo={titolo}
       descrizione={descrizione || "Insight e materiali del volantino"}
       indietro={INDIETRO}
+      azioni={<ScaricaReportPdf idKit={idKit} titolo={titolo} disabled={!dati} />}
     >
       {insights.isLoading ? (
         <div aria-busy="true" className="space-y-6">
@@ -180,7 +184,6 @@ function DettaglioVolantino({ idKit }: { idKit: string }) {
                 // Le pagine della sintesi (PDF in Olimpo, o fino all'ultimo box): le stesse delle card e dei confronti
                 totalePagine={dati.sintesi?.pagine ?? dati.totalePagine}
                 configurazione={configurazione.data}
-                calore={dati.zoneCalde?.calore}
                 pagina={paginaVolantino}
                 onCambiaPagina={setPaginaSfogliata}
                 idBoxIniziale={boxIniziale?.id ?? null}
@@ -192,7 +195,7 @@ function DettaglioVolantino({ idKit }: { idKit: string }) {
 
       <Sezione
         titolo="Insight del volantino"
-        descrizione="Pagine, reparti, meccaniche, prezzi e sconti, spazio, marche e zone calde."
+        descrizione="Pagine, reparti, meccaniche, prezzi e sconti, spazio e marche."
       >
         {insights.isLoading ? (
           <div aria-busy="true" className="space-y-4">

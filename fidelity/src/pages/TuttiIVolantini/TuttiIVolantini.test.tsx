@@ -13,6 +13,8 @@ const finti = vi.hoisted(() => ({
   richiestaFile: null as { idKit: string; abilitata?: boolean } | null,
   idKitRichiesti: [] as string[],
   idKitConfronti: [] as Array<string | undefined>,
+  /** Le prop ricevute dal visualizzatore all'ultimo disegno. */
+  propVolantino: [] as string[],
   scarica: vi.fn(),
 }));
 
@@ -41,6 +43,14 @@ vi.mock("@/query/consultazione", () => ({
 vi.mock("@/utils/scaricaFileConsultazione", () => ({
   useScaricaFileConsultazione: () => ({ inCorso: null, scarica: finti.scarica }),
 }));
+// Il report PDF lo disegna il suo componente (con i suoi test): qui conta dove sta e cosa riceve
+vi.mock("@/components/FlyerInsights/report", () => ({
+  ScaricaReportPdf: ({ idKit, titolo, disabled }: { idKit: string; titolo: string; disabled?: boolean }) => (
+    <button type="button" disabled={disabled}>
+      Report PDF di {idKit}: {titolo}
+    </button>
+  ),
+}));
 vi.mock("@/components/FlyerInsights", () => ({
   FlyerInsights: ({ insights, paginaSelezionata }: { insights: { guidIdKitRuntime: string } | null; paginaSelezionata?: number }) => (
     <div>Insight {insights?.guidIdKitRuntime ?? "vuoti"} pagina {paginaSelezionata ?? "tutte"}</div>
@@ -64,30 +74,26 @@ vi.mock("@/components/FlyerInsights/analisi", () => ({
   ),
 }));
 vi.mock("@/components/FlyerInsights/volantino", () => ({
-  VolantinoSfogliabile: ({
-    idKit,
-    pagina,
-    idBoxIniziale,
-    calore,
-    box,
-    onCambiaPagina,
-  }: {
+  VolantinoSfogliabile: (props: {
     idKit: string;
     pagina?: number;
     idBoxIniziale?: string | null;
-    calore?: unknown[];
     box: unknown[];
     onCambiaPagina?: (pagina: number) => void;
-  }) => (
-    <div>
-      <p>
-        Volantino {idKit} pagina {pagina ?? "nessuna"} box iniziale {idBoxIniziale ?? "nessuno"} box {box.length} calore {calore?.length ?? 0}
-      </p>
-      <button type="button" onClick={() => onCambiaPagina?.((pagina ?? 1) + 2)}>
-        Pagine successive
-      </button>
-    </div>
-  ),
+  }) => {
+    const { idKit, pagina, idBoxIniziale, box, onCambiaPagina } = props;
+    finti.propVolantino = Object.keys(props);
+    return (
+      <div>
+        <p>
+          Volantino {idKit} pagina {pagina ?? "nessuna"} box iniziale {idBoxIniziale ?? "nessuno"} box {box.length}
+        </p>
+        <button type="button" onClick={() => onCambiaPagina?.((pagina ?? 1) + 2)}>
+          Pagine successive
+        </button>
+      </div>
+    );
+  },
 }));
 vi.mock("@/components/FlyerInsights/confronti", async () => {
   // Il collegamento all'edizione precedente deve navigare davvero nel router del test
@@ -150,7 +156,6 @@ const box = (id: string, pagina: number, nome: string, idReferenze: string[]) =>
   foto: [],
   prodotti: idReferenze.length,
   idReferenze,
-  visibilita: 50,
 });
 
 const datiInsight = {
@@ -165,7 +170,6 @@ const datiInsight = {
   pdf: { idOlimpoCloud: "olimpo-1", pagine: 8 },
   box: [box("b1", 1, "Latte intero", ["r1"]), box("b2", 2, "Yogurt bianco", ["r6", "r7"]), box("b3", 5, "Mozzarella Granarolo", ["r9"])],
   sintesi: { referenze: 3, box: 3, pagine: 8 },
-  zoneCalde: { calore: [{ pagina: 1, celle: [] }, { pagina: 2, celle: [] }] },
 };
 
 const caricato = (data: unknown) => ({ data, isLoading: false, isError: false, error: null, refetch: vi.fn() });
@@ -194,6 +198,7 @@ describe("Dettaglio insight del volantino", () => {
     finti.richiestaFile = null;
     finti.idKitRichiesti = [];
     finti.idKitConfronti = [];
+    finti.propVolantino = [];
     finti.scarica.mockReset();
   });
 
@@ -217,22 +222,24 @@ describe("Dettaglio insight del volantino", () => {
     expect(titoli).toEqual(["In sintesi", "Il volantino", "Insight del volantino", "Confronti", "File del volantino"]);
   });
 
-  it("passa al visualizzatore PDF, box, mappa di calore, pagina di ?pagina e box di ?referenza cercato per id", () => {
+  it("passa al visualizzatore PDF, box, pagina di ?pagina e box di ?referenza cercato per id, senza mappa di calore né vendite", () => {
     apri("/volantini/tutti_i_volantini?kit=k1&pagina=2&referenza=r7");
 
-    expect(screen.getByText("Volantino k1 pagina 2 box iniziale b2 box 3 calore 2")).toBeInTheDocument();
+    expect(screen.getByText("Volantino k1 pagina 2 box iniziale b2 box 3")).toBeInTheDocument();
+    expect(finti.propVolantino).toContain("pdf");
+    for (const tolta of ["calore", "rendimento", "previsione", "pesi"]) expect(finti.propVolantino).not.toContain(tolta);
   });
 
   it("senza ?pagina apre la pagina del box della referenza, cercata anche per nome stampato", () => {
     apri("/volantini/tutti_i_volantini?kit=k1&referenza=mozzarella%20%20granarolo");
 
-    expect(screen.getByText("Volantino k1 pagina 5 box iniziale b3 box 3 calore 2")).toBeInTheDocument();
+    expect(screen.getByText("Volantino k1 pagina 5 box iniziale b3 box 3")).toBeInTheDocument();
   });
 
   it("con una referenza che non è in nessun box parte dalla prima pagina senza box aperto", () => {
     apri("/volantini/tutti_i_volantini?kit=k1&referenza=inesistente&pagina=abc");
 
-    expect(screen.getByText("Volantino k1 pagina 1 box iniziale nessuno box 3 calore 2")).toBeInTheDocument();
+    expect(screen.getByText("Volantino k1 pagina 1 box iniziale nessuno box 3")).toBeInTheDocument();
   });
 
   it("sfogliando il visualizzatore la pagina scelta vince su quella dell'indirizzo", () => {
@@ -359,5 +366,42 @@ describe("Dettaglio insight del volantino", () => {
 
     expect(screen.getByText("Volantino non indicato")).toBeInTheDocument();
     expect(finti.idKitConfronti.at(-1)).toBeUndefined();
+    expect(screen.queryByRole("button", { name: /^Report PDF/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("Dettaglio insight del volantino: report PDF", () => {
+  beforeEach(() => {
+    finti.permessi = new Set(["materiali.visualizza"]);
+    finti.insights = caricato(datiInsight);
+    finti.configurazione = caricato({});
+    finti.confronti = caricato(confrontiCompleti);
+    finti.file = caricato({ id: "k1", titolo: "Volantino ottobre", file: [] });
+  });
+
+  it("il report PDF sta nell'intestazione con kit e titolo; resta disabilitato finché gli insight non arrivano", () => {
+    apri();
+    expect(screen.getByRole("button", { name: "Report PDF di k1: Volantino ottobre" })).toBeEnabled();
+  });
+
+  it("mentre gli insight caricano il report non si può scaricare", () => {
+    finti.insights = inCaricamento();
+    apri();
+
+    expect(screen.getByRole("button", { name: "Report PDF di k1: Dettaglio volantino" })).toBeDisabled();
+  });
+
+  it("se gli insight non arrivano non c'è il report", () => {
+    finti.insights = fallito("Volantino non trovato");
+    apri();
+
+    expect(screen.queryByRole("button", { name: /^Report PDF/ })).not.toBeInTheDocument();
+  });
+
+  it("accanto al report niente rendimento, previsione né simulazione", () => {
+    apri();
+
+    expect(screen.getByRole("button", { name: /^Report PDF/ })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { level: 2, name: /Rendimento|Previsione|Simulazione/ })).not.toBeInTheDocument();
   });
 });

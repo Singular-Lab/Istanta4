@@ -4,7 +4,7 @@ import { twMerge } from "@/utils/twMerge";
 import { useState, type KeyboardEvent, type SyntheticEvent } from "react";
 import type { BoxInsight } from "../../../../lib/insightVolantino/tipi";
 import { descrizioneBox, tooltipBox } from "./box";
-import { TINTA_CALORE, type StileRiquadro } from "./colori";
+import type { StileRiquadro } from "./colori";
 import { paginaNellImmagine, riquadroBox, stileImmagine, type PaginaNellImmagine } from "./geometria";
 
 export interface PaginaConImmagineProps {
@@ -20,8 +20,6 @@ export interface PaginaConImmagineProps {
   stile: (box: BoxInsight) => StileRiquadro;
   selezionato: string | null;
   onSeleziona: (box: BoxInsight) => void;
-  /** Mappa di calore della pagina (righe × colonne, valori 0-1), sotto i riquadri. */
-  calore?: readonly (readonly number[])[] | null;
 }
 
 /** Larghezza della pagina nelle coordinate del disegno: l'altezza segue la proporzione. */
@@ -44,7 +42,7 @@ type EsitoImmagine = { url: string; pagina: PaginaNellImmagine | null };
  * (compensando l'abbondanza), con sopra i riquadri dei box. Senza immagine, o se Olimpo risponde
  * con il segnaposto, la pagina resta bianca con le sue proporzioni e i riquadri al loro posto.
  */
-export function PaginaConImmagine({ numero, lato, proporzione, immagine, box, stile, selezionato, onSeleziona, calore }: PaginaConImmagineProps) {
+export function PaginaConImmagine({ numero, lato, proporzione, immagine, box, stile, selezionato, onSeleziona }: PaginaConImmagineProps) {
   const { conTooltip, tooltip } = useTooltip();
   const [esito, setEsito] = useState<EsitoImmagine | null>(null);
   const altezza = altezzaFoglio(proporzione);
@@ -71,7 +69,6 @@ export function PaginaConImmagine({ numero, lato, proporzione, immagine, box, st
 
   // Il box scelto si disegna per ultimo, perché il contorno resti sopra i vicini
   const ordinati = [...box].sort((a, b) => Number(a.id === selezionato) - Number(b.id === selezionato));
-  const righeCalore = calore?.length ?? 0;
 
   return (
     <div
@@ -103,26 +100,6 @@ export function PaginaConImmagine({ numero, lato, proporzione, immagine, box, st
         />
       )}
       <svg viewBox={`0 0 ${LARGHEZZA} ${altezza}`} preserveAspectRatio="none" focusable="false" className="absolute inset-0 block h-full w-full">
-        {righeCalore > 0 && (
-          <g data-testid={`calore-${numero}`} aria-hidden="true" className="pointer-events-none">
-            {calore!.map((riga, r) =>
-              riga.map((valore, c) => {
-                const colonne = riga.length || 1;
-                return (
-                  <rect
-                    key={`${r}-${c}`}
-                    x={arrotonda((c * LARGHEZZA) / colonne)}
-                    y={arrotonda((r * altezza) / righeCalore)}
-                    width={arrotonda(LARGHEZZA / colonne)}
-                    height={arrotonda(altezza / righeCalore)}
-                    fillOpacity={Math.max(0, Math.min(1, valore)) * 0.55}
-                    className={TINTA_CALORE.classe}
-                  />
-                );
-              })
-            )}
-          </g>
-        )}
         {ordinati.map(voce => {
           const riquadro = riquadroBox(voce.geometria);
           if (!riquadro) return null;

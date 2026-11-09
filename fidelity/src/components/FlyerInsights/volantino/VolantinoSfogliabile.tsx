@@ -8,13 +8,7 @@ import { formatNumero } from "@/utils/format";
 import { urlPaginaMateriale } from "@/utils/materiali";
 import { twMerge } from "@/utils/twMerge";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import {
-  PESI_VISIBILITA,
-  type BoxInsight,
-  type CalorePagina,
-  type PdfVolantino,
-  type StatoDifferenza,
-} from "../../../../lib/insightVolantino/tipi";
+import type { BoxInsight, PdfVolantino, StatoDifferenza } from "../../../../lib/insightVolantino/tipi";
 import { marcaFormato, trovaBoxIniziale } from "./box";
 import {
   coloriReparti,
@@ -23,7 +17,6 @@ import {
   OPZIONI_COLORE,
   stileBox,
   stileDifferenza,
-  TINTA_CALORE,
   TITOLI_LEGENDA,
   type ModoColore,
   type StileRiquadro,
@@ -54,8 +47,6 @@ export interface VolantinoSfogliabileProps {
   configurazione?: FlyerInsightsConfig;
   /** Colora per differenza fra varianti e nasconde "Colora per". */
   statoBox?: Record<string, StatoDifferenza>;
-  /** Mappa di calore (zone calde) da mostrare nella modalità visibilità. */
-  calore?: CalorePagina[];
   /** Pagina controllata (opzionale): due visualizzatori affiancati restano sulla stessa doppia pagina. */
   pagina?: number;
   onCambiaPagina?: (pagina: number) => void;
@@ -67,16 +58,6 @@ export interface VolantinoSfogliabileProps {
 
 /** Livelli dell'ingrandimento a tutto schermo. */
 export const LIVELLI_ZOOM: readonly number[] = [1, 1.5, 2, 3];
-
-/** I pesi della visibilità come si leggono ("0,8"), dal contratto: la pagina li dichiara. */
-const PESI_TESTO = {
-  copertina: formatNumero(PESI_VISIBILITA.copertina),
-  ultima: formatNumero(PESI_VISIBILITA.ultima),
-  primaDoppia: formatNumero(PESI_VISIBILITA.primaDoppia),
-  altre: formatNumero(PESI_VISIBILITA.altre),
-  alto: formatNumero(PESI_VISIBILITA.alto),
-  basso: formatNumero(PESI_VISIBILITA.basso),
-};
 
 /** Precedente e successiva, con la posizione nel volantino. */
 function Navigazione({ doppia, doppie, onVai }: { doppia: DoppiaPagina; doppie: number; onVai: (indice: number) => void }) {
@@ -113,8 +94,8 @@ function Navigazione({ doppia, doppie, onVai }: { doppia: DoppiaPagina; doppie: 
 
 /**
  * Il volantino sfogliabile: le pagine vere del PDF da Olimpo (copertina da sola, poi le doppie
- * pagine) con sopra i riquadri dei box, colorati per reparto, meccanica, sconto o visibilità, o per
- * differenza con un'altra variante. Un clic (o Invio) su un riquadro apre la scheda del box, e da lì
+ * pagine) con sopra i riquadri dei box, colorati per reparto, meccanica o sconto, o per differenza
+ * con un'altra variante. Un clic (o Invio) su un riquadro apre la scheda del box, e da lì
  * il viaggio del prodotto nei volantini della GDO. Senza PDF le pagine sono bianche.
  */
 export function VolantinoSfogliabile(props: VolantinoSfogliabileProps) {
@@ -129,7 +110,6 @@ function Sfogliabile({
   totalePagine,
   configurazione,
   statoBox,
-  calore,
   pagina,
   onCambiaPagina,
   idBoxIniziale,
@@ -143,7 +123,6 @@ function Sfogliabile({
   const [viaggioAperto, setViaggioAperto] = useState(false);
   /** Indice in LIVELLI_ZOOM; null a ingrandimento chiuso. */
   const [zoom, setZoom] = useState<number | null>(null);
-  const [mostraCalore, setMostraCalore] = useState(true);
 
   const controllata = pagina !== undefined;
   const totale = pagineDaSfogliare(totalePagine, box);
@@ -183,20 +162,17 @@ function Sfogliabile({
   const perPagina = useMemo(() => boxPerPagina(box), [box]);
   const proporzioneBase = useMemo(() => proporzioneDelVolantino(box), [box]);
   const reparti = useMemo(() => coloriReparti(box, configurazione), [box, configurazione]);
-  const calorePerPagina = useMemo(() => new Map((calore ?? []).map(voce => [voce.pagina, voce.celle])), [calore]);
   const senzaPosizione = useMemo(() => box.filter(voce => voce.pagina === null || !riquadroBox(voce.geometria)).length, [box]);
 
   const confronto = statoBox !== undefined;
-  const conCalore = !confronto && modo === "visibilita" && calorePerPagina.size > 0;
   const stile = useCallback(
     (voce: BoxInsight): StileRiquadro => (statoBox ? stileDifferenza(statoBox[voce.id]) : stileBox(voce, modo, reparti)),
     [statoBox, modo, reparti]
   );
-  const voci = useMemo<VoceLegenda[]>(() => {
-    if (statoBox) return legendaDifferenze(box, statoBox);
-    const base = legendaModo(modo, box, reparti);
-    return conCalore && mostraCalore ? [...base, { id: "calore", etichetta: "Zona calda", forma: "quadrato" as const, tinta: TINTA_CALORE }] : base;
-  }, [statoBox, box, modo, reparti, conCalore, mostraCalore]);
+  const voci = useMemo<VoceLegenda[]>(
+    () => (statoBox ? legendaDifferenze(box, statoBox) : legendaModo(modo, box, reparti)),
+    [statoBox, box, modo, reparti]
+  );
 
   // Le pagine oltre quelle del PDF restano bianche; pagine 0 vuol dire che Olimpo non le ha contate
   const immagine = (numero: number): string | null =>
@@ -215,7 +191,6 @@ function Sfogliabile({
       stile={stile}
       selezionato={selezionato}
       onSeleziona={apriBox}
-      calore={conCalore && mostraCalore ? calorePerPagina.get(numero) : null}
     />
   );
 
@@ -315,19 +290,6 @@ function Sfogliabile({
 
       {legenda}
 
-      {conCalore && (
-        <label className="inline-flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
-          <input type="checkbox" checked={mostraCalore} onChange={evento => setMostraCalore(evento.target.checked)} className="rounded border-slate-300" />
-          Mappa di calore delle zone più viste
-        </label>
-      )}
-      {!confronto && modo === "visibilita" && (
-        <p className="text-xs text-slate-500 dark:text-slate-400">
-          Visibilità stimata, uguale per tutti i volantini: spazio del box × peso della pagina (copertina {PESI_TESTO.copertina}, ultima {PESI_TESTO.ultima},
-          pagine 2-3 {PESI_TESTO.primaDoppia}, altre {PESI_TESTO.altre}) × posizione (da {PESI_TESTO.alto} in cima a {PESI_TESTO.basso} in fondo). 100 è il box più
-          visibile di questo volantino.
-        </p>
-      )}
       {(!pdf || senzaPosizione > 0) && (
         <p className="text-xs text-slate-500 dark:text-slate-400">
           {!pdf && "Il PDF del volantino non è disponibile: i box sono disegnati su pagine bianche. "}
