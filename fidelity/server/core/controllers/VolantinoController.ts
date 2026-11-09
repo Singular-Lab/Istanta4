@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import 'express-session';
 import { HttpStatusCode } from '../../../lib/enums';
+import { ambitoGdoDellaRichiesta } from '../accessi/contestoAccesso';
 import { BaseController } from '../base/BaseController';
 import { IVolantinoService } from '../interfaces/IVolantinoService';
 import { authMiddleware } from '../middleware/authMiddleware';
@@ -29,7 +30,9 @@ export class VolantinoController extends BaseController {
         this.sendResponse(res, HttpStatusCode.BAD_REQUEST, { error: "guidIdKitRuntime è obbligatorio" });
         return;
       }
-      const result = await this.volantinoService.getFlyerInsights(guidIdKitRuntime);
+      // La GDO della sessione (Superadmin e Agenzia: tutte, o quella in ?gdo=): fuori ambito e' un 404
+      const ambito = await ambitoGdoDellaRichiesta(req, res, req.query.gdo);
+      const result = await this.volantinoService.getFlyerInsights(guidIdKitRuntime, ambito);
       this.sendResponse(res, HttpStatusCode.OK, result);
     } catch (error) {
       this.handleError(res, error as Error);

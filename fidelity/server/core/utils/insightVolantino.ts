@@ -1,0 +1,414 @@
+import {
+  FASCE_SCONTO,
+  GRIGLIA_CALORE,
+  PESI_VISIBILITA,
+  pesoPagina,
+  pesoPosizione,
+  type BoxInsight,
+  type CalorePagina,
+  type DensitaPagina,
+  type EstensioneInsight,
+  type FasciaSconto,
+  type MarcaInsight,
+  type MarcheVolantino,
+  type PrezziSconti,
+  type QuotaSpazio,
+  type QuotaVisibilita,
+  type RepartoInsight,
+  type ScontoPerGruppo,
+  type SintesiVolantino,
+  type UsoSpazio,
+  type ZoneCalde,
+} from '../../../lib/insightVolantino/tipi';
+import { ETICHETTA_MECCANICA } from '../../../lib/puntiVendita/analisi';
+import type { BoxKit } from './analisiKit';
+import { repartoInAnagrafica, type RepartoAnagrafica } from './campiInsights';
+import type { ReferenzaStampata } from './referenzaStampata';
+
+/**
+ * Le sezioni nuove degli insight del volantino (lib/insightVolantino/tipi.ts) dai box del kit
+ * (boxDelKit), uguali per ogni GDO e per i kit di Istanta e dello storico: prezzi, sconti, marca,
+ * meccanica e geometria vengono dalla lettura generica delle referenze (referenzaStampata.ts).
+ * Della configurazione del cliente servono solo l'anagrafica dei reparti, il reparto e la
+ * meccanica gia' mappati (per gli stessi codici e colori dei riepiloghi di sempre) e le marche
+ * del distributore, e arrivano come opzioni: qui niente database e niente lettura della config.
+ *
+ * Ogni box conta nei conteggi; un box senza geometria ha spazio e visibilita' 0.
+ */
+
+export interface OpzioniInsight {
+  totalePagine: number;
+  anagraficaReparti: readonly RepartoAnagrafica[];
+  marcheDistributore: readonly string[];
+  /** reparto gia' mappato dalla config per id referenza */
+  repartoConfigurato?: (idReferenza: string) => RepartoInsight | null;
+  /** meccanica come la scrive la fonte per id referenza */
+  meccanicaOriginale?: (idReferenza: string) => string | null;
+  urlFoto: (guid: string) => string;
+  origine?: (codiceBox: string) => 'listino' | 'fuori_listino' | undefined;
+}
+
+/** Quanti box mostrano le zone calde come i piu' visibili. */
+export const BOX_PIU_VISIBILI = 10;
+
+/** I gruppi dei box che non hanno il dato: chiave vuota, cosi' non si confondono con un valore vero. */
+export const SENZA_REPARTO = { chiave: '', etichetta: 'Reparto non indicato' } as const;
+export const SENZA_MECCANICA = { chiave: '', etichetta: 'Meccanica non riconosciuta' } as const;
+export const SENZA_MARCA = { chiave: '', etichetta: 'Marca non indicata' } as const;
+
+// ─── Numeri ─────────────────────────────────────────────────────────
+
+const arrotonda = (valore: number, cifre = 1): number => {
+  const fattore = 10 ** cifre;
+  return Math.round(valore * fattore) / fattore;
+};
+
+const somma = (valori: readonly number[]): number => valori.reduce((totale, valore) => totale + valore, 0);
+
+/** Percentuale 0-100 con un decimale; 0 se il totale e' 0. */
+const quota = (parte: number, totale: number): number => (totale > 0 ? arrotonda((parte / totale) * 100) : 0);
+
+const media = (valori: readonly number[]): number | null => (valori.length > 0 ? arrotonda(somma(valori) / valori.length) : null);
+
+/** Nome normalizzato della marca: maiuscole e spazi singoli, per riconoscere la stessa marca scritta in modi diversi. */
+export const chiaveMarca = (marca: string): string => marca.toLocaleUpperCase('it-IT').trim().replace(/\s+/g, ' ');
+
+const sconti = (box: readonly BoxInsight[]): number[] => box.flatMap(singolo => (singolo.sconto === null ? [] : [singolo.sconto]));
+
+const referenzeDi = (box: readonly BoxInsight[]): number => somma(box.map(singolo => singolo.idReferenze.length));
+
+const spazioDi = (box: readonly BoxInsight[]): number => somma(box.map(singolo => singolo.spazio));
+
+/**
+ * Le pagine su cui si calcola: quelle del volantino, o fino all'ultima con un box se i dati ne
+ * hanno di piu' (o se il numero di pagine non si sa), cosi' nessun box resta fuori.
+ */
+function pagineDelVolantino(box: readonly BoxKit[], totalePagine: number): number {
+  const ultimaConBox = box.reduce((massima, singolo) => Math.max(massima, singolo.pagina ?? 0), 0);
+  return Math.max(Number.isFinite(totalePagine) && totalePagine > 0 ? Math.floor(totalePagine) : 0, ultimaConBox);
+}
+
+// ─── Box ────────────────────────────────────────────────────────────
+
+/** Visibilita' prima della normalizzazione: spazio × peso della pagina × peso della posizione del centro. */
+function visibilitaGrezza(singolo: BoxKit, pagine: number): number {
+  const geometria = singolo.geometria;
+  if (!geometria) return 0;
+  return geometria.spazio * pesoPagina(geometria.pagina, pagine) * pesoPosizione(geometria.y + geometria.h / 2);
+}
+
+/** Il primo valore presente fra le referenze del box, dalla pilota in giu'. */
+function primo<T>(referenze: readonly ReferenzaStampata[], valore: (referenza: ReferenzaStampata) => T | null | undefined): T | null {
+  for (const referenza of referenze) {
+    const trovato = valore(referenza);
+    if (trovato !== null && trovato !== undefined) return trovato;
+  }
+  return null;
+}
+
+const NUMERO_REPARTO = /^Reparto (\d+)$/;
+
+/**
+ * Il reparto del box. Prima quello mappato dalla config (pilota, poi le altre righe del box): ha i
+ * codici dell'anagrafica, gli stessi dei colori dei riepiloghi. Altrimenti la lettura generica,
+ * ricondotta all'anagrafica se ne riconosce la descrizione, la sigla o il numero ("Reparto 01",
+ * come la lettura generica scrive il reparto DB1 o lo stile DIC_Rep_NN); se no, com'e' stato letto.
+ */
+function repartoDelBox(singolo: BoxKit, opzioni: OpzioniInsight): RepartoInsight | null {
+  const configurato = primo(singolo.referenze, referenza => opzioni.repartoConfigurato?.(referenza.id));
+  if (configurato && configurato.codice.trim() !== '') return configurato;
+
+  const letto = singolo.reparto?.trim();
+  if (!letto) return null;
+  const numero = NUMERO_REPARTO.exec(letto)?.[1];
+  const inAnagrafica = repartoInAnagrafica(opzioni.anagraficaReparti, numero ?? letto, letto);
+  if (inAnagrafica) return { codice: inAnagrafica.codice, descrizione: inAnagrafica.descrizione };
+  return { codice: letto, descrizione: letto };
+}
+
+function insightDelBox(singolo: BoxKit, opzioni: OpzioniInsight, visibilita: number): BoxInsight {
+  const referenze = singolo.referenze;
+  const pilota = referenze[0];
+  const geometria = singolo.geometria;
+  // Prezzo e barrato vanno presi insieme dalla stessa riga: la pilota, o la prima che ha un prezzo
+  const conPrezzo = referenze.find(referenza => referenza.prezzo !== null) ?? pilota;
+  const insight: BoxInsight = {
+    id: singolo.id,
+    codiceBox: singolo.codiceBox,
+    pagina: singolo.pagina,
+    geometria: geometria ? { x: geometria.x, y: geometria.y, w: geometria.w, h: geometria.h } : null,
+    spazio: geometria?.spazio ?? 0,
+    proporzionePagina: geometria?.proporzione ?? null,
+    chiave: pilota.chiave,
+    nome: pilota.nome,
+    marca: pilota.marca,
+    formato: pilota.formato,
+    prezzo: conPrezzo.prezzo,
+    barrato: conPrezzo.barrato,
+    sconto: singolo.sconto,
+    prezzoAlKg: primo(referenze, referenza => referenza.prezzoAlKg || null),
+    punti: primo(referenze, referenza => referenza.punti || null),
+    sottocosto: singolo.meccanica === 'sottocosto' || referenze.some(referenza => referenza.sottocosto),
+    meccanica: singolo.meccanica,
+    meccanicaOriginale: primo(referenze, referenza => opzioni.meccanicaOriginale?.(referenza.id) || null),
+    reparto: repartoDelBox(singolo, opzioni),
+    foto: [...new Set(referenze.flatMap(referenza => referenza.foto))].map(guid => opzioni.urlFoto(guid)),
+    prodotti: singolo.prodotti.length,
+    idReferenze: referenze.map(referenza => referenza.id),
+    visibilita,
+  };
+  const origine = opzioni.origine?.(singolo.codiceBox);
+  if (origine) insight.origine = origine;
+  return insight;
+}
+
+/** I box del volantino per gli insight; la visibilita' e' 100 sul box piu' visibile di questo volantino. */
+export function boxInsight(box: readonly BoxKit[], opzioni: OpzioniInsight): BoxInsight[] {
+  const pagine = pagineDelVolantino(box, opzioni.totalePagine);
+  const grezze = box.map(singolo => visibilitaGrezza(singolo, pagine));
+  const massima = grezze.reduce((max, valore) => Math.max(max, valore), 0);
+  return box.map((singolo, indice) =>
+    insightDelBox(singolo, opzioni, massima > 0 ? arrotonda((grezze[indice] / massima) * 100) : 0));
+}
+
+// ─── Gruppi ─────────────────────────────────────────────────────────
+
+interface Etichettato {
+  chiave: string;
+  etichetta: string;
+}
+
+interface Gruppo extends Etichettato {
+  box: BoxInsight[];
+}
+
+/** I box per gruppo, nell'ordine in cui il gruppo compare la prima volta. */
+function raggruppa(box: readonly BoxInsight[], gruppoDi: (singolo: BoxInsight) => Etichettato): Gruppo[] {
+  const gruppi = new Map<string, Gruppo>();
+  for (const singolo of box) {
+    const { chiave, etichetta } = gruppoDi(singolo);
+    const gruppo = gruppi.get(chiave) ?? { chiave, etichetta, box: [] };
+    gruppo.box.push(singolo);
+    gruppi.set(chiave, gruppo);
+  }
+  return [...gruppi.values()];
+}
+
+const perReparto = (singolo: BoxInsight): Etichettato =>
+  singolo.reparto
+    ? { chiave: singolo.reparto.codice, etichetta: singolo.reparto.descrizione || singolo.reparto.codice }
+    : SENZA_REPARTO;
+
+const perMeccanica = (singolo: BoxInsight): Etichettato =>
+  singolo.meccanica ? { chiave: singolo.meccanica, etichetta: ETICHETTA_MECCANICA[singolo.meccanica] } : SENZA_MECCANICA;
+
+const perMarca = (singolo: BoxInsight): Etichettato => {
+  const nome = singolo.marca?.trim();
+  return nome ? { chiave: chiaveMarca(nome), etichetta: nome } : SENZA_MARCA;
+};
+
+const perEtichetta = (a: Etichettato, b: Etichettato): number => a.etichetta.localeCompare(b.etichetta, 'it');
+
+// ─── Sezioni ────────────────────────────────────────────────────────
+
+function sintesiDi(box: readonly BoxInsight[], pagine: number): SintesiVolantino {
+  const conSconto = sconti(box);
+  const conta = (condizione: (singolo: BoxInsight) => boolean): number => box.filter(condizione).length;
+  return {
+    referenze: referenzeDi(box),
+    box: box.length,
+    pagine,
+    scontoMedio: media(conSconto),
+    boxConSconto: conSconto.length,
+    quotaFidelity: quota(conta(singolo => singolo.meccanica === 'fidelity'), box.length),
+    sottocosto: conta(singolo => singolo.sottocosto),
+    marche: new Set(box.flatMap(singolo => (singolo.marca?.trim() ? [chiaveMarca(singolo.marca)] : []))).size,
+    copertura: {
+      prezzo: quota(conta(singolo => singolo.prezzo !== null), box.length),
+      marca: quota(conta(singolo => !!singolo.marca?.trim()), box.length),
+      reparto: quota(conta(singolo => singolo.reparto !== null), box.length),
+      geometria: quota(conta(singolo => singolo.geometria !== null), box.length),
+    },
+  };
+}
+
+function scontoPerGruppo(gruppi: readonly Gruppo[]): ScontoPerGruppo[] {
+  return gruppi
+    .map(gruppo => ({ chiave: gruppo.chiave, etichetta: gruppo.etichetta, box: gruppo.box.length, scontoMedio: media(sconti(gruppo.box)) }))
+    .sort((a, b) => b.box - a.box || perEtichetta(a, b));
+}
+
+function prezziScontiDi(box: readonly BoxInsight[]): PrezziSconti {
+  const fasce: FasciaSconto[] = FASCE_SCONTO.map((da, indice) => {
+    const a = indice + 1 < FASCE_SCONTO.length ? FASCE_SCONTO[indice + 1] : null;
+    const nellaFascia = box.filter(singolo => singolo.sconto !== null && singolo.sconto >= da && (a === null || singolo.sconto < a));
+    return { da, a, box: nellaFascia.length };
+  });
+  return {
+    fasce,
+    perReparto: scontoPerGruppo(raggruppa(box, perReparto)),
+    perMeccanica: scontoPerGruppo(raggruppa(box, perMeccanica)),
+    sottocosto: box.filter(singolo => singolo.sottocosto).map(singolo => singolo.id),
+    conPrezzoAlKg: box.filter(singolo => !!singolo.prezzoAlKg).length,
+  };
+}
+
+function quoteSpazio(gruppi: readonly Gruppo[], totaleReferenze: number, totaleSpazio: number): QuotaSpazio[] {
+  return gruppi
+    .map(gruppo => {
+      const referenze = referenzeDi(gruppo.box);
+      const spazio = spazioDi(gruppo.box);
+      return {
+        chiave: gruppo.chiave,
+        etichetta: gruppo.etichetta,
+        referenze,
+        spazio: arrotonda(spazio, 2),
+        quotaReferenze: quota(referenze, totaleReferenze),
+        quotaSpazio: quota(spazio, totaleSpazio),
+      };
+    })
+    .sort((a, b) => b.spazio - a.spazio || b.referenze - a.referenze || perEtichetta(a, b));
+}
+
+function usoSpazioDi(box: readonly BoxInsight[], pagine: number): UsoSpazio {
+  const totaleReferenze = referenzeDi(box);
+  const totaleSpazio = spazioDi(box);
+  const perPagina: DensitaPagina[] = Array.from({ length: pagine }, (_, indice) => {
+    const nellaPagina = box.filter(singolo => singolo.pagina === indice + 1);
+    // Box sovrapposti non coprono piu' della pagina intera
+    return { pagina: indice + 1, box: nellaPagina.length, spazioOccupato: Math.min(100, arrotonda(spazioDi(nellaPagina), 2)) };
+  });
+  return {
+    perReparto: quoteSpazio(raggruppa(box, perReparto), totaleReferenze, totaleSpazio),
+    perMeccanica: quoteSpazio(raggruppa(box, perMeccanica), totaleReferenze, totaleSpazio),
+    perMarca: quoteSpazio(raggruppa(box, perMarca), totaleReferenze, totaleSpazio),
+    perPagina,
+  };
+}
+
+function marcheDi(box: readonly BoxInsight[], marcheDistributore: readonly string[]): MarcheVolantino {
+  const totaleSpazio = spazioDi(box);
+  const delDistributore = marcheDistributore.map(chiaveMarca).filter(valore => valore !== '');
+  const eDelDistributore = (marca: string | null): boolean => {
+    const chiave = marca ? chiaveMarca(marca) : '';
+    return chiave !== '' && delDistributore.some(valore => chiave.includes(valore));
+  };
+
+  const elenco = raggruppa(box.filter(singolo => !!singolo.marca?.trim()), perMarca)
+    .map(gruppo => ({ gruppo, spazio: spazioDi(gruppo.box) }))
+    .sort((a, b) => b.spazio - a.spazio || b.gruppo.box.length - a.gruppo.box.length || perEtichetta(a.gruppo, b.gruppo))
+    .map(({ gruppo, spazio }): MarcaInsight => ({
+      chiave: gruppo.chiave,
+      nome: gruppo.etichetta,
+      box: gruppo.box.length,
+      referenze: referenzeDi(gruppo.box),
+      quotaSpazio: quota(spazio, totaleSpazio),
+      scontoMedio: media(sconti(gruppo.box)),
+      distributore: eDelDistributore(gruppo.etichetta),
+    }));
+
+  if (delDistributore.length === 0) return { elenco, quotaDistributore: null };
+  const delDistributoreNelVolantino = box.filter(singolo => eDelDistributore(singolo.marca));
+  return {
+    elenco,
+    quotaDistributore: {
+      quotaSpazio: quota(spazioDi(delDistributoreNelVolantino), totaleSpazio),
+      quotaBox: quota(delDistributoreNelVolantino.length, box.length),
+    },
+  };
+}
+
+function quoteVisibilita(gruppi: readonly Gruppo[], totaleVisibilita: number, totaleSpazio: number): QuotaVisibilita[] {
+  return gruppi
+    .map(gruppo => ({
+      gruppo,
+      visibilita: somma(gruppo.box.map(singolo => singolo.visibilita)),
+      spazio: spazioDi(gruppo.box),
+    }))
+    // I gruppi fatti solo di box senza posizione non hanno niente da dire sulle zone calde
+    .filter(voce => voce.visibilita > 0 || voce.spazio > 0)
+    .sort((a, b) => b.visibilita - a.visibilita || b.spazio - a.spazio || perEtichetta(a.gruppo, b.gruppo))
+    .map(voce => ({
+      chiave: voce.gruppo.chiave,
+      etichetta: voce.gruppo.etichetta,
+      quotaVisibilita: quota(voce.visibilita, totaleVisibilita),
+      quotaSpazio: quota(voce.spazio, totaleSpazio),
+    }));
+}
+
+/**
+ * La mappa di calore di ogni pagina: ogni box distribuisce la sua visibilita' sulle celle della
+ * griglia che copre, in proporzione all'area coperta; poi tutto si divide per la cella piu' calda
+ * del volantino, cosi' le pagine si confrontano fra loro (la copertina e' piu' calda di una
+ * pagina interna con gli stessi box).
+ */
+function caloreDi(box: readonly BoxInsight[], pagine: number): CalorePagina[] {
+  const { righe, colonne } = GRIGLIA_CALORE;
+  const griglie = new Map<number, number[][]>();
+  const grigliaDi = (pagina: number): number[][] => {
+    let griglia = griglie.get(pagina);
+    if (!griglia) {
+      griglia = Array.from({ length: righe }, () => new Array<number>(colonne).fill(0));
+      griglie.set(pagina, griglia);
+    }
+    return griglia;
+  };
+  for (let pagina = 1; pagina <= pagine; pagina++) grigliaDi(pagina);
+
+  for (const singolo of box) {
+    const geometria = singolo.geometria;
+    if (!geometria || singolo.pagina === null || singolo.visibilita <= 0) continue;
+    const area = geometria.w * geometria.h;
+    if (area <= 0) continue;
+    const griglia = grigliaDi(singolo.pagina);
+    for (let riga = 0; riga < righe; riga++) {
+      const altezza = Math.min(geometria.y + geometria.h, (riga + 1) / righe) - Math.max(geometria.y, riga / righe);
+      if (altezza <= 0) continue;
+      for (let colonna = 0; colonna < colonne; colonna++) {
+        const larghezza = Math.min(geometria.x + geometria.w, (colonna + 1) / colonne) - Math.max(geometria.x, colonna / colonne);
+        if (larghezza <= 0) continue;
+        griglia[riga][colonna] += (singolo.visibilita * altezza * larghezza) / area;
+      }
+    }
+  }
+
+  let massima = 0;
+  for (const griglia of griglie.values()) for (const riga of griglia) for (const valore of riga) massima = Math.max(massima, valore);
+  return [...griglie.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([pagina, griglia]) => ({
+      pagina,
+      celle: griglia.map(riga => riga.map(valore => (massima > 0 ? arrotonda(valore / massima, 3) : 0))),
+    }));
+}
+
+function zoneCaldeDi(box: readonly BoxInsight[], pagine: number): ZoneCalde {
+  const totaleVisibilita = somma(box.map(singolo => singolo.visibilita));
+  const totaleSpazio = spazioDi(box);
+  return {
+    // Ordinamento stabile: a parita' di visibilita' resta l'ordine del volantino
+    boxPiuVisibili: box
+      .filter(singolo => singolo.visibilita > 0)
+      .sort((a, b) => b.visibilita - a.visibilita)
+      .slice(0, BOX_PIU_VISIBILI)
+      .map(singolo => singolo.id),
+    perReparto: quoteVisibilita(raggruppa(box, perReparto), totaleVisibilita, totaleSpazio),
+    perMarca: quoteVisibilita(raggruppa(box, perMarca), totaleVisibilita, totaleSpazio),
+    calore: caloreDi(box, pagine),
+    pesi: PESI_VISIBILITA,
+  };
+}
+
+/** Box e sezioni degli insight del volantino; il PDF lo aggiunge chi conosce il kit. */
+export function sezioniInsight(box: readonly BoxKit[], opzioni: OpzioniInsight): Omit<EstensioneInsight, 'pdf'> {
+  const pagine = pagineDelVolantino(box, opzioni.totalePagine);
+  const insight = boxInsight(box, opzioni);
+  return {
+    box: insight,
+    sintesi: sintesiDi(insight, pagine),
+    prezziSconti: prezziScontiDi(insight),
+    spazio: usoSpazioDi(insight, pagine),
+    marche: marcheDi(insight, opzioni.marcheDistributore),
+    zoneCalde: zoneCaldeDi(insight, pagine),
+  };
+}

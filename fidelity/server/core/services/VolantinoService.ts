@@ -1,6 +1,8 @@
 import { EXPORT_DI_SISTEMA } from '../../../lib/enums';
 import { isAppError, wrapDatabaseError, wrapNotFoundError } from '../../../lib/errors';
-import { FileItemKit, ImportStorico } from '../../../lib/types';
+import type { RepartoInsight } from '../../../lib/insightVolantino/tipi';
+import { FileItemKit } from '../../../lib/types';
+import type { AmbitoGdo } from '../accessi/contestoAccesso';
 import { urlFotoOlimpo } from '../utils/urlOlimpo';
 import {
   FlyerInsightsDTO,
@@ -13,12 +15,35 @@ import { IConfigService } from '../interfaces/IConfigService';
 import { IVolantinoService } from '../interfaces/IVolantinoService';
 import { TipiDiExport } from '../models';
 import { FilesRuntime } from '../models/files_runtime';
-import { Referenze } from '../models/referenze';
-import { RuntimeKit } from '../models/runtime_kit';
 import { ReferenzeGruppo } from '../models/referenze_gruppo';
+import { kitNellAmbito, pdfDelKit, righeDelKit } from '../repositories/InsightVolantinoRepository';
+import { boxDelKit } from '../utils/analisiKit';
 import { applicaAnagraficaReparti, leggiAnagraficaReparti, valoreCampo, type PercorsoCampo } from '../utils/campiInsights';
+import { sezioniInsight } from '../utils/insightVolantino';
 import { origineStoricoPerReport } from '../utils/origineStorico';
-import { percentualeIngombro } from '../utils/referenzaStampata';
+import { leggiReferenza, percentualeIngombro } from '../utils/referenzaStampata';
+
+/** Un campo mappato dalla config come testo: '' se manca o non e' un valore semplice. */
+function testoDelCampo(valore: unknown): string {
+  return typeof valore === 'string' || typeof valore === 'number' ? String(valore).trim() : '';
+}
+
+/**
+ * Il reparto della referenza come l'ha mappato la config, gia' ricondotto all'anagrafica: stesso
+ * codice dei riepiloghi e dei colori della config. null se la config non lo mappa o la referenza non lo ha.
+ */
+function repartoDellaConfig(referenza: ReferenzaPosizioneDTO | undefined, campoCodice: string, campoDescrizione?: string): RepartoInsight | null {
+  if (!referenza) return null;
+  const codice = testoDelCampo(referenza[campoCodice]);
+  if (!codice) return null;
+  const descrizione = campoDescrizione ? testoDelCampo(referenza[campoDescrizione]) : '';
+  return { codice, descrizione: descrizione || codice };
+}
+
+/** Le marche del distributore dalla config (marche.distributore, facoltativa): solo testi non vuoti. */
+function marcheDelDistributore(valore: unknown): string[] {
+  return Array.isArray(valore) ? valore.filter((voce): voce is string => typeof voce === 'string' && voce.trim() !== '') : [];
+}
 
 /**
  * Autonomous VolantinoService with its own implementation.
@@ -48,8 +73,18 @@ export class VolantinoService implements IVolantinoService {
     }
   }
 
-  async getFlyerInsights(guidIdKitRuntime: string): Promise<FlyerInsightsDTO> {
+  async getFlyerInsights(guidIdKitRuntime: string, ambito: AmbitoGdo = 'tutte'): Promise<FlyerInsightsDTO> {
     try {
+      // 0. Il kit solo nella GDO della richiesta: per chi non la vede e' come se non esistesse
+      const kit = await kitNellAmbito(guidIdKitRuntime, ambito);
+      if (!kit) {
+        throw wrapNotFoundError(new Error('Volantino non trovato'), {
+          message: 'Volantino non trovato',
+          entityType: 'RuntimeKit',
+          entityId: guidIdKitRuntime
+        });
+      }
+
       // 1. Calcola le pagine totali dai file VOL reali in FilesRuntime
       // (RuntimeKit.files_data è un template senza campo "pages")
       let totalePaginePdf = 0;
@@ -74,9 +109,10 @@ export class VolantinoService implements IVolantinoService {
         totalePaginePdf = anyFiles.reduce((max: number, f: any) => Math.max(max, f.pages || 0), 0);
       }
 
-      // 2. Recupera tutte le referenze per il kit runtime
-      const referenzePg = await Referenze.findAll({ where: { id_runtime_kit: guidIdKitRuntime }, raw: true });
-      const referenze = referenzePg as unknown as any[];
+      // 2. Le referenze del kit per pagina e posizione (la prima di un box e' la pilota) e il PDF del volantino.
+      // Senza referenze si prosegue lo stesso: i riepiloghi vengono vuoti e le sezioni nuove pure.
+      const [righe, pdf] = await Promise.all([righeDelKit(guidIdKitRuntime), pdfDelKit(guidIdKitRuntime)]);
+      const referenze = righe as unknown as any[];
 
       /*
         L'origine sta sul kit, non sulla singola referenza: se la lavorazione e
@@ -84,50 +120,17 @@ export class VolantinoService implements IVolantinoService {
         listino si riconoscono per codice box, che e il ponte verso il box del
         volantino da cui sono state compilate.
       */
-      const kitRow = await RuntimeKit.findOne({
-        where: { id: guidIdKitRuntime },
-        attributes: ['titolo', 'nome_area', 'nome_canale', 'id_promo', 'import_storico'],
-        raw: true
-      }) as {
-        titolo: string;
-        nome_area?: string;
-        nome_canale?: string;
-        id_promo: string;
-        import_storico?: ImportStorico | null;
-      } | null;
-      if (!kitRow) {
-        throw wrapNotFoundError(new Error('Volantino non trovato'), {
-          message: 'Volantino non trovato',
-          entityType: 'RuntimeKit',
-          entityId: guidIdKitRuntime
-        });
-      }
-
       const contesto = {
-        titolo: kitRow.titolo,
-        nomeArea: kitRow.nome_area,
-        nomeCanale: kitRow.nome_canale,
-        idPromo: kitRow.id_promo
+        titolo: kit.titolo,
+        nomeArea: kit.area || undefined,
+        nomeCanale: kit.canale || undefined,
+        idPromo: kit.idPromo
       };
-      const importStorico = kitRow?.import_storico ?? null;
+      const importStorico = kit.importStorico;
       const codiciBoxFuoriListino = new Set(
         (importStorico?.fuoriListino ?? []).map((voce) => String(voce.codiceBox)).filter(Boolean)
       );
       const origineStorico = origineStoricoPerReport(importStorico);
-
-      if (!referenze || referenze.length === 0) {
-        return {
-          guidIdKitRuntime,
-          contesto,
-          origineStorico,
-          totaleReferenze: 0,
-          totalePagine: totalePaginePdf,
-          riepilogoPagine: [],
-          riepilogoReparti: [],
-          riepilogoMeccaniche: [],
-          referenze: []
-        };
-      }
 
       // 2b. Recupera le foto di gruppo dalla tabella ReferenzeGruppo
       const codiciReferenza = referenze
@@ -294,6 +297,29 @@ export class VolantinoService implements IVolantinoService {
       const maxPageFromRefs = Math.max(...Array.from(pagineMap.keys()), 0);
       const actualTotalePagine = totalePaginePdf > 0 ? totalePaginePdf : maxPageFromRefs;
 
+      // 6. Le sezioni nuove (box sulle pagine, sintesi, prezzi, spazio, marche, zone calde): lettura
+      // generica delle referenze, uguale per ogni GDO e per Istanta e storico. Dalla config solo
+      // reparto e meccanica gia' mappati qui sopra, cosi' codici e colori restano quelli dei riepiloghi.
+      const dtoPerId = new Map(referenzeDTO.map(ref => [String(ref.id), ref] as const));
+      const codiciFuoriListino = new Set([...codiciBoxFuoriListino].map(codice => codice.trim()));
+      const sezioni = sezioniInsight(
+        boxDelKit(righe.map(riga => leggiReferenza(riga, { storico: kit.storico }))),
+        {
+          // Le pagine come nei confronti (InsightConfrontiService.pagineDelKit): quelle del PDF in Olimpo,
+          // o fino all'ultima pagina con un box. Cosi' la sintesi e il confronto con l'edizione
+          // precedente contano le stesse pagine; totalePagine di sempre resta per i riepiloghi.
+          totalePagine: pdf?.pagine ?? 0,
+          anagraficaReparti,
+          marcheDistributore: marcheDelDistributore(insightsConfig.marche?.distributore),
+          repartoConfigurato: (idReferenza) => repartoDellaConfig(dtoPerId.get(idReferenza), repartiField, repartiDescField),
+          meccanicaOriginale: (idReferenza) => testoDelCampo(dtoPerId.get(idReferenza)?.[meccanicheField]) || null,
+          urlFoto: (guid) => urlFotoOlimpo(guid, { performante: true }),
+          origine: origineStorico
+            ? (codiceBox) => (codiciFuoriListino.has(codiceBox) ? 'fuori_listino' : 'listino')
+            : undefined
+        }
+      );
+
       return {
         guidIdKitRuntime,
         contesto,
@@ -303,7 +329,10 @@ export class VolantinoService implements IVolantinoService {
         riepilogoPagine,
         riepilogoReparti,
         riepilogoMeccaniche,
-        referenze: referenzeDTO
+        referenze: referenzeDTO,
+        // Le pagine del PDF quando il file non le dice sono quelle della sintesi, come pdfAltra nelle varianti
+        pdf: pdf ? { ...pdf, pagine: pdf.pagine > 0 ? pdf.pagine : sezioni.sintesi.pagine } : null,
+        ...sezioni
       };
 
     } catch (error) {

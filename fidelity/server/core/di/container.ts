@@ -157,6 +157,9 @@ import { type IPuntiVenditaVolantinoRepository, PuntiVenditaVolantinoRepository 
 import { AnalisiPuntoVenditaService } from "../services/AnalisiPuntoVenditaService";
 import type { IAnalisiPuntoVenditaService } from "../interfaces/IAnalisiPuntoVenditaService";
 import { AnalisiPuntiVenditaRepository, type IAnalisiPuntiVenditaRepository } from "../repositories/AnalisiPuntiVenditaRepository";
+import { InsightConfrontiService } from "../services/InsightConfrontiService";
+import type { IInsightConfrontiService } from "../interfaces/IInsightConfrontiService";
+import { InsightConfrontiRepository, type IInsightConfrontiRepository } from "../repositories/InsightConfrontiRepository";
 import { WebPliantService } from "../services/WebPliantService";
 import { WebhookService } from "../services/WebhookService";
 import { WhatsAppService } from "../services/WhatsAppService";
@@ -252,6 +255,7 @@ function bindRepositories() {
   container.bind<IConsultazionePuntiVenditaRepository>(TYPES.ConsultazionePuntiVenditaRepository).toDynamicValue(() => new ConsultazionePuntiVenditaRepository()).inSingletonScope();
   container.bind<IPuntiVenditaVolantinoRepository>(TYPES.PuntiVenditaVolantinoRepository).toDynamicValue(() => new PuntiVenditaVolantinoRepository()).inSingletonScope();
   container.bind<IAnalisiPuntiVenditaRepository>(TYPES.AnalisiPuntiVenditaRepository).toDynamicValue(() => new AnalisiPuntiVenditaRepository()).inSingletonScope();
+  container.bind<IInsightConfrontiRepository>(TYPES.InsightConfrontiRepository).toDynamicValue(() => new InsightConfrontiRepository()).inSingletonScope();
 
   // Hub
   container.bind<IAuthProviderRepository>(TYPES.AuthProviderRepository).toDynamicValue(() => new AuthProviderRepository()).inSingletonScope();
@@ -469,6 +473,14 @@ function bindServices() {
   );
   container.bind<IVolantinoService>(TYPES.VolantinoService).toDynamicValue(
     (context) => new VolantinoService(
+      context.get<IConfigService>(TYPES.ConfigService)
+    )
+  );
+  // Il viaggio del prodotto usa i riepiloghi dei kit in analisi_kit, gli stessi delle pagine del PV
+  container.bind<IInsightConfrontiService>(TYPES.InsightConfrontiService).toDynamicValue(
+    (context) => new InsightConfrontiService(
+      context.get<IInsightConfrontiRepository>(TYPES.InsightConfrontiRepository),
+      context.get<IAnalisiPuntiVenditaRepository>(TYPES.AnalisiPuntiVenditaRepository),
       context.get<IConfigService>(TYPES.ConfigService)
     )
   );

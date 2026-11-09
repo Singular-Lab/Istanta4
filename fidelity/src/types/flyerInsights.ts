@@ -7,6 +7,7 @@ import type {
   OrigineStorico as OrigineStoricoCondivisa,
   ReferenzaReportStorico
 } from "../../lib/types";
+import type { EstensioneInsight } from "../../lib/insightVolantino/tipi";
 
 export interface ReferenzaPosizione {
   id: string;
@@ -210,6 +211,11 @@ export interface FlyerInsightsConfig {
   meccaniche: RiepilogoSectionConfig;
   pagine: RiepilogoSectionConfig;
   mappa?: MappaConfig;
+  /**
+   * Facoltativa. distributore: nomi o parti di nome delle marche del distributore, confrontati
+   * senza maiuscole; senza, gli insight non calcolano la quota delle marche del distributore.
+   */
+  marche?: { distributore?: string[] };
 }
 
 // --- Data types ---
@@ -236,7 +242,8 @@ export interface ContestoFlyerInsights {
   idPromo: string;
 }
 
-export interface FlyerInsights {
+/** Campi di sempre più le sezioni nuove (lib/insightVolantino/tipi.ts). */
+export interface FlyerInsights extends EstensioneInsight {
   guidIdKitRuntime: string;
   contesto: ContestoFlyerInsights;
   /** Assente sulle lavorazioni normali: la scheda resta quella di sempre. */

@@ -73,6 +73,9 @@ export const TYPES = {
   // Pagine del punto vendita sulla timeline dei volantini (scheda, volantino, referenza, rete, qualita')
   AnalisiPuntoVenditaService: Symbol.for('AnalisiPuntoVenditaService'),
 
+  // Confronti degli insight del volantino (edizione precedente, varianti, viaggio del prodotto)
+  InsightConfrontiService: Symbol.for('InsightConfrontiService'),
+
   // Permessi
   PermessiService: Symbol.for('PermessiService'),
 
@@ -130,6 +133,7 @@ export const TYPES = {
   ConsultazionePuntiVenditaRepository: Symbol.for('ConsultazionePuntiVenditaRepository'),
   PuntiVenditaVolantinoRepository: Symbol.for('PuntiVenditaVolantinoRepository'),
   AnalisiPuntiVenditaRepository: Symbol.for('AnalisiPuntiVenditaRepository'),
+  InsightConfrontiRepository: Symbol.for('InsightConfrontiRepository'),
 
   // Agenzia Lib — logiche custom per cliente
   AgenziaLib: Symbol.for('AgenziaLib'),

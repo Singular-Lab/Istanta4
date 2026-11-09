@@ -23,6 +23,13 @@ export const urlAnteprimaMateriale = (idOlimpoCloud: string): string =>
   `/olimpo/materiali/getThumbnailMaterialePdfs?id=${encodeURIComponent(idOlimpoCloud)}`;
 
 /**
+ * Immagine di una pagina (contata da 1) di un PDF del kit, dallo stesso proxy: serve a chi vede gli
+ * insight del volantino, senza il permesso di scaricare il file.
+ */
+export const urlPaginaMateriale = (idOlimpoCloud: string, pagina: number): string =>
+  `${urlAnteprimaMateriale(idOlimpoCloud)}&page=${encodeURIComponent(String(pagina))}`;
+
+/**
  * Validità compatta di una promo: "16/10 – 29/10/2026", con l'anno una volta sola quando le due
  * date cadono nello stesso anno. Date ISO (YYYY-MM-DD) come nel contratto; null se mancano entrambe.
  */

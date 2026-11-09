@@ -38,6 +38,7 @@ import { ReferenzeController } from './controllers/ReferenzeController';
 import { WebPliantController } from './controllers/WebPliantController';
 import { FileManagementController } from './controllers/FileManagementController';
 import { VolantinoController } from './controllers/VolantinoController';
+import { InsightConfrontiController } from './controllers/InsightConfrontiController';
 import { MaterialiController } from './controllers/MaterialiController';
 import { AvanzamentoProduzioneController } from './controllers/AvanzamentoProduzioneController';
 import { ConsultazioneController } from './controllers/ConsultazioneController';
@@ -83,6 +84,7 @@ import type { IReferenzeService } from './interfaces/IReferenzeService';
 import type { IWebPliantService } from './interfaces/IWebPliantService';
 import type { IFileManagementService } from './interfaces/IFileManagementService';
 import type { IVolantinoService } from './interfaces/IVolantinoService';
+import type { IInsightConfrontiService } from './interfaces/IInsightConfrontiService';
 import type { IMaterialiService } from './interfaces/IMaterialiService';
 import type { IAvanzamentoProduzioneService } from './interfaces/IAvanzamentoProduzioneService';
 import type { IConsultazioneService } from './interfaces/IConsultazioneService';
@@ -155,6 +157,7 @@ export async function createControllers(): Promise<IController[]> {
   const webPliantService = container.get<IWebPliantService>(TYPES.WebPliantService);
   const fileManagementService = container.get<IFileManagementService>(TYPES.FileManagementService);
   const volantinoService = container.get<IVolantinoService>(TYPES.VolantinoService);
+  const insightConfrontiService = container.get<IInsightConfrontiService>(TYPES.InsightConfrontiService);
   const materialiService = container.get<IMaterialiService>(TYPES.MaterialiService);
   const avanzamentoProduzioneService = container.get<IAvanzamentoProduzioneService>(TYPES.AvanzamentoProduzioneService);
   const consultazioneService = container.get<IConsultazioneService>(TYPES.ConsultazioneService);
@@ -186,6 +189,8 @@ export async function createControllers(): Promise<IController[]> {
     new WebPliantController(webPliantService, gdoService),
     new FileManagementController(fileManagementService),
     new VolantinoController(volantinoService),
+    // '/flyer-insights/:idKit/...' (due o tre segmenti) non si sovrappone alla scheda '/flyer-insights/:id'
+    new InsightConfrontiController(insightConfrontiService),
     new MaterialiController(materialiService),
     new AvanzamentoProduzioneController(avanzamentoProduzioneService),
     new ConsultazioneController(consultazioneService),
