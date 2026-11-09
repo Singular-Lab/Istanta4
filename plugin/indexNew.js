@@ -3115,6 +3115,16 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
     var reportImpaginazioneObj = { segnalazioni: [] };
     let tipo_lavorazione_corrente = ficoProcess.getTipoLavorazioneCorrente();
 
+    //TASK-16def236: il nome si legge ora. Se l'operatore chiude il documento durante il lavoro non
+    //si legge piu', e il messaggio IDX-201 lo deve dire.
+    var nomeDocumentoImpaginazione = "";
+    try {
+        nomeDocumentoImpaginazione = docInLavorazione.name;
+    }
+    catch (e) {
+        nomeDocumentoImpaginazione = "";
+    }
+
     try {
         var libreria = pluginMiddleware.getLibreria();
         if (libreria == null && tipo_lavorazione_corrente == 2){ //in questo caso saltiamo, non ci serve per forza una libreria perchè siamo in pop
@@ -3189,61 +3199,64 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
 
 
         showLoading(impagina ? "Leggo i filtri per l'impaginazione" : "Leggo i filtri per il conteggio");
-        await Utility.sleep(100);
-        indesignEvents.setBusy(true);
+        var debug = "riga try";
+        //TASK-16def236: il try comincia qui. Chiudendo il documento (Cmd+W) mentre il Plugin legge i
+        //filtri, la lettura delle pagine qui sotto lanciava fuori da ogni try: la schermata di attesa
+        //restava su "Leggo i filtri" e il Plugin occupato per sempre. Il catch IDX-32 la toglie.
+        try {
+            await Utility.sleep(100);
+            indesignEvents.setBusy(true);
 
-        //disattiviamo gli sp-button bOpt1 e bOpt2 per evitare doppie richieste, per farlo impostiamo un attr chiamato disabled a true    
-        bOpt1.disabled = true;
-        bOpt2.disabled = true;
-        //cambiamo il testo del bottone bOpt1 in "Elaborazione..." se impagina è false altrimenti cambiamo il testo del bottone bOpt2 in "Elaborazione..."
-
-
-        if (!impagina) {
-            bOpt1.text = "Elaborazione...";
-        }
-        else {
-            bOpt2.text = "Elaborazione...";
-        }
-
-        //leggiamo il val di pagineRange e creiamo un array di pagine da elaborare
-        //facciamo prima uno split per , poi per ogni elemento facciamo uno split per - e creiamo un array di pagine
-        var pagine = [];
-        pagine = docInLavorazione.pages.everyItem().getElements().map(function (p) {
-            return parseInt(p.name);
-        });
+            //disattiviamo gli sp-button bOpt1 e bOpt2 per evitare doppie richieste, per farlo impostiamo un attr chiamato disabled a true    
+            bOpt1.disabled = true;
+            bOpt2.disabled = true;
+            //cambiamo il testo del bottone bOpt1 in "Elaborazione..." se impagina è false altrimenti cambiamo il testo del bottone bOpt2 in "Elaborazione..."
 
 
-        let mappa = null;
+            if (!impagina) {
+                bOpt1.text = "Elaborazione...";
+            }
+            else {
+                bOpt2.text = "Elaborazione...";
+            }
 
-        console.log(pagine);
-
-        //cicliamo tutti i gruppi con layer FILTRO o GRIGLIA in tutte le pagine e se l'item è non visibile si rimuove
-        //facciamo una lista di pages composta dalle pagine contenute in pagine
-        var pages = docInLavorazione.pages.everyItem().getElements().filter(function (p) {
-            return pagine.includes(parseInt(p.name));
-        });
-
+            //leggiamo il val di pagineRange e creiamo un array di pagine da elaborare
+            //facciamo prima uno split per , poi per ogni elemento facciamo uno split per - e creiamo un array di pagine
+            var pagine = [];
+            pagine = docInLavorazione.pages.everyItem().getElements().map(function (p) {
+                return parseInt(p.name);
+            });
 
 
-        ////DISATTIVATA IN DATA 17/11/25 PERCHè CAUSA UN CRASH DI INDESIGN QUANDO IN MC SI HANNO DUE GRIGLIE ADIACENTI DA RIMUOVERE (MOTIVI IGNOTI)        
-        for (var i = 0; i < pages.length; i++) {
-            var page = pages[i];
-            let arrGroups = page.groups;
+            let mappa = null;
 
-            for (var j = 0; j < arrGroups.length; j++) {
-                var item = arrGroups.item(j);
-                if (/*item.itemLayer.name == "FILTRO" || */ item.itemLayer.name == "GRIGLIA") {
-                    if (!item.visible) {
-                        item.remove();
+            console.log(pagine);
+
+            //cicliamo tutti i gruppi con layer FILTRO o GRIGLIA in tutte le pagine e se l'item è non visibile si rimuove
+            //facciamo una lista di pages composta dalle pagine contenute in pagine
+            var pages = docInLavorazione.pages.everyItem().getElements().filter(function (p) {
+                return pagine.includes(parseInt(p.name));
+            });
+
+
+
+            ////DISATTIVATA IN DATA 17/11/25 PERCHè CAUSA UN CRASH DI INDESIGN QUANDO IN MC SI HANNO DUE GRIGLIE ADIACENTI DA RIMUOVERE (MOTIVI IGNOTI)        
+            for (var i = 0; i < pages.length; i++) {
+                var page = pages[i];
+                let arrGroups = page.groups;
+
+                for (var j = 0; j < arrGroups.length; j++) {
+                    var item = arrGroups.item(j);
+                    if (/*item.itemLayer.name == "FILTRO" || */ item.itemLayer.name == "GRIGLIA") {
+                        if (!item.visible) {
+                            item.remove();
+                        }
                     }
                 }
             }
-        }
         
 
-        await Utility.sleep(100);
-        var debug = "riga try";
-        try {
+            await Utility.sleep(100);
 
             paramsCache = {};
             var req = "";
@@ -4026,6 +4039,8 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                         //var boxConteggioTemplate = libreria.assets.itemByName("Box Conteggio").placeAsset(docInLavorazione)[0];
 
                         for (var $r = 0; $r < objResult.result.length; $r++) {
+                            //TASK-16def236: se l'operatore ha chiuso il documento ci si ferma qui (IDX-201).
+                            InddEvents.fermaSeDocumentoChiuso(docInLavorazione, nomeDocumentoImpaginazione);
                             docInLavorazione.activeLayer = docInLavorazione.layers.itemByName("InPagina");
                             var filtroResult = objResult.result[$r];
                             itemRef = null; //I20-1038: il contesto di IDX-27 non deve mostrare la ref della pagina prima
@@ -4169,6 +4184,7 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
 
                                     if (res != null || codiceAssociato == "" /*bItem.label == "box_" + inx*/) {
 
+                                        InddEvents.fermaSeDocumentoChiuso(docInLavorazione, nomeDocumentoImpaginazione);
                                         res = await impaginaBox(meccanica, pagCoinvolta, bounds, itemRef, pathLavorazione, listElementiNonImpaginati, tipo_lavorazione_corrente, reportImpaginazioneObj, null, null, docInLavorazione);
                                         
                                         if (res != null) {
@@ -4244,7 +4260,11 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                     //try si e' fermato prima del ciclo dei box; typeof protegge se finissero in una funzione interna.
                     //Un errore gia' detto all'operatore (giaSegnalato, come IDX-169) non si ripete: resta la pulizia.
                     var contestoErrore = contestoErroreFiltro(typeof filtroResult !== "undefined" ? filtroResult : null, typeof itemRef !== "undefined" ? itemRef : null);
-                    if (!(ex != null && ex.giaSegnalato === true)) {
+                    //TASK-16def236: il documento chiuso dall'operatore si dice, invece di "Object is invalid".
+                    if (InddEvents.documentoChiuso(docInLavorazione)) {
+                        messaggioUtente(InddEvents.messaggioDocumentoChiuso(nomeDocumentoImpaginazione, impagina), "warning");
+                    }
+                    else if (!(ex != null && ex.giaSegnalato === true)) {
                         messaggioUtente("Code IDX-27 Filtro: Errore durante l'elaborazione del filtro (Deb1) [" + contestoErrore + "]: " + ex, "error");
                     }
                     console.error(ex);
@@ -4262,7 +4282,8 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                     stampaSegnalazioni(reportImpaginazioneObj);
                     //I20-1029, lotto 2: se l'impaginazione ha prodotto segnalazioni, la schermata si
                     //apre da sola. I20-1056: solo con le pagine impaginate, e solo se li' ci sono bollini.
-                    if (impagina) {
+                    //TASK-16def236: a documento chiuso leggerebbe i bollini del documento rimasto davanti.
+                    if (impagina && !InddEvents.documentoChiuso(docInLavorazione)) {
                         SchermataSegnalazioni.apriSeCiSono(reportImpaginazioneObj, SchermataSegnalazioni.pagineDelRisultato(objResult));
                     }
 
@@ -4306,7 +4327,13 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
         catch (ex) {
             rimuoviSimboli();
             console.error(ex);
-            messaggioUtente("Code IDX-32 Errore generico durante l'elaborazione del filtro: " + ex.toString(), "error");
+            //TASK-16def236: il documento chiuso dall'operatore si dice, invece di "Object is invalid".
+            if (InddEvents.documentoChiuso(docInLavorazione)) {
+                messaggioUtente(InddEvents.messaggioDocumentoChiuso(nomeDocumentoImpaginazione, impagina), "warning");
+            }
+            else {
+                messaggioUtente("Code IDX-32 Errore generico durante l'elaborazione del filtro: " + ex.toString(), "error");
+            }
             //riattiviamo i bottoni bOpt1 e bOpt2 e rimettiamo il testo originale
             bOpt1.disabled = false;
             bOpt2.disabled = false;
@@ -4715,6 +4742,8 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
 
                         showLoading("Impaginazione di pagina: " + filtroResult.pag);
                         await Utility.sleep(10);
+                        //TASK-16def236: se l'operatore ha chiuso il documento ci si ferma qui (IDX-201).
+                        InddEvents.fermaSeDocumentoChiuso(docInLavorazione, nomeDocumentoImpaginazione);
                         //var pagCoinvolta = docInLavorazione.pages.item(filtroResult.pag - 1);
                         var pagCoinvolta = docInLavorazione.pages.itemByName(filtroResult.pag.toString());
                         //pagCoinvolta.select();
@@ -4771,6 +4800,7 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                                     if (bItem.label == "box_" + inx) {
                                         console.log("Trovato box " + inx);
 
+                                        InddEvents.fermaSeDocumentoChiuso(docInLavorazione, nomeDocumentoImpaginazione);
                                         res = await impaginaBox(meccanica, pagCoinvolta, bounds, itemRef, pathLavorazione, listElementiNonImpaginati, tipo_lavorazione_corrente, reportImpaginazioneObj, null, null, docInLavorazione);
 
                                         trovato = res.trovato;
@@ -4783,6 +4813,7 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                             }
                             else {
                                 //in questa casistica siamo in 1x1 e non c'è griglia
+                                InddEvents.fermaSeDocumentoChiuso(docInLavorazione, nomeDocumentoImpaginazione);
                                 res = await impaginaBox(meccanica, pagCoinvolta, null, itemRef, pathLavorazione, listElementiNonImpaginati, tipo_lavorazione_corrente, reportImpaginazioneObj, null, null, docInLavorazione);
                                 trovato = res.trovato;
                                 listElementiNonImpaginati = res.listElementiNonImpaginati;
@@ -4834,7 +4865,13 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                 catch (ex) {
                     rimuoviSimboli();
                     //await svuotaMenabo();
-                    messaggioUtente("Code IDX-32 Errore generico durante l'elaborazione del filtro: " + ex.toString(), "error");
+                    //TASK-16def236: il documento chiuso dall'operatore si dice, invece di "Object is invalid".
+                    if (InddEvents.documentoChiuso(docInLavorazione)) {
+                        messaggioUtente(InddEvents.messaggioDocumentoChiuso(nomeDocumentoImpaginazione, impagina), "warning");
+                    }
+                    else {
+                        messaggioUtente("Code IDX-32 Errore generico durante l'elaborazione del filtro: " + ex.toString(), "error");
+                    }
                     console.error(ex);
                     logContent += "Filtro: Errore durante l'elaborazione del filtro: " + ex.toString() + "\n";
                     //riattiviamo i bottoni bOpt1 e bOpt2 e rimettiamo il testo originale
@@ -4857,7 +4894,10 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                     if (!(jobImpaginazioneLibro.stato == 1 && jobImpaginazioneLibro.queue.length > 0)) {
                         stampaSegnalazioni(reportImpaginazioneObj);
                         //I20-1056: solo con le pagine impaginate in questo giro.
-                        SchermataSegnalazioni.apriSeCiSono(reportImpaginazioneObj, SchermataSegnalazioni.pagineDelRisultato(objResult, restartFromIndexPoP));
+                        //TASK-16def236: a documento chiuso leggerebbe i bollini del documento rimasto davanti.
+                        if (!InddEvents.documentoChiuso(docInLavorazione)) {
+                            SchermataSegnalazioni.apriSeCiSono(reportImpaginazioneObj, SchermataSegnalazioni.pagineDelRisultato(objResult, restartFromIndexPoP));
+                        }
                     }
 
                     if (jobImpaginazioneLibro.stato == 2 || jobImpaginazioneLibro.stato == 4) {
@@ -4944,7 +4984,13 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
         }
         catch (ex) {
             console.error(ex);
-            messaggioUtente("Code IDX-32 Errore generico durante l'elaborazione del filtro: " + ex.toString() + " Debug: " + debug, "error");
+            //TASK-16def236: il documento chiuso dall'operatore si dice, invece di "Object is invalid".
+            if (InddEvents.documentoChiuso(docInLavorazione)) {
+                messaggioUtente(InddEvents.messaggioDocumentoChiuso(nomeDocumentoImpaginazione, impagina), "warning");
+            }
+            else {
+                messaggioUtente("Code IDX-32 Errore generico durante l'elaborazione del filtro: " + ex.toString() + " Debug: " + debug, "error");
+            }
             //riattiviamo i bottoni bOpt1 e bOpt2 e rimettiamo il testo originale
             bOpt1.disabled = false;
             bOpt2.disabled = false;

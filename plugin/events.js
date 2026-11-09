@@ -1145,6 +1145,38 @@ class InddEvents {
         }
     }
 
+    /// TASK-16def236: vero se il documento non c'e' piu', per esempio perche' l'operatore l'ha
+    /// chiuso (Cmd+W) mentre il Plugin ci lavorava. Un documento chiuso ha isValid a false; se
+    /// anche leggerlo lancia, il documento non si puo' piu' usare e vale come chiuso. Non lancia mai.
+    static documentoChiuso(documento)
+    {
+        try {
+            return documento == null || documento.isValid === false;
+        }
+        catch (e) {
+            return true;
+        }
+    }
+
+    /// TASK-16def236: il messaggio per l'operatore quando il documento del lavoro e' stato chiuso.
+    /// Il nome va letto all'avvio del lavoro: da un documento chiuso non si legge piu'.
+    static messaggioDocumentoChiuso(nomeDocumento, impagina = true)
+    {
+        const nome = nomeDocumento != null && String(nomeDocumento) !== "" ? " " + nomeDocumento : "";
+        const lavoro = impagina ? "durante l'impaginazione: l'impaginazione si è fermata" : "durante il conteggio: il conteggio si è fermato";
+        return "Code IDX-201 Il documento" + nome + " è stato chiuso " + lavoro;
+    }
+
+    /// TASK-16def236: ferma l'impaginazione, con il messaggio IDX-201, se il documento e' stato
+    /// chiuso. Si chiama prima di ogni pagina e di ogni box: senza, ogni box rimasto dava il suo
+    /// errore IDX-59 prima che il ciclo si fermasse.
+    static fermaSeDocumentoChiuso(documento, nomeDocumento)
+    {
+        if (InddEvents.documentoChiuso(documento)) {
+            throw new Error(InddEvents.messaggioDocumentoChiuso(nomeDocumento, true));
+        }
+    }
+
     /// I20-1074: la scheda ref e' aperta in vista controllata, dal Report Integrita' o dalla
     /// schermata delle segnalazioni: si esce solo dalla sua X (o deselezionando il box).
     vistaControllataAperta()

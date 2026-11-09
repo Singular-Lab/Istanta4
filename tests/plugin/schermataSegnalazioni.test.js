@@ -413,10 +413,10 @@ test("si apre da sola a fine impaginazione di Volantino, PoP e singola, ma non d
     const indexNew = leggiFileDelPlugin("indexNew.js").replace(/\r/g, "");
 
     assert.match(indexNew, /const SchermataSegnalazioni = require\('\.\/segnalazioni\/schermata'\);/);
-    //Volantino: dopo il report, solo se si impagina.
-    assert.match(indexNew, /stampaSegnalazioni\(reportImpaginazioneObj\);\s*\/\/[^\n]*\n[^\n]*\n\s*if \(impagina\) \{\s*SchermataSegnalazioni\.apriSeCiSono\(reportImpaginazioneObj, SchermataSegnalazioni\.pagineDelRisultato\(objResult\)\);/);
-    //PoP: report e schermata, fuori dal giro di un libro.
-    assert.match(indexNew, /if \(!\(jobImpaginazioneLibro\.stato == 1 && jobImpaginazioneLibro\.queue\.length > 0\)\) \{\s*stampaSegnalazioni\(reportImpaginazioneObj\);\s*\/\/[^\n]*\n\s*SchermataSegnalazioni\.apriSeCiSono\(reportImpaginazioneObj, SchermataSegnalazioni\.pagineDelRisultato\(objResult, restartFromIndexPoP\)\);/);
+    //Volantino: dopo il report, solo se si impagina (e, da TASK-16def236, se il documento c'e' ancora).
+    assert.match(indexNew, /stampaSegnalazioni\(reportImpaginazioneObj\);\s*\/\/[^\n]*\n[^\n]*\n\s*\/\/[^\n]*\n\s*if \(impagina && !InddEvents\.documentoChiuso\(docInLavorazione\)\) \{\s*SchermataSegnalazioni\.apriSeCiSono\(reportImpaginazioneObj, SchermataSegnalazioni\.pagineDelRisultato\(objResult\)\);/);
+    //PoP: report e schermata, fuori dal giro di un libro (e, da TASK-16def236, se il documento c'e' ancora).
+    assert.match(indexNew, /if \(!\(jobImpaginazioneLibro\.stato == 1 && jobImpaginazioneLibro\.queue\.length > 0\)\) \{\s*stampaSegnalazioni\(reportImpaginazioneObj\);\s*\/\/[^\n]*\n\s*\/\/[^\n]*\n\s*if \(!InddEvents\.documentoChiuso\(docInLavorazione\)\) \{\s*SchermataSegnalazioni\.apriSeCiSono\(reportImpaginazioneObj, SchermataSegnalazioni\.pagineDelRisultato\(objResult, restartFromIndexPoP\)\);/);
     //Singola: solo fuori dalle operazioni massive.
     //I20-1056: solo se si impagina un box nuovo, e solo per la sua pagina.
     assert.match(indexNew, /if\(!massiveOperation\)\{\s*stampaSegnalazioni\(reportImpaginazioneObj\);\s*rimuoviSimboli\(\);[\s\S]{0,700}?if \(apriSegnalazioni\) \{\s*SchermataSegnalazioni\.apriSeCiSono\(reportImpaginazioneObj, \[String\(pagina\)\]\);/);
@@ -442,7 +442,7 @@ test("si apre da sola a fine impaginazione di Volantino, PoP e singola, ma non d
 test("a fine Volantino la schermata si apre a Menabo' ridisegnato, o le caselle Ordine nuove le restano sopra", () => {
     const indexNew = leggiFileDelPlugin("indexNew.js").replace(/\r/g, "");
     const ridisegno = indexNew.indexOf("await filtriJs.visualizzaHomePageFiltri()");
-    const apertura = indexNew.indexOf("if (impagina) {\n                        SchermataSegnalazioni.apriSeCiSono(");
+    const apertura = indexNew.indexOf("if (impagina && !InddEvents.documentoChiuso(docInLavorazione)) {\n                        SchermataSegnalazioni.apriSeCiSono(");
 
     assert.ok(ridisegno >= 0, "il ridisegno del Menabo' si aspetta");
     assert.ok(apertura > ridisegno, "e viene prima dell'apertura della schermata");
