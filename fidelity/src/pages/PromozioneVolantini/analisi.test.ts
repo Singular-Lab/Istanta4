@@ -53,7 +53,7 @@ const kit = (id: string, campi: Partial<KitPromozioneConsultazione> = {}): KitPr
 
 const riga = (id: string, campi: Partial<PuntoVenditaPromozioneConsultazione> = {}): PuntoVenditaPromozioneConsultazione => ({
   id,
-  idKit: "k1",
+  idKit: ["k1"],
   riga: `RIGA ${id}`,
   localita: "Lucca",
   indirizzo: "Via Roma 1",
@@ -114,12 +114,18 @@ describe("muro delle copertine", () => {
 });
 
 describe("griglia canali × aree", () => {
-  it("canali e aree per nome, una cella per combinazione, i punti vendita sommati per riga e colonna", () => {
-    const griglia = grigliaKit([
-      kit("k1", { canale: SUPERSTORE, area: TOSCANA, numeroPuntiVendita: 13 }),
-      kit("k2", { canale: CITY, area: TOSCANA, numeroPuntiVendita: 102 }),
-      kit("k3", { canale: CITY, area: LAZIO, numeroPuntiVendita: 28 }),
-    ]);
+  /** n punti vendita stampati dai kit indicati. */
+  const stampati = (n: number, idKit: string[]) => Array.from({ length: n }, (_, i) => riga(`${idKit.join("+")}-${i}`, { idKit }));
+
+  it("canali e aree per nome, una cella per combinazione, i punti vendita per riga e colonna", () => {
+    const griglia = grigliaKit(
+      [
+        kit("k1", { canale: SUPERSTORE, area: TOSCANA, numeroPuntiVendita: 13 }),
+        kit("k2", { canale: CITY, area: TOSCANA, numeroPuntiVendita: 102 }),
+        kit("k3", { canale: CITY, area: LAZIO, numeroPuntiVendita: 28 }),
+      ],
+      [...stampati(13, ["k1"]), ...stampati(102, ["k2"]), ...stampati(28, ["k3"])]
+    );
 
     expect(griglia.canali.map(c => c.nome)).toEqual(["City", "Superstore"]);
     expect(griglia.aree.map(a => a.nome)).toEqual(["Lazio", "Toscana"]);
@@ -131,8 +137,23 @@ describe("griglia canali × aree", () => {
   });
 
   it("due kit dello stesso canale e area stanno nella stessa cella", () => {
-    const griglia = grigliaKit([kit("k1"), kit("k2")]);
+    const griglia = grigliaKit([kit("k1"), kit("k2")], []);
     expect(griglia.celle.get(chiaveCella("c1", "a1"))?.map(k => k.id)).toEqual(["k1", "k2"]);
+  });
+
+  it("un punto vendita stampato da più kit conta una volta nei totali, non la somma delle celle", () => {
+    // A2623: Emilia e Liguria (stesso canale, aree diverse) stampano gli stessi 38 punti vendita
+    const EMILIA = { id: "a-em", nome: "Emilia" };
+    const LIGURIA = { id: "a-li", nome: "Liguria" };
+    const griglia = grigliaKit(
+      [kit("em", { area: EMILIA, numeroPuntiVendita: 38 }), kit("li", { area: LIGURIA, numeroPuntiVendita: 38 })],
+      stampati(38, ["em", "li"])
+    );
+
+    expect(griglia.totaleCanale.get(CITY.id)).toBe(38);
+    expect(griglia.totaleArea.get(EMILIA.id)).toBe(38);
+    expect(griglia.totaleArea.get(LIGURIA.id)).toBe(38);
+    expect(griglia.totale).toBe(38);
   });
 });
 
@@ -222,24 +243,33 @@ describe("località e punti vendita", () => {
     expect(filtraPuntiVendita(conIndirizzi, { regione: null, cerca: "cesena" }).map(r => r.id)).toEqual(["2", "3"]);
   });
 
-  it("conta i punti vendita per insegna dal kit di ogni riga", () => {
+  it("conta i punti vendita per insegna dai kit che stampano ciascuno", () => {
     const kitPromo = [kit("k1"), kit("k2", { canale: SUPERSTORE })];
-    const perCanale = puntiVenditaPerCanale(kitPromo, [riga("1"), riga("2", { idKit: "k2" }), riga("3", { idKit: "k2" }), riga("4", { idKit: "altro" })]);
+    const perCanale = puntiVenditaPerCanale(kitPromo, [riga("1"), riga("2", { idKit: ["k2"] }), riga("3", { idKit: ["k2"] }), riga("4", { idKit: ["altro"] })]);
     expect(perCanale).toEqual([
       { canale: SUPERSTORE, puntiVendita: 2 },
       { canale: CITY, puntiVendita: 1 },
     ]);
   });
 
+  it("un punto vendita stampato da due kit della stessa insegna conta una volta, da due insegne una volta per ciascuna", () => {
+    const kitPromo = [kit("em"), kit("li"), kit("ss", { canale: SUPERSTORE })];
+    const perCanale = puntiVenditaPerCanale(kitPromo, [riga("1", { idKit: ["em", "li"] }), riga("2", { idKit: ["li", "ss"] })]);
+    expect(perCanale).toEqual([
+      { canale: CITY, puntiVendita: 2 },
+      { canale: SUPERSTORE, puntiVendita: 1 },
+    ]);
+  });
+
   it("sulla mappa solo i riconosciuti con le coordinate, una volta anche se li stampano più kit", () => {
     const pv = (id: string, coordinate: { lat: number; lon: number } | null) => ({ id, nome: `PV ${id}`, coordinate });
     const { punti, fuoriMappa } = puntiSullaMappa([
-      riga("1", { puntoVendita: pv("p1", { lat: 43.8, lon: 10.5 }) }),
-      riga("2", { idKit: "k2", puntoVendita: pv("p1", { lat: 43.8, lon: 10.5 }) }),
+      riga("1", { idKit: ["k1", "k3"], puntoVendita: pv("p1", { lat: 43.8, lon: 10.5 }) }),
+      riga("2", { idKit: ["k2", "k1"], puntoVendita: pv("p1", { lat: 43.8, lon: 10.5 }) }),
       riga("3", { puntoVendita: pv("p2", null) }),
       riga("4", { puntoVendita: null }),
     ]);
-    expect(punti).toEqual([{ id: "p1", nome: "PV p1", lat: 43.8, lon: 10.5, idKit: ["k1", "k2"] }]);
+    expect(punti).toEqual([{ id: "p1", nome: "PV p1", lat: 43.8, lon: 10.5, idKit: ["k1", "k3", "k2"] }]);
     expect(fuoriMappa).toBe(2);
   });
 });

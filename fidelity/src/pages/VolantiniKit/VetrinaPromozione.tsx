@@ -35,7 +35,7 @@ function Numero({ valore, singolare, plurale }: { valore: number; singolare: str
 function VetrinaPromozione({ vetrina, periodo, className }: VetrinaPromozioneProps) {
   const { promo, kit } = vetrina.promozione;
   const adesso = new Date();
-  const numeri = numeriDeiKit(kit);
+  const numeri = numeriDeiKit(vetrina.promozione);
   const tempo = tempoDellaPromo(periodo, promo, adesso);
 
   return (

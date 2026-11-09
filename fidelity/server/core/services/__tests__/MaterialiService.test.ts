@@ -128,6 +128,7 @@ function repositoryFinto(dati: Partial<IMaterialiRepository> = {}): IMaterialiRe
     elencaPromoVolantini: vi.fn<IMaterialiRepository['elencaPromoVolantini']>(async () => []),
     contaPromoVolantini: vi.fn<IMaterialiRepository['contaPromoVolantini']>(async () => ({ promozioni: 0, kit: 0 })),
     elencaVariantiVolantini: vi.fn<IMaterialiRepository['elencaVariantiVolantini']>(async () => []),
+    contaPuntiVenditaPromoVolantini: vi.fn<IMaterialiRepository['contaPuntiVenditaPromoVolantini']>(async () => []),
     trovaPromoInVetrina: vi.fn<IMaterialiRepository['trovaPromoInVetrina']>(async () => null),
     riepilogoPromoVolantini: vi.fn<IMaterialiRepository['riepilogoPromoVolantini']>(async () => ({ promozioni: 0, kit: 0, puntiVendita: 0 })),
     elencaPuntiVenditaVolantini: vi.fn<IMaterialiRepository['elencaPuntiVenditaVolantini']>(async () => []),

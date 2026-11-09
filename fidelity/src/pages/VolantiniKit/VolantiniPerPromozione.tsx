@@ -90,15 +90,15 @@ function SchedeInCaricamento() {
   );
 }
 
-/** "12 promozioni · 48 volantini · 1.234 righe di punti vendita stampate", del periodo senza filtri. */
+/** "12 promozioni · 48 volantini · 1.234 punti vendita", del periodo senza filtri: punti vendita diversi. */
 function RiepilogoPeriodo({ riepilogo }: { riepilogo: RiepilogoPeriodoVolantiniConsultazione }) {
   const voci: [numero: number, singolare: string, plurale: string][] = [
     [riepilogo.promozioni, "promozione", "promozioni"],
     [riepilogo.kit, "volantino", "volantini"],
   ];
-  // 0 righe: le liste dei punti vendita non sono arrivate, non che i volantini non ne abbiano
+  // 0: le liste dei punti vendita non sono arrivate, non che i volantini non ne abbiano
   if (riepilogo.puntiVendita > 0) {
-    voci.push([riepilogo.puntiVendita, "riga di punti vendita stampata", "righe di punti vendita stampate"]);
+    voci.push([riepilogo.puntiVendita, "punto vendita", "punti vendita"]);
   }
   return (
     <ul aria-label="Il periodo in numeri" className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm tabular-nums">

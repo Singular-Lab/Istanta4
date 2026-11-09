@@ -21,7 +21,7 @@ function AdattaVista({ punti }: { punti: [number, number][] }) {
 
 export interface MappaPromozioneProps {
   punti: PuntoSullaMappa[];
-  /** Righe che non sono sulla mappa: non abbinate all'anagrafica o senza coordinate. */
+  /** Punti vendita stampati che non sono sulla mappa: non riconosciuti nell'anagrafica o senza coordinate. */
   fuoriMappa: number;
   kitPerId: ReadonlyMap<string, KitPromozioneConsultazione>;
   /** Colore CSS del pallino del canale (Leaflet lo riceve come opzione di disegno). */
@@ -97,8 +97,8 @@ export function MappaPromozione({ punti, fuoriMappa, kitPerId, coloreCanale, con
         <p className="flex items-start gap-1.5 text-xs text-slate-500 dark:text-slate-400">
           <Lucide icon="MapPinOff" aria-hidden="true" className="mt-px h-3.5 w-3.5 flex-none" />
           {fuoriMappa === 1
-            ? "1 riga non è sulla mappa: non è abbinata all'anagrafica o il punto vendita non ha le coordinate."
-            : `${formatNumero(fuoriMappa)} righe non sono sulla mappa: non sono abbinate all'anagrafica o il punto vendita non ha le coordinate.`}
+            ? "1 punto vendita non è sulla mappa: non è riconosciuto nell'anagrafica o non ha le coordinate."
+            : `${formatNumero(fuoriMappa)} punti vendita non sono sulla mappa: non sono riconosciuti nell'anagrafica o non hanno le coordinate.`}
         </p>
       )}
     </div>

@@ -88,7 +88,10 @@ export interface GrigliaKit {
   aree: Riferimento[];
   /** I kit di una cella (chiaveCella); di solito uno, più di uno se canale e area hanno più kit. */
   celle: ReadonlyMap<string, Kit[]>;
-  /** Righe dei punti vendita stampate, per canale, per area e in tutto. */
+  /**
+   * Punti vendita diversi per canale, per area e in tutto: uno stampato da più kit dello stesso
+   * canale o della stessa area conta una volta. Non sono la somma dei punti vendita delle celle.
+   */
   totaleCanale: ReadonlyMap<string, number>;
   totaleArea: ReadonlyMap<string, number>;
   totale: number;
@@ -106,17 +109,22 @@ const unici = (riferimenti: readonly Riferimento[]): Riferimento[] => {
 
 const somma = (mappa: Map<string, number>, chiave: string, valore: number) => mappa.set(chiave, (mappa.get(chiave) ?? 0) + valore);
 
-export const grigliaKit = (kit: readonly Kit[]): GrigliaKit => {
+export const grigliaKit = (kit: readonly Kit[], puntiVendita: readonly Pick<RigaPv, "idKit">[]): GrigliaKit => {
   const celle = new Map<string, Kit[]>();
-  const totaleCanale = new Map<string, number>();
-  const totaleArea = new Map<string, number>();
-  let totale = 0;
   for (const k of kit) {
     const chiave = chiaveCella(k.canale.id, k.area.id);
     celle.set(chiave, [...(celle.get(chiave) ?? []), k]);
-    somma(totaleCanale, k.canale.id, k.numeroPuntiVendita);
-    somma(totaleArea, k.area.id, k.numeroPuntiVendita);
-    totale += k.numeroPuntiVendita;
+  }
+  const kitPerId = new Map(kit.map(k => [k.id, k]));
+  const totaleCanale = new Map<string, number>();
+  const totaleArea = new Map<string, number>();
+  let totale = 0;
+  for (const pv of puntiVendita) {
+    const deiKit = pv.idKit.flatMap(id => kitPerId.get(id) ?? []);
+    if (deiKit.length === 0) continue;
+    for (const idCanale of new Set(deiKit.map(k => k.canale.id))) somma(totaleCanale, idCanale, 1);
+    for (const idArea of new Set(deiKit.map(k => k.area.id))) somma(totaleArea, idArea, 1);
+    totale++;
   }
   return { canali: unici(kit.map(k => k.canale)), aree: unici(kit.map(k => k.area)), celle, totaleCanale, totaleArea, totale };
 };
@@ -279,19 +287,23 @@ export const filtraPuntiVendita = <T extends Pick<RigaPv, "regione" | "localita"
   );
 };
 
-/** Righe dei punti vendita per canale (dal kit di ogni riga), dalla più alta; a parità per nome. */
+/**
+ * Punti vendita per canale (dai kit che stampano ciascuno), dal più alto; a parità per nome. Un punto
+ * vendita conta una volta per ogni canale dei suoi kit, non una volta per kit.
+ */
 export const puntiVenditaPerCanale = (
   kit: readonly Pick<Kit, "id" | "canale">[],
-  righe: readonly Pick<RigaPv, "idKit">[]
+  puntiVendita: readonly Pick<RigaPv, "idKit">[]
 ): Array<{ canale: Riferimento; puntiVendita: number }> => {
   const canaleDelKit = new Map(kit.map(k => [k.id, k.canale]));
   const perCanale = new Map<string, { canale: Riferimento; puntiVendita: number }>();
-  for (const riga of righe) {
-    const canale = canaleDelKit.get(riga.idKit);
-    if (!canale) continue;
-    const voce = perCanale.get(canale.id);
-    if (voce) voce.puntiVendita++;
-    else perCanale.set(canale.id, { canale, puntiVendita: 1 });
+  for (const pv of puntiVendita) {
+    const canali = new Map(pv.idKit.flatMap(id => canaleDelKit.get(id) ?? []).map(canale => [canale.id, canale]));
+    for (const canale of canali.values()) {
+      const voce = perCanale.get(canale.id);
+      if (voce) voce.puntiVendita++;
+      else perCanale.set(canale.id, { canale, puntiVendita: 1 });
+    }
   }
   return [...perCanale.values()].sort((a, b) => b.puntiVendita - a.puntiVendita || perNome(a.canale, b.canale));
 };
@@ -307,23 +319,24 @@ export interface PuntoSullaMappa {
 }
 
 /**
- * I punti vendita da mettere sulla mappa: solo le righe abbinate all'anagrafica con le coordinate,
- * una volta per punto vendita anche se lo stampano più kit. `fuoriMappa` conta le righe rimaste fuori.
+ * I punti vendita da mettere sulla mappa: solo quelli riconosciuti nell'anagrafica con le coordinate,
+ * un punto per punto vendita dell'anagrafica con tutti i kit che lo stampano. `fuoriMappa` conta i
+ * punti vendita rimasti fuori.
  */
-export const puntiSullaMappa = (righe: readonly Pick<RigaPv, "idKit" | "puntoVendita">[]): { punti: PuntoSullaMappa[]; fuoriMappa: number } => {
+export const puntiSullaMappa = (puntiVendita: readonly Pick<RigaPv, "idKit" | "puntoVendita">[]): { punti: PuntoSullaMappa[]; fuoriMappa: number } => {
   const perId = new Map<string, PuntoSullaMappa>();
   let fuoriMappa = 0;
-  for (const riga of righe) {
-    const pv = riga.puntoVendita;
+  for (const stampato of puntiVendita) {
+    const pv = stampato.puntoVendita;
     if (!pv?.coordinate) {
       fuoriMappa++;
       continue;
     }
     const punto = perId.get(pv.id);
     if (punto) {
-      if (!punto.idKit.includes(riga.idKit)) punto.idKit.push(riga.idKit);
+      for (const idKit of stampato.idKit) if (!punto.idKit.includes(idKit)) punto.idKit.push(idKit);
     } else {
-      perId.set(pv.id, { id: pv.id, nome: pv.nome, lat: pv.coordinate.lat, lon: pv.coordinate.lon, idKit: [riga.idKit] });
+      perId.set(pv.id, { id: pv.id, nome: pv.nome, lat: pv.coordinate.lat, lon: pv.coordinate.lon, idKit: [...stampato.idKit] });
     }
   }
   return { punti: [...perId.values()], fuoriMappa };

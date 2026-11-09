@@ -38,7 +38,7 @@ const minuscola = (testo: string) => testo.charAt(0).toLowerCase() + testo.slice
 function CardPromozioneVolantini({ promozione, periodo, livelloTitolo = 3, className }: CardPromozioneVolantiniProps) {
   const { promo, kit, numeroKit } = promozione;
   const adesso = new Date();
-  const numeri = numeriDeiKit(kit);
+  const numeri = numeriDeiKit(promozione);
   const tempo = tempoDellaPromo(periodo, promo, adesso);
   // Con i filtri arrivano solo i kit che corrispondono: la scheda dice quanti sono sul totale
   const volantini = testoVolantini(kit.length, numeroKit);

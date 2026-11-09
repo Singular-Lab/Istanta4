@@ -104,7 +104,7 @@ function PromozioneVolantini() {
     >
       <Banda dettaglio={dettaglio} />
       <NumeriPromozione numeri={dettaglio.numeri} />
-      <MatriceKit kit={dettaglio.kit} tinta={tinta} />
+      <MatriceKit kit={dettaglio.kit} puntiVendita={dettaglio.puntiVendita} tinta={tinta} />
       <DoveArriva dettaglio={dettaglio} tinta={tinta} conScheda={conScheda} />
       <Assortimento assortimento={dettaglio.assortimento} numeroKit={dettaglio.kit.length} />
       <ConfrontoKit kit={dettaglio.kit} tinta={tinta} />

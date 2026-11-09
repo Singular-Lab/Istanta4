@@ -80,7 +80,7 @@ const coordinate = { lat: 43.84, lon: 10.5 };
 
 const riga = (id: string, campi: Partial<PuntoVenditaPromozioneConsultazione>): PuntoVenditaPromozioneConsultazione => ({
   id,
-  idKit: "k1",
+  idKit: ["k1"],
   riga: `RIGA ${id}`,
   localita: null,
   indirizzo: null,
@@ -93,9 +93,9 @@ const PUNTI_VENDITA: PuntoVenditaPromozioneConsultazione[] = [
   riga("r1", { localita: "Lucca", indirizzo: "Via Roma 1", regione: "TOS", puntoVendita: { id: "pv1", nome: "Conad Lucca", coordinate } }),
   riga("r2", { localita: "Pisa", indirizzo: "Via Mazzini 2", regione: "TOS" }),
   riga("r3", { localita: "Lucca", indirizzo: "Via Verdi 3", regione: "TOS", puntoVendita: { id: "pv2", nome: "Conad Lucca Verdi", coordinate: null } }),
-  riga("r4", { idKit: "k2", localita: "Firenze", indirizzo: "Viale Europa 4", regione: "TOS", puntoVendita: { id: "pv3", nome: "Conad Firenze", coordinate } }),
-  riga("r5", { idKit: "k2", riga: "SEDE - VIA SENZA NOME" }),
-  riga("r6", { idKit: "k3", localita: "Roma", indirizzo: "Via Appia 6", regione: "LAZ", puntoVendita: { id: "pv4", nome: "Conad Roma", coordinate } }),
+  riga("r4", { idKit: ["k2"], localita: "Firenze", indirizzo: "Viale Europa 4", regione: "TOS", puntoVendita: { id: "pv3", nome: "Conad Firenze", coordinate } }),
+  riga("r5", { idKit: ["k2"], riga: "SEDE - VIA SENZA NOME" }),
+  riga("r6", { idKit: ["k3"], localita: "Roma", indirizzo: "Via Appia 6", regione: "LAZ", puntoVendita: { id: "pv4", nome: "Conad Roma", coordinate } }),
 ];
 
 const dettaglio = (campi: Partial<DettaglioPromozioneVolantiniConsultazione> = {}): DettaglioPromozioneVolantiniConsultazione => ({
@@ -277,7 +277,7 @@ describe("Consultazione di una promozione", () => {
     expect(within(regioni).getByRole("button", { name: "Toscana: 4 punti vendita" })).toHaveAttribute("aria-pressed", "false");
     expect(within(regioni).getByRole("button", { name: "Lazio: 1 punto vendita" })).toHaveAttribute("aria-pressed", "false");
     expect(within(regioni).getByRole("button", { name: "Lombardia: 0 punti vendita" })).toBeDisabled();
-    expect(screen.getByText("1 riga ha la regione non indicata: non è nel cartogramma.")).toBeInTheDocument();
+    expect(screen.getByText("1 punto vendita ha la regione non indicata: non è nel cartogramma.")).toBeInTheDocument();
   });
 
   it("una regione filtra località, mappa ed elenco; di nuovo, o dal chip, il filtro si toglie", async () => {
@@ -285,7 +285,7 @@ describe("Consultazione di una promozione", () => {
 
     expect(screen.getByText("6 di 6 punti vendita")).toBeInTheDocument();
     expect(screen.getAllByTestId("pallino")).toHaveLength(3);
-    expect(screen.getByText(/3 righe non sono sulla mappa/)).toBeInTheDocument();
+    expect(screen.getByText(/3 punti vendita non sono sulla mappa/)).toBeInTheDocument();
 
     const lazio = screen.getByRole("button", { name: "Lazio: 1 punto vendita" });
     fireEvent.click(lazio);
@@ -345,6 +345,36 @@ describe("Consultazione di una promozione", () => {
     expect(within(tabellaElenco()).getAllByText("Riconosciuto")).toHaveLength(4);
     expect(within(tabellaElenco()).queryByRole("link")).not.toBeInTheDocument();
     expect(within(tabellaElenco()).getByText("Conad Lucca")).toBeInTheDocument();
+  });
+
+  it("un punto vendita stampato da due volantini è una riga sola, con i due volantini, e conta una volta", async () => {
+    // A2623: Emilia e Liguria stampano gli stessi punti vendita toscani
+    const EMILIA = { id: "a-em", nome: "Emilia" };
+    const LIGURIA = { id: "a-li", nome: "Liguria" };
+    const stessaLista = [
+      riga("arezzo", { idKit: ["em", "li"], localita: "AREZZO", indirizzo: "VIA CHIARINI 23/A", regione: "TOS" }),
+      riga("barga", { idKit: ["em", "li"], localita: "BARGA", indirizzo: "VIA CANIPAIA", regione: "TOS" }),
+    ];
+    finti.risultato = caricato(dettaglio({
+      kit: [kit("em", { area: EMILIA, numeroPuntiVendita: 2 }), kit("li", { area: LIGURIA, numeroPuntiVendita: 2 })],
+      numeri: { ...dettaglio().numeri, kit: 2, puntiVendita: 2, localita: 2, regioni: 1 },
+      puntiVendita: stessaLista,
+    }));
+    await apri();
+
+    expect(screen.getByRole("button", { name: "Toscana: 2 punti vendita" })).toBeInTheDocument();
+    expect(screen.getByText("2 di 2 punti vendita")).toBeInTheDocument();
+    const elenco = tabellaElenco();
+    expect(within(elenco).getAllByText("AREZZO")).toHaveLength(1);
+    const volantiniArezzo = within(elenco).getByRole("list", { name: "Volantini che stampano AREZZO" });
+    expect(within(volantiniArezzo).getAllByRole("listitem").map(voce => voce.textContent)).toEqual(["City · Emilia", "City · Liguria"]);
+
+    // Nella griglia ogni volantino ha i suoi 2 punti vendita, ma il totale è 2, non 4
+    const griglia = screen.getByRole("table", { name: "Volantini per insegna e area, con i punti vendita stampati" });
+    const [, city, totali] = within(griglia).getAllByRole("row");
+    expect(within(city).getAllByText("2").length).toBeGreaterThan(0);
+    expect(within(city).queryByText("4")).not.toBeInTheDocument();
+    expect(within(totali).queryByText("4")).not.toBeInTheDocument();
   });
 
   it("l'elenco mostra 25 righe alla volta", async () => {

@@ -3,7 +3,7 @@ import { formatNumero } from "@/utils/format";
 import dayjs from "dayjs";
 import "dayjs/locale/it";
 import type { PeriodoConsultazione } from "../../../lib/consultazione/periodi";
-import type { MotivoVetrina, PromoConsultazione, VarianteConsultazione } from "../../../lib/consultazione/tipi";
+import type { MotivoVetrina, PromoConsultazione, PromozioneVolantiniConsultazione } from "../../../lib/consultazione/tipi";
 import {
   GIORNI_SCADENZA_VICINA,
   giorniAllaScadenza,
@@ -115,15 +115,18 @@ export interface NumeriKit {
   volantini: number;
   insegne: number;
   aree: number;
-  /** Righe delle liste dei punti vendita stampate; 0 vuol dire che le liste non sono arrivate. */
+  /**
+   * Punti vendita diversi stampati nei kit mostrati, contati dal server: non la somma dei kit, perché
+   * uno stampato in più kit conta una volta. 0 vuol dire che le liste non sono arrivate.
+   */
   puntiVendita: number;
 }
 
-export const numeriDeiKit = (kit: readonly VarianteConsultazione[]): NumeriKit => ({
+export const numeriDeiKit = ({ kit, numeroPuntiVendita }: Pick<PromozioneVolantiniConsultazione, "kit" | "numeroPuntiVendita">): NumeriKit => ({
   volantini: kit.length,
   insegne: new Set(kit.map((voce) => voce.canale.id)).size,
   aree: new Set(kit.map((voce) => voce.area.id)).size,
-  puntiVendita: kit.reduce((somma, voce) => somma + Math.max(0, voce.numeroPuntiVendita || 0), 0),
+  puntiVendita: Math.max(0, numeroPuntiVendita || 0),
 });
 
 /** "3 volantini"; con i filtri, quando la promo ne ha altri, "2 di 5 volantini". */

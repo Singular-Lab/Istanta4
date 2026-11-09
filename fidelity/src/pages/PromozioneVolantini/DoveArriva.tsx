@@ -27,7 +27,7 @@ export interface DoveArrivaProps {
 
 const TITOLO = "Dove arriva";
 const DESCRIZIONE =
-  "I punti vendita stampati nelle liste dei volantini, per regione e insegna. Scegli una regione per vedere solo i suoi punti vendita.";
+  "I punti vendita stampati nelle liste dei volantini, per regione e insegna: uno stampato in più volantini conta una volta. Scegli una regione per vedere solo i suoi punti vendita.";
 
 /** Il blocco di un grafico dentro la sezione: titolo h3 e contenuto. */
 function Blocco({ titolo, children }: { titolo: string; children: ReactNode }) {
@@ -41,7 +41,8 @@ function Blocco({ titolo, children }: { titolo: string; children: ReactNode }) {
 
 /**
  * "Dove arriva": il cartogramma delle regioni, i punti vendita per insegna e le località con più
- * punti vendita, la mappa dei riconosciuti con le coordinate e l'elenco di tutte le righe stampate.
+ * punti vendita, la mappa dei riconosciuti con le coordinate e l'elenco dei punti vendita stampati,
+ * ciascuno una volta con i volantini che lo stampano.
  * La regione scelta sul cartogramma filtra località, mappa ed elenco; la ricerca solo l'elenco.
  */
 export function DoveArriva({ dettaglio, tinta, conScheda }: DoveArrivaProps) {
@@ -92,7 +93,7 @@ export function DoveArriva({ dettaglio, tinta, conScheda }: DoveArrivaProps) {
               voci={localita.map(voce => ({ id: voce.chiave, etichetta: voce.nome, valore: voce.puntiVendita }))}
               titolo={nomeScelta ? `Località con più punti vendita in ${nomeScelta}` : "Località con più punti vendita"}
               descrizioneValore="Punti vendita"
-              vuoto="Le righe non indicano la località."
+              vuoto="I punti vendita stampati non indicano la località."
             />
           </Blocco>
         </div>
