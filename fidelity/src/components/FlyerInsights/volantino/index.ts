@@ -1,6 +1,6 @@
 /**
- * Il volantino sfogliabile degli insight: pagine vere del PDF con i riquadri dei box, colori,
- * ingrandimento, scheda del box e viaggio del prodotto.
+ * Il volantino degli insight come lettore di PDF: tutte le pagine dal PDF con i riquadri dei box,
+ * indice delle pagine, zoom, colori, scheda del box e viaggio del prodotto.
  */
 export { default, VolantinoSfogliabile, LIVELLI_ZOOM, type VolantinoSfogliabileProps } from "./VolantinoSfogliabile";
 export { PaginaConImmagine, type PaginaConImmagineProps } from "./PaginaConImmagine";
@@ -22,14 +22,13 @@ export {
   type StileRiquadro,
 } from "./colori";
 export {
-  doppiaDellaPagina,
-  etichettaDoppia,
-  pagineDellaDoppia,
   paginaNellImmagine,
+  paginaRichiesta,
+  pagineInVista,
   PROPORZIONE_PREDEFINITA,
   riquadroBox,
   stileImmagine,
-  totaleDoppie,
-  type DoppiaPagina,
   type PaginaNellImmagine,
+  type PosizionePagina,
 } from "./geometria";
+export { IndicePagine, type IndicePagineProps, type VoceIndice } from "./IndicePagine";

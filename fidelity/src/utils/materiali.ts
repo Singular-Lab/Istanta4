@@ -30,6 +30,13 @@ export const urlPaginaMateriale = (idOlimpoCloud: string, pagina: number): strin
   `${urlAnteprimaMateriale(idOlimpoCloud)}&page=${encodeURIComponent(String(pagina))}`;
 
 /**
+ * Il PDF di un materiale dallo stesso proxy di sola lettura. Olimpo risponde alle richieste Range:
+ * il visualizzatore degli insight ne legge solo i pezzi delle pagine che mostra.
+ */
+export const urlPdfMateriale = (idOlimpoCloud: string): string =>
+  `/olimpo/materiali/getMaterialePDF?id=${encodeURIComponent(idOlimpoCloud)}`;
+
+/**
  * Validità compatta di una promo: "16/10 – 29/10/2026", con l'anno una volta sola quando le due
  * date cadono nello stesso anno. Date ISO (YYYY-MM-DD) come nel contratto; null se mancano entrambe.
  */
