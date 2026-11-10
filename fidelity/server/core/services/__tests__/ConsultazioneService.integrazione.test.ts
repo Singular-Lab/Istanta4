@@ -209,9 +209,9 @@ describeConDatabase('ConsultazioneService', () => {
 
     const pagina = await service.getPromozioniVolantini({ periodo: 'storico' }, della(nostro));
 
-    // L'unica promo della GDO e' in vetrina; quella dell'altra GDO non c'e' da nessuna parte
-    expect(pagina.vetrina?.promozione.promo.nome).toBe('Nostra');
-    expect(pagina.promozioni).toEqual([]);
+    // Lo Storico non ha la vetrina: l'unica promo della GDO e' fra le schede, quella dell'altra GDO da nessuna parte
+    expect(pagina.vetrina).toBeNull();
+    expect(pagina.promozioni.map(p => p.promo.nome)).toEqual(['Nostra']);
     expect(pagina.riepilogo).toEqual({ promozioni: 1, kit: 1, puntiVendita: 0 });
     expect(pagina.opzioni.aree.map(area => area.id)).toEqual([nostro.idArea]);
     expect(pagina.opzioni.canali.map(canale => canale.id)).toEqual([nostro.idCanale]);
@@ -370,7 +370,7 @@ describeConDatabase('ConsultazioneService', () => {
     expect(perArea.promozioni.map(p => p.promo.nome)).toEqual(['Ottobre']);
   });
 
-  it('vetrina dei Prossimi: l\'inizio di validita\' piu\' vicino; dello Storico: la fine di validita\' piu\' recente; periodo vuoto senza vetrina', async () => {
+  it('vetrina dei Prossimi: l\'inizio di validita\' piu\' vicino; lo Storico non ha la vetrina; periodo vuoto senza vetrina', async () => {
     const dicembre = await creaKitRuntime({ statoPromo: 'IN_LAVORAZIONE', nomePromo: 'Dicembre', validitaDal: giorno('2026-12-01T00:00:00+01:00') });
     const ambito = della(dicembre);
     await creaRighePuntiVendita(dicembre, righeQualunque(10));
@@ -389,14 +389,115 @@ describeConDatabase('ConsultazioneService', () => {
     expect(prossimi.promozioni.map(p => p.promo.nome)).toEqual(['Dicembre']);
     expect(prossimi.riepilogo).toEqual({ promozioni: 2, kit: 2, puntiVendita: 10 });
 
+    // Nello Storico nessuna vetrina, neppure senza filtri: tutte le promo concluse fra le schede
     const storico = await service.getPromozioniVolantini({ periodo: 'storico' }, ambito);
-    expect([storico.vetrina?.motivo, storico.vetrina?.promozione.promo.nome]).toEqual(['ultima_conclusa', 'Settembre']);
-    expect(storico.promozioni.map(p => p.promo.nome)).toEqual(['Agosto']);
-    expect(storico).toMatchObject({ totale: 1, totaleKit: 1, totaleSenzaFiltri: 2 });
+    expect(storico.vetrina).toBeNull();
+    expect(storico.promozioni.map(p => p.promo.nome)).toEqual(['Settembre', 'Agosto']);
+    expect(storico).toMatchObject({ totale: 2, totaleKit: 2, totaleSenzaFiltri: 2 });
 
     const attivi = await service.getPromozioniVolantini({ periodo: 'attivi' }, ambito);
     expect(attivi).toMatchObject({ vetrina: null, promozioni: [], totale: 0, totaleSenzaFiltri: 0 });
     expect(attivi.riepilogo).toEqual({ promozioni: 0, kit: 0, puntiVendita: 0 });
+  });
+
+  /** Una combinazione canale/area della GDO, con area e canale suoi, senza nessun volantino. */
+  async function creaCombinazioneSenzaVolantini(idGdo: string): Promise<{ idArea: string; idCanale: string }> {
+    const idArea = randomUUID();
+    const idCanale = randomUUID();
+    await sequelize.query(
+      `INSERT INTO aree (id_aree, codice_aree, nome_aree, id_gdo_aree, createdat, updatedat) VALUES (:idArea, 'CE', 'Centro', :idGdo, NOW(), NOW())`,
+      { replacements: { idArea, idGdo } }
+    );
+    await sequelize.query(
+      `INSERT INTO canali (id_canali, codice_canali, nome_canali, id_gdo_canali, createdat, updatedat) VALUES (:idCanale, 'IP', 'Iper', :idGdo, NOW(), NOW())`,
+      { replacements: { idCanale, idGdo } }
+    );
+    await sequelize.query(
+      `INSERT INTO combinazione_canale_area (id_combinazione_canale_area, id_gdo_combinazione_canale_area, id_canale_combinazione_canale_area,
+         id_area_combinazione_canale_area, stato_combinazione_canale_area, createdat, updatedat)
+       VALUES (:id, :idGdo, :idCanale, :idArea, 'DISATTIVO', NOW(), NOW())`,
+      { replacements: { id: randomUUID(), idGdo, idCanale, idArea } }
+    );
+    return { idArea, idCanale };
+  }
+
+  const idDi = (voci: Array<{ id: string }>) => voci.map(voce => voce.id).sort();
+
+  it('Storico: aree e canali dei soli volantini pubblicati, mai delle combinazioni della GDO senza volantini', async () => {
+    const archiviata = await creaKitRuntime({ statoPromo: 'ARCHIVIATA', nomePromo: 'Conclusa' });
+    const ambito = della(archiviata);
+    const senzaVolantini = await creaCombinazioneSenzaVolantini(archiviata.idGdo);
+    // Un kit non pubblicato di un'altra promo conclusa: area e canale suoi non si propongono
+    const inRevisione = await creaKitRuntime({ idGdo: archiviata.idGdo, statoPromo: 'ARCHIVIATA', statoLavorazione: 'IN_REVISIONE' });
+
+    const storico = await service.getPromozioniVolantini({ periodo: 'storico' }, ambito);
+
+    expect(idDi(storico.opzioni.aree)).toEqual([archiviata.idArea]);
+    expect(idDi(storico.opzioni.canali)).toEqual([archiviata.idCanale]);
+    for (const id of [senzaVolantini.idArea, senzaVolantini.idCanale, inRevisione.idArea, inRevisione.idCanale]) {
+      expect(JSON.stringify(storico.opzioni)).not.toContain(id);
+    }
+  });
+
+  it('filtri incrociati: aree, canali e anni dei volantini che corrispondono agli altri filtri, non al proprio', async () => {
+    const del2024 = await creaKitRuntime({
+      statoPromo: 'ARCHIVIATA', nomePromo: 'Settembre 2024',
+      validitaDal: giorno('2024-09-01T00:00:00+02:00'), validitaAl: giorno('2024-09-14T00:00:00+02:00'),
+    });
+    const ambito = della(del2024);
+    const del2022 = await creaKitRuntime({
+      idGdo: del2024.idGdo, statoPromo: 'ARCHIVIATA', nomePromo: 'Marzo 2022',
+      validitaDal: giorno('2022-03-01T00:00:00+01:00'), validitaAl: giorno('2022-03-14T00:00:00+01:00'),
+    });
+    const storico = (filtri: { idArea?: string; idCanale?: string; anno?: number; cerca?: string }) =>
+      service.getPromozioniVolantini({ periodo: 'storico', ...filtri }, ambito);
+
+    // Scelto il 2024: aree e canali dei soli volantini del 2024; gli anni restano tutti
+    const perAnno = await storico({ anno: 2024 });
+    expect(idDi(perAnno.opzioni.aree)).toEqual([del2024.idArea]);
+    expect(idDi(perAnno.opzioni.canali)).toEqual([del2024.idCanale]);
+    expect(perAnno.opzioni.anni).toEqual([2024, 2022]);
+
+    // Scelta un'area: le aree restano tutte, canali e anni sono quelli dell'area
+    const perArea = await storico({ idArea: del2022.idArea });
+    expect(idDi(perArea.opzioni.aree)).toEqual([del2024.idArea, del2022.idArea].sort());
+    expect(idDi(perArea.opzioni.canali)).toEqual([del2022.idCanale]);
+    expect(perArea.opzioni.anni).toEqual([2022]);
+
+    // Scelto un canale: i canali restano tutti, aree e anni sono quelli del canale
+    const perCanale = await storico({ idCanale: del2024.idCanale });
+    expect(idDi(perCanale.opzioni.canali)).toEqual([del2024.idCanale, del2022.idCanale].sort());
+    expect(idDi(perCanale.opzioni.aree)).toEqual([del2024.idArea]);
+    expect(perCanale.opzioni.anni).toEqual([2024]);
+
+    // Anche la ricerca restringe le opzioni
+    const cercate = await storico({ cerca: 'marzo' });
+    expect(idDi(cercate.opzioni.aree)).toEqual([del2022.idArea]);
+    expect(cercate.opzioni.anni).toEqual([2022]);
+
+    // Area e canale senza volantini insieme: nessuna promo, e ogni filtro propone cio' che l'altro lascia
+    const incompatibili = await storico({ idArea: del2022.idArea, idCanale: del2024.idCanale });
+    expect(incompatibili).toMatchObject({ promozioni: [], totale: 0, totaleSenzaFiltri: 2 });
+    expect(idDi(incompatibili.opzioni.aree)).toEqual([del2024.idArea]);
+    expect(idDi(incompatibili.opzioni.canali)).toEqual([del2022.idCanale]);
+    expect(incompatibili.opzioni.anni).toEqual([]);
+  });
+
+  it('filtri incrociati anche negli Attivi', async () => {
+    const prima = await creaKitRuntime({ nomePromo: 'Prima' });
+    const ambito = della(prima);
+    const seconda = await creaKitRuntime({ idGdo: prima.idGdo, nomePromo: 'Seconda' });
+
+    const tutte = await service.getPromozioniVolantini({ periodo: 'attivi' }, ambito);
+    expect(idDi(tutte.opzioni.aree)).toEqual([prima.idArea, seconda.idArea].sort());
+
+    const perCanale = await service.getPromozioniVolantini({ periodo: 'attivi', idCanale: seconda.idCanale }, ambito);
+    expect(idDi(perCanale.opzioni.aree)).toEqual([seconda.idArea]);
+    expect(idDi(perCanale.opzioni.canali)).toEqual([prima.idCanale, seconda.idCanale].sort());
+
+    const perPromo = await service.getPromozioniVolantini({ periodo: 'attivi', idPromo: prima.idPromo }, ambito);
+    expect(idDi(perPromo.opzioni.aree)).toEqual([prima.idArea]);
+    expect(idDi(perPromo.opzioni.canali)).toEqual([prima.idCanale]);
   });
 
   it('dettaglio della promozione: solo i kit volantino pubblicati, per canale, area e titolo, con insight e righe dei punti vendita', async () => {

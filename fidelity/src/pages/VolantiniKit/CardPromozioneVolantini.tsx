@@ -32,20 +32,26 @@ const minuscola = (testo: string) => testo.charAt(0).toLowerCase() + testo.slice
 /**
  * Una promozione con volantini pubblicati: il collage delle copertine dei primi kit, il nome
  * piccolo sopra il periodo di validità in grande, quanto manca e i numeri (volantini, punti vendita
- * stampati, insegne). Le varianti non si elencano: tutta la scheda apre il dettaglio di
+ * stampati, insegne). Nello Storico niente fine né punti vendita: i volantini e due pillole con le
+ * aree e i canali dei kit. Le varianti non si elencano: tutta la scheda apre il dettaglio di
  * consultazione della promozione, che non è quello della produzione.
  */
 function CardPromozioneVolantini({ promozione, periodo, livelloTitolo = 3, className }: CardPromozioneVolantiniProps) {
   const { promo, kit, numeroKit } = promozione;
   const adesso = new Date();
   const numeri = numeriDeiKit(promozione);
-  const tempo = tempoDellaPromo(periodo, promo, adesso);
+  const storico = periodo === "storico";
+  const tempo = storico ? null : tempoDellaPromo(periodo, promo, adesso);
   // Con i filtri arrivano solo i kit che corrispondono: la scheda dice quanti sono sul totale
   const volantini = testoVolantini(kit.length, numeroKit);
   // 0 vuol dire che le liste dei punti vendita non sono arrivate, non che il volantino non ne ha
   const puntiVendita =
-    numeri.puntiVendita > 0 ? plurale(numeri.puntiVendita, "punto vendita", "punti vendita") : null;
-  const insegne = plurale(numeri.insegne, "insegna", "insegne");
+    !storico && numeri.puntiVendita > 0 ? plurale(numeri.puntiVendita, "punto vendita", "punti vendita") : null;
+  const insegne = storico ? null : plurale(numeri.insegne, "insegna", "insegne");
+  // Nello Storico, aree e canali coinvolti: il canale è l'insegna
+  const pillole = storico
+    ? [plurale(numeri.aree, "area", "aree"), plurale(numeri.insegne, "canale", "canali")]
+    : [];
   const Titolo = livelloTitolo === 4 ? "h4" : "h3";
 
   // Il nome del collegamento per intero, con l'anno: i pezzi della scheda letti in fila non si separerebbero
@@ -56,6 +62,7 @@ function CardPromozioneVolantini({ promozione, periodo, livelloTitolo = 3, class
     volantini,
     puntiVendita,
     insegne,
+    ...pillole,
   ]
     .filter(Boolean)
     .join(", ");
@@ -98,11 +105,25 @@ function CardPromozioneVolantini({ promozione, periodo, livelloTitolo = 3, class
               {puntiVendita}
             </span>
           )}
-          <span className="inline-flex items-center gap-1.5">
-            <Lucide icon="Tags" aria-hidden="true" className="h-3.5 w-3.5" />
-            {insegne}
-          </span>
+          {insegne && (
+            <span className="inline-flex items-center gap-1.5">
+              <Lucide icon="Tags" aria-hidden="true" className="h-3.5 w-3.5" />
+              {insegne}
+            </span>
+          )}
         </div>
+        {pillole.length > 0 && (
+          <ul aria-label="Aree e canali" className="flex flex-wrap gap-1.5">
+            {pillole.map((testo) => (
+              <li
+                key={testo}
+                className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-2xs font-medium tabular-nums text-slate-600 dark:bg-darkmode-400 dark:text-slate-200"
+              >
+                {testo}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </Link>
   );

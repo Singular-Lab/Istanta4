@@ -14,11 +14,12 @@ import { useRicercaDifferita } from "@/hooks/useRicercaDifferita";
 import { usePromozioniVolantiniConsultazione } from "@/query/consultazione";
 import { formatNumero } from "@/utils/format";
 import { twMerge } from "@/utils/twMerge";
-import { useEffect, useId, useMemo } from "react";
+import { useEffect, useId, useMemo, useRef } from "react";
 import type { PeriodoConsultazione } from "../../../lib/consultazione/periodi";
 import type {
   PaginaPromozioniVolantiniConsultazione,
   PromozioneVolantiniConsultazione,
+  Riferimento,
   RiepilogoPeriodoVolantiniConsultazione,
 } from "../../../lib/consultazione/tipi";
 import { DIMENSIONI_PAGINA_PROMOZIONI_VOLANTINI } from "../../../lib/materiali/tipi";
@@ -90,14 +91,23 @@ function SchedeInCaricamento() {
   );
 }
 
-/** "12 promozioni · 48 volantini · 1.234 punti vendita", del periodo senza filtri: punti vendita diversi. */
-function RiepilogoPeriodo({ riepilogo }: { riepilogo: RiepilogoPeriodoVolantiniConsultazione }) {
+/**
+ * "12 promozioni · 48 volantini · 1.234 punti vendita", del periodo senza filtri: punti vendita
+ * diversi. Nello Storico niente punti vendita: "12 promozioni · 48 volantini".
+ */
+function RiepilogoPeriodo({
+  riepilogo,
+  conPuntiVendita,
+}: {
+  riepilogo: RiepilogoPeriodoVolantiniConsultazione;
+  conPuntiVendita: boolean;
+}) {
   const voci: [numero: number, singolare: string, plurale: string][] = [
     [riepilogo.promozioni, "promozione", "promozioni"],
     [riepilogo.kit, "volantino", "volantini"],
   ];
   // 0: le liste dei punti vendita non sono arrivate, non che i volantini non ne abbiano
-  if (riepilogo.puntiVendita > 0) {
+  if (conPuntiVendita && riepilogo.puntiVendita > 0) {
     voci.push([riepilogo.puntiVendita, "punto vendita", "punti vendita"]);
   }
   return (
@@ -122,6 +132,20 @@ function RiepilogoPeriodo({ riepilogo }: { riepilogo: RiepilogoPeriodoVolantiniC
     </ul>
   );
 }
+
+/**
+ * Le opzioni di Area o Canale con il valore scelto, se non c'è: in coda, con il nome già visto o
+ * uno generico (un indirizzo con un valore mai proposto).
+ */
+const conValoreScelto = (
+  opzioni: readonly Riferimento[],
+  scelto: string,
+  nomiVisti: ReadonlyMap<string, string>,
+  nomeGenerico: string
+): readonly Riferimento[] =>
+  !scelto || opzioni.some((opzione) => opzione.id === scelto)
+    ? opzioni
+    : [...opzioni, { id: scelto, nome: nomiVisti.get(scelto) ?? nomeGenerico }];
 
 /** Nome della promo filtrata con ?promo=: dalle opzioni, dai risultati, o un nome generico. */
 const nomePromoFiltrata = (dati: PaginaPromozioniVolantiniConsultazione | undefined, idPromo: string): string =>
@@ -208,8 +232,8 @@ export interface VolantiniPerPromozioneProps {
 }
 
 /**
- * Volantini pubblicati di un periodo, solo come promozioni: in testa la promozione in vetrina, poi
- * una scheda-collage per promozione, dalla più recente. Ogni scheda apre il dettaglio di
+ * Volantini pubblicati di un periodo, solo come promozioni: in testa la promozione in vetrina (non
+ * nello Storico), poi una scheda-collage per promozione, dalla più recente. Ogni scheda apre il dettaglio di
  * consultazione della promozione; nessuno stato di lavorazione, nessun collegamento alla
  * produzione. Si cerca, si filtra per area e canale (nello Storico anche per anno); la promozione
  * arriva solo dall'indirizzo (?promo=) e si vede come filtro removibile.
@@ -250,8 +274,9 @@ function VolantiniPerPromozione({ periodo, titolo, descrizione }: VolantiniPerPr
     dimensione,
   });
   const dati = query.data;
-  // La vetrina è del periodo senza filtri: con un filtro non si mostra, neppure mentre arrivano i dati filtrati
-  const vetrina = conFiltri ? null : (dati?.vetrina ?? null);
+  // La vetrina è del periodo senza filtri: con un filtro non si mostra, neppure mentre arrivano i
+  // dati filtrati. Lo Storico non ce l'ha: tutte le promozioni concluse stanno fra le schede
+  const vetrina = conFiltri || periodo === "storico" ? null : (dati?.vetrina ?? null);
 
   // Una pagina oltre l'ultima (indirizzo vecchio, promo archiviate nel frattempo) torna alla prima
   useEffect(() => {
@@ -260,6 +285,23 @@ function VolantiniPerPromozione({ periodo, titolo, descrizione }: VolantiniPerPr
     }
   }, [dati, query.isPlaceholderData, pagina, aggiorna]);
 
+  // I filtri sono incrociati: il valore scelto può non avere più volantini con gli altri filtri e
+  // sparire dalle opzioni. Resta nella tendina, con l'ultimo nome visto
+  const nomiVisti = useRef(new Map<string, string>());
+  useEffect(() => {
+    for (const voce of [...(dati?.opzioni.aree ?? []), ...(dati?.opzioni.canali ?? [])]) {
+      nomiVisti.current.set(voce.id, voce.nome);
+    }
+  }, [dati?.opzioni.aree, dati?.opzioni.canali]);
+
+  const opzioniArea = useMemo(
+    () => conValoreScelto(dati?.opzioni.aree ?? [], idArea, nomiVisti.current, "Area scelta"),
+    [dati?.opzioni.aree, idArea]
+  );
+  const opzioniCanale = useMemo(
+    () => conValoreScelto(dati?.opzioni.canali ?? [], idCanale, nomiVisti.current, "Canale scelto"),
+    [dati?.opzioni.canali, idCanale]
+  );
   const opzioniAnno = useMemo(() => {
     const anni = dati?.opzioni.anni ?? [];
     return anno !== undefined && !anni.includes(anno) ? [...anni, anno].sort((a, b) => b - a) : anni;
@@ -324,7 +366,9 @@ function VolantiniPerPromozione({ periodo, titolo, descrizione }: VolantiniPerPr
   const intestazione = (
     <>
       <p>{descrizione}</p>
-      {riepilogo && riepilogo.promozioni > 0 && <RiepilogoPeriodo riepilogo={riepilogo} />}
+      {riepilogo && riepilogo.promozioni > 0 && (
+        <RiepilogoPeriodo riepilogo={riepilogo} conPuntiVendita={periodo !== "storico"} />
+      )}
     </>
   );
 
@@ -377,7 +421,7 @@ function VolantiniPerPromozione({ periodo, titolo, descrizione }: VolantiniPerPr
             onChange={(evento) => filtra("area", evento.target.value)}
           >
             <option value="">Tutte le aree</option>
-            {dati?.opzioni.aree.map((area) => (
+            {opzioniArea.map((area) => (
               <option key={area.id} value={area.id}>
                 {area.nome}
               </option>
@@ -391,7 +435,7 @@ function VolantiniPerPromozione({ periodo, titolo, descrizione }: VolantiniPerPr
             onChange={(evento) => filtra("canale", evento.target.value)}
           >
             <option value="">Tutti i canali</option>
-            {dati?.opzioni.canali.map((canale) => (
+            {opzioniCanale.map((canale) => (
               <option key={canale.id} value={canale.id}>
                 {canale.nome}
               </option>
