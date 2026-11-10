@@ -923,6 +923,13 @@ namespace Istanta.Models
         public string? dettaglio { get; set; }
     }
 
+    /// I20-1206: l'esito di Menabo/ClonaRecordRicollegato. Il clone si salva con il codice gruppo dei
+    /// soli codici clonati, che puo' non essere quello del record d'origine: il Plugin impagina con questo.
+    public class RisultatoClonazione : BoolResult
+    {
+        public string? codiceGruppo { get; set; }
+    }
+
     public class PromoLavorazioniResult
     {
         public bool Esito { get; set; }

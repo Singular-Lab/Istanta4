@@ -3193,24 +3193,63 @@
         else {
             text = sender.closest(".record-revisione").attr("codice_gruppo");
         }
-        this.copyToClipboard(text);
-        sender.removeClass("fa-copy").addClass("fa-check");
+        //I20-1206: la spunta solo se la copia e' riuscita; altrimenti l'operatore lo deve sapere.
+        this.copyToClipboard(text).then(function (copiato) {
+            if (!copiato) {
+                alert("Codice non copiato: il browser non permette di scrivere negli appunti. Codice: " + text);
+                return;
+            }
+            sender.removeClass("fa-copy").addClass("fa-check");
 
-        // Ripristina l'icona a fa-copy dopo 2 secondi
-        setTimeout(function () {
-            sender.removeClass("fa-check").addClass("fa-copy");
-        }, 1000);
+            // Ripristina l'icona a fa-copy dopo 1 secondo
+            setTimeout(function () {
+                sender.removeClass("fa-check").addClass("fa-copy");
+            }, 1000);
+        });
     }
 
     copyToClipboard(text) {
-        navigator.clipboard.writeText(text)
-            .then(function () {
-                console.log('Testo copiato negli appunti con successo.');
-            })
-            .catch(function (err) {
-                console.error('Errore durante la copia negli appunti:', err);
-            });
+        return Revisore.copiaNegliAppunti(text);
+    }
 
+    /// I20-1206: copia negli appunti e dice se e' riuscita. navigator.clipboard il browser lo da' solo
+    /// alle pagine https o di localhost, e Istanta si apre in http: li' mancava, il clic andava in
+    /// errore e non si copiava niente. Senza, o se rifiuta, si copia da un campo nascosto con il
+    /// comando "copia" del browser, che funziona anche in http.
+    static copiaNegliAppunti(testo, nav = globalThis.navigator, doc = globalThis.document) {
+        const ripiego = () => Revisore.copiaDaCampoNascosto(testo, doc);
+        if (nav && nav.clipboard && typeof nav.clipboard.writeText === "function") {
+            try {
+                return Promise.resolve(nav.clipboard.writeText(testo)).then(() => true, ripiego);
+            }
+            catch (e) {
+                return Promise.resolve(ripiego());
+            }
+        }
+        return Promise.resolve(ripiego());
+    }
+
+    static copiaDaCampoNascosto(testo, doc) {
+        if (!doc || !doc.body || typeof doc.execCommand !== "function") {
+            return false;
+        }
+        const campo = doc.createElement("textarea");
+        campo.value = testo;
+        campo.setAttribute("readonly", "");
+        campo.style.position = "fixed";
+        campo.style.top = "-1000px";
+        campo.style.opacity = "0";
+        doc.body.appendChild(campo);
+        try {
+            campo.select();
+            return doc.execCommand("copy") === true;
+        }
+        catch (e) {
+            return false;
+        }
+        finally {
+            doc.body.removeChild(campo);
+        }
     }
 
     gruppidebug = []
