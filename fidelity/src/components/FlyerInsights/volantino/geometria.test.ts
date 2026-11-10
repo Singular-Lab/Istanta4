@@ -165,4 +165,11 @@ describe("compensazione dell'abbondanza dell'immagine della pagina", () => {
   it("l'immagine di una pagina si chiede al proxy di Olimpo, pagine contate da 1", () => {
     expect(urlPaginaMateriale("abc 1", 3)).toBe("/olimpo/materiali/getThumbnailMaterialePdfs?id=abc%201&page=3");
   });
+
+  it("con una misura Olimpo restituisce la pagina già ridotta, in pixel interi e mai a zero", () => {
+    expect(urlPaginaMateriale("abc", 2, { larghezza: 144, altezza: 203.6 })).toBe(
+      "/olimpo/materiali/getThumbnailMaterialePdfs?id=abc&page=2&width=144&height=204"
+    );
+    expect(urlPaginaMateriale("abc", 1, { larghezza: 0, altezza: 0.2 })).toMatch(/&width=1&height=1$/);
+  });
 });

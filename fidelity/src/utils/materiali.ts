@@ -22,19 +22,25 @@ export const parametriMateriali = (valori: Readonly<Record<string, ValoreParamet
 export const urlAnteprimaMateriale = (idOlimpoCloud: string): string =>
   `/olimpo/materiali/getThumbnailMaterialePdfs?id=${encodeURIComponent(idOlimpoCloud)}`;
 
-/**
- * Immagine di una pagina (contata da 1) di un PDF del kit, dallo stesso proxy: serve a chi vede gli
- * insight del volantino, senza il permesso di scaricare il file.
- */
-export const urlPaginaMateriale = (idOlimpoCloud: string, pagina: number): string =>
-  `${urlAnteprimaMateriale(idOlimpoCloud)}&page=${encodeURIComponent(String(pagina))}`;
+/** Misura in pixel in cui chiedere a Olimpo l'immagine di una pagina. */
+export interface MisuraImmagine {
+  larghezza: number;
+  altezza: number;
+}
 
 /**
- * Il PDF di un materiale dallo stesso proxy di sola lettura. Olimpo risponde alle richieste Range:
- * il visualizzatore degli insight ne legge solo i pezzi delle pagine che mostra.
+ * Immagine di una pagina (contata da 1) di un PDF del kit, dallo stesso proxy: serve a chi vede gli
+ * insight del volantino, senza il permesso di scaricare il file. Con `misura` Olimpo la restituisce
+ * già ridotta (e ritagliata al centro se le proporzioni sono diverse): per le miniature, che così
+ * pesano pochi KB invece dell'immagine intera.
  */
-export const urlPdfMateriale = (idOlimpoCloud: string): string =>
-  `/olimpo/materiali/getMaterialePDF?id=${encodeURIComponent(idOlimpoCloud)}`;
+export const urlPaginaMateriale = (idOlimpoCloud: string, pagina: number, misura?: MisuraImmagine): string => {
+  const base = `${urlAnteprimaMateriale(idOlimpoCloud)}&page=${encodeURIComponent(String(pagina))}`;
+  if (!misura) return base;
+  const larghezza = Math.max(1, Math.round(misura.larghezza));
+  const altezza = Math.max(1, Math.round(misura.altezza));
+  return `${base}&width=${larghezza}&height=${altezza}`;
+};
 
 /**
  * Validità compatta di una promo: "16/10 – 29/10/2026", con l'anno una volta sola quando le due

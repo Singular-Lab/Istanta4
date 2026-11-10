@@ -84,7 +84,6 @@
     "docker:test:prune": "docker compose -f docker-compose.test.yml down -v && docker image prune -f"
   },
   "dependencies": {
-    "pdfjs-dist": "6.4.299",
     "undici": "^8.12.3"
   },
   "devDependencies": {

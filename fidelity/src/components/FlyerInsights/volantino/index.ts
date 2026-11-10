@@ -1,15 +1,30 @@
 /**
- * Il volantino degli insight come lettore di PDF: tutte le pagine dal PDF con i riquadri dei box,
- * indice delle pagine, zoom, colori, scheda del box e viaggio del prodotto.
+ * Il volantino degli insight come lettore: tutte le pagine con le immagini di Olimpo e i riquadri dei
+ * box, indice delle pagine, zoom, colori, ricerca dei box, analisi della pagina guardata, scheda del
+ * box e viaggio del prodotto.
  */
 export { default, VolantinoSfogliabile, LIVELLI_ZOOM, type VolantinoSfogliabileProps } from "./VolantinoSfogliabile";
 export { PaginaConImmagine, type PaginaConImmagineProps } from "./PaginaConImmagine";
+export { AnalisiPagina, type AnalisiPaginaProps } from "./AnalisiPagina";
+export {
+  cercaBox,
+  LUNGHEZZA_MINIMA_RICERCA,
+  normalizzaRicerca,
+  ordineLettura,
+  perSpazio,
+  ripartizionePagina,
+  risultatoVicino,
+  sintesiPagina,
+  type GruppoPagina,
+  type SintesiPagina,
+} from "./analisiPagina";
 export { SchedaBox, type SchedaBoxProps } from "./SchedaBox";
 export { ViaggioProdotto, type ViaggioProdottoProps } from "./ViaggioProdotto";
 export { descrizioneBox, marcaFormato, testoReparto, tooltipBox, trovaBoxIniziale } from "./box";
 export {
   coloriReparti,
   fasciaSconto,
+  gruppoBox,
   legendaDifferenze,
   legendaModo,
   OPZIONI_COLORE,
@@ -18,6 +33,7 @@ export {
   tintaMeccanica,
   tintaSconto,
   type ColoriReparti,
+  type GruppoBox,
   type ModoColore,
   type StileRiquadro,
 } from "./colori";
@@ -31,4 +47,4 @@ export {
   type PaginaNellImmagine,
   type PosizionePagina,
 } from "./geometria";
-export { IndicePagine, type IndicePagineProps, type VoceIndice } from "./IndicePagine";
+export { IndicePagine, misuraMiniatura, type IndicePagineProps, type VoceIndice } from "./IndicePagine";

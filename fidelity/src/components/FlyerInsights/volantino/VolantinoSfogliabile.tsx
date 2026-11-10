@@ -1,24 +1,28 @@
 import Button from "@/components/Base/Button";
+import CampoRicerca from "@/components/Base/CampoRicerca";
 import { Dialog, Slideover } from "@/components/Base/Headless";
 import Lucide from "@/components/Base/Lucide";
 import Segmenti from "@/components/Base/Segmenti";
 import { Legenda, type VoceLegenda } from "@/components/Grafici";
 import type { FlyerInsightsConfig } from "@/types/flyerInsights";
 import { formatNumero } from "@/utils/format";
-import { urlPaginaMateriale, urlPdfMateriale } from "@/utils/materiali";
+import { urlPaginaMateriale } from "@/utils/materiali";
 import { twMerge } from "@/utils/twMerge";
-import type { PDFDocumentProxy } from "pdfjs-dist";
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { BoxInsight, PdfVolantino, StatoDifferenza } from "../../../../lib/insightVolantino/tipi";
+import { AnalisiPagina } from "./AnalisiPagina";
+import { cercaBox, risultatoVicino } from "./analisiPagina";
 import { marcaFormato, trovaBoxIniziale } from "./box";
 import {
   coloriReparti,
+  gruppoBox,
   legendaDifferenze,
   legendaModo,
   OPZIONI_COLORE,
   stileBox,
   stileDifferenza,
   TITOLI_LEGENDA,
+  type GruppoBox,
   type ModoColore,
   type StileRiquadro,
 } from "./colori";
@@ -31,9 +35,8 @@ import {
   proporzioneDellaPagina,
   riquadroBox,
 } from "./geometria";
-import { IndicePagine, type VoceIndice } from "./IndicePagine";
+import { IndicePagine, misuraMiniatura, type VoceIndice } from "./IndicePagine";
 import { PaginaConImmagine } from "./PaginaConImmagine";
-import { useDocumentoPdf } from "./pdfVolantino";
 import { SchedaBox } from "./SchedaBox";
 import { ViaggioProdotto } from "./ViaggioProdotto";
 
@@ -50,13 +53,16 @@ export interface VolantinoSfogliabileProps {
   onCambiaPagina?: (pagina: number) => void;
   /** Box da evidenziare e scheda aperta all'avvio, es. da ?referenza=. */
   idBoxIniziale?: string | null;
-  /** Lettore senza indice delle pagine e senza schermo intero, per il confronto fra varianti. */
+  /** Lettore senza indice delle pagine, schermo intero, ricerca e analisi della pagina, per il confronto fra varianti. */
   compatto?: boolean;
   titolo?: string;
 }
 
-/** Ingrandimenti rispetto alle pagine adattate alla larghezza del lettore (1). */
-export const LIVELLI_ZOOM: readonly number[] = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
+/**
+ * Ingrandimenti rispetto alle pagine adattate alla larghezza del lettore (1). Le immagini di Olimpo
+ * sono a 150 dpi: oltre il doppio sgranerebbero.
+ */
+export const LIVELLI_ZOOM: readonly number[] = [0.5, 0.75, 1, 1.25, 1.5, 2];
 const ZOOM_ADATTA = LIVELLI_ZOOM.indexOf(1);
 /** Le pagine adattate non vanno oltre questa larghezza: una pagina verticale deve restare leggibile intera. */
 const LARGHEZZA_ADATTA_REM = 52;
@@ -64,8 +70,10 @@ const LARGHEZZA_ADATTA_REM = 52;
 const MARGINE_SALTO = 12;
 /** Dopo un salto lo scorrimento non sposta la pagina corrente: l'ultima pagina non arriva in cima. */
 const PAUSA_DOPO_SALTO_MS = 250;
-/** Le pagine si disegnano quando lo scorrimento si ferma per questo tempo: non a ogni pagina che passa. */
+/** Le immagini delle pagine si chiedono quando lo scorrimento si ferma per questo tempo: non a ogni pagina che passa. */
 const ATTESA_SCORRIMENTO_FERMO_MS = 150;
+/** Una pagina senza box: lo stesso array per tutte, perché le pagine non si ridisegnino per nulla. */
+const NESSUN_BOX: readonly BoxInsight[] = [];
 
 /** Al prossimo fotogramma; dove non c'è requestAnimationFrame (test, server), poco dopo. */
 const alProssimoFotogramma = (funzione: () => void): (() => void) => {
@@ -179,6 +187,70 @@ function ControlliZoom({ zoom, onZoom }: { zoom: number; onZoom: (indice: number
   );
 }
 
+interface RicercaNelVolantinoProps {
+  testo: string;
+  onTesto: (testo: string) => void;
+  /** I box trovati, in ordine di lettura; null: testo troppo corto, nessuna ricerca. */
+  risultati: readonly BoxInsight[] | null;
+  /** Il risultato a cui si è arrivati con precedente e successivo; -1 nessuno. */
+  attuale: number;
+  onPassa: (passo: 1 | -1) => void;
+}
+
+/**
+ * "Cerca prodotto o marca": quanti box e in quante pagine, e i comandi per passare da un box trovato
+ * all'altro. Invio porta al successivo, Maiusc+Invio al precedente, Esc cancella la ricerca.
+ */
+function RicercaNelVolantino({ testo, onTesto, risultati, attuale, onPassa }: RicercaNelVolantinoProps) {
+  const quanti = risultati?.length ?? 0;
+  const pagine = risultati ? new Set(risultati.map(voce => voce.pagina)).size : 0;
+  const tasto = (evento: KeyboardEvent<HTMLInputElement>) => {
+    if (evento.key === "Enter" && quanti > 0) {
+      evento.preventDefault();
+      onPassa(evento.shiftKey ? -1 : 1);
+    }
+    if (evento.key === "Escape" && testo) {
+      evento.preventDefault();
+      onTesto("");
+    }
+  };
+  const trovato = attuale >= 0 ? risultati?.[attuale] : undefined;
+  const stato =
+    risultati === null
+      ? ""
+      : quanti === 0
+        ? `Nessun box per «${testo.trim()}»`
+        : trovato
+          ? `${formatNumero(attuale + 1)} di ${formatNumero(quanti)} · pagina ${formatNumero(trovato.pagina ?? 0)}`
+          : `${quanti === 1 ? "1 box" : `${formatNumero(quanti)} box`} in ${pagine === 1 ? "1 pagina" : `${formatNumero(pagine)} pagine`}`;
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <CampoRicerca
+        etichetta="Cerca prodotto o marca"
+        placeholder="Cerca prodotto o marca…"
+        value={testo}
+        onChange={onTesto}
+        onKeyDown={tasto}
+        className="w-full sm:w-56"
+      />
+      {quanti > 0 && (
+        <>
+          <Button type="button" variant="outline-secondary" size="sm" aria-label="Box trovato precedente" title="Box trovato precedente" onClick={() => onPassa(-1)}>
+            <Lucide icon="ArrowUp" aria-hidden="true" className="h-4 w-4" />
+          </Button>
+          <Button type="button" variant="outline-secondary" size="sm" aria-label="Box trovato successivo" title="Box trovato successivo" onClick={() => onPassa(1)}>
+            <Lucide icon="ArrowDown" aria-hidden="true" className="h-4 w-4" />
+          </Button>
+        </>
+      )}
+      <span role="status" aria-live="polite" data-testid="esito-ricerca" className="text-xs tabular-nums text-slate-500 dark:text-slate-400">
+        {stato}
+      </span>
+    </div>
+  );
+}
+
 interface LettoreProps {
   totale: number;
   corrente: number;
@@ -192,27 +264,29 @@ interface LettoreProps {
   /** Classi dell'altezza del lettore: le pagine scorrono al suo interno. */
   altezza: string;
   pagina: (numero: number, attiva: boolean) => ReactNode;
+  /** L'analisi della pagina guardata: a destra delle pagine sugli schermi larghi, sotto sugli altri. */
+  laterale?: ReactNode;
 }
 
 /**
  * Il lettore: le pagine una sotto l'altra in un riquadro che scorre, con l'indice a fianco.
  *
- * Con PDF pesanti conta cosa si disegna e quando:
+ * Con volantini di molte pagine conta cosa si scarica e quando:
  * - lo spazio di ogni pagina c'è da subito, con i riquadri: niente salti mentre le pagine arrivano;
- * - si disegnano solo le pagine vicine alla parte visibile, e solo a scorrimento fermo: scorrendo
- *   veloce non partono disegni che sarebbero subito superati (la pagina corrente si aggiorna lo stesso);
- * - le pagine che si allontanano liberano il loro disegno;
+ * - si chiedono solo le immagini delle pagine vicine alla parte visibile, e solo a scorrimento fermo:
+ *   scorrendo veloce non partono richieste che sarebbero subito superate (la pagina corrente si
+ *   aggiorna lo stesso);
  * - cambiando zoom resta sotto gli occhi lo stesso punto della stessa pagina.
  * Quando la pagina corrente cambia da fuori (indice, Vai a, l'altro lettore del confronto) ci va.
  * Da tastiera: Home e Fine portano alla prima e all'ultima pagina, + e - ingrandiscono e riducono,
  * 0 adatta alla larghezza; le frecce e Pagina su/giù scorrono come sempre.
  */
-function Lettore({ totale, corrente, onScorrimento, onVai, zoom, onZoom, conIndice, indice, altezza, pagina }: LettoreProps) {
+function Lettore({ totale, corrente, onScorrimento, onVai, zoom, onZoom, conIndice, indice, altezza, pagina, laterale }: LettoreProps) {
   const contenitore = useRef<HTMLDivElement>(null);
   const pagine = useRef(new Map<number, HTMLDivElement>());
   /**
-   * Le pagine da disegnare. undefined: lettore non ancora misurato, non se ne disegna nessuna (al
-   * primo fotogramma partirebbero tutte insieme); null: misure non disponibili, tutte.
+   * Le pagine di cui chiedere l'immagine. undefined: lettore non ancora misurato, nessuna (al primo
+   * fotogramma partirebbero tutte insieme); null: misure non disponibili, tutte.
    */
   const [vicine, setVicine] = useState<ReadonlySet<number> | null | undefined>(undefined);
   /** L'ultima pagina vista scorrendo: se la corrente è diversa, è arrivata da fuori e ci si va. */
@@ -236,7 +310,7 @@ function Lettore({ totale, corrente, onScorrimento, onVai, zoom, onZoom, conIndi
     onScorrimento(nuova);
   }, [onScorrimento]);
 
-  /** Pagine da disegnare: a scorrimento fermo. */
+  /** Pagine di cui chiedere l'immagine: a scorrimento fermo. */
   const misuraVicine = useCallback(() => {
     const nodo = contenitore.current;
     if (!nodo) return;
@@ -274,7 +348,7 @@ function Lettore({ totale, corrente, onScorrimento, onVai, zoom, onZoom, conIndi
     misuraVicine();
   }, [zoom, misuraVicine]);
 
-  // Scorrimento e ridimensionamento: la pagina corrente al fotogramma successivo, i disegni a scorrimento fermo
+  // Scorrimento e ridimensionamento: la pagina corrente al fotogramma successivo, le immagini a scorrimento fermo
   useEffect(() => {
     const nodo = contenitore.current;
     if (!nodo) return;
@@ -318,41 +392,49 @@ function Lettore({ totale, corrente, onScorrimento, onVai, zoom, onZoom, conIndi
   const numeri = Array.from({ length: totale }, (_, posto) => posto + 1);
 
   return (
-    <div className={twMerge("flex min-h-0 gap-3", altezza)}>
-      {conIndice && (
-        <div className="hidden w-24 flex-none sm:block">
-          <IndicePagine voci={indice} corrente={corrente} onVai={onVai} />
-        </div>
-      )}
-      <div
-        ref={contenitore}
-        role="region"
-        aria-label="Pagine del volantino"
-        aria-keyshortcuts="Home End + - 0"
-        tabIndex={0}
-        onKeyDown={tasto}
-        data-testid="lettore-pagine"
-        className="relative min-w-0 flex-1 overflow-auto overscroll-contain rounded-control border border-slate-200 bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 dark:border-darkmode-400 dark:bg-darkmode-800"
-      >
+    <div className="flex min-w-0 flex-col gap-3 xl:flex-row">
+      <div className={twMerge("flex min-h-0 min-w-0 flex-1 gap-3", altezza)}>
+        {conIndice && (
+          <div className="hidden w-24 flex-none sm:block">
+            <IndicePagine voci={indice} corrente={corrente} onVai={onVai} />
+          </div>
+        )}
         <div
-          data-testid="colonna-pagine"
-          className="mx-auto flex flex-col gap-4 p-4"
-          style={{ width: `calc(min(100%, ${LARGHEZZA_ADATTA_REM}rem) * ${LIVELLI_ZOOM[zoom]})` }}
+          ref={contenitore}
+          role="region"
+          aria-label="Pagine del volantino"
+          aria-keyshortcuts="Home End + - 0"
+          tabIndex={0}
+          onKeyDown={tasto}
+          data-testid="lettore-pagine"
+          className="relative min-w-0 flex-1 overflow-auto overscroll-contain rounded-control border border-slate-200 bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 dark:border-darkmode-400 dark:bg-darkmode-800"
         >
-          {numeri.map(numero => (
-            <div
-              key={numero}
-              data-pagina={numero}
-              ref={elemento => {
-                if (elemento) pagine.current.set(numero, elemento);
-                else pagine.current.delete(numero);
-              }}
-            >
-              {pagina(numero, vicine === null || (vicine !== undefined && vicine.has(numero)))}
-            </div>
-          ))}
+          <div
+            data-testid="colonna-pagine"
+            className="mx-auto flex flex-col gap-4 p-4"
+            style={{ width: `calc(min(100%, ${LARGHEZZA_ADATTA_REM}rem) * ${LIVELLI_ZOOM[zoom]})` }}
+          >
+            {numeri.map(numero => (
+              <div
+                key={numero}
+                data-pagina={numero}
+                ref={elemento => {
+                  if (elemento) pagine.current.set(numero, elemento);
+                  else pagine.current.delete(numero);
+                }}
+              >
+                {pagina(numero, vicine === null || (vicine !== undefined && vicine.has(numero)))}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
+      {/* Sugli schermi larghi l'analisi è alta quanto il lettore e scorre da sola; sotto, segue la pagina */}
+      {laterale && (
+        <div className="relative min-w-0 xl:w-80 xl:flex-none">
+          <div className="max-h-[32rem] overflow-y-auto overscroll-contain xl:absolute xl:inset-0 xl:max-h-none">{laterale}</div>
+        </div>
+      )}
       {/* La pagina corrente per chi usa un lettore di schermo */}
       <p aria-live="polite" className="sr-only">
         Pagina {corrente} di {totale}
@@ -362,12 +444,12 @@ function Lettore({ totale, corrente, onScorrimento, onVai, zoom, onZoom, conIndi
 }
 
 /**
- * Il volantino negli insight, come un lettore di PDF: tutte le pagine una sotto l'altra, disegnate
- * dal PDF di Olimpo e nitide a ogni ingrandimento, con sopra i riquadri dei box colorati per reparto,
- * meccanica o sconto, o per differenza con un'altra variante. A fianco l'indice delle pagine; sopra
- * la pagina corrente, "Vai a", lo zoom e lo schermo intero. Un clic (o Invio) su un riquadro apre la
- * scheda del box, e da lì il viaggio del prodotto. Se il PDF non si legge le pagine sono le immagini
- * di Olimpo; senza PDF sono bianche.
+ * Il volantino negli insight, come un lettore: tutte le pagine una sotto l'altra, con le immagini
+ * delle pagine date da Olimpo e sopra i riquadri dei box colorati per reparto, meccanica o sconto, o
+ * per differenza con un'altra variante. A fianco l'indice delle pagine e l'analisi della pagina
+ * guardata; sopra la pagina corrente, "Vai a", la ricerca dei box, lo zoom e lo schermo intero. Un
+ * clic (o Invio) su un riquadro apre la scheda del box, e da lì il viaggio del prodotto. Senza PDF le
+ * pagine sono bianche.
  */
 export function VolantinoSfogliabile(props: VolantinoSfogliabileProps) {
   // Un altro volantino riparte da capo: pagina, box scelto, scheda e zoom
@@ -394,8 +476,11 @@ function Sfogliabile({
   const [viaggioAperto, setViaggioAperto] = useState(false);
   const [zoom, setZoom] = useState(ZOOM_ADATTA);
   const [schermoIntero, setSchermoIntero] = useState(false);
-  /** Ogni "Riprova con il PDF" riapre il documento da capo. */
-  const [tentativoPdf, setTentativoPdf] = useState(0);
+  const [ricerca, setRicerca] = useState("");
+  /** Il risultato della ricerca a cui si è arrivati, per il testo cercato in quel momento. */
+  const [passaggio, setPassaggio] = useState<{ testo: string; indice: number }>({ testo: "", indice: -1 });
+  /** Il box su cui si passa nell'elenco dell'analisi della pagina. */
+  const [rilievoElenco, setRilievoElenco] = useState<string | null>(null);
 
   const controllata = pagina !== undefined;
   const totale = pagineDaSfogliare(totalePagine, box);
@@ -444,44 +529,87 @@ function Sfogliabile({
     [statoBox, box, modo, reparti]
   );
 
-  // Il PDF si apre una volta per il volantino e ogni pagina si disegna da lì, solo i pezzi che servono
-  const documentoPdf = useDocumentoPdf(pdf?.idOlimpoCloud ? urlPdfMateriale(pdf.idOlimpoCloud) : null, tentativoPdf);
-  const documento: PDFDocumentProxy | null = documentoPdf.stato === "pronto" ? documentoPdf.documento : null;
-  const pdfDellaPagina = (numero: number) => (documento && numero <= documento.numPages ? documento : null);
-  // Le immagini di Olimpo sono la riserva: la pagina le chiede solo se il PDF, o quella sua pagina,
-  // non si legge. Le pagine oltre quelle del PDF restano bianche; pagine 0 vuol dire che Olimpo non
-  // le ha contate
-  const immagine = (numero: number): string | null =>
-    pdf && pdf.idOlimpoCloud && (pdf.pagine <= 0 || numero <= pdf.pagine) ? urlPaginaMateriale(pdf.idOlimpoCloud, numero) : null;
+  const gruppo = useCallback((voce: BoxInsight): GruppoBox => gruppoBox(voce, modo, reparti), [modo, reparti]);
+
+  // La ricerca dei box: i trovati restano in evidenza e gli altri si attenuano; senza risultati,
+  // o con un testo troppo corto, i riquadri restano come sono. Nel confronto fra varianti non c'è
+  const testoCercato = useDeferredValue(ricerca);
+  const risultati = useMemo(() => (compatto ? null : cercaBox(box, testoCercato)), [compatto, box, testoCercato]);
+  const trovati = useMemo(() => (risultati && risultati.length > 0 ? new Set(risultati.map(voce => voce.id)) : null), [risultati]);
+  const trovatiPerPagina = useMemo(() => {
+    const conti = new Map<number, number>();
+    for (const voce of risultati ?? []) {
+      if (voce.pagina !== null) conti.set(voce.pagina, (conti.get(voce.pagina) ?? 0) + 1);
+    }
+    return conti;
+  }, [risultati]);
+  const attuale = risultati && passaggio.testo === testoCercato && passaggio.indice < risultati.length ? passaggio.indice : -1;
+  const passaAlRisultato = (passo: 1 | -1) => {
+    if (!risultati || risultati.length === 0) return;
+    const indice = risultatoVicino(risultati, attuale, passo, corrente);
+    setPassaggio({ testo: testoCercato, indice });
+    const voce = risultati[indice];
+    if (voce.pagina !== null) vaiAllaPagina(voce.pagina);
+  };
+
+  // In rilievo il box su cui si passa nell'elenco, altrimenti il risultato raggiunto con la ricerca
+  const rilievo = rilievoElenco ?? (attuale >= 0 && risultati ? risultati[attuale].id : null);
+  const paginaDelBox = useMemo(() => new Map(box.map(voce => [voce.id, voce.pagina])), [box]);
+  // Ogni pagina riceve solo ciò che la riguarda: le altre non si ridisegnano
+  const diQuestaPagina = (id: string | null, numero: number): string | null => (id !== null && paginaDelBox.get(id) === numero ? id : null);
+
+  // Le pagine oltre quelle del PDF restano bianche; pagine 0 vuol dire che Olimpo non le ha contate
+  const conImmagine = (numero: number): string | null =>
+    pdf && pdf.idOlimpoCloud && (pdf.pagine <= 0 || numero <= pdf.pagine) ? pdf.idOlimpoCloud : null;
 
   const boxScelto = selezionato ? (box.find(voce => voce.id === selezionato) ?? null) : null;
 
-  const paginaDisegnata = (numero: number, attiva: boolean) => (
-    <PaginaConImmagine
-      numero={numero}
-      attiva={attiva}
-      proporzione={proporzioneDellaPagina(box, numero, proporzioneBase)}
-      pdf={pdfDellaPagina(numero)}
-      inAttesa={documentoPdf.stato === "caricamento"}
-      immagine={immagine(numero)}
-      box={perPagina.get(numero) ?? []}
-      stile={stile}
-      selezionato={selezionato}
-      onSeleziona={apriBox}
-    />
-  );
+  const paginaDisegnata = (numero: number, attiva: boolean) => {
+    const idOlimpo = conImmagine(numero);
+    return (
+      <PaginaConImmagine
+        numero={numero}
+        attiva={attiva}
+        proporzione={proporzioneDellaPagina(box, numero, proporzioneBase)}
+        immagine={idOlimpo ? urlPaginaMateriale(idOlimpo, numero) : null}
+        box={perPagina.get(numero) ?? NESSUN_BOX}
+        stile={stile}
+        selezionato={diQuestaPagina(selezionato, numero)}
+        onSeleziona={apriBox}
+        trovati={trovati}
+        rilievo={diQuestaPagina(rilievo, numero)}
+      />
+    );
+  };
 
-  // L'indice usa le stesse fonti delle pagine: le miniature di Olimpo solo se il PDF non si legge
+  // Le miniature dell'indice si chiedono a Olimpo già ridotte: pochi KB l'una
   const indice: VoceIndice[] = Array.from({ length: totale }, (_, posto) => {
     const numero = posto + 1;
+    const proporzione = proporzioneDellaPagina(box, numero, proporzioneBase);
+    const idOlimpo = conImmagine(numero);
     return {
       numero,
-      proporzione: proporzioneDellaPagina(box, numero, proporzioneBase),
-      box: (perPagina.get(numero) ?? []).filter(voce => riquadroBox(voce.geometria)).length,
-      pdf: pdfDellaPagina(numero),
-      immagine: documentoPdf.stato === "caricamento" ? null : immagine(numero),
+      proporzione,
+      box: (perPagina.get(numero) ?? NESSUN_BOX).filter(voce => riquadroBox(voce.geometria)).length,
+      immagine: idOlimpo ? urlPaginaMateriale(idOlimpo, numero, misuraMiniatura(proporzione)) : null,
+      trovati: trovati ? (trovatiPerPagina.get(numero) ?? 0) : null,
     };
   });
+
+  const analisi =
+    compatto || confronto ? undefined : (
+      <AnalisiPagina
+        numero={corrente}
+        totale={totale}
+        box={perPagina.get(corrente) ?? NESSUN_BOX}
+        gruppo={gruppo}
+        titoloRipartizione={TITOLI_LEGENDA[modo]}
+        selezionato={selezionato}
+        trovati={trovati}
+        onRilievo={setRilievoElenco}
+        onApri={apriBox}
+      />
+    );
 
   const lettore = (inGrande: boolean) => (
     <Lettore
@@ -495,6 +623,7 @@ function Sfogliabile({
       indice={indice}
       altezza={inGrande ? "h-[calc(100vh-11rem)]" : compatto ? "h-[min(70vh,44rem)]" : "h-[min(80vh,56rem)] min-h-[28rem]"}
       pagina={paginaDisegnata}
+      laterale={analisi}
     />
   );
 
@@ -545,11 +674,8 @@ function Sfogliabile({
     >
       <div className="flex flex-wrap items-center gap-3">
         <Navigazione corrente={corrente} totale={totale} onVai={vaiAllaPagina} />
-        {documentoPdf.stato === "caricamento" && (
-          <span role="status" className="inline-flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-            <Lucide icon="Loader2" aria-hidden="true" className="h-3.5 w-3.5 motion-safe:animate-spin" />
-            Apertura del PDF…
-          </span>
+        {!compatto && (
+          <RicercaNelVolantino testo={ricerca} onTesto={setRicerca} risultati={risultati} attuale={attuale} onPassa={passaAlRisultato} />
         )}
       </div>
       <div className="flex flex-wrap items-center gap-2">
@@ -591,22 +717,9 @@ function Sfogliabile({
 
       {legenda}
 
-      {(!pdf || documentoPdf.stato === "errore" || documentoPdf.stato === "nonSupportato" || senzaPosizione > 0) && (
+      {(!pdf || senzaPosizione > 0) && (
         <p className="text-xs text-slate-500 dark:text-slate-400">
           {!pdf && "Il PDF del volantino non è disponibile: i box sono disegnati su pagine bianche. "}
-          {pdf && documentoPdf.stato === "nonSupportato" && "Questo browser non può disegnare il PDF del volantino: le pagine sono le immagini di Olimpo. "}
-          {pdf && documentoPdf.stato === "errore" && (
-            <>
-              Il PDF del volantino non si è potuto leggere: le pagine sono le immagini di Olimpo.{" "}
-              <button
-                type="button"
-                onClick={() => setTentativoPdf(tentativo => tentativo + 1)}
-                className="font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 dark:text-indigo-300"
-              >
-                Riprova con il PDF
-              </button>{" "}
-            </>
-          )}
           {senzaPosizione > 0 &&
             (senzaPosizione === 1 ? "1 box non ha la posizione nella pagina e non è disegnato." : `${formatNumero(senzaPosizione)} box non hanno la posizione nella pagina e non sono disegnati.`)}
         </p>

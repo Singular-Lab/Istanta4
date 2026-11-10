@@ -5,13 +5,14 @@ import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { altezzaFoglio, tintaCategoria } from "@/components/Grafici";
 import type { FlyerInsightsConfig } from "@/types/flyerInsights";
-import { urlPaginaMateriale, urlPdfMateriale } from "@/utils/materiali";
+import { urlPaginaMateriale } from "@/utils/materiali";
 import type { BoxInsight, TappaProdotto, ViaggioProdotto } from "../../../../lib/insightVolantino/tipi";
 import { percorsoDettaglioVolantino } from "../../../../lib/materiali/periodi";
 import { STATI_DIFFERENZA } from "../confronti/supporto";
 
-// Il volantino sfogliabile degli insight: pagine del PDF con i riquadri dei box (kit di Istanta e
-// dello storico), doppie pagine, colori, ingrandimento, scheda del box e viaggio del prodotto
+// Il volantino degli insight: tutte le pagine con le immagini di Olimpo e i riquadri dei box (kit di
+// Istanta e dello storico), indice, colori, ingrandimento, analisi della pagina guardata, ricerca dei
+// box, scheda del box e viaggio del prodotto
 
 // jsdom non implementa ResizeObserver, usato da Headless UI all'apertura di Dialog e Slideover
 globalThis.ResizeObserver ??= class {
@@ -25,28 +26,6 @@ const finti = vi.hoisted(() => ({
   richiesteViaggio: [] as Array<[string | undefined, string | null | undefined]>,
 }));
 
-// pdf.js non gira in jsdom: il documento e il disegno di ogni pagina li decide il test
-const pdfFinto = vi.hoisted(() => ({
-  documento: { stato: "errore" } as Record<string, unknown>,
-  disegno: { stato: "pronta", misure: { larghezza: 216, altezza: 303 } } as Record<string, unknown>,
-  aperti: [] as Array<string | null>,
-  tentativi: [] as number[],
-  disegnate: [] as number[],
-}));
-
-vi.mock("./pdfVolantino", () => ({
-  useDocumentoPdf: (url: string | null, tentativo = 0) => {
-    pdfFinto.aperti.push(url);
-    pdfFinto.tentativi.push(tentativo);
-    return url ? pdfFinto.documento : { stato: "assente" };
-  },
-  useDisegnoPdf: (documento: unknown, numero: number) => {
-    if (!documento) return { stato: "caricamento" };
-    pdfFinto.disegnate.push(numero);
-    return pdfFinto.disegno;
-  },
-}));
-
 vi.mock("@/query/query", () => ({ useFetchReteInsegne: () => ({ data: undefined }) }));
 vi.mock("@/query/flyerInsights", () => ({
   useViaggioProdotto: (idKit: string | undefined, chiave: string | null | undefined) => {
@@ -55,7 +34,7 @@ vi.mock("@/query/flyerInsights", () => ({
   },
 }));
 
-import { paginaNellImmagine, stileImmagine, VolantinoSfogliabile, type VolantinoSfogliabileProps } from ".";
+import { misuraMiniatura, paginaNellImmagine, stileImmagine, VolantinoSfogliabile, type VolantinoSfogliabileProps } from ".";
 
 const A4 = 210 / 297;
 
@@ -102,12 +81,6 @@ const caricato = (data: unknown) => ({ data, isLoading: false, isError: false, e
 beforeEach(() => {
   finti.viaggio = caricato(undefined);
   finti.richiesteViaggio = [];
-  // Di base il PDF non si legge: le immagini di Olimpo sono la riserva
-  pdfFinto.documento = { stato: "errore" };
-  pdfFinto.disegno = { stato: "pronta", misure: { larghezza: 216, altezza: 303 } };
-  pdfFinto.aperti = [];
-  pdfFinto.tentativi = [];
-  pdfFinto.disegnate = [];
 });
 
 describe("VolantinoSfogliabile: geometria dei kit di Istanta e dello storico", () => {
@@ -155,7 +128,8 @@ describe("VolantinoSfogliabile: lettore con tutte le pagine", () => {
     ]);
     expect(screen.queryByText(/Pagine 2-3|Copertina/)).not.toBeInTheDocument();
     expect(vaiA()).toHaveValue("1");
-    expect(screen.getByText("di 5")).toBeInTheDocument();
+    // "di 5" anche nell'analisi della pagina: qui conta quello della barra
+    expect(within(screen.getByRole("toolbar", { name: "Comandi del lettore" })).getByText("di 5")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Pagina precedente" })).toBeDisabled();
   });
 
@@ -229,102 +203,7 @@ describe("VolantinoSfogliabile: lettore con tutte le pagine", () => {
   });
 });
 
-describe("VolantinoSfogliabile: pagine dal PDF", () => {
-  const PDF = { idOlimpoCloud: "olimpo-1", pagine: 5 };
-  const pronto = (numPages = 5) => ({ stato: "pronto", documento: { numPages } });
-
-  it("apre il PDF dal proxy e disegna ogni pagina dal PDF, allineata come la pagina rifilata, senza chiedere immagini", () => {
-    pdfFinto.documento = pronto();
-    disegna({ pdf: PDF, box: [boxDi("a")] });
-
-    expect(pdfFinto.aperti).toContain(urlPdfMateriale("olimpo-1"));
-    expect(pdfFinto.disegnate).toContain(1);
-    expect(pagina(1)).toHaveAttribute("data-sorgente", "pdf");
-    expect(pagina(1)).toHaveAttribute("data-immagine", "pronta");
-    expect(pagina(1).querySelector("img")).toBeNull();
-    const canvas = screen.getByRole("img", { name: "Pagina 1 del volantino" });
-    expect(canvas.tagName).toBe("CANVAS");
-    // A4 con 3 mm di abbondanza per lato: la stessa compensazione delle immagini
-    const atteso = stileImmagine(paginaNellImmagine(216, 303, A4)!);
-    expect(canvas.style.width).toBe(atteso.width);
-    expect(canvas.style.left).toBe(atteso.left);
-    expect(canvas.style.top).toBe(atteso.top);
-    expect(screen.getByTestId("box-a")).toBeInTheDocument();
-    expect(screen.queryByText(/Il PDF del volantino/)).not.toBeInTheDocument();
-  });
-
-  it("mentre il PDF si apre la pagina aspetta, con i riquadri già al loro posto e senza chiedere immagini", () => {
-    pdfFinto.documento = { stato: "caricamento" };
-    disegna({ pdf: PDF, box: [boxDi("a")] });
-
-    expect(pagina(1)).toHaveAttribute("data-immagine", "caricamento");
-    expect(pagina(1)).toHaveAttribute("data-sorgente", "nessuna");
-    expect(pagina(1).querySelector("img, canvas")).toBeNull();
-    expect(screen.getByTestId("box-a")).toBeInTheDocument();
-  });
-
-  it("una pagina del PDF che non si disegna usa la sua immagine di Olimpo", () => {
-    pdfFinto.documento = pronto();
-    pdfFinto.disegno = { stato: "errore" };
-    disegna({ pdf: PDF });
-
-    expect(pagina(1)).toHaveAttribute("data-sorgente", "immagine");
-    expect(pagina(1).querySelector("img")).toHaveAttribute("src", urlPaginaMateriale("olimpo-1", 1));
-  });
-
-  it("se il browser non può far girare pdf.js le pagine e l'indice sono le miniature di Olimpo, senza Riprova", () => {
-    pdfFinto.documento = { stato: "nonSupportato" };
-    disegna({ pdf: PDF, box: [boxDi("a")] });
-
-    expect(pagina(1)).toHaveAttribute("data-sorgente", "immagine");
-    expect(pagina(1).querySelector("img")).toHaveAttribute("src", urlPaginaMateriale("olimpo-1", 1));
-    const indice = screen.getByRole("navigation", { name: "Indice delle pagine" });
-    expect(indice.querySelector("img")).toHaveAttribute("src", urlPaginaMateriale("olimpo-1", 1));
-    expect(screen.getByText(/Questo browser non può disegnare il PDF del volantino/)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Riprova con il PDF" })).not.toBeInTheDocument();
-    expect(screen.getByTestId("box-a")).toBeInTheDocument();
-  });
-
-  it("se il PDF non si apre si può riprovare, e intanto si vedono le miniature", () => {
-    pdfFinto.documento = { stato: "errore" };
-    disegna({ pdf: PDF });
-
-    expect(pagina(1)).toHaveAttribute("data-sorgente", "immagine");
-    fireEvent.click(screen.getByRole("button", { name: "Riprova con il PDF" }));
-
-    expect(pdfFinto.tentativi.at(-1)).toBe(1);
-  });
-
-  it("mentre il PDF si apre la barra lo dice", () => {
-    pdfFinto.documento = { stato: "caricamento" };
-    disegna({ pdf: PDF });
-
-    expect(screen.getByRole("status")).toHaveTextContent("Apertura del PDF…");
-  });
-
-  it("le pagine oltre quelle del PDF restano bianche", () => {
-    pdfFinto.documento = pronto(1);
-    disegna({ pdf: { idOlimpoCloud: "olimpo-1", pagine: 1 }, pagina: 2 });
-
-    expect(pagina(2)).toHaveAttribute("data-sorgente", "nessuna");
-    expect(pagina(2)).toHaveAttribute("data-immagine", "assente");
-    expect(pdfFinto.disegnate).not.toContain(2);
-  });
-
-  it("a schermo intero le pagine si disegnano anche loro dal PDF, e l'indice ha le miniature dal PDF", async () => {
-    pdfFinto.documento = pronto();
-    disegna({ pdf: PDF, box: [boxDi("a")] });
-
-    fireEvent.click(screen.getByRole("button", { name: "Schermo intero" }));
-
-    const grande = await screen.findByTestId("volantino-schermo-intero");
-    expect(within(grande).getByRole("group", { name: "Pagina 1" })).toHaveAttribute("data-sorgente", "pdf");
-    // Pagine e miniature dell'indice: tutte chiedono il disegno al PDF
-    expect(pdfFinto.disegnate.filter(numero => numero === 5).length).toBeGreaterThanOrEqual(2);
-  });
-});
-
-describe("VolantinoSfogliabile: immagini delle pagine se il PDF non si legge", () => {
+describe("VolantinoSfogliabile: pagine dalle immagini di Olimpo", () => {
   const PDF = { idOlimpoCloud: "olimpo-1", pagine: 5 };
   const immagineDi = (numero: number) => pagina(numero).querySelector("img") as HTMLImageElement;
   const misura = (immagine: HTMLImageElement, larghezza: number, altezza: number) => {
@@ -332,14 +211,16 @@ describe("VolantinoSfogliabile: immagini delle pagine se il PDF non si legge", (
     Object.defineProperty(immagine, "naturalHeight", { configurable: true, value: altezza });
   };
 
-  it("ogni pagina chiede la sua immagine a Olimpo, solo quando serve; caricata, compensa l'abbondanza; la pagina lo dice", () => {
-    disegna({ pdf: PDF, box: [boxDi("a")] });
-    expect(screen.getByText(/Il PDF del volantino non si è potuto leggere: le pagine sono le immagini di Olimpo/)).toBeInTheDocument();
+  it("ogni pagina chiede la sua immagine a Olimpo, solo quando serve; caricata, compensa l'abbondanza", () => {
+    const { container } = disegna({ pdf: PDF, box: [boxDi("a")] });
 
     const immagine = immagineDi(1);
     expect(immagine).toHaveAttribute("src", urlPaginaMateriale("olimpo-1", 1));
     expect(immagine).toHaveAttribute("loading", "lazy");
     expect(pagina(1)).toHaveAttribute("data-immagine", "caricamento");
+    // Nessun PDF scaricato né disegnato: solo immagini
+    expect(container.querySelector("canvas")).toBeNull();
+    expect([...container.querySelectorAll("img")].some(img => img.getAttribute("src")?.includes("getMaterialePDF"))).toBe(false);
 
     // A4 con 3 mm di abbondanza per lato
     misura(immagine, 216, 303);
@@ -351,6 +232,17 @@ describe("VolantinoSfogliabile: immagini delle pagine se il PDF non si legge", (
     expect(immagine.style.left).toBe(atteso.left);
     expect(immagine.style.top).toBe(atteso.top);
     expect(screen.getByRole("img", { name: "Pagina 1 del volantino" })).toBe(immagine);
+    expect(screen.getByTestId("box-a")).toBeInTheDocument();
+    expect(screen.queryByText(/Il PDF del volantino/)).not.toBeInTheDocument();
+  });
+
+  it("l'indice chiede a Olimpo le miniature già ridotte, non l'immagine intera", () => {
+    disegna({ pdf: PDF, box: [boxDi("a")] });
+
+    const indice = screen.getByRole("navigation", { name: "Indice delle pagine" });
+    const miniatura = indice.querySelector("img");
+    expect(miniatura).toHaveAttribute("src", urlPaginaMateriale("olimpo-1", 1, misuraMiniatura(A4)));
+    expect(miniatura?.getAttribute("src")).toMatch(/&width=144&height=\d+$/);
   });
 
   it("se Olimpo risponde con il segnaposto quadrato, o l'immagine non arriva, la pagina resta bianca", () => {
@@ -374,12 +266,20 @@ describe("VolantinoSfogliabile: immagini delle pagine se il PDF non si legge", (
 
   it("senza PDF le pagine sono bianche con i riquadri al loro posto, e la pagina lo dice", () => {
     const { container } = disegna({ box: [boxDi("a")] });
-    expect(pdfFinto.aperti.every(url => url === null)).toBe(true);
 
     expect(container.querySelector("img")).toBeNull();
     expect(pagina(1)).toHaveAttribute("data-immagine", "assente");
     expect(screen.getByTestId("box-a")).toBeInTheDocument();
     expect(screen.getByText(/Il PDF del volantino non è disponibile/)).toBeInTheDocument();
+  });
+
+  it("a schermo intero le pagine sono le stesse immagini", async () => {
+    disegna({ pdf: PDF, box: [boxDi("a")] });
+
+    fireEvent.click(screen.getByRole("button", { name: "Schermo intero" }));
+
+    const grande = await screen.findByTestId("volantino-schermo-intero");
+    expect(within(grande).getByRole("group", { name: "Pagina 1" }).querySelector("img")).toHaveAttribute("src", urlPaginaMateriale("olimpo-1", 1));
   });
 });
 
@@ -513,7 +413,8 @@ describe("VolantinoSfogliabile: scheda del box", () => {
     // Niente indici di visibilità stimata, vendite o previsioni
     expect(within(dati).queryByText("Visibilità stimata")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Vendite e previsione")).not.toBeInTheDocument();
-    expect(screen.getByText("€ 1,69")).toBeInTheDocument();
+    // Il prezzo è anche nell'elenco dell'analisi della pagina: qui conta quello della scheda
+    expect(within(screen.getByRole("dialog")).getByText("€ 1,69")).toBeInTheDocument();
   });
 
   it("Invio su un riquadro apre la scheda, come il clic", async () => {
@@ -608,8 +509,10 @@ describe("VolantinoSfogliabile: zoom e schermo intero", () => {
     expect(larghezza()).toMatch(/\*\s?1\.25\)$/);
     expect(screen.getByRole("button", { name: "Adatta alla larghezza" })).toHaveAttribute("aria-pressed", "false");
 
+    // Le immagini di Olimpo sono a 150 dpi: lo zoom si ferma al 200%
     for (let volta = 0; volta < 5; volta++) fireEvent.click(screen.getByRole("button", { name: "Ingrandisci" }));
-    expect(screen.getByText("300%")).toBeInTheDocument();
+    expect(screen.getByText("200%")).toBeInTheDocument();
+    expect(screen.queryByText("300%")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Ingrandisci" })).toBeDisabled();
 
     fireEvent.click(screen.getByRole("button", { name: "Adatta alla larghezza" }));
@@ -637,5 +540,170 @@ describe("VolantinoSfogliabile: zoom e schermo intero", () => {
     await waitFor(() => expect(screen.queryByTestId("volantino-schermo-intero")).not.toBeInTheDocument());
     // Si torna al lettore della pagina sulla stessa pagina
     expect(screen.getByRole("textbox", { name: "Vai alla pagina" })).toHaveValue("2");
+  });
+});
+
+describe("VolantinoSfogliabile: analisi della pagina guardata", () => {
+  const LATTICINI = { codice: "24", descrizione: "LATTICINI" };
+  const CARNI = { codice: "10", descrizione: "CARNI" };
+  const BOX = [
+    boxDi("a", { nome: "Mozzarella", reparto: LATTICINI, spazio: 30, sconto: 20, meccanica: "fidelity" }),
+    boxDi("b", { nome: "Yogurt", reparto: LATTICINI, spazio: 20, sconto: 40, sottocosto: true, geometria: { x: 0.1, y: 0.6, w: 0.4, h: 0.2 } }),
+    boxDi("c", { nome: "Bistecca", reparto: CARNI, pagina: 2, spazio: 45 }),
+  ];
+  const pannello = () => screen.getByRole("complementary", { name: "Analisi della pagina" });
+  const numero = (etichetta: string) => within(pannello()).getByText(etichetta).closest("div");
+
+  it("segue la pagina guardata: numeri ed elenco dei box dal più grande", () => {
+    disegna({ box: BOX, totalePagine: 3 });
+
+    expect(within(pannello()).getByRole("heading", { name: "Pagina 1" })).toBeInTheDocument();
+    expect(numero("Box")).toHaveTextContent("2");
+    expect(numero("Spazio")).toHaveTextContent("50%");
+    expect(numero("Sconto medio")).toHaveTextContent("30%");
+    expect(numero("Fidelity")).toHaveTextContent("1");
+    expect(numero("Sottocosto")).toHaveTextContent("1");
+    const righe = within(within(pannello()).getByRole("region", { name: "Box della pagina" })).getAllByRole("button");
+    expect(righe.map(riga => riga.getAttribute("data-testid"))).toEqual(["riga-box-a", "riga-box-b"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Pagina successiva" }));
+
+    expect(within(pannello()).getByRole("heading", { name: "Pagina 2" })).toBeInTheDocument();
+    expect(numero("Box")).toHaveTextContent("1");
+    expect(within(pannello()).getByTestId("riga-box-c")).toHaveTextContent("Bistecca");
+  });
+
+  it("la ripartizione segue \"Colora per\"", () => {
+    disegna({ box: BOX });
+
+    expect(within(pannello()).getByRole("region", { name: "Per reparto" })).toHaveTextContent("LATTICINI2 box50%");
+    fireEvent.click(screen.getByRole("radio", { name: "Meccanica" }));
+
+    const perMeccanica = within(pannello()).getByRole("region", { name: "Per meccanica" });
+    expect(within(perMeccanica).getByTestId("gruppo-fidelity")).toHaveTextContent("Prezzo Fidelity1 box30%");
+    expect(within(perMeccanica).getByTestId("gruppo-senza")).toHaveTextContent("Non riconosciuta1 box20%");
+  });
+
+  it("passando su un box dell'elenco il suo riquadro è in rilievo; scegliendolo si apre la scheda", async () => {
+    disegna({ box: BOX });
+
+    fireEvent.mouseEnter(screen.getByTestId("riga-box-b"));
+    expect(screen.getByTestId("box-b")).toHaveAttribute("data-rilievo");
+    expect(screen.getByTestId("box-a")).not.toHaveAttribute("data-rilievo");
+    fireEvent.mouseLeave(screen.getByTestId("riga-box-b"));
+    expect(screen.getByTestId("box-b")).not.toHaveAttribute("data-rilievo");
+
+    fireEvent.click(screen.getByTestId("riga-box-b"));
+    expect(await screen.findByRole("heading", { name: "Yogurt" })).toBeInTheDocument();
+    expect(screen.getByTestId("box-b")).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("una pagina senza box lo dice", () => {
+    disegna({ box: BOX, totalePagine: 3, pagina: 3 });
+
+    expect(within(pannello()).getByText("Nessun box in questa pagina.")).toBeInTheDocument();
+  });
+
+  it("nel confronto fra varianti non c'è", () => {
+    disegna({ box: BOX, compatto: true });
+    expect(screen.queryByRole("complementary", { name: "Analisi della pagina" })).not.toBeInTheDocument();
+  });
+});
+
+describe("VolantinoSfogliabile: ricerca dei box", () => {
+  const BOX = [
+    boxDi("latte", { nome: "Latte intero", marca: "Granarolo", pagina: 2 }),
+    boxDi("mozzarella", { nome: "Mozzarella", marca: "GRANAROLO", formato: "125 g", pagina: 4 }),
+    boxDi("yogurt", { nome: "Yogurt", marca: "Granarolo", pagina: 4, geometria: { x: 0.1, y: 0.6, w: 0.4, h: 0.2 } }),
+    boxDi("caffe", { nome: "Caffè macinato", marca: "Lavazza", pagina: 1 }),
+    boxDi("pasta", { nome: "Pasta", marca: "Barilla", pagina: 2, geometria: { x: 0.1, y: 0.6, w: 0.4, h: 0.2 } }),
+  ];
+  const campo = () => screen.getByRole("searchbox", { name: "Cerca prodotto o marca" });
+  const esito = () => screen.getByTestId("esito-ricerca");
+  const vaiA = () => screen.getByRole("textbox", { name: "Vai alla pagina" });
+  const cerca = (testo: string) => fireEvent.change(campo(), { target: { value: testo } });
+
+  it("conta i box trovati e le pagine, evidenzia i trovati e attenua gli altri, segna le pagine nell'indice", async () => {
+    disegna({ box: BOX, totalePagine: 5 });
+
+    cerca("granarolo");
+
+    await waitFor(() => expect(esito()).toHaveTextContent("3 box in 2 pagine"));
+    for (const id of ["latte", "mozzarella", "yogurt"]) expect(screen.getByTestId(`box-${id}`)).toHaveAttribute("data-trovato");
+    for (const id of ["caffe", "pasta"]) expect(screen.getByTestId(`box-${id}`)).toHaveAttribute("data-attenuato");
+    expect(riquadro("pasta")).toHaveClass("opacity-0");
+
+    const indice = screen.getByRole("navigation", { name: "Indice delle pagine" });
+    expect(within(indice).getByTestId("trovati-pagina-2")).toHaveTextContent("1");
+    expect(within(indice).getByTestId("trovati-pagina-4")).toHaveTextContent("2");
+    expect(within(indice).queryByTestId("trovati-pagina-1")).not.toBeInTheDocument();
+    expect(within(indice).getByRole("button", { name: "Pagina 4, 2 box, 2 trovati" })).toBeInTheDocument();
+    expect(within(indice).getByRole("button", { name: "Pagina 3, 0 box" })).toHaveClass("opacity-40");
+  });
+
+  it("successivo e precedente portano alla pagina del box trovato e lo mettono in rilievo; Invio e Maiusc+Invio fanno lo stesso", async () => {
+    disegna({ box: BOX, totalePagine: 5 });
+    cerca("granarolo");
+    await waitFor(() => expect(esito()).toHaveTextContent("3 box in 2 pagine"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Box trovato successivo" }));
+    expect(vaiA()).toHaveValue("2");
+    expect(screen.getByTestId("box-latte")).toHaveAttribute("data-rilievo");
+    expect(esito()).toHaveTextContent("1 di 3 · pagina 2");
+
+    fireEvent.keyDown(campo(), { key: "Enter" });
+    expect(vaiA()).toHaveValue("4");
+    expect(screen.getByTestId("box-mozzarella")).toHaveAttribute("data-rilievo");
+    expect(screen.getByTestId("box-latte")).not.toHaveAttribute("data-rilievo");
+
+    fireEvent.keyDown(campo(), { key: "Enter", shiftKey: true });
+    expect(vaiA()).toHaveValue("2");
+    fireEvent.click(screen.getByRole("button", { name: "Box trovato precedente" }));
+    // Dal primo si gira all'ultimo
+    expect(vaiA()).toHaveValue("4");
+    expect(screen.getByTestId("box-yogurt")).toHaveAttribute("data-rilievo");
+  });
+
+  it("non distingue maiuscole e accenti", async () => {
+    disegna({ box: BOX });
+    cerca("CAFFE");
+
+    await waitFor(() => expect(esito()).toHaveTextContent("1 box in 1 pagina"));
+    expect(screen.getByTestId("box-caffe")).toHaveAttribute("data-trovato");
+  });
+
+  it("senza risultati lo dice e i riquadri restano come prima", async () => {
+    disegna({ box: BOX, totalePagine: 5 });
+    cerca("biscotti");
+
+    await waitFor(() => expect(esito()).toHaveTextContent("Nessun box per «biscotti»"));
+    expect(document.querySelector("[data-attenuato]")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Box trovato successivo" })).not.toBeInTheDocument();
+    expect(screen.queryByTestId(/^trovati-pagina-/)).not.toBeInTheDocument();
+  });
+
+  it("Esc cancella la ricerca e tutti i riquadri tornano come prima", async () => {
+    disegna({ box: BOX, totalePagine: 5 });
+    cerca("granarolo");
+    await waitFor(() => expect(document.querySelector("[data-attenuato]")).not.toBeNull());
+
+    fireEvent.keyDown(campo(), { key: "Escape" });
+
+    expect(campo()).toHaveValue("");
+    await waitFor(() => expect(document.querySelector("[data-attenuato]")).toBeNull());
+    expect(esito()).toHaveTextContent("");
+  });
+
+  it("una lettera sola non cerca", () => {
+    disegna({ box: BOX });
+    cerca("g");
+
+    expect(esito()).toHaveTextContent("");
+    expect(document.querySelector("[data-attenuato]")).toBeNull();
+  });
+
+  it("nel confronto fra varianti non c'è", () => {
+    disegna({ box: BOX, compatto: true });
+    expect(screen.queryByRole("searchbox", { name: "Cerca prodotto o marca" })).not.toBeInTheDocument();
   });
 });
