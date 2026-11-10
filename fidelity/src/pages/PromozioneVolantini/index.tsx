@@ -3,7 +3,6 @@ import Pagina from "@/components/Base/Pagina";
 import Sezione from "@/components/Base/Sezione";
 import Skeleton from "@/components/Base/Skeleton";
 import EmptyState from "@/components/EmptyState";
-import { StrisciaNumeri } from "@/components/Grafici";
 import withSessionCheck from "@/components/SessionChecker";
 import { PERMISSIONS } from "@/constants/permissions";
 import { usePermission } from "@/context/PermissionContext";
@@ -23,7 +22,6 @@ import { DoveArriva } from "./DoveArriva";
 import { FiltriPromozione } from "./FiltriPromozione";
 import { GrigliaVolantini } from "./GrigliaVolantini";
 import { LoghiInsegneContext } from "./LogoInsegna";
-import { NumeriPromozione, TITOLO_NUMERI } from "./Numeri";
 
 const titoloVista = (periodo: PeriodoConsultazione) => `Volantini ${ETICHETTA_PERIODO_CONSULTAZIONE[periodo]}`;
 
@@ -41,7 +39,6 @@ function Caricamento() {
     <Pagina titolo={TITOLO_PREDEFINITO} indietro={INDIETRO_PREDEFINITO}>
       <div role="status" aria-label="Caricamento della promozione" className="flex flex-col gap-6">
         <Skeleton className="h-56 rounded-2xl" />
-        <StrisciaNumeri titolo={TITOLO_NUMERI} voci={[]} loading vociAttese={5} />
         <Sezione>
           <div className="flex flex-col gap-3">
             <Skeleton className="h-6 w-1/3" />
@@ -58,7 +55,7 @@ function Caricamento() {
  * Consultazione di una promozione (/volantini/promozioni/:idPromo, "materiali.visualizza"), dalle
  * schede delle viste Volantini: un'infografica di tutti i suoi volantini pubblicati e dei punti
  * vendita che raggiungono. Banda con validità e insegne, filtri per insegna e area, griglia delle
- * miniature, numeri, dove arriva, assortimento e confronto fra i kit; ogni
+ * miniature, dove arriva, assortimento e confronto fra i kit; ogni
  * kit apre i suoi insight. I filtri stanno nell'indirizzo (?canale=&area=) e il server ricalcola
  * tutto sui soli kit filtrati. Solo materiali pubblicati della GDO, dalle API di consultazione:
  * niente stato di lavorazione né collegamenti alla produzione, e nessun dato di vendita,
@@ -145,7 +142,6 @@ function PromozioneVolantini() {
           {conKit ? (
             <>
               <GrigliaVolantini kit={dettaglio.kit} tinta={tinta} />
-              <NumeriPromozione numeri={dettaglio.numeri} />
               <DoveArriva dettaglio={dettaglio} tinta={tinta} conScheda={conScheda} />
               <Assortimento assortimento={dettaglio.assortimento} numeroKit={dettaglio.kit.length} />
               <ConfrontoKit kit={dettaglio.kit} tinta={tinta} />
