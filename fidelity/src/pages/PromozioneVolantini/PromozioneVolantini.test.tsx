@@ -12,7 +12,7 @@ import type {
 } from "../../../lib/consultazione/tipi";
 
 // Consultazione di una promozione (/volantini/promozioni/:idPromo): banda con le insegne, filtri per
-// insegna e area, griglia delle miniature, numeri, dove arriva (cartogramma,
+// insegna e area, griglia delle miniature, dove arriva (cartogramma,
 // mappa, elenco), assortimento e confronto fra i kit. Ogni kit apre i suoi insight; nessun
 // collegamento alla produzione.
 
@@ -225,17 +225,16 @@ describe("Consultazione di una promozione", () => {
     expect(screen.getByRole("link", { name: `Torna a ${vista}` })).toHaveAttribute("href", indirizzo);
   });
 
-  it("mostra i numeri della promozione", async () => {
+  it("la striscia dei numeri della promozione non c'è: dopo le schede dei volantini viene dove arrivano", async () => {
     await apri();
 
-    const numeri = screen.getByLabelText("La promozione in numeri");
-    expect(within(numeri).getByText("48 pagine in tutto")).toBeInTheDocument();
-    expect(within(numeri).getByText("6")).toBeInTheDocument();
-    expect(within(numeri).getByText("in 4 località, 2 regioni")).toBeInTheDocument();
-    expect(within(numeri).getByText("320")).toBeInTheDocument();
-    expect(within(numeri).getByText("495 referenze stampate")).toBeInTheDocument();
-    expect(within(numeri).getByText("28%")).toBeInTheDocument();
-    expect(within(numeri).getByText("box in sottocosto")).toBeInTheDocument();
+    expect(screen.queryByLabelText("La promozione in numeri")).not.toBeInTheDocument();
+    expect(screen.queryByText("48 pagine in tutto")).not.toBeInTheDocument();
+    expect(screen.queryByText("495 referenze stampate")).not.toBeInTheDocument();
+    // Le sezioni nell'ordine della pagina: subito dopo "I volantini" c'è "Dove arriva"
+    const titoli = screen.getAllByRole("heading", { level: 2 }).map(titolo => titolo.textContent);
+    expect(titoli.indexOf("I volantini")).toBeGreaterThanOrEqual(0);
+    expect(titoli[titoli.indexOf("I volantini") + 1]).toMatch(/Dove arriva/);
   });
 
   it("le miniature dicono insegna e area e aprono gli insight del loro kit; senza miniatura c'è il foglio segnaposto", async () => {
@@ -405,8 +404,6 @@ describe("Consultazione di una promozione", () => {
     // La seconda colonna del confronto sono i punti vendita del volantino
     const puntiVenditaDi = (riga: HTMLElement) => within(riga).getAllByRole("cell")[1]?.textContent;
     expect(righeDi(tabellaConfronto()).map(puntiVenditaDi)).toEqual(["2", "2"]);
-    const numeri = screen.getByLabelText("La promozione in numeri");
-    expect(within(numeri).queryByText("4")).not.toBeInTheDocument();
   });
 
   it("l'elenco mostra 25 righe alla volta", async () => {
@@ -624,7 +621,6 @@ describe("Filtri per insegna e area", () => {
     const vuoto = screen.getByRole("heading", { name: "Nessun volantino con questi filtri" }).closest("section") ?? document.body;
     expect(screen.queryByText("Promozione non disponibile")).not.toBeInTheDocument();
     expect(screen.queryByRole("list", { name: "Copertine dei volantini" })).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("La promozione in numeri")).not.toBeInTheDocument();
     expect(screen.getByRole("region", { name: "La promozione" })).toBeInTheDocument();
     expect(within(barra()).getByText("0 di 3 volantini")).toBeInTheDocument();
 
