@@ -1004,6 +1004,11 @@ namespace IstantaLib
         /// con lo stesso valore). Falso: la versione si controlla. Il valore originale si controlla sempre.
         public bool ignoraVersioneMeta { get; set; } = false;
 
+        /// I20-1217: se la schermata delle segnalazioni del Plugin mostra la sezione "Foto cambiate":
+        /// le foto primarie e secondarie dei box con il collegamento non aggiornato perche' il sync del
+        /// pacchetto foto ha sostituito il file (Coop). Falso: la sezione non c'e'.
+        public bool segnalaFotoCambiate { get; set; } = false;
+
         /// La voce "Fuori vol" nella tendina del tracciato del Plugin, con le referenze che
         /// l'esportazione esclude perche' fuori volantino e il pulsante per rimetterle in volantino.
         /// Le regole dicono quando una referenza e' fuori per un campo del cliente (Coop: il tema

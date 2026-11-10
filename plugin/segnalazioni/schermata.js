@@ -39,6 +39,13 @@
  * scrive bollini (finalizzaSegnalazioni di indexNew), la schermata non si apre da sola e il Report
  * Integrita' non avvisa; il segnalino e' grigio. La scelta sta nella voce della lavorazione, in
  * lavorazioni.json (Utility.voceLavorazione). Senza segnalazioni il segnalino e' verde.
+ *
+ * I20-1217: per il cliente che lo dichiara (segnalaFotoCambiate, Coop), quando ce ne sono, accanto a
+ * "Tutte" c'e' la linguetta "Foto cambiate (N)", che mostra al posto delle segnalazioni i due casi che in Foto P/S danno il messaggio giallo: la foto del dato ha un nome
+ * nuovo che nel box non c'e' (il sync ha cambiato la foto della ref), o il file nella cartella e' stato
+ * sostituito con lo stesso nome e il collegamento non e' aggiornato. Si legge dal documento, dalla lista
+ * della lavorazione e dalla cartella Links a ogni disegno, senza salvare niente: aggiornata la foto,
+ * la riga sparisce. Ogni riga ha "Vai al box" e "Aggiorna", come il pulsante giallo di Foto P/S.
  */
 
 const Segnalazioni = require('./segnalazioni');
@@ -100,6 +107,14 @@ const SchermataSegnalazioni = {
     /// I20-1116, lotto 2: la colonna della vista affiancata (regole in vistaAffiancata.js, I20-1121).
     ID_COLONNA: "colonnaSegnalazioni",
     TITOLO: "Segnalazioni di impaginazione",
+
+    /// I20-1217: la sezione "Foto cambiate" in cima alla schermata, e lo stato del collegamento
+    /// InDesign che la fa nascere (lo stesso che in Foto P/S da' "la foto impaginata e' da ricollegare").
+    ID_FOTO_CAMBIATE: "fotoCambiateSegnalazioni",
+    /// I20-1217: la linguetta "Foto cambiate" accanto a "Tutte": la scelta sta nell'elenco come quella
+    /// dei filtri (data 'filtro'), con un nome che nessun filtro del cliente puo' avere.
+    VISTA_FOTO_CAMBIATE: "\u0000fotoCambiate",
+    STATO_FOTO_CAMBIATA: "LINK_OUT_OF_DATE",
 
     /// I20-1056, lotto 3: l'ultimo controllo dei bollini del documento, pagina per pagina:
     /// { chiave, pagine: { nome: { segnalazioni, errori, gravita } } }. Solo i numeri: i dati della
@@ -723,11 +738,48 @@ const SchermataSegnalazioni = {
         SchermataSegnalazioni._disegna(elenco, SchermataSegnalazioni._leggi(Array.isArray(pagine) ? pagine : null), pagine);
     },
 
-    _disegna(elenco, lette, pagine) {
+    /// I20-1217: ridisegna dall'ultima lettura, senza chiedere niente a InDesign: e' il cambio di
+    /// linguetta ("Tutte", un filtro del cliente, "Foto cambiate"), che rileggendo tutto il documento
+    /// impiegava secondi. Senza una lettura tenuta, rilegge come riempi.
+    ridisegna(elenco) {
+        const lette = elenco.data('lette');
+        const fotoCambiate = elenco.data('fotoCambiate');
+        if (!Array.isArray(lette) || !Array.isArray(fotoCambiate)) {
+            SchermataSegnalazioni.riempi(elenco);
+            return;
+        }
+        SchermataSegnalazioni._disegna(elenco, lette, elenco.data('pagine'), fotoCambiate);
+    },
+
+    /// I20-1217: fotoCambiate e' la lettura delle foto cambiate gia' fatta (ridisegna); senza, si legge.
+    /// Bollini e foto cambiate restano nell'elenco (data 'lette' e 'fotoCambiate') per ridisegna.
+    _disegna(elenco, lette, pagine, fotoCambiate = null) {
+        //I20-1217: le foto cambiate, lette una volta per disegno: servono alla linguetta (la barra le
+        //prende dall'elenco) e alla sua vista. Solo per il cliente che lo dichiara. Senza foto cambiate
+        //la linguetta sparisce e si torna a Tutte.
+        if (!Array.isArray(fotoCambiate)) {
+            fotoCambiate = SchermataSegnalazioni._fotoCambiate();
+        }
+        elenco.data('lette', Array.isArray(lette) ? lette : []);
+        elenco.data('fotoCambiate', fotoCambiate);
+        if (elenco.data('filtro') === SchermataSegnalazioni.VISTA_FOTO_CAMBIATE && fotoCambiate.length === 0) {
+            elenco.data('filtro', "");
+        }
         elenco.empty();
 
         //I20-1126: in cima, disattivare o riattivare le segnalazioni della lavorazione.
         elenco.append(SchermataSegnalazioni._barraDisattivazione(elenco));
+
+        //I20-1217: scelta la linguetta, la schermata mostra solo le foto cambiate, con il loro conteggio
+        //accanto al titolo. Anche con le segnalazioni disattivate: non sono bollini.
+        if (elenco.data('filtro') === SchermataSegnalazioni.VISTA_FOTO_CAMBIATE) {
+            const conteggioFoto = elenco.data('conteggio');
+            if (conteggioFoto != null) {
+                conteggioFoto.text(SchermataSegnalazioni.testoFotoCambiate(fotoCambiate));
+            }
+            elenco.append(SchermataSegnalazioni._sezioneFotoCambiate(elenco, fotoCambiate));
+            return;
+        }
 
         //I20-1056, lotto 2: il conteggio e' accanto al titolo del popup, e si aggiorna a ogni giro.
         //I20-1126: con le segnalazioni disattivate la schermata e' "pulita": solo la barra con
@@ -781,9 +833,16 @@ const SchermataSegnalazioni = {
 
     /// I20-1126: la barra in cima all'elenco: "Disattiva segnalazioni", o "Riattiva segnalazioni" se
     /// sono disattivate.
+    /// I20-1217: con foto cambiate (quelle dell'ultimo disegno, nell'elenco) la scelta "Mostra:" c'e'
+    /// sempre, anche senza filtri del cliente e con le segnalazioni disattivate, per la linguetta.
     _barraDisattivazione(elenco) {
         const barra = $('<div></div>').css({ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', padding: '4px 8px', marginBottom: '6px' });
+        const fotoCambiate = elenco != null && typeof elenco.data === "function" ? elenco.data('fotoCambiate') : null;
+        const quanteFoto = Array.isArray(fotoCambiate) ? fotoCambiate.length : 0;
         if (SchermataSegnalazioni.disattivate()) {
+            if (quanteFoto > 0) {
+                barra.append(SchermataSegnalazioni._sceltaFiltro(elenco, [], quanteFoto));
+            }
             barra.append($('<span></span>').text("Segnalazioni disattivate per questa lavorazione").css({ color: '#555', marginRight: '8px' }));
             barra.append($('<button type="button"></button>').text("Riattiva segnalazioni").on('click', () => {
                 if (SchermataSegnalazioni.impostaDisattivate(false)) {
@@ -794,8 +853,8 @@ const SchermataSegnalazioni = {
         else {
             //I20-1211: a sinistra i filtri del cliente, solo se ne ha almeno uno.
             const filtri = SchermataSegnalazioni.filtriDelCliente();
-            if (filtri.length > 0) {
-                barra.append(SchermataSegnalazioni._sceltaFiltro(elenco, filtri));
+            if (filtri.length > 0 || quanteFoto > 0) {
+                barra.append(SchermataSegnalazioni._sceltaFiltro(elenco, filtri, quanteFoto));
             }
             barra.append($('<button type="button"></button>').text("Disattiva segnalazioni").on('click', () => {
                 SchermataSegnalazioni.chiediDisattivazione(elenco);
@@ -806,21 +865,26 @@ const SchermataSegnalazioni = {
 
     /// I20-1211: la scelta del filtro: "Tutte" e un pulsante per filtro del cliente, quello scelto
     /// in evidenza. Il filtro scelto sta nell'elenco (data 'filtro') e la schermata si ridisegna.
-    _sceltaFiltro(elenco, filtri) {
+    /// I20-1217: dopo i filtri, la linguetta "Foto cambiate (N)" se fotoCambiate e' piu' di zero.
+    _sceltaFiltro(elenco, filtri, fotoCambiate = 0) {
         const scelta = $('<span></span>').css({ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px', marginRight: 'auto' });
         const attuale = elenco.data('filtro') || "";
-        const pulsante = (testo, nome) => {
+        const pulsante = (testo, nome, colore = COLORE_FILTRI) => {
             const scelto = nome === attuale;
             return $('<button type="button"></button>').text(testo)
-                .css({ fontWeight: scelto ? 'bold' : 'normal', borderBottom: scelto ? '2px solid ' + (nome === "" ? '#555' : COLORE_FILTRI) : '2px solid transparent' })
+                .css({ fontWeight: scelto ? 'bold' : 'normal', borderBottom: scelto ? '2px solid ' + (nome === "" ? '#555' : colore) : '2px solid transparent' })
                 .on('click', () => {
                     elenco.data('filtro', nome);
-                    SchermataSegnalazioni.riempi(elenco);
+                    //I20-1217: cambiare linguetta non cambia il documento: si ridisegna dall'ultima lettura.
+                    SchermataSegnalazioni.ridisegna(elenco);
                 });
         };
         scelta.append($('<span></span>').text("Mostra:").css({ color: '#555' }));
         scelta.append(pulsante("Tutte", ""));
         filtri.forEach(filtro => scelta.append(pulsante(filtro.nome, filtro.nome)));
+        if (fotoCambiate > 0) {
+            scelta.append(pulsante("Foto cambiate (" + fotoCambiate + ")", SchermataSegnalazioni.VISTA_FOTO_CAMBIATE, '#f9a825'));
+        }
         return scelta;
     },
 
@@ -1196,6 +1260,344 @@ const SchermataSegnalazioni = {
             //resta quello che c'e'
         }
         return dati;
+    },
+
+    /// I20-1217: se la sezione "Foto cambiate" vale per il cliente (pluginMiddleware.getSegnalaFotoCambiate).
+    fotoCambiateAttive() {
+        try {
+            return typeof pluginMiddleware !== "undefined" && pluginMiddleware != null &&
+                typeof pluginMiddleware.getSegnalaFotoCambiate === "function" && pluginMiddleware.getSegnalaFotoCambiate() === true;
+        }
+        catch (e) {
+            return false;
+        }
+    },
+
+    /// I20-1217: se l'etichetta di un riquadro e' quella di una foto primaria o secondaria del box,
+    /// con i nomi del cliente come in Foto P/S. Il clone della primaria non e' una foto del dato.
+    eFotoDelBox(etichetta) {
+        if (typeof etichetta !== "string" || etichetta === "") {
+            return false;
+        }
+        if (typeof Utility !== "undefined" && Utility != null && typeof Utility.eUnClone === "function" && Utility.eUnClone(etichetta)) {
+            return false;
+        }
+        const campo = (nome, predefinito) => {
+            const valore = typeof pluginMiddleware !== "undefined" && pluginMiddleware != null && typeof pluginMiddleware.getCampo === "function"
+                ? pluginMiddleware.getCampo(nome) : null;
+            return typeof valore === "string" && valore !== "" ? valore : predefinito;
+        };
+        return etichetta.startsWith(campo("nomeFotoPrimaria", "immagine")) || etichetta.startsWith(campo("nomeFotoSecondaria", "foto_secondaria"));
+    },
+
+    /// I20-1217: le foto cambiate del documento, i due casi che in Foto P/S danno il messaggio giallo:
+    /// - "nomeNuovo": il dato del box (il suo record nella lista della lavorazione) vuole una foto
+    ///   primaria o secondaria che nessun riquadro foto del box ha, e il file e' gia' nella cartella
+    ///   Links: il sync ha dato alla ref una foto con un nome nuovo ("la foto non risulta impaginata");
+    /// - "stessoNome": il collegamento InDesign di una foto del box non e' aggiornato, perche' il file
+    ///   nella cartella e' stato sostituito con lo stesso nome ("la foto impaginata e' da ricollegare").
+    /// I box si trovano dai collegamenti del documento: un box impaginato ha almeno un riquadro foto,
+    /// anche con la nofoto. Senza la lista o senza i nomi dei file di Links il primo caso non si
+    /// controlla. Collegamenti rotti e foto extra non danno righe. Ordinate per pagina.
+    /// Ogni riga: { tipo, foto, fotoNelBox, codice, pagina, box, rettangolo, meccanica, codiceGruppo, idRec }.
+    fotoCambiateDelDocumento(documento, records = [], fileNeiLinks = null) {
+        const righe = [];
+        if (documento == null || documento.links == null) {
+            return righe;
+        }
+
+        //I box incontrati, ciascuno con i suoi riquadri foto, in una mappa per id: gli oggetti di InDesign
+        //cambiano a ogni lettura e ogni proprieta' e' una chiamata a InDesign. Confrontare l'id di ogni
+        //collegamento con quello di ogni box trovato faceva migliaia di chiamate e secondi di attesa:
+        //l'id si legge una volta per collegamento. Pagina e DNA del box si leggono una volta per box.
+        const boxTrovati = new Map();
+        const voceDelBox = (box) => {
+            let id = null;
+            try {
+                id = box.id;
+            }
+            catch (e) {
+                id = null;
+            }
+            const chiave = id != null ? "id:" + id : "box:" + boxTrovati.size;
+            let voce = boxTrovati.get(chiave);
+            if (voce == null) {
+                voce = { box: box, riquadri: [], dati: null };
+                boxTrovati.set(chiave, voce);
+            }
+            return voce;
+        };
+
+        const collegamenti = documento.links;
+        for (let i = 0; i < collegamenti.length; i++) {
+            try {
+                const link = collegamenti.item(i);
+                const grafica = link != null ? link.parent : null;
+                const rettangolo = grafica != null ? grafica.parent : null;
+                const etichetta = rettangolo != null ? rettangolo.label : null;
+                if (rettangolo == null || !SchermataSegnalazioni.eFotoDelBox(etichetta)) {
+                    continue;
+                }
+                const box = Utility.getBoxFromElementOfBox(rettangolo);
+                if (box == null) {
+                    continue;
+                }
+                const codice = String(etichetta).split("$")[1] || null;
+                const nome = link.name;
+                const voce = voceDelBox(box);
+                voce.riquadri.push({ rettangolo: rettangolo, nome: nome, codice: codice });
+                if (link.status != null && link.status.toString() === SchermataSegnalazioni.STATO_FOTO_CAMBIATA) {
+                    righe.push(SchermataSegnalazioni._rigaFotoCambiata("stessoNome", voce,
+                        { foto: nome, fotoNelBox: nome, codice: codice, rettangolo: rettangolo }));
+                }
+            }
+            catch (e) {
+                console.error("Code SGN-17 Collegamento non letto per le foto cambiate:", e);
+            }
+        }
+
+        if (fileNeiLinks != null && Array.isArray(records) && records.length > 0) {
+            boxTrovati.forEach(voce => {
+                try {
+                    const previste = SchermataSegnalazioni.fotoPrevisteDelBox(records, SchermataSegnalazioni._datiDellaVoce(voce).idRec);
+                    previste.forEach(prevista => {
+                        if (voce.riquadri.some(r => r.nome === prevista.nomeFoto) || !fileNeiLinks.has(prevista.nomeFoto)) {
+                            return;
+                        }
+                        //La foto che il box ha ancora per quella ref, se c'e': quella che "Aggiorna" sostituisce.
+                        const vecchia = voce.riquadri.find(r => r.codice != null && prevista.codice != null && r.codice === prevista.codice);
+                        righe.push(SchermataSegnalazioni._rigaFotoCambiata("nomeNuovo", voce,
+                            { foto: prevista.nomeFoto, fotoNelBox: vecchia != null ? vecchia.nome : null, codice: prevista.codice, rettangolo: null }));
+                    });
+                }
+                catch (e) {
+                    console.error("Code SGN-17 Foto del dato non confrontate con il box:", e);
+                }
+            });
+        }
+        return SchermataSegnalazioni.ordinaFotoCambiate(righe);
+    },
+
+    /// I20-1217: pagina e DNA del box di una voce, letti da InDesign la prima volta e poi tenuti.
+    _datiDellaVoce(voce) {
+        if (voce.dati == null) {
+            let pagina = null;
+            try {
+                pagina = voce.box.parentPage != null ? voce.box.parentPage.name : null;
+            }
+            catch (e) {
+                pagina = null;
+            }
+            voce.dati = Object.assign({ pagina: pagina }, SchermataSegnalazioni._datiBox(voce.box));
+        }
+        return voce.dati;
+    },
+
+    /// I20-1217: una riga della sezione, con la pagina e i dati del box della voce.
+    _rigaFotoCambiata(tipo, voce, dati) {
+        const datiBox = SchermataSegnalazioni._datiDellaVoce(voce);
+        return Object.assign({ tipo: tipo, pagina: datiBox.pagina, box: voce.box, meccanica: datiBox.meccanica, codiceGruppo: datiBox.codiceGruppo, idRec: datiBox.idRec }, dati);
+    },
+
+    /// I20-1217: le foto che il dato vuole nel box, come le elenca Foto P/S (EditFotoPrimarieSecondarie):
+    /// una per ogni ref del gruppo del box, cioe' i record della lista con lo stesso Scatto.CodiceGruppo
+    /// del record del box, tranne quelle non selezionate (StatoSelezione 3) e quelle senza foto. Ognuna
+    /// con il codice della sua ref, che e' quello nell'etichetta del riquadro. Il record del DNA del box
+    /// puo' essere una ref non selezionata: la sua foto non va nel box. Un nome ripetuto vale una volta.
+    /// [{ nomeFoto, codice }].
+    fotoPrevisteDelBox(records, idRec) {
+        const chiave = Segnalazioni.chiaveRecord(idRec);
+        if (chiave == null || !Array.isArray(records)) {
+            return [];
+        }
+        const delRecord = (r) => r != null && r.recordInTracciato != null ? r.recordInTracciato : null;
+        const trovato = records.map(delRecord).find(r => r != null && Segnalazioni.chiaveRecord(r.idRec) === chiave);
+        if (trovato == null) {
+            return [];
+        }
+        const gruppo = trovato["Scatto.CodiceGruppo"] == null ? "" : String(trovato["Scatto.CodiceGruppo"]);
+        const delGruppo = gruppo === ""
+            ? [trovato]
+            : records.map(delRecord).filter(r => r != null && String(r["Scatto.CodiceGruppo"]) === gruppo);
+        const previste = [];
+        delGruppo.forEach(record => {
+            if (record.StatoSelezione == 3) {
+                return;
+            }
+            const nome = record["Foto.Nome"] == null ? "" : String(record["Foto.Nome"]).trim();
+            if (nome === "" || previste.some(p => p.nomeFoto === nome)) {
+                return;
+            }
+            const codice = record["Referenza.Codice"];
+            previste.push({ nomeFoto: nome, codice: codice == null || codice === "" ? null : String(codice) });
+        });
+        return previste;
+    },
+
+    /// I20-1217: per pagina (numerica, le pagine senza numero in fondo), poi per nome della foto.
+    ordinaFotoCambiate(righe) {
+        const numero = (pagina) => {
+            const n = parseInt(pagina, 10);
+            return isNaN(n) ? Number.MAX_SAFE_INTEGER : n;
+        };
+        return righe.slice().sort((a, b) =>
+            (numero(a.pagina) - numero(b.pagina)) ||
+            String(a.pagina).localeCompare(String(b.pagina)) ||
+            String(a.foto).localeCompare(String(b.foto)));
+    },
+
+    /// I20-1217: "2 foto cambiate in 1 box". I box si contano per record, o per id InDesign.
+    testoFotoCambiate(righe) {
+        const elenco = Array.isArray(righe) ? righe : [];
+        const box = new Set(elenco.map((riga, indice) => riga.idRec != null && riga.idRec !== ""
+            ? "rec:" + riga.idRec
+            : (riga.box != null && riga.box.id != null ? "id:" + riga.box.id : "riga:" + indice)));
+        return elenco.length + (elenco.length === 1 ? " foto cambiata" : " foto cambiate") + " in " + box.size + " box";
+    },
+
+    /// I20-1217: i nomi dei file nella cartella Links della lavorazione (percorsoLinks di indexNew),
+    /// letta una volta. null se non si legge: allora le foto con un nome nuovo non si controllano.
+    _fileNeiLinks() {
+        try {
+            if (typeof percorsoLinks === "undefined" || !percorsoLinks) {
+                return null;
+            }
+            return new Set(require('fs').readdirSync(percorsoLinks) || []);
+        }
+        catch (e) {
+            console.error("Code SGN-19 Cartella Links non letta per le foto cambiate:", e);
+            return null;
+        }
+    },
+
+    /// I20-1217: le foto cambiate del documento aperto, se il cliente le vuole; altrimenti nessuna.
+    /// Il dato e' quello della lista della lavorazione: a fine pacchetto foto il tracciato si riscarica.
+    _fotoCambiate() {
+        if (!SchermataSegnalazioni.fotoCambiateAttive()) {
+            return [];
+        }
+        try {
+            return SchermataSegnalazioni.fotoCambiateDelDocumento(SchermataSegnalazioni._documento(),
+                SchermataSegnalazioni._recordsDellaLavorazione(), SchermataSegnalazioni._fileNeiLinks());
+        }
+        catch (e) {
+            console.error("Code SGN-17 Foto cambiate non lette dal documento:", e);
+            return [];
+        }
+    },
+
+    /// I20-1217: a fine scaricamento del pacchetto foto, quante foto sono cambiate e in quanti box.
+    /// Restituisce il numero di foto cambiate; senza, non dice niente.
+    avvisaFotoCambiate() {
+        const righe = SchermataSegnalazioni._fotoCambiate();
+        if (righe.length === 0) {
+            return 0;
+        }
+        messaggioUtente("Code FTC-01 " + SchermataSegnalazioni.testoFotoCambiate(righe) + ": le trovi in Segnalazioni, sezione Foto cambiate", "warning", false, 10);
+        return righe.length;
+    },
+
+    /// I20-1217: "Aggiorna" su una foto cambiata fa quello che fa il pulsante giallo di Foto P/S:
+    /// FotoPlacer.updateFoto con la foto del dato. Con lo stesso nome ("da ricollegare") ripiazza il
+    /// file nel suo riquadro; con un nome nuovo ("non risulta impaginata") passa il codice della ref e
+    /// nessun riquadro, e FotoPlacer sostituisce la foto di quella ref (o ne crea il riquadro), che poi
+    /// va dietro la primaria come in Foto P/S. FotoPlacer si carica qui, al clic, perche' vuole InDesign.
+    /// Restituisce true se la foto e' stata aggiornata.
+    aggiornaFotoCambiata(riga, placer = null) {
+        try {
+            const fotoPlacer = placer != null ? placer : require('../reperimentoFoto/fotoPlacer');
+            const primaria = riga.tipo === "nomeNuovo" ? SchermataSegnalazioni._primariaDelBox(riga.box) : null;
+            const esito = fotoPlacer.updateFoto(riga.foto, riga.box, riga.tipo === "nomeNuovo" ? null : riga.rettangolo, riga.codice);
+            if (esito != null && esito.warning) {
+                messaggioUtente("Code SGN-18 La foto " + riga.foto + " non e' stata aggiornata: " + esito.warning, "warning", false, 6);
+                return false;
+            }
+            const impaginata = esito != null ? esito.fotoRectangle : null;
+            if (primaria != null && impaginata != null && impaginata !== primaria && (impaginata.id == null || impaginata.id !== primaria.id)) {
+                try {
+                    impaginata.sendToBack(primaria);
+                }
+                catch (e) {
+                    console.error("Code SGN-18 Foto aggiornata ma non portata dietro la primaria:", e);
+                }
+            }
+            return true;
+        }
+        catch (e) {
+            console.error("Code SGN-18 Foto cambiata non aggiornata:", e);
+            messaggioUtente("Code SGN-18 La foto " + (riga != null ? riga.foto : "") + " non e' stata aggiornata: riapri le segnalazioni", "error", false, 6);
+            return false;
+        }
+    },
+
+    /// I20-1217: il riquadro della foto primaria del box, o null.
+    _primariaDelBox(box) {
+        try {
+            const nome = typeof pluginMiddleware !== "undefined" && pluginMiddleware != null && typeof pluginMiddleware.getCampo === "function"
+                ? pluginMiddleware.getCampo("nomeFotoPrimaria") : null;
+            const primaria = typeof nome === "string" && nome !== "" ? nome : "immagine";
+            const elementi = box != null && box.allPageItems != null ? box.allPageItems : [];
+            for (let i = 0; i < elementi.length; i++) {
+                const etichetta = elementi[i] != null ? elementi[i].label : null;
+                if (typeof etichetta === "string" && etichetta.startsWith(primaria) && SchermataSegnalazioni.eFotoDelBox(etichetta)) {
+                    return elementi[i];
+                }
+            }
+        }
+        catch (e) {
+            //senza primaria la foto resta dove FotoPlacer la mette
+        }
+        return null;
+    },
+
+    /// I20-1217: cosa e' cambiato, in breve: la foto vecchia e la nuova, o il file sostituito.
+    testoCambio(riga) {
+        if (riga.tipo === "nomeNuovo") {
+            return riga.fotoNelBox ? "nel box c'e' " + riga.fotoNelBox + ", il dato vuole " + riga.foto : "il dato vuole " + riga.foto + ", che nel box non c'e'";
+        }
+        return "file sostituito nella cartella, il box ha ancora quello vecchio";
+    },
+
+    /// I20-1217: la sezione "Foto cambiate": la testata con il numero e una riga per foto, con la
+    /// pagina, il box e il suo gruppo, "Vai al box" (come per le segnalazioni) e "Aggiorna".
+    _sezioneFotoCambiate(elenco, righe) {
+        const sezione = $('<div></div>').attr('id', SchermataSegnalazioni.ID_FOTO_CAMBIATE).css({ marginBottom: '14px' });
+        sezione.append($('<div></div>').text("Foto cambiate (" + righe.length + ")")
+            .attr('title', "Foto dei box diverse da quelle del dato o dal file nella cartella, per esempio dopo il sync del pacchetto foto")
+            .css({
+                fontWeight: '700', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '.4px',
+                padding: '6px 8px', marginBottom: '4px', borderBottom: '2px solid #f9a825', backgroundColor: '#fff8e1'
+            }));
+
+        righe.forEach(riga => {
+            const blocco = $('<div></div>').css({ margin: '4px 0', padding: '6px', border: '1px solid #ddd', borderRadius: '4px' });
+            const testata = $('<div></div>').css({ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px' });
+            testata.append(SchermataSegnalazioni._testoCheSiRestringe($('<span></span>')).text(riga.foto).css({ fontWeight: 'bold', flexBasis: '120px' }));
+            testata.append($('<button type="button"></button>').text("Vai al box").css({ flexShrink: '0' })
+                .on('click', () => SchermataSegnalazioni.vaiAlBox(riga.box, elenco)));
+            testata.append($('<button type="button"></button>').text("Aggiorna").css({ flexShrink: '0' })
+                .on('click', () => {
+                    SchermataSegnalazioni.aggiornaFotoCambiata(riga);
+                    SchermataSegnalazioni.riempi(elenco);
+                }));
+            blocco.append(testata);
+            blocco.append($('<div></div>').text(SchermataSegnalazioni.testoCambio(riga))
+                .css({ fontSize: '11px', color: '#333', marginTop: '2px', overflowWrap: 'anywhere' }));
+
+            const dettaglio = [];
+            if (riga.pagina != null && riga.pagina !== "") {
+                dettaglio.push("Pagina " + riga.pagina);
+            }
+            dettaglio.push("Box " + (riga.meccanica || ""));
+            if (riga.codiceGruppo) {
+                dettaglio.push("gruppo " + SchermataSegnalazioni.codiciAbbreviati(riga.codiceGruppo));
+            }
+            blocco.append($('<div></div>').text(dettaglio.join(" · "))
+                .attr('title', riga.codiceGruppo ? "Gruppo " + SchermataSegnalazioni.codiciAbbreviati(riga.codiceGruppo, Infinity) : "")
+                .css({ fontSize: '11px', color: '#666', marginTop: '2px', overflowWrap: 'anywhere' }));
+            sezione.append(blocco);
+        });
+        return sezione;
     },
 
     //I20-1044: un testo dentro una riga flex che si restringe col pannello. Senza minWidth 0 non
