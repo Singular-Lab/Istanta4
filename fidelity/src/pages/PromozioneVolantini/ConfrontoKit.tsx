@@ -3,7 +3,6 @@ import Sezione from "@/components/Base/Sezione";
 import Table from "@/components/Base/Table";
 import type { Tinta } from "@/components/Grafici";
 import { formatPercentuale } from "@/pages/PuntiVenditaConsultazione/analisi";
-import { PuntoInsegna } from "@/pages/PuntiVenditaConsultazione/componenti";
 import { formatNumero } from "@/utils/format";
 import { twMerge } from "@/utils/twMerge";
 import { useMemo, useState, type KeyboardEvent } from "react";
@@ -20,6 +19,7 @@ import {
   type OrdinamentoConfronto,
 } from "./analisi";
 import { Copertina } from "./Copertina";
+import { LogoInsegna } from "./LogoInsegna";
 
 const COLONNE: ReadonlyArray<{ id: ColonnaConfronto; etichetta: string; numerica: boolean }> = [
   { id: "volantino", etichetta: "Volantino", numerica: false },
@@ -123,7 +123,7 @@ export function ConfrontoKit({ kit, tinta }: { kit: readonly KitPromozioneConsul
                       className="flex items-center gap-2.5 whitespace-nowrap font-semibold text-slate-800 hover:text-primary dark:text-slate-100 dark:hover:text-indigo-300"
                     >
                       <Copertina kit={k} conNome={false} className="aspect-[5/7] w-7 flex-none rounded-sm shadow-sm ring-1 ring-black/5" />
-                      <PuntoInsegna tinta={colore} />
+                      <LogoInsegna idCanale={k.canale.id} tinta={colore} />
                       {nomeKit(k)}
                     </Link>
                   </Table.Td>

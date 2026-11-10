@@ -11,7 +11,6 @@ import type {
   PuntoVenditaPromozioneConsultazione,
   Riferimento,
 } from "../../../lib/consultazione/tipi";
-import { ordinaPerCollage } from "../VolantiniKit/collage";
 import { tempoDellaPromo } from "../VolantiniKit/testi";
 
 /**
@@ -59,75 +58,49 @@ export const fraseKit = (kit: readonly Pick<Kit, "canale" | "area">[]): string =
 /* ---------- Colori delle insegne ---------- */
 
 /**
- * Tinta di ogni canale della promozione, per nome: la stessa nella griglia, nei grafici, nella mappa e
- * nella tabella. Solo i canali della promo (la rete delle insegne chiederebbe "gdo.visualizza").
+ * Tinta di ogni insegna (canale) della promozione, per nome: la stessa nelle miniature, nella griglia,
+ * nei grafici, nella mappa e nella tabella. Si calcola su tutte le insegne della promo, non sui kit
+ * filtrati, cosi' un filtro non cambia i colori. Solo le insegne della promo (la rete delle insegne
+ * chiederebbe "gdo.visualizza").
  */
-export const tinteCanaliPromozione = (kit: readonly Pick<Kit, "canale">[]): ((idCanale: string) => Tinta) => {
-  const indici = indiciPerNome(kit.map(k => k.canale));
+export const tinteCanaliPromozione = (insegne: readonly Riferimento[]): ((idCanale: string) => Tinta) => {
+  const indici = indiciPerNome(insegne);
   return (idCanale: string) => tintaCategoria(indici.get(idCanale) ?? -1);
 };
 
-/* ---------- Muro delle copertine ---------- */
+/* ---------- Filtri ---------- */
 
-/** Le copertine alternate per canale (un giro per insegna), come nel collage delle schede. */
-export const kitPerMuro = ordinaPerCollage;
+/** Un id di area o di insegna nell'indirizzo: solo UUID, gli altri non arrivano al server. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export const idFiltro = (valore: string | null): string | undefined => (valore && UUID.test(valore) ? valore : undefined);
 
 /**
- * Colonne del muro: con pochi kit fogli grandi, con molti abbastanza colonne perché tutte le
- * copertine restino dentro la banda (il muro è più largo che alto, i fogli 5:7).
+ * Le opzioni di un filtro con il valore scelto: il server lo tiene fra le opzioni se e' della promo;
+ * uno che non lo e' (indirizzo vecchio) si mostra in coda con un nome generico, per poterlo togliere.
  */
-export const colonneMuro = (quanti: number): number =>
-  quanti <= 4 ? Math.max(2, quanti) : Math.min(9, Math.max(4, Math.ceil(Math.sqrt(quanti * 1.6))));
+export const conValoreScelto = (opzioni: readonly Riferimento[], scelto: string | undefined, nomeGenerico: string): readonly Riferimento[] =>
+  !scelto || opzioni.some(opzione => opzione.id.toLowerCase() === scelto.toLowerCase())
+    ? opzioni
+    : [...opzioni, { id: scelto, nome: nomeGenerico }];
 
-/* ---------- Griglia canali × aree ---------- */
+/**
+ * Le chiavi canale+area con piu' di un kit: nelle miniature quei kit dicono anche il titolo, che
+ * altrimenti sarebbero indistinguibili.
+ */
+export const celleConPiuKit = (kit: readonly Pick<Kit, "canale" | "area">[]): ReadonlySet<string> => {
+  const conteggi = new Map<string, number>();
+  for (const k of kit) {
+    const cella = chiaveCella(k.canale.id, k.area.id);
+    conteggi.set(cella, (conteggi.get(cella) ?? 0) + 1);
+  }
+  return new Set([...conteggi].filter(([, numero]) => numero > 1).map(([cella]) => cella));
+};
 
-export interface GrigliaKit {
-  /** Per nome. */
-  canali: Riferimento[];
-  /** Per nome. */
-  aree: Riferimento[];
-  /** I kit di una cella (chiaveCella); di solito uno, più di uno se canale e area hanno più kit. */
-  celle: ReadonlyMap<string, Kit[]>;
-  /**
-   * Punti vendita diversi per canale, per area e in tutto: uno stampato da più kit dello stesso
-   * canale o della stessa area conta una volta. Non sono la somma dei punti vendita delle celle.
-   */
-  totaleCanale: ReadonlyMap<string, number>;
-  totaleArea: ReadonlyMap<string, number>;
-  totale: number;
-}
-
+/** Chiave di insegna e area di un kit. */
 export const chiaveCella = (idCanale: string, idArea: string): string => `${idCanale}\u0000${idArea}`;
 
 const perNome = (a: Riferimento, b: Riferimento) => a.nome.localeCompare(b.nome, "it") || a.id.localeCompare(b.id);
-
-const unici = (riferimenti: readonly Riferimento[]): Riferimento[] => {
-  const visti = new Map<string, Riferimento>();
-  for (const riferimento of riferimenti) if (!visti.has(riferimento.id)) visti.set(riferimento.id, riferimento);
-  return [...visti.values()].sort(perNome);
-};
-
-const somma = (mappa: Map<string, number>, chiave: string, valore: number) => mappa.set(chiave, (mappa.get(chiave) ?? 0) + valore);
-
-export const grigliaKit = (kit: readonly Kit[], puntiVendita: readonly Pick<RigaPv, "idKit">[]): GrigliaKit => {
-  const celle = new Map<string, Kit[]>();
-  for (const k of kit) {
-    const chiave = chiaveCella(k.canale.id, k.area.id);
-    celle.set(chiave, [...(celle.get(chiave) ?? []), k]);
-  }
-  const kitPerId = new Map(kit.map(k => [k.id, k]));
-  const totaleCanale = new Map<string, number>();
-  const totaleArea = new Map<string, number>();
-  let totale = 0;
-  for (const pv of puntiVendita) {
-    const deiKit = pv.idKit.flatMap(id => kitPerId.get(id) ?? []);
-    if (deiKit.length === 0) continue;
-    for (const idCanale of new Set(deiKit.map(k => k.canale.id))) somma(totaleCanale, idCanale, 1);
-    for (const idArea of new Set(deiKit.map(k => k.area.id))) somma(totaleArea, idArea, 1);
-    totale++;
-  }
-  return { canali: unici(kit.map(k => k.canale)), aree: unici(kit.map(k => k.area)), celle, totaleCanale, totaleArea, totale };
-};
 
 /* ---------- Regioni ---------- */
 

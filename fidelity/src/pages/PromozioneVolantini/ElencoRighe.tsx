@@ -4,13 +4,13 @@ import StatusBadge from "@/components/Base/StatusBadge";
 import Table from "@/components/Base/Table";
 import type { Tinta } from "@/components/Grafici";
 import { percorsoScheda } from "@/pages/PuntiVenditaConsultazione/analisi";
-import { PuntoInsegna } from "@/pages/PuntiVenditaConsultazione/componenti";
 import { formatNumero } from "@/utils/format";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import type { KitPromozioneConsultazione, PuntoVenditaPromozioneConsultazione } from "../../../lib/consultazione/tipi";
 import { nomeRegione } from "../../../lib/consultazione/regioni";
 import { nomeKit } from "./analisi";
+import { LogoInsegna } from "./LogoInsegna";
 
 /** Righe mostrate all'inizio e a ogni "Mostra altre": l'elenco di una promo grande arriva a migliaia. */
 export const RIGHE_PER_VOLTA = 25;
@@ -79,7 +79,7 @@ export function ElencoRighe({ righe, kitPerId, tinta, conScheda, vuoto }: Elenco
                         <ul aria-label={`Volantini che stampano ${riga.localita ?? riga.riga}`} className="flex flex-col gap-1">
                           {kit.map(k => (
                             <li key={k.id} className="inline-flex items-center gap-2 whitespace-nowrap text-sm font-medium text-slate-700 dark:text-slate-200">
-                              <PuntoInsegna tinta={tinta(k.canale.id)} />
+                              <LogoInsegna idCanale={k.canale.id} tinta={tinta(k.canale.id)} />
                               {nomeKit(k)}
                             </li>
                           ))}

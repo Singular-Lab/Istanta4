@@ -287,12 +287,42 @@ export interface AssortimentoPromozioneConsultazione {
 
 export const MAX_MARCHE_PROMOZIONE = 8;
 
+/**
+ * Filtri del dettaglio della promozione (?idArea=&idCanale=): i kit di un'area e/o di un'insegna, che
+ * e' il canale del kit. Numeri, punti vendita e assortimento si contano sui soli kit che corrispondono.
+ */
+export interface FiltriDettaglioPromozioneVolantini {
+  idArea?: string;
+  idCanale?: string;
+}
+
+/** Insegne (canali) e aree dei kit pubblicati della promozione, per nome. */
+export interface OpzioniDettaglioPromozioneVolantini {
+  /** Con il filtro sull'area, non con quello sull'insegna. */
+  insegne: Riferimento[];
+  /** Con il filtro sull'insegna, non con quello sull'area. */
+  aree: Riferimento[];
+}
+
 export interface DettaglioPromozioneVolantiniConsultazione {
   promo: PromoConsultazione;
   /** Periodo in cui si consulta la promo, dal suo stato. */
   periodo: PeriodoConsultazione;
-  /** Ordinati per nome del canale, poi dell'area, poi titolo. */
+  /**
+   * I kit che corrispondono ai filtri, ordinati per nome del canale, poi dell'area, poi titolo.
+   * Vuoto quando insegna e area scelte insieme non hanno kit: la promo esiste comunque.
+   */
   kit: KitPromozioneConsultazione[];
+  /** Kit volantino pubblicati della promozione, anche quelli esclusi dai filtri. */
+  numeroKitTotale: number;
+  /** Tutte le insegne (canali) dei kit pubblicati della promozione, per nome: i colori non cambiano con i filtri. */
+  insegne: Riferimento[];
+  opzioni: OpzioniDettaglioPromozioneVolantini;
+  /**
+   * URL del logo di ogni insegna della promozione che ne ha uno, per id del canale: dai Loghi delle
+   * insegne delle Impostazioni GDO, prima quello della sola insegna (senza area ne' punto vendita).
+   */
+  loghiInsegne: Record<string, string>;
   numeri: NumeriPromozioneConsultazione;
   /** Un elemento per punto vendita, nell'ordine in cui compare per primo: per kit (come `kit`) e posizione nella lista stampata. */
   puntiVendita: PuntoVenditaPromozioneConsultazione[];

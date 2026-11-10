@@ -7,6 +7,7 @@ import {
 } from "../../lib/consultazione/periodi";
 import type {
   DettaglioPromozioneVolantiniConsultazione,
+  FiltriDettaglioPromozioneVolantini,
   DettaglioVolantinoConsultazione,
   ElencoPromozioniPopConsultazione,
   FiltriContenutiDigitali,
@@ -133,14 +134,32 @@ export const usePromozioniVolantiniConsultazione = (filtri: FiltriPromozioniVola
  * insight, le righe dei punti vendita stampate e l'assortimento. Una promo di un'altra GDO,
  * eliminata o senza volantini pubblicati risponde 404, che non si ritenta (predefinito per i 4xx).
  */
-export const useDettaglioPromozioneVolantini = (idPromo: string | undefined) =>
+/**
+ * Il dettaglio di consultazione di una promozione, sui soli kit dell'insegna e dell'area scelte:
+ * cambiando filtro resta il dettaglio di prima finche' non arriva il nuovo, della stessa promo.
+ */
+/**
+ * Inizio della chiave del dettaglio di una promozione: dopo vengono insegna e area filtrate. Nome
+ * e periodo della promo sono gli stessi con qualunque filtro (il breadcrumb li legge da qui).
+ */
+export const chiaveDettaglioPromozioneVolantini = (idPromo: string | undefined) =>
+  [CHIAVE_CONSULTAZIONE, "volantini", "promozione", idPromo] as const;
+
+export const useDettaglioPromozioneVolantini = (
+  idPromo: string | undefined,
+  filtri: FiltriDettaglioPromozioneVolantini = {}
+) =>
   useQuery({
-    queryKey: [CHIAVE_CONSULTAZIONE, "volantini", "promozione", idPromo],
-    queryFn: () => ServerCall.get<DettaglioPromozioneVolantiniConsultazione>(
-      percorsoPromozioneVolantiniConsultazione(idPromo ?? "")
-    ),
+    queryKey: [...chiaveDettaglioPromozioneVolantini(idPromo), filtri.idCanale ?? "", filtri.idArea ?? ""],
+    queryFn: () => {
+      const parametri = parametriMateriali({ idCanale: filtri.idCanale, idArea: filtri.idArea });
+      const percorso = percorsoPromozioneVolantiniConsultazione(idPromo ?? "");
+      return ServerCall.get<DettaglioPromozioneVolantiniConsultazione>(parametri ? `${percorso}?${parametri}` : percorso);
+    },
     enabled: Boolean(idPromo),
     staleTime: STALE_VISTE,
+    // Solo il dettaglio della stessa promo: un'altra promo riparte dal caricamento
+    placeholderData: (precedente, query) => (query?.queryKey[3] === idPromo ? precedente : undefined),
   });
 
 /** Promozioni del periodo con file POP pubblicati, con il loro conteggio. */

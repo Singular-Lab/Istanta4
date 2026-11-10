@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { beforeEach, expect, it, vi } from 'vitest';
-import { NotFoundError, ServiceUnavailableError } from '../../../../lib/errors';
+import { BadRequestError, NotFoundError, ServiceUnavailableError } from '../../../../lib/errors';
 import { describeConDatabase, svuotaTabelle, usaDatabase } from '../../../__tests__/integrazione/database';
 import { creaFile, creaKitRuntime, creaReferenza, creaTipoExport, type KitDiProva } from '../../../__tests__/integrazione/dati';
 import { sequelize } from '../../db/SequelizeConnector';
@@ -616,6 +616,92 @@ describeConDatabase('ConsultazioneService', () => {
     // Un kit senza referenze: zero box, nessun errore
     expect(dettaglio.kit).toEqual([expect.objectContaining({ titolo: 'SS TO 45', referenze: 0, box: 0, scontoMedio: null })]);
     expect(dettaglio.numeri).toMatchObject({ kit: 1, prodotti: 0, puntiVendita: 0 });
+  });
+
+  /**
+   * Una promo con tre kit: A (insegna 1, area 1), B (insegna 2, area 2) e C (insegna 1, area 2).
+   * A e C stampano lo stesso punto vendita di Lucca.
+   */
+  async function promoConTreKit() {
+    const a = await creaKitRuntime({ nomePromo: 'Filtrata', titolo: 'A' });
+    const promo = { idGdo: a.idGdo, idPromo: a.idPromo };
+    const b = await creaKitRuntime({ promo, titolo: 'B' });
+    const c = await creaKitRuntime({ promo, stessaCombinazioneDi: a, titolo: 'C' });
+    await sequelize.query('UPDATE runtime_kit SET id_area = :idArea WHERE id = :idKit', { replacements: { idArea: b.idArea, idKit: c.idRuntime } });
+    await creaRighePuntiVendita(a, [{ riga: 'Lucca 1', localita: 'Lucca', indirizzo: 'Via Roma 1' }, { riga: 'Pisa 2', localita: 'Pisa', indirizzo: 'Via Pia 2' }]);
+    await creaRighePuntiVendita(c, [{ riga: 'LUCCA 1', localita: 'LUCCA', indirizzo: 'via roma 1' }, { riga: 'Siena 3', localita: 'Siena', indirizzo: 'Via Sena 3' }]);
+    await creaRighePuntiVendita(b, [{ riga: 'Roma 4', localita: 'Roma', indirizzo: 'Via Appia 4' }]);
+    return { a, b, c, ambito: della(a), idPromo: a.idPromo };
+  }
+
+  it('dettaglio della promozione: i filtri per insegna e area contano solo i loro kit; opzioni incrociate, totale e insegne della promo', async () => {
+    const { a, b, c, ambito, idPromo } = await promoConTreKit();
+    const kitDi = (dettaglio: { kit: Array<{ id: string }> }) => dettaglio.kit.map(k => k.id).sort();
+
+    const tutta = await service.getPromozioneVolantini(idPromo, ambito);
+    expect(kitDi(tutta)).toEqual([a.idRuntime, b.idRuntime, c.idRuntime].sort());
+    expect(tutta).toMatchObject({ numeroKitTotale: 3, numeri: { kit: 3, puntiVendita: 4 } });
+    expect(idDi(tutta.insegne)).toEqual([a.idCanale, b.idCanale].sort());
+    expect(idDi(tutta.opzioni.insegne)).toEqual([a.idCanale, b.idCanale].sort());
+    expect(idDi(tutta.opzioni.aree)).toEqual([a.idArea, b.idArea].sort());
+    // La configurazione del database di prova non ha loghi
+    expect(tutta.loghiInsegne).toEqual({});
+
+    // Insegna 1: i kit A e C, il punto vendita di Lucca stampato da entrambi conta una volta
+    const perInsegna = await service.getPromozioneVolantini(idPromo, ambito, { idCanale: a.idCanale });
+    expect(kitDi(perInsegna)).toEqual([a.idRuntime, c.idRuntime].sort());
+    expect(perInsegna).toMatchObject({ numeroKitTotale: 3, numeri: { kit: 2, puntiVendita: 3 } });
+    expect(perInsegna.puntiVendita.map(pv => pv.localita?.toLowerCase()).sort()).toEqual(['lucca', 'pisa', 'siena']);
+    expect(perInsegna.assortimento.meccanichePerCanale.every(voce => voce.canale.id === a.idCanale)).toBe(true);
+    // Le insegne non dipendono dal filtro sull'insegna; le aree sono quelle dell'insegna 1
+    expect(idDi(perInsegna.opzioni.insegne)).toEqual([a.idCanale, b.idCanale].sort());
+    expect(idDi(perInsegna.opzioni.aree)).toEqual([a.idArea, b.idArea].sort());
+    expect(idDi(perInsegna.insegne)).toEqual([a.idCanale, b.idCanale].sort());
+
+    // Area 1: solo il kit A; fra le insegne solo quella che ha kit nell'area 1
+    const perArea = await service.getPromozioneVolantini(idPromo, ambito, { idArea: a.idArea });
+    expect(kitDi(perArea)).toEqual([a.idRuntime]);
+    expect(idDi(perArea.opzioni.insegne)).toEqual([a.idCanale]);
+    expect(idDi(perArea.opzioni.aree)).toEqual([a.idArea, b.idArea].sort());
+
+    // Insegna 2 e area 1 non hanno kit insieme: la promo c'e', senza kit, e i valori scelti restano fra le opzioni
+    const incompatibili = await service.getPromozioneVolantini(idPromo, ambito, { idCanale: b.idCanale, idArea: a.idArea });
+    expect(incompatibili).toMatchObject({ kit: [], puntiVendita: [], numeroKitTotale: 3, numeri: { kit: 0, puntiVendita: 0, prodotti: 0 } });
+    expect(idDi(incompatibili.opzioni.insegne)).toEqual([a.idCanale, b.idCanale].sort());
+    expect(idDi(incompatibili.opzioni.aree)).toEqual([a.idArea, b.idArea].sort());
+  });
+
+  it('dettaglio della promozione: un filtro che non e\' un UUID e\' rifiutato; una promo di un\'altra GDO resta non trovata anche con i filtri', async () => {
+    const { a, idPromo, ambito } = await promoConTreKit();
+    const altra = await creaKitRuntime({ nomePromo: 'Altrui' });
+
+    await expect(service.getPromozioneVolantini(idPromo, ambito, { idArea: 'toscana' })).rejects.toBeInstanceOf(BadRequestError);
+    await expect(service.getPromozioneVolantini(altra.idPromo, ambito, { idCanale: a.idCanale })).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it('dettaglio della promozione: il logo di ogni insegna dalle Impostazioni GDO, prima quello della sola insegna; mai il base64', async () => {
+    const { a, b, ambito, idPromo } = await promoConTreKit();
+    const conLoghi = (fonte: () => Promise<unknown>) =>
+      new ConsultazioneService(new MaterialiRepository(), new ConsultazioneRepository(), scrittoreZip, lettore, async () => [], undefined, undefined, undefined, fonte);
+
+    const loghi = [
+      { url: 'https://olimpo/logo-1-area', idCanale: a.idCanale, idArea: a.idArea },
+      // L'id con le maiuscole: e' lo stesso canale
+      { url: 'https://olimpo/logo-1', idCanale: a.idCanale.toUpperCase(), idArea: '', idPv: '' },
+      { url: '', base64: 'iVBORw0KGgo=', idCanale: b.idCanale },
+      { url: 'https://olimpo/logo-2-pv', idCanale: b.idCanale, idPv: randomUUID() },
+      { url: 'https://olimpo/logo-altra-insegna', idCanale: randomUUID() },
+      null,
+      'non e un logo',
+    ];
+    const dettaglio = await conLoghi(async () => loghi).getPromozioneVolantini(idPromo, ambito, { idArea: a.idArea });
+    // Anche l'insegna esclusa dal filtro ha il suo logo: le insegne della banda e delle tendine lo mostrano
+    expect(dettaglio.loghiInsegne).toEqual({ [a.idCanale]: 'https://olimpo/logo-1', [b.idCanale]: 'https://olimpo/logo-2-pv' });
+
+    // Una configurazione che non si legge non ferma la pagina: niente loghi
+    const senza = await conLoghi(async () => { throw new Error('config illeggibile'); }).getPromozioneVolantini(idPromo, ambito);
+    expect(senza.loghiInsegne).toEqual({});
+    expect(senza.kit).toHaveLength(3);
   });
 
   it('dettaglio della promozione: 404 per un\'altra GDO, una promo eliminata o senza kit volantino pubblicati', async () => {

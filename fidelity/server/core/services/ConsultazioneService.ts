@@ -18,6 +18,7 @@ import {
   FileConsultazione,
   FilePopConsultazione,
   FiltriContenutiDigitali,
+  FiltriDettaglioPromozioneVolantini,
   FiltriFilePopConsultazione,
   FiltriPromozioniVolantiniConsultazione,
   FiltriVolantiniConsultazione,
@@ -25,6 +26,7 @@ import {
   FormatoPopConsultazione,
   MOTIVO_VETRINA_DEL_PERIODO,
   OpzioniContenutiDigitali,
+  OpzioniDettaglioPromozioneVolantini,
   OpzioniFilePopConsultazione,
   PaginaContenutiDigitali,
   PaginaFilePopConsultazione,
@@ -107,6 +109,45 @@ export const campiRicercaDaConfigurazione: FonteCampiRicerca = async () => {
   const campi: unknown = configurazione?.webpliant?.data_fields_files;
   return Array.isArray(campi) ? campi.filter((campo): campo is string => typeof campo === 'string') : [];
 };
+
+/**
+ * I Loghi delle insegne delle Impostazioni GDO (`webpliant.logo_header` della configurazione
+ * dell'installazione), come sono salvati: si leggono solo url e idCanale, idArea, idPv.
+ */
+export type FonteLoghiInsegne = () => Promise<unknown>;
+
+export const loghiInsegneDaConfigurazione: FonteLoghiInsegne = async () => {
+  const configurazione = await trovaConfigInstallazione({ raw: true });
+  return configurazione?.webpliant?.logo_header;
+};
+
+const testoDi = (valore: unknown): string => (typeof valore === 'string' ? valore.trim() : '');
+
+/**
+ * Il logo di ogni insegna indicata, per id del canale: prima quello che vale per la sola insegna
+ * (senza area ne' punto vendita), altrimenti il primo dell'insegna. Solo i loghi con l'URL di
+ * Olimpo: il base64 resta alle Impostazioni GDO, troppo pesante per ogni dettaglio.
+ */
+export function loghiDelleInsegne(voci: unknown, idCanali: readonly string[]): Record<string, string> {
+  const richiesti = new Map(idCanali.map(id => [chiave(id), id] as const));
+  const soloInsegna = new Map<string, string>();
+  const qualunque = new Map<string, string>();
+  for (const voce of Array.isArray(voci) ? voci : []) {
+    if (voce === null || typeof voce !== 'object') continue;
+    const logo = voce as Record<string, unknown>;
+    const url = testoDi(logo.url);
+    const idCanale = richiesti.get(chiave(testoDi(logo.idCanale)));
+    if (!url || idCanale === undefined) continue;
+    if (!qualunque.has(idCanale)) qualunque.set(idCanale, url);
+    if (!testoDi(logo.idArea) && !testoDi(logo.idPv) && !soloInsegna.has(idCanale)) soloInsegna.set(idCanale, url);
+  }
+  return Object.fromEntries(
+    [...richiesti.values()].flatMap(id => {
+      const url = soloInsegna.get(id) ?? qualunque.get(id);
+      return url ? [[id, url] as const] : [];
+    })
+  );
+}
 
 /** La config degli insight del volantino (ConfigService): reparti, meccanica e marche del distributore. */
 export type FonteConfigInsight = Pick<IConfigService, 'getFlyerInsightsConfig'>;
@@ -382,7 +423,9 @@ export class ConsultazioneService implements IConsultazioneService {
     private readonly configInsight: FonteConfigInsight = SENZA_CONFIG_INSIGHT,
     private readonly lettureInsight: LettureKitInsight = LETTURE_KIT_INSIGHT,
     // Nome per il marketing e colore dei reparti della GDO (Impostazioni GDO) nell'assortimento
-    private readonly repartiGdo: FonteRepartiGdo = SENZA_REPARTI_GDO
+    private readonly repartiGdo: FonteRepartiGdo = SENZA_REPARTI_GDO,
+    // Loghi delle insegne (Impostazioni GDO) accanto ai nomi delle insegne del dettaglio della promozione
+    private readonly loghiInsegne: FonteLoghiInsegne = loghiInsegneDaConfigurazione
   ) { }
 
   /** Solo kit pubblicati del tipo indicato, nelle promo del periodo e della GDO dell'ambito. */
@@ -519,10 +562,17 @@ export class ConsultazioneService implements IConsultazioneService {
   /**
    * Il dettaglio di consultazione della promozione (spec volantini-pop): i suoi kit volantino
    * pubblicati, nella GDO dell'ambito, con i numeri dei loro insight e le righe dei punti vendita
-   * stampate. Il periodo viene dallo stato della promo, non dalla richiesta.
+   * stampate. Il periodo viene dallo stato della promo, non dalla richiesta. Con i filtri si contano
+   * solo i kit dell'insegna (canale) e dell'area scelte; opzioni, totale dei kit e loghi restano della promo.
    */
-  async getPromozioneVolantini(idPromo: string, ambito: AmbitoGdo): Promise<DettaglioPromozioneVolantiniConsultazione> {
+  async getPromozioneVolantini(
+    idPromo: string,
+    ambito: AmbitoGdo,
+    filtri: FiltriDettaglioPromozioneVolantini = {}
+  ): Promise<DettaglioPromozioneVolantiniConsultazione> {
     const id = idPromoEsistente(idPromo);
+    const idArea = uuidOpzionale(filtri.idArea, 'Area');
+    const idCanale = uuidOpzionale(filtri.idCanale, 'Canale');
     const nonDisponibile = () => new NotFoundError({ message: PROMOZIONE_VOLANTINI_NON_DISPONIBILE, entityType: 'Promo', entityId: id });
     const rigaPromo = await this.repository.trovaPromo(id, STATI_PROMO_CONSULTABILI, ambito);
     const periodo = periodoConsultazioneDellaPromo(rigaPromo?.stato_promo);
@@ -533,6 +583,19 @@ export class ConsultazioneService implements IConsultazioneService {
     const righeKit = await this.materiali.elencaVariantiVolantini(criteri, [rigaPromo.id_promo]);
     if (righeKit.length === 0) throw nonDisponibile();
     const varianti = righeKit.map(varianteDa).sort(confrontaVarianti);
+    // Un filtro non indicato vale per tutti; gli id senza distinguere maiuscole, come le opzioni
+    const stessa = (id: string, scelto: string | undefined) => scelto === undefined || chiave(id) === chiave(scelto);
+    const mostrate = varianti.filter(v => stessa(v.area.id, idArea) && stessa(v.canale.id, idCanale));
+    // Ogni filtro con l'altro, non con il proprio; il valore scelto resta fra le opzioni anche
+    // quando con l'altro filtro non ha kit, purche' sia della promo
+    const opzioni: OpzioniDettaglioPromozioneVolantini = {
+      insegne: riferimentiUnici(
+        varianti.filter(v => stessa(v.area.id, idArea) || (idCanale !== undefined && stessa(v.canale.id, idCanale))).map(v => v.canale)
+      ),
+      aree: riferimentiUnici(
+        varianti.filter(v => stessa(v.canale.id, idCanale) || (idArea !== undefined && stessa(v.area.id, idArea))).map(v => v.area)
+      ),
+    };
 
     // Config degli insight e reparti della GDO dei kit (tutti della GDO della promo): letti una volta
     const contesti = new Map<string, Promise<ContestoConfig>>();
@@ -544,12 +607,38 @@ export class ConsultazioneService implements IConsultazioneService {
       contesti.set(chiave, contesto);
       return contesto;
     };
-    const [righePuntiVendita, kit] = await Promise.all([
-      this.materiali.elencaPuntiVenditaVolantini(criteri, rigaPromo.id_promo),
-      aGruppi(varianti, KIT_INSIGHT_IN_PARALLELO, variante => this.insightDelKit(variante, ambito, contestoDellaGdoDelKit)),
+    const [righePuntiVendita, kit, loghi] = await Promise.all([
+      // Le righe dei kit esclusi dai filtri non contano: l'aggregazione tiene solo quelle dei kit mostrati
+      mostrate.length > 0 ? this.materiali.elencaPuntiVenditaVolantini(criteri, rigaPromo.id_promo) : Promise.resolve([]),
+      aGruppi(mostrate, KIT_INSIGHT_IN_PARALLELO, variante => this.insightDelKit(variante, ambito, contestoDellaGdoDelKit)),
+      this.loghiDelleInsegneDellaPromo(varianti),
     ]);
     const { kit: kitConNumeri, numeri, puntiVendita, assortimento } = aggregaPromozioneVolantini(kit, righePuntiVendita);
-    return { promo: promoDa(rigaPromo), periodo, kit: kitConNumeri, numeri, puntiVendita, assortimento };
+    return {
+      promo: promoDa(rigaPromo),
+      periodo,
+      kit: kitConNumeri,
+      numeroKitTotale: varianti.length,
+      insegne: riferimentiUnici(varianti.map(v => v.canale)),
+      opzioni,
+      loghiInsegne: loghi,
+      numeri,
+      puntiVendita,
+      assortimento,
+    };
+  }
+
+  /** I loghi delle insegne dei kit: senza configurazione leggibile la pagina mostra i soli nomi. */
+  private async loghiDelleInsegneDellaPromo(varianti: readonly VarianteConsultazione[]): Promise<Record<string, string>> {
+    try {
+      return loghiDelleInsegne(await this.loghiInsegne(), varianti.map(v => v.canale.id));
+    } catch (error) {
+      log.warn('Loghi delle insegne non letti dalla configurazione', {
+        context: 'Consultazione',
+        motivo: error instanceof Error ? error.message : String(error),
+      });
+      return {};
+    }
   }
 
   /**
