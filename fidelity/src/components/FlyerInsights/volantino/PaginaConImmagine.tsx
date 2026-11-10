@@ -1,7 +1,7 @@
 import { altezzaFoglio, CLASSI_TESTO, useTooltip } from "@/components/Grafici";
 import { formatNumero } from "@/utils/format";
 import { twMerge } from "@/utils/twMerge";
-import { useState, type KeyboardEvent, type SyntheticEvent } from "react";
+import { memo, useState, type KeyboardEvent, type SyntheticEvent } from "react";
 import type { BoxInsight } from "../../../../lib/insightVolantino/tipi";
 import { descrizioneBox, tooltipBox } from "./box";
 import type { StileRiquadro } from "./colori";
@@ -9,8 +9,13 @@ import { paginaNellImmagine, riquadroBox, stileImmagine, type PaginaNellImmagine
 
 export interface PaginaConImmagineProps {
   numero: number;
-  /** Dove sta nella doppia pagina: decide il lato del numero e degli angoli arrotondati. */
-  lato: "sinistra" | "destra" | "singola";
+  /** Dove sta il numero della pagina e quali angoli sono arrotondati; nel lettore le pagine sono singole. */
+  lato?: "sinistra" | "destra" | "singola";
+  /**
+   * La pagina è vicina alla parte visibile del lettore: solo allora chiede la sua immagine. Lontana,
+   * resta la pagina con i riquadri.
+   */
+  attiva?: boolean;
   /** Larghezza/altezza della pagina rifilata. */
   proporzione: number;
   /** Immagine della pagina da Olimpo; null: pagina bianca. */
@@ -20,6 +25,10 @@ export interface PaginaConImmagineProps {
   stile: (box: BoxInsight) => StileRiquadro;
   selezionato: string | null;
   onSeleziona: (box: BoxInsight) => void;
+  /** I box trovati dalla ricerca: gli altri si attenuano. null: nessuna ricerca, tutti come sempre. */
+  trovati?: ReadonlySet<string> | null;
+  /** Il box messo in rilievo (dall'elenco della pagina o dal risultato della ricerca), se è di questa pagina. */
+  rilievo?: string | null;
 }
 
 /** Larghezza della pagina nelle coordinate del disegno: l'altezza segue la proporzione. */
@@ -38,18 +47,40 @@ const percorsoCornice = (x: number, y: number, w: number, h: number, spessore: n
 type EsitoImmagine = { url: string; pagina: PaginaNellImmagine | null };
 
 /**
- * Una pagina del volantino: l'immagine vera da Olimpo, allineata alla pagina rifilata
- * (compensando l'abbondanza), con sopra i riquadri dei box. Senza immagine, o se Olimpo risponde
- * con il segnaposto, la pagina resta bianca con le sue proporzioni e i riquadri al loro posto.
+ * Una pagina del volantino: l'immagine della pagina data da Olimpo, allineata alla pagina rifilata
+ * (compensando l'abbondanza), con sopra i riquadri dei box. Senza immagine, o se Olimpo risponde con
+ * il segnaposto, la pagina resta bianca con le sue proporzioni e i riquadri al loro posto.
  */
-export function PaginaConImmagine({ numero, lato, proporzione, immagine, box, stile, selezionato, onSeleziona }: PaginaConImmagineProps) {
+function PaginaConImmagineBase({
+  numero,
+  lato = "singola",
+  attiva = true,
+  proporzione,
+  immagine: immagineDisponibile,
+  box,
+  stile,
+  selezionato,
+  onSeleziona,
+  trovati = null,
+  rilievo = null,
+}: PaginaConImmagineProps) {
   const { conTooltip, tooltip } = useTooltip();
+  // Lontana dalla vista la pagina non chiede la sua immagine: aspetta di tornare vicina
+  const immagine = attiva ? immagineDisponibile : null;
   const [esito, setEsito] = useState<EsitoImmagine | null>(null);
   const altezza = altezzaFoglio(proporzione);
 
   // L'esito vale solo per l'immagine che lo ha prodotto: cambiando pagina si riparte dal bianco
   const allineamento = esito && esito.url === immagine ? esito.pagina : null;
-  const statoImmagine = !immagine ? "assente" : !esito || esito.url !== immagine ? "caricamento" : allineamento ? "pronta" : "bianca";
+  const statoImmagine = immagine
+    ? !esito || esito.url !== immagine
+      ? "caricamento"
+      : allineamento
+        ? "pronta"
+        : "bianca"
+    : immagineDisponibile
+      ? "caricamento"
+      : "assente";
 
   const caricata = (evento: SyntheticEvent<HTMLImageElement>) => {
     if (!immagine) return;
@@ -67,8 +98,10 @@ export function PaginaConImmagine({ numero, lato, proporzione, immagine, box, st
     }
   };
 
-  // Il box scelto si disegna per ultimo, perché il contorno resti sopra i vicini
-  const ordinati = [...box].sort((a, b) => Number(a.id === selezionato) - Number(b.id === selezionato));
+  // Il box scelto e quello in rilievo si disegnano per ultimi, perché il contorno resti sopra i vicini
+  const peso = (voce: BoxInsight) => Number(voce.id === selezionato) + Number(voce.id === rilievo);
+  const ordinati = [...box].sort((a, b) => peso(a) - peso(b));
+  const posizione = allineamento ? stileImmagine(allineamento) : { left: 0, top: 0, width: "100%", height: "100%" };
 
   return (
     <div
@@ -84,6 +117,10 @@ export function PaginaConImmagine({ numero, lato, proporzione, immagine, box, st
       )}
       style={{ aspectRatio: String(proporzione), flex: `${proporzione} 1 0%` }}
     >
+      {/* Mentre la pagina arriva il fondo pulsa piano: i riquadri sono già al loro posto */}
+      {statoImmagine === "caricamento" && (
+        <span aria-hidden="true" className="absolute inset-0 bg-slate-100 motion-safe:animate-pulse dark:bg-darkmode-600" />
+      )}
       {immagine && (
         <img
           key={immagine}
@@ -96,7 +133,7 @@ export function PaginaConImmagine({ numero, lato, proporzione, immagine, box, st
           onLoad={caricata}
           onError={nonCaricata}
           className={twMerge("pointer-events-none absolute max-w-none select-none", !allineamento && "invisible")}
-          style={allineamento ? stileImmagine(allineamento) : { left: 0, top: 0, width: "100%", height: "100%" }}
+          style={posizione}
         />
       )}
       <svg viewBox={`0 0 ${LARGHEZZA} ${altezza}`} preserveAspectRatio="none" focusable="false" className="absolute inset-0 block h-full w-full">
@@ -109,6 +146,10 @@ export function PaginaConImmagine({ numero, lato, proporzione, immagine, box, st
           const h = arrotonda(riquadro.h * altezza);
           const { tinta, attenuato } = stile(voce);
           const scelto = voce.id === selezionato;
+          const inRilievo = voce.id === rilievo;
+          const trovato = trovati?.has(voce.id) ?? false;
+          // Con una ricerca in corso i box non trovati passano in secondo piano
+          const fuoriRicerca = trovati !== null && !trovato && !scelto;
           return (
             <g
               key={voce.id}
@@ -117,6 +158,9 @@ export function PaginaConImmagine({ numero, lato, proporzione, immagine, box, st
               aria-label={descrizioneBox(voce)}
               aria-pressed={scelto}
               data-testid={`box-${voce.id}`}
+              data-trovato={trovato ? "" : undefined}
+              data-attenuato={fuoriRicerca ? "" : undefined}
+              data-rilievo={inRilievo ? "" : undefined}
               onClick={() => onSeleziona(voce)}
               onKeyDown={evento => tasto(evento, voce)}
               className="group cursor-pointer outline-none"
@@ -133,14 +177,14 @@ export function PaginaConImmagine({ numero, lato, proporzione, immagine, box, st
                 className={twMerge(
                   tinta.classe,
                   "transition-opacity group-hover:opacity-10 group-focus-visible:opacity-10",
-                  attenuato ? "opacity-10" : "opacity-35"
+                  fuoriRicerca ? "opacity-0" : attenuato ? "opacity-10" : "opacity-35"
                 )}
               />
               <path
-                d={percorsoCornice(x, y, w, h, scelto ? CORNICE * 2 : CORNICE)}
+                d={percorsoCornice(x, y, w, h, scelto || inRilievo ? CORNICE * 2 : CORNICE)}
                 fillRule="evenodd"
                 fill={tinta.colore}
-                className={twMerge(tinta.classe, attenuato && !scelto && "opacity-50")}
+                className={twMerge(tinta.classe, "transition-opacity", fuoriRicerca ? "opacity-15" : attenuato && !scelto && !inRilievo && "opacity-50")}
               />
               <rect
                 x={x}
@@ -148,10 +192,10 @@ export function PaginaConImmagine({ numero, lato, proporzione, immagine, box, st
                 width={w}
                 height={h}
                 fill="none"
-                strokeWidth={scelto ? 5 : 3}
+                strokeWidth={scelto || inRilievo ? 5 : 3}
                 className={twMerge(
-                  "stroke-slate-900 dark:stroke-white",
-                  scelto ? "opacity-100" : "opacity-0 group-hover:opacity-60 group-focus-visible:opacity-100"
+                  "stroke-slate-900 transition-opacity dark:stroke-white",
+                  scelto || inRilievo ? "opacity-100" : "opacity-0 group-hover:opacity-60 group-focus-visible:opacity-100"
                 )}
               />
             </g>
@@ -176,5 +220,11 @@ export function PaginaConImmagine({ numero, lato, proporzione, immagine, box, st
     </div>
   );
 }
+
+/**
+ * La pagina si ridisegna solo quando cambia qualcosa di suo: passando sull'elenco dei box non si
+ * ridisegnano tutte le pagine del volantino.
+ */
+export const PaginaConImmagine = memo(PaginaConImmagineBase);
 
 export default PaginaConImmagine;

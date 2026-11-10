@@ -1,7 +1,7 @@
 import type { BoxInsight, GeometriaPagina } from "../../../../lib/insightVolantino/tipi";
 
 /**
- * Geometria del visualizzatore del volantino: doppie pagine, proporzioni delle pagine, riquadri dei
+ * Geometria del lettore del volantino: pagine in scorrimento, proporzioni delle pagine, riquadri dei
  * box e allineamento dell'immagine della pagina. Funzioni pure.
  *
  * La geometria dei box arriva dal server già relativa alla pagina (da 0 a 1, origine in alto a
@@ -26,54 +26,52 @@ const SCARTO_TRASCURABILE = 0.002;
 const proporzioneValida = (valore: number | null | undefined): valore is number =>
   typeof valore === "number" && Number.isFinite(valore) && valore > 0.2 && valore < 5;
 
-/* ---------- Doppie pagine ---------- */
+/* ---------- Pagine in scorrimento ---------- */
 
-/**
- * Una doppia pagina del volantino sfogliato: la copertina da sola (indice 0, solo a destra), poi
- * 2-3, 4-5... L'ultima resta da sola quando le pagine sono pari.
- */
-export interface DoppiaPagina {
-  indice: number;
-  sinistra: number | null;
-  destra: number | null;
+/** Dove sta una pagina nello scorrimento del lettore, in pixel dall'inizio del contenuto. */
+export interface PosizionePagina {
+  numero: number;
+  inizio: number;
+  fine: number;
 }
 
-/** Indice della doppia pagina che contiene la pagina (contata da 1). */
-export const doppiaDellaPagina = (pagina: number): number => (pagina <= 1 ? 0 : Math.floor(pagina / 2));
+/** La pagina corrente è quella che attraversa questa linea del lettore, a un terzo dall'alto. */
+export const LINEA_PAGINA_CORRENTE = 0.35;
+/** Si disegnano le pagine fino a questa distanza dalla parte visibile, in altezze del lettore. */
+export const MARGINE_DISEGNO = 1.5;
 
-/** Quante doppie pagine ha un volantino: la copertina, poi una ogni due pagine. */
-export const totaleDoppie = (totalePagine: number): number => (totalePagine <= 1 ? 1 : Math.floor(totalePagine / 2) + 1);
+export interface PagineInVista {
+  /** La pagina che l'utente sta guardando; null quando non si può dire (nessuna misura). */
+  corrente: number | null;
+  /** Le pagine da disegnare, vicine alla parte visibile; null: tutte (lettore non ancora misurato). */
+  vicine: Set<number> | null;
+}
 
-export const pagineDellaDoppia = (indice: number, totalePagine: number): DoppiaPagina => {
-  if (indice <= 0) return { indice: 0, sinistra: null, destra: 1 };
-  const sinistra = indice * 2;
-  const destra = sinistra + 1;
-  return {
-    indice,
-    sinistra: sinistra <= totalePagine ? sinistra : null,
-    destra: destra <= totalePagine ? destra : null,
-  };
-};
+/**
+ * Dalle posizioni delle pagine (in ordine) e dallo scorrimento del lettore alto `altezza`: la pagina
+ * corrente, la prima che arriva oltre la linea a un terzo dall'alto (fra due pagine vale la
+ * successiva), e le pagine da disegnare, quelle entro MARGINE_DISEGNO altezze dalla parte visibile.
+ */
+export function pagineInVista(posizioni: readonly PosizionePagina[], scorrimento: number, altezza: number): PagineInVista {
+  if (!(altezza > 0) || posizioni.every(posizione => posizione.fine <= posizione.inizio)) return { corrente: null, vicine: null };
+  const linea = scorrimento + altezza * LINEA_PAGINA_CORRENTE;
+  const da = scorrimento - altezza * MARGINE_DISEGNO;
+  const a = scorrimento + altezza * (1 + MARGINE_DISEGNO);
+  let corrente: number | null = null;
+  const vicine = new Set<number>();
+  for (const posizione of posizioni) {
+    if (posizione.fine > da && posizione.inizio < a) vicine.add(posizione.numero);
+    if (corrente === null && posizione.fine > linea) corrente = posizione.numero;
+  }
+  // Oltre l'ultima pagina (il fondo del lettore): l'ultima
+  return { corrente: corrente ?? posizioni[posizioni.length - 1]?.numero ?? null, vicine };
+}
 
-/** Le pagine della doppia, nell'ordine in cui si vedono. */
-export const pagineVisibili = (doppia: DoppiaPagina): number[] =>
-  [doppia.sinistra, doppia.destra].filter((pagina): pagina is number => pagina !== null);
-
-/** "1", "2-3", "8": il nome breve della doppia pagina, per la mini navigazione. */
-export const numeriDoppia = (doppia: DoppiaPagina): string => pagineVisibili(doppia).join("-");
-
-/** "Copertina", "Pagine 2-3", "Pagina 8". */
-export const etichettaDoppia = (doppia: DoppiaPagina): string => {
-  if (doppia.indice === 0) return "Copertina";
-  const pagine = pagineVisibili(doppia);
-  return pagine.length > 1 ? `Pagine ${pagine.join("-")}` : `Pagina ${pagine[0] ?? ""}`;
-};
-
-/** Nome del pulsante che porta alla doppia pagina, per le tecnologie assistive. */
-export const destinazioneDoppia = (doppia: DoppiaPagina): string => {
-  if (doppia.indice === 0) return "Vai alla copertina";
-  const pagine = pagineVisibili(doppia);
-  return pagine.length > 1 ? `Vai alle pagine ${pagine.join("-")}` : `Vai alla pagina ${pagine[0] ?? ""}`;
+/** Il numero di pagina scritto dall'utente, dentro il volantino; null se non è un numero. */
+export const paginaRichiesta = (testo: string, totalePagine: number): number | null => {
+  const numero = Number.parseInt(testo.trim(), 10);
+  if (!Number.isFinite(numero)) return null;
+  return Math.min(Math.max(1, totalePagine), Math.max(1, numero));
 };
 
 /**

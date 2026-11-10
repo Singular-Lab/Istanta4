@@ -8,6 +8,7 @@ import { STATI_DIFFERENZA } from "../confronti/supporto";
 import {
   coloriReparti,
   fasciaSconto,
+  gruppoBox,
   legendaDifferenze,
   legendaModo,
   stileBox,
@@ -138,6 +139,34 @@ describe("stile e legenda nel modo scelto", () => {
     const conSconto = legendaModo("sconto", [box("a", { sconto: 20 })], reparti).map(v => v.etichetta);
     expect(conSconto).toEqual(["0–10%", "10–20%", "20–30%", "30–40%", "40–50%", "≥ 50%"]);
     expect(legendaModo("sconto", [box("a")], reparti).at(-1)?.etichetta).toBe("Senza sconto");
+  });
+});
+
+describe("gruppo di un box per la ripartizione della pagina", () => {
+  const automatici = coloriReparti([box("a", { reparto: LATTICINI }), box("b", { reparto: DROGHERIA })]);
+
+  it("per reparto: il nome del reparto con la tinta del suo riquadro, \"Reparto non noto\" senza", () => {
+    const gruppo = gruppoBox(box("a", { reparto: LATTICINI }), "reparto", automatici);
+    expect(gruppo).toEqual({ id: "24", etichetta: "LATTICINI", tinta: automatici.tinta(LATTICINI) });
+    expect(gruppoBox(box("x"), "reparto", automatici)).toEqual({ id: "senza", etichetta: "Reparto non noto", tinta: TINTA_NEUTRA });
+  });
+
+  it("per reparto con la config: il reparto fuori mappa resta col suo nome, non \"Altri reparti\"", () => {
+    const conMappa = coloriReparti([box("a", { reparto: VARIE })], MAPPA);
+    expect(gruppoBox(box("a", { reparto: VARIE }), "reparto", conMappa).etichetta).toBe("VARIE");
+  });
+
+  it("per meccanica e per fascia di sconto: stessi id e tinte della legenda", () => {
+    expect(gruppoBox(box("a", { meccanica: "fidelity" }), "meccanica", automatici)).toEqual({
+      id: "fidelity",
+      etichetta: "Prezzo Fidelity",
+      tinta: tintaCategoria(MECCANICHE.indexOf("fidelity")),
+    });
+    expect(gruppoBox(box("a"), "meccanica", automatici).etichetta).toBe("Non riconosciuta");
+    const fascia = gruppoBox(box("a", { sconto: 32 }), "sconto", automatici);
+    const voce = legendaModo("sconto", [box("a", { sconto: 32 })], automatici).find(v => v.id === fascia.id);
+    expect(fascia).toEqual({ id: "sconto-3", etichetta: "30–40%", tinta: voce?.tinta });
+    expect(gruppoBox(box("a"), "sconto", automatici)).toEqual({ id: "senza", etichetta: "Senza sconto", tinta: TINTA_NEUTRA });
   });
 });
 

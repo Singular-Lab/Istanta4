@@ -3,22 +3,21 @@ import { urlPaginaMateriale } from "@/utils/materiali";
 import type { BoxInsight } from "../../../../lib/insightVolantino/tipi";
 import {
   boxPerPagina,
-  destinazioneDoppia,
-  doppiaDellaPagina,
-  etichettaDoppia,
-  numeriDoppia,
-  pagineDaSfogliare,
-  pagineDellaDoppia,
+  LINEA_PAGINA_CORRENTE,
+  MARGINE_DISEGNO,
   paginaNellImmagine,
+  paginaRichiesta,
+  pagineDaSfogliare,
+  pagineInVista,
   proporzioneDellaPagina,
   proporzioneDelVolantino,
   PROPORZIONE_PREDEFINITA,
   riquadroBox,
   stileImmagine,
-  totaleDoppie,
+  type PosizionePagina,
 } from "./geometria";
 
-// Geometria del volantino sfogliabile: doppie pagine, proporzioni, riquadri e abbondanza dell'immagine
+// Geometria del lettore del volantino: pagine in scorrimento, proporzioni, riquadri e abbondanza dell'immagine
 
 const A4 = 210 / 297;
 
@@ -30,33 +29,45 @@ const box = (pagina: number | null, dati: Partial<BoxGeometria> = {}): BoxGeomet
   ...dati,
 });
 
-describe("doppie pagine", () => {
-  it("la copertina sta da sola, poi le pagine vanno a coppie 2-3, 4-5", () => {
-    expect([1, 2, 3, 4, 5, 8].map(doppiaDellaPagina)).toEqual([0, 1, 1, 2, 2, 4]);
-    expect(pagineDellaDoppia(0, 5)).toEqual({ indice: 0, sinistra: null, destra: 1 });
-    expect(pagineDellaDoppia(1, 5)).toEqual({ indice: 1, sinistra: 2, destra: 3 });
-    expect(pagineDellaDoppia(2, 5)).toEqual({ indice: 2, sinistra: 4, destra: 5 });
+describe("pagine in scorrimento", () => {
+  /** n pagine alte 1000 px con 16 px fra l'una e l'altra, come nel lettore. */
+  const colonna = (n: number): PosizionePagina[] =>
+    Array.from({ length: n }, (_, indice) => ({ numero: indice + 1, inizio: indice * 1016, fine: indice * 1016 + 1000 }));
+
+  it("la pagina corrente è quella che attraversa la linea a un terzo dall'alto del lettore", () => {
+    expect(LINEA_PAGINA_CORRENTE).toBeCloseTo(0.35);
+    expect(pagineInVista(colonna(24), 0, 800).corrente).toBe(1);
+    // Scorrendo di 1016 px la pagina 2 è in cima
+    expect(pagineInVista(colonna(24), 1016, 800).corrente).toBe(2);
+    // La pagina 2 finisce a 2016: con la linea oltre, la corrente è la 3
+    expect(pagineInVista(colonna(24), 2016 - 800 * LINEA_PAGINA_CORRENTE + 1, 800).corrente).toBe(3);
   });
 
-  it("con le pagine pari l'ultima resta da sola e si raggiunge (8 pagine: 5 doppie)", () => {
-    expect(totaleDoppie(5)).toBe(3);
-    expect(totaleDoppie(8)).toBe(5);
-    expect(pagineDellaDoppia(4, 8)).toEqual({ indice: 4, sinistra: 8, destra: null });
+  it("fra due pagine conta la successiva; oltre l'ultima resta l'ultima", () => {
+    // Linea nello spazio fra la pagina 1 (fine 1000) e la 2 (inizio 1016)
+    expect(pagineInVista(colonna(3), 1008 - 800 * LINEA_PAGINA_CORRENTE, 800).corrente).toBe(2);
+    expect(pagineInVista(colonna(3), 100_000, 800).corrente).toBe(3);
   });
 
-  it("un volantino di una pagina o senza pagine ha solo la copertina", () => {
-    expect(totaleDoppie(1)).toBe(1);
-    expect(totaleDoppie(0)).toBe(1);
+  it("si disegnano solo le pagine vicine alla parte visibile, non tutte", () => {
+    const { vicine } = pagineInVista(colonna(24), 10 * 1016, 800);
+    // Visibili da 10160 a 10960, più 1,5 altezze (1200 px) sopra e sotto: da 8960 a 12160
+    expect(MARGINE_DISEGNO).toBe(1.5);
+    expect([...(vicine ?? [])]).toEqual([9, 10, 11, 12]);
   });
 
-  it("nomi delle doppie pagine per la testata e la mini navigazione", () => {
-    expect(etichettaDoppia(pagineDellaDoppia(0, 8))).toBe("Copertina");
-    expect(etichettaDoppia(pagineDellaDoppia(1, 8))).toBe("Pagine 2-3");
-    expect(etichettaDoppia(pagineDellaDoppia(4, 8))).toBe("Pagina 8");
-    expect(numeriDoppia(pagineDellaDoppia(2, 8))).toBe("4-5");
-    expect(destinazioneDoppia(pagineDellaDoppia(0, 8))).toBe("Vai alla copertina");
-    expect(destinazioneDoppia(pagineDellaDoppia(2, 8))).toBe("Vai alle pagine 4-5");
-    expect(destinazioneDoppia(pagineDellaDoppia(4, 8))).toBe("Vai alla pagina 8");
+  it("un lettore non ancora misurato (nessuna altezza) disegna tutte le pagine e non cambia la corrente", () => {
+    const vuote = colonna(3).map(posizione => ({ ...posizione, inizio: 0, fine: 0 }));
+    expect(pagineInVista(vuote, 0, 0)).toEqual({ corrente: null, vicine: null });
+    expect(pagineInVista(colonna(3), 0, 0)).toEqual({ corrente: null, vicine: null });
+  });
+
+  it("il numero scritto per andare a una pagina resta dentro il volantino", () => {
+    expect(paginaRichiesta("17", 24)).toBe(17);
+    expect(paginaRichiesta(" 3 ", 24)).toBe(3);
+    expect(paginaRichiesta("99", 24)).toBe(24);
+    expect(paginaRichiesta("0", 24)).toBe(1);
+    expect(paginaRichiesta("pagina", 24)).toBeNull();
   });
 
   it("le pagine da sfogliare sono quelle dichiarate, o di più se un box sta oltre", () => {
@@ -153,5 +164,12 @@ describe("compensazione dell'abbondanza dell'immagine della pagina", () => {
 
   it("l'immagine di una pagina si chiede al proxy di Olimpo, pagine contate da 1", () => {
     expect(urlPaginaMateriale("abc 1", 3)).toBe("/olimpo/materiali/getThumbnailMaterialePdfs?id=abc%201&page=3");
+  });
+
+  it("con una misura Olimpo restituisce la pagina già ridotta, in pixel interi e mai a zero", () => {
+    expect(urlPaginaMateriale("abc", 2, { larghezza: 144, altezza: 203.6 })).toBe(
+      "/olimpo/materiali/getThumbnailMaterialePdfs?id=abc&page=2&width=144&height=204"
+    );
+    expect(urlPaginaMateriale("abc", 1, { larghezza: 0, altezza: 0.2 })).toMatch(/&width=1&height=1$/);
   });
 });

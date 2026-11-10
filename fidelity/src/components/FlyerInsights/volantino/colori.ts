@@ -246,6 +246,37 @@ export const legendaModo = (
   }
 };
 
+/** Il gruppo di un box nel modo scelto: per la ripartizione della pagina, con la tinta dei riquadri. */
+export interface GruppoBox {
+  /** Lo stesso id della voce di legenda, dove c'è; "senza" per i box senza il dato. */
+  id: string;
+  etichetta: string;
+  tinta: Tinta;
+}
+
+/**
+ * Reparto, meccanica o fascia di sconto del box, con la tinta del suo riquadro. Il reparto si chiama
+ * col suo nome anche quando la legenda lo raccoglie fra gli "Altri reparti".
+ */
+export const gruppoBox = (box: Pick<BoxInsight, "reparto" | "meccanica" | "sconto">, modo: ModoColore, reparti: ColoriReparti): GruppoBox => {
+  switch (modo) {
+    case "reparto":
+      return box.reparto
+        ? { id: chiaveReparto(box.reparto), etichetta: nomeReparto(box.reparto), tinta: reparti.tinta(box.reparto) }
+        : { id: "senza", etichetta: "Reparto non noto", tinta: TINTA_NEUTRA };
+    case "meccanica":
+      return box.meccanica
+        ? { id: box.meccanica, etichetta: ETICHETTA_MECCANICA[box.meccanica], tinta: tintaMeccanica(box.meccanica) }
+        : { id: "senza", etichetta: "Non riconosciuta", tinta: TINTA_NEUTRA };
+    case "sconto": {
+      const fascia = fasciaSconto(box.sconto);
+      return fascia < 0
+        ? { id: "senza", etichetta: "Senza sconto", tinta: TINTA_NEUTRA }
+        : { id: `sconto-${fascia}`, etichetta: etichetteFasce(FASCE_SCONTO, "%")[fascia], tinta: tintaSequenziale(fascia + 1) };
+    }
+  }
+};
+
 /** Lo stile di un box nel confronto fra varianti: senza uno stato è attenuato come gli uguali. */
 export const stileDifferenza = (stato: StatoDifferenza | undefined): StileRiquadro =>
   stato ? stile(STATI_DIFFERENZA[stato].tinta, stato === "uguale") : stile(TINTA_NEUTRA, true);
