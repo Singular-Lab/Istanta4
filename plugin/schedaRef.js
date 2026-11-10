@@ -3716,6 +3716,15 @@ const schedaRef = {
         });
     },
 
+    /// I20-1206: il codice gruppo con cui impaginare un record appena clonato. Istanta salva il clone
+    /// con il gruppo dei soli codici clonati: un codice che nella promo vecchia era in un gruppo piu'
+    /// grande diventa un singolo, e impaginarlo con il gruppo d'origine dava IDX-90. Un'Istanta che
+    /// non lo restituisce lascia il codice gruppo di prima.
+    codiceGruppoDelClone(risposta, codiceGruppoDOrigine) {
+        var codiceGruppo = risposta != null && risposta.codiceGruppo != null ? String(risposta.codiceGruppo).trim() : "";
+        return codiceGruppo !== "" ? codiceGruppo : codiceGruppoDOrigine;
+    },
+
     async clonaRecord(label, idAddestramento, pagina, codiceGruppo, meta) {
         let me = this;
         var codiceBox = "";
@@ -3738,7 +3747,8 @@ const schedaRef = {
                 if (!parsed) {
                     objResult = JSON.parse(objResult);
                 }
-                if (objResult.error != null && objResult.error != "") {
+                var clonazioneFallita = objResult.error != null && objResult.error != "";
+                if (clonazioneFallita) {
                     messaggioUtente("Code SRF-28 Ricollegamento fallito: " + objResult.error, "error");
                     console.error("Code SRF-28 Ricollegamento fallito: " + objResult.error);
                 }
@@ -3746,11 +3756,12 @@ const schedaRef = {
                 Modali.closeAllModal();
                 if (pagina != "0"){
                     this.initSchedaRef(this.refSelected);
-                }else{
+                }else if (!clonazioneFallita){
+                    //I20-1206: dopo un errore la clonazione non e' completata, e non c'e' niente da impaginare.
                     hideLoading();
                     if (await Modali.confirm("Clonazione completata con successo. Vuoi impaginare subito l'elemento a pagina corrente?")) {
                         showLoading("Impaginazione in corso...");
-                        await impaginaSingolo(codiceGruppo, null);
+                        await impaginaSingolo(me.codiceGruppoDelClone(objResult, codiceGruppo), null);
                     }
                 }
 

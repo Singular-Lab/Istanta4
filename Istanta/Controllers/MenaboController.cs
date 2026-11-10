@@ -13094,6 +13094,37 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
             return $"Salvati {salvati} record su {totale}, dato modificato solo in parte. {motivo}";
         }
 
+        /// I20-1206: il record da clonare arriva dal Plugin come JSON, e un decimale tondo ci arriva
+        /// senza virgola (25.0 nel record d'origine, 25 dal Plugin): Newtonsoft lo rilegge come Int64.
+        /// ToDecimal di AgenziaLib legge solo double, decimal, float e testo, quindi l'intero valeva 0
+        /// e nel box spariva lo sconto (o un prezzo tondo). Qui un intero torna decimale, come nel
+        /// record d'origine, se la sua colonna non e' di numeri interi: quelle restano intere, come le
+        /// lascia l'importazione (parseAddesttramentoValue).
+        public static void RipristinaDecimaliDelClone(Dictionary<string, object> record, IEnumerable<SchemaCampiExcel> schema)
+        {
+            foreach (var colonna in schema)
+            {
+                if (colonna.NomeColonna == null || !record.TryGetValue(colonna.NomeColonna, out object? valore))
+                {
+                    continue;
+                }
+
+                bool colonnaDecimaleODiTesto = colonna.TipoDato == null
+                    || colonna.TipoDato == (byte)AddestramentoTipoValore.NonAssegnato
+                    || colonna.TipoDato == (byte)AddestramentoTipoValore.Stringa
+                    || colonna.TipoDato == (byte)AddestramentoTipoValore.Decimale;
+
+                if (colonnaDecimaleODiTesto && valore is long intero)
+                {
+                    record[colonna.NomeColonna] = (decimal)intero;
+                }
+                else if (colonnaDecimaleODiTesto && valore is int interoBreve)
+                {
+                    record[colonna.NomeColonna] = (decimal)interoBreve;
+                }
+            }
+        }
+
 
         [HttpPut]
         [Route("Menabo/rimuoviRefImpaginata/{idLavorazione}/{eliminaDaTracciato}")]
@@ -13240,7 +13271,7 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
         [Route("Menabo/ClonaRecordRicollegato/{idKitLavorazione}")]
         public async Task<IActionResult> ClonaRecordRicollegato([FromForm] string req, int idKitLavorazione)
         {
-            BoolResult res = new BoolResult();
+            RisultatoClonazione res = new RisultatoClonazione();
             try
             {
                 richiestaClonazione? dati = JsonConvert.DeserializeObject<richiestaClonazione>(req);
@@ -13405,6 +13436,9 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                         }
                     }
 
+                    //I20-1206: i decimali tondi tornati interi nel giro dal Plugin.
+                    RipristinaDecimaliDelClone(tracciatoRecord, adItem.SchemaCampiExcels);
+
 
                     tracciatoRecord[key_codice_gruppo] = codiceGruppo;
 
@@ -13464,6 +13498,8 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                 }
 
                 this.ctx2.SaveChanges();
+                //I20-1206: il Plugin impagina il clone con questo, non con il gruppo del record d'origine.
+                res.codiceGruppo = codiceGruppo;
                 if (dati.pagina != 0)
                 {
                     RichiestaImpaginazioneSingolo richiesta = new RichiestaImpaginazioneSingolo();
