@@ -3,6 +3,7 @@ import { PERMESSI } from '../../../lib/accessi/catalogo';
 import { isPeriodoConsultazione, PeriodoConsultazione } from '../../../lib/consultazione/periodi';
 import type {
   FiltriContenutiDigitali,
+  FiltriDettaglioPromozioneVolantini,
   FiltriFilePopConsultazione,
   FiltriPromozioniVolantiniConsultazione,
   FiltriVolantiniConsultazione,
@@ -171,7 +172,14 @@ export class ConsultazioneController extends BaseController {
   }
 
   private getPromozioneVolantini(req: Request<{ idPromo: string }>, res: Response): Promise<void> {
-    return this.rispondi(req, res, ambito => this.consultazione.getPromozioneVolantini(req.params.idPromo, ambito));
+    return this.rispondi(req, res, ambito => {
+      // Insegna (canale) e area dei kit da contare: il servizio verifica che siano UUID
+      const filtri: FiltriDettaglioPromozioneVolantini = {
+        idArea: testo(req.query.idArea),
+        idCanale: testo(req.query.idCanale),
+      };
+      return this.consultazione.getPromozioneVolantini(req.params.idPromo, ambito, filtri);
+    });
   }
 
   private getVolantino(req: Request<{ idKit: string }>, res: Response): Promise<void> {

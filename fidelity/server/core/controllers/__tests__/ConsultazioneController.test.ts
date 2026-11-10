@@ -44,6 +44,10 @@ const DETTAGLIO_PROMOZIONE: DettaglioPromozioneVolantiniConsultazione = {
   promo: { id: 'PROMO-2026-45', nome: 'Volantino 45', validitaDal: '2026-11-05', validitaAl: '2026-11-18' },
   periodo: 'attivi',
   kit: [],
+  numeroKitTotale: 0,
+  insegne: [],
+  opzioni: { insegne: [], aree: [] },
+  loghiInsegne: {},
   numeri: { kit: 0, pagine: 0, puntiVendita: 0, localita: 0, regioni: 0, prodotti: 0, referenze: 0, scontoMedio: null, sottocosto: 0 },
   puntiVendita: [],
   assortimento: { prodotti: { inTutti: 0, inAlcuni: 0, inUnoSolo: 0 }, fasceSconto: [], reparti: [], meccanichePerCanale: [], marche: [] },
@@ -189,7 +193,13 @@ describe('dettaglio di consultazione della promozione', () => {
   it('passa al servizio l\'id della promo, anche se non e\' un UUID, e la GDO della sessione', async () => {
     const { app, servizio } = creaApp(TIPO_UTENTI.GDO);
     await request(app).get(`/api/consultazione/volantini/promozioni/${encodeURIComponent('PROMO/2026 45')}?gdo=altra-gdo`);
-    expect(servizio.getPromozioneVolantini).toHaveBeenCalledWith('PROMO/2026 45', { idGdo: 'gdo-sessione' });
+    expect(servizio.getPromozioneVolantini).toHaveBeenCalledWith('PROMO/2026 45', { idGdo: 'gdo-sessione' }, { idArea: undefined, idCanale: undefined });
+  });
+
+  it('passa al servizio i filtri del dettaglio della promozione: insegna (idCanale) e area', async () => {
+    const { app, servizio } = creaApp(TIPO_UTENTI.GDO);
+    await request(app).get(`/api/consultazione/volantini/promozioni/PROMO-2026-45?idCanale=${ID}&idArea=%20${ID}%20`);
+    expect(servizio.getPromozioneVolantini).toHaveBeenCalledWith('PROMO-2026-45', { idGdo: 'gdo-sessione' }, { idArea: ID, idCanale: ID });
   });
 
   it('il Superadmin senza GDO legge tutte le GDO, o quella che indica', async () => {

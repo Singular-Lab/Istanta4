@@ -242,7 +242,8 @@ describe("SmartBreadcrumb nel dettaglio di consultazione della promozione", () =
   beforeEach(() => {
     finti.get.mockReset();
     finti.get.mockImplementation(async (url: string) => {
-      if (url === `/consultazione/volantini/promozioni/${encodeURIComponent(ID)}`) {
+      // Con o senza i filtri di insegna e area: nome e periodo sono della promo
+      if (url.split("?")[0] === `/consultazione/volantini/promozioni/${encodeURIComponent(ID)}`) {
         return { promo: { id: ID, nome: "Volantino 5-18 novembre", validitaDal: "2026-11-05", validitaAl: "2026-11-18" }, periodo: "attivi" };
       }
       throw Object.assign(new Error("Not found"), { httpStatus: 404 });
@@ -255,6 +256,17 @@ describe("SmartBreadcrumb nel dettaglio di consultazione della promozione", () =
     await waitFor(() => expect(voci()).toEqual(["FP", "Volantini Attivi", "Volantino 5-18 novembre"]));
     expect(screen.getByRole("link", { name: "Volantini Attivi" })).toHaveAttribute("href", "/volantini/attivi");
     expect(finti.get).toHaveBeenCalledTimes(1);
+  });
+
+  it("con i filtri di insegna e area della pagina dice lo stesso nome e la stessa vista", async () => {
+    const PaginaFiltrata = () => {
+      useDettaglioPromozioneVolantini(ID, { idArea: "a1a1a1a1-0000-4000-8000-000000000001" });
+      return null;
+    };
+    apriPromozione(<PaginaFiltrata />);
+
+    await waitFor(() => expect(voci()).toEqual(["FP", "Volantini Attivi", "Volantino 5-18 novembre"]));
+    expect(finti.get).toHaveBeenCalledWith(expect.stringContaining("idArea=a1a1a1a1-0000-4000-8000-000000000001"));
   });
 
   it("senza i dati della pagina porta a Volantini e non chiede nulla", async () => {

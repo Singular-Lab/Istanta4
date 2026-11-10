@@ -8,15 +8,15 @@ vi.mock("@/query/query", () => ({ useFetchReteInsegne: () => ({ data: undefined 
 import {
   ariaSort,
   CARTOGRAMMA,
+  celleConPiuKit,
   classiScalaRegioni,
-  colonneMuro,
   contaPerRegione,
+  conValoreScelto,
   etichettaFascia,
   filtraPuntiVendita,
   fraseKit,
-  grigliaKit,
   chiaveCella,
-  kitPerMuro,
+  idFiltro,
   localitaConPiuPuntiVendita,
   meccanicheImpilate,
   ORDINAMENTO_INIZIALE,
@@ -27,6 +27,7 @@ import {
   puntiVenditaPerCanale,
   testoQuantoManca,
   testoValidita,
+  tinteCanaliPromozione,
 } from "./analisi";
 
 const CITY = { id: "c1", nome: "City" };
@@ -97,63 +98,34 @@ describe("testi della banda", () => {
   });
 });
 
-describe("muro delle copertine", () => {
-  it("alterna le insegne, senza perdere nessun kit", () => {
-    const ordinati = kitPerMuro([kit("c1"), kit("c2"), kit("c3"), kit("s1", { canale: SUPERSTORE }), kit("s2", { canale: SUPERSTORE })]);
-    expect(ordinati.map(k => k.id)).toEqual(["c1", "s1", "c2", "s2", "c3"]);
+describe("filtri del dettaglio", () => {
+  const ID = "6f1c2b3a-4d5e-4f60-8a7b-9c0d1e2f3a4b";
+
+  it("dall'indirizzo arrivano al server solo gli UUID", () => {
+    expect(idFiltro(ID)).toBe(ID);
+    expect(idFiltro(ID.toUpperCase())).toBe(ID.toUpperCase());
+    expect(idFiltro("toscana")).toBeUndefined();
+    expect(idFiltro("")).toBeUndefined();
+    expect(idFiltro(null)).toBeUndefined();
   });
 
-  it("con molti kit usa più colonne, perché tutte le copertine stiano nella banda", () => {
-    expect(colonneMuro(1)).toBe(2);
-    expect(colonneMuro(3)).toBe(3);
-    expect(colonneMuro(8)).toBe(4);
-    expect(colonneMuro(15)).toBe(5);
-    expect(colonneMuro(40)).toBe(8);
-    expect(colonneMuro(500)).toBe(9);
-  });
-});
-
-describe("griglia canali × aree", () => {
-  /** n punti vendita stampati dai kit indicati. */
-  const stampati = (n: number, idKit: string[]) => Array.from({ length: n }, (_, i) => riga(`${idKit.join("+")}-${i}`, { idKit }));
-
-  it("canali e aree per nome, una cella per combinazione, i punti vendita per riga e colonna", () => {
-    const griglia = grigliaKit(
-      [
-        kit("k1", { canale: SUPERSTORE, area: TOSCANA, numeroPuntiVendita: 13 }),
-        kit("k2", { canale: CITY, area: TOSCANA, numeroPuntiVendita: 102 }),
-        kit("k3", { canale: CITY, area: LAZIO, numeroPuntiVendita: 28 }),
-      ],
-      [...stampati(13, ["k1"]), ...stampati(102, ["k2"]), ...stampati(28, ["k3"])]
-    );
-
-    expect(griglia.canali.map(c => c.nome)).toEqual(["City", "Superstore"]);
-    expect(griglia.aree.map(a => a.nome)).toEqual(["Lazio", "Toscana"]);
-    expect(griglia.celle.get(chiaveCella("c2", "a2"))).toBeUndefined();
-    expect(griglia.celle.get(chiaveCella("c1", "a1"))?.map(k => k.id)).toEqual(["k2"]);
-    expect(griglia.totaleCanale.get("c1")).toBe(130);
-    expect(griglia.totaleArea.get("a1")).toBe(115);
-    expect(griglia.totale).toBe(143);
+  it("il valore scelto resta fra le opzioni: se manca va in coda con un nome generico", () => {
+    expect(conValoreScelto([TOSCANA, LAZIO], undefined, "Area scelta")).toEqual([TOSCANA, LAZIO]);
+    expect(conValoreScelto([TOSCANA, LAZIO], "A2", "Area scelta")).toEqual([TOSCANA, LAZIO]);
+    expect(conValoreScelto([TOSCANA], "a9", "Area scelta")).toEqual([TOSCANA, { id: "a9", nome: "Area scelta" }]);
   });
 
-  it("due kit dello stesso canale e area stanno nella stessa cella", () => {
-    const griglia = grigliaKit([kit("k1"), kit("k2")], []);
-    expect(griglia.celle.get(chiaveCella("c1", "a1"))?.map(k => k.id)).toEqual(["k1", "k2"]);
+  it("le miniature dicono il titolo solo dove insegna e area hanno più di un volantino", () => {
+    const celle = celleConPiuKit([kit("k1"), kit("k2"), kit("k3", { area: LAZIO }), kit("k4", { canale: SUPERSTORE })]);
+    expect([...celle]).toEqual([chiaveCella(CITY.id, TOSCANA.id)]);
   });
 
-  it("un punto vendita stampato da più kit conta una volta nei totali, non la somma delle celle", () => {
-    // A2623: Emilia e Liguria (stesso canale, aree diverse) stampano gli stessi 38 punti vendita
-    const EMILIA = { id: "a-em", nome: "Emilia" };
-    const LIGURIA = { id: "a-li", nome: "Liguria" };
-    const griglia = grigliaKit(
-      [kit("em", { area: EMILIA, numeroPuntiVendita: 38 }), kit("li", { area: LIGURIA, numeroPuntiVendita: 38 })],
-      stampati(38, ["em", "li"])
-    );
-
-    expect(griglia.totaleCanale.get(CITY.id)).toBe(38);
-    expect(griglia.totaleArea.get(EMILIA.id)).toBe(38);
-    expect(griglia.totaleArea.get(LIGURIA.id)).toBe(38);
-    expect(griglia.totale).toBe(38);
+  it("i colori delle insegne si calcolano su tutte le insegne della promo, non sui kit filtrati", () => {
+    const tutte = tinteCanaliPromozione([SUPERSTORE, CITY]);
+    const soloSuperstore = tinteCanaliPromozione([SUPERSTORE]);
+    // Per nome: City prima di Superstore, qualunque sia l'ordine ricevuto
+    expect(tutte(CITY.id)).toEqual(tinteCanaliPromozione([CITY, SUPERSTORE])(CITY.id));
+    expect(tutte(SUPERSTORE.id)).not.toEqual(soloSuperstore(SUPERSTORE.id));
   });
 });
 

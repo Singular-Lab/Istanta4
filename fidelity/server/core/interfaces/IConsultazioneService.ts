@@ -5,6 +5,7 @@ import type {
   DettaglioVolantinoConsultazione,
   ElencoPromozioniPopConsultazione,
   FiltriContenutiDigitali,
+  FiltriDettaglioPromozioneVolantini,
   FiltriFilePopConsultazione,
   FiltriPromozioniVolantiniConsultazione,
   FiltriVolantiniConsultazione,
@@ -37,8 +38,15 @@ export interface FileScaricato {
 export interface IConsultazioneService {
   getVolantini(filtri: FiltriVolantiniConsultazione, ambito: AmbitoGdo): Promise<PaginaVolantiniConsultazione>;
   getPromozioniVolantini(filtri: FiltriPromozioniVolantiniConsultazione, ambito: AmbitoGdo): Promise<PaginaPromozioniVolantiniConsultazione>;
-  /** Una promo di un'altra GDO, eliminata o senza kit volantino pubblicati risponde 404. */
-  getPromozioneVolantini(idPromo: string, ambito: AmbitoGdo): Promise<DettaglioPromozioneVolantiniConsultazione>;
+  /**
+   * Una promo di un'altra GDO, eliminata o senza kit volantino pubblicati risponde 404. I filtri
+   * restringono i kit contati; se insieme non ne lasciano nessuno la promo c'e' lo stesso, senza kit.
+   */
+  getPromozioneVolantini(
+    idPromo: string,
+    ambito: AmbitoGdo,
+    filtri?: FiltriDettaglioPromozioneVolantini
+  ): Promise<DettaglioPromozioneVolantiniConsultazione>;
   getVolantino(idKit: string, ambito: AmbitoGdo): Promise<DettaglioVolantinoConsultazione>;
 
   getPromozioniPop(periodo: PeriodoConsultazione, ambito: AmbitoGdo): Promise<ElencoPromozioniPopConsultazione>;

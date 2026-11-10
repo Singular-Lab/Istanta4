@@ -1,5 +1,6 @@
-import { useStatoQuery } from "@/components/PuntiVendita/breadcrumb";
-import { CHIAVE_CONSULTAZIONE } from "@/query/consultazione";
+import { chiaveDettaglioPromozioneVolantini } from "@/query/consultazione";
+import { notifyManager, useQueryClient, type QueryState } from "@tanstack/react-query";
+import { useCallback, useSyncExternalStore } from "react";
 import {
   ETICHETTA_PERIODO_CONSULTAZIONE,
   percorsoPromozioneVolantini,
@@ -27,12 +28,30 @@ const decodifica = (segmento: string) => {
   }
 };
 
+/**
+ * Lo stato del dettaglio della promozione nella cache, con qualunque filtro di insegna e area: nome
+ * e periodo non cambiano. Prima uno che ha i dati, altrimenti il primo che c'è.
+ */
+function useStatoDettaglioPromozione(idPromo: string | null): QueryState | undefined {
+  const client = useQueryClient();
+  // Come useStatoQuery: gli avvisi della cache arrivano anche durante il render della pagina
+  const iscrivi = useCallback(
+    (avvisa: () => void) => client.getQueryCache().subscribe(notifyManager.batchCalls(avvisa)),
+    [client]
+  );
+  const leggi = () => {
+    if (!idPromo) return undefined;
+    const query = client.getQueryCache().findAll({ queryKey: chiaveDettaglioPromozioneVolantini(idPromo) });
+    return (query.find(voce => voce.state.data !== undefined) ?? query[0])?.state;
+  };
+  return useSyncExternalStore(iscrivi, leggi, leggi);
+}
+
 /** Le due voci del breadcrumb, o null fuori dalla pagina del dettaglio della promozione. */
 export function useBreadcrumbPromozioneVolantini(segmenti: string[]): VoceBreadcrumbPromozione[] | null {
   const [radice, sezione, id] = segmenti;
   const idPromo = radice === "volantini" && sezione === "promozioni" && id && segmenti.length === 3 ? decodifica(id) : null;
-  // Stessa chiave di useDettaglioPromozioneVolantini
-  const stato = useStatoQuery(idPromo ? [CHIAVE_CONSULTAZIONE, "volantini", "promozione", idPromo] : null);
+  const stato = useStatoDettaglioPromozione(idPromo);
   if (!idPromo) return null;
 
   const dettaglio = stato?.data as DettaglioPromozioneVolantiniConsultazione | undefined;
