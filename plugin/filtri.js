@@ -1473,6 +1473,16 @@ const filtri = {
 
         newFiltroDiv.append(filtroInfoDiv);
 
+        //I20-1216: sotto i conteggi, i prodotti che il filtro trova (li scrive ricercaFiltro). Solo nella
+        //finestra del Menabo': nella scheda Tracciato i prodotti sono gia' nella tabella.
+        if (!hideButtonsForTracciato) {
+            newFiltroDiv.append(
+                $('<div></div>')
+                    .addClass('filtro-prodotti')
+                    .css({ marginTop: '5px', marginLeft: '10px', padding: '3px', backgroundColor: 'white', color: 'black', fontSize: '11px' })
+            );
+        }
+
         if(filtro == null){
             this.addCriterio(newFiltroDiv, null, hideButtonsForTracciato);
         }
@@ -2499,39 +2509,8 @@ const filtri = {
 
         let me = this;
 
-        //prendiamo i filtri dal bodyFiltri, per ogni filtro prendiamo il limite e i criteri
-        //I20-1187: solo quelli della finestra aperta. '#bodyFiltri .filtro' prendeva anche i filtri rimasti
-        //nel modello nascosto di index.html, e un filtro tolto tornava a ogni Conferma.
-        const filtri_arr = [];
-        let ordine = 0;
-        this.corpoFiltriAperto().children('.filtro').each(function () {
-            ordine++;
-            let limite = $(this).find('input[type="number"]').val();
-            let criteri = [];
-            $(this).find('.criterio').each(function () {
-                let chiave = $(this).find('.filtro-chiave-hidden').val();
-                let operatore = $(this).find('.filtro-operatore').val();
-                let valoreTendina = $(this).find('.filtro-valore-hidden').val();
-
-                // Aggiungiamo il criterio solo se la chiave è selezionata
-                if (chiave && operatore!=null) {
-                    criteri.push({
-                        chiave: chiave,
-                        operatore: operatore,
-                        valore: valoreTendina
-                    });
-                }
-            });
-
-            // Aggiungiamo il filtro solo se ha criteri
-            if (criteri.length > 0) {
-                filtri_arr.push({
-                    limite: parseInt(limite),
-                    ordine: ordine, // Ordine da gestire in futuro
-                    criteri: criteri
-                });
-            }
-        });
+        //I20-1216: i filtri della finestra li legge leggiFiltriFinestra, la stessa lettura di Copia filtri.
+        const filtri_arr = this.leggiFiltriFinestra();
 
         // Leggiamo il file Filtri.json
 
@@ -2597,6 +2576,46 @@ const filtri = {
         Modali.chiudiModal();
     },
 
+    /// I20-1216: i filtri mostrati nella finestra aperta, come li salva la Conferma: per ognuno il
+    /// limite e i criteri con la chiave scelta, nell'ordine in cui si vedono. Un filtro senza criteri
+    /// resta fuori, ma conta per l'ordine, come prima.
+    /// I20-1187: solo quelli della finestra aperta. '#bodyFiltri .filtro' prendeva anche i filtri rimasti
+    /// nel modello nascosto di index.html, e un filtro tolto tornava a ogni Conferma.
+    leggiFiltriFinestra() {
+        const filtri_arr = [];
+        let ordine = 0;
+        this.corpoFiltriAperto().children('.filtro').each(function () {
+            ordine++;
+            let limite = $(this).find('input[type="number"]').val();
+            let criteri = [];
+            $(this).find('.criterio').each(function () {
+                let chiave = $(this).find('.filtro-chiave-hidden').val();
+                let operatore = $(this).find('.filtro-operatore').val();
+                let valoreTendina = $(this).find('.filtro-valore-hidden').val();
+
+                // Aggiungiamo il criterio solo se la chiave è selezionata
+                if (chiave && operatore!=null) {
+                    criteri.push({
+                        chiave: chiave,
+                        operatore: operatore,
+                        valore: valoreTendina
+                    });
+                }
+            });
+
+            // Aggiungiamo il filtro solo se ha criteri
+            if (criteri.length > 0) {
+                filtri_arr.push({
+                    limite: parseInt(limite),
+                    ordine: ordine, // Ordine da gestire in futuro
+                    criteri: criteri
+                });
+            }
+        });
+
+        return filtri_arr;
+    },
+
     getNomeFileFiltriJson(){
         var controlloNomeFile = false;
         if (pluginMiddleware.getCampo("controlloNomeFileFiltri") !== null) {
@@ -2609,6 +2628,196 @@ const filtri = {
             nomeFileSenzaEstensione = "";
         }
         return Utility.percorsoDati("Filtri" + nomeFileSenzaEstensione + ".json");
+    },
+
+    /// I20-1216: dove Copia filtri mette i filtri della pagina. Il localStorage del Plugin resta anche
+    /// cambiando documento, come la copia del criterio ('criterioCopia'): cosi' i filtri si incollano
+    /// anche nella lavorazione di un'altra promo.
+    CHIAVE_COPIA_FILTRI: 'filtriCopia',
+
+    /// I20-1216: quanti prodotti si vedono sotto un filtro; gli altri stanno in "+ altri N".
+    PRODOTTI_VISIBILI_FILTRO: 3,
+
+    /// I20-1216: quello che Copia filtri salva, dai filtri letti dalla finestra: limite, ordine e
+    /// criteri di ognuno, e la pagina da cui vengono, solo come informazione.
+    confezionaCopiaFiltri(filtriLetti, pagina = null) {
+        return {
+            pagina: pagina != null ? String(pagina) : null,
+            filtri: (filtriLetti || []).map(filtro => ({
+                limite: filtro.limite,
+                ordine: filtro.ordine,
+                criteri: (filtro.criteri || []).map(criterio => ({
+                    chiave: criterio.chiave,
+                    operatore: criterio.operatore,
+                    valore: criterio.valore
+                }))
+            }))
+        };
+    },
+
+    /// I20-1216: i filtri da incollare, dal testo che Copia filtri ha salvato, nell'ordine in cui erano
+    /// nella finestra. Un testo assente o rovinato da' un elenco vuoto, e restano fuori i criteri senza
+    /// chiave o senza operatore e i filtri che restano senza criteri, come fa la Conferma. Un limite
+    /// che non e' un numero diventa 0.
+    filtriDaIncollare(testo) {
+        if (testo == null || testo === '') {
+            return [];
+        }
+        let copia;
+        try {
+            copia = JSON.parse(testo);
+        }
+        catch (e) {
+            return [];
+        }
+        if (copia == null || !Array.isArray(copia.filtri)) {
+            return [];
+        }
+        const filtriValidi = [];
+        copia.filtri.forEach((filtro, posizione) => {
+            if (filtro == null || !Array.isArray(filtro.criteri)) {
+                return;
+            }
+            const criteri = filtro.criteri
+                .filter(c => c != null && c.chiave != null && String(c.chiave) !== '' && c.operatore != null)
+                .map(c => ({ chiave: c.chiave, operatore: c.operatore, valore: c.valore != null ? c.valore : '' }));
+            if (criteri.length === 0) {
+                return;
+            }
+            const limite = parseInt(filtro.limite);
+            filtriValidi.push({
+                limite: isNaN(limite) ? 0 : limite,
+                ordine: typeof filtro.ordine === 'number' ? filtro.ordine : posizione + 1,
+                criteri: criteri
+            });
+        });
+        return filtriValidi.sort((a, b) => a.ordine - b.ordine);
+    },
+
+    /// I20-1216: Copia filtri. Tutti i filtri della finestra, letti come li salva la Conferma, vanno
+    /// nel localStorage del Plugin e prendono il posto di quelli copiati prima.
+    copiaFiltri() {
+        const letti = this.leggiFiltriFinestra();
+        if (letti.length === 0) {
+            Modali.popup('Errore', 'Nessun filtro da copiare: i filtri della pagina non hanno criteri.');
+            return;
+        }
+        try {
+            localStorage.setItem(filtri.CHIAVE_COPIA_FILTRI, JSON.stringify(filtri.confezionaCopiaFiltri(letti, $('#dialogFiltri').data('pagina'))));
+        }
+        catch (e) {
+            console.error('Errore durante la copia dei filtri:', e);
+            Modali.popup('Errore', 'Copia dei filtri non riuscita: ' + e.message);
+            return;
+        }
+        messaggioUtente(letti.length == 1 ? 'Copiato 1 filtro' : 'Copiati ' + letti.length + ' filtri', 'success');
+    },
+
+    /// I20-1216: Incolla filtri. I filtri copiati si aggiungono in coda a quelli della finestra, dalla
+    /// stessa strada dei filtri salvati (addNewFiltro), che rifa' la ricerca sulla lista di questa
+    /// lavorazione. Non salva: i filtri restano da confermare con Conferma.
+    async incollaFiltri() {
+        let testo = null;
+        try {
+            testo = localStorage.getItem(filtri.CHIAVE_COPIA_FILTRI);
+        }
+        catch (e) {
+            testo = null;
+        }
+        const daIncollare = filtri.filtriDaIncollare(testo);
+        if (daIncollare.length === 0) {
+            Modali.popup('Errore', 'Nessun filtro copiato da incollare.');
+            return;
+        }
+        const corpoFiltri = this.corpoFiltriAperto();
+        for (const filtro of daIncollare) {
+            await Utility.sleep(1);
+            //Come in apriFiltriPagina (I20-1187): chiusa la finestra, i filtri che restano non hanno
+            //piu' dove andare.
+            if (!this.corpoFiltriAncoraAperto(corpoFiltri)) {
+                return;
+            }
+            await this.addNewFiltro(filtro, corpoFiltri);
+        }
+    },
+
+    /// I20-1216: i prodotti che un filtro trova, impaginati e non, nell'ordine della lista della
+    /// lavorazione: per ognuno il codice, la descrizione (quella del gruppo per un gruppo, come nei
+    /// popup dei conteggi) e, se e' impaginato, la pagina.
+    righeProdottiFiltro(nonImpaginati, impaginati) {
+        const righe = [];
+        const aggiungi = (record, impaginato) => {
+            const r = (record && record.recordInTracciato) || {};
+            const codice = r["Scatto.CodiceGruppo"] != null ? r["Scatto.CodiceGruppo"] : r["Referenza.Codice"];
+            const conDescrizione = (r["Referenza.Codice"] == r["Scatto.CodiceGruppo"] || r.descrizione_gruppo == null) ? r : r.descrizione_gruppo;
+            const descrizione = [conDescrizione["Descrizioni.Descrizione1"], conDescrizione["Descrizioni.Descrizione2"]]
+                .filter(d => d != null && String(d).trim() !== '')
+                .map(d => String(d).trim())
+                .join(' ');
+            righe.push({
+                posizione: typeof record.index === 'number' ? record.index : Number.MAX_SAFE_INTEGER,
+                codice: codice != null ? String(codice) : '',
+                descrizione: descrizione,
+                impaginato: impaginato,
+                pagina: impaginato && record.paginaImpaginazione != null ? String(record.paginaImpaginazione) : null
+            });
+        };
+        (nonImpaginati || []).forEach(record => aggiungi(record, false));
+        (impaginati || []).forEach(record => aggiungi(record, true));
+        righe.sort((a, b) => a.posizione - b.posizione);
+        return righe.map(riga => ({ codice: riga.codice, descrizione: riga.descrizione, impaginato: riga.impaginato, pagina: riga.pagina }));
+    },
+
+    /// I20-1216: la riga di un prodotto sotto il filtro: "codice: descrizione", e la pagina se e'
+    /// impaginato.
+    testoProdottoFiltro(riga) {
+        let testo = riga.codice + (riga.descrizione ? ': ' + riga.descrizione : '');
+        if (riga.impaginato) {
+            testo += riga.pagina ? ' (pag. ' + riga.pagina + ')' : ' (impaginato)';
+        }
+        return testo;
+    },
+
+    /// I20-1216: la voce che apre e chiude i prodotti oltre i primi.
+    etichettaAltriProdotti(quanti, aperti) {
+        return aperti ? '- nascondi' : '+ altri ' + quanti;
+    },
+
+    /// I20-1216: scrive sotto il filtro i suoi prodotti: i primi PRODOTTI_VISIBILI_FILTRO, gli altri
+    /// dietro "+ altri N", che al click si aprono e al click dopo si richiudono. Un filtro della scheda
+    /// Tracciato non ha il riquadro, e resta com'e'.
+    mostraProdottiFiltro(filtro, righe) {
+        const contenitore = filtro.find('.filtro-prodotti');
+        if (contenitore.length === 0) {
+            return;
+        }
+        contenitore.empty();
+        if (righe.length === 0) {
+            contenitore.append($('<div></div>').css({ color: '#777' }).text('Nessun prodotto'));
+            return;
+        }
+        const visibili = filtri.PRODOTTI_VISIBILI_FILTRO;
+        righe.slice(0, visibili).forEach(riga => {
+            contenitore.append($('<div></div>').addClass('filtro-prodotto').text(filtri.testoProdottoFiltro(riga)));
+        });
+        const altri = righe.slice(visibili);
+        if (altri.length === 0) {
+            return;
+        }
+        const nascosti = $('<div></div>').addClass('filtro-prodotti-altri').css({ display: 'none' });
+        altri.forEach(riga => {
+            nascosti.append($('<div></div>').addClass('filtro-prodotto').text(filtri.testoProdottoFiltro(riga)));
+        });
+        const voce = $('<div></div>')
+            .addClass('filtro-prodotti-piu')
+            .css({ color: '#1d5fa8', cursor: 'pointer', textDecoration: 'underline', marginTop: '2px' })
+            .text(filtri.etichettaAltriProdotti(altri.length, false))
+            .on('click', function () {
+                const aperti = nascosti.css('display') !== 'none';
+                nascosti.css('display', aperti ? 'none' : 'block');
+                voce.text(filtri.etichettaAltriProdotti(altri.length, !aperti));
+            });
+        contenitore.append(nascosti, voce);
     },
 
     /// Congela una pagina perche' non venga toccata dagli spostamenti di filtri.
@@ -3194,6 +3403,9 @@ const filtri = {
             // Aggiungi il totale degli elementi trovati
             const totaleElementi = risultati.length + risultatiImpaginati.length;
             filtro.find('.filtro-info-tot').text('Elementi totali: ' + totaleElementi);
+
+            //I20-1216: e sotto, a quali prodotti corrisponde il filtro.
+            filtri.mostraProdottiFiltro(filtro, filtri.righeProdottiFiltro(risultati, risultatiImpaginati));
     
     
             //scorriamo la lista completa e per ogni elemento controlliamo se è impaginato, se lo è aggiungiamo il nome pagina al record

@@ -1104,7 +1104,7 @@
 </div>
 
 <div id="dialogFiltri" myname="dialogFiltri" style="overflow-x: hidden; display: none; height: 100%; width: 100%; z-index: 2000;">
-  <div id="advancedOptionsFiltro" style="height: 20%; display: none; border-bottom: 2px solid #ccc; padding-top: 2px; overflow-y: auto;">
+  <div id="advancedOptionsFiltro" style="height: 33%; display: none; border-bottom: 2px solid #ccc; padding-top: 2px; overflow-y: auto;">
     <div style="width: 100%; display: flex; justify-content: space-between; align-items: center; padding-top: 10px;">
       <button id="scorriAvantiFiltri" onclick="filtriJs.scorriFiltri(true)">Scorri avanti</button> 
       <button id="scorriIndietroFiltri" onclick="filtriJs.scorriFiltri(false)">Scorri indietro</button>
@@ -1117,6 +1117,12 @@
       <button id="scambiaFiltro" onclick="filtriJs.scambiaFiltri(1)">Scambia con:</button> 
       <label for="paginaInvioFiltro" style="font-size: small;">Pag:</label>
       <textarea style="width:20%" id="paginaInvioFiltro"></textarea>
+    </div>
+    <!-- I20-1216: tutti i filtri della pagina, da incollare in coda in un'altra pagina, anche di un'altra promo.
+         Riga a parte: le due sopra sono gia' piene, e nella barra in basso Conferma usciva dal pannello. -->
+    <div style="width: 100%; display: flex; flex-wrap: wrap; justify-content: start; align-items: center;">
+      <button id="copiaFiltri" style="margin-right: 5px;" onclick="filtriJs.copiaFiltri()">Copia filtri</button>
+      <button id="incollaFiltri" onclick="filtriJs.incollaFiltri()">Incolla filtri</button>
     </div>
   </div>
   <img src="images/sbloccaPaginaGrande.png" id="lockIcon" style="height: 100%; cursor:pointer; display: none;" onclick="filtriJs.bloccaSblocca()">
@@ -1144,8 +1150,8 @@
 <div id="pulsanteAdvancedOptionFiltro" style="width:20%; display: none; justify-content: end;">
   <button name="advancedOptionFiltro" onclick="$('#advancedOptionsFiltro').toggle();
   if ($('#advancedOptionsFiltro').css('display') == 'block') {
-      $('#lockIcon').css('height', '80%');
-      $('#bodyFiltri').css('height', '70%');
+      $('#lockIcon').css('height', '67%');
+      $('#bodyFiltri').css('height', '57%');
   } else {
       $('#lockIcon').css('height', '100%');
       $('#bodyFiltri').css('height', '90%');
