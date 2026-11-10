@@ -178,10 +178,15 @@ describe("Volantini per periodo", () => {
       expect(screen.queryByLabelText("Stato")).not.toBeInTheDocument();
       expect(screen.queryByText(/In lavorazione|Non avviato|In revisione/)).not.toBeInTheDocument();
       expect(scheda()).toHaveAttribute("href", "/volantini/promozioni/p1");
-      expect(screen.getByRole("link", { name: "Apri la promozione Grande Volantino" })).toHaveAttribute(
-        "href",
-        "/volantini/promozioni/pv"
-      );
+      // Lo Storico non ha la vetrina
+      if (periodo === "storico") {
+        expect(screen.queryByRole("link", { name: "Apri la promozione Grande Volantino" })).not.toBeInTheDocument();
+      } else {
+        expect(screen.getByRole("link", { name: "Apri la promozione Grande Volantino" })).toHaveAttribute(
+          "href",
+          "/volantini/promozioni/pv"
+        );
+      }
       // Né il dettaglio della produzione, né gli insight delle singole varianti
       for (const link of screen.getAllByRole("link")) {
         expect(link.getAttribute("href"), link.textContent ?? "").not.toMatch(
@@ -366,12 +371,36 @@ describe("Schede delle promozioni", () => {
     expect(screen.queryByText(/Inizia|Già iniziata/)).not.toBeInTheDocument();
   });
 
-  it("nello Storico la scheda dice quando la promozione si è conclusa", async () => {
+  it("nello Storico la scheda dice volantini, aree e canali, senza la fine, i punti vendita e le insegne", async () => {
     oggiE("2026-11-09T10:00:00+01:00");
+    finti.risultato = caricato(
+      pagina({ promozioni: [promozione({ numeroKit: noveKit.length, kit: noveKit, numeroPuntiVendita: 216 })] })
+    );
     await apri("/volantini/storico");
 
-    expect(within(scheda()).getByTitle("Conclusa il 29 ottobre")).toHaveAttribute("data-tono", "neutral");
+    expect(scheda()).toHaveAccessibleName("Speciale Colazione, 16 – 29 ottobre 2026, 9 volantini, 3 aree, 3 canali");
+    expect(within(scheda()).getByText("9 volantini")).toBeInTheDocument();
+    const pillole = within(within(scheda()).getByRole("list", { name: "Aree e canali" })).getAllByRole("listitem");
+    expect(pillole.map((pillola) => pillola.textContent)).toEqual(["3 aree", "3 canali"]);
+    expect(within(scheda()).queryByTitle(/Conclusa/)).not.toBeInTheDocument();
+    expect(within(scheda()).queryByText(/Conclusa|punti vendita|insegn/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Scade|Inizia/)).not.toBeInTheDocument();
+  });
+
+  it("nello Storico le pillole contano le aree e i canali dei soli kit mostrati, al singolare", async () => {
+    finti.risultato = caricato(pagina({ promozioni: [promozione({ numeroKit: 2, kit: [variante("k1")] })] }));
+    await apri("/volantini/storico?area=a1");
+
+    const pillole = within(within(scheda()).getByRole("list", { name: "Aree e canali" })).getAllByRole("listitem");
+    expect(pillole.map((pillola) => pillola.textContent)).toEqual(["1 area", "1 canale"]);
+    expect(within(scheda()).getByText("1 di 2 volantini")).toBeInTheDocument();
+  });
+
+  it("negli Attivi la scheda non ha le pillole di aree e canali", async () => {
+    await apri("/volantini/attivi");
+
+    expect(within(scheda()).queryByRole("list", { name: "Aree e canali" })).not.toBeInTheDocument();
+    expect(within(scheda()).getByText("2 insegne")).toBeInTheDocument();
   });
 });
 
@@ -404,19 +433,25 @@ describe("Promozione in vetrina", () => {
     expect(screen.getAllByRole("link", { name: /Grande Volantino/ })).toHaveLength(1);
   });
 
-  const casiMotivo: [string, MotivoVetrina, string, string, string][] = [
-    ["prossimi", "prima_a_partire", "2026-11-01T10:00:00+01:00", "Inizia tra 4 giorni", "In vetrina perché è la prima che parte"],
-    ["storico", "ultima_conclusa", "2026-11-20T10:00:00+01:00", "Conclusa il 18 novembre", "In vetrina perché è l'ultima conclusa"],
-  ];
-
-  it.each(casiMotivo)("nei %s la vetrina dice il suo perché", async (periodo, motivo, oggi, cartellino, didascalia) => {
-    oggiE(oggi);
-    finti.risultato = caricato(pagina({ vetrina: vetrina(motivo), totaleSenzaFiltri: 2 }));
-    await apri(`/volantini/${periodo}`);
+  it("nei Prossimi la vetrina dice il suo perché", async () => {
+    oggiE("2026-11-01T10:00:00+01:00");
+    finti.risultato = caricato(pagina({ vetrina: vetrina("prima_a_partire"), totaleSenzaFiltri: 2 }));
+    await apri("/volantini/prossimi");
 
     const banda = screen.getByRole("region", { name: "Promozione in vetrina" });
-    expect(within(banda).getByText(cartellino)).toBeInTheDocument();
-    expect(within(banda).getByText(didascalia)).toBeInTheDocument();
+    expect(within(banda).getByText("Inizia tra 4 giorni")).toBeInTheDocument();
+    expect(within(banda).getByText("In vetrina perché è la prima che parte")).toBeInTheDocument();
+  });
+
+  it("nello Storico la vetrina non c'è, neppure senza filtri: le promozioni stanno tutte fra le schede", async () => {
+    // Anche se un server non aggiornato la mandasse
+    finti.risultato = caricato(pagina({ vetrina: vetrina(), totaleSenzaFiltri: 2 }));
+    await apri("/volantini/storico");
+
+    expect(screen.queryByRole("region", { name: "Promozione in vetrina" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/In vetrina/)).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "Promozioni" })).toBeInTheDocument();
+    expect(scheda()).toBeInTheDocument();
   });
 
   it("con un filtro la vetrina non c'è e l'elenco si chiama Promozioni", async () => {
@@ -463,6 +498,14 @@ describe("Riepilogo del periodo", () => {
 
     expect(numeriDelPeriodo()).toEqual(["1 promozione", "1 volantino"]);
   });
+
+  it("nello Storico dice solo promozioni e volantini, senza i punti vendita", async () => {
+    finti.risultato = caricato(pagina({ riepilogo: { promozioni: 12, kit: 48, puntiVendita: 1234 } }));
+    await apri("/volantini/storico");
+
+    expect(numeriDelPeriodo()).toEqual(["12 promozioni", "48 volantini"]);
+    expect(screen.queryByText(/punti vendita/)).not.toBeInTheDocument();
+  });
 });
 
 describe("Storico per mese", () => {
@@ -497,7 +540,7 @@ describe("Storico per mese", () => {
     // Sotto il mese le schede hanno un titolo di livello 4; fuori dall'anno in corso il periodo ha l'anno
     const natale = screen.getByRole("link", { name: /^Natale,/ });
     expect(within(natale).getByRole("heading", { level: 4 })).toHaveTextContent("18 – 31 dicembre 2025");
-    expect(within(natale).getByTitle("Conclusa il 31 dicembre 2025")).toBeInTheDocument();
+    expect(within(natale).queryByTitle(/Conclusa/)).not.toBeInTheDocument();
   });
 
   it("negli Attivi le schede non sono raggruppate", async () => {
@@ -542,6 +585,48 @@ describe("Filtri", () => {
       expect(finti.filtri.at(-1)).toMatchObject({ idPromo: undefined, idArea: "a1", pagina: 1 });
     }
   );
+
+  const opzioniDi = (etichetta: string) =>
+    within(screen.getByRole("combobox", { name: etichetta }))
+      .getAllByRole("option")
+      .map((opzione) => opzione.textContent);
+
+  it("area e canale propongono le opzioni arrivate dal server, cioè dei volantini", async () => {
+    finti.risultato = caricato(
+      pagina({ opzioni: { promozioni: [], aree: [LAZIO, TOSCANA], canali: [IPER], anni: [2025] } })
+    );
+    await apri("/volantini/storico");
+
+    expect(opzioniDi("Area")).toEqual(["Tutte le aree", "Lazio", "Toscana"]);
+    expect(opzioniDi("Canale")).toEqual(["Tutti i canali", "Iper"]);
+    expect(opzioniDi("Anno")).toEqual(["Tutti gli anni", "2025"]);
+  });
+
+  it("un'area scelta che con gli altri filtri non ha più volantini resta nella tendina, col suo nome", async () => {
+    finti.risultato = caricato(
+      pagina({ opzioni: { promozioni: [], aree: [LAZIO, TOSCANA], canali: [IPER, SUPERSTORE], anni: [2025] } })
+    );
+    const router = await apri("/volantini/storico?area=a2");
+    expect(screen.getByLabelText("Area")).toHaveValue("a2");
+
+    // Con il canale Superstore il Lazio non ha volantini: il server non lo propone più
+    finti.risultato = caricato(
+      pagina({ promozioni: [], totale: 0, opzioni: { promozioni: [], aree: [TOSCANA], canali: [IPER, SUPERSTORE], anni: [2025] } })
+    );
+    fireEvent.change(screen.getByLabelText("Canale"), { target: { value: "c1" } });
+
+    await waitFor(() => expect(router.state.location.search).toBe("?area=a2&canale=c1"));
+    expect(opzioniDi("Area")).toEqual(["Tutte le aree", "Toscana", "Lazio"]);
+    expect(screen.getByLabelText("Area")).toHaveValue("a2");
+    expect(screen.getByText("Nessuna promozione corrisponde ai filtri")).toBeInTheDocument();
+  });
+
+  it("un canale dell'indirizzo mai proposto resta scelto, con un nome generico", async () => {
+    await apri("/volantini/attivi?canale=c9");
+
+    expect(opzioniDi("Canale")).toEqual(["Tutti i canali", "Superstore", "Canale scelto"]);
+    expect(screen.getByLabelText("Canale")).toHaveValue("c9");
+  });
 
   it("una promozione dell'indirizzo che non è fra le opzioni ha un nome generico", async () => {
     await apri("/volantini/attivi?promo=p9");

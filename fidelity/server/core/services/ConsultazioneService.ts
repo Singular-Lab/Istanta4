@@ -430,18 +430,18 @@ export class ConsultazioneService implements IConsultazioneService {
     const criteri = this.criteri(periodo, TIPO_LAVORAZIONE.VOLANTINO, ambito);
     const conFiltri = Object.values(filtriPromo).some(valore => valore !== undefined);
 
-    // La promo in vetrina solo senza filtri: sta fuori dall'elenco e dai totali della paginazione
+    // La promo in vetrina solo senza filtri, e mai nello Storico: sta fuori dall'elenco e dai totali della paginazione
     const motivo = MOTIVO_VETRINA_DEL_PERIODO[periodo];
-    const rigaVetrina = conFiltri ? null : await this.materiali.trovaPromoInVetrina(criteri, motivo);
+    const rigaVetrina = conFiltri || !motivo ? null : await this.materiali.trovaPromoInVetrina(criteri, motivo);
     const criteriElenco: CriteriKit = rigaVetrina ? { ...criteri, escludiPromo: rigaVetrina.id_promo } : criteri;
 
-    const [righePromo, totali, riepilogo, righeAreeCanali, anni, promozioni] = await Promise.all([
+    const [righePromo, totali, riepilogo, opzioniIncrociate, promozioni] = await Promise.all([
       this.materiali.elencaPromoVolantini(criteriElenco, filtriPromo, { limite: dimensione, scarto: (pagina - 1) * dimensione }),
       this.materiali.contaPromoVolantini(criteriElenco, filtriPromo),
       // Il riepilogo e' sempre del periodo intero, vetrina compresa: le promo sono anche il totale senza filtri
       this.materiali.riepilogoPromoVolantini(criteri),
-      this.materiali.elencaAreeCanaliVolantini(criteri, periodo === 'storico'),
-      this.materiali.elencaAnniPromoVolantini(criteri),
+      // Sul periodo intero, vetrina compresa: con un filtro la vetrina non c'e' comunque
+      this.opzioniIncrociate(criteri, filtriPromo),
       // Nello Storico le promo sono centinaia: si cercano per nome e anno, non da una tendina
       periodo === 'storico' ? Promise.resolve([] as RigaPromo[]) : this.materiali.elencaPromoVolantini(criteri),
     ]);
@@ -452,7 +452,8 @@ export class ConsultazioneService implements IConsultazioneService {
       this.materiali.elencaVariantiVolantini(criteri, idPromoKit, filtriPromo),
       this.materiali.contaPuntiVenditaPromoVolantini(criteri, idPromoKit, filtriPromo),
     ]);
-    const vetrina: VetrinaVolantiniConsultazione | null = rigaVetrina
+    // C'e' una riga in vetrina solo con un motivo: il controllo serve al tipo
+    const vetrina: VetrinaVolantiniConsultazione | null = rigaVetrina && motivo
       ? { motivo, promozione: promozioniConVarianti([rigaVetrina], righeKit, righePuntiVendita)[0] }
       : null;
 
@@ -467,9 +468,36 @@ export class ConsultazioneService implements IConsultazioneService {
       riepilogo: { promozioni: riepilogo.promozioni, kit: riepilogo.kit, puntiVendita: riepilogo.puntiVendita },
       opzioni: {
         promozioni: promozioni.map(riga => ({ id: riga.id_promo, nome: riga.nome_promo })),
-        ...areeECanali(righeAreeCanali),
-        anni,
+        ...opzioniIncrociate,
       },
+    };
+  }
+
+  /**
+   * Aree, canali e anni dei soli kit pubblicati del periodo, mai delle combinazioni canale/area
+   * senza kit. Ognuno con la ricerca, la promo e gli altri filtri ma non con il proprio: scelta
+   * un'area, le altre aree restano sceglibili e i canali sono quelli dei volantini di quell'area.
+   */
+  private async opzioniIncrociate(
+    criteri: CriteriKit,
+    filtri: FiltriSqlPromoVolantini
+  ): Promise<{ aree: Riferimento[]; canali: Riferimento[]; anni: number[] }> {
+    const { idArea, idCanale, anno, ...comuni } = filtri;
+    const perAree: FiltriSqlPromoVolantini = { ...comuni, idCanale, anno };
+    const perCanali: FiltriSqlPromoVolantini = { ...comuni, idArea, anno };
+    // Senza area ne' canale scelti le due letture sono la stessa: se ne fa una sola
+    const letturaCanali = idArea === undefined && idCanale === undefined
+      ? null
+      : this.materiali.elencaAreeCanaliVolantini(criteri, false, perCanali);
+    const [righeAree, righeCanali, anni] = await Promise.all([
+      this.materiali.elencaAreeCanaliVolantini(criteri, false, perAree),
+      letturaCanali,
+      this.materiali.elencaAnniPromoVolantini(criteri, { ...comuni, idArea, idCanale }),
+    ]);
+    return {
+      aree: areeECanali(righeAree).aree,
+      canali: areeECanali(righeCanali ?? righeAree).canali,
+      anni,
     };
   }
 

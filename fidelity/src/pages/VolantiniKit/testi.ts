@@ -62,7 +62,7 @@ export const dataInParole = (data: string | null | undefined, adesso: Date = new
   return giorno.format(giorno.year() !== adesso.getFullYear() ? "D MMMM YYYY" : "D MMMM");
 };
 
-/** Quanto manca, o quando è finita: badge delle schede e cartellino della vetrina. */
+/** Quanto manca, o quando è finita: badge delle schede, cartellino della vetrina e del dettaglio. */
 export interface TempoPromo {
   testo: string;
   tono: TonoStato;
@@ -72,7 +72,8 @@ export interface TempoPromo {
 
 /**
  * Attivi: giorni alla scadenza, in evidenza da GIORNI_SCADENZA_VICINA in giù. Prossimi: giorni
- * all'inizio, finché non è cominciata. Storico: "Conclusa il 4 novembre". Null senza la data.
+ * all'inizio, finché non è cominciata. Storico: "Conclusa il 4 novembre", per il dettaglio della
+ * promozione: la scheda dello Storico non dice quando è finita. Null senza la data.
  */
 export const tempoDellaPromo = (
   periodo: PeriodoConsultazione,
@@ -99,7 +100,6 @@ export const tempoDellaPromo = (
 export const MOTIVO_IN_VETRINA: Readonly<Record<MotivoVetrina, string>> = {
   piu_punti_vendita: "In vetrina perché raggiunge più punti vendita",
   prima_a_partire: "In vetrina perché è la prima che parte",
-  ultima_conclusa: "In vetrina perché è l'ultima conclusa",
 };
 
 /** Mese di inizio della validità, per i gruppi dello Storico: chiave ordinabile ed etichetta "ottobre 2026". */
@@ -113,6 +113,7 @@ export const meseDiInizio = (dal: string | null | undefined): { chiave: string; 
 /** I numeri di una scheda o della vetrina, sui kit mostrati. */
 export interface NumeriKit {
   volantini: number;
+  /** Canali diversi: il canale è l'insegna, nello Storico la scheda li chiama canali. */
   insegne: number;
   aree: number;
   /**

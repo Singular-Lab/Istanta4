@@ -115,15 +115,14 @@ export interface FiltriPromozioniVolantiniConsultazione {
 /**
  * Perche' una promozione e' in vetrina (spec volantini-pop, "Promozione in vetrina"):
  * - piu_punti_vendita: negli Attivi, la promo con piu' punti vendita diversi stampati nei volantini;
- * - prima_a_partire: nei Prossimi, la promo con l'inizio di validita' piu' vicino;
- * - ultima_conclusa: nello Storico, la promo con la fine di validita' piu' recente.
+ * - prima_a_partire: nei Prossimi, la promo con l'inizio di validita' piu' vicino.
  */
-export type MotivoVetrina = 'piu_punti_vendita' | 'prima_a_partire' | 'ultima_conclusa';
+export type MotivoVetrina = 'piu_punti_vendita' | 'prima_a_partire';
 
-export const MOTIVO_VETRINA_DEL_PERIODO: Readonly<Record<PeriodoConsultazione, MotivoVetrina>> = {
+/** Lo Storico non ha la vetrina: tutte le promozioni concluse stanno fra le schede. */
+export const MOTIVO_VETRINA_DEL_PERIODO: Readonly<Partial<Record<PeriodoConsultazione, MotivoVetrina>>> = {
   attivi: 'piu_punti_vendita',
   prossimi: 'prima_a_partire',
-  storico: 'ultima_conclusa',
 };
 
 /** La promozione in vetrina, con tutti i suoi kit volantino pubblicati. */
@@ -152,10 +151,18 @@ export interface PaginaPromozioniVolantiniConsultazione {
   totaleSenzaFiltri: number;
   pagina: number;
   dimensione: number;
-  /** Solo senza filtri (ne' cerca, ne' promo, area, canale, anno); null altrimenti o con il periodo vuoto. */
+  /**
+   * Solo negli Attivi e nei Prossimi senza filtri (ne' cerca, ne' promo, area, canale, anno); null
+   * altrimenti, con il periodo vuoto e sempre nello Storico.
+   */
   vetrina: VetrinaVolantiniConsultazione | null;
   /** Sempre senza filtri. */
   riepilogo: RiepilogoPeriodoVolantiniConsultazione;
+  /**
+   * Valori dei soli kit pubblicati del periodo, mai delle combinazioni canale/area senza kit.
+   * Aree, canali e anni sono incrociati: ciascuno con la ricerca, la promo e gli altri filtri, non
+   * con il proprio (le aree tengono conto del canale e dell'anno, non dell'area scelta).
+   */
   opzioni: {
     promozioni: Riferimento[];
     aree: Riferimento[];

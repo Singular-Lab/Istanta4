@@ -218,8 +218,7 @@ export interface IMaterialiRepository {
   /**
    * La promo in vetrina fra quelle con kit ammessi (spec volantini-pop, "Promozione in vetrina"):
    * - piu_punti_vendita: piu' punti vendita diversi nei suoi kit, a parita' la validita' piu' recente;
-   * - prima_a_partire: l'inizio di validita' piu' vicino;
-   * - ultima_conclusa: la fine di validita' piu' recente.
+   * - prima_a_partire: l'inizio di validita' piu' vicino.
    * Poi per nome e id. null senza promo.
    */
   trovaPromoInVetrina(criteri: CriteriKit, motivo: MotivoVetrina): Promise<RigaPromo | null>;
@@ -231,12 +230,16 @@ export interface IMaterialiRepository {
    */
   elencaPuntiVenditaVolantini(criteri: CriteriKit, idPromo: string): Promise<RigaPuntoVenditaPromozione[]>;
   /**
-   * Aree e canali dei kit ammessi; con combinazioniGdo anche quelli delle combinazioni canale/area
-   * delle GDO che hanno promo nel periodo, comprese le disattivate. Senza nome vale il codice.
+   * Aree e canali dei kit ammessi che corrispondono ai filtri; con combinazioniGdo anche quelli
+   * delle combinazioni canale/area delle GDO che hanno promo nel periodo, comprese le disattivate
+   * (i filtri valgono solo sui kit). Senza nome vale il codice.
    */
-  elencaAreeCanaliVolantini(criteri: CriteriKit, combinazioniGdo: boolean): Promise<RigaAreaCanale[]>;
-  /** Anni dell'inizio di validita' delle promo con kit ammessi, nel calendario italiano, dal piu' recente. */
-  elencaAnniPromoVolantini(criteri: CriteriKit): Promise<number[]>;
+  elencaAreeCanaliVolantini(criteri: CriteriKit, combinazioniGdo: boolean, filtri?: FiltriSqlPromoVolantini): Promise<RigaAreaCanale[]>;
+  /**
+   * Anni dell'inizio di validita' delle promo con kit ammessi che corrispondono ai filtri, nel
+   * calendario italiano, dal piu' recente.
+   */
+  elencaAnniPromoVolantini(criteri: CriteriKit, filtri?: FiltriSqlPromoVolantini): Promise<number[]>;
   /**
    * Promo del periodo con almeno un kit ammesso, con file e formati dei loro kit. Le promo che
    * hanno solo kit non avviati non ci sono: quei kit li conosce Istanta, non il database.
@@ -415,7 +418,6 @@ const ORDINE_VETRINA: Readonly<Record<MotivoVetrina, string>> = {
   // A parita' di punti vendita, la validita' piu' recente: come l'ordine dell'elenco
   piu_punti_vendita: `${PUNTI_VENDITA_DIVERSI} DESC, p.validita_dal DESC NULLS LAST, p.validita_al DESC NULLS LAST, p.nome_promo, p.id_promo`,
   prima_a_partire: 'p.validita_dal ASC NULLS LAST, p.nome_promo, p.id_promo',
-  ultima_conclusa: 'p.validita_al DESC NULLS LAST, p.nome_promo, p.id_promo',
 };
 
 function condizioniFiltriFile(filtri: FiltriSqlFile | undefined, sostituzioni: Sostituzioni): string[] {
@@ -730,9 +732,13 @@ export class MaterialiRepository implements IMaterialiRepository {
     );
   }
 
-  async elencaAreeCanaliVolantini(criteri: CriteriKit, combinazioniGdo: boolean): Promise<RigaAreaCanale[]> {
+  async elencaAreeCanaliVolantini(
+    criteri: CriteriKit,
+    combinazioniGdo: boolean,
+    filtri?: FiltriSqlPromoVolantini
+  ): Promise<RigaAreaCanale[]> {
     const sostituzioni: Sostituzioni = {};
-    const condizioni = condizioniKit(criteri, sostituzioni);
+    const condizioni = [...condizioniKit(criteri, sostituzioni), ...condizioniFiltriPromoVolantini(filtri, sostituzioni)];
     const gdoCombinazioni = condizioneAmbitoGdo(criteri.ambitoGdo, sostituzioni, 'pg.gdo');
     // Le combinazioni della GDO, anche disattivate: nello Storico un volantino puo' essere di una
     // combinazione che oggi non c'e' piu'. Le GDO sono quelle delle promo del periodo
@@ -760,9 +766,9 @@ export class MaterialiRepository implements IMaterialiRepository {
     );
   }
 
-  async elencaAnniPromoVolantini(criteri: CriteriKit): Promise<number[]> {
+  async elencaAnniPromoVolantini(criteri: CriteriKit, filtri?: FiltriSqlPromoVolantini): Promise<number[]> {
     const sostituzioni: Sostituzioni = { fusoPromo: FUSO_PROMO };
-    const condizioni = condizioniKit(criteri, sostituzioni);
+    const condizioni = [...condizioniKit(criteri, sostituzioni), ...condizioniFiltriPromoVolantini(filtri, sostituzioni)];
     const righe = await this.seleziona<{ anno: number }>(
       `SELECT DISTINCT EXTRACT(YEAR FROM (p.validita_dal AT TIME ZONE :fusoPromo))::int AS anno
        FROM runtime_kit k
