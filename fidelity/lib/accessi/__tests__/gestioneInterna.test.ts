@@ -30,3 +30,26 @@ describe('pagine spostate sotto /gestione-interna', () => {
     }
   });
 });
+
+describe('pagine WebPliant spostate', () => {
+  it('l\'elenco dei workspace diventa Workspace WebPliant, l\'editor sta sotto di essa', () => {
+    expect(percorsoSpostato('/webliant/impostazioni-webpliant')).toBe('/webliant/workspace');
+    expect(percorsoSpostato('/webliant/impostazioni-webpliant/workspace')).toBe('/webliant/workspace/editor');
+  });
+
+  it('la configurazione WebPliant porta alle Impostazioni GDO, non a una sottopagina dei workspace', () => {
+    expect(percorsoSpostato('/webliant/impostazioni-webpliant/configurazione-webpliant')).toBe('/impostazioni-gdo');
+  });
+
+  it('vince il vecchio percorso più lungo, qualunque sia l\'ordine delle voci', () => {
+    expect(percorsoSpostato('/webliant/impostazioni-webpliant/workspace/altro')).toBe('/webliant/workspace/editor/altro');
+    expect(percorsoSpostato('/webliant/impostazioni-webpliant/altro')).toBe('/webliant/workspace/altro');
+    expect(percorsoSpostato('/webliant/impostazioni-webpliant-bis')).toBeUndefined();
+  });
+
+  it('i nuovi percorsi chiedono gli stessi permessi di prima', () => {
+    expect(paginaPer('/webliant/workspace')?.permesso).toBe(PERMESSI.WEBPLIANT.CONFIGURA);
+    expect(paginaPer('/webliant/workspace/editor')?.permesso).toBe(PERMESSI.WEBPLIANT.CONFIGURA);
+    expect(paginaPer('/impostazioni-gdo')?.permesso).toBe(PERMESSI.IMPOSTAZIONI.MODIFICA_GENERALI);
+  });
+});

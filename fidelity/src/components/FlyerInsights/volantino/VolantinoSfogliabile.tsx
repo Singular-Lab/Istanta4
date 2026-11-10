@@ -9,23 +9,11 @@ import { formatNumero } from "@/utils/format";
 import { urlPaginaMateriale } from "@/utils/materiali";
 import { twMerge } from "@/utils/twMerge";
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import type { BoxInsight, PdfVolantino, StatoDifferenza } from "../../../../lib/insightVolantino/tipi";
+import type { BoxInsight, PdfVolantino } from "../../../../lib/insightVolantino/tipi";
 import { AnalisiPagina } from "./AnalisiPagina";
 import { cercaBox, risultatoVicino } from "./analisiPagina";
 import { marcaFormato, trovaBoxIniziale } from "./box";
-import {
-  coloriReparti,
-  gruppoBox,
-  legendaDifferenze,
-  legendaModo,
-  OPZIONI_COLORE,
-  stileBox,
-  stileDifferenza,
-  TITOLI_LEGENDA,
-  type GruppoBox,
-  type ModoColore,
-  type StileRiquadro,
-} from "./colori";
+import { coloriReparti, gruppoBox, legendaModo, OPZIONI_COLORE, stileBox, TITOLI_LEGENDA, type GruppoBox, type ModoColore, type StileRiquadro } from "./colori";
 import {
   boxPerPagina,
   paginaRichiesta,
@@ -46,15 +34,16 @@ export interface VolantinoSfogliabileProps {
   box: BoxInsight[];
   totalePagine: number;
   configurazione?: FlyerInsightsConfig;
-  /** Colora per differenza fra varianti e nasconde "Colora per". */
-  statoBox?: Record<string, StatoDifferenza>;
-  /** Pagina controllata (opzionale): due lettori affiancati restano sulla stessa pagina. */
+  /** Pagina controllata (opzionale): la decide la pagina, per esempio dalla distribuzione nelle pagine. */
   pagina?: number;
   onCambiaPagina?: (pagina: number) => void;
-  /** Box da evidenziare e scheda aperta all'avvio, es. da ?referenza=. */
+  /** Box da evidenziare e scheda aperta all'avvio, es. da ?referenza=. Si apre una volta sola. */
   idBoxIniziale?: string | null;
-  /** Lettore senza indice delle pagine, schermo intero, ricerca e analisi della pagina, per il confronto fra varianti. */
-  compatto?: boolean;
+  /**
+   * Box da aprire da fuori, per esempio dall'elenco delle referenze: a ogni nuovo `volta` si va alla
+   * sua pagina e si apre la sua scheda, anche se è lo stesso box di prima.
+   */
+  apriBox?: { id: string; volta: number } | null;
   titolo?: string;
 }
 
@@ -65,7 +54,11 @@ export interface VolantinoSfogliabileProps {
 export const LIVELLI_ZOOM: readonly number[] = [0.5, 0.75, 1, 1.25, 1.5, 2];
 const ZOOM_ADATTA = LIVELLI_ZOOM.indexOf(1);
 /** Le pagine adattate non vanno oltre questa larghezza: una pagina verticale deve restare leggibile intera. */
-const LARGHEZZA_ADATTA_REM = 52;
+const LARGHEZZA_ADATTA_REM = 56;
+/** Altezza del lettore nella pagina: quasi tutto lo schermo, perché le pagine si leggano in grande. */
+const ALTEZZA_LETTORE = "h-[min(92vh,64rem)] min-h-[36rem]";
+/** A schermo intero il lettore prende lo schermo, tolti titolo e comandi. */
+const ALTEZZA_SCHERMO_INTERO = "h-[calc(100vh-11rem)]";
 /** Spazio sopra la pagina raggiunta con "Vai a", perché non si incolli al bordo del lettore. */
 const MARGINE_SALTO = 12;
 /** Dopo un salto lo scorrimento non sposta la pagina corrente: l'ultima pagina non arriva in cima. */
@@ -259,13 +252,12 @@ interface LettoreProps {
   onVai: (pagina: number) => void;
   zoom: number;
   onZoom: (indice: number) => void;
-  conIndice: boolean;
   indice: readonly VoceIndice[];
   /** Classi dell'altezza del lettore: le pagine scorrono al suo interno. */
   altezza: string;
   pagina: (numero: number, attiva: boolean) => ReactNode;
   /** L'analisi della pagina guardata: a destra delle pagine sugli schermi larghi, sotto sugli altri. */
-  laterale?: ReactNode;
+  laterale: ReactNode;
 }
 
 /**
@@ -277,11 +269,11 @@ interface LettoreProps {
  *   scorrendo veloce non partono richieste che sarebbero subito superate (la pagina corrente si
  *   aggiorna lo stesso);
  * - cambiando zoom resta sotto gli occhi lo stesso punto della stessa pagina.
- * Quando la pagina corrente cambia da fuori (indice, Vai a, l'altro lettore del confronto) ci va.
+ * Quando la pagina corrente cambia da fuori (indice, Vai a, la distribuzione nelle pagine) ci va.
  * Da tastiera: Home e Fine portano alla prima e all'ultima pagina, + e - ingrandiscono e riducono,
  * 0 adatta alla larghezza; le frecce e Pagina su/giù scorrono come sempre.
  */
-function Lettore({ totale, corrente, onScorrimento, onVai, zoom, onZoom, conIndice, indice, altezza, pagina, laterale }: LettoreProps) {
+function Lettore({ totale, corrente, onScorrimento, onVai, zoom, onZoom, indice, altezza, pagina, laterale }: LettoreProps) {
   const contenitore = useRef<HTMLDivElement>(null);
   const pagine = useRef(new Map<number, HTMLDivElement>());
   /**
@@ -318,7 +310,7 @@ function Lettore({ totale, corrente, onScorrimento, onVai, zoom, onZoom, conIndi
     setVicine(precedenti => (precedenti !== undefined && stessiNumeri(precedenti, nuove) ? precedenti : nuove));
   }, []);
 
-  // La pagina corrente arrivata da fuori: ci si va subito, senza animazione (il lettore affiancato la segue)
+  // La pagina corrente arrivata da fuori: ci si va subito, senza animazione
   useEffect(() => {
     if (corrente === vista.current) return;
     const nodo = contenitore.current;
@@ -394,11 +386,9 @@ function Lettore({ totale, corrente, onScorrimento, onVai, zoom, onZoom, conIndi
   return (
     <div className="flex min-w-0 flex-col gap-3 xl:flex-row">
       <div className={twMerge("flex min-h-0 min-w-0 flex-1 gap-3", altezza)}>
-        {conIndice && (
-          <div className="hidden w-24 flex-none sm:block">
-            <IndicePagine voci={indice} corrente={corrente} onVai={onVai} />
-          </div>
-        )}
+        <div className="hidden w-24 flex-none sm:block">
+          <IndicePagine voci={indice} corrente={corrente} onVai={onVai} />
+        </div>
         <div
           ref={contenitore}
           role="region"
@@ -430,11 +420,9 @@ function Lettore({ totale, corrente, onScorrimento, onVai, zoom, onZoom, conIndi
         </div>
       </div>
       {/* Sugli schermi larghi l'analisi è alta quanto il lettore e scorre da sola; sotto, segue la pagina */}
-      {laterale && (
-        <div className="relative min-w-0 xl:w-80 xl:flex-none">
-          <div className="max-h-[32rem] overflow-y-auto overscroll-contain xl:absolute xl:inset-0 xl:max-h-none">{laterale}</div>
-        </div>
-      )}
+      <div className="relative min-w-0 xl:w-80 xl:flex-none">
+        <div className="max-h-[32rem] overflow-y-auto overscroll-contain xl:absolute xl:inset-0 xl:max-h-none">{laterale}</div>
+      </div>
       {/* La pagina corrente per chi usa un lettore di schermo */}
       <p aria-live="polite" className="sr-only">
         Pagina {corrente} di {totale}
@@ -445,11 +433,10 @@ function Lettore({ totale, corrente, onScorrimento, onVai, zoom, onZoom, conIndi
 
 /**
  * Il volantino negli insight, come un lettore: tutte le pagine una sotto l'altra, con le immagini
- * delle pagine date da Olimpo e sopra i riquadri dei box colorati per reparto, meccanica o sconto, o
- * per differenza con un'altra variante. A fianco l'indice delle pagine e l'analisi della pagina
- * guardata; sopra la pagina corrente, "Vai a", la ricerca dei box, lo zoom e lo schermo intero. Un
- * clic (o Invio) su un riquadro apre la scheda del box, e da lì il viaggio del prodotto. Senza PDF le
- * pagine sono bianche.
+ * delle pagine date da Olimpo e sopra i riquadri dei box colorati per reparto, meccanica o sconto. A
+ * fianco l'indice delle pagine e l'analisi della pagina guardata; sopra la pagina corrente, "Vai a",
+ * la ricerca dei box, lo zoom e lo schermo intero. Un clic (o Invio) su un riquadro apre la scheda
+ * del box, e da lì il viaggio del prodotto. Senza PDF le pagine sono bianche.
  */
 export function VolantinoSfogliabile(props: VolantinoSfogliabileProps) {
   // Un altro volantino riparte da capo: pagina, box scelto, scheda e zoom
@@ -462,11 +449,10 @@ function Sfogliabile({
   box,
   totalePagine,
   configurazione,
-  statoBox,
   pagina,
   onCambiaPagina,
   idBoxIniziale,
-  compatto = false,
+  apriBox: daAprire,
   titolo = "Il volantino",
 }: VolantinoSfogliabileProps) {
   const [paginaInterna, setPaginaInterna] = useState(1);
@@ -514,27 +500,33 @@ function Sfogliabile({
     if (trovato.pagina !== null) vaiAllaPagina(trovato.pagina);
   }, [idBoxIniziale, box, apriBox, vaiAllaPagina]);
 
+  // Il box chiesto da fuori (l'elenco delle referenze): a ogni richiesta, anche dello stesso box
+  const voltaAperta = useRef<number | null>(null);
+  const idDaAprire = daAprire?.id;
+  const voltaDaAprire = daAprire?.volta;
+  useEffect(() => {
+    if (idDaAprire === undefined || voltaDaAprire === undefined || voltaAperta.current === voltaDaAprire) return;
+    voltaAperta.current = voltaDaAprire;
+    const trovato = box.find(voce => voce.id === idDaAprire);
+    if (!trovato) return;
+    apriBox(trovato);
+    if (trovato.pagina !== null) vaiAllaPagina(trovato.pagina);
+  }, [idDaAprire, voltaDaAprire, box, apriBox, vaiAllaPagina]);
+
   const perPagina = useMemo(() => boxPerPagina(box), [box]);
   const proporzioneBase = useMemo(() => proporzioneDelVolantino(box), [box]);
   const reparti = useMemo(() => coloriReparti(box, configurazione), [box, configurazione]);
   const senzaPosizione = useMemo(() => box.filter(voce => voce.pagina === null || !riquadroBox(voce.geometria)).length, [box]);
 
-  const confronto = statoBox !== undefined;
-  const stile = useCallback(
-    (voce: BoxInsight): StileRiquadro => (statoBox ? stileDifferenza(statoBox[voce.id]) : stileBox(voce, modo, reparti)),
-    [statoBox, modo, reparti]
-  );
-  const voci = useMemo<VoceLegenda[]>(
-    () => (statoBox ? legendaDifferenze(box, statoBox) : legendaModo(modo, box, reparti)),
-    [statoBox, box, modo, reparti]
-  );
+  const stile = useCallback((voce: BoxInsight): StileRiquadro => stileBox(voce, modo, reparti), [modo, reparti]);
+  const voci = useMemo<VoceLegenda[]>(() => legendaModo(modo, box, reparti), [box, modo, reparti]);
 
   const gruppo = useCallback((voce: BoxInsight): GruppoBox => gruppoBox(voce, modo, reparti), [modo, reparti]);
 
   // La ricerca dei box: i trovati restano in evidenza e gli altri si attenuano; senza risultati,
-  // o con un testo troppo corto, i riquadri restano come sono. Nel confronto fra varianti non c'è
+  // o con un testo troppo corto, i riquadri restano come sono
   const testoCercato = useDeferredValue(ricerca);
-  const risultati = useMemo(() => (compatto ? null : cercaBox(box, testoCercato)), [compatto, box, testoCercato]);
+  const risultati = useMemo(() => cercaBox(box, testoCercato), [box, testoCercato]);
   const trovati = useMemo(() => (risultati && risultati.length > 0 ? new Set(risultati.map(voce => voce.id)) : null), [risultati]);
   const trovatiPerPagina = useMemo(() => {
     const conti = new Map<number, number>();
@@ -596,20 +588,19 @@ function Sfogliabile({
     };
   });
 
-  const analisi =
-    compatto || confronto ? undefined : (
-      <AnalisiPagina
-        numero={corrente}
-        totale={totale}
-        box={perPagina.get(corrente) ?? NESSUN_BOX}
-        gruppo={gruppo}
-        titoloRipartizione={TITOLI_LEGENDA[modo]}
-        selezionato={selezionato}
-        trovati={trovati}
-        onRilievo={setRilievoElenco}
-        onApri={apriBox}
-      />
-    );
+  const analisi = (
+    <AnalisiPagina
+      numero={corrente}
+      totale={totale}
+      box={perPagina.get(corrente) ?? NESSUN_BOX}
+      gruppo={gruppo}
+      titoloRipartizione={TITOLI_LEGENDA[modo]}
+      selezionato={selezionato}
+      trovati={trovati}
+      onRilievo={setRilievoElenco}
+      onApri={apriBox}
+    />
+  );
 
   const lettore = (inGrande: boolean) => (
     <Lettore
@@ -619,9 +610,8 @@ function Sfogliabile({
       onVai={vaiAllaPagina}
       zoom={zoom}
       onZoom={zoomTra}
-      conIndice={!compatto}
       indice={indice}
-      altezza={inGrande ? "h-[calc(100vh-11rem)]" : compatto ? "h-[min(70vh,44rem)]" : "h-[min(80vh,56rem)] min-h-[28rem]"}
+      altezza={inGrande ? ALTEZZA_SCHERMO_INTERO : ALTEZZA_LETTORE}
       pagina={paginaDisegnata}
       laterale={analisi}
     />
@@ -664,7 +654,7 @@ function Sfogliabile({
     </Slideover>
   );
 
-  const legenda = <Legenda voci={voci} titolo={confronto ? "Differenze" : TITOLI_LEGENDA[modo]} />;
+  const legenda = <Legenda voci={voci} titolo={TITOLI_LEGENDA[modo]} />;
 
   const barra = (
     <div
@@ -674,13 +664,11 @@ function Sfogliabile({
     >
       <div className="flex flex-wrap items-center gap-3">
         <Navigazione corrente={corrente} totale={totale} onVai={vaiAllaPagina} />
-        {!compatto && (
-          <RicercaNelVolantino testo={ricerca} onTesto={setRicerca} risultati={risultati} attuale={attuale} onPassa={passaAlRisultato} />
-        )}
+        <RicercaNelVolantino testo={ricerca} onTesto={setRicerca} risultati={risultati} attuale={attuale} onPassa={passaAlRisultato} />
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <ControlliZoom zoom={zoom} onZoom={zoomTra} />
-        {!compatto && !schermoIntero && (
+        {!schermoIntero && (
           <Button type="button" variant="outline-secondary" size="sm" aria-label="Schermo intero" title="Schermo intero" onClick={() => setSchermoIntero(true)}>
             <Lucide icon="Maximize2" aria-hidden="true" className="h-4 w-4" />
           </Button>
@@ -690,7 +678,7 @@ function Sfogliabile({
   );
 
   return (
-    <section aria-label={titolo} className={twMerge("flex min-w-0 flex-col gap-3", compatto && "gap-2")}>
+    <section aria-label={titolo} className="flex min-w-0 flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <h3 className="title-card">{titolo}</h3>
@@ -698,14 +686,12 @@ function Sfogliabile({
             {formatNumero(totale)} {totale === 1 ? "pagina" : "pagine"}
           </p>
         </div>
-        {!confronto && (
-          <div className="flex items-center gap-2">
-            <span aria-hidden="true" className="text-xs text-slate-500 dark:text-slate-400">
-              Colora per
-            </span>
-            <Segmenti<ModoColore> etichetta="Colora per" opzioni={OPZIONI_COLORE} valore={modo} onChange={setModo} />
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          <span aria-hidden="true" className="text-xs text-slate-500 dark:text-slate-400">
+            Colora per
+          </span>
+          <Segmenti<ModoColore> etichetta="Colora per" opzioni={OPZIONI_COLORE} valore={modo} onChange={setModo} />
+        </div>
       </div>
 
       {!schermoIntero && (

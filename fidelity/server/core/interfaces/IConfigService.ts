@@ -12,7 +12,11 @@ export interface IConfigService {
     saveDashBoardConfig(dashboard: Dashboard, role: TIPO_UTENTI): Promise<any>;
     getDashBoardConfig(role: TIPO_UTENTI): Promise<Dashboard>;
     getPluginRegistry(): Promise<any[]>;
-    getFlyerInsightsConfig(): Promise<Record<string, any>>;
+    /**
+     * La configurazione degli insight del volantino della GDO (Impostazioni GDO), o quella del file
+     * dell'installazione; senza GDO, il file. NotFoundError se non c'e' nessuna delle due.
+     */
+    getFlyerInsightsConfig(idGdo?: string | null): Promise<Record<string, any>>;
     getAvvisoManutenzione(): Promise<AvvisoManutenzione | null>;
     saveAvvisoManutenzione(avviso: AvvisoManutenzione | null): Promise<void>;
     getRegoleMenabo(): Promise<RegoleMenabo | null>;

@@ -75,7 +75,7 @@ describe('GET /api/flyer-insights/:idKit/report', () => {
 
     expect(risposta.status).toBe(200);
     expect(risposta.body).toEqual({ idKit: ID_KIT, titolo: 'Volantino di novembre', sezioni: [] });
-    expect(servizio.report).toHaveBeenCalledWith(ID_KIT, { idGdo: 'gdo-sessione' });
+    expect(servizio.report).toHaveBeenCalledWith(ID_KIT, { idGdo: 'gdo-sessione' }, expect.anything());
   });
 
   it('senza materiali.visualizza e\' 403 e il servizio non viene interrogato', async () => {
@@ -115,7 +115,7 @@ describe('ambito GDO', () => {
 
     await request(app).get(`/api/flyer-insights/${ID_KIT}/report?gdo=altra-gdo`);
 
-    expect(servizio.report).toHaveBeenCalledWith(ID_KIT, { idGdo: 'gdo-sessione' });
+    expect(servizio.report).toHaveBeenCalledWith(ID_KIT, { idGdo: 'gdo-sessione' }, expect.anything());
   });
 
   it('il Superadmin senza GDO vede tutte le GDO, o quella che indica', async () => {

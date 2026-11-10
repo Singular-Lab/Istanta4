@@ -40,6 +40,6 @@ describe("WebPliantDisponibili", () => {
     expect(await screen.findByRole("heading", { level: 3, name: "Volantino - Nord" })).toHaveClass("title-card");
     expect(screen.getByText(/09\/03\/2026/)).toHaveTextContent("al");
     expect(screen.getByRole("alert")).toHaveTextContent("Nessun workspace configurato");
-    expect(screen.getByRole("link", { name: "Crea workspace" })).toHaveAttribute("href", "/webliant/impostazioni-webpliant");
+    expect(screen.getByRole("link", { name: "Crea workspace" })).toHaveAttribute("href", "/webliant/workspace");
   });
 });

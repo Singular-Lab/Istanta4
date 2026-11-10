@@ -114,6 +114,18 @@ export function nomeLeggibile(testo: string): string {
   return minuscolo.charAt(0).toLocaleUpperCase('it-IT') + minuscolo.slice(1);
 }
 
+/**
+ * I codici dei reparti che negli insight hanno il nome per il marketing della GDO (Impostazioni GDO):
+ * quel nome si mostra come e' scritto, senza la forma di frase delle descrizioni dell'anagrafica.
+ */
+function repartiConNomeMarketing(dati: DatiReportVolantino): ReadonlySet<string> {
+  return new Set((dati.insight.box ?? []).flatMap(box => (box.reparto?.marketing ? [box.reparto.codice] : [])));
+}
+
+/** L'etichetta di un reparto nel report: il nome per il marketing com'e', le descrizioni in forma di frase. */
+const etichettaReparto = (voce: { chiave: string; etichetta: string }, marketing: ReadonlySet<string>): string =>
+  (marketing.has(voce.chiave) ? voce.etichetta.trim() : nomeLeggibile(voce.etichetta));
+
 /** Chiude la frase con il punto, se non ha gia' la punteggiatura finale. */
 const frase = (testo: string): string => {
   const pulito = testo.trim();
@@ -263,7 +275,7 @@ function indicatoriSintesi(dati: DatiReportVolantino): IndicatoreReport[] {
 function fraseSpazio(dati: DatiReportVolantino): string | null {
   const primo = dati.insight.spazio.perReparto.find(voce => voce.chiave !== '' && voce.quotaSpazio > 0);
   if (!primo) return null;
-  return `${conArticolo(percento(primo.quotaSpazio), true)} dello spazio va al reparto ${nomeLeggibile(primo.etichetta)}, che porta ${conArticolo(percento(primo.quotaReferenze))} delle referenze.`;
+  return `${conArticolo(percento(primo.quotaSpazio), true)} dello spazio va al reparto ${etichettaReparto(primo, repartiConNomeMarketing(dati))}, che porta ${conArticolo(percento(primo.quotaReferenze))} delle referenze.`;
 }
 
 function fraseSconto(dati: DatiReportVolantino): string | null {
@@ -318,6 +330,7 @@ function graficoReparti(dati: DatiReportVolantino): GraficoSezione | null {
   const voci = dati.insight.spazio.perReparto.filter(voce => voce.chiave !== '' && (voce.quotaSpazio > 0 || voce.quotaReferenze > 0));
   if (voci.length === 0) return null;
   const mostrate = voci.slice(0, MAX_VOCI_GRAFICO);
+  const marketing = repartiConNomeMarketing(dati);
   return {
     titolo: 'Quota di referenze e quota di spazio per reparto',
     nota: unisciFrasi(
@@ -328,7 +341,7 @@ function graficoReparti(dati: DatiReportVolantino): GraficoSezione | null {
       forma: 'confronto',
       serie: ['Quota referenze', 'Quota spazio'],
       voci: mostrate.map(voce => ({
-        etichetta: nomeLeggibile(voce.etichetta),
+        etichetta: etichettaReparto(voce, marketing),
         valori: [voce.quotaReferenze, voce.quotaSpazio],
         testi: [percento(voce.quotaReferenze), percento(voce.quotaSpazio)],
       })),
@@ -430,7 +443,7 @@ function rigaVariazione(etichetta: string, voce: Variazione, formato: FormatoVar
   return [etichetta, valore(voce.attuale), valore(voce.precedente), variazione];
 }
 
-function tabellaConfronto(confronto: ConfrontoEdizione): SezioneReport {
+function tabellaConfronto(confronto: ConfrontoEdizione, marketing: ReadonlySet<string>): SezioneReport {
   const { sintesi } = confronto;
   const reparti = confronto.spazioPerReparto
     .filter(voce => voce.chiave !== '')
@@ -459,7 +472,7 @@ function tabellaConfronto(confronto: ConfrontoEdizione): SezioneReport {
       rigaVariazione('Box in sottocosto', sintesi.sottocosto, 'conteggio'),
       rigaVariazione('Marche', sintesi.marche, 'conteggio'),
       ...reparti.map(({ voce }) =>
-        rigaVariazione(`Spazio: ${nomeLeggibile(voce.etichetta)}`, { attuale: voce.attuale, precedente: voce.precedente, differenza: voce.attuale - voce.precedente }, 'punti')),
+        rigaVariazione(`Spazio: ${etichettaReparto(voce, marketing)}`, { attuale: voce.attuale, precedente: voce.precedente, differenza: voce.attuale - voce.precedente }, 'punti')),
     ],
     nota: reparti.length > 0 ? "Per lo spazio dei reparti, i cambiamenti di almeno un punto, dal più grande." : null,
   };
@@ -502,7 +515,8 @@ function sezioniConfronto(dati: DatiReportVolantino): SezioneReport[] {
   const confronto = dati.confronto;
   if (!confronto) return [];
   const entratiUsciti = tabellaEntratiUsciti(confronto);
-  return entratiUsciti ? [tabellaConfronto(confronto), entratiUsciti] : [tabellaConfronto(confronto)];
+  const tabella = tabellaConfronto(confronto, repartiConNomeMarketing(dati));
+  return entratiUsciti ? [tabella, entratiUsciti] : [tabella];
 }
 
 // ─── Metodo ─────────────────────────────────────────────────────────

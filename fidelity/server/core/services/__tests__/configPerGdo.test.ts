@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Righe della tabella config, gia' nell'ordine della piu' vecchia
-type Riga = { id: string; id_gdo_config: string | null; funzionalita?: any; update?: any };
+type Riga = { id: string; id_gdo_config: string | null; funzionalita?: any; update?: any; webpliant?: unknown; color?: string };
 const stato = vi.hoisted(() => ({ righe: [] as Riga[], gdo: [] as Array<{ id_gdo: string; nome_gdo: string }> }));
 
 const modello = vi.hoisted(() => ({
@@ -35,7 +35,14 @@ vi.mock('../../logger', () => ({
 }));
 
 import { ConfigService } from '../ConfigService';
-import { dimenticaGdoCliente, funzionalitaDa, trovaConfigInstallazione, trovaConfigPerGdo } from '../configPerGdo';
+import {
+  dimenticaGdoCliente,
+  funzionalitaDa,
+  trovaConfigInstallazione,
+  trovaConfigPerGdo,
+  trovaConfigWebpliantDiGdo,
+  trovaOCreaConfigWebpliantDiGdo,
+} from '../configPerGdo';
 
 beforeEach(() => {
   dimenticaGdoCliente();
@@ -125,5 +132,32 @@ describe('ConfigService funzionalita', () => {
       funzionalita: { momenti: false, menabo: true },
       webpliant: {},
     }));
+  });
+});
+
+describe('righe config delle Impostazioni GDO', () => {
+  // WebPliant, l'import dei file e la consultazione leggono solo la riga dell'installazione: le
+  // Impostazioni GDO devono leggere e scrivere quella, qualunque sia la GDO della sessione
+  it('in lettura: sempre la riga dell\'installazione, anche per una GDO con una riga propria', async () => {
+    stato.righe = [
+      { id: 'storica', id_gdo_config: null, webpliant: { css_text: '.a{}' } },
+      // come la riga che il salvataggio delle funzionalita' crea per una GDO, con webpliant vuoto
+      { id: 'centrale', id_gdo_config: 'gdo-centrale', webpliant: {} },
+    ];
+
+    expect((await trovaConfigWebpliantDiGdo('gdo-centrale')).id).toBe('storica');
+    expect((await trovaConfigWebpliantDiGdo(null)).id).toBe('storica');
+    expect((await trovaConfigWebpliantDiGdo('gdo-senza-riga')).id).toBe('storica');
+  });
+
+  it('in scrittura: la stessa riga dell\'installazione, senza crearne una per la GDO', async () => {
+    stato.righe = [
+      { id: 'storica', id_gdo_config: null },
+      { id: 'centrale', id_gdo_config: 'gdo-centrale' },
+    ];
+
+    expect((await trovaOCreaConfigWebpliantDiGdo('gdo-centrale')).id).toBe('storica');
+    expect((await trovaOCreaConfigWebpliantDiGdo('gdo-nuova')).id).toBe('storica');
+    expect(modello.create).not.toHaveBeenCalled();
   });
 });

@@ -50,6 +50,8 @@ export interface RiepilogoRepartoDTO {
   descrizione: string;
   numeroReferenze: number;
   pagine: number[];
+  /** Colore del reparto impostato per la GDO (Impostazioni GDO), solo se c'e'. */
+  colore?: string;
   [key: string]: any;
 }
 
@@ -68,6 +70,9 @@ export interface ContestoFlyerInsightsDTO {
   nomeArea?: string;
   nomeCanale?: string;
   idPromo: string;
+  /** Validita' della promo del kit, YYYY-MM-DD nel calendario della promo; null se non c'e'. */
+  validitaDal?: string | null;
+  validitaAl?: string | null;
 }
 
 /** Campi di sempre più le sezioni nuove (lib/insightVolantino/tipi.ts). */

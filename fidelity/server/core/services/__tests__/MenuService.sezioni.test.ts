@@ -74,8 +74,9 @@ describe('menu dell\'utente diviso in sezioni', () => {
 
     expect(struttura(menu)).toEqual([
       '== Produzione', '# PROMOZIONI', '/promozioni/nuova',
-      '== Sistema', '/superadmin/dashboard *',
       // Le voci di sistema che MenuService aggiunge sempre al Superadmin, sotto GESTIONE INTERNA
+      '== Gestione interna', '/impostazioni-gdo',
+      '== Sistema', '/superadmin/dashboard *',
       '/gestione-interna/gestione-hub', '/gestione-interna/gestione-metodi-accesso',
     ]);
   });

@@ -95,8 +95,8 @@ export interface SchedaBoxProps {
 }
 
 /**
- * La scheda di un box del volantino: il prodotto pilota (foto, prezzi, meccanica, reparto) e dove
- * sta nel volantino (pagina, spazio), con il pulsante del viaggio del prodotto.
+ * La scheda di un box del volantino: il prodotto pilota (foto, prezzi, meccanica, reparto, linea del
+ * distributore) e dove sta nel volantino (pagina, spazio), con il pulsante del viaggio del prodotto.
  */
 export function SchedaBox({ box, totalePagine, onViaggio }: SchedaBoxProps) {
   const sottotitolo = marcaFormato(box);
@@ -124,6 +124,8 @@ export function SchedaBox({ box, totalePagine, onViaggio }: SchedaBoxProps) {
         <Dato etichetta="Meccanica">{box.meccanica ? ETICHETTA_MECCANICA[box.meccanica] : VALORE_ASSENTE}</Dato>
         {box.meccanicaOriginale && <Dato etichetta="Meccanica nella fonte">{box.meccanicaOriginale}</Dato>}
         <Dato etichetta="Reparto">{reparto ?? VALORE_ASSENTE}</Dato>
+        {/* La linea del distributore c'è solo se il cliente dichiara linee e il prodotto ne fa parte */}
+        {box.linea && <Dato etichetta="Linea">{box.linea.nome || box.linea.sigla}</Dato>}
         <Dato etichetta="Pagina">{box.pagina !== null ? `${formatNumero(box.pagina)} di ${formatNumero(totalePagine)}` : VALORE_ASSENTE}</Dato>
         <Dato etichetta="Spazio">{box.geometria ? `${formatPercentuale(box.spazio)} della pagina` : VALORE_ASSENTE}</Dato>
         <Dato etichetta="Prodotti nel box">{formatNumero(box.prodotti)}</Dato>

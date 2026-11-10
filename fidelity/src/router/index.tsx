@@ -37,7 +37,6 @@ const dashboard3Loader = createLazyLoader("dashboard3Loader");
 const superadminDashboardLoader = createLazyLoader("superadminDashboardLoader");
 const funzioneCaricamentoAuth = createLazyLoader("funzioneCaricamentoAuth");
 const funzioneCaricamentoAuthAD = createLazyLoader("funzioneCaricamentoAuthAD");
-const funzioneCaricamentoConfigWebpliant = createLazyLoader("funzioneCaricamentoConfigWebpliant");
 const funzioneCaricamentoDettagliFineLavorazione = createLazyLoader("funzioneCaricamentoDettagliFineLavorazione");
 const funzioneCaricamentoDettagliOrdiniDiStampa = createLazyLoader("funzioneCaricamentoDettagliOrdiniDiStampa");
 const funzioneCaricamentoDettagliTemplateWhatsappAdmin = createLazyLoader("funzioneCaricamentoDettagliTemplateWhatsappAdmin");
@@ -256,7 +255,8 @@ const routes: RouteObject[] = [
           return { Component: ReferenzaPuntoVendita };
         },
       },
-      // Vecchi indirizzi delle pagine spostate sotto /gestione-interna (segnalibri e link esterni)
+      // Vecchi indirizzi delle pagine spostate (segnalibri e link esterni): sotto /gestione-interna,
+      // Workspace WebPliant e Impostazioni GDO
       ...Object.entries(PERCORSI_SPOSTATI).map(([vecchio, nuovo]) => ({
         path: `${vecchio.slice(1)}/*`,
         // Dai parametri e non da request.url, che contiene anche il basename dell'installazione
@@ -652,27 +652,24 @@ const routes: RouteObject[] = [
           return { Component: PaginaDettaglioCombinazione };
         },
       },
+      // Impostazioni della GDO: identità, loghi, reparti, campi delle referenze, insight, sito web
       {
-        path: "webliant/impostazioni-webpliant",
+        path: "impostazioni-gdo",
         lazy: async () => {
-          const { default: ImpostazioniWebpliant } = await import(
-            "@/pages/ImpostazioniWebpliant"
-          );
-          return {
-            Component: ImpostazioniWebpliant,
-            loader: funzioneCaricamentoWorkspace,
-          };
+          const { default: ImpostazioniGdo } = await import("@/pages/ImpostazioniGdo");
+          return { Component: ImpostazioniGdo };
         },
       },
+      // Elenco dei workspace WebPliant; l'editor è a schermo intero, fuori dal layout
       {
-        path: "webliant/impostazioni-webpliant/configurazione-webpliant",
+        path: "webliant/workspace",
         lazy: async () => {
-          const { default: ConfigurazioneWebpliant } = await import(
-            "@/pages/ConfigurazioneWebpliant"
+          const { default: WorkspaceWebpliant } = await import(
+            "@/pages/WorkspaceWebpliant"
           );
           return {
-            Component: ConfigurazioneWebpliant,
-            loader: funzioneCaricamentoConfigWebpliant,
+            Component: WorkspaceWebpliant,
+            loader: funzioneCaricamentoWorkspace,
           };
         },
       },
@@ -1164,8 +1161,9 @@ const routes: RouteObject[] = [
   },
 
   // Altre top-level routes
+  // Editor del workspace WebPliant, aperto in una nuova scheda dalla pagina Workspace WebPliant
   {
-    path: "webliant/impostazioni-webpliant/workspace",
+    path: "webliant/workspace/editor",
     lazy: async () => {
       const { default: CreazioneWebPliant } = await import(
         "@/pages/CreazioneWebPliant"

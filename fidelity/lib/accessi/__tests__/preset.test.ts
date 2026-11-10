@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AREE, applicaRegoleArea, PERMESSI as P, voceDi } from '../catalogo';
-import { PERMESSI_FUORI_DA_AGENZIA, presetDi, PRESET } from '../preset';
+import { puoAprirePagina } from '../pagine';
+import { PERMESSI_FUORI_DA_AGENZIA, presetDi, PRESET, type IdPreset } from '../preset';
 import { SEZIONI } from '../sezioni';
 
 describe('aree dei permessi e aree del menu', () => {
@@ -52,5 +53,14 @@ describe('preset', () => {
       P.WHATSAPP.ANNULLA_CAMPAGNA, P.WHATSAPP.GESTISCI_PRESETS, P.WHATSAPP.GESTISCI_TEMPLATES,
       P.WHATSAPP.INVIA_CAMPAGNA, P.WHATSAPP.VISUALIZZA_CAMPAGNE,
     ].sort());
+  });
+
+  it('Agenzia apre Impostazioni GDO e Workspace WebPliant, Solo visualizzazione no', () => {
+    const apre = (id: IdPreset, percorso: string) =>
+      puoAprirePagina(percorso, codice => presetDi(id).permessi.indexOf(codice) >= 0);
+    for (const percorso of ['/impostazioni-gdo', '/webliant/workspace', '/webliant/workspace/editor']) {
+      expect(apre('agenzia', percorso), percorso).toBe(true);
+      expect(apre('solo-visualizzazione', percorso), percorso).toBe(false);
+    }
   });
 });

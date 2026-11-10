@@ -1,3 +1,4 @@
+import type { Request } from 'express';
 import type { ReportVolantino } from '../../../lib/insightVolantino/report';
 import type { AmbitoGdo } from '../accessi/contestoAccesso';
 
@@ -7,5 +8,6 @@ import type { AmbitoGdo } from '../accessi/contestoAccesso';
  * insight: un kit di un'altra GDO risponde 404.
  */
 export interface IReportVolantinoService {
-  report(idKit: string, ambito: AmbitoGdo): Promise<ReportVolantino>;
+  /** La richiesta, facoltativa, serve al catalogo dei loghi delle linee del distributore. */
+  report(idKit: string, ambito: AmbitoGdo, richiesta?: Request): Promise<ReportVolantino>;
 }

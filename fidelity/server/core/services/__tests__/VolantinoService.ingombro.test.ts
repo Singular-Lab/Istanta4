@@ -71,7 +71,7 @@ describe('VolantinoService.getFlyerInsights: ingombro delle pagine', () => {
 
     const insights = await servizio.getFlyerInsights('kit-1');
 
-    expect(insights.contesto).toEqual({ titolo: 'Volantino Nord', nomeArea: 'Nord', nomeCanale: 'Super', idPromo: 'promo-1' });
+    expect(insights.contesto).toMatchObject({ titolo: 'Volantino Nord', nomeArea: 'Nord', nomeCanale: 'Super', idPromo: 'promo-1' });
     expect(insights.riepilogoPagine.map(pagina => [pagina.pagina, pagina.numeroReferenze, pagina.ingombroTotalePerc])).toEqual([
       [2, 2, 12.86],
       [3, 1, 5.52],
@@ -136,7 +136,7 @@ describe('VolantinoService.getFlyerInsights: GDO e PDF del volantino', () => {
     const insights = await servizio.getFlyerInsights('kit-1');
 
     expect(kitNellAmbito).toHaveBeenCalledWith('kit-1', 'tutte');
-    expect(insights.contesto).toEqual({ titolo: 'Volantino Nord', nomeArea: 'Nord', nomeCanale: 'Super', idPromo: 'promo-1' });
+    expect(insights.contesto).toMatchObject({ titolo: 'Volantino Nord', nomeArea: 'Nord', nomeCanale: 'Super', idPromo: 'promo-1' });
   });
 
   it('con il PDF in Olimpo ne restituisce id e pagine; senza pagine nel file valgono quelle del volantino', async () => {

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Request } from 'express';
 import { NotFoundError } from '../../../../lib/errors';
 import { PALETTE_REPORT_STANDARD, type SezioneReport } from '../../../../lib/insightVolantino/report';
 import type { BoxInsight, ConfrontoEdizione } from '../../../../lib/insightVolantino/tipi';
@@ -103,8 +104,8 @@ const CONFRONTO = {
 
 function creaServizio(agenziaLib: Pick<IAgenziaLib, 'insightVolantino'> = {}) {
   const dipendenze = {
-    volantino: { getFlyerInsights: vi.fn(async (_idKit: string, _ambito?: AmbitoGdo) => INSIGHT) },
-    confronti: { confronti: vi.fn(async (_idKit: string, _ambito: AmbitoGdo) => ({ edizionePrecedente: CONFRONTO as ConfrontoEdizione | null, varianti: [] })) },
+    volantino: { getFlyerInsights: vi.fn(async (_idKit: string, _ambito?: AmbitoGdo, _richiesta?: Request) => INSIGHT) },
+    confronti: { edizionePrecedente: vi.fn(async (_idKit: string, _ambito: AmbitoGdo): Promise<ConfrontoEdizione | null> => CONFRONTO) },
     gdo: { getGDOById: vi.fn(async (id: string) => ({ id, nome: ' GDO di prova ', updatedat: new Date(0) })) },
     letture: { kitNellAmbito: vi.fn(async (_idKit: string, _ambito: AmbitoGdo): Promise<KitInsight | null> => KIT) },
   };
@@ -130,8 +131,8 @@ describe('ReportVolantinoService.report: dati e intestazione', () => {
     const report = await servizio.report(ID_KIT, AMBITO);
 
     expect(letture.kitNellAmbito).toHaveBeenCalledWith(ID_KIT, AMBITO);
-    expect(volantino.getFlyerInsights).toHaveBeenCalledWith(ID_KIT, AMBITO);
-    expect(confronti.confronti).toHaveBeenCalledWith(ID_KIT, AMBITO);
+    expect(volantino.getFlyerInsights).toHaveBeenCalledWith(ID_KIT, AMBITO, undefined);
+    expect(confronti.edizionePrecedente).toHaveBeenCalledWith(ID_KIT, AMBITO);
     expect(gdo.getGDOById).toHaveBeenCalledWith('gdo-1');
     expect(report).toMatchObject({
       generatoIl: '2026-11-09T08:30:00.000Z',
@@ -229,12 +230,12 @@ describe('ReportVolantinoService.report: ambito e confronto facoltativo', () => 
 
     await expect(servizio.report(ID_KIT, { idGdo: 'altra-gdo' })).rejects.toBeInstanceOf(NotFoundError);
     expect(volantino.getFlyerInsights).not.toHaveBeenCalled();
-    expect(confronti.confronti).not.toHaveBeenCalled();
+    expect(confronti.edizionePrecedente).not.toHaveBeenCalled();
   });
 
   it('confronto in errore: il report esce senza le sezioni del confronto', async () => {
     const { servizio, confronti } = creaServizio();
-    confronti.confronti.mockRejectedValueOnce(new Error('edizione precedente non leggibile'));
+    confronti.edizionePrecedente.mockRejectedValueOnce(new Error('edizione precedente non leggibile'));
 
     const report = await servizio.report(ID_KIT, AMBITO);
 
@@ -245,14 +246,14 @@ describe('ReportVolantinoService.report: ambito e confronto facoltativo', () => 
 
   it('un 404 dal confronto vale per tutto il report', async () => {
     const { servizio, confronti } = creaServizio();
-    confronti.confronti.mockRejectedValueOnce(new NotFoundError({ message: 'Volantino non trovato', entityType: 'RuntimeKit', entityId: ID_KIT }));
+    confronti.edizionePrecedente.mockRejectedValueOnce(new NotFoundError({ message: 'Volantino non trovato', entityType: 'RuntimeKit', entityId: ID_KIT }));
 
     await expect(servizio.report(ID_KIT, AMBITO)).rejects.toBeInstanceOf(NotFoundError);
   });
 
   it('prima edizione: il report ha solo le sezioni dell\'impaginato', async () => {
     const { servizio, confronti } = creaServizio();
-    confronti.confronti.mockResolvedValueOnce({ edizionePrecedente: null, varianti: [] });
+    confronti.edizionePrecedente.mockResolvedValueOnce(null);
 
     const report = await servizio.report(ID_KIT, AMBITO);
 

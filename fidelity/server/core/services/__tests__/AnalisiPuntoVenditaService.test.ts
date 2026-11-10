@@ -22,7 +22,7 @@ import {
 import { chiaveDescrizione, type ProdottoFrequente, type RigaListaVolantino, type StatisticheProdotti } from '../../utils/analisiPuntoVendita';
 import { MINUTI_DISPOSITIVO_OFFLINE, type RigaSenzaPuntoVendita } from '../../utils/gestionePuntiVendita';
 import type { ApparizioneStoria } from '../../utils/storiaPuntoVendita';
-import { AnalisiPuntoVenditaService, KIT_PER_LETTURA, oggiARoma } from '../AnalisiPuntoVenditaService';
+import { AnalisiPuntoVenditaService, KIT_PER_LETTURA, oggiARoma, type OpzioniAnalisiPuntoVendita } from '../AnalisiPuntoVenditaService';
 
 vi.mock('../../logger', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -169,7 +169,13 @@ const LISTA: RigaListaVolantino[] = [
   { posizione: 3, riga: 'TAGGIA - Via Lungomare 21', regione: 'LIGURIA', provincia: 'IMPERIA', idPuntoVendita: null, abbinamento: null },
 ];
 
-function creaServizio(opzioni: { salvati?: Map<string, RiepilogoKit>; puntoVendita?: PuntoVenditaDellaStoria | null; chiaveMeta?: string | null } = {}) {
+function creaServizio(opzioni: {
+  salvati?: Map<string, RiepilogoKit>;
+  puntoVendita?: PuntoVenditaDellaStoria | null;
+  chiaveMeta?: string | null;
+  repartiGdo?: OpzioniAnalisiPuntoVendita['repartiGdo'];
+  configInsight?: OpzioniAnalisiPuntoVendita['configInsight'];
+} = {}) {
   /** analisi_kit in memoria. */
   const salvati = new Map(opzioni.salvati ?? [[K1, RIEPILOGO_K1]]);
   const repository = {
@@ -208,7 +214,12 @@ function creaServizio(opzioni: { salvati?: Map<string, RiepilogoKit>; puntoVendi
     trovaPuntoVendita: vi.fn(async (id: string) => (opzioni.puntoVendita === undefined ? (id === PV ? PUNTO_VENDITA : null) : opzioni.puntoVendita)),
     apparizioni: vi.fn(async () => APPARIZIONI),
   };
-  const servizio = new AnalisiPuntoVenditaService(repository, storia, { chiaveMetaPuntoVendita: opzioni.chiaveMeta, oggi: () => '2022-01-15' });
+  const servizio = new AnalisiPuntoVenditaService(repository, storia, {
+    chiaveMetaPuntoVendita: opzioni.chiaveMeta,
+    oggi: () => '2022-01-15',
+    repartiGdo: opzioni.repartiGdo,
+    configInsight: opzioni.configInsight,
+  });
   return { servizio, repository, storia, salvati };
 }
 
@@ -480,5 +491,44 @@ describe('oggiARoma', () => {
   it('il giorno del calendario di Roma, anche quando in UTC e\' ancora ieri', () => {
     expect(oggiARoma(new Date('2026-10-30T23:30:00Z'))).toBe('2026-10-31');
     expect(oggiARoma(new Date('2026-07-01T10:00:00Z'))).toBe('2026-07-01');
+  });
+});
+
+describe('reparti della GDO del PV (Impostazioni GDO)', () => {
+  const riepilogo = (reparti: RiepilogoKit['dati']['reparti']): RiepilogoKit => ({ dati: { ...AGGREGATI_VUOTI, marche: [], prodotti: [], reparti }, descrizioni: {} });
+  const salvati = () => new Map([
+    [K1, riepilogo([{ reparto: 'Drogheria alimentare', spazio: 30 }, { reparto: 'Reparto 05', spazio: 10 }, { reparto: 'Ortofrutta', spazio: 60 }])],
+    [K2, riepilogo([])],
+    [K3, riepilogo([])],
+  ]);
+  const configInsight = () => ({
+    getFlyerInsightsConfig: vi.fn(async (_idGdo?: string | null) => ({
+      dataMapping: { reparti: [{ codice: '01', descrizione: 'DROGHERIA ALIMENTARE' }, { codice: '05', descrizione: 'DROGHERIA CHIMICA' }] },
+    })),
+  });
+
+  it('i reparti dei riepiloghi salvati prendono il nome per il marketing, e quelli con lo stesso nome si sommano', async () => {
+    const repartiGdo = {
+      repartiSalvati: vi.fn(async (_idGdo: string) => [
+        { codice: '01', nomeDati: 'DROGHERIA ALIMENTARE', nomeMarketing: 'Dispensa', colore: null },
+        { codice: '05', nomeDati: 'DROGHERIA CHIMICA', nomeMarketing: ' dispensa', colore: '#8b5cf6' },
+      ]),
+    };
+    const config = configInsight();
+    const { servizio } = creaServizio({ salvati: salvati(), repartiGdo, configInsight: config });
+
+    const analisi = await servizio.analisi(PV, GDO);
+
+    expect(repartiGdo.repartiSalvati).toHaveBeenCalledWith(GDO);
+    expect(config.getFlyerInsightsConfig).toHaveBeenCalledWith(GDO);
+    expect(analisi.reparti).toEqual([{ anno: 2022, reparti: [{ reparto: 'Ortofrutta', quota: 60 }, { reparto: 'Dispensa', quota: 40 }] }]);
+  });
+
+  it('senza reparti salvati i nomi restano quelli dei riepiloghi', async () => {
+    const { servizio } = creaServizio({ salvati: salvati(), repartiGdo: { repartiSalvati: vi.fn(async () => []) }, configInsight: configInsight() });
+
+    const analisi = await servizio.analisi(PV, GDO);
+
+    expect(analisi.reparti[0].reparti.map(voce => voce.reparto)).toEqual(['Ortofrutta', 'Drogheria alimentare', 'Reparto 05']);
   });
 });

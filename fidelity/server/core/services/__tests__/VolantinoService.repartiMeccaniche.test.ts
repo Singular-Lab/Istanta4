@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ImportStorico } from '../../../../lib/types';
+import type { IAgenziaLib } from '../../agenzia_lib/types';
+import { insightVolantinoConadCno } from '../../agenzia_lib/conadcno/insight-volantino';
+import type { LogoDelCatalogo } from '../../interfaces/ICatalogoLoghiService';
 import type { IConfigService } from '../../interfaces/IConfigService';
+import type { RepartoSalvato } from '../../utils/repartiGdo';
 import { TipiDiExport } from '../../models';
 import { FilesRuntime } from '../../models/files_runtime';
 import { ReferenzeGruppo } from '../../models/referenze_gruppo';
@@ -64,7 +68,13 @@ const referenza = (id: string, dati: Record<string, unknown>) => ({
   pag: 1, x: 10, y: 10, w: 50, h: 50, w_page: 210, h_page: 287, perc_ingombro: 4, ...dati,
 });
 
-function creaServizio(referenze: Array<Record<string, unknown>>, config: Record<string, unknown>, importStorico: ImportStorico | null = null) {
+interface Extra {
+  reparti?: RepartoSalvato[];
+  agenzia?: Pick<IAgenziaLib, 'insightVolantino'>;
+  catalogo?: Map<string, LogoDelCatalogo>;
+}
+
+function creaServizio(referenze: Array<Record<string, unknown>>, config: Record<string, unknown>, importStorico: ImportStorico | null = null, extra: Extra = {}) {
   vi.spyOn(TipiDiExport, 'findOne').mockResolvedValue({ id_tipiexport: 'tipo-vol' } as never);
   vi.spyOn(FilesRuntime, 'findAll').mockResolvedValue([]);
   vi.spyOn(ReferenzeGruppo, 'findAll').mockResolvedValue([] as never);
@@ -87,9 +97,13 @@ function creaServizio(referenze: Array<Record<string, unknown>>, config: Record<
   // Il repository le restituisce gia' ordinate per pagina e posizione
   vi.mocked(righeDelKit).mockResolvedValue(referenze as never);
   vi.mocked(pdfDelKit).mockResolvedValue(null);
-  const configService = { getFlyerInsightsConfig: vi.fn(async () => config) } as unknown as IConfigService;
-  return new VolantinoService(configService);
+  configService = { getFlyerInsightsConfig: vi.fn(async (_idGdo?: string | null) => config) } as unknown as IConfigService;
+  const reparti = { repartiSalvati: vi.fn(async (_idGdo: string) => extra.reparti ?? []) };
+  const catalogo = { catalogo: vi.fn(async () => extra.catalogo ?? new Map<string, LogoDelCatalogo>()) };
+  return new VolantinoService(configService, reparti, extra.agenzia ?? {}, catalogo);
 }
+
+let configService: IConfigService;
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -219,5 +233,104 @@ describe('VolantinoService.getFlyerInsights: sezioni nuove con la config dell\'i
     expect(conMarche.marche.elenco.map(marca => [marca.nome, marca.distributore])).toEqual([['Granarolo', false], ['Insegna', true]]);
     expect(conMarche.marche.quotaDistributore).toEqual({ quotaSpazio: 50, quotaBox: 50 });
     expect(senzaMarche.marche.quotaDistributore).toBeNull();
+  });
+});
+
+describe('VolantinoService.getFlyerInsights: contesto, reparti della GDO e linee del distributore', () => {
+  it('il contesto ha le date di validita\' della promo del kit, e la config e\' quella della GDO del kit', async () => {
+    const servizio = creaServizio([referenza('c1', { data_fields: { reparto: '01' } })], CONFIG_EDRO21);
+
+    const insights = await servizio.getFlyerInsights('kit-1');
+
+    expect(insights.contesto).toEqual({
+      titolo: 'Volantino di novembre',
+      nomeArea: 'Nord',
+      nomeCanale: 'Super',
+      idPromo: 'promo-1',
+      validitaDal: '2026-11-01',
+      validitaAl: '2026-11-14',
+    });
+    expect(configService.getFlyerInsightsConfig).toHaveBeenCalledWith('gdo-1');
+  });
+
+  it('nomi per il marketing: codici con lo stesso nome sono un reparto solo, con il codice piu\' basso e il colore della GDO', async () => {
+    const servizio = creaServizio([
+      referenza('r1', { x: 0, data_fields: { reparto: '1', descrizione_uno: 'Pasta' } }),
+      referenza('r2', { x: 60, data_fields: { reparto: '05', descrizione_uno: 'Detersivo' } }),
+      referenza('r3', { x: 120, data_fields: { reparto: '24', descrizione_uno: 'Yogurt' } }),
+    ], CONFIG_EDRO21, STORICO, {
+      // Stesso nome senza maiuscole e spazi doppi; il colore e' il primo del gruppo dal codice piu' basso
+      reparti: [
+        { codice: '05', nomeDati: 'DROGHERIA CHIMICA', nomeMarketing: 'Spesa di casa ', colore: '#8b5cf6' },
+        { codice: '01', nomeDati: 'DROGHERIA ALIMENTARE', nomeMarketing: 'spesa  DI casa', colore: null },
+        { codice: '24', nomeDati: 'DEPERIBILI LIBERO SERVIZIO', nomeMarketing: null, colore: '#eab308' },
+      ],
+    });
+
+    const insights = await servizio.getFlyerInsights('kit-storico');
+    const box = new Map(insights.box.map(singolo => [singolo.id, singolo.reparto]));
+
+    expect(box.get('r1')).toEqual({ codice: '01', descrizione: 'spesa  DI casa', colore: '#8b5cf6', marketing: true });
+    expect(box.get('r2')).toEqual(box.get('r1'));
+    expect(box.get('r3')).toEqual({ codice: '24', descrizione: 'DEPERIBILI LIBERO SERVIZIO', colore: '#eab308' });
+    expect(insights.riepilogoReparti.map(voce => [voce.sigla, voce.descrizione, voce.numeroReferenze, voce.colore])).toEqual([
+      ['01', 'spesa  DI casa', 2, '#8b5cf6'],
+      ['24', 'DEPERIBILI LIBERO SERVIZIO', 1, '#eab308'],
+    ]);
+    expect(insights.spazio.perReparto.map(voce => [voce.chiave, voce.etichetta])).toEqual([
+      ['01', 'spesa  DI casa'],
+      ['24', 'DEPERIBILI LIBERO SERVIZIO'],
+    ]);
+    expect(insights.referenze.map(ref => ref.reparto)).toEqual(['01', '01', '24']);
+  });
+
+  it('senza reparti salvati per la GDO restano i reparti dell\'anagrafica, senza colore', async () => {
+    const insights = await creaServizio([referenza('r1', { data_fields: { reparto: '1' } })], CONFIG_EDRO21, STORICO).getFlyerInsights('kit-storico');
+
+    expect(insights.box[0].reparto).toEqual({ codice: '01', descrizione: 'DROGHERIA ALIMENTARE' });
+    expect(insights.riepilogoReparti[0]).not.toHaveProperty('colore');
+  });
+
+  it('linee del distributore: quella assegnata da Istanta, o ricavata dai testi; bolli dichiarati; loghi dal catalogo', async () => {
+    const servizio = creaServizio([
+      // Istanta: la linea e i bolli assegnati (un logo spento non conta)
+      referenza('l1', { x: 0, w: 100, foto_extra: [
+        { guidId: 'g-1', attiva: true, sigla: 'conad_SaporiDintorni', tipo: 3 },
+        { guid_id: 'g-2', sigla: 'DOP', tipo: 2 },
+        { guidId: 'g-3', attiva: false, sigla: 'igp', tipo: 2 },
+      ], data_fields: { descrizione_uno: 'Pecorino', descrizione_due: 'Conad', prezzo: 3, prezzo_anziche: 4 } }),
+      // Storico: nessun logo, la linea dai testi stampati
+      referenza('l2', { x: 110, w: 50, data_fields: { descrizione_uno: 'Passata', descrizione_due: 'Conad Il Biologico' } }),
+      referenza('l3', { x: 170, w: 50, data_fields: { descrizione_uno: 'Latte', descrizione_due: 'Granarolo' } }),
+    ], CONFIG_EDRO21, null, {
+      agenzia: { insightVolantino: insightVolantinoConadCno },
+      catalogo: new Map([['conad_saporidintorni', { sigla: 'conad_SaporiDintorni', guidId: 'logo-sd', tipo: 3 }]]),
+    });
+
+    const insights = await servizio.getFlyerInsights('kit-1');
+    const box = new Map(insights.box.map(singolo => [singolo.id, singolo]));
+
+    expect(box.get('l1')).toMatchObject({ linea: { sigla: 'conad_saporidintorni', nome: 'Sapori & Dintorni' }, bolli: ['dop'] });
+    expect(box.get('l2')).toMatchObject({ linea: { sigla: 'conad_bio', nome: 'Il Biologico' }, bolli: [] });
+    expect(box.get('l3')).toMatchObject({ linea: null, bolli: [] });
+    expect(insights.lineeDistributore).toMatchObject({
+      box: 2,
+      quotaBox: 66.7,
+      linee: [
+        { sigla: 'conad_saporidintorni', nome: 'Sapori & Dintorni', box: 1, referenze: 1, scontoMedio: 25, logo: '/olimpo/foto/getThumbNailOnDemand?guidId=logo-sd&width=96&height=0' },
+        { sigla: 'conad_bio', nome: 'Il Biologico', box: 1, referenze: 1, logo: null },
+      ],
+      bolli: [{ sigla: 'dop', nome: 'DOP', box: 1, logo: null }],
+    });
+  });
+
+  it('senza linee dichiarate dalla libreria agenzia i box non hanno linea e la sezione e\' null', async () => {
+    const insights = await creaServizio([
+      referenza('l1', { foto_extra: [{ guidId: 'g-1', sigla: 'conad_saporidintorni', tipo: 3 }], data_fields: { descrizione_due: 'Conad' } }),
+    ], CONFIG_EDRO21).getFlyerInsights('kit-1');
+
+    expect(insights.lineeDistributore).toBeNull();
+    expect(insights.box[0]).not.toHaveProperty('linea');
+    expect(insights.box[0]).not.toHaveProperty('bolli');
   });
 });

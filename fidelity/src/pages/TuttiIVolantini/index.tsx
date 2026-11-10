@@ -7,36 +7,27 @@ import PageError from "@/components/Base/PageError";
 import Pagina from "@/components/Base/Pagina";
 import Sezione from "@/components/Base/Sezione";
 import Skeleton from "@/components/Base/Skeleton";
+import StatusBadge from "@/components/Base/StatusBadge";
 import EmptyState from "@/components/EmptyState";
 import { FlyerInsights as FlyerInsightsComponent } from "@/components/FlyerInsights";
-import { SintesiInsight } from "@/components/FlyerInsights/analisi";
+import { DistribuzionePagine, MarchiDistributore, SintesiInsight } from "@/components/FlyerInsights/analisi";
+import { sezioneAttiva } from "@/components/FlyerInsights/configurazione";
+import { ReferenzeVolantino } from "@/components/FlyerInsights/referenze";
 import { ScaricaReportPdf } from "@/components/FlyerInsights/report";
 import { VolantinoSfogliabile } from "@/components/FlyerInsights/volantino";
-import ReferenzeInVolantinoBox from "@/components/ReferenzeInVolantinoBox";
 import withSessionCheck from "@/components/SessionChecker";
 import { PERMISSIONS } from "@/constants/permissions";
 import { usePermission } from "@/context/PermissionContext";
-import { useConfrontiVolantino } from "@/query/flyerInsights";
+import { periodoValidita } from "@/pages/PuntiVenditaConsultazione/analisi";
 import { useFetchFlyerInsights, useFetchFlyerInsightsConfig } from "@/query/query";
-import type { ReferenzaPosizione } from "@/types/flyerInsights";
-import { resolveColor } from "@/utils/flyerInsightsHelpers";
 import { useVolantinoConsultazione } from "@/query/consultazione";
 import { useScaricaFileConsultazione } from "@/utils/scaricaFileConsultazione";
-import { lazy, Suspense, useMemo, useState } from "react";
+import { useCallback, useId, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { percorsoVolantini } from "../../../lib/consultazione/periodi";
 import { EXPORT_DI_SISTEMA } from "../../../lib/enums";
 import type { BoxInsight } from "../../../lib/insightVolantino/tipi";
-
-// I confronti stanno in fondo alla pagina e pesano: il loro codice si scarica a parte, con un solo
-// caricamento per i due blocchi (due import() contemporanei dello stesso modulo sono inutili e, con
-// i mock di vitest, il secondo riceverebbe il modulo vero)
-let caricamentoConfronti: Promise<typeof import("@/components/FlyerInsights/confronti")> | undefined;
-const caricaConfronti = () => (caricamentoConfronti ??= import("@/components/FlyerInsights/confronti"));
-const ConfrontoEdizione = lazy(() => caricaConfronti().then(modulo => ({ default: modulo.ConfrontoEdizione })));
-const DifferenzeVarianti = lazy(() => caricaConfronti().then(modulo => ({ default: modulo.DifferenzeVarianti })));
-
-type GruppoReferenze = { sigla: string; descrizione: string; referenze: ReferenzaPosizione[] };
+import { statoValidita } from "./validita";
 
 const INDIETRO = { to: percorsoVolantini("attivi"), etichetta: "Torna ai volantini attivi" };
 
@@ -60,11 +51,19 @@ const boxDellaReferenza = (box: readonly BoxInsight[], referenza: string): BoxIn
   return box.find(voce => normalizza(voce.nome) === nome) ?? null;
 };
 
+/** Porta in vista il volantino sfogliabile, dopo che la distribuzione o la tabella l'hanno mosso. */
+const mostraVolantino = (id: string) => {
+  const elemento = document.getElementById(id);
+  // jsdom e i browser vecchi non hanno scrollIntoView con le opzioni
+  if (elemento && typeof elemento.scrollIntoView === "function") elemento.scrollIntoView({ behavior: "smooth", block: "start" });
+};
+
 /**
- * Dettaglio di sola consultazione del volantino: sintesi, pagine con i box, insight, confronti e,
- * se autorizzati, file pubblicati; nell'intestazione il report PDF. Il kit è nella chiave: aprendo
- * un altro volantino da questa pagina (l'edizione precedente, un'altra variante) pagina, scelte e
- * filtri ripartono da capo.
+ * Dettaglio di sola consultazione del volantino, dall'alto: intestazione compatta (canale, area,
+ * periodo, stato e report PDF), i numeri chiave, la distribuzione nelle pagine, il volantino
+ * sfogliabile in grande, i marchi del distributore, le analisi per reparto, meccanica e marca, la
+ * tabella delle referenze e, se autorizzati, i file pubblicati. Niente confronti con altre edizioni o
+ * varianti. Il kit è nella chiave: aprendo un altro volantino pagina, scelte e filtri ripartono da capo.
  */
 const TuttiIVolantini: React.FC = () => {
   const [parametri] = useSearchParams();
@@ -79,20 +78,36 @@ function DettaglioVolantino({ idKit }: { idKit: string }) {
   const puoScaricare = usePermission(PERMISSIONS.MATERIALI.SCARICA);
   const insights = useFetchFlyerInsights(idKit);
   const configurazione = useFetchFlyerInsightsConfig();
-  // Edizione precedente e varianti: partono subito, ma la pagina non le aspetta
-  const confronti = useConfrontiVolantino(idKit || undefined);
   // File pubblicati del kit dalla consultazione: solo se è pubblicato e della GDO dell'utente
   const file = useVolantinoConsultazione(idKit, puoScaricare);
   const { inCorso, scarica } = useScaricaFileConsultazione();
   const [cerca, setCerca] = useState("");
   // Pagina del visualizzatore: finché l'utente non sfoglia vale quella dell'indirizzo, o quella del box cercato
   const [paginaSfogliata, setPaginaSfogliata] = useState<number | null>(null);
+  // Il box chiesto dalla tabella delle referenze: `volta` cresce a ogni richiesta, anche dello stesso box
+  const [boxDaAprire, setBoxDaAprire] = useState<{ id: string; volta: number } | null>(null);
+  const idVolantino = useId();
 
   const dati = insights.data;
   const boxVolantino = dati?.box;
 
   const boxIniziale = useMemo(() => (boxVolantino ? boxDellaReferenza(boxVolantino, referenza) : null), [boxVolantino, referenza]);
   const paginaVolantino = paginaSfogliata ?? pagina ?? boxIniziale?.pagina ?? 1;
+
+  const vaiAllaPagina = useCallback(
+    (numero: number) => {
+      setPaginaSfogliata(numero);
+      mostraVolantino(idVolantino);
+    },
+    [idVolantino]
+  );
+  const apriBox = useCallback(
+    (voce: BoxInsight) => {
+      setBoxDaAprire(attuale => ({ id: voce.id, volta: (attuale?.volta ?? 0) + 1 }));
+      mostraVolantino(idVolantino);
+    },
+    [idVolantino]
+  );
 
   const fileFiltrati = useMemo(() => {
     const elenco = file.data?.file ?? [];
@@ -101,30 +116,9 @@ function DettaglioVolantino({ idKit }: { idKit: string }) {
     return elenco.filter((voce) => voce.nome.toLowerCase().includes(testo));
   }, [file.data?.file, cerca]);
 
-  const referenzePerReparto = useMemo<GruppoReferenze[]>(() => {
-    if (!dati) return [];
-    const gruppi = new Map<string, GruppoReferenze>();
-    for (const reparto of dati.riepilogoReparti) {
-      gruppi.set(reparto.sigla, { sigla: reparto.sigla, descrizione: reparto.descrizione, referenze: [] });
-    }
-    for (const voce of dati.referenze) {
-      const sigla = String(voce.reparto || "ALTRO");
-      const gruppo = gruppi.get(sigla) ?? {
-        sigla,
-        descrizione: String(voce.descrizioneReparto || sigla),
-        referenze: [],
-      };
-      gruppo.referenze.push(voce);
-      gruppi.set(sigla, gruppo);
-    }
-    return [...gruppi.values()]
-      .filter((gruppo) => gruppo.referenze.length > 0)
-      .sort((a, b) => b.referenze.length - a.referenze.length);
-  }, [dati]);
-
   if (!idKit) {
     return (
-      <Pagina titolo="Dettaglio volantino" indietro={INDIETRO}>
+      <Pagina compatta titolo="Dettaglio volantino" indietro={INDIETRO}>
         <PageError compatta titolo="Volantino non indicato" motivo="L'indirizzo non contiene il volantino da consultare." />
       </Pagina>
     );
@@ -132,7 +126,7 @@ function DettaglioVolantino({ idKit }: { idKit: string }) {
 
   if (insights.isError) {
     return (
-      <Pagina titolo="Dettaglio volantino" indietro={INDIETRO}>
+      <Pagina compatta titolo="Dettaglio volantino" indietro={INDIETRO}>
         <PageError
           compatta
           titolo="Insight non caricati"
@@ -145,13 +139,30 @@ function DettaglioVolantino({ idKit }: { idKit: string }) {
 
   const contesto = dati?.contesto;
   const titolo = contesto?.titolo || "Dettaglio volantino";
-  const descrizione = [contesto?.nomeArea, contesto?.nomeCanale].filter(Boolean).join(" · ");
-  const conPagine = Boolean(dati && (dati.pdf || (dati.box?.length ?? 0) > 0));
+  // Le date della promo arrivano con gli insight; senza (server non aggiornato o promo senza date) niente periodo né stato
+  const periodo = contesto?.validitaDal || contesto?.validitaAl ? periodoValidita(contesto.validitaDal, contesto.validitaAl) : null;
+  const stato = contesto ? statoValidita(contesto.validitaDal, contesto.validitaAl) : null;
+  const box = dati?.box ?? [];
+  const conPagine = Boolean(dati && (dati.pdf || box.length > 0));
+  // Le pagine della sintesi (PDF in Olimpo, o fino all'ultimo box): le stesse del volantino e della distribuzione
+  const totalePagine = dati?.sintesi?.pagine ?? dati?.totalePagine ?? 0;
+  const conDistribuzione = box.length > 0 && sezioneAttiva(configurazione.data, "pagine");
+
+  const meta =
+    contesto?.nomeCanale || contesto?.nomeArea || periodo || stato ? (
+      <>
+        {contesto?.nomeCanale && <StatusBadge tono="neutral" icon="Store" etichetta={contesto.nomeCanale} />}
+        {contesto?.nomeArea && <StatusBadge tono="neutral" icon="MapPin" etichetta={contesto.nomeArea} />}
+        {periodo && <StatusBadge tono="neutral" icon="CalendarDays" etichetta={periodo} />}
+        {stato && <StatusBadge tono={stato.tono} icon={stato.icona} etichetta={stato.testo} />}
+      </>
+    ) : undefined;
 
   return (
     <Pagina
+      compatta
       titolo={titolo}
-      descrizione={descrizione || "Insight e materiali del volantino"}
+      meta={meta}
       indietro={INDIETRO}
       azioni={<ScaricaReportPdf idKit={idKit} titolo={titolo} disabled={!dati} />}
     >
@@ -161,102 +172,69 @@ function DettaglioVolantino({ idKit }: { idKit: string }) {
           <Skeleton className="h-96" />
         </div>
       ) : (
-        <>
-          {dati?.sintesi && (
-            <Sezione titolo="In sintesi" descrizione="I numeri chiave del volantino e come cambiano rispetto all'edizione precedente.">
-              <SintesiInsight
-                sintesi={dati.sintesi}
-                // undefined finché il confronto non c'è (in caricamento o non caricato), null se è la prima edizione
-                confronto={confronti.data ? confronti.data.edizionePrecedente : undefined}
-                caricamentoConfronto={confronti.isLoading}
-              />
-            </Sezione>
-          )}
+        dati && (
+          <>
+            {dati.sintesi && (
+              <section aria-label="Numeri del volantino">
+                <SintesiInsight sintesi={dati.sintesi} box={dati.box} lineeDistributore={dati.lineeDistributore} />
+              </section>
+            )}
 
-          {dati && conPagine && (
-            <Sezione
-              titolo="Il volantino"
-              descrizione="Le pagine stampate con i box nelle posizioni reali: seleziona un box per la sua scheda e il viaggio del prodotto."
-            >
-              <VolantinoSfogliabile
-                idKit={idKit}
-                pdf={dati.pdf ?? null}
-                box={dati.box ?? []}
-                // Le pagine della sintesi (PDF in Olimpo, o fino all'ultimo box): le stesse delle card e dei confronti
-                totalePagine={dati.sintesi?.pagine ?? dati.totalePagine}
-                configurazione={configurazione.data}
-                pagina={paginaVolantino}
-                onCambiaPagina={setPaginaSfogliata}
-                idBoxIniziale={boxIniziale?.id ?? null}
-              />
-            </Sezione>
-          )}
-        </>
+            {conDistribuzione && (
+              <Sezione
+                titolo="Distribuzione nelle pagine"
+                descrizione="Quanto di ogni pagina coprono i box, per reparto: scegli una pagina per aprirla nel volantino."
+              >
+                <DistribuzionePagine
+                  box={box}
+                  totalePagine={totalePagine}
+                  configurazione={configurazione.data}
+                  paginaCorrente={paginaVolantino}
+                  onVaiAllaPagina={vaiAllaPagina}
+                />
+              </Sezione>
+            )}
+
+            {conPagine && (
+              <Sezione
+                id={idVolantino}
+                className="scroll-mt-4"
+                titolo="Il volantino"
+                descrizione="Le pagine stampate con i box nelle posizioni reali: seleziona un box per la sua scheda e il viaggio del prodotto."
+              >
+                <VolantinoSfogliabile
+                  idKit={idKit}
+                  pdf={dati.pdf ?? null}
+                  box={box}
+                  totalePagine={totalePagine}
+                  configurazione={configurazione.data}
+                  pagina={paginaVolantino}
+                  onCambiaPagina={setPaginaSfogliata}
+                  idBoxIniziale={boxIniziale?.id ?? null}
+                  apriBox={boxDaAprire}
+                />
+              </Sezione>
+            )}
+
+            {dati.lineeDistributore && (
+              <Sezione titolo="Marchi del distributore" descrizione="Lo spazio delle linee di marca del distributore, linea per linea, e i bolli stampati sui box.">
+                <MarchiDistributore linee={dati.lineeDistributore} />
+              </Sezione>
+            )}
+          </>
+        )
       )}
 
-      <Sezione
-        titolo="Insight del volantino"
-        descrizione="Pagine, reparti, meccaniche, prezzi e sconti, spazio e marche."
-      >
-        {insights.isLoading ? (
-          <div aria-busy="true" className="space-y-4">
-            <Skeleton className="h-16" />
-            <Skeleton className="h-80" />
-          </div>
-        ) : (
-          <FlyerInsightsComponent
-            insights={dati ?? null}
-            paginaSelezionata={pagina}
-            exportCodes={[EXPORT_DI_SISTEMA.VOL]}
-          />
-        )}
-      </Sezione>
+      <FlyerInsightsComponent insights={dati ?? null} isLoading={insights.isLoading} exportCodes={[EXPORT_DI_SISTEMA.VOL]} />
 
-      {dati && (
-        <Sezione
-          titolo="Confronti"
-          descrizione="Rispetto all'edizione precedente della stessa area e canale e alle altre varianti della promo."
-        >
-          <Suspense
-            fallback={
-              <div aria-busy="true" className="space-y-4">
-                <Skeleton className="h-40" />
-                <Skeleton className="h-64" />
-              </div>
-            }
-          >
-            <div className="space-y-8">
-              <ConfrontoEdizione
-                confronto={confronti.data?.edizionePrecedente ?? null}
-                caricamento={confronti.isLoading}
-                errore={confronti.isError ? confronti.error?.message || "Non è stato possibile caricare i confronti del volantino." : null}
-                onRiprova={() => confronti.refetch()}
-              />
-              {/* Senza confronti non si sa quali varianti esistono: l'errore lo dice già il blocco sopra */}
-              {!confronti.isError && (
-                <div className="border-t border-dashed border-slate-200 pt-6 dark:border-darkmode-400">
-                  <DifferenzeVarianti
-                    idKit={idKit}
-                    insights={dati}
-                    varianti={confronti.data?.varianti ?? []}
-                    configurazione={configurazione.data}
-                    caricamento={confronti.isLoading}
-                  />
-                </div>
-              )}
-            </div>
-          </Suspense>
-        </Sezione>
-      )}
-
-      {dati && referenzePerReparto.length > 0 && (
-        <ReferenzeInVolantinoBox
-          exportTypes={[EXPORT_DI_SISTEMA.VOL]}
-          referenzePerReparto={referenzePerReparto}
-          flyerInsights={dati}
-          insightsConfig={configurazione.data}
-          resolveColor={resolveColor}
+      {dati && box.length > 0 && (
+        <ReferenzeVolantino
+          box={box}
+          referenze={dati.referenze}
+          lineeDistributore={dati.lineeDistributore}
+          totaleReferenze={dati.sintesi?.referenze ?? dati.totaleReferenze}
           ricercaIniziale={referenza}
+          onApriBox={apriBox}
         />
       )}
 

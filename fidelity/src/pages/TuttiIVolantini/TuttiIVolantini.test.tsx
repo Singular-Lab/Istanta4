@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -8,13 +8,12 @@ const finti = vi.hoisted(() => ({
   permessi: new Set<string>(),
   insights: {} as Record<string, unknown>,
   configurazione: {} as Record<string, unknown>,
-  confronti: {} as Record<string, unknown>,
   file: {} as Record<string, unknown>,
   richiestaFile: null as { idKit: string; abilitata?: boolean } | null,
   idKitRichiesti: [] as string[],
-  idKitConfronti: [] as Array<string | undefined>,
   /** Le prop ricevute dal visualizzatore all'ultimo disegno. */
   propVolantino: [] as string[],
+  propAnalisi: null as { isLoading?: boolean } | null,
   scarica: vi.fn(),
 }));
 
@@ -26,12 +25,8 @@ vi.mock("@/query/query", () => ({
     return finti.insights;
   },
   useFetchFlyerInsightsConfig: () => finti.configurazione,
-}));
-vi.mock("@/query/flyerInsights", () => ({
-  useConfrontiVolantino: (idKit: string | undefined) => {
-    finti.idKitConfronti.push(idKit);
-    return finti.confronti;
-  },
+  // analisi.ts dei punti vendita legge la rete delle insegne solo nei suoi hook, qui non usati
+  useFetchReteInsegne: () => ({ data: undefined }),
 }));
 // I file arrivano dalle API di consultazione: solo quelli del kit pubblicato della GDO
 vi.mock("@/query/consultazione", () => ({
@@ -51,42 +46,32 @@ vi.mock("@/components/FlyerInsights/report", () => ({
     </button>
   ),
 }));
+// Le sezioni Reparti, Meccaniche e sconti e Marche hanno i loro test
 vi.mock("@/components/FlyerInsights", () => ({
-  FlyerInsights: ({ insights, paginaSelezionata }: { insights: { guidIdKitRuntime: string } | null; paginaSelezionata?: number }) => (
-    <div>Insight {insights?.guidIdKitRuntime ?? "vuoti"} pagina {paginaSelezionata ?? "tutte"}</div>
-  ),
+  FlyerInsights: (props: { insights: { guidIdKitRuntime: string } | null; isLoading?: boolean }) => {
+    finti.propAnalisi = props;
+    return <div data-testid="analisi">Analisi {props.isLoading ? "in caricamento" : (props.insights?.guidIdKitRuntime ?? "vuote")}</div>;
+  },
 }));
-// Sintesi, visualizzatore e confronti hanno i loro test: qui conta cosa la pagina passa loro
-vi.mock("@/components/FlyerInsights/analisi", () => ({
-  SintesiInsight: ({
-    sintesi,
-    confronto,
-    caricamentoConfronto,
-  }: {
-    sintesi: { referenze: number };
-    confronto?: { edizione: { titolo: string } } | null;
-    caricamentoConfronto?: boolean;
-  }) => (
-    <p>
-      Sintesi di {sintesi.referenze} referenze, confronto{" "}
-      {caricamentoConfronto ? "in caricamento" : confronto === undefined ? "non richiesto" : (confronto?.edizione.titolo ?? "prima edizione")}
-    </p>
-  ),
-}));
+// Il visualizzatore ha i suoi test: qui conta cosa la pagina gli passa
 vi.mock("@/components/FlyerInsights/volantino", () => ({
   VolantinoSfogliabile: (props: {
     idKit: string;
     pagina?: number;
     idBoxIniziale?: string | null;
+    apriBox?: { id: string; volta: number } | null;
     box: unknown[];
     onCambiaPagina?: (pagina: number) => void;
   }) => {
-    const { idKit, pagina, idBoxIniziale, box, onCambiaPagina } = props;
+    const { idKit, pagina, idBoxIniziale, apriBox, box, onCambiaPagina } = props;
     finti.propVolantino = Object.keys(props);
     return (
       <div>
         <p>
           Volantino {idKit} pagina {pagina ?? "nessuna"} box iniziale {idBoxIniziale ?? "nessuno"} box {box.length}
+        </p>
+        <p>
+          Box chiesto {apriBox ? `${apriBox.id} volta ${apriBox.volta}` : "nessuno"}
         </p>
         <button type="button" onClick={() => onCambiaPagina?.((pagina ?? 1) + 2)}>
           Pagine successive
@@ -95,45 +80,12 @@ vi.mock("@/components/FlyerInsights/volantino", () => ({
     );
   },
 }));
-vi.mock("@/components/FlyerInsights/confronti", async () => {
-  // Il collegamento all'edizione precedente deve navigare davvero nel router del test
-  const { Link } = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
-  return {
-    ConfrontoEdizione: ({
-      confronto,
-      caricamento,
-      errore,
-      onRiprova,
-    }: {
-      confronto: { edizione: { idKit: string; titolo: string } } | null;
-      caricamento?: boolean;
-      errore?: string | null;
-      onRiprova?: () => void;
-    }) => (
-      <div>
-        <p>Edizione precedente: {errore ?? (caricamento ? "in caricamento" : (confronto?.edizione.titolo ?? "nessuna"))}</p>
-        {confronto && <Link to={`/volantini/tutti_i_volantini?kit=${confronto.edizione.idKit}`}>Apri {confronto.edizione.titolo}</Link>}
-        {errore && (
-          <button type="button" onClick={onRiprova}>
-            Riprova i confronti
-          </button>
-        )}
-      </div>
-    ),
-    DifferenzeVarianti: ({ idKit, varianti, caricamento }: { idKit: string; varianti: Array<{ idKit: string }>; caricamento?: boolean }) => (
-      <p>
-        Varianti di {idKit}: {caricamento ? "in caricamento" : varianti.map((variante) => variante.idKit).join(", ") || "nessuna"}
-      </p>
-    ),
-  };
-});
-vi.mock("@/components/ReferenzeInVolantinoBox", () => ({
-  default: ({ ricercaIniziale }: { ricercaIniziale?: string }) => <div>Referenze: {ricercaIniziale || "tutte"}</div>,
-}));
 
 import TuttiIVolantini from ".";
 
-const box = (id: string, pagina: number, nome: string, idReferenze: string[]) => ({
+const LATTICINI = { codice: "LS", descrizione: "Latticini" };
+
+const box = (id: string, pagina: number, nome: string, idReferenze: string[], campi: Record<string, unknown> = {}) => ({
   id,
   codiceBox: id,
   pagina,
@@ -152,34 +104,59 @@ const box = (id: string, pagina: number, nome: string, idReferenze: string[]) =>
   sottocosto: false,
   meccanica: null,
   meccanicaOriginale: null,
-  reparto: null,
+  reparto: LATTICINI,
   foto: [],
   prodotti: idReferenze.length,
   idReferenze,
+  ...campi,
 });
+
+const LINEE = {
+  quotaSpazio: 33.3,
+  quotaBox: 33.3,
+  box: 1,
+  linee: [{ sigla: "SD", nome: "Sapori & Dintorni", colore: "#b45309", logo: null, box: 1, referenze: 1, quotaSpazio: 33.3, scontoMedio: null }],
+  bolli: [{ sigla: "DOP", nome: "DOP", logo: null, box: 1 }],
+};
 
 const datiInsight = {
   guidIdKitRuntime: "k1",
-  contesto: { titolo: "Volantino ottobre", nomeArea: "Nord", nomeCanale: "Super", idPromo: "p1" },
-  totaleReferenze: 3,
+  // Una promo già finita: lo stato non dipende dal giorno in cui girano i test
+  contesto: { titolo: "Volantino ottobre", nomeArea: "Nord", nomeCanale: "Super", idPromo: "p1", validitaDal: "2020-01-01", validitaAl: "2020-01-14" },
+  totaleReferenze: 4,
   totalePagine: 8,
   riepilogoPagine: [],
-  riepilogoReparti: [{ sigla: "LS", descrizione: "Latticini", numeroReferenze: 1, pagine: [2] }],
+  riepilogoReparti: [],
   riepilogoMeccaniche: [],
-  referenze: [{ id: "r1", reparto: "LS", descrizioneReparto: "Latticini", posizione: null }],
+  referenze: [
+    { id: "r1", posizione: null },
+    { id: "r6", descrizione: "Yogurt bianco", posizione: null },
+    { id: "r7", descrizione: "Yogurt alla fragola", codiceReferenza: "778", prezzo: "0,89", posizione: null },
+  ],
   pdf: { idOlimpoCloud: "olimpo-1", pagine: 8 },
-  box: [box("b1", 1, "Latte intero", ["r1"]), box("b2", 2, "Yogurt bianco", ["r6", "r7"]), box("b3", 5, "Mozzarella Granarolo", ["r9"])],
-  sintesi: { referenze: 3, box: 3, pagine: 8 },
+  box: [
+    box("b1", 1, "Latte intero", ["r1"], { meccanica: "fidelity" }),
+    box("b2", 2, "Yogurt bianco", ["r6", "r7"], { meccanica: "sconto", sconto: 30, barrato: 2.85 }),
+    box("b3", 5, "Mozzarella Granarolo", ["r9"], { sottocosto: true, marca: "Granarolo", linea: { sigla: "SD", nome: "Sapori & Dintorni" } }),
+  ],
+  sintesi: {
+    referenze: 4,
+    box: 3,
+    pagine: 8,
+    scontoMedio: 30,
+    boxConSconto: 1,
+    quotaFidelity: 33.3,
+    sottocosto: 1,
+    marche: 2,
+    copertura: { prezzo: 100, marca: 100, reparto: 100, geometria: 100 },
+  },
 };
 
 const caricato = (data: unknown) => ({ data, isLoading: false, isError: false, error: null, refetch: vi.fn() });
 const inCaricamento = () => ({ data: undefined, isLoading: true, isError: false, error: null, refetch: vi.fn() });
 const fallito = (messaggio: string) => ({ data: undefined, isLoading: false, isError: true, error: new Error(messaggio), refetch: vi.fn() });
 
-const confrontiCompleti = {
-  edizionePrecedente: { edizione: { idKit: "k0", titolo: "Volantino settembre" } },
-  varianti: [{ idKit: "k2" }, { idKit: "k3" }],
-};
+const PUBBLICATO = { id: "k1", titolo: "Volantino ottobre", promo: { id: "p1", nome: "Ottobre", validitaDal: "2020-01-01", validitaAl: "2020-01-14" }, file: [] };
 
 const apri = (indirizzo = "/volantini/tutti_i_volantini?kit=k1") =>
   render(
@@ -188,38 +165,170 @@ const apri = (indirizzo = "/volantini/tutti_i_volantini?kit=k1") =>
     </MemoryRouter>
   );
 
-describe("Dettaglio insight del volantino", () => {
+const titoliSezioni = () => screen.getAllByRole("heading", { level: 2 }).map((titolo) => titolo.textContent);
+const numeri = () => screen.getByRole("region", { name: "Numeri del volantino" });
+const numero = (etichetta: string) => within(numeri()).getByText(etichetta, { selector: "dt span" }).closest("[data-numero]") as HTMLElement;
+
+describe("Dettaglio del volantino", () => {
   beforeEach(() => {
     finti.permessi = new Set(["materiali.visualizza"]);
     finti.insights = caricato(datiInsight);
     finti.configurazione = caricato({});
-    finti.confronti = caricato(confrontiCompleti);
-    finti.file = caricato({ id: "k1", titolo: "Volantino ottobre", file: [] });
+    finti.file = caricato(PUBBLICATO);
     finti.richiestaFile = null;
     finti.idKitRichiesti = [];
-    finti.idKitConfronti = [];
     finti.propVolantino = [];
+    finti.propAnalisi = null;
     finti.scarica.mockReset();
   });
 
-  it("usa il kit dell'indirizzo e mostra contesto, pagina e referenza negli insight condivisi", () => {
-    apri("/volantini/tutti_i_volantini?kit=k1&pagina=2&referenza=Mozzarella+Granarolo");
-
-    expect(finti.idKitRichiesti.at(-1)).toBe("k1");
-    expect(finti.idKitConfronti.at(-1)).toBe("k1");
-    expect(screen.getByRole("heading", { level: 1, name: "Volantino ottobre" })).toBeInTheDocument();
-    expect(screen.getByText("Nord · Super")).toBeInTheDocument();
-    expect(screen.getByText("Insight k1 pagina 2")).toBeInTheDocument();
-    expect(screen.getByText("Referenze: Mozzarella Granarolo")).toBeInTheDocument();
-  });
-
-  it("mette le sezioni nell'ordine: sintesi, volantino, insight, confronti, file", async () => {
-    finti.permessi.add("materiali.scarica");
+  it("intestazione compatta: titolo, canale, area, periodo e stato del volantino dagli insight, con il report PDF", () => {
+    // Le date vengono dagli insight, non dalla consultazione
+    finti.file = caricato(undefined);
     apri();
 
-    expect(await screen.findByText("Edizione precedente: Volantino settembre")).toBeInTheDocument();
-    const titoli = screen.getAllByRole("heading", { level: 2 }).map((titolo) => titolo.textContent);
-    expect(titoli).toEqual(["In sintesi", "Il volantino", "Insight del volantino", "Confronti", "File del volantino"]);
+    expect(finti.idKitRichiesti.at(-1)).toBe("k1");
+    const titolo = screen.getByRole("heading", { level: 1, name: "Volantino ottobre" });
+    expect(titolo).not.toHaveClass("title-page");
+    expect(screen.getByTitle("Super")).toBeInTheDocument();
+    expect(screen.getByTitle("Nord")).toBeInTheDocument();
+    expect(screen.getByTitle("1 – 14 gennaio 2020")).toBeInTheDocument();
+    expect(screen.getByTitle("Concluso")).toHaveAttribute("data-tono", "neutral");
+    expect(screen.getByRole("button", { name: "Report PDF di k1: Volantino ottobre" })).toBeEnabled();
+  });
+
+  it("senza le date negli insight (server non aggiornato) non c'è periodo né stato, ma il resto dell'intestazione sì", () => {
+    finti.insights = caricato({ ...datiInsight, contesto: { titolo: "Volantino ottobre", nomeArea: "Nord", nomeCanale: "Super", idPromo: "p1" } });
+    apri();
+
+    expect(screen.getByTitle("Super")).toBeInTheDocument();
+    expect(screen.queryByTitle(/gennaio/)).not.toBeInTheDocument();
+    expect(screen.queryByTitle("Concluso")).not.toBeInTheDocument();
+  });
+
+  it("con le date null nemmeno; con la sola fine passata il volantino è concluso", () => {
+    finti.insights = caricato({ ...datiInsight, contesto: { ...datiInsight.contesto, validitaDal: null, validitaAl: null } });
+    const { unmount } = apri();
+    expect(screen.queryByTitle("Concluso")).not.toBeInTheDocument();
+    unmount();
+
+    finti.insights = caricato({ ...datiInsight, contesto: { ...datiInsight.contesto, validitaDal: null, validitaAl: "2020-01-14" } });
+    apri();
+    expect(screen.getByTitle("fino al 14 gennaio 2020")).toBeInTheDocument();
+    expect(screen.getByTitle("Concluso")).toBeInTheDocument();
+  });
+
+  it("mette le sezioni nell'ordine: numeri, distribuzione, volantino, marchi del distributore, analisi, referenze, file", () => {
+    finti.permessi.add("materiali.scarica");
+    finti.insights = caricato({ ...datiInsight, lineeDistributore: LINEE });
+    apri();
+
+    expect(titoliSezioni()).toEqual([
+      "Distribuzione nelle pagine",
+      "Il volantino",
+      "Marchi del distributore",
+      "Referenze in volantino · 4",
+      "File del volantino",
+    ]);
+    // I numeri stanno prima della distribuzione, le analisi fra i marchi e le referenze
+    const distribuzione = screen.getByRole("heading", { level: 2, name: "Distribuzione nelle pagine" });
+    expect(numeri().compareDocumentPosition(distribuzione) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const analisi = screen.getByTestId("analisi");
+    const marchi = screen.getByRole("heading", { level: 2, name: "Marchi del distributore" });
+    const referenze = screen.getByRole("heading", { level: 2, name: "Referenze in volantino · 4" });
+    expect(marchi.compareDocumentPosition(analisi) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(analisi.compareDocumentPosition(referenze) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("non confronta con altre edizioni o varianti: niente sezione Confronti", () => {
+    apri();
+
+    expect(screen.queryByRole("heading", { name: /Confronti/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/edizione precedente/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Varianti/)).not.toBeInTheDocument();
+    expect(document.querySelector("[data-direzione]")).toBeNull();
+  });
+
+  it("i numeri chiave in riquadri: referenze, pagine, sconto, Prezzo Fidelity, sottocosto e marche", () => {
+    apri();
+
+    expect(numero("Referenze")).toHaveTextContent("4");
+    expect(numero("Referenze")).toHaveTextContent("3 box");
+    expect(numero("Pagine")).toHaveTextContent("8");
+    expect(numero("Sconto medio")).toHaveTextContent("30%");
+    expect(numero("Prezzo Fidelity")).toHaveTextContent("33,3%");
+    expect(numero("Prezzo Fidelity")).toHaveTextContent("1 box");
+    expect(numero("Sottocosto")).toHaveTextContent("1");
+    expect(numero("Marche")).toHaveTextContent("2");
+    expect(within(numeri()).queryByText("Marchi del distributore")).not.toBeInTheDocument();
+  });
+
+  it("con le linee del distributore mostra il riquadro e la sezione dei suoi marchi; senza, nessuno dei due", () => {
+    finti.insights = caricato({ ...datiInsight, lineeDistributore: LINEE });
+    const { unmount } = apri();
+
+    expect(numero("Marchi del distributore")).toHaveTextContent("33,3%");
+    const sezione = screen.getByRole("region", { name: "Marchi del distributore" });
+    expect(within(sezione).getByText("Sapori & Dintorni")).toBeInTheDocument();
+    expect(within(sezione).getByRole("list", { name: "Bolli nel volantino" })).toHaveTextContent("DOP");
+    unmount();
+
+    finti.insights = caricato({ ...datiInsight, lineeDistributore: null });
+    apri();
+    expect(screen.queryByRole("region", { name: "Marchi del distributore" })).not.toBeInTheDocument();
+  });
+
+  it("scegliendo una pagina nella distribuzione il volantino va a quella pagina, anche da tastiera", () => {
+    apri();
+
+    const distribuzione = screen.getByRole("region", { name: "Distribuzione nelle pagine" });
+    fireEvent.click(within(distribuzione).getByRole("button", { name: /^Pagina 5:/ }));
+    expect(screen.getByText(/^Volantino k1 pagina 5 /)).toBeInTheDocument();
+    expect(within(distribuzione).getByRole("button", { name: /^Pagina 5:/ })).toHaveAttribute("aria-current", "page");
+
+    fireEvent.keyDown(within(distribuzione).getByRole("button", { name: /^Pagina 2:/ }), { key: "Enter" });
+    expect(screen.getByText(/^Volantino k1 pagina 2 /)).toBeInTheDocument();
+  });
+
+  it("la config della GDO può spegnere la distribuzione nelle pagine", () => {
+    finti.configurazione = caricato({ pagine: { enabled: false } });
+    apri();
+
+    expect(screen.queryByRole("heading", { level: 2, name: "Distribuzione nelle pagine" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "Il volantino" })).toBeInTheDocument();
+  });
+
+  it("dalla tabella delle referenze \"p. N\" apre il box nel volantino, ogni volta che si sceglie", () => {
+    apri();
+
+    const tabella = screen.getByRole("table", { name: "Referenze in volantino" });
+    expect(screen.getByText("Box chiesto nessuno")).toBeInTheDocument();
+    fireEvent.click(within(tabella).getByRole("button", { name: "Apri nel volantino Mozzarella Granarolo, pagina 5" }));
+    expect(screen.getByText("Box chiesto b3 volta 1")).toBeInTheDocument();
+
+    fireEvent.click(within(tabella).getByRole("button", { name: "Apri nel volantino Mozzarella Granarolo, pagina 5" }));
+    expect(screen.getByText("Box chiesto b3 volta 2")).toBeInTheDocument();
+  });
+
+  it("la tabella delle referenze ha la colonna Linea solo con le linee del distributore", () => {
+    finti.insights = caricato({ ...datiInsight, lineeDistributore: LINEE });
+    const { unmount } = apri();
+    expect(within(screen.getByRole("table", { name: "Referenze in volantino" })).getByRole("columnheader", { name: "Linea" })).toBeInTheDocument();
+    unmount();
+
+    // Senza linee del distributore negli insight
+    finti.insights = caricato({ ...datiInsight, lineeDistributore: null });
+    apri();
+    expect(within(screen.getByRole("table", { name: "Referenze in volantino" })).queryByRole("columnheader", { name: "Linea" })).not.toBeInTheDocument();
+  });
+
+  it("?referenza con il nome di un prodotto cerca nella tabella; un id di referenza no", () => {
+    const { unmount } = apri("/volantini/tutti_i_volantini?kit=k1&referenza=Mozzarella+Granarolo");
+    expect(screen.getByRole("searchbox", { name: "Cerca referenza" })).toHaveValue("Mozzarella Granarolo");
+    unmount();
+
+    apri("/volantini/tutti_i_volantini?kit=k1&referenza=r7");
+    expect(screen.getByRole("searchbox", { name: "Cerca referenza" })).toHaveValue("");
   });
 
   it("passa al visualizzatore PDF, box, pagina di ?pagina e box di ?referenza cercato per id, senza mappa di calore né vendite", () => {
@@ -227,7 +336,8 @@ describe("Dettaglio insight del volantino", () => {
 
     expect(screen.getByText("Volantino k1 pagina 2 box iniziale b2 box 3")).toBeInTheDocument();
     expect(finti.propVolantino).toContain("pdf");
-    for (const tolta of ["calore", "rendimento", "previsione", "pesi"]) expect(finti.propVolantino).not.toContain(tolta);
+    expect(finti.propVolantino).toContain("apriBox");
+    for (const tolta of ["calore", "rendimento", "previsione", "pesi", "statoBox", "compatto"]) expect(finti.propVolantino).not.toContain(tolta);
   });
 
   it("senza ?pagina apre la pagina del box della referenza, cercata anche per nome stampato", () => {
@@ -249,58 +359,6 @@ describe("Dettaglio insight del volantino", () => {
     expect(screen.getByText(/^Volantino k1 pagina 4 /)).toBeInTheDocument();
   });
 
-  it("aprendo l'edizione precedente riparte dal suo kit e dalla prima pagina", async () => {
-    apri("/volantini/tutti_i_volantini?kit=k1");
-
-    fireEvent.click(screen.getByRole("button", { name: "Pagine successive" }));
-    expect(screen.getByText(/^Volantino k1 pagina 3 /)).toBeInTheDocument();
-
-    fireEvent.click(await screen.findByRole("link", { name: "Apri Volantino settembre" }));
-    expect(finti.idKitRichiesti.at(-1)).toBe("k0");
-    expect(screen.getByText(/^Volantino k0 pagina 1 /)).toBeInTheDocument();
-  });
-
-  it("passa la sintesi con l'edizione precedente e le varianti ai confronti", async () => {
-    apri();
-
-    expect(screen.getByText("Sintesi di 3 referenze, confronto Volantino settembre")).toBeInTheDocument();
-    expect(await screen.findByText("Edizione precedente: Volantino settembre")).toBeInTheDocument();
-    expect(screen.getByText("Varianti di k1: k2, k3")).toBeInTheDocument();
-  });
-
-  it("per la prima edizione di area e canale la sintesi riceve null e i confronti nessuna edizione", async () => {
-    finti.confronti = caricato({ edizionePrecedente: null, varianti: [] });
-    apri();
-
-    expect(screen.getByText("Sintesi di 3 referenze, confronto prima edizione")).toBeInTheDocument();
-    expect(await screen.findByText("Edizione precedente: nessuna")).toBeInTheDocument();
-    expect(screen.getByText("Varianti di k1: nessuna")).toBeInTheDocument();
-  });
-
-  it("mentre i confronti caricano mostra già sintesi e volantino", async () => {
-    finti.confronti = inCaricamento();
-    apri();
-
-    expect(screen.getByText("Sintesi di 3 referenze, confronto in caricamento")).toBeInTheDocument();
-    expect(screen.getByText(/^Volantino k1 pagina 1 /)).toBeInTheDocument();
-    expect(await screen.findByText("Edizione precedente: in caricamento")).toBeInTheDocument();
-    expect(screen.getByText("Varianti di k1: in caricamento")).toBeInTheDocument();
-  });
-
-  it("se i confronti falliscono lo dice nella loro sezione, permette di riprovare e lascia il resto della pagina", async () => {
-    const confronti = fallito("Servizio non raggiungibile");
-    finti.confronti = confronti;
-    apri();
-
-    expect(await screen.findByText("Edizione precedente: Servizio non raggiungibile")).toBeInTheDocument();
-    expect(screen.queryByText(/^Varianti di/)).not.toBeInTheDocument();
-    expect(screen.getByText("Sintesi di 3 referenze, confronto non richiesto")).toBeInTheDocument();
-    expect(screen.getByText("Insight k1 pagina tutte")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Riprova i confronti" }));
-    expect(confronti.refetch).toHaveBeenCalled();
-  });
-
   it("se gli insight non arrivano mostra l'errore con Riprova e nessuna sezione", () => {
     const insights = fallito("Volantino non trovato");
     finti.insights = insights;
@@ -313,23 +371,25 @@ describe("Dettaglio insight del volantino", () => {
     expect(insights.refetch).toHaveBeenCalled();
   });
 
-  it("mentre gli insight caricano non mostra sintesi, volantino né confronti", () => {
+  it("mentre gli insight caricano non mostra numeri, distribuzione, volantino né referenze", () => {
     finti.insights = inCaricamento();
     apri();
 
-    expect(screen.queryByText(/^Sintesi di/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Numeri del volantino" })).not.toBeInTheDocument();
     expect(screen.queryByText(/^Volantino k1/)).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { level: 2, name: "Confronti" })).not.toBeInTheDocument();
-    expect(screen.getByRole("heading", { level: 2, name: "Insight del volantino" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { level: 2, name: "Distribuzione nelle pagine" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("table", { name: "Referenze in volantino" })).not.toBeInTheDocument();
+    expect(finti.propAnalisi?.isLoading).toBe(true);
   });
 
-  it("senza PDF né box non mostra il visualizzatore ma tiene insight e confronti", async () => {
+  it("senza PDF né box non mostra distribuzione, volantino e referenze ma tiene le analisi", () => {
     finti.insights = caricato({ ...datiInsight, pdf: null, box: [] });
     apri();
 
     expect(screen.queryByRole("heading", { level: 2, name: "Il volantino" })).not.toBeInTheDocument();
-    expect(screen.getByText("Insight k1 pagina tutte")).toBeInTheDocument();
-    expect(await screen.findByText("Edizione precedente: Volantino settembre")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { level: 2, name: "Distribuzione nelle pagine" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("table", { name: "Referenze in volantino" })).not.toBeInTheDocument();
+    expect(screen.getByText("Analisi k1")).toBeInTheDocument();
   });
 
   it("senza materiali.scarica lascia consultare gli insight e non abilita la richiesta dei file", () => {
@@ -343,8 +403,7 @@ describe("Dettaglio insight del volantino", () => {
   it("con materiali.scarica mostra, filtra e scarica dalla consultazione i file pubblicati", () => {
     finti.permessi.add("materiali.scarica");
     finti.file = caricato({
-      id: "k1",
-      titolo: "Volantino ottobre",
+      ...PUBBLICATO,
       file: [
         { id: "f1", nome: "Roma.pdf", tipoExport: "VOL", mime: "application/pdf", pagine: 8, anteprima: "/mini/roma" },
         { id: "f2", nome: "MILANO.pdf", tipoExport: "VOL", mime: "application/pdf", pagine: 8, anteprima: null },
@@ -365,23 +424,16 @@ describe("Dettaglio insight del volantino", () => {
     apri("/volantini/tutti_i_volantini");
 
     expect(screen.getByText("Volantino non indicato")).toBeInTheDocument();
-    expect(finti.idKitConfronti.at(-1)).toBeUndefined();
     expect(screen.queryByRole("button", { name: /^Report PDF/ })).not.toBeInTheDocument();
   });
 });
 
-describe("Dettaglio insight del volantino: report PDF", () => {
+describe("Dettaglio del volantino: report PDF", () => {
   beforeEach(() => {
     finti.permessi = new Set(["materiali.visualizza"]);
     finti.insights = caricato(datiInsight);
     finti.configurazione = caricato({});
-    finti.confronti = caricato(confrontiCompleti);
-    finti.file = caricato({ id: "k1", titolo: "Volantino ottobre", file: [] });
-  });
-
-  it("il report PDF sta nell'intestazione con kit e titolo; resta disabilitato finché gli insight non arrivano", () => {
-    apri();
-    expect(screen.getByRole("button", { name: "Report PDF di k1: Volantino ottobre" })).toBeEnabled();
+    finti.file = caricato(PUBBLICATO);
   });
 
   it("mentre gli insight caricano il report non si può scaricare", () => {

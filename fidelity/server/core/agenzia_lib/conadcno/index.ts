@@ -82,8 +82,8 @@ function userNames(claims: OidcUserClaims, email: string): { nome: string; cogno
 /**
  * CONAD CNO. Per tutto il resto vale il comportamento di default, che e quello
  * che il loader usava gia per questo cliente; in piu abilita l'import dei volantini,
- * il proprio tracciato del file punti vendita e le regole del report PDF del volantino
- * (palette, intestazione, ordine delle sezioni).
+ * il proprio tracciato del file punti vendita e le regole degli insight e del report PDF del
+ * volantino (palette, intestazione, ordine delle sezioni, linee del distributore e bolli).
  */
 export class ConadcnoAgenziaLib extends DefaultAgenziaLib {
   constructor(private readonly conadcnoUserService: IUserService) {

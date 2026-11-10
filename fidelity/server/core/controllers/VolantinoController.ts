@@ -32,7 +32,7 @@ export class VolantinoController extends BaseController {
       }
       // La GDO della sessione (Superadmin e Agenzia: tutte, o quella in ?gdo=): fuori ambito e' un 404
       const ambito = await ambitoGdoDellaRichiesta(req, res, req.query.gdo);
-      const result = await this.volantinoService.getFlyerInsights(guidIdKitRuntime, ambito);
+      const result = await this.volantinoService.getFlyerInsights(guidIdKitRuntime, ambito, req);
       this.sendResponse(res, HttpStatusCode.OK, result);
     } catch (error) {
       this.handleError(res, error as Error);

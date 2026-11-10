@@ -2,12 +2,12 @@
 import "@testing-library/jest-dom/vitest";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import type { ConfrontoEdizione, SintesiVolantino, Variazione } from "../../../../lib/insightVolantino/tipi";
+import type { LineeDistributore, SintesiVolantino } from "../../../../lib/insightVolantino/tipi";
 
 // analisi.ts dei punti vendita legge la rete delle insegne solo nei suoi hook, qui non usati
 vi.mock("@/query/query", () => ({ useFetchReteInsegne: () => ({ data: undefined }) }));
 
-import { CLASSE_VARIAZIONE_NEUTRA, NUMERI_SINTESI, SintesiInsight, testoCoperturaParziale, variazioneNumero } from "./SintesiInsight";
+import { numeriSintesi, SintesiInsight, testoCoperturaParziale } from "./SintesiInsight";
 
 const sintesi = (campi: Partial<SintesiVolantino> = {}): SintesiVolantino => ({
   referenze: 120,
@@ -22,111 +22,66 @@ const sintesi = (campi: Partial<SintesiVolantino> = {}): SintesiVolantino => ({
   ...campi,
 });
 
-const variazione = (attuale: number | null, precedente: number | null): Variazione => ({
-  attuale,
-  precedente,
-  differenza: attuale !== null && precedente !== null ? attuale - precedente : null,
-});
+const LINEE: LineeDistributore = {
+  quotaSpazio: 18.4,
+  quotaBox: 15,
+  box: 12,
+  linee: [
+    { sigla: "SD", nome: "Sapori & Dintorni", colore: "#b45309", logo: null, box: 7, referenze: 9, quotaSpazio: 11.2, scontoMedio: 20 },
+    { sigla: "VB", nome: "Verso Natura", colore: null, logo: null, box: 5, referenze: 5, quotaSpazio: 7.2, scontoMedio: null },
+  ],
+  bolli: [],
+};
 
-const confronto = (campi: Partial<ConfrontoEdizione["sintesi"]> = {}, storico = false): ConfrontoEdizione => ({
-  edizione: {
-    idKit: "k0",
-    titolo: "Volantino di settembre",
-    idPromo: "p0",
-    nomePromo: null,
-    area: "Nord",
-    canale: "Super",
-    validitaDal: "2026-09-03",
-    validitaAl: "2026-09-16",
-    storico,
-  },
-  sintesi: {
-    referenze: variazione(120, 100),
-    box: variazione(80, 80),
-    pagine: variazione(16, 16),
-    scontoMedio: variazione(27.84, 30.2),
-    quotaFidelity: variazione(12.5, 9.5),
-    sottocosto: variazione(3, 1),
-    marche: variazione(35, 35),
-    ...campi,
-  },
-  spazioPerReparto: [],
-  prodottiEntrati: [],
-  prodottiUsciti: [],
-});
-
-/** La StatCard (radice con data-tono) che ha questa etichetta. */
-const card = (etichetta: string) => screen.getByText(etichetta, { selector: "dt" }).closest("[data-tono]") as HTMLElement;
+/** Il riquadro (dl con data-numero) che ha questa etichetta. */
+const riquadro = (etichetta: string) => screen.getByText(etichetta, { selector: "dt span" }).closest("[data-numero]") as HTMLElement;
 
 describe("SintesiInsight", () => {
-  it("mostra i numeri chiave del volantino senza variazioni quando il confronto non c'è", () => {
+  it("mostra i numeri chiave in riquadri separati, con il dettaglio sotto ciascuno", () => {
     render(<SintesiInsight sintesi={sintesi()} />);
 
-    expect(card("Referenze")).toHaveTextContent("120");
-    expect(card("Box")).toHaveTextContent("80");
-    expect(card("Pagine")).toHaveTextContent("16");
-    expect(card("Sconto medio")).toHaveTextContent("27,8%");
-    expect(card("Sconto medio")).toHaveTextContent("su 42 box");
-    expect(card("Quota fidelity")).toHaveTextContent("12,5%");
-    expect(card("Sottocosto")).toHaveTextContent("3");
-    expect(card("Marche")).toHaveTextContent("35");
+    expect(riquadro("Referenze")).toHaveTextContent("120");
+    expect(riquadro("Referenze")).toHaveTextContent("80 box");
+    expect(riquadro("Pagine")).toHaveTextContent("16");
+    expect(riquadro("Pagine")).toHaveTextContent("5 box a pagina");
+    expect(riquadro("Sconto medio")).toHaveTextContent("27,8%");
+    expect(riquadro("Sconto medio")).toHaveTextContent("42 box scontati");
+    expect(riquadro("Prezzo Fidelity")).toHaveTextContent("12,5%");
+    // Senza i box il conteggio si ricava dalla quota: 12,5% di 80
+    expect(riquadro("Prezzo Fidelity")).toHaveTextContent("10 box");
+    expect(riquadro("Sottocosto")).toHaveTextContent("3");
+    expect(riquadro("Marche")).toHaveTextContent("35");
+  });
+
+  it("non confronta con altre edizioni: niente variazioni né \"prima\"", () => {
+    render(<SintesiInsight sintesi={sintesi()} />);
+
     expect(document.querySelector("[data-direzione]")).toBeNull();
+    expect(screen.queryByText(/prima /)).not.toBeInTheDocument();
     expect(screen.queryByText(/edizione precedente/)).not.toBeInTheDocument();
   });
 
-  it("con l'edizione precedente mostra la variazione: neutra per lo sconto medio, positiva se sale la quota fidelity", () => {
-    render(<SintesiInsight sintesi={sintesi()} confronto={confronto()} />);
+  it("conta i box con il Prezzo Fidelity sui box, quando ci sono", () => {
+    render(<SintesiInsight sintesi={sintesi()} box={[{ meccanica: "fidelity" }, { meccanica: "sconto" }, { meccanica: "fidelity" }]} />);
 
-    const referenze = card("Referenze");
-    expect(referenze).toHaveTextContent("+20");
-    expect(referenze).toHaveTextContent("prima 100");
-    expect(referenze.querySelector("[data-direzione]")).toHaveAttribute("data-direzione", "su");
-    expect(referenze).toHaveClass(CLASSE_VARIAZIONE_NEUTRA);
-
-    // Uno sconto medio più basso non è un peggioramento: la card lo riporta al grigio
-    const sconto = card("Sconto medio");
-    expect(sconto).toHaveTextContent("−2,4 punti");
-    expect(sconto.querySelector("[data-direzione]")).toHaveAttribute("data-direzione", "giu");
-    expect(sconto).toHaveClass(CLASSE_VARIAZIONE_NEUTRA);
-    expect(sconto).toHaveTextContent("su 42 box · prima 30,2%");
-
-    const fidelity = card("Quota fidelity");
-    expect(fidelity).toHaveTextContent("+3 punti");
-    expect(fidelity.querySelector("[data-direzione]")).toHaveClass("text-success");
-    expect(fidelity).not.toHaveClass(CLASSE_VARIAZIONE_NEUTRA);
-
-    expect(screen.getByText("Volantino di settembre")).toBeInTheDocument();
-    expect(screen.getByText(/rispetto all'edizione precedente della stessa area e canale/)).toBeInTheDocument();
+    expect(riquadro("Prezzo Fidelity")).toHaveTextContent("2 box");
   });
 
-  it("una differenza nulla è stabile; senza uno dei due valori la variazione non c'è", () => {
-    render(<SintesiInsight sintesi={sintesi()} confronto={confronto({ scontoMedio: variazione(27.84, null) })} />);
+  it("con le linee del distributore aggiunge il riquadro in evidenza dei suoi marchi e il dettaglio delle marche", () => {
+    render(<SintesiInsight sintesi={sintesi()} lineeDistributore={LINEE} />);
 
-    const marche = card("Marche");
-    expect(marche).toHaveTextContent("stabile");
-    expect(marche.querySelector("[data-direzione]")).toHaveAttribute("data-direzione", "stabile");
-    expect(card("Sconto medio").querySelector("[data-direzione]")).toBeNull();
-    expect(card("Sconto medio")).not.toHaveTextContent("prima");
+    const marchi = riquadro("Marchi del distributore");
+    expect(marchi).toHaveAttribute("data-evidenza", "true");
+    expect(marchi).toHaveTextContent("18,4%");
+    expect(marchi).toHaveTextContent("dello spazio, 12 box");
+    expect(riquadro("Marche")).toHaveTextContent("di cui 2 linee del distributore");
   });
 
-  it("l'edizione precedente dello storico è dichiarata", () => {
-    render(<SintesiInsight sintesi={sintesi()} confronto={confronto({}, true)} />);
+  it("senza linee del distributore il riquadro dei marchi non c'è", () => {
+    render(<SintesiInsight sintesi={sintesi()} lineeDistributore={null} />);
 
-    expect(screen.getByText(/dallo storico/)).toBeInTheDocument();
-  });
-
-  it("alla prima edizione dell'area e del canale dice che non c'è confronto", () => {
-    render(<SintesiInsight sintesi={sintesi()} confronto={null} />);
-
-    expect(screen.getByText(/Nessuna edizione precedente per la stessa area e lo stesso canale/)).toBeInTheDocument();
-    expect(document.querySelector("[data-direzione]")).toBeNull();
-  });
-
-  it("mentre il confronto si carica lo annuncia senza variazioni", () => {
-    render(<SintesiInsight sintesi={sintesi()} caricamentoConfronto />);
-
-    expect(screen.getByText(/in caricamento/)).toHaveAttribute("aria-busy", "true");
-    expect(document.querySelector("[data-direzione]")).toBeNull();
+    expect(screen.queryByText("Marchi del distributore")).not.toBeInTheDocument();
+    expect(riquadro("Marche")).not.toHaveTextContent("di cui");
   });
 
   it("segnala i dati parziali sotto la soglia di copertura, e tace quando la copertura è buona", () => {
@@ -141,23 +96,38 @@ describe("SintesiInsight", () => {
   it("un volantino senza box mostra zeri e N/D, senza la nota sulla copertura", () => {
     render(
       <SintesiInsight
-        sintesi={sintesi({ referenze: 0, box: 0, scontoMedio: null, boxConSconto: 0, quotaFidelity: 0, sottocosto: 0, marche: 0, copertura: { prezzo: 0, marca: 0, reparto: 0, geometria: 0 } })}
+        sintesi={sintesi({ referenze: 0, box: 0, pagine: 0, scontoMedio: null, boxConSconto: 0, quotaFidelity: 0, sottocosto: 0, marche: 0, copertura: { prezzo: 0, marca: 0, reparto: 0, geometria: 0 } })}
       />
     );
 
-    expect(card("Sconto medio")).toHaveTextContent("N/D");
+    expect(riquadro("Sconto medio")).toHaveTextContent("N/D");
+    expect(riquadro("Pagine")).not.toHaveTextContent("a pagina");
     expect(screen.queryByText(/Dati parziali/)).not.toBeInTheDocument();
   });
 });
 
-describe("variazioneNumero e testoCoperturaParziale", () => {
-  const numero = (chiave: string) => NUMERI_SINTESI.find(n => n.chiave === chiave)!;
+describe("numeriSintesi e testoCoperturaParziale", () => {
+  it("l'ordine dei riquadri: i marchi del distributore prima delle marche, solo se dichiarati", () => {
+    expect(numeriSintesi(sintesi()).map(n => n.id)).toEqual(["referenze", "pagine", "scontoMedio", "fidelity", "sottocosto", "marche"]);
+    expect(numeriSintesi(sintesi(), undefined, LINEE).map(n => n.id)).toEqual([
+      "referenze",
+      "pagine",
+      "scontoMedio",
+      "fidelity",
+      "sottocosto",
+      "distributore",
+      "marche",
+    ]);
+  });
 
-  it("le quote si confrontano in punti a un decimale, i conteggi in unità", () => {
-    expect(variazioneNumero(numero("scontoMedio"), variazione(30, 29.96))).toEqual({ valore: "stabile", direzione: "stabile", positivoSe: "su" });
-    expect(variazioneNumero(numero("referenze"), variazione(90, 100))).toEqual({ valore: "−10", direzione: "giu", positivoSe: "su" });
-    expect(variazioneNumero(numero("referenze"), variazione(90, null))).toBeUndefined();
-    expect(variazioneNumero(numero("referenze"), undefined)).toBeUndefined();
+  it("al singolare con un box e una linea", () => {
+    const numeri = numeriSintesi(sintesi({ box: 1, boxConSconto: 1 }), [{ meccanica: "fidelity" }], { ...LINEE, box: 1, linee: [LINEE.linee[0]] });
+    const numero = (id: string) => numeri.find(n => n.id === id)!;
+
+    expect(numero("referenze").sottotitolo).toBe("1 box");
+    expect(numero("scontoMedio").sottotitolo).toBe("1 box scontato");
+    expect(numero("distributore").sottotitolo).toBe("dello spazio, 1 box");
+    expect(numero("marche").sottotitolo).toBe("di cui 1 linea del distributore");
   });
 
   it("solo i dati sotto il 60% entrano nella nota", () => {

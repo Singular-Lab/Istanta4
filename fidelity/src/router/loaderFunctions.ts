@@ -198,20 +198,6 @@ export const funzioneCaricamentoWorkspace = async () => {
   return { aree, canali, workspaces, puntiVendita };
 };
 
-export const funzioneCaricamentoConfigWebpliant = async () => {
-  const totalSteps = 1;
-
-
-  const configPromise = ServerCall.get<ConfigWebpliant>("/get_config");
-
-  const results = await Promise.allSettled([configPromise]);
-  const [config] = results.map((r) =>
-    r.status === "fulfilled" ? r.value : (console.error("Errore:", r.reason), null)
-  );
-
-  return { config };
-};
-
 export const funzioneCaricamentoWebpliant = async () => {
   const totalSteps = 1;
 

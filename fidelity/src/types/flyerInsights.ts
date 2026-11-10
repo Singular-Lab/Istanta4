@@ -240,6 +240,9 @@ export interface ContestoFlyerInsights {
   nomeArea?: string;
   nomeCanale?: string;
   idPromo: string;
+  /** Validità della promo (YYYY-MM-DD); null se la promo non le ha, assente dai server non aggiornati. */
+  validitaDal?: string | null;
+  validitaAl?: string | null;
 }
 
 /** Campi di sempre più le sezioni nuove (lib/insightVolantino/tipi.ts). */

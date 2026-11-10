@@ -349,11 +349,12 @@ describe("Scheda del punto vendita", () => {
     expect(within(volantini).getByRole("link", { name: /PDF/ })).toHaveAttribute("href", "/olimpo/pdf");
   });
 
-  it("Storia: una colonna per volantino; senza scelta il più recente, con la sua scheda", () => {
+  it("Storia: una barra per volantino; senza scelta il più recente, con la sua scheda", () => {
     apri();
 
     const storia = sezione("Storia");
     expect(storia).toHaveTextContent("Nei volantini dal marzo 2019 all'ottobre 2026.");
+    expect(storia).toHaveTextContent("Ogni barra è un volantino in cui compare, dal primo all'ultimo giorno di validità");
     expect(within(storia).getAllByRole("option")).toHaveLength(3);
     expect(within(storia).getByRole("option", { name: /Promo k3/ })).toHaveAttribute("aria-selected", "true");
     const scelto = within(storia).getByRole("region", { name: "Volantino selezionato" });
@@ -375,13 +376,64 @@ describe("Scheda del punto vendita", () => {
     expect(within(legenda).getAllByRole("listitem").map(v => v.textContent)).toEqual(["Conad City", "Conad Superstore", "cambio di insegna", "indirizzo cambiato"]);
   });
 
-  it("Storia: nello zoom su un anno l'insegna è scritta nella fascia e l'asse va per mesi", () => {
+  it("Storia: il periodo predefinito va dal primo anno a oggi, con la linea di oggi sul calendario", () => {
+    apri();
+
+    const storia = sezione("Storia");
+    expect(within(storia).getAllByRole("radio").map(r => r.textContent)).toEqual(["Dal 2025", "2026", "2025", "Ultimi 3 mesi"]);
+    expect(within(storia).getByRole("radio", { name: "Dal 2025" })).toHaveAttribute("aria-checked", "true");
+    const timeline = within(storia).getByRole("group", { name: /Timeline/ });
+    expect(within(timeline).getByText("oggi")).toBeInTheDocument();
+  });
+
+  it("Storia: nello zoom su un anno l'insegna è scritta nella fascia e l'asse va per mesi del calendario", () => {
     apri("/punti-vendita/pv1?anno=2026");
 
     const timeline = within(sezione("Storia")).getByRole("group", { name: /Timeline/ });
     expect(timeline).toHaveTextContent("Conad Superstore · Toscana");
-    expect(within(timeline).getByText("ott")).toBeInTheDocument();
+    expect(within(timeline).getByText("gen 2026")).toBeInTheDocument();
+    expect(within(timeline).getByText("ott 2026")).toBeInTheDocument();
     expect(within(sezione("Storia")).getAllByRole("option")).toHaveLength(1);
+  });
+
+  it("Storia: gli ultimi 3 mesi, dall'indirizzo, mostrano i volantini recenti con le settimane e la linea di oggi", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 10, 10, 12));
+    try {
+      apri("/punti-vendita/pv1?anno=ultimi3mesi&volantino=k1");
+
+      const storia = sezione("Storia");
+      expect(within(storia).getByRole("radio", { name: "Ultimi 3 mesi" })).toHaveAttribute("aria-checked", "true");
+      // Il volantino di marzo 2025 non è nel periodo: si sceglie il più recente
+      expect(within(storia).getAllByRole("option")).toHaveLength(1);
+      expect(within(storia).getByRole("option", { name: /Promo k3/ })).toHaveAttribute("aria-selected", "true");
+      const timeline = within(storia).getByRole("group", { name: /Timeline/ });
+      expect(within(timeline).getByText("ago 2026")).toBeInTheDocument();
+      expect(within(timeline).getByText("ott 2026")).toBeInTheDocument();
+      // Lunedì 12 ottobre 2026
+      expect(within(timeline).getByText("12")).toBeInTheDocument();
+      expect(within(timeline).getByText("oggi")).toBeInTheDocument();
+
+      fireEvent.click(within(storia).getByRole("radio", { name: "Dal 2025" }));
+      expect(within(storia).getAllByRole("option")).toHaveLength(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("Storia: senza volantini negli ultimi 3 mesi lo dice, e il calendario resta", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2027, 5, 1, 12));
+    try {
+      apri("/punti-vendita/pv1?anno=ultimi3mesi");
+
+      const storia = sezione("Storia");
+      expect(within(storia).queryAllByRole("option")).toHaveLength(0);
+      expect(storia).toHaveTextContent("Nessun volantino negli ultimi 3 mesi");
+      expect(within(within(storia).getByRole("group", { name: /Timeline/ })).getByText("oggi")).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("Storia: scegliendo un volantino nella timeline la scheda lo mostra; precedente e successivo scorrono", async () => {
@@ -444,7 +496,7 @@ describe("Scheda del punto vendita", () => {
     const storia = sezione("Storia");
     expect(storia).toHaveTextContent("Arriva quando il Plugin InDesign invia i volantini o quando si importano i loro export JSON");
     // La guida alla lettura della timeline non serve senza timeline
-    expect(storia).not.toHaveTextContent("Ogni colonna è un volantino");
+    expect(storia).not.toHaveTextContent("Ogni barra è un volantino");
     expect(screen.queryByLabelText("Il punto vendita in numeri")).not.toBeInTheDocument();
     for (const titolo of ["Come si promuove", "Sconto medio", "Marche più presenti", "Prodotti che tornano", "Dove sta nel volantino", "Indirizzo e telefono stampati", "Eventi"]) {
       expect(screen.queryByRole("region", { name: titolo })).not.toBeInTheDocument();

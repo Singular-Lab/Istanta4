@@ -4,9 +4,10 @@ import type { MeccanicaReferenza } from '../puntiVendita/analisi';
  * Contratto degli insight del volantino (spec insight-volantino), condiviso fra server e client.
  *
  * - GET /api/flyer-insights/:idKit                       "materiali.visualizza" -> FlyerInsights (campi di sempre + EstensioneInsight)
- * - GET /api/flyer-insights/:idKit/confronti             "materiali.visualizza" -> ConfrontiVolantino
- * - GET /api/flyer-insights/:idKit/varianti/:idAltra     "materiali.visualizza" -> DifferenzeVarianti (400 se idAltra non e' della stessa promo)
  * - GET /api/flyer-insights/:idKit/prodotti/:chiave      "materiali.visualizza" -> ViaggioProdotto
+ *
+ * Nella pagina nessun confronto con altri volantini (decisione dell'utente): il confronto con
+ * l'edizione precedente resta solo nel report PDF (ConfrontoEdizione, lib/insightVolantino/report.ts).
  *
  * Tutte limitate alla GDO della sessione (superadmin e agenzia: tutte, o quella in ?gdo=): un kit di
  * un'altra GDO risponde 404 come un kit inesistente. Valgono per ogni GDO e per i kit di Istanta e
@@ -22,9 +23,6 @@ import type { MeccanicaReferenza } from '../puntiVendita/analisi';
 const base = (idKit: string): string => `/flyer-insights/${encodeURIComponent(idKit)}`;
 
 export const percorsoInsight = (idKit: string): string => base(idKit);
-export const percorsoConfronti = (idKit: string): string => `${base(idKit)}/confronti`;
-export const percorsoVarianti = (idKit: string, idAltra: string): string =>
-  `${base(idKit)}/varianti/${encodeURIComponent(idAltra)}`;
 export const percorsoViaggio = (idKit: string, chiave: string): string =>
   `${base(idKit)}/prodotti/${encodeURIComponent(chiave)}`;
 
@@ -53,8 +51,17 @@ export interface PdfVolantino {
 }
 
 export interface RepartoInsight {
+  /**
+   * Codice del reparto. Con un nome per il marketing condiviso da piu' codici (Impostazioni GDO),
+   * e' il codice piu' basso del gruppo: lo stesso per tutti i box del gruppo.
+   */
   codice: string;
+  /** Nome per il marketing della GDO se impostato, altrimenti la descrizione dell'anagrafica o dei dati. */
   descrizione: string;
+  /** Colore impostato per la GDO (#rrggbb); assente o null: quello della configurazione o automatico. */
+  colore?: string | null;
+  /** true quando descrizione e' il nome per il marketing della GDO: si mostra come e' scritto. */
+  marketing?: boolean;
 }
 
 /** Un box del volantino: il primo prodotto (pilota) e quanti altri ne contiene. */
@@ -91,6 +98,19 @@ export interface BoxInsight {
   idReferenze: string[];
   /** Solo nei kit dello storico. */
   origine?: 'listino' | 'fuori_listino';
+  /**
+   * Linea di marca del distributore della referenza pilota (es. Sapori & Dintorni): quella assegnata
+   * da Istanta, o ricavata dalle regole della libreria agenzia dai testi stampati; null se non e' del
+   * distributore o il cliente non dichiara linee. Assente nelle risposte dei server non aggiornati.
+   */
+  linea?: LineaBox | null;
+  /** Sigle dei bolli della referenza pilota (DOP, Filiera controllata...), solo quelli dichiarati. */
+  bolli?: string[];
+}
+
+export interface LineaBox {
+  sigla: string;
+  nome: string;
 }
 
 /** Percentuali 0-100 di box che hanno il dato. */
@@ -184,6 +204,38 @@ export interface MarcheVolantino {
   quotaDistributore: { quotaSpazio: number; quotaBox: number } | null;
 }
 
+/** Una linea del distributore nel volantino (spec insight-volantino, "Linee del distributore con loghi e bolli"). */
+export interface LineaInsight {
+  sigla: string;
+  nome: string;
+  colore: string | null;
+  /** URL dell'immagine del logo (proxy pubblico /olimpo); null se il catalogo di Istanta non ce l'ha. */
+  logo: string | null;
+  box: number;
+  referenze: number;
+  /** % dello spazio dei box del volantino (0-100). */
+  quotaSpazio: number;
+  scontoMedio: number | null;
+}
+
+export interface BolloInsight {
+  sigla: string;
+  nome: string;
+  logo: string | null;
+  box: number;
+}
+
+export interface LineeDistributore {
+  /** Tutte le linee insieme: % dello spazio e dei box del volantino. */
+  quotaSpazio: number;
+  quotaBox: number;
+  box: number;
+  /** Nell'ordine dichiarato dalla libreria agenzia, solo quelle presenti. */
+  linee: LineaInsight[];
+  /** Per numero di box, solo quelli presenti. */
+  bolli: BolloInsight[];
+}
+
 /** Le sezioni nuove di GET /api/flyer-insights/:idKit, accanto ai campi di sempre. */
 export interface EstensioneInsight {
   pdf: PdfVolantino | null;
@@ -192,9 +244,14 @@ export interface EstensioneInsight {
   prezziSconti: PrezziSconti;
   spazio: UsoSpazio;
   marche: MarcheVolantino;
+  /**
+   * Linee del distributore con loghi e bolli; null quando la libreria agenzia del cliente non dichiara
+   * linee. Assente nelle risposte dei server non aggiornati.
+   */
+  lineeDistributore?: LineeDistributore | null;
 }
 
-// ─── Confronti ──────────────────────────────────────────────────────
+// ─── Confronto con l'edizione precedente (solo report PDF) ───────────
 
 export interface VolantinoDiRiferimento {
   idKit: string;
@@ -239,46 +296,6 @@ export interface ConfrontoEdizione {
   spazioPerReparto: Array<{ chiave: string; etichetta: string; attuale: number; precedente: number }>;
   prodottiEntrati: ProdottoConfronto[];
   prodottiUsciti: ProdottoConfronto[];
-}
-
-export interface ConfrontiVolantino {
-  /** null per la prima edizione di un'area e di un canale. */
-  edizionePrecedente: ConfrontoEdizione | null;
-  /** Le altre varianti area/canale della stessa promo (senza questo volantino). */
-  varianti: VolantinoDiRiferimento[];
-}
-
-export type StatoDifferenza = 'solo-qui' | 'solo-altra' | 'prezzo-diverso' | 'uguale';
-
-export interface PresenzaInVariante {
-  idBox: string;
-  pagina: number | null;
-  prezzo: number | null;
-  sconto: number | null;
-  spazio: number;
-}
-
-export interface DifferenzaProdotto {
-  chiave: string;
-  nome: string;
-  marca: string | null;
-  stato: StatoDifferenza;
-  qui: PresenzaInVariante | null;
-  altra: PresenzaInVariante | null;
-}
-
-export interface DifferenzeVarianti {
-  qui: VolantinoDiRiferimento;
-  altra: VolantinoDiRiferimento;
-  pdfAltra: PdfVolantino | null;
-  /** I box dell'altra variante, come EstensioneInsight.box. */
-  boxAltra: BoxInsight[];
-  /** Stato di ogni box per id: un box con piu' prodotti prende lo stato piu' rilevante. */
-  statoBoxQui: Record<string, StatoDifferenza>;
-  statoBoxAltra: Record<string, StatoDifferenza>;
-  /** Senza gli "uguale": solo qui, solo nell'altra, prezzo o sconto diverso. */
-  differenze: DifferenzaProdotto[];
-  conteggi: Record<StatoDifferenza, number>;
 }
 
 // ─── Viaggio del prodotto ───────────────────────────────────────────

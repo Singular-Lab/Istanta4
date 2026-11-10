@@ -5488,6 +5488,71 @@
       ],
       "vincoliUnici": []
     },
+    "impostazioni_gdo": {
+      "colonne": {
+        "aggiornato_il": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": false,
+          "riferimento": null,
+          "tipo": "timestamp with time zone",
+          "unico": false
+        },
+        "id_gdo": {
+          "autoIncremento": false,
+          "chiavePrimaria": true,
+          "default": null,
+          "nullable": false,
+          "riferimento": {
+            "colonna": "id_gdo",
+            "onDelete": "CASCADE",
+            "onUpdate": "CASCADE",
+            "tabella": "gdo"
+          },
+          "tipo": "uuid",
+          "unico": false
+        },
+        "insight_aggiornato_da": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": true,
+          "riferimento": null,
+          "tipo": "text",
+          "unico": false
+        },
+        "insight_aggiornato_il": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": true,
+          "riferimento": null,
+          "tipo": "timestamp with time zone",
+          "unico": false
+        },
+        "insight_volantino": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": true,
+          "riferimento": null,
+          "tipo": "jsonb",
+          "unico": false
+        },
+        "reparti": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": "'[]'",
+          "nullable": false,
+          "riferimento": null,
+          "tipo": "jsonb",
+          "unico": false
+        }
+      },
+      "indici": [],
+      "vincoliUnici": []
+    },
     "lavori_in_background": {
       "colonne": {
         "annullamento_richiesto": {

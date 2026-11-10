@@ -48,8 +48,8 @@ describe("ConadcnoAgenziaLib: report del volantino", () => {
     expect(insightVolantino?.intestazione).not.toHaveProperty("logo");
   });
 
-  it("dichiara solo palette, intestazione e sezioni: niente pesi della visibilita' ne' previsione", () => {
-    expect(Object.keys(insightVolantino ?? {}).sort()).toEqual(["intestazione", "palette", "sezioniReport"]);
+  it("dichiara solo palette, intestazione, sezioni e linee del distributore: niente pesi della visibilita' ne' previsione", () => {
+    expect(Object.keys(insightVolantino ?? {}).sort()).toEqual(["intestazione", "lineeDistributore", "palette", "sezioniReport"]);
   });
 
   it("dopo la sintesi vengono il confronto con l'edizione precedente e i prodotti entrati e usciti", () => {

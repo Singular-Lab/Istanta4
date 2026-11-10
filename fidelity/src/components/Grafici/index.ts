@@ -17,7 +17,7 @@ export { StrisciaNumeri, type NumeroStriscia, type StrisciaNumeriProps } from ".
 export { TabellaDati } from "./TabellaDati";
 export {
   TimelineVolantini,
-  type ColonnaTimeline,
+  type BarraTimeline,
   type EventoTimeline,
   type FasciaTimeline,
   type FormaEvento,

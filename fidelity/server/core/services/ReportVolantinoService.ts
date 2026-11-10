@@ -1,3 +1,4 @@
+import type { Request } from 'express';
 import { isAppError, NotFoundError } from '../../../lib/errors';
 import {
   PALETTE_REPORT_STANDARD,
@@ -53,21 +54,21 @@ function unisci<T extends object>(standard: T, delCliente: Partial<T> | undefine
 export class ReportVolantinoService implements IReportVolantinoService {
   constructor(
     private readonly volantino: Pick<IVolantinoService, 'getFlyerInsights'>,
-    private readonly confronti: Pick<IInsightConfrontiService, 'confronti'>,
+    private readonly confronti: Pick<IInsightConfrontiService, 'edizionePrecedente'>,
     private readonly gdo: Pick<IGdoService, 'getGDOById'>,
     private readonly agenziaLib: Pick<IAgenziaLib, 'insightVolantino'>,
     private readonly letture: LettureKitReport = LETTURE_PREDEFINITE,
     private readonly adesso: () => Date = () => new Date(),
   ) {}
 
-  async report(idKit: string, ambito: AmbitoGdo): Promise<ReportVolantino> {
+  async report(idKit: string, ambito: AmbitoGdo, richiesta?: Request): Promise<ReportVolantino> {
     // Il kit solo nella GDO della richiesta: per chi non la vede e' come se non esistesse
     const kit = await this.letture.kitNellAmbito(idKit, ambito);
     if (!kit) throw new NotFoundError({ message: 'Volantino non trovato', entityType: 'RuntimeKit', entityId: idKit });
 
     const [insight, confronto, nomeGdo] = await Promise.all([
-      this.volantino.getFlyerInsights(idKit, ambito),
-      this.facoltativo("il confronto con l'edizione precedente", idKit, async () => (await this.confronti.confronti(idKit, ambito)).edizionePrecedente),
+      this.volantino.getFlyerInsights(idKit, ambito, richiesta),
+      this.facoltativo("il confronto con l'edizione precedente", idKit, () => this.confronti.edizionePrecedente(idKit, ambito)),
       this.nomeGdo(kit, idKit),
     ]);
 
@@ -97,6 +98,7 @@ export class ReportVolantinoService implements IReportVolantinoService {
         prezziSconti: insight.prezziSconti,
         spazio: insight.spazio,
         marche: insight.marche,
+        lineeDistributore: insight.lineeDistributore ?? null,
         totalePagine,
         totaleReferenze: insight.totaleReferenze,
       },

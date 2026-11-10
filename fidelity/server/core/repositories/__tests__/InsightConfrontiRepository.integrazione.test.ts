@@ -6,7 +6,8 @@ import { InsightConfrontiRepository } from '../InsightConfrontiRepository';
 import type { KitInsight } from '../InsightVolantinoRepository';
 
 // I volantini con cui gli insight confrontano un kit, su PostgreSQL: edizione precedente della stessa
-// area e canale, varianti della stessa promo, volantini della GDO per il viaggio del prodotto.
+// area e canale (report PDF) e volantini della GDO per il viaggio del prodotto. Le varianti della
+// stessa promo non si leggono piu': la pagina degli insight non confronta il volantino con altri.
 // Sempre volantini (non POP), con kit e promo non eliminati, della GDO del kit.
 describeConDatabase('InsightConfrontiRepository', () => {
   usaDatabase();
@@ -92,22 +93,6 @@ describeConDatabase('InsightConfrontiRepository', () => {
     await edizione(base, '2026-01-15');
 
     await expect(repository.edizionePrecedente(kitInsight(base, '2026-01-15'))).resolves.toBeNull();
-  });
-
-  it('le varianti: gli altri volantini validi della stessa promo, senza il kit, per canale, area e titolo', async () => {
-    const base = await creaKitRuntime({ validitaDal: giorno('2026-03-01'), titolo: 'Liguria' });
-    const seconda = await creaKitRuntime({ promo: base, titolo: 'Variante B' });
-    const prima = await creaKitRuntime({ promo: base, titolo: 'Variante A' });
-    await creaKitRuntime({ promo: base, titolo: 'Eliminata', statoLavorazione: 'ELIMINATO' });
-    await creaKitRuntime({ promo: base, titolo: 'Locandina', tipoLavorazione: 2 });
-    await edizione(base, '2026-03-01');
-
-    const varianti = await repository.variantiDellaPromo(kitInsight(base, '2026-03-01'));
-
-    expect(varianti.map(variante => [variante.id, variante.titolo, variante.idPromo])).toEqual([
-      [prima.idRuntime, 'Variante A', base.idPromo],
-      [seconda.idRuntime, 'Variante B', base.idPromo],
-    ]);
   });
 
   it('i volantini della GDO per il viaggio, dal piu\' recente, senza l\'import dello storico', async () => {

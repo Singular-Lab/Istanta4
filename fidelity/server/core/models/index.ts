@@ -18,6 +18,7 @@ import { FilesRuntime } from './files_runtime';
 import { FilesRuntimeLog } from './files_runtime_log';
 import { Formati } from './formati';
 import { GDO } from './gdo';
+import { ImpostazioniGdo } from './impostazioni_gdo';
 import { NamingConvention } from './naming_convention';
 import { OrdiniDiStampa } from './ordini_di_stampa';
 import { OrdiniDiStampaInvii } from './ordini_di_stampa_invii';
@@ -93,6 +94,8 @@ export const MODELLI_SEQUELIZE = {
   ContrattoTipografia: { model: ContrattoTipografia, nome: 'ContrattoTipografia', tabella: 'contratto_tipografia' },
   Formati: { model: Formati, nome: 'Formati', tabella: 'formati' },
   GDO: { model: GDO, nome: 'GDO', tabella: 'gdo' },
+  // Reparti per il marketing e configurazione degli insight di ogni GDO (Impostazioni GDO)
+  ImpostazioniGdo: { model: ImpostazioniGdo, nome: 'ImpostazioniGdo', tabella: 'impostazioni_gdo' },
   NamingConvention: { model: NamingConvention, nome: 'NamingConvention', tabella: 'naming_convention' },
 
   // Modelli ordini
@@ -350,7 +353,7 @@ export const modelliManager = ModelliManager.getInstance();
 // Esporta tutti i modelli per compatibilità
 export {
   AbbinamentoManualePvVolantino, ApprofondimentoVino, Area, Attivita, Canale, CanaleInterazione, CombinazioneCanaleArea, Config, ContenutiAggiuntiviReferenza,
-  ContrattoTipografia, DesignKit, DisplayContextPuntoVendita, DispositivoPuntoVendita, EphemeralAuditLog, EphemeralChallenge, EphemeralOriginsWhitelist, EphemeralToken, FilesRuntime, FilesRuntimeLog, Formati, GDO, NamingConvention,
+  ContrattoTipografia, DesignKit, DisplayContextPuntoVendita, DispositivoPuntoVendita, EphemeralAuditLog, EphemeralChallenge, EphemeralOriginsWhitelist, EphemeralToken, FilesRuntime, FilesRuntimeLog, Formati, GDO, ImpostazioniGdo, NamingConvention,
   OrdiniDiStampa, OrdiniDiStampaInvii, PromoScoreboard, PuntoVendita, PuntoVenditaUtenti, PuntoVenditaVolantino, RaccoglitoreKit, Referenze, ReferenzeGruppo, Ricette, RuntimeKit, RuoloPuntoVendita, TentativoWebhook, TipiDiExport, Tracciati, TracciatiInvioIstanta, TracciatiMomentoConfronti,
   Utente, UtentiAnonimi, UtentiGDO, UtentiGuest, Webhook, WishlistWebpliant, WorkspaceWebpliant,
   MenuItem, Permesso, PermessoRuolo, PermessoRuoloGdo,

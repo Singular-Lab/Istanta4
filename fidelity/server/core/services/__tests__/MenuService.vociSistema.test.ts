@@ -19,12 +19,13 @@ const percorsi = (menu: unknown[]) =>
   menu.map((voce) => (typeof voce === 'string' ? voce : (voce as { pathname: string }).pathname));
 
 describe('voci di sistema nel menu del Superadmin', () => {
-  it('aggiunge Gestione Hub e Metodi di accesso sotto GESTIONE INTERNA', () => {
+  it('aggiunge Gestione Hub, Metodi di accesso e Impostazioni GDO sotto GESTIONE INTERNA', () => {
     const menu = ['PROMOZIONI', { pathname: '/promozioni/in-corso' }, 'GESTIONE INTERNA', { pathname: '/gestione-interna/gestione-permessi' }, 'ALTRO', { pathname: '/x' }];
 
     expect(percorsi(aggiungiVoci(menu, TIPO_UTENTI.SUPERADMIN))).toEqual([
       'PROMOZIONI', '/promozioni/in-corso',
       'GESTIONE INTERNA', '/gestione-interna/gestione-permessi', '/gestione-interna/gestione-hub', '/gestione-interna/gestione-metodi-accesso',
+      '/impostazioni-gdo',
       'ALTRO', '/x',
     ]);
   });
@@ -33,7 +34,7 @@ describe('voci di sistema nel menu del Superadmin', () => {
     const menu = [{ pathname: '/gestione-interna/gestione-metodi-accesso' }];
 
     expect(percorsi(aggiungiVoci(menu, TIPO_UTENTI.SUPERADMIN))).toEqual([
-      '/gestione-interna/gestione-metodi-accesso', 'GESTIONE INTERNA', '/gestione-interna/gestione-hub',
+      '/gestione-interna/gestione-metodi-accesso', 'GESTIONE INTERNA', '/gestione-interna/gestione-hub', '/impostazioni-gdo',
     ]);
   });
 

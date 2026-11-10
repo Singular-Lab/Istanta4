@@ -10,19 +10,18 @@ import {
 import type { ColorStrategy, FlyerInsightsConfig } from "@/types/flyerInsights";
 import { resolveColor } from "@/utils/flyerInsightsHelpers";
 import { formatNumero } from "@/utils/format";
-import { FASCE_SCONTO, type BoxInsight, type RepartoInsight, type StatoDifferenza } from "../../../../lib/insightVolantino/tipi";
+import { FASCE_SCONTO, type BoxInsight, type RepartoInsight } from "../../../../lib/insightVolantino/tipi";
 import { ETICHETTA_MECCANICA, MECCANICHE, type MeccanicaReferenza } from "../../../../lib/puntiVendita/analisi";
-import { ORDINE_STATI, STATI_DIFFERENZA } from "../confronti/supporto";
 
 /**
  * Colori dei riquadri del volantino sfogliabile e la loro legenda. Funzioni pure.
  *
- * - reparto: i colori della config dell'installazione (mappa o reparti), altrimenti la palette
- *   automatica, per nome, ai reparti con più spazio;
+ * - reparto: il colore per il marketing impostato per la GDO (reparto.colore), poi i colori della
+ *   config dell'installazione (mappa o reparti), altrimenti la palette automatica, per nome, ai
+ *   reparti con più spazio;
  * - meccanica: la meccanica riconosciuta dalla lettura generica, uguale per tutte le GDO;
- * - sconto: la scala sequenziale, a fasce;
- * - differenze fra varianti: le tinte dei confronti (STATI_DIFFERENZA), perché legenda, elenco e
- *   pagine dicano la stessa cosa.
+ * - sconto: la scala sequenziale, a fasce.
+ * Gli stessi colori valgono per il volantino sfogliabile e per la distribuzione nelle pagine.
  */
 
 export type ModoColore = "reparto" | "meccanica" | "sconto";
@@ -108,20 +107,22 @@ const coloreConfigurato = (configurazione?: FlyerInsightsConfig): ((reparto: Rep
 
 const ordinaVoci = (voci: VoceLegenda[]): VoceLegenda[] => [...voci].sort((a, b) => a.etichetta.localeCompare(b.etichetta, "it"));
 
-/** I colori dei reparti del volantino: dalla config se ne ha, altrimenti automatici. */
-export function coloriReparti(box: readonly Pick<BoxInsight, "reparto" | "spazio">[], configurazione?: FlyerInsightsConfig): ColoriReparti {
-  const presenti = new Map<string, { reparto: RepartoInsight; spazio: number }>();
-  let senzaReparto = false;
-  for (const voce of box) {
-    if (!voce.reparto) {
-      senzaReparto = true;
-      continue;
-    }
-    const chiave = chiaveReparto(voce.reparto);
-    const attuale = presenti.get(chiave);
-    if (attuale) attuale.spazio += voce.spazio;
-    else presenti.set(chiave, { reparto: voce.reparto, spazio: voce.spazio });
-  }
+const ESADECIMALE = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
+
+/** Il colore per il marketing impostato per la GDO (Impostazioni GDO), se è un colore valido. */
+export const coloreMarketing = (reparto: Pick<RepartoInsight, "colore"> | null | undefined): string | null => {
+  const colore = reparto?.colore?.trim();
+  return colore && ESADECIMALE.test(colore) ? colore : null;
+};
+
+type RepartoPresente = { reparto: RepartoInsight; spazio: number };
+
+/** Colori e legenda dei reparti senza colore per il marketing: dalla config o automatici. */
+function coloriSenzaMarketing(
+  presenti: ReadonlyMap<string, RepartoPresente>,
+  senzaReparto: boolean,
+  configurazione?: FlyerInsightsConfig
+): ColoriReparti {
   const nonNoto: VoceLegenda[] = senzaReparto ? [{ id: "senza", etichetta: "Reparto non noto", forma: "quadrato", tinta: TINTA_NEUTRA }] : [];
 
   const configurato = coloreConfigurato(configurazione);
@@ -162,6 +163,49 @@ export function coloriReparti(box: readonly Pick<BoxInsight, "reparto" | "spazio
     voci.push({ id: "senza", etichetta, forma: "quadrato", tinta: TINTA_NEUTRA });
   }
   return { tinta, voci, daConfigurazione: false };
+}
+
+/**
+ * I colori dei reparti del volantino. Un reparto con il colore per il marketing della GDO prende
+ * quello, con il suo nome per il marketing in legenda: vale più della config dell'installazione.
+ * Gli altri prendono i colori della config se ne ha, altrimenti quelli automatici.
+ */
+export function coloriReparti(box: readonly Pick<BoxInsight, "reparto" | "spazio">[], configurazione?: FlyerInsightsConfig): ColoriReparti {
+  const presenti = new Map<string, RepartoPresente>();
+  const conMarketing = new Map<string, VoceLegenda>();
+  let senzaReparto = false;
+  for (const voce of box) {
+    if (!voce.reparto) {
+      senzaReparto = true;
+      continue;
+    }
+    const colore = coloreMarketing(voce.reparto);
+    if (colore) {
+      // Un nome per il marketing condiviso da più codici è una voce sola
+      const etichetta = nomeReparto(voce.reparto);
+      const chiave = `${colore.toLowerCase()}|${etichetta}`;
+      if (!conMarketing.has(chiave)) {
+        conMarketing.set(chiave, { id: chiaveReparto(voce.reparto), etichetta, forma: "quadrato", tinta: tintaEsadecimale(colore) });
+      }
+      continue;
+    }
+    const chiave = chiaveReparto(voce.reparto);
+    const attuale = presenti.get(chiave);
+    if (attuale) attuale.spazio += voce.spazio;
+    else presenti.set(chiave, { reparto: voce.reparto, spazio: voce.spazio });
+  }
+
+  const base = coloriSenzaMarketing(presenti, senzaReparto, configurazione);
+  if (conMarketing.size === 0) return base;
+
+  const tinta = (reparto: RepartoInsight | null): Tinta => {
+    const colore = coloreMarketing(reparto);
+    return colore ? tintaEsadecimale(colore) : base.tinta(reparto);
+  };
+  // Prima i reparti con un nome, in ordine alfabetico; in fondo gli altri e quelli senza reparto
+  const inCoda = (voce: VoceLegenda) => voce.id === "altri" || voce.id === "senza";
+  const nominate = ordinaVoci([...conMarketing.values(), ...base.voci.filter(voce => !inCoda(voce))]);
+  return { tinta, voci: [...nominate, ...base.voci.filter(inCoda)], daConfigurazione: base.daConfigurazione };
 }
 
 /* ---------- Meccaniche ---------- */
@@ -275,19 +319,4 @@ export const gruppoBox = (box: Pick<BoxInsight, "reparto" | "meccanica" | "scont
         : { id: `sconto-${fascia}`, etichetta: etichetteFasce(FASCE_SCONTO, "%")[fascia], tinta: tintaSequenziale(fascia + 1) };
     }
   }
-};
-
-/** Lo stile di un box nel confronto fra varianti: senza uno stato è attenuato come gli uguali. */
-export const stileDifferenza = (stato: StatoDifferenza | undefined): StileRiquadro =>
-  stato ? stile(STATI_DIFFERENZA[stato].tinta, stato === "uguale") : stile(TINTA_NEUTRA, true);
-
-/** La legenda delle differenze: solo gli stati dei box di questo volantino, nell'ordine dei confronti. */
-export const legendaDifferenze = (box: readonly Pick<BoxInsight, "id">[], statoBox: Readonly<Record<string, StatoDifferenza>>): VoceLegenda[] => {
-  const presenti = new Set(box.map(voce => statoBox[voce.id]).filter(Boolean));
-  return ORDINE_STATI.filter(stato => presenti.has(stato)).map(stato => ({
-    id: stato,
-    etichetta: STATI_DIFFERENZA[stato].etichetta,
-    forma: "quadrato" as const,
-    tinta: STATI_DIFFERENZA[stato].tinta,
-  }));
 };

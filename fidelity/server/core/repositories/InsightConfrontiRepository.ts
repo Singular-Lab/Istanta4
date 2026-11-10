@@ -8,8 +8,8 @@ import { DATA_EDIZIONE, KIT_VALIDI, SOSTITUZIONI_FISSE } from './PuntiVenditaVol
 
 /**
  * I volantini con cui gli insight confrontano un kit (contratto in lib/insightVolantino/tipi.ts):
- * l'edizione precedente della stessa area e dello stesso canale, le altre varianti della stessa promo
- * e i volantini della GDO in cui cercare il viaggio di un prodotto.
+ * l'edizione precedente della stessa area e dello stesso canale (report PDF) e i volantini della GDO
+ * in cui cercare il viaggio di un prodotto.
  *
  * Sono volantini (formato con tipo di lavorazione VOLANTINO) validi come nella storia dei punti
  * vendita (kit e promo non eliminati, stessa data dell'edizione), di qualunque stato di lavorazione:
@@ -31,8 +31,6 @@ export interface IInsightConfrontiRepository {
    * con la data dell'edizione prima di quella del kit; null per la prima edizione.
    */
   edizionePrecedente(kit: KitInsight): Promise<KitInsight | null>;
-  /** Gli altri volantini della stessa promo (senza il kit), per canale, area e titolo. */
-  variantiDellaPromo(kit: KitInsight): Promise<KitInsight[]>;
   /**
    * I volantini della GDO del kit, dal piu' recente, al massimo KIT_PER_VIAGGIO. Senza importStorico:
    * al viaggio servono solo identita' e date, e l'import dello storico di centinaia di kit pesa.
@@ -137,18 +135,6 @@ export class InsightConfrontiRepository implements IInsightConfrontiRepository {
       sostituzioni
     );
     return precedente ?? null;
-  }
-
-  async variantiDellaPromo(kit: KitInsight): Promise<KitInsight[]> {
-    const sostituzioni: Sostituzioni = { idPromo: kit.idPromo, idKit: kit.id };
-    const condizioni = [...condizioniVolantini(kit, sostituzioni), 'k.id_promo::text = :idPromo', 'k.id::text <> :idKit'];
-    return this.seleziona(
-      `SELECT ${colonneKit(true)}
-       ${DA_VOLANTINI}
-       WHERE ${condizioni.join(' AND ')}
-       ORDER BY ${NOME_CANALE}, ${NOME_AREA}, k.titolo, k.id`,
-      sostituzioni
-    );
   }
 
   async kitDellaGdoPerViaggio(kit: KitInsight): Promise<KitInsight[]> {

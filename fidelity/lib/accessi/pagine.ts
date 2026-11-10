@@ -83,9 +83,11 @@ export const PAGINE: DefinizionePagina[] = [
   { percorso: '/ods-completati', permesso: P.ORDINI_STAMPA.VISUALIZZA, sottopagine: true, sezione: 'produzione' },
   { percorso: '/ordini-di-stampa', permesso: P.ORDINI_STAMPA.VISUALIZZA, sottopagine: true, sezione: 'produzione' },
 
-  // WebPliant: la configurazione è produzione, l'elenco dei volantini digitali è consultazione
+  // WebPliant: i workspace sono produzione, l'elenco dei volantini digitali è consultazione
   { percorso: '/webliant/webpliant-disponibili', permesso: P.WEBPLIANT.VISUALIZZA, sezione: 'visualizzazione' },
-  { percorso: '/webliant/impostazioni-webpliant', permesso: P.WEBPLIANT.CONFIGURA, sottopagine: true, sezione: 'produzione' },
+  { percorso: '/webliant/workspace', permesso: P.WEBPLIANT.CONFIGURA, sezione: 'produzione' },
+  // Editor del workspace, a schermo intero fuori dal layout: si apre dalla pagina Workspace WebPliant
+  { percorso: '/webliant/workspace/editor', permesso: P.WEBPLIANT.CONFIGURA, sezione: 'produzione' },
 
   // GDO e punti vendita
   { percorso: '/gestione-interna/aree-e-canali', permesso: P.GDO.VISUALIZZA, sezione: 'gestione' },
@@ -99,6 +101,8 @@ export const PAGINE: DefinizionePagina[] = [
   // Impostazioni di produzione
   { percorso: '/impostazioni-tipografia', permesso: P.IMPOSTAZIONI.VISUALIZZA, sezione: 'produzione' },
   { percorso: '/impostazioni-di-produzione', permesso: P.IMPOSTAZIONI.VISUALIZZA, sottopagine: true, sezione: 'produzione' },
+  // Impostazioni della GDO: identità, reparti, campi delle referenze, insight del volantino, sito web
+  { percorso: '/impostazioni-gdo', permesso: P.IMPOSTAZIONI.MODIFICA_GENERALI, sezione: 'gestione' },
 
   // Contenuti AI
   { percorso: '/gestione-ricette', permesso: P.AI.GESTISCI_RICETTE, sottopagine: true, sezione: 'produzione' },
@@ -144,11 +148,12 @@ export const VOCI_DI_MENU: readonly VoceDiMenu[] = [
   { percorso: '/nuovo-ods', titolo: 'Nuovo Ordine di Stampa', icona: 'PackagePlus' },
   { percorso: '/ods-in-corso', titolo: 'Ordine di Stampa in corso', icona: 'Truck' },
   { percorso: '/ods-completati', titolo: 'Ordine di Stampa completati', icona: 'CircleCheck' },
-  { percorso: '/webliant/impostazioni-webpliant', titolo: 'Impostazioni WebPliant', icona: 'Settings' },
+  { percorso: '/webliant/workspace', titolo: 'Workspace WebPliant', icona: 'LayoutTemplate' },
   { percorso: '/gestione-ricette', titolo: 'Gestione Ricette', icona: 'BookOpen' },
   { percorso: '/gestione-approfondimento-vini', titolo: 'Approfondimenti Vini', icona: 'Wine' },
   { percorso: '/impostazioni-di-produzione', titolo: 'Impostazioni Kit', icona: 'SlidersVertical' },
   { percorso: '/impostazioni-tipografia', titolo: 'Impostazioni Tipografia', icona: 'FolderTree' },
+  { percorso: '/impostazioni-gdo', titolo: 'Impostazioni GDO', icona: 'Building2' },
   // Visualizzazione
   { percorso: '/gdo/dashboard', titolo: 'Panoramica volantini', icona: 'LayoutDashboard' },
   { percorso: '/category/dashboard', titolo: 'Dashboard Category', icona: 'ChartColumn' },

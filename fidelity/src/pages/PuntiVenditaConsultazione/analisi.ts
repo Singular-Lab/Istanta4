@@ -1,12 +1,15 @@
 import {
   indiciPerNome,
+  isoData,
   MASSIMO_CATEGORIE,
+  msData,
+  msOggi,
+  MS_GIORNO,
   passoSequenziale,
   PASSI_SEQUENZIALI,
   tintaCategoria,
   tintaSequenziale,
   TINTA_NEUTRA,
-  type ColonnaTimeline,
   type EventoTimeline,
   type FasciaTimeline,
   type FasciaTempo,
@@ -15,6 +18,7 @@ import {
   type Tinta,
   type VoceLegenda,
 } from "@/components/Grafici";
+import type { BarraTimeline } from "@/components/Grafici/TimelineVolantini";
 import { useFetchReteInsegne } from "@/query/query";
 import { formatNumero, VALORE_ASSENTE } from "@/utils/format";
 import dayjs from "dayjs";
@@ -83,9 +87,14 @@ export const identificativiGdo = <T extends { etichetta: string }>(codici: reado
 
 /* ---------- Percorsi ---------- */
 
-/** Parametri nell'indirizzo: anno e volantino scelti nella scheda. */
+/**
+ * Parametri nell'indirizzo: periodo e volantino scelti nella scheda. Il periodo è un anno
+ * (`?anno=2025`), gli ultimi 3 mesi (`?anno=ultimi3mesi`) o, senza il parametro, tutto.
+ */
 export const PARAMETRO_ANNO = "anno";
 export const PARAMETRO_VOLANTINO = "volantino";
+/** Valore di PARAMETRO_ANNO per gli ultimi 3 mesi. */
+export const ULTIMI_3_MESI = "ultimi3mesi";
 
 export const percorsoScheda = (idPv: string): string => `/punti-vendita/${encodeURIComponent(idPv)}`;
 
@@ -135,9 +144,59 @@ export const canaliDelleEdizioni = (edizioni: readonly EdizioneTimeline[]): Rife
 
 export const annoEdizione = (edizione: Pick<EdizioneTimeline, "dal">): number => Number(edizione.dal.slice(0, 4));
 
-/** Le edizioni dell'anno scelto, o tutte; nell'ordine della timeline (dal più vecchio). */
-export const edizioniDelPeriodo = (edizioni: readonly EdizioneTimeline[], anno: number | null): EdizioneTimeline[] =>
-  anno === null ? [...edizioni] : edizioni.filter(e => annoEdizione(e) === anno);
+/** Ultimo giorno di validità dell'edizione (ISO): senza la fine, o con la fine prima dell'inizio, il primo. */
+export const fineEdizione = (edizione: Pick<EdizioneTimeline, "dal" | "al">): string =>
+  edizione.al && edizione.al > edizione.dal ? edizione.al : edizione.dal;
+
+/** Periodo della storia: un anno, gli ultimi 3 mesi o (null) tutto. */
+export type PeriodoStoria = number | typeof ULTIMI_3_MESI | null;
+
+/** Il periodo scritto nell'indirizzo: un anno dei dati, gli ultimi 3 mesi, altrimenti tutto. */
+export const periodoDaParametro = (valore: string | null, anni: readonly number[]): PeriodoStoria => {
+  if (valore === ULTIMI_3_MESI) return ULTIMI_3_MESI;
+  const anno = Number(valore);
+  return valore && anni.includes(anno) ? anno : null;
+};
+
+/** Oggi, la data locale, in ISO (YYYY-MM-DD). */
+export const oggiIso = (): string => isoData(msOggi());
+
+/** Primo giorno degli ultimi 3 mesi: lo stesso giorno di tre mesi fa (ISO). */
+export const inizioUltimi3Mesi = (oggi: string): string => dayjs(oggi).subtract(3, "month").format("YYYY-MM-DD");
+
+/**
+ * Le edizioni del periodo, nell'ordine della timeline (dal più vecchio): tutte, quelle iniziate
+ * nell'anno scelto, oppure quelle valide negli ultimi 3 mesi o dopo (attive e in arrivo comprese).
+ */
+export const edizioniDelPeriodo = (edizioni: readonly EdizioneTimeline[], periodo: PeriodoStoria, oggi: string = oggiIso()): EdizioneTimeline[] => {
+  if (periodo === null) return [...edizioni];
+  if (periodo === ULTIMI_3_MESI) {
+    const inizio = inizioUltimi3Mesi(oggi);
+    return edizioni.filter(e => fineEdizione(e) >= inizio);
+  }
+  return edizioni.filter(e => annoEdizione(e) === periodo);
+};
+
+/** Giorni dopo oggi sempre in vista negli ultimi 3 mesi, perché la linea di oggi non stia sul bordo. */
+const GIORNI_DOPO_OGGI = 7;
+
+/**
+ * I giorni dell'asse della timeline (primo e ultimo compresi) per il periodo: l'anno intero, oppure
+ * da tre mesi fa a una settimana dopo oggi, o fino alla fine dell'ultima edizione se va oltre.
+ * Undefined per tutto: l'asse lo decide la timeline dai dati.
+ */
+export const intervalloPeriodo = (
+  periodo: PeriodoStoria,
+  edizioni: readonly EdizioneTimeline[],
+  oggi: string = oggiIso()
+): { dal: string; al: string } | undefined => {
+  if (periodo === null) return undefined;
+  if (periodo === ULTIMI_3_MESI) {
+    const fine = Math.max(msData(oggi) + GIORNI_DOPO_OGGI * MS_GIORNO, ...edizioni.map(e => msData(fineEdizione(e))));
+    return { dal: inizioUltimi3Mesi(oggi), al: isoData(fine) };
+  }
+  return { dal: `${periodo}-01-01`, al: `${periodo}-12-31` };
+};
 
 /**
  * Il volantino da mostrare nella scheda: quello richiesto se è nel periodo, altrimenti il più
@@ -146,17 +205,21 @@ export const edizioniDelPeriodo = (edizioni: readonly EdizioneTimeline[], anno: 
 export const edizioneScelta = (edizioni: readonly EdizioneTimeline[], richiesta: string | null): EdizioneTimeline | null =>
   edizioni.find(e => e.idKit === richiesta) ?? edizioni[edizioni.length - 1] ?? null;
 
-/** Colonne della timeline: una per volantino, alta quanto le sue referenze, colorata per insegna. */
-export const colonneTimeline = (edizioni: readonly EdizioneTimeline[]): ColonnaTimeline[] =>
+/**
+ * Barre della timeline: una per volantino, dal primo all'ultimo giorno di validità (senza la fine,
+ * il primo giorno solo), colorata per insegna, con area, referenze e stato nel tooltip.
+ */
+export const barreTimeline = (edizioni: readonly EdizioneTimeline[]): BarraTimeline[] =>
   edizioni.map(edizione => ({
     id: edizione.idKit,
-    data: edizione.dal,
-    valore: edizione.numeroReferenze,
+    dal: edizione.dal,
+    al: edizione.al,
     gruppo: edizione.canale.id,
     titolo: edizione.promo.nome,
     sottotitolo: periodoValidita(edizione.dal, edizione.al),
     dettagli: [
       { etichetta: "Area", valore: edizione.area.nome },
+      { etichetta: "Referenze", valore: formatNumero(edizione.numeroReferenze) },
       ...(edizione.attivo ? [{ etichetta: "Stato", valore: "attivo" }] : []),
     ],
   }));
@@ -169,7 +232,7 @@ export const fasceInsegne = (edizioni: readonly EdizioneTimeline[]): FasciaTimel
   const fasce: Array<FasciaTimeline & { volantini: number; area: string }> = [];
   for (const edizione of edizioni) {
     const ultima = fasce[fasce.length - 1];
-    const fine = edizione.al && edizione.al > edizione.dal ? edizione.al : edizione.dal;
+    const fine = fineEdizione(edizione);
     if (ultima && ultima.gruppo === edizione.canale.id && ultima.area === edizione.area.id) {
       ultima.al = fine > ultima.al ? fine : ultima.al;
       ultima.volantini++;

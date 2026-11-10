@@ -215,11 +215,14 @@ export class MenuService implements IMenuService {
 
   /**
    * Pagine di sistema aggiunte al menu del Superadmin se mancano, sotto 'GESTIONE INTERNA':
-   * il seed MENU_SUPERADMIN non cambia e un menu gia' personalizzato le riceve comunque.
+   * il seed MENU_SUPERADMIN (e seed-fidelity.sh) non cambia e un menu gia' personalizzato le riceve
+   * comunque. Le Impostazioni GDO hanno preso il posto della configurazione WebPliant, che nel menu
+   * predefinito non c'era.
    */
   private static readonly VOCI_SISTEMA: MenuItemType[] = [
     { icon: 'LayoutDashboard', pathname: '/gestione-interna/gestione-hub', title: 'Gestione Hub', subMenu: [] },
     { icon: 'KeyRound', pathname: '/gestione-interna/gestione-metodi-accesso', title: 'Metodi di accesso', subMenu: [] },
+    { icon: 'Building2', pathname: '/impostazioni-gdo', title: 'Impostazioni GDO', subMenu: [] },
   ];
 
   private ensureHubManagementEntry(menu: MenuElement[], tipoUtente: string): MenuElement[] {

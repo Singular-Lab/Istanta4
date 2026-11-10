@@ -21,6 +21,7 @@ vi.mock('../../logger', () => ({
 
 import { AnalisiPuntoVenditaController } from '../AnalisiPuntoVenditaController';
 import { DisplayContextController } from '../DisplayContextController';
+import { ImpostazioniGdoController } from '../ImpostazioniGdoController';
 import { IstantaController } from '../IstantaController';
 import { KitRuntimeController } from '../KitRuntimeController';
 import { PromoController } from '../PromoController';
@@ -28,6 +29,7 @@ import { PuntoVenditaController } from '../PuntoVenditaController';
 import { StoriaPuntoVenditaController } from '../StoriaPuntoVenditaController';
 import type { IAnalisiPuntoVenditaService } from '../../interfaces/IAnalisiPuntoVenditaService';
 import type { IStoriaPuntoVenditaService } from '../../interfaces/IStoriaPuntoVenditaService';
+import type { IImpostazioniGdoService } from '../../interfaces/IImpostazioniGdoService';
 import { TracciatoController } from '../TracciatoController';
 
 function createApp() {
@@ -45,6 +47,7 @@ function createApp() {
   new PuntoVenditaController({} as any, {} as any, {} as any).registerRoutes(app);
   new StoriaPuntoVenditaController({} as IStoriaPuntoVenditaService).registerRoutes(app);
   new AnalisiPuntoVenditaController({} as IAnalisiPuntoVenditaService, {} as IStoriaPuntoVenditaService).registerRoutes(app);
+  new ImpostazioniGdoController({} as IImpostazioniGdoService).registerRoutes(app);
   return app;
 }
 
@@ -68,6 +71,13 @@ describe('permessi sulle route che modificano dati', () => {
     ['contesti in blocco delle promo dell\'archivio', 'post', '/api/promo/contesto-importazione/archivio', 'promo.crea'],
     ['rinvio di un tracciato a Istanta', 'post', '/api/tracciati/t1/rimanda-istanta', 'file.upload_tracciato'],
     ['modifica del contesto di un tracciato in attesa', 'put', '/api/tracciati/t1/contesto', 'file.upload_tracciato'],
+    ['identita\' della GDO', 'put', '/api/impostazioni-gdo/identita', 'impostazioni.modifica_generali'],
+    ['reparti per il marketing della GDO', 'put', '/api/impostazioni-gdo/reparti', 'impostazioni.modifica_generali'],
+    ['campi delle referenze della GDO', 'put', '/api/impostazioni-gdo/campi-referenze', 'impostazioni.modifica_generali'],
+    ['sito web della GDO', 'put', '/api/impostazioni-gdo/sito-web', 'impostazioni.modifica_generali'],
+    ['verifica della configurazione degli insight', 'post', '/api/impostazioni-gdo/insight-volantino/verifica', 'impostazioni.modifica_generali'],
+    ['configurazione degli insight della GDO', 'put', '/api/impostazioni-gdo/insight-volantino', 'impostazioni.modifica_generali'],
+    ['ritorno alla configurazione degli insight del file', 'delete', '/api/impostazioni-gdo/insight-volantino', 'impostazioni.modifica_generali'],
   ];
 
   it.each(casi)('%s richiede il permesso giusto', async (_nome, metodo, url, permesso) => {

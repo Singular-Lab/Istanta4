@@ -2,14 +2,15 @@ import express, { type NextFunction, type Request, type Response } from 'express
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TIPO_UTENTI } from '../../../../lib/enums';
-import { BadRequestError, NotFoundError } from '../../../../lib/errors';
+import { NotFoundError } from '../../../../lib/errors';
 import type { AmbitoGdo } from '../../accessi/contestoAccesso';
 import type { IInsightConfrontiService } from '../../interfaces/IInsightConfrontiService';
 import type { IVolantinoService } from '../../interfaces/IVolantinoService';
 
-// Le API dei confronti degli insight del volantino: permesso, parametri controllati prima di leggere
-// la sessione, ambito GDO passato al servizio, errori del servizio e convivenza con la scheda
-// GET /api/flyer-insights/:id sullo stesso percorso base.
+// Il viaggio del prodotto negli insight del volantino: permesso, parametri controllati prima di
+// leggere la sessione, ambito GDO passato al servizio, errori del servizio e convivenza con la scheda
+// GET /api/flyer-insights/:id sullo stesso percorso base. Il confronto con l'edizione precedente e
+// le differenze fra varianti non sono piu' API della pagina: il confronto resta nel report PDF.
 
 const permessi = vi.hoisted(() => ({ concessi: new Set<string>() }));
 const anagrafica = vi.hoisted(() => ({ idGdo: 'gdo-sessione' as string | null }));
@@ -45,8 +46,7 @@ const ID_ALTRA = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 
 function servizioFinto() {
   return {
-    confronti: vi.fn(async (_idKit: string, _ambito: AmbitoGdo) => ({ edizionePrecedente: null, varianti: [] })),
-    differenzeVarianti: vi.fn(async (idKit: string, idAltra: string, _ambito: AmbitoGdo) => ({ qui: { idKit }, altra: { idKit: idAltra } } as never)),
+    edizionePrecedente: vi.fn(async (_idKit: string, _ambito: AmbitoGdo) => null),
     viaggioProdotto: vi.fn(async (_idKit: string, chiave: string, _ambito: AmbitoGdo) => ({ chiave, nome: 'Mozzarella', marca: null, formato: null, foto: [], tappe: [] })),
   } satisfies IInsightConfrontiService;
 }
@@ -75,40 +75,39 @@ beforeEach(() => {
 });
 
 describe('permessi', () => {
-  it('senza materiali.visualizza nessuna delle tre API interroga il servizio', async () => {
+  it('senza materiali.visualizza il viaggio non interroga il servizio', async () => {
     permessi.concessi = new Set(['volantini.visualizza', 'promo.visualizza']);
     const { app, confronti } = creaApp();
 
-    for (const percorso of [
-      `/api/flyer-insights/${ID_KIT}/confronti`,
-      `/api/flyer-insights/${ID_KIT}/varianti/${ID_ALTRA}`,
-      `/api/flyer-insights/${ID_KIT}/prodotti/c-123`,
-    ]) {
-      const risposta = await request(app).get(percorso);
-      expect([risposta.status, risposta.body], percorso).toEqual([403, { codice: 'materiali.visualizza' }]);
-    }
-    expect(confronti.confronti).not.toHaveBeenCalled();
-    expect(confronti.differenzeVarianti).not.toHaveBeenCalled();
+    const risposta = await request(app).get(`/api/flyer-insights/${ID_KIT}/prodotti/c-123`);
+
+    expect([risposta.status, risposta.body]).toEqual([403, { codice: 'materiali.visualizza' }]);
     expect(confronti.viaggioProdotto).not.toHaveBeenCalled();
   });
 });
 
-describe('le tre API', () => {
-  it('confronti, varianti e viaggio arrivano al servizio con i parametri e la GDO della sessione', async () => {
+describe('le API', () => {
+  it('il viaggio arriva al servizio con la chiave e la GDO della sessione', async () => {
     const { app, confronti } = creaApp();
+
+    const risposta = await request(app).get(`/api/flyer-insights/${ID_KIT}/prodotti/${encodeURIComponent('d-TW96emFyZWxsYQ~1.2_x')}`);
+
+    expect(risposta.status).toBe(200);
+    expect(risposta.body.chiave).toBe('d-TW96emFyZWxsYQ~1.2_x');
+    expect(confronti.viaggioProdotto).toHaveBeenCalledWith(ID_KIT, 'd-TW96emFyZWxsYQ~1.2_x', { idGdo: 'gdo-sessione' });
+  });
+
+  it('confronti e varianti non ci sono piu\': la pagina non confronta il volantino con altri', async () => {
+    const { app, confronti, scheda } = creaApp();
 
     const risposte = await Promise.all([
       request(app).get(`/api/flyer-insights/${ID_KIT}/confronti`),
       request(app).get(`/api/flyer-insights/${ID_KIT}/varianti/${ID_ALTRA}`),
-      request(app).get(`/api/flyer-insights/${ID_KIT}/prodotti/${encodeURIComponent('d-TW96emFyZWxsYQ~1.2_x')}`),
     ]);
 
-    expect(risposte.map(risposta => risposta.status)).toEqual([200, 200, 200]);
-    expect(risposte[0].body).toEqual({ edizionePrecedente: null, varianti: [] });
-    expect(risposte[2].body.chiave).toBe('d-TW96emFyZWxsYQ~1.2_x');
-    expect(confronti.confronti).toHaveBeenCalledWith(ID_KIT, { idGdo: 'gdo-sessione' });
-    expect(confronti.differenzeVarianti).toHaveBeenCalledWith(ID_KIT, ID_ALTRA, { idGdo: 'gdo-sessione' });
-    expect(confronti.viaggioProdotto).toHaveBeenCalledWith(ID_KIT, 'd-TW96emFyZWxsYQ~1.2_x', { idGdo: 'gdo-sessione' });
+    expect(risposte.map(risposta => risposta.status)).toEqual([404, 404]);
+    expect(confronti.edizionePrecedente).not.toHaveBeenCalled();
+    expect(scheda.getFlyerInsights).not.toHaveBeenCalled();
   });
 
   it('la scheda del volantino resta sulla sua route: un solo segmento dopo /flyer-insights', async () => {
@@ -116,27 +115,21 @@ describe('le tre API', () => {
 
     expect((await request(app).get(`/api/flyer-insights/${ID_KIT}`)).body).toEqual({ guidIdKitRuntime: ID_KIT });
     expect(scheda.getFlyerInsights).toHaveBeenCalledTimes(1);
-    expect(confronti.confronti).not.toHaveBeenCalled();
+    expect(confronti.viaggioProdotto).not.toHaveBeenCalled();
 
-    await request(app).get(`/api/flyer-insights/${ID_KIT}/confronti`);
+    await request(app).get(`/api/flyer-insights/${ID_KIT}/prodotti/c-123`);
     expect(scheda.getFlyerInsights).toHaveBeenCalledTimes(1);
-    expect(confronti.confronti).toHaveBeenCalledTimes(1);
+    expect(confronti.viaggioProdotto).toHaveBeenCalledTimes(1);
   });
 });
 
 describe('parametri non validi', () => {
-  it('un id del kit o della variante che non e\' un UUID e\' 400, senza interrogare il servizio', async () => {
+  it('un id del kit che non e\' un UUID e\' 400, senza interrogare il servizio', async () => {
     const { app, confronti } = creaApp();
 
-    const risposte = await Promise.all([
-      request(app).get('/api/flyer-insights/42/confronti'),
-      request(app).get(`/api/flyer-insights/${ID_KIT}/varianti/non-un-kit`),
-      request(app).get('/api/flyer-insights/non-un-uuid/prodotti/c-123'),
-    ]);
+    const risposta = await request(app).get('/api/flyer-insights/non-un-uuid/prodotti/c-123');
 
-    expect(risposte.map(risposta => risposta.status)).toEqual([400, 400, 400]);
-    expect(confronti.confronti).not.toHaveBeenCalled();
-    expect(confronti.differenzeVarianti).not.toHaveBeenCalled();
+    expect(risposta.status).toBe(400);
     expect(confronti.viaggioProdotto).not.toHaveBeenCalled();
   });
 
@@ -155,9 +148,9 @@ describe('ambito GDO', () => {
   it('un utente GDO resta nella sua GDO anche se ne indica un\'altra', async () => {
     const { app, confronti } = creaApp(TIPO_UTENTI.GDO);
 
-    await request(app).get(`/api/flyer-insights/${ID_KIT}/confronti?gdo=altra-gdo`);
+    await request(app).get(`/api/flyer-insights/${ID_KIT}/prodotti/c-123?gdo=altra-gdo`);
 
-    expect(confronti.confronti).toHaveBeenCalledWith(ID_KIT, { idGdo: 'gdo-sessione' });
+    expect(confronti.viaggioProdotto).toHaveBeenCalledWith(ID_KIT, 'c-123', { idGdo: 'gdo-sessione' });
   });
 
   it('il Superadmin senza GDO vede tutte le GDO, o quella che indica', async () => {
@@ -174,20 +167,18 @@ describe('ambito GDO', () => {
     anagrafica.idGdo = null;
     const { app, confronti } = creaApp(TIPO_UTENTI.CATEGORY);
 
-    await request(app).get(`/api/flyer-insights/${ID_KIT}/varianti/${ID_ALTRA}`);
+    await request(app).get(`/api/flyer-insights/${ID_KIT}/prodotti/c-123`);
 
-    expect(confronti.differenzeVarianti.mock.calls[0][2]).toBe('nessuna');
+    expect(confronti.viaggioProdotto.mock.calls[0][2]).toBe('nessuna');
   });
 });
 
 describe('errori del servizio', () => {
-  it('un kit fuori ambito o inesistente e\' 404; una variante di un\'altra promo e\' 400', async () => {
+  it('un kit fuori ambito o inesistente e\' 404', async () => {
     const { app, confronti } = creaApp();
-    confronti.confronti.mockRejectedValueOnce(new NotFoundError({ message: 'Volantino non trovato', entityType: 'RuntimeKit', entityId: ID_KIT }));
-    confronti.differenzeVarianti.mockRejectedValueOnce(new BadRequestError({ message: "L'altro volantino non e' una variante della stessa promo" }));
+    confronti.viaggioProdotto.mockRejectedValueOnce(new NotFoundError({ message: 'Volantino non trovato', entityType: 'RuntimeKit', entityId: ID_KIT }));
 
-    expect((await request(app).get(`/api/flyer-insights/${ID_KIT}/confronti`)).status).toBe(404);
-    expect((await request(app).get(`/api/flyer-insights/${ID_KIT}/varianti/${ID_ALTRA}`)).status).toBe(400);
+    expect((await request(app).get(`/api/flyer-insights/${ID_KIT}/prodotti/c-123`)).status).toBe(404);
   });
 
   it('un errore imprevisto e\' 500', async () => {

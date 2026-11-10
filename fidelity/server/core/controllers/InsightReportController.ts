@@ -38,7 +38,7 @@ export class InsightReportController extends BaseController {
       const { idKit } = req.params;
       if (!UUID.test(idKit)) throw new BadRequestError({ message: "Volantino non valido: serve l'id del kit" });
       const ambito = await ambitoGdoDellaRichiesta(req, res, req.query.gdo);
-      this.sendResponse(res, HttpStatusCode.OK, await this.reportVolantino.report(idKit, ambito));
+      this.sendResponse(res, HttpStatusCode.OK, await this.reportVolantino.report(idKit, ambito, req));
     } catch (error) {
       this.handleError(res, error);
     }
