@@ -12,13 +12,19 @@ import type { CoperturaDati, MarcaInsight, MarcheVolantino as DatiMarche } from 
 import { BarraQuota, Blocco, MostraTutte, Nota } from "./comuni";
 
 /**
- * Scheda "Marche": le marche con piu' spazio e piu' box, con lo sconto medio di ciascuna. Il peso
+ * Sezione "Marche": le marche con piu' spazio e piu' box, con lo sconto medio di ciascuna. Il peso
  * delle marche del distributore compare solo se la config dell'installazione le indica
  * (marche.distributore): senza, il server manda quotaDistributore null e la scheda non le distingue.
  */
 
 export interface MarcheVolantinoProps {
   marche: DatiMarche;
+  /**
+   * Il volantino ha le linee del distributore (lineeDistributore): la loro quota sta nella sezione
+   * "Marchi del distributore", e qui non si ripete con il conto per nome di marca, che darebbe una
+   * percentuale diversa.
+   */
+  conLineeDistributore?: boolean;
   /** Copertura dei dati (sintesi.copertura): sotto la soglia la scheda dice che il dato e' parziale. */
   copertura?: CoperturaDati;
 }
@@ -77,7 +83,7 @@ function Intestazione({
   );
 }
 
-export function MarcheVolantino({ marche, copertura }: MarcheVolantinoProps) {
+export function MarcheVolantino({ marche, conLineeDistributore = false, copertura }: MarcheVolantinoProps) {
   const [ordinamento, setOrdinamento] = useState<{ colonna: ColonnaMarche; direzione: DirezioneOrdinamento }>({
     colonna: "quotaSpazio",
     direzione: "desc",
@@ -98,17 +104,15 @@ export function MarcheVolantino({ marche, copertura }: MarcheVolantinoProps) {
 
   if (marche.elenco.length === 0) {
     return (
-      <div className="p-4">
-        <EmptyState compatta icon="Award" title="Nessuna marca riconosciuta" description="Le referenze di questo volantino non hanno la marca." />
-      </div>
+      <EmptyState compatta icon="Award" title="Nessuna marca riconosciuta" description="Le referenze di questo volantino non hanno la marca." />
     );
   }
 
   const visibili = tutte ? ordinate : ordinate.slice(0, MARCHE_INIZIALI);
 
   return (
-    <div className="space-y-6 p-4">
-      {marche.quotaDistributore && (
+    <div className="space-y-6">
+      {marche.quotaDistributore && !conLineeDistributore && (
         <Blocco titolo="Marche del distributore" descrizione="Il peso delle marche del distributore indicate nella configurazione.">
           <StatCardGrid className="lg:grid-cols-2">
             <StatCard
@@ -135,7 +139,8 @@ export function MarcheVolantino({ marche, copertura }: MarcheVolantinoProps) {
         titolo="Marche nel volantino"
         descrizione={`${formatNumero(marche.elenco.length)} ${marche.elenco.length === 1 ? "marca" : "marche"}, ordinate per ${COLONNE.find(c => c.id === ordinamento.colonna)?.etichetta.toLowerCase() ?? "spazio"}.`}
       >
-        <div className="-mx-4 overflow-x-auto">
+        {/* La tabella arriva ai bordi della sezione */}
+        <div className="-mx-5 overflow-x-auto">
           <Table sm id={idTabella}>
             <caption className="sr-only">Marche nel volantino</caption>
             <Table.Thead>
@@ -146,7 +151,7 @@ export function MarcheVolantino({ marche, copertura }: MarcheVolantinoProps) {
                     colonna={colonna.id}
                     ordinamento={ordinamento}
                     onOrdina={ordina}
-                    className={twMerge(i === 0 && "pl-4", i === COLONNE.length - 1 && "pr-4", colonna.destra && "text-right")}
+                    className={twMerge(i === 0 && "pl-5", i === COLONNE.length - 1 && "pr-5", colonna.destra && "text-right")}
                   >
                     {colonna.etichetta}
                   </Intestazione>
@@ -156,7 +161,7 @@ export function MarcheVolantino({ marche, copertura }: MarcheVolantinoProps) {
             <Table.Tbody>
               {visibili.map(marca => (
                 <Table.Tr key={marca.chiave}>
-                  <Table.Td className="min-w-40 pl-4">
+                  <Table.Td className="min-w-40 pl-5">
                     <span className="font-medium text-slate-800 [overflow-wrap:anywhere] dark:text-slate-200">{marca.nome}</span>
                     {conDistributore && marca.distributore && (
                       <Badge variant="primary" size="sm" className="ml-2 align-middle">
@@ -174,7 +179,7 @@ export function MarcheVolantino({ marche, copertura }: MarcheVolantinoProps) {
                       </span>
                     </div>
                   </Table.Td>
-                  <Table.Td className="pr-4 text-right tabular-nums dark:text-slate-200">
+                  <Table.Td className="pr-5 text-right tabular-nums dark:text-slate-200">
                     {marca.scontoMedio === null ? "—" : formatPercentuale(marca.scontoMedio)}
                   </Table.Td>
                 </Table.Tr>

@@ -7,12 +7,16 @@ import type { PeriodoRecapito } from "../../../lib/puntiVendita/storia";
 vi.mock("@/query/query", () => ({ useFetchReteInsegne: () => ({ data: undefined }) }));
 
 import {
-  colonneTimeline,
+  barreTimeline,
   edizioneScelta,
   edizioniDelPeriodo,
   etichettaBox,
   eventiTimeline,
   fasceInsegne,
+  fineEdizione,
+  intervalloPeriodo,
+  periodoDaParametro,
+  ULTIMI_3_MESI,
   formatDifferenzaPunti,
   formatEuro,
   formatPercentuale,
@@ -96,12 +100,25 @@ describe("timeline della scheda", () => {
     edizione("k3", "2025-04-08", rif("sup", "Conad Superstore"), { al: "2025-04-21", numeroReferenze: 148 }),
   ];
 
-  it("una colonna per volantino, alta quanto le referenze e del gruppo del suo canale", () => {
-    expect(colonneTimeline(timeline).map(c => [c.id, c.data, c.valore, c.gruppo])).toEqual([
-      ["k1", "2024-03-04", 100, "city"],
-      ["k2", "2024-03-18", 100, "city"],
-      ["k3", "2025-04-08", 148, "sup"],
+  it("una barra per volantino, dal primo all'ultimo giorno, del gruppo del suo canale, con le referenze nei dettagli", () => {
+    const barre = barreTimeline(timeline);
+    expect(barre.map(b => [b.id, b.dal, b.al, b.gruppo])).toEqual([
+      ["k1", "2024-03-04", "2024-03-17", "city"],
+      ["k2", "2024-03-18", "2024-03-31", "city"],
+      ["k3", "2025-04-08", "2025-04-21", "sup"],
     ]);
+    expect(barre[2].sottotitolo).toBe("8 – 21 aprile 2025");
+    expect(barre[2].dettagli).toEqual([
+      { etichetta: "Area", valore: "Liguria" },
+      { etichetta: "Referenze", valore: "148" },
+    ]);
+  });
+
+  it("senza la fine la barra è il primo giorno solo", () => {
+    const [barra] = barreTimeline([edizione("k9", "2026-03-03")]);
+    expect([barra.dal, barra.al, barra.sottotitolo]).toEqual(["2026-03-03", null, "dal 3 marzo 2026"]);
+    expect(fineEdizione(edizione("k9", "2026-03-03"))).toBe("2026-03-03");
+    expect(fineEdizione(edizione("k9", "2026-03-03", undefined, { al: "2026-03-16" }))).toBe("2026-03-16");
   });
 
   it("la fascia delle insegne unisce i volantini consecutivi con la stessa insegna e area", () => {
@@ -120,6 +137,35 @@ describe("timeline della scheda", () => {
     expect(edizioneScelta(del2024, "k3")?.idKit).toBe("k2");
     expect(edizioneScelta(timeline, null)?.idKit).toBe("k3");
     expect(edizioneScelta([], "k1")).toBeNull();
+  });
+
+  it("il periodo dall'indirizzo: un anno dei dati, gli ultimi 3 mesi, altrimenti tutto", () => {
+    expect(periodoDaParametro("2024", [2024, 2025])).toBe(2024);
+    expect(periodoDaParametro("2019", [2024, 2025])).toBeNull();
+    expect(periodoDaParametro(ULTIMI_3_MESI, [2024, 2025])).toBe(ULTIMI_3_MESI);
+    expect(periodoDaParametro(null, [2024, 2025])).toBeNull();
+    expect(periodoDaParametro("tutti", [2024, 2025])).toBeNull();
+  });
+
+  it("gli ultimi 3 mesi: i volantini validi da tre mesi fa in poi, attivi e in arrivo compresi", () => {
+    const recenti = [
+      edizione("vecchia", "2026-07-20", undefined, { al: "2026-08-02" }),
+      edizione("a-cavallo", "2026-08-03", undefined, { al: "2026-08-16" }),
+      edizione("attiva", "2026-11-02", undefined, { al: "2026-11-15", attivo: true }),
+      edizione("in-arrivo", "2026-11-23", undefined, { al: "2026-12-06" }),
+    ];
+    const oggi = "2026-11-10";
+
+    const edizioni = edizioniDelPeriodo(recenti, ULTIMI_3_MESI, oggi);
+    expect(edizioni.map(e => e.idKit)).toEqual(["a-cavallo", "attiva", "in-arrivo"]);
+    // L'asse va da tre mesi fa fino all'ultimo volantino, almeno una settimana dopo oggi
+    expect(intervalloPeriodo(ULTIMI_3_MESI, edizioni, oggi)).toEqual({ dal: "2026-08-10", al: "2026-12-06" });
+    expect(intervalloPeriodo(ULTIMI_3_MESI, [], oggi)).toEqual({ dal: "2026-08-10", al: "2026-11-17" });
+  });
+
+  it("l'asse di un anno è l'anno intero; per tutto lo decide la timeline", () => {
+    expect(intervalloPeriodo(2025, timeline)).toEqual({ dal: "2025-01-01", al: "2025-12-31" });
+    expect(intervalloPeriodo(null, timeline)).toBeUndefined();
   });
 
   it("gli eventi diventano marcatori con forma per tipo ed etichetta breve", () => {

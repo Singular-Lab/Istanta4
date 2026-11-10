@@ -50,6 +50,43 @@ describe('migrazione dei percorsi del menu', () => {
     expect(fonte.aggiornaPercorso).not.toHaveBeenCalled();
   });
 
+  it('porta le voci WebPliant a Workspace WebPliant, al suo editor e alle Impostazioni GDO', async () => {
+    const { fonte, menu } = creaFonte({
+      a: '/webliant/impostazioni-webpliant',
+      b: '/webliant/impostazioni-webpliant/workspace',
+      c: '/webliant/impostazioni-webpliant/configurazione-webpliant',
+      d: '/webliant/webpliant-disponibili',
+      e: '/webliant/workspace',
+    });
+
+    expect(await migraPercorsiSpostati(fonte)).toBe(3);
+    expect(Object.fromEntries(menu)).toEqual({
+      a: '/webliant/workspace',
+      b: '/webliant/workspace/editor',
+      c: '/impostazioni-gdo',
+      d: '/webliant/webpliant-disponibili',
+      e: '/webliant/workspace',
+    });
+  });
+
+  it('la voce col vecchio titolo predefinito diventa "Workspace WebPliant"; un titolo scelto a mano resta', async () => {
+    const voci = [
+      { id_menu_item: 'a', pathname: '/webliant/impostazioni-webpliant', titolo: 'Impostazioni WebPliant' },
+      { id_menu_item: 'b', pathname: '/webliant/impostazioni-webpliant', titolo: 'I miei siti' },
+      { id_menu_item: 'c', pathname: '/webliant/impostazioni-webpliant/configurazione-webpliant', titolo: 'Impostazioni WebPliant' },
+    ];
+    const titoli = new Map(voci.map(v => [v.id_menu_item, v.titolo]));
+    const fonte: FonteMenu = {
+      leggiVoci: async () => voci,
+      aggiornaPercorso: vi.fn(async () => {}),
+      aggiornaTitolo: vi.fn(async (id: string, titolo: string) => { titoli.set(id, titolo); }),
+    };
+
+    expect(await migraPercorsiSpostati(fonte)).toBe(3);
+    expect(Object.fromEntries(titoli)).toEqual({ a: 'Workspace WebPliant', b: 'I miei siti', c: 'Impostazioni WebPliant' });
+    expect(fonte.aggiornaTitolo).toHaveBeenCalledTimes(1);
+  });
+
   it('una seconda esecuzione non cambia nulla', async () => {
     const { fonte } = creaFonte({ a: '/gestione-hub' });
     await migraPercorsiSpostati(fonte);

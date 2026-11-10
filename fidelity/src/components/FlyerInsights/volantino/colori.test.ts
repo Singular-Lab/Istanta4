@@ -4,20 +4,10 @@ import { MASSIMO_CATEGORIE, tintaCategoria, tintaSequenziale, TINTA_NEUTRA } fro
 import type { FlyerInsightsConfig } from "@/types/flyerInsights";
 import type { BoxInsight, RepartoInsight } from "../../../../lib/insightVolantino/tipi";
 import { MECCANICHE } from "../../../../lib/puntiVendita/analisi";
-import { STATI_DIFFERENZA } from "../confronti/supporto";
-import {
-  coloriReparti,
-  fasciaSconto,
-  gruppoBox,
-  legendaDifferenze,
-  legendaModo,
-  stileBox,
-  stileDifferenza,
-  tintaSconto,
-} from "./colori";
+import { coloreMarketing, coloriReparti, fasciaSconto, gruppoBox, legendaModo, stileBox, tintaSconto } from "./colori";
 
-// Colori dei riquadri del volantino: reparti dalla config o automatici, meccaniche, fasce di sconto,
-// differenze fra varianti
+// Colori dei riquadri del volantino: reparti con il colore per il marketing, dalla config o
+// automatici, meccaniche, fasce di sconto
 
 type BoxColori = Pick<BoxInsight, "id" | "reparto" | "spazio" | "meccanica" | "sconto">;
 const box = (id: string, dati: Partial<BoxColori> = {}): BoxColori => ({
@@ -170,15 +160,35 @@ describe("gruppo di un box per la ripartizione della pagina", () => {
   });
 });
 
-describe("differenze fra varianti", () => {
-  it("i box prendono le tinte dei confronti; gli uguali e quelli senza stato sono attenuati", () => {
-    expect(stileDifferenza("solo-qui")).toEqual({ tinta: STATI_DIFFERENZA["solo-qui"].tinta, attenuato: false });
-    expect(stileDifferenza("uguale").attenuato).toBe(true);
-    expect(stileDifferenza(undefined)).toEqual({ tinta: TINTA_NEUTRA, attenuato: true });
+describe("colori per il marketing dei reparti", () => {
+  const FRESCHI = { codice: "24", descrizione: "Freschissimi", colore: "#0ea5e9" };
+
+  it("il colore per il marketing della GDO vale più della config, con il nome per il marketing in legenda", () => {
+    const colori = coloriReparti([box("a", { reparto: { ...DROGHERIA, colore: "#16a34a" } }), box("b", { reparto: VARIE })], MAPPA);
+
+    expect(colori.tinta({ ...DROGHERIA, colore: "#16a34a" }).colore).toBe("#16a34a");
+    // Il reparto senza colore per il marketing resta sulla config
+    expect(colori.tinta(VARIE).colore).toBe("#64748b");
+    expect(colori.voci.map(v => v.etichetta)).toEqual(["DROGHERIA ALIMENTARE", "Altro"]);
+    expect(stileBox(box("a", { reparto: { ...DROGHERIA, colore: "#16a34a" } }), "reparto", colori).tinta.colore).toBe("#16a34a");
   });
 
-  it("la legenda ha solo gli stati dei box del volantino, nell'ordine dei confronti", () => {
-    const voci = legendaDifferenze([box("a"), box("b"), box("c")], { a: "uguale", b: "solo-qui", z: "solo-altra" });
-    expect(voci.map(v => v.etichetta)).toEqual([STATI_DIFFERENZA["solo-qui"].etichetta, STATI_DIFFERENZA.uguale.etichetta]);
+  it("senza config i reparti con il colore per il marketing lo tengono e gli altri prendono la palette", () => {
+    const colori = coloriReparti([box("a", { reparto: FRESCHI }), box("b", { reparto: VARIE }), box("c")]);
+
+    expect(colori.tinta(FRESCHI).colore).toBe("#0ea5e9");
+    expect(colori.tinta(VARIE)).toEqual(tintaCategoria(0));
+    expect(colori.voci.map(v => v.etichetta)).toEqual(["Freschissimi", "VARIE", "Reparto non noto"]);
+    expect(gruppoBox(box("a", { reparto: FRESCHI }), "reparto", colori)).toEqual({ id: "24", etichetta: "Freschissimi", tinta: colori.tinta(FRESCHI) });
+  });
+
+  it("un nome per il marketing condiviso da più box è una voce sola; un colore non valido non conta", () => {
+    const colori = coloriReparti([box("a", { reparto: FRESCHI }), box("b", { reparto: FRESCHI }), box("c", { reparto: { ...VARIE, colore: "blu" } })]);
+
+    expect(colori.voci.filter(v => v.etichetta === "Freschissimi")).toHaveLength(1);
+    expect(coloreMarketing({ colore: "blu" })).toBeNull();
+    expect(coloreMarketing({ colore: " #ABC " })).toBe("#ABC");
+    expect(coloreMarketing(null)).toBeNull();
+    expect(colori.tinta({ ...VARIE, colore: "blu" })).toEqual(tintaCategoria(0));
   });
 });

@@ -1,97 +1,92 @@
 import Lucide from "@/components/Base/Lucide";
-import StatCard, { StatCardGrid, type StatCardProps } from "@/components/Base/StatCard";
-import { coperturaParziale, formatDifferenzaPunti, formatPercentuale, periodoValidita } from "@/pages/PuntiVenditaConsultazione/analisi";
-import { formatNumero } from "@/utils/format";
-import type { ConfrontoEdizione, CoperturaDati, SintesiVolantino, Variazione } from "../../../../lib/insightVolantino/tipi";
-// La stessa scrittura delle differenze della tabella del confronto ("+12", "−3", "stabile")
-import { formatDifferenzaNumero } from "../confronti/supporto";
+import { coperturaParziale, formatPercentuale } from "@/pages/PuntiVenditaConsultazione/analisi";
+import { formatNumero, VALORE_ASSENTE } from "@/utils/format";
+import { twMerge } from "@/utils/twMerge";
+import type { BoxInsight, CoperturaDati, LineeDistributore, SintesiVolantino } from "../../../../lib/insightVolantino/tipi";
 import { Nota } from "./comuni";
 
 /**
- * I numeri chiave del volantino per la Direzione, con la variazione rispetto all'edizione precedente
- * della stessa area e canale quando c'e'. Vale per ogni GDO e per i kit di Istanta e dello storico:
- * i numeri arrivano gia' calcolati dal server (EstensioneInsight.sintesi).
+ * I numeri chiave del volantino per la Direzione, in una fascia di riquadri. Vale per ogni GDO e per
+ * i kit di Istanta e dello storico: i numeri arrivano gia' calcolati dal server
+ * (EstensioneInsight.sintesi e, se il cliente dichiara linee, lineeDistributore). Niente confronti
+ * con altre edizioni: il dettaglio racconta solo questo volantino.
  */
 
 export interface SintesiInsightProps {
   sintesi: SintesiVolantino;
-  /** Edizione precedente: undefined se non richiesta, null se questa e' la prima dell'area e del canale. */
-  confronto?: ConfrontoEdizione | null;
-  caricamentoConfronto?: boolean;
+  /** I box del volantino, per contare quelli con il Prezzo Fidelity; senza, si ricavano dalla quota. */
+  box?: readonly Pick<BoxInsight, "meccanica">[];
+  /** Le linee del distributore: aggiungono il riquadro dei suoi marchi e il dettaglio delle marche. */
+  lineeDistributore?: LineeDistributore | null;
 }
-
-export type ChiaveNumero = keyof ConfrontoEdizione["sintesi"];
-
-/** Verso buono di una variazione; "neutra" quando salire o scendere non e' di per se' un bene. */
-export type Tendenza = "neutra" | "su" | "giu";
 
 export interface NumeroSintesi {
-  chiave: ChiaveNumero;
+  id: string;
   etichetta: string;
   icona: string;
-  formatta: (valore: number | null) => string;
-  /** La differenza arrotondata come si mostra, e il suo testo. */
-  differenza: (differenza: number) => { arrotondata: number; testo: string };
-  tendenza: Tendenza;
-  dettaglio?: (sintesi: SintesiVolantino) => string;
+  valore: string;
+  sottotitolo?: string;
+  /** Il riquadro in evidenza (i marchi del distributore). */
+  evidenza?: boolean;
 }
 
-const differenzaConteggio = (differenza: number) => {
-  const arrotondata = Math.round(differenza);
-  return { arrotondata, testo: formatDifferenzaNumero(arrotondata) };
-};
+const contaBox = (numero: number): string => (numero === 1 ? "1 box" : `${formatNumero(numero)} box`);
 
-// Le quote si confrontano in punti percentuali, a un decimale come le mostra la pagina
-const differenzaPunti = (differenza: number) => {
-  const arrotondata = Math.round(differenza * 10) / 10;
-  return { arrotondata, testo: formatDifferenzaPunti(arrotondata) };
-};
+/** "4,5 box a pagina": una cifra decimale, senza se la media e' intera. */
+const boxAPagina = (box: number, pagine: number): string | undefined =>
+  pagine > 0 ? `${formatNumero(Math.round((box / pagine) * 10) / 10)} box a pagina` : undefined;
 
-const conteggio = (valore: number | null) => formatNumero(valore);
+/** I box con il Prezzo Fidelity: contati sui box se ci sono, altrimenti dalla quota della sintesi. */
+const boxFidelity = (sintesi: SintesiVolantino, box?: readonly Pick<BoxInsight, "meccanica">[]): number =>
+  box ? box.filter(voce => voce.meccanica === "fidelity").length : Math.round((sintesi.quotaFidelity / 100) * sintesi.box);
 
 /**
- * I numeri della sintesi. Quasi tutti hanno tendenza neutra: piu' referenze, piu' pagine o uno sconto
- * medio piu' alto (piu' aggressivo) sono scelte commerciali, non miglioramenti. Fa eccezione la quota
- * di box con meccanica fidelity, che misura quanto il volantino spinge la carta fedelta'.
+ * I riquadri della fascia, nell'ordine in cui si leggono: quanto e' grande il volantino, quanto
+ * sconta, quanto spinge la carta, i marchi del distributore e le marche.
  */
-export const NUMERI_SINTESI: readonly NumeroSintesi[] = [
-  { chiave: "referenze", etichetta: "Referenze", icona: "Package", formatta: conteggio, differenza: differenzaConteggio, tendenza: "neutra" },
-  { chiave: "box", etichetta: "Box", icona: "Boxes", formatta: conteggio, differenza: differenzaConteggio, tendenza: "neutra" },
-  { chiave: "pagine", etichetta: "Pagine", icona: "BookOpen", formatta: conteggio, differenza: differenzaConteggio, tendenza: "neutra" },
-  {
-    chiave: "scontoMedio",
-    etichetta: "Sconto medio",
-    icona: "Percent",
-    formatta: valore => formatPercentuale(valore),
-    differenza: differenzaPunti,
-    tendenza: "neutra",
-    dettaglio: sintesi => `su ${formatNumero(sintesi.boxConSconto)} box`,
-  },
-  {
-    chiave: "quotaFidelity",
-    etichetta: "Quota fidelity",
-    icona: "Star",
-    formatta: valore => formatPercentuale(valore),
-    differenza: differenzaPunti,
-    tendenza: "su",
-    dettaglio: () => "dei box",
-  },
-  { chiave: "sottocosto", etichetta: "Sottocosto", icona: "Tag", formatta: conteggio, differenza: differenzaConteggio, tendenza: "neutra", dettaglio: () => "box" },
-  { chiave: "marche", etichetta: "Marche", icona: "Award", formatta: conteggio, differenza: differenzaConteggio, tendenza: "neutra" },
-];
-
-/**
- * StatCard colora la variazione come miglioramento (verde) o peggioramento (rosso) secondo positivoSe:
- * per i numeri a tendenza neutra la riporta al grigio, lasciando freccia e testo per le tecnologie assistive.
- */
-export const CLASSE_VARIAZIONE_NEUTRA = "[&_[data-direzione]]:text-slate-500 dark:[&_[data-direzione]]:text-slate-400";
-
-/** La variazione da mostrare nella StatCard; nessuna se manca uno dei due valori. */
-export const variazioneNumero = (numero: NumeroSintesi, variazione: Variazione | undefined): StatCardProps["variazione"] => {
-  if (!variazione || variazione.differenza === null || !Number.isFinite(variazione.differenza)) return undefined;
-  const { arrotondata, testo } = numero.differenza(variazione.differenza);
-  const direzione = arrotondata === 0 ? "stabile" : arrotondata > 0 ? "su" : "giu";
-  return { valore: testo, direzione, positivoSe: numero.tendenza === "giu" ? "giu" : "su" };
+export const numeriSintesi = (
+  sintesi: SintesiVolantino,
+  box?: readonly Pick<BoxInsight, "meccanica">[],
+  lineeDistributore?: LineeDistributore | null
+): NumeroSintesi[] => {
+  const numeri: NumeroSintesi[] = [
+    { id: "referenze", etichetta: "Referenze", icona: "Package", valore: formatNumero(sintesi.referenze), sottotitolo: contaBox(sintesi.box) },
+    { id: "pagine", etichetta: "Pagine", icona: "BookOpen", valore: formatNumero(sintesi.pagine), sottotitolo: boxAPagina(sintesi.box, sintesi.pagine) },
+    {
+      id: "scontoMedio",
+      etichetta: "Sconto medio",
+      icona: "Percent",
+      valore: formatPercentuale(sintesi.scontoMedio),
+      sottotitolo: sintesi.boxConSconto === 1 ? "1 box scontato" : `${formatNumero(sintesi.boxConSconto)} box scontati`,
+    },
+    {
+      id: "fidelity",
+      etichetta: "Prezzo Fidelity",
+      icona: "Star",
+      valore: formatPercentuale(sintesi.quotaFidelity),
+      sottotitolo: contaBox(boxFidelity(sintesi, box)),
+    },
+    { id: "sottocosto", etichetta: "Sottocosto", icona: "Tag", valore: formatNumero(sintesi.sottocosto), sottotitolo: "box sotto costo" },
+  ];
+  if (lineeDistributore) {
+    numeri.push({
+      id: "distributore",
+      etichetta: "Marchi del distributore",
+      icona: "BadgeCheck",
+      valore: formatPercentuale(lineeDistributore.quotaSpazio),
+      sottotitolo: `dello spazio, ${contaBox(lineeDistributore.box)}`,
+      evidenza: true,
+    });
+  }
+  const linee = lineeDistributore?.linee.length ?? 0;
+  numeri.push({
+    id: "marche",
+    etichetta: "Marche",
+    icona: "Award",
+    valore: formatNumero(sintesi.marche),
+    sottotitolo: lineeDistributore ? `di cui ${linee === 1 ? "1 linea" : `${formatNumero(linee)} linee`} del distributore` : undefined,
+  });
+  return numeri;
 };
 
 const NOMI_COPERTURA: ReadonlyArray<{ chiave: keyof CoperturaDati; nome: string }> = [
@@ -110,55 +105,58 @@ export const testoCoperturaParziale = (copertura: CoperturaDati): string | null 
     .join(", ");
 };
 
-function DidascaliaConfronto({ confronto, caricamento }: { confronto: ConfrontoEdizione | null | undefined; caricamento: boolean }) {
-  if (caricamento) {
-    return (
-      <p aria-busy="true" className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-        <Lucide icon="LoaderCircle" aria-hidden="true" className="h-3.5 w-3.5 flex-none motion-safe:animate-spin" />
-        Confronto con l&apos;edizione precedente in caricamento…
-      </p>
-    );
-  }
-  if (confronto === undefined) return null;
-  if (confronto === null) {
-    return <Nota>Nessuna edizione precedente per la stessa area e lo stesso canale: le variazioni non si calcolano.</Nota>;
-  }
-  const { edizione } = confronto;
-  const periodo = periodoValidita(edizione.validitaDal, edizione.validitaAl);
+/** Un riquadro della fascia: etichetta, valore grande e una riga di dettaglio. */
+function Riquadro({ numero }: { numero: NumeroSintesi }) {
+  const { evidenza = false } = numero;
   return (
-    <Nota icona="History">
-      Variazioni rispetto all&apos;edizione precedente della stessa area e canale:{" "}
-      <b className="font-semibold text-slate-700 dark:text-slate-200">{edizione.titolo}</b>, {periodo}
-      {edizione.storico ? " (dallo storico)" : ""}.
-    </Nota>
+    <dl
+      data-numero={numero.id}
+      data-evidenza={evidenza || undefined}
+      className={twMerge(
+        "min-w-0 rounded-card border px-4 py-3 shadow-card",
+        evidenza
+          ? "border-theme-1 bg-theme-1 text-white dark:border-indigo-300/40 dark:bg-indigo-300/15"
+          : "border-slate-200 bg-white dark:border-darkmode-400 dark:bg-darkmode-600"
+      )}
+    >
+      <dt
+        title={numero.etichetta}
+        className={twMerge(
+          "flex items-center gap-1.5 truncate text-2xs font-medium uppercase tracking-wide",
+          evidenza ? "text-white/80 dark:text-indigo-200" : "text-slate-500 dark:text-slate-400"
+        )}
+      >
+        <Lucide icon={numero.icona} aria-hidden="true" className="h-3.5 w-3.5 flex-none" />
+        <span className="truncate">{numero.etichetta}</span>
+      </dt>
+      <dd
+        className={twMerge(
+          "mt-1 truncate text-2xl font-bold leading-tight tabular-nums",
+          evidenza ? "text-white dark:text-indigo-100" : "text-slate-800 dark:text-slate-100"
+        )}
+      >
+        {numero.valore || VALORE_ASSENTE}
+      </dd>
+      {numero.sottotitolo && (
+        <dd className={twMerge("mt-0.5 truncate text-xs", evidenza ? "text-white/80 dark:text-indigo-200" : "text-slate-500 dark:text-slate-400")}>
+          {numero.sottotitolo}
+        </dd>
+      )}
+    </dl>
   );
 }
 
-export function SintesiInsight({ sintesi, confronto, caricamentoConfronto = false }: SintesiInsightProps) {
+export function SintesiInsight({ sintesi, box, lineeDistributore }: SintesiInsightProps) {
   const copertura = sintesi.box > 0 ? testoCoperturaParziale(sintesi.copertura) : null;
+  const numeri = numeriSintesi(sintesi, box, lineeDistributore);
   return (
     <div className="space-y-2">
-      <StatCardGrid className="sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-7">
-        {NUMERI_SINTESI.map(numero => {
-          const variazione = confronto ? confronto.sintesi[numero.chiave] : undefined;
-          const precedente = variazione && variazione.precedente !== null ? `prima ${numero.formatta(variazione.precedente)}` : null;
-          const sottotitolo = [numero.dettaglio?.(sintesi), precedente].filter(Boolean).join(" · ");
-          return (
-            <StatCard
-              key={numero.chiave}
-              densita="compatta"
-              tono="neutral"
-              etichetta={numero.etichetta}
-              valore={numero.formatta(sintesi[numero.chiave])}
-              icona={numero.icona}
-              variazione={variazioneNumero(numero, variazione)}
-              sottotitolo={sottotitolo || undefined}
-              className={numero.tendenza === "neutra" ? CLASSE_VARIAZIONE_NEUTRA : undefined}
-            />
-          );
-        })}
-      </StatCardGrid>
-      <DidascaliaConfronto confronto={confronto} caricamento={caricamentoConfronto} />
+      {/* Una riga sola finché ci stanno, poi vanno a capo: almeno 9,5rem a riquadro */}
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(9.5rem,1fr))] gap-3">
+        {numeri.map(numero => (
+          <Riquadro key={numero.id} numero={numero} />
+        ))}
+      </div>
       {copertura && (
         <Nota>
           Dati parziali: {copertura}. Sconti, marche, reparti e spazi valgono sui box che hanno il dato.

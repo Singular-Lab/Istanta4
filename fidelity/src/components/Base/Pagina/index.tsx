@@ -11,12 +11,16 @@ export interface PaginaProps {
   indietro?: Indietro;
   /** Badge accanto al titolo, per esempio lo stato. */
   badges?: ReactNode;
+  /** Intestazione compatta su una riga, per le pagine di dettaglio dense (vedi PageHeader). */
+  compatta?: boolean;
+  /** Pastiglie accanto al titolo nell'intestazione compatta: canale, area, periodo... */
+  meta?: ReactNode;
   className?: string;
   children?: ReactNode;
 }
 
 /** Struttura comune delle pagine: intestazione e, sotto, le sezioni distanziate in modo uniforme. */
-function Pagina({ titolo, descrizione, azioni, indietro, badges, className, children }: PaginaProps) {
+function Pagina({ titolo, descrizione, azioni, indietro, badges, compatta, meta, className, children }: PaginaProps) {
   return (
     <div className={twMerge("flex flex-col gap-6", className)}>
       <PageHeader
@@ -25,6 +29,8 @@ function Pagina({ titolo, descrizione, azioni, indietro, badges, className, chil
         actions={azioni}
         indietro={indietro}
         badges={badges}
+        compatta={compatta}
+        meta={meta}
         className="mb-0"
       />
       {children}

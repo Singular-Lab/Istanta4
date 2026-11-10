@@ -1,5 +1,5 @@
 import EmptyState from "@/components/EmptyState";
-import { BarreOrizzontali, Colonne, SERIE_PRINCIPALE, type VoceBarra } from "@/components/Grafici";
+import { BarreOrizzontali, Colonne, type VoceBarra } from "@/components/Grafici";
 import { coperturaParziale, formatEuro, formatPercentuale, marcaFormato } from "@/pages/PuntiVenditaConsultazione/analisi";
 import { formatNumero } from "@/utils/format";
 import { useId, useMemo, useState } from "react";
@@ -10,12 +10,13 @@ import type {
   PrezziSconti as DatiPrezziSconti,
   ScontoPerGruppo,
 } from "../../../../lib/insightVolantino/tipi";
-import { BarraQuota, Blocco, MostraTutte, Nota, RIGHE_INIZIALI } from "./comuni";
+import { Blocco, MostraTutte, Nota, RIGHE_INIZIALI } from "./comuni";
 
 /**
- * Scheda "Prezzi e sconti": come si distribuiscono gli sconti, quanto sconta ogni reparto e ogni
- * meccanica, i box in sottocosto e quelli con il prezzo al kg. Per ogni GDO e per i kit di Istanta e
- * dello storico: i dati arrivano dalla lettura generica delle referenze (EstensioneInsight.prezziSconti).
+ * Sezione "Meccaniche e sconti": come si distribuiscono gli sconti, quanto sconta ogni meccanica e i
+ * box in sottocosto. Sta in mezza pagina accanto ai reparti: i blocchi vanno uno sotto l'altro. Per
+ * ogni GDO e per i kit di Istanta e dello storico: i dati arrivano dalla lettura generica delle
+ * referenze (EstensioneInsight.prezziSconti).
  */
 
 export interface PrezziScontiProps {
@@ -102,67 +103,32 @@ function Sottocosto({ idBox, box }: { idBox: readonly string[]; box: readonly Bo
   );
 }
 
-function PrezzoAlKg({ conPrezzo, totale }: { conPrezzo: number; totale: number }) {
-  const quota = totale > 0 ? (conPrezzo / totale) * 100 : null;
-  return (
-    <div className="space-y-2">
-      <p className="text-sm text-slate-700 dark:text-slate-200">
-        <b className="text-xl font-bold tabular-nums text-slate-800 dark:text-slate-100">{formatNumero(conPrezzo)}</b> box su{" "}
-        {formatNumero(totale)}
-        {quota !== null && <span className="text-slate-500 dark:text-slate-400"> ({formatPercentuale(quota)})</span>}
-      </p>
-      {quota !== null && (
-        <div className="flex items-center">
-          <BarraQuota valore={quota} massimo={100} classe={SERIE_PRINCIPALE.sfondo} />
-        </div>
-      )}
-    </div>
-  );
-}
-
 export function PrezziSconti({ prezziSconti, box, copertura }: PrezziScontiProps) {
-  const perReparto = useMemo(() => vociScontoMedio(prezziSconti.perReparto), [prezziSconti.perReparto]);
   const perMeccanica = useMemo(() => vociScontoMedio(prezziSconti.perMeccanica), [prezziSconti.perMeccanica]);
   const prezzoParziale = copertura !== undefined && box.length > 0 && coperturaParziale(copertura.prezzo);
 
   return (
-    <div className="space-y-6 p-4">
+    <div className="space-y-6">
       <Blocco titolo="Fasce di sconto" descrizione="Quanti box hanno lo sconto in ciascuna fascia.">
         <FasceSconto fasce={prezziSconti.fasce} />
       </Blocco>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Blocco titolo="Sconto medio per reparto" descrizione="Media degli sconti dei box del reparto che ne hanno uno.">
-          <BarreOrizzontali
-            voci={perReparto}
-            titolo="Sconto medio per reparto"
-            descrizioneValore="Sconto medio"
-            formatta={valore => formatPercentuale(valore)}
-            vuoto="Nessun reparto con uno sconto calcolabile."
-          />
-        </Blocco>
-        <Blocco titolo="Sconto medio per meccanica" descrizione="Media degli sconti dei box di ogni meccanica.">
-          <BarreOrizzontali
-            voci={perMeccanica}
-            titolo="Sconto medio per meccanica"
-            descrizioneValore="Sconto medio"
-            formatta={valore => formatPercentuale(valore)}
-            vuoto="Nessuna meccanica con uno sconto calcolabile."
-          />
-        </Blocco>
-      </div>
+      <Blocco titolo="Sconto medio per meccanica" descrizione="Media degli sconti dei box di ogni meccanica.">
+        <BarreOrizzontali
+          voci={perMeccanica}
+          titolo="Sconto medio per meccanica"
+          descrizioneValore="Sconto medio"
+          formatta={valore => formatPercentuale(valore)}
+          vuoto="Nessuna meccanica con uno sconto calcolabile."
+        />
+      </Blocco>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Blocco
-          titolo="Sottocosto"
-          descrizione={`${formatNumero(prezziSconti.sottocosto.length)} ${prezziSconti.sottocosto.length === 1 ? "box venduto" : "box venduti"} sotto il costo.`}
-        >
-          <Sottocosto idBox={prezziSconti.sottocosto} box={box} />
-        </Blocco>
-        <Blocco titolo="Prezzo al kg o al litro" descrizione="Box con il prezzo al kg o al litro stampato o nei dati.">
-          <PrezzoAlKg conPrezzo={prezziSconti.conPrezzoAlKg} totale={box.length} />
-        </Blocco>
-      </div>
+      <Blocco
+        titolo="Sottocosto"
+        descrizione={`${formatNumero(prezziSconti.sottocosto.length)} ${prezziSconti.sottocosto.length === 1 ? "box venduto" : "box venduti"} sotto il costo.`}
+      >
+        <Sottocosto idBox={prezziSconti.sottocosto} box={box} />
+      </Blocco>
 
       {prezzoParziale && copertura && (
         <Nota>

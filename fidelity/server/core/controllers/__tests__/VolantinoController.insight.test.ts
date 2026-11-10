@@ -74,7 +74,7 @@ describe('GET /api/flyer-insights/:guidIdKitRuntime', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.contesto.titolo).toBe('Volantino Nord');
-    expect(volantinoService.getFlyerInsights).toHaveBeenCalledWith('k1', { idGdo: 'gdo-sessione' });
+    expect(volantinoService.getFlyerInsights).toHaveBeenCalledWith('k1', { idGdo: 'gdo-sessione' }, expect.anything());
   });
 
   it('senza materiali.visualizza non interroga il servizio', async () => {
@@ -93,7 +93,7 @@ describe('GET /api/flyer-insights/:guidIdKitRuntime', () => {
 
     await request(creaApp(volantinoService)).get('/api/flyer-insights/k1?gdo=altra-gdo');
 
-    expect(volantinoService.getFlyerInsights).toHaveBeenCalledWith('k1', { idGdo: 'gdo-sessione' });
+    expect(volantinoService.getFlyerInsights).toHaveBeenCalledWith('k1', { idGdo: 'gdo-sessione' }, expect.anything());
   });
 
   it('il Superadmin senza GDO legge tutte le GDO, o quella che indica', async () => {
@@ -128,6 +128,6 @@ describe('GET /api/flyer-insights/:guidIdKitRuntime', () => {
     const res = await request(creaApp(volantinoService)).get('/api/flyer-insights/k-altra-gdo');
 
     expect(res.status).toBe(404);
-    expect(volantinoService.getFlyerInsights).toHaveBeenCalledWith('k-altra-gdo', { idGdo: 'gdo-sessione' });
+    expect(volantinoService.getFlyerInsights).toHaveBeenCalledWith('k-altra-gdo', { idGdo: 'gdo-sessione' }, expect.anything());
   });
 });

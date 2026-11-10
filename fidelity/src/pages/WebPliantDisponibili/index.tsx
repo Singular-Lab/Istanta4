@@ -138,7 +138,7 @@ const ChannelCard: React.FC<{
           <div className="border-t border-dashed border-slate-200 pt-3">
             <Link
               className="inline-flex text-sm items-center text-primary hover:underline"
-              to="/webliant/impostazioni-webpliant"
+              to="/webliant/workspace"
             >
               <Lucide icon="Download" aria-hidden="true" className="w-4 h-4 mr-1.5" />
               <span>Crea workspace</span>

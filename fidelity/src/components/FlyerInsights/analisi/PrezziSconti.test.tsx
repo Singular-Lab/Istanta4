@@ -68,14 +68,25 @@ describe("PrezziSconti", () => {
     expect(within(tabella).getAllByRole("row")).toHaveLength(7);
   });
 
-  it("lo sconto medio per reparto va dal più alto e lascia fuori i reparti senza sconto", () => {
-    render(<PrezziSconti prezziSconti={dati()} box={BOX} />);
+  it("lo sconto medio per meccanica va dal più alto; lo sconto per reparto e il prezzo al kg non ci sono più", () => {
+    render(
+      <PrezziSconti
+        prezziSconti={dati({
+          perMeccanica: [
+            { chiave: "fidelity", etichetta: "Prezzo Fidelity", box: 4, scontoMedio: 25 },
+            { chiave: "sconto", etichetta: "Sconto in %", box: 2, scontoMedio: 35 },
+            { chiave: "taglio", etichetta: "Taglio prezzo", box: 1, scontoMedio: null },
+          ],
+        })}
+        box={BOX}
+      />
+    );
 
-    const tabella = screen.getByRole("table", { name: "Sconto medio per reparto" });
-    const righe = within(tabella).getAllByRole("rowheader").map(cella => cella.textContent);
-    expect(righe).toEqual(["Latticini", "Ortofrutta"]);
+    const tabella = screen.getByRole("table", { name: "Sconto medio per meccanica" });
+    expect(within(tabella).getAllByRole("rowheader").map(cella => cella.textContent)).toEqual(["Sconto in %", "Prezzo Fidelity"]);
     expect(within(tabella).getByText("35%")).toBeInTheDocument();
-    expect(screen.getByRole("table", { name: "Sconto medio per meccanica" })).toHaveTextContent("Prezzo Fidelity");
+    expect(screen.queryByRole("table", { name: "Sconto medio per reparto" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Prezzo al kg o al litro" })).not.toBeInTheDocument();
   });
 
   it("elenca i box in sottocosto con marca, formato, prezzo e pagina", () => {
@@ -89,14 +100,7 @@ describe("PrezziSconti", () => {
     expect(within(blocco).getByText("pagina 3")).toBeInTheDocument();
   });
 
-  it("dice quanti box hanno il prezzo al kg sul totale", () => {
-    render(<PrezziSconti prezziSconti={dati()} box={BOX} />);
-
-    const blocco = screen.getByRole("region", { name: "Prezzo al kg o al litro" });
-    expect(blocco).toHaveTextContent("3 box su 4 (75%)");
-  });
-
-  it("senza sconti, sottocosto e reparti mostra stati vuoti sobri", () => {
+  it("senza sconti, sottocosto e meccaniche mostra stati vuoti sobri", () => {
     render(
       <PrezziSconti
         prezziSconti={dati({ fasce: fasce([]), perReparto: [], perMeccanica: [], sottocosto: [], conPrezzoAlKg: 0 })}
@@ -106,7 +110,6 @@ describe("PrezziSconti", () => {
 
     expect(screen.getByText("Nessuno sconto calcolabile")).toBeInTheDocument();
     expect(screen.queryByRole("img", { name: "Box per fascia di sconto" })).not.toBeInTheDocument();
-    expect(screen.getByText("Nessun reparto con uno sconto calcolabile.")).toBeInTheDocument();
     expect(screen.getByText("Nessuna meccanica con uno sconto calcolabile.")).toBeInTheDocument();
     expect(screen.getByText("Nessun box in sottocosto.")).toBeInTheDocument();
   });

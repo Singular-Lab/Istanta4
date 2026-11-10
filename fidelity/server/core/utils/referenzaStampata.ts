@@ -26,6 +26,8 @@ export interface RigaReferenza {
   compiled_fields?: unknown;
   data_fields?: unknown;
   foto?: unknown;
+  /** Loghi e bolli assegnati da Istanta: { guidId o guid_id, attiva, sigla, tipo }; linee del distributore. */
+  foto_extra?: unknown;
   meccanica?: string | null;
   codice_box?: string | null;
   group_elements?: unknown;

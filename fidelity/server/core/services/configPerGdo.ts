@@ -70,3 +70,20 @@ export const funzionalitaDa = (riga: { funzionalita?: Partial<Funzionalita> | nu
   momenti: riga?.funzionalita?.momenti === true,
   menabo: riga?.funzionalita?.menabo === true,
 });
+
+/** La riga config come la restituiscono le letture qui sopra (istanza o oggetto con raw). */
+type RigaConfig = ReturnType<typeof trovaConfigInstallazione>;
+
+/**
+ * La riga config che WebPliant legge, per le Impostazioni GDO: sempre quella dell'installazione,
+ * qualunque sia la GDO. WebPliant, l'import dei file (mapping dei campi) e la consultazione leggono
+ * solo quella (trovaConfigInstallazione): un'altra riga, come quella che il salvataggio delle
+ * funzionalita' crea per una GDO con webpliant vuoto, nasconderebbe i dati veri e raccoglierebbe
+ * salvataggi che nessuno legge. Per GDO restano soltanto le funzionalita' (trovaConfigPerGdo).
+ */
+export const trovaConfigWebpliantDiGdo = async (_idGdo: string | null | undefined, opzioni: FindOptions = {}): RigaConfig =>
+  trovaConfigInstallazione(opzioni);
+
+/** La riga config da scrivere per le Impostazioni GDO: la stessa che WebPliant legge; null se non ce n'e' nessuna. */
+export const trovaOCreaConfigWebpliantDiGdo = async (_idGdo: string | null | undefined): RigaConfig =>
+  trovaConfigInstallazione();

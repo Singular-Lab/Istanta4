@@ -1,5 +1,6 @@
 import { ORDINE_SEZIONI_STANDARD, riordinaSezioni, type ChiaveSezioneReport } from "../../utils/reportVolantino.js";
 import type { InsightVolantinoAgenzia } from "../types.js";
+import { lineeDistributoreConadCno } from "./linee-distributore.js";
 
 /*
  * Report PDF del volantino per CONAD CNO (spec insight-volantino).
@@ -11,6 +12,8 @@ import type { InsightVolantinoAgenzia } from "../types.js";
  * - Sezioni: CONAD CNO fa un volantino per insegna e area, e la prima domanda dei category e' cosa
  *   e' cambiato rispetto all'edizione precedente della stessa insegna. Subito dopo la sintesi
  *   vengono quindi il confronto e i prodotti entrati e usciti; poi grafici e metodo come nello standard.
+ * - Linee del distributore: le linee di marca CONAD e i bolli da contare negli insight, con la
+ *   regola di Istanta per ricavare la linea dai testi stampati (linee-distributore.ts).
  */
 
 const ORDINE_CONAD_CNO: readonly ChiaveSezioneReport[] = [
@@ -30,4 +33,5 @@ export const insightVolantinoConadCno: InsightVolantinoAgenzia = {
     riservatezza: "Riservato - uso interno",
   },
   sezioniReport: (_dati, standard) => riordinaSezioni(standard, ORDINE_CONAD_CNO),
+  lineeDistributore: lineeDistributoreConadCno,
 };

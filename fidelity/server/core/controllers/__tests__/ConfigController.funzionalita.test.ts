@@ -83,14 +83,23 @@ describe('GET /api/funzionalita', () => {
 });
 
 describe('GET /api/getFlyerInsightsConfig', () => {
-  it('richiede materiali.visualizza e restituisce la configurazione degli insight', async () => {
+  it('richiede materiali.visualizza e restituisce la configurazione degli insight della GDO dell utente', async () => {
     const { app, configService } = createApp({ ...operatoreGdo, permessi: ['materiali.visualizza'] });
 
-    const res = await request(app).get('/api/getFlyerInsightsConfig');
+    const res = await request(app).get('/api/getFlyerInsightsConfig?gdo=altra-gdo');
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ reparti: {} });
     expect(configService.getFlyerInsightsConfig).toHaveBeenCalledOnce();
+    expect(configService.getFlyerInsightsConfig).toHaveBeenCalledWith('coop-firenze');
+  });
+
+  it('un Superadmin legge quella della GDO che indica', async () => {
+    const { app, configService } = createApp({ id_utente: 's1', tipo_utente: TIPO_UTENTI.SUPERADMIN, permessi: ['materiali.visualizza'] });
+
+    await request(app).get('/api/getFlyerInsightsConfig?gdo=coop-lazio');
+
+    expect(configService.getFlyerInsightsConfig).toHaveBeenCalledWith('coop-lazio');
   });
 
   it('senza materiali.visualizza non espone la configurazione', async () => {

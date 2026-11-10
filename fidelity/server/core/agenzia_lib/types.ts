@@ -307,6 +307,33 @@ export interface InsightVolantinoAgenzia {
    * vuote: puo' riordinarle, toglierle, cambiarne i testi o aggiungerne di proprie.
    */
   sezioniReport?(dati: DatiReportVolantino, standard: SezioneReport[]): SezioneReport[];
+  /**
+   * Linee di marca del distributore e bolli da mostrare negli insight (spec insight-volantino, "Linee
+   * del distributore con loghi e bolli"). Senza, la sezione non compare.
+   */
+  lineeDistributore?: LineeDistributoreAgenzia;
+}
+
+/** Testi stampati da cui ricavare la linea quando Istanta non l'ha assegnata (volantini dello storico). */
+export interface TestiPerLinea {
+  /** Marca (es. "Conad Sapori & Dintorni"), la Descrizione2 di Istanta. */
+  marca: string | null;
+  /** Nome del prodotto, la Descrizione1. */
+  descrizione: string | null;
+  /** Gusto o variante, la Descrizione3. */
+  gusto: string | null;
+}
+
+export interface LineeDistributoreAgenzia {
+  /** Nell'ordine in cui mostrarle. La sigla e' quella del catalogo loghi e bolli di Istanta. */
+  linee: Array<{ sigla: string; nome: string; colore?: string }>;
+  /** Bolli da contare, con il loro nome; gli altri si ignorano. */
+  bolli?: Array<{ sigla: string; nome: string }>;
+  /**
+   * Sigla della linea ricavata dai testi stampati, con le stesse regole della libreria agenzia di
+   * Istanta; null se il prodotto non e' del distributore.
+   */
+  lineaDaTesti?(testi: TestiPerLinea): string | null;
 }
 
 // ── Interfaccia AgenziaLib ────────────────────────────────────────────────────

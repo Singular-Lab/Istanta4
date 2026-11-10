@@ -17,6 +17,7 @@ import {
 import { chiaveDescrizione } from '../../utils/analisiPuntoVendita';
 import type { OpzioniInsight } from '../../utils/insightVolantino';
 import { scontoDaiPrezzi } from '../../utils/referenzaStampata';
+import type { RepartoSalvato } from '../../utils/repartiGdo';
 import { urlFotoOlimpo } from '../../utils/urlOlimpo';
 
 vi.mock('../../logger', () => ({
@@ -127,6 +128,7 @@ const PRECEDENTE = kitInsight(ID_PRECEDENTE, {
   titolo: 'Volantino Liguria febbraio', idPromo: 'promo-febbraio', nomePromo: 'Promo di febbraio',
   validitaDal: '2026-02-10', validitaAl: '2026-02-20', data: '2026-02-10', storico: true, importStorico: IMPORT_STORICO,
 });
+/** Un'altra variante della stessa promo e un volantino di un'altra promo: contano solo per il viaggio. */
 const VARIANTE = kitInsight(ID_VARIANTE, { titolo: 'Volantino Toscana', idArea: 'area-to', area: 'Toscana' });
 const ALTRA_PROMO = kitInsight(ID_ALTRA_PROMO, { idPromo: 'promo-aprile' });
 const KIT_PER_ID = new Map([KIT, PRECEDENTE, VARIANTE, ALTRA_PROMO].map(kit => [kit.id, kit] as const));
@@ -183,7 +185,11 @@ const CONFIG = {
   marche: { distributore: ['Marca del distributore', ' '] },
 };
 
-function creaServizio(opzioni: { salvati?: Map<string, RiepilogoKit>; config?: () => Promise<Record<string, unknown>> } = {}) {
+function creaServizio(opzioni: {
+  salvati?: Map<string, RiepilogoKit>;
+  config?: () => Promise<Record<string, unknown>>;
+  reparti?: RepartoSalvato[];
+} = {}) {
   const salvati = opzioni.salvati ?? new Map<string, RiepilogoKit>();
   const letture = {
     kitNellAmbito: vi.fn(async (idKit: string, _ambito: AmbitoGdo) => KIT_PER_ID.get(idKit.toLowerCase()) ?? null),
@@ -192,8 +198,6 @@ function creaServizio(opzioni: { salvati?: Map<string, RiepilogoKit>; config?: (
   } satisfies LettureKitInsight;
   const repository = {
     edizionePrecedente: vi.fn(async (_kit: KitInsight): Promise<KitInsight | null> => PRECEDENTE),
-    // Il repository esclude gia' il kit; se tornasse, il servizio non lo elenca
-    variantiDellaPromo: vi.fn(async (_kit: KitInsight) => [VARIANTE, KIT]),
     kitDellaGdoPerViaggio: vi.fn(async (_kit: KitInsight) => [PRECEDENTE, VARIANTE, KIT]),
   } satisfies IInsightConfrontiRepository;
   // analisi_kit in memoria, come nei test delle pagine del punto vendita
@@ -216,9 +220,10 @@ function creaServizio(opzioni: { salvati?: Map<string, RiepilogoKit>; config?: (
     }))),
   } satisfies RepositoryAnalisiViaggio;
   const leggiConfig: () => Promise<Record<string, unknown>> = opzioni.config ?? (async () => CONFIG);
-  const config = { getFlyerInsightsConfig: vi.fn(leggiConfig) };
-  const servizio = new InsightConfrontiService(repository, analisi, config, letture);
-  return { servizio, letture, repository, analisi, config, salvati };
+  const config = { getFlyerInsightsConfig: vi.fn((_idGdo?: string | null) => leggiConfig()) };
+  const reparti = { repartiSalvati: vi.fn(async (_idGdo: string) => opzioni.reparti ?? []) };
+  const servizio = new InsightConfrontiService(repository, analisi, config, letture, reparti);
+  return { servizio, letture, repository, analisi, config, salvati, reparti };
 }
 
 /** Le opzioni con cui il servizio ha chiesto le sezioni del kit che contiene la referenza indicata. */
@@ -233,11 +238,10 @@ beforeEach(() => {
 });
 
 describe('kit di partenza e ambito GDO', () => {
-  it('un kit inesistente o di un\'altra GDO e\' 404 per tutti i confronti, senza leggere altro', async () => {
+  it('un kit inesistente o di un\'altra GDO e\' 404, senza leggere altro', async () => {
     const { servizio, letture, repository } = creaServizio();
 
-    await expect(servizio.confronti(ESTRANEO, AMBITO)).rejects.toBeInstanceOf(NotFoundError);
-    await expect(servizio.differenzeVarianti(ESTRANEO, ID_VARIANTE, AMBITO)).rejects.toBeInstanceOf(NotFoundError);
+    await expect(servizio.edizionePrecedente(ESTRANEO, AMBITO)).rejects.toBeInstanceOf(NotFoundError);
     await expect(servizio.viaggioProdotto(ESTRANEO, 'c-A', AMBITO)).rejects.toBeInstanceOf(NotFoundError);
 
     expect(letture.kitNellAmbito).toHaveBeenCalledWith(ESTRANEO, AMBITO);
@@ -249,31 +253,33 @@ describe('kit di partenza e ambito GDO', () => {
   it('un id che non e\' un UUID e\' una richiesta non valida, senza cercare il kit', async () => {
     const { servizio, letture } = creaServizio();
 
-    await expect(servizio.confronti('42', AMBITO)).rejects.toBeInstanceOf(BadRequestError);
-    await expect(servizio.differenzeVarianti(ID_KIT, 'non-un-kit', AMBITO)).rejects.toBeInstanceOf(BadRequestError);
-    expect(letture.kitNellAmbito).toHaveBeenCalledTimes(1);
-    expect(letture.kitNellAmbito).toHaveBeenCalledWith(ID_KIT, AMBITO);
+    await expect(servizio.edizionePrecedente('42', AMBITO)).rejects.toBeInstanceOf(BadRequestError);
+    expect(letture.kitNellAmbito).not.toHaveBeenCalled();
   });
 
   it('l\'ambito della sessione arriva alla lettura del kit cosi\' com\'e\'', async () => {
     const { servizio, letture } = creaServizio();
 
-    await servizio.confronti(ID_KIT, 'tutte');
+    await servizio.edizionePrecedente(ID_KIT, 'tutte');
 
     expect(letture.kitNellAmbito).toHaveBeenCalledWith(ID_KIT, 'tutte');
   });
+
+  it('nessuna API confronta il volantino con le altre varianti della promo', () => {
+    const { servizio } = creaServizio();
+
+    expect('confronti' in servizio).toBe(false);
+    expect('differenzeVarianti' in servizio).toBe(false);
+  });
 });
 
-describe('edizione precedente e varianti', () => {
-  it('la prima edizione di un\'area e un canale non ha confronto; senza varianti l\'elenco e\' vuoto', async () => {
+describe('edizione precedente (report PDF)', () => {
+  it('la prima edizione di un\'area e un canale non ha confronto e non legge nessun volantino', async () => {
     const { servizio, repository, letture, config } = creaServizio();
     repository.edizionePrecedente.mockResolvedValueOnce(null);
-    repository.variantiDellaPromo.mockResolvedValueOnce([]);
 
-    await expect(servizio.confronti(ID_KIT, AMBITO)).resolves.toEqual({ edizionePrecedente: null, varianti: [] });
+    await expect(servizio.edizionePrecedente(ID_KIT, AMBITO)).resolves.toBeNull();
     expect(repository.edizionePrecedente).toHaveBeenCalledWith(KIT);
-    expect(repository.variantiDellaPromo).toHaveBeenCalledWith(KIT);
-    // Senza confronto non si legge nessun volantino
     expect(letture.righeDelKit).not.toHaveBeenCalled();
     expect(config.getFlyerInsightsConfig).not.toHaveBeenCalled();
   });
@@ -281,8 +287,7 @@ describe('edizione precedente e varianti', () => {
   it('numeri chiave, spazio per reparto e prodotti entrati e usciti rispetto all\'edizione precedente', async () => {
     const { servizio } = creaServizio();
 
-    const confronti = await servizio.confronti(ID_KIT, AMBITO);
-    const confronto = confronti.edizionePrecedente;
+    const confronto = await servizio.edizionePrecedente(ID_KIT, AMBITO);
 
     expect(confronto?.edizione).toEqual({
       idKit: ID_PRECEDENTE, titolo: 'Volantino Liguria febbraio', idPromo: 'promo-febbraio', nomePromo: 'Promo di febbraio',
@@ -301,14 +306,12 @@ describe('edizione precedente e varianti', () => {
     ]);
     expect(confronto?.prodottiEntrati).toEqual([{ chiave: 'c-B', nome: 'Acqua', marca: null, prezzo: 3, sconto: null }]);
     expect(confronto?.prodottiUsciti).toEqual([{ chiave: 'c-C', nome: 'Biscotti', marca: null, prezzo: 0.99, sconto: null }]);
-    // Le varianti senza il volantino stesso
-    expect(confronti.varianti.map(variante => [variante.idKit, variante.area])).toEqual([[ID_VARIANTE, 'Toscana']]);
   });
 
   it('le sezioni dei due volantini usano config, foto e origine dello storico come la scheda degli insight', async () => {
     const { servizio } = creaServizio();
 
-    await servizio.confronti(ID_KIT, AMBITO);
+    await servizio.edizionePrecedente(ID_KIT, AMBITO);
 
     const attuale = opzioniDelleSezioni('k-a');
     expect(attuale.totalePagine).toBe(8);
@@ -327,56 +330,46 @@ describe('edizione precedente e varianti', () => {
     expect(precedente.repartoConfigurato?.('p-c')).toEqual({ codice: '03', descrizione: '03' });
   });
 
-  it('senza la config degli insight i confronti si fanno lo stesso, con la sola lettura generica', async () => {
+  it('config degli insight e reparti sono quelli della GDO del kit', async () => {
+    const { servizio, config, reparti } = creaServizio({
+      reparti: [
+        { codice: '01', nomeDati: 'Freschi', nomeMarketing: 'Freschezza', colore: '#22c55e' },
+        { codice: '02', nomeDati: 'Bevande', nomeMarketing: null, colore: '#3b82f6' },
+      ],
+    });
+
+    await servizio.edizionePrecedente(ID_KIT, AMBITO);
+
+    expect(config.getFlyerInsightsConfig).toHaveBeenCalledWith(GDO);
+    expect(reparti.repartiSalvati).toHaveBeenCalledWith(GDO);
+    const { risolviReparto } = opzioniDelleSezioni('k-a');
+    expect(risolviReparto?.({ codice: '1', descrizione: 'Freschi' })).toEqual({ codice: '01', descrizione: 'Freschezza', colore: '#22c55e', marketing: true });
+    expect(risolviReparto?.({ codice: '02', descrizione: 'Bevande' })).toEqual({ codice: '02', descrizione: 'Bevande', colore: '#3b82f6' });
+    // Le due edizioni sono della stessa GDO: la stessa risoluzione per entrambe
+    expect(opzioniDelleSezioni('p-a').risolviReparto).toBe(risolviReparto);
+  });
+
+  it('senza reparti salvati per la GDO i reparti restano quelli dei dati', async () => {
+    const { servizio } = creaServizio({ reparti: [] });
+
+    await servizio.edizionePrecedente(ID_KIT, AMBITO);
+
+    expect(opzioniDelleSezioni('k-a').risolviReparto).toBeUndefined();
+  });
+
+  it('senza la config degli insight il confronto si fa lo stesso, con la sola lettura generica', async () => {
     const { servizio } = creaServizio({
       config: async () => { throw new NotFoundError({ message: 'File flyerInsightsConfig.json non trovato', entityType: 'FlyerInsightsConfig' }); },
     });
 
-    const confronti = await servizio.confronti(ID_KIT, AMBITO);
+    const confronto = await servizio.edizionePrecedente(ID_KIT, AMBITO);
 
-    expect(confronti.edizionePrecedente?.prodottiEntrati.map(prodotto => prodotto.chiave)).toEqual(['c-B']);
+    expect(confronto?.prodottiEntrati.map(prodotto => prodotto.chiave)).toEqual(['c-B']);
     const opzioni = opzioniDelleSezioni('k-a');
     expect(opzioni.anagraficaReparti).toEqual([]);
     expect(opzioni.marcheDistributore).toEqual([]);
     expect(opzioni.repartoConfigurato?.('k-a')).toBeNull();
     expect(opzioni.meccanicaOriginale?.('k-b')).toBeNull();
-  });
-});
-
-describe('differenze fra varianti', () => {
-  it('le due varianti, il PDF e i box dell\'altra, lo stato dei box e i prodotti diversi', async () => {
-    const { servizio } = creaServizio();
-
-    const differenze = await servizio.differenzeVarianti(ID_KIT, ID_VARIANTE, AMBITO);
-
-    expect(differenze.qui).toMatchObject({ idKit: ID_KIT, area: 'Liguria' });
-    expect(differenze.altra).toMatchObject({ idKit: ID_VARIANTE, area: 'Toscana' });
-    // Il file non dice le pagine: quelle del volantino (la pagina piu' alta con un box)
-    expect(differenze.pdfAltra).toEqual({ idOlimpoCloud: 'olimpo-variante', pagine: 2 });
-    expect(differenze.boxAltra.map(box => box.id)).toEqual(['v-a', 'v-d']);
-    expect(differenze.statoBoxQui).toEqual({ 'k-a': 'prezzo-diverso', 'k-b': 'solo-qui' });
-    expect(differenze.statoBoxAltra).toEqual({ 'v-a': 'prezzo-diverso', 'v-d': 'solo-altra' });
-    expect(differenze.differenze.map(differenza => [differenza.chiave, differenza.stato])).toEqual([
-      ['c-B', 'solo-qui'],
-      ['c-D', 'solo-altra'],
-      ['c-A', 'prezzo-diverso'],
-    ]);
-    expect(differenze.conteggi).toEqual({ 'solo-qui': 1, 'solo-altra': 1, 'prezzo-diverso': 1, uguale: 0 });
-  });
-
-  it('un volantino di un\'altra promo, o lo stesso volantino, e\' una richiesta non valida', async () => {
-    const { servizio, letture } = creaServizio();
-
-    await expect(servizio.differenzeVarianti(ID_KIT, ID_ALTRA_PROMO, AMBITO)).rejects.toBeInstanceOf(BadRequestError);
-    await expect(servizio.differenzeVarianti(ID_KIT, ID_KIT.toUpperCase(), AMBITO)).rejects.toBeInstanceOf(BadRequestError);
-    expect(letture.righeDelKit).not.toHaveBeenCalled();
-  });
-
-  it('una variante inesistente o fuori dall\'ambito GDO e\' 404', async () => {
-    const { servizio, letture } = creaServizio();
-
-    await expect(servizio.differenzeVarianti(ID_KIT, ESTRANEO, AMBITO)).rejects.toBeInstanceOf(NotFoundError);
-    expect(letture.kitNellAmbito).toHaveBeenCalledWith(ESTRANEO, AMBITO);
   });
 });
 

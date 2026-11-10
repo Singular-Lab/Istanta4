@@ -3,16 +3,45 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { v4 as uuidv4 } from 'uuid';
 import { TIPO_UTENTI } from "../../../lib/enums";
-import { NotFoundError, wrapDatabaseError } from "../../../lib/errors";
+import { isAppError, NotFoundError, wrapDatabaseError } from "../../../lib/errors";
 import { AvvisoManutenzione, Config, ConfigWebpliant, Dashboard, Funzionalita, RegoleMenabo } from "../../../lib/types";
 import { urlFotoOlimpo } from "../utils/urlOlimpo";
 import { IConfigService } from "../interfaces/IConfigService";
 import { Config as ConfigModel } from "../models/config";
 import { log } from '../logger/index.js';
+import type { IImpostazioniGdoRepository } from '../repositories/ImpostazioniGdoRepository';
+import { chiaveCacheConfigInsight, DURATA_CACHE_CONFIG_INSIGHT_SECONDI } from './cacheConfigInsight';
 import { funzionalitaDa, idGdoCliente, trovaConfigDiGdo, trovaConfigInstallazione, trovaConfigPerGdo } from './configPerGdo';
 
+/** Le impostazioni salvate delle GDO: la configurazione degli insight di ciascuna. */
+export type FonteImpostazioniGdo = Pick<IImpostazioniGdoRepository, 'trova'>;
+
+/** Il repository vero, caricato solo quando serve: chi usa ConfigService per altro non lo importa. */
+const IMPOSTAZIONI_GDO_PREDEFINITE: FonteImpostazioniGdo = {
+  trova: async (idGdo) => new (await import('../repositories/ImpostazioniGdoRepository')).ImpostazioniGdoRepository().trova(idGdo),
+};
+
+/** Il file config/flyerInsightsConfig.json dell'installazione; NotFoundError se manca. */
+async function leggiFileConfigInsight(): Promise<Record<string, any>> {
+  const cwdCandidate = path.join(process.cwd(), 'config', 'flyerInsightsConfig.json');
+  const serviceDir = path.dirname(fileURLToPath(import.meta.url));
+  const fileRelativeCandidate = path.resolve(serviceDir, '../../../config/flyerInsightsConfig.json');
+  const configPath = fs.existsSync(cwdCandidate) ? cwdCandidate : fileRelativeCandidate;
+
+  if (!fs.existsSync(configPath)) {
+    throw new NotFoundError({
+      message: 'File flyerInsightsConfig.json non trovato',
+      entityType: 'FlyerInsightsConfig',
+      entityId: configPath,
+    });
+  }
+  const fileContent = await fs.promises.readFile(configPath, 'utf-8');
+  return JSON.parse(fileContent) as Record<string, unknown>;
+}
 
 export class ConfigService implements IConfigService {
+  constructor(private readonly impostazioniGdo: FonteImpostazioniGdo = IMPOSTAZIONI_GDO_PREDEFINITE) { }
+
   async getDashBoardConfig(role: TIPO_UTENTI): Promise<Dashboard> {
     try {
       const configDoc = await trovaConfigInstallazione({ raw: true }) as any;
@@ -354,31 +383,31 @@ export class ConfigService implements IConfigService {
     }
   }
 
-  async getFlyerInsightsConfig(): Promise<Record<string, any>> {
-    const { remember } = await import('../../src/shared/cache/cache.service.js');
-    const cwdCandidate = path.join(process.cwd(), 'config', 'flyerInsightsConfig.json');
-    const serviceDir = path.dirname(fileURLToPath(import.meta.url));
-    const fileRelativeCandidate = path.resolve(serviceDir, '../../../config/flyerInsightsConfig.json');
-    const configPath = fs.existsSync(cwdCandidate) ? cwdCandidate : fileRelativeCandidate;
-
-    if (!fs.existsSync(configPath)) {
-      throw new NotFoundError({
-        message: 'File flyerInsightsConfig.json non trovato',
-        entityType: 'FlyerInsightsConfig',
-        entityId: configPath,
-      });
-    }
-
-    const readFromDisk = async (): Promise<Record<string, any>> => {
-      const fileContent = await fs.promises.readFile(configPath, 'utf-8');
-      return JSON.parse(fileContent) as Record<string, any>;
+  /**
+   * La configurazione degli insight del volantino per una GDO: quella salvata nelle Impostazioni GDO,
+   * altrimenti il file config/flyerInsightsConfig.json dell'installazione (NotFoundError se manca
+   * anche quello). Senza GDO, il file. In cache per GDO (chiaveCacheConfigInsight): le Impostazioni GDO
+   * la dimenticano quando la salvano o la tolgono. Se la lettura della GDO fallisce vale il file.
+   */
+  async getFlyerInsightsConfig(idGdo?: string | null): Promise<Record<string, any>> {
+    const leggi = async (): Promise<Record<string, any>> => {
+      if (idGdo) {
+        const salvate = await this.impostazioniGdo.trova(idGdo);
+        if (salvate?.insightVolantino) return salvate.insightVolantino;
+      }
+      return leggiFileConfigInsight();
     };
 
     try {
-      return await remember('config:flyer-insights', 300, readFromDisk);
+      const { remember } = await import('../../src/shared/cache/cache.service.js');
+      return await remember(chiaveCacheConfigInsight(idGdo), DURATA_CACHE_CONFIG_INSIGHT_SECONDI, leggi);
     } catch (err) {
-      log.warn('Redis non disponibile, FlyerInsightsConfig restituito senza cache', { configPath });
-      return readFromDisk();
+      if (isAppError(err)) throw err;
+      log.warn('FlyerInsightsConfig della GDO non disponibile: si usa il file dell\'installazione, senza cache', {
+        idGdo: idGdo ?? null,
+        errore: err instanceof Error ? err.message : String(err),
+      });
+      return leggiFileConfigInsight();
     }
   }
 

@@ -163,6 +163,12 @@ import type { IInsightConfrontiService } from "../interfaces/IInsightConfrontiSe
 import { InsightConfrontiRepository, type IInsightConfrontiRepository } from "../repositories/InsightConfrontiRepository";
 import { ReportVolantinoService } from "../services/ReportVolantinoService";
 import type { IReportVolantinoService } from "../interfaces/IReportVolantinoService";
+import { ImpostazioniGdoService } from "../services/ImpostazioniGdoService";
+import type { IImpostazioniGdoService } from "../interfaces/IImpostazioniGdoService";
+import { type IImpostazioniGdoRepository, ImpostazioniGdoRepository } from "../repositories/ImpostazioniGdoRepository";
+import { ConfigWebpliantGdoRepository, type IConfigWebpliantGdoRepository } from "../repositories/ConfigWebpliantGdoRepository";
+import { CatalogoLoghiService } from "../services/CatalogoLoghiService";
+import type { ICatalogoLoghiService } from "../interfaces/ICatalogoLoghiService";
 import { WebPliantService } from "../services/WebPliantService";
 import { WebhookService } from "../services/WebhookService";
 import { WhatsAppService } from "../services/WhatsAppService";
@@ -259,6 +265,8 @@ function bindRepositories() {
   container.bind<IPuntiVenditaVolantinoRepository>(TYPES.PuntiVenditaVolantinoRepository).toDynamicValue(() => new PuntiVenditaVolantinoRepository()).inSingletonScope();
   container.bind<IAnalisiPuntiVenditaRepository>(TYPES.AnalisiPuntiVenditaRepository).toDynamicValue(() => new AnalisiPuntiVenditaRepository()).inSingletonScope();
   container.bind<IInsightConfrontiRepository>(TYPES.InsightConfrontiRepository).toDynamicValue(() => new InsightConfrontiRepository()).inSingletonScope();
+  container.bind<IImpostazioniGdoRepository>(TYPES.ImpostazioniGdoRepository).toDynamicValue(() => new ImpostazioniGdoRepository()).inSingletonScope();
+  container.bind<IConfigWebpliantGdoRepository>(TYPES.ConfigWebpliantGdoRepository).toDynamicValue(() => new ConfigWebpliantGdoRepository()).inSingletonScope();
 
   // Hub
   container.bind<IAuthProviderRepository>(TYPES.AuthProviderRepository).toDynamicValue(() => new AuthProviderRepository()).inSingletonScope();
@@ -288,7 +296,10 @@ function bindServices() {
   container.bind<ICanaleService>(TYPES.CanaleService).toDynamicValue(
     (context) => new CanaleService(context.get<ICanaleRepository>(TYPES.CanaleRepository))
   );
-  container.bind<IConfigService>(TYPES.ConfigService).toDynamicValue(() => new ConfigService());
+  // La configurazione degli insight puo' essere della GDO (Impostazioni GDO)
+  container.bind<IConfigService>(TYPES.ConfigService).toDynamicValue(
+    (context) => new ConfigService(context.get<IImpostazioniGdoRepository>(TYPES.ImpostazioniGdoRepository))
+  );
   container.bind<IPuntoVenditaService>(TYPES.PuntoVenditaService).toDynamicValue(
     (context) => new PuntoVenditaService(
       context.get<IPuntoVenditaRepository>(TYPES.PuntoVenditaRepository),
@@ -303,8 +314,13 @@ function bindServices() {
     (context) => new AnalisiPuntoVenditaService(
       context.get<IAnalisiPuntiVenditaRepository>(TYPES.AnalisiPuntiVenditaRepository),
       context.get<IPuntiVenditaVolantinoRepository>(TYPES.PuntiVenditaVolantinoRepository),
-      // Il PV "senza codice" e' quello senza la chiave con cui l'import della GDO lo riconosce
-      { chiaveMetaPuntoVendita: context.get<IAgenziaLib>(TYPES.AgenziaLib).importPuntiVendita?.chiaveMeta ?? null }
+      // Il PV "senza codice" e' quello senza la chiave con cui l'import della GDO lo riconosce; i reparti
+      // dei riepiloghi con il nome per il marketing della GDO (Impostazioni GDO)
+      {
+        chiaveMetaPuntoVendita: context.get<IAgenziaLib>(TYPES.AgenziaLib).importPuntiVendita?.chiaveMeta ?? null,
+        repartiGdo: context.get<IImpostazioniGdoRepository>(TYPES.ImpostazioniGdoRepository),
+        configInsight: context.get<IConfigService>(TYPES.ConfigService),
+      }
     )
   );
   container.bind<IUserService>(TYPES.UserService).toDynamicValue(
@@ -474,17 +490,37 @@ function bindServices() {
       context.get<IPromoRepository>(TYPES.PromoRepository)
     )
   );
+  // Insight: config e reparti della GDO del kit, linee del distributore della libreria agenzia
   container.bind<IVolantinoService>(TYPES.VolantinoService).toDynamicValue(
     (context) => new VolantinoService(
-      context.get<IConfigService>(TYPES.ConfigService)
+      context.get<IConfigService>(TYPES.ConfigService),
+      context.get<IImpostazioniGdoRepository>(TYPES.ImpostazioniGdoRepository),
+      context.get<IAgenziaLib>(TYPES.AgenziaLib),
+      context.get<ICatalogoLoghiService>(TYPES.CatalogoLoghiService)
     )
   );
-  // Il viaggio del prodotto usa i riepiloghi dei kit in analisi_kit, gli stessi delle pagine del PV
+  // Il viaggio del prodotto usa i riepiloghi dei kit in analisi_kit, gli stessi delle pagine del PV;
+  // l'edizione precedente (report PDF) i reparti della GDO
   container.bind<IInsightConfrontiService>(TYPES.InsightConfrontiService).toDynamicValue(
     (context) => new InsightConfrontiService(
       context.get<IInsightConfrontiRepository>(TYPES.InsightConfrontiRepository),
       context.get<IAnalisiPuntiVenditaRepository>(TYPES.AnalisiPuntiVenditaRepository),
-      context.get<IConfigService>(TYPES.ConfigService)
+      context.get<IConfigService>(TYPES.ConfigService),
+      undefined,
+      context.get<IImpostazioniGdoRepository>(TYPES.ImpostazioniGdoRepository)
+    )
+  );
+  // Una sola istanza per processo: tiene in memoria per un'ora il catalogo letto da Istanta
+  container.bind<ICatalogoLoghiService>(TYPES.CatalogoLoghiService).toDynamicValue(
+    () => new CatalogoLoghiService()
+  ).inSingletonScope();
+  container.bind<IImpostazioniGdoService>(TYPES.ImpostazioniGdoService).toDynamicValue(
+    (context) => new ImpostazioniGdoService(
+      context.get<IImpostazioniGdoRepository>(TYPES.ImpostazioniGdoRepository),
+      context.get<IConfigWebpliantGdoRepository>(TYPES.ConfigWebpliantGdoRepository),
+      context.get<IConfigService>(TYPES.ConfigService),
+      context.get<IAgenziaLib>(TYPES.AgenziaLib),
+      context.get<ICatalogoLoghiService>(TYPES.CatalogoLoghiService)
     )
   );
   // Report PDF: insight e confronto, con palette e sezioni della libreria agenzia
@@ -519,7 +555,9 @@ function bindServices() {
       context.get<IFileManagementService>(TYPES.FileManagementService),
       scaricaMaterialePdf,
       campiRicercaDaConfigurazione,
-      context.get<IConfigService>(TYPES.ConfigService)
+      context.get<IConfigService>(TYPES.ConfigService),
+      undefined,
+      context.get<IImpostazioniGdoRepository>(TYPES.ImpostazioniGdoRepository)
     )
   );
   container.bind<IConsultazionePuntiVenditaService>(TYPES.ConsultazionePuntiVenditaService).toDynamicValue(

@@ -46,13 +46,28 @@ export const msData = (dataIso: string): number => {
   return Number.isFinite(ms) ? ms : 0;
 };
 
+/** Un giorno in millisecondi: le date di msData sono mezzanotti UTC, senza ora legale. */
+export const MS_GIORNO = 86_400_000;
+
+/** Data ISO (YYYY-MM-DD) di millisecondi UTC: l'inverso di msData. */
+export const isoData = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
+
+/** Oggi, il giorno del calendario locale, in millisecondi UTC come le date di msData. */
+export const msOggi = (adesso: Date = new Date()): number => Date.UTC(adesso.getFullYear(), adesso.getMonth(), adesso.getDate());
+
 /** Inizio dell'anno, in millisecondi UTC. */
 export const inizioAnno = (anno: number): number => Date.UTC(anno, 0, 1);
 
 /** Anno di una data in millisecondi UTC. */
 export const annoDi = (ms: number): number => new Date(ms).getUTCFullYear();
 
-const MESI_BREVI = ["gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ott", "nov", "dic"];
+/** Inizio del mese di una data in millisecondi UTC, oppure di `spostamento` mesi dopo (o prima, se negativo). */
+export const inizioMese = (ms: number, spostamento = 0): number => {
+  const data = new Date(ms);
+  return Date.UTC(data.getUTCFullYear(), data.getUTCMonth() + spostamento, 1);
+};
+
+export const MESI_BREVI: readonly string[] = ["gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ott", "nov", "dic"];
 
 /** "8 apr 2024". */
 export const dataBreve = (ms: number): string => {
@@ -92,8 +107,85 @@ export const taccheTempo = (t0: number, t1: number): TaccaTempo[] => {
   return tacche;
 };
 
+export interface MeseCalendario {
+  /** Primo giorno del mese, in millisecondi UTC. */
+  ms: number;
+  /** Primo giorno del mese dopo. */
+  fine: number;
+  anno: number;
+  /** 0 = gennaio. */
+  mese: number;
+  /** "ott 2026". */
+  etichetta: string;
+  /** "ott". */
+  breve: string;
+}
+
+/** I mesi del calendario che toccano [t0, t1), anche solo in parte, con le etichette lunga e breve. */
+export const mesiCalendario = (t0: number, t1: number): MeseCalendario[] => {
+  const mesi: MeseCalendario[] = [];
+  for (let ms = inizioMese(t0); ms < t1; ms = inizioMese(ms, 1)) {
+    const data = new Date(ms);
+    const anno = data.getUTCFullYear();
+    const mese = data.getUTCMonth();
+    mesi.push({ ms, fine: inizioMese(ms, 1), anno, mese, etichetta: `${MESI_BREVI[mese]} ${anno}`, breve: MESI_BREVI[mese] });
+  }
+  return mesi;
+};
+
+/** I lunedì in [t0, t1), in millisecondi UTC: l'inizio delle settimane del calendario. */
+export const lunediTra = (t0: number, t1: number): number[] => {
+  const giorno = Math.ceil(t0 / MS_GIORNO) * MS_GIORNO;
+  // getUTCDay: 0 è domenica, 1 lunedì
+  const primo = giorno + ((8 - new Date(giorno).getUTCDay()) % 7) * MS_GIORNO;
+  const risultato: number[] = [];
+  for (let ms = primo; ms < t1; ms += 7 * MS_GIORNO) risultato.push(ms);
+  return risultato;
+};
+
+/**
+ * I giorni di un periodo di validità come intervallo semiaperto in millisecondi UTC: dal primo
+ * giorno all'inizio del giorno dopo l'ultimo, che è compreso. Senza fine, o con la fine prima
+ * dell'inizio, è un giorno solo.
+ */
+export const intervalloGiorni = (dal: string, al: string | null | undefined): { inizio: number; fine: number } => {
+  const inizio = msData(dal);
+  const ultimo = al ? msData(al) : inizio;
+  return { inizio, fine: Math.max(inizio, ultimo) + MS_GIORNO };
+};
+
+/**
+ * Corsie delle barre nel tempo, perché quelle che si sovrappongono non si coprano: dalla barra che
+ * inizia prima, ognuna va nella prima corsia libera, quella la cui ultima barra finisce entro il
+ * suo inizio (gli intervalli sono semiaperti: chi finisce il 16 e chi inizia il 17 stanno sulla
+ * stessa corsia). Restituisce la corsia (0 = la prima) di ogni barra, nell'ordine dato.
+ */
+export const assegnaCorsie = (intervalli: ReadonlyArray<{ inizio: number; fine: number }>): number[] => {
+  const ordine = intervalli.map((_, i) => i).sort((a, b) => intervalli[a].inizio - intervalli[b].inizio || a - b);
+  const fineCorsie: number[] = [];
+  const corsie = new Array<number>(intervalli.length).fill(0);
+  for (const i of ordine) {
+    const { inizio, fine } = intervalli[i];
+    const libera = fineCorsie.findIndex(f => f <= inizio);
+    const corsia = libera === -1 ? fineCorsie.length : libera;
+    fineCorsie[corsia] = Math.max(inizio, fine);
+    corsie[i] = corsia;
+  }
+  return corsie;
+};
+
 /** Larghezza stimata di un testo in pixel (Urbanist, cifre e lettere medie). */
 export const larghezzaTesto = (testo: string, dimensione = 11): number => testo.length * dimensione * 0.58;
+
+/**
+ * Il testo che sta in `spazio` pixel: intero se ci sta, altrimenti tagliato con "…"; null se non
+ * ne restano almeno `minimo` caratteri (meglio niente che due lettere).
+ */
+export const testoCheSta = (testo: string, spazio: number, dimensione = 11, minimo = 4): string | null => {
+  if (larghezzaTesto(testo, dimensione) <= spazio) return testo;
+  const caratteri = Math.floor(spazio / (dimensione * 0.58)) - 1;
+  return caratteri >= minimo ? `${testo.slice(0, caratteri).trimEnd()}…` : null;
+};
 
 /**
  * Barra orizzontale che parte dalla linea di base (x0) e finisce arrotondata: base squadrata,

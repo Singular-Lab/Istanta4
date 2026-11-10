@@ -17,9 +17,8 @@ import {
   tintaCategoria,
   TINTA_NEUTRA,
   type BoxPagina,
-  type ColonnaTimeline,
 } from ".";
-import { distanziaColonne } from "./TimelineVolantini";
+import type { BarraTimeline } from "./TimelineVolantini";
 
 // Grafici SVG delle pagine dei punti vendita: valori, etichette, tooltip, legenda, tabella dei dati e dati vuoti
 
@@ -244,10 +243,10 @@ describe("BarreImpilate100", () => {
 });
 
 describe("TimelineVolantini", () => {
-  const colonne: ColonnaTimeline[] = [
-    { id: "k1", data: "2024-03-04", valore: 120, gruppo: "city", titolo: "Promo marzo" },
-    { id: "k2", data: "2025-05-10", valore: 160, gruppo: "superstore", titolo: "Promo maggio" },
-    { id: "k3", data: "2025-10-23", valore: 148, gruppo: "superstore", titolo: "Promo ottobre" },
+  const barre: BarraTimeline[] = [
+    { id: "k1", dal: "2024-03-04", al: "2024-03-17", gruppo: "city", titolo: "Promo marzo" },
+    { id: "k2", dal: "2025-05-10", al: "2025-05-23", gruppo: "superstore", titolo: "Promo maggio", dettagli: [{ etichetta: "Referenze", valore: "160" }] },
+    { id: "k3", dal: "2025-10-23", al: "2025-11-05", gruppo: "superstore", titolo: "Promo ottobre" },
   ];
   const gruppi = [
     { id: "city", etichetta: "Conad City", tinta: tintaCategoria(0) },
@@ -256,7 +255,7 @@ describe("TimelineVolantini", () => {
   const disegna = (props: Partial<Parameters<typeof TimelineVolantini>[0]> = {}) =>
     render(
       <TimelineVolantini
-        colonne={colonne}
+        barre={barre}
         gruppi={gruppi}
         fasce={[
           { id: "f1", dal: "2024-01-01", al: "2024-12-31", gruppo: "city", etichetta: "Conad City · Liguria" },
@@ -264,34 +263,41 @@ describe("TimelineVolantini", () => {
         ]}
         eventi={[{ id: "e1", data: "2025-01-01", forma: "cerchio", etichetta: "Diventa Conad Superstore" }]}
         nomiEventi={{ cerchio: "cambio di insegna" }}
+        oggi="2025-11-10"
         titolo="Timeline dei volantini"
-        descrizioneValore="Referenze"
         descrizioneGruppo="Insegna"
         selezionata="k3"
         onSeleziona={vi.fn()}
         {...props}
       />
     );
+  /** Il rettangolo disegnato della barra di un volantino. */
+  const barra = (container: HTMLElement, id: string) => {
+    const rect = container.querySelector(`[data-barra="${id}"]`)!;
+    return { x: Number(rect.getAttribute("x")), y: Number(rect.getAttribute("y")), w: Number(rect.getAttribute("width")) };
+  };
 
-  it("una colonna per volantino, come opzione con nome; quella scelta è selezionata ed etichettata", () => {
-    disegna();
+  it("una barra per volantino, come opzione con nome; quella scelta è selezionata e contornata", () => {
+    const { container } = disegna();
 
     const opzioni = screen.getAllByRole("option");
     expect(opzioni).toHaveLength(3);
     expect(screen.getByRole("option", { name: /Promo ottobre/ })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("option", { name: /Promo marzo/ })).toHaveAttribute("aria-selected", "false");
-    expect(screen.getByText("Selezionato · 148")).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Promo maggio, 10 mag 2025 – 23 mag 2025, Conad Superstore, Referenze 160" })).toBeInTheDocument();
+    expect(container.querySelectorAll("[data-selezionata]")).toHaveLength(1);
   });
 
-  it("clic e frecce scelgono il volantino", () => {
+  it("clic, Invio, frecce e Home scelgono il volantino", () => {
     const onSeleziona = vi.fn();
     disegna({ onSeleziona });
 
     fireEvent.click(screen.getByRole("option", { name: /Promo marzo/ }));
     fireEvent.keyDown(screen.getByRole("option", { name: /Promo ottobre/ }), { key: "ArrowLeft" });
     fireEvent.keyDown(screen.getByRole("option", { name: /Promo ottobre/ }), { key: "Home" });
+    fireEvent.keyDown(screen.getByRole("option", { name: /Promo maggio/ }), { key: "Enter" });
 
-    expect(onSeleziona.mock.calls).toEqual([["k1"], ["k2"], ["k1"]]);
+    expect(onSeleziona.mock.calls).toEqual([["k1"], ["k2"], ["k1"], ["k2"]]);
   });
 
   it("fascia delle insegne con le etichette, eventi e legenda di insegne ed eventi", () => {
@@ -304,40 +310,90 @@ describe("TimelineVolantini", () => {
     expect(within(legenda).getAllByRole("listitem").map(v => v.textContent)).toEqual(["Conad City", "Conad Superstore", "cambio di insegna"]);
   });
 
-  it("lo zoom su un anno mostra solo i suoi volantini e i mesi sull'asse", () => {
-    disegna({ intervallo: { dal: "2025-01-01", al: "2025-12-31" } });
+  it("asse a calendario: i mesi con mese e anno, la linea di oggi e, nello zoom su un anno, solo i suoi volantini", () => {
+    const { container } = disegna({ intervallo: { dal: "2025-01-01", al: "2025-12-31" } });
 
     expect(screen.getAllByRole("option")).toHaveLength(2);
     const grafico = screen.getByRole("group", { name: "Timeline dei volantini" });
-    expect(within(grafico).getByText("gen")).toBeInTheDocument();
-    expect(within(grafico).queryByText("2024")).not.toBeInTheDocument();
+    expect(within(grafico).getByText("gen 2025")).toBeInTheDocument();
+    expect(within(grafico).getByText("dic 2025")).toBeInTheDocument();
+    expect(container.querySelectorAll("[data-mese]")).toHaveLength(12);
+    expect(within(grafico).queryByText(/2024/)).not.toBeInTheDocument();
+    expect(within(grafico).getByText("oggi")).toBeInTheDocument();
+    expect(container.querySelector("[data-oggi]")).toHaveAttribute("data-oggi", "2025-11-10");
   });
 
-  it("i volantini con la stessa data (le varianti per area) si affiancano invece di coprirsi, e ognuno si sceglie", () => {
-    const onSeleziona = vi.fn();
-    render(
+  it("oggi fuori dal periodo: niente linea di oggi", () => {
+    const { container } = disegna({ intervallo: { dal: "2024-01-01", al: "2024-12-31" } });
+
+    expect(container.querySelector("[data-oggi]")).not.toBeInTheDocument();
+    expect(screen.queryByText("oggi")).not.toBeInTheDocument();
+  });
+
+  it("su pochi mesi le settimane: il numero del giorno di ogni lunedì", () => {
+    disegna({ intervallo: { dal: "2025-10-01", al: "2025-11-30" } });
+
+    const grafico = screen.getByRole("group", { name: "Timeline dei volantini" });
+    // Lunedì 6, 13, 20 e 27 ottobre 2025
+    for (const giorno of ["6", "13", "20", "27"]) expect(within(grafico).getByText(giorno)).toBeInTheDocument();
+    expect(within(grafico).getByText("ott 2025")).toBeInTheDocument();
+  });
+
+  it("la barra va dal primo all'ultimo giorno compreso; senza fine è un giorno solo", () => {
+    const { container } = render(
       <TimelineVolantini
-        colonne={["Emilia", "Liguria", "Piemonte"].map(area => ({ id: area, data: "2026-10-26", valore: 148, gruppo: "city", titolo: `Promo ${area}` }))}
+        barre={[
+          { id: "a", dal: "2025-03-03", al: "2025-03-16", gruppo: "city", titolo: "Prima" },
+          { id: "b", dal: "2025-03-17", al: "2025-03-30", gruppo: "city", titolo: "Seconda" },
+          { id: "c", dal: "2025-05-10", al: null, gruppo: "city", titolo: "Un giorno" },
+        ]}
         gruppi={gruppi}
+        intervallo={{ dal: "2025-01-01", al: "2025-12-31" }}
         titolo="Timeline dei volantini"
-        descrizioneValore="Referenze"
+      />
+    );
+
+    const [a, b, c] = ["a", "b", "c"].map(id => barra(container, id));
+    // Due settimane ciascuna, una dopo l'altra: la seconda inizia dove finisce l'ultimo giorno della prima
+    expect(b.w).toBeCloseTo(a.w, 5);
+    expect(b.x).toBeCloseTo(a.x + a.w + 1, 5);
+    expect(b.y).toBe(a.y);
+    expect(c.w).toBeLessThan(a.w / 10);
+    expect(screen.getByRole("option", { name: "Un giorno, 10 mag 2025, Conad City" })).toBeInTheDocument();
+  });
+
+  it("i volantini che si sovrappongono (le varianti per area) vanno su corsie diverse, e ognuno si sceglie", () => {
+    const onSeleziona = vi.fn();
+    const { container } = render(
+      <TimelineVolantini
+        barre={["Emilia", "Liguria", "Piemonte"].map(area => ({ id: area, dal: "2026-10-26", al: "2026-11-08", gruppo: "city", titolo: `Promo ${area}` }))}
+        gruppi={gruppi}
+        oggi="2026-11-10"
+        titolo="Timeline dei volantini"
         onSeleziona={onSeleziona}
       />
     );
 
-    const aree = screen.getAllByRole("option").map(opzione => ({ x: Number(opzione.getAttribute("x")), w: Number(opzione.getAttribute("width")) }));
-    expect(new Set(aree.map(a => a.x)).size).toBe(3);
-    for (let i = 1; i < aree.length; i++) expect(aree[i].x).toBeGreaterThanOrEqual(aree[i - 1].x + aree[i - 1].w - 0.01);
+    const corsie = ["Emilia", "Liguria", "Piemonte"].map(id => barra(container, id));
+    expect(new Set(corsie.map(c => c.y)).size).toBe(3);
+    expect(new Set(corsie.map(c => c.x)).size).toBe(1);
     fireEvent.click(screen.getByRole("option", { name: /Promo Liguria/ }));
     expect(onSeleziona).toHaveBeenCalledWith("Liguria");
   });
 
-  it("il tooltip della colonna dice volantino, referenze e insegna", () => {
+  it("il nome del volantino sta dentro la barra quando c'è spazio, tagliato se serve", () => {
+    disegna({ intervallo: { dal: "2025-10-15", al: "2025-11-15" } });
+
+    expect(within(screen.getByRole("group", { name: "Timeline dei volantini" })).getByText("Promo ottobre")).toBeInTheDocument();
+  });
+
+  it("il tooltip della barra dice volantino, periodo, insegna e dettagli", () => {
     disegna();
 
     fireEvent.mouseMove(screen.getByRole("option", { name: /Promo maggio/ }));
 
     expect(screen.getByRole("tooltip")).toHaveTextContent("Promo maggio");
+    expect(screen.getByRole("tooltip")).toHaveTextContent("10 mag 2025 – 23 mag 2025");
     expect(screen.getByRole("tooltip")).toHaveTextContent("Referenze160");
     expect(screen.getByRole("tooltip")).toHaveTextContent("InsegnaConad Superstore");
   });
@@ -462,15 +518,5 @@ describe("StrisciaNumeri", () => {
     expect(numeri).toHaveTextContent("volantini di questo punto vendita3· dal ott 2026");
     expect(within(numeri).getByText("3").tagName).toBe("DD");
     expect(within(numeri).getByText("volantini di questo punto vendita").tagName).toBe("DT");
-  });
-});
-
-describe("distanziaColonne", () => {
-  it("affianca le colonne con la stessa data attorno alla data e lascia dove sono quelle lontane", () => {
-    expect(distanziaColonne([100, 100, 100, 300], 10)).toEqual([90, 100, 110, 300]);
-  });
-
-  it("un gruppo che sporgerebbe oltre il margine destro rientra, tenendo la distanza", () => {
-    expect(distanziaColonne([100, 100, 105], 10, 0, 112)).toEqual([92, 102, 112]);
   });
 });

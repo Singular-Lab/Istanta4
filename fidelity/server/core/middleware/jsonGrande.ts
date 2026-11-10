@@ -7,7 +7,9 @@ import express, { NextFunction, Request, Response } from 'express';
  */
 export const ROUTE_JSON_GRANDE = new Set([
   '/api/salva_workspace_webpliant',
-  '/api/saveWebpliantConfig'
+  '/api/saveWebpliantConfig',
+  // Impostazioni GDO: logo dell'header e icona del sito web
+  '/api/impostazioni-gdo/sito-web'
 ]);
 
 export const jsonGrande = express.json({ limit: '200mb' });

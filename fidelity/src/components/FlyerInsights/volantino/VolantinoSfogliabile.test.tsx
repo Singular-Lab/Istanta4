@@ -8,7 +8,6 @@ import type { FlyerInsightsConfig } from "@/types/flyerInsights";
 import { urlPaginaMateriale } from "@/utils/materiali";
 import type { BoxInsight, TappaProdotto, ViaggioProdotto } from "../../../../lib/insightVolantino/tipi";
 import { percorsoDettaglioVolantino } from "../../../../lib/materiali/periodi";
-import { STATI_DIFFERENZA } from "../confronti/supporto";
 
 // Il volantino degli insight: tutte le pagine con le immagini di Olimpo e i riquadri dei box (kit di
 // Istanta e dello storico), indice, colori, ingrandimento, analisi della pagina guardata, ricerca dei
@@ -193,13 +192,12 @@ describe("VolantinoSfogliabile: lettore con tutte le pagine", () => {
     expect(vaiA()).toHaveValue("7");
   });
 
-  it("compatto non ha l'indice né lo schermo intero, ma ha la pagina e lo zoom", () => {
-    disegna({ compatto: true });
+  it("il lettore è alto quasi quanto lo schermo, con un minimo, e ha sempre indice e schermo intero", () => {
+    disegna();
 
-    expect(screen.queryByRole("navigation", { name: "Indice delle pagine" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Schermo intero" })).not.toBeInTheDocument();
-    expect(vaiA()).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Ingrandisci" })).toBeInTheDocument();
+    expect(screen.getByTestId("lettore-pagine").parentElement).toHaveClass("h-[min(92vh,64rem)]", "min-h-[36rem]");
+    expect(screen.getByRole("navigation", { name: "Indice delle pagine" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Schermo intero" })).toBeInTheDocument();
   });
 });
 
@@ -343,22 +341,11 @@ describe("VolantinoSfogliabile: colori dei riquadri", () => {
     expect(screen.queryByText(/Mappa di calore/)).not.toBeInTheDocument();
   });
 
-  it("con statoBox i riquadri sono colorati per differenza e \"Colora per\" non c'è", () => {
-    disegna({
-      box: [boxDi("a"), boxDi("b", { geometria: { x: 0.1, y: 0.6, w: 0.4, h: 0.2 } })],
-      statoBox: { a: "solo-qui", b: "uguale" },
-    });
+  it("un reparto con il colore per il marketing della GDO colora il riquadro con quello e la legenda dice il suo nome", () => {
+    disegna({ box: [boxDi("a", { reparto: { codice: "24", descrizione: "Freschissimi", colore: "#0ea5e9" } })] });
 
-    expect(screen.queryByRole("radiogroup", { name: "Colora per" })).not.toBeInTheDocument();
-    expect(riquadro("a")).toHaveClass(...(STATI_DIFFERENZA["solo-qui"].tinta.classe ?? "").split(" "));
-    expect(riquadro("a")).toHaveClass("opacity-35");
-    // Gli uguali restano attenuati
-    expect(riquadro("b")).toHaveClass("opacity-10");
-    expect(riquadro("b")).not.toHaveClass("opacity-35");
-    const legenda = screen.getByRole("list", { name: "Differenze" });
-    expect(within(legenda).getByText(STATI_DIFFERENZA["solo-qui"].etichetta)).toBeInTheDocument();
-    expect(within(legenda).getByText(STATI_DIFFERENZA.uguale.etichetta)).toBeInTheDocument();
-    expect(within(legenda).queryByText(STATI_DIFFERENZA["solo-altra"].etichetta)).not.toBeInTheDocument();
+    expect(riquadro("a")).toHaveAttribute("fill", "#0ea5e9");
+    expect(within(screen.getByRole("list", { name: "Reparto" })).getByText("Freschissimi")).toBeInTheDocument();
   });
 });
 
@@ -432,6 +419,48 @@ describe("VolantinoSfogliabile: scheda del box", () => {
     expect(await screen.findByRole("heading", { name: "Mozzarella" })).toBeInTheDocument();
     expect(onCambiaPagina).toHaveBeenCalledWith(4);
     expect(pagina(4)).toBeInTheDocument();
+  });
+
+  it("un box chiesto da fuori apre la sua scheda e porta alla sua pagina, a ogni nuova richiesta", async () => {
+    const onCambiaPagina = vi.fn();
+    const props = { idKit: "k1", pdf: null, totalePagine: 5, box: [boxDi("x"), { ...MOZZARELLA, pagina: 3 }], onCambiaPagina };
+    const { rerender } = render(
+      <MemoryRouter>
+        <VolantinoSfogliabile {...props} apriBox={{ id: "a", volta: 1 }} />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByRole("heading", { name: "Mozzarella" })).toBeInTheDocument();
+    expect(onCambiaPagina).toHaveBeenLastCalledWith(3);
+
+    fireEvent.click(screen.getByRole("button", { name: "Chiudi la scheda" }));
+    await waitFor(() => expect(screen.queryByRole("heading", { name: "Mozzarella" })).not.toBeInTheDocument());
+    onCambiaPagina.mockClear();
+
+    // Lo stesso box chiesto di nuovo si riapre
+    rerender(
+      <MemoryRouter>
+        <VolantinoSfogliabile {...props} apriBox={{ id: "a", volta: 2 }} />
+      </MemoryRouter>
+    );
+    expect(await screen.findByRole("heading", { name: "Mozzarella" })).toBeInTheDocument();
+    expect(onCambiaPagina).toHaveBeenLastCalledWith(3);
+  });
+
+  it("la scheda mostra la linea del distributore quando il box ne ha una", async () => {
+    disegna({ box: [{ ...MOZZARELLA, linea: { sigla: "SD", nome: "Sapori & Dintorni" } }] });
+
+    fireEvent.click(screen.getByTestId("box-a"));
+    const dati = await screen.findByLabelText("Dati del box");
+    expect(within(dati).getByText("Linea")).toBeInTheDocument();
+    expect(within(dati).getByText("Sapori & Dintorni")).toBeInTheDocument();
+  });
+
+  it("senza linea la scheda non ha la riga della linea", async () => {
+    disegna({ box: [MOZZARELLA] });
+
+    fireEvent.click(screen.getByTestId("box-a"));
+    expect(within(await screen.findByLabelText("Dati del box")).queryByText("Linea")).not.toBeInTheDocument();
   });
 
   it("un box indicato all'avvio che non c'è non apre nulla", () => {
@@ -604,10 +633,6 @@ describe("VolantinoSfogliabile: analisi della pagina guardata", () => {
     expect(within(pannello()).getByText("Nessun box in questa pagina.")).toBeInTheDocument();
   });
 
-  it("nel confronto fra varianti non c'è", () => {
-    disegna({ box: BOX, compatto: true });
-    expect(screen.queryByRole("complementary", { name: "Analisi della pagina" })).not.toBeInTheDocument();
-  });
 });
 
 describe("VolantinoSfogliabile: ricerca dei box", () => {
@@ -702,8 +727,4 @@ describe("VolantinoSfogliabile: ricerca dei box", () => {
     expect(document.querySelector("[data-attenuato]")).toBeNull();
   });
 
-  it("nel confronto fra varianti non c'è", () => {
-    disegna({ box: BOX, compatto: true });
-    expect(screen.queryByRole("searchbox", { name: "Cerca prodotto o marca" })).not.toBeInTheDocument();
-  });
 });

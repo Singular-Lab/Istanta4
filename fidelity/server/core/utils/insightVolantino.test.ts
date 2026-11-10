@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import type { BoxInsight, RepartoInsight } from '../../../lib/insightVolantino/tipi';
 import { boxDelKit } from './analisiKit';
 import { boxInsight, chiaveMarca, sezioniInsight, type OpzioniInsight } from './insightVolantino';
+import { regoleLinee } from './lineeDistributore';
 import { leggiReferenza, type RigaReferenza } from './referenzaStampata';
+import { risolutoreReparti } from './repartiGdo';
 
 // Le sezioni nuove degli insight del volantino (spec insight-volantino): uguali per ogni GDO e per
 // i kit di Istanta e dello storico, perche' vengono dalla lettura generica delle referenze.
@@ -234,7 +236,7 @@ describe('niente visibilita\' stimata ne\' zone calde', () => {
   it('le sezioni non hanno zone calde e nessun box ha la visibilita\'', () => {
     const sezioni = sezioniInsight(boxDi(righe), opzioni({ totalePagine: 8 }));
 
-    expect(Object.keys(sezioni).sort()).toEqual(['box', 'marche', 'prezziSconti', 'sintesi', 'spazio']);
+    expect(Object.keys(sezioni).sort()).toEqual(['box', 'lineeDistributore', 'marche', 'prezziSconti', 'sintesi', 'spazio']);
     expect(sezioni).not.toHaveProperty('zoneCalde');
     expect(sezioni.box).toHaveLength(3);
     for (const singolo of sezioni.box) expect(singolo).not.toHaveProperty('visibilita');
@@ -327,5 +329,94 @@ describe('boxInsight: il box come lo vede la scheda', () => {
     expect(box.get('k3')?.reparto).toEqual({ codice: '33', descrizione: 'ORTOFRUTTA' });
     expect(box.get('k4')?.reparto).toEqual({ codice: 'Enoteca', descrizione: 'Enoteca' });
     expect(box.get('k5')?.reparto).toBeNull();
+  });
+});
+
+describe('reparti della GDO (Impostazioni GDO)', () => {
+  const salvati = [
+    { codice: '01', nomeDati: 'DROGHERIA ALIMENTARE', nomeMarketing: 'Dispensa', colore: null },
+    { codice: '03', nomeDati: 'BEVANDE', nomeMarketing: 'DISPENSA', colore: '#3b82f6' },
+    { codice: '33', nomeDati: 'ORTOFRUTTA', nomeMarketing: null, colore: '#22c55e' },
+  ];
+  const righe = [
+    riga('d1', { x: 0, data_fields: { reparto: '1', prezzo: 1, prezzo_anziche: 2 } }),
+    riga('d2', { x: 20, data_fields: { reparto: '03', prezzo: 3, prezzo_anziche: 4 } }),
+    riga('d3', { x: 40, data_fields: { reparto: '33' } }),
+    riga('d4', { x: 60, data_fields: { descrizione_reparto: 'ENOTECA' } }),
+  ];
+
+  it('codici con lo stesso nome per il marketing sono un reparto solo nei box e nei gruppi per reparto', () => {
+    const risolutore = risolutoreReparti(salvati, ANAGRAFICA);
+    const sezioni = sezioniInsight(boxDi(righe, true), opzioni({ anagraficaReparti: ANAGRAFICA, risolviReparto: reparto => risolutore.risolvi(reparto) }));
+    const box = perId(sezioni.box);
+
+    expect(box.get('d1')?.reparto).toEqual({ codice: '01', descrizione: 'Dispensa', colore: '#3b82f6', marketing: true });
+    expect(box.get('d2')?.reparto).toEqual(box.get('d1')?.reparto);
+    expect(box.get('d3')?.reparto).toEqual({ codice: '33', descrizione: 'ORTOFRUTTA', colore: '#22c55e' });
+    expect(box.get('d4')?.reparto).toEqual({ codice: 'Enoteca', descrizione: 'Enoteca' });
+    expect(sezioni.spazio.perReparto.map(voce => [voce.chiave, voce.etichetta, voce.referenze])).toEqual([
+      ['01', 'Dispensa', 2],
+      // A parita' di spazio e referenze, per etichetta
+      ['Enoteca', 'Enoteca', 1],
+      ['33', 'ORTOFRUTTA', 1],
+    ]);
+    expect(sezioni.prezziSconti.perReparto.find(voce => voce.chiave === '01')).toMatchObject({ etichetta: 'Dispensa', box: 2, scontoMedio: 37.5 });
+  });
+
+  it('senza risoluzione i reparti restano quelli dell\'anagrafica', () => {
+    const box = perId(boxInsight(boxDi(righe, true), opzioni({ anagraficaReparti: ANAGRAFICA })));
+
+    expect(box.get('d1')?.reparto).toEqual({ codice: '01', descrizione: 'DROGHERIA ALIMENTARE' });
+    expect(box.get('d2')?.reparto).toEqual({ codice: '03', descrizione: 'BEVANDE' });
+  });
+});
+
+describe('linee del distributore', () => {
+  const regole = regoleLinee({
+    linee: [
+      { sigla: 'conad_logo', nome: 'Conad' },
+      { sigla: 'conad_bio', nome: 'Il Biologico', colore: '#558b2f' },
+    ],
+    bolli: [{ sigla: 'dop', nome: 'DOP' }],
+    lineaDaTesti: ({ marca }) => (marca?.toLowerCase().includes('conad') ? 'conad_logo' : null),
+  });
+  const righe = [
+    riga('a', { x: 0, w: 40, data_fields: { descrizione_uno: 'Passata', descrizione_due: 'Granarolo' } }),
+    riga('b', { x: 40, w: 20, data_fields: { descrizione_uno: 'Pasta', descrizione_due: 'Conad' } }),
+    riga('c', { x: 60, w: 20, data_fields: { descrizione_uno: 'Olio', descrizione_due: 'Conad' } }),
+  ];
+  const loghi: Record<string, string[]> = { a: ['CONAD_BIO', 'DOP', 'altro'], c: ['dop'] };
+
+  it('la linea assegnata da Istanta prima di quella dai testi; i bolli dichiarati; la sezione con quote e loghi', () => {
+    const sezioni = sezioniInsight(boxDi(righe), opzioni({
+      lineeDistributore: regole,
+      loghiAssegnati: idReferenza => loghi[idReferenza] ?? [],
+      urlLogo: sigla => (sigla === 'conad_bio' ? '/olimpo/logo-bio' : null),
+    }));
+    const box = perId(sezioni.box);
+
+    expect(box.get('a')).toMatchObject({ linea: { sigla: 'conad_bio', nome: 'Il Biologico' }, bolli: ['dop'] });
+    expect(box.get('b')).toMatchObject({ linea: { sigla: 'conad_logo', nome: 'Conad' }, bolli: [] });
+    expect(box.get('c')).toMatchObject({ linea: { sigla: 'conad_logo', nome: 'Conad' }, bolli: ['dop'] });
+    expect(sezioni.lineeDistributore).toEqual({
+      quotaSpazio: 100,
+      quotaBox: 100,
+      box: 3,
+      linee: [
+        { sigla: 'conad_logo', nome: 'Conad', colore: null, logo: null, box: 2, referenze: 2, quotaSpazio: 50, scontoMedio: null },
+        { sigla: 'conad_bio', nome: 'Il Biologico', colore: '#558b2f', logo: '/olimpo/logo-bio', box: 1, referenze: 1, quotaSpazio: 50, scontoMedio: null },
+      ],
+      bolli: [{ sigla: 'dop', nome: 'DOP', logo: null, box: 2 }],
+    });
+  });
+
+  it('senza regole i box non hanno linea ne\' bolli e la sezione e\' null', () => {
+    const sezioni = sezioniInsight(boxDi(righe), opzioni({ loghiAssegnati: idReferenza => loghi[idReferenza] ?? [] }));
+
+    expect(sezioni.lineeDistributore).toBeNull();
+    for (const singolo of sezioni.box) {
+      expect(singolo).not.toHaveProperty('linea');
+      expect(singolo).not.toHaveProperty('bolli');
+    }
   });
 });

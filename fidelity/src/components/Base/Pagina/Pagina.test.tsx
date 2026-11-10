@@ -45,4 +45,11 @@ describe("Pagina", () => {
     expect(screen.getByRole("link", { name: "Torna agli ordini" })).toHaveAttribute("href", "/ordini");
     expect(screen.getByText("In revisione")).toBeInTheDocument();
   });
+
+  it("passa compatta e meta all'intestazione", () => {
+    disegna(<Pagina compatta titolo="Volantino ottobre" meta={<span>Nord</span>} />);
+
+    expect(screen.getByRole("heading", { level: 1, name: "Volantino ottobre" })).not.toHaveClass("title-page");
+    expect(screen.getByText("Nord")).toBeInTheDocument();
+  });
 });

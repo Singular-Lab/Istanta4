@@ -16,7 +16,8 @@ import {
 import { ETICHETTA_MECCANICA } from '../../../lib/puntiVendita/analisi';
 import type { BoxKit } from './analisiKit';
 import { repartoInAnagrafica, type RepartoAnagrafica } from './campiInsights';
-import type { ReferenzaStampata } from './referenzaStampata';
+import { lineaEBolli, lineeDelVolantino, type RegoleLinee } from './lineeDistributore';
+import { DESCRIZIONE_ASSENTE, type ReferenzaStampata } from './referenzaStampata';
 
 /**
  * Le sezioni nuove degli insight del volantino (lib/insightVolantino/tipi.ts) dai box del kit
@@ -28,6 +29,10 @@ import type { ReferenzaStampata } from './referenzaStampata';
  *
  * Ogni box conta nei conteggi; un box senza geometria ha spazio 0. Per decisione della direzione
  * niente visibilita' stimata, mappe di calore ne' zone calde.
+ *
+ * Due aggiunte facoltative, anche loro come opzioni: i reparti della GDO (Impostazioni GDO: nome per
+ * il marketing e colore, utils/repartiGdo.ts) e le linee del distributore con i bolli, quando la
+ * libreria agenzia del cliente le dichiara (utils/lineeDistributore.ts).
  */
 
 export interface OpzioniInsight {
@@ -40,6 +45,14 @@ export interface OpzioniInsight {
   meccanicaOriginale?: (idReferenza: string) => string | null;
   urlFoto: (guid: string) => string;
   origine?: (codiceBox: string) => 'listino' | 'fuori_listino' | undefined;
+  /** Il reparto con nome per il marketing e colore della GDO (risolutoreReparti); senza, com'e'. */
+  risolviReparto?: (reparto: RepartoInsight) => RepartoInsight;
+  /** Linee e bolli della libreria agenzia: senza, i box non hanno linea ne' bolli e la sezione e' null. */
+  lineeDistributore?: RegoleLinee | null;
+  /** Le sigle dei loghi attivi assegnati da Istanta (foto_extra) per id referenza. */
+  loghiAssegnati?: (idReferenza: string) => readonly string[];
+  /** URL del logo di una sigla nel catalogo di Istanta, gia' letto; null se non c'e'. */
+  urlLogo?: (sigla: string) => string | null;
 }
 
 /** I gruppi dei box che non hanno il dato: chiave vuota, cosi' non si confondono con un valore vero. */
@@ -98,7 +111,7 @@ const NUMERO_REPARTO = /^Reparto (\d+)$/;
  * ricondotta all'anagrafica se ne riconosce la descrizione, la sigla o il numero ("Reparto 01",
  * come la lettura generica scrive il reparto DB1 o lo stile DIC_Rep_NN); se no, com'e' stato letto.
  */
-function repartoDelBox(singolo: BoxKit, opzioni: OpzioniInsight): RepartoInsight | null {
+function repartoLetto(singolo: BoxKit, opzioni: OpzioniInsight): RepartoInsight | null {
   const configurato = primo(singolo.referenze, referenza => opzioni.repartoConfigurato?.(referenza.id));
   if (configurato && configurato.codice.trim() !== '') return configurato;
 
@@ -108,6 +121,27 @@ function repartoDelBox(singolo: BoxKit, opzioni: OpzioniInsight): RepartoInsight
   const inAnagrafica = repartoInAnagrafica(opzioni.anagraficaReparti, numero ?? letto, letto);
   if (inAnagrafica) return { codice: inAnagrafica.codice, descrizione: inAnagrafica.descrizione };
   return { codice: letto, descrizione: letto };
+}
+
+/**
+ * Il reparto del box, con il nome per il marketing e il colore della GDO quando ci sono: piu'
+ * codici con lo stesso nome diventano un solo reparto, anche nei gruppi per reparto qui sotto.
+ */
+function repartoDelBox(singolo: BoxKit, opzioni: OpzioniInsight): RepartoInsight | null {
+  const reparto = repartoLetto(singolo, opzioni);
+  return reparto && opzioni.risolviReparto ? opzioni.risolviReparto(reparto) : reparto;
+}
+
+/** Linea e bolli del box dalla referenza pilota, solo se la libreria agenzia dichiara le linee. */
+function lineaDelBox(singolo: BoxKit, opzioni: OpzioniInsight): Pick<BoxInsight, 'linea' | 'bolli'> {
+  const regole = opzioni.lineeDistributore;
+  if (!regole) return {};
+  const pilota = singolo.referenze[0];
+  return lineaEBolli(opzioni.loghiAssegnati?.(pilota.id) ?? [], {
+    marca: pilota.marca,
+    descrizione: pilota.nome === DESCRIZIONE_ASSENTE ? null : pilota.nome,
+    gusto: pilota.tipo,
+  }, regole);
 }
 
 function insightDelBox(singolo: BoxKit, opzioni: OpzioniInsight): BoxInsight {
@@ -139,6 +173,7 @@ function insightDelBox(singolo: BoxKit, opzioni: OpzioniInsight): BoxInsight {
     foto: [...new Set(referenze.flatMap(referenza => referenza.foto))].map(guid => opzioni.urlFoto(guid)),
     prodotti: singolo.prodotti.length,
     idReferenze: referenze.map(referenza => referenza.id),
+    ...lineaDelBox(singolo, opzioni),
   };
   const origine = opzioni.origine?.(singolo.codiceBox);
   if (origine) insight.origine = origine;
@@ -320,5 +355,6 @@ export function sezioniInsight(box: readonly BoxKit[], opzioni: OpzioniInsight):
     prezziSconti: prezziScontiDi(insight),
     spazio: usoSpazioDi(insight, pagine),
     marche: marcheDi(insight, opzioni.marcheDistributore),
+    lineeDistributore: opzioni.lineeDistributore ? lineeDelVolantino(insight, opzioni.lineeDistributore, opzioni.urlLogo) : null,
   };
 }

@@ -1,41 +1,45 @@
-import { formatNumero } from "@/utils/format";
 import { twMerge } from "@/utils/twMerge";
 import { useEffect, useRef, type KeyboardEvent } from "react";
 import { CLASSI_ASSI, CLASSI_TESTO, TINTA_NEUTRA, type Tinta } from "./colori";
 import { Legenda, type VoceLegenda } from "./Legenda";
 import {
+  assegnaCorsie,
   dataBreve,
-  inizioAnno,
-  annoDi,
+  inizioMese,
+  intervalloGiorni,
+  isoData,
   larghezzaTesto,
+  lunediTra,
+  mesiCalendario,
   msData,
-  percorsoColonna,
+  msOggi,
+  MS_GIORNO,
   percorsoCroce,
   percorsoRombo,
   percorsoTriangolo,
   scalaLineare,
-  taccheTempo,
-  taccheTonde,
+  testoCheSta,
 } from "./scale";
 import { TabellaDati } from "./TabellaDati";
 import { useTooltip, type RigaTooltip } from "./Tooltip";
 import { useLarghezza } from "./useLarghezza";
 
-/** Una colonna della timeline: un volantino, alto quanto il suo valore (per esempio le referenze). */
-export interface ColonnaTimeline {
+/** Una barra della timeline: un volantino, dal primo all'ultimo giorno di validità. */
+export interface BarraTimeline {
   id: string;
-  /** Inizio validità (ISO YYYY-MM-DD): la posizione sull'asse del tempo. */
-  data: string;
-  valore: number;
-  /** Gruppo della colonna (per esempio l'id del canale): ne decide il colore. */
+  /** Primo giorno di validità (ISO YYYY-MM-DD). */
+  dal: string;
+  /** Ultimo giorno di validità, compreso (ISO); senza, la barra è il solo primo giorno. */
+  al: string | null;
+  /** Gruppo della barra (per esempio l'id del canale): ne decide il colore. */
   gruppo: string;
-  /** Nome del volantino, nel tooltip e nel nome accessibile. */
+  /** Nome del volantino: dentro la barra se ci sta, nel tooltip e nel nome accessibile. */
   titolo: string;
   sottotitolo?: string;
   dettagli?: RigaTooltip[];
 }
 
-/** Un tratto della fascia sotto le colonne (per esempio l'insegna con cui compare), con l'etichetta dentro. */
+/** Un tratto della fascia sotto le barre (per esempio l'insegna con cui compare), con l'etichetta dentro. */
 export interface FasciaTimeline {
   id: string;
   dal: string;
@@ -63,75 +67,45 @@ export interface GruppoTimeline {
 }
 
 export interface TimelineVolantiniProps {
-  colonne: ColonnaTimeline[];
+  barre: BarraTimeline[];
   /** I gruppi con il loro colore (in ordine fisso, vedi indiciPerNome e tintaCategoria). */
   gruppi: GruppoTimeline[];
   fasce?: FasciaTimeline[];
   eventi?: EventoTimeline[];
   /** Nome di ogni forma di evento, per la legenda: compaiono solo le forme presenti. */
   nomiEventi?: Partial<Record<FormaEvento, string>>;
-  /** Periodo mostrato (zoom su un anno); predefinito dagli anni dei dati. */
+  /**
+   * Periodo mostrato, primo e ultimo giorno compresi (un anno, gli ultimi 3 mesi); predefinito a
+   * mesi interi dal primo all'ultimo giorno dei dati, oggi compreso.
+   */
   intervallo?: { dal: string; al: string };
+  /** Il giorno della linea "oggi" (ISO); predefinito la data di oggi. */
+  oggi?: string;
   selezionata?: string | null;
-  /** Clic su una colonna, frecce, Home e Fine. */
+  /** Clic su una barra, Invio, frecce, Home e Fine. */
   onSeleziona?: (id: string) => void;
-  /** Nome del grafico e della lista delle colonne per le tecnologie assistive. */
+  /** Nome del grafico e della lista delle barre per le tecnologie assistive. */
   titolo: string;
-  /** Che cosa misura l'altezza delle colonne, sopra il grafico e nel tooltip ("Referenze"). */
-  descrizioneValore: string;
-  /** Nome del gruppo nella tabella dei dati ("Insegna"). */
+  /** Nome del gruppo nel tooltip e nella tabella dei dati ("Insegna"). */
   descrizioneGruppo?: string;
   className?: string;
 }
 
 const LARGHEZZA_MINIMA = 720;
-const MARGINE_SINISTRO = 44;
-const MARGINE_DESTRO = 16;
-const CIMA = 26;
-const BASE = 150;
-const ALTEZZA_MASSIMA = BASE - CIMA - 20;
-const Y_FASCIA = BASE + 14;
+const MARGINE = 12;
+/** Sotto questa scala la timeline si allarga e scorre: una promo di due settimane resta larga 35 px. */
+const PIXEL_GIORNO_MINIMI = 2.5;
+/** Da questa scala in su le settimane hanno spazio per il numero del lunedì. */
+const PIXEL_GIORNO_SETTIMANE = 3.5;
+const Y_MESI = 13;
+const Y_GIORNI = 29;
+const ALTEZZA_BARRA = 22;
+const PASSO_CORSIA = ALTEZZA_BARRA + 4;
 const ALTEZZA_FASCIA = 18;
-const Y_EVENTI = Y_FASCIA + ALTEZZA_FASCIA + 22;
-const GIORNO = 86_400_000;
+/** Area attiva minima di una barra corta (un giorno solo), per il clic. */
+const AREA_ATTIVA_MINIMA = 12;
 /** Ordine delle forme degli eventi in legenda, fisso. */
 const ORDINE_FORME: readonly FormaEvento[] = ["cerchio", "rombo", "quadrato", "triangolo", "croce"];
-
-const mediana = (numeri: number[]): number => {
-  if (numeri.length === 0) return 0;
-  const ordinati = [...numeri].sort((a, b) => a - b);
-  return ordinati[Math.floor(ordinati.length / 2)];
-};
-
-/**
- * Posizioni delle colonne (in ordine) distanziate di almeno `distanza`: i volantini con la stessa
- * data, come le varianti per area della stessa promo, si affiancano attorno alla loro data invece
- * di disegnarsi uno sull'altro. Restano fra `minimo` e `massimo` quando c'è spazio.
- */
-export const distanziaColonne = (xs: readonly number[], distanza: number, minimo = -Infinity, massimo = Infinity): number[] => {
-  const posizioni: number[] = [];
-  let inizioGruppo = 0;
-  for (let i = 0; i <= xs.length; i++) {
-    // Un gruppo finisce dove la colonna successiva è abbastanza lontana dall'ultima del gruppo
-    if (i < xs.length && i > inizioGruppo && xs[i] - xs[i - 1] < distanza) continue;
-    const gruppo = xs.slice(inizioGruppo, i);
-    if (gruppo.length > 0) {
-      const centro = (gruppo[0] + gruppo[gruppo.length - 1]) / 2;
-      gruppo.forEach((_, k) => posizioni.push(centro + (k - (gruppo.length - 1) / 2) * distanza));
-    }
-    inizioGruppo = i;
-  }
-  // Allargando un gruppo può toccare il vicino: si spinge avanti, poi si rientra nei margini
-  for (let i = 1; i < posizioni.length; i++) posizioni[i] = Math.max(posizioni[i], posizioni[i - 1] + distanza);
-  const sporge = posizioni.length > 0 ? posizioni[posizioni.length - 1] - massimo : 0;
-  if (sporge > 0) {
-    for (let i = posizioni.length - 1; i >= 0; i--) {
-      const limite = i === posizioni.length - 1 ? massimo : posizioni[i + 1] - distanza;
-      posizioni[i] = Math.min(posizioni[i], limite);
-    }
-  }
-  return posizioni.map(x => Math.max(minimo, x));
-};
 
 function MarcatoreEvento({ forma, x, y }: { forma: FormaEvento; x: number; y: number }) {
   const classi = twMerge(CLASSI_ASSI.superficie, "stroke-slate-700 dark:stroke-slate-200");
@@ -150,21 +124,24 @@ function MarcatoreEvento({ forma, x, y }: { forma: FormaEvento; x: number; y: nu
 }
 
 /**
- * Timeline dei volantini: una colonna sottile per volantino, alta quanto il suo valore e colorata
- * per gruppo (l'insegna); sotto la fascia dei gruppi con le etichette, poi gli eventi e gli anni.
- * Le colonne sono una lista di opzioni: clic, frecce, Home e Fine scelgono il volantino.
+ * Timeline dei volantini su un asse a calendario: i mesi a fasce alterne con il nome ("ott 2026"),
+ * i lunedì col numero del giorno quando c'è spazio e la linea di oggi. Ogni volantino è una barra
+ * dal primo all'ultimo giorno di validità, del colore del suo gruppo (l'insegna), col nome dentro
+ * se ci sta; quelli che si sovrappongono (le varianti per area della stessa promo) vanno su corsie
+ * diverse. Sotto, la fascia dei gruppi e gli eventi. Le barre sono una lista di opzioni: clic,
+ * Invio, frecce, Home e Fine scelgono il volantino.
  */
 export function TimelineVolantini({
-  colonne,
+  barre,
   gruppi,
   fasce = [],
   eventi = [],
   nomiEventi = {},
   intervallo,
+  oggi,
   selezionata = null,
   onSeleziona,
   titolo,
-  descrizioneValore,
   descrizioneGruppo = "Gruppo",
   className,
 }: TimelineVolantiniProps) {
@@ -173,7 +150,7 @@ export function TimelineVolantini({
   const opzioni = useRef(new Map<string, SVGRectElement>());
   const daFocalizzare = useRef<string | null>(null);
 
-  // Scegliendo con la tastiera il fuoco segue la colonna scelta
+  // Scegliendo con la tastiera il fuoco segue la barra scelta
   useEffect(() => {
     if (selezionata && daFocalizzare.current === selezionata) {
       opzioni.current.get(selezionata)?.focus();
@@ -181,74 +158,117 @@ export function TimelineVolantini({
     }
   }, [selezionata]);
 
-  const larghezza = Math.max(LARGHEZZA_MINIMA, misurata);
   const tintaDi = new Map(gruppi.map(g => [g.id, g.tinta]));
   const nomeGruppo = new Map(gruppi.map(g => [g.id, g.etichetta]));
+  const msDiOggi = oggi ? msData(oggi) : msOggi();
+  const giorni = barre.map(barra => intervalloGiorni(barra.dal, barra.al));
 
-  // Dominio del tempo: il periodo scelto, oppure dal primo all'ultimo anno dei dati, interi
-  const date = [...colonne.map(c => msData(c.data)), ...fasce.flatMap(f => [msData(f.dal), msData(f.al)]), ...eventi.map(e => msData(e.data))];
-  const [t0, t1] = intervallo
-    ? [msData(intervallo.dal), msData(intervallo.al) + GIORNO]
-    : date.length > 0
-      ? [inizioAnno(annoDi(Math.min(...date))), inizioAnno(annoDi(Math.max(...date)) + 1)]
-      : [inizioAnno(new Date().getUTCFullYear()), inizioAnno(new Date().getUTCFullYear() + 1)];
+  // Dominio del tempo: il periodo scelto, oppure dal primo all'ultimo mese dei dati, oggi compreso
+  const [t0, t1] = (() => {
+    if (intervallo) return [msData(intervallo.dal), msData(intervallo.al) + MS_GIORNO];
+    const date = [
+      msDiOggi,
+      ...giorni.flatMap(g => [g.inizio, g.fine - MS_GIORNO]),
+      ...fasce.flatMap(f => [msData(f.dal), msData(f.al)]),
+      ...eventi.map(e => msData(e.data)),
+    ];
+    return [inizioMese(Math.min(...date)), inizioMese(Math.max(...date), 1)];
+  })();
+  const giorniDominio = Math.max(1, (t1 - t0) / MS_GIORNO);
+  // Larga quanto il contenitore, o di più (e scorre) perché ogni giorno abbia almeno PIXEL_GIORNO_MINIMI
+  const larghezza = Math.max(misurata, Math.ceil(giorniDominio * PIXEL_GIORNO_MINIMI) + 2 * MARGINE);
+  const sx = scalaLineare([t0, t1], [MARGINE, larghezza - MARGINE]);
+  const pixelGiorno = (larghezza - 2 * MARGINE) / giorniDominio;
+  const conSettimane = pixelGiorno >= PIXEL_GIORNO_SETTIMANE;
   const dentro = (ms: number) => ms >= t0 && ms < t1;
-  const sx = scalaLineare([t0, t1], [MARGINE_SINISTRO, larghezza - MARGINE_DESTRO]);
 
-  const visibili = colonne.filter(c => dentro(msData(c.data))).sort((a, b) => msData(a.data) - msData(b.data));
-  const fasceVisibili = fasce.filter(f => msData(f.al) + GIORNO > t0 && msData(f.dal) < t1);
-  const eventiVisibili = eventi.filter(e => dentro(msData(e.data))).sort((a, b) => msData(a.data) - msData(b.data));
-
-  const conEventi = eventiVisibili.length > 0;
-  const yAsse = (conEventi ? Y_EVENTI : Y_FASCIA + ALTEZZA_FASCIA) + 26;
-  const altezza = yAsse + 6;
-
-  const massimo = Math.max(0, ...visibili.map(c => c.valore));
-  const tacchY = taccheTonde(0, massimo || 1, 3);
-  const h = scalaLineare([0, tacchY[tacchY.length - 1]], [0, ALTEZZA_MASSIMA]);
-  const posizioniData = visibili.map(c => sx(msData(c.data)));
-  const passo = mediana(posizioniData.slice(1).map((x, i) => x - posizioniData[i]).filter(d => d > 0.5)) || 12;
-  const larghezzaColonna = Math.max(2, Math.min(24, passo * 0.6));
-  const xs = distanziaColonne(posizioniData, larghezzaColonna + 2, MARGINE_SINISTRO + larghezzaColonna / 2, larghezza - MARGINE_DESTRO - larghezzaColonna / 2);
-  // Area attiva di ogni colonna: larga un passo, ma fino a metà strada dalle vicine, così non si coprono
-  const areeAttive = xs.map((x, i) => {
-    const sinistra = Math.max(x - passo / 2, i > 0 ? (xs[i - 1] + x) / 2 : -Infinity);
-    const destra = Math.min(x + passo / 2, i < xs.length - 1 ? (x + xs[i + 1]) / 2 : Infinity);
-    return destra - sinistra >= 4 ? { x: sinistra, w: destra - sinistra } : { x: x - 2, w: 4 };
+  // Le barre che toccano il periodo, in ordine di inizio (a parità, nell'ordine dato)
+  const visibili = barre
+    .map((barra, i) => ({ barra, ...giorni[i], i }))
+    .filter(b => b.inizio < t1 && b.fine > t0)
+    .sort((a, b) => a.inizio - b.inizio || a.i - b.i);
+  const corsie = assegnaCorsie(visibili);
+  const numeroCorsie = Math.max(1, ...corsie.map(c => c + 1));
+  const geometrie = visibili.map((b, k) => {
+    const x = sx(Math.max(t0, b.inizio));
+    const fine = sx(Math.min(t1, b.fine));
+    // Un pixel di superficie fra una barra e la successiva sulla stessa corsia
+    return { x, w: Math.max(2, fine - x - 1), corsia: corsie[k] };
   });
-  const indiceSelezionata = visibili.findIndex(c => c.id === selezionata);
+  // Area attiva: la barra, allargata se è più stretta del minimo ma non oltre metà strada dalle vicine di corsia
+  // (le barre sono in ordine di inizio, quindi anche in ordine di x dentro ogni corsia)
+  const vicine = geometrie.map(() => ({ prima: -1, dopo: -1 }));
+  const ultimaInCorsia = new Map<number, number>();
+  geometrie.forEach((g, k) => {
+    const prima = ultimaInCorsia.get(g.corsia);
+    if (prima !== undefined) {
+      vicine[k].prima = prima;
+      vicine[prima].dopo = k;
+    }
+    ultimaInCorsia.set(g.corsia, k);
+  });
+  const areeAttive = geometrie.map((g, k) => {
+    const { prima, dopo } = vicine[k];
+    const precedente = prima >= 0 ? geometrie[prima].x + geometrie[prima].w : -Infinity;
+    const successiva = dopo >= 0 ? geometrie[dopo].x : Infinity;
+    const extra = Math.max(0, (AREA_ATTIVA_MINIMA - g.w) / 2);
+    const sinistra = Math.max(g.x - extra, (precedente + g.x) / 2);
+    const destra = Math.min(g.x + g.w + extra, (g.x + g.w + successiva) / 2);
+    return { x: sinistra, w: Math.max(g.w, destra - sinistra) };
+  });
+
+  const fasceVisibili = fasce.filter(f => msData(f.al) + MS_GIORNO > t0 && msData(f.dal) < t1);
+  const eventiVisibili = eventi.filter(e => dentro(msData(e.data))).sort((a, b) => msData(a.data) - msData(b.data));
+  const settimane = conSettimane ? lunediTra(t0, t1) : [];
+  const conOggi = dentro(msDiOggi);
+
+  // Altezze: mesi, poi giorni e oggi (se ci sono), corsie, fascia dei gruppi ed eventi
+  const cimaCorsie = conSettimane || conOggi ? 40 : 24;
+  const fondoCorsie = cimaCorsie + numeroCorsie * PASSO_CORSIA - (PASSO_CORSIA - ALTEZZA_BARRA);
+  const yFascia = fondoCorsie + 10;
+  const fondoFascia = fasceVisibili.length > 0 ? yFascia + ALTEZZA_FASCIA : fondoCorsie;
+  const conEventi = eventiVisibili.length > 0;
+  const yEventi = fondoFascia + 20;
+  const altezza = (conEventi ? yEventi + 12 : fondoFascia) + 8;
+
+  const indiceSelezionata = visibili.findIndex(b => b.barra.id === selezionata);
   const indiceFocus = indiceSelezionata >= 0 ? indiceSelezionata : visibili.length - 1;
 
-  // Sugli schermi stretti la timeline scorre: il volantino scelto (di solito il più recente, in
-  // fondo a destra) deve restare in vista, all'apertura e quando se ne sceglie un altro
-  // (solo quando la timeline è più larga del contenitore per la sua larghezza minima, non per un
-  // ridimensionamento in corso)
-  const xSelezionata = indiceSelezionata >= 0 ? xs[indiceSelezionata] : null;
+  // La timeline più larga del contenitore scorre: il volantino scelto (o, senza, oggi) deve restare
+  // in vista, all'apertura, cambiando periodo e scegliendone un altro (solo quando scorre per la
+  // sua larghezza minima, non per un ridimensionamento in corso)
+  const xBersaglio =
+    indiceSelezionata >= 0 ? geometrie[indiceSelezionata].x + geometrie[indiceSelezionata].w / 2 : conOggi ? sx(msDiOggi) : null;
   const scorre = larghezza > misurata + 1;
   useEffect(() => {
     const elemento = contenitore.current;
-    if (!scorre || !elemento || xSelezionata === null) return;
+    if (!scorre || !elemento || xBersaglio === null) return;
     const margine = 32;
-    if (xSelezionata < elemento.scrollLeft + margine || xSelezionata > elemento.scrollLeft + elemento.clientWidth - margine) {
-      elemento.scrollLeft = Math.max(0, xSelezionata - elemento.clientWidth / 2);
+    if (xBersaglio < elemento.scrollLeft + margine || xBersaglio > elemento.scrollLeft + elemento.clientWidth - margine) {
+      elemento.scrollLeft = Math.max(0, xBersaglio - elemento.clientWidth / 2);
     }
-  }, [xSelezionata, scorre, contenitore]);
+  }, [xBersaglio, scorre, contenitore]);
 
   const scegli = (indice: number) => {
-    const colonna = visibili[Math.max(0, Math.min(visibili.length - 1, indice))];
-    if (!colonna || !onSeleziona) return;
-    daFocalizzare.current = colonna.id;
-    onSeleziona(colonna.id);
+    const scelta = visibili[Math.max(0, Math.min(visibili.length - 1, indice))];
+    if (!scelta || !onSeleziona) return;
+    daFocalizzare.current = scelta.barra.id;
+    onSeleziona(scelta.barra.id);
   };
 
   const tasto = (evento: KeyboardEvent) => {
+    const idCorrente = (evento.target as Element).getAttribute?.("data-id");
+    const corrente = visibili.findIndex(b => b.barra.id === idCorrente);
+    const da = corrente >= 0 ? corrente : indiceFocus;
     const mosse: Record<string, number> = {
-      ArrowRight: indiceFocus + 1,
-      ArrowDown: indiceFocus + 1,
-      ArrowLeft: indiceFocus - 1,
-      ArrowUp: indiceFocus - 1,
+      ArrowRight: da + 1,
+      ArrowDown: da + 1,
+      ArrowLeft: da - 1,
+      ArrowUp: da - 1,
       Home: 0,
       End: visibili.length - 1,
+      Enter: da,
+      " ": da,
     };
     if (!(evento.key in mosse)) return;
     evento.preventDefault();
@@ -259,11 +279,11 @@ export function TimelineVolantini({
   const etichetteEventi = eventiVisibili.map((evento, i) => {
     const x = sx(msData(evento.data));
     const prossimo = eventiVisibili[i + 1];
-    const limite = prossimo ? sx(msData(prossimo.data)) - 14 : larghezza - MARGINE_DESTRO;
+    const limite = prossimo ? sx(msData(prossimo.data)) - 14 : larghezza - MARGINE;
     return x + 12 + larghezzaTesto(evento.etichetta, 11) <= limite;
   });
 
-  const gruppiPresenti = new Set([...visibili.map(c => c.gruppo), ...fasceVisibili.map(f => f.gruppo)]);
+  const gruppiPresenti = new Set([...visibili.map(b => b.barra.gruppo), ...fasceVisibili.map(f => f.gruppo)]);
   const formePresenti = ORDINE_FORME.filter(forma => eventiVisibili.some(e => e.forma === forma));
   const vociLegenda: VoceLegenda[] = [
     ...gruppi.filter(g => gruppiPresenti.has(g.id)).map(g => ({ id: `g-${g.id}`, etichetta: g.etichetta, forma: "quadrato" as const, tinta: g.tinta })),
@@ -274,84 +294,103 @@ export function TimelineVolantini({
     })),
   ];
 
-  const selezionataVisibile = indiceSelezionata >= 0 ? visibili[indiceSelezionata] : null;
+  const periodoBarra = (barra: BarraTimeline) =>
+    barra.al && barra.al !== barra.dal ? `${dataBreve(msData(barra.dal))} – ${dataBreve(msData(barra.al))}` : dataBreve(msData(barra.dal));
+  const righeTooltip = (barra: BarraTimeline): RigaTooltip[] => [
+    ...(nomeGruppo.has(barra.gruppo) ? [{ etichetta: descrizioneGruppo, valore: nomeGruppo.get(barra.gruppo)! }] : []),
+    ...(barra.dettagli ?? []),
+  ];
 
   return (
     <figure className={twMerge("m-0 min-w-0", className)}>
       <div ref={contenitore} className="overflow-x-auto">
         <svg role="group" aria-label={titolo} width={larghezza} height={altezza} viewBox={`0 0 ${larghezza} ${altezza}`} className="block">
-          <text x={MARGINE_SINISTRO} y={12} className={twMerge("text-2xs font-semibold uppercase tracking-wide", CLASSI_TESTO.tenue)}>
-            {descrizioneValore}
-          </text>
-          {/* Griglia del tempo: anni, o mesi nello zoom su un anno */}
-          {taccheTempo(t0, t1).map(tacca => (
-            <g key={tacca.ms}>
-              <line x1={sx(tacca.ms)} x2={sx(tacca.ms)} y1={CIMA} y2={yAsse - 14} className={CLASSI_ASSI.griglia} />
-              <text x={sx(tacca.centro)} y={yAsse} textAnchor="middle" className={twMerge("text-xs font-semibold tabular-nums", CLASSI_TESTO.secondario)}>
-                {tacca.etichetta}
-              </text>
-            </g>
-          ))}
-          {tacchY.slice(1).map(t => (
-            <g key={t}>
-              <line x1={MARGINE_SINISTRO} x2={larghezza - MARGINE_DESTRO} y1={BASE - h(t)} y2={BASE - h(t)} className={CLASSI_ASSI.griglia} />
-              <text x={MARGINE_SINISTRO - 8} y={BASE - h(t)} dominantBaseline="central" textAnchor="end" className={twMerge("text-3xs tabular-nums", CLASSI_TESTO.tenue)}>
-                {formatNumero(t)}
-              </text>
-            </g>
-          ))}
-          <text x={MARGINE_SINISTRO - 8} y={BASE} dominantBaseline="central" textAnchor="end" className={twMerge("text-3xs tabular-nums", CLASSI_TESTO.tenue)}>
-            0
-          </text>
-
-          {/* Colonne */}
-          {visibili.map((colonna, i) => {
-            const tinta = tintaDi.get(colonna.gruppo) ?? TINTA_NEUTRA;
-            const scelta = colonna.id === selezionata;
+          {/* Mesi: fasce alterne, la riga all'inizio (più marcata a gennaio) e il nome se ci sta */}
+          {mesiCalendario(t0, t1).map(mese => {
+            const inizio = sx(Math.max(t0, mese.ms));
+            const fine = sx(Math.min(t1, mese.fine));
+            const etichetta = [mese.etichetta, mese.breve].find(testo => larghezzaTesto(testo, 11) + 10 <= fine - inizio);
             return (
-              <path
-                key={colonna.id}
-                d={percorsoColonna(xs[i] - larghezzaColonna / 2, BASE, h(colonna.valore), larghezzaColonna, Math.min(4, larghezzaColonna / 2))}
-                fill={tinta.colore}
-                className={twMerge(tinta.classe, !scelta && selezionata !== null && "opacity-75")}
-              />
+              <g key={mese.ms} data-mese={mese.etichetta}>
+                {(mese.anno * 12 + mese.mese) % 2 === 1 && (
+                  <rect x={inizio} y={0} width={Math.max(0, fine - inizio)} height={altezza} className="fill-slate-100/70 dark:fill-darkmode-400/30" />
+                )}
+                {mese.ms >= t0 && (
+                  <line x1={inizio} x2={inizio} y1={0} y2={altezza} className={mese.mese === 0 ? CLASSI_ASSI.base : CLASSI_ASSI.griglia} />
+                )}
+                {etichetta && (
+                  <text x={inizio + 5} y={Y_MESI} className={twMerge("text-2xs font-semibold tabular-nums", CLASSI_TESTO.secondario)}>
+                    {etichetta}
+                  </text>
+                )}
+              </g>
             );
           })}
-          <line x1={MARGINE_SINISTRO} x2={larghezza - MARGINE_DESTRO} y1={BASE + 0.5} y2={BASE + 0.5} className={CLASSI_ASSI.base} />
 
-          {/* Volantino scelto: marcatore sopra la colonna ed etichetta col valore */}
-          {selezionataVisibile && (() => {
-            const x = xs[indiceSelezionata];
-            const y = BASE - h(selezionataVisibile.valore) - 9;
-            const aSinistra = x > larghezza / 2;
+          {/* Settimane: una tacca e il giorno di ogni lunedì, con una riga tenue fra le corsie */}
+          {settimane.map(ms => {
+            const x = sx(ms);
             return (
-              <g className="pointer-events-none">
-                <circle cx={x} cy={y} r={5} strokeWidth={2} className={twMerge("fill-slate-800 dark:fill-slate-100", CLASSI_ASSI.anello)} />
-                <text
-                  x={aSinistra ? x - 9 : x + 9}
-                  y={Math.max(CIMA - 4, y - 7)}
-                  textAnchor={aSinistra ? "end" : "start"}
-                  className={twMerge("text-2xs font-bold tabular-nums", CLASSI_TESTO.primario)}
-                >
-                  Selezionato · {formatNumero(selezionataVisibile.valore)}
+              <g key={ms}>
+                <line x1={x} x2={x} y1={Y_GIORNI - 9} y2={fondoCorsie} strokeDasharray="2 3" className="stroke-slate-200 dark:stroke-darkmode-400" />
+                <text x={x + 3} y={Y_GIORNI} className={twMerge("text-3xs tabular-nums", CLASSI_TESTO.tenue)}>
+                  {new Date(ms).getUTCDate()}
                 </text>
               </g>
+            );
+          })}
+
+          {/* Barre dei volantini, una corsia per quelli che si sovrappongono */}
+          {visibili.map(({ barra }, k) => {
+            const { x, w, corsia } = geometrie[k];
+            const y = cimaCorsie + corsia * PASSO_CORSIA;
+            const tinta = tintaDi.get(barra.gruppo) ?? TINTA_NEUTRA;
+            const etichetta = testoCheSta(barra.titolo, w - 10);
+            return (
+              <g key={barra.id} className="pointer-events-none">
+                <rect data-barra={barra.id} x={x} y={y} width={w} height={ALTEZZA_BARRA} rx={Math.min(4, w / 2)} fill={tinta.colore} className={tinta.classe} />
+                {etichetta && (
+                  <text x={x + 5} y={y + ALTEZZA_BARRA / 2} dominantBaseline="central" className={twMerge("text-2xs font-semibold", tinta.classeTesto)}>
+                    {etichetta}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+
+          {/* Volantino scelto: un contorno attorno alla barra */}
+          {indiceSelezionata >= 0 && (() => {
+            const { x, w, corsia } = geometrie[indiceSelezionata];
+            const y = cimaCorsie + corsia * PASSO_CORSIA;
+            return (
+              <rect
+                data-selezionata=""
+                x={x - 2}
+                y={y - 2}
+                width={w + 4}
+                height={ALTEZZA_BARRA + 4}
+                rx={Math.min(6, (w + 4) / 2)}
+                fill="none"
+                strokeWidth={2}
+                className="pointer-events-none stroke-slate-800 dark:stroke-slate-100"
+              />
             );
           })()}
 
           {/* Fascia dei gruppi, con 2 px di superficie fra un tratto e l'altro */}
           {fasceVisibili.map(fascia => {
             const inizio = sx(Math.max(t0, msData(fascia.dal)));
-            const fine = sx(Math.min(t1, msData(fascia.al) + GIORNO));
+            const fine = sx(Math.min(t1, msData(fascia.al) + MS_GIORNO));
             const w = Math.max(2, fine - inizio - 2);
             const tinta = tintaDi.get(fascia.gruppo) ?? TINTA_NEUTRA;
             const periodo = `${dataBreve(msData(fascia.dal))} – ${dataBreve(msData(fascia.al))}`;
+            const etichetta = testoCheSta(fascia.etichetta, w - 16);
             return (
               <g key={fascia.id} {...conTooltip({ titolo: fascia.etichetta, sottotitolo: periodo, righe: fascia.dettagli })}>
-                <rect x={inizio + 1} y={Y_FASCIA} width={w} height={ALTEZZA_FASCIA} rx={4} fill={tinta.colore} className={tinta.classe} />
-                {w >= larghezzaTesto(fascia.etichetta, 11) + 16 && (
-                  <text x={inizio + 9} y={Y_FASCIA + ALTEZZA_FASCIA / 2} dominantBaseline="central" className={twMerge("pointer-events-none text-2xs font-bold", tinta.classeTesto)}>
-                    {fascia.etichetta}
+                <rect x={inizio + 1} y={yFascia} width={w} height={ALTEZZA_FASCIA} rx={4} fill={tinta.colore} className={tinta.classe} />
+                {etichetta && (
+                  <text x={inizio + 9} y={yFascia + ALTEZZA_FASCIA / 2} dominantBaseline="central" className={twMerge("pointer-events-none text-2xs font-bold", tinta.classeTesto)}>
+                    {etichetta}
                   </text>
                 )}
               </g>
@@ -359,15 +398,15 @@ export function TimelineVolantini({
           })}
 
           {/* Eventi */}
-          {conEventi && <line x1={MARGINE_SINISTRO} x2={larghezza - MARGINE_DESTRO} y1={Y_EVENTI} y2={Y_EVENTI} className={CLASSI_ASSI.griglia} />}
+          {conEventi && <line x1={MARGINE} x2={larghezza - MARGINE} y1={yEventi} y2={yEventi} className={CLASSI_ASSI.griglia} />}
           {eventiVisibili.map((evento, i) => {
             const x = sx(msData(evento.data));
             return (
               <g key={evento.id} {...conTooltip({ titolo: evento.etichetta, sottotitolo: dataBreve(msData(evento.data)), testo: evento.dettaglio })}>
-                <rect x={x - 12} y={Y_EVENTI - 12} width={24} height={24} fill="transparent" />
-                <MarcatoreEvento forma={evento.forma} x={x} y={Y_EVENTI} />
+                <rect x={x - 12} y={yEventi - 12} width={24} height={24} fill="transparent" />
+                <MarcatoreEvento forma={evento.forma} x={x} y={yEventi} />
                 {etichetteEventi[i] && (
-                  <text x={x + 12} y={Y_EVENTI} dominantBaseline="central" className={twMerge("text-2xs font-semibold", CLASSI_TESTO.primario)}>
+                  <text x={x + 12} y={yEventi} dominantBaseline="central" className={twMerge("text-2xs font-semibold", CLASSI_TESTO.primario)}>
                     {evento.etichetta}
                   </text>
                 )}
@@ -375,37 +414,51 @@ export function TimelineVolantini({
             );
           })}
 
-          {/* Aree attive delle colonne: opzioni della lista, più larghe della colonna */}
+          {/* Oggi: una linea su tutto il calendario, col nome nella riga dei giorni */}
+          {conOggi && (() => {
+            const x = sx(msDiOggi + MS_GIORNO / 2);
+            return (
+              <g data-oggi={isoData(msDiOggi)} className="pointer-events-none">
+                <line x1={x} x2={x} y1={Y_GIORNI + 6} y2={altezza} strokeWidth={1.5} className="stroke-danger" />
+                <rect x={x - 15} y={Y_GIORNI - 9} width={30} height={15} rx={7.5} className="fill-danger" />
+                <text x={x} y={Y_GIORNI - 1.5} textAnchor="middle" dominantBaseline="central" className="fill-white text-3xs font-bold">
+                  oggi
+                </text>
+              </g>
+            );
+          })()}
+
+          {/* Aree attive delle barre: opzioni della lista */}
           <g role="listbox" aria-label={titolo} aria-orientation="horizontal" onKeyDown={tasto}>
-            {visibili.map((colonna, i) => {
-              const nome = [colonna.titolo, colonna.sottotitolo, `${formatNumero(colonna.valore)} ${descrizioneValore.toLowerCase()}`].filter(Boolean).join(", ");
+            {visibili.map(({ barra }, k) => {
+              const nome = [
+                barra.titolo,
+                barra.sottotitolo ?? periodoBarra(barra),
+                nomeGruppo.get(barra.gruppo),
+                ...(barra.dettagli ?? []).map(d => `${d.etichetta} ${d.valore}`),
+              ]
+                .filter(Boolean)
+                .join(", ");
               return (
                 <rect
-                  key={colonna.id}
+                  key={barra.id}
                   ref={elemento => {
-                    if (elemento) opzioni.current.set(colonna.id, elemento);
-                    else opzioni.current.delete(colonna.id);
+                    if (elemento) opzioni.current.set(barra.id, elemento);
+                    else opzioni.current.delete(barra.id);
                   }}
+                  data-id={barra.id}
                   role="option"
-                  aria-selected={colonna.id === selezionata}
+                  aria-selected={barra.id === selezionata}
                   aria-label={nome}
-                  tabIndex={i === indiceFocus ? 0 : -1}
-                  x={areeAttive[i].x}
-                  y={CIMA}
-                  width={areeAttive[i].w}
-                  height={BASE - CIMA}
+                  tabIndex={k === indiceFocus ? 0 : -1}
+                  x={areeAttive[k].x}
+                  y={cimaCorsie + geometrie[k].corsia * PASSO_CORSIA}
+                  width={areeAttive[k].w}
+                  height={ALTEZZA_BARRA}
                   fill="transparent"
                   className={twMerge("outline-none", onSeleziona && "cursor-pointer")}
-                  onClick={() => onSeleziona?.(colonna.id)}
-                  {...conTooltip({
-                    titolo: colonna.titolo,
-                    sottotitolo: colonna.sottotitolo,
-                    righe: [
-                      { etichetta: descrizioneValore, valore: formatNumero(colonna.valore) },
-                      ...(nomeGruppo.has(colonna.gruppo) ? [{ etichetta: descrizioneGruppo, valore: nomeGruppo.get(colonna.gruppo)! }] : []),
-                      ...(colonna.dettagli ?? []),
-                    ],
-                  })}
+                  onClick={() => onSeleziona?.(barra.id)}
+                  {...conTooltip({ titolo: barra.titolo, sottotitolo: barra.sottotitolo ?? periodoBarra(barra), righe: righeTooltip(barra) })}
                 />
               );
             })}
@@ -415,8 +468,8 @@ export function TimelineVolantini({
       <Legenda voci={vociLegenda} className="mt-3" />
       <TabellaDati
         titolo={titolo}
-        colonne={["Volantino", "Dal", descrizioneGruppo, descrizioneValore]}
-        righe={visibili.map(c => [c.titolo, dataBreve(msData(c.data)), nomeGruppo.get(c.gruppo) ?? "", formatNumero(c.valore)])}
+        colonne={["Volantino", "Dal", "Al", descrizioneGruppo]}
+        righe={visibili.map(({ barra }) => [barra.titolo, dataBreve(msData(barra.dal)), dataBreve(msData(barra.al ?? barra.dal)), nomeGruppo.get(barra.gruppo) ?? ""])}
       />
       {tooltip}
     </figure>

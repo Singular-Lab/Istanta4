@@ -230,6 +230,17 @@ describe('calcolaAnalisiPuntoVendita', () => {
     expect(senzaReparti.reparti).toEqual([]);
   });
 
+  it('reparti con il nome per il marketing della GDO: quelli con lo stesso nome si sommano', () => {
+    const nomeReparto = (reparto: string) => (reparto === 'Ortofrutta' || reparto === 'Bevande' ? 'Mercato' : reparto);
+
+    const conNomi = calcolaAnalisiPuntoVendita('pv-1', EDIZIONI, AGGREGATI, STATISTICHE, DESCRIZIONI, '2022-10-25', nomeReparto);
+
+    expect(conNomi.reparti).toEqual([
+      { anno: 2021, reparti: [{ reparto: 'Mercato', quota: 100 }] },
+      { anno: 2022, reparti: [{ reparto: 'Mercato', quota: 100 }] },
+    ]);
+  });
+
   it('copertura: percentuale delle referenze con codice, reparto, prezzo e marca', () => {
     expect(analisi.copertura).toEqual({ conCodice: 50, conReparto: 20, conPrezzo: 96.7, conMarca: 30 });
   });

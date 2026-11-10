@@ -1,10 +1,18 @@
+import type { Request } from 'express';
 import { EXPORT_DI_SISTEMA } from '../../../lib/enums';
 import { isAppError, wrapDatabaseError, wrapNotFoundError } from '../../../lib/errors';
 import type { RepartoInsight } from '../../../lib/insightVolantino/tipi';
 import { FileItemKit } from '../../../lib/types';
 import type { AmbitoGdo } from '../accessi/contestoAccesso';
+import type { IAgenziaLib } from '../agenzia_lib/types';
+import type { ICatalogoLoghiService, LogoDelCatalogo } from '../interfaces/ICatalogoLoghiService';
+import { log } from '../logger';
+import { regoleLinee, type RegoleLinee, sigleAssegnate, urlImmagineLogo } from '../utils/lineeDistributore';
+import { type FonteRepartiGdo, type RisolutoreReparti, SENZA_REPARTI_GDO } from '../utils/repartiGdo';
 import { urlFotoOlimpo } from '../utils/urlOlimpo';
+import { caricaRisolutoreReparti } from './risolutoreRepartiGdo';
 import {
+  ContestoFlyerInsightsDTO,
   FlyerInsightsDTO,
   ReferenzaPosizioneDTO,
   RiepilogoMeccanicaDTO,
@@ -40,6 +48,20 @@ function repartoDellaConfig(referenza: ReferenzaPosizioneDTO | undefined, campoC
   return { codice, descrizione: descrizione || codice };
 }
 
+/**
+ * Il reparto della referenza con nome per il marketing e colore della GDO (Impostazioni GDO): codici
+ * con lo stesso nome per il marketing diventano un reparto solo, nei riepiloghi come nei box.
+ */
+function applicaRepartoGdo(referenza: Record<string, unknown>, risolutore: RisolutoreReparti, campoCodice: string, campoDescrizione?: string): void {
+  const codice = testoDelCampo(referenza[campoCodice]);
+  const descrizione = campoDescrizione ? testoDelCampo(referenza[campoDescrizione]) : '';
+  if (!codice && !descrizione) return;
+  const risolto = risolutore.risolvi({ codice, descrizione });
+  if (!risolto.marketing) return;
+  referenza[campoCodice] = risolto.codice;
+  if (campoDescrizione) referenza[campoDescrizione] = risolto.descrizione;
+}
+
 /** Le marche del distributore dalla config (marche.distributore, facoltativa): solo testi non vuoti. */
 function marcheDelDistributore(valore: unknown): string[] {
   return Array.isArray(valore) ? valore.filter((voce): voce is string => typeof voce === 'string' && voce.trim() !== '') : [];
@@ -51,8 +73,25 @@ function marcheDelDistributore(valore: unknown): string[] {
  */
 export class VolantinoService implements IVolantinoService {
   constructor(
-    private readonly configService: IConfigService
+    private readonly configService: IConfigService,
+    // Reparti della GDO, linee del distributore e catalogo dei loghi: il container li passa, i test possono non farlo
+    private readonly reparti: FonteRepartiGdo = SENZA_REPARTI_GDO,
+    private readonly agenziaLib: Pick<IAgenziaLib, 'insightVolantino'> = {},
+    private readonly catalogoLoghi: Pick<ICatalogoLoghiService, 'catalogo'> | null = null
   ) { }
+
+  /** Il catalogo dei loghi di Istanta per le linee del distributore; vuoto se non si legge. */
+  private async catalogo(richiesta?: Request): Promise<Map<string, LogoDelCatalogo>> {
+    if (!this.catalogoLoghi) return new Map();
+    try {
+      return await this.catalogoLoghi.catalogo(richiesta);
+    } catch (error) {
+      log.warn('Insight volantino: catalogo dei loghi non disponibile, linee senza logo', {
+        errore: error instanceof Error ? error.message : String(error)
+      });
+      return new Map();
+    }
+  }
 
   async prendiIVolantiniCaricatiDaDB(): Promise<any> {
     try {
@@ -73,7 +112,7 @@ export class VolantinoService implements IVolantinoService {
     }
   }
 
-  async getFlyerInsights(guidIdKitRuntime: string, ambito: AmbitoGdo = 'tutte'): Promise<FlyerInsightsDTO> {
+  async getFlyerInsights(guidIdKitRuntime: string, ambito: AmbitoGdo = 'tutte', richiesta?: Request): Promise<FlyerInsightsDTO> {
     try {
       // 0. Il kit solo nella GDO della richiesta: per chi non la vede e' come se non esistesse
       const kit = await kitNellAmbito(guidIdKitRuntime, ambito);
@@ -120,11 +159,14 @@ export class VolantinoService implements IVolantinoService {
         listino si riconoscono per codice box, che e il ponte verso il box del
         volantino da cui sono state compilate.
       */
-      const contesto = {
+      const contesto: ContestoFlyerInsightsDTO = {
         titolo: kit.titolo,
         nomeArea: kit.area || undefined,
         nomeCanale: kit.canale || undefined,
-        idPromo: kit.idPromo
+        idPromo: kit.idPromo,
+        // Le date della promo come le legge kitNellAmbito: YYYY-MM-DD nel fuso delle promo
+        validitaDal: kit.validitaDal,
+        validitaAl: kit.validitaAl
       };
       const importStorico = kit.importStorico;
       const codiciBoxFuoriListino = new Set(
@@ -147,10 +189,12 @@ export class VolantinoService implements IVolantinoService {
         }
       }
 
-      // 2. Mappa referenze in DTO usando la config per i campi dinamici
-      const insightsConfig = await this.configService.getFlyerInsightsConfig();
+      // 2. Mappa referenze in DTO usando la config degli insight della GDO del kit (o quella del file)
+      const insightsConfig = await this.configService.getFlyerInsightsConfig(kit.gdo);
       const fieldMapping: Record<string, PercorsoCampo> = insightsConfig.dataMapping?.referenzaFields ?? {};
       const anagraficaReparti = leggiAnagraficaReparti(insightsConfig.dataMapping?.reparti);
+      // Nome per il marketing e colore dei reparti della GDO (Impostazioni GDO)
+      const risolutore = await caricaRisolutoreReparti(this.reparti, kit.gdo, anagraficaReparti, 'Insight volantino');
 
       // Config per groupBy
       const repartiGroupBy = insightsConfig.reparti?.groupBy ?? { field: 'reparto', descriptionField: 'descrizioneReparto' };
@@ -192,6 +236,7 @@ export class VolantinoService implements IVolantinoService {
         }
         // Stesso reparto per Istanta ("01") e storico ("1", senza descrizione): quello dell'anagrafica
         applicaAnagraficaReparti(mapped, anagraficaReparti, repartiField, repartiDescField);
+        if (!risolutore.vuoto) applicaRepartoGdo(mapped, risolutore, repartiField, repartiDescField);
 
         // Normalizza stringhe numeriche in formato italiano (es. "0,85" → 0.85)
         // Il componente usa Number(ref.prezzo) che non gestisce la virgola come separatore decimale
@@ -269,12 +314,18 @@ export class VolantinoService implements IVolantinoService {
       });
 
       const riepilogoReparti: RiepilogoRepartoDTO[] = Array.from(repartiMap.entries())
-        .map(([sigla, data]) => ({
-          sigla,
-          descrizione: data.descrizione,
-          numeroReferenze: data.count,
-          pagine: Array.from(data.pagine).sort((a, b) => a - b)
-        }))
+        .map(([sigla, data]) => {
+          const voce: RiepilogoRepartoDTO = {
+            sigla,
+            descrizione: data.descrizione,
+            numeroReferenze: data.count,
+            pagine: Array.from(data.pagine).sort((a, b) => a - b)
+          };
+          // Il colore impostato per la GDO, solo se c'e': senza, quello della config o automatico
+          const colore = risolutore.vuoto || !sigla ? null : risolutore.risolvi({ codice: sigla, descrizione: data.descrizione }).colore;
+          if (colore) voce.colore = colore;
+          return voce;
+        })
         .sort((a, b) => b.numeroReferenze - a.numeroReferenze);
 
       // 5. Calcola riepilogo per meccanica (campo groupBy dalla config)
@@ -302,6 +353,11 @@ export class VolantinoService implements IVolantinoService {
       // reparto e meccanica gia' mappati qui sopra, cosi' codici e colori restano quelli dei riepiloghi.
       const dtoPerId = new Map(referenzeDTO.map(ref => [String(ref.id), ref] as const));
       const codiciFuoriListino = new Set([...codiciBoxFuoriListino].map(codice => codice.trim()));
+      // Linee del distributore e bolli, se la libreria agenzia del cliente li dichiara: i loghi
+      // assegnati da Istanta alle referenze e il catalogo dei loghi, letto prima delle sezioni
+      const regole: RegoleLinee | null = regoleLinee(this.agenziaLib.insightVolantino?.lineeDistributore);
+      const loghiPerReferenza = new Map(righe.map(riga => [String(riga.id), sigleAssegnate(riga.foto_extra)] as const));
+      const catalogo = regole ? await this.catalogo(richiesta) : new Map<string, LogoDelCatalogo>();
       const sezioni = sezioniInsight(
         boxDelKit(righe.map(riga => leggiReferenza(riga, { storico: kit.storico }))),
         {
@@ -316,7 +372,14 @@ export class VolantinoService implements IVolantinoService {
           urlFoto: (guid) => urlFotoOlimpo(guid, { performante: true }),
           origine: origineStorico
             ? (codiceBox) => (codiciFuoriListino.has(codiceBox) ? 'fuori_listino' : 'listino')
-            : undefined
+            : undefined,
+          risolviReparto: risolutore.vuoto ? undefined : (reparto) => risolutore.risolvi(reparto),
+          lineeDistributore: regole,
+          loghiAssegnati: (idReferenza) => loghiPerReferenza.get(idReferenza) ?? [],
+          urlLogo: (sigla) => {
+            const voce = catalogo.get(sigla.trim().toLowerCase());
+            return voce ? urlImmagineLogo(voce.guidId) : null;
+          }
         }
       );
 

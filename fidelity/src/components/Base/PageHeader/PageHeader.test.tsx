@@ -66,4 +66,30 @@ describe("PageHeader", () => {
     expect(intestazione).toHaveClass("mb-0");
     expect(intestazione).not.toHaveClass("mb-5");
   });
+
+  it("compatta: una riga con indietro, titolo più piccolo, pastiglie e azioni", () => {
+    disegna(
+      <PageHeader
+        compatta
+        title="Volantino ottobre"
+        indietro={{ to: "/volantini", etichetta: "Torna ai volantini" }}
+        meta={<span>Super</span>}
+        actions={<button>Scarica report PDF</button>}
+      />
+    );
+
+    const titolo = screen.getByRole("heading", { level: 1, name: "Volantino ottobre" });
+    expect(titolo).toHaveClass("text-lg");
+    expect(titolo).not.toHaveClass("title-page");
+    expect(screen.getByText("Super")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Torna ai volantini" })).toHaveClass("mt-0");
+    expect(screen.getByRole("button", { name: "Scarica report PDF" })).toBeInTheDocument();
+  });
+
+  it("senza compatta le pastiglie di meta non cambiano l'intestazione di sempre", () => {
+    disegna(<PageHeader title="Punti vendita" description="Anagrafica" />);
+
+    expect(screen.getByRole("heading", { level: 1 })).toHaveClass("title-page");
+    expect(screen.getByText("Anagrafica")).toBeInTheDocument();
+  });
 });

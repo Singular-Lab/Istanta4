@@ -440,3 +440,40 @@ describe('testi in italiano', () => {
     expect(nomeLeggibile('Reparto 01')).toBe('Reparto 01');
   });
 });
+
+describe('reparti con il nome per il marketing della GDO', () => {
+  // Un nome per il marketing si mostra come e' scritto, anche tutto maiuscolo; le descrizioni
+  // dell'anagrafica restano in forma di frase
+  const MARKETING = { codice: '01', descrizione: 'BIO & GUSTO', colore: '#22c55e', marketing: true };
+  const conMarketing = (altro: Partial<DatiReportVolantino> = {}): DatiReportVolantino => {
+    const base = dati(altro);
+    return {
+      ...base,
+      insight: {
+        ...base.insight,
+        box: base.insight.box.map(singolo => (singolo.reparto?.codice === '01' ? { ...singolo, reparto: MARKETING } : singolo)),
+        spazio: {
+          ...base.insight.spazio,
+          perReparto: base.insight.spazio.perReparto.map(voce => (voce.chiave === '01' ? { ...voce, etichetta: 'BIO & GUSTO' } : voce)),
+        },
+      },
+    };
+  };
+
+  it('nel grafico dei reparti e nella frase sullo spazio', () => {
+    const sezioni = sezioniStandard(conMarketing());
+    const { grafici } = sezioneDi<'grafici'>(sezioni, 'assortimento');
+
+    expect(grafici[0].grafico.forma === 'confronto' && grafici[0].grafico.voci.map(voce => voce.etichetta)).toEqual(['BIO & GUSTO', 'Bevande']);
+    expect(frasiChiave(conMarketing())[0]).toContain('va al reparto BIO & GUSTO');
+    // Senza nome per il marketing la descrizione dell'anagrafica resta in forma di frase
+    expect(frasiChiave(dati())[0]).toContain('va al reparto Drogheria alimentare');
+  });
+
+  it('nel confronto con l\'edizione precedente', () => {
+    const confronto = { ...CONFRONTO, spazioPerReparto: CONFRONTO.spazioPerReparto.map(voce => (voce.chiave === '01' ? { ...voce, etichetta: 'BIO & GUSTO' } : voce)) };
+    const tabella = sezioneDi<'tabella'>(sezioniStandard(conMarketing({ confronto })), 'confronto');
+
+    expect(tabella.righe).toContainEqual(['Spazio: BIO & GUSTO', '42%', '35%', '+7 punti']);
+  });
+});

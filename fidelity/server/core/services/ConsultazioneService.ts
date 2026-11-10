@@ -75,7 +75,8 @@ import { sezioniInsight } from '../utils/insightVolantino';
 import { aggregaPromozioneVolantini, type KitConInsight } from '../utils/promozioneVolantini';
 import { leggiReferenza } from '../utils/referenzaStampata';
 import { trovaConfigInstallazione } from './configPerGdo';
-import { type ContestoConfig, contestoDallaConfig, type LettureKitInsight, opzioniDelKit } from './InsightConfrontiService';
+import { type ContestoConfig, contestoDellaGdo, type LettureKitInsight, opzioniDelKit } from './InsightConfrontiService';
+import { type FonteRepartiGdo, SENZA_REPARTI_GDO } from '../utils/repartiGdo';
 import {
   annoOpzionale,
   confrontaTesto,
@@ -379,7 +380,9 @@ export class ConsultazioneService implements IConsultazioneService {
     private readonly leggiFileOlimpo: LettoreFileOlimpo = scaricaMaterialePdf,
     private readonly campiRicerca: FonteCampiRicerca = campiRicercaDaConfigurazione,
     private readonly configInsight: FonteConfigInsight = SENZA_CONFIG_INSIGHT,
-    private readonly lettureInsight: LettureKitInsight = LETTURE_KIT_INSIGHT
+    private readonly lettureInsight: LettureKitInsight = LETTURE_KIT_INSIGHT,
+    // Nome per il marketing e colore dei reparti della GDO (Impostazioni GDO) nell'assortimento
+    private readonly repartiGdo: FonteRepartiGdo = SENZA_REPARTI_GDO
   ) { }
 
   /** Solo kit pubblicati del tipo indicato, nelle promo del periodo e della GDO dell'ambito. */
@@ -503,26 +506,22 @@ export class ConsultazioneService implements IConsultazioneService {
     if (righeKit.length === 0) throw nonDisponibile();
     const varianti = righeKit.map(varianteDa).sort(confrontaVarianti);
 
+    // Config degli insight e reparti della GDO dei kit (tutti della GDO della promo): letti una volta
+    const contesti = new Map<string, Promise<ContestoConfig>>();
+    const contestoDellaGdoDelKit = (idGdo: string | null): Promise<ContestoConfig> => {
+      const chiave = idGdo ?? '';
+      const giaChiesto = contesti.get(chiave);
+      if (giaChiesto !== undefined) return giaChiesto;
+      const contesto = contestoDellaGdo(this.configInsight, this.repartiGdo, idGdo, 'Dettaglio della promozione');
+      contesti.set(chiave, contesto);
+      return contesto;
+    };
     const [righePuntiVendita, kit] = await Promise.all([
       this.materiali.elencaPuntiVenditaVolantini(criteri, rigaPromo.id_promo),
-      this.contestoInsight().then(contesto =>
-        aGruppi(varianti, KIT_INSIGHT_IN_PARALLELO, variante => this.insightDelKit(variante, ambito, contesto))),
+      aGruppi(varianti, KIT_INSIGHT_IN_PARALLELO, variante => this.insightDelKit(variante, ambito, contestoDellaGdoDelKit)),
     ]);
     const { kit: kitConNumeri, numeri, puntiVendita, assortimento } = aggregaPromozioneVolantini(kit, righePuntiVendita);
     return { promo: promoDa(rigaPromo), periodo, kit: kitConNumeri, numeri, puntiVendita, assortimento };
-  }
-
-  /** La config degli insight; se manca o non si legge, il dettaglio vale lo stesso con la lettura generica. */
-  private async contestoInsight(): Promise<ContestoConfig> {
-    try {
-      return contestoDallaConfig(await this.configInsight.getFlyerInsightsConfig());
-    } catch (error) {
-      log.warn('Dettaglio della promozione: config degli insight non disponibile, numeri con la sola lettura generica', {
-        context: 'Consultazione',
-        errore: error instanceof Error ? error.message : String(error),
-      });
-      return contestoDallaConfig(null);
-    }
   }
 
   /**
@@ -530,13 +529,21 @@ export class ConsultazioneService implements IConsultazioneService {
    * un kit senza referenze ha zero box. Un kit che non si trova piu' fra l'elenco e questa lettura
    * vale come un kit senza referenze.
    */
-  private async insightDelKit(variante: VarianteConsultazione, ambito: AmbitoGdo, contesto: ContestoConfig): Promise<KitConInsight> {
+  private async insightDelKit(
+    variante: VarianteConsultazione,
+    ambito: AmbitoGdo,
+    contestoDellaGdoDelKit: (idGdo: string | null) => Promise<ContestoConfig>
+  ): Promise<KitConInsight> {
     const kit = await this.lettureInsight.kitNellAmbito(variante.id, ambito);
     if (!kit) {
       const { sintesi, box } = sezioniInsight([], { totalePagine: 0, anagraficaReparti: [], marcheDistributore: [], urlFoto: guid => guid });
       return { variante, sintesi, box };
     }
-    const [righe, pdf] = await Promise.all([this.lettureInsight.righeDelKit(kit.id), this.lettureInsight.pdfDelKit(kit.id)]);
+    const [righe, pdf, contesto] = await Promise.all([
+      this.lettureInsight.righeDelKit(kit.id),
+      this.lettureInsight.pdfDelKit(kit.id),
+      contestoDellaGdoDelKit(kit.gdo),
+    ]);
     const boxKit = boxDelKit(righe.map(riga => leggiReferenza(riga, { storico: kit.storico })));
     const { sintesi, box } = sezioniInsight(boxKit, opzioniDelKit(kit, righe, boxKit, pdf, contesto));
     return { variante, sintesi, box };

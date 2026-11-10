@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { render, screen, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { FlyerInsights as DatiFlyerInsights, FlyerInsightsConfig } from "@/types/flyerInsights";
 import type { BoxInsight } from "../../../lib/insightVolantino/tipi";
@@ -15,22 +14,16 @@ vi.mock("@/query/query", () => ({
   useFetchFlyerInsightsConfig: () => finti.config,
   useFetchReteInsegne: () => ({ data: undefined }),
 }));
-// I riepiloghi di sempre disegnano con chart.js e la config: qui conta solo che ci siano
-vi.mock("./RiepilogoReparti", () => ({ default: () => <div>Riepilogo reparti</div> }));
-vi.mock("./RiepilogoMeccaniche", () => ({ default: () => <div>Riepilogo meccaniche</div> }));
-vi.mock("./RiepilogoPagine", () => ({
-  default: ({ selectedPage }: { selectedPage: number | null }) => <div>Riepilogo pagine {selectedPage ?? "tutte"}</div>,
-}));
 
 import FlyerInsights from "./FlyerInsights";
 
-const sezione = (enabled?: boolean) => ({ title: "Sezione", enabled }) as unknown as FlyerInsightsConfig["reparti"];
+const sezioneConfig = (enabled?: boolean) => ({ title: "Sezione", enabled }) as unknown as FlyerInsightsConfig["reparti"];
 
 const CONFIG = {
   dataMapping: { referenzaFields: {} },
-  reparti: sezione(),
-  meccaniche: sezione(),
-  pagine: sezione(),
+  reparti: sezioneConfig(),
+  meccaniche: sezioneConfig(),
+  pagine: sezioneConfig(),
 } as FlyerInsightsConfig;
 
 const box = (id: string, campi: Partial<BoxInsight> = {}): BoxInsight => ({
@@ -101,73 +94,85 @@ const insights = (campi: Partial<DatiFlyerInsights> = {}): DatiFlyerInsights => 
   ...campi,
 });
 
-const nomiSchede = () => screen.getAllByRole("tab").map(scheda => scheda.textContent);
+const titoliSezioni = () => screen.getAllByRole("heading", { level: 2 }).map(titolo => titolo.textContent);
+const regione = (nome: string) => screen.getByRole("region", { name: nome });
 
 describe("FlyerInsights", () => {
   beforeEach(() => {
     finti.config = { data: CONFIG, isError: false };
   });
 
-  it("mette le analisi nuove prima dei riepiloghi di sempre, in sentence case, senza la mappa visiva né le zone calde", () => {
+  it("mostra le analisi come sezioni separate, senza schede: Reparti, Meccaniche e sconti, Marche", () => {
     render(<FlyerInsights insights={insights()} exportCodes={[EXPORT_DI_SISTEMA.VOL]} />);
 
-    expect(nomiSchede()).toEqual(["Prezzi e sconti", "Spazio", "Marche", "Reparti", "Meccaniche", "Pagine"]);
-    expect(screen.queryByRole("tab", { name: /mappa/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("tab", { name: /zone calde/i })).not.toBeInTheDocument();
+    expect(titoliSezioni()).toEqual(["Reparti", "Meccaniche e sconti", "Marche"]);
+    expect(screen.queryByRole("tab")).not.toBeInTheDocument();
+    expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /mappa|zone calde/i })).not.toBeInTheDocument();
   });
 
-  it("si apre su Prezzi e sconti, senza la riga di StatCard che ora è della sintesi nella pagina", () => {
-    const { container } = render(<FlyerInsights insights={insights()} />);
-
-    expect(screen.getByRole("tab", { name: "Prezzi e sconti" })).toHaveAttribute("aria-selected", "true");
-    const pannello = screen.getByRole("tabpanel");
-    expect(within(pannello).getByRole("heading", { name: "Fasce di sconto" })).toBeInTheDocument();
-    expect(within(pannello).getByText("Zucchero")).toBeInTheDocument();
-    expect(container.querySelector("[data-tono]")).toBeNull();
-  });
-
-  it("passa da una scheda all'altra: marche, spazio e reparti", async () => {
+  it("ogni sezione ha il suo contenuto: spazio per reparto, sconti e sottocosto, tabella delle marche", () => {
     render(<FlyerInsights insights={insights()} />);
 
-    await userEvent.click(screen.getByRole("tab", { name: "Marche" }));
-    expect(screen.getByRole("table", { name: "Marche nel volantino" })).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole("tab", { name: "Spazio" }));
-    expect(screen.getByRole("table", { name: "Spazio e referenze per reparto" })).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole("tab", { name: "Reparti" }));
-    expect(screen.getByText("Riepilogo reparti")).toBeInTheDocument();
+    const spazioReparti = within(regione("Reparti")).getByRole("table", { name: "Spazio e referenze per reparto" });
+    // Drogheria compare anche nella tabella dello sconto medio per reparto: qui conta quella dello spazio
+    expect(within(spazioReparti).getByRole("rowheader", { name: "Drogheria" })).toBeInTheDocument();
+    expect(within(regione("Meccaniche e sconti")).getByRole("heading", { name: "Fasce di sconto" })).toBeInTheDocument();
+    expect(within(regione("Meccaniche e sconti")).getByText("Zucchero")).toBeInTheDocument();
+    expect(within(regione("Marche")).getByRole("table", { name: "Marche nel volantino" })).toBeInTheDocument();
   });
 
-  it("con una pagina nell'indirizzo si apre sul riepilogo per pagina", () => {
-    render(<FlyerInsights insights={insights()} paginaSelezionata={3} />);
+  it("i reparti hanno anche lo sconto medio per reparto, preso da prezzi e sconti", () => {
+    render(<FlyerInsights insights={insights()} />);
 
-    expect(screen.getByRole("tab", { name: "Pagine" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByText("Riepilogo pagine 3")).toBeInTheDocument();
+    const tabella = within(regione("Reparti")).getByRole("table", { name: "Sconto medio per reparto" });
+    expect(within(tabella).getByRole("rowheader", { name: "Drogheria" })).toBeInTheDocument();
+    expect(within(regione("Meccaniche e sconti")).queryByRole("table", { name: "Sconto medio per reparto" })).not.toBeInTheDocument();
   });
 
-  it("senza config dell'installazione restano le analisi e spariscono i riepiloghi", () => {
+  it("con le linee del distributore le marche non ripetono la quota del distributore per nome di marca", () => {
+    const quotaDistributore = { quotaSpazio: 40, quotaBox: 50 };
+    const conMarche = (campi: Partial<DatiFlyerInsights>) => insights({ marche: { ...insights().marche, quotaDistributore }, ...campi });
+    const { unmount } = render(<FlyerInsights insights={conMarche({})} />);
+    expect(within(regione("Marche")).getByRole("region", { name: "Marche del distributore" })).toBeInTheDocument();
+    unmount();
+
+    render(
+      <FlyerInsights
+        insights={conMarche({ lineeDistributore: { quotaSpazio: 10, quotaBox: 10, box: 1, linee: [], bolli: [] } })}
+      />
+    );
+    expect(within(regione("Marche")).queryByRole("region", { name: "Marche del distributore" })).not.toBeInTheDocument();
+  });
+
+  it("reparti e meccaniche stanno affiancati sugli schermi larghi", () => {
+    render(<FlyerInsights insights={insights()} />);
+
+    expect(regione("Reparti").parentElement).toHaveClass("lg:grid-cols-2");
+    expect(regione("Meccaniche e sconti").parentElement).toBe(regione("Reparti").parentElement);
+  });
+
+  it("la config della GDO può spegnere reparti e meccaniche; le marche restano", () => {
+    finti.config = { data: { ...CONFIG, reparti: sezioneConfig(false) }, isError: false };
+    const { unmount } = render(<FlyerInsights insights={insights()} />);
+    expect(titoliSezioni()).toEqual(["Meccaniche e sconti", "Marche"]);
+    expect(regione("Meccaniche e sconti").parentElement).not.toHaveClass("lg:grid-cols-2");
+    unmount();
+
+    finti.config = { data: { ...CONFIG, reparti: sezioneConfig(false), meccaniche: sezioneConfig(false) }, isError: false };
+    render(<FlyerInsights insights={insights()} />);
+    expect(titoliSezioni()).toEqual(["Marche"]);
+  });
+
+  it("senza config, o mentre si carica, le sezioni ci sono: i dati vengono dal server", () => {
     finti.config = { data: undefined, isError: true };
-    render(<FlyerInsights insights={insights()} paginaSelezionata={3} />);
+    const { unmount } = render(<FlyerInsights insights={insights()} />);
+    expect(titoliSezioni()).toEqual(["Reparti", "Meccaniche e sconti", "Marche"]);
+    unmount();
 
-    expect(nomiSchede()).toEqual(["Prezzi e sconti", "Spazio", "Marche"]);
-    // La pagina chiesta non ha la sua scheda: si apre la prima analisi
-    expect(screen.getByRole("tab", { name: "Prezzi e sconti" })).toHaveAttribute("aria-selected", "true");
-  });
-
-  it("la config può spegnere un riepilogo, e una sezione che non ha non diventa una scheda", () => {
-    finti.config = { data: { ...CONFIG, reparti: sezione(false), meccaniche: undefined }, isError: false };
+    finti.config = { data: { ...CONFIG, meccaniche: undefined }, isError: false };
     render(<FlyerInsights insights={insights()} />);
-
-    expect(nomiSchede()).toEqual(["Prezzi e sconti", "Spazio", "Marche", "Pagine"]);
-  });
-
-  it("mentre la config si carica i riepiloghi ci sono, con lo spinner", async () => {
-    finti.config = { data: undefined, isError: false };
-    render(<FlyerInsights insights={insights()} />);
-
-    await userEvent.click(screen.getByRole("tab", { name: "Meccaniche" }));
-    expect(within(screen.getByRole("tabpanel")).getByRole("status")).toHaveTextContent("Caricamento…");
+    expect(titoliSezioni()).toEqual(["Reparti", "Meccaniche e sconti", "Marche"]);
   });
 
   it("un kit dello storico ha le stesse analisi", () => {
@@ -180,23 +185,30 @@ describe("FlyerInsights", () => {
       />
     );
 
-    expect(nomiSchede()).toHaveLength(6); // come un kit normale: senza la scheda Zone calde
-    expect(within(screen.getByRole("tabpanel")).getByText("Zucchero")).toBeInTheDocument();
+    expect(titoliSezioni()).toEqual(["Reparti", "Meccaniche e sconti", "Marche"]);
+    expect(within(regione("Meccaniche e sconti")).getByText("Zucchero")).toBeInTheDocument();
   });
 
   it("una risposta senza le sezioni nuove mostra uno stato vuoto invece di rompersi", () => {
     const vecchia = insights({ prezziSconti: undefined, sintesi: undefined, box: undefined } as unknown as Partial<DatiFlyerInsights>);
     render(<FlyerInsights insights={vecchia} />);
 
-    expect(within(screen.getByRole("tabpanel")).getByText("Analisi non disponibile")).toBeInTheDocument();
+    expect(within(regione("Meccaniche e sconti")).getByText("Analisi non disponibile")).toBeInTheDocument();
   });
 
   it("senza esportazione VOL o senza referenze mostra lo stato vuoto di sempre", () => {
     const { rerender } = render(<FlyerInsights insights={insights()} exportCodes={[]} />);
     expect(screen.getByText("Per questo kit non è presente il tipo di esportazione VOL")).toBeInTheDocument();
-    expect(screen.queryByRole("tab")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Reparti" })).not.toBeInTheDocument();
 
     rerender(<FlyerInsights insights={insights({ totaleReferenze: 0 })} />);
     expect(screen.getByText("Nessuna referenza trovata")).toBeInTheDocument();
+  });
+
+  it("mentre gli insight caricano mostra lo scheletro", () => {
+    render(<FlyerInsights insights={null} isLoading />);
+
+    expect(screen.getByRole("heading", { level: 2, name: "Analisi del volantino" })).toBeInTheDocument();
+    expect(document.querySelector("[aria-busy='true']")).not.toBeNull();
   });
 });

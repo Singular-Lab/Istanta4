@@ -1,8 +1,6 @@
 import { BadRequestError, NotFoundError } from '../../../lib/errors';
 import {
-  type ConfrontiVolantino,
   type ConfrontoEdizione,
-  type DifferenzeVarianti,
   MAX_TAPPE_VIAGGIO,
   type PdfVolantino,
   type RepartoInsight,
@@ -26,19 +24,22 @@ import {
   type RepartoAnagrafica,
   valoreCampo,
 } from '../utils/campiInsights';
-import { confrontoSintesi, confrontoSpazioPerReparto, differenzeFraVarianti, prodottiAssenti } from '../utils/diffVarianti';
-import { boxInsight, type OpzioniInsight, sezioniInsight } from '../utils/insightVolantino';
+import { confrontoSintesi, confrontoSpazioPerReparto, prodottiAssenti } from '../utils/diffVarianti';
+import { type OpzioniInsight, sezioniInsight } from '../utils/insightVolantino';
 import { DESCRIZIONE_ASSENTE, leggiReferenza, type RigaReferenza, scontoDaiPrezzi } from '../utils/referenzaStampata';
+import { type FonteRepartiGdo, SENZA_REPARTI_GDO } from '../utils/repartiGdo';
 import { urlFotoOlimpo } from '../utils/urlOlimpo';
 import { AnalisiKitService, CHIAVE_PRODOTTO, type RepositoryRiepiloghiKit } from './AnalisiKitService';
+import { caricaRisolutoreReparti } from './risolutoreRepartiGdo';
 
 /**
  * Confronti degli insight del volantino (contratto in lib/insightVolantino/tipi.ts): l'edizione
- * precedente della stessa area e canale, le differenze fra varianti della stessa promo e il viaggio
- * di un prodotto nei volantini della GDO. Per ogni GDO e per i kit di Istanta e dello storico: prezzi,
- * sconti, marche e meccaniche vengono dalla lettura generica delle referenze (referenzaStampata), la
- * config degli insight aggiunge solo l'anagrafica dei reparti, la meccanica come la scrive la fonte e
- * le marche del distributore.
+ * precedente della stessa area e canale, per il report PDF, e il viaggio di un prodotto nei volantini
+ * della GDO. La pagina degli insight non confronta il volantino con altri (decisione dell'utente). Per
+ * ogni GDO e per i kit di Istanta e dello storico: prezzi, sconti, marche e meccaniche vengono dalla
+ * lettura generica delle referenze (referenzaStampata), la config degli insight della GDO del kit
+ * aggiunge solo l'anagrafica dei reparti, la meccanica come la scrive la fonte e le marche del
+ * distributore; le Impostazioni GDO il nome per il marketing e il colore dei reparti.
  *
  * Il kit di partenza deve essere nell'ambito GDO della sessione: altrimenti 404, come un kit che non
  * esiste. Gli altri volantini sono sempre della sua GDO.
@@ -70,6 +71,8 @@ export interface ContestoConfig {
   percorsoReparto: PercorsoCampo | null;
   percorsoDescrizioneReparto: PercorsoCampo | null;
   percorsoMeccanica: PercorsoCampo | null;
+  /** Nome per il marketing e colore dei reparti della GDO (Impostazioni GDO); senza, i reparti dei dati. */
+  risolviReparto?: (reparto: RepartoInsight) => RepartoInsight;
 }
 
 /** Un volantino letto: le sue referenze in box e le opzioni con cui gli insight le descrivono. */
@@ -180,7 +183,36 @@ export function opzioniDelKit(
     meccanicaOriginale: idReferenza => meccaniche.get(idReferenza) ?? null,
     urlFoto: guid => urlFotoOlimpo(guid, { performante: true }),
     origine: kit.storico ? codiceBox => (fuoriListino.has(codiceBox) ? 'fuori_listino' : 'listino') : undefined,
+    risolviReparto: contesto.risolviReparto,
   };
+}
+
+/** La config degli insight letta, come ContestoConfig: ConfigService.getFlyerInsightsConfig. */
+export type FonteConfigInsightGdo = Pick<IConfigService, 'getFlyerInsightsConfig'>;
+
+/**
+ * Il contesto degli insight per la GDO di un kit: la sua config degli insight (o quella del file
+ * dell'installazione) e i suoi reparti salvati. Se la config manca o non si legge si prosegue con
+ * la sola lettura generica, con un avviso nel log.
+ */
+export async function contestoDellaGdo(
+  config: FonteConfigInsightGdo,
+  reparti: FonteRepartiGdo,
+  idGdo: string | null,
+  chi: string,
+): Promise<ContestoConfig> {
+  let contesto: ContestoConfig;
+  try {
+    contesto = contestoDallaConfig(await config.getFlyerInsightsConfig(idGdo));
+  } catch (error) {
+    log.warn(`${chi}: config degli insight non disponibile, si usa la sola lettura generica`, {
+      idGdo,
+      errore: error instanceof Error ? error.message : String(error),
+    });
+    contesto = contestoDallaConfig(null);
+  }
+  const risolutore = await caricaRisolutoreReparti(reparti, idGdo, contesto.anagraficaReparti, chi);
+  return risolutore.vuoto ? contesto : { ...contesto, risolviReparto: reparto => risolutore.risolvi(reparto) };
 }
 
 export const riferimentoDelKit = (kit: KitInsight): VolantinoDiRiferimento => ({
@@ -225,8 +257,9 @@ export class InsightConfrontiService implements IInsightConfrontiService {
   constructor(
     private readonly repository: IInsightConfrontiRepository,
     private readonly analisi: RepositoryAnalisiViaggio,
-    private readonly config: Pick<IConfigService, 'getFlyerInsightsConfig'>,
+    private readonly config: FonteConfigInsightGdo,
     private readonly letture: LettureKitInsight = LETTURE_PREDEFINITE,
+    private readonly reparti: FonteRepartiGdo = SENZA_REPARTI_GDO,
   ) {
     this.riepiloghi = new AnalisiKitService(analisi, 'Insight volantino');
   }
@@ -241,16 +274,9 @@ export class InsightConfrontiService implements IInsightConfrontiService {
     return kit;
   }
 
-  /** La config degli insight; se manca o non si legge, i confronti valgono lo stesso con la lettura generica. */
-  private async contestoConfig(): Promise<ContestoConfig> {
-    try {
-      return contestoDallaConfig(await this.config.getFlyerInsightsConfig());
-    } catch (error) {
-      log.warn('Insight volantino: config degli insight non disponibile, confronti con la sola lettura generica', {
-        errore: error instanceof Error ? error.message : String(error),
-      });
-      return contestoDallaConfig(null);
-    }
+  /** La config degli insight e i reparti della GDO del kit; senza config, la sola lettura generica. */
+  private contestoConfig(kit: KitInsight): Promise<ContestoConfig> {
+    return contestoDellaGdo(this.config, this.reparti, kit.gdo, 'Insight volantino');
   }
 
   private async leggiKit(kit: KitInsight, contesto: ContestoConfig): Promise<KitLetto> {
@@ -259,22 +285,17 @@ export class InsightConfrontiService implements IInsightConfrontiService {
     return { kit, pdf, box, opzioni: opzioniDelKit(kit, righe, box, pdf, contesto) };
   }
 
-  // ─── Edizione precedente e varianti ────────────────────────────────
+  // ─── Edizione precedente (report PDF) ──────────────────────────────
 
-  async confronti(idKit: string, ambito: AmbitoGdo): Promise<ConfrontiVolantino> {
+  async edizionePrecedente(idKit: string, ambito: AmbitoGdo): Promise<ConfrontoEdizione | null> {
     const kit = await this.kitNellAmbito(idKit, ambito);
-    const [precedente, varianti] = await Promise.all([
-      this.repository.edizionePrecedente(kit),
-      this.repository.variantiDellaPromo(kit),
-    ]);
-    return {
-      edizionePrecedente: precedente ? await this.confrontoEdizione(kit, precedente) : null,
-      varianti: varianti.filter(variante => !stessoId(variante.id, kit.id)).map(riferimentoDelKit),
-    };
+    const precedente = await this.repository.edizionePrecedente(kit);
+    return precedente ? this.confrontoEdizione(kit, precedente) : null;
   }
 
   private async confrontoEdizione(kit: KitInsight, precedente: KitInsight): Promise<ConfrontoEdizione> {
-    const contesto = await this.contestoConfig();
+    // Le due edizioni sono della stessa GDO: stessa config e stessi reparti
+    const contesto = await this.contestoConfig(kit);
     const [attuale, prima] = await Promise.all([this.leggiKit(kit, contesto), this.leggiKit(precedente, contesto)]);
     const sezioniAttuale = sezioniInsight(attuale.box, attuale.opzioni);
     const sezioniPrima = sezioniInsight(prima.box, prima.opzioni);
@@ -284,30 +305,6 @@ export class InsightConfrontiService implements IInsightConfrontiService {
       spazioPerReparto: confrontoSpazioPerReparto(sezioniAttuale.spazio.perReparto, sezioniPrima.spazio.perReparto),
       prodottiEntrati: prodottiAssenti(attuale.box, prima.box),
       prodottiUsciti: prodottiAssenti(prima.box, attuale.box),
-    };
-  }
-
-  async differenzeVarianti(idKit: string, idAltra: string, ambito: AmbitoGdo): Promise<DifferenzeVarianti> {
-    const kit = await this.kitNellAmbito(idKit, ambito);
-    if (!UUID.test(idAltra)) throw new BadRequestError({ message: "Variante non valida: serve l'id del kit" });
-    if (stessoId(idAltra, kit.id)) throw new BadRequestError({ message: 'Per le differenze serve un altro volantino della stessa promo' });
-    const altra = await this.letture.kitNellAmbito(idAltra, ambito);
-    if (!altra) throw new NotFoundError({ message: 'Variante non trovata', entityType: 'RuntimeKit', entityId: idAltra });
-    if (altra.idPromo !== kit.idPromo) {
-      throw new BadRequestError({ message: "L'altro volantino non e' una variante della stessa promo" });
-    }
-
-    const contesto = await this.contestoConfig();
-    const [qui, diLa] = await Promise.all([this.leggiKit(kit, contesto), this.leggiKit(altra, contesto)]);
-    const boxQui = boxInsight(qui.box, qui.opzioni);
-    const boxAltra = boxInsight(diLa.box, diLa.opzioni);
-    return {
-      qui: riferimentoDelKit(kit),
-      altra: riferimentoDelKit(altra),
-      // Come nella scheda: le pagine del PDF, se il file non le dice, sono quelle del volantino
-      pdfAltra: diLa.pdf ? { ...diLa.pdf, pagine: diLa.opzioni.totalePagine } : null,
-      boxAltra,
-      ...differenzeFraVarianti(qui.box, diLa.box, boxQui, boxAltra),
     };
   }
 

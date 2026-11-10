@@ -10,6 +10,8 @@ import type {
 import { DIMENSIONI_PAGINA_STORIA } from '../../../lib/puntiVendita/storia';
 import { BadRequestError, NotFoundError } from '../../../lib/errors';
 import type { IAnalisiPuntoVenditaService } from '../interfaces/IAnalisiPuntoVenditaService';
+import type { IConfigService } from '../interfaces/IConfigService';
+import { log } from '../logger';
 import type { IAnalisiPuntiVenditaRepository } from '../repositories/AnalisiPuntiVenditaRepository';
 import type { IPuntiVenditaVolantinoRepository, PuntoVenditaDellaStoria } from '../repositories/PuntiVenditaVolantinoRepository';
 import { AGGREGATI_VUOTI, type AggregatiKit, boxDelKit, riassumiKit } from '../utils/analisiKit';
@@ -35,7 +37,10 @@ import {
   SOGLIA_PRODOTTO_FREQUENTE,
   spazioPerMeccanica,
 } from '../utils/analisiPuntoVendita';
+import { leggiAnagraficaReparti, type RepartoAnagrafica } from '../utils/campiInsights';
 import { MINUTI_DISPOSITIVO_OFFLINE, raggruppaRigheNonAbbinate, righeDaRevisionare, volantiniDelGruppo } from '../utils/gestionePuntiVendita';
+import { type FonteRepartiGdo, type RisolutoreReparti, SENZA_REPARTI_GDO } from '../utils/repartiGdo';
+import { caricaRisolutoreReparti } from './risolutoreRepartiGdo';
 
 /**
  * Le pagine del punto vendita costruite sulla timeline dei volantini (contratto in
@@ -64,6 +69,10 @@ export interface OpzioniAnalisiPuntoVendita {
   chiaveMetaPuntoVendita?: string | null;
   /** Il giorno di oggi nel calendario di Roma (YYYY-MM-DD). */
   oggi?: () => string;
+  /** Reparti salvati della GDO (Impostazioni GDO): nome per il marketing dei reparti dei riepiloghi. */
+  repartiGdo?: FonteRepartiGdo;
+  /** La config degli insight della GDO, per l'anagrafica dei reparti. */
+  configInsight?: Pick<IConfigService, 'getFlyerInsightsConfig'>;
 }
 
 export const oggiARoma = (adesso: Date = new Date()): string =>
@@ -73,6 +82,8 @@ export class AnalisiPuntoVenditaService implements IAnalisiPuntoVenditaService {
   private readonly chiaveMeta: string | null;
   private readonly oggi: () => string;
   private readonly riepiloghi: AnalisiKitService;
+  private readonly repartiGdo: FonteRepartiGdo;
+  private readonly configInsight: Pick<IConfigService, 'getFlyerInsightsConfig'> | null;
 
   constructor(
     private readonly repository: IAnalisiPuntiVenditaRepository,
@@ -82,6 +93,28 @@ export class AnalisiPuntoVenditaService implements IAnalisiPuntoVenditaService {
     this.chiaveMeta = opzioni.chiaveMetaPuntoVendita?.trim() || null;
     this.oggi = opzioni.oggi ?? (() => oggiARoma());
     this.riepiloghi = new AnalisiKitService(repository);
+    this.repartiGdo = opzioni.repartiGdo ?? SENZA_REPARTI_GDO;
+    this.configInsight = opzioni.configInsight ?? null;
+  }
+
+  /**
+   * I reparti della GDO del PV con il nome per il marketing (Impostazioni GDO): i riepiloghi salvati
+   * hanno il reparto come lo scrive la lettura generica e si traducono qui, alla lettura, riconoscendo
+   * il testo dalla descrizione o dal codice dell'anagrafica della GDO.
+   */
+  private async repartiDellaGdo(idGdo: string): Promise<RisolutoreReparti> {
+    let anagrafica: RepartoAnagrafica[] = [];
+    if (this.configInsight) {
+      try {
+        anagrafica = leggiAnagraficaReparti((await this.configInsight.getFlyerInsightsConfig(idGdo))?.dataMapping?.reparti);
+      } catch (error) {
+        log.debug('Pagine del punto vendita: anagrafica dei reparti non disponibile', {
+          idGdo,
+          errore: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+    return caricaRisolutoreReparti(this.repartiGdo, idGdo, anagrafica, 'Pagine del punto vendita');
   }
 
   // ─── PV e kit ──────────────────────────────────────────────────────
@@ -118,7 +151,8 @@ export class AnalisiPuntoVenditaService implements IAnalisiPuntoVenditaService {
       { soglia: SOGLIA_PRODOTTO_FREQUENTE, ricorrenti: NUMERO_PRODOTTI_RICORRENTI, marche: MARCHE_IN_EVIDENZA },
     );
     const descrizioni = descrizioniRicorrenti(statistiche.ricorrenti, await this.repository.descrizioniProdotti(coppieDaDescrivere(statistiche.ricorrenti)));
-    return calcolaAnalisiPuntoVendita(puntoVendita.id, edizioni, aggregati, statistiche, descrizioni, this.oggi());
+    const reparti = await this.repartiDellaGdo(puntoVendita.idGdo);
+    return calcolaAnalisiPuntoVendita(puntoVendita.id, edizioni, aggregati, statistiche, descrizioni, this.oggi(), reparto => reparti.nome(reparto));
   }
 
   async volantino(idPuntoVendita: string, idKit: string, idGdo: string | null): Promise<DettaglioVolantinoPv> {
@@ -131,11 +165,12 @@ export class AnalisiPuntoVenditaService implements IAnalisiPuntoVenditaService {
     const precedente = indice > 0 ? edizioni[indice - 1] : null;
     const successivo = indice < edizioni.length - 1 ? edizioni[indice + 1] : null;
 
-    const [kit, righe, lista, riepiloghiPrecedente] = await Promise.all([
+    const [kit, righe, lista, riepiloghiPrecedente, reparti] = await Promise.all([
       this.repository.kitDelVolantino(edizione.idKit),
       this.repository.referenzeDeiKit([edizione.idKit]),
       this.repository.listaDelVolantino(edizione.idKit),
       precedente ? this.aggregati([precedente.idKit]) : Promise.resolve(new Map<string, AggregatiKit>()),
+      this.repartiDellaGdo(puntoVendita.idGdo),
     ]);
     if (!kit) throw nonTrovato();
     const referenze = leggi(righe);
@@ -162,7 +197,10 @@ export class AnalisiPuntoVenditaService implements IAnalisiPuntoVenditaService {
         puntiVenditaInLista: lista.length,
         puntiVenditaAbbinati: lista.filter(riga => riga.idPuntoVendita !== null).length,
       },
-      pagine: pagineDelVolantino(box, pagine),
+      pagine: pagineDelVolantino(box, pagine).map(pagina => (reparti.vuoto ? pagina : {
+        ...pagina,
+        boxes: pagina.boxes.map(singolo => (singolo.reparto ? { ...singolo, reparto: reparti.nome(singolo.reparto) } : singolo)),
+      })),
       meccaniche: spazioPerMeccanica(box),
       rigaPuntoVendita: rigaDelPuntoVendita(lista, puntoVendita.id),
       precedente: precedente ? { idKit: precedente.idKit, dal: precedente.promo.validitaDal ?? precedente.data } : null,
@@ -185,17 +223,20 @@ export class AnalisiPuntoVenditaService implements IAnalisiPuntoVenditaService {
     // Intestazione e posizione dall'ultimo volantino che la contiene, riletto per intero; le foto
     // delle presenze dalle descrizioni dei volantini piu' recenti che ne hanno una
     const ultimo = presenze[0].edizione.idKit;
-    const [righe, kit, trovate] = await Promise.all([
+    const [righe, kit, trovate, reparti] = await Promise.all([
       this.repository.referenzeDeiKit([ultimo]),
       this.repository.kitDelVolantino(ultimo),
       this.repository.descrizioniProdotti(kitDaDescrivere(presenze).map(id => ({ idKit: id, chiave }))),
+      this.repartiDellaGdo(puntoVendita.idGdo),
     ]);
     const descrizioni = new Map(presenze.flatMap(({ edizione }) => {
       const descrizione = trovate.get(chiaveDescrizione(edizione.idKit, chiave));
       return descrizione ? [[edizione.idKit, descrizione] as const] : [];
     }));
     const box = boxDelKit(leggi(righe));
-    return dettaglioReferenza(chiave, presenze, { box, pagine: numeroPagine(kit?.pdf?.pagine ?? null, box) }, descrizioni);
+    const dettaglio = dettaglioReferenza(chiave, presenze, { box, pagine: numeroPagine(kit?.pdf?.pagine ?? null, box) }, descrizioni);
+    if (reparti.vuoto || !dettaglio.dati.reparto) return dettaglio;
+    return { ...dettaglio, dati: { ...dettaglio.dati, reparto: reparti.nome(dettaglio.dati.reparto) } };
   }
 
   // ─── Elenco e gestione ─────────────────────────────────────────────

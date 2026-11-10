@@ -85,6 +85,14 @@ describe("MarcheVolantino", () => {
     expect(within(blocco).getByText("Quota di box", { selector: "dt" }).closest("[data-tono]")).toHaveTextContent("31,3%");
   });
 
+  it("con le linee del distributore la quota per nome di marca non si ripete, ma il badge sulle marche resta", () => {
+    render(<MarcheVolantino marche={dati({ quotaDistributore: { quotaSpazio: 30, quotaBox: 31.3 } })} conLineeDistributore />);
+
+    expect(screen.queryByRole("region", { name: "Marche del distributore" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Quota di spazio", { selector: "dt" })).not.toBeInTheDocument();
+    expect(within(within(tabella()).getAllByRole("row")[1]).getByText("Marca del distributore")).toBeInTheDocument();
+  });
+
   it("mostra le prime 15 marche e le altre con Mostra tutte", () => {
     const molte = Array.from({ length: 20 }, (_, i) => marca(`Marca ${String(i).padStart(2, "0")}`, { quotaSpazio: 40 - i }));
     render(<MarcheVolantino marche={dati({ elenco: molte })} />);

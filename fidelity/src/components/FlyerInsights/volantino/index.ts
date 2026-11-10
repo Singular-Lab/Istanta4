@@ -22,14 +22,13 @@ export { SchedaBox, type SchedaBoxProps } from "./SchedaBox";
 export { ViaggioProdotto, type ViaggioProdottoProps } from "./ViaggioProdotto";
 export { descrizioneBox, marcaFormato, testoReparto, tooltipBox, trovaBoxIniziale } from "./box";
 export {
+  coloreMarketing,
   coloriReparti,
   fasciaSconto,
   gruppoBox,
-  legendaDifferenze,
   legendaModo,
   OPZIONI_COLORE,
   stileBox,
-  stileDifferenza,
   tintaMeccanica,
   tintaSconto,
   type ColoriReparti,

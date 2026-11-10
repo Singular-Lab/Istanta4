@@ -23,18 +23,24 @@ import type { AnalisiPuntoVendita, EdizioneTimeline } from "../../../lib/puntiVe
 import { DIMENSIONI_PAGINA_STORIA, type EventoStoria, type StoriaPuntoVendita, type VolantinoNellaStoria } from "../../../lib/puntiVendita/storia";
 import { giorniAllaScadenza, testoScadenza } from "../VolantiniKit/scadenza";
 import {
-  colonneTimeline,
+  annoEdizione,
+  barreTimeline,
   edizioneScelta,
   edizioniDelPeriodo,
   eventiTimeline,
   fasceInsegne,
   formatPercentuale,
+  intervalloPeriodo,
   NOMI_EVENTI,
   NOMI_TONI_RECAPITI,
+  oggiIso,
   PARAMETRO_ANNO,
   PARAMETRO_VOLANTINO,
+  periodoDaParametro,
   periodoValidita,
   righeRecapiti,
+  ULTIMI_3_MESI,
+  type PeriodoStoria,
 } from "./analisi";
 import { PuntoInsegna, RigaStampata, StatoBox, type QueryBox } from "./componenti";
 import {
@@ -167,7 +173,8 @@ function TimelineStoria({
   idPv,
   analisi,
   eventi,
-  anno,
+  periodo,
+  oggi,
   richiesta,
   tinta,
   onScegli,
@@ -175,12 +182,14 @@ function TimelineStoria({
   idPv: string;
   analisi: AnalisiPuntoVendita;
   eventi: readonly EventoStoria[];
-  anno: number | null;
+  periodo: PeriodoStoria;
+  /** Oggi (ISO): la linea della timeline e gli ultimi 3 mesi. */
+  oggi: string;
   richiesta: string | null;
   tinta: (idCanale: string) => Tinta;
   onScegli: (idKit: string) => void;
 }) {
-  const edizioni = edizioniDelPeriodo(analisi.timeline, anno);
+  const edizioni = edizioniDelPeriodo(analisi.timeline, periodo, oggi);
   const scelta = edizioneScelta(edizioni, richiesta);
   const indice = scelta ? edizioni.indexOf(scelta) : -1;
   const canali = new Map(analisi.timeline.map(e => [e.canale.id, e.canale]));
@@ -189,16 +198,16 @@ function TimelineStoria({
   return (
     <>
       <TimelineVolantini
-        colonne={colonneTimeline(edizioni)}
+        barre={barreTimeline(edizioni)}
         gruppi={gruppi}
         fasce={fasceInsegne(analisi.timeline)}
         eventi={eventiTimeline(eventi)}
         nomiEventi={NOMI_EVENTI}
-        intervallo={anno ? { dal: `${anno}-01-01`, al: `${anno}-12-31` } : undefined}
+        intervallo={intervalloPeriodo(periodo, edizioni, oggi)}
+        oggi={oggi}
         selezionata={scelta?.idKit ?? null}
         onSeleziona={onScegli}
         titolo={`Timeline: ${testoVolantini(edizioni.length)} del punto vendita`}
-        descrizioneValore="Referenze"
         descrizioneGruppo="Insegna"
       />
       {scelta ? (
@@ -210,17 +219,20 @@ function TimelineStoria({
           tinta={tinta(scelta.canale.id)}
           onScegli={onScegli}
         />
+      ) : periodo === ULTIMI_3_MESI ? (
+        <EmptyState compatta icon="CalendarX" title="Nessun volantino negli ultimi 3 mesi" description="Scegli un anno o tutto il periodo." />
       ) : (
-        <EmptyState compatta icon="CalendarX" title="Nessun volantino in questo anno" description="Scegli un altro anno o tutti gli anni." />
+        <EmptyState compatta icon="CalendarX" title="Nessun volantino in questo anno" description="Scegli un altro anno o tutto il periodo." />
       )}
     </>
   );
 }
 
 /**
- * Riquadro "Storia" della scheda: la timeline dei volantini in cui compare il punto vendita, con
- * l'insegna e gli eventi, il periodo (tutti gli anni o uno) e il volantino scelto. Anno e
- * volantino stanno nell'indirizzo, così tornando dal volantino la scheda resta dov'era.
+ * Riquadro "Storia" della scheda: la timeline a calendario dei volantini in cui compare il punto
+ * vendita, con l'insegna e gli eventi, il periodo (tutto, un anno o gli ultimi 3 mesi) e il
+ * volantino scelto. Periodo e volantino stanno nell'indirizzo, così tornando dal volantino la
+ * scheda resta dov'era.
  * Senza volantini è l'unico riquadro della storia: dice che cos'è e come arriva, e a chi gestisce
  * i punti vendita offre l'import degli export (`onImporta`).
  */
@@ -239,8 +251,11 @@ export function BoxStoria({
 }) {
   const [parametri, setParametri] = useSearchParams();
   const anni = [...(analisi.data?.anni ?? [])].sort((a, b) => b - a);
-  const annoRichiesto = Number(parametri.get(PARAMETRO_ANNO));
-  const anno = anni.includes(annoRichiesto) ? annoRichiesto : null;
+  // Con un anno solo non c'è la scelta dell'anno: quel periodo è "Dal"
+  const periodo = periodoDaParametro(parametri.get(PARAMETRO_ANNO), anni.length > 1 ? anni : []);
+  const oggi = oggiIso();
+  const primoVolantino = analisi.data?.timeline[0];
+  const primoAnno = Math.min(...anni, ...(primoVolantino ? [annoEdizione(primoVolantino)] : []));
 
   const aggiorna = (valori: Record<string, string | null>) =>
     setParametri(
@@ -261,7 +276,7 @@ export function BoxStoria({
     ? undefined
     : [
         storia?.sintesi ? `${testoSintesi(storia.sintesi)}.` : null,
-        "Ogni colonna è un volantino in cui compare, alta quanto le sue referenze; sotto, l'insegna e gli eventi. Scegli un volantino per vederlo qui sotto.",
+        "Ogni barra è un volantino in cui compare, dal primo all'ultimo giorno di validità; sotto, l'insegna e gli eventi. Scegli un volantino per vederlo qui sotto.",
       ]
         .filter(Boolean)
         .join(" ");
@@ -271,11 +286,16 @@ export function BoxStoria({
       titolo="Storia"
       descrizione={descrizione}
       azioni={
-        anni.length > 1 ? (
+        primoVolantino ? (
           <Segmenti
             etichetta="Periodo"
-            opzioni={[{ valore: "tutti", etichetta: "Tutti gli anni" }, ...anni.map(a => ({ valore: String(a), etichetta: String(a) }))]}
-            valore={anno === null ? "tutti" : String(anno)}
+            opzioni={[
+              { valore: "tutti", etichetta: `Dal ${primoAnno}` },
+              // Con un anno solo, l'anno e "Dal" sarebbero lo stesso periodo
+              ...(anni.length > 1 ? anni.map(a => ({ valore: String(a), etichetta: String(a) })) : []),
+              { valore: ULTIMI_3_MESI, etichetta: "Ultimi 3 mesi" },
+            ]}
+            valore={periodo === null ? "tutti" : String(periodo)}
             onChange={valore => aggiorna({ [PARAMETRO_ANNO]: valore === "tutti" ? null : valore, [PARAMETRO_VOLANTINO]: null })}
           />
         ) : undefined
@@ -304,7 +324,8 @@ export function BoxStoria({
             idPv={idPv}
             analisi={dati}
             eventi={storia?.eventi ?? []}
-            anno={anno}
+            periodo={periodo}
+            oggi={oggi}
             richiesta={parametri.get(PARAMETRO_VOLANTINO)}
             tinta={tinta}
             onScegli={idKit => aggiorna({ [PARAMETRO_VOLANTINO]: idKit })}

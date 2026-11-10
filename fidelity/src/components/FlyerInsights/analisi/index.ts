@@ -1,10 +1,12 @@
 /**
  * Analisi del volantino lato pagina (contratto in lib/insightVolantino/tipi.ts): la sintesi per la
- * Direzione e le schede Prezzi e sconti, Spazio e Marche. Valgono per ogni GDO e per i kit di
- * Istanta e dello storico.
+ * Direzione, la distribuzione nelle pagine, i marchi del distributore e le sezioni Reparti,
+ * Meccaniche e sconti e Marche. Valgono per ogni GDO e per i kit di Istanta e dello storico.
  */
 export { BarreAppaiate, type BarreAppaiateProps, type VoceAppaiata } from "./BarreAppaiate";
+export { DistribuzionePagine, distribuzionePagine, type ColonnaPagina, type DistribuzionePagineProps, type ParteColonna } from "./DistribuzionePagine";
 export { MarcheVolantino, type MarcheVolantinoProps } from "./MarcheVolantino";
+export { MarchiDistributore, type MarchiDistributoreProps } from "./MarchiDistributore";
 export { PrezziSconti, type PrezziScontiProps } from "./PrezziSconti";
+export { RepartiVolantino, type RepartiVolantinoProps } from "./RepartiVolantino";
 export { SintesiInsight, type SintesiInsightProps } from "./SintesiInsight";
-export { UsoSpazio, type UsoSpazioProps } from "./UsoSpazio";

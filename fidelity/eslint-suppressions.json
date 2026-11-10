@@ -1395,7 +1395,7 @@
       "count": 41
     },
     "@typescript-eslint/no-unused-vars": {
-      "count": 2
+      "count": 1
     }
   },
   "server/core/services/ContrattoTipografiaService.ts": {
@@ -2502,28 +2502,6 @@
       "count": 3
     }
   },
-  "src/pages/ConfigurazioneWebpliant/index.tsx": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    },
-    "no-console": {
-      "count": 1
-    }
-  },
-  "src/pages/ConfigurazioneWebpliant/sub-components/EditorStiliReferenza.tsx": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 7
-    },
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    },
-    "react-hooks/exhaustive-deps": {
-      "count": 1
-    }
-  },
   "src/pages/CreaTemplatesWhatsappSuperAdmin/index.tsx": {
     "@typescript-eslint/no-explicit-any": {
       "count": 1
@@ -3107,14 +3085,6 @@
       "count": 1
     }
   },
-  "src/pages/ImpostazioniWebpliant/index.tsx": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    }
-  },
   "src/pages/InvioCampagnaWhatsapp/index.tsx": {
     "@typescript-eslint/no-explicit-any": {
       "count": 20
@@ -3581,10 +3551,10 @@
       "count": 17
     },
     "@typescript-eslint/no-unused-vars": {
-      "count": 19
+      "count": 18
     },
     "no-console": {
-      "count": 28
+      "count": 27
     }
   },
   "src/router/pagineRimosse.routes.test.tsx": {

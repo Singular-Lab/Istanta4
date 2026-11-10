@@ -46,6 +46,7 @@ import { ConsultazioneController } from './controllers/ConsultazioneController';
 import { ConsultazionePuntiVenditaController } from './controllers/ConsultazionePuntiVenditaController';
 import { StoriaPuntoVenditaController } from './controllers/StoriaPuntoVenditaController';
 import { AnalisiPuntoVenditaController } from './controllers/AnalisiPuntoVenditaController';
+import { ImpostazioniGdoController } from './controllers/ImpostazioniGdoController';
 
 import { IController } from './interfaces/IController';
 import { container, initializeContainer, TYPES } from './di';
@@ -93,6 +94,7 @@ import type { IConsultazioneService } from './interfaces/IConsultazioneService';
 import type { IConsultazionePuntiVenditaService } from './interfaces/IConsultazionePuntiVenditaService';
 import type { IStoriaPuntoVenditaService } from './interfaces/IStoriaPuntoVenditaService';
 import type { IAnalisiPuntoVenditaService } from './interfaces/IAnalisiPuntoVenditaService';
+import type { IImpostazioniGdoService } from './interfaces/IImpostazioniGdoService';
 
 import { ScoreboardService } from './services/ScoreboardService';
 import BadgeService from './services/BadgeService';
@@ -167,6 +169,7 @@ export async function createControllers(): Promise<IController[]> {
   const consultazionePuntiVenditaService = container.get<IConsultazionePuntiVenditaService>(TYPES.ConsultazionePuntiVenditaService);
   const storiaPuntoVenditaService = container.get<IStoriaPuntoVenditaService>(TYPES.StoriaPuntoVenditaService);
   const analisiPuntoVenditaService = container.get<IAnalisiPuntoVenditaService>(TYPES.AnalisiPuntoVenditaService);
+  const impostazioniGdoService = container.get<IImpostazioniGdoService>(TYPES.ImpostazioniGdoService);
   const permessiService = container.get<IPermessiService>(TYPES.PermessiService);
   const menuService = container.get<IMenuService>(TYPES.MenuService);
   const authProviderService = container.get<IAuthProviderService>(TYPES.AuthProviderService);
@@ -203,6 +206,8 @@ export async function createControllers(): Promise<IController[]> {
     new AnalisiPuntoVenditaController(analisiPuntoVenditaService, storiaPuntoVenditaService),
     new ConsultazionePuntiVenditaController(consultazionePuntiVenditaService),
     new StoriaPuntoVenditaController(storiaPuntoVenditaService),
+    // '/impostazioni-gdo/...': nessun altro controller usa questo prefisso
+    new ImpostazioniGdoController(impostazioniGdoService),
 
     // Original controllers
     new WebhookController(webhookService),

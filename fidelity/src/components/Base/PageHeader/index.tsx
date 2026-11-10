@@ -13,6 +13,13 @@ interface PageHeaderProps {
   indietro?: Indietro;
   /** Badge accanto al titolo, per esempio lo stato della promo. */
   badges?: React.ReactNode;
+  /**
+   * Intestazione compatta, per le pagine di dettaglio dense: una riga sola con indietro, titolo più
+   * piccolo, le pastiglie di `meta` e le azioni a destra. La descrizione, se c'è, va sotto in piccolo.
+   */
+  compatta?: boolean;
+  /** Pastiglie accanto al titolo nell'intestazione compatta (canale, area, periodo...). */
+  meta?: React.ReactNode;
   className?: string;
 }
 
@@ -30,10 +37,45 @@ const PageHeader: React.FC<PageHeaderProps> = ({
   actions,
   indietro,
   badges,
+  compatta = false,
+  meta,
   className
 }) => {
   const etichettaIndietro = indietro?.etichetta ?? 'Indietro';
   const icona = <Lucide icon="ArrowLeft" aria-hidden="true" className="h-4 w-4" />;
+
+  if (compatta) {
+    const classiIndietroCompatto = twMerge(classiIndietro, 'mt-0');
+    return (
+      <div className={twMerge('mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between', className)}>
+        <div className="flex min-w-0 items-center gap-3">
+          {indietro?.to !== undefined && (
+            <Link to={indietro.to} aria-label={etichettaIndietro} title={etichettaIndietro} className={classiIndietroCompatto}>
+              {icona}
+            </Link>
+          )}
+          {indietro?.onClick && (
+            <button type="button" onClick={indietro.onClick} aria-label={etichettaIndietro} title={etichettaIndietro} className={classiIndietroCompatto}>
+              {icona}
+            </button>
+          )}
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+              <h1 className="min-w-0 max-w-full text-lg font-semibold leading-tight text-slate-800 [overflow-wrap:anywhere] group-[.mode--light]:text-white group-[.mode--dark]:text-slate-800 dark:text-slate-100">
+                {title}
+              </h1>
+              {badges && <div className={classiBadge}>{badges}</div>}
+              {meta && <div className={twMerge(classiBadge, 'gap-1.5')}>{meta}</div>}
+            </div>
+            {description && (
+              <div className="mt-0.5 text-xs text-slate-500 group-[.mode--light]:text-white group-[.mode--dark]:text-slate-800">{description}</div>
+            )}
+          </div>
+        </div>
+        {actions && <div className="flex flex-wrap items-center gap-2 sm:ml-4 sm:flex-none sm:justify-end">{actions}</div>}
+      </div>
+    );
+  }
 
   return (
     <div className={twMerge('mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between', className)}>

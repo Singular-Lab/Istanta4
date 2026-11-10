@@ -1,12 +1,21 @@
 import { describe, expect, it } from "vitest";
 import {
+  assegnaCorsie,
   dataBreve,
+  inizioMese,
+  intervalloGiorni,
+  isoData,
+  lunediTra,
+  mesiCalendario,
   msData,
+  msOggi,
+  MS_GIORNO,
   percorsoBarraOrizzontale,
   percorsoColonna,
   scalaLineare,
   taccheTempo,
   taccheTonde,
+  testoCheSta,
 } from "./scale";
 
 // Calcoli dei grafici SVG: scale, tacche, date e forme dei segni
@@ -53,6 +62,59 @@ describe("tempo", () => {
     expect(tacche).toHaveLength(12);
     expect(tacche[0].etichetta).toBe("gen");
     expect(tacche[11].etichetta).toBe("dic");
+  });
+});
+
+describe("calendario", () => {
+  it("oggi è il giorno del calendario locale, nella stessa scala di msData; isoData torna alla data", () => {
+    expect(msOggi(new Date(2026, 10, 10, 23, 30))).toBe(msData("2026-11-10"));
+    expect(isoData(msData("2026-11-10"))).toBe("2026-11-10");
+  });
+
+  it("i mesi che toccano il periodo, anche a metà, con mese e anno", () => {
+    const mesi = mesiCalendario(msData("2026-08-10"), msData("2026-11-18"));
+    expect(mesi.map(m => m.etichetta)).toEqual(["ago 2026", "set 2026", "ott 2026", "nov 2026"]);
+    expect(mesi[0].ms).toBe(msData("2026-08-01"));
+    expect(mesi[0].fine).toBe(msData("2026-09-01"));
+    expect(mesi[0].breve).toBe("ago");
+    expect(inizioMese(msData("2025-12-15"), 1)).toBe(msData("2026-01-01"));
+  });
+
+  it("le settimane iniziano il lunedì, compreso quello del primo giorno", () => {
+    expect(lunediTra(msData("2025-10-01"), msData("2025-11-01")).map(isoData)).toEqual(["2025-10-06", "2025-10-13", "2025-10-20", "2025-10-27"]);
+    expect(lunediTra(msData("2025-10-06"), msData("2025-10-14")).map(isoData)).toEqual(["2025-10-06", "2025-10-13"]);
+  });
+
+  it("una barra va dal primo all'ultimo giorno compreso; senza fine, o con la fine prima dell'inizio, un giorno solo", () => {
+    expect(intervalloGiorni("2025-03-03", "2025-03-16")).toEqual({ inizio: msData("2025-03-03"), fine: msData("2025-03-17") });
+    expect(intervalloGiorni("2025-05-10", null)).toEqual({ inizio: msData("2025-05-10"), fine: msData("2025-05-10") + MS_GIORNO });
+    expect(intervalloGiorni("2025-05-10", "2025-05-01").fine).toBe(msData("2025-05-11"));
+  });
+
+  it("le barre che si sovrappongono vanno su corsie diverse; quella che inizia il giorno dopo la fine dell'altra resta sulla stessa", () => {
+    const barra = (dal: string, al: string | null) => intervalloGiorni(dal, al);
+    expect(
+      assegnaCorsie([
+        barra("2025-03-03", "2025-03-16"),
+        barra("2025-03-17", "2025-03-30"),
+        // Le varianti per area della stessa promo: stesse date, tre corsie
+        barra("2025-03-17", "2025-03-30"),
+        barra("2025-03-17", "2025-03-30"),
+        // La prima corsia si libera dopo il 30
+        barra("2025-03-31", null),
+      ])
+    ).toEqual([0, 0, 1, 2, 0]);
+  });
+
+  it("le corsie seguono l'inizio, non l'ordine dato", () => {
+    expect(assegnaCorsie([{ inizio: 10, fine: 20 }, { inizio: 0, fine: 15 }])).toEqual([1, 0]);
+    expect(assegnaCorsie([])).toEqual([]);
+  });
+
+  it("il testo che sta nello spazio: intero, tagliato con i puntini o niente", () => {
+    expect(testoCheSta("Promo ottobre", 200)).toBe("Promo ottobre");
+    expect(testoCheSta("PE2623_24_MIPREMIO_05-11-26", 64)).toBe("PE2623_24…");
+    expect(testoCheSta("PE2623_24_MIPREMIO_05-11-26", 20)).toBeNull();
   });
 });
 

@@ -171,6 +171,11 @@ export function calcolaAnalisiPuntoVendita(
   statistiche: StatisticheProdotti,
   descrizioni: ReadonlyMap<string, DescrizioneProdotto>,
   oggi: string,
+  /**
+   * Il nome da mostrare per un reparto dei riepiloghi salvati (descrizione, sigla o "Reparto NN"):
+   * con le Impostazioni GDO il nome per il marketing, e i reparti con lo stesso nome si sommano.
+   */
+  nomeReparto: (reparto: string) => string = reparto => reparto,
 ): AnalisiPuntoVendita {
   const anni = [...new Set(edizioni.map(edizione => annoDi(edizione.data)))].sort((a, b) => a - b);
   const meccanichePerAnno = new Map<number, Map<MeccanicaReferenza, number>>();
@@ -200,7 +205,10 @@ export function calcolaAnalisiPuntoVendita(
     meccanichePerAnno.set(anno, meccanicheAnno);
 
     const repartiAnno = repartiPerAnno.get(anno) ?? new Map<string, number>();
-    for (const voce of riepilogo.reparti) repartiAnno.set(voce.reparto, (repartiAnno.get(voce.reparto) ?? 0) + voce.spazio);
+    for (const voce of riepilogo.reparti) {
+      const nome = nomeReparto(voce.reparto);
+      repartiAnno.set(nome, (repartiAnno.get(nome) ?? 0) + voce.spazio);
+    }
     repartiPerAnno.set(anno, repartiAnno);
 
     return {

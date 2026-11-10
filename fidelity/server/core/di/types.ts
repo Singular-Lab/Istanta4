@@ -79,6 +79,12 @@ export const TYPES = {
   // Report PDF del volantino (dati e sezioni; il PDF lo disegna il browser)
   ReportVolantinoService: Symbol.for('ReportVolantinoService'),
 
+  // Impostazioni GDO (reparti per il marketing, configurazione degli insight, sito web)
+  ImpostazioniGdoService: Symbol.for('ImpostazioniGdoService'),
+
+  // Catalogo dei loghi e bolli di Istanta (linee del distributore negli insight)
+  CatalogoLoghiService: Symbol.for('CatalogoLoghiService'),
+
   // Permessi
   PermessiService: Symbol.for('PermessiService'),
 
@@ -137,6 +143,8 @@ export const TYPES = {
   PuntiVenditaVolantinoRepository: Symbol.for('PuntiVenditaVolantinoRepository'),
   AnalisiPuntiVenditaRepository: Symbol.for('AnalisiPuntiVenditaRepository'),
   InsightConfrontiRepository: Symbol.for('InsightConfrontiRepository'),
+  ImpostazioniGdoRepository: Symbol.for('ImpostazioniGdoRepository'),
+  ConfigWebpliantGdoRepository: Symbol.for('ConfigWebpliantGdoRepository'),
 
   // Agenzia Lib — logiche custom per cliente
   AgenziaLib: Symbol.for('AgenziaLib'),

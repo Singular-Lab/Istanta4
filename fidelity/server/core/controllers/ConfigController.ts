@@ -25,6 +25,7 @@ import { jsonGrande } from '../middleware/jsonGrande';
 import { permissionGuard } from '../middleware/permissionGuard';
 import { PERMESSI } from '../../../lib/accessi/catalogo';
 import { AuditLogService } from '../services/AuditLogService';
+import { idGdoCliente } from '../services/configPerGdo';
 import { ServerUtils } from '../utils/ServerUtils';
 import { isUrlOlimpo, urlOlimpo } from '../utils/urlOlimpo';
 
@@ -249,9 +250,11 @@ export class ConfigController extends BaseController {
     }
   }
 
-  private async getFlyerInsightsConfig(_req: Request, res: Response): Promise<void> {
+  /** La configurazione degli insight della GDO operativa (superadmin e agenzia: ?gdo=, altrimenti quella dell'installazione). */
+  private async getFlyerInsightsConfig(req: Request, res: Response): Promise<void> {
     try {
-      const config = await this.configService.getFlyerInsightsConfig();
+      const idGdo = (await gdoOperativaPerRichiesta(req, res, req.query.gdo)) ?? (await idGdoCliente());
+      const config = await this.configService.getFlyerInsightsConfig(idGdo);
       this.sendResponse(res, HttpStatusCode.OK, config);
     } catch (error: any) {
       this.handleError(res, error);

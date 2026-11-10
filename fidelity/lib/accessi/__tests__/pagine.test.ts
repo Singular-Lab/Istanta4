@@ -65,6 +65,20 @@ describe('puoAprirePagina', () => {
     expect(puoAprirePagina('/punti-vendita', con(PERMESSI.PROMO.VISUALIZZA))).toBe(false);
   });
 
+  it('Impostazioni GDO chiede di modificare le impostazioni generali, non solo di consultarle', () => {
+    expect(puoAprirePagina('/impostazioni-gdo', con(PERMESSI.IMPOSTAZIONI.VISUALIZZA))).toBe(false);
+    expect(puoAprirePagina('/impostazioni-gdo', con(PERMESSI.IMPOSTAZIONI.VISUALIZZA, PERMESSI.IMPOSTAZIONI.MODIFICA_GENERALI))).toBe(true);
+  });
+
+  it('Workspace WebPliant e il suo editor chiedono di configurare WebPliant; la vecchia pagina non c\'è più', () => {
+    const configura = con(PERMESSI.WEBPLIANT.VISUALIZZA, PERMESSI.WEBPLIANT.CONFIGURA);
+    expect(puoAprirePagina('/webliant/workspace', configura)).toBe(true);
+    expect(puoAprirePagina('/webliant/workspace/editor', configura)).toBe(true);
+    expect(puoAprirePagina('/webliant/workspace', con(PERMESSI.WEBPLIANT.VISUALIZZA))).toBe(false);
+    expect(paginaPer('/webliant/impostazioni-webpliant')).toBeUndefined();
+    expect(paginaPer('/webliant/impostazioni-webpliant/configurazione-webpliant')).toBeUndefined();
+  });
+
   it('le pagine di sistema richiedono il permesso di sistema', () => {
     expect(puoAprirePagina('/gestione-interna/gestione-permessi', con(PERMESSI.UTENTI.VISUALIZZA))).toBe(false);
     expect(puoAprirePagina('/gestione-interna/gestione-permessi', con(PERMESSI.SISTEMA.GESTISCI_ACCESSI))).toBe(true);
@@ -78,8 +92,12 @@ describe('sezione delle pagine', () => {
   });
 
   it('le pagine operative stanno in Produzione', () => {
-    for (const percorso of ['/promozioni/nuova', '/promozioni/in-corso/dettagli/x/kits/y', '/nuovo-ods', '/ods-in-corso', '/impostazioni-di-produzione', '/webliant/impostazioni-webpliant', '/gestione-ricette'])
+    for (const percorso of ['/promozioni/nuova', '/promozioni/in-corso/dettagli/x/kits/y', '/nuovo-ods', '/ods-in-corso', '/impostazioni-di-produzione', '/webliant/workspace', '/webliant/workspace/editor', '/gestione-ricette'])
       expect(sezioneDiPercorso(percorso), percorso).toBe('produzione');
+  });
+
+  it('le Impostazioni GDO stanno in Gestione interna, con aree, canali e punti vendita', () => {
+    expect(sezioneDiPercorso('/impostazioni-gdo')).toBe('gestione');
   });
 
   it('le pagine di consultazione stanno in Visualizzazione', () => {
@@ -115,8 +133,14 @@ describe('pagine che si possono mettere nel menu', () => {
     expect(new Set(VOCI_DI_MENU.map(v => v.titolo)).size).toBe(VOCI_DI_MENU.length);
   });
 
+  it('Impostazioni GDO e Workspace WebPliant si possono mettere nel menu, l\'editor a schermo intero no', () => {
+    expect(voceDiMenuPer('/impostazioni-gdo')).toEqual({ percorso: '/impostazioni-gdo', titolo: 'Impostazioni GDO', icona: 'Building2' });
+    expect(voceDiMenuPer('/webliant/workspace')).toEqual({ percorso: '/webliant/workspace', titolo: 'Workspace WebPliant', icona: 'LayoutTemplate' });
+    expect(voceDiMenuPer('/webliant/workspace/editor')).toBeUndefined();
+  });
+
   it('i redirect e i vecchi indirizzi non si possono scegliere', () => {
-    for (const percorso of ['/dashboard', '/materiali-attivi', '/nuova-promozione', '/promozioni'])
+    for (const percorso of ['/dashboard', '/materiali-attivi', '/nuova-promozione', '/promozioni', '/webliant/impostazioni-webpliant'])
       expect(voceDiMenuPer(percorso), percorso).toBeUndefined();
     expect(voceDiMenuPer('promozioni/in-corso/')?.titolo).toBe('Promozioni in corso');
   });

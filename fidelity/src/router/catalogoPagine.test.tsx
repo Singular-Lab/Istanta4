@@ -15,7 +15,7 @@ const PROTETTE_FUORI_DAL_LAYOUT = [
   "/promozioni/storico/dettagli/:idPromo/menabo",
   "/promozioni/in-corso/dettagli/:idPromo/anteprima-tracciato/:idTracciato",
   "/promozioni/storico/dettagli/:idPromo/anteprima-tracciato/:idTracciato",
-  "webliant/impostazioni-webpliant/workspace",
+  "webliant/workspace/editor",
 ];
 
 const unisci = (base: string, path?: string) =>

@@ -70,10 +70,11 @@ export function leggiAnagraficaReparti(config: unknown): RepartoAnagrafica[] {
   });
 }
 
-const testoNormalizzato = (testo: string): string => testo.toUpperCase().trim().replace(/\s+/g, ' ');
+/** Testo per i confronti: maiuscole e spazi singoli. */
+export const testoNormalizzato = (testo: string): string => testo.toUpperCase().trim().replace(/\s+/g, ' ');
 
 /** Stesso codice reparto: numerici a confronto come numeri ("1" = "01"), gli altri come testo. */
-function stessoCodice(a: string, b: string): boolean {
+export function stessoCodice(a: string, b: string): boolean {
   const primo = a.trim();
   const secondo = b.trim();
   if (/^\d+$/.test(primo) && /^\d+$/.test(secondo)) return Number(primo) === Number(secondo);
