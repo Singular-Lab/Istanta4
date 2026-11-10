@@ -183,7 +183,7 @@ function DettaglioVolantino({ idKit }: { idKit: string }) {
             {conDistribuzione && (
               <Sezione
                 titolo="Distribuzione nelle pagine"
-                descrizione="Quanto di ogni pagina coprono i box, per reparto: scegli una pagina per aprirla nel volantino."
+                descrizione="Le referenze di ogni pagina per reparto e quanto della pagina coprono i box: scegli una pagina per aprirla nel volantino."
               >
                 <DistribuzionePagine
                   box={box}

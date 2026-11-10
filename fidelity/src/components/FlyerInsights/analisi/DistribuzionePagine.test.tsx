@@ -42,32 +42,35 @@ const gruppo = (voce: Pick<BoxInsight, "reparto">) =>
   voce.reparto ? { id: voce.reparto.codice, etichetta: voce.reparto.descrizione, tinta: TINTA_NEUTRA } : { id: "senza", etichetta: "Reparto non noto", tinta: TINTA_NEUTRA };
 
 const BOX = [
-  box("a", 1, 30),
+  box("a", 1, 30, { idReferenze: ["a1", "a2"] }),
   box("b", 1, 20, { reparto: DROGHERIA }),
   box("c", 2, 10, { reparto: DROGHERIA }),
   box("d", 2, 0, { reparto: null }),
   box("e", 3, 60),
-  box("f", 3, 70, { reparto: DROGHERIA }),
+  box("f", 3, 70, { reparto: DROGHERIA, idReferenze: ["f1", "f2", "f3"] }),
 ];
 
 describe("distribuzionePagine", () => {
-  it("una colonna per pagina, anche vuota, con box e spazio per reparto", () => {
+  it("una colonna per pagina, anche vuota, con box, referenze e spazio per reparto", () => {
     const colonne = distribuzionePagine(BOX, 4, gruppo);
 
     expect(colonne.map(c => c.pagina)).toEqual([1, 2, 3, 4]);
     expect(colonne.map(c => c.box)).toEqual([2, 2, 2, 0]);
+    // Le referenze dei box, come nei numeri del volantino: il box "a" ne ha due
+    expect(colonne.map(c => c.referenze)).toEqual([3, 2, 4, 0]);
     expect(colonne[0].occupato).toBe(50);
-    expect(colonne[0].parti.map(p => [p.etichetta, p.spazio])).toEqual([
-      ["Drogheria", 20],
-      ["Latticini", 30],
+    expect(colonne[0].parti.map(p => [p.etichetta, p.referenze, p.spazio])).toEqual([
+      ["Drogheria", 1, 20],
+      ["Latticini", 2, 30],
     ]);
     expect(colonne[3].parti).toEqual([]);
   });
 
-  it("i reparti stanno nello stesso ordine in ogni pagina, dal più grande nel volantino; i box senza reparto in cima", () => {
+  it("i reparti stanno nello stesso ordine in ogni pagina, dal più grande nel volantino per referenze; i box senza reparto in cima", () => {
     const colonne = distribuzionePagine(BOX, 3, gruppo);
 
-    // Drogheria 100 di spazio nel volantino, Latticini 90
+    // Drogheria 5 referenze nel volantino, Latticini 3
+    expect(colonne[0].parti.map(p => p.id)).toEqual(["01", "24"]);
     expect(colonne[2].parti.map(p => p.id)).toEqual(["01", "24"]);
     expect(colonne[1].parti.map(p => p.id)).toEqual(["01", "senza"]);
   });
@@ -77,18 +80,20 @@ describe("distribuzionePagine", () => {
 
     expect(colonne[2].occupato).toBe(100);
     expect(colonne.reduce((somma, c) => somma + c.box, 0)).toBe(6);
+    expect(colonne.reduce((somma, c) => somma + c.referenze, 0)).toBe(9);
   });
 });
 
 describe("DistribuzionePagine", () => {
-  it("ogni pagina è un pulsante con box e reparti; sceglierlo, col clic o con Invio, porta il volantino a quella pagina", () => {
+  const grafico = () => screen.getByRole("group", { name: "Referenze delle pagine per reparto" });
+
+  it("ogni colonna è un pulsante con referenze, box, ingombro e reparti; sceglierla, col clic o con Invio, porta il volantino a quella pagina", () => {
     const onVaiAllaPagina = vi.fn();
     render(<DistribuzionePagine box={BOX} totalePagine={4} paginaCorrente={2} onVaiAllaPagina={onVaiAllaPagina} />);
 
-    const grafico = screen.getByRole("group", { name: "Spazio delle pagine per reparto" });
-    const colonne = within(grafico).getAllByRole("button");
+    const colonne = within(grafico()).getAllByRole("button");
     expect(colonne).toHaveLength(4);
-    expect(colonne[0]).toHaveAccessibleName("Pagina 1: 2 box, 50% della pagina coperto; Drogheria 20%; Latticini 30%");
+    expect(colonne[0]).toHaveAccessibleName("Pagina 1: 3 referenze, 2 box, 50% della pagina coperto; Drogheria 1 referenza; Latticini 2 referenze");
     expect(colonne[1]).toHaveAttribute("aria-current", "page");
 
     fireEvent.click(colonne[2]);
@@ -97,18 +102,42 @@ describe("DistribuzionePagine", () => {
     expect(onVaiAllaPagina).toHaveBeenLastCalledWith(4);
   });
 
-  it("sotto ogni colonna il numero della pagina e i box", () => {
+  it("le colonne sono alte quanto le referenze, divise per reparto; la linea dell'ingombro passa per la parte coperta di ogni pagina", () => {
     const { container } = render(<DistribuzionePagine box={BOX} totalePagine={4} />);
 
-    const quarta = container.querySelector("[data-pagina='4']")!;
-    expect(quarta).toHaveTextContent("4");
-    expect(quarta).toHaveTextContent("0 box");
-    expect(container.querySelector("[data-pagina='1']")).toHaveTextContent("2 box");
-    // Senza onVaiAllaPagina le colonne non sono pulsanti
+    const altezza = (pagina: number, reparto: string) =>
+      Number(container.querySelector(`[data-pagina='${pagina}'] [data-reparto='${reparto}']`)?.getAttribute("height"));
+    // Pagina 3: 3 referenze di Drogheria e 1 di Latticini
+    expect(altezza(3, "01")).toBeCloseTo(altezza(3, "24") * 3, 5);
+    // Pagina 1: Latticini (2 referenze) doppio di Drogheria (1)
+    expect(altezza(1, "24")).toBeCloseTo(altezza(1, "01") * 2, 5);
+    expect(container.querySelector("[data-pagina='4'] [data-reparto]")).toBeNull();
+
+    const yIngombro = (pagina: number) => Number(container.querySelector(`[data-ingombro='${pagina}']`)?.getAttribute("cy"));
+    // Più ingombro, punto più in alto: pagina 3 al 100%, pagina 1 al 50%, pagina 4 a zero
+    expect(yIngombro(3)).toBeLessThan(yIngombro(1));
+    expect(yIngombro(1)).toBeLessThan(yIngombro(4));
+    expect(screen.getByTestId("linea-ingombro").querySelector("polyline")).not.toBeNull();
+    // Senza onVaiAllaPagina colonne e riquadri non sono pulsanti
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
-  it("i reparti prendono gli stessi colori del volantino, con la legenda dei nomi", () => {
+  it("sotto il grafico un riquadro per pagina con referenze e ingombro; sceglierlo porta il volantino a quella pagina", () => {
+    const onVaiAllaPagina = vi.fn();
+    render(<DistribuzionePagine box={BOX} totalePagine={4} paginaCorrente={3} onVaiAllaPagina={onVaiAllaPagina} />);
+
+    const riquadri = within(screen.getByRole("list", { name: "Pagine del volantino" })).getAllByRole("button");
+    expect(riquadri).toHaveLength(4);
+    expect(riquadri[0]).toHaveTextContent("13 ref.50% ing.");
+    expect(riquadri[0]).toHaveAccessibleName("Pagina 1: 3 referenze, 50% di ingombro");
+    expect(riquadri[2]).toHaveAttribute("aria-current", "page");
+    expect(riquadri[3]).toHaveTextContent("40 ref.0% ing.");
+
+    fireEvent.click(riquadri[1]);
+    expect(onVaiAllaPagina).toHaveBeenLastCalledWith(2);
+  });
+
+  it("i reparti prendono gli stessi colori del volantino, con la legenda dei nomi e dell'ingombro", () => {
     const { container } = render(
       <DistribuzionePagine box={[box("a", 1, 30, { reparto: { ...LATTICINI, colore: "#0ea5e9" } }), box("b", 1, 20, { reparto: DROGHERIA })]} totalePagine={1} />
     );
@@ -118,22 +147,23 @@ describe("DistribuzionePagine", () => {
     const legenda = screen.getByRole("list", { name: "Reparto" });
     expect(within(legenda).getByText("Latticini")).toBeInTheDocument();
     expect(within(legenda).getByText("Drogheria")).toBeInTheDocument();
+    expect(within(screen.getByRole("list", { name: "Legenda" })).getByText("Ingombro della pagina")).toBeInTheDocument();
   });
 
   it("le pagine arrivano fino all'ultimo box anche oltre quelle dichiarate, e i dati sono anche in tabella", () => {
     render(<DistribuzionePagine box={[box("a", 6, 10)]} totalePagine={2} onVaiAllaPagina={() => {}} />);
 
-    expect(screen.getAllByRole("button")).toHaveLength(6);
-    const tabella = screen.getByRole("table", { name: "Spazio delle pagine per reparto" });
+    expect(within(grafico()).getAllByRole("button")).toHaveLength(6);
+    const tabella = screen.getByRole("table", { name: "Referenze delle pagine per reparto" });
     expect(within(tabella).getAllByRole("row")).toHaveLength(7);
+    expect(within(tabella).getByRole("row", { name: /^6 1 1 10%/ })).toBeInTheDocument();
   });
 
   it("con molte pagine il grafico scorre in orizzontale invece di stringersi", () => {
     const molti = Array.from({ length: 40 }, (_, i) => box(`p${i}`, i + 1, 10));
     render(<DistribuzionePagine box={molti} totalePagine={40} />);
 
-    const svg = screen.getByRole("group", { name: "Spazio delle pagine per reparto" });
-    expect(Number(svg.getAttribute("width"))).toBeGreaterThanOrEqual(40 * 44);
+    expect(Number(grafico().getAttribute("width"))).toBeGreaterThanOrEqual(40 * 40);
     expect(screen.getByTestId("scorrimento-distribuzione")).toHaveClass("overflow-x-auto");
   });
 });

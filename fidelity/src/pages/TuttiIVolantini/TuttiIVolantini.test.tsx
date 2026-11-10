@@ -278,16 +278,22 @@ describe("Dettaglio del volantino", () => {
     expect(screen.queryByRole("region", { name: "Marchi del distributore" })).not.toBeInTheDocument();
   });
 
-  it("scegliendo una pagina nella distribuzione il volantino va a quella pagina, anche da tastiera", () => {
+  it("scegliendo una pagina nella distribuzione, dalla colonna o dal riquadro, il volantino va a quella pagina, anche da tastiera", () => {
     apri();
 
     const distribuzione = screen.getByRole("region", { name: "Distribuzione nelle pagine" });
-    fireEvent.click(within(distribuzione).getByRole("button", { name: /^Pagina 5:/ }));
+    const colonne = within(distribuzione).getByRole("group", { name: "Referenze delle pagine per reparto" });
+    const riquadri = within(distribuzione).getByRole("list", { name: "Pagine del volantino" });
+    fireEvent.click(within(colonne).getByRole("button", { name: /^Pagina 5:/ }));
     expect(screen.getByText(/^Volantino k1 pagina 5 /)).toBeInTheDocument();
-    expect(within(distribuzione).getByRole("button", { name: /^Pagina 5:/ })).toHaveAttribute("aria-current", "page");
+    expect(within(colonne).getByRole("button", { name: /^Pagina 5:/ })).toHaveAttribute("aria-current", "page");
+    expect(within(riquadri).getByRole("button", { name: /^Pagina 5:/ })).toHaveAttribute("aria-current", "page");
 
-    fireEvent.keyDown(within(distribuzione).getByRole("button", { name: /^Pagina 2:/ }), { key: "Enter" });
+    fireEvent.keyDown(within(colonne).getByRole("button", { name: /^Pagina 2:/ }), { key: "Enter" });
     expect(screen.getByText(/^Volantino k1 pagina 2 /)).toBeInTheDocument();
+
+    fireEvent.click(within(riquadri).getByRole("button", { name: /^Pagina 3:/ }));
+    expect(screen.getByText(/^Volantino k1 pagina 3 /)).toBeInTheDocument();
   });
 
   it("la config della GDO può spegnere la distribuzione nelle pagine", () => {
