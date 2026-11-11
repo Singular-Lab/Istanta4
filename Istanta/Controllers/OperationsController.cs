@@ -825,6 +825,22 @@ namespace Istanta.Controllers
                         throw new Exception($"LIB ERROR#{parsingRes.errors}#");
                     }
 
+                    //TASK-f434bd2f: lo stesso codice piu' volte con la stessa label, nello stesso canale e area,
+                    //ferma l'importazione prima di salvare, in ogni modalita': decide l'operatore (Annulla o
+                    //Continua, che rilancia con ignoraDoppioni e non chiede piu').
+                    string keyCodiceDoppi = Enum.GetName(AddestramentoRuoli.Referenza) + "." + GLOBAL_VARIABLES.keyRefCodice;
+                    List<CodiceDoppioInLista> codiciDoppi = CodiciDoppiImportazione.Trova(parsingRes.liste, idLabel, parsingRes.codiciDoppi, keyCodiceDoppi);
+                    if (codiciDoppi.Count > 0 && !pkg.ignoraDoppioni)
+                    {
+                        await CodiciDoppiImportazione.ScriviAsync(_path_to_import, id_attivita, codiciDoppi);
+                        res.Attivita.Progress = 0;
+                        res.Attivita.Stato = (Byte)OperationStauts.InAttesaDiConfermaUtente;
+                        res.Attivita.StatoMsg = CodiciDoppiImportazione.MessaggioAttivita;
+                        _ = await ctx_1.SaveChangesAsync();
+                        return Ok(res);
+                    }
+                    CodiciDoppiImportazione.Togli(_path_to_import, id_attivita);
+
                     if (addestramento.salvaSuDb)
                     {
                         res.Attivita.Progress = 90;

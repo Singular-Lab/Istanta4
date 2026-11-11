@@ -274,6 +274,17 @@ namespace Istanta.Controllers
             return Content(report, "application/json");
         }
 
+        /// <summary>
+        /// TASK-f434bd2f: i codici doppi per cui l'importazione dell'attivita' si e' fermata, per l'avviso della
+        /// pagina Tracciati. Un elenco vuoto se l'attivita' non si e' fermata per questo.
+        /// </summary>
+        [HttpGet]
+        [Route("Tracciati/codiciDoppiAttivita/{idAttivita:long}")]
+        public async Task<IActionResult> codiciDoppiAttivita(long idAttivita)
+        {
+            return Ok(await CodiciDoppiImportazione.LeggiAsync(this.path_to_import, idAttivita) ?? new List<CodiceDoppioInLista>());
+        }
+
         [HttpGet]
         [Route("Tracciati/GetTracciatiPromo/{idPromo}")]
         public async Task<IActionResult> GetTracciatiPromo(int idPromo)
@@ -418,7 +429,10 @@ namespace Istanta.Controllers
                         idPromo=id_promo,
                         id = s.Id,
                         titolo = s.Titolo,
-                        label = JsonConvert.DeserializeObject<InputFormTracciato>(JsonConvert.DeserializeObject<OperationRequest>(s.Contract)!.Packet!.ToString()!)!.fields!["idLabel"].ToString()!
+                        label = JsonConvert.DeserializeObject<InputFormTracciato>(JsonConvert.DeserializeObject<OperationRequest>(s.Contract)!.Packet!.ToString()!)!.fields!["idLabel"].ToString()!,
+                        //TASK-f434bd2f: fermata per codici doppi, in attesa che l'operatore decida.
+                        codiciDoppi = s.Stato == (Byte)OperationStauts.InAttesaDiConfermaUtente
+                            && System.IO.File.Exists(CodiciDoppiImportazione.Percorso(this.path_to_import, s.Id))
                     }).ToList();
 
                 return Ok(resultMapped);

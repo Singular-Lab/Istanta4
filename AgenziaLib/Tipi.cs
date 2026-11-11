@@ -208,6 +208,22 @@ namespace AgenziaLib.Tipi
     {
         public string errors = "";
         public List<Tracciato> liste = new List<Tracciato>();
+        /// <summary>
+        /// TASK-f434bd2f: i codici che la lista porta piu' volte nello stesso canale e area e di cui l'agenzia
+        /// ha tenuto una riga sola, scartando le altre. Le fusioni volute dal cliente non ci vanno. Istanta li
+        /// unisce ai doppi che trova nelle liste e, se ce ne sono, chiede all'operatore se importare lo stesso.
+        /// </summary>
+        public List<CodiceDoppio> codiciDoppi = new List<CodiceDoppio>();
+    }
+
+    /// <summary>
+    /// TASK-f434bd2f: un codice presente piu' volte nella lista, nel canale e nell'area dati (sigle).
+    /// </summary>
+    public class CodiceDoppio
+    {
+        public string codice = "";
+        public string canale = "";
+        public string area = "";
     }
 
     public class ExportResult

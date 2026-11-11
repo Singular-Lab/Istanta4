@@ -79,8 +79,12 @@ namespace AgenziaLib
                         }
 
                         //Non salviamo un codice che è già previsto per questo tracciato
+                        //TASK-f434bd2f: ma lo si segnala, la riga scartata va persa.
                         if (t_item.Records.Count(c => c[GLOBAL_VARIABLES_FICO.keyRefCodice].ToString() == codRef) > 0)
+                        {
+                            impResult.codiciDoppi.Add(new CodiceDoppio { codice = codRef, canale = t_item.Canale, area = t_item.Area });
                             continue;
+                        }
 
                         if (prestazione<=0)
                         {

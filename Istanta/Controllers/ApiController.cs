@@ -68,7 +68,7 @@ namespace Istanta.Controllers
 
         [HttpGet]
         [Route("attivita/confermaAttivitaByUtente/{id}/{persistenza}/{report}")]
-        public async Task<IActionResult> confermaAttivitaByUtente(Int64 id, bool persistenza, bool report)
+        public async Task<IActionResult> confermaAttivitaByUtente(Int64 id, bool persistenza, bool report, [FromQuery] bool ignoraDoppioni = false)
         {
             BoolResult res = new BoolResult();
             try
@@ -84,6 +84,12 @@ namespace Istanta.Controllers
                 
                 packet!.persistent = persistenza;
                 packet!.askReport = report;
+                //TASK-f434bd2f: "Continua" sull'avviso dei codici doppi. Non si torna indietro: per questa
+                //importazione l'operatore ha gia' deciso.
+                if (ignoraDoppioni)
+                {
+                    packet.ignoraDoppioni = true;
+                }
                 opReq.Packet = packet;
 
 
