@@ -3192,6 +3192,12 @@ namespace Istanta.Models
     {
         public List<dbModifiche> modificheCssPerKit { get; set; } = new List<dbModifiche>();
 
+        /// TASK-9bf94d47: la configurazione del fix foto che vale per tutto il cliente, anche nelle
+        /// lavorazioni senza un kit, con le scelte per box in perBox. Le voci dei kit
+        /// (modificheCssBox.fixFoto) la sostituiscono valore per valore. Null: valgono i default
+        /// del Plugin.
+        public FixFotoGeneraleObj? fixFoto { get; set; }
+
         // Campi opzionali solo per migrazione/diagnostica; puoi rimuoverli quando sei sicuro
         [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
         public string noteLegacy { get; set; } = "";
@@ -3457,6 +3463,87 @@ namespace Istanta.Models
         /// l'operatore non risolve la segnalazione o non cambia l'opacita'. Etichette, anche con
         /// l'asterisco.
         public List<string> elementiDaPosizionare { get; set; } = new();
+
+        /// TASK-9bf94d47: la configurazione del fix foto automatico, che prima stava nel custom.js
+        /// dell'agenzia. Ogni valore si cerca nella voce del box, poi in quella di default del kit,
+        /// poi nel kit di default, poi nella sezione fixFoto generale del file (prima nel suo
+        /// perBox, poi nei valori generali); se nessuno lo dice
+        /// vale quello del Plugin (plugin/sistemazioneFoto/sistemazioneFoto.js, risolviConfigurazione).
+        /// Null: nessuno.
+        public FixFotoObj? fixFoto { get; set; }
+    }
+
+    /// TASK-9bf94d47: la configurazione del fix foto di una voce del CssFramework. Ogni proprieta'
+    /// null non dice niente e lascia decidere la voce successiva.
+    public class FixFotoObj
+    {
+        /// Tipi di lavorazione in cui il fix si applica all'impaginazione: 1 volantino, 2 PoP.
+        public List<int>? lavorazioni { get; set; }
+
+        /// All'impaginazione: "automatico" (quello dell'agenzia, se ne ha uno, altrimenti quello
+        /// del Plugin), "semplice" (solo quello del Plugin), "nessuno" (le foto restano dove sono).
+        public string? modo { get; set; }
+
+        /// Per ogni numero di foto, di quanto ognuna si scosta dalla precedente.
+        public List<DistanziamentoFotoObj>? distanziamento { get; set; }
+
+        /// Etichette, anche con l'asterisco, che non fanno da ostacolo alle foto, in aggiunta a
+        /// quelle che il Plugin non considera mai (base, immagini, foto extra, sfondi...).
+        public List<string>? elementiIgnorati { get; set; }
+
+        /// Etichette che fanno da ostacolo anche se sono fra quelle ignorate, come i loghi.
+        public List<string>? eccezioniIgnorati { get; set; }
+
+        /// Margine in mm attorno agli ostacoli con quell'etichetta.
+        public List<MargineElementoFixFotoObj>? marginiElementi { get; set; }
+
+        /// Margine in mm dello spazio libero dalla base: [alto, sinistra, basso, destra].
+        public List<double>? marginiBox { get; set; }
+
+        /// Margine in mm attorno alle foto: [alto e basso, sinistra e destra].
+        public List<double>? marginiFoto { get; set; }
+
+        /// I dati che usa solo il fix foto dell'agenzia (setCustomFixFoto nel suo custom.js), come
+        /// li vuole lei: il Plugin li passa senza leggerli, chiave per chiave.
+        public JObject? agenzia { get; set; }
+    }
+
+    /// TASK-9bf94d47: la sezione fixFoto generale del CssFramework: i valori per tutto il cliente e,
+    /// in perBox, quelli di alcuni box, che valgono prima dei generali e dopo le voci dei kit.
+    public class FixFotoGeneraleObj : FixFotoObj
+    {
+        public List<FixFotoPerBoxObj>? perBox { get; set; }
+    }
+
+    /// TASK-9bf94d47: i valori del fix foto per i box con queste etichette.
+    public class FixFotoPerBoxObj : FixFotoObj
+    {
+        public List<string> nomiBox { get; set; } = new();
+    }
+
+    /// TASK-9bf94d47: lo scostamento delle foto quando nel box ce ne sono "foto".
+    public class DistanziamentoFotoObj
+    {
+        public int foto { get; set; }
+        public List<IntervalloDistanziamentoFotoObj> percDistFoto { get; set; } = new();
+    }
+
+    /// TASK-9bf94d47: le percentuali di scostamento di ogni foto dalla precedente, sulla sua larghezza
+    /// e sulla sua altezza, quando il rapporto altezza/larghezza della prima foto e' nell'intervallo.
+    /// endRangeRatioCondition null: senza limite.
+    public class IntervalloDistanziamentoFotoObj
+    {
+        public List<double> percDistanceXFoto { get; set; } = new();
+        public List<double> percDistanceYFoto { get; set; } = new();
+        public double startRangeRatioCondition { get; set; }
+        public double? endRangeRatioCondition { get; set; }
+    }
+
+    /// TASK-9bf94d47: margine in mm attorno agli ostacoli con quell'etichetta: [alto, sinistra, basso, destra].
+    public class MargineElementoFixFotoObj
+    {
+        public string label { get; set; } = "";
+        public List<double> padding { get; set; } = new();
     }
 
     /// I20-1180: se una riga di uno dei testi tocca uno degli elementi, allargato del margine in mm,

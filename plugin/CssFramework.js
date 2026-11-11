@@ -83,6 +83,8 @@ const CssFramework =
                     try
                     {
                         var allineamentiDB = objResult;
+                        //TASK-9bf94d47: il fix foto legge da qui la sua configurazione fuori dal contesto.
+                        me.regoleScaricate = allineamentiDB;
                         fs.writeFileSync(Utility.percorsoDati("allineamenti.json"), JSON.stringify(allineamentiDB));
                         callback(null, allineamentiDB); // Passiamo `null` come primo argomento per indicare che non c'è errore
                     }catch(e){
@@ -418,6 +420,81 @@ const CssFramework =
             console.error("Code CSF-17: estensioni foto del box " + box.label + " non calcolate: " + e);
             return vuote;
         }
+    },
+
+    /// TASK-9bf94d47: la configurazione del fix foto del box, dalla sezione fixFoto delle sue voci,
+    /// dalla piu' forte: la voce del box nel kit, quella del box nel kit di default, la voce di
+    /// default del kit, quella del kit di default e infine la sezione fixFoto generale delle regole,
+    /// che vale anche dove un kit non c'e': prima la sua voce per il box (perBox), poi i valori
+    /// generali. Le combina SistemazioneFoto.risolviConfigurazione.
+    ///
+    /// Le voci dei kit sono quelle del contesto quando e' di un box con la stessa etichetta, come
+    /// all'impaginazione subito dopo il CSS; altrimenti quelle delle regole scaricate, nel kit
+    /// della lavorazione corrente. Cosi' anche il Fix foto premuto prima di ogni impaginazione,
+    /// quando il contesto non c'e', usa la configurazione del cliente. box null: solo le voci di
+    /// default e la sezione generale. Senza regole valgono i default del Plugin.
+    getConfigurazioneFixFoto(box) {
+        var voci = [];
+        try {
+            var etichetta = box != null ? box.label : null;
+            var regole = this.regoleDallaCopia();
+            var DB = null;
+            var DBDef = null;
+            var contesto = this.contestoCss;
+            if (contesto != null && etichetta != null && contesto.etichettaBox == etichetta) {
+                DB = contesto.DBallineamenti;
+                DBDef = contesto.DBDefault;
+            }
+            else if (regole != null && typeof ficoProcess !== "undefined") {
+                //Se il kit non si trova vale comunque la sezione generale.
+                try {
+                    var kit = this.kitDelleRegole(regole);
+                    if (kit != null) {
+                        DB = kit.fileModifiche ? kit.fileModifiche.operazioniPerBox : null;
+                        DBDef = kit.fileModificheDef ? kit.fileModificheDef.operazioniPerBox : null;
+                    }
+                }
+                catch (e) {
+                    console.error("Code CSF-32: kit della lavorazione non trovato per il fix foto del box " + (etichetta || "") + ", uso la sezione generale: " + e);
+                }
+            }
+
+            var delBox = db => Array.isArray(db) && etichetta != null
+                ? db.find(el => el != null && Array.isArray(el.nomiBox) && el.nomiBox.includes(etichetta)) : null;
+            var diDefault = db => Array.isArray(db)
+                ? db.find(el => el != null && Array.isArray(el.nomiBox) && el.nomiBox.length == 0) : null;
+            var generale = regole != null && regole.fixFoto != null ? regole.fixFoto : null;
+            var generaleDelBox = generale != null && Array.isArray(generale.perBox) && etichetta != null
+                ? generale.perBox.find(el => el != null && Array.isArray(el.nomiBox) && el.nomiBox.includes(etichetta)) : null;
+            voci = [delBox(DB), delBox(DBDef), diDefault(DB), diDefault(DBDef),
+                { fixFoto: generaleDelBox }, { fixFoto: generale }];
+        }
+        catch (e) {
+            console.error("Code CSF-32: configurazione del fix foto del box " + (box != null ? box.label : "") + " non letta, uso i valori di default: " + e);
+            voci = [];
+        }
+        return SistemazioneFoto.risolviConfigurazione(voci);
+    },
+
+    /// TASK-9bf94d47: l'ultima copia delle regole scaricate, tenuta in memoria perche' il fix foto la
+    /// chiede piu' volte per box. La rinnova getAllineamentiDB a ogni scaricamento; finche' non ce
+    /// n'e' una si legge allineamenti.json, la copia di riserva su disco.
+    regoleScaricate: null,
+
+    /// TASK-9bf94d47: le regole scaricate (regoleScaricate), o null se non ce ne sono.
+    regoleDallaCopia() {
+        if (this.regoleScaricate == null) {
+            //readFile e' di indexNew: senza, non c'e' una copia da leggere.
+            if (typeof readFile !== "function") {
+                return null;
+            }
+            var file = readFile(Utility.percorsoDati("allineamenti.json"));
+            if (!file || !Array.isArray(file.modificheCssPerKit)) {
+                return null;
+            }
+            this.regoleScaricate = file;
+        }
+        return this.regoleScaricate;
     },
 
     /// I20-1026: i bounds su cui si misura la forma del box (largo, alto, standard). Sono quelli

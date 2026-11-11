@@ -3,14 +3,37 @@
 /// con lo stesso nome, perche' il core e le agenzie (Agenzie/*/custom.js) lo prendono con
 /// require('./utility').
 ///
-/// Usa come globali quelle di indexNew - pluginMiddleware, customAgenzia, docInLavorazione,
+/// Usa come globali quelle di indexNew - pluginMiddleware, docInLavorazione,
 /// pathLavorazione, percorsoLinks, percorsoLoghi - come faceva dentro utility.js. Non importa
 /// utility.js: e' utility.js a importare questo file.
 
 const { FitOptions, LocationOptions } = require('indesign');
 
+/// TASK-9bf94d47: CssFramework, chiesto quando serve: e' CssFramework a caricare questo file in testa.
+function cssFramework() {
+    return require('../CssFramework');
+}
+
 const FotoPlacer =
 {
+    /// TASK-9bf94d47: il margine attorno alla foto (fixFoto.marginiFoto) del box che la contiene, il
+    /// gruppo piu' esterno sopra il riquadro; null se e' zero, come quando custom.js non lo diceva.
+    marginiDellaFoto(fotoRectangle) {
+        var box = null;
+        try {
+            var genitore = fotoRectangle.parent;
+            while (genitore != null && genitore.constructorName === "Group") {
+                box = genitore;
+                genitore = genitore.parent;
+            }
+        }
+        catch (e) {
+            box = null;
+        }
+        var margini = cssFramework().getConfigurazioneFixFoto(box).marginiFoto;
+        return Array.isArray(margini) && margini.some(m => m) ? margini : null;
+    },
+
     placeFoto:function(nomeFoto, fotoRectangle, callback)
     {
         var warningMessage = "";
@@ -29,24 +52,26 @@ const FotoPlacer =
         var path = /*pathLavorazione +*/ (nomeFoto != null && nomeFoto != "" ? percorsoLinks + nomeFoto : percorsoLoghi + nomeNoFoto);
         try {
             console.log("Path: " + path);
-            if(customAgenzia.paddingFoto){
+            //TASK-9bf94d47: il margine attorno alla foto e' quello del fix foto del box (CssFramework).
+            var paddingFoto = FotoPlacer.marginiDellaFoto(fotoRectangle);
+            if(paddingFoto){
                 //rimpiccioliamo la fotorectangle del padding
                 fotoRectangle.geometricBounds = [
-                    fotoRectangle.geometricBounds[0] + customAgenzia.paddingFoto[0],
-                    fotoRectangle.geometricBounds[1] + customAgenzia.paddingFoto[1],
-                    fotoRectangle.geometricBounds[2] - customAgenzia.paddingFoto[0],
-                    fotoRectangle.geometricBounds[3] - customAgenzia.paddingFoto[1]
+                    fotoRectangle.geometricBounds[0] + paddingFoto[0],
+                    fotoRectangle.geometricBounds[1] + paddingFoto[1],
+                    fotoRectangle.geometricBounds[2] - paddingFoto[0],
+                    fotoRectangle.geometricBounds[3] - paddingFoto[1]
                 ];
             }
             fotoRectangle.place(path);
             //fotoRectangle.fillColor = "None";
             fotoRectangle.fit(FitOptions.PROPORTIONALLY);
-            if(customAgenzia.paddingFoto){
+            if(paddingFoto){
                 fotoRectangle.geometricBounds = [
-                    fotoRectangle.geometricBounds[0] - customAgenzia.paddingFoto[0],
-                    fotoRectangle.geometricBounds[1] - customAgenzia.paddingFoto[1],
-                    fotoRectangle.geometricBounds[2] + customAgenzia.paddingFoto[0],
-                    fotoRectangle.geometricBounds[3] + customAgenzia.paddingFoto[1]
+                    fotoRectangle.geometricBounds[0] - paddingFoto[0],
+                    fotoRectangle.geometricBounds[1] - paddingFoto[1],
+                    fotoRectangle.geometricBounds[2] + paddingFoto[0],
+                    fotoRectangle.geometricBounds[3] + paddingFoto[1]
                 ];
             }
             //fotoRectangle.fit(FitOptions.FRAME_TO_CONTENT);

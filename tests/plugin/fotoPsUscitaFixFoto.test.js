@@ -151,7 +151,9 @@ test("dopo Applica e dopo il salvataggio del noRender il fix si propone passando
 
 test("le foto si contano come le dispone il fix", () => {
     const motore = sorgente("sistemazioneFoto/sistemazioneFoto.js");
-    assert.match(motore, /return selezioneFoto\.avvisoFotoAMano\(this\.fotoDelFix\(box\)\.length, this\.configurazioneDistanziamento\(\)\);/);
+    //TASK-9bf94d47: con la configurazione di distanziamento del box, la stessa che usa il fix.
+    assert.match(motore, /return selezioneFoto\.avvisoFotoAMano\(this\.fotoDelFix\(box\)\.length, this\.configurazioneDistanziamento\(box\)\);/);
+    assert.match(motore, /var distanzFoto = configurazione\.distanziamento\.find\(d => d\.foto == fotos\.length\);/);
     assert.match(motore, /var listFoto = this\.fotoDelFix\(box\);/);
 });
 

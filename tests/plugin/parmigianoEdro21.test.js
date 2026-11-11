@@ -328,11 +328,11 @@ test("il custom di Edro21 applica base_A_Parmigiano per SC e base_P_Parmigiano p
     assert.ok(custom.indexOf("base_P_Parmigiano") > custom.indexOf("base_P_VersoNatura"));
 });
 
-//Gli elementi che il fix foto di Edro21 tratta da ostacolo, come li scrive il custom.
+//Gli elementi che il fix foto di Edro21 tratta da ostacolo, come li scrive il CssFramework.
+//TASK-9bf94d47: prima stavano nel custom (exceptionElementsToIgnoreFixFoto), ora nella sezione
+//fixFoto generale delle regole.
 function ostacoliFixFoto() {
-    const custom = leggi("plugin/Agenzie/Edro21/custom.js");
-    const eccezioni = custom.substring(custom.indexOf("exceptionElementsToIgnoreFixFoto:"), custom.indexOf("calcoloDistanziamentoFoto"));
-    return [...eccezioni.matchAll(/"([^"]+)"/g)].map(m => m[1]);
+    return regole.dbRidimensionamentiAllineamenti.fixFoto.eccezioniIgnorati;
 }
 
 test("payoff, testi e caratteristiche fanno da ostacolo al fix foto di Edro21", () => {
@@ -356,14 +356,15 @@ function descrizioneTraLoghi(ostacoli = ["*Parmigiano_payoff*", "*parmigiano_tes
         if (custom[fine] === "{") livello++;
         else if (custom[fine] === "}" && --livello === 0) break;
     }
+    //TASK-9bf94d47: gli ostacoli il custom li chiede alla configurazione del fix foto del box.
     const CssFrameworkFinto = {
         getRealBounds: item => item.testo || item.geometricBounds,
-        makeRegexFromGroupName: regex
+        makeRegexFromGroupName: regex,
+        getConfigurazioneFixFoto: () => ({ eccezioniIgnorati: ostacoli })
     };
     const UtilityFinta = { parseLabel: l => (l.indexOf("foto_extra") === 0 ? l : l.split("$")[0]) };
     const oggetto = new Function("CssFramework", "Utility",
-        "return { exceptionElementsToIgnoreFixFoto: " + JSON.stringify(ostacoli) + ",\n"
-        + custom.substring(inizio + 4, fine + 1) + "};")(CssFrameworkFinto, UtilityFinta);
+        "return {\n" + custom.substring(inizio + 4, fine + 1) + "};")(CssFrameworkFinto, UtilityFinta);
     return oggetto;
 }
 
@@ -379,7 +380,7 @@ test("la descrizione che tocca il payoff con il testo e' in conflitto", () => {
     assert.strictEqual(custom.descrizioneTraLoghi(boxCon(descrizione, [payoff]), descrizione), true);
 });
 
-test("la descrizione che tocca le caratteristiche con il testo e' in conflitto, con gli ostacoli veri del custom", () => {
+test("la descrizione che tocca le caratteristiche con il testo e' in conflitto, con gli ostacoli veri del cliente", () => {
     //I20-1131: le caratteristiche in alto a sinistra fanno da ostacolo anche per la descrizione.
     const custom = descrizioneTraLoghi(ostacoliFixFoto());
     const descrizione = { label: "descrizione", visible: true, geometricBounds: [0, 20, 30, 80], testo: [0, 20, 20, 60] };
