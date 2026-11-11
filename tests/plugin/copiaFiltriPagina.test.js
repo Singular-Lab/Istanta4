@@ -226,3 +226,51 @@ test("il riquadro dei prodotti c'e' solo nella finestra del Menabo', e la ricerc
     assert.ok(ricerca.indexOf("filtri.mostraProdottiFiltro(") > ricerca.indexOf("'Elementi totali: '"));
     assert.ok(ricerca.indexOf("filtri.mostraProdottiFiltro(") < ricerca.indexOf("return objRes;"));
 });
+
+/*
+ * I20-1227: aggiungendo un filtro senza compilarlo, sotto compariva la lista di tutti i prodotti (un
+ * filtro senza criteri trova tutto). Ora i prodotti si vedono solo sotto un filtro compilato, con la
+ * regola della Conferma: almeno un criterio con la chiave scelta. E le righe lunghe (i codici dei
+ * gruppi) uscivano dal riquadro: ora ogni prodotto sta su una riga, con i puntini e il testo intero nel
+ * suggerimento.
+ */
+
+test("I20-1227: un filtro e' compilato quando almeno un criterio ha la chiave scelta", () => {
+    assert.strictEqual(filtri.filtroCompilato([]), false);
+    assert.strictEqual(filtri.filtroCompilato(undefined), false);
+    //Il filtro appena aggiunto: un criterio vuoto, senza chiave.
+    assert.strictEqual(filtri.filtroCompilato([{ chiave: "", operatore: "=" }]), false);
+    assert.strictEqual(filtri.filtroCompilato([{ chiave: undefined, operatore: undefined }]), false);
+    assert.strictEqual(filtri.filtroCompilato([{ chiave: "Referenza.Codice", operatore: null }]), false);
+    assert.strictEqual(filtri.filtroCompilato([{ chiave: "", operatore: "=" }, { chiave: "Referenza.Codice", operatore: "=" }]), true);
+    assert.strictEqual(filtri.criterioCompilato("sigla_reparto", "IN"), true);
+});
+
+test("I20-1227: la Conferma salva i criteri con la stessa regola", () => {
+    const leggi = corpo("    leggiFiltriFinestra() {", "\n    getNomeFileFiltriJson(){");
+    assert.match(leggi, /if \(filtri\.criterioCompilato\(chiave, operatore\)\) \{/);
+    assert.doesNotMatch(leggi, /if \(chiave && operatore!=null\)/);
+});
+
+test("I20-1227: sotto un filtro non compilato non c'e' nessun prodotto, neanche 'Nessun prodotto'", () => {
+    const mostra = corpo("    mostraProdottiFiltro(filtro, righe) {", "\n    bloccaSblocca(){");
+    const svuota = mostra.indexOf("contenitore.empty();");
+    const controllo = mostra.indexOf("if (!filtri.filtroCompilato(filtri.criteriDelFiltro(filtro))) {");
+    const nessuno = mostra.indexOf("'Nessun prodotto'");
+    assert.ok(svuota > 0 && controllo > svuota && nessuno > controllo, "il controllo va dopo lo svuotamento e prima di ogni elenco");
+    assert.match(mostra.slice(controllo, controllo + 120), /\{\s*return;\s*\}/);
+    //I criteri si leggono come li legge la Conferma.
+    const criteri = corpo("    criteriDelFiltro(filtro) {", "\n    STILE_RIGA_PRODOTTO_FILTRO");
+    assert.match(criteri, /\.filtro-chiave-hidden/);
+    assert.match(criteri, /\.filtro-operatore/);
+});
+
+test("I20-1227: ogni prodotto sta su una riga, con i puntini e il testo intero nel suggerimento", () => {
+    assert.deepStrictEqual(filtri.STILE_RIGA_PRODOTTO_FILTRO, { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' });
+    const riga = corpo("    rigaProdottoFiltro(riga) {", "\n    /// I20-1216: i prodotti che un filtro trova");
+    assert.match(riga, /\.css\(filtri\.STILE_RIGA_PRODOTTO_FILTRO\)\.attr\('title', testo\)\.text\(testo\)/);
+    //Le righe in vista e quelle dietro "+ altri N" sono fatte allo stesso modo.
+    const mostra = corpo("    mostraProdottiFiltro(filtro, righe) {", "\n    bloccaSblocca(){");
+    assert.strictEqual((mostra.match(/filtri\.rigaProdottoFiltro\(riga\)/g) || []).length, 2);
+    assert.doesNotMatch(mostra, /\.text\(filtri\.testoProdottoFiltro\(riga\)\)/);
+});
