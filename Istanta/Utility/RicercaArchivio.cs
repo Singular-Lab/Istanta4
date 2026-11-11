@@ -124,10 +124,16 @@ namespace Istanta.Utility
                     //
                     // Nota: la giunzione duplicherebbe un articolo che avesse piu di una riga base.
                     // Verificato sui dati veri: nessun articolo ne ha piu di una.
+                    //
+                    // I20-1213: giunzione esterna. Quella interna scartava gli articoli trovati dalla
+                    // ricerca che non hanno la riga base (hanno solo descrizioni di area o canale):
+                    // ordinando per descrizione sparivano dall'elenco. Ora ci sono, in fondo, come gli
+                    // articoli con la descrizione base vuota, su PostgreSQL e su SQL Server.
                     return from a in query
                            join d in ctx.ArticoliDescrizionis.Where(x => x.Area == null && x.Canale == null)
-                                on (Int64?)a.Id equals d.IdArticolo
-                           orderby d.Descrizione1
+                                on (Int64?)a.Id equals d.IdArticolo into righeBase
+                           from d in righeBase.DefaultIfEmpty()
+                           orderby (d == null || d.Descrizione1 == null) ? 1 : 0, d!.Descrizione1
                            select a;
                 default:
                     return query.OrderBy(a => a.Codice);

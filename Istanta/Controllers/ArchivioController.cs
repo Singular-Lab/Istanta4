@@ -132,11 +132,11 @@ namespace Istanta.Controllers
 
         public async Task<IActionResult> Index()
         {
-            // Prima la GET restituiva la pagina senza risultati: per una pagina
-            // che serve a trovare in fretta una referenza, mostrare subito la
-            // prima pagina dell'archivio e' piu' utile di un modulo vuoto.
+            // I20-1213: la pagina si apre senza ricerca, come ha chiesto la cliente: all'Archivio si va
+            // per cercare qualcosa di preciso, e la prima pagina dell'archivio non serviva. Senza ricerca
+            // c'e' solo "In archivio"; Risultati, Con foto e Senza foto valgono zero finche' non si cerca.
             return await eseguiRicerca(null, null, null, null, null, null,
-                                       null, null, null, null, null, 0, 0);
+                                       null, null, null, null, null, 0, 0, cerca: false);
         }
 
         [HttpPost]
@@ -145,10 +145,11 @@ namespace Istanta.Controllers
             return await eseguiRicerca(search_generic, search_codice, search_brand,
                                        search_tipogusto, search_gramm, search_nome,
                                        search_reparto, search_settore, search_categoria,
-                                       search_foto, ordinamento, Page, any_changed);
+                                       search_foto, ordinamento, Page, any_changed, cerca: true);
         }
 
-        private async Task<IActionResult> eseguiRicerca(string? search_generic, string? search_codice, string? search_brand, string? search_tipogusto, string? search_gramm, string? search_nome, string? search_reparto, string? search_settore, string? search_categoria, string? search_foto, string? ordinamento, Int32 Page, int any_changed)
+        /// I20-1213: cerca false e' l'apertura della pagina: tendine e "In archivio", senza ricerca.
+        private async Task<IActionResult> eseguiRicerca(string? search_generic, string? search_codice, string? search_brand, string? search_tipogusto, string? search_gramm, string? search_nome, string? search_reparto, string? search_settore, string? search_categoria, string? search_foto, string? ordinamento, Int32 Page, int any_changed, bool cerca)
         {
             ViewBag.ipOlympus = olympusServerUrl;
 
@@ -188,6 +189,20 @@ namespace Istanta.Controllers
             ViewBag.totaleArchivio = await ctx.Articolis.CountAsync();
             msTotaleArchivio = cronometro.ElapsedMilliseconds - inizioFase;
 
+            // I20-1213: all'apertura nessuna ricerca, nessun elenco e i tre contatori della ricerca a zero.
+            if (!cerca)
+            {
+                ViewBag.conteggio = 0;
+                ViewBag.kpiConFoto = 0;
+                ViewBag.kpiSenzaFoto = 0;
+                ViewBag.TotPagine = 0;
+                ViewBag.CurrentPage = 1;
+                ViewBag.lista_ricerca = null;
+                _logger.LogInformation("Archivio: apertura in {Tutto} ms (merceologia {Merceologia} ms, totale archivio {TotaleArchivio} ms), senza ricerca",
+                    cronometro.ElapsedMilliseconds, msMerceologia, msTotaleArchivio);
+                return View();
+            }
+
             // TASK-6e4320b7: i filtri di testo non distinguono maiuscole e minuscole: ILIKE invece di
             // Contains, che su PostgreSQL le distingueva. Stanno in RicercaArchivio, che i test provano.
             query = Utility.RicercaArchivio.FiltraPerTesto(ctx, query, search_codice, search_generic,
@@ -220,14 +235,15 @@ namespace Istanta.Controllers
                 query = query.Where(a => codici.Contains(a.Codice));
             }
 
-            query = Utility.RicercaArchivio.Ordina(ctx, query, ordinamento);
-
             // TASK-a77bd7b2: i contatori di testata, sull'intero risultato della ricerca e non sulla
             // sola pagina, in una query sola: prima erano due, ognuna con tutti i filtri.
+            // I20-1213: si contano prima dell'ordinamento, che cosi' non puo' cambiare i Risultati.
             inizioFase = cronometro.ElapsedMilliseconds;
             var conteggi = await Utility.RicercaArchivio.ContaAsync(query);
             msConteggi = cronometro.ElapsedMilliseconds - inizioFase;
             ViewBag.conteggio = conteggi.Totale;
+
+            query = Utility.RicercaArchivio.Ordina(ctx, query, ordinamento);
 
             ViewBag.TotPagine = (Int32)ViewBag.conteggio / this.recordPerPage;
             if ((Int32)ViewBag.conteggio % this.recordPerPage != 0)
