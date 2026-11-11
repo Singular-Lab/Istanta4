@@ -838,6 +838,27 @@ class Promo {
         return String(testo == null ? "" : testo).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
     }
 
+    /// TASK-110bdfa0: le colonne del core del report dell'importazione, ognuna con il nome del suo campo nel
+    /// dato e il titolo. L'agenzia ne esclude alcune per nome (getColonneCoreEscluseReport): Coop toglie le
+    /// Alterazioni. Il resto del report non cambia: stato, colori e conteggi si calcolano come sempre.
+    static colonneCoreDelReport(escluse) {
+        let fuori = Array.isArray(escluse) ? escluse : [];
+        return [
+            { nome: "AC", titolo: "Area/canale" },
+            { nome: "Referenza.Codice", titolo: "Codice" },
+            { nome: "Alterazioni", titolo: "Alterazioni" }
+        ].filter(c => fuori.indexOf(c.nome) < 0);
+    }
+
+    /// TASK-110bdfa0: la cella di una colonna del core per una riga del report. Le alterazioni sono l'elenco
+    /// dei campi cambiati, uno per riga.
+    static cellaCoreDelReport(colonna, item, campiAlterati) {
+        if (colonna.nome == "Alterazioni") {
+            return `<td>${(campiAlterati || []).map(Promo.html).join("<br>")}</td>`;
+        }
+        return `<td>${Promo.html(item[colonna.nome] ?? "")}</td>`;
+    }
+
     esporta(sender) {
 
         let container = sender.closest(".record_tracciato");
@@ -955,7 +976,9 @@ class Promo {
         rows.each(function () {
             let row = $(this);
             let myStato = row.attr("stato");
-            let codice = row.find("td").eq(1).text().toLowerCase(); // colonna "Codice"
+            //TASK-110bdfa0: dalla riga, non dalla posizione della cella. Prima si leggeva la seconda cella, che e'
+            //l'area/canale: si cerca in tutti e due.
+            let codice = ((row.attr("data-codice") || "") + " " + (row.attr("data-ac") || "")).toLowerCase();
 
             if (stato != null) {
                 // Filtraggio per stato (Inalterato, Cambiato, etc.)
@@ -983,7 +1006,8 @@ class Promo {
         if (this.agenzia.getParametriReport != null) {
             colonneDinamiche = this.agenzia.getParametriReport();
         } // es: ['area', 'descrizione_iniziativa', ...]
-        //const colonneFisse = ['AC', 'Referenza.Codice', 'Alterazioni'];
+        //TASK-110bdfa0: le colonne del core meno quelle che l'agenzia esclude.
+        let colonneCore = Promo.colonneCoreDelReport(this.agenzia.getColonneCoreEscluseReport != null ? this.agenzia.getColonneCoreEscluseReport() : []);
 
         let me = this;
 
@@ -1026,24 +1050,22 @@ class Promo {
                 let alteredKeys = alterazione ? Object.keys(alterazione) : [];
                 let isAltered = alteredKeys.length > 0;
 
-                let riepilogo_alterazioni = "";
                 if (isAltered) {
                     stato = 2;
                     bkgRow = "#ebcbcb";
                     ref_cambiate++;
                     ref_inalterate--;
-                    alteredKeys.forEach(key => {
-                        riepilogo_alterazioni += key + "<br>";
-                    });
                 }
 
-                tblRows += `<tr style="background-color:${bkgRow};" stato="${stato}">`;
+                //TASK-110bdfa0: codice e area/canale stanno anche sulla riga, per la ricerca e le azioni dirette,
+                //cosi' non dipendono dalla posizione delle colonne, che l'agenzia puo' togliere.
+                tblRows += `<tr style="background-color:${bkgRow};" stato="${stato}" data-codice="${Promo.html(item["Referenza.Codice"] ?? "")}" data-ac="${Promo.html(item.AC ?? "")}">`;
 
                 // 🔒 Colonne Fisse
                 tblRows += `<td><input type="checkbox" ${stato==3?"":"disabled"} class="chDirectAct"></td>`;
-                tblRows += `<td>${item.AC ?? ""}</td>`;
-                tblRows += `<td>${item["Referenza.Codice"] ?? ""}</td>`;
-                tblRows += `<td>${riepilogo_alterazioni}</td>`;
+                colonneCore.forEach(colonna => {
+                    tblRows += Promo.cellaCoreDelReport(colonna, item, alteredKeys);
+                });
 
                 // ➕ Colonne Dinamiche
                 colonneDinamiche.forEach(col => {
@@ -1066,9 +1088,7 @@ class Promo {
             let headerHTML = `
             <tr style="background:white;">
                 <th></th>
-                <th>Area/canale</th>
-                <th>Codice</th>
-                <th>Alterazioni</th>
+                ${colonneCore.map(colonna => `<th>${colonna.titolo}</th>`).join("")}
                 ${colonneDinamiche.map(col => `<th>${col}</th>`).join("")}
             </tr>
         `;
@@ -1122,8 +1142,8 @@ class Promo {
                             let isVisibile = row.css("display") != "none";
 
                             if (isChecked && isVisibile) {
-                                let codiceRef = row.find("td").eq(2).text(); // colonna "Codice"
-                                let areacanale = row.find("td").eq(1).text(); // colonna "Codice"
+                                let codiceRef = row.attr("data-codice"); // TASK-110bdfa0: dalla riga
+                                let areacanale = row.attr("data-ac");
                                 selectedRecords.push({ cr: codiceRef, ac: areacanale });
                             }
                         });
@@ -1158,8 +1178,8 @@ class Promo {
                                         //Aggiorno la riga
                                         $("#reportTable tbody tr").each(function () {
                                             let row = $(this);
-                                            let codiceRef = row.find("td").eq(2).text(); // colonna "Codice"
-                                            let areacanale = row.find("td").eq(1).text(); // colonna "Codice"
+                                            let codiceRef = row.attr("data-codice"); // TASK-110bdfa0: dalla riga
+                                            let areacanale = row.attr("data-ac");
                                             if (resItem.codice == codiceRef && resItem.ac == areacanale && resItem.result == "ok") {//Trovata la riga
                                                 row.css("background-color", "#fdb6f1");
                                             }

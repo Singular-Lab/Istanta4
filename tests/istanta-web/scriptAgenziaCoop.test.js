@@ -40,9 +40,18 @@ test("nella scheda di revisione Coop il marchio e' Brand e il tipo e' Tipo/Gusto
 //cambiare. Ogni altra differenza fra i due archivi il test la segnala ancora.
 const SOLO_EDRO21 = ["preparaRevisioniDaSalvare"];
 
+//TASK-110bdfa0: le funzioni che Coop ha diverse da Edro21, o solo sue, per scelta: le colonne del report
+//dell'importazione (tema e settore al posto del segmento, senza la colonna Alterazioni).
+const DIVERSE_IN_COOP = ["getParametriReport", "getColonneCoreEscluseReport"];
+
 /// Il testo senza le funzioni che ha solo Edro21, commento di testa compreso.
 function senzaLeFunzioniSoloDiEdro21(testo) {
-    return SOLO_EDRO21.reduce(function (risultato, nome) {
+    return senzaLeFunzioni(testo, SOLO_EDRO21);
+}
+
+/// Il testo senza le funzioni nominate, commento di testa compreso.
+function senzaLeFunzioni(testo, nomi) {
+    return nomi.reduce(function (risultato, nome) {
         const inizio = risultato.indexOf("\n    " + nome + "(");
         if (inizio < 0) {
             return risultato;
@@ -72,6 +81,16 @@ test("l'archivio Coop ha tutte le funzioni dello script di Edro21, tranne quelle
 test("l'archivio Coop e' la copia di quello di Edro21, intestazione e funzioni solo di Edro21 a parte", () => {
     //Se uno dei due cambia, il test lo dice: allinearli o separarli diventa una scelta, non una dimenticanza.
     const senzaIntestazione = (testo) => testo.replace(/^\uFEFF?(\/\/[^\n]*\n)+/, "");
-    assert.strictEqual(senzaIntestazione(archivio("coopfi")), senzaIntestazione(senzaLeFunzioniSoloDiEdro21(archivio("edro21"))));
+    assert.strictEqual(senzaIntestazione(senzaLeFunzioni(archivio("coopfi"), DIVERSE_IN_COOP)),
+        senzaIntestazione(senzaLeFunzioni(senzaLeFunzioniSoloDiEdro21(archivio("edro21")), DIVERSE_IN_COOP)));
     assert.match(archivio("coopfi"), /^\uFEFF?\/\/Coopfi\n\/\/I20-1107: copia di edro21\/agenzia\.js/);
+});
+
+test("TASK-110bdfa0: nel report dell'importazione Coop vede tema e settore, non segmento e Alterazioni", () => {
+    const coop = archivio("coopfi");
+    assert.match(coop, /getParametriReport\(\) \{\n        return \["tema", "settore", "reparto", "Referenza\.Ean"\];/);
+    assert.match(coop, /getColonneCoreEscluseReport\(\) \{\n        return \["Alterazioni"\];/);
+    //Edro21 resta com'era.
+    assert.match(archivio("edro21"), /getParametriReport\(\) \{\n        return \["segmento", "reparto", "Referenza\.Ean"\];/);
+    assert.doesNotMatch(archivio("edro21"), /getColonneCoreEscluseReport/);
 });
