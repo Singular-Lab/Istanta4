@@ -1,4 +1,9 @@
 class Promo {
+    /// TASK-c4fdc17b: le chiavi delle colonne del core che non sono campi del dato: l'etichetta la scrive il
+    /// server in ogni riga del report (ReportImportazione.KeyEtichetta), la natura dello scatto la calcola qui.
+    static KEY_ETICHETTA = "EtichettaTracciato";
+    static KEY_NATURA_SCATTO = "NaturaScatto";
+
 
     agenzia;
     addestramento;
@@ -350,7 +355,7 @@ class Promo {
                 if (r > 0)
                     promoEl.find("#importazioniPending").append("<hr>");
 
-                promoEl.find("#importazioniPending").append("<div class=\"row mb-2\" id=\"attivita_" + rec.id + "\"><div class=\"col-2\" style=\"width: 97px;\"><button class=\"btn btn-danger btnAttivitaImport\" id=\"btnAttivitaImport\" id_attivita=\"" + rec.id + "\" id_promo=\"" + rec.idPromo + "\">Importa</button></div><div class=\"col-2\"><select class=\"form-select tipo_azione\" id=\"tipo_azione\"><option value=\"1\">Salva</option><option selected value=\"2\">Solo report</option><option value=\"3\">Salva e fai report</option></select></div><div class=\"col-7\" id=\"file_attivita\" style=\"display:flex;\"><h6><span class=\"badge bg-secondary me-2\">"+rec.label+"</span></h6>" + rec.titolo + "</div><div class=\"col-1\" style=\"text-align:right;\"><img id=\"imgGarbage_"+rec.id+"\" src=\"images/garbage_ico.png\" style=\"width:30px;cursor:pointer;\"></div>");// </div></div><div class=\"col-12\"><div class=\"progress mt-2\" id=\"progress_"+rec.id+"\" style=\"display:none;\"><div class=\"progress-bar progress-bar-striped progress-bar-animated progressBar\" id_attivita=\""+ rec.id +"\" role=\"progressbar\" aria-valuenow=\"0\" aria-valuemin=\"0\" aria-valuemax=\"100\" style=\"width:0%; height:20px;\"></div></div></div>");
+                promoEl.find("#importazioniPending").append("<div class=\"row mb-2\" id=\"attivita_" + rec.id + "\"><div class=\"col-2\" style=\"width: 97px;\"><button class=\"btn btn-danger btnAttivitaImport\" id=\"btnAttivitaImport\" id_attivita=\"" + rec.id + "\" id_promo=\"" + rec.idPromo + "\">Importa</button></div><div class=\"col-2\"><select class=\"form-select tipo_azione\" id=\"tipo_azione\">" + Promo.htmlOpzioniImportazione(me.opzioniImportazioneEscluse()) + "</select></div><div class=\"col-7\" id=\"file_attivita\" style=\"display:flex;\"><h6><span class=\"badge bg-secondary me-2\">"+rec.label+"</span></h6>" + rec.titolo + "</div><div class=\"col-1\" style=\"text-align:right;\"><img id=\"imgGarbage_"+rec.id+"\" src=\"images/garbage_ico.png\" style=\"width:30px;cursor:pointer;\"></div>");// </div></div><div class=\"col-12\"><div class=\"progress mt-2\" id=\"progress_"+rec.id+"\" style=\"display:none;\"><div class=\"progress-bar progress-bar-striped progress-bar-animated progressBar\" id_attivita=\""+ rec.id +"\" role=\"progressbar\" aria-valuenow=\"0\" aria-valuemin=\"0\" aria-valuemax=\"100\" style=\"width:0%; height:20px;\"></div></div></div>");
                 promoEl.find("#importazioniPending").append(
                     '<div class="row mt-4 progressBar" id_attivita="' + rec.id + '" id="progress_' + rec.id + '" style="display:none;">' +
                     '<div class= "container">' +
@@ -401,10 +406,9 @@ class Promo {
                     let accBody = promoEl.find(".accordion-body");
                     let b = $(`<button class="btn btn-danger btn-sm ms-3">Importa tutti</button>`);
                     let _divMassivo = $("<div style=\"display:flex;margin-left:10px;background-color: #949d93;padding: 8px;border-radius: 12px;\"></div>");
+                    //TASK-c4fdc17b: le stesse opzioni della riga, meno quelle che l'agenzia esclude.
                     _divMassivo.append($(`<select class="form-select tipo_azione" id="tipo_azione" style="width:180px;">
-                    <option value="1">Salva</option>
-                    <option selected value="2">Solo report</option>
-                    <option value="3">Salva e fai report</option>
+                    ${Promo.htmlOpzioniImportazione(me.opzioniImportazioneEscluse())}
                     </select>`));
 
                     _divMassivo.append(b);
@@ -448,7 +452,9 @@ class Promo {
                                     let arrAtt = result.esito.split(",");
                                     for (let id_attivita of arrAtt) {
                                         $("#progress_" + id_attivita).css("display", "block");
-                                        me.codaProcessi["act_" + id_attivita] = { id_attivita, persistent: true, askReport: true };
+                                        //TASK-c4fdc17b: con la scelta fatta: prima valeva sempre "Salva e fai report", e dopo un
+                                        //"Salva" massivo compariva "Leggi report" su un report che non c'era.
+                                        me.codaProcessi["act_" + id_attivita] = { id_attivita, persistent: _persistenzaMassiva == "true", askReport: _reportMassivo == "true", idPromo: id };
                                         taskManager.Add(id_attivita);
                                     }
                                 }
@@ -688,7 +694,13 @@ class Promo {
         });
     }
 
-    onAttivitaChageStatus(id_attivita, stato) {
+    /// TASK-c4fdc17b: le opzioni d'importazione che l'agenzia esclude (Edro21: "Salva").
+    opzioniImportazioneEscluse() {
+        return this.agenzia != null && this.agenzia.getOpzioniImportazioneEscluse != null ? this.agenzia.getOpzioniImportazioneEscluse() : [];
+    }
+
+    /// TASK-c4fdc17b: haReport dice se l'importazione ha lasciato un report da leggere (attivita/getStato).
+    onAttivitaChageStatus(id_attivita, stato, haReport) {
 
         //TASK-f434bd2f: l'importazione si e' fermata prima di salvare per codici doppi nella lista.
         if (stato == 8) {
@@ -711,8 +723,10 @@ class Promo {
             //setTimeout(function () { window.location = "Tracciati"; }, 2000);
             let details = this.codaProcessi["act_" + id_attivita];
             let rowParent = $("#attivita_" + id_attivita);
+            //TASK-c4fdc17b: senza report (prima versione dell'etichetta) finisce come un "Salva".
+            let esito = Promo.esitoFineImportazione(details, stato, haReport);
 
-            if (details!=null && details.askReport && stato != 7) {
+            if (esito.leggiReport) {
                 //Mostrare Vedi report al posto della tendina               
                 rowParent.find("#btnReport").remove();
                 rowParent.find("#file_attivita").prepend("<input id=\"btnReport\" type=\"button\" class=\"btn btn-primary me-2 btnReport\" id_attivita=\"" + id_attivita + "\" id_promo=\"" + details.idPromo+"\" value=\"Leggi report\">");
@@ -754,7 +768,7 @@ class Promo {
                 }
             }
             else {
-                if (details!=null && stato == 6 && !details.askReport) {
+                if (esito.chiudiRiga) {
                     //Toglo la riga dell'attività in quanto l'importazione è terminata con successo e l'operatore non aveva chiesto il report
                     rowParent.parent().remove();
                 }
@@ -841,22 +855,147 @@ class Promo {
     /// TASK-110bdfa0: le colonne del core del report dell'importazione, ognuna con il nome del suo campo nel
     /// dato e il titolo. L'agenzia ne esclude alcune per nome (getColonneCoreEscluseReport): Coop toglie le
     /// Alterazioni. Il resto del report non cambia: stato, colori e conteggi si calcolano come sempre.
-    static colonneCoreDelReport(escluse) {
+    /// TASK-c4fdc17b: anche l'etichetta del tracciato con cui la lista e' stata caricata e, se l'agenzia la
+    /// chiede (getNaturaScattoNelReport, Edro21), la natura dello scatto: di gruppo o singolo.
+    static colonneCoreDelReport(escluse, conNaturaScatto = false) {
         let fuori = Array.isArray(escluse) ? escluse : [];
-        return [
+        let colonne = [
             { nome: "AC", titolo: "Area/canale" },
             { nome: "Referenza.Codice", titolo: "Codice" },
-            { nome: "Alterazioni", titolo: "Alterazioni" }
-        ].filter(c => fuori.indexOf(c.nome) < 0);
+            { nome: "Alterazioni", titolo: "Alterazioni" },
+            { nome: Promo.KEY_ETICHETTA, titolo: "Etichetta" }
+        ];
+        if (conNaturaScatto) {
+            colonne.push({ nome: Promo.KEY_NATURA_SCATTO, titolo: "Scatto" });
+        }
+        return colonne.filter(c => fuori.indexOf(c.nome) < 0);
     }
 
     /// TASK-110bdfa0: la cella di una colonna del core per una riga del report. Le alterazioni sono l'elenco
-    /// dei campi cambiati, uno per riga.
+    /// dei campi cambiati, uno per riga. TASK-c4fdc17b: il testo viene da righeDelReport.
     static cellaCoreDelReport(colonna, item, campiAlterati) {
         if (colonna.nome == "Alterazioni") {
             return `<td>${(campiAlterati || []).map(Promo.html).join("<br>")}</td>`;
         }
         return `<td>${Promo.html(item[colonna.nome] ?? "")}</td>`;
+    }
+
+    /// TASK-c4fdc17b: la natura dello scatto di ogni riga del report: "Gruppo" quando il suo codice gruppo e'
+    /// di piu' referenze dello stesso area/canale, o non e' il suo codice; altrimenti "Singolo".
+    static naturaDelloScatto(items) {
+        let gruppo = item => String(item["Scatto.CodiceGruppo"] ?? item["Referenza.Codice"] ?? "");
+        let conteggi = {};
+        (items || []).forEach(item => {
+            let chiave = (item.AC ?? "") + "|" + gruppo(item);
+            conteggi[chiave] = (conteggi[chiave] || 0) + 1;
+        });
+        return (items || []).map(item => {
+            let chiave = (item.AC ?? "") + "|" + gruppo(item);
+            return conteggi[chiave] > 1 || gruppo(item) != String(item["Referenza.Codice"] ?? "") ? "Gruppo" : "Singolo";
+        });
+    }
+
+    /// TASK-c4fdc17b: le righe del report dai dati di Report.json: stato (1 inalterato, 2 cambiato, 3 nuovo,
+    /// 4 uscito), campi alterati e il testo di ogni colonna, del core e del cliente, su cui lavorano filtri e CSV.
+    static righeDelReport(items, colonneCore, colonneCliente) {
+        let nature = Promo.naturaDelloScatto(items);
+        return (items || []).map((item, indice) => {
+            let stato = 1;
+            if (item.versione === 1) {
+                stato = 3;
+            } else if (item.versione === -1) {
+                stato = 4;
+            }
+            let alterazione = item.Alterazioni;
+            let alterate = alterazione ? Object.keys(alterazione) : [];
+            if (alterate.length > 0) {
+                stato = 2;
+            }
+            let valori = {};
+            (colonneCore || []).forEach(c => {
+                valori[c.nome] = c.nome == "Alterazioni" ? alterate.join(", ")
+                    : c.nome == Promo.KEY_NATURA_SCATTO ? nature[indice]
+                    : String(item[c.nome] ?? "");
+            });
+            (colonneCliente || []).forEach(col => {
+                valori[col] = String(item[col] ?? "");
+            });
+            return {
+                indice: indice,
+                stato: stato,
+                codice: String(item["Referenza.Codice"] ?? ""),
+                ac: String(item.AC ?? ""),
+                alterate: alterate,
+                valori: valori,
+                item: item
+            };
+        });
+    }
+
+    /// TASK-c4fdc17b: se la riga si vede con i filtri del report, che valgono tutti insieme: lo stato (null:
+    /// tutti), la ricerca su codice e area/canale, e per ogni colonna i valori scelti (assente: tutti).
+    static rigaVisibile(riga, filtri) {
+        if (filtri == null) {
+            return true;
+        }
+        if (filtri.stato != null && String(riga.stato) != String(filtri.stato)) {
+            return false;
+        }
+        let testo = String(filtri.testo || "").toLowerCase();
+        if (testo != "" && !(riga.codice + " " + riga.ac).toLowerCase().includes(testo)) {
+            return false;
+        }
+        let colonne = filtri.colonne || {};
+        return Object.keys(colonne).every(col => !Array.isArray(colonne[col]) || colonne[col].indexOf(riga.valori[col] ?? "") >= 0);
+    }
+
+    /// TASK-c4fdc17b: i valori presenti in una colonna, una volta ciascuno, in ordine.
+    static valoriDellaColonna(righe, colonna) {
+        return [...new Set((righe || []).map(r => r.valori[colonna] ?? ""))].sort((a, b) => a.localeCompare(b, "it", { numeric: true }));
+    }
+
+    /// TASK-c4fdc17b: il CSV delle righe: le colonne del report (meno Alterazioni) e, per ogni campo alterato,
+    /// una riga con il campo, il valore precedente e quello attuale; una riga sola senza alterazioni.
+    /// Separatore ; come lo vuole Excel in italiano.
+    static csvDelReport(righe, colonneCore, colonneCliente) {
+        let cella = v => {
+            let testo = String(v ?? "");
+            return /[;"\r\n]/.test(testo) ? "\"" + testo.replace(/"/g, "\"\"") + "\"" : testo;
+        };
+        let colonne = (colonneCore || []).filter(c => c.nome != "Alterazioni").map(c => ({ chiave: c.nome, titolo: c.titolo }))
+            .concat((colonneCliente || []).map(col => ({ chiave: col, titolo: col })));
+        let linee = [colonne.map(c => c.titolo).concat(["Campo", "Prima", "Dopo"]).map(cella).join(";")];
+        (righe || []).forEach(riga => {
+            let inizio = colonne.map(c => riga.valori[c.chiave] ?? "");
+            if (riga.alterate.length == 0) {
+                linee.push(inizio.concat(["", "", ""]).map(cella).join(";"));
+                return;
+            }
+            riga.alterate.forEach(campo => {
+                linee.push(inizio.concat([campo, riga.item.Alterazioni[campo], riga.item[campo]]).map(cella).join(";"));
+            });
+        });
+        return linee.join("\r\n") + "\r\n";
+    }
+
+    /// TASK-c4fdc17b: le opzioni della scelta d'importazione, meno quelle che l'agenzia esclude
+    /// (getOpzioniImportazioneEscluse: Edro21 toglie "Salva"). Resta scelta "Solo report", o la prima rimasta.
+    static htmlOpzioniImportazione(escluse) {
+        let fuori = (Array.isArray(escluse) ? escluse : []).map(Number);
+        let opzioni = [{ valore: 1, testo: "Salva" }, { valore: 2, testo: "Solo report" }, { valore: 3, testo: "Salva e fai report" }]
+            .filter(o => fuori.indexOf(o.valore) < 0);
+        let scelta = opzioni.some(o => o.valore == 2) ? 2 : (opzioni.length > 0 ? opzioni[0].valore : null);
+        return opzioni.map(o => `<option ${o.valore == scelta ? "selected " : ""}value="${o.valore}">${o.testo}</option>`).join("");
+    }
+
+    /// TASK-c4fdc17b: quale riga d'importazione chiudere e se mostrare "Leggi report", a fine importazione.
+    /// haReport false: un "Salva e fai report" sulla prima versione dell'etichetta, finito come un "Salva".
+    static esitoFineImportazione(details, stato, haReport) {
+        let conReport = details != null && details.askReport && stato != 7 && haReport !== false;
+        return {
+            leggiReport: conReport,
+            chiudiRiga: details != null && stato == 6 && !conReport
+        };
     }
 
     esporta(sender) {
@@ -969,33 +1108,86 @@ class Promo {
         xhr.send();
     }
 
+    /// TASK-c4fdc17b: stato (dai pulsanti; "" per tutti) e ricerca valgono insieme, e insieme ai filtri delle
+    /// colonne. Prima stato e ricerca si escludevano: l'uno toglieva l'altro.
     searchReportTable = function (stato) {
-        let searchValue = $("#searchInput").val().toLowerCase();
-        let rows = $("#reportTable tbody tr");
+        if (this.filtriReport == null) {
+            this.filtriReport = { stato: null, testo: "", colonne: {} };
+        }
+        if (stato !== undefined) {
+            this.filtriReport.stato = stato === "" || stato == null ? null : stato;
+        }
+        this.filtriReport.testo = $("#searchInput").val() || "";
+        this.applicaFiltriReport();
+    }
 
-        rows.each(function () {
-            let row = $(this);
-            let myStato = row.attr("stato");
-            //TASK-110bdfa0: dalla riga, non dalla posizione della cella. Prima si leggeva la seconda cella, che e'
-            //l'area/canale: si cerca in tutti e due.
-            let codice = ((row.attr("data-codice") || "") + " " + (row.attr("data-ac") || "")).toLowerCase();
-
-            if (stato != null) {
-                // Filtraggio per stato (Inalterato, Cambiato, etc.)
-                if (myStato == stato.toString()) {
-                    row.show();
-                } else {
-                    row.hide();
-                }
+    /// TASK-c4fdc17b: mostra le righe del report che passano tutti i filtri (Promo.rigaVisibile).
+    applicaFiltriReport() {
+        let me = this;
+        if (me.reportCorrente == null) {
+            return;
+        }
+        $("#reportTable tbody tr").each(function () {
+            let riga = me.reportCorrente.righe[Number($(this).attr("data-indice"))];
+            if (riga != null && Promo.rigaVisibile(riga, me.filtriReport)) {
+                $(this).show();
             } else {
-                // Filtraggio per testo (codice)
-                if (codice.includes(searchValue)) {
-                    row.show();
-                } else {
-                    row.hide();
-                }
+                $(this).hide();
             }
         });
+    }
+
+    /// TASK-c4fdc17b: la tendina di una colonna: i suoi valori da spuntare, tutti spuntati se la colonna non ha
+    /// filtro. Tutti spuntati di nuovo: il filtro della colonna si toglie.
+    filtroColonnaReport(pulsante) {
+        let me = this;
+        let colonna = pulsante.attr("data-colonna");
+        $(".menuFiltroColonna").remove();
+        let valori = Promo.valoriDellaColonna(me.reportCorrente.righe, colonna);
+        let scelti = me.filtriReport.colonne[colonna];
+        let menu = $(`<div class="dropdown-menu show p-2 menuFiltroColonna" style="max-height:320px;overflow:auto;min-width:200px;top:100%;left:0;"></div>`);
+        menu.append(`<div class="mb-1"><a href="#" class="me-2 tuttiValori">Tutti</a><a href="#" class="nessunValore">Nessuno</a></div>`);
+        valori.forEach((valore, i) => {
+            let id = "valoreFiltro_" + i;
+            menu.append(`<div class="form-check"><input class="form-check-input" type="checkbox" id="${id}" data-valore="${Promo.html(valore)}" ${scelti == null || scelti.indexOf(valore) >= 0 ? "checked" : ""}>
+                <label class="form-check-label" for="${id}">${valore === "" ? "<i>(vuoto)</i>" : Promo.html(valore)}</label></div>`);
+        });
+        let aggiorna = function () {
+            let spuntati = menu.find("input:checked").map(function () { return $(this).attr("data-valore"); }).get();
+            if (spuntati.length == valori.length) {
+                delete me.filtriReport.colonne[colonna];
+                pulsante.removeClass("btn-warning").addClass("btn-light");
+            } else {
+                me.filtriReport.colonne[colonna] = spuntati;
+                pulsante.removeClass("btn-light").addClass("btn-warning");
+            }
+            me.applicaFiltriReport();
+        };
+        menu.on("click", function (e) { e.stopPropagation(); });
+        menu.find("input").on("change", aggiorna);
+        menu.find(".tuttiValori").on("click", function (e) { e.preventDefault(); menu.find("input").prop("checked", true); aggiorna(); });
+        menu.find(".nessunValore").on("click", function (e) { e.preventDefault(); menu.find("input").prop("checked", false); aggiorna(); });
+        pulsante.closest("th").append(menu);
+        $(document).one("click", function () { menu.remove(); });
+    }
+
+    /// TASK-c4fdc17b: il CSV delle righe visibili del report, con le stesse colonne (Promo.csvDelReport).
+    scaricaCsvReport() {
+        let me = this;
+        if (me.reportCorrente == null) {
+            return;
+        }
+        let visibili = me.reportCorrente.righe.filter(r => Promo.rigaVisibile(r, me.filtriReport));
+        let testo = Promo.csvDelReport(visibili, me.reportCorrente.colonneCore, me.reportCorrente.colonneCliente);
+        let blob = new Blob(["\ufeff" + testo], { type: "text/csv;charset=utf-8" });
+        let url = URL.createObjectURL(blob);
+        let a = document.createElement("a");
+        a.href = url;
+        a.download = "Report_" + me.reportCorrente.idAttivita + ".csv";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
     }
 
     consultaReport(id_attivita, id_promo) {
@@ -1007,7 +1199,11 @@ class Promo {
             colonneDinamiche = this.agenzia.getParametriReport();
         } // es: ['area', 'descrizione_iniziativa', ...]
         //TASK-110bdfa0: le colonne del core meno quelle che l'agenzia esclude.
-        let colonneCore = Promo.colonneCoreDelReport(this.agenzia.getColonneCoreEscluseReport != null ? this.agenzia.getColonneCoreEscluseReport() : []);
+        //TASK-c4fdc17b: con l'etichetta del tracciato e, se l'agenzia la chiede, la natura dello scatto.
+        let colonneCore = Promo.colonneCoreDelReport(this.agenzia.getColonneCoreEscluseReport != null ? this.agenzia.getColonneCoreEscluseReport() : [],
+            this.agenzia.getNaturaScattoNelReport != null && this.agenzia.getNaturaScattoNelReport() === true);
+        //TASK-c4fdc17b: l'agenzia puo' togliere la tendina delle azioni dirette e le caselle di selezione (Edro21).
+        let conAzioniDirette = !(this.agenzia.nascondiAzioniDiretteReport != null && this.agenzia.nascondiAzioniDiretteReport() === true);
 
         let me = this;
 
@@ -1019,77 +1215,67 @@ class Promo {
 
             me.repordDbCache = data;
 
-            let ref_cambiate = 0;
-            let ref_nuove = 0;
-            let ref_uscite = 0;
-            let ref_inalterate = data.length;
+            //TASK-c4fdc17b: le righe con stato e testo di ogni colonna, su cui lavorano filtri e CSV.
+            let righe = Promo.righeDelReport(data, colonneCore, colonneDinamiche);
+            me.reportCorrente = { idAttivita: id_attivita, righe: righe, colonneCore: colonneCore, colonneCliente: colonneDinamiche };
+            me.filtriReport = { stato: null, testo: "", colonne: {} };
+
+            let conteggio = stato => righe.filter(r => r.stato == stato).length;
+            let ref_inalterate = conteggio(1);
+            let ref_cambiate = conteggio(2);
+            let ref_nuove = conteggio(3);
+            let ref_uscite = conteggio(4);
+            let sfondi = { 1: "white", 2: "#ebcbcb", 3: "#ceebcb", 4: "orange" };
 
             let body = $("#ReportAttivita").find(".modal-body");
             body.empty();
 
             let tblRows = "";
 
-            for (let i = 0; i < data.length; i++) {
-                let item = data[i];
-                let stato = 1;
-                let bkgRow = "white";
-
-                if (item.versione === 1) {
-                    stato = 3;
-                    bkgRow = "#ceebcb";
-                    ref_nuove++;
-                    ref_inalterate--;
-                } else if (item.versione === -1) {
-                    stato = 4;
-                    bkgRow = "orange";
-                    ref_uscite++;
-                    ref_inalterate--;
-                }
-
+            righe.forEach(riga => {
+                let item = riga.item;
                 let alterazione = item.Alterazioni;
-                let alteredKeys = alterazione ? Object.keys(alterazione) : [];
-                let isAltered = alteredKeys.length > 0;
-
-                if (isAltered) {
-                    stato = 2;
-                    bkgRow = "#ebcbcb";
-                    ref_cambiate++;
-                    ref_inalterate--;
-                }
 
                 //TASK-110bdfa0: codice e area/canale stanno anche sulla riga, per la ricerca e le azioni dirette,
                 //cosi' non dipendono dalla posizione delle colonne, che l'agenzia puo' togliere.
-                tblRows += `<tr style="background-color:${bkgRow};" stato="${stato}" data-codice="${Promo.html(item["Referenza.Codice"] ?? "")}" data-ac="${Promo.html(item.AC ?? "")}">`;
+                tblRows += `<tr style="background-color:${sfondi[riga.stato]};" stato="${riga.stato}" data-indice="${riga.indice}" data-codice="${Promo.html(riga.codice)}" data-ac="${Promo.html(riga.ac)}">`;
 
                 // 🔒 Colonne Fisse
-                tblRows += `<td><input type="checkbox" ${stato==3?"":"disabled"} class="chDirectAct"></td>`;
+                if (conAzioniDirette) {
+                    tblRows += `<td><input type="checkbox" ${riga.stato==3?"":"disabled"} class="chDirectAct"></td>`;
+                }
                 colonneCore.forEach(colonna => {
-                    tblRows += Promo.cellaCoreDelReport(colonna, item, alteredKeys);
+                    tblRows += colonna.nome == "Alterazioni" ? Promo.cellaCoreDelReport(colonna, item, riga.alterate)
+                        : `<td>${Promo.html(riga.valori[colonna.nome])}</td>`;
                 });
 
                 // ➕ Colonne Dinamiche
                 colonneDinamiche.forEach(col => {
-                    let valore = item[col] ?? "";
+                    let valore = riga.valori[col];
                     let cellStyle = "";
                     let cellTooltip = "";
 
                     if (alterazione && alterazione[col] != null) {
                         cellStyle = "background-color:yellow;";
-                        cellTooltip = `title="Da: ${alterazione[col]} → A: ${valore}"`;
+                        cellTooltip = `title="Da: ${Promo.html(alterazione[col])} → A: ${Promo.html(valore)}"`;
                     }
 
-                    tblRows += `<td style="${cellStyle}" ${cellTooltip}>${valore}</td>`;
+                    tblRows += `<td style="${cellStyle}" ${cellTooltip}>${Promo.html(valore)}</td>`;
                 });
 
                 tblRows += `</tr>`;
-            }
+            });
+
+            //TASK-c4fdc17b: ogni intestazione ha la tendina dei suoi valori (filtroColonnaReport).
+            let intestazione = (chiave, titolo) => `<th style="position:relative;white-space:nowrap;">${Promo.html(titolo)}
+                <button type="button" class="btn btn-sm btn-light py-0 px-1 ms-1 btnFiltroColonna" data-colonna="${Promo.html(chiave)}" title="Filtra i valori">&#9662;</button></th>`;
 
             // Costruzione dell’header
             let headerHTML = `
             <tr style="background:white;">
-                <th></th>
-                ${colonneCore.map(colonna => `<th>${colonna.titolo}</th>`).join("")}
-                ${colonneDinamiche.map(col => `<th>${col}</th>`).join("")}
+                ${conAzioniDirette ? "<th></th>" : ""}
+                ${colonneCore.map(colonna => intestazione(colonna.nome, colonna.titolo)).join("")}
+                ${colonneDinamiche.map(col => intestazione(col, col)).join("")}
             </tr>
         `;
 
@@ -1102,20 +1288,25 @@ class Promo {
             </div>
         `;
 
-            let searchBarHTML = `
-            <div id="reportSearchBar" style="position:sticky; top:0; background:white; z-index:10; padding:10px;">
-                <input type="text" class="form-control mb-2" id="searchInput" placeholder="Cerca..." onkeyup="promoCtrl.searchReportTable()">
-                <div style="margin-bottom:10px;display:flex;">
-                    <select id="cmbAzioneDirettaSuReport" class="form-select" style="width:200px;">
+            let azioniHTML = !conAzioniDirette ? "" : `
+                    <select id="cmbAzioneDirettaSuReport" class="form-select me-2" style="width:200px;">
                         <option value="-3" selected>Seleziona azione...</option>
                         <option value="-2">Seleziona tutti...</option>
                         <option value="-1">Deseleziona tutti...</option>
                         <option value="1">Integra selezionati in tracciato</option>
-                    </select>
+                    </select>`;
+
+            let searchBarHTML = `
+            <div id="reportSearchBar" style="position:sticky; top:0; background:white; z-index:10; padding:10px;">
+                <input type="text" class="form-control mb-2" id="searchInput" placeholder="Cerca codice o area/canale..." onkeyup="promoCtrl.searchReportTable()">
+                <div style="margin-bottom:10px;display:flex;flex-wrap:wrap;gap:4px;">
+                    ${azioniHTML}
+                    <input type="button" filter="" class="btn btn-secondary me-2 btnFilter" value="Tutti (${righe.length})">
                     <input type="button" filter="1" class="btn btn-primary me-2 btnFilter" value="Inalterati (${ref_inalterate})">
                     <input type="button" filter="2" class="btn btn-primary me-2 btnFilter" value="Cambiati (${ref_cambiate})">
                     <input type="button" filter="3" class="btn btn-primary me-2 btnFilter" value="Nuovi (${ref_nuove})">
                     <input type="button" filter="4" class="btn btn-primary me-2 btnFilter" value="Usciti (${ref_uscite})">
+                    <input type="button" class="btn btn-success ms-auto" id="btnCsvReport" value="Scarica CSV">
                 </div>
             </div>
         `;
@@ -1126,6 +1317,15 @@ class Promo {
 
             body.find(".btnFilter").on("click", function () {
                 promoCtrl.searchReportTable($(this).attr("filter"));
+            });
+
+            body.find(".btnFiltroColonna").on("click", function (e) {
+                e.stopPropagation();
+                me.filtroColonnaReport($(this));
+            });
+
+            body.find("#btnCsvReport").on("click", function () {
+                me.scaricaCsvReport();
             });
 
             $("#cmbAzioneDirettaSuReport").on("change", function () {

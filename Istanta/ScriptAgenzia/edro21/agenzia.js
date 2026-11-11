@@ -1579,6 +1579,21 @@ class Agenzia extends IAgenzia {
         return ["segmento", "reparto", "Referenza.Ean"];
     }
 
+    /// TASK-c4fdc17b: nel report dell'importazione la colonna Scatto, di gruppo o singolo (Promo.naturaDelloScatto).
+    getNaturaScattoNelReport() {
+        return true;
+    }
+
+    /// TASK-c4fdc17b: niente tendina "Seleziona azione" ne' caselle di selezione nel report dell'importazione.
+    nascondiAzioniDiretteReport() {
+        return true;
+    }
+
+    /// TASK-c4fdc17b: le opzioni d'importazione che Edro21 non usa: 1, "Salva" senza report.
+    getOpzioniImportazioneEscluse() {
+        return [1];
+    }
+
     filtroModePerSingoliOGruppi(mode, currentList) {
         if (mode == "gruppi") {
             return currentList.filter(f => f.isGruppo || f.recordInTracciato[(revInstance.modalitaSottogruppi ? keyScattoCodiceSottogruppo : keyScattoCodiceGruppo)] != f.recordInTracciato[keyRefCodice]);

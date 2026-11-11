@@ -1923,7 +1923,8 @@ namespace Istanta.Controllers
                         {
                             guidIdCanaleDelRecord = item[key]!.ToString()!;
                         }
-                        else if (key != "AC" && key != "versione")
+                        //TASK-c4fdc17b: l'etichetta del tracciato sta nel report, non nel dato del record.
+                        else if (key != "AC" && key != "versione" && key != ReportImportazione.KeyEtichetta)
                         {
                             //var schema = impItem.IdAddestramentoNavigation.SchemaCampiExcels.FirstOrDefault(sc => sc.NomeColonna == key);
                             //if (schema == null)
