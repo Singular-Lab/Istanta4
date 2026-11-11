@@ -110,6 +110,53 @@ public class FixFotoTests
         Assert.Equal(3, fix.distanziamento!.Count);
     }
 
+    /// <summary>
+    /// TASK-99de57d1: le regole condizionali del fix foto, il modo a tutto box e i fit 4 e 5 arrivano
+    /// al Plugin come li scrive il file.
+    /// </summary>
+    [Fact]
+    public void Le_regole_condizionali_e_l_adattamento_dell_immagine_non_si_perdono()
+    {
+        const string json = "{\"modificheCssPerKit\":[],\"fixFoto\":{\"perBox\":[{\"nomiBox\":[\"BOX_STD\"],"
+            + "\"condizionali\":[{\"quando\":{\"etichette\":[\"FRESCHISSIMI\"],\"lavorazioni\":[1],"
+            + "\"campi\":[{\"campo\":\"codice_settore\",\"contiene\":\"58\"}]},"
+            + "\"modo\":\"aTuttoBox\",\"adattamentoImmagine\":\"larghezza\"}]}]}}";
+
+        var letto = JsonConvert.DeserializeObject<DbRidimensionamentiAllineamenti>(json)!;
+        var riletto = JsonConvert.DeserializeObject<DbRidimensionamentiAllineamenti>(JsonConvert.SerializeObject(letto))!;
+
+        var regola = riletto.fixFoto!.perBox!.Single().condizionali!.Single();
+        Assert.Equal(new List<string> { "FRESCHISSIMI" }, regola.quando.etichette);
+        Assert.Equal(new List<int> { 1 }, regola.quando.lavorazioni);
+        Assert.Equal("58", regola.quando.campi!.Single().contiene);
+        Assert.Equal("aTuttoBox", regola.modo);
+        Assert.Equal("larghezza", regola.adattamentoImmagine);
+    }
+
+    [Fact]
+    public void I_fit_4_e_5_sono_la_larghezza_e_l_altezza()
+    {
+        var fit = JsonConvert.DeserializeObject<FitClass>("{\"nomiElementi\":[\"immagine*\"],\"fit\":[4,5]}")!;
+
+        Assert.Equal(new List<FitOperation> { FitOperation.FILL_WIDTH_CENTERED, FitOperation.FILL_HEIGHT_CENTERED }, fit.fit);
+        Assert.Contains("[4,5]", JsonConvert.SerializeObject(fit));
+    }
+
+    [Fact]
+    public void Coop_mette_a_tutto_box_il_BOX_STD_FRESCHISSIMI_del_volantino()
+    {
+        var root = JsonConvert.DeserializeObject<DbFrameworkCss>(File.ReadAllText(TrovaSorgente("Coopfi")))!;
+
+        var servito = JObject.Parse(JsonConvert.SerializeObject(root.dbRidimensionamentiAllineamenti));
+        var regola = servito["fixFoto"]!["perBox"]!.Children()
+            .Single(p => p["nomiBox"]!.Values<string>().Contains("BOX_STD"))["condizionali"]!.Single();
+
+        Assert.Equal(new[] { "FRESCHISSIMI" }, regola["quando"]!["etichette"]!.Values<string>());
+        Assert.Equal(new[] { 1 }, regola["quando"]!["lavorazioni"]!.Values<int>());
+        Assert.Equal("aTuttoBox", regola["modo"]!.Value<string>());
+        Assert.Equal("larghezza", regola["adattamentoImmagine"]!.Value<string>());
+    }
+
     private static string TrovaSorgente(string cliente)
     {
         var relativo = $"Istanta/wwwroot/external_source/{cliente}/SourceFrameworkCss.json";

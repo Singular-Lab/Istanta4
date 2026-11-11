@@ -1162,16 +1162,10 @@ const ReperimentoFoto = {
                             }
                         }
                         //TASK-9bf94d47: come all'impaginazione, lo dice la sezione fixFoto del CssFramework.
-                        var configurazioneFixFoto = CssFramework.getConfigurazioneFixFoto(boxImpaginato);
-                        if (configurazioneFixFoto.lavorazioni.includes(ficoProcess.getTipoLavorazioneCorrente()) && configurazioneFixFoto.modo != "nessuno") {
-                            if (configurazioneFixFoto.modo != "semplice" && customAgenzia.setCustomFixFoto != null) {
-                                boxImpaginato = customAgenzia.setCustomFixFoto(boxImpaginato);
-                            }
-                            else {
-                                var res = SistemazioneFoto.getSpazioImpaginazione(boxImpaginato);
-                                SistemazioneFoto.fixFoto(boxImpaginato, res.candidate, res.obstacles);
-                            }
-                        }
+                        //TASK-99de57d1: con la referenza del box, ricavata dal suo DNA.
+                        var referenzaFixFoto = await referenzaDelBox(boxImpaginato);
+                        boxImpaginato = SistemazioneFoto.sistemaFotoAllImpaginazione(boxImpaginato, referenzaFixFoto,
+                            ficoProcess.getTipoLavorazioneCorrente(), fixFotoDellAgenzia());
                     }
 
                     //creiamo il file di esito

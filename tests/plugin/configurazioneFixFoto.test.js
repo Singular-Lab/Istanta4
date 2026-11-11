@@ -352,9 +352,11 @@ test("il core non legge piu' i dati del fix foto da customAgenzia", () => {
 });
 
 test("all'impaginazione lavorazioni e modo del box decidono se e quale fix fare", () => {
-    for (const file of ["indexNew.js", "reperimentoFoto/reperimentoFoto.js"]) {
-        const sorgente = senzaCommenti(leggiFileDelPlugin(file));
-        assert.match(sorgente, /var configurazioneFixFoto = CssFramework\.getConfigurazioneFixFoto\(boxImpaginato\);/, file);
-        assert.match(sorgente, /configurazioneFixFoto\.lavorazioni\.includes\((?:tipoLavorazione|ficoProcess\.getTipoLavorazioneCorrente\(\))\) && configurazioneFixFoto\.modo != "nessuno"\) \{\s*if \(configurazioneFixFoto\.modo != "semplice" && customAgenzia\.setCustomFixFoto != null\) \{\s*boxImpaginato = customAgenzia\.setCustomFixFoto\(boxImpaginato\);/, file);
-    }
+    //TASK-99de57d1: la decisione sta in SistemazioneFoto.sistemaFotoAllImpaginazione (provata in
+    //fotoATuttoBox.test.js); i due punti dell'impaginazione le passano la referenza e il fix dell'agenzia.
+    const indexNew = senzaCommenti(leggiFileDelPlugin("indexNew.js"));
+    assert.match(indexNew, /boxImpaginato = SistemazioneFoto\.sistemaFotoAllImpaginazione\(boxImpaginato, itemRef, tipoLavorazione, fixFotoDellAgenzia\(\)\);/);
+    const reperimento = senzaCommenti(leggiFileDelPlugin("reperimentoFoto/reperimentoFoto.js"));
+    assert.match(reperimento, /var referenzaFixFoto = await referenzaDelBox\(boxImpaginato\);\s*boxImpaginato = SistemazioneFoto\.sistemaFotoAllImpaginazione\(boxImpaginato, referenzaFixFoto,\s*ficoProcess\.getTipoLavorazioneCorrente\(\), fixFotoDellAgenzia\(\)\);/);
+    assert.match(indexNew, /return customAgenzia\.setCustomFixFoto != null \? function \(box\) \{ return customAgenzia\.setCustomFixFoto\(box\); \} : null;/);
 });

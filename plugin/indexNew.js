@@ -976,15 +976,17 @@ indesignEvents.addEventListener(indesignEvents.EVENT_NEW_REF_FIELD_SELECTED, asy
         },
         {
             buttonText: "Fix foto",
-            buttonCallback: function () {
+            buttonCallback: async function () {
                 // risaliamo di parent fino a trovare la spread
                 let currentElement = args[0];
                 while (currentElement.parent != null && currentElement.parent.constructorName != "Spread") {
                     currentElement = currentElement.parent;
                 }
 
-                var obs =SistemazioneFoto.getSpazioImpaginazione(currentElement);
-                SistemazioneFoto.fixFoto(currentElement, obs.candidate, obs.obstacles);
+                //TASK-99de57d1: con la referenza del box, cosi' le regole che la guardano valgono
+                //anche qui: un BOX_STD FRESCHISSIMI di Coop torna a tutto box.
+                var referenza = await referenzaDelBox(currentElement);
+                SistemazioneFoto.sistemaFotoDelBox(currentElement, referenza);
             }
         }];
 
@@ -5367,6 +5369,44 @@ async function fixRefImpaginata() {
 /// nome che inganna: qui dentro `schedaRef` non e' la globale.
 ///
 /// DA SPOSTARE (task di divisione): in schedaRef.js, accanto alla funzione che avvolge.
+/// TASK-99de57d1: il fix foto dell'agenzia (customAgenzia.setCustomFixFoto) come funzione, o null.
+function fixFotoDellAgenzia() {
+    return customAgenzia.setCustomFixFoto != null ? function (box) { return customAgenzia.setCustomFixFoto(box); } : null;
+}
+
+/// TASK-99de57d1: il record della ref di un box, dal suo DNA: quello delle schede gia' scaricate
+/// se c'e', altrimenti lo si chiede a Istanta come fa fixRefImpaginata. Null se il box non ha DNA o
+/// la scheda non arriva: chi lo usa per il fix foto lo fa senza le regole sulla referenza.
+async function referenzaDelBox(box) {
+    try {
+        var dna = Utility.getDnaOfBox(box);
+        if (dna == null || dna.codice_gruppo == null || dna.codice_gruppo === "") {
+            return null;
+        }
+        var codiceGruppo = dna.codice_gruppo;
+        var idRec = dna.idRec != null && dna.idRec !== "" && !isNaN(parseInt(dna.idRec)) ? parseInt(dna.idRec) : null;
+
+        if (schedaRef.schedeRefDati != null) {
+            var scheda = schedaRef.schedeRefDati.find(function (s) {
+                if (s.recordInTracciato == null || s.recordInTracciato["Scatto.CodiceGruppo"] == null
+                    || s.recordInTracciato["Scatto.CodiceGruppo"].toString() != codiceGruppo
+                    || s.recordInTracciato.StatoSelezione != 1) {
+                    return false;
+                }
+                return idRec == null || getIdRecFromItemRef(s.recordInTracciato) === idRec;
+            });
+            if (scheda != null) {
+                return scheda.recordInTracciato;
+            }
+        }
+        return await getSchedaRefAsync(schedaRef, codiceGruppo, idRec != null ? idRec : 0);
+    }
+    catch (e) {
+        console.error("Code IDX-202: referenza del box non trovata per il fix foto: " + e);
+        return null;
+    }
+}
+
 function getSchedaRefAsync(schedaRef, codiceGruppo, idRec = 0) {
     return new Promise(function (resolve, reject) {
         schedaRef.getSchedaRef(codiceGruppo, function (errore, data) {
@@ -5561,19 +5601,10 @@ async function callAllOperationFixBox(boxImpaginato, bounds, itemRef, garbageKey
 
     //TASK-9bf94d47: se e come sistemare le foto lo dice la sezione fixFoto del CssFramework: le
     //lavorazioni in cui si fa e il modo del box. "semplice" salta il fix dell'agenzia.
-    var configurazioneFixFoto = CssFramework.getConfigurazioneFixFoto(boxImpaginato);
-
+    //TASK-99de57d1: con la referenza del box, per le regole che la guardano (FRESCHISSIMI di Coop).
     CssFramework.sospendiControlloSegnalazioniConflitti = true;
     try {
-        if (configurazioneFixFoto.lavorazioni.includes(tipoLavorazione) && configurazioneFixFoto.modo != "nessuno") {
-            if (configurazioneFixFoto.modo != "semplice" && customAgenzia.setCustomFixFoto != null) {
-                boxImpaginato = customAgenzia.setCustomFixFoto(boxImpaginato);
-            }
-            else {
-                var res = SistemazioneFoto.getSpazioImpaginazione(boxImpaginato);
-                SistemazioneFoto.fixFoto(boxImpaginato, res.candidate, res.obstacles);
-            }
-        }
+        boxImpaginato = SistemazioneFoto.sistemaFotoAllImpaginazione(boxImpaginato, itemRef, tipoLavorazione, fixFotoDellAgenzia());
     }
     finally {
         CssFramework.sospendiControlloSegnalazioniConflitti = false;

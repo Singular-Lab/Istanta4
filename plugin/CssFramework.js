@@ -433,8 +433,19 @@ const CssFramework =
     /// della lavorazione corrente. Cosi' anche il Fix foto premuto prima di ogni impaginazione,
     /// quando il contesto non c'e', usa la configurazione del cliente. box null: solo le voci di
     /// default e la sezione generale. Senza regole valgono i default del Plugin.
-    getConfigurazioneFixFoto(box) {
+    /// TASK-99de57d1: referenza e' il record della ref del box, per le regole condizionali; senza,
+    /// quelle regole non valgono. Il tipo di lavorazione e' quello corrente.
+    getConfigurazioneFixFoto(box, referenza = null) {
         var voci = [];
+        var tipoLavorazione = null;
+        try {
+            if (typeof ficoProcess !== "undefined") {
+                tipoLavorazione = ficoProcess.getTipoLavorazioneCorrente();
+            }
+        }
+        catch (e) {
+            tipoLavorazione = null;
+        }
         try {
             var etichetta = box != null ? box.label : null;
             var regole = this.regoleDallaCopia();
@@ -473,7 +484,7 @@ const CssFramework =
             console.error("Code CSF-32: configurazione del fix foto del box " + (box != null ? box.label : "") + " non letta, uso i valori di default: " + e);
             voci = [];
         }
-        return SistemazioneFoto.risolviConfigurazione(voci);
+        return SistemazioneFoto.risolviConfigurazione(voci, referenza, tipoLavorazione);
     },
 
     /// TASK-9bf94d47: l'ultima copia delle regole scaricate, tenuta in memoria perche' il fix foto la
@@ -8613,6 +8624,14 @@ const CssFramework =
                                 messaggioUtente("Code CSF-11 Attenzione: impossibile eseguire il fit FILL_PROPORTIONALLY sull'elemento " + elementoTrovato.item.name + ", operazione ignorata");
                             }
                         }
+                        //TASK-99de57d1: l'immagine larga (o alta) quanto la cornice, centrata sull'altro asse.
+                        else if (fitType == "FILL_WIDTH_CENTERED" || fitType == "FILL_HEIGHT_CENTERED") {
+                            try {
+                                SistemazioneFoto.adattaImmagine(elementoTrovato.item, fitType == "FILL_WIDTH_CENTERED" ? "larghezza" : "altezza");
+                            } catch (error) {
+                                messaggioUtente("Code CSF-11 Attenzione: impossibile eseguire il fit " + fitType + " sull'elemento " + elementoTrovato.item.name + ", operazione ignorata");
+                            }
+                        }
                         else {
                             messaggioUtente("Code CSF-11 Attenzione: tipo di fit " + fitType + " non riconosciuto per l'elemento " + elementoTrovato.item.name + ", operazione ignorata");
                         }
@@ -8719,6 +8738,11 @@ const CssFramework =
                 return "PROPORTIONALLY";
             case 3:
                 return "FILL_PROPORTIONALLY";
+            //TASK-99de57d1
+            case 4:
+                return "FILL_WIDTH_CENTERED";
+            case 5:
+                return "FILL_HEIGHT_CENTERED";
             default:
                 return null;
         }

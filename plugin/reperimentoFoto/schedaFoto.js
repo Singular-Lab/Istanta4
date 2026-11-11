@@ -1374,8 +1374,10 @@ const schedaFoto = {
             return false;
         }
         //il fix foto automatico posiziona tutte le foto primarie e secondarie al posto giusto in base alla meccanica
-        var obs = SistemazioneFoto.getSpazioImpaginazione(box);
-        SistemazioneFoto.fixFoto(box, obs.candidate, obs.obstacles);
+        //TASK-99de57d1: con la referenza del box, come il Fix foto manuale: un BOX_STD FRESCHISSIMI
+        //di Coop torna a tutto box invece di cercare lo spazio libero.
+        var referenza = await referenzaDelBox(box);
+        SistemazioneFoto.sistemaFotoDelBox(box, referenza);
         messaggioUtente("Fix Foto automatico applicato", "success", false, 3);
         return true;
     },
