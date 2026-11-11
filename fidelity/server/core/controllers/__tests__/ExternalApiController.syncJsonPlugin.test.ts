@@ -618,6 +618,51 @@ describe('POST /api/external/sync_json_plugin: salvataggio', () => {
       fuoriListinoIgnorati: 1,
     }));
   });
+
+  it('salva i loghi e i bolli del box caricati su Olimpo, nella forma di quelli di Istanta', async () => {
+    const servizi = preparaServizi();
+    const box: SyncJsonPluginRef = {
+      ...boxDaListino(8, '4969665'),
+      foto_extra: [
+        { sigla: 'conad_cpq', tipo: 3, guid_id: 'g-logo-cpq' },
+        { sigla: 'boll_STAR', tipo: 2, guid_id: 'g-boll-star' },
+      ],
+    };
+
+    const res = await invia({ ...payloadBase(), refs: [box, boxDaListino(9, '1404871')] });
+
+    expect(res.status).toBe(200);
+    const [, referenze] = servizi.referenze.sostituisciReferenzeKit.mock.calls[0];
+    expect(referenze[0].fotoExtra).toEqual([
+      { tipo: 3, sigla: 'conad_cpq', guidId: 'g-logo-cpq', attiva: true },
+      { tipo: 2, sigla: 'boll_STAR', guidId: 'g-boll-star', attiva: true },
+    ]);
+    // Un box senza loghi resta senza loghi
+    expect(referenze[1].fotoExtra).toEqual([]);
+  });
+
+  it('scarta i loghi non caricati su Olimpo o incompleti senza far fallire la sincronizzazione', async () => {
+    const servizi = preparaServizi();
+    const box = {
+      ...boxDaListino(8, '4969665'),
+      foto_extra: [
+        { sigla: 'conad_cpq', tipo: 3, guid_id: 'g-logo-cpq' },
+        // Caricamento non riuscito: il plugin lascia guid_id vuoto e il percorso sul disco
+        { sigla: 'Logo_VistoinTV', tipo: 3, guid_id: '', path: '/Volumes/foto/Logo_VistoinTV.psd', exists: true },
+        { sigla: '', tipo: 3, guid_id: 'g-senza-sigla' },
+        { sigla: 'LOGO_filiera', tipo: '3', guid_id: 'g-tipo-testo' },
+        null,
+        'conad_bio',
+      ],
+    };
+
+    const res = await invia({ ...payloadBase(), refs: [box, boxDaListino(9, '1404871')] });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ success: true, referenzeCreate: 2 });
+    const [, referenze] = servizi.referenze.sostituisciReferenzeKit.mock.calls[0];
+    expect(referenze[0].fotoExtra).toEqual([{ tipo: 3, sigla: 'conad_cpq', guidId: 'g-logo-cpq', attiva: true }]);
+  });
 });
 
 describe('POST /api/external/sync_json_plugin: lista dei punti vendita', () => {
