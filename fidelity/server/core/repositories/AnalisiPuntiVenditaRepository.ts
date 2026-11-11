@@ -21,6 +21,7 @@ import {
   type StatisticheProdotti,
 } from '../utils/analisiPuntoVendita';
 import type { EdizioneConLista, PuntoVenditaPerSuggerimenti, RigaSenzaPuntoVendita } from '../utils/gestionePuntiVendita';
+import type { RigaCollegata } from '../utils/verificaCollegamenti';
 import type { RigaReferenza } from '../utils/referenzaStampata';
 import { DATA_EDIZIONE, KIT_VALIDI, PDF_VOLANTINO, SOSTITUZIONI_FISSE } from './PuntiVenditaVolantinoRepository';
 
@@ -115,8 +116,13 @@ export interface IAnalisiPuntiVenditaRepository {
    */
   qualita(idGdo: string, chiaveMeta: string | null, minutiOffline: number): Promise<QualitaGrezza>;
   righeSenzaPuntoVendita(idGdo: string): Promise<RigaSenzaPuntoVendita[]>;
+  /** Le righe della GDO collegate a un PV, a mano o automaticamente, dei kit e delle promo non eliminati. */
+  righeCollegate(idGdo: string): Promise<RigaCollegata[]>;
   edizioniConLista(idGdo: string): Promise<EdizioneConLista[]>;
-  /** Tutti i PV della GDO, con telefono, citta', indirizzo e ragione sociale: suggerimenti per le righe non abbinate. */
+  /**
+   * Tutti i PV della GDO, con telefono, citta', indirizzo, provincia, ragione sociale, combinazione
+   * canale/area e coordinate: suggerimenti per le righe non abbinate e verifica dei collegamenti.
+   */
   puntiVenditaPerSuggerimenti(idGdo: string): Promise<PuntoVenditaPerSuggerimenti[]>;
 }
 
@@ -440,28 +446,31 @@ export class AnalisiPuntiVenditaRepository implements IAnalisiPuntiVenditaReposi
     };
   }
 
-  async righeSenzaPuntoVendita(idGdo: string): Promise<RigaSenzaPuntoVendita[]> {
-    // Dall'indice parziale delle righe senza PV della GDO
+  /** Le righe dei volantini della GDO, con il loro kit; `condizione` sceglie quali. */
+  private async righeConKit(idGdo: string, condizione: string): Promise<Array<RigaSenzaPuntoVendita & { id: string; idPuntoVendita: string | null; abbinamento: TipoAbbinamento | null }>> {
     const righe = await this.seleziona<{
-      id_kit: string; data: string; id_canale: string | null; nome_canale: string | null; id_area: string | null; posizione: number;
-      riga: string; localita: string | null; indirizzo: string | null; telefono: string | null;
+      id: string; id_kit: string; data: string; id_canale: string | null; nome_canale: string | null; id_area: string | null; posizione: number;
+      riga: string; localita: string | null; indirizzo: string | null; telefono: string | null; provincia: string | null;
       chiave_indirizzo: string | null; chiave_telefono: string | null;
       titolo_kit: string | null; id_promo: string; nome_promo: string | null; nome_area: string | null;
+      id_punto_vendita: string | null; abbinamento: TipoAbbinamento | null;
     }>(
-      `SELECT k.id::text AS id_kit, ${DATA_EDIZIONE} AS data,
+      `SELECT r.id::text AS id, k.id::text AS id_kit, ${DATA_EDIZIONE} AS data,
               k.id_canale::text AS id_canale, COALESCE(c.nome_canali, k.nome_canale) AS nome_canale, k.id_area::text AS id_area,
-              r.posizione, r.riga, r.localita, r.indirizzo, r.telefono, r.chiave_indirizzo, r.chiave_telefono,
-              k.titolo AS titolo_kit, p.id_promo, p.nome_promo, COALESCE(a.nome_aree, k.nome_area) AS nome_area
+              r.posizione, r.riga, r.localita, r.indirizzo, r.telefono, r.provincia, r.chiave_indirizzo, r.chiave_telefono,
+              k.titolo AS titolo_kit, p.id_promo, p.nome_promo, COALESCE(a.nome_aree, k.nome_area) AS nome_area,
+              r.id_punto_vendita::text AS id_punto_vendita, r.abbinamento
        FROM punti_vendita_volantino r
        JOIN runtime_kit k ON k.id = r.id_kit_runtime
        JOIN promo p ON p.id_promo = k.id_promo
        LEFT JOIN canali c ON c.id_canali = k.id_canale
        LEFT JOIN aree a ON a.id_aree = k.id_area
-       WHERE r.id_gdo = :idGdo AND r.id_punto_vendita IS NULL AND ${KIT_VALIDI}
+       WHERE r.id_gdo = :idGdo AND ${condizione} AND ${KIT_VALIDI}
        ORDER BY data, k.id, r.posizione`,
       { idGdo }
     );
     return righe.map(riga => ({
+      id: riga.id,
       idKit: riga.id_kit,
       data: riga.data,
       idCanale: riga.id_canale,
@@ -472,13 +481,27 @@ export class AnalisiPuntiVenditaRepository implements IAnalisiPuntiVenditaReposi
       localita: riga.localita,
       indirizzo: riga.indirizzo,
       telefono: riga.telefono,
+      provincia: riga.provincia,
       chiaveIndirizzo: riga.chiave_indirizzo,
       chiaveTelefono: riga.chiave_telefono,
       titoloKit: riga.titolo_kit ?? '',
       idPromo: riga.id_promo,
       nomePromo: riga.nome_promo,
       nomeArea: riga.nome_area,
+      idPuntoVendita: riga.id_punto_vendita,
+      abbinamento: riga.abbinamento,
     }));
+  }
+
+  async righeSenzaPuntoVendita(idGdo: string): Promise<RigaSenzaPuntoVendita[]> {
+    // Dall'indice parziale delle righe senza PV della GDO
+    const righe = await this.righeConKit(idGdo, 'r.id_punto_vendita IS NULL');
+    return righe.map(({ id: _id, idPuntoVendita: _idPuntoVendita, abbinamento: _abbinamento, ...riga }) => riga);
+  }
+
+  async righeCollegate(idGdo: string): Promise<RigaCollegata[]> {
+    const righe = await this.righeConKit(idGdo, 'r.id_punto_vendita IS NOT NULL');
+    return righe.map(riga => ({ ...riga, idPuntoVendita: riga.idPuntoVendita as string }));
   }
 
   async edizioniConLista(idGdo: string): Promise<EdizioneConLista[]> {
@@ -495,10 +518,16 @@ export class AnalisiPuntiVenditaRepository implements IAnalisiPuntiVenditaReposi
 
   async puntiVenditaPerSuggerimenti(idGdo: string): Promise<PuntoVenditaPerSuggerimenti[]> {
     return this.seleziona<PuntoVenditaPerSuggerimenti>(
-      `SELECT id_puntivendita::text AS id, nome_puntivendita AS nome, telefono_puntivendita AS telefono,
-              citta_puntivendita AS citta, indirizzo_puntivendita AS indirizzo, ragionesociale_puntivendita AS "ragioneSociale"
-       FROM punti_vendita
-       WHERE id_gdo_puntivendita = :idGdo`,
+      `SELECT pv.id_puntivendita::text AS id, pv.nome_puntivendita AS nome, pv.telefono_puntivendita AS telefono,
+              pv.citta_puntivendita AS citta, pv.indirizzo_puntivendita AS indirizzo, pv.ragionesociale_puntivendita AS "ragioneSociale",
+              pv.provincia_puntivendita AS provincia, pv.lat_puntivendita AS lat, pv.lon_puntivendita AS lon,
+              cca.id_canale_combinazione_canale_area::text AS "idCanale", c.nome_canali AS "nomeCanale",
+              cca.id_area_combinazione_canale_area::text AS "idArea", ar.nome_aree AS "nomeArea"
+       FROM punti_vendita pv
+       LEFT JOIN combinazione_canale_area cca ON cca.id_combinazione_canale_area = pv.id_combinazione_canale_area_puntivendita
+       LEFT JOIN canali c ON c.id_canali = cca.id_canale_combinazione_canale_area
+       LEFT JOIN aree ar ON ar.id_aree = cca.id_area_combinazione_canale_area
+       WHERE pv.id_gdo_puntivendita = :idGdo`,
       { idGdo }
     );
   }

@@ -63,4 +63,31 @@ describe('RegoleCollegamento', () => {
     expect(regole.vuote).toBe(true);
     expect(regole.per(pra)).toBeNull();
   });
+
+  it('un collegamento vale solo per le righe della combinazione del suo PV; la stessa chiave puo\' andare a un PV per combinazione', () => {
+    const regole = new RegoleCollegamento([
+      { id: 'superstore', idPuntoVendita: 'pv-ss', chiavi: ['tel:0106197180'], creatoIl: '2026-11-06T10:00:00Z', combinazione: 'ss|li' },
+      { id: 'city', idPuntoVendita: 'pv-cy', chiavi: ['tel:0106197180'], creatoIl: '2026-11-06T09:00:00Z', combinazione: 'cy|li' },
+    ]);
+
+    expect(regole.per({ ...pra, combinazione: 'ss|li' })?.id).toBe('superstore');
+    expect(regole.per({ ...pra, combinazione: 'CY|LI' })?.id).toBe('city');
+    expect(regole.per({ ...pra, combinazione: 'tu|li' })).toBeNull();
+    // Riga di un kit senza canale o area: nessun collegamento con una combinazione
+    expect(regole.per({ ...pra, combinazione: null })).toBeNull();
+    // Chi non conosce la combinazione della riga trova il piu' recente
+    expect(regole.per(pra)?.id).toBe('superstore');
+  });
+
+  it('impara solo le chiavi che nessun collegamento della stessa combinazione ha gia\'', () => {
+    const superstore = { id: 'superstore', idPuntoVendita: 'pv-ss', chiavi: ['tel:0106197180'], creatoIl: '2026-11-06T10:00:00Z', combinazione: 'ss|li' };
+    const city = { id: 'city', idPuntoVendita: 'pv-cy', chiavi: ['ind:PRA|VIA NOVELLA 3'], creatoIl: '2026-11-06T09:00:00Z', combinazione: 'cy|li' };
+    const regole = new RegoleCollegamento([superstore, city]);
+    const novella = { ...riga('PRA - Via Novella 3 - tel. 010 6197180', { localita: 'PRA', indirizzo: 'Via Novella 3', telefono: '010 6197180' }), combinazione: 'ss|li' };
+
+    // L'indirizzo e' di un collegamento Conad City: per le righe Superstore si impara
+    expect(regole.impara(superstore, novella)).toEqual(['ind:PRA|VIA NOVELLA 3']);
+    expect(regole.per({ ...novella, chiaveTelefono: null, telefono: null })?.id).toBe('superstore');
+    expect(regole.per({ ...novella, chiaveTelefono: null, telefono: null, combinazione: 'cy|li' })?.id).toBe('city');
+  });
 });

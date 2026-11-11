@@ -5,6 +5,7 @@ import type { TipoAbbinamento } from '../../../../lib/puntiVendita/storia';
 import type { FileExportPlugin } from '../../interfaces/IStoriaPuntoVenditaService';
 import type {
   CambioAbbinamento,
+  CambioCollegamento,
   CollegamentoSalvato,
   IPuntiVenditaVolantinoRepository,
   KitVolantino,
@@ -13,6 +14,7 @@ import type {
   PuntoVenditaDellaStoria,
 } from '../../repositories/PuntiVenditaVolantinoRepository';
 import { chiaviRigaVolantino } from '../../utils/chiaviRigheVolantino';
+import { chiaveCombinazione } from '../../utils/confrontoPuntiVendita';
 import type { PuntoVenditaAnagrafica } from '../../utils/abbinamentoPuntiVendita';
 import { chiaveIndirizzo, chiaveTelefono } from '../../utils/puntoVenditaNormalization';
 import type { ApparizioneStoria } from '../../utils/storiaPuntoVendita';
@@ -63,6 +65,16 @@ function repositoryInMemoria(opzioni: { kit?: KitVolantino[]; anagrafica?: Punto
   const kitPerId = new Map((opzioni.kit ?? [kitDiProva()]).map(kit => [kit.id, kit]));
   let progressivo = 0;
   let orologio = Date.parse('2026-11-06T10:00:00Z');
+  const puntoVendita = (id: string) => (opzioni.puntiVendita ?? []).find(pv => pv.id === id);
+  const combinazioneDi = (id: string) => {
+    const trovato = puntoVendita(id);
+    return chiaveCombinazione(trovato?.idCanale, trovato?.idArea);
+  };
+  const collegataDa = (riga: RigaInMemoria) => ({
+    id: riga.id, idPuntoVendita: riga.id_punto_vendita as string, riga: riga.riga, localita: riga.localita ?? null,
+    chiaveIndirizzo: riga.chiave_indirizzo ?? null, chiaveTelefono: riga.chiave_telefono ?? null,
+    combinazione: chiaveCombinazione(riga.id_canale, riga.id_area),
+  });
   const repository = {
     trovaKit: vi.fn(async (idKit: string) => kitPerId.get(idKit.toLowerCase()) ?? null),
     sostituisciRigheKit: vi.fn(async (idKit: string, nuove: readonly NuovaRigaVolantino[]) => {
@@ -79,7 +91,7 @@ function repositoryInMemoria(opzioni: { kit?: KitVolantino[]; anagrafica?: Punto
       .filter(riga => riga.id_gdo === idGdo && riga.id_punto_vendita === null && (!soloKit || soloKit.includes(riga.id_kit_runtime)))
       .map(riga => ({
         id: riga.id, riga: riga.riga, localita: riga.localita, chiave_indirizzo: riga.chiave_indirizzo, chiave_telefono: riga.chiave_telefono,
-        id_punto_vendita: riga.id_punto_vendita, abbinamento: riga.abbinamento,
+        id_punto_vendita: riga.id_punto_vendita, abbinamento: riga.abbinamento, id_canale: riga.id_canale, id_area: riga.id_area,
       }))),
     aggiornaAbbinamenti: vi.fn(async (cambi: readonly CambioAbbinamento[]) => {
       for (const cambio of cambi) {
@@ -90,15 +102,16 @@ function repositoryInMemoria(opzioni: { kit?: KitVolantino[]; anagrafica?: Punto
     regoleCollegamento: vi.fn(async (idGdo: string) => collegamenti.filter(collegamento => collegamento.idGdo === idGdo)),
     creaCollegamento: vi.fn(async (nuovo: NuovoCollegamento) => {
       const id = `00000000-0000-4000-8000-${String(++progressivo).padStart(12, '0')}`;
-      const puntoVendita = (opzioni.puntiVendita ?? []).find(pv => pv.id === nuovo.idPuntoVendita);
+      const scelto = puntoVendita(nuovo.idPuntoVendita);
       orologio += 60_000;
       collegamenti.push({
         id,
         idGdo: nuovo.idGdo,
         idPuntoVendita: nuovo.idPuntoVendita,
         chiavi: [...nuovo.chiavi],
+        combinazione: combinazioneDi(nuovo.idPuntoVendita),
         riga: nuovo.riga,
-        puntoVendita: { id: nuovo.idPuntoVendita, nome: `PV ${puntoVendita?.citta ?? ''}`, indirizzo: puntoVendita?.indirizzo ?? null, citta: puntoVendita?.citta ?? null },
+        puntoVendita: { id: nuovo.idPuntoVendita, nome: `PV ${scelto?.citta ?? ''}`, indirizzo: scelto?.indirizzo ?? null, citta: scelto?.citta ?? null },
         creatoIl: new Date(orologio).toISOString(),
       });
       return id;
@@ -119,10 +132,37 @@ function repositoryInMemoria(opzioni: { kit?: KitVolantino[]; anagrafica?: Punto
     righeCollegateAMano: vi.fn(async (idGdo: string, idPuntoVendita?: string) => righe
       .filter(riga => riga.id_gdo === idGdo && riga.abbinamento === 'manuale' && riga.id_punto_vendita !== null
         && (!idPuntoVendita || riga.id_punto_vendita === idPuntoVendita))
-      .map(riga => ({
-        id: riga.id, idPuntoVendita: riga.id_punto_vendita as string, riga: riga.riga, localita: riga.localita ?? null,
-        chiaveIndirizzo: riga.chiave_indirizzo ?? null, chiaveTelefono: riga.chiave_telefono ?? null,
-      }))),
+      .map(collegataDa)),
+    righeDelPuntoVendita: vi.fn(async (idGdo: string, idPuntoVendita: string) => righe
+      .filter(riga => riga.id_gdo === idGdo && riga.id_punto_vendita === idPuntoVendita)
+      .map(riga => ({ ...collegataDa(riga), idCanale: riga.id_canale, idArea: riga.id_area, abbinamento: riga.abbinamento }))),
+    // Come la transazione vera: il collegamento aggiornato o creato, quelli assorbiti tolti, le righe spostate
+    cambiaCollegamento: vi.fn(async (cambio: CambioCollegamento) => {
+      orologio += 60_000;
+      let id = cambio.idCollegamento;
+      const esistente = collegamenti.find(collegamento => collegamento.id === id);
+      if (esistente) {
+        Object.assign(esistente, {
+          idPuntoVendita: cambio.idPuntoVendita, chiavi: [...cambio.chiavi], combinazione: combinazioneDi(cambio.idPuntoVendita), creatoIl: new Date(orologio).toISOString(),
+        });
+      } else {
+        id = `00000000-0000-4000-8000-${String(++progressivo).padStart(12, '0')}`;
+        collegamenti.push({
+          id, idGdo: cambio.idGdo, idPuntoVendita: cambio.idPuntoVendita, chiavi: [...cambio.chiavi], combinazione: combinazioneDi(cambio.idPuntoVendita),
+          riga: cambio.riga, puntoVendita: { id: cambio.idPuntoVendita, nome: 'PV', indirizzo: null, citta: null }, creatoIl: new Date(orologio).toISOString(),
+        });
+      }
+      for (const daEliminare of cambio.daEliminare) collegamenti.splice(collegamenti.findIndex(collegamento => collegamento.id === daEliminare), 1);
+      for (const singolo of cambio.cambi) {
+        const riga = righe.find(esistenteRiga => esistenteRiga.id === singolo.id);
+        if (riga) Object.assign(riga, { id_punto_vendita: singolo.idPuntoVendita, abbinamento: singolo.abbinamento });
+      }
+      return id as string;
+    }),
+    nomiCanaliAree: vi.fn(async (_idGdo: string) => ({
+      canali: new Map([['canale-ss', 'Superstore'], ['canale-cy', 'Conad City']]),
+      aree: new Map([['area-li', 'Liguria'], ['area-to', 'Toscana']]),
+    })),
     trovaPuntoVendita: vi.fn(async (id: string) => (opzioni.puntiVendita ?? []).find(pv => pv.id === id) ?? null),
     apparizioni: vi.fn(async (_id: string): Promise<ApparizioneStoria[]> => []),
     volantiniSenzaPuntoVendita: vi.fn(async (_criteri: Parameters<IPuntiVenditaVolantinoRepository['volantiniSenzaPuntoVendita']>[0]) => [] as Array<{ idKit: string; data: string }>),
@@ -544,7 +584,10 @@ describe('StoriaPuntoVenditaService.importaExport', () => {
 describe('StoriaPuntoVenditaService: collegamenti fatti a mano', () => {
   // Il Conad di Pra si e' trasferito: in anagrafica e' in Via Novella 3 con un altro telefono,
   // nei volantini resta stampato in Via Murtola. L'abbinamento automatico non lo riconosce.
-  const PRA_TRASFERITO: PuntoVenditaDellaStoria = { id: PV_PRA, idGdo: GDO, citta: 'Genova', indirizzo: 'Via Novella 3', telefono: '010 0000001' };
+  const PRA_TRASFERITO: PuntoVenditaDellaStoria = {
+    id: PV_PRA, idGdo: GDO, citta: 'Genova', indirizzo: 'Via Novella 3', telefono: '010 0000001',
+    idCanale: 'canale-ss', nomeCanale: 'Superstore', idArea: 'area-li', nomeArea: 'Liguria',
+  };
   const SANREMO_ALTRA_GDO: PuntoVenditaDellaStoria = { id: PV_SANREMO, idGdo: ALTRA_GDO, citta: 'Sanremo', indirizzo: 'Corso Nazario Sauro 44', telefono: null };
   const RIGA_PRA = 'PRA - Via Murtola 12/14 - tel. 010 6197180';
 
@@ -677,5 +720,148 @@ describe('StoriaPuntoVenditaService: collegamenti fatti a mano', () => {
     await expect(storia.scollega(GDO, 'non-un-uuid')).rejects.toBeInstanceOf(NotFoundError);
     expect(collegamenti).toHaveLength(1);
     expect(righe.filter(riga => riga.riga === RIGA_PRA).every(riga => riga.id_punto_vendita === PV_PRA)).toBe(true);
+  });
+});
+
+describe('StoriaPuntoVenditaService: canale e area nei collegamenti fatti a mano', () => {
+  // Il kit KIT e' Superstore · Liguria; KIT_CITY e' Conad City · Liguria
+  const KIT_CITY = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+  const PV_CITY = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+  const PV_ALTRO = '99999999-9999-4999-8999-999999999999';
+  const RIGA_PRA = 'PRA - Via Murtola 12/14 - tel. 010 6197180';
+  const pv = (id: string, idCanale: string, nomeCanale: string, sovrascritti: Partial<PuntoVenditaDellaStoria> = {}): PuntoVenditaDellaStoria => ({
+    id, idGdo: GDO, citta: 'Genova', indirizzo: 'Via Novella 3', telefono: null, idCanale, nomeCanale, idArea: 'area-li', nomeArea: 'Liguria', ...sovrascritti,
+  });
+  const SUPERSTORE = pv(PV_PRA, 'canale-ss', 'Superstore');
+  const CITY = pv(PV_CITY, 'canale-cy', 'Conad City');
+  const ALTRO_SUPERSTORE = pv(PV_ALTRO, 'canale-ss', 'Superstore', { indirizzo: 'Via Pra 1' });
+
+  const preparato = async (anagrafica: PuntoVenditaAnagrafica[] = []) => {
+    const memoria = repositoryInMemoria({
+      kit: [kitDiProva(), kitDiProva({ id: KIT_DUE, titolo: 'SS LI 46' }), kitDiProva({ id: KIT_CITY, titolo: 'CY LI 46', idCanale: 'canale-cy' })],
+      anagrafica,
+      puntiVendita: [SUPERSTORE, CITY, ALTRO_SUPERSTORE],
+    });
+    const storia = servizio(memoria.repository);
+    await storia.registraListaVolantino({ idKit: KIT, pv: RIGA_PRA });
+    await storia.registraListaVolantino({ idKit: KIT_CITY, pv: RIGA_PRA });
+    const chiavePra = chiaviRigaVolantino({ riga: RIGA_PRA, localita: 'PRA', chiaveIndirizzo: chiaveIndirizzo('Via Murtola 12/14'), chiaveTelefono: chiaveTelefono('010 6197180') })[0];
+    return { ...memoria, storia, chiavePra };
+  };
+  const stato = (righe: RigaInMemoria[]) => righe.map(riga => [riga.id_kit_runtime, riga.id_punto_vendita, riga.abbinamento]);
+
+  it('collega solo le righe dei volantini della combinazione del PV: le altre restano non abbinate', async () => {
+    const { storia, righe, chiavePra } = await preparato();
+
+    const esito = await storia.collega(GDO, { chiave: chiavePra, idPuntoVendita: PV_PRA }, null);
+
+    expect(esito.righe).toBe(1);
+    expect(stato(righe)).toEqual([[KIT, PV_PRA, 'manuale'], [KIT_CITY, null, null]]);
+  });
+
+  it('PV di una combinazione che nessun volantino della riga ha: 422 con le combinazioni, nessuna riga cambia', async () => {
+    const memoria = repositoryInMemoria({
+      kit: [kitDiProva()],
+      puntiVendita: [CITY],
+    });
+    const storia = servizio(memoria.repository);
+    await storia.registraListaVolantino({ idKit: KIT, pv: RIGA_PRA });
+    const chiave = chiaviRigaVolantino({ riga: RIGA_PRA, localita: 'PRA', chiaveIndirizzo: chiaveIndirizzo('Via Murtola 12/14'), chiaveTelefono: chiaveTelefono('010 6197180') })[0];
+
+    const errore = await storia.collega(GDO, { chiave, idPuntoVendita: PV_CITY }, null).catch((e: unknown) => e);
+
+    expect(errore).toBeInstanceOf(ApplicationError);
+    expect((errore as ApplicationError).httpStatus).toBe(422);
+    expect((errore as ApplicationError).code).toBe('COMBINAZIONE_DIVERSA');
+    expect((errore as ApplicationError).message).toContain('Conad City · Liguria');
+    expect((errore as ApplicationError).message).toContain('Superstore · Liguria');
+    expect(memoria.repository.creaCollegamento).not.toHaveBeenCalled();
+    expect(memoria.righe.every(riga => riga.id_punto_vendita === null)).toBe(true);
+  });
+
+  it('un volantino nuovo di un\'altra combinazione con la stessa riga non viene collegato dal collegamento', async () => {
+    const { storia, righe, chiavePra } = await preparato();
+    await storia.collega(GDO, { chiave: chiavePra, idPuntoVendita: PV_PRA }, null);
+
+    await storia.registraListaVolantino({ idKit: KIT_CITY, pv: RIGA_PRA });
+    await storia.registraListaVolantino({ idKit: KIT_DUE, pv: RIGA_PRA });
+
+    expect(stato(righe)).toEqual([[KIT, PV_PRA, 'manuale'], [KIT_CITY, null, null], [KIT_DUE, PV_PRA, 'manuale']]);
+  });
+
+  it('scollega anche le righe collegate prima del vincolo, di un\'altra combinazione', async () => {
+    const { storia, righe, collegamenti, chiavePra } = await preparato();
+    const { idCollegamento } = await storia.collega(GDO, { chiave: chiavePra, idPuntoVendita: PV_PRA }, null);
+    // Una riga Conad City collegata a mano allo stesso PV, come prima del vincolo su canale e area
+    Object.assign(righe[1], { id_punto_vendita: PV_PRA, abbinamento: 'manuale' });
+    expect((await storia.collegamenti(GDO)).collegamenti[0].righe).toBe(2);
+
+    const esito = await storia.scollega(GDO, idCollegamento);
+
+    expect(esito).toEqual({ righe: 2 });
+    expect(collegamenti).toHaveLength(0);
+    expect(stato(righe)).toEqual([[KIT, null, null], [KIT_CITY, null, null]]);
+  });
+
+  describe('cambiaCollegamento', () => {
+    it('collegamento fatto a mano: lo stesso collegamento passa al nuovo PV, con tutte le righe', async () => {
+      const { storia, righe, collegamenti, chiavePra, repository } = await preparato();
+      await storia.registraListaVolantino({ idKit: KIT_DUE, pv: RIGA_PRA });
+      const { idCollegamento } = await storia.collega(GDO, { chiave: chiavePra, idPuntoVendita: PV_PRA }, null);
+
+      const esito = await storia.cambiaCollegamento(GDO, { chiave: chiavePra, idPuntoVenditaAttuale: PV_PRA, idPuntoVendita: PV_ALTRO }, 'utente-2');
+
+      expect(esito).toEqual({ idCollegamento, righe: 2 });
+      expect(collegamenti).toHaveLength(1);
+      expect(collegamenti[0]).toMatchObject({ id: idCollegamento, idPuntoVendita: PV_ALTRO });
+      expect(stato(righe)).toEqual([[KIT, PV_ALTRO, 'manuale'], [KIT_CITY, null, null], [KIT_DUE, PV_ALTRO, 'manuale']]);
+      expect(repository.cambiaCollegamento).toHaveBeenCalledWith(expect.objectContaining({ idCollegamento, daEliminare: [], creatoDa: 'utente-2' }));
+    });
+
+    it('abbinamento automatico per telefono: diventa un collegamento fatto a mano, che resta a una nuova sincronizzazione', async () => {
+      // Lo stesso telefono di un PV dell'anagrafica: l'abbinamento automatico lo collega a PV_PRA
+      const { storia, righe, collegamenti, chiavePra } = await preparato([{ id: PV_PRA, citta: 'Genova', indirizzo: 'Via Novella 3', telefono: '010 6197180' }]);
+      expect(stato(righe)).toEqual([[KIT, PV_PRA, 'telefono'], [KIT_CITY, PV_PRA, 'telefono']]);
+
+      const esito = await storia.cambiaCollegamento(GDO, { chiave: chiavePra, idPuntoVenditaAttuale: PV_PRA, idPuntoVendita: PV_ALTRO }, null);
+
+      expect(esito.righe).toBe(1);
+      expect(collegamenti).toHaveLength(1);
+      // La riga Conad City torna all'abbinamento automatico: di nuovo per telefono a PV_PRA
+      expect(stato(righe)).toEqual([[KIT, PV_ALTRO, 'manuale'], [KIT_CITY, PV_PRA, 'telefono']]);
+
+      await storia.registraListaVolantino({ idKit: KIT, pv: RIGA_PRA });
+      expect(righe.filter(riga => riga.id_kit_runtime === KIT).map(riga => [riga.id_punto_vendita, riga.abbinamento])).toEqual([[PV_ALTRO, 'manuale']]);
+    });
+
+    it('verso un PV di un\'altra combinazione: 422, le righe restano al PV di prima', async () => {
+      const { storia, righe, chiavePra, repository } = await preparato();
+      await storia.collega(GDO, { chiave: chiavePra, idPuntoVendita: PV_PRA }, null);
+
+      const errore = await storia.cambiaCollegamento(GDO, { chiave: chiavePra, idPuntoVenditaAttuale: PV_PRA, idPuntoVendita: PV_CITY }, null).catch((e: unknown) => e);
+
+      // La riga collegata a PV_PRA e' solo quella Superstore: Conad City non e' fra le sue combinazioni
+      expect((errore as ApplicationError).httpStatus).toBe(422);
+      expect(repository.cambiaCollegamento).not.toHaveBeenCalled();
+      expect(stato(righe)).toEqual([[KIT, PV_PRA, 'manuale'], [KIT_CITY, null, null]]);
+    });
+
+    it('PV di un\'altra GDO o gruppo non piu\' collegato a quel PV: 404 e 409, nulla cambia', async () => {
+      const { storia, chiavePra, repository } = await preparato();
+      await storia.collega(GDO, { chiave: chiavePra, idPuntoVendita: PV_PRA }, null);
+
+      await expect(storia.cambiaCollegamento(GDO, { chiave: chiavePra, idPuntoVenditaAttuale: PV_PRA, idPuntoVendita: PV_SANREMO }, null)).rejects.toBeInstanceOf(NotFoundError);
+      const errore = await storia.cambiaCollegamento(GDO, { chiave: chiavePra, idPuntoVenditaAttuale: PV_ALTRO, idPuntoVendita: PV_PRA }, null).catch((e: unknown) => e);
+      expect((errore as ApplicationError).httpStatus).toBe(409);
+      expect(repository.cambiaCollegamento).not.toHaveBeenCalled();
+    });
+
+    it('richiesta non valida o stesso PV: BadRequestError', async () => {
+      const { storia, chiavePra } = await preparato();
+
+      await expect(storia.cambiaCollegamento(GDO, { chiave: '', idPuntoVenditaAttuale: PV_PRA, idPuntoVendita: PV_ALTRO }, null)).rejects.toBeInstanceOf(BadRequestError);
+      await expect(storia.cambiaCollegamento(GDO, { chiave: chiavePra, idPuntoVenditaAttuale: 'x', idPuntoVendita: PV_ALTRO }, null)).rejects.toBeInstanceOf(BadRequestError);
+      await expect(storia.cambiaCollegamento(GDO, { chiave: chiavePra, idPuntoVenditaAttuale: PV_PRA, idPuntoVendita: PV_PRA }, null)).rejects.toBeInstanceOf(BadRequestError);
+    });
   });
 });

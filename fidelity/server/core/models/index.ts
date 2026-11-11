@@ -29,6 +29,7 @@ import { DispositivoPuntoVendita } from "./punto_vendita/dispositivi_punto_vendi
 import { PuntoVendita } from './punto_vendita/punti_vendita';
 import { PuntoVenditaUtenti } from './punto_vendita/punti_vendita_utenti';
 import { AbbinamentoManualePvVolantino } from './punto_vendita/abbinamenti_manuali_pv_volantino';
+import { PosizioneRigaVolantino } from './punto_vendita/posizioni_righe_volantino';
 import { PuntoVenditaVolantino } from './punto_vendita/punti_vendita_volantino';
 import { RaccoglitoreKit } from './raccoglitore_kit';
 import { Referenze } from './referenze';
@@ -111,6 +112,8 @@ export const MODELLI_SEQUELIZE = {
   PuntoVenditaVolantino: { model: PuntoVenditaVolantino, nome: 'PuntoVenditaVolantino', tabella: 'punti_vendita_volantino' },
   // Le righe dei volantini collegate a mano a un PV: regole della GDO
   AbbinamentoManualePvVolantino: { model: AbbinamentoManualePvVolantino, nome: 'AbbinamentoManualePvVolantino', tabella: 'abbinamenti_manuali_pv_volantino' },
+  // La posizione delle righe dei volantini (Nominatim o corretta a mano): verifica dei collegamenti
+  PosizioneRigaVolantino: { model: PosizioneRigaVolantino, nome: 'PosizioneRigaVolantino', tabella: 'posizioni_righe_volantino' },
   // Riepilogo di ogni kit per le pagine dei punti vendita (cache)
   AnalisiKit: { model: AnalisiKit, nome: 'AnalisiKit', tabella: 'analisi_kit' },
   // Modelli export
@@ -354,7 +357,7 @@ export const modelliManager = ModelliManager.getInstance();
 export {
   AbbinamentoManualePvVolantino, ApprofondimentoVino, Area, Attivita, Canale, CanaleInterazione, CombinazioneCanaleArea, Config, ContenutiAggiuntiviReferenza,
   ContrattoTipografia, DesignKit, DisplayContextPuntoVendita, DispositivoPuntoVendita, EphemeralAuditLog, EphemeralChallenge, EphemeralOriginsWhitelist, EphemeralToken, FilesRuntime, FilesRuntimeLog, Formati, GDO, ImpostazioniGdo, NamingConvention,
-  OrdiniDiStampa, OrdiniDiStampaInvii, PromoScoreboard, PuntoVendita, PuntoVenditaUtenti, PuntoVenditaVolantino, RaccoglitoreKit, Referenze, ReferenzeGruppo, Ricette, RuntimeKit, RuoloPuntoVendita, TentativoWebhook, TipiDiExport, Tracciati, TracciatiInvioIstanta, TracciatiMomentoConfronti,
+  OrdiniDiStampa, OrdiniDiStampaInvii, PosizioneRigaVolantino, PromoScoreboard, PuntoVendita, PuntoVenditaUtenti, PuntoVenditaVolantino, RaccoglitoreKit, Referenze, ReferenzeGruppo, Ricette, RuntimeKit, RuoloPuntoVendita, TentativoWebhook, TipiDiExport, Tracciati, TracciatiInvioIstanta, TracciatiMomentoConfronti,
   Utente, UtentiAnonimi, UtentiGDO, UtentiGuest, Webhook, WishlistWebpliant, WorkspaceWebpliant,
   MenuItem, Permesso, PermessoRuolo, PermessoRuoloGdo,
   PluginAnalyticsEvent,

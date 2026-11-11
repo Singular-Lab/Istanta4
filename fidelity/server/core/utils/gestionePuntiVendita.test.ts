@@ -1,3 +1,4 @@
+import { MASSIMO_CANDIDATI, type PosizioneRiga } from '../../../lib/puntiVendita/analisi';
 import { describe, expect, it } from 'vitest';
 import { chiaviRigaVolantino } from './chiaviRigheVolantino';
 import { type EdizioneConLista, raggruppaRigheNonAbbinate, righeDaRevisionare, type RigaSenzaPuntoVendita, volantiniDelGruppo } from './gestionePuntiVendita';
@@ -56,8 +57,8 @@ describe('raggruppaRigheNonAbbinate', () => {
   ];
 
   const PUNTI_VENDITA = [
-    { id: 'pv-9', nome: 'Conad Superstore Sanremo', telefono: '0184 5550143' },
-    { id: 'pv-3', nome: 'Conad City Genova', telefono: null },
+    { id: 'pv-9', nome: 'Conad Superstore Sanremo', telefono: '0184 5550143', idCanale: 'SS', idArea: 'LI' },
+    { id: 'pv-3', nome: 'Conad City Genova', telefono: null, idCanale: 'CC', idArea: 'LI' },
   ];
 
   const gruppi = raggruppaRigheNonAbbinate(RIGHE, EDIZIONI, PUNTI_VENDITA);
@@ -80,10 +81,14 @@ describe('raggruppaRigheNonAbbinate', () => {
       localita: 'ARMA DI TAGGIA',
       indirizzo: 'P.zza Chierotti 4',
       telefono: '0184 999 0000',
+      provincia: null,
       volantini: 2,
       primoVolantino: '2022-01-06',
       ultimoVolantino: '2022-02-03',
       canale: { id: 'SS', nome: 'Conad Superstore' },
+      combinazioni: [{ canale: { id: 'SS', nome: 'Conad Superstore' }, area: { id: 'LI', nome: '' } }],
+      // Mai cercata: nessuna posizione
+      posizione: null,
       suggerimento: { tipo: 'da_aggiungere' },
       candidati: [],
     });
@@ -110,6 +115,8 @@ describe('raggruppaRigheNonAbbinate', () => {
   });
 });
 
+const SS_LI = { idCanale: 'SS', nomeCanale: 'Conad Superstore', idArea: 'LI', nomeArea: 'Liguria' };
+
 describe('raggruppaRigheNonAbbinate: punti vendita a cui collegare la riga', () => {
   const rigaSanremo = (telefono: string | null): RigaSenzaPuntoVendita => ({
     idKit: 'k1',
@@ -128,11 +135,11 @@ describe('raggruppaRigheNonAbbinate: punti vendita a cui collegare la riga', () 
 
   it('dal motivo piu\' forte: stesso telefono, stesso indirizzo altrove, indirizzo simile, stessa localita\'', () => {
     const [gruppo] = raggruppaRigheNonAbbinate([rigaSanremo('0184 555 0001')], [], [
-      { id: 'pv-roma', nome: 'PV Via Roma', telefono: null, citta: 'Sanremo', indirizzo: 'Via Roma 3' },
-      { id: 'pv-46', nome: 'PV Corso 46', telefono: null, citta: 'Sanremo', indirizzo: 'Corso Nazario Sauro 46' },
-      { id: 'pv-taggia', nome: 'PV Taggia', telefono: null, citta: 'Taggia', indirizzo: 'Corso Nazario Sauro 44' },
-      { id: 'pv-centralino', nome: 'Centralino', telefono: '0184 5550001', citta: 'Sanremo', indirizzo: 'Via Matteotti 1' },
-      { id: 'pv-genova', nome: 'Genova', telefono: null, citta: 'Genova', indirizzo: 'Via XX Settembre 1' },
+      { ...SS_LI, id: 'pv-roma', nome: 'PV Via Roma', telefono: null, citta: 'Sanremo', indirizzo: 'Via Roma 3' },
+      { ...SS_LI, id: 'pv-46', nome: 'PV Corso 46', telefono: null, citta: 'Sanremo', indirizzo: 'Corso Nazario Sauro 46' },
+      { ...SS_LI, id: 'pv-taggia', nome: 'PV Taggia', telefono: null, citta: 'Taggia', indirizzo: 'Corso Nazario Sauro 44' },
+      { ...SS_LI, id: 'pv-centralino', nome: 'Centralino', telefono: '0184 5550001', citta: 'Sanremo', indirizzo: 'Via Matteotti 1' },
+      { ...SS_LI, id: 'pv-genova', nome: 'Genova', telefono: null, citta: 'Genova', indirizzo: 'Via XX Settembre 1' },
     ]);
 
     expect(gruppo.candidati.map(candidato => [candidato.puntoVendita.id, candidato.motivo])).toEqual([
@@ -141,17 +148,24 @@ describe('raggruppaRigheNonAbbinate: punti vendita a cui collegare la riga', () 
       ['pv-46', 'indirizzo_simile'],
       ['pv-roma', 'stessa_localita'],
     ]);
-    expect(gruppo.candidati[1].puntoVendita).toEqual({ id: 'pv-taggia', nome: 'PV Taggia', ragioneSociale: null, indirizzo: 'Corso Nazario Sauro 44', citta: 'Taggia' });
+    expect(gruppo.candidati[1].puntoVendita).toEqual({
+      id: 'pv-taggia', nome: 'PV Taggia', ragioneSociale: null, indirizzo: 'Corso Nazario Sauro 44', citta: 'Taggia', provincia: null, telefono: null,
+      lat: null, lon: null, combinazione: { canale: { id: 'SS', nome: 'Conad Superstore' }, area: { id: 'LI', nome: 'Liguria' } },
+    });
+    // Ogni candidato con il confronto: stesso indirizzo, altra localita'
+    expect(gruppo.candidati[1].confronto).toEqual({
+      telefono: 'assente', indirizzo: 'uguale', localita: 'diverso', provincia: 'assente', stessaCombinazione: true, distanzaMetri: null,
+    });
   });
 
-  it('al massimo cinque, i piu\' vicini per indirizzo', () => {
-    const puntiVendita = Array.from({ length: 8 }, (_, indice) => ({
-      id: `pv-${indice}`, nome: `PV ${indice}`, telefono: null, citta: 'Sanremo', indirizzo: `Via Lontana ${'X'.repeat(indice)} 1`,
+  it('al massimo otto, i piu\' vicini per indirizzo', () => {
+    const puntiVendita = Array.from({ length: 10 }, (_, indice) => ({
+      ...SS_LI, id: `pv-${indice}`, nome: `PV ${indice}`, telefono: null, citta: 'Sanremo', indirizzo: `Via Lontana ${'X'.repeat(indice)} 1`,
     }));
 
     const [gruppo] = raggruppaRigheNonAbbinate([rigaSanremo(null)], [], puntiVendita);
 
-    expect(gruppo.candidati).toHaveLength(5);
+    expect(gruppo.candidati).toHaveLength(MASSIMO_CANDIDATI);
     expect(gruppo.candidati.every(candidato => candidato.motivo === 'stessa_localita')).toBe(true);
   });
 
@@ -165,10 +179,10 @@ describe('raggruppaRigheNonAbbinate: punti vendita a cui collegare la riga', () 
     };
 
     const [gruppo] = raggruppaRigheNonAbbinate([riga], [], [
-      { id: 'pv-pra', nome: 'Superstore Pra', telefono: null, citta: 'Genova', indirizzo: 'Via Novella 3' },
-      { id: 'pv-murtola', nome: 'Conad Genova', ragioneSociale: 'Murtola Market Srl', telefono: null, citta: 'Genova', indirizzo: 'Via Roma 1' },
+      { ...SS_LI, id: 'pv-pra', nome: 'Superstore Pra', telefono: null, citta: 'Genova', indirizzo: 'Via Novella 3' },
+      { ...SS_LI, id: 'pv-murtola', nome: 'Conad Genova', ragioneSociale: 'Murtola Market Srl', telefono: null, citta: 'Genova', indirizzo: 'Via Roma 1' },
       // "PRATO" non e' "PRA"
-      { id: 'pv-prato', nome: 'Conad Prato', telefono: null, citta: 'Prato', indirizzo: 'Via Pistoiese 2' },
+      { ...SS_LI, id: 'pv-prato', nome: 'Conad Prato', telefono: null, citta: 'Prato', indirizzo: 'Via Pistoiese 2' },
     ]);
 
     expect(gruppo.candidati.map(candidato => [candidato.puntoVendita.id, candidato.motivo])).toEqual([
@@ -180,8 +194,65 @@ describe('raggruppaRigheNonAbbinate: punti vendita a cui collegare la riga', () 
 
   it('nessun PV della stessa localita\', telefono o indirizzo: nessun candidato', () => {
     const [gruppo] = raggruppaRigheNonAbbinate([rigaSanremo('0184 555 0001')], [], [
-      { id: 'pv-genova', nome: 'Genova', telefono: '010 1234567', citta: 'Genova', indirizzo: 'Via XX Settembre 1' },
+      { ...SS_LI, id: 'pv-genova', nome: 'Genova', telefono: '010 1234567', citta: 'Genova', indirizzo: 'Via XX Settembre 1' },
     ]);
+    expect(gruppo.candidati).toEqual([]);
+  });
+});
+
+describe('raggruppaRigheNonAbbinate: canale e area, posizione e vicinanza', () => {
+  const riga = (sovrascritti: Partial<RigaSenzaPuntoVendita> = {}): RigaSenzaPuntoVendita => ({
+    idKit: 'k1', data: '2024-03-07', idCanale: 'SS', nomeCanale: 'Conad Superstore', idArea: 'LI', nomeArea: 'Liguria', posizione: 1,
+    riga: 'PRA - Via Murtola 12/14 - tel. 010 6197180', localita: 'PRA', indirizzo: 'Via Murtola 12/14', telefono: '010 6197180', provincia: 'GE',
+    chiaveIndirizzo: chiaveIndirizzo('Via Murtola 12/14'), chiaveTelefono: chiaveTelefono('010 6197180'),
+    ...sovrascritti,
+  });
+  const posizioneMurtola = (precisione: PosizioneRiga['precisione']): Map<string, PosizioneRiga> => new Map([[
+    'ind:PRA|VIA MURTOLA 12 14',
+    { chiave: 'ind:PRA|VIA MURTOLA 12 14', lat: 44.4281, lon: 8.7836, precisione, fonte: 'nominatim', errore: null, aggiornataIl: '2026-11-11T09:00:00.000Z' },
+  ]]);
+  const CITY_LI = { idCanale: 'CC', nomeCanale: 'Conad City', idArea: 'LI', nomeArea: 'Liguria' };
+
+  it('solo PV della combinazione di uno dei volantini della riga, anche per il suggerimento "stesso telefono"', () => {
+    const [gruppo] = raggruppaRigheNonAbbinate([riga()], [], [
+      { ...CITY_LI, id: 'pv-city', nome: 'Conad City Pra', telefono: '010 6197180', citta: 'Genova', indirizzo: 'Via Murtola 12/14' },
+      { ...SS_LI, id: 'pv-ss', nome: 'Superstore Pra', telefono: null, citta: 'PRA', indirizzo: 'Via Novella 3' },
+    ]);
+
+    expect(gruppo.candidati.map(candidato => candidato.puntoVendita.id)).toEqual(['pv-ss']);
+    expect(gruppo.suggerimento).toEqual({ tipo: 'da_aggiungere' });
+    expect(gruppo.combinazioni).toEqual([{ canale: { id: 'SS', nome: 'Conad Superstore' }, area: { id: 'LI', nome: 'Liguria' } }]);
+    expect(gruppo.provincia).toBe('GE');
+  });
+
+  it('una riga stampata in due combinazioni: PV di tutte e due', () => {
+    const [gruppo] = raggruppaRigheNonAbbinate([riga(), riga({ idKit: 'k2', idCanale: 'CC', nomeCanale: 'Conad City' })], [], [
+      { ...CITY_LI, id: 'pv-city', nome: 'Conad City Pra', telefono: '010 6197180', citta: 'Genova', indirizzo: 'Via Novella 3' },
+      { ...SS_LI, id: 'pv-ss', nome: 'Superstore Pra', telefono: null, citta: 'PRA', indirizzo: 'Via Novella 3' },
+    ]);
+
+    expect(gruppo.candidati.map(candidato => [candidato.puntoVendita.id, candidato.motivo])).toEqual([['pv-city', 'stesso_telefono'], ['pv-ss', 'nome_simile']]);
+    expect(gruppo.combinazioni).toHaveLength(2);
+  });
+
+  it('vicini alla posizione della riga, dal piu\' vicino, con la distanza nel confronto; oltre il raggio no', () => {
+    const [gruppo] = raggruppaRigheNonAbbinate([riga({ telefono: null, chiaveTelefono: null })], [], [
+      { ...SS_LI, id: 'pv-lontano', nome: 'Superstore Voltri', telefono: null, citta: 'Genova', indirizzo: 'Via Lungomare 1', lat: 44.4281, lon: 8.7300 },
+      { ...SS_LI, id: 'pv-150', nome: 'Superstore Ponente', telefono: null, citta: 'Genova', indirizzo: 'Via Novella 3', lat: 44.4290, lon: 8.7850 },
+      { ...SS_LI, id: 'pv-1000', nome: 'Superstore Pegli', telefono: null, citta: 'Genova', indirizzo: 'Via Pegli 1', lat: 44.4281, lon: 8.7960 },
+    ], posizioneMurtola('via'));
+
+    expect(gruppo.posizione).toMatchObject({ precisione: 'via', lat: 44.4281 });
+    expect(gruppo.candidati.map(candidato => [candidato.puntoVendita.id, candidato.motivo])).toEqual([['pv-150', 'vicino'], ['pv-1000', 'vicino']]);
+    expect(gruppo.candidati[0].confronto.distanzaMetri).toBeGreaterThan(100);
+    expect(gruppo.candidati[0].confronto.distanzaMetri).toBeLessThan(200);
+  });
+
+  it('con la sola posizione del comune nessun PV e\' suggerito per vicinanza', () => {
+    const [gruppo] = raggruppaRigheNonAbbinate([riga({ telefono: null, chiaveTelefono: null })], [], [
+      { ...SS_LI, id: 'pv-150', nome: 'Superstore Ponente', telefono: null, citta: 'Genova', indirizzo: 'Via Novella 3', lat: 44.4290, lon: 8.7850 },
+    ], posizioneMurtola('comune'));
+
     expect(gruppo.candidati).toEqual([]);
   });
 });

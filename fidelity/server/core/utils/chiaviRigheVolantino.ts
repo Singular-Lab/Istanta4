@@ -18,6 +18,12 @@ export interface RigaConChiavi {
   telefono?: string | null;
   chiaveIndirizzo: string | null;
   chiaveTelefono: string | null;
+  /**
+   * Canale e area del volantino della riga ("<idCanale>|<idArea>", confrontoPuntiVendita.ts): un
+   * collegamento fatto a mano vale solo per le righe della combinazione del suo PV. Null se il kit
+   * non ha canale o area; undefined se chi chiama non la conosce (allora ogni regola vale).
+   */
+  combinazione?: string | null;
 }
 
 export function chiaviRigaVolantino(riga: RigaConChiavi): string[] {
@@ -90,28 +96,51 @@ export interface RegolaCollegamento {
   chiavi: readonly string[];
   /** Data ISO o Date: a parità di chiave vince il collegamento più recente. */
   creatoIl: Date | string;
+  /**
+   * La combinazione canale/area del PV ("<idCanale>|<idArea>"): il collegamento vale solo per le
+   * righe dei volantini di quella combinazione. Null o assente: vale per tutte (PV senza combinazione).
+   */
+  combinazione?: string | null;
 }
 
 /** Trova il collegamento fatto a mano che vale per una riga, se c'è. */
 export class RegoleCollegamento {
-  private readonly perChiave = new Map<string, RegolaCollegamento>();
+  /** Per ogni chiave, i collegamenti che la contengono, dal più vecchio al più recente. */
+  private readonly perChiave = new Map<string, RegolaCollegamento[]>();
 
   constructor(regole: readonly RegolaCollegamento[]) {
     const dallaPiuVecchia = [...regole].sort((a, b) => new Date(a.creatoIl).getTime() - new Date(b.creatoIl).getTime());
     for (const regola of dallaPiuVecchia) {
-      for (const chiave of regola.chiavi) this.perChiave.set(chiave, regola);
+      for (const chiave of regola.chiavi) this.aggiungi(chiave, regola);
     }
+  }
+
+  private aggiungi(chiave: string, regola: RegolaCollegamento): void {
+    const elenco = this.perChiave.get(chiave);
+    if (elenco) elenco.push(regola);
+    else this.perChiave.set(chiave, [regola]);
+  }
+
+  /** Il collegamento vale per la riga: stessa combinazione, o una delle due non nota. */
+  private static vale(regola: RegolaCollegamento, riga: RigaConChiavi): boolean {
+    if (regola.combinazione == null || riga.combinazione === undefined) return true;
+    return riga.combinazione !== null && riga.combinazione.toLowerCase() === regola.combinazione.toLowerCase();
   }
 
   get vuote(): boolean {
     return this.perChiave.size === 0;
   }
 
-  /** La regola di una delle chiavi della riga: telefono, poi indirizzo, poi testo. */
+  /**
+   * La regola di una delle chiavi della riga, telefono, poi indirizzo, poi testo: per ogni chiave la
+   * più recente che vale per la combinazione della riga.
+   */
   per(riga: RigaConChiavi): RegolaCollegamento | null {
     for (const chiave of chiaviRigaVolantino(riga)) {
-      const regola = this.perChiave.get(chiave);
-      if (regola) return regola;
+      const elenco = this.perChiave.get(chiave) ?? [];
+      for (let indice = elenco.length - 1; indice >= 0; indice--) {
+        if (RegoleCollegamento.vale(elenco[indice], riga)) return elenco[indice];
+      }
     }
     return null;
   }
@@ -119,11 +148,12 @@ export class RegoleCollegamento {
   /**
    * La regola impara le chiavi di una riga che ha collegato: un negozio che cambia indirizzo
    * tenendo il telefono si riconosce poi anche dal nuovo indirizzo. Una chiave che e' gia' di
-   * un'altra regola resta sua. Restituisce le chiavi imparate.
+   * un'altra regola valida per la stessa combinazione resta sua. Restituisce le chiavi imparate.
    */
   impara(regola: RegolaCollegamento, riga: RigaConChiavi): string[] {
-    const nuove = chiaviRigaVolantino(riga).filter(chiave => !this.perChiave.has(chiave));
-    for (const chiave of nuove) this.perChiave.set(chiave, regola);
+    const nuove = chiaviRigaVolantino(riga).filter(chiave =>
+      !(this.perChiave.get(chiave) ?? []).some(altra => altra === regola || RegoleCollegamento.vale(altra, riga)));
+    for (const chiave of nuove) this.aggiungi(chiave, regola);
     return nuove;
   }
 }

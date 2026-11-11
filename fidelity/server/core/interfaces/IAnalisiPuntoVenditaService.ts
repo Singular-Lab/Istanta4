@@ -3,10 +3,15 @@ import type {
   DettaglioReferenzaPv,
   DettaglioVolantinoPv,
   PaginaRigheNonAbbinate,
+  PaginaVerificaCollegamenti,
+  PosizioneRiga,
   QualitaPuntiVendita,
   ReteInsegne,
   VolantiniRigaNonAbbinata,
 } from '../../../lib/puntiVendita/analisi';
+import type { EsitoRicercaPosizione } from '../repositories/PosizioniRigheRepository';
+import type { FiltriVerifica } from '../services/AnalisiPuntoVenditaService';
+import type { IndirizzoDaCercare } from '../services/PosizioniRigheJob';
 
 /**
  * Le pagine del punto vendita costruite sulla timeline dei volantini (contratto in
@@ -25,4 +30,14 @@ export interface IAnalisiPuntoVenditaService {
    * recente. BadRequestError senza chiave, NotFoundError se la riga non e' piu' fra le non abbinate.
    */
   volantiniRigaNonAbbinata(idGdo: string, chiave: unknown): Promise<VolantiniRigaNonAbbinata>;
+  /** I gruppi di righe collegati a un PV con l'esito della verifica, filtrati per esito e tipo. */
+  verificaCollegamenti(idGdo: string, filtri?: FiltriVerifica): Promise<PaginaVerificaCollegamenti>;
+  /** Gli indirizzi stampati da cercare con Nominatim: mai cercati o, con ancheNonTrovate, non trovati. */
+  indirizziDaCercare(idGdo: string, ancheNonTrovate?: boolean): Promise<IndirizzoDaCercare[]>;
+  salvaRicercaPosizione(idGdo: string, chiave: string, esito: EsitoRicercaPosizione, idUtente: string | null): Promise<void>;
+  /**
+   * Salva la posizione corretta a mano (CorrezionePosizione). BadRequestError per chiave o coordinate
+   * non valide, NotFoundError se nessuna riga della GDO ha quella posizione.
+   */
+  correggiPosizione(idGdo: string, richiesta: unknown, idUtente: string | null): Promise<PosizioneRiga>;
 }

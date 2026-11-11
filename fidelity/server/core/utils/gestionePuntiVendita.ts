@@ -3,12 +3,30 @@ import {
   MASSIMO_CANDIDATI,
   MASSIMO_VARIANTI,
   type MotivoCandidato,
+  type PosizioneRiga,
+  type PuntoVenditaConfrontato,
+  RAGGIO_VICINI_M,
   type RigaNonAbbinata,
   type SuggerimentoRiga,
   type VolantinoDellaRiga,
 } from '../../../lib/puntiVendita/analisi';
 import type { RiferimentoStoria } from '../../../lib/puntiVendita/storia';
 import { raggruppaPerChiavi } from './chiaviRigheVolantino';
+import {
+  chiaveCombinazione,
+  combinazioniDelleRighe,
+  confronta as confrontaConPuntoVendita,
+  coordinate,
+  datiStampati,
+  type DatiStampati,
+  distanzaMetri,
+  DISTANZA_INDIRIZZO_SIMILE,
+  posizioneDelGruppo,
+  posizionePrecisa,
+  type PuntoVenditaDaConfrontare,
+  puntoVenditaConfrontato,
+  viaSenzaCivici,
+} from './confrontoPuntiVendita';
 import { chiaveIndirizzo, chiaveLocalita, chiaveTelefono, editDistance, normalizePuntoVenditaText } from './puntoVenditaNormalization';
 import { MINIMO_VOLANTINI_ASSENZA } from './storiaPuntoVendita';
 
@@ -57,6 +75,8 @@ export interface RigaSenzaPuntoVendita {
   idPromo?: string;
   nomePromo?: string | null;
   nomeArea?: string | null;
+  /** La provincia stampata nelle intestazioni della lista, se c'e'. */
+  provincia?: string | null;
 }
 
 /** Un'edizione con la lista dei PV registrata: serve a dire se una riga non compare più. */
@@ -66,23 +86,10 @@ export interface EdizioneConLista {
   data: string;
 }
 
-/** Un punto vendita dell'anagrafica della GDO, con i campi per i suggerimenti. */
-export interface PuntoVenditaPerSuggerimenti {
-  id: string;
-  nome: string;
-  telefono: string | null;
-  citta?: string | null;
-  indirizzo?: string | null;
-  ragioneSociale?: string | null;
-}
+/** Un punto vendita dell'anagrafica della GDO, con i campi per i suggerimenti e il confronto. */
+export type PuntoVenditaPerSuggerimenti = PuntoVenditaDaConfrontare;
 
 const confronta = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
-
-/** Distanza oltre la quale due indirizzi della stessa località non sono più "simili". */
-const DISTANZA_INDIRIZZO_SIMILE = 3;
-
-/** La via senza civici: "VIA MURTOLA 12 14" -> "VIA MURTOLA". */
-const viaSenzaCivici = (chiave: string): string => chiave.replace(/\d+/g, ' ').replace(/\s+/g, ' ').trim();
 
 /** Le parole che dicono che tipo di strada e': il nome della via e' quello che viene dopo. */
 const TOPONIMI = new Set([
@@ -106,27 +113,33 @@ const ORDINE_MOTIVO: Readonly<Record<MotivoCandidato, number>> = {
   stesso_telefono: 0,
   stesso_indirizzo: 1,
   indirizzo_simile: 2,
-  nome_simile: 3,
-  stessa_localita: 4,
+  vicino: 3,
+  nome_simile: 4,
+  stessa_localita: 5,
 };
 
 interface PuntoVenditaIndicizzato {
-  puntoVendita: PuntoVenditaPerSuggerimenti;
+  puntoVendita: PuntoVenditaConfrontato;
   localita: string | null;
   indirizzo: string | null;
   /** Nome e ragione sociale normalizzati, fra spazi: si cercano parole intere. */
   nomi: string;
+  combinazione: string | null;
+  coordinate: { lat: number; lon: number } | null;
 }
 
 /**
- * I punti vendita dell'anagrafica da suggerire per un gruppo di righe non abbinate, dal motivo più
- * forte: stesso telefono, stesso indirizzo (anche in un'altra località: il volantino stampa la
- * frazione), indirizzo simile nella stessa località (stessa via o pochi caratteri di differenza),
- * nome o ragione sociale che contengono la località o la via stampate, altri PV della stessa
- * località (un trasferimento). Al massimo MASSIMO_CANDIDATI. Sono solo suggerimenti: il nome non
- * collega mai una riga da solo.
+ * I punti vendita dell'anagrafica da suggerire per un gruppo di righe non abbinate, solo con la
+ * combinazione canale/area di uno dei volantini del gruppo, dal motivo più forte: stesso telefono,
+ * stesso indirizzo (anche in un'altra località: il volantino stampa la frazione), indirizzo simile
+ * nella stessa località (stessa via o pochi caratteri di differenza), vicini alla posizione della
+ * riga (entro RAGGIO_VICINI_M, dal più vicino), nome o ragione sociale che contengono la località
+ * o la via stampate, altri PV della stessa località (un trasferimento). Al massimo
+ * MASSIMO_CANDIDATI, ognuno con il confronto. Sono solo suggerimenti: nome e distanza non
+ * collegano mai una riga da soli.
  */
 class IndiceCandidati {
+  private readonly tutti: PuntoVenditaIndicizzato[] = [];
   private readonly perTelefono = new Map<string, PuntoVenditaIndicizzato[]>();
   private readonly perIndirizzo = new Map<string, PuntoVenditaIndicizzato[]>();
   private readonly perLocalita = new Map<string, PuntoVenditaIndicizzato[]>();
@@ -137,19 +150,28 @@ class IndiceCandidati {
     const aggiungi = (mappa: Map<string, PuntoVenditaIndicizzato[]>, chiave: string | null, voce: PuntoVenditaIndicizzato) => {
       if (chiave) mappa.set(chiave, [...(mappa.get(chiave) ?? []), voce]);
     };
-    for (const puntoVendita of [...puntiVendita].sort((a, b) => confronta(a.nome, b.nome) || confronta(a.id, b.id))) {
+    for (const grezzo of [...puntiVendita].sort((a, b) => confronta(a.nome, b.nome) || confronta(a.id, b.id))) {
+      const puntoVendita = puntoVenditaConfrontato(grezzo);
       const nomi = normalizePuntoVenditaText(`${puntoVendita.nome} ${puntoVendita.ragioneSociale ?? ''}`);
-      const voce = {
+      const voce: PuntoVenditaIndicizzato = {
         puntoVendita,
         localita: chiaveLocalita(puntoVendita.citta),
         indirizzo: chiaveIndirizzo(puntoVendita.indirizzo),
         nomi: ` ${nomi} `,
+        combinazione: chiaveCombinazione(grezzo.idCanale, grezzo.idArea),
+        coordinate: coordinate(puntoVendita),
       };
+      this.tutti.push(voce);
       aggiungi(this.perTelefono, chiaveTelefono(puntoVendita.telefono), voce);
       aggiungi(this.perIndirizzo, voce.indirizzo, voce);
       aggiungi(this.perLocalita, voce.localita, voce);
       for (const parola of new Set(nomi.split(' ').filter(Boolean))) aggiungi(this.perParolaDelNome, parola, voce);
     }
+  }
+
+  /** Il PV ha la combinazione di uno dei volantini delle righe (senza combinazioni note, qualunque PV). */
+  private static ammesso(voce: PuntoVenditaIndicizzato, dati: DatiStampati): boolean {
+    return dati.combinazioni.size === 0 || (voce.combinazione !== null && dati.combinazioni.has(voce.combinazione));
   }
 
   /** I PV il cui nome o la cui ragione sociale contiene il termine come parole intere. */
@@ -158,19 +180,33 @@ class IndiceCandidati {
     return (this.perParolaDelNome.get(prima) ?? []).filter(voce => voce.nomi.includes(` ${termine} `));
   }
 
-  /** Il primo PV con il telefono di una delle righe, dalla più recente. */
-  stessoTelefono(righe: readonly RigaSenzaPuntoVendita[]): PuntoVenditaPerSuggerimenti | null {
+  /** Il primo PV di una delle combinazioni delle righe con il telefono di una delle righe, dalla più recente. */
+  stessoTelefono(righe: readonly RigaSenzaPuntoVendita[]): PuntoVenditaConfrontato | null {
+    const dati = datiStampati(righe);
     for (const riga of [...righe].reverse()) {
       const telefono = riga.chiaveTelefono ?? chiaveTelefono(riga.telefono);
-      const trovato = telefono ? this.perTelefono.get(telefono)?.[0] : undefined;
+      const trovato = telefono ? (this.perTelefono.get(telefono) ?? []).find(voce => IndiceCandidati.ammesso(voce, dati)) : undefined;
       if (trovato) return trovato.puntoVendita;
     }
     return null;
   }
 
-  candidati(righe: readonly RigaSenzaPuntoVendita[]): CandidatoCollegamento[] {
+  /** I PV ammessi con le coordinate entro `raggio` metri dalla posizione, dal più vicino, escluso `tranne`. */
+  vicini(dati: DatiStampati, posizione: PosizioneRiga | null, raggio: number, tranne?: string): Array<{ puntoVendita: PuntoVenditaConfrontato; metri: number }> {
+    const daRiga = posizionePrecisa(posizione) ? coordinate(posizione) : null;
+    if (!daRiga) return [];
+    return this.tutti
+      .filter(voce => voce.coordinate && voce.puntoVendita.id !== tranne && IndiceCandidati.ammesso(voce, dati))
+      .map(voce => ({ puntoVendita: voce.puntoVendita, metri: distanzaMetri(daRiga, voce.coordinate as { lat: number; lon: number }) }))
+      .filter(vicino => vicino.metri <= raggio)
+      .sort((a, b) => a.metri - b.metri || confronta(a.puntoVendita.nome, b.puntoVendita.nome));
+  }
+
+  candidati(righe: readonly RigaSenzaPuntoVendita[], posizione: PosizioneRiga | null = null): CandidatoCollegamento[] {
+    const dati = datiStampati(righe);
     const scelti = new Map<string, { voce: PuntoVenditaIndicizzato; motivo: MotivoCandidato; distanza: number }>();
     const proponi = (voce: PuntoVenditaIndicizzato, motivo: MotivoCandidato, distanza = 0) => {
+      if (!IndiceCandidati.ammesso(voce, dati)) return;
       const gia = scelti.get(voce.puntoVendita.id);
       if (!gia || ORDINE_MOTIVO[motivo] < ORDINE_MOTIVO[gia.motivo] || (gia.motivo === motivo && distanza < gia.distanza)) {
         scelti.set(voce.puntoVendita.id, { voce, motivo, distanza });
@@ -197,6 +233,11 @@ class IndiceCandidati {
         proponi(voce, stessaVia || distanza <= DISTANZA_INDIRIZZO_SIMILE ? 'indirizzo_simile' : 'stessa_localita', distanza);
       }
     }
+    // Vicini alla posizione stampata: un PV trasferito o con un indirizzo scritto in un altro modo
+    const perId = new Map(this.tutti.map(voce => [voce.puntoVendita.id, voce]));
+    for (const vicino of this.vicini(dati, posizione, RAGGIO_VICINI_M)) {
+      proponi(perId.get(vicino.puntoVendita.id) as PuntoVenditaIndicizzato, 'vicino', vicino.metri);
+    }
     return [...scelti.values()]
       .sort((a, b) =>
         ORDINE_MOTIVO[a.motivo] - ORDINE_MOTIVO[b.motivo]
@@ -205,32 +246,33 @@ class IndiceCandidati {
         || confronta(a.voce.puntoVendita.id, b.voce.puntoVendita.id))
       .slice(0, MASSIMO_CANDIDATI)
       .map(({ voce: { puntoVendita }, motivo }) => ({
-        puntoVendita: {
-          id: puntoVendita.id,
-          nome: puntoVendita.nome,
-          ragioneSociale: puntoVendita.ragioneSociale ?? null,
-          indirizzo: puntoVendita.indirizzo ?? null,
-          citta: puntoVendita.citta ?? null,
-        },
+        puntoVendita,
         motivo,
+        confronto: confrontaConPuntoVendita(dati, puntoVendita, posizione),
       }));
   }
 }
+
+/** Le righe di un gruppo, dalla più vecchia: per data, kit e posizione nella lista. */
+export const ordinaRighe = <T extends RigaSenzaPuntoVendita>(righe: readonly T[]): T[] =>
+  [...righe].sort((a, b) => confronta(a.data, b.data) || confronta(a.idKit, b.idKit) || a.posizione - b.posizione);
 
 /**
  * Le righe senza PV raggruppate per punto vendita stampato (chiavi in chiaviRigheVolantino.ts:
  * stesso telefono, o stessa località e stesso indirizzo; senza né l'uno né l'altro, stesso testo).
  * Per ogni gruppo il suggerimento:
- * - 'stesso_telefono': un PV dell'anagrafica ha lo stesso telefono;
+ * - 'stesso_telefono': un PV dell'anagrafica di una delle sue combinazioni ha lo stesso telefono;
  * - 'forse_chiuso': dopo la sua ultima volta, la sua insegna e area hanno avuto almeno
  *   MINIMO_VOLANTINI_ASSENZA edizioni con la lista senza di lui;
  * - 'da_aggiungere' altrimenti.
- * E i punti vendita a cui collegarlo a mano (candidati). Dal gruppo visto più di recente.
+ * E i punti vendita a cui collegarlo a mano (candidati), con la sua posizione se è stata cercata.
+ * Dal gruppo visto più di recente.
  */
 export function raggruppaRigheNonAbbinate(
   righe: readonly RigaSenzaPuntoVendita[],
   edizioniConLista: readonly EdizioneConLista[],
   puntiVendita: readonly PuntoVenditaPerSuggerimenti[],
+  posizioni: ReadonlyMap<string, PosizioneRiga> = new Map(),
 ): RigaNonAbbinata[] {
   const indice = new IndiceCandidati(puntiVendita);
   const edizioniPerInsegna = new Map<string, Set<string>>();
@@ -248,27 +290,35 @@ export function raggruppaRigheNonAbbinate(
 
   return raggruppaPerChiavi(righe)
     .map(({ righe: gruppo, chiavi }) => {
-      const ordinate = [...gruppo].sort((a, b) => confronta(a.data, b.data) || confronta(a.idKit, b.idKit) || a.posizione - b.posizione);
+      const ordinate = ordinaRighe(gruppo);
       const ultima = ordinate[ordinate.length - 1];
+      const dallaPiuRecente = [...ordinate].reverse();
       const canale: RiferimentoStoria | null = ultima.idCanale ? { id: ultima.idCanale, nome: ultima.nomeCanale ?? '' } : null;
-      const varianti = [...new Set([...ordinate].reverse().map(riga => riga.riga))].slice(0, MASSIMO_VARIANTI);
+      const varianti = [...new Set(dallaPiuRecente.map(riga => riga.riga))].slice(0, MASSIMO_VARIANTI);
+      const posizione = posizioneDelGruppo(dallaPiuRecente, posizioni);
       return {
         chiave: chiavi[0],
         riga: ultima.riga,
         varianti,
         localita: ultima.localita,
         indirizzo: ultima.indirizzo,
-        telefono: ultima.telefono ?? [...ordinate].reverse().find(riga => riga.telefono)?.telefono ?? null,
+        telefono: ultima.telefono ?? dallaPiuRecente.find(riga => riga.telefono)?.telefono ?? null,
+        provincia: dallaPiuRecente.find(riga => riga.provincia)?.provincia ?? null,
         volantini: new Set(ordinate.map(riga => riga.idKit)).size,
         primoVolantino: ordinate[0].data,
         ultimoVolantino: ultima.data,
         canale,
+        combinazioni: combinazioniDelleRighe(dallaPiuRecente),
+        posizione,
         suggerimento: suggerimento(ordinate, ultima),
-        candidati: indice.candidati(ordinate),
+        candidati: indice.candidati(ordinate, posizione),
       };
     })
     .sort((a, b) => confronta(b.ultimoVolantino, a.ultimoVolantino) || b.volantini - a.volantini || confronta(a.riga, b.riga));
 }
+
+/** L'indice dei PV della GDO per i suggerimenti, usato anche dalla verifica per i PV vicini. */
+export { IndiceCandidati };
 
 /**
  * I volantini di una riga non abbinata: quelli delle righe del gruppo che ha quella chiave, uno per

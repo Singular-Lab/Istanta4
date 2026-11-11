@@ -1,18 +1,25 @@
 import type {
   AnalisiPuntoVendita,
+  CorrezionePosizione,
   DettaglioReferenzaPv,
   DettaglioVolantinoPv,
+  EsitoVerifica,
   PaginaRigheNonAbbinate,
+  PaginaVerificaCollegamenti,
+  PosizioneRiga,
   QualitaPuntiVendita,
   ReteInsegne,
+  TipoCollegamento,
   VolantiniRigaNonAbbinata,
 } from '../../../lib/puntiVendita/analisi';
+import { ESITI_VERIFICA } from '../../../lib/puntiVendita/analisi';
 import { DIMENSIONI_PAGINA_STORIA } from '../../../lib/puntiVendita/storia';
 import { BadRequestError, NotFoundError } from '../../../lib/errors';
 import type { IAnalisiPuntoVenditaService } from '../interfaces/IAnalisiPuntoVenditaService';
 import type { IConfigService } from '../interfaces/IConfigService';
 import { log } from '../logger';
 import type { IAnalisiPuntiVenditaRepository } from '../repositories/AnalisiPuntiVenditaRepository';
+import type { EsitoRicercaPosizione, IPosizioniRigheRepository } from '../repositories/PosizioniRigheRepository';
 import type { IPuntiVenditaVolantinoRepository, PuntoVenditaDellaStoria } from '../repositories/PuntiVenditaVolantinoRepository';
 import { AGGREGATI_VUOTI, type AggregatiKit, boxDelKit, riassumiKit } from '../utils/analisiKit';
 import { AnalisiKitService, CHIAVE_PRODOTTO, leggiReferenzeKit as leggi } from './AnalisiKitService';
@@ -38,7 +45,17 @@ import {
   spazioPerMeccanica,
 } from '../utils/analisiPuntoVendita';
 import { leggiAnagraficaReparti, type RepartoAnagrafica } from '../utils/campiInsights';
-import { MINUTI_DISPOSITIVO_OFFLINE, raggruppaRigheNonAbbinate, righeDaRevisionare, volantiniDelGruppo } from '../utils/gestionePuntiVendita';
+import { chiavePosizione, localitaDaCercare } from '../utils/confrontoPuntiVendita';
+import {
+  MINUTI_DISPOSITIVO_OFFLINE,
+  raggruppaRigheNonAbbinate,
+  type RigaSenzaPuntoVendita,
+  righeDaRevisionare,
+  volantiniDelGruppo,
+} from '../utils/gestionePuntiVendita';
+import { contaPerEsito, verificaCollegamenti } from '../utils/verificaCollegamenti';
+import { coordinateValide } from './importPuntiVendita';
+import type { IndirizzoDaCercare } from './PosizioniRigheJob';
 import { type FonteRepartiGdo, type RisolutoreReparti, SENZA_REPARTI_GDO } from '../utils/repartiGdo';
 import { caricaRisolutoreReparti } from './risolutoreRepartiGdo';
 
@@ -73,7 +90,34 @@ export interface OpzioniAnalisiPuntoVendita {
   repartiGdo?: FonteRepartiGdo;
   /** La config degli insight della GDO, per l'anagrafica dei reparti. */
   configInsight?: Pick<IConfigService, 'getFlyerInsightsConfig'>;
+  /** Le posizioni delle righe dei volantini; senza, nessuna posizione e nessuna correzione. */
+  posizioni?: IPosizioniRigheRepository;
+  /** I collegamenti fatti a mano, per la verifica; senza, nessun collegamento si può annullare dalla verifica. */
+  collegamenti?: Pick<IPuntiVenditaVolantinoRepository, 'regoleCollegamento'>;
 }
+
+/** Filtri della verifica dei collegamenti. */
+export interface FiltriVerifica {
+  esito?: unknown;
+  tipo?: unknown;
+  pagina?: number;
+  dimensione?: number;
+}
+
+/** Senza repository delle posizioni (prove): nessuna posizione. */
+const SENZA_POSIZIONI: IPosizioniRigheRepository = {
+  posizioni: async () => new Map(),
+  salvaRicerca: async () => undefined,
+  correggi: async () => {
+    throw new BadRequestError({ message: 'Posizioni delle righe non disponibili' });
+  },
+};
+
+const MASSIMA_LUNGHEZZA_CHIAVE = 1000;
+
+/** Le righe dalla più recente: per data dell'edizione, kit e posizione nella lista. */
+const dallaPiuRecente = <T extends RigaSenzaPuntoVendita>(righe: readonly T[]): T[] =>
+  [...righe].sort((a, b) => (a.data < b.data ? 1 : a.data > b.data ? -1 : 0) || (a.idKit < b.idKit ? 1 : a.idKit > b.idKit ? -1 : 0) || a.posizione - b.posizione);
 
 export const oggiARoma = (adesso: Date = new Date()): string =>
   new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' }).format(adesso);
@@ -84,6 +128,8 @@ export class AnalisiPuntoVenditaService implements IAnalisiPuntoVenditaService {
   private readonly riepiloghi: AnalisiKitService;
   private readonly repartiGdo: FonteRepartiGdo;
   private readonly configInsight: Pick<IConfigService, 'getFlyerInsightsConfig'> | null;
+  private readonly posizioni: IPosizioniRigheRepository;
+  private readonly collegamenti: Pick<IPuntiVenditaVolantinoRepository, 'regoleCollegamento'> | null;
 
   constructor(
     private readonly repository: IAnalisiPuntiVenditaRepository,
@@ -95,6 +141,8 @@ export class AnalisiPuntoVenditaService implements IAnalisiPuntoVenditaService {
     this.riepiloghi = new AnalisiKitService(repository);
     this.repartiGdo = opzioni.repartiGdo ?? SENZA_REPARTI_GDO;
     this.configInsight = opzioni.configInsight ?? null;
+    this.posizioni = opzioni.posizioni ?? SENZA_POSIZIONI;
+    this.collegamenti = opzioni.collegamenti ?? null;
   }
 
   /**
@@ -275,17 +323,107 @@ export class AnalisiPuntoVenditaService implements IAnalisiPuntoVenditaService {
   async righeNonAbbinate(idGdo: string, pagina = 1, dimensione = DIMENSIONI_PAGINA_STORIA[0]): Promise<PaginaRigheNonAbbinate> {
     const perPagina = DIMENSIONI_PAGINA_STORIA.includes(dimensione) ? dimensione : DIMENSIONI_PAGINA_STORIA[0];
     const numeroPagina = Number.isInteger(pagina) && pagina >= 1 ? pagina : 1;
-    const [righe, edizioni, puntiVendita] = await Promise.all([
+    const [righe, edizioni, puntiVendita, posizioni] = await Promise.all([
       this.repository.righeSenzaPuntoVendita(idGdo),
       this.repository.edizioniConLista(idGdo),
       this.repository.puntiVenditaPerSuggerimenti(idGdo),
+      this.posizioni.posizioni(idGdo),
     ]);
-    const gruppi = raggruppaRigheNonAbbinate(righe, edizioni, puntiVendita);
+    const gruppi = raggruppaRigheNonAbbinate(righe, edizioni, puntiVendita, posizioni);
     return {
       righe: gruppi.slice((numeroPagina - 1) * perPagina, numeroPagina * perPagina),
       totale: gruppi.length,
       pagina: numeroPagina,
       dimensione: perPagina,
     };
+  }
+
+  // ─── Verifica dei collegamenti e posizioni delle righe ─────────────
+
+  async verificaCollegamenti(idGdo: string, filtri: FiltriVerifica = {}): Promise<PaginaVerificaCollegamenti> {
+    const esito = ESITI_VERIFICA.includes(filtri.esito as EsitoVerifica) ? (filtri.esito as EsitoVerifica) : undefined;
+    const tipo = filtri.tipo === 'manuale' || filtri.tipo === 'automatico' ? (filtri.tipo as TipoCollegamento) : undefined;
+    const perPagina = DIMENSIONI_PAGINA_STORIA.includes(filtri.dimensione ?? 0) ? (filtri.dimensione as number) : DIMENSIONI_PAGINA_STORIA[0];
+    const numeroPagina = Number.isInteger(filtri.pagina) && (filtri.pagina as number) >= 1 ? (filtri.pagina as number) : 1;
+    const [collegate, senza, puntiVendita, posizioni, regole] = await Promise.all([
+      this.repository.righeCollegate(idGdo),
+      this.repository.righeSenzaPuntoVendita(idGdo),
+      this.repository.puntiVenditaPerSuggerimenti(idGdo),
+      this.posizioni.posizioni(idGdo),
+      this.collegamenti ? this.collegamenti.regoleCollegamento(idGdo) : Promise.resolve([]),
+    ]);
+    const gruppi = verificaCollegamenti(collegate, puntiVendita, posizioni, regole);
+    const delTipo = tipo ? gruppi.filter(gruppo => gruppo.tipo === tipo) : gruppi;
+    const filtrati = esito ? delTipo.filter(gruppo => gruppo.esito === esito) : delTipo;
+    const chiavi = new Set([...collegate, ...senza].map(chiavePosizione).filter((chiave): chiave is string => chiave !== null));
+    let posizioniDaCercare = 0;
+    let posizioniNonTrovate = 0;
+    for (const chiave of chiavi) {
+      const posizione = posizioni.get(chiave);
+      if (!posizione) posizioniDaCercare++;
+      else if (posizione.precisione === 'non_trovata') posizioniNonTrovate++;
+    }
+    return {
+      gruppi: filtrati.slice((numeroPagina - 1) * perPagina, numeroPagina * perPagina),
+      totale: filtrati.length,
+      pagina: numeroPagina,
+      dimensione: perPagina,
+      conteggi: contaPerEsito(delTipo),
+      posizioniDaCercare,
+      posizioniNonTrovate,
+    };
+  }
+
+  /**
+   * Gli indirizzi stampati della GDO la cui posizione non è ancora stata cercata (con ancheNonTrovate
+   * anche quelli non trovati o in errore), uno per chiave con la riga più recente: prima quelli delle
+   * righe collegate, che servono alla verifica, poi quelli delle righe non abbinate. Mai quelli
+   * corretti a mano.
+   */
+  async indirizziDaCercare(idGdo: string, ancheNonTrovate = false): Promise<IndirizzoDaCercare[]> {
+    const [collegate, senza, posizioni] = await Promise.all([
+      this.repository.righeCollegate(idGdo),
+      this.repository.righeSenzaPuntoVendita(idGdo),
+      this.posizioni.posizioni(idGdo),
+    ]);
+    const daCercare = new Map<string, IndirizzoDaCercare>();
+    for (const riga of [...dallaPiuRecente(collegate), ...dallaPiuRecente(senza)]) {
+      const chiave = chiavePosizione(riga);
+      if (!chiave || daCercare.has(chiave)) continue;
+      const salvata = posizioni.get(chiave);
+      const daRifare = salvata && ancheNonTrovate && salvata.fonte !== 'manuale' && salvata.precisione === 'non_trovata';
+      if (salvata && !daRifare) continue;
+      daCercare.set(chiave, {
+        chiave,
+        indirizzo: chiave.startsWith('ind:') ? riga.indirizzo : null,
+        localita: localitaDaCercare(riga.localita),
+        provincia: riga.provincia ?? null,
+      });
+    }
+    return [...daCercare.values()];
+  }
+
+  async salvaRicercaPosizione(idGdo: string, chiave: string, esito: EsitoRicercaPosizione, idUtente: string | null): Promise<void> {
+    await this.posizioni.salvaRicerca(idGdo, chiave, esito, idUtente);
+  }
+
+  /** La posizione di una riga corretta a mano (coordinate di Google Maps). */
+  async correggiPosizione(idGdo: string, richiesta: unknown, idUtente: string | null): Promise<PosizioneRiga> {
+    const { chiave, lat, lon } = (richiesta ?? {}) as Partial<Record<keyof CorrezionePosizione, unknown>>;
+    if (typeof chiave !== 'string' || !/^(ind|loc):/.test(chiave) || chiave.length > MASSIMA_LUNGHEZZA_CHIAVE) {
+      throw new BadRequestError({ message: 'Posizione da correggere non indicata (chiave)' });
+    }
+    const latitudine = typeof lat === 'number' ? lat : Number.NaN;
+    const longitudine = typeof lon === 'number' ? lon : Number.NaN;
+    if (!coordinateValide(latitudine, longitudine) || Math.abs(latitudine) > 90 || Math.abs(longitudine) > 180) {
+      throw new BadRequestError({ message: 'Coordinate non valide: servono latitudine (fra -90 e 90) e longitudine (fra -180 e 180)' });
+    }
+    const [collegate, senza] = await Promise.all([this.repository.righeCollegate(idGdo), this.repository.righeSenzaPuntoVendita(idGdo)]);
+    if (![...collegate, ...senza].some(riga => chiavePosizione(riga) === chiave)) {
+      throw new NotFoundError({ message: 'Nessuna riga dei volantini con questa posizione', entityType: 'PosizioneRiga', entityId: chiave });
+    }
+    const corretta = await this.posizioni.correggi(idGdo, chiave, { lat: latitudine, lon: longitudine }, idUtente);
+    log.info('Posizione di una riga dei volantini corretta a mano', { idGdo, chiave });
+    return corretta;
   }
 }

@@ -43,6 +43,7 @@ import { ImportStoricoVolantini } from "./ImportStoricoVolantini";
 import { InserimentoManualeImport } from "./InserimentoManualeImport";
 import { ETICHETTA_FILTRO_QUALITA, QualitaDati, type FiltroQualita } from "./QualitaDati";
 import { RigheNonAbbinate } from "./RigheNonAbbinate";
+import { VerificaCollegamenti } from "./VerificaCollegamenti";
 import { useImportPuntiVendita } from "./useImportPuntiVendita";
 
 /** Il punto vendita dell'anagrafica con la sua storia nei volantini, quando il server la manda. */
@@ -792,6 +793,8 @@ function Main() {
         </Sezione>
 
         <RigheNonAbbinate coloreDelCanale={elenco.coloreDelCanale} onAggiungi={aggiungiDaRiga} puntiVendita={tuttiPuntiVendita} />
+
+        <VerificaCollegamenti puntiVendita={tuttiPuntiVendita} />
       </Pagina>
     </>
   );

@@ -58,6 +58,7 @@ function servizioFinto() {
       collega: vi.fn(),
       collegamenti: vi.fn(),
       scollega: vi.fn(),
+      cambiaCollegamento: vi.fn(),
     } satisfies IStoriaPuntoVenditaService,
   };
 }

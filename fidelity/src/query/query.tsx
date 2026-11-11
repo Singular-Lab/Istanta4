@@ -8,7 +8,7 @@ import type { AvanzamentoProduzione } from "../../lib/produzione/avanzamento";
 import type { AreaResponseDTO, CanaleResponseDTO, CombinazioneCanaleAreaResponseDTO, DisplayContextResponseDTO, DispositivoPuntoVenditaResponseDTO, FormatiResponseDTO, GDOResponseDTO, PromoResponseDTO, PuntoVenditaResponseDTO, RuoloUtenteGDOResponseDTO, TipiDiExportResponseDTO, VolantinoAttivoDTO } from "../../server/core/dto";
 import type { PuntoVenditaConsultazione } from "../../lib/puntiVendita/consultazione";
 import type { PaginaVolantiniStoria, StoriaPuntoVendita } from "../../lib/puntiVendita/storia";
-import type { EsitoCollegamento, EsitoScollegamento, PaginaCollegamentiManuali, PaginaRigheNonAbbinate, QualitaPuntiVendita, ReteInsegne, RichiestaCollegamento, VolantiniRigaNonAbbinata } from "../../lib/puntiVendita/analisi";
+import type { CorrezionePosizione, EsitoCollegamento, EsitoScollegamento, EsitoVerifica, PaginaCollegamentiManuali, PaginaRigheNonAbbinate, PaginaVerificaCollegamenti, PosizioneRiga, QualitaPuntiVendita, ReteInsegne, RichiestaCambioCollegamento, RichiestaCollegamento, TipoCollegamento, VolantiniRigaNonAbbinata } from "../../lib/puntiVendita/analisi";
 import type { AnalisiPuntoVendita, DettaglioReferenzaPv, DettaglioVolantinoPv } from "../../lib/puntiVendita/analisi";
 
 
@@ -620,6 +620,38 @@ export const useScollegaCollegamentoManuale = () => {
     mutationFn: (idCollegamento: string) =>
       ServerCall.delete<EsitoScollegamento>(`/punti-vendita/gestione/collegamenti-manuali/${encodeURIComponent(idCollegamento)}`),
     onSuccess: () => invalidaDopoCollegamento(queryClient),
+  });
+};
+
+/** La verifica dei collegamenti fra righe dei volantini e punti vendita, filtrata per esito e tipo. */
+export const useFetchVerificaCollegamenti = (filtri: { esito: EsitoVerifica | null; tipo: TipoCollegamento | null; pagina: number; dimensione: number }) =>
+  useQuery({
+    queryKey: ["puntiVendita", "gestione", "verifica-collegamenti", filtri.esito, filtri.tipo, filtri.pagina, filtri.dimensione],
+    queryFn: () => {
+      const parametri = new URLSearchParams({ pagina: String(filtri.pagina), dimensione: String(filtri.dimensione) });
+      if (filtri.esito) parametri.set("esito", filtri.esito);
+      if (filtri.tipo) parametri.set("tipo", filtri.tipo);
+      return ServerCall.get<PaginaVerificaCollegamenti>(`/punti-vendita/gestione/verifica-collegamenti?${parametri}`);
+    },
+    placeholderData: (precedenti) => precedenti,
+  });
+
+/** Cambia il punto vendita di un gruppo di righe collegato: diventa un collegamento fatto a mano. */
+export const useCambiaCollegamento = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (richiesta: RichiestaCambioCollegamento) =>
+      ServerCall.put<EsitoCollegamento>("/punti-vendita/gestione/collegamenti/cambia", richiesta),
+    onSuccess: () => invalidaDopoCollegamento(queryClient),
+  });
+};
+
+/** La posizione di una riga stampata corretta a mano, con le coordinate di Google Maps. */
+export const useCorreggiPosizioneRiga = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (correzione: CorrezionePosizione) => ServerCall.put<PosizioneRiga>("/punti-vendita/gestione/posizioni-righe", correzione),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["puntiVendita", "gestione"] }),
   });
 };
 

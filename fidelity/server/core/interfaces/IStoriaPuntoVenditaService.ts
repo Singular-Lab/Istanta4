@@ -63,11 +63,19 @@ export interface IStoriaPuntoVenditaService extends RiabbinamentoPuntiVenditaVol
 /** I collegamenti fatti a mano fra righe dei volantini non abbinate e PV della GDO. */
 export interface CollegamentiPuntiVenditaVolantino {
   /**
-   * Collega al PV le righe senza PV del gruppo `chiave` (RichiestaCollegamento) e salva il
-   * collegamento come regola della GDO. BadRequestError per una richiesta non valida,
-   * NotFoundError se il PV non e' della GDO, 409 se il gruppo non e' piu' fra i non abbinati.
+   * Collega al PV le righe senza PV del gruppo `chiave` (RichiestaCollegamento) stampate nei
+   * volantini della combinazione canale/area del PV, e salva il collegamento come regola della GDO.
+   * BadRequestError per una richiesta non valida, NotFoundError se il PV non e' della GDO, 409 se il
+   * gruppo non e' piu' fra i non abbinati, 422 COMBINAZIONE_DIVERSA se il PV non ha la combinazione
+   * di nessuno dei volantini del gruppo.
    */
   collega(idGdo: string, richiesta: unknown, idUtente: string | null): Promise<EsitoCollegamento>;
+  /**
+   * Cambia il PV di un gruppo di righe collegato (RichiestaCambioCollegamento), a mano o
+   * automaticamente: il collegamento fatto a mano del gruppo si aggiorna, o se ne crea uno. Stessi
+   * errori di collega; 409 se il gruppo non e' piu' collegato a quel PV.
+   */
+  cambiaCollegamento(idGdo: string, richiesta: unknown, idUtente: string | null): Promise<EsitoCollegamento>;
   collegamenti(idGdo: string, pagina?: number, dimensione?: number): Promise<PaginaCollegamentiManuali>;
   /** Toglie il collegamento e riabbina le sue righe. NotFoundError se non e' della GDO. */
   scollega(idGdo: string, idCollegamento: string): Promise<EsitoScollegamento>;
