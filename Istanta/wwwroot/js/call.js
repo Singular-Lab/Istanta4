@@ -27,27 +27,7 @@
                 if (data && data.responseJSON && data.responseJSON.dettaglio) {
                     console.error("Dettaglio dell'errore del server (" + address + "):", data.responseJSON.dettaglio);
                 }
-                let serverMessage =
-                    data.responseJSON?.detail ??
-                    data.responseJSON?.error ??
-                    data.responseJSON?.message ??
-                    data.responseText;
-
-                let details = {
-                    info: data,
-                    error: status || "unknown",
-                    message: serverMessage
-                };
-
-                if (!details.message) {
-                    if (data.status === 0) {
-                        details.message =
-                            "Riscontrati problemi con la connessione, impossibile portare a termine l'operazione!";
-                    } else {
-                        details.message =
-                            "Errore " + data.status + ", impossibile portare a termine l'operazione!";
-                    }
-                }
+                let details = Call.dettagliDellErrore(data, status);
 
                 if (callbackError != null) {
                     callbackError(details);
@@ -57,6 +37,33 @@
             }
         });
 
+    }
+
+    /// Quello che Call.do passa a callbackError su un errore HTTP o di rete: { info, error, message }, con il
+    /// messaggio del server se c'e', altrimenti quello della connessione o del codice HTTP.
+    static dettagliDellErrore(data, status) {
+        let serverMessage =
+            data.responseJSON?.detail ??
+            data.responseJSON?.error ??
+            data.responseJSON?.message ??
+            data.responseText;
+
+        let details = {
+            info: data,
+            error: status || "unknown",
+            message: serverMessage
+        };
+
+        if (!details.message) {
+            if (data.status === 0) {
+                details.message =
+                    "Riscontrati problemi con la connessione, impossibile portare a termine l'operazione!";
+            } else {
+                details.message =
+                    "Errore " + data.status + ", impossibile portare a termine l'operazione!";
+            }
+        }
+        return details;
     }
 
     /// I20-1069: il perche' di una risposta che non e' andata bene, in parole per l'operatore, oppure null
@@ -143,7 +150,10 @@
         return { info: data, error: "uknown" };
     }
 
-    static doWithLargePayload(controller, address, method, params, sender, callback) {
+    /// I parametri vanno in JSON nel corpo: niente limite del binder sugli elenchi lunghi (1024 elementi come
+    /// form). TASK-c0dd1af9: con callbackError un errore HTTP o di rete arriva li', come in Call.do; senza,
+    /// arriva a callback come { info, error: "unknown" }, come sempre.
+    static doWithLargePayload(controller, address, method, params, sender, callback, callbackError) {
 
         let controller_link = getWebAppRootFolder() + controller + "/";
 
@@ -156,9 +166,14 @@
             success: function (data) {
                 callback(data, sender);
             },
-            error: function (data) {
+            error: function (data, status) {
                 console.log("error : " + JSON.stringify(data));
-                callback({ info: data, error: "unknown" });
+                if (callbackError != null) {
+                    callbackError(Call.dettagliDellErrore(data, status));
+                }
+                else {
+                    callback({ info: data, error: "unknown" });
+                }
             },
         });
     }
