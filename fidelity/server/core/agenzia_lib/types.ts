@@ -3,6 +3,7 @@ import type { AnalisiMomentoTracciato, CompiledField, DataFields, DimensioneVisi
 import type { PromoContextValue, PuntoVenditaDaImportareDTO } from "../dto/index.js";
 import type { OidcUserClaims } from "../interfaces/IOidcService.js";
 import type { DatiReportVolantino, IntestazioneReport, PaletteReport, SezioneReport } from "../../../lib/insightVolantino/report.js";
+import type { ParteDescrizione, TestiDescrizioneBox } from "../../../lib/insightVolantino/tipi.js";
 
 // ── Tipi di base ──────────────────────────────────────────────────────────────
 
@@ -312,6 +313,13 @@ export interface InsightVolantinoAgenzia {
    * del distributore con loghi e bolli"). Senza, la sezione non compare.
    */
   lineeDistributore?: LineeDistributoreAgenzia;
+  /**
+   * La descrizione completa del box nella scheda del volantino, accanto al prezzo (spec
+   * insight-volantino, "Scheda del volantino adattata al cliente e alla GDO"): quali testi stampati,
+   * in che ordine, quale in evidenza. Senza, quella standard (lib/insightVolantino/descrizione.ts:
+   * nome, marca in evidenza, formato, varianti).
+   */
+  descrizioneBox?(testi: TestiDescrizioneBox): ParteDescrizione[];
 }
 
 /** Testi stampati da cui ricavare la linea quando Istanta non l'ha assegnata (volantini dello storico). */

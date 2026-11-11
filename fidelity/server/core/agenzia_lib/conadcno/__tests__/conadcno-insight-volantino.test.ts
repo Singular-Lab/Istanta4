@@ -48,8 +48,8 @@ describe("ConadcnoAgenziaLib: report del volantino", () => {
     expect(insightVolantino?.intestazione).not.toHaveProperty("logo");
   });
 
-  it("dichiara solo palette, intestazione, sezioni e linee del distributore: niente pesi della visibilita' ne' previsione", () => {
-    expect(Object.keys(insightVolantino ?? {}).sort()).toEqual(["intestazione", "lineeDistributore", "palette", "sezioniReport"]);
+  it("dichiara solo palette, intestazione, sezioni, linee del distributore e descrizione del box: niente pesi della visibilita' ne' previsione", () => {
+    expect(Object.keys(insightVolantino ?? {}).sort()).toEqual(["descrizioneBox", "intestazione", "lineeDistributore", "palette", "sezioniReport"]);
   });
 
   it("dopo la sintesi vengono il confronto con l'edizione precedente e i prodotti entrati e usciti", () => {
@@ -74,6 +74,20 @@ describe("ConadcnoAgenziaLib: report del volantino", () => {
 
     expect(sezioni).toEqual(senzaConfronto);
     expect(sezioni.map(chiaveSezione)).toEqual(ORDINE_SEZIONI_STANDARD.filter(chiave => chiave !== "confronto" && chiave !== "entratiUsciti"));
+  });
+});
+
+describe("ConadcnoAgenziaLib: descrizione del box nella scheda", () => {
+  // Spec insight-volantino, "Scheda del volantino adattata al cliente e alla GDO"
+  it("nome, marca in evidenza, formato e varianti, come sul volantino CONAD", () => {
+    const { insightVolantino } = new ConadcnoAgenziaLib(userService);
+
+    expect(insightVolantino?.descrizioneBox?.({ nome: "Gelato", marca: "Nutella", formato: "230 g", varianti: ["Classico"] })).toEqual([
+      { testo: "Gelato" },
+      { testo: "Nutella", evidenza: true },
+      { testo: "230 g" },
+      { testo: "Classico" },
+    ]);
   });
 });
 

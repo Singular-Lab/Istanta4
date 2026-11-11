@@ -1,9 +1,10 @@
 /**
  * Il volantino degli insight da sfogliare come quello stampato: le pagine aperte con le immagini di
- * Olimpo e i riquadri dei box, indice delle pagine, zoom, colori, ricerca e interrogazione dei box,
- * analisi delle pagine aperte, scheda del box e viaggio del prodotto.
+ * Olimpo e i riquadri dei box (sempre nascosti), indice delle pagine, zoom fino alla risoluzione
+ * reale, lettura a schermo pieno, colori, ricerca e interrogazione dei box, analisi delle pagine
+ * aperte, scheda del box e viaggio del prodotto.
  */
-export { default, VolantinoSfogliabile, LIVELLI_ZOOM, type VolantinoSfogliabileProps } from "./VolantinoSfogliabile";
+export { default, VolantinoSfogliabile, type VolantinoSfogliabileProps } from "./VolantinoSfogliabile";
 export { PaginaConImmagine, type PaginaConImmagineProps } from "./PaginaConImmagine";
 export { AnalisiPagina, type AnalisiPaginaProps } from "./AnalisiPagina";
 export {
@@ -37,16 +38,26 @@ export {
   type StileRiquadro,
 } from "./colori";
 export {
+  altezzaAdattata,
   aperturaDi,
   aperture,
   aperturaVicina,
+  LIVELLI_ZOOM,
   paginaNellImmagine,
   paginaRichiesta,
   pagineDaPreparare,
   PROPORZIONE_PREDEFINITA,
+  proporzioneRitaglio,
+  puntoNelLibro,
   riquadroBox,
+  scorrimentoPerPunto,
   stileImmagine,
+  stileRitaglio,
   testoApertura,
+  ZOOM_MASSIMO_MINIMO,
+  zoomDallaRotella,
+  zoomMassimo,
+  zoomVicino,
   type Apertura,
   type PaginaNellImmagine,
 } from "./geometria";

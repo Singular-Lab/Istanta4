@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { EsitoVerificaConfigurazione } from '../impostazioniGdo/tipi';
+import { DATI_PRODOTTO_SCHEDA, DATI_TECNICI_SCHEDA } from './scheda';
 
 /**
  * Verifica della configurazione degli insight del volantino (flyerInsightsConfig.json, o quella
@@ -9,14 +10,15 @@ import type { EsitoVerificaConfigurazione } from '../impostazioniGdo/tipi';
  * Tollerante: le chiavi sconosciute restano, quasi tutto e' facoltativo (la scheda degli insight
  * ha i suoi valori predefiniti). Severa sui tipi di cio' che il codice usa davvero: i percorsi dei
  * campi (testo o elenco di testi), l'anagrafica dei reparti (codice e descrizione), i groupBy, il
- * tipo e i colori delle strategie di colore, le marche del distributore. Serve almeno la mappatura
+ * tipo e i colori delle strategie di colore, le marche del distributore, i dati della scheda del
+ * volantino (scheda.ts). Serve almeno la mappatura
  * dei campi delle referenze (dataMapping.referenzaFields).
  *
  * I messaggi sono in italiano, con il percorso puntato del campo ("reparti.colorStrategy.type").
  */
 
 /** Le sezioni che la configurazione puo' avere, nell'ordine in cui si elencano. */
-export const SEZIONI_CONFIGURAZIONE_INSIGHT = ['dataMapping', 'reparti', 'meccaniche', 'pagine', 'mappa', 'marche'] as const;
+export const SEZIONI_CONFIGURAZIONE_INSIGHT = ['dataMapping', 'reparti', 'meccaniche', 'pagine', 'mappa', 'marche', 'volantino'] as const;
 
 const COLORE = /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
 
@@ -90,6 +92,30 @@ const percorsoCampo = z.union([testoNonVuoto, z.array(testoNonVuoto).min(1)], {
   error: 'deve essere un percorso (testo) o un elenco di percorsi',
 });
 
+const sceltaFra = (valori: readonly string[]) =>
+  z.enum(valori as [string, ...string[]], { error: `deve essere uno di: ${valori.join(', ')}` });
+
+const schedaVolantino = z
+  .looseObject({
+    datiProdotto: z.array(sceltaFra(DATI_PRODOTTO_SCHEDA)).optional(),
+    dettagliTecnici: z.array(sceltaFra(DATI_TECNICI_SCHEDA)).optional(),
+  })
+  .superRefine((scheda, contesto) => {
+    // Un dato sta in vista o nei dettagli tecnici, non in tutti e due
+    const inVista = new Set<string>(scheda.datiProdotto ?? []);
+    (scheda.dettagliTecnici ?? []).forEach((dato, posto) => {
+      if (inVista.has(dato)) {
+        contesto.addIssue({
+          code: 'custom',
+          path: ['dettagliTecnici', posto],
+          message: `"${dato}" e' gia' fra i dati in vista (datiProdotto): un dato sta in una lista sola`,
+        });
+      }
+    });
+  });
+
+const volantino = z.looseObject({ scheda: schedaVolantino.optional() });
+
 const mappaturaDati = z.looseObject({
   referenzaFields: z.record(z.string(), percorsoCampo),
   referenzaDescriptionFields: elencoDiTesti.optional(),
@@ -103,6 +129,7 @@ export const schemaConfigurazioneInsight = z.looseObject({
   pagine: sezioneRiepilogo.optional(),
   mappa: mappa.optional(),
   marche: z.looseObject({ distributore: z.array(testoNonVuoto).optional() }).optional(),
+  volantino: volantino.optional(),
 });
 
 const NOMI_TIPI: Readonly<Record<string, string>> = {

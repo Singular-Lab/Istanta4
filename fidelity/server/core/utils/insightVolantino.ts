@@ -6,12 +6,14 @@ import {
   type FasciaSconto,
   type MarcaInsight,
   type MarcheVolantino,
+  type ParteDescrizione,
   type PrezziSconti,
   type ProdottoInsight,
   type QuotaSpazio,
   type RepartoInsight,
   type ScontoPerGruppo,
   type SintesiVolantino,
+  type TestiDescrizioneBox,
   type UsoSpazio,
 } from '../../../lib/insightVolantino/tipi';
 import { ETICHETTA_MECCANICA } from '../../../lib/puntiVendita/analisi';
@@ -19,6 +21,7 @@ import type { BoxKit } from './analisiKit';
 import { repartoInAnagrafica, type RepartoAnagrafica } from './campiInsights';
 import { lineaEBolli, lineeDelVolantino, type RegoleLinee } from './lineeDistributore';
 import { DESCRIZIONE_ASSENTE, type ProdottoStampato, type ReferenzaStampata } from './referenzaStampata';
+import { descrizioneStandard, variantiDei } from '../../../lib/insightVolantino/descrizione';
 
 /**
  * Le sezioni nuove degli insight del volantino (lib/insightVolantino/tipi.ts) dai box del kit
@@ -54,6 +57,8 @@ export interface OpzioniInsight {
   loghiAssegnati?: (idReferenza: string) => readonly string[];
   /** URL del logo di una sigla nel catalogo di Istanta, gia' letto; null se non c'e'. */
   urlLogo?: (sigla: string) => string | null;
+  /** La descrizione completa del box come la compone la libreria agenzia; senza, quella standard. */
+  descrizioneBox?: (testi: TestiDescrizioneBox) => ParteDescrizione[];
 }
 
 /** I gruppi dei box che non hanno il dato: chiave vuota, cosi' non si confondono con un valore vero. */
@@ -199,6 +204,12 @@ function insightDelBox(singolo: BoxKit, opzioni: OpzioniInsight): BoxInsight {
     idReferenze: referenze.map(referenza => referenza.id),
     ...lineaDelBox(singolo, opzioni),
     dettaglioProdotti: singolo.prodotti.map(prodottoInsight),
+    descrizione: (opzioni.descrizioneBox ?? descrizioneStandard)({
+      nome: pilota.nome === DESCRIZIONE_ASSENTE ? null : pilota.nome,
+      marca: pilota.marca,
+      formato: pilota.formato,
+      varianti: variantiDei(singolo.prodotti.map(prodotto => ({ gusto: prodotto.tipo }))),
+    }),
   };
   const origine = opzioni.origine?.(singolo.codiceBox);
   if (origine) insight.origine = origine;

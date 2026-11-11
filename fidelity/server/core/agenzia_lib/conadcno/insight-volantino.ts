@@ -1,3 +1,4 @@
+import { descrizioneStandard } from "../../../../lib/insightVolantino/descrizione.js";
 import { ORDINE_SEZIONI_STANDARD, riordinaSezioni, type ChiaveSezioneReport } from "../../utils/reportVolantino.js";
 import type { InsightVolantinoAgenzia } from "../types.js";
 import { lineeDistributoreConadCno } from "./linee-distributore.js";
@@ -14,6 +15,9 @@ import { lineeDistributoreConadCno } from "./linee-distributore.js";
  *   vengono quindi il confronto e i prodotti entrati e usciti; poi grafici e metodo come nello standard.
  * - Linee del distributore: le linee di marca CONAD e i bolli da contare negli insight, con la
  *   regola di Istanta per ricavare la linea dai testi stampati (linee-distributore.ts).
+ * - Descrizione del box nella scheda: come si legge sul volantino CONAD, nome, marca in evidenza,
+ *   formato e varianti ("Gelato Nutella 230 g"). E' la composizione standard, dichiarata qui perche'
+ *   e' una scelta per CONAD: un altro cliente puo' comporla diversamente nella sua libreria.
  */
 
 const ORDINE_CONAD_CNO: readonly ChiaveSezioneReport[] = [
@@ -34,4 +38,5 @@ export const insightVolantinoConadCno: InsightVolantinoAgenzia = {
   },
   sezioniReport: (_dati, standard) => riordinaSezioni(standard, ORDINE_CONAD_CNO),
   lineeDistributore: lineeDistributoreConadCno,
+  descrizioneBox: descrizioneStandard,
 };

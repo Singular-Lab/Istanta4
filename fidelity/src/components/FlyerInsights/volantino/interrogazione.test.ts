@@ -5,6 +5,9 @@ import {
   condizioniAttive,
   condizioniDisponibili,
   conIntervallo,
+  conTesto,
+  eanCercati,
+  eanDisponibile,
   elencoCondizioniAttive,
   INTERROGAZIONE_VUOTA,
   interroga,
@@ -13,6 +16,7 @@ import {
   sintesiRisultati,
   togliIntervallo,
   togliScelta,
+  togliTesto,
   type Interrogazione,
 } from "./interrogazione";
 
@@ -126,7 +130,7 @@ describe("interroga: condizioni combinate", () => {
     expect(ids(interroga(elenco, alternaValore(INTERROGAZIONE_VUOTA, "reparto", "10")))).not.toContain("fuori");
   });
 
-  it("EAN, settore, tema e ruolo vengono dai prodotti del box, anche del gruppo", () => {
+  it("settore, tema e ruolo vengono dai prodotti del box, anche del gruppo", () => {
     const elenco = [
       box("a", { dettaglioProdotti: [prodotto({ settore: "Freschi" }), prodotto({ settore: "Latticini", tema: "MBIS", ruolo: "STAR" })] }),
       box("b", { dettaglioProdotti: [prodotto({ settore: "Bevande", ean: [] })] }),
@@ -134,7 +138,55 @@ describe("interroga: condizioni combinate", () => {
 
     expect(ids(interroga(elenco, alternaValore(INTERROGAZIONE_VUOTA, "settore", "latticini")))).toEqual(["a"]);
     expect(ids(interroga(elenco, alternaValore(INTERROGAZIONE_VUOTA, "ruolo", "star")))).toEqual(["a"]);
-    expect(ids(interroga(elenco, alternaValore(INTERROGAZIONE_VUOTA, "ean", "no")))).toEqual(["b"]);
+  });
+});
+
+describe("interroga: l'EAN scritto", () => {
+  const ELENCO = [
+    box("nutella", { dettaglioProdotti: [prodotto({ ean: ["8000500425183"] })] }),
+    // L'EAN di un prodotto del gruppo, non del pilota
+    box("mozzarella", { reparto: CARNI, dettaglioProdotti: [prodotto({ ean: [] }), prodotto({ chiave: "c-2", ean: ["8033281161575", "8033281162091"] })] }),
+    box("pane", { dettaglioProdotti: [prodotto({ ean: [] })] }),
+  ];
+  const conEan = (testo: string) => conTesto(INTERROGAZIONE_VUOTA, "ean", testo);
+
+  it("gli EAN cercati: separati da virgola, punto e virgola o spazi, solo le cifre", () => {
+    expect(eanCercati(" 8000500425183, 80332-81161575;  12 ")).toEqual(["8000500425183", "8033281161575", "12"]);
+    expect(eanCercati("abc")).toEqual([]);
+    expect(eanCercati(undefined)).toEqual([]);
+  });
+
+  it("trova il box dall'EAN anche scritto in parte, anche di un prodotto del gruppo", () => {
+    expect(ids(interroga(ELENCO, conEan("425183")))).toEqual(["nutella"]);
+    expect(ids(interroga(ELENCO, conEan("8033281162091")))).toEqual(["mozzarella"]);
+  });
+
+  it("più EAN valgono in alternativa", () => {
+    expect(ids(interroga(ELENCO, conEan("8000500425183, 8033281161575")))).toEqual(expect.arrayContaining(["nutella", "mozzarella"]));
+    expect(interroga(ELENCO, conEan("8000500425183, 8033281161575"))).toHaveLength(2);
+  });
+
+  it("vale insieme alle altre condizioni e conta fra quelle attive", () => {
+    const domanda = alternaValore(conEan("8000500425183"), "reparto", "10");
+
+    expect(condizioniAttive(domanda)).toBe(2);
+    expect(interroga(ELENCO, domanda)).toEqual([]);
+    expect(elencoCondizioniAttive(domanda, [])).toEqual(
+      expect.arrayContaining([{ tipo: "testo", id: "ean", etichetta: "EAN", valori: ["8000500425183"] }])
+    );
+  });
+
+  it("un campo vuoto o senza cifre non è una condizione; togliendolo si torna come prima", () => {
+    expect(interroga(ELENCO, conEan("  "))).toBeNull();
+    expect(condizioniAttive(conEan("abc"))).toBe(0);
+    expect(interroga(ELENCO, togliTesto(conEan("425183"), "ean"))).toBeNull();
+  });
+
+  it("il campo EAN si propone solo se qualche box ha prodotti con l'EAN", () => {
+    expect(eanDisponibile(ELENCO)).toBe(true);
+    expect(eanDisponibile([ELENCO[2]])).toBe(false);
+    // Server non aggiornati: senza i prodotti del box
+    expect(eanDisponibile(ELENCO.map(voce => ({ ...voce, dettaglioProdotti: undefined })))).toBe(false);
   });
 });
 
@@ -172,13 +224,9 @@ describe("condizioniDisponibili: valori presenti con i conteggi", () => {
     for (const assente of ["settore", "segmento", "tema", "ruolo", "linea", "bolli", "punti", "sottocosto", "origine"]) {
       expect(proposte).not.toContain(assente);
     }
-    expect(proposte).toEqual(expect.arrayContaining(["reparto", "meccanica", "ean"]));
-  });
-
-  it("senza i prodotti del box (server non aggiornato) l'EAN non si propone", () => {
-    const vecchi = VOLANTINO.map(voce => ({ ...voce, dettaglioProdotti: undefined }));
-
-    expect(condizioniDisponibili(vecchi, vecchi, INTERROGAZIONE_VUOTA).map(condizione => condizione.id)).not.toContain("ean");
+    expect(proposte).toEqual(expect.arrayContaining(["reparto", "meccanica"]));
+    // L'EAN non è più una scelta "con o senza": si scrive (eanDisponibile)
+    expect(proposte).not.toContain("ean");
   });
 
   it("nessuna condizione su vendite, previsioni, calore o visibilità", () => {
