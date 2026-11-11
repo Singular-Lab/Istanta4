@@ -427,3 +427,73 @@ test('per le sole decisioni la finestra non si apre da sola, e il segnalino legg
     //La nota di "tutto risolto" non parla piu' delle decisioni.
     assert.doesNotMatch(scheda, /conCosa\.push/);
 });
+
+/*
+ * I20-1224: nella vista affiancata, aprendo la scheda di un box, la finestra delle differenze non
+ * deve aprirsi da sola sopra la colonna delle segnalazioni: ne' per le segnalazioni del bollino, che
+ * la colonna mostra gia', ne' per le differenze fra box e dato, che si vedono dal segnalino. Il box di
+ * un altro tipo la apre sempre. Senza la colonna tutto come prima.
+ */
+
+const UNA_VOCE = [{ c: 'PSD-01', g: 'warning', t: 'La foto 7035281_1_AD.jpg non e\' un psd' }];
+
+/// La colonna delle segnalazioni aperta o chiusa, con le globali che il Plugin ha in InDesign.
+function conColonna(aperta, fn, altre = {}) {
+    const prima = { VistaAffiancata: global.VistaAffiancata, SchermataSegnalazioni: global.SchermataSegnalazioni, confronti: global.confronti };
+    global.VistaAffiancata = { colonnaAperta: (id) => aperta && id === 'colonnaSegnalazioni' };
+    global.SchermataSegnalazioni = { ID_COLONNA: 'colonnaSegnalazioni' };
+    Object.assign(global, altre);
+    try {
+        return fn();
+    }
+    finally {
+        Object.keys(prima).forEach(k => { if (prima[k] === undefined) { delete global[k]; } else { global[k] = prima[k]; } });
+    }
+}
+
+test('I20-1224: con la colonna delle segnalazioni aperta la finestra non si apre da sola per le sole segnalazioni', () => {
+    pulisci();
+    conColonna(true, () => {
+        assert.strictEqual(schedaRef.colonnaSegnalazioniAperta(), true);
+        assert.strictEqual(schedaRef.deveAprirsiDaSola([], '7035277,7035281', UNA_VOCE), false);
+    });
+});
+
+test('I20-1224: con la colonna aperta neanche le differenze fra box e dato aprono la finestra da sola', () => {
+    pulisci();
+    //Il caso della prova: la foto extra mancante nel box, una differenza fra box e dato.
+    const fotoExtraMancante = [{ label: 'Bollino_ProdottoinToscana.psd', difference: 'Foto extraAuto mancante nel box' }];
+    conColonna(true, () => {
+        assert.strictEqual(schedaRef.deveAprirsiDaSola(fotoExtraMancante, '3485020'), false);
+        assert.strictEqual(schedaRef.deveAprirsiDaSola(UNA_DIFFERENZA, '7035277,7035281', UNA_VOCE), false);
+    });
+    //Il segnalino resta: le differenze sono in memoria e il pulsante le conta.
+    schedaRef.memorizzaSegnalazioni(fotoExtraMancante);
+    assert.strictEqual(schedaRef.ciSonoSegnalazioniIrrisolte(schedaRef.segnalazioniInMemoria()), true);
+    //Chiusa la colonna, le stesse differenze aprono la finestra come prima.
+    pulisci();
+    conColonna(false, () => {
+        assert.strictEqual(schedaRef.deveAprirsiDaSola(fotoExtraMancante, '3485020'), true);
+    });
+});
+
+test('I20-1224: con la colonna aperta il box di un altro tipo apre sempre la finestra', () => {
+    pulisci();
+    const boxDiverso = [{ label: 'Tipo di box', difference: 'diverso fra box e dato', tipo: 'codiceBox', valoreLocale: 'BOX7', valoreServer: 'BOX14' }];
+    conColonna(true, () => {
+        assert.strictEqual(schedaRef.deveAprirsiDaSola(boxDiverso, '123', UNA_VOCE), true);
+    }, { confronti: { eDifferenzaGrave: (d) => d.tipo === 'codiceBox' } });
+});
+
+test('I20-1224: senza la colonna, o con il pannello stretto, le sole segnalazioni aprono la finestra come prima', () => {
+    pulisci();
+    conColonna(false, () => {
+        assert.strictEqual(schedaRef.colonnaSegnalazioniAperta(), false);
+        assert.strictEqual(schedaRef.deveAprirsiDaSola([], '7035277,7035281', UNA_VOCE), true);
+    });
+    //Senza vista affiancata e senza schermata (sotto Node) la colonna non c'e'.
+    pulisci();
+    delete global.VistaAffiancata;
+    assert.strictEqual(schedaRef.colonnaSegnalazioniAperta(), false);
+    assert.strictEqual(schedaRef.deveAprirsiDaSola([], '7035277,7035281', UNA_VOCE), true);
+});

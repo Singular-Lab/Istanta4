@@ -5891,6 +5891,9 @@ const schedaRef = {
     /// anche a chi non aveva chiesto nessun silenzio.
     /// I20-1056, lotto 4: si apre anche per le sole segnalazioni del bollino (voci), con le stesse
     /// regole: silenziare vale per tutte e due.
+    /// I20-1224: con la colonna delle segnalazioni aperta (vista affiancata) non si apre da sola, ne'
+    /// per le segnalazioni del bollino ne' per le differenze: si aprirebbe sopra la colonna. Resta il
+    /// segnalino, da cui si apre a mano. Il box di un altro tipo (differenza grave) la apre comunque.
     deveAprirsiDaSola(differenze, codice, voci = []) {
         if (!this.ciSonoSegnalazioniIrrisolte(differenze) && !(Array.isArray(voci) && voci.length > 0)) {
             return false;
@@ -5902,10 +5905,26 @@ const schedaRef = {
         if (this.ciSonoDifferenzeGravi(differenze)) {
             return true;
         }
+        if (this.colonnaSegnalazioniAperta()) {
+            return false;
+        }
         if (this.segnalazioniSilenziateOvunque) {
             return false;
         }
         return !this.refESilenziata(codice);
+    },
+
+    /// I20-1224: se e' aperta la colonna delle segnalazioni della vista affiancata. Senza la vista
+    /// affiancata o la schermata (sotto Node, per esempio) la colonna non c'e'.
+    colonnaSegnalazioniAperta() {
+        try {
+            return typeof VistaAffiancata !== "undefined" && VistaAffiancata != null && typeof VistaAffiancata.colonnaAperta === "function"
+                && typeof SchermataSegnalazioni !== "undefined" && SchermataSegnalazioni != null && SchermataSegnalazioni.ID_COLONNA != null
+                && VistaAffiancata.colonnaAperta(SchermataSegnalazioni.ID_COLONNA) === true;
+        }
+        catch (e) {
+            return false;
+        }
     },
 
     /* ---------- I20-1081: le differenze gravi, molto visibili ---------- */
