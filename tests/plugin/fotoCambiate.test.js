@@ -484,3 +484,56 @@ test("senza la chiave, o con un valore che non e' un booleano, le foto cambiate 
         if (prima === undefined) { delete global.customAgenzia; } else { global.customAgenzia = prima; }
     }
 });
+
+/// I20-1222: uno spread finto con i suoi elementi di primo livello.
+function spreadCon(elementi) {
+    return { pageItems: { length: elementi.length, item: (i) => elementi[i] } };
+}
+
+/// I20-1222: un riquadro foto vuoto, senza file e quindi senza collegamento.
+function riquadroVuoto(etichetta) {
+    return { label: etichetta, graphics: { length: 0, item: () => null } };
+}
+
+test("I20-1222: il box con il riquadro foto vuoto, senza collegamenti, da' la riga come Foto P/S", () => {
+    //Il caso della traccia: BOX_STD del gruppo 2699490 a pagina 14, l'unico riquadro immagine$2699490
+    //vuoto, il dato vuole 2699490.png e il file e' in Links. Gli altri box hanno le foto collegate.
+    const conFoto = boxFinto(301, "3", "2437584", "55");
+    const vuoto = Object.assign(boxFinto(24597946, "14", "2699490", "89959"), { label: "BOX_STD" });
+    vuoto.allPageItems = [riquadroVuoto("immagine$2699490")];
+    const documento = documentoCon([collegamento("2437584_1_AD.psd", "LINK_NORMAL", "immagine$2437584", conFoto)]);
+    //Il box gia' trovato dai collegamenti non si scorre di nuovo.
+    Object.defineProperty(conFoto, "allPageItems", { get: () => { throw new Error("box gia' trovato riletto"); } });
+    documento.spreads = { length: 2, item: (i) => [spreadCon([conFoto]), spreadCon([vuoto, { id: 999, label: "testata", allPageItems: [] }])][i] };
+    const records = recordDelBox("55", "2437584", "2437584_1_AD.psd").concat(recordDelBox("89959", "2699490", "2699490.png"));
+    conGlobali({ attiva: true }, () => {
+        const righe = SchermataSegnalazioni.fotoCambiateDelDocumento(documento, records, new Set(["2437584_1_AD.psd", "2699490.png"]));
+        assert.deepStrictEqual(righe.map(r => [r.tipo, r.foto, r.fotoNelBox, r.pagina, r.codiceGruppo, r.idRec, r.codice, r.meccanica]), [
+            ["nomeNuovo", "2699490.png", null, "14", "2699490", "89959", "2699490", "BOX_STD"]
+        ]);
+        assert.strictEqual(righe[0].box, vuoto);
+        assert.strictEqual(SchermataSegnalazioni.testoCambio(righe[0]), "il dato vuole 2699490.png, che nel box non c'e'");
+        assert.strictEqual(SchermataSegnalazioni.testoFotoCambiate(righe), "1 foto cambiata in 1 box");
+    });
+});
+
+test("I20-1222: riquadro vuoto con la foto non ancora in Links, elementi senza foto e documento senza spread non danno righe", () => {
+    const vuoto = boxFinto(401, "5", "2699490", "89959");
+    vuoto.allPageItems = [riquadroVuoto("immagine$2699490"), { label: "testo$2699490" }];
+    const records = recordDelBox("89959", "2699490", "2699490.png");
+    const conSpread = Object.assign(documentoCon([]), { spreads: { length: 1, item: () => spreadCon([vuoto, { id: 402, label: "", allPageItems: [{ label: "prezzo" }] }]) } });
+    conGlobali({ attiva: true }, () => {
+        assert.deepStrictEqual(SchermataSegnalazioni.fotoCambiateDelDocumento(conSpread, records, new Set(["altra.png"])), []);
+        assert.deepStrictEqual(SchermataSegnalazioni.fotoCambiateDelDocumento(documentoCon([]), records, new Set(["2699490.png"])), []);
+    });
+});
+
+test("I20-1222: un riquadro con il file collegato, in un box non trovato dai collegamenti, conta con il suo nome", () => {
+    const box = boxFinto(501, "6", "2699490", "89959");
+    const pieno = { label: "immagine$2699490", graphics: { length: 1, item: () => ({ itemLink: { name: "2699490.png" } }) } };
+    box.allPageItems = [pieno];
+    const documento = Object.assign(documentoCon([]), { spreads: { length: 1, item: () => spreadCon([box]) } });
+    conGlobali({ attiva: true }, () => {
+        assert.deepStrictEqual(SchermataSegnalazioni.fotoCambiateDelDocumento(documento, recordDelBox("89959", "2699490", "2699490.png"), new Set(["2699490.png"])), []);
+    });
+});

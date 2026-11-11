@@ -46,6 +46,7 @@
  * sostituito con lo stesso nome e il collegamento non e' aggiornato. Si legge dal documento, dalla lista
  * della lavorazione e dalla cartella Links a ogni disegno, senza salvare niente: aggiornata la foto,
  * la riga sparisce. Ogni riga ha "Vai al box" e "Aggiorna", come il pulsante giallo di Foto P/S.
+ * I20-1222: anche i box con il riquadro foto vuoto, che non hanno collegamenti.
  */
 
 const Segnalazioni = require('./segnalazioni');
@@ -1296,8 +1297,8 @@ const SchermataSegnalazioni = {
     ///   Links: il sync ha dato alla ref una foto con un nome nuovo ("la foto non risulta impaginata");
     /// - "stessoNome": il collegamento InDesign di una foto del box non e' aggiornato, perche' il file
     ///   nella cartella e' stato sostituito con lo stesso nome ("la foto impaginata e' da ricollegare").
-    /// I box si trovano dai collegamenti del documento: un box impaginato ha almeno un riquadro foto,
-    /// anche con la nofoto. Senza la lista o senza i nomi dei file di Links il primo caso non si
+    /// I box si trovano dai collegamenti del documento e, per i riquadri foto vuoti, che collegamenti non
+    /// ne hanno, dagli spread (I20-1222). Senza la lista o senza i nomi dei file di Links il primo caso non si
     /// controlla. Collegamenti rotti e foto extra non danno righe. Ordinate per pagina.
     /// Ogni riga: { tipo, foto, fotoNelBox, codice, pagina, box, rettangolo, meccanica, codiceGruppo, idRec }.
     fotoCambiateDelDocumento(documento, records = [], fileNeiLinks = null) {
@@ -1356,6 +1357,10 @@ const SchermataSegnalazioni = {
             }
         }
 
+        //I20-1222: un box con il riquadro foto vuoto non ha collegamenti, e dai collegamenti non si trova:
+        //Foto P/S, che scorre i riquadri del box, dava "la foto non risulta impaginata" e qui non c'era riga.
+        SchermataSegnalazioni._aggiungiBoxSenzaCollegamenti(documento, boxTrovati, voceDelBox);
+
         if (fileNeiLinks != null && Array.isArray(records) && records.length > 0) {
             boxTrovati.forEach(voce => {
                 try {
@@ -1376,6 +1381,80 @@ const SchermataSegnalazioni = {
             });
         }
         return SchermataSegnalazioni.ordinaFotoCambiate(righe);
+    },
+
+    /// I20-1222: i box degli spread che i collegamenti non hanno portato ma che hanno riquadri foto
+    /// primari o secondari: un riquadro vuoto non ha collegamento, ma Foto P/S lo vede e la foto del dato
+    /// "non risulta impaginata". Ogni riquadro entra con il nome del file che ha, se lo ha. Di ogni
+    /// elemento di primo livello si legge l'id una volta; i riquadri si scorrono solo nei box non ancora
+    /// trovati, quindi un documento con tutte le foto collegate costa una lettura per elemento.
+    _aggiungiBoxSenzaCollegamenti(documento, boxTrovati, voceDelBox) {
+        let spread = null;
+        try {
+            spread = documento.spreads;
+        }
+        catch (e) {
+            spread = null;
+        }
+        const elencoSpread = SchermataSegnalazioni._elementiDi(spread);
+        elencoSpread.forEach(unoSpread => {
+            let elementi = [];
+            try {
+                elementi = SchermataSegnalazioni._elementiDi(unoSpread.pageItems);
+            }
+            catch (e) {
+                console.error("Code SGN-17 Elementi dello spread non letti per le foto cambiate:", e);
+            }
+            elementi.forEach(elemento => {
+                try {
+                    const id = elemento.id;
+                    if (id != null && boxTrovati.has("id:" + id)) {
+                        return;
+                    }
+                    const riquadri = [elemento].concat(SchermataSegnalazioni._elementiDi(elemento.allPageItems))
+                        .filter(riquadro => SchermataSegnalazioni.eFotoDelBox(riquadro.label));
+                    if (riquadri.length === 0) {
+                        return;
+                    }
+                    const voce = voceDelBox(elemento);
+                    riquadri.forEach(riquadro => voce.riquadri.push({
+                        rettangolo: riquadro, nome: SchermataSegnalazioni._nomeDelFile(riquadro), codice: String(riquadro.label).split("$")[1] || null
+                    }));
+                }
+                catch (e) {
+                    console.error("Code SGN-17 Box non letto per le foto cambiate:", e);
+                }
+            });
+        });
+    },
+
+    /// I20-1222: una collezione di InDesign (length e item) o un array, come array; altrimenti vuoto.
+    _elementiDi(collezione) {
+        if (Array.isArray(collezione)) {
+            return collezione;
+        }
+        if (collezione == null || typeof collezione.length !== "number" || typeof collezione.item !== "function") {
+            return [];
+        }
+        const elementi = [];
+        for (let i = 0; i < collezione.length; i++) {
+            elementi.push(collezione.item(i));
+        }
+        return elementi;
+    },
+
+    /// I20-1222: il nome del file collegato a un riquadro, null se il riquadro e' vuoto.
+    _nomeDelFile(riquadro) {
+        try {
+            if (riquadro.graphics != null && riquadro.graphics.length > 0) {
+                const link = riquadro.graphics.item(0).itemLink;
+                return link != null ? link.name : null;
+            }
+        }
+        catch (e) {
+            //senza file il riquadro conta come vuoto
+        }
+        return null;
     },
 
     /// I20-1217: pagina e DNA del box di una voce, letti da InDesign la prima volta e poi tenuti.
