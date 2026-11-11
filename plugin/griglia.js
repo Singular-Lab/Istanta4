@@ -92,9 +92,8 @@ const griglia = {
                 puntoRossoIcon.on('click', function () {
                     //se il gruppo è pieno
                     if (!gruppo.infoPresenti || gruppo.bloccato) {
-                        gruppo.bloccato = !gruppo.bloccato;
-                        $(this).attr("src", gruppo.bloccato ? "images/boxBloccato.png" : "images/boxSbloccato.png");
-                        me.getChildBoxByLabel(gruppo.box, "no").visible = gruppo.bloccato;
+                        //I20-1228: anche qui la riga si ridisegna, non solo l'icona.
+                        me.cambiaBloccoSenzaScorrere(gruppo, griglia, mappaGriglia);
                     }
                     else {
                         let postoSuccessivo = false;
@@ -325,6 +324,16 @@ const griglia = {
                 hideLoading();
             }
         }
+    },
+
+    /// I20-1228: blocca un box vuoto, o sblocca un box bloccato, senza spostare referenze. Il segno
+    /// di blocco nella griglia (il riquadro "no") segue lo stato, e l'elenco si ridisegna: la riga
+    /// prende stato, bordo ed etichetta dal gruppo (_rigaBox). Prima cambiava solo l'icona del
+    /// lucchetto e la riga di un box sbloccato restava "Bloccato".
+    cambiaBloccoSenzaScorrere(gruppo, griglia, mappaGriglia) {
+        gruppo.bloccato = !gruppo.bloccato;
+        this.getChildBoxByLabel(gruppo.box, "no").visible = gruppo.bloccato;
+        return this.compilaGriglia(griglia, mappaGriglia);
     },
 
     /* ---- TASK-13f15b99: la selezione dei box e le righe del pannello ---- */
