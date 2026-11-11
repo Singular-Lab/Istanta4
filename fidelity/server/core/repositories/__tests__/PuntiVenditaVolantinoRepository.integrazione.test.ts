@@ -4,6 +4,7 @@ import { describeConDatabase, svuotaTabelle, usaDatabase } from '../../../__test
 import { creaFile, creaKitRuntime, creaReferenza, creaTipoExport, type KitDiProva } from '../../../__tests__/integrazione/dati';
 import { sequelize } from '../../db/SequelizeConnector';
 import { chiaveIndirizzo, chiaveTelefono } from '../../utils/puntoVenditaNormalization';
+import { PosizioniRigheRepository } from '../PosizioniRigheRepository';
 import { type NuovaRigaVolantino, PuntiVenditaVolantinoRepository } from '../PuntiVenditaVolantinoRepository';
 
 // Le letture e scritture della storia dei punti vendita su PostgreSQL: righe dei volantini per kit,
@@ -13,7 +14,7 @@ describeConDatabase('PuntiVenditaVolantinoRepository', () => {
   const repository = new PuntiVenditaVolantinoRepository();
 
   beforeEach(async () => {
-    await svuotaTabelle('abbinamenti_manuali_pv_volantino', 'punti_vendita_volantino', 'gdo', 'promo', 'formati', 'tipi_export');
+    await svuotaTabelle('abbinamenti_manuali_pv_volantino', 'posizioni_righe_volantino', 'punti_vendita_volantino', 'gdo', 'promo', 'formati', 'tipi_export');
   });
 
   /** La combinazione canale/area del kit: da li' viene la GDO della lista. */
@@ -170,6 +171,8 @@ describeConDatabase('PuntiVenditaVolantinoRepository', () => {
     expect(await repository.righeCollegateAMano(kit.idGdo)).toEqual([{
       id: rigaPra.id, idPuntoVendita: pra, riga: 'PRA - Via Murtola 12/14', localita: 'PRA',
       chiaveIndirizzo: chiaveIndirizzo('Via Murtola 12/14'), chiaveTelefono: chiaveTelefono('010 6197180'),
+      // Canale e area del kit: un collegamento vale solo per la combinazione del suo PV
+      combinazione: `${kit.idCanale}|${kit.idArea}`.toLowerCase(), idCanale: kit.idCanale, idArea: kit.idArea, abbinamento: 'manuale',
     }]);
     expect(await repository.righeCollegateAMano(kit.idGdo, sestri)).toEqual([]);
 
@@ -180,6 +183,83 @@ describeConDatabase('PuntiVenditaVolantinoRepository', () => {
     await sequelize.query('DELETE FROM punti_vendita WHERE id_puntivendita = :pra', { replacements: { pra } });
     expect(await repository.regoleCollegamento(kit.idGdo)).toEqual([]);
     expect((await repository.righeDaRiabbinare(kit.idGdo)).map(r => [r.riga, r.id_punto_vendita])).toEqual([['PRA - Via Murtola 12/14', null]]);
+  });
+
+  it('cambio del collegamento: collegamento e righe insieme, o niente; la combinazione del PV nelle regole', async () => {
+    const kit = await creaKitRuntime();
+    const combinazione = await creaCombinazione(kit);
+    const pra = await creaPuntoVendita(kit, combinazione, { citta: 'Genova', indirizzo: 'Via Novella 3' });
+    const altro = await creaPuntoVendita(kit, combinazione, { citta: 'Genova', indirizzo: 'Via Pra 1' });
+    await repository.sostituisciRigheKit(kit.idRuntime, [
+      riga(kit, 1, { localita: 'PRA', indirizzo: 'Via Murtola 12/14', telefono: '010 6197180' }),
+      riga(kit, 2, { localita: 'SESTRI', indirizzo: 'Via Sestri 5' }),
+    ]);
+    const [rigaPra, rigaSestri] = await repository.righeDaRiabbinare(kit.idGdo);
+    expect(rigaPra).toMatchObject({ id_canale: kit.idCanale, id_area: kit.idArea });
+    const primo = await repository.creaCollegamento({ idGdo: kit.idGdo, idPuntoVendita: pra, chiavi: ['tel:0106197180'], riga: 'PRA', creatoDa: 'u1' });
+    const doppio = await repository.creaCollegamento({ idGdo: kit.idGdo, idPuntoVendita: pra, chiavi: ['ind:PRA|VIA MURTOLA 12 14'], riga: 'PRA', creatoDa: 'u1' });
+    await repository.aggiornaAbbinamenti([
+      { id: rigaPra.id, idPuntoVendita: pra, abbinamento: 'manuale' },
+      { id: rigaSestri.id, idPuntoVendita: pra, abbinamento: 'indirizzo' },
+    ]);
+    expect((await repository.regoleCollegamento(kit.idGdo))[0].combinazione).toBe(`${kit.idCanale}|${kit.idArea}`.toLowerCase());
+    expect((await repository.righeDelPuntoVendita(kit.idGdo, pra)).map(r => [r.id, r.abbinamento])).toEqual([[rigaPra.id, 'manuale'], [rigaSestri.id, 'indirizzo']]);
+
+    // Un PV che non esiste: la chiave esterna rifiuta le righe e il collegamento resta com'era
+    await expect(repository.cambiaCollegamento({
+      idCollegamento: primo, daEliminare: [doppio], idGdo: kit.idGdo, idPuntoVendita: altro, chiavi: ['tel:0106197180'], riga: 'PRA', creatoDa: 'u2',
+      cambi: [{ id: rigaPra.id, idPuntoVendita: randomUUID(), abbinamento: 'manuale' }],
+    })).rejects.toThrow();
+    expect((await repository.trovaCollegamento(primo))?.idPuntoVendita).toBe(pra);
+    expect(await repository.trovaCollegamento(doppio)).not.toBeNull();
+
+    const id = await repository.cambiaCollegamento({
+      idCollegamento: primo, daEliminare: [doppio], idGdo: kit.idGdo, idPuntoVendita: altro,
+      chiavi: ['ind:PRA|VIA MURTOLA 12 14', 'tel:0106197180'], riga: 'PRA', creatoDa: 'u2',
+      cambi: [{ id: rigaPra.id, idPuntoVendita: altro, abbinamento: 'manuale' }, { id: rigaSestri.id, idPuntoVendita: null, abbinamento: null }],
+    });
+
+    expect(id).toBe(primo);
+    expect(await repository.trovaCollegamento(primo)).toMatchObject({ idPuntoVendita: altro, chiavi: ['ind:PRA|VIA MURTOLA 12 14', 'tel:0106197180'] });
+    expect(await repository.trovaCollegamento(doppio)).toBeNull();
+    expect((await repository.righeDelPuntoVendita(kit.idGdo, altro)).map(r => r.id)).toEqual([rigaPra.id]);
+    expect((await repository.righeDaRiabbinare(kit.idGdo)).map(r => r.id)).toEqual([rigaSestri.id]);
+
+    // Senza collegamento da aggiornare se ne crea uno
+    const nuovo = await repository.cambiaCollegamento({
+      idCollegamento: null, daEliminare: [], idGdo: kit.idGdo, idPuntoVendita: pra, chiavi: ['ind:SESTRI|VIA SESTRI 5'], riga: 'SESTRI', creatoDa: null,
+      cambi: [{ id: rigaSestri.id, idPuntoVendita: pra, abbinamento: 'manuale' }],
+    });
+    expect(await repository.trovaCollegamento(nuovo)).toMatchObject({ idPuntoVendita: pra, riga: 'SESTRI' });
+
+    const nomi = await repository.nomiCanaliAree(kit.idGdo);
+    expect(nomi.canali.get(kit.idCanale.toLowerCase())).toBe('Superstore');
+    expect(nomi.aree.get(kit.idArea.toLowerCase())).toBe('Toscana');
+  });
+
+  it('posizioni delle righe: la ricerca salva e aggiorna, ma non tocca una posizione corretta a mano', async () => {
+    const posizioni = new PosizioniRigheRepository();
+    const kit = await creaKitRuntime();
+
+    await posizioni.salvaRicerca(kit.idGdo, 'ind:PRA|VIA MURTOLA 12 14', { ricerca: 'Via Murtola, PRA', lat: 44.4281, lon: 8.7836, precisione: 'via', errore: null }, 'u1');
+    await posizioni.salvaRicerca(kit.idGdo, 'loc:ALASSIO', { ricerca: null, lat: null, lon: null, precisione: 'non_trovata', errore: 'HTTP 429' }, 'u1');
+    expect(await posizioni.posizioni(kit.idGdo)).toEqual(new Map([
+      ['ind:PRA|VIA MURTOLA 12 14', expect.objectContaining({ lat: 44.4281, lon: 8.7836, precisione: 'via', fonte: 'nominatim', errore: null })],
+      ['loc:ALASSIO', expect.objectContaining({ lat: null, lon: null, precisione: 'non_trovata', errore: 'HTTP 429' })],
+    ]));
+
+    // Una nuova ricerca aggiorna
+    await posizioni.salvaRicerca(kit.idGdo, 'loc:ALASSIO', { ricerca: 'ALASSIO', lat: 44.0, lon: 8.17, precisione: 'comune', errore: null }, 'u1');
+    expect((await posizioni.posizioni(kit.idGdo)).get('loc:ALASSIO')).toMatchObject({ precisione: 'comune', errore: null });
+
+    // Corretta a mano: vince e una ricerca successiva non la tocca
+    const corretta = await posizioni.correggi(kit.idGdo, 'ind:PRA|VIA MURTOLA 12 14', { lat: 44.42801, lon: 8.78412 }, 'u2');
+    expect(corretta).toMatchObject({ chiave: 'ind:PRA|VIA MURTOLA 12 14', lat: 44.42801, lon: 8.78412, fonte: 'manuale', precisione: 'civico' });
+    await posizioni.salvaRicerca(kit.idGdo, 'ind:PRA|VIA MURTOLA 12 14', { ricerca: 'x', lat: 1, lon: 1, precisione: 'via', errore: null }, 'u1');
+    expect((await posizioni.posizioni(kit.idGdo)).get('ind:PRA|VIA MURTOLA 12 14')).toMatchObject({ lat: 44.42801, fonte: 'manuale' });
+
+    // Per GDO
+    expect(await posizioni.posizioni(randomUUID())).toEqual(new Map());
   });
 
   it('eliminato il kit, le sue righe se ne vanno', async () => {
@@ -224,7 +304,11 @@ describeConDatabase('PuntiVenditaVolantinoRepository', () => {
       chiaveIndirizzo: 'VIA MURTOLA 12 14',
       abbinamento: 'probabile',
     });
-    expect(await repository.trovaPuntoVendita(pra)).toEqual({ id: pra, idGdo: primo.idGdo, citta: 'Genova', indirizzo: 'Via Murtola 12/14', telefono: null });
+    expect(await repository.trovaPuntoVendita(pra)).toEqual({
+      id: pra, idGdo: primo.idGdo, nome: 'PV Genova', citta: 'Genova', indirizzo: 'Via Murtola 12/14', telefono: null,
+      // La combinazione del PV: si collega a mano solo a righe dei suoi volantini
+      idCanale: primo.idCanale, nomeCanale: 'Superstore', idArea: primo.idArea, nomeArea: 'Toscana',
+    });
   });
 
   it('volantini successivi della stessa insegna e area con la lista registrata, senza il PV', async () => {

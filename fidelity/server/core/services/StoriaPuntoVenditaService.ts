@@ -4,6 +4,7 @@ import type {
   EsitoCollegamento,
   EsitoScollegamento,
   PaginaCollegamentiManuali,
+  RichiestaCambioCollegamento,
   RichiestaCollegamento,
 } from '../../../lib/puntiVendita/analisi';
 import {
@@ -27,10 +28,16 @@ import type {
   IPuntiVenditaVolantinoRepository,
   KitVolantino,
   PuntoVenditaDellaStoria,
-  RigaDaRiabbinare,
 } from '../repositories/PuntiVenditaVolantinoRepository';
 import { AbbinatorePuntiVendita } from '../utils/abbinamentoPuntiVendita';
-import { raggruppaPerChiavi, type RegolaCollegamento, RegoleCollegamento, type RigaConChiavi } from '../utils/chiaviRigheVolantino';
+import {
+  chiaviRigaVolantino,
+  raggruppaPerChiavi,
+  type RegolaCollegamento,
+  RegoleCollegamento,
+  type RigaConChiavi,
+} from '../utils/chiaviRigheVolantino';
+import { chiaveCombinazione } from '../utils/confrontoPuntiVendita';
 import { type VoceListaPuntiVendita, vociDelVolantino } from '../utils/listaPuntiVenditaVolantino';
 import { chiaveIndirizzo, chiaveTelefono } from '../utils/puntoVenditaNormalization';
 import { calcolaStoria, ultimaApparizione } from '../utils/storiaPuntoVendita';
@@ -52,6 +59,10 @@ import { importPuntiVenditaJobs } from './ImportPuntiVenditaJob';
  * collegamento si salva come regola della GDO (abbinamenti_manuali_pv_volantino) e il
  * riabbinamento la applica prima delle regole automatiche, anche alle righe riscritte da una nuova
  * sincronizzazione del kit. Annullato il collegamento (scollega), le sue righe si riabbinano.
+ * Un collegamento fatto a mano vale solo per le righe dei volantini con la combinazione canale/area
+ * del suo PV, e si fa solo verso un PV con la combinazione di uno dei volantini della riga.
+ * Dalla verifica dei collegamenti si cambia il PV di un gruppo di righe, anche abbinato
+ * automaticamente (cambiaCollegamento): diventa un collegamento fatto a mano.
  */
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -87,6 +98,51 @@ export interface OpzioniStoriaPuntoVendita {
 }
 
 const messaggio = (errore: unknown): string => (errore instanceof Error ? errore.message : String(errore));
+
+/** Le chiavi di una riga del repository, con la combinazione del suo kit. */
+const chiaviDi = (riga: { riga: string; localita: string | null; chiave_indirizzo: string | null; chiave_telefono: string | null; id_canale: string | null; id_area: string | null }): RigaConChiavi => ({
+  riga: riga.riga,
+  localita: riga.localita,
+  chiaveIndirizzo: riga.chiave_indirizzo,
+  chiaveTelefono: riga.chiave_telefono,
+  combinazione: chiaveCombinazione(riga.id_canale, riga.id_area),
+});
+
+/**
+ * Per le righe gia' collegate a mano a un PV, il collegamento di quel PV che le riconosce, senza
+ * guardare la combinazione: anche le righe collegate prima del vincolo su canale e area si contano
+ * e si scollegano con il loro collegamento.
+ */
+class CollegamentiPerPuntoVendita {
+  private readonly perPuntoVendita = new Map<string, RegoleCollegamento>();
+
+  constructor(regole: readonly RegolaCollegamento[]) {
+    const raggruppate = new Map<string, RegolaCollegamento[]>();
+    for (const regola of regole) raggruppate.set(regola.idPuntoVendita, [...(raggruppate.get(regola.idPuntoVendita) ?? []), { ...regola, combinazione: null }]);
+    for (const [idPuntoVendita, delPuntoVendita] of raggruppate) this.perPuntoVendita.set(idPuntoVendita, new RegoleCollegamento(delPuntoVendita));
+  }
+
+  per(riga: RigaConChiavi & { idPuntoVendita: string }): RegolaCollegamento | null {
+    return this.perPuntoVendita.get(riga.idPuntoVendita)?.per({ ...riga, combinazione: undefined }) ?? null;
+  }
+}
+
+/** Il PV non ha la combinazione di nessuno dei volantini delle righe: 422 con le combinazioni. */
+function combinazioneDiversa(puntoVendita: PuntoVenditaDellaStoria, combinazioniRighe: readonly string[], nomi: { canali: ReadonlyMap<string, string>; aree: ReadonlyMap<string, string> }): ApplicationError {
+  const nome = (combinazione: string) => {
+    const [canale, area] = combinazione.split('|');
+    return `${nomi.canali.get(canale) ?? 'canale sconosciuto'} · ${nomi.aree.get(area) ?? 'area sconosciuta'}`;
+  };
+  const delPuntoVendita = `${puntoVendita.nomeCanale ?? 'canale sconosciuto'} · ${puntoVendita.nomeArea ?? 'area sconosciuta'}`;
+  const deiVolantini = combinazioniRighe.map(nome).join(', ');
+  return new ApplicationError({
+    name: 'CombinazioneDiversaError',
+    code: 'COMBINAZIONE_DIVERSA',
+    message: `Il punto vendita è di ${delPuntoVendita}, ma la riga è nei volantini di ${deiVolantini}: si collega solo a un punto vendita dello stesso canale e della stessa area`,
+    httpStatus: HttpStatusCode.UNPROCESSABLE_ENTITY,
+    details: { puntoVendita: delPuntoVendita, volantini: combinazioniRighe.map(nome) },
+  });
+}
 const stessoId = (a: unknown, b: string): boolean => typeof a === 'string' && a.trim().toLowerCase() === b.toLowerCase();
 const presente = (valore: unknown): boolean => typeof valore === 'string' && valore.trim() !== '';
 
@@ -198,9 +254,6 @@ export class StoriaPuntoVenditaService implements IStoriaPuntoVenditaService {
       this.repository.regoleCollegamento(idGdo),
     ]);
     const abbinatore = new AbbinatorePuntiVendita(puntiVendita);
-    const chiaviDi = (riga: RigaDaRiabbinare) => ({
-      riga: riga.riga, localita: riga.localita, chiaveIndirizzo: riga.chiave_indirizzo, chiaveTelefono: riga.chiave_telefono,
-    });
     const { manuali, imparate } = this.applicaCollegamenti(righe.map(riga => ({ id: riga.id, chiavi: chiaviDi(riga) })), regoleSalvate);
     const cambi: CambioAbbinamento[] = [];
     for (const riga of righe) {
@@ -303,12 +356,7 @@ export class StoriaPuntoVenditaService implements IStoriaPuntoVenditaService {
 
     // Il gruppo di righe senza PV che ha quella chiave, come nell'elenco delle righe non abbinate
     const righe = await this.repository.righeDaRiabbinare(idGdo);
-    const gruppo = raggruppaPerChiavi(righe.map(riga => ({
-      riga: riga.riga,
-      localita: riga.localita,
-      chiaveIndirizzo: riga.chiave_indirizzo,
-      chiaveTelefono: riga.chiave_telefono,
-    }))).find(candidato => candidato.chiavi.includes(chiave));
+    const gruppo = raggruppaPerChiavi(righe.map(chiaviDi)).find(candidato => candidato.chiavi.includes(chiave));
     if (!gruppo) {
       throw new ApplicationError({
         name: 'RigaGiaAbbinataError',
@@ -318,6 +366,8 @@ export class StoriaPuntoVenditaService implements IStoriaPuntoVenditaService {
         details: { chiave },
       });
     }
+
+    await this.verificaCombinazione(idGdo, puntoVendita, gruppo.righe);
 
     const idCollegamento = await this.repository.creaCollegamento({
       idGdo,
@@ -329,11 +379,88 @@ export class StoriaPuntoVenditaService implements IStoriaPuntoVenditaService {
     log.info('Storia PV: righe dei volantini collegate a mano', { idGdo, idPuntoVendita: puntoVendita.id, idCollegamento, righe: gruppo.righe.length });
     // Il riabbinamento applica il collegamento a tutte le righe senza PV con quelle chiavi
     await this.riabbina(idGdo);
-    // Con le chiavi che il collegamento ha imparato riabbinando
+    return { idCollegamento, righe: await this.righeDelCollegamento(idGdo, puntoVendita.id, idCollegamento, gruppo.chiavi) };
+  }
+
+  /** Le righe collegate a mano al PV grazie al collegamento, con le chiavi che ha imparato riabbinando. */
+  private async righeDelCollegamento(idGdo: string, idPuntoVendita: string, idCollegamento: string, chiavi: readonly string[]): Promise<number> {
     const salvato = await this.repository.trovaCollegamento(idCollegamento);
-    const regola = new RegoleCollegamento([salvato ?? { id: idCollegamento, idPuntoVendita: puntoVendita.id, chiavi: gruppo.chiavi, creatoIl: new Date() }]);
-    const collegate = await this.repository.righeCollegateAMano(idGdo, puntoVendita.id);
-    return { idCollegamento, righe: collegate.filter(riga => regola.per(riga)).length };
+    const regola = new CollegamentiPerPuntoVendita([salvato ?? { id: idCollegamento, idPuntoVendita, chiavi, creatoIl: new Date() }]);
+    const collegate = await this.repository.righeCollegateAMano(idGdo, idPuntoVendita);
+    return collegate.filter(riga => regola.per(riga)?.id === idCollegamento).length;
+  }
+
+  /** 422 se il PV non ha la combinazione di nessuna delle righe; righe senza canale o area non vincolano. */
+  private async verificaCombinazione(idGdo: string, puntoVendita: PuntoVenditaDellaStoria, righe: readonly RigaConChiavi[]): Promise<void> {
+    const combinazioni = [...new Set(righe.map(riga => riga.combinazione).filter((combinazione): combinazione is string => !!combinazione))];
+    if (combinazioni.length === 0) return;
+    const delPuntoVendita = chiaveCombinazione(puntoVendita.idCanale, puntoVendita.idArea);
+    if (delPuntoVendita && combinazioni.includes(delPuntoVendita)) return;
+    throw combinazioneDiversa(puntoVendita, combinazioni, await this.repository.nomiCanaliAree(idGdo));
+  }
+
+  async cambiaCollegamento(idGdo: string, richiesta: unknown, idUtente: string | null): Promise<EsitoCollegamento> {
+    const { chiave, idPuntoVenditaAttuale, idPuntoVendita } = (richiesta ?? {}) as Partial<Record<keyof RichiestaCambioCollegamento, unknown>>;
+    if (typeof chiave !== 'string' || chiave.trim() === '' || chiave.length > MASSIMA_LUNGHEZZA_CHIAVE) {
+      throw new BadRequestError({ message: 'Righe da collegare non indicate (chiave)' });
+    }
+    if (typeof idPuntoVenditaAttuale !== 'string' || !UUID.test(idPuntoVenditaAttuale)) {
+      throw new BadRequestError({ message: 'Punto vendita collegato oggi non indicato (idPuntoVenditaAttuale)' });
+    }
+    if (typeof idPuntoVendita !== 'string' || !UUID.test(idPuntoVendita)) {
+      throw new BadRequestError({ message: 'Punto vendita da collegare non indicato (idPuntoVendita)' });
+    }
+    if (idPuntoVendita.toLowerCase() === idPuntoVenditaAttuale.toLowerCase()) {
+      throw new BadRequestError({ message: "Le righe sono gia' collegate a questo punto vendita" });
+    }
+    const nuovo = await this.puntoVenditaDellaGdo(idPuntoVendita, idGdo);
+
+    // Il gruppo di righe collegate oggi al PV che ha quella chiave, come nella verifica dei collegamenti
+    const righe = await this.repository.righeDelPuntoVendita(idGdo, idPuntoVenditaAttuale);
+    const gruppo = raggruppaPerChiavi(righe).find(candidato => candidato.chiavi.includes(chiave));
+    if (!gruppo) {
+      throw new ApplicationError({
+        name: 'CollegamentoCambiatoError',
+        code: 'COLLEGAMENTO_CAMBIATO',
+        message: "Le righe non sono piu' collegate a quel punto vendita: ricarica la verifica",
+        httpStatus: HttpStatusCode.CONFLICT,
+        details: { chiave, idPuntoVenditaAttuale },
+      });
+    }
+    await this.verificaCombinazione(idGdo, nuovo, gruppo.righe);
+
+    // Il collegamento fatto a mano del gruppo (anche piu' d'uno) diventa uno solo, con tutte le chiavi
+    const chiaviGruppo = new Set(gruppo.chiavi);
+    const esistenti = (await this.repository.regoleCollegamento(idGdo))
+      .filter(regola => regola.idPuntoVendita.toLowerCase() === idPuntoVenditaAttuale.toLowerCase() && regola.chiavi.some(c => chiaviGruppo.has(c)))
+      .sort((a, b) => new Date(b.creatoIl).getTime() - new Date(a.creatoIl).getTime());
+    const chiavi = [...new Set([...gruppo.chiavi, ...esistenti.flatMap(regola => regola.chiavi)])].sort();
+
+    // Le righe del PV con una di quelle chiavi: vanno al nuovo PV se sono della sua combinazione, le altre tornano all'abbinamento automatico
+    const insieme = new Set(chiavi);
+    const combinazioneNuovo = chiaveCombinazione(nuovo.idCanale, nuovo.idArea);
+    const cambi: CambioAbbinamento[] = righe
+      .filter(riga => chiaviRigaVolantino(riga).some(c => insieme.has(c)))
+      .map(riga => (riga.combinazione === null || riga.combinazione === combinazioneNuovo
+        ? { id: riga.id, idPuntoVendita: nuovo.id, abbinamento: 'manuale' as const }
+        : { id: riga.id, idPuntoVendita: null, abbinamento: null }));
+
+    const idCollegamento = await this.repository.cambiaCollegamento({
+      idCollegamento: esistenti[0]?.id ?? null,
+      daEliminare: esistenti.slice(1).map(regola => regola.id),
+      idGdo,
+      idPuntoVendita: nuovo.id,
+      chiavi,
+      riga: gruppo.righe[gruppo.righe.length - 1].riga,
+      creatoDa: idUtente,
+      cambi,
+    });
+    log.info('Storia PV: collegamento cambiato', {
+      idGdo, idCollegamento, da: idPuntoVenditaAttuale, a: nuovo.id, righe: cambi.filter(cambio => cambio.idPuntoVendita).length,
+    });
+    // Le righe tornate senza PV si riabbinano con gli altri collegamenti o con le regole automatiche
+    await this.riabbina(idGdo);
+    return { idCollegamento, righe: cambi.filter(cambio => cambio.idPuntoVendita).length };
   }
 
   async collegamenti(idGdo: string, pagina = 1, dimensione = DIMENSIONI_PAGINA_STORIA[0]): Promise<PaginaCollegamentiManuali> {
@@ -344,14 +471,12 @@ export class StoriaPuntoVenditaService implements IStoriaPuntoVenditaService {
       this.repository.regoleCollegamento(idGdo),
       this.repository.righeCollegateAMano(idGdo),
     ]);
-    // Ogni riga collegata a mano conta sotto il collegamento che oggi la riconosce
-    const indice = new RegoleCollegamento(regole);
+    // Ogni riga collegata a mano conta sotto il collegamento del suo PV che oggi la riconosce
+    const indice = new CollegamentiPerPuntoVendita(regole);
     const righePerCollegamento = new Map<string, number>();
     for (const riga of collegate) {
       const regola = indice.per(riga);
-      if (regola && regola.idPuntoVendita === riga.idPuntoVendita) {
-        righePerCollegamento.set(regola.id, (righePerCollegamento.get(regola.id) ?? 0) + 1);
-      }
+      if (regola) righePerCollegamento.set(regola.id, (righePerCollegamento.get(regola.id) ?? 0) + 1);
     }
     return {
       collegamenti: collegamenti.map(collegamento => ({
@@ -374,7 +499,7 @@ export class StoriaPuntoVenditaService implements IStoriaPuntoVenditaService {
     }
     await this.repository.eliminaCollegamento(collegamento.id);
     // Le righe di quel PV collegate a mano con le chiavi del collegamento tornano senza PV...
-    const regola = new RegoleCollegamento([collegamento]);
+    const regola = new CollegamentiPerPuntoVendita([collegamento]);
     const daScollegare = (await this.repository.righeCollegateAMano(idGdo, collegamento.idPuntoVendita)).filter(riga => regola.per(riga));
     await this.repository.aggiornaAbbinamenti(daScollegare.map(riga => ({ id: riga.id, idPuntoVendita: null, abbinamento: null })));
     log.info('Storia PV: collegamento fatto a mano annullato', { idGdo, idCollegamento: collegamento.id, righe: daScollegare.length });

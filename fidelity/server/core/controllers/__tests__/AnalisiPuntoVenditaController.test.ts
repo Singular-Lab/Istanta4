@@ -6,6 +6,10 @@ import { ApplicationError, BadRequestError, NotFoundError } from '../../../../li
 import type { IAnalisiPuntoVenditaService } from '../../interfaces/IAnalisiPuntoVenditaService';
 import type { IConsultazionePuntiVenditaService } from '../../interfaces/IConsultazionePuntiVenditaService';
 import type { CollegamentiPuntiVenditaVolantino, IStoriaPuntoVenditaService } from '../../interfaces/IStoriaPuntoVenditaService';
+import type { PosizioneRiga, StatoRicercaPosizioni } from '../../../../lib/puntiVendita/analisi';
+import type { EsitoRicercaPosizione } from '../../repositories/PosizioniRigheRepository';
+import type { FiltriVerifica } from '../../services/AnalisiPuntoVenditaService';
+import { type IndirizzoDaCercare, type OperazioniPosizioni, RicercaPosizioniGiaInCorso } from '../../services/PosizioniRigheJob';
 
 // Le pagine del PV sulla timeline dei volantini: permessi, GDO della sessione e ordine delle route
 // sullo stesso percorso base della consultazione e della storia.
@@ -31,6 +35,8 @@ vi.mock('../../logger', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+vi.mock('../../../ws-server', () => ({ emitToClients: vi.fn() }));
+
 vi.mock('../../models', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   UtentiGDO: { findOne: vi.fn(async () => (anagrafica.idGdo ? { id_gdo_utentegdo: anagrafica.idGdo, id_ruolo_utente_gdo: null } : null)) },
@@ -52,10 +58,40 @@ function servizioFinto() {
     qualita: vi.fn(async (_idGdo: string) => ({ totale: 1, senzaCoordinate: 0, senzaCodice: 0, righeDaRevisionare: 0, conStoria: 1, dispositiviOffline: 0 })),
     righeNonAbbinate: vi.fn(async (_idGdo: string, pagina?: number, dimensione?: number) => ({ righe: [], totale: 0, pagina: pagina ?? 1, dimensione: dimensione ?? 10 })),
     volantiniRigaNonAbbinata: vi.fn(async (_idGdo: string, chiave: unknown) => ({ chiave: String(chiave), volantini: [] })),
+    verificaCollegamenti: vi.fn(async (_idGdo: string, filtri?: FiltriVerifica) => ({
+      gruppi: [], totale: 0, pagina: filtri?.pagina ?? 1, dimensione: filtri?.dimensione ?? 10,
+      conteggi: { coerente: 0, da_verificare: 0, incongruente: 0 }, posizioniDaCercare: 0, posizioniNonTrovate: 0,
+    })),
+    indirizziDaCercare: vi.fn(async (_idGdo: string, _ancheNonTrovate?: boolean): Promise<IndirizzoDaCercare[]> => [
+      { chiave: 'ind:PRA|VIA MURTOLA 12 14', indirizzo: 'Via Murtola 12/14', localita: 'PRA', provincia: 'GE' },
+    ]),
+    salvaRicercaPosizione: vi.fn(async (_idGdo: string, _chiave: string, _esito: EsitoRicercaPosizione, _idUtente: string | null) => undefined),
+    correggiPosizione: vi.fn(async (_idGdo: string, richiesta: unknown, _idUtente: string | null): Promise<PosizioneRiga> => ({
+      chiave: String((richiesta as { chiave?: unknown }).chiave), lat: 44.4, lon: 8.79, precisione: 'civico', fonte: 'manuale', errore: null, aggiornataIl: '2026-11-11T10:00:00.000Z',
+    })),
   } satisfies IAnalisiPuntoVenditaService;
 }
 
-function creaApp(opzioni: { tipo?: TIPO_UTENTI; consultazionePrima?: boolean } = {}) {
+const STATO_RICERCA: StatoRicercaPosizioni = {
+  jobId: 'job-1', stato: 'in_corso', totale: 1, esaminate: 0, trovate: 0, approssimate: 0, nonTrovate: 0, errori: 0, avviatoIl: '2026-11-11T10:00:00.000Z',
+};
+
+/** Il gestore delle ricerche: esegue subito le operazioni del primo indirizzo, per vedere cosa gli passa il controller. */
+function posizioniFinte(opzioni: { giaInCorso?: boolean } = {}) {
+  return {
+    avvia: vi.fn(async (_idGdo: string, _idUtente: string, indirizzi: readonly IndirizzoDaCercare[], operazioni: OperazioniPosizioni) => {
+      if (opzioni.giaInCorso) throw new RicercaPosizioniGiaInCorso(STATO_RICERCA);
+      await operazioni.salva(indirizzi[0].chiave, { ricerca: 'x', lat: 1, lon: 2, precisione: 'via', errore: null });
+      operazioni.notifica('progress', STATO_RICERCA);
+      return { stato: STATO_RICERCA, fine: Promise.resolve(STATO_RICERCA) };
+    }),
+    stato: vi.fn(async (jobId: string, _idGdo: string) => (jobId === 'job-1' ? STATO_RICERCA : undefined)),
+    ultima: vi.fn(async (_idGdo: string) => STATO_RICERCA),
+    annulla: vi.fn(async (jobId: string, _idGdo: string) => (jobId === 'job-1' ? { ...STATO_RICERCA, stato: 'annullato' as const } : undefined)),
+  };
+}
+
+function creaApp(opzioni: { tipo?: TIPO_UTENTI; consultazionePrima?: boolean; ricercaGiaInCorso?: boolean } = {}) {
   const analisi = servizioFinto();
   const consultazione = {
     elenca: vi.fn(async () => []),
@@ -66,20 +102,23 @@ function creaApp(opzioni: { tipo?: TIPO_UTENTI; consultazionePrima?: boolean } =
     collega: vi.fn(async (_idGdo: string, _richiesta: unknown, _idUtente: string | null) => ({ idCollegamento: 'c1', righe: 40 })),
     collegamenti: vi.fn(async (_idGdo: string, pagina?: number, dimensione?: number) => ({ collegamenti: [], totale: 0, pagina: pagina ?? 1, dimensione: dimensione ?? 10 })),
     scollega: vi.fn(async (_idGdo: string, _idCollegamento: string) => ({ righe: 40 })),
+    cambiaCollegamento: vi.fn(async (_idGdo: string, _richiesta: unknown, _idUtente: string | null) => ({ idCollegamento: 'c2', righe: 12 })),
   } satisfies CollegamentiPuntiVenditaVolantino;
+  const posizioni = posizioniFinte({ giaInCorso: opzioni.ricercaGiaInCorso });
+  const emetti = vi.fn();
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
     req.session = { id_utente: 'u1', tipo_utente: opzioni.tipo ?? TIPO_UTENTI.GDO } as Request['session'];
     next();
   });
-  const controllerAnalisi = new AnalisiPuntoVenditaController(analisi, collegamenti);
+  const controllerAnalisi = new AnalisiPuntoVenditaController(analisi, collegamenti, posizioni, async () => undefined, emetti);
   const controllerConsultazione = new ConsultazionePuntiVenditaController(consultazione);
   // Come in routes.ts: analisi, consultazione, storia; a richiesta la consultazione prima
   const ordine = opzioni.consultazionePrima ? [controllerConsultazione, controllerAnalisi] : [controllerAnalisi, controllerConsultazione];
   for (const controller of ordine) controller.registerRoutes(app);
   new StoriaPuntoVenditaController({} as IStoriaPuntoVenditaService).registerRoutes(app);
-  return { app, analisi, consultazione, collegamenti };
+  return { app, analisi, consultazione, collegamenti, posizioni, emetti };
 }
 
 beforeEach(() => {
@@ -308,5 +347,113 @@ describe('ordine delle route sul percorso base /api/punti-vendita', () => {
     expect(consultazione.dettaglio).toHaveBeenCalledWith('gdo-sessione', ID_PV);
     expect(consultazione.volantiniAttivi).toHaveBeenCalledWith('gdo-sessione', ID_PV);
     expect(analisi.volantino).not.toHaveBeenCalled();
+  });
+});
+
+describe('verifica dei collegamenti e posizioni delle righe: /api/punti-vendita/gestione/...', () => {
+  it('con la sola visualizzazione: 403 per verifica, cambio, ricerca e correzione, niente chiamato', async () => {
+    const { app, analisi, collegamenti, posizioni } = creaApp();
+
+    const risposte = await Promise.all([
+      request(app).get('/api/punti-vendita/gestione/verifica-collegamenti'),
+      request(app).put('/api/punti-vendita/gestione/collegamenti/cambia').send({ chiave: 'tel:1', idPuntoVenditaAttuale: ID_PV, idPuntoVendita: ID_PV }),
+      request(app).post('/api/punti-vendita/gestione/posizioni-righe').send({}),
+      request(app).get('/api/punti-vendita/gestione/posizioni-righe/stato'),
+      request(app).post('/api/punti-vendita/gestione/posizioni-righe/job-1/annulla'),
+      request(app).put('/api/punti-vendita/gestione/posizioni-righe').send({ chiave: 'loc:PRA', lat: 44, lon: 8 }),
+    ]);
+
+    expect(risposte.map(risposta => risposta.status)).toEqual([403, 403, 403, 403, 403, 403]);
+    expect(analisi.verificaCollegamenti).not.toHaveBeenCalled();
+    expect(collegamenti.cambiaCollegamento).not.toHaveBeenCalled();
+    expect(posizioni.avvia).not.toHaveBeenCalled();
+    expect(analisi.correggiPosizione).not.toHaveBeenCalled();
+  });
+
+  it('verifica: nella GDO della sessione, con esito, tipo e pagina', async () => {
+    permessi.concessi = new Set(['gdo.gestisci_punti_vendita']);
+    const { app, analisi } = creaApp();
+
+    const res = await request(app).get('/api/punti-vendita/gestione/verifica-collegamenti').query({ esito: 'incongruente', tipo: 'manuale', pagina: '2', dimensione: '25' });
+
+    expect(res.status).toBe(200);
+    expect(analisi.verificaCollegamenti).toHaveBeenCalledWith('gdo-sessione', { esito: 'incongruente', tipo: 'manuale', pagina: 2, dimensione: 25 });
+  });
+
+  it('cambio del collegamento: nella GDO della sessione, a nome dell\'utente', async () => {
+    permessi.concessi = new Set(['gdo.gestisci_punti_vendita']);
+    const { app, collegamenti } = creaApp();
+    const corpo = { chiave: 'tel:0106197180', idPuntoVenditaAttuale: ID_PV, idPuntoVendita: ID_KIT };
+
+    const res = await request(app).put('/api/punti-vendita/gestione/collegamenti/cambia').send(corpo);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ idCollegamento: 'c2', righe: 12 });
+    expect(collegamenti.cambiaCollegamento).toHaveBeenCalledWith('gdo-sessione', corpo, 'u1');
+  });
+
+  it('cambio verso un PV di un\'altra combinazione: l\'errore 422 del servizio arriva al client', async () => {
+    permessi.concessi = new Set(['gdo.gestisci_punti_vendita']);
+    const { app, collegamenti } = creaApp();
+    collegamenti.cambiaCollegamento.mockRejectedValueOnce(new ApplicationError({
+      name: 'CombinazioneDiversaError', code: 'COMBINAZIONE_DIVERSA', message: 'Il punto vendita è di Conad City · Liguria', httpStatus: 422,
+    }));
+
+    const res = await request(app).put('/api/punti-vendita/gestione/collegamenti/cambia').send({ chiave: 'tel:1', idPuntoVenditaAttuale: ID_PV, idPuntoVendita: ID_KIT });
+
+    expect(res.status).toBe(422);
+  });
+
+  it('ricerca delle posizioni: 202 subito, salva nella GDO della sessione e manda l\'avanzamento all\'utente che l\'ha avviata', async () => {
+    permessi.concessi = new Set(['gdo.gestisci_punti_vendita']);
+    const { app, analisi, posizioni, emetti } = creaApp();
+
+    const res = await request(app).post('/api/punti-vendita/gestione/posizioni-righe').send({ nonTrovate: true });
+
+    expect(res.status).toBe(202);
+    expect(res.body).toEqual(STATO_RICERCA);
+    expect(analisi.indirizziDaCercare).toHaveBeenCalledWith('gdo-sessione', true);
+    expect(posizioni.avvia).toHaveBeenCalledWith('gdo-sessione', 'u1', expect.any(Array), expect.any(Object));
+    expect(analisi.salvaRicercaPosizione).toHaveBeenCalledWith('gdo-sessione', 'ind:PRA|VIA MURTOLA 12 14', expect.objectContaining({ precisione: 'via' }), 'u1');
+    expect(emetti).toHaveBeenCalledWith('posizioniRighe_job-1_progress', STATO_RICERCA, 'user:u1');
+  });
+
+  it('ricerca gia\' in corso sulla GDO: 409 con lo stato di quella in corso', async () => {
+    permessi.concessi = new Set(['gdo.gestisci_punti_vendita']);
+    const { app } = creaApp({ ricercaGiaInCorso: true });
+
+    const res = await request(app).post('/api/punti-vendita/gestione/posizioni-righe').send({});
+
+    expect(res.status).toBe(409);
+    expect(res.body.stato).toEqual(STATO_RICERCA);
+  });
+
+  it('stato e annullamento della ricerca, nella GDO della sessione; ricerca sconosciuta: 404', async () => {
+    permessi.concessi = new Set(['gdo.gestisci_punti_vendita']);
+    const { app, posizioni } = creaApp();
+
+    const ultima = await request(app).get('/api/punti-vendita/gestione/posizioni-righe/stato');
+    const perId = await request(app).get('/api/punti-vendita/gestione/posizioni-righe/stato').query({ jobId: 'job-1' });
+    const annullata = await request(app).post('/api/punti-vendita/gestione/posizioni-righe/job-1/annulla');
+    const sconosciuta = await request(app).post('/api/punti-vendita/gestione/posizioni-righe/job-9/annulla');
+
+    expect([ultima.status, perId.status, annullata.status, sconosciuta.status]).toEqual([200, 200, 200, 404]);
+    expect(ultima.body).toEqual({ stato: STATO_RICERCA });
+    expect(annullata.body.stato.stato).toBe('annullato');
+    expect(posizioni.ultima).toHaveBeenCalledWith('gdo-sessione');
+    expect(posizioni.stato).toHaveBeenCalledWith('job-1', 'gdo-sessione');
+    expect(posizioni.annulla).toHaveBeenCalledWith('job-1', 'gdo-sessione');
+  });
+
+  it('correzione della posizione: nella GDO della sessione, a nome dell\'utente', async () => {
+    permessi.concessi = new Set(['gdo.gestisci_punti_vendita']);
+    const { app, analisi } = creaApp();
+    const corpo = { chiave: 'ind:PRA|VIA MURTOLA 12 14', lat: 44.428, lon: 8.79 };
+
+    const res = await request(app).put('/api/punti-vendita/gestione/posizioni-righe').send(corpo);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ chiave: corpo.chiave, fonte: 'manuale' });
+    expect(analisi.correggiPosizione).toHaveBeenCalledWith('gdo-sessione', corpo, 'u1');
   });
 });

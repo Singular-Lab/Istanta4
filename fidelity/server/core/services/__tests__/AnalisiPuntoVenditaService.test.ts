@@ -20,7 +20,11 @@ import {
   VERSIONE_ANALISI_KIT,
 } from '../../utils/analisiKit';
 import { chiaveDescrizione, type ProdottoFrequente, type RigaListaVolantino, type StatisticheProdotti } from '../../utils/analisiPuntoVendita';
-import { MINUTI_DISPOSITIVO_OFFLINE, type RigaSenzaPuntoVendita } from '../../utils/gestionePuntiVendita';
+import { MINUTI_DISPOSITIVO_OFFLINE, type PuntoVenditaPerSuggerimenti, type RigaSenzaPuntoVendita } from '../../utils/gestionePuntiVendita';
+import type { RegolaCollegamento } from '../../utils/chiaviRigheVolantino';
+import type { RigaCollegata } from '../../utils/verificaCollegamenti';
+import type { IPosizioniRigheRepository } from '../../repositories/PosizioniRigheRepository';
+import type { PosizioneRiga } from '../../../../lib/puntiVendita/analisi';
 import type { ApparizioneStoria } from '../../utils/storiaPuntoVendita';
 import { AnalisiPuntoVenditaService, KIT_PER_LETTURA, oggiARoma, type OpzioniAnalisiPuntoVendita } from '../AnalisiPuntoVenditaService';
 
@@ -175,6 +179,11 @@ function creaServizio(opzioni: {
   chiaveMeta?: string | null;
   repartiGdo?: OpzioniAnalisiPuntoVendita['repartiGdo'];
   configInsight?: OpzioniAnalisiPuntoVendita['configInsight'];
+  righeCollegate?: RigaCollegata[];
+  righeSenza?: RigaSenzaPuntoVendita[];
+  puntiVendita?: PuntoVenditaPerSuggerimenti[];
+  posizioni?: OpzioniAnalisiPuntoVendita['posizioni'];
+  regole?: RegolaCollegamento[];
 } = {}) {
   /** analisi_kit in memoria. */
   const salvati = new Map(opzioni.salvati ?? [[K1, RIEPILOGO_K1]]);
@@ -202,13 +211,14 @@ function creaServizio(opzioni: {
       totale: 10, senzaCoordinate: 2, senzaCodice: 1, conStoria: 7, dispositiviOffline: 3,
       ultimoImport: { errori: [{ row: 4, error: 'CAP' }, { row: 0, error: 'Interrotto' }], rigaInAttesa: { riga: 6 } },
     })),
-    righeSenzaPuntoVendita: vi.fn(async (): Promise<RigaSenzaPuntoVendita[]> => Array.from({ length: 30 }, (_, indice) => ({
+    righeCollegate: vi.fn(async (_idGdo: string): Promise<RigaCollegata[]> => opzioni.righeCollegate ?? []),
+    righeSenzaPuntoVendita: vi.fn(async (): Promise<RigaSenzaPuntoVendita[]> => opzioni.righeSenza ?? Array.from({ length: 30 }, (_, indice) => ({
       idKit: `kit-${indice}`, data: piuGiorni('2022-01-06', indice), idCanale: 'SS', nomeCanale: 'Conad Superstore', idArea: 'LI', posizione: 1,
       riga: `LOCALITA ${indice} - Via ${indice}`, localita: `LOCALITA ${indice}`, indirizzo: `Via ${indice}`, telefono: null,
       chiaveIndirizzo: `VIA ${indice}`, chiaveTelefono: null,
     }))),
     edizioniConLista: vi.fn(async () => []),
-    puntiVenditaPerSuggerimenti: vi.fn(async () => []),
+    puntiVenditaPerSuggerimenti: vi.fn(async (): Promise<PuntoVenditaPerSuggerimenti[]> => opzioni.puntiVendita ?? []),
   } satisfies IAnalisiPuntiVenditaRepository;
   const storia = {
     trovaPuntoVendita: vi.fn(async (id: string) => (opzioni.puntoVendita === undefined ? (id === PV ? PUNTO_VENDITA : null) : opzioni.puntoVendita)),
@@ -219,6 +229,8 @@ function creaServizio(opzioni: {
     oggi: () => '2022-01-15',
     repartiGdo: opzioni.repartiGdo,
     configInsight: opzioni.configInsight,
+    posizioni: opzioni.posizioni,
+    collegamenti: { regoleCollegamento: vi.fn(async () => opzioni.regole ?? []) },
   });
   return { servizio, repository, storia, salvati };
 }
@@ -530,5 +542,137 @@ describe('reparti della GDO del PV (Impostazioni GDO)', () => {
     const analisi = await servizio.analisi(PV, GDO);
 
     expect(analisi.reparti[0].reparti.map(voce => voce.reparto)).toEqual(['Ortofrutta', 'Drogheria alimentare', 'Reparto 05']);
+  });
+});
+
+describe('verifica dei collegamenti e posizioni delle righe', () => {
+  const PV_MASSA_MARITTIMA = '33333333-3333-4333-8333-333333333333';
+  const PV_MARINA = '44444444-4444-4444-8444-444444444444';
+  const pvToscana = (id: string, nome: string, citta: string, indirizzo: string, lat: number, lon: number, idCanale = 'CY'): PuntoVenditaPerSuggerimenti => ({
+    id, nome, citta, indirizzo, telefono: null, provincia: null, idCanale, nomeCanale: idCanale === 'CY' ? 'Conad City' : 'Conad', idArea: 'TO', nomeArea: 'Toscana', lat, lon,
+  });
+  const riga = (sovrascritti: Partial<RigaCollegata>): RigaCollegata => ({
+    id: 'r1', idKit: 'kit-1', data: '2026-10-01', idCanale: 'CY', nomeCanale: 'Conad City', idArea: 'TO', nomeArea: 'Toscana', posizione: 1,
+    riga: 'MARINA DI MASSA Via S. Leonardo 350', localita: 'MARINA DI MASSA', indirizzo: 'Via S. Leonardo 350', telefono: null,
+    chiaveIndirizzo: 'VIA S LEONARDO 350', chiaveTelefono: null, titoloKit: 'CY TO 40', idPuntoVendita: PV_MASSA_MARITTIMA, abbinamento: 'manuale',
+    ...sovrascritti,
+  });
+  const CHIAVE_MARINA = 'ind:MARINA DI MASSA|VIA S LEONARDO 350';
+  const posizione = (chiave: string, sovrascritti: Partial<PosizioneRiga> = {}): PosizioneRiga => ({
+    chiave, lat: 44.0098, lon: 10.1077, precisione: 'via', fonte: 'nominatim', errore: null, aggiornataIl: '2026-11-11T09:00:00.000Z', ...sovrascritti,
+  });
+  const posizioniInMemoria = (salvate: PosizioneRiga[] = []) => {
+    const mappa = new Map(salvate.map(salvata => [salvata.chiave, salvata]));
+    return {
+      mappa,
+      repository: {
+        posizioni: vi.fn(async () => new Map(mappa)),
+        salvaRicerca: vi.fn(async () => undefined),
+        correggi: vi.fn(async (_idGdo: string, chiave: string, coordinate: { lat: number; lon: number }) => posizione(chiave, { ...coordinate, fonte: 'manuale', precisione: 'civico' })),
+      } satisfies IPosizioniRigheRepository,
+    };
+  };
+
+  it('Marina di Massa collegata a Massa Marittima: incongruente per distanza e località, con il PV giusto fra i vicini', async () => {
+    const { repository } = posizioniInMemoria([posizione(CHIAVE_MARINA)]);
+    const { servizio } = creaServizio({
+      righeCollegate: [riga({})],
+      righeSenza: [],
+      puntiVendita: [
+        pvToscana(PV_MASSA_MARITTIMA, 'MASSA MAR.MA VIA DON LUIGI ROSSI 5', 'MASSA MARITTIMA', 'Via Don Luigi Rossi 5', 43.0496, 10.8888),
+        pvToscana(PV_MARINA, 'Conad City Marina di Massa', 'MARINA DI MASSA', 'Via San Leonardo 350', 44.0101, 10.1080),
+      ],
+      posizioni: repository,
+      regole: [{ id: 'c1', idPuntoVendita: PV_MASSA_MARITTIMA, chiavi: ['ind:MARINA DI MASSA|VIA S LEONARDO 350'], creatoIl: '2026-11-06T10:00:00Z', combinazione: 'cy|to' }],
+    });
+
+    const pagina = await servizio.verificaCollegamenti(GDO);
+
+    expect(pagina.conteggi).toEqual({ incongruente: 1, da_verificare: 0, coerente: 0 });
+    const [gruppo] = pagina.gruppi;
+    expect(gruppo).toMatchObject({ esito: 'incongruente', tipo: 'manuale', idCollegamento: 'c1', puntoVendita: { id: PV_MASSA_MARITTIMA } });
+    expect(gruppo.motivi.map(motivo => motivo.tipo)).toEqual(expect.arrayContaining(['distanza', 'localita_diversa', 'piu_vicino']));
+    expect(gruppo.motivi[0]).toMatchObject({ tipo: 'distanza', livello: 'incongruente' });
+    expect(gruppo.vicini[0]).toMatchObject({ puntoVendita: { id: PV_MARINA } });
+    expect(gruppo.vicini[0].metri).toBeLessThan(100);
+  });
+
+  it('filtri per esito e tipo, con i conteggi del tipo e le posizioni da cercare e non trovate', async () => {
+    const { repository } = posizioniInMemoria([posizione(CHIAVE_MARINA, { lat: null, lon: null, precisione: 'non_trovata' })]);
+    const { servizio } = creaServizio({
+      righeCollegate: [
+        riga({}),
+        riga({ id: 'r2', riga: 'SARZANA - Via Variante Aurelia 1 - tel. 0187 600000', localita: 'SARZANA', indirizzo: 'Via Variante Aurelia 1', chiaveIndirizzo: 'VIA VARIANTE AURELIA 1', telefono: '0187 600000', chiaveTelefono: '0187600000', idPuntoVendita: PV_MARINA, abbinamento: 'telefono' }),
+      ],
+      righeSenza: [],
+      puntiVendita: [
+        pvToscana(PV_MASSA_MARITTIMA, 'Massa Marittima', 'MASSA MARITTIMA', 'Via Don Luigi Rossi 5', 43.0496, 10.8888),
+        { ...pvToscana(PV_MARINA, 'Sarzana', 'SARZANA', 'Via Variante Aurelia 1', 44.11, 9.96), telefono: '0187 600000' },
+      ],
+      posizioni: repository,
+    });
+
+    const manuali = await servizio.verificaCollegamenti(GDO, { tipo: 'manuale' });
+    const coerenti = await servizio.verificaCollegamenti(GDO, { esito: 'coerente' });
+
+    expect(manuali.totale).toBe(1);
+    expect(manuali.conteggi).toEqual({ incongruente: 0, da_verificare: 1, coerente: 0 });
+    expect(coerenti.gruppi.map(gruppo => gruppo.puntoVendita.id)).toEqual([PV_MARINA]);
+    expect(coerenti).toMatchObject({ posizioniDaCercare: 1, posizioniNonTrovate: 1 });
+  });
+
+  it('indirizzi da cercare: prima quelli delle righe collegate, una volta per chiave; i non trovati solo su richiesta, mai i corretti a mano', async () => {
+    const ARCOLA = 'ind:ARCOLA|VIA VALLE 1';
+    const { repository } = posizioniInMemoria([
+      posizione(CHIAVE_MARINA, { lat: null, lon: null, precisione: 'non_trovata', errore: 'HTTP 429' }),
+      posizione(ARCOLA, { fonte: 'manuale', precisione: 'civico' }),
+    ]);
+    const senza: RigaSenzaPuntoVendita = {
+      idKit: 'kit-2', data: '2026-10-08', idCanale: 'CY', nomeCanale: 'Conad City', idArea: 'TO', posizione: 1, riga: 'PRA - Via Murtola 12/14',
+      localita: 'PRA', indirizzo: 'Via Murtola 12/14', telefono: null, chiaveIndirizzo: 'VIA MURTOLA 12 14', chiaveTelefono: null, provincia: 'GE',
+    };
+    const { servizio } = creaServizio({
+      righeCollegate: [
+        riga({}),
+        riga({ id: 'r2', idKit: 'kit-2', riga: 'MARINA DI MASSA Via S. Leonardo 350' }),
+        riga({ id: 'r3', riga: 'ARCOLA - Via Valle 1', localita: 'ARCOLA', indirizzo: 'Via Valle 1', chiaveIndirizzo: 'VIA VALLE 1' }),
+        riga({ id: 'r4', riga: 'BOLOGNA e provincia', localita: 'BOLOGNA e provincia', indirizzo: null, chiaveIndirizzo: null }),
+      ],
+      righeSenza: [senza],
+      posizioni: repository,
+    });
+
+    const nuovi = await servizio.indirizziDaCercare(GDO);
+    const ancheNonTrovati = await servizio.indirizziDaCercare(GDO, true);
+
+    expect(nuovi).toEqual([
+      { chiave: 'loc:BOLOGNA', indirizzo: null, localita: 'BOLOGNA', provincia: null },
+      { chiave: 'ind:PRA|VIA MURTOLA 12 14', indirizzo: 'Via Murtola 12/14', localita: 'PRA', provincia: 'GE' },
+    ]);
+    expect(ancheNonTrovati.map(indirizzo => indirizzo.chiave)).toEqual([CHIAVE_MARINA, 'loc:BOLOGNA', 'ind:PRA|VIA MURTOLA 12 14']);
+  });
+
+  it('le righe non abbinate portano la posizione del gruppo', async () => {
+    const { repository } = posizioniInMemoria([posizione('ind:LOCALITA 3|VIA 3')]);
+    const { servizio } = creaServizio({ posizioni: repository });
+
+    const pagina = await servizio.righeNonAbbinate(GDO, 1, 50);
+
+    expect(pagina.righe.find(gruppo => gruppo.chiave === 'ind:LOCALITA 3|VIA 3')?.posizione).toMatchObject({ lat: 44.0098, precisione: 'via' });
+    expect(pagina.righe.find(gruppo => gruppo.chiave === 'ind:LOCALITA 4|VIA 4')?.posizione).toBeNull();
+  });
+
+  it('correzione della posizione: coordinate valide di una riga della GDO; altrimenti BadRequestError o NotFoundError', async () => {
+    const { repository } = posizioniInMemoria();
+    const { servizio } = creaServizio({ righeCollegate: [riga({})], righeSenza: [], posizioni: repository });
+
+    await expect(servizio.correggiPosizione(GDO, { chiave: CHIAVE_MARINA, lat: 44.0101, lon: 10.108 }, 'u1')).resolves.toMatchObject({ fonte: 'manuale', lat: 44.0101 });
+    expect(repository.correggi).toHaveBeenCalledWith(GDO, CHIAVE_MARINA, { lat: 44.0101, lon: 10.108 }, 'u1');
+
+    await expect(servizio.correggiPosizione(GDO, { chiave: CHIAVE_MARINA, lat: 120, lon: 10 }, null)).rejects.toBeInstanceOf(BadRequestError);
+    await expect(servizio.correggiPosizione(GDO, { chiave: CHIAVE_MARINA, lat: '44', lon: 10 }, null)).rejects.toBeInstanceOf(BadRequestError);
+    await expect(servizio.correggiPosizione(GDO, { chiave: 'tel:123', lat: 44, lon: 10 }, null)).rejects.toBeInstanceOf(BadRequestError);
+    await expect(servizio.correggiPosizione(GDO, { chiave: 'ind:ALTROVE|VIA 1', lat: 44, lon: 10 }, null)).rejects.toBeInstanceOf(NotFoundError);
+    expect(repository.correggi).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,4 +1,5 @@
 import { numeroWorkerHttp } from '../cluster';
+import type { PrecisionePosizione } from '../../../lib/puntiVendita/analisi';
 import type { IndirizzoTrovatoDTO } from '../dto';
 import { log } from '../logger';
 
@@ -111,4 +112,77 @@ async function chiamaNominatim(query: string, paese?: string): Promise<{ lat?: n
     });
     return {};
   }
+}
+
+/** Dove si trova una riga stampata secondo Nominatim, con la precisione del risultato. */
+export interface PosizioneTrovata {
+  lat: number;
+  lon: number;
+  precisione: Exclude<PrecisionePosizione, 'non_trovata'>;
+  /** Il testo cercato che l'ha trovata. */
+  ricerca: string;
+}
+
+type RisultatoPosizione = RisultatoNominatim & { category?: string; type?: string; addresstype?: string };
+
+/** Tipi di luogo di Nominatim che sono una strada. */
+const TIPI_STRADA = new Set(['road', 'street', 'pedestrian', 'square', 'residential', 'living_street', 'tertiary', 'secondary', 'primary', 'unclassified', 'service', 'trunk']);
+
+/** Quanto è preciso un risultato: col civico, la strada, oppure un luogo (comune, frazione, quartiere). */
+function precisioneRisultato(risultato: RisultatoPosizione, cercavoLaVia: boolean): PosizioneTrovata['precisione'] {
+  if (!cercavoLaVia) return 'comune';
+  if (risultato.address?.house_number) return 'civico';
+  if (risultato.category === 'highway' || TIPI_STRADA.has(risultato.addresstype ?? '') || TIPI_STRADA.has(risultato.type ?? '')) return 'via';
+  if (risultato.category === 'place' || risultato.category === 'boundary') return 'comune';
+  // Un edificio o un negozio della via cercata
+  return 'via';
+}
+
+/** Una ricerca libera, limitata all'Italia; lancia un errore se Nominatim non risponde. */
+async function primoRisultato(query: string): Promise<RisultatoPosizione | undefined> {
+  return inCoda(async () => {
+    const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&countrycodes=it&limit=1&q=${encodeURIComponent(query)}`;
+    let response: Response;
+    try {
+      response = await fetch(url, { headers: { 'User-Agent': 'fidelity-promotion/2.18' }, signal: AbortSignal.timeout(TIMEOUT_MS) });
+    } catch (error) {
+      throw new Error(`Nominatim non raggiungibile: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    if (!response.ok) throw new Error(`Nominatim non disponibile (HTTP ${response.status})`);
+    const [primo] = (await response.json()) as RisultatoPosizione[];
+    return primo;
+  });
+}
+
+/**
+ * La posizione di una riga stampata in un volantino, dalla più precisa: indirizzo e località (con
+ * il civico, se OpenStreetMap ce l'ha, altrimenti la via), poi la via senza civici, poi la sola
+ * località. Undefined se non la trova; un errore se Nominatim non risponde, perché chi cerca
+ * possa contare gli errori di fila. Le chiamate passano dalla coda di geocodifica.
+ */
+export async function cercaPosizione(dati: { indirizzo: string | null; localita: string | null; provincia?: string | null }): Promise<PosizioneTrovata | undefined> {
+  const indirizzo = dati.indirizzo?.trim() || null;
+  const localita = dati.localita?.trim() || null;
+  const provincia = dati.provincia?.trim() || null;
+  const tentativi: Array<{ query: string; via: boolean }> = [];
+  const aggiungi = (parti: Array<string | null>, via: boolean) => {
+    const query = parti.filter(Boolean).join(', ');
+    if (query && !tentativi.some(tentativo => tentativo.query === query)) tentativi.push({ query, via });
+  };
+  if (indirizzo && localita) {
+    aggiungi([indirizzo, localita], true);
+    // "Via Murtola 12/14" -> "Via Murtola": il civico non c'e' in OpenStreetMap
+    const senzaCivici = indirizzo.replace(/\b\d+[A-Za-z]?(?:\s*[/-]\s*\d*[A-Za-z]?)*\b/g, ' ').replace(/\s+/g, ' ').replace(/[\s,]+$/, '').trim();
+    if (senzaCivici && senzaCivici !== indirizzo) aggiungi([senzaCivici, localita], true);
+  }
+  if (localita) aggiungi([localita, provincia && provincia.length === 2 ? provincia : null], false);
+  for (const { query, via } of tentativi) {
+    const risultato = await primoRisultato(query);
+    const lat = Number(risultato?.lat);
+    const lon = Number(risultato?.lon);
+    if (risultato && Number.isFinite(lat) && Number.isFinite(lon)) {
+      return { lat, lon, precisione: precisioneRisultato(risultato, via), ricerca: query };
+    }
+  }
+  return undefined;
 }

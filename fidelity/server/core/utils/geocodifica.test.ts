@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cercaIndirizzi, geocodifica, INTERVALLO_MS, intervalloProcessoMs } from './geocodifica';
+import { cercaIndirizzi, cercaPosizione, geocodifica, INTERVALLO_MS, intervalloProcessoMs } from './geocodifica';
 
 vi.mock('../logger', () => ({ log: { warn: vi.fn() } }));
 
@@ -126,5 +126,70 @@ describe('geocodifica', () => {
     const verifica = expect(ricerca).rejects.toThrow('Nominatim non raggiungibile: fetch failed');
     await vi.runAllTimersAsync();
     await verifica;
+  });
+});
+
+describe('cercaPosizione: la posizione di una riga stampata, dalla piu\' precisa', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  /** Nominatim finto: per ogni ricerca (q) il risultato indicato, o nessuno. */
+  const nominatim = (risultati: Record<string, object | undefined>) => {
+    const ricerche: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      const q = new URL(url).searchParams.get('q') ?? '';
+      ricerche.push(q);
+      const risultato = risultati[q];
+      return new Response(JSON.stringify(risultato ? [risultato] : []));
+    }));
+    return ricerche;
+  };
+
+  const cerca = async (dati: Parameters<typeof cercaPosizione>[0]) => {
+    vi.useFakeTimers();
+    const esito = cercaPosizione(dati);
+    // Un errore si legge dopo i timer: intanto non e' una promessa rifiutata senza gestore
+    esito.catch(() => undefined);
+    await vi.runAllTimersAsync();
+    return esito;
+  };
+
+  it('col civico in OpenStreetMap: precisione "civico", con una sola ricerca', async () => {
+    const ricerche = nominatim({ 'Via Murtola 12/14, PRA': { lat: '44.4281', lon: '8.7836', category: 'place', type: 'house', address: { house_number: '12' } } });
+
+    await expect(cerca({ indirizzo: 'Via Murtola 12/14', localita: 'PRA', provincia: 'GE' })).resolves.toEqual({
+      lat: 44.4281, lon: 8.7836, precisione: 'civico', ricerca: 'Via Murtola 12/14, PRA',
+    });
+    expect(ricerche).toEqual(['Via Murtola 12/14, PRA']);
+  });
+
+  it('civico assente da OpenStreetMap: la via senza civici, precisione "via"', async () => {
+    const ricerche = nominatim({ 'Via Murtola, PRA': { lat: '44.428', lon: '8.783', category: 'highway', type: 'residential', addresstype: 'road', address: {} } });
+
+    await expect(cerca({ indirizzo: 'Via Murtola 12/14', localita: 'PRA', provincia: 'GE' })).resolves.toMatchObject({ precisione: 'via', ricerca: 'Via Murtola, PRA' });
+    expect(ricerche).toEqual(['Via Murtola 12/14, PRA', 'Via Murtola, PRA']);
+  });
+
+  it('via assente: la localita\' con la sigla della provincia, precisione "comune"', async () => {
+    const ricerche = nominatim({ 'PRA, GE': { lat: '44.43', lon: '8.78', category: 'place', type: 'suburb', address: {} } });
+
+    await expect(cerca({ indirizzo: 'Via Inesistente 1', localita: 'PRA', provincia: 'GE' })).resolves.toMatchObject({ precisione: 'comune' });
+    expect(ricerche).toEqual(['Via Inesistente 1, PRA', 'Via Inesistente, PRA', 'PRA, GE']);
+  });
+
+  it('senza indirizzo cerca solo la localita\'; niente trovato: undefined', async () => {
+    const ricerche = nominatim({});
+
+    await expect(cerca({ indirizzo: null, localita: 'ALASSIO', provincia: 'Savona' })).resolves.toBeUndefined();
+    // Una provincia scritta per esteso non si aggiunge: confonderebbe la ricerca
+    expect(ricerche).toEqual(['ALASSIO']);
+  });
+
+  it('Nominatim non risponde: errore con il motivo, per contare gli errori di fila', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 429 })));
+
+    await expect(cerca({ indirizzo: 'Via Roma 1', localita: 'SANREMO' })).rejects.toThrow('Nominatim non disponibile (HTTP 429)');
   });
 });

@@ -6648,6 +6648,102 @@
       ],
       "vincoliUnici": []
     },
+    "posizioni_righe_volantino": {
+      "colonne": {
+        "aggiornata_da": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": true,
+          "riferimento": null,
+          "tipo": "character varying(255)",
+          "unico": false
+        },
+        "aggiornata_il": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": false,
+          "riferimento": null,
+          "tipo": "timestamp with time zone",
+          "unico": false
+        },
+        "chiave": {
+          "autoIncremento": false,
+          "chiavePrimaria": true,
+          "default": null,
+          "nullable": false,
+          "riferimento": null,
+          "tipo": "text",
+          "unico": false
+        },
+        "errore": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": true,
+          "riferimento": null,
+          "tipo": "text",
+          "unico": false
+        },
+        "fonte": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": "'nominatim'",
+          "nullable": false,
+          "riferimento": null,
+          "tipo": "text",
+          "unico": false
+        },
+        "id_gdo": {
+          "autoIncremento": false,
+          "chiavePrimaria": true,
+          "default": null,
+          "nullable": false,
+          "riferimento": null,
+          "tipo": "uuid",
+          "unico": false
+        },
+        "lat": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": true,
+          "riferimento": null,
+          "tipo": "numeric(10,8)",
+          "unico": false
+        },
+        "lon": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": true,
+          "riferimento": null,
+          "tipo": "numeric(11,8)",
+          "unico": false
+        },
+        "precisione": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": false,
+          "riferimento": null,
+          "tipo": "text",
+          "unico": false
+        },
+        "ricerca": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": true,
+          "riferimento": null,
+          "tipo": "text",
+          "unico": false
+        }
+      },
+      "indici": [],
+      "vincoliUnici": []
+    },
     "promo": {
       "colonne": {
         "context": {

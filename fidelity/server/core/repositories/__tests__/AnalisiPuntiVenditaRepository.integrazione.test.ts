@@ -290,9 +290,22 @@ describeConDatabase('AnalisiPuntiVenditaRepository', () => {
       { posizione: 2, riga: 'STRUPPA - Via Trossarelli 1/F - tel. 010 8000001', regione: 'LIGURIA', provincia: 'GENOVA', idPuntoVendita: null, abbinamento: null },
       { posizione: 3, riga: 'SESTRI - Via Sestri 5', regione: 'LIGURIA', provincia: 'GENOVA', idPuntoVendita: null, abbinamento: null },
     ]);
-    expect(await repository.puntiVenditaPerSuggerimenti(del2021.idGdo)).toEqual([
-      { id: pra, nome: 'PV Genova', telefono: '010 6197180', citta: 'Genova', indirizzo: 'Via Murtola 12/14', ragioneSociale: null },
+    expect(await repository.puntiVenditaPerSuggerimenti(del2021.idGdo)).toEqual([{
+      id: pra, nome: 'PV Genova', telefono: '010 6197180', citta: 'Genova', indirizzo: 'Via Murtola 12/14', ragioneSociale: null,
+      // Provincia, coordinate e combinazione canale/area: confronto con le righe stampate
+      provincia: null, lat: null, lon: null, idCanale: del2021.idCanale, nomeCanale: 'Superstore', idArea: del2021.idArea, nomeArea: 'Toscana',
+    }]);
+
+    // Le righe collegate a un PV, con il kit e il tipo di abbinamento: la verifica dei collegamenti
+    const collegate = await repository.righeCollegate(del2021.idGdo);
+    expect(collegate.map(r => [r.data, r.localita, r.idPuntoVendita, r.abbinamento])).toEqual([
+      ['2021-03-04', 'PRA', pra, 'telefono'],
+      ['2022-01-06', 'PRA', pra, 'telefono'],
+      ['2022-02-03', 'PRA', pra, 'telefono'],
     ]);
+    expect(collegate[0]).toMatchObject({ idKit: del2021.idRuntime, idCanale: del2021.idCanale, idArea: del2021.idArea, provincia: 'GENOVA', titoloKit: 'SS TO VOL' });
+    expect(senza[0]).toMatchObject({ provincia: 'GENOVA' });
+    expect(senza[0]).not.toHaveProperty('idPuntoVendita');
 
     const storie = await new ConsultazionePuntiVenditaRepository().storiaInElenco(del2021.idGdo);
     expect([...storie].sort((a, b) => a.anno - b.anno)).toEqual([

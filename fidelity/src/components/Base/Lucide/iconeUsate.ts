@@ -1,5 +1,5 @@
 // File generato da scripts/generaIconeLucide.mjs: non modificarlo a mano.
-// Icone Lucide nominate come stringa nel codice (366): <Lucide> le risolve senza caricare la
+// Icone Lucide nominate come stringa nel codice (370): <Lucide> le risolve senza caricare la
 // mappa completa di lucide-react. Rigenera con `node scripts/generaIconeLucide.mjs`.
 export {
   Activity,
@@ -104,6 +104,7 @@ export {
   Download,
   Ellipsis,
   EllipsisVertical,
+  Equal,
   Euro,
   Expand,
   ExternalLink,
@@ -210,6 +211,7 @@ export {
   MailCheck,
   MapPin,
   MapPinOff,
+  MapPinned,
   Maximize2,
   Megaphone,
   Menu,
@@ -254,6 +256,7 @@ export {
   Pencil,
   PencilLine,
   Percent,
+  PersonStanding,
   Phone,
   PhoneForwarded,
   PictureInPicture,
@@ -282,6 +285,7 @@ export {
   RotateCw,
   Route,
   Rows2,
+  Ruler,
   Save,
   ScanBarcode,
   ScanSearch,

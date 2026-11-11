@@ -26,6 +26,11 @@ const finti = vi.hoisted(() => ({
   collega: { mutate: vi.fn(), isPending: false, isError: false, error: null, reset: vi.fn() },
   scollega: { mutate: vi.fn(), isPending: false, isError: false, error: null, reset: vi.fn() },
   importJob: {} as Record<string, unknown>,
+  verifica: {} as Record<string, unknown>,
+  richiesteVerifica: [] as Array<Record<string, unknown>>,
+  cambia: { mutate: vi.fn(), isPending: false, isError: false, error: null, reset: vi.fn() },
+  correggi: { mutate: vi.fn(), isPending: false, isError: false, error: null, reset: vi.fn() },
+  posizioni: {} as Record<string, unknown>,
   put: vi.fn(),
   combinazioni: {
     data: [{ id: "comb1", sigla_combinazione: "SN", stato_combinazione: "attiva", id_canale: "c1", id_area: "a1", nome_canale: "Super", nome_area: "Nord" }],
@@ -38,9 +43,10 @@ vi.mock("react-leaflet", () => ({
   MapContainer: () => <div data-testid="mappa" />,
   TileLayer: () => null,
   CircleMarker: () => null,
+  Polyline: () => null,
   Popup: () => null,
   Tooltip: () => null,
-  useMap: () => ({ fitBounds: vi.fn() }),
+  useMap: () => ({ fitBounds: vi.fn(), setView: vi.fn() }),
 }));
 vi.mock("../../../lib/server_call", () => ({ ServerCall: { get: vi.fn(), post: vi.fn(), put: finti.put, delete: vi.fn() } }));
 vi.mock("@/components/SessionChecker", () => ({ default: (Componente: any) => Componente }));
@@ -63,6 +69,16 @@ vi.mock("@/query/query", () => ({
   },
   useCollegaRigaNonAbbinata: () => finti.collega,
   useScollegaCollegamentoManuale: () => finti.scollega,
+  useFetchVerificaCollegamenti: (filtri: Record<string, unknown>) => {
+    finti.richiesteVerifica.push(filtri);
+    return finti.verifica;
+  },
+  useCambiaCollegamento: () => finti.cambia,
+  useCorreggiPosizioneRiga: () => finti.correggi,
+}));
+vi.mock("./usePosizioniRighe", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  usePosizioniRighe: () => finti.posizioni,
 }));
 vi.mock("./useImportPuntiVendita", () => ({ useImportPuntiVendita: () => finti.importJob }));
 vi.mock("@/context/PermissionContext", async (importOriginal) => ({
@@ -132,6 +148,8 @@ const statoImport = (dati: Record<string, unknown> = {}) => ({
   ...dati,
 });
 
+const SUPER_NORD = { canale: { id: "c1", nome: "Super" }, area: { id: "a1", nome: "Nord" } };
+
 const RIGHE_NON_ABBINATE = [
   {
     chiave: "tel:01845550143",
@@ -144,6 +162,9 @@ const RIGHE_NON_ABBINATE = [
     primoVolantino: "2021-03-01",
     ultimoVolantino: "2022-08-12",
     canale: { id: "c1", nome: "Super" },
+    provincia: "IM",
+    combinazioni: [SUPER_NORD],
+    posizione: null,
     suggerimento: { tipo: "stesso_telefono", puntoVendita: { id: "pv7", nome: "Punto vendita 7" } },
     candidati: [
       { puntoVendita: { id: "pv7", nome: "Punto vendita 7", indirizzo: "Via Roma 7", citta: "Firenze" }, motivo: "stesso_telefono" },
@@ -161,6 +182,9 @@ const RIGHE_NON_ABBINATE = [
     primoVolantino: "2019-01-10",
     ultimoVolantino: "2025-03-14",
     canale: null,
+    provincia: null,
+    combinazioni: [SUPER_NORD],
+    posizione: null,
     suggerimento: { tipo: "forse_chiuso" },
     candidati: [],
   },
@@ -175,6 +199,9 @@ const RIGHE_NON_ABBINATE = [
     primoVolantino: "2026-01-09",
     ultimoVolantino: "2026-10-23",
     canale: { id: "c1", nome: "Super" },
+    provincia: null,
+    combinazioni: [SUPER_NORD],
+    posizione: null,
     suggerimento: { tipo: "da_aggiungere" },
     candidati: [],
   },
@@ -200,6 +227,54 @@ const VOLANTINI_ALASSIO = [
     rigaStampata: "ALASSIO - V. Dante 88",
   },
 ];
+
+/** Nessuna ricerca delle posizioni in corso. */
+const RICERCA_FERMA = { stato: null, inCorso: false, avvia: vi.fn(), annulla: vi.fn(), avvioInCorso: false, annullamentoInCorso: false, errore: null };
+
+const confronto = (dati: Record<string, unknown> = {}) => ({
+  telefono: "assente", indirizzo: "diverso", localita: "diverso", provincia: "assente", stessaCombinazione: true, distanzaMetri: null, ...dati,
+});
+
+const pvConfrontato = (indice: number, dati: Record<string, unknown> = {}) => ({
+  id: `pv${indice}`, nome: `Punto vendita ${indice}`, ragioneSociale: null, indirizzo: `Via Roma ${indice}`, citta: "Firenze", provincia: "FI",
+  telefono: null, lat: null, lon: null, combinazione: SUPER_NORD, ...dati,
+});
+
+/** Marina di Massa collegata a mano a un PV lontano: incongruente. */
+const GRUPPO_MARINA = {
+  chiave: "ind:MARINA DI MASSA|VIA S LEONARDO 350",
+  riga: "MARINA DI MASSA Via S. Leonardo 350",
+  varianti: ["MARINA DI MASSA Via S. Leonardo 350"],
+  localita: "MARINA DI MASSA",
+  indirizzo: "Via S. Leonardo 350",
+  telefono: null,
+  provincia: "MS",
+  volantini: 2,
+  primoVolantino: "2026-09-01",
+  ultimoVolantino: "2026-10-01",
+  combinazioni: [SUPER_NORD],
+  tipo: "manuale",
+  abbinamenti: ["manuale"],
+  idCollegamento: "c9",
+  posizione: {
+    chiave: "ind:MARINA DI MASSA|VIA S LEONARDO 350", lat: 44.0098, lon: 10.1077, precisione: "via", fonte: "nominatim", errore: null,
+    aggiornataIl: "2026-11-11T09:00:00Z",
+  },
+  puntoVendita: pvConfrontato(5, { nome: "Massa Marittima", citta: "Massa Marittima", indirizzo: "Via Don Luigi Rossi 5", lat: 43.0496, lon: 10.8888 }),
+  confronto: confronto({ distanzaMetri: 122000 }),
+  esito: "incongruente",
+  motivi: [
+    { tipo: "distanza", livello: "incongruente", testo: "122 km fra la posizione stampata (della via) e il punto vendita" },
+    { tipo: "localita_diversa", livello: "da_verificare", testo: "Località stampata \"MARINA DI MASSA\", città del punto vendita \"Massa Marittima\"" },
+  ],
+  vicini: [{ puntoVendita: pvConfrontato(6, { nome: "Conad Marina", lat: 44.0101, lon: 10.108 }), metri: 40 }],
+  candidati: [{ puntoVendita: pvConfrontato(6, { nome: "Conad Marina", lat: 44.0101, lon: 10.108 }), motivo: "vicino", confronto: confronto({ distanzaMetri: 40 }) }],
+};
+
+const verifica = (gruppi: unknown[], dati: Record<string, unknown> = {}) => ({
+  gruppi, totale: gruppi.length, pagina: 1, dimensione: 10,
+  conteggi: { incongruente: gruppi.length, da_verificare: 0, coerente: 0 }, posizioniDaCercare: 0, posizioniNonTrovate: 0, ...dati,
+});
 
 const COLLEGAMENTI_VUOTI = { data: { collegamenti: [], totale: 0, pagina: 1, dimensione: 10 }, isLoading: false, isError: false, refetch: vi.fn() };
 
@@ -229,6 +304,11 @@ describe("Gestione punti vendita", () => {
     finti.collega.mutate = vi.fn();
     finti.scollega.mutate = vi.fn();
     finti.importJob = { ...JOB_FERMO };
+    finti.verifica = { data: verifica([]), isLoading: false, isError: false, refetch: vi.fn() };
+    finti.richiesteVerifica = [];
+    finti.cambia.mutate = vi.fn();
+    finti.correggi.mutate = vi.fn();
+    finti.posizioni = { ...RICERCA_FERMA };
     finti.put.mockReset();
   });
 
@@ -546,7 +626,8 @@ describe("Gestione punti vendita", () => {
 
     await userEvent.click(within(regione("Righe dei volantini non abbinate")).getByRole("button", { name: "Collega ALASSIO - Via Dante 88" }));
     const dialogo = await screen.findByRole("dialog");
-    expect(dialogo).toHaveTextContent("Nessun punto vendita con lo stesso telefono, indirizzo o località");
+    // Solo fra i punti vendita dell'insegna e dell'area dei volantini della riga
+    expect(dialogo).toHaveTextContent("Nessun punto vendita di Super · Nord con lo stesso telefono, indirizzo o località, né vicino");
     const collega = within(dialogo).getByRole("button", { name: "Collega" });
     expect(collega).toBeDisabled();
 
@@ -713,5 +794,144 @@ describe("Gestione punti vendita", () => {
 
     expect(screen.getByTestId("mappa")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Punto vendita 1" })).not.toBeInTheDocument();
+  });
+
+  it("nel dialogo Collega: solo punti vendita della stessa insegna e area, i suggeriti col confronto e Google Maps", async () => {
+    finti.puntiVendita = {
+      ...finti.puntiVendita,
+      data: [puntoVendita(1), puntoVendita(2, { nome: "Conad Lucca Sud", id_area: "a2", nome_area: "Sud" }), puntoVendita(3, { nome: "Conad Lucca Nord" })],
+    };
+    finti.righe = {
+      data: {
+        righe: [{
+          ...RIGHE_NON_ABBINATE[1],
+          posizione: { chiave: "ind:ALASSIO|VIA DANTE 88", lat: 44.0, lon: 8.17, precisione: "via", fonte: "nominatim", errore: null, aggiornataIl: "2026-11-11T09:00:00Z" },
+          candidati: [{ puntoVendita: pvConfrontato(1, { nome: "Superstore Alassio", lat: 44.001, lon: 8.171 }), motivo: "vicino", confronto: confronto({ distanzaMetri: 150 }) }],
+        }],
+        totale: 1, pagina: 1, dimensione: 10,
+      },
+      isLoading: false, isError: false, refetch: vi.fn(),
+    };
+    apri();
+
+    await userEvent.click(within(regione("Righe dei volantini non abbinate")).getByRole("button", { name: "Collega ALASSIO - Via Dante 88" }));
+    const dialogo = await screen.findByRole("dialog");
+
+    expect(dialogo).toHaveTextContent("Posizione da OpenStreetMap: solo la via");
+    expect(within(dialogo).getByRole("link", { name: "Apri l'indirizzo stampato in Google Maps" })).toHaveAttribute(
+      "href",
+      "https://www.google.com/maps/search/?api=1&query=Via%20Dante%2088%2C%20Alassio"
+    );
+    expect(within(dialogo).getByRole("link", { name: "Apri l'indirizzo stampato in Street View" })).toHaveAttribute("target", "_blank");
+    const suggeriti = within(dialogo).getByRole("list", { name: "Punti vendita suggeriti" });
+    expect(suggeriti).toHaveTextContent("Vicino");
+    expect(suggeriti).toHaveTextContent("a 150 m");
+    expect(suggeriti).toHaveTextContent("Super · Nord");
+
+    // La ricerca non trova i punti vendita di un'altra area
+    await userEvent.type(within(dialogo).getByLabelText("Cerca il punto vendita da collegare"), "lucca");
+    const trovati = within(dialogo).getByRole("list", { name: "Punti vendita trovati" });
+    expect(within(trovati).getByRole("radio", { name: /Conad Lucca Nord/ })).toBeInTheDocument();
+    expect(within(trovati).queryByRole("radio", { name: /Conad Lucca Sud/ })).not.toBeInTheDocument();
+  });
+
+  it("verifica dei collegamenti: gli incongruenti col motivo; il dettaglio confronta stampato e anagrafica, Cambia collegamento usa il cambio", async () => {
+    finti.verifica = { data: verifica([GRUPPO_MARINA]), isLoading: false, isError: false, refetch: vi.fn() };
+    finti.cambia.mutate = vi.fn((_richiesta, opzioni) => opzioni?.onSuccess?.({ idCollegamento: "c9", righe: 2 }));
+    apri();
+    const sezione = regione("Verifica dei collegamenti");
+
+    // Si parte dagli incongruenti
+    expect(finti.richiesteVerifica.at(-1)).toMatchObject({ esito: "incongruente", tipo: null, pagina: 1 });
+    expect(within(sezione).getByText("Incongruente")).toBeInTheDocument();
+    expect(within(sezione).getByText("122 km fra la posizione stampata (della via) e il punto vendita")).toBeInTheDocument();
+
+    await userEvent.click(within(sezione).getByRole("button", { name: /MARINA DI MASSA Via S. Leonardo 350/ }));
+    const confrontoTabella = within(sezione).getByRole("table", { name: "Stampato nei volantini e anagrafica" });
+    expect(confrontoTabella).toHaveTextContent("Via Don Luigi Rossi 5");
+    expect(confrontoTabella).toHaveTextContent("Località diverso");
+    expect(within(sezione).getByRole("list", { name: "Punti vendita vicini" })).toHaveTextContent("Conad Marina");
+    expect(within(sezione).getByRole("link", { name: "Apri Massa Marittima in Street View" })).toBeInTheDocument();
+
+    await userEvent.click(within(sezione).getByRole("button", { name: "Collega a Conad Marina" }));
+    const dialogo = await screen.findByRole("dialog");
+    expect(dialogo).toHaveAccessibleName("Cambia collegamento");
+    expect(dialogo).toHaveTextContent("Oggi collegato a Massa Marittima");
+    expect(within(within(dialogo).getByRole("list", { name: "Punti vendita suggeriti" })).getByRole("radio", { name: /Conad Marina/ })).toBeChecked();
+
+    await userEvent.click(within(dialogo).getByRole("button", { name: "Cambia" }));
+
+    expect(finti.cambia.mutate).toHaveBeenCalledWith(
+      { chiave: GRUPPO_MARINA.chiave, idPuntoVenditaAttuale: "pv5", idPuntoVendita: "pv6" },
+      expect.anything()
+    );
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(within(sezione).getByText("2 righe dei volantini collegate a Conad Marina.")).toBeInTheDocument();
+  });
+
+  it("verifica: filtri per esito e tipo; Scollega solo per i collegamenti fatti a mano, con conferma", async () => {
+    finti.verifica = { data: verifica([GRUPPO_MARINA]), isLoading: false, isError: false, refetch: vi.fn() };
+    apri();
+    const sezione = regione("Verifica dei collegamenti");
+
+    await userEvent.click(within(within(sezione).getByRole("radiogroup", { name: "Esito della verifica" })).getByRole("radio", { name: /Tutti/ }));
+    expect(finti.richiesteVerifica.at(-1)).toMatchObject({ esito: null });
+    await userEvent.click(within(within(sezione).getByRole("radiogroup", { name: "Tipo di collegamento" })).getByRole("radio", { name: "A mano" }));
+    expect(finti.richiesteVerifica.at(-1)).toMatchObject({ tipo: "manuale" });
+
+    await userEvent.click(within(sezione).getByRole("button", { name: /MARINA DI MASSA Via S. Leonardo 350/ }));
+    await userEvent.click(within(sezione).getByRole("button", { name: "Scollega MARINA DI MASSA Via S. Leonardo 350" }));
+    expect(finti.scollega.mutate).not.toHaveBeenCalled();
+    await userEvent.click(within(sezione).getByRole("button", { name: "Conferma" }));
+    expect(finti.scollega.mutate).toHaveBeenCalledWith("c9", expect.anything());
+  });
+
+  it("Correggi la posizione rifiuta un testo senza coordinate e salva quelle di un link di Google Maps", async () => {
+    finti.verifica = { data: verifica([GRUPPO_MARINA]), isLoading: false, isError: false, refetch: vi.fn() };
+    apri();
+    const sezione = regione("Verifica dei collegamenti");
+    await userEvent.click(within(sezione).getByRole("button", { name: /MARINA DI MASSA Via S. Leonardo 350/ }));
+
+    await userEvent.click(within(sezione).getByRole("button", { name: "Correggi la posizione" }));
+    const campo = within(sezione).getByLabelText(/Coordinate o link di Google Maps/);
+    await userEvent.type(campo, "via roma");
+    await userEvent.click(within(sezione).getByRole("button", { name: "Salva la posizione" }));
+    expect(within(sezione).getByRole("alert")).toHaveTextContent("Coordinate non riconosciute");
+    expect(finti.correggi.mutate).not.toHaveBeenCalled();
+
+    await userEvent.clear(campo);
+    await userEvent.type(campo, "https://www.google.com/maps/@44.0101,10.108,17z");
+    await userEvent.click(within(sezione).getByRole("button", { name: "Salva la posizione" }));
+    expect(finti.correggi.mutate).toHaveBeenCalledWith({ chiave: GRUPPO_MARINA.chiave, lat: 44.0101, lon: 10.108 }, expect.anything());
+  });
+
+  it("ricerca delle posizioni: Cerca le posizioni la avvia; in corso mostra l'avanzamento e si annulla", async () => {
+    const avvia = vi.fn();
+    finti.verifica = { data: verifica([GRUPPO_MARINA], { posizioniDaCercare: 120, posizioniNonTrovate: 3 }), isLoading: false, isError: false, refetch: vi.fn() };
+    finti.posizioni = { ...RICERCA_FERMA, avvia };
+    const { unmount } = apri();
+    const sezione = regione("Verifica dei collegamenti");
+
+    expect(sezione).toHaveTextContent("120 indirizzi stampati senza posizione");
+    await userEvent.click(within(sezione).getByRole("button", { name: "Cerca le posizioni" }));
+    expect(avvia).toHaveBeenCalledWith();
+    await userEvent.click(within(sezione).getByRole("button", { name: "Riprova le non trovate" }));
+    expect(avvia).toHaveBeenCalledWith({ nonTrovate: true });
+    unmount();
+
+    const annulla = vi.fn();
+    finti.posizioni = {
+      ...RICERCA_FERMA,
+      inCorso: true,
+      annulla,
+      stato: { jobId: "j1", stato: "in_corso", totale: 120, esaminate: 30, trovate: 25, approssimate: 6, nonTrovate: 4, errori: 1, avviatoIl: "2026-11-11T10:00:00Z" },
+    };
+    apri();
+    const avanzamento = screen.getByRole("status", { name: "Ricerca delle posizioni in corso" });
+    expect(avanzamento).toHaveTextContent("Ricerca delle posizioni: 30 di 120");
+    expect(avanzamento).toHaveTextContent("25 trovate (6 solo via o comune) · 4 non trovate · 1 errori di OpenStreetMap");
+    expect(within(avanzamento).getByRole("progressbar")).toHaveAttribute("aria-valuenow", "25");
+    await userEvent.click(within(avanzamento).getByRole("button", { name: "Annulla" }));
+    expect(annulla).toHaveBeenCalled();
   });
 });

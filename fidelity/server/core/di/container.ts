@@ -156,6 +156,7 @@ import { StoriaPuntoVenditaService } from "../services/StoriaPuntoVenditaService
 import type { IStoriaPuntoVenditaService } from "../interfaces/IStoriaPuntoVenditaService";
 import { type IPuntiVenditaVolantinoRepository, PuntiVenditaVolantinoRepository } from "../repositories/PuntiVenditaVolantinoRepository";
 import { AnalisiPuntoVenditaService } from "../services/AnalisiPuntoVenditaService";
+import { PosizioniRigheRepository } from "../repositories/PosizioniRigheRepository";
 import type { IAnalisiPuntoVenditaService } from "../interfaces/IAnalisiPuntoVenditaService";
 import { AnalisiPuntiVenditaRepository, type IAnalisiPuntiVenditaRepository } from "../repositories/AnalisiPuntiVenditaRepository";
 import { InsightConfrontiService } from "../services/InsightConfrontiService";
@@ -320,6 +321,9 @@ function bindServices() {
         chiaveMetaPuntoVendita: context.get<IAgenziaLib>(TYPES.AgenziaLib).importPuntiVendita?.chiaveMeta ?? null,
         repartiGdo: context.get<IImpostazioniGdoRepository>(TYPES.ImpostazioniGdoRepository),
         configInsight: context.get<IConfigService>(TYPES.ConfigService),
+        // Verifica dei collegamenti: posizioni delle righe e collegamenti fatti a mano
+        posizioni: new PosizioniRigheRepository(),
+        collegamenti: context.get<IPuntiVenditaVolantinoRepository>(TYPES.PuntiVenditaVolantinoRepository),
       }
     )
   );

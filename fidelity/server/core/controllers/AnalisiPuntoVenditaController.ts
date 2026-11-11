@@ -7,6 +7,16 @@ import type { IAnalisiPuntoVenditaService } from '../interfaces/IAnalisiPuntoVen
 import type { CollegamentiPuntiVenditaVolantino } from '../interfaces/IStoriaPuntoVenditaService';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { permissionGuard } from '../middleware/permissionGuard';
+import {
+  eventoPosizioniRighe,
+  type GestorePosizioniRighe,
+  type IndirizzoDaCercare,
+  posizioniRigheJobs,
+  RicercaPosizioniGiaInCorso,
+} from '../services/PosizioniRigheJob';
+import { cercaPosizione, type PosizioneTrovata } from '../utils/geocodifica';
+import { roomUtente } from '../utils/socketRooms';
+import { emitToClients } from '../../ws-server';
 
 const numero = (valore: unknown): number | undefined => {
   if (typeof valore !== 'string' || valore.trim() === '') return undefined;
@@ -17,7 +27,10 @@ const numero = (valore: unknown): number | undefined => {
 /**
  * Le pagine del punto vendita costruite sulla timeline dei volantini (contratto in
  * lib/puntiVendita/analisi.ts). Letture con "gdo.visualizza"; la qualita' dei dati, le righe
- * dei volantini non abbinate e i loro collegamenti fatti a mano con "gdo.gestisci_punti_vendita".
+ * dei volantini non abbinate, i loro collegamenti fatti a mano, la verifica e il cambio dei
+ * collegamenti e la ricerca delle posizioni delle righe con "gdo.gestisci_punti_vendita".
+ * La ricerca delle posizioni gira in background (PosizioniRigheJob): l'avanzamento arriva via
+ * socket all'utente che l'ha avviata.
  *
  * Sullo stesso percorso base ci sono la consultazione ('/', '/:id', '/:id/volantini-attivi') e la
  * storia ('/:id/storia', '/:id/storia/volantini', '/storia/import-export'): nessuno dei loro
@@ -28,6 +41,9 @@ export class AnalisiPuntoVenditaController extends BaseController {
   constructor(
     private readonly analisi: IAnalisiPuntoVenditaService,
     private readonly collegamenti: CollegamentiPuntiVenditaVolantino,
+    private readonly posizioni: Pick<GestorePosizioniRighe, 'avvia' | 'stato' | 'ultima' | 'annulla'> = posizioniRigheJobs,
+    private readonly cerca: (indirizzo: IndirizzoDaCercare) => Promise<PosizioneTrovata | undefined> = cercaPosizione,
+    private readonly emetti: (evento: string, dati: unknown, room: string) => void = emitToClients,
   ) {
     super('/api/punti-vendita');
   }
@@ -43,6 +59,12 @@ export class AnalisiPuntoVenditaController extends BaseController {
     this.router.post('/gestione/righe-non-abbinate/collega', ...gestisci, this.postCollega.bind(this));
     this.router.get('/gestione/collegamenti-manuali', ...gestisci, this.getCollegamenti.bind(this));
     this.router.delete('/gestione/collegamenti-manuali/:idCollegamento', ...gestisci, this.deleteCollegamento.bind(this));
+    this.router.get('/gestione/verifica-collegamenti', ...gestisci, this.getVerifica.bind(this));
+    this.router.put('/gestione/collegamenti/cambia', ...gestisci, this.putCambiaCollegamento.bind(this));
+    this.router.post('/gestione/posizioni-righe', ...gestisci, this.postPosizioni.bind(this));
+    this.router.get('/gestione/posizioni-righe/stato', ...gestisci, this.getStatoPosizioni.bind(this));
+    this.router.post('/gestione/posizioni-righe/:jobId/annulla', ...gestisci, this.postAnnullaPosizioni.bind(this));
+    this.router.put('/gestione/posizioni-righe', ...gestisci, this.putPosizione.bind(this));
     this.router.get('/:id/analisi', ...visualizza, this.getAnalisi.bind(this));
     this.router.get('/:id/volantini/:idKit', ...visualizza, this.getVolantino.bind(this));
     this.router.get('/:id/referenze/:chiave', ...visualizza, this.getReferenza.bind(this));
@@ -156,6 +178,87 @@ export class AnalisiPuntoVenditaController extends BaseController {
     try {
       const idGdo = await this.gdoDellaSessione(req, res);
       this.sendResponse(res, HttpStatusCode.OK, await this.collegamenti.scollega(idGdo, req.params.idCollegamento));
+    } catch (error) {
+      this.handleError(res, error);
+    }
+  }
+
+  private idUtente(req: Request): string | null {
+    return req.session?.id_utente ? String(req.session.id_utente) : null;
+  }
+
+  private async getVerifica(req: Request, res: Response): Promise<void> {
+    try {
+      const idGdo = await this.gdoDellaSessione(req, res);
+      this.sendResponse(res, HttpStatusCode.OK, await this.analisi.verificaCollegamenti(idGdo, {
+        esito: req.query.esito,
+        tipo: req.query.tipo,
+        pagina: numero(req.query.pagina),
+        dimensione: numero(req.query.dimensione),
+      }));
+    } catch (error) {
+      this.handleError(res, error);
+    }
+  }
+
+  private async putCambiaCollegamento(req: Request, res: Response): Promise<void> {
+    try {
+      const idGdo = await this.gdoDellaSessione(req, res);
+      this.sendResponse(res, HttpStatusCode.OK, await this.collegamenti.cambiaCollegamento(idGdo, req.body, this.idUtente(req)));
+    } catch (error) {
+      this.handleError(res, error);
+    }
+  }
+
+  /** Avvia la ricerca delle posizioni e risponde subito: l'avanzamento arriva via socket a chi l'ha avviata. */
+  private async postPosizioni(req: Request, res: Response): Promise<void> {
+    try {
+      const idGdo = await this.gdoDellaSessione(req, res);
+      const idUtente = this.idUtente(req);
+      if (!idUtente) throw new BadRequestError({ message: 'Utente non riconosciuto' });
+      const indirizzi = await this.analisi.indirizziDaCercare(idGdo, req.body?.nonTrovate === true);
+      const { stato } = await this.posizioni.avvia(idGdo, idUtente, indirizzi, {
+        cerca: indirizzo => this.cerca(indirizzo),
+        salva: (chiave, esito) => this.analisi.salvaRicercaPosizione(idGdo, chiave, esito, idUtente),
+        notifica: (evento, statoJob) => this.emetti(eventoPosizioniRighe(statoJob.jobId, evento), statoJob, roomUtente(idUtente)),
+      });
+      this.sendResponse(res, HttpStatusCode.ACCEPTED, stato);
+    } catch (error) {
+      if (error instanceof RicercaPosizioniGiaInCorso) {
+        this.sendResponse(res, HttpStatusCode.CONFLICT, { message: error.message, stato: error.stato });
+        return;
+      }
+      this.handleError(res, error);
+    }
+  }
+
+  /** Lo stato di una ricerca (?jobId=) o, senza jobId, quella attiva sulla GDO o l'ultima finita da poco. */
+  private async getStatoPosizioni(req: Request, res: Response): Promise<void> {
+    try {
+      const idGdo = await this.gdoDellaSessione(req, res);
+      const jobId = typeof req.query.jobId === 'string' ? req.query.jobId : undefined;
+      const stato = jobId ? await this.posizioni.stato(jobId, idGdo) : await this.posizioni.ultima(idGdo);
+      this.sendResponse(res, HttpStatusCode.OK, { stato: stato ?? null });
+    } catch (error) {
+      this.handleError(res, error);
+    }
+  }
+
+  private async postAnnullaPosizioni(req: Request<{ jobId: string }>, res: Response): Promise<void> {
+    try {
+      const idGdo = await this.gdoDellaSessione(req, res);
+      const stato = await this.posizioni.annulla(req.params.jobId, idGdo);
+      if (!stato) throw new NotFoundError({ message: 'Ricerca delle posizioni non trovata', entityType: 'RicercaPosizioni', entityId: req.params.jobId });
+      this.sendResponse(res, HttpStatusCode.OK, { stato });
+    } catch (error) {
+      this.handleError(res, error);
+    }
+  }
+
+  private async putPosizione(req: Request, res: Response): Promise<void> {
+    try {
+      const idGdo = await this.gdoDellaSessione(req, res);
+      this.sendResponse(res, HttpStatusCode.OK, await this.analisi.correggiPosizione(idGdo, req.body, this.idUtente(req)));
     } catch (error) {
       this.handleError(res, error);
     }
