@@ -34,6 +34,8 @@ const spazioLibero = require('./spazioLibero');
 const sceltaSpazio = require('./sceltaSpazio');
 const selezioneFoto = require('./selezioneFoto');
 const etichettaSegnalazioni = require('../segnalazioni/etichetta');
+//TASK-99de57d1: le condizioni sui campi della referenza, le stesse del CssFramework.
+const condizioniRef = require('../cssFramework/sovrastrutture');
 
 /// CssFramework, chiesto quando serve: vedi l'intestazione.
 function cssFramework() {
@@ -104,8 +106,39 @@ const SistemazioneFoto = {
             marginiElementi: [],
             marginiBox: null,
             marginiFoto: [0, 0],
+            adattamentoImmagine: null,
             agenzia: {}
         };
+    },
+
+    /// TASK-99de57d1: se la condizione di una regola condizionale vale per la referenza e la
+    /// lavorazione: le etichette tutte fra quelle della referenza (senza distinguere maiuscole),
+    /// ogni campo che contiene il suo testo, il tipo di lavorazione fra quelli elencati. Una parte
+    /// assente non conta. Senza referenza nessuna regola condizionale vale. Pura.
+    condizioneVera(quando, referenza, tipoLavorazione) {
+        if (quando == null || typeof quando !== "object" || referenza == null) {
+            return false;
+        }
+
+        if (Array.isArray(quando.etichette) && quando.etichette.length > 0) {
+            var etichetteRef = (Array.isArray(referenza.allEtichette) ? referenza.allEtichette : [])
+                .map(e => String(e).trim().toLowerCase());
+            if (!quando.etichette.every(e => etichetteRef.indexOf(String(e).trim().toLowerCase()) >= 0)) {
+                return false;
+            }
+        }
+
+        if (Array.isArray(quando.campi) && quando.campi.length > 0
+            && !quando.campi.every(c => condizioniRef.refConditionVera(referenza, [c]))) {
+            return false;
+        }
+
+        if (Array.isArray(quando.lavorazioni) && quando.lavorazioni.length > 0
+            && !quando.lavorazioni.some(t => t == tipoLavorazione)) {
+            return false;
+        }
+
+        return true;
     },
 
     /// TASK-9bf94d47: la configurazione del fix da una lista di voci del CssFramework, dalla piu'
@@ -113,11 +146,24 @@ const SistemazioneFoto = {
     /// prima voce che ne ha una non null nella sua sezione fixFoto, altrimenti il default; i dati
     /// dell'agenzia (agenzia) allo stesso modo, chiave per chiave. Nel JSON un intervallo di
     /// distanziamento senza fine ha endRangeRatioCondition null: qui torna Infinity. Pura.
-    risolviConfigurazione(voci) {
+    /// TASK-99de57d1: le regole condizionali di una sezione la cui condizione e' vera (condizioneVera,
+    /// con referenza e tipoLavorazione) contano subito prima della sezione, nel loro ordine.
+    risolviConfigurazione(voci, referenza = null, tipoLavorazione = null) {
         var esito = this.configurazionePredefinita();
-        var sezioni = (Array.isArray(voci) ? voci : [])
-            .map(voce => voce != null && voce.fixFoto != null && typeof voce.fixFoto === "object" ? voce.fixFoto : null)
-            .filter(sezione => sezione != null);
+        var me = this;
+        var sezioni = [];
+        (Array.isArray(voci) ? voci : []).forEach(voce => {
+            var sezione = voce != null && voce.fixFoto != null && typeof voce.fixFoto === "object" ? voce.fixFoto : null;
+            if (sezione == null) {
+                return;
+            }
+            (Array.isArray(sezione.condizionali) ? sezione.condizionali : []).forEach(regola => {
+                if (regola != null && typeof regola === "object" && me.condizioneVera(regola.quando, referenza, tipoLavorazione)) {
+                    sezioni.push(regola);
+                }
+            });
+            sezioni.push(sezione);
+        });
 
         Object.keys(esito).forEach(chiave => {
             if (chiave === "agenzia") {
@@ -151,8 +197,127 @@ const SistemazioneFoto = {
     },
 
     /// TASK-9bf94d47: la configurazione del fix per questo box, dal CssFramework.
+    /// TASK-99de57d1: con la referenza del fix in corso (conReferenza), per le regole condizionali.
     configurazione(box) {
-        return cssFramework().getConfigurazioneFixFoto(box);
+        return cssFramework().getConfigurazioneFixFoto(box, this.referenzaInCorso);
+    },
+
+    /// TASK-99de57d1: la referenza del box di cui si stanno sistemando le foto. La mette conReferenza,
+    /// perche' arrivi anche alle letture della configurazione dentro il fix senza cambiarne la firma.
+    referenzaInCorso: null,
+
+    /// TASK-99de57d1: esegue operazione con referenza come referenza del fix in corso, e poi la toglie.
+    conReferenza(referenza, operazione) {
+        var prima = this.referenzaInCorso;
+        this.referenzaInCorso = referenza;
+        try {
+            return operazione();
+        }
+        finally {
+            this.referenzaInCorso = prima;
+        }
+    },
+
+    /// TASK-99de57d1: il Fix foto chiesto dall'operatore su un box, con la sua referenza: nel modo a
+    /// tutto box la foto torna a tutto box, altrimenti il fix di sempre. Il modo nessuno non lo
+    /// ferma: l'operatore il fix l'ha chiesto.
+    sistemaFotoDelBox(box, referenza) {
+        var me = this;
+        return this.conReferenza(referenza, function () {
+            var configurazione = me.configurazione(box);
+            if (configurazione.modo == "aTuttoBox") {
+                return me.fotoATuttoBox(box, configurazione);
+            }
+            var spazio = me.getSpazioImpaginazione(box);
+            return me.fixFoto(box, spazio.candidate, spazio.obstacles);
+        });
+    },
+
+    /// TASK-99de57d1: la sistemazione delle foto all'impaginazione, come la decide la configurazione
+    /// del box per la sua referenza: niente fuori dalle lavorazioni previste o nel modo nessuno; la
+    /// foto a tutto box nel modo aTuttoBox; il fix dell'agenzia (fixDellAgenzia, se c'e') nel modo
+    /// automatico; altrimenti quello del Plugin. Torna il box, quello che torna il fix dell'agenzia.
+    sistemaFotoAllImpaginazione(box, referenza, tipoLavorazione, fixDellAgenzia) {
+        var me = this;
+        return this.conReferenza(referenza, function () {
+            var configurazione = me.configurazione(box);
+            if (!configurazione.lavorazioni.includes(tipoLavorazione) || configurazione.modo == "nessuno") {
+                return box;
+            }
+            if (configurazione.modo == "aTuttoBox") {
+                return me.fotoATuttoBox(box, configurazione);
+            }
+            if (configurazione.modo != "semplice" && typeof fixDellAgenzia === "function") {
+                return fixDellAgenzia(box);
+            }
+            var spazio = me.getSpazioImpaginazione(box);
+            me.fixFoto(box, spazio.candidate, spazio.obstacles);
+            return box;
+        });
+    },
+
+    /// TASK-99de57d1: il modo a tutto box. La cornice della foto primaria prende misure e posizione
+    /// della base, senza ostacoli, e l'immagine si adatta come dice adattamentoImmagine. Senza base:
+    /// CSF-19, come il fix di sempre, e il box resta com'e'.
+    fotoATuttoBox(box, configurazione) {
+        var base = this.trovaBase(box);
+        if (base == null) {
+            this.segnalaBaseMancante(box);
+            return box;
+        }
+        var primaria = this.fotoDelFix(box)[0];
+        if (primaria == null) {
+            return box;
+        }
+        primaria.geometricBounds = base.geometricBounds;
+        this.adattaImmagine(primaria, configurazione != null ? configurazione.adattamentoImmagine : null);
+        return box;
+    },
+
+    /// TASK-99de57d1: adatta l'immagine dentro la cornice: "larghezza" o "altezza"
+    /// (boundsImmagineAdattata), altrimenti in proporzione. Una cornice senza immagine resta com'e'.
+    adattaImmagine(cornice, adattamento) {
+        if (cornice == null || cornice.graphics == null || cornice.graphics.length == 0) {
+            return;
+        }
+        if (adattamento != "larghezza" && adattamento != "altezza") {
+            cornice.fit(FitOptions.PROPORTIONALLY);
+            return;
+        }
+        var immagine = cornice.graphics.item(0);
+        var bounds = this.boundsImmagineAdattata(cornice.geometricBounds, immagine.geometricBounds, adattamento);
+        if (bounds != null) {
+            immagine.geometricBounds = bounds;
+        }
+    },
+
+    /// TASK-99de57d1: i bounds [alto, sinistra, basso, destra] dell'immagine adattata alla cornice.
+    /// "larghezza": larga quanto la cornice, in proporzione, centrata in verticale. "altezza": alta
+    /// quanto la cornice, in proporzione, centrata in orizzontale. Sull'altro asse puo' uscire dalla
+    /// cornice. Null se le misure non lo permettono. Pura.
+    boundsImmagineAdattata(cornice, immagine, adattamento) {
+        if (!Array.isArray(cornice) || !Array.isArray(immagine)) {
+            return null;
+        }
+        var larghezzaCornice = cornice[3] - cornice[1];
+        var altezzaCornice = cornice[2] - cornice[0];
+        var larghezzaImmagine = immagine[3] - immagine[1];
+        var altezzaImmagine = immagine[2] - immagine[0];
+        if (!(larghezzaCornice > 0 && altezzaCornice > 0 && larghezzaImmagine > 0 && altezzaImmagine > 0)) {
+            return null;
+        }
+
+        if (adattamento == "larghezza") {
+            var altezza = larghezzaCornice * altezzaImmagine / larghezzaImmagine;
+            var alto = cornice[0] + (altezzaCornice - altezza) / 2;
+            return [alto, cornice[1], alto + altezza, cornice[3]];
+        }
+        if (adattamento == "altezza") {
+            var larghezza = altezzaCornice * larghezzaImmagine / altezzaImmagine;
+            var sinistra = cornice[1] + (larghezzaCornice - larghezza) / 2;
+            return [cornice[0], sinistra, cornice[2], sinistra + larghezza];
+        }
+        return null;
     },
 
     /// La porta d'ingresso del gruppo: quali porzioni del box sono libere per le foto.

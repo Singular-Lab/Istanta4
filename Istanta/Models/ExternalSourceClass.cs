@@ -3482,7 +3482,18 @@ namespace Istanta.Models
 
         /// All'impaginazione: "automatico" (quello dell'agenzia, se ne ha uno, altrimenti quello
         /// del Plugin), "semplice" (solo quello del Plugin), "nessuno" (le foto restano dove sono).
+        /// TASK-99de57d1: "aTuttoBox", la cornice della foto primaria prende misure e posizione
+        /// della base, senza ostacoli, e l'immagine si adatta come dice adattamentoImmagine.
         public string? modo { get; set; }
+
+        /// TASK-99de57d1: nel modo aTuttoBox, come l'immagine si adatta alla cornice: "larghezza"
+        /// (larga quanto la cornice, centrata in verticale) o "altezza" (alta quanto la cornice,
+        /// centrata in orizzontale). Null: in proporzione dentro la cornice.
+        public string? adattamentoImmagine { get; set; }
+
+        /// TASK-99de57d1: regole che valgono solo per certe referenze o lavorazioni. Una regola la cui
+        /// condizione e' vera conta piu' dei valori di questa stessa sezione.
+        public List<FixFotoCondizionaleObj>? condizionali { get; set; }
 
         /// Per ogni numero di foto, di quanto ognuna si scosta dalla precedente.
         public List<DistanziamentoFotoObj>? distanziamento { get; set; }
@@ -3506,6 +3517,23 @@ namespace Istanta.Models
         /// I dati che usa solo il fix foto dell'agenzia (setCustomFixFoto nel suo custom.js), come
         /// li vuole lei: il Plugin li passa senza leggerli, chiave per chiave.
         public JObject? agenzia { get; set; }
+    }
+
+    /// TASK-99de57d1: una regola condizionale del fix foto: i suoi valori valgono quando la
+    /// condizione e' vera.
+    public class FixFotoCondizionaleObj : FixFotoObj
+    {
+        public QuandoFixFotoObj quando { get; set; } = new();
+    }
+
+    /// TASK-99de57d1: la condizione di una regola del fix foto, tutte le parti insieme. etichette: la
+    /// referenza le ha tutte, senza distinguere le maiuscole. campi: ogni campo del record contiene il
+    /// testo. lavorazioni: il tipo della lavorazione corrente e' fra questi. Una parte null non conta.
+    public class QuandoFixFotoObj
+    {
+        public List<string>? etichette { get; set; }
+        public List<RefCondition>? campi { get; set; }
+        public List<int>? lavorazioni { get; set; }
     }
 
     /// TASK-9bf94d47: la sezione fixFoto generale del CssFramework: i valori per tutto il cliente e,
@@ -4116,7 +4144,13 @@ namespace Istanta.Models
         FRAME_TO_CONTENT,
         CONTENT_TO_FRAME,
         PROPORTIONALLY,
-        FILL_PROPORTIONALLY
+        FILL_PROPORTIONALLY,
+
+        /// TASK-99de57d1: l'immagine larga quanto la cornice, in proporzione, centrata in verticale.
+        FILL_WIDTH_CENTERED,
+
+        /// TASK-99de57d1: l'immagine alta quanto la cornice, in proporzione, centrata in orizzontale.
+        FILL_HEIGHT_CENTERED
 
     }
 

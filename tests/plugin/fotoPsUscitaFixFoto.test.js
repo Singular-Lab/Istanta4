@@ -104,11 +104,12 @@ test("il massimo viene dalla configurazione del cliente, non e' un tre scritto n
 
 /// La scheda con i globali finti di proponiFixFoto: cosa ha chiesto e cosa ha fatto.
 function provaProponiFixFoto(avviso, risposta) {
-    const fatto = { popup: [], domande: [], fix: 0 };
+    const fatto = { popup: [], domande: [], fix: 0, referenze: [] };
+    //TASK-99de57d1: il fix parte con la referenza del box, per le regole che la guardano.
+    global.referenzaDelBox = async (box) => ({ box });
     global.SistemazioneFoto = {
         avvisoFotoAMano: () => avviso,
-        getSpazioImpaginazione: () => ({ candidate: [], obstacles: [] }),
-        fixFoto: () => { fatto.fix++; },
+        sistemaFotoDelBox: (box, referenza) => { fatto.fix++; fatto.referenze.push(referenza); },
     };
     global.Modali = {
         popup: (titolo, testo) => { fatto.popup.push([titolo, testo]); },
@@ -130,9 +131,11 @@ test("oltre la configurazione niente domanda sul Fix Foto: la finestra dice di s
 
 test("con un numero di foto previsto si chiede, e il fix parte solo con il si'", async () => {
     let fatto = provaProponiFixFoto(null, true);
-    assert.strictEqual(await schedaRef.proponiFixFoto({}, "Modifiche salvate. Applicare il Fix Foto automatico?"), true);
+    const box = { label: "BOX_STD" };
+    assert.strictEqual(await schedaRef.proponiFixFoto(box, "Modifiche salvate. Applicare il Fix Foto automatico?"), true);
     assert.deepStrictEqual(fatto.domande, ["Modifiche salvate. Applicare il Fix Foto automatico?"]);
     assert.strictEqual(fatto.fix, 1);
+    assert.strictEqual(fatto.referenze[0].box, box);
 
     fatto = provaProponiFixFoto(null, false);
     assert.strictEqual(await schedaRef.proponiFixFoto({}, "Modifiche salvate. Applicare il Fix Foto automatico?"), false);
