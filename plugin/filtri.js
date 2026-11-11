@@ -2594,7 +2594,8 @@ const filtri = {
                 let valoreTendina = $(this).find('.filtro-valore-hidden').val();
 
                 // Aggiungiamo il criterio solo se la chiave è selezionata
-                if (chiave && operatore!=null) {
+                //I20-1227: la stessa regola che decide se sotto il filtro si vedono i prodotti.
+                if (filtri.criterioCompilato(chiave, operatore)) {
                     criteri.push({
                         chiave: chiave,
                         operatore: operatore,
@@ -2741,6 +2742,36 @@ const filtri = {
         }
     },
 
+    /// I20-1227: un criterio e' compilato quando ha la chiave scelta (e un operatore): e' la regola con
+    /// cui la Conferma decide quali criteri salvare.
+    criterioCompilato(chiave, operatore) {
+        return chiave != null && String(chiave) !== '' && operatore != null;
+    },
+
+    /// I20-1227: un filtro e' compilato quando almeno un suo criterio lo e'. Un filtro appena aggiunto,
+    /// senza chiave, trova tutta la lista: sotto non deve elencarla. criteri: [{ chiave, operatore }].
+    filtroCompilato(criteri) {
+        return Array.isArray(criteri) && criteri.some(c => c != null && filtri.criterioCompilato(c.chiave, c.operatore));
+    },
+
+    /// I20-1227: chiave e operatore dei criteri di un filtro della finestra, letti come li legge la Conferma.
+    criteriDelFiltro(filtro) {
+        const criteri = [];
+        filtro.find('.criterio').each(function () {
+            criteri.push({ chiave: $(this).find('.filtro-chiave-hidden').val(), operatore: $(this).find('.filtro-operatore').val() });
+        });
+        return criteri;
+    },
+
+    /// I20-1227: lo stile di una riga di prodotto sotto il filtro: una riga sola, i puntini se non entra.
+    STILE_RIGA_PRODOTTO_FILTRO: { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' },
+
+    /// I20-1227: la riga di un prodotto sotto il filtro, con il testo intero nel suggerimento.
+    rigaProdottoFiltro(riga) {
+        const testo = filtri.testoProdottoFiltro(riga);
+        return $('<div></div>').addClass('filtro-prodotto').css(filtri.STILE_RIGA_PRODOTTO_FILTRO).attr('title', testo).text(testo);
+    },
+
     /// I20-1216: i prodotti che un filtro trova, impaginati e non, nell'ordine della lista della
     /// lavorazione: per ognuno il codice, la descrizione (quella del gruppo per un gruppo, come nei
     /// popup dei conteggi) e, se e' impaginato, la pagina.
@@ -2786,19 +2817,24 @@ const filtri = {
     /// I20-1216: scrive sotto il filtro i suoi prodotti: i primi PRODOTTI_VISIBILI_FILTRO, gli altri
     /// dietro "+ altri N", che al click si aprono e al click dopo si richiudono. Un filtro della scheda
     /// Tracciato non ha il riquadro, e resta com'e'.
+    /// I20-1227: sotto un filtro non compilato niente, neanche "Nessun prodotto"; ogni prodotto su una
+    /// riga sola, con i puntini e il testo intero nel suggerimento.
     mostraProdottiFiltro(filtro, righe) {
         const contenitore = filtro.find('.filtro-prodotti');
         if (contenitore.length === 0) {
             return;
         }
         contenitore.empty();
+        if (!filtri.filtroCompilato(filtri.criteriDelFiltro(filtro))) {
+            return;
+        }
         if (righe.length === 0) {
             contenitore.append($('<div></div>').css({ color: '#777' }).text('Nessun prodotto'));
             return;
         }
         const visibili = filtri.PRODOTTI_VISIBILI_FILTRO;
         righe.slice(0, visibili).forEach(riga => {
-            contenitore.append($('<div></div>').addClass('filtro-prodotto').text(filtri.testoProdottoFiltro(riga)));
+            contenitore.append(filtri.rigaProdottoFiltro(riga));
         });
         const altri = righe.slice(visibili);
         if (altri.length === 0) {
@@ -2806,7 +2842,7 @@ const filtri = {
         }
         const nascosti = $('<div></div>').addClass('filtro-prodotti-altri').css({ display: 'none' });
         altri.forEach(riga => {
-            nascosti.append($('<div></div>').addClass('filtro-prodotto').text(filtri.testoProdottoFiltro(riga)));
+            nascosti.append(filtri.rigaProdottoFiltro(riga));
         });
         const voce = $('<div></div>')
             .addClass('filtro-prodotti-piu')
