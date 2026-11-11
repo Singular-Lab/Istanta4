@@ -36,7 +36,7 @@ import { ephemeralTokenAuthMiddleware } from '../middleware/ephemeralTokenAuthMi
 import { permissionGuard } from '../middleware/permissionGuard';
 import { FilterTemplateService } from '../services/FilterTemplateService';
 import { StatisticheApiService } from '../services/StatisticheApiService';
-import { validaImportFinale } from '../utils/importPlugin';
+import { loghiDelPlugin, validaImportFinale } from '../utils/importPlugin';
 import { ServerUtils } from '../utils/ServerUtils';
 import { TraduttoreReferenze } from '../utils/Translator';
 
@@ -452,7 +452,8 @@ export class ExternalApiController extends BaseController {
           fotoGruppo: '',
           meccanica: ref.meccanica ?? '',
           codiceBox: String(ref.groupId ?? ref.dna ?? uuidv4()),
-          fotoExtra: [],
+          // Loghi e bolli del box caricati su Olimpo, come quelli che assegna Istanta
+          fotoExtra: loghiDelPlugin(ref.foto_extra),
           groupElements: Array.isArray(ref.groupElements) ? ref.groupElements.map((elemento) => TraduttoreReferenze.traduci_data_fields(elemento, mappaCampi)) : [],
           dataFields: TraduttoreReferenze.traduci_data_fields(ref.dataFields ?? {}, mappaCampi),
           pag: ref.pag,

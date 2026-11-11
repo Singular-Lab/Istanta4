@@ -217,6 +217,18 @@ export interface SyncJsonPluginRef {
   percIngombro?: number;
   aspectRatio?: number;
   groupElements?: DataFields[];
+  /**
+   * Loghi (tipo 3) e bolli (tipo 2) trovati nel box: la sigla e' il nome del file senza estensione,
+   * guid_id l'immagine caricata su Olimpo, vuoto se il caricamento non e' riuscito.
+   */
+  foto_extra?: PluginFotoExtra[];
+}
+
+/** Un logo o un bollo di un box come lo invia il plugin. */
+export interface PluginFotoExtra {
+  sigla: string;
+  tipo: number;
+  guid_id: string;
 }
 
 export interface SyncJsonPluginPayload {

@@ -1,6 +1,29 @@
 import { BadRequestError } from '../../../lib/errors';
-import type { OrigineStorico } from '../../../lib/types';
+import type { LoghiReferenza, OrigineStorico } from '../../../lib/types';
 import type { SyncJsonPluginPayload, SyncJsonPluginRef } from '../agenzia_lib/types';
+
+/** Un logo della referenza come lo salva Istanta: attivo, con l'immagine di Olimpo in guidId. */
+export type LogoReferenza = LoghiReferenza & { attiva: true };
+
+/**
+ * I loghi e i bolli di un box del plugin (foto_extra) nella forma di quelli che Istanta assegna
+ * alle referenze, letta da WebPliant, API esterne e insight (spec import-storico-volantino,
+ * "Loghi e bolli delle referenze dello storico"). Si tengono solo quelli caricati su Olimpo, con
+ * sigla e tipo: un logo non caricato ha guid_id vuoto e non si puo' mostrare. Mai un errore: un
+ * logo scartato non ferma la sincronizzazione.
+ */
+export function loghiDelPlugin(fotoExtra: unknown): LogoReferenza[] {
+  if (!Array.isArray(fotoExtra)) return [];
+  return fotoExtra.flatMap((voce: unknown) => {
+    if (voce === null || typeof voce !== 'object') return [];
+    const { sigla, tipo, guid_id: guidIdPlugin, guidId: guidIdIstanta } = voce as Record<string, unknown>;
+    const guidId = typeof guidIdPlugin === 'string' && guidIdPlugin.trim() !== '' ? guidIdPlugin : guidIdIstanta;
+    if (typeof guidId !== 'string' || guidId.trim() === '') return [];
+    if (typeof sigla !== 'string' || sigla.trim() === '') return [];
+    if (typeof tipo !== 'number' || !Number.isFinite(tipo)) return [];
+    return [{ tipo, sigla: sigla.trim(), guidId: guidId.trim(), attiva: true as const }];
+  });
+}
 
 export function validaImportFinale(payload: SyncJsonPluginPayload): {
   refs: SyncJsonPluginRef[];
