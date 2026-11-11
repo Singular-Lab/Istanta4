@@ -56,6 +56,16 @@ afterEach(() => {
 });
 
 describe("ScaricaReportPdf", () => {
+  it("disattivato con un motivo resta visibile, dice il motivo e non genera né scarica nulla", () => {
+    render(<ScaricaReportPdf idKit="k1" titolo="Volantino ottobre" motivoDisattivato="Il report PDF è disattivato" />);
+
+    const pulsante = screen.getByRole("button", { name: /Report PDF/ });
+    expect(pulsante).toBeDisabled();
+    expect(pulsante).toHaveAttribute("title", "Il report PDF è disattivato");
+    fireEvent.click(pulsante);
+    expect(finti.caricaReportVolantino).not.toHaveBeenCalled();
+  });
+
   it("chiede il report, prepara la copertina, impagina e scarica il file con il nome del report", async () => {
     const report = reportDiProva({ titolo: "Volantino 3/16 novembre" });
     finti.caricaReportVolantino.mockResolvedValue(report);

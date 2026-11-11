@@ -75,6 +75,7 @@ import type {
 import { boxDelKit } from '../utils/analisiKit';
 import { sezioniInsight } from '../utils/insightVolantino';
 import { aggregaPromozioneVolantini, type KitConInsight } from '../utils/promozioneVolantini';
+import { nomeFileLeggibile } from '../utils/nomeFileLeggibile';
 import { leggiReferenza } from '../utils/referenzaStampata';
 import { trovaConfigInstallazione } from './configPerGdo';
 import { type ContestoConfig, contestoDellaGdo, type LettureKitInsight, opzioniDelKit } from './InsightConfrontiService';
@@ -256,7 +257,8 @@ function copertinaDa(riga: Pick<RigaKit, 'copertina_id_file' | 'copertina_id_oli
 export function fileDa(riga: RigaFileConsultazione): FileConsultazione {
   return {
     id: riga.id,
-    nome: riga.nome_originale || riga.nome || '',
+    // Il nome leggibile con l'estensione: nome_originale e' il nome archiviato su Olimpo (un GUID per Istanta)
+    nome: nomeFileLeggibile(riga.nome, riga.nome_originale, riga.mime),
     tipoExport: riga.tipo_export || null,
     mime: riga.mime ?? null,
     pagine: pagine(riga.pagine),
@@ -825,7 +827,7 @@ export class ConsultazioneService implements IConsultazioneService {
     if (!file?.id_olimpo_cloud) throw new NotFoundError({ message: FILE_NON_DISPONIBILE, entityType: 'FileRuntime', entityId: id });
     try {
       const contenuto = await this.leggiFileOlimpo(file.id_olimpo_cloud);
-      return { nome: file.nome_originale || file.nome || 'file.pdf', mime: file.mime || 'application/pdf', contenuto };
+      return { nome: nomeFileLeggibile(file.nome, file.nome_originale, file.mime), mime: file.mime || 'application/pdf', contenuto };
     } catch (errore) {
       const motivo = motivoFileNonScaricato(errore);
       log.warn('File di consultazione non scaricato da Olimpo', { context: 'Consultazione', idFile: id, motivo });
