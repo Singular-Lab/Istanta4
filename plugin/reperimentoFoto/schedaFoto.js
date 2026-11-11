@@ -1636,7 +1636,8 @@ const schedaFoto = {
                             }
                             else{
                                 imgSync = $('<img>', { src: "images/download.png", style: "width:30px; cursor:pointer;", 'data-codice': objItem["Foto.guidid"] });
-                                errorText = $('<span>Errore: la foto nei link non corrisponde al server, aggiornare l\'immagine</span>');
+                                //I20-1225: la dicitura chiesta dall'operatore.
+                                errorText = $('<span>Mancata corrispondenza fra foto in Links e server. Riscaricare e sostituire da archivio.</span>');
                                 errorText.css({ "font-size": "14px", "color": "yellow" });
                                 imgSync.on('click', function () {
                                     ReperimentoFoto.avviaSyncPacchettoFoto(2, function () {
