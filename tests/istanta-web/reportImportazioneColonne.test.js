@@ -29,16 +29,18 @@ function dallAgenzia(cliente, metodo) {
 
 const ITEM = { 'AC': 'SS-A', 'Referenza.Codice': '3191029', tema: 'JOLLY', settore: 'ortofrutta' };
 
-test('senza esclusioni le colonne del core sono Area/canale, Codice e Alterazioni, come prima', () => {
-    assert.deepStrictEqual(Promo.colonneCoreDelReport([]).map(c => c.titolo), ['Area/canale', 'Codice', 'Alterazioni']);
-    assert.deepStrictEqual(Promo.colonneCoreDelReport(undefined).map(c => c.nome), ['AC', 'Referenza.Codice', 'Alterazioni']);
+test('senza esclusioni le colonne del core sono Area/canale, Codice, Alterazioni ed Etichetta', () => {
+    //TASK-c4fdc17b: l'etichetta del tracciato e' una colonna del core; la natura dello scatto solo se chiesta.
+    assert.deepStrictEqual(Promo.colonneCoreDelReport([]).map(c => c.titolo), ['Area/canale', 'Codice', 'Alterazioni', 'Etichetta']);
+    assert.deepStrictEqual(Promo.colonneCoreDelReport(undefined).map(c => c.nome), ['AC', 'Referenza.Codice', 'Alterazioni', 'EtichettaTracciato']);
+    assert.deepStrictEqual(Promo.colonneCoreDelReport([], true).map(c => c.titolo), ['Area/canale', 'Codice', 'Alterazioni', 'Etichetta', 'Scatto']);
 });
 
 test('una colonna del core esclusa per nome non c\'e\', le altre restano nel loro ordine', () => {
-    assert.deepStrictEqual(Promo.colonneCoreDelReport(['Alterazioni']).map(c => c.nome), ['AC', 'Referenza.Codice']);
-    assert.deepStrictEqual(Promo.colonneCoreDelReport(['AC']).map(c => c.nome), ['Referenza.Codice', 'Alterazioni']);
+    assert.deepStrictEqual(Promo.colonneCoreDelReport(['Alterazioni']).map(c => c.nome), ['AC', 'Referenza.Codice', 'EtichettaTracciato']);
+    assert.deepStrictEqual(Promo.colonneCoreDelReport(['AC']).map(c => c.nome), ['Referenza.Codice', 'Alterazioni', 'EtichettaTracciato']);
     //Un nome che non e' del core non toglie niente.
-    assert.strictEqual(Promo.colonneCoreDelReport(['segmento']).length, 3);
+    assert.strictEqual(Promo.colonneCoreDelReport(['segmento']).length, 4);
 });
 
 test('le celle del core: il campo della colonna, e per le Alterazioni l\'elenco dei campi cambiati', () => {
@@ -50,10 +52,10 @@ test('le celle del core: il campo della colonna, e per le Alterazioni l\'elenco 
     assert.strictEqual(Promo.cellaCoreDelReport(codice, {}, []), '<td></td>');
 });
 
-test('Coop: Area/canale, Codice, poi tema, settore, reparto e Referenza.Ean; niente Alterazioni e segmento', () => {
+test('Coop: Area/canale, Codice, Etichetta, poi tema, settore, reparto e Referenza.Ean; niente Alterazioni e segmento', () => {
     const core = Promo.colonneCoreDelReport(dallAgenzia('coopfi', 'getColonneCoreEscluseReport')).map(c => c.titolo);
     const cliente = dallAgenzia('coopfi', 'getParametriReport');
-    assert.deepStrictEqual(core.concat(cliente), ['Area/canale', 'Codice', 'tema', 'settore', 'reparto', 'Referenza.Ean']);
+    assert.deepStrictEqual(core.concat(cliente), ['Area/canale', 'Codice', 'Etichetta', 'tema', 'settore', 'reparto', 'Referenza.Ean']);
 });
 
 test('Edro21 non esclude niente e vede il report come prima', () => {
@@ -67,17 +69,22 @@ const inizio = promo.indexOf('    consultaReport(id_attivita, id_promo) {');
 const report = promo.substring(inizio, promo.indexOf('\n    consultaErrorReport(', inizio) > 0 ? promo.indexOf('\n    consultaErrorReport(', inizio) : promo.length);
 
 test('intestazione e celle vengono dalle colonne del core, meno quelle che l\'agenzia esclude', () => {
-    assert.match(report, /let colonneCore = Promo\.colonneCoreDelReport\(this\.agenzia\.getColonneCoreEscluseReport != null \? this\.agenzia\.getColonneCoreEscluseReport\(\) : \[\]\);/);
-    assert.match(report, /colonneCore\.forEach\(colonna => \{\s*tblRows \+= Promo\.cellaCoreDelReport\(colonna, item, alteredKeys\);/);
-    assert.match(report, /\$\{colonneCore\.map\(colonna => `<th>\$\{colonna\.titolo\}<\/th>`\)\.join\(""\)\}/);
+    //TASK-c4fdc17b: con la natura dello scatto se l'agenzia la chiede; le celle dal testo di righeDelReport.
+    assert.match(report, /let colonneCore = Promo\.colonneCoreDelReport\(this\.agenzia\.getColonneCoreEscluseReport != null \? this\.agenzia\.getColonneCoreEscluseReport\(\) : \[\],/);
+    assert.match(report, /colonneCore\.forEach\(colonna => \{\s*tblRows \+= colonna\.nome == "Alterazioni" \? Promo\.cellaCoreDelReport\(colonna, item, riga\.alterate\)/);
+    assert.match(report, /\$\{colonneCore\.map\(colonna => intestazione\(colonna\.nome, colonna\.titolo\)\)\.join\(""\)\}/);
     assert.doesNotMatch(report, /<th>Alterazioni<\/th>/);
     //Lo stato e il colore delle righe cambiate non dipendono dalla colonna Alterazioni.
-    assert.match(report, /if \(isAltered\) \{\s*stato = 2;\s*bkgRow = "#ebcbcb";\s*ref_cambiate\+\+;/);
+    const righe = Promo.righeDelReport([{ 'Referenza.Codice': '1', AC: 'A', versione: 2, Alterazioni: { tema: 'X' } }], Promo.colonneCoreDelReport(['Alterazioni']), []);
+    assert.strictEqual(righe[0].stato, 2);
+    assert.match(report, /let sfondi = \{ 1: "white", 2: "#ebcbcb", 3: "#ceebcb", 4: "orange" \};/);
 });
 
 test('ricerca e azioni dirette leggono codice e area/canale dalla riga, non dalla posizione della cella', () => {
-    assert.match(report, /data-codice="\$\{Promo\.html\(item\["Referenza\.Codice"\] \?\? ""\)\}" data-ac="\$\{Promo\.html\(item\.AC \?\? ""\)\}"/);
+    assert.match(report, /data-codice="\$\{Promo\.html\(riga\.codice\)\}" data-ac="\$\{Promo\.html\(riga\.ac\)\}"/);
     assert.doesNotMatch(promo, /row\.find\("td"\)\.eq\(/);
-    assert.match(promo, /let codice = \(\(row\.attr\("data-codice"\) \|\| ""\) \+ " " \+ \(row\.attr\("data-ac"\) \|\| ""\)\)\.toLowerCase\(\);/);
+    //TASK-c4fdc17b: la ricerca sta in Promo.rigaVisibile, su codice e area/canale della riga.
+    assert.strictEqual(Promo.rigaVisibile({ stato: 1, codice: '3191029', ac: 'SS-A', valori: {} }, { testo: 'ss-a' }), true);
+    assert.strictEqual(Promo.rigaVisibile({ stato: 1, codice: '3191029', ac: 'SS-A', valori: {} }, { testo: '3191' }), true);
     assert.strictEqual((promo.match(/let codiceRef = row\.attr\("data-codice"\);/g) || []).length, 2);
 });

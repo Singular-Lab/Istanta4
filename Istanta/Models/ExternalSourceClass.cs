@@ -2457,6 +2457,11 @@ namespace Istanta.Models
         private string pathExternalSource="";
         public List<DbConfrontoCampoDiControllo> campiDiControllo { get; set; } = new List<DbConfrontoCampoDiControllo>();
 
+        /// TASK-c4fdc17b: i campi che il report dell'importazione non elenca fra le alterazioni, come
+        /// Tracciato.Xlsx o data_estrazione: una referenza che cambia solo quelli risulta inalterata.
+        /// Non cambiano il dato salvato. Vuota: si elenca ogni campo cambiato.
+        public List<string> campiEsclusiDalReport { get; set; } = new List<string>();
+
         public void SetExternalPath(string pathExternalSource)
         {
             this.pathExternalSource = pathExternalSource + "Source" + DbConfronto.dbSourceName;
@@ -2469,6 +2474,7 @@ namespace Istanta.Models
             {
                 var db = JsonConvert.DeserializeObject<DbConfronto>(jsonStr);
                 this.campiDiControllo = db!.campiDiControllo;
+                this.campiEsclusiDalReport = db.campiEsclusiDalReport ?? new List<string>();
                 this.SaveChanges();
 
                 br.Esito = true;

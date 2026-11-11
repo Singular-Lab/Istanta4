@@ -38,7 +38,9 @@ test("nella scheda di revisione Coop il marchio e' Brand e il tipo e' Tipo/Gusto
 //TASK-e9620c69: le funzioni che Edro21 ha e Coop no, per scelta. preparaRevisioniDaSalvare svuota le descrizioni
 //fatte solo di spazi e a capo al salvataggio dal revisore e dall'Archivio: l'ha chiesto Edro21, e Coop non deve
 //cambiare. Ogni altra differenza fra i due archivi il test la segnala ancora.
-const SOLO_EDRO21 = ["preparaRevisioniDaSalvare"];
+//TASK-c4fdc17b: e le opzioni del report dell'importazione che vuole solo Edro21: la natura dello scatto, niente
+//azioni dirette e niente "Salva". Nell'ordine in cui stanno nel file.
+const SOLO_EDRO21 = ["getNaturaScattoNelReport", "nascondiAzioniDiretteReport", "getOpzioniImportazioneEscluse", "preparaRevisioniDaSalvare"];
 
 //TASK-110bdfa0: le funzioni che Coop ha diverse da Edro21, o solo sue, per scelta: le colonne del report
 //dell'importazione (tema e settore al posto del segmento, senza la colonna Alterazioni).

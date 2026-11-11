@@ -170,7 +170,8 @@
 
                     sender.listeners.forEach(f => {
                         console.log(f.onAttivitaChageStatus + " -> " + attivita.stato);
-                        f.onAttivitaChageStatus(attivita.id, attivita.stato);
+                        //TASK-c4fdc17b: e se c'e' un report da leggere.
+                        f.onAttivitaChageStatus(attivita.id, attivita.stato, attivita.haReport);
                     });
 
                 }

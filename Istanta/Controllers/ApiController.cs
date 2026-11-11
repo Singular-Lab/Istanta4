@@ -230,7 +230,23 @@ namespace Istanta.Controllers
 
             }).FirstOrDefaultAsync();
 
-            return Ok(item);
+            if (item == null)
+            {
+                return Ok(item);
+            }
+
+            //TASK-c4fdc17b: se c'e' un report da leggere. Un "Salva e fai report" che porta l'etichetta alla prima
+            //versione non lo scrive, e la pagina chiude la riga come dopo un "Salva".
+            return Ok(new
+            {
+                item.Id,
+                item.StatoMsg,
+                item.Progress,
+                item.Stato,
+                item.Coda,
+                item.SubAttivita,
+                HaReport = ReportImportazione.HaReport(this.path_to_import, (int)id)
+            });
         }
 
         [HttpGet]

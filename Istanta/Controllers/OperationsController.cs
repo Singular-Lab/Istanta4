@@ -863,6 +863,9 @@ namespace Istanta.Controllers
                         Register regContext = new Register(this._conn_string, this._dbContextFactory, dbContextFactory2: this._dbContextFactory2);
 
                         List<Dictionary<string,object>> _report=new List<Dictionary<string, object>>();
+                        //TASK-c4fdc17b: se l'etichetta entra alla prima versione in ogni tracciato, "Salva e fai report"
+                        //e' un "Salva": non c'e' niente da confrontare (ReportImportazione.ScriveReport).
+                        bool primaVersioneOvunque = true;
 
                         ExternalSourceClass extSource = new ExternalSourceClass(this._path_external_source);
                         DbConfronto dbConfExt = extSource.getConfronto();
@@ -1019,6 +1022,10 @@ namespace Istanta.Controllers
                             else
                             {
                                 versioneLab = 1;
+                            }
+                            if (versioneLab != 1)
+                            {
+                                primaVersioneOvunque = false;
                             }
 
 
@@ -1442,6 +1449,8 @@ namespace Istanta.Controllers
                                         item["versione"] = 1;
                                         item["guidIdCanale"] = pTr.guidCanale;
                                         item["guidIdArea"] = pTr.guidArea;
+                                        //TASK-c4fdc17b: l'etichetta con cui la lista e' stata caricata.
+                                        item[ReportImportazione.KeyEtichetta] = idLabel;
                                         _report.Add(item);
                                     }
 
@@ -1568,16 +1577,13 @@ namespace Istanta.Controllers
                                         item["versione"] = _rec.Versione;
                                         item["guidIdCanale"] = pTr.guidCanale;
                                         item["guidIdArea"] = pTr.guidArea;
+                                        item[ReportImportazione.KeyEtichetta] = idLabel;
 
-                                        //Togliamo dalle alterazioni i campi che sono di controllo e non di reale interesse per l'utente, altrimenti si rischia di generare confusione
-                                        foreach (DbConfrontoCampoDiControllo campo in dbConfExt.campiDiControllo)
-                                        {
-                                            if (!alterazioni.ContainsKey(campo.nome))
-                                            {
-                                                alterazioni.Remove(campo.nome);
-                                            }
-                                        }
-                                        item[GLOBAL_VARIABLES.keyAlterazioni] = alterazioni;
+                                        //TASK-c4fdc17b: dalle alterazioni si tolgono i campi che il cliente esclude dal report
+                                        //(campiEsclusiDalReport). Prima qui si leggevano i campiDiControllo, che per i Confronti
+                                        //sono i campi da controllare: con la condizione invertita il ciclo non toglieva niente,
+                                        //e corretto avrebbe tolto proprio i campi che contano (prezzi, tema, meccanica).
+                                        item[GLOBAL_VARIABLES.keyAlterazioni] = ReportImportazione.SenzaCampiEsclusi(alterazioni, dbConfExt.campiEsclusiDalReport);
 
                                         _report.Add(item);
                                     }
@@ -1718,6 +1724,8 @@ namespace Istanta.Controllers
                                         s2!["versione"] = -1;
                                         s2!["guidIdCanale"] = pTr.guidCanale;
                                         s2!["guidIdArea"] = pTr.guidArea;
+                                        //TASK-c4fdc17b: le uscite hanno la stessa etichetta, sono i record di quella label.
+                                        s2![ReportImportazione.KeyEtichetta] = idLabel;
                                         return s2;
                                     }).ToList();
 
@@ -1741,11 +1749,22 @@ namespace Istanta.Controllers
 
                         
 
-                        if (pkg.askReport && _report.Count > 0)
+                        string pathReport = System.IO.Path.Combine(path_attivita, "Report.json");
+                        if (ReportImportazione.ScriveReport(pkg.persistent, pkg.askReport, _report.Count, primaVersioneOvunque))
                         {
                             //Salvo il json su file, nella stessa cartella dove è stato salvato l'excel di lettura
-                            string pathReport = System.IO.Path.Combine(path_attivita, "Report.json");
                             await System.IO.File.WriteAllTextAsync(pathReport, JsonConvert.SerializeObject(_report));
+                            //TASK-c4fdc17b: a "Salva e fai report" anche il CSV del report completo, accanto al json.
+                            if (pkg.persistent)
+                            {
+                                await ReportImportazione.ScriviCsvAsync(path_attivita, _report.Cast<IDictionary<string, object>>());
+                            }
+                        }
+                        else if (pkg.askReport && System.IO.File.Exists(pathReport))
+                        {
+                            //TASK-c4fdc17b: un "Solo report" di prima sulla stessa attivita' non deve far credere che ci sia
+                            //un report da leggere: la pagina lo chiede con HaReport.
+                            System.IO.File.Delete(pathReport);
                         }
                     }
                     else
