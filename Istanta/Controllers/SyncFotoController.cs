@@ -1785,6 +1785,35 @@ namespace Istanta.Controllers
             return null;
         }
 
+        /// I20-1230: i record del kit di cui il pacchetto foto porta la foto del prodotto: le primarie e
+        /// le secondarie dei gruppi. Le ref non selezionate (StatoSelezione 3) restano fuori, si
+        /// scaricano da Foto P/S quando servono. Un record senza stato, o con uno stato che non si legge,
+        /// resta dentro: meglio una foto in piu' che una che manca.
+        public static List<ArticoloInKit> RecordConFotoNelPacchetto(IEnumerable<ArticoloInKit>? records)
+        {
+            if (records == null)
+            {
+                return new List<ArticoloInKit>();
+            }
+
+            return records.Where(r => r?.recordInTracciato != null && StatoConFotoNelPacchetto(r.recordInTracciato)).ToList();
+        }
+
+        private static bool StatoConFotoNelPacchetto(Dictionary<string, object> record)
+        {
+            if (!record.TryGetValue(GLOBAL_VARIABLES.keyXMLSelezione, out var valore) || valore == null)
+            {
+                return true;
+            }
+
+            if (!byte.TryParse(Convert.ToString(valore, System.Globalization.CultureInfo.InvariantCulture), out var stato))
+            {
+                return true;
+            }
+
+            return stato != (byte)TipoSelezioneMenabo.None;
+        }
+
         /// Le foto extra da scaricare di tutti i record di un kit, quelle che l'impaginazione piazza
         /// dalla cartella Loghi. Le usano il pacchetto completo e la sync loghi della lavorazione.
         public static List<FileOlympoSync> FotoExtraDeiRecord(IEnumerable<ArticoloInKit>? records)
@@ -2870,9 +2899,13 @@ namespace Istanta.Controllers
                 var okResult = promise as OkObjectResult;
                 ArticoloInRevisioneKitResult result = (okResult!.Value as ArticoloInRevisioneKitResult)!;
 
+                //I20-1230: la foto del prodotto solo delle primarie e delle secondarie. Quelle delle ref non
+                //selezionate dei gruppi si scaricano su richiesta da Foto P/S (getFotosAsContract).
+                List<ArticoloInKit> recordConFoto = RecordConFotoNelPacchetto(result.records);
+
                 //Scarico tutti i dati json di tutti gli articoli in tracciato
-                List<string> tRecordsJson = result.records.Select(s => s.recordInTracciato[k_cod].ToString()!).ToList();
-                las.WriteLine($"> getPacchettoFotoAsContract step3");
+                List<string> tRecordsJson = recordConFoto.Select(s => s.recordInTracciato[k_cod].ToString()!).ToList();
+                las.WriteLine($"> getPacchettoFotoAsContract step3 ({recordConFoto.Count} record con foto su {result.records.Count})");
                 //Console.WriteLine($"Codici per ricerca foto {String.Join(',', tRecordsJson)}");
 
                 //Qui devo prendere la descrizione revisionata dell'articolo singolo piazzato in menabo
@@ -2900,7 +2933,7 @@ namespace Istanta.Controllers
 
                     if (af != null)
                     {
-                        var inTrackItem = result.records.FirstOrDefault(t => t.recordInTracciato[k_cod].ToString() == art.Codice);
+                        var inTrackItem = recordConFoto.FirstOrDefault(t => t.recordInTracciato[k_cod].ToString() == art.Codice);
 
                         if (inTrackItem != null && inTrackItem.recordInTracciato.ContainsKey(k_guidid_foto))
                         {
