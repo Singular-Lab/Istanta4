@@ -79,6 +79,32 @@ public class ReportImportazioneTests : IDisposable
         Assert.Contains("item[GLOBAL_VARIABLES.keyAlterazioni] = ReportImportazione.SenzaCampiEsclusi(alterazioni, dbConfExt.campiEsclusiDalReport);", sorgente);
     }
 
+    /// <summary>I campi esclusi dal report come li dichiarano Edro21 e Coop nel loro SourceConfronto: il nome
+    /// del file caricato cambia a ogni lista, e senza esclusione ogni referenza risulterebbe cambiata.</summary>
+    [Fact]
+    public void Edro21_e_Coop_escludono_dal_report_i_campi_che_cambiano_a_ogni_lista()
+    {
+        DbConfronto Conf(string cliente) => JsonConvert.DeserializeObject<DbConfronto>(
+            File.ReadAllText(DllAgenziaLibTests.TrovaFile($"Istanta/wwwroot/external_source/{cliente}/SourceConfronto.json")))!;
+
+        var edro = Conf("Edro21");
+        var coop = Conf("Coopfi");
+        Assert.Equal(new[] { "Tracciato.Xlsx", "data_estrazione", "file_immagini" }, edro.campiEsclusiDalReport);
+        Assert.Equal(new[] { "Tracciato.Xlsx" }, coop.campiEsclusiDalReport);
+
+        //Edro21: una referenza che cambia solo quei tre campi e' inalterata.
+        var soloTecnici = new Dictionary<string, object> { ["Tracciato.Xlsx"] = "vecchio.xlsx", ["data_estrazione"] = "01/11", ["file_immagini"] = "a.zip" };
+        Assert.Empty(ReportImportazione.SenzaCampiEsclusi(soloTecnici, edro.campiEsclusiDalReport));
+
+        //Coop: il prezzo cambiato resta, il nome del file no.
+        var conPrezzo = new Dictionary<string, object> { ["Tracciato.Xlsx"] = "vecchio.xlsx", ["prezzo_promo"] = "1,99" };
+        Assert.Equal(new[] { "prezzo_promo" }, ReportImportazione.SenzaCampiEsclusi(conPrezzo, coop.campiEsclusiDalReport).Keys);
+
+        //I campi di controllo dei Confronti restano quelli di prima.
+        Assert.Equal(new[] { "tema" }, edro.campiDiControllo.Select(c => c.nome));
+        Assert.Contains("prezzo_promo", coop.campiDiControllo.Select(c => c.nome));
+    }
+
     /* ---- prima versione ---- */
 
     [Theory]

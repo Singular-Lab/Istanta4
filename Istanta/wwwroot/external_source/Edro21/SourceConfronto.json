@@ -4,5 +4,10 @@
       "nome": "tema",
       "rules": []
     }
+  ],
+  "campiEsclusiDalReport": [
+    "Tracciato.Xlsx",
+    "data_estrazione",
+    "file_immagini"
   ]
 }

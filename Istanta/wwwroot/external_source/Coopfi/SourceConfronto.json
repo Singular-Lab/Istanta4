@@ -40,5 +40,8 @@
       "nome": "N_pezzi_soci",
       "rules": []
     }
+  ],
+  "campiEsclusiDalReport": [
+    "Tracciato.Xlsx"
   ]
 }
