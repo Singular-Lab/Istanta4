@@ -240,6 +240,34 @@ const ReperimentoFoto = {
         return stato;
     },
 
+    /// I20-1217: dopo il pacchetto foto completo, solo per il cliente che lo dichiara: si riscarica il
+    /// tracciato, come con il pulsante di sincronizzazione, perche' la lista della lavorazione abbia le
+    /// foto del dato dopo il sync (la scheda ref le rilegge dal server, la lista no), poi si avvisa
+    /// delle foto cambiate nei box. Se il tracciato non arriva si controlla con la lista che c'e'.
+    /// Un errore qui non deve toccare la fine dello scaricamento. Restituisce le foto cambiate.
+    async avvisaFotoCambiate() {
+        try {
+            if (typeof SchermataSegnalazioni === "undefined" || SchermataSegnalazioni == null ||
+                typeof SchermataSegnalazioni.avvisaFotoCambiate !== "function" || !SchermataSegnalazioni.fotoCambiateAttive()) {
+                return 0;
+            }
+            if (typeof scaricaContenutoKitAsync === "function" && idKitLavorazione) {
+                try {
+                    await scaricaContenutoKitAsync(idKitLavorazione, true);
+                }
+                catch (e) {
+                    console.error("Code FTC-03 Tracciato non riscaricato dopo il pacchetto foto:", e);
+                    messaggioUtente("Code FTC-03 Il tracciato non si e' riscaricato: le foto cambiate di nome si vedranno dopo averlo aggiornato", "warning", false, 8);
+                }
+            }
+            return SchermataSegnalazioni.avvisaFotoCambiate();
+        }
+        catch (e) {
+            console.error("Code FTC-02 Foto cambiate non controllate dopo il pacchetto foto:", e);
+        }
+        return 0;
+    },
+
     /// Le immagini di un pacchetto divise per cartella. Le foto extra di una ref (loghi, bollini,
     /// ambientate caricati sulla ref) vanno nella cartella Loghi, da cui l'impaginazione le piazza;
     /// le foto del prodotto in Links. Il server da' il tipo solo alle foto extra: senza tipo, o
@@ -289,7 +317,10 @@ const ReperimentoFoto = {
 
     /// Lo scaricamento massivo del pacchetto foto, con barra di avanzamento e
     /// possibilita' di interruzione. 348 righe.
-    async avviaSyncPacchettoFoto(mode, callback, codici = []){
+    /// I20-1217: opzioni.dopoPacchettoFoto dice al modo 1 che e' la seconda fase del pacchetto
+    /// completo chiesto dall'operatore: alla sua fine vera si controllano le foto cambiate. Non quando
+    /// il pacchetto lo scarica l'impaginazione massiva (con la callback): li' si impagina subito dopo.
+    async avviaSyncPacchettoFoto(mode, callback, codici = [], opzioni = {}){
         // var idTracciato = parseInt($("#idTracciato").val());
         // if(idTracciato == null || idTracciato == "" || idTracciato == 0){
         //     messaggioUtente("Errore: Nessun tracciato selezionato", "error");
@@ -394,7 +425,7 @@ const ReperimentoFoto = {
                                 syncFotoInCorso = syncFotoInCorso.filter(id => id !== codiceSyncFoto);
                                 if (!abortedSyncFoto.includes(codiceSyncFoto)) {
                                     ReperimentoFoto.mostraFineScaricamento(0, fineScaricamento.esiti.completato, codiceSyncFoto);
-                                    ReperimentoFoto.avviaSyncPacchettoFoto(1, callback);
+                                    ReperimentoFoto.avviaSyncPacchettoFoto(1, callback, [], { dopoPacchettoFoto: callback == null });
                                 }
                                 else{
                                     abortedSyncFoto = abortedSyncFoto.filter(id => id !== codiceSyncFoto);
@@ -518,6 +549,10 @@ const ReperimentoFoto = {
                         //icona onComplete l'ha gia' chiusa col messaggio verde, e qui non si tocca niente.
                         if (!annullata) {
                             ReperimentoFoto.mostraFineScaricamento(1, fineScaricamento.esiti.completato, codiceSyncFotoMode1);
+                            //I20-1217: finito il pacchetto completo, le foto dei box che il sync ha cambiato.
+                            if (opzioni != null && opzioni.dopoPacchettoFoto === true) {
+                                ReperimentoFoto.avvisaFotoCambiate();
+                            }
                         }
 
 

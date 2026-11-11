@@ -721,6 +721,23 @@ const pluginMiddleware = {
         return typeof valore === "boolean" ? valore : false;
     },
 
+    /// I20-1217: se la schermata delle segnalazioni mostra la sezione "Foto cambiate", le foto dei
+    /// box con il collegamento non aggiornato dopo il sync del pacchetto foto (Coop). La chiave sta
+    /// nella configurazione del cliente sul server, come chiediAmbitoDecisioniLavorazione: senza, falso.
+    getSegnalaFotoCambiate() {
+        let me = this;
+
+        if (me.callCustom) {
+            if (typeof customAgenzia !== "undefined" && customAgenzia != null && typeof customAgenzia.segnalaFotoCambiate === "boolean") {
+                return customAgenzia.segnalaFotoCambiate;
+            }
+            return false;
+        }
+
+        const valore = me.customPluginDB?.segnalaFotoCambiate;
+        return typeof valore === "boolean" ? valore : false;
+    },
+
     /// La voce "Fuori vol" del tracciato: se c'e' e le regole del cliente che portano una referenza
     /// fuori volantino senza il campo core, con i campi da correggere (Coop: il tema con "fuori
     /// depliant"). Senza configurazione e' spenta.
