@@ -200,7 +200,7 @@ function DettaglioVolantino({ idKit }: { idKit: string }) {
                 id={idVolantino}
                 className="scroll-mt-4"
                 titolo="Il volantino"
-                descrizione="Le pagine stampate con i box nelle posizioni reali: seleziona un box per la sua scheda e il viaggio del prodotto."
+                descrizione="Sfoglia il volantino come quello stampato, con i box nelle posizioni reali: seleziona un box per la sua scheda e il viaggio del prodotto, oppure interroga i box per EAN, reparto, meccanica, prezzo e altri dati."
               >
                 <VolantinoSfogliabile
                   idKit={idKit}

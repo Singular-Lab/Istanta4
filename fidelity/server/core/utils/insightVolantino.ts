@@ -7,6 +7,7 @@ import {
   type MarcaInsight,
   type MarcheVolantino,
   type PrezziSconti,
+  type ProdottoInsight,
   type QuotaSpazio,
   type RepartoInsight,
   type ScontoPerGruppo,
@@ -17,7 +18,7 @@ import { ETICHETTA_MECCANICA } from '../../../lib/puntiVendita/analisi';
 import type { BoxKit } from './analisiKit';
 import { repartoInAnagrafica, type RepartoAnagrafica } from './campiInsights';
 import { lineaEBolli, lineeDelVolantino, type RegoleLinee } from './lineeDistributore';
-import { DESCRIZIONE_ASSENTE, type ReferenzaStampata } from './referenzaStampata';
+import { DESCRIZIONE_ASSENTE, type ProdottoStampato, type ReferenzaStampata } from './referenzaStampata';
 
 /**
  * Le sezioni nuove degli insight del volantino (lib/insightVolantino/tipi.ts) dai box del kit
@@ -144,6 +145,29 @@ function lineaDelBox(singolo: BoxKit, opzioni: OpzioniInsight): Pick<BoxInsight,
   }, regole);
 }
 
+/**
+ * Gli EAN di una referenza: la fonte ne unisce a volte piu' d'uno in un campo solo
+ * ("8033281161575_8033281162091"), con trattini bassi, virgole, punti e virgola o spazi.
+ */
+export const eanDi = (valore: string | null): string[] =>
+  valore ? [...new Set(valore.split(/[\s_,;|/]+/).map(parte => parte.trim()).filter(Boolean))] : [];
+
+/** Un prodotto del box con i suoi dati anagrafici, per la scheda e per l'interrogazione del volantino. */
+const prodottoInsight = (prodotto: ProdottoStampato): ProdottoInsight => ({
+  chiave: prodotto.chiave,
+  nome: prodotto.nome,
+  marca: prodotto.marca,
+  formato: prodotto.formato,
+  gusto: prodotto.tipo,
+  codice: prodotto.codice,
+  ean: eanDi(prodotto.ean),
+  prezzo: prodotto.prezzo,
+  settore: prodotto.settore,
+  segmento: prodotto.segmento,
+  tema: prodotto.tema,
+  ruolo: prodotto.ruolo,
+});
+
 function insightDelBox(singolo: BoxKit, opzioni: OpzioniInsight): BoxInsight {
   const referenze = singolo.referenze;
   const pilota = referenze[0];
@@ -174,6 +198,7 @@ function insightDelBox(singolo: BoxKit, opzioni: OpzioniInsight): BoxInsight {
     prodotti: singolo.prodotti.length,
     idReferenze: referenze.map(referenza => referenza.id),
     ...lineaDelBox(singolo, opzioni),
+    dettaglioProdotti: singolo.prodotti.map(prodottoInsight),
   };
   const origine = opzioni.origine?.(singolo.codiceBox);
   if (origine) insight.origine = origine;

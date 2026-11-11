@@ -106,6 +106,30 @@ export interface BoxInsight {
   linea?: LineaBox | null;
   /** Sigle dei bolli della referenza pilota (DOP, Filiera controllata...), solo quelli dichiarati. */
   bolli?: string[];
+  /**
+   * I prodotti del box (pilota per primo) con i dati anagrafici, per la scheda e per l'interrogazione
+   * del volantino. Assente nelle risposte dei server non aggiornati.
+   */
+  dettaglioProdotti?: ProdottoInsight[];
+}
+
+/** Un prodotto del box con i dati che la fonte fornisce (DB1 o Istanta): null quando non li fornisce. */
+export interface ProdottoInsight {
+  chiave: string;
+  nome: string;
+  marca: string | null;
+  formato: string | null;
+  /** Gusto o variante (descrizione 3). */
+  gusto: string | null;
+  /** Codice referenza. */
+  codice: string | null;
+  /** Gli EAN della referenza: la fonte ne unisce a volte più d'uno ("8033281161575_8033281162091"). */
+  ean: string[];
+  prezzo: number | null;
+  settore: string | null;
+  segmento: string | null;
+  tema: string | null;
+  ruolo: string | null;
 }
 
 export interface LineaBox {

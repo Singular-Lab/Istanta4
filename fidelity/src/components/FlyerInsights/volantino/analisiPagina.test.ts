@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { TINTA_NEUTRA } from "@/components/Grafici";
-import type { BoxInsight } from "../../../../lib/insightVolantino/tipi";
+import type { BoxInsight, ProdottoInsight } from "../../../../lib/insightVolantino/tipi";
 import {
   cercaBox,
   normalizzaRicerca,
@@ -12,10 +12,27 @@ import {
 } from "./analisiPagina";
 import type { GruppoBox } from "./colori";
 
-// L'analisi della pagina guardata e la ricerca dei box (spec insight-volantino, "Analisi della pagina
+// L'analisi delle pagine aperte e la ricerca dei box (spec insight-volantino, "Analisi della pagina
 // guardata" e "Ricerca dei box nel volantino"): solo dai box già restituiti, niente calore né vendite
 
-type Box = Pick<BoxInsight, "id" | "nome" | "marca" | "formato" | "pagina" | "geometria" | "spazio" | "sconto" | "meccanica" | "sottocosto" | "reparto">;
+type Box = Pick<BoxInsight, "id" | "nome" | "marca" | "formato" | "pagina" | "geometria" | "spazio" | "sconto" | "meccanica" | "sottocosto" | "reparto"> &
+  Partial<Pick<BoxInsight, "codiceBox" | "dettaglioProdotti">>;
+
+const prodotto = (dati: Partial<ProdottoInsight> = {}): ProdottoInsight => ({
+  chiave: "c-1",
+  nome: "Prodotto",
+  marca: null,
+  formato: null,
+  gusto: null,
+  codice: null,
+  ean: [],
+  prezzo: null,
+  settore: null,
+  segmento: null,
+  tema: null,
+  ruolo: null,
+  ...dati,
+});
 
 const box = (id: string, dati: Partial<Box> = {}): Box => ({
   id,
@@ -117,6 +134,30 @@ describe("ricerca dei box", () => {
     expect(cercaBox(elenco, "granarolo")?.map(voce => voce.id)).toEqual(["b", "c"]);
     expect(cercaBox(elenco, "granarolo 125")?.map(voce => voce.id)).toEqual(["c"]);
     expect(cercaBox(elenco, "biscotti")).toEqual([]);
+  });
+
+  it("trova un box dall'EAN di un suo prodotto, anche del gruppo e anche da una parte delle cifre", () => {
+    const elenco = [
+      box("a", { nome: "Completo letto", dettaglioProdotti: [prodotto({ ean: ["8033281161575", "8033281162091"] })] }),
+      box("b", {
+        nome: "Yogurt",
+        dettaglioProdotti: [prodotto({ nome: "Yogurt bianco", ean: ["8000000000001"] }), prodotto({ nome: "Yogurt fragola", gusto: "Fragola", ean: ["8001420012484"] })],
+      }),
+    ];
+
+    expect(cercaBox(elenco, "8033281162091")?.map(voce => voce.id)).toEqual(["a"]);
+    expect(cercaBox(elenco, "12484")?.map(voce => voce.id)).toEqual(["b"]);
+    expect(cercaBox(elenco, "fragola")?.map(voce => voce.id)).toEqual(["b"]);
+  });
+
+  it("trova un box dal codice referenza di un suo prodotto o dal codice box", () => {
+    const elenco = [
+      box("a", { codiceBox: "B-77", dettaglioProdotti: [prodotto({ codice: "7332163" })] }),
+      box("b", { codiceBox: "B-12", dettaglioProdotti: [prodotto({ codice: "1234567" })] }),
+    ];
+
+    expect(cercaBox(elenco, "7332163")?.map(voce => voce.id)).toEqual(["a"]);
+    expect(cercaBox(elenco, "b-12")?.map(voce => voce.id)).toEqual(["b"]);
   });
 
   it("sotto le due lettere non cerca", () => {

@@ -1,18 +1,20 @@
 import { SegnoLegenda } from "@/components/Grafici";
 import { formatEuro, formatPercentuale } from "@/pages/PuntiVenditaConsultazione/analisi";
+import Segmenti from "@/components/Base/Segmenti";
 import { formatNumero, VALORE_ASSENTE } from "@/utils/format";
 import { twMerge } from "@/utils/twMerge";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { BoxInsight } from "../../../../lib/insightVolantino/tipi";
 import { perSpazio, ripartizionePagina, sintesiPagina } from "./analisiPagina";
 import { descrizioneBox, marcaFormato } from "./box";
 import type { GruppoBox } from "./colori";
-import { riquadroBox } from "./geometria";
+import { riquadroBox, testoApertura } from "./geometria";
 
 export interface AnalisiPaginaProps {
-  numero: number;
+  /** Le pagine aperte: una, o due affiancate. */
+  pagine: readonly number[];
   totale: number;
-  /** I box della pagina. */
+  /** I box delle pagine aperte. */
   box: readonly BoxInsight[];
   /** Il gruppo di un box secondo "Colora per": dà la ripartizione e il colore di ogni riga. */
   gruppo: (box: BoxInsight) => GruppoBox;
@@ -38,17 +40,37 @@ function Numero({ etichetta, valore, titolo }: { etichetta: string; valore: stri
   );
 }
 
+/** "Insieme" analizza le pagine aperte insieme; un numero, quella pagina sola. */
+type Ambito = "insieme" | number;
+
 /**
- * L'analisi della pagina che si sta guardando nel lettore: i numeri della pagina, la ripartizione dei
- * box e del loro spazio secondo "Colora per" e l'elenco dei box dal più grande. Passando su un box
- * dell'elenco il suo riquadro si evidenzia sulla pagina; scegliendolo si apre la sua scheda.
+ * L'analisi delle pagine aperte nel lettore: i numeri delle pagine, la ripartizione dei box e del
+ * loro spazio secondo "Colora per" e l'elenco dei box dal più grande. Con due pagine aperte si
+ * analizzano insieme o una alla volta. Passando su un box dell'elenco il suo riquadro si evidenzia
+ * sulla pagina; scegliendolo si apre la sua scheda.
  */
-export function AnalisiPagina({ numero, totale, box, gruppo, titoloRipartizione, selezionato, trovati, onRilievo, onApri }: AnalisiPaginaProps) {
-  const sintesi = useMemo(() => sintesiPagina(box), [box]);
-  const gruppi = useMemo(() => ripartizionePagina(box, gruppo), [box, gruppo]);
+export function AnalisiPagina(props: AnalisiPaginaProps) {
+  // Girando pagina si riparte dalle pagine insieme
+  return <Analisi key={props.pagine.join("-")} {...props} />;
+}
+
+function Analisi({ pagine, totale, box: tuttiIBox, gruppo, titoloRipartizione, selezionato, trovati, onRilievo, onApri }: AnalisiPaginaProps) {
+  const [ambito, setAmbito] = useState<Ambito>("insieme");
+  const analizzate = ambito === "insieme" ? pagine : [ambito];
+  const piuPagine = analizzate.length > 1;
+  const box = useMemo(
+    () => (ambito === "insieme" ? tuttiIBox : tuttiIBox.filter(voce => voce.pagina === ambito)),
+    [ambito, tuttiIBox]
+  );
+  const sintesi = useMemo(() => sintesiPagina(box, analizzate.length), [box, analizzate.length]);
+  const gruppi = useMemo(() => ripartizionePagina(box, gruppo, analizzate.length), [box, gruppo, analizzate.length]);
   const elenco = useMemo(() => perSpazio(box), [box]);
-  // La barra è la pagina intera: ogni gruppo vi occupa la sua quota, il resto è spazio libero
+  // La barra è la superficie delle pagine: ogni gruppo vi occupa la sua quota, il resto è spazio libero
   const scala = Math.max(100, gruppi.reduce((somma, voce) => somma + voce.spazio, 0));
+  const opzioni = [
+    { valore: "insieme" as Ambito, etichetta: "Insieme" },
+    ...pagine.map(numero => ({ valore: numero as Ambito, etichetta: `Pag. ${formatNumero(numero)}` })),
+  ];
 
   return (
     <aside
@@ -56,18 +78,21 @@ export function AnalisiPagina({ numero, totale, box, gruppo, titoloRipartizione,
       data-testid="analisi-pagina"
       className="flex flex-col gap-4 rounded-control border border-slate-200 bg-white p-4 dark:border-darkmode-400 dark:bg-darkmode-700"
     >
-      <header className="flex items-baseline justify-between gap-2">
-        <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Pagina {formatNumero(numero)}</h4>
-        <span className="text-xs tabular-nums text-slate-500 dark:text-slate-400">di {formatNumero(totale)}</span>
+      <header className="flex flex-col gap-2">
+        <div className="flex items-baseline justify-between gap-2">
+          <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">{testoApertura(analizzate)}</h4>
+          <span className="text-xs tabular-nums text-slate-500 dark:text-slate-400">di {formatNumero(totale)}</span>
+        </div>
+        {pagine.length > 1 && <Segmenti<Ambito> etichetta="Pagine da analizzare" opzioni={opzioni} valore={ambito} onChange={setAmbito} />}
       </header>
 
       {box.length === 0 ? (
-        <p className="text-xs text-slate-500 dark:text-slate-400">Nessun box in questa pagina.</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400">{piuPagine ? "Nessun box in queste pagine." : "Nessun box in questa pagina."}</p>
       ) : (
         <>
           <dl className="grid grid-cols-3 gap-x-3 gap-y-3">
             <Numero etichetta="Box" valore={formatNumero(sintesi.box)} />
-            <Numero etichetta="Spazio" valore={percento(sintesi.spazio)} titolo="Spazio della pagina occupato dai box" />
+            <Numero etichetta="Spazio" valore={percento(sintesi.spazio)} titolo={piuPagine ? "Spazio delle pagine occupato dai box" : "Spazio della pagina occupato dai box"} />
             <Numero etichetta="Sconto medio" valore={percento(sintesi.scontoMedio)} />
             <Numero etichetta="Fidelity" valore={formatNumero(sintesi.fidelity)} titolo="Box con meccanica Prezzo Fidelity" />
             <Numero etichetta="Sottocosto" valore={formatNumero(sintesi.sottocosto)} />
@@ -107,14 +132,16 @@ export function AnalisiPagina({ numero, totale, box, gruppo, titoloRipartizione,
             </ul>
           </section>
 
-          <section aria-label="Box della pagina" className="flex flex-col gap-2">
-            <h5 className="text-3xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Box della pagina, dal più grande</h5>
+          <section aria-label={piuPagine ? "Box delle pagine" : "Box della pagina"} className="flex flex-col gap-2">
+            <h5 className="text-3xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              {piuPagine ? "Box delle pagine, dal più grande" : "Box della pagina, dal più grande"}
+            </h5>
             <ul className="-mx-2 flex flex-col">
               {elenco.map(voce => {
                 const scelto = voce.id === selezionato;
                 const trovato = trovati?.has(voce.id) ?? false;
                 const senzaPosizione = !riquadroBox(voce.geometria);
-                const dettagli = marcaFormato(voce);
+                const dettagli = [piuPagine && voce.pagina !== null ? `pag. ${formatNumero(voce.pagina)}` : null, marcaFormato(voce)].filter(Boolean).join(" · ");
                 return (
                   <li key={voce.id}>
                     <button

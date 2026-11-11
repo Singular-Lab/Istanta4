@@ -2,22 +2,24 @@ import { describe, expect, it } from "vitest";
 import { urlPaginaMateriale } from "@/utils/materiali";
 import type { BoxInsight } from "../../../../lib/insightVolantino/tipi";
 import {
+  aperturaDi,
+  aperturaVicina,
+  aperture,
   boxPerPagina,
-  LINEA_PAGINA_CORRENTE,
-  MARGINE_DISEGNO,
   paginaNellImmagine,
   paginaRichiesta,
+  pagineDaPreparare,
   pagineDaSfogliare,
-  pagineInVista,
+  proporzioneApertura,
   proporzioneDellaPagina,
   proporzioneDelVolantino,
   PROPORZIONE_PREDEFINITA,
   riquadroBox,
   stileImmagine,
-  type PosizionePagina,
+  testoApertura,
 } from "./geometria";
 
-// Geometria del lettore del volantino: pagine in scorrimento, proporzioni, riquadri e abbondanza dell'immagine
+// Geometria del lettore del volantino: pagine aperte come nel volantino stampato, proporzioni, riquadri e abbondanza dell'immagine
 
 const A4 = 210 / 297;
 
@@ -29,37 +31,57 @@ const box = (pagina: number | null, dati: Partial<BoxGeometria> = {}): BoxGeomet
   ...dati,
 });
 
-describe("pagine in scorrimento", () => {
-  /** n pagine alte 1000 px con 16 px fra l'una e l'altra, come nel lettore. */
-  const colonna = (n: number): PosizionePagina[] =>
-    Array.from({ length: n }, (_, indice) => ({ numero: indice + 1, inizio: indice * 1016, fine: indice * 1016 + 1000 }));
-
-  it("la pagina corrente è quella che attraversa la linea a un terzo dall'alto del lettore", () => {
-    expect(LINEA_PAGINA_CORRENTE).toBeCloseTo(0.35);
-    expect(pagineInVista(colonna(24), 0, 800).corrente).toBe(1);
-    // Scorrendo di 1016 px la pagina 2 è in cima
-    expect(pagineInVista(colonna(24), 1016, 800).corrente).toBe(2);
-    // La pagina 2 finisce a 2016: con la linea oltre, la corrente è la 3
-    expect(pagineInVista(colonna(24), 2016 - 800 * LINEA_PAGINA_CORRENTE + 1, 800).corrente).toBe(3);
+describe("pagine aperte come nel volantino stampato", () => {
+  it("a doppia pagina: la copertina da sola a destra, poi le pagine a due a due, l'ultima pari da sola a sinistra", () => {
+    expect(aperture(6, true).map(voce => [voce.sinistra, voce.destra])).toEqual([
+      [null, 1],
+      [2, 3],
+      [4, 5],
+      [6, null],
+    ]);
+    // Con un numero dispari di pagine l'ultima ha la sua compagna
+    expect(aperture(5, true).map(voce => voce.pagine)).toEqual([[1], [2, 3], [4, 5]]);
   });
 
-  it("fra due pagine conta la successiva; oltre l'ultima resta l'ultima", () => {
-    // Linea nello spazio fra la pagina 1 (fine 1000) e la 2 (inizio 1016)
-    expect(pagineInVista(colonna(3), 1008 - 800 * LINEA_PAGINA_CORRENTE, 800).corrente).toBe(2);
-    expect(pagineInVista(colonna(3), 100_000, 800).corrente).toBe(3);
+  it("l'apertura di una pagina è quella che la contiene, dentro il volantino", () => {
+    expect(aperturaDi(17, 24, true).pagine).toEqual([16, 17]);
+    expect(aperturaDi(16, 24, true).pagine).toEqual([16, 17]);
+    expect(aperturaDi(1, 24, true)).toEqual({ chiave: 1, sinistra: null, destra: 1, pagine: [1] });
+    expect(aperturaDi(99, 24, true).pagine).toEqual([24]);
+    expect(aperturaDi(0, 24, true).pagine).toEqual([1]);
   });
 
-  it("si disegnano solo le pagine vicine alla parte visibile, non tutte", () => {
-    const { vicine } = pagineInVista(colonna(24), 10 * 1016, 800);
-    // Visibili da 10160 a 10960, più 1,5 altezze (1200 px) sopra e sotto: da 8960 a 12160
-    expect(MARGINE_DISEGNO).toBe(1.5);
-    expect([...(vicine ?? [])]).toEqual([9, 10, 11, 12]);
+  it("a pagina singola (schermi stretti) una pagina alla volta, senza lato", () => {
+    expect(aperturaDi(3, 24, false)).toEqual({ chiave: 3, sinistra: null, destra: null, pagine: [3] });
+    expect(aperture(3, false).map(voce => voce.pagine)).toEqual([[1], [2], [3]]);
   });
 
-  it("un lettore non ancora misurato (nessuna altezza) disegna tutte le pagine e non cambia la corrente", () => {
-    const vuote = colonna(3).map(posizione => ({ ...posizione, inizio: 0, fine: 0 }));
-    expect(pagineInVista(vuote, 0, 0)).toEqual({ corrente: null, vicine: null });
-    expect(pagineInVista(colonna(3), 0, 0)).toEqual({ corrente: null, vicine: null });
+  it("l'apertura prima e dopo: girando pagina dalla copertina si apre 2-3, oltre i bordi nulla", () => {
+    expect(aperturaVicina(1, 24, true, 1)?.pagine).toEqual([2, 3]);
+    expect(aperturaVicina(5, 24, true, -1)?.pagine).toEqual([2, 3]);
+    expect(aperturaVicina(2, 24, true, -1)?.pagine).toEqual([1]);
+    expect(aperturaVicina(1, 24, true, -1)).toBeNull();
+    expect(aperturaVicina(24, 24, true, 1)).toBeNull();
+    expect(aperturaVicina(2, 3, false, 1)?.pagine).toEqual([3]);
+  });
+
+  it("si preparano solo le immagini delle aperture vicine, non quelle lontane", () => {
+    expect(pagineDaPreparare(1, 24, true)).toEqual([2, 3]);
+    expect(pagineDaPreparare(5, 24, true)).toEqual([2, 3, 6, 7]);
+    expect(pagineDaPreparare(24, 24, true)).toEqual([22, 23]);
+    expect(pagineDaPreparare(2, 3, false)).toEqual([1, 3]);
+  });
+
+  it("l'indicatore dice la pagina o le pagine aperte", () => {
+    expect(testoApertura([1])).toBe("Pagina 1");
+    expect(testoApertura([4, 5])).toBe("Pagine 4-5");
+  });
+
+  it("l'apertura tiene il posto della pagina che manca: la copertina occupa la metà destra", () => {
+    const proporzione = () => A4;
+    expect(proporzioneApertura(aperturaDi(1, 24, true), proporzione)).toEqual({ totale: A4 + A4, sinistra: A4 });
+    expect(proporzioneApertura(aperturaDi(2, 24, true), pagina => (pagina === 2 ? 0.5 : 0.75))).toEqual({ totale: 1.25, sinistra: 0.5 });
+    expect(proporzioneApertura(aperturaDi(2, 24, false), proporzione)).toEqual({ totale: A4, sinistra: 0 });
   });
 
   it("il numero scritto per andare a una pagina resta dentro il volantino", () => {

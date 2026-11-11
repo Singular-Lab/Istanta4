@@ -3,8 +3,8 @@ import Button from "@/components/Base/Button";
 import Lucide from "@/components/Base/Lucide";
 import { formatEuro, formatPercentuale } from "@/pages/PuntiVenditaConsultazione/analisi";
 import { formatNumero, VALORE_ASSENTE } from "@/utils/format";
-import { useState, type ReactNode } from "react";
-import type { BoxInsight } from "../../../../lib/insightVolantino/tipi";
+import { useEffect, useState, type ReactNode } from "react";
+import type { BoxInsight, ProdottoInsight } from "../../../../lib/insightVolantino/tipi";
 import { ETICHETTA_MECCANICA } from "../../../../lib/puntiVendita/analisi";
 import { marcaFormato, testoReparto } from "./box";
 
@@ -82,6 +82,98 @@ function Prezzi({ box }: { box: BoxInsight }) {
   );
 }
 
+/** Un EAN con il comando per copiarlo, dove il browser lo permette. */
+function Ean({ codice }: { codice: string }) {
+  const [copiato, setCopiato] = useState(false);
+  useEffect(() => {
+    if (!copiato) return;
+    const attesa = setTimeout(() => setCopiato(false), 1500);
+    return () => clearTimeout(attesa);
+  }, [copiato]);
+  const appunti = typeof navigator !== "undefined" ? navigator.clipboard : undefined;
+  const copia = () => {
+    appunti?.writeText(codice).then(
+      () => setCopiato(true),
+      () => setCopiato(false)
+    );
+  };
+  return (
+    <span className="inline-flex items-center gap-1 font-mono text-xs">
+      {codice}
+      {appunti && (
+        <button
+          type="button"
+          aria-label={copiato ? `EAN ${codice} copiato` : `Copia l'EAN ${codice}`}
+          title={copiato ? "Copiato" : "Copia"}
+          onClick={copia}
+          className="rounded p-0.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 dark:hover:bg-darkmode-600 dark:hover:text-slate-200"
+        >
+          <Lucide icon={copiato ? "Check" : "Copy"} aria-hidden="true" className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </span>
+  );
+}
+
+/** I dati di un prodotto che la fonte fornisce: solo quelli presenti, niente righe vuote. */
+function DatiProdotto({ prodotto }: { prodotto: ProdottoInsight }) {
+  const voci: Array<[string, ReactNode]> = [];
+  if (prodotto.codice) voci.push(["Codice", <span className="font-mono text-xs">{prodotto.codice}</span>]);
+  // Il key delle voci è l'etichetta: ognuna compare una volta sola
+  if (prodotto.ean.length > 0) {
+    voci.push([
+      "EAN",
+      <span className="flex flex-wrap gap-x-3 gap-y-1">
+        {prodotto.ean.map(codice => (
+          <Ean key={codice} codice={codice} />
+        ))}
+      </span>,
+    ]);
+  }
+  if (prodotto.settore) voci.push(["Settore", prodotto.settore]);
+  if (prodotto.segmento) voci.push(["Segmento", prodotto.segmento]);
+  if (prodotto.tema) voci.push(["Tema", prodotto.tema]);
+  if (prodotto.ruolo) voci.push(["Ruolo", prodotto.ruolo]);
+  if (prodotto.prezzo !== null) voci.push(["Prezzo", formatEuro(prodotto.prezzo)]);
+  const sottotitolo = [prodotto.marca, prodotto.formato, prodotto.gusto].filter(Boolean).join(" · ");
+  return (
+    <li className="flex flex-col gap-2 rounded-control border border-slate-200 p-3 dark:border-darkmode-400">
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-slate-800 [overflow-wrap:anywhere] dark:text-slate-100">{prodotto.nome}</p>
+        {sottotitolo && <p className="text-xs text-slate-500 dark:text-slate-400">{sottotitolo}</p>}
+      </div>
+      {voci.length > 0 ? (
+        <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-1 text-sm tabular-nums">
+          {voci.map(([etichetta, valore]) => (
+            <Dato key={etichetta} etichetta={etichetta}>
+              {valore}
+            </Dato>
+          ))}
+        </dl>
+      ) : (
+        <p className="text-xs text-slate-500 dark:text-slate-400">La fonte non fornisce codice, EAN né altri dati del prodotto.</p>
+      )}
+    </li>
+  );
+}
+
+/** I prodotti del box, pilota per primo, con i loro codici e i dati anagrafici. */
+function ProdottiDelBox({ prodotti }: { prodotti: readonly ProdottoInsight[] }) {
+  if (prodotti.length === 0) return null;
+  return (
+    <section aria-label="Prodotti del box" className="flex flex-col gap-2">
+      <h3 className="text-3xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+        {prodotti.length === 1 ? "Il prodotto" : `I ${formatNumero(prodotti.length)} prodotti del box`}
+      </h3>
+      <ul className="flex flex-col gap-2">
+        {prodotti.map(prodotto => (
+          <DatiProdotto key={prodotto.chiave} prodotto={prodotto} />
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 const ORIGINE: Readonly<Record<NonNullable<BoxInsight["origine"]>, string>> = {
   listino: "Dal listino",
   fuori_listino: "Fuori listino",
@@ -96,7 +188,8 @@ export interface SchedaBoxProps {
 
 /**
  * La scheda di un box del volantino: il prodotto pilota (foto, prezzi, meccanica, reparto, linea del
- * distributore) e dove sta nel volantino (pagina, spazio), con il pulsante del viaggio del prodotto.
+ * distributore), dove sta nel volantino (pagina, spazio), i prodotti del box con codice, EAN e dati
+ * anagrafici, e il pulsante del viaggio del prodotto.
  */
 export function SchedaBox({ box, totalePagine, onViaggio }: SchedaBoxProps) {
   const sottotitolo = marcaFormato(box);
@@ -131,6 +224,8 @@ export function SchedaBox({ box, totalePagine, onViaggio }: SchedaBoxProps) {
         <Dato etichetta="Prodotti nel box">{formatNumero(box.prodotti)}</Dato>
         {box.codiceBox && <Dato etichetta="Codice box">{box.codiceBox}</Dato>}
       </dl>
+
+      {box.dettaglioProdotti && <ProdottiDelBox prodotti={box.dettaglioProdotti} />}
 
       <div className="flex flex-col gap-2 border-t border-dashed border-slate-200 pt-4 dark:border-darkmode-400">
         <p className="text-xs text-slate-500 dark:text-slate-400">

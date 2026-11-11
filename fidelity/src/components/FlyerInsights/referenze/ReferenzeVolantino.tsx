@@ -346,8 +346,9 @@ export function ReferenzeVolantino({ box, referenze, lineeDistributore, totaleRe
         </div>
       ) : (
         <>
-          {/* Scorre da sola: le intestazioni restano ferme in cima */}
-          <div className="max-h-[70vh] overflow-auto overscroll-contain" data-testid="scorrimento-referenze">
+          {/* Scorre da sola: le intestazioni restano ferme in cima. Posizionata, così il testo
+              nascosto delle righe (sr-only è assoluto) resta dentro e non allunga la pagina */}
+          <div className="relative max-h-[70vh] overflow-auto overscroll-contain" data-testid="scorrimento-referenze">
             <table id={idTabella} className="w-full min-w-[56rem] border-separate border-spacing-0 text-left text-sm">
               <caption className="sr-only">Referenze in volantino</caption>
               <thead>

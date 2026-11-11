@@ -1,10 +1,10 @@
 import { formatNumero } from "@/utils/format";
 import { twMerge } from "@/utils/twMerge";
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { PROPORZIONE_PREDEFINITA } from "./geometria";
+import { PROPORZIONE_PREDEFINITA, testoApertura, type Apertura } from "./geometria";
 
-/** Larghezza in pixel CSS della miniatura di una pagina nell'indice. */
-const LARGHEZZA_MINIATURA = 72;
+/** Larghezza in pixel CSS della miniatura di una pagina nell'indice: bassa, per non allungare il lettore. */
+const LARGHEZZA_MINIATURA = 52;
 
 /**
  * Misura in pixel in cui chiedere a Olimpo la miniatura di una pagina di proporzione `proporzione`:
@@ -28,8 +28,12 @@ export interface VoceIndice {
 }
 
 export interface IndicePagineProps {
+  /** Una voce per pagina, in ordine. */
   voci: readonly VoceIndice[];
-  corrente: number;
+  /** Le pagine come si aprono: l'indice le raggruppa così. */
+  aperture: readonly Apertura[];
+  /** L'apertura davanti all'utente: le sue pagine sono evidenziate. */
+  aperta: Apertura;
   onVai: (numero: number) => void;
 }
 
@@ -64,8 +68,8 @@ function Miniatura({ voce }: { voce: VoceIndice }) {
     <span
       ref={contenitore}
       aria-hidden="true"
-      className="relative block w-full overflow-hidden rounded-sm border border-slate-200 bg-white dark:border-darkmode-400"
-      style={{ aspectRatio: String(voce.proporzione) }}
+      className="relative block overflow-hidden border border-slate-200 bg-white dark:border-darkmode-400"
+      style={{ aspectRatio: String(voce.proporzione), width: LARGHEZZA_MINIATURA }}
     >
       {visibile && voce.immagine && rotta !== voce.immagine && (
         <img
@@ -91,54 +95,72 @@ function Miniatura({ voce }: { voce: VoceIndice }) {
 }
 
 /**
- * L'indice delle pagine del lettore: una miniatura per pagina, chiesta a Olimpo già ridotta quando
- * entra in vista, con il numero della pagina e quanti box ha. La pagina che si sta guardando è
- * evidenziata e resta visibile nell'indice; un clic porta alla pagina. Con una ricerca in corso le
+ * L'indice delle pagine del lettore, sotto il volantino: le miniature raggruppate come si aprono
+ * (la copertina da sola, poi le pagine affiancate), chieste a Olimpo già ridotte quando entrano in
+ * vista, con il numero della pagina e quanti box ha. Le pagine aperte sono evidenziate e restano
+ * visibili nell'indice; un clic apre la pagina. Con una ricerca o un'interrogazione in corso le
  * pagine con box trovati ne mostrano il numero e le altre si attenuano.
  */
-export function IndicePagine({ voci, corrente, onVai }: IndicePagineProps) {
-  const correnteRef = useRef<HTMLLIElement>(null);
+export function IndicePagine({ voci, aperture, aperta, onVai }: IndicePagineProps) {
+  const apertaRef = useRef<HTMLLIElement>(null);
+  const perNumero = new Map(voci.map(voce => [voce.numero, voce]));
 
-  // L'indice segue lo scorrimento: la pagina corrente non esce dalla sua colonna
+  // L'indice segue il volantino: le pagine aperte non escono dalla striscia
   useEffect(() => {
-    const nodo = correnteRef.current;
-    if (nodo && typeof nodo.scrollIntoView === "function") nodo.scrollIntoView({ block: "nearest" });
-  }, [corrente]);
+    const nodo = apertaRef.current;
+    if (nodo && typeof nodo.scrollIntoView === "function") nodo.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [aperta.chiave]);
 
   return (
-    <nav aria-label="Indice delle pagine" className="h-full overflow-y-auto overscroll-contain pr-1">
-      <ol className="flex flex-col gap-2 p-1">
-        {voci.map(voce => {
-          const attuale = voce.numero === corrente;
-          const trovati = voce.trovati ?? null;
-          const etichetta = [
-            `Pagina ${voce.numero}`,
-            voce.box === 1 ? "1 box" : `${formatNumero(voce.box)} box`,
-            trovati !== null && trovati > 0 ? `${formatNumero(trovati)} ${trovati === 1 ? "trovato" : "trovati"}` : null,
-          ]
-            .filter(Boolean)
-            .join(", ");
+    <nav aria-label="Indice delle pagine" className="overflow-x-auto overscroll-contain pb-1">
+      <ol className="flex w-max items-end gap-3 px-1 py-1">
+        {aperture.map(gruppo => {
+          const attuale = gruppo.chiave === aperta.chiave;
           return (
-            <li key={voce.numero} ref={attuale ? correnteRef : undefined}>
-              <button
-                type="button"
-                aria-label={etichetta}
-                aria-current={attuale ? "page" : undefined}
-                onClick={() => onVai(voce.numero)}
-                className={twMerge(
-                  "group flex w-full flex-col gap-1 rounded-control p-1.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
-                  attuale ? "bg-primary/10 ring-1 ring-primary/40 dark:bg-indigo-300/15" : "hover:bg-slate-100 dark:hover:bg-darkmode-600",
-                  trovati === 0 && !attuale && "opacity-40 hover:opacity-100"
-                )}
-              >
-                <Miniatura voce={voce} />
-                <span className="flex items-baseline justify-between gap-1 text-3xs tabular-nums">
-                  <span className={twMerge("font-semibold", attuale ? "text-primary dark:text-indigo-200" : "text-slate-700 dark:text-slate-200")}>
-                    {formatNumero(voce.numero)}
-                  </span>
-                  <span className="text-slate-500 dark:text-slate-400">{formatNumero(voce.box)} box</span>
-                </span>
-              </button>
+            <li
+              key={gruppo.chiave}
+              ref={attuale ? apertaRef : undefined}
+              aria-label={testoApertura(gruppo.pagine)}
+              className={twMerge(
+                "flex flex-col gap-1 rounded-control p-1 transition",
+                attuale ? "bg-primary/10 ring-1 ring-primary/40 dark:bg-indigo-300/15" : "hover:bg-slate-100 dark:hover:bg-darkmode-600"
+              )}
+            >
+              <div className="flex">
+                {gruppo.pagine.map(numero => {
+                  const voce = perNumero.get(numero);
+                  if (!voce) return null;
+                  const trovati = voce.trovati ?? null;
+                  const etichetta = [
+                    `Pagina ${voce.numero}`,
+                    voce.box === 1 ? "1 box" : `${formatNumero(voce.box)} box`,
+                    trovati !== null && trovati > 0 ? `${formatNumero(trovati)} ${trovati === 1 ? "trovato" : "trovati"}` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(", ");
+                  return (
+                    <button
+                      key={numero}
+                      type="button"
+                      aria-label={etichetta}
+                      aria-current={attuale ? "page" : undefined}
+                      onClick={() => onVai(voce.numero)}
+                      className={twMerge(
+                        "group flex flex-col gap-1 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                        trovati === 0 && !attuale && "opacity-40 hover:opacity-100"
+                      )}
+                    >
+                      <Miniatura voce={voce} />
+                      <span className="flex items-baseline justify-between gap-1 px-0.5 text-3xs tabular-nums">
+                        <span className={twMerge("font-semibold", attuale ? "text-primary dark:text-indigo-200" : "text-slate-700 dark:text-slate-200")}>
+                          {formatNumero(voce.numero)}
+                        </span>
+                        <span className="text-slate-500 dark:text-slate-400">{formatNumero(voce.box)} box</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </li>
           );
         })}

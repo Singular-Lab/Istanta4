@@ -7,8 +7,9 @@ import type { BoxInsight } from "../../../../lib/insightVolantino/tipi";
 import { AnalisiPagina, type AnalisiPaginaProps } from "./AnalisiPagina";
 import type { GruppoBox } from "./colori";
 
-// Il pannello "Questa pagina" accanto al lettore (spec insight-volantino, "Analisi della pagina
-// guardata"): numeri della pagina, ripartizione secondo "Colora per", elenco dei box dal più grande
+// Il pannello accanto al lettore (spec insight-volantino, "Analisi della pagina guardata"): numeri
+// delle pagine aperte, insieme o una alla volta, ripartizione secondo "Colora per", elenco dei box
+// dal più grande
 
 const boxDi = (id: string, dati: Partial<BoxInsight> = {}): BoxInsight => ({
   id,
@@ -56,7 +57,7 @@ const disegna = (props: Partial<AnalisiPaginaProps> = {}) => {
   const onApri = vi.fn();
   render(
     <AnalisiPagina
-      numero={3}
+      pagine={[3]}
       totale={24}
       box={BOX}
       gruppo={perReparto}
@@ -128,6 +129,25 @@ describe("AnalisiPagina", () => {
     expect(screen.getByTestId("riga-box-grande")).toHaveAttribute("aria-current", "true");
     expect(screen.getByTestId("riga-box-piccolo")).toHaveAttribute("data-trovato");
     expect(screen.getByTestId("riga-box-medio")).not.toHaveAttribute("data-trovato");
+  });
+
+  it("con due pagine aperte le analizza insieme, lo spazio sulle due pagine, o una alla volta", () => {
+    const pagina2 = [boxDi("p2", { nome: "Pane", pagina: 2, spazio: 30, reparto: CARNI })];
+    const { pannello } = disegna({ pagine: [2, 3], box: [...pagina2, ...BOX] });
+
+    expect(within(pannello).getByRole("heading", { name: "Pagine 2-3" })).toBeInTheDocument();
+    expect(numero(pannello, "Box")).toHaveTextContent("5");
+    // 30% della pagina 2 e 68% della pagina 3: il 49% delle due pagine
+    expect(numero(pannello, "Spazio")).toHaveTextContent("49%");
+    const righe = within(within(pannello).getByRole("region", { name: "Box delle pagine" })).getAllByRole("button");
+    expect(righe[0]).toHaveTextContent("pag. 3");
+
+    fireEvent.click(within(pannello).getByRole("radio", { name: "Pag. 3" }));
+
+    expect(within(pannello).getByRole("heading", { name: "Pagina 3" })).toBeInTheDocument();
+    expect(numero(pannello, "Box")).toHaveTextContent("4");
+    expect(numero(pannello, "Spazio")).toHaveTextContent("68%");
+    expect(within(pannello).getByRole("region", { name: "Box della pagina" })).toBeInTheDocument();
   });
 
   it("una pagina senza box lo dice", () => {
