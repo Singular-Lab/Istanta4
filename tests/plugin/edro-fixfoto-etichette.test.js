@@ -108,10 +108,13 @@ test('i campi che possono portare il DNA sono quelli cercati dal fix foto', () =
     assert.ok(campiDNA.includes('descrizione'), 'descrizione non e\' piu\' candidata DNA');
 
     //I campi del fix foto che sono anche candidati DNA: sono quelli che il difetto colpiva.
-    const getElements = setCustomFixFoto.match(/const getElements = \[([^\]]*)\]/)[1]
-        .split(',')
-        .map(v => v.trim().replace(/^"|"$/g, ''))
-        .filter(v => v !== '');
+    //TASK-9bf94d47: getElements viene dalla configurazione del fix foto, la sezione fixFoto
+    //generale del CssFramework di Edro21 (agenzia.descrizioneAllineataA).
+    assert.match(setCustomFixFoto, /const getElements = Array\.isArray\(datiFix\.descrizioneAllineataA\) \? datiFix\.descrizioneAllineataA : \[\];/);
+    const cssEdro = JSON.parse(fs.readFileSync(
+        path.join(__dirname, '..', '..', 'Istanta', 'wwwroot', 'external_source', 'Edro21', 'SourceFrameworkCss.json'),
+        'utf8'));
+    const getElements = cssEdro.dbRidimensionamentiAllineamenti.fixFoto.agenzia.descrizioneAllineataA;
 
     const esposti = getElements.filter(campo => campiDNA.includes(campo));
     assert.ok(esposti.length > 0, 'nessun campo in comune: il test non sta piu\' verificando nulla');

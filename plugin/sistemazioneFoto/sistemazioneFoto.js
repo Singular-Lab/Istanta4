@@ -14,14 +14,20 @@
 /// segnalazioni conflitti. CssFramework tiene ancora getSpazioImpaginazione, fixFoto e
 /// safeFitToContent come rimandi a questo modulo, perche' le agenzie li chiamano da li'.
 ///
-/// Da CssFramework prende cinque cose che restano sue: makeRegexFromGroupName, i due
-/// lettori della configurazione del box (getSceltaSpazioFoto, getEstensioniFoto), il
+/// Da CssFramework prende sei cose che restano sue: makeRegexFromGroupName, i tre
+/// lettori della configurazione del box (getSceltaSpazioFoto, getEstensioniFoto,
+/// getConfigurazioneFixFoto), il
 /// controllo delle segnalazioni conflitti e il suo interruttore. Le chiede al momento della
 /// chiamata, con cssFramework(): CssFramework carica questo modulo in testa, e un require
 /// reciproco a quel punto troverebbe CssFramework ancora vuoto.
 ///
-/// Usa come globali Utility, messaggioUtente, addSegnalazione, customAgenzia e
-/// pluginMiddleware, come il resto del Plugin.
+/// Usa come globali Utility, messaggioUtente, addSegnalazione e pluginMiddleware, come il
+/// resto del Plugin.
+///
+/// TASK-9bf94d47: la configurazione del fix - distanziamento, ostacoli, margini - non viene
+/// piu' dal custom.js dell'agenzia ma dalla sezione fixFoto del CssFramework, voce per voce
+/// (CssFramework.getConfigurazioneFixFoto). Qui restano i valori di default e la regola con
+/// cui le voci si combinano (risolviConfigurazione).
 
 const { FitOptions, ClippingPathType } = require('indesign');
 const spazioLibero = require('./spazioLibero');
@@ -38,7 +44,8 @@ const SistemazioneFoto = {
 
     //sono i valori sulla x e sulla y in percentuale (0-1) di cui deve essere distanziato dall'immagine prima
     /// Per ogni numero di foto, le percentuali di distanziamento fra una e l'altra, scelte in
-    /// base al rapporto altezza/larghezza. Il cliente la sovrascrive da custom.js.
+    /// base al rapporto altezza/larghezza. Il cliente la sovrascrive con fixFoto.distanziamento
+    /// nel CssFramework.
     calcoloDistanziamentoFoto: [ //il ratio è calcolato Y/X
         {
             foto: 0,
@@ -85,6 +92,69 @@ const SistemazioneFoto = {
         }
     ],
 
+    /// TASK-9bf94d47: i valori del fix quando nessuna voce del CssFramework li dice.
+    /// marginiBox null lascia a spazioLibero il suo margine di default.
+    configurazionePredefinita() {
+        return {
+            lavorazioni: [1],
+            modo: "automatico",
+            distanziamento: this.calcoloDistanziamentoFoto,
+            elementiIgnorati: [],
+            eccezioniIgnorati: [],
+            marginiElementi: [],
+            marginiBox: null,
+            marginiFoto: [0, 0],
+            agenzia: {}
+        };
+    },
+
+    /// TASK-9bf94d47: la configurazione del fix da una lista di voci del CssFramework, dalla piu'
+    /// forte alla piu' debole (CssFramework.getConfigurazioneFixFoto). Ogni chiave la decide la
+    /// prima voce che ne ha una non null nella sua sezione fixFoto, altrimenti il default; i dati
+    /// dell'agenzia (agenzia) allo stesso modo, chiave per chiave. Nel JSON un intervallo di
+    /// distanziamento senza fine ha endRangeRatioCondition null: qui torna Infinity. Pura.
+    risolviConfigurazione(voci) {
+        var esito = this.configurazionePredefinita();
+        var sezioni = (Array.isArray(voci) ? voci : [])
+            .map(voce => voce != null && voce.fixFoto != null && typeof voce.fixFoto === "object" ? voce.fixFoto : null)
+            .filter(sezione => sezione != null);
+
+        Object.keys(esito).forEach(chiave => {
+            if (chiave === "agenzia") {
+                return;
+            }
+            var sezione = sezioni.find(s => s[chiave] != null);
+            if (sezione != null) {
+                esito[chiave] = sezione[chiave];
+            }
+        });
+
+        sezioni.forEach(sezione => {
+            var datiAgenzia = sezione.agenzia;
+            if (datiAgenzia == null || typeof datiAgenzia !== "object") {
+                return;
+            }
+            Object.keys(datiAgenzia).forEach(chiave => {
+                if (esito.agenzia[chiave] === undefined && datiAgenzia[chiave] != null) {
+                    esito.agenzia[chiave] = datiAgenzia[chiave];
+                }
+            });
+        });
+
+        esito.distanziamento = (Array.isArray(esito.distanziamento) ? esito.distanziamento : []).map(d => Object.assign({}, d, {
+            percDistFoto: (Array.isArray(d.percDistFoto) ? d.percDistFoto : []).map(intervallo => Object.assign({}, intervallo, {
+                endRangeRatioCondition: intervallo.endRangeRatioCondition == null ? Infinity : intervallo.endRangeRatioCondition
+            }))
+        }));
+
+        return esito;
+    },
+
+    /// TASK-9bf94d47: la configurazione del fix per questo box, dal CssFramework.
+    configurazione(box) {
+        return cssFramework().getConfigurazioneFixFoto(box);
+    },
+
     /// La porta d'ingresso del gruppo: quali porzioni del box sono libere per le foto.
     /// Mette in fila i tre passi - ostacoli, candidati grossolani, raffinamento - e torna
     /// { candidate, obstacles }. Chi chiama passa poi tutti e due a fixFoto.
@@ -130,9 +200,9 @@ const SistemazioneFoto = {
         let ostacoliInterni = obs.map(o => Object.assign({}, o, { x: o.x - traccia, y: o.y - traccia }));
 
         //calcoliamo i rettangoli liberi
-        //Il margine attorno agli ostacoli e' del cliente: se custom.js non lo dice vale il
+        //Il margine attorno agli ostacoli e' del cliente: se il CssFramework non lo dice vale il
         //default di spazioLibero.
-        let paddingBox = customAgenzia && customAgenzia.paddingBox ? customAgenzia.paddingBox : null;
+        let paddingBox = this.configurazione(box).marginiBox;
         let candidate = spazioLibero.generateCandidateRects(baseWidth, baseHeight, ostacoliInterni, 0, paddingBox);
 
         //refiniamo i rettangoli liberi
@@ -250,18 +320,12 @@ const SistemazioneFoto = {
         }
 
         //scorriamo tutti gli elementi tranne quelli elencati nella variabile ignoreElements
-        let ignoreElements = ["base*", "immagine*", "foto_secondaria*", "etichetta*", "foto_extra*", "sfondo*"];
-        let exception = [];
-        if (customAgenzia && customAgenzia.exceptionElementsToIgnoreFixFoto) {
-            exception = customAgenzia.exceptionElementsToIgnoreFixFoto;
-        }
-        if (customAgenzia && customAgenzia.ignoreElementsFixFoto) {
-            ignoreElements = ignoreElements.concat(customAgenzia.ignoreElementsFixFoto);
-        }
-        let customPadding = []; //[{label: "string", padding: [top, left, bottom, right]}]
-        if(customAgenzia && customAgenzia.customPadding) {
-            customPadding = customAgenzia.customPadding;
-        }
+        //Gli elementi ignorati del cliente si aggiungono a questi; le eccezioni fanno da ostacolo
+        //anche se sono fra gli ignorati.
+        let configurazione = this.configurazione(box);
+        let ignoreElements = ["base*", "immagine*", "foto_secondaria*", "etichetta*", "foto_extra*", "sfondo*"].concat(configurazione.elementiIgnorati);
+        let exception = configurazione.eccezioniIgnorati;
+        let customPadding = configurazione.marginiElementi; //[{label: "string", padding: [top, left, bottom, right]}]
         let obstacles = [];
 
 
@@ -505,13 +569,11 @@ const SistemazioneFoto = {
         return sceltaSpazio.preferisciDisposizione(prima, seconda, cssFramework().getSceltaSpazioFoto(box));
     },
 
-    /// I20-1205: la configurazione di distanziamento in uso, quella del cliente se il suo custom.js
-    /// la dichiara.
-    configurazioneDistanziamento() {
-        if (customAgenzia.calcoloDistanziamentoFoto != null) {
-            this.calcoloDistanziamentoFoto = customAgenzia.calcoloDistanziamentoFoto;
-        }
-        return this.calcoloDistanziamentoFoto;
+    /// I20-1205: la configurazione di distanziamento in uso per il box, quella del cliente se il
+    /// CssFramework la dichiara. TASK-9bf94d47: non sovrascrive piu' quella di default, perche'
+    /// ogni box puo' avere la sua.
+    configurazioneDistanziamento(box) {
+        return this.configurazione(box).distanziamento;
     },
 
     /// I20-1205: le foto del box che il fix dispone (selezioneFoto.fotoDelFix), fra i rettangoli
@@ -535,7 +597,7 @@ const SistemazioneFoto = {
     /// I20-1205: il testo della finestra "Foto da sistemare a mano" se il fix non ha una disposizione
     /// per le foto visibili del box, o null se proporre il fix ha senso.
     avvisoFotoAMano(box) {
-        return selezioneFoto.avvisoFotoAMano(this.fotoDelFix(box).length, this.configurazioneDistanziamento());
+        return selezioneFoto.avvisoFotoAMano(this.fotoDelFix(box).length, this.configurazioneDistanziamento(box));
     },
 
     /// Il corpo di fixFoto. Si chiama solo da li': e' fixFoto a garantire il ripristino.
@@ -546,7 +608,8 @@ const SistemazioneFoto = {
 
         var base = this.trovaBase(box);
 
-        this.configurazioneDistanziamento();
+        //TASK-9bf94d47: la configurazione del box, letta una volta per tutto il fix.
+        var configurazione = this.configurazione(box);
 
         //I20-1205: le foto le sceglie fotoDelFix, la stessa regola con cui si contano prima di
         //proporre il fix (avvisoFotoAMano): primarie in testa, quelle in noRender fuori.
@@ -560,10 +623,7 @@ const SistemazioneFoto = {
         for (let i = 0; i < listFoto.length; i++) {
             let foto = listFoto[i];
             //calcoliamo i bounds della foto
-            let paddingFoto = [0,0];
-            if(customAgenzia && customAgenzia.paddingFoto) {
-                paddingFoto = customAgenzia.paddingFoto;
-            }
+            let paddingFoto = configurazione.marginiFoto;
             let esitoMisura = {};
             let boundsFoto = this.getRealBoundsOfFoto(foto, paddingFoto, esitoMisura);
             if (esitoMisura.origine != null && esitoMisura.origine !== "tracciato") {
@@ -600,7 +660,7 @@ const SistemazioneFoto = {
         }
 
         //cerchiamo in calcoloDistanziamentoFoto l'oggetto che ha foto uguale alla lunghezza della lista delle foto
-        var distanzFoto = this.calcoloDistanziamentoFoto.find(d => d.foto == fotos.length);
+        var distanzFoto = configurazione.distanziamento.find(d => d.foto == fotos.length);
         //se non lo troviamo prendiamo l'ultimo elemento in lista come valido
         if(distanzFoto == null){
             //non esiste una configurazione per questo numero di foto, mandiamo l'avviso e torniamo senza fare nulla
@@ -751,10 +811,7 @@ const SistemazioneFoto = {
             for (let i = 0; i < fotos.length; i++) {
                 let foto = fotos[i];
                 //calcoliamo i padding della foto
-                let padding = [0, 0];
-                if (customAgenzia && customAgenzia.paddingFoto) {
-                    padding = customAgenzia.paddingFoto;
-                }
+                let padding = configurazione.marginiFoto;
                 foto.object.geometricBounds = [
                     absoluteBounds[0] + foto.bounds[0] + base.geometricBounds[0] + padding[0],
                     absoluteBounds[1] + foto.bounds[1] + base.geometricBounds[1] + padding[1],

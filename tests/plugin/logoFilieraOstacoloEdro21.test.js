@@ -2,11 +2,14 @@
  * I20-1177: nel volantino di Edro21 il logo Filiera Controllata finiva sotto la foto.
  *
  * Il fix foto non tratta da ostacolo le foto extra (foto_extra*), tranne quelle che il cliente
- * elenca in exceptionElementsToIgnoreFixFoto. Edro21 elencava "*Logo_filiera*", ma il confronto
+ * elenca fra le eccezioni (exceptionElementsToIgnoreFixFoto nel custom.js, oggi
+ * fixFoto.eccezioniIgnorati nel CssFramework). Edro21 elencava "*Logo_filiera*", ma il confronto
  * (makeRegexFromGroupName) distingue le maiuscole e la sigla del logo e' LOGO_filiera: il logo
  * restava spazio libero e la foto ci si allargava sopra.
  *
- * Qui le liste si leggono dal custom di Edro21 come sono scritte, e passano da getObstacles. In
+ * Qui le liste si leggono dal CssFramework di Edro21 come sono scritte (TASK-9bf94d47: la sezione
+ * fixFoto generale, che prima era nel custom.js), e passano da getObstacles attraverso
+ * CssFramework.getConfigurazioneFixFoto. In
  * piu' ogni voce delle eccezioni deve trovare almeno una sigla dei loghi di Edro21, cosi' un altro
  * errore di maiuscole non passa in silenzio.
  *
@@ -38,20 +41,14 @@ finally {
 
 const RADICE = path.join(__dirname, "..", "..");
 
-//Una lista di custom.js di Edro21 come la scrive il file, commenti esclusi.
-function listaDelCustom(nome) {
-    const custom = fs.readFileSync(path.join(RADICE, "plugin", "Agenzie", "Edro21", "custom.js"), "utf8").replace(/\r/g, "");
-    const inizio = custom.indexOf(nome + ":");
-    assert.ok(inizio >= 0, nome);
-    const corpo = custom.substring(inizio, custom.indexOf("]", inizio));
-    const senzaCommenti = corpo.split("\n").map(riga => riga.replace(/\/\/.*$/, "")).join("\n");
-    return [...senzaCommenti.matchAll(/"([^"]+)"/g)].map(m => m[1]);
-}
+//Le regole del CssFramework di Edro21 come le scarica il Plugin: la sezione dbRidimensionamentiAllineamenti.
+const REGOLE = JSON.parse(fs.readFileSync(path.join(RADICE, "Istanta", "wwwroot", "external_source", "Edro21", "SourceFrameworkCss.json"), "utf8")).dbRidimensionamentiAllineamenti;
+const ECCEZIONI = REGOLE.fixFoto.eccezioniIgnorati;
+assert.ok(Array.isArray(ECCEZIONI) && ECCEZIONI.length > 0);
 
-const ECCEZIONI = listaDelCustom("exceptionElementsToIgnoreFixFoto");
-const DA_IGNORARE = listaDelCustom("ignoreElementsFixFoto");
-
-global.customAgenzia = { exceptionElementsToIgnoreFixFoto: ECCEZIONI, ignoreElementsFixFoto: DA_IGNORARE };
+//Senza contesto e senza lavorazione il fix foto prende la sezione generale delle regole scaricate.
+CssFramework.regoleScaricate = REGOLE;
+CssFramework.contestoCss = null;
 //Come Utility.parseLabel per le foto extra: l'etichetta resta intera.
 global.Utility = { parseLabel: (label) => (label == null ? "" : String(label)) };
 global.messaggioUtente = () => {};
@@ -88,7 +85,7 @@ function boxAlbume() {
     };
 }
 
-test("nel custom di Edro21 il logo filiera e' fra le eccezioni con la sua sigla", () => {
+test("nel CssFramework di Edro21 il logo filiera e' fra le eccezioni con la sua sigla", () => {
     assert.ok(ECCEZIONI.includes("*LOGO_filiera*"));
     assert.ok(!ECCEZIONI.includes("*Logo_filiera*"));
 });

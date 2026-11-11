@@ -128,25 +128,38 @@ function corpoFunzione(testo, intestazione) {
     assert.fail("corpo di " + intestazione + " non delimitato");
 }
 
-const gruppoDellaDescrizione = new Function("return function " + corpoFunzione(customEdro, "gruppoDellaDescrizione(etichettaBox, etichette) {"))();
+const gruppoDellaDescrizione = new Function("return function " + corpoFunzione(customEdro, "gruppoDellaDescrizione(gruppo, etichette) {"))();
 const setCustomFixFoto = corpoFunzione(customEdro, "setCustomFixFoto(box){");
 
+//TASK-9bf94d47: i dati del fix foto di Edro21 dal CssFramework, come li legge il Plugin fuori dal
+//contesto: la sezione fixFoto generale delle regole scaricate.
+function datiFixFoto(etichettaBox) {
+    CssFramework.regoleScaricate = cssEdro.dbRidimensionamentiAllineamenti;
+    CssFramework.contestoCss = null;
+    return CssFramework.getConfigurazioneFixFoto({ label: etichettaBox }).agenzia;
+}
+
 test("il fix foto sposta il gruppo della descrizione: quello del BIS nel BOX7, quello del sottocosto nel BOX4", () => {
-    assert.strictEqual(gruppoDellaDescrizione("BOX4", ["base", "gruppo_descrizione_sottocosto", "descrizione", "SOTTOCOSTO", "prezzo_offerta"]), "gruppo_descrizione_sottocosto");
-    assert.strictEqual(gruppoDellaDescrizione("BOX7", ["gruppo_descrizione_BIS", "descrizione", "BIS"]), "gruppo_descrizione_BIS");
+    //TASK-9bf94d47: quale gruppo ha il box lo dice il CssFramework, non piu' una mappa nel custom.
+    const gruppo = (etichettaBox, etichette) => gruppoDellaDescrizione(datiFixFoto(etichettaBox).gruppoDescrizione, etichette);
+    assert.strictEqual(gruppo("BOX4", ["base", "gruppo_descrizione_sottocosto", "descrizione", "SOTTOCOSTO", "prezzo_offerta"]), "gruppo_descrizione_sottocosto");
+    assert.strictEqual(gruppo("BOX7", ["gruppo_descrizione_BIS", "descrizione", "BIS"]), "gruppo_descrizione_BIS");
     //Il BOX4 del canale SC non ha il gruppo: resta la descrizione.
-    assert.strictEqual(gruppoDellaDescrizione("BOX4", ["base", "descrizione", "prezzo_offerta"]), null);
+    assert.strictEqual(gruppo("BOX4", ["base", "descrizione", "prezzo_offerta"]), null);
     //Gli altri box non hanno un gruppo della descrizione, anche se un'etichetta gli somiglia.
-    assert.strictEqual(gruppoDellaDescrizione("BOX1", ["gruppo_descrizione_sottocosto", "descrizione"]), null);
-    assert.strictEqual(gruppoDellaDescrizione("BOX7", ["gruppo_descrizione_sottocosto"]), null);
-    assert.strictEqual(gruppoDellaDescrizione("BOX4", null), null);
+    assert.strictEqual(gruppo("BOX1", ["gruppo_descrizione_sottocosto", "descrizione"]), null);
+    assert.strictEqual(gruppo("BOX7", ["gruppo_descrizione_sottocosto"]), null);
+    assert.strictEqual(gruppo("BOX4", null), null);
 });
 
 test("il fix foto custom usa il gruppo della descrizione per la scelta e per la descrizione da stringere", () => {
-    assert.match(setCustomFixFoto, /var gruppoDescrizione = this\.gruppoDellaDescrizione\(box\.label, etichetteDelBox\);/);
+    assert.match(setCustomFixFoto, /var gruppoDescrizione = this\.gruppoDellaDescrizione\(datiFix\.gruppoDescrizione, etichetteDelBox\);/);
     assert.match(setCustomFixFoto, /if \(gruppoDescrizione != null\) \{\s*if \(etichetta == gruppoDescrizione\) \{\s*descrizione = item;/);
-    //Senza gruppo la descrizione, tranne nel BOX7 come prima.
-    assert.match(setCustomFixFoto, /else if \(etichetta == "descrizione" && box\.label != "BOX7"\) \{\s*descrizione = item;/);
+    //Senza gruppo la descrizione, tranne nel BOX7 come prima: il BOX7 lo dichiara nel CssFramework.
+    assert.match(setCustomFixFoto, /else if \(etichetta == "descrizione" && datiFix\.spostaDescrizioneSenzaGruppo !== false\) \{\s*descrizione = item;/);
+    assert.strictEqual(datiFixFoto("BOX7").spostaDescrizioneSenzaGruppo, false);
+    assert.strictEqual(datiFixFoto("BOX4").spostaDescrizioneSenzaGruppo, undefined);
+    assert.strictEqual(datiFixFoto("BOX1").spostaDescrizioneSenzaGruppo, undefined);
     //Dentro il gruppo si stringe la descrizione, con l'etichetta come la scrivono i modelli: minuscola.
     assert.match(setCustomFixFoto, /if \(gruppoDescrizione != null && descrizione\.allPageItems != null\)/);
     assert.match(setCustomFixFoto, /Utility\.parseLabel\(itemDescrizioneNelGruppo\.label\) == "descrizione"/);

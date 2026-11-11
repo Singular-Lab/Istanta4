@@ -9,42 +9,9 @@ const ficoProcess = require('../../ficoProcess');
 const CssFramework = require('../../CssFramework');
 
 const customAgenzia={
-    usaSottogruppi: false,
-    fixFotoLavorazioni: [1,2], 
     callCustom: false,
-    calcoloDistanziamentoFoto: [ //il ratio è calcolato Y/X
-        {
-            foto: 1,
-            percDistFoto: [{
-                percDistanceXFoto: [],
-                percDistanceYFoto: [],
-                startRangeRatioCondition: 0.0,
-                endRangeRatioCondition: Infinity,
-            }],
-        },
-        {
-            foto: 2,
-            percDistFoto: [{
-                percDistanceXFoto: [0.5],
-                percDistanceYFoto: [-0.25],
-                startRangeRatioCondition: 0.0,
-                endRangeRatioCondition: Infinity,
-            }],
-        },
-        {
-            foto: 3,
-            percDistFoto: [{
-                percDistanceXFoto: [0.5, -1.05],
-                percDistanceYFoto: [-0.3, 0],
-                startRangeRatioCondition: 0,
-                endRangeRatioCondition: Infinity,
-            },
-            ],
-        }
-    ],
-    ignoreElementsFixFoto:["sconto","txt_sconto","sconto_base","sfondo"],
-    customPadding: [
-    ], 
+    //TASK-9bf94d47: i dati del fix foto (lavorazioni, distanziamento, elementi ignorati) stanno
+    //nella sezione fixFoto del SourceFrameworkCss del cliente: CssFramework.getConfigurazioneFixFoto.
 
     area: null,
     canale: null,

@@ -3,7 +3,7 @@
  *
  * Lo spazio per le foto si cercava sui bordi geometrici della base, che stanno sul tracciato: con
  * una traccia al centro meta' dello spessore cadeva nello spazio libero, e nei box Edro21, dove il
- * paddingBox e' azzerato, il fondo della foto finiva sul bordo verde.
+ * paddingBox (oggi fixFoto.marginiBox nel CssFramework) e' azzerato, il fondo della foto finiva sul bordo verde.
  *
  * Ora CssFramework.insetTracciaBase dice quanto la traccia entra nella base - lo stesso calcolo
  * dell'evita traccia dei gruppi di allineamento - e calcolaSpazioLibero cerca lo spazio dentro
@@ -59,13 +59,16 @@ function base(tracciaMm, allineamento = "INSIDE_ALIGNMENT") {
 const BOX = { label: "BOX1" };
 const OSTACOLO = { x: 40, y: 30, width: 20, height: 20, label: "prezzo" };
 
+//TASK-9bf94d47: il margine del cliente non viene piu' da custom.js ma dalla sezione fixFoto del
+//CssFramework (marginiBox), qui quella generale delle regole scaricate.
 function spazio(laBase, paddingBox) {
-    global.customAgenzia = { paddingBox };
+    CssFramework.regoleScaricate = { modificheCssPerKit: [], fixFoto: paddingBox ? { marginiBox: paddingBox } : null };
+    CssFramework.contestoCss = null;
     try {
         return SistemazioneFoto.calcolaSpazioLibero(BOX, laBase, [Object.assign({}, OSTACOLO)]);
     }
     finally {
-        global.customAgenzia = {};
+        CssFramework.regoleScaricate = null;
     }
 }
 

@@ -8,80 +8,8 @@ const customAgenzia={
     callCustom: false,
 
 
-//#region VARIABILI IMPAGINAZIONE e FIX FOTO
-
-    customPadding : [{label: "campo_offerta_KgL_sconto", padding:[0,0,0,0]}, //qui vanno messi i padding degli ostacoli per il fix foto se ce ne sono  [{label: "string", padding: [top, left, bottom, right]}]
-    {label: "prezzo_offerta_gruppo", padding:[0,0,0,0]},
-    {label: "descrizione", padding:[0,0,0,0]},], 
-
-    paddingBox : [0, 0, 0, 0], // [top, left, bottom, right] padding da applicare ai box per il calcolo dei candidati
-
-    paddingFoto : [1, 1], // [top/bottom, left/right] padding da applicare alle foto
-    
-    ignoreElementsFixFoto: ["*fondo*","*soggetto_IT*","parentesi_BeF","sy_ombra"],
-    
-    exceptionElementsToIgnoreFixFoto: ["*cpq*","*conad_logo*","*piacersi*","*lattosio*","*glutine*",
-        "*parafarmacia*","*conad_vn*","*conad_11P*","*essentiae*","*PetFr*","*petfrplus*","*conad_baby*","*Friend-of-the-Sea*",
-        //I20-1177: il confronto distingue le maiuscole, e la sigla e' LOGO_filiera: scritto
-        //con la L sola maiuscola il logo non faceva da ostacolo e la foto gli finiva sopra.
-        "*Marinou*","*Carne_Chianina*","*LOGO_filiera*","*Logo_BDP*","*Logo_SDB*",
-        //I20-1209: il logo Armomia non deve finire sotto le foto; la sigla e' tutta minuscola.
-        "*conad_armomia*",
-        //I20-1026: payoff e testi del Parmigiano stanno in basso a sinistra, dove la foto non deve
-        //finire. I20-1131: anche le caratteristiche, che nei box alti e larghi stanno in alto a
-        //sinistra; nel box standard sono spente.
-        "*Parmigiano_payoff*","*parmigiano_testo_2mod_*","*Parmigiano_caratteristiche*",], //se un elemento è sia in ignoreElementsFixFoto che in exceptionElementsToIgnoreFixFoto non viene ignorato. Serve perchè si può fare cose come ignora loghi e specificare solo il logo che fa eccezione
-    
-    calcoloDistanziamentoFoto: [ //il ratio è calcolato Y/X
-        {
-            foto: 1,
-            percDistFoto: [{
-                percDistanceXFoto: [],
-                percDistanceYFoto: [],
-                startRangeRatioCondition : 0.0,
-                endRangeRatioCondition : Infinity,
-            }],
-        },
-        {
-            foto: 2,
-            percDistFoto: [{
-                percDistanceXFoto: [0.5],
-                percDistanceYFoto: [-0.25],
-                startRangeRatioCondition: 0.0,
-                endRangeRatioCondition: 3,
-            },{
-                percDistanceXFoto: [0.55],
-                percDistanceYFoto: [-0.05],
-                startRangeRatioCondition: 3,
-                endRangeRatioCondition: Infinity,
-            }],
-        },
-        {
-            foto: 3,
-            percDistFoto: [{
-                percDistanceXFoto: [0.3, -0.3],
-                percDistanceYFoto: [-0.5, -0.5],
-                startRangeRatioCondition: 0,
-                endRangeRatioCondition: 0.4,
-            },{
-                percDistanceXFoto: [0.5, -1.05],
-                percDistanceYFoto: [-0.3, 0],
-                startRangeRatioCondition: 0.4,
-                endRangeRatioCondition: 1.5,
-            },
-            {
-                percDistanceXFoto: [0.4, -0.6],
-                percDistanceYFoto: [-0.1, -0.1],
-                startRangeRatioCondition: 1.5,
-                endRangeRatioCondition: Infinity,
-            }
-            ],
-        }
-    ],
-
-
-    
-//#endregion 
+//TASK-9bf94d47: i dati del fix foto (ostacoli, margini, distanziamento e quelli di setCustomFixFoto)
+//stanno nella sezione fixFoto del SourceFrameworkCss di Edro21: CssFramework.getConfigurazioneFixFoto.
 
 //#region VARIABILI CAMPI VARI E NOMENCLATURE
 
@@ -137,11 +65,6 @@ const customAgenzia={
         this.codiceFormato = formatoObj.codice;
         this.tipoLavorazione = formatoObj.tipo;
 
-    },
-
-    //TODO: trasferire nel cssFramework
-    getEtichetteEsclusePerFixDescrizione() {
-        return ["base*", "sfondo*"];
     },
 
 //#endregion
@@ -1196,9 +1119,10 @@ const customAgenzia={
     },
 
     /// I20-1026: se il testo della descrizione tocca un logo che fa da ostacolo alla foto - le foto
-    /// extra elencate in exceptionElementsToIgnoreFixFoto, come il payoff e i testi del Parmigiano,
-    /// SDB, BDP, Conad. Conta il testo (getRealBounds), non il riquadro, e solo i loghi visibili: uno
-    /// nascosto dal noRender non c'e', e uno disattivato dalla forma del box non sta nel box.
+    /// extra fra le eccezioni degli ostacoli del fix foto del box (fixFoto.eccezioniIgnorati nel
+    /// CssFramework), come il payoff e i testi del Parmigiano, SDB, BDP, Conad. Conta il testo
+    /// (getRealBounds), non il riquadro, e solo i loghi visibili: uno nascosto dal noRender non c'e',
+    /// e uno disattivato dalla forma del box non sta nel box.
     descrizioneTraLoghi(box, descrizione) {
         try {
             var testo = CssFramework.getRealBounds(descrizione);
@@ -1206,7 +1130,7 @@ const customAgenzia={
                 return false;
             }
 
-            var loghi = (this.exceptionElementsToIgnoreFixFoto || []).map(e => CssFramework.makeRegexFromGroupName(e));
+            var loghi = (CssFramework.getConfigurazioneFixFoto(box).eccezioniIgnorati || []).map(e => CssFramework.makeRegexFromGroupName(e));
             for (var i = 0; i < box.allPageItems.length; i++) {
                 var item = box.allPageItems[i];
                 if (item === descrizione || !item.label || item.visible === false) {
@@ -1232,11 +1156,11 @@ const customAgenzia={
 
     /// TASK-5370a489: il gruppo che nel box tiene insieme la descrizione e la scritta che la accompagna, e
     /// che il fix foto custom sposta al posto della sola descrizione: gruppo_descrizione_BIS nel BOX7,
-    /// gruppo_descrizione_sottocosto nel BOX4 dei canali SS, CN e CY. null se il box non ne prevede uno o
-    /// non ce l'ha, come il BOX4 del canale SC. etichette: quelle degli elementi del box, normalizzate. Pura.
-    gruppoDellaDescrizione(etichettaBox, etichette) {
-        var gruppi = { "BOX7": "gruppo_descrizione_BIS", "BOX4": "gruppo_descrizione_sottocosto" };
-        var gruppo = gruppi[etichettaBox];
+    /// gruppo_descrizione_sottocosto nel BOX4 dei canali SS, CN e CY. TASK-9bf94d47: il gruppo del box lo
+    /// dice la configurazione del fix foto (fixFoto.agenzia.gruppoDescrizione nel CssFramework). null se
+    /// il box non ne prevede uno o non ce l'ha, come il BOX4 del canale SC. etichette: quelle degli
+    /// elementi del box, normalizzate. Pura.
+    gruppoDellaDescrizione(gruppo, etichette) {
         if (gruppo == null) {
             return null;
         }
@@ -1245,18 +1169,17 @@ const customAgenzia={
 
     setCustomFixFoto(box){
 
-        if(ficoProcess.getTipoLavorazioneCorrente() != 1){
-            return box;
-        }
-
-        const getElements = ["sy_euro", "sy_-", "sy_%", "sconto_fid", "prezzo_offerta", "campo_offerta_KgL_sconto", "campo_offerta", "prezzo_offerta_etto", "rect_etto","LBL_Titolari"];
-        //duplichiamo il box
-        if (box.label == "BOX40")
-        {
-            return box;
-        }
+        //TASK-9bf94d47: in quali lavorazioni si fa, in quali box no (BOX40) e in quali solo quello del
+        //Plugin (BOX14, BOX11, BOX41) lo decide chi chiama, con fixFoto.lavorazioni e fixFoto.modo del
+        //CssFramework. Da li' vengono anche i dati di questo fix (fixFoto.agenzia): gli elementi a cui
+        //si allinea la descrizione, il suo gruppo, gli elementi che le stanno sotto o che la fermano.
+        var datiFix = CssFramework.getConfigurazioneFixFoto(box).agenzia;
+        const getElements = Array.isArray(datiFix.descrizioneAllineataA) ? datiFix.descrizioneAllineataA : [];
+        var elementiSottoDescrizione = (datiFix.elementiSottoDescrizione || []).map(e => CssFramework.makeRegexFromGroupName(e));
+        var elementiCheBloccanoDescrizione = (datiFix.elementiCheBloccanoDescrizione || []).map(e => CssFramework.makeRegexFromGroupName(e));
         var res1 = CssFramework.getSpazioImpaginazione(box);
-        if (box.label == "BOX14" || box.label == "BOX11"|| box.label == "BOX41") {
+        //Senza elementi a cui allineare la descrizione non c'e' niente da provare: il fix e' quello del Plugin.
+        if (getElements.length === 0) {
             CssFramework.fixFoto(box, res1.candidate, res1.obstacles);
             return box;
         }
@@ -1283,7 +1206,7 @@ const customAgenzia={
         for (var e = 0; e < items.length; e++) {
             etichetteDelBox.push(Utility.parseLabel(items[e].label));
         }
-        var gruppoDescrizione = this.gruppoDellaDescrizione(box.label, etichetteDelBox);
+        var gruppoDescrizione = this.gruppoDellaDescrizione(datiFix.gruppoDescrizione, etichetteDelBox);
         for (var i = 0; i < items.length; i++) {
             var item = items[i];
             var etichetta = Utility.parseLabel(item.label);
@@ -1294,17 +1217,18 @@ const customAgenzia={
                     continue;
                 }
             }
-            else if (etichetta == "descrizione" && box.label != "BOX7") {
+            //Nel BOX7 la descrizione si sposta solo con il suo gruppo (spostaDescrizioneSenzaGruppo false).
+            else if (etichetta == "descrizione" && datiFix.spostaDescrizioneSenzaGruppo !== false) {
                 descrizione = item;
                 continue;
             }
 
-            if(item.label.startsWith("PIEDE_Titolari")){
+            if(elementiSottoDescrizione.some(r => r.test(item.label))){
                 piedeTitolari = item;
                 continue;
             }
 
-            if(item.label.includes("LOGO_carneS_USOdiANTIBIOTICI")){
+            if(elementiCheBloccanoDescrizione.some(r => r.test(item.label))){
                 logoUsoAntibiotici = item;
                 continue;
             }

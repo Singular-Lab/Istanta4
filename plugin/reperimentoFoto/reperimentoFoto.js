@@ -1161,18 +1161,16 @@ const ReperimentoFoto = {
                                 await Utility.sleep(300);
                             }
                         }
-                        var fixFotoLavorazioni = [1];
-
-                        if(customAgenzia.fixFotoLavorazioni != null){
-                            fixFotoLavorazioni = customAgenzia.fixFotoLavorazioni;
-                        }
-
-                        if(customAgenzia.setCustomFixFoto != null){
-                            boxImpaginato = customAgenzia.setCustomFixFoto(boxImpaginato);
-                        }
-                        else if(fixFotoLavorazioni.includes(ficoProcess.getTipoLavorazioneCorrente())){
-                            var res = SistemazioneFoto.getSpazioImpaginazione(boxImpaginato);
-                            SistemazioneFoto.fixFoto(boxImpaginato, res.candidate, res.obstacles);
+                        //TASK-9bf94d47: come all'impaginazione, lo dice la sezione fixFoto del CssFramework.
+                        var configurazioneFixFoto = CssFramework.getConfigurazioneFixFoto(boxImpaginato);
+                        if (configurazioneFixFoto.lavorazioni.includes(ficoProcess.getTipoLavorazioneCorrente()) && configurazioneFixFoto.modo != "nessuno") {
+                            if (configurazioneFixFoto.modo != "semplice" && customAgenzia.setCustomFixFoto != null) {
+                                boxImpaginato = customAgenzia.setCustomFixFoto(boxImpaginato);
+                            }
+                            else {
+                                var res = SistemazioneFoto.getSpazioImpaginazione(boxImpaginato);
+                                SistemazioneFoto.fixFoto(boxImpaginato, res.candidate, res.obstacles);
+                            }
                         }
                     }
 

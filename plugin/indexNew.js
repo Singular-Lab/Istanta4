@@ -5559,21 +5559,20 @@ async function callAllOperationFixBox(boxImpaginato, bounds, itemRef, garbageKey
             pluginMiddleware.getCampo("etichetteEsclusePerFixDescrizione") !== null ? pluginMiddleware.getCampo("etichetteEsclusePerFixDescrizione") : []);
     }
 
-    var fixFotoLavorazioni = [1];
-
-    if(customAgenzia.fixFotoLavorazioni != null){
-        fixFotoLavorazioni = customAgenzia.fixFotoLavorazioni;
-    }
-
+    //TASK-9bf94d47: se e come sistemare le foto lo dice la sezione fixFoto del CssFramework: le
+    //lavorazioni in cui si fa e il modo del box. "semplice" salta il fix dell'agenzia.
+    var configurazioneFixFoto = CssFramework.getConfigurazioneFixFoto(boxImpaginato);
 
     CssFramework.sospendiControlloSegnalazioniConflitti = true;
     try {
-        if (customAgenzia.setCustomFixFoto != null) {
-            boxImpaginato = customAgenzia.setCustomFixFoto(boxImpaginato);
-        }
-        else if (fixFotoLavorazioni.includes(tipoLavorazione)) {
-            var res = SistemazioneFoto.getSpazioImpaginazione(boxImpaginato);
-            SistemazioneFoto.fixFoto(boxImpaginato, res.candidate, res.obstacles);
+        if (configurazioneFixFoto.lavorazioni.includes(tipoLavorazione) && configurazioneFixFoto.modo != "nessuno") {
+            if (configurazioneFixFoto.modo != "semplice" && customAgenzia.setCustomFixFoto != null) {
+                boxImpaginato = customAgenzia.setCustomFixFoto(boxImpaginato);
+            }
+            else {
+                var res = SistemazioneFoto.getSpazioImpaginazione(boxImpaginato);
+                SistemazioneFoto.fixFoto(boxImpaginato, res.candidate, res.obstacles);
+            }
         }
     }
     finally {
